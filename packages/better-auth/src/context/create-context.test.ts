@@ -1,9 +1,10 @@
+import Database from "better-sqlite3";
 import { describe, expect, it, vi } from "vitest";
 import { createAuthEndpoint } from "../api";
 import { getAdapter } from "../db";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { BetterAuthOptions } from "../types";
-import { createAuthContext } from "./base";
+import { createAuthContext } from "./create-context";
 
 describe("base context creation", () => {
 	const initBase = async (options: Partial<BetterAuthOptions> = {}) => {
@@ -274,8 +275,15 @@ describe("base context creation", () => {
 		});
 
 		it("should return false for cookieRefreshCache when undefined", async () => {
-			const res = await initBase({});
+			const res = await initBase({
+				database: new Database(":memory:"),
+			});
 			expect(res.sessionConfig.cookieRefreshCache).toBe(false);
+		});
+
+		it("should set a value for cookieRefreshCache when database isn't provided", async () => {
+			const res = await initBase({});
+			expect(res.sessionConfig.cookieRefreshCache).not.toBe(false);
 		});
 
 		it("should return false for cookieRefreshCache when explicitly false", async () => {
@@ -550,9 +558,9 @@ describe("base context creation", () => {
 	});
 
 	describe("oauth configuration", () => {
-		it("should use database as default storeStateStrategy", async () => {
+		it("should use cookie strategy as default storeStateStrategy if database is not provided", async () => {
 			const res = await initBase({});
-			expect(res.oauthConfig.storeStateStrategy).toBe("database");
+			expect(res.oauthConfig.storeStateStrategy).toBe("cookie");
 		});
 
 		it("should allow cookie storeStateStrategy", async () => {
@@ -1423,6 +1431,34 @@ describe("base context creation", () => {
 			});
 
 			expect(ctx.baseURL).toBe("http://localhost:3000/api/v1/auth-service");
+		});
+	});
+
+	describe("stateless mode", () => {
+		it("should enable stateless mode by default", async () => {
+			const ctx = await initBase({});
+			expect(ctx.options.session?.cookieCache?.enabled).toBe(true);
+			expect(ctx.options.session?.cookieCache?.strategy).toBe("jwe");
+			expect(ctx.options.session?.cookieCache?.refreshCache).toBe(true);
+			expect(ctx.oauthConfig.storeStateStrategy).toBe("cookie");
+			expect(ctx.options.database).toBeUndefined();
+		});
+
+		it("should allow overriding stateless mode", async () => {
+			const ctx = await initBase({
+				session: {
+					cookieCache: {
+						enabled: false,
+					},
+				},
+				advanced: {
+					oauthConfig: {
+						storeStateStrategy: "database",
+					},
+				},
+			});
+			expect(ctx.options.session?.cookieCache?.enabled).toBe(false);
+			expect(ctx.oauthConfig.storeStateStrategy).toBe("database");
 		});
 	});
 });
