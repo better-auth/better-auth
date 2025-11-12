@@ -388,8 +388,10 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				userId: toBeRemovedMember.userId,
 			});
 
-			// Clear session if removed user's active organization matches
-			// Check if removed user is the current user making the request
+			// Clear session if removed user is the current user making the request
+			// Note: When a user is removed by another user, their sessions will be invalidated
+			// on the next request when endpoints check membership (e.g., getFullOrganization,
+			// setActiveOrganization). This avoids the performance cost of bulk session updates.
 			if (
 				session.user.id === toBeRemovedMember.userId &&
 				session.session.activeOrganizationId ===
@@ -405,20 +407,6 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 					session: updatedSession,
 					user: session.user,
 				});
-			} else if (toBeRemovedMember.organizationId === organizationId) {
-				// Someone else is removing the user - need to find and update their active session
-				// Find all sessions for the removed user and clear active org if it matches
-				const removedUserSessions =
-					await ctx.context.internalAdapter.listSessions(
-						toBeRemovedMember.userId,
-					);
-
-				// Update sessions where activeOrganizationId matches
-				for (const userSession of removedUserSessions) {
-					if ((userSession as any).activeOrganizationId === organizationId) {
-						await adapter.setActiveOrganization(userSession.token, null, ctx);
-					}
-				}
 			}
 
 			// Run afterRemoveMember hook
