@@ -205,10 +205,4 @@ export interface SSOOptions {
 	 * @default false
 	 */
 	trustEmailVerified?: boolean | undefined;
-	/**
-	 * Enable SCIM Provisioning for the provider. When combined with the SCIM plugin
-	 * this will automatically generate a SCIM bearer token for the provider
-	 * @default false
-	 */
-	enableSCIMProvisioning?: boolean;
 }

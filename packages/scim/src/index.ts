@@ -4,6 +4,8 @@ import {
 	type DBAdapter,
 	type User,
 } from "better-auth";
+import { APIError, sessionMiddleware } from "better-auth/api";
+import { generateRandomString } from "better-auth/crypto";
 import { createAuthEndpoint, type Member } from "better-auth/plugins";
 import * as z from "zod/v4";
 import { getAccountId, getUserFullName, getUserPrimaryEmail } from "./mappings";
@@ -16,6 +18,7 @@ import {
 	SCIMParseError,
 } from "./scim-filters";
 import { createUserResource } from "./scim-resources";
+import type { SCIMProvider } from "./types";
 import {
 	APIUserSchema,
 	OpenAPIUserResourceSchema,
@@ -83,6 +86,109 @@ export const scim = () => {
 	return {
 		id: "scim",
 		endpoints: {
+			generateSCIMToken: createAuthEndpoint(
+				"/scim/generate-token",
+				{
+					method: "POST",
+					body: z.object({
+						providerId: z
+							.string()
+							.meta({ description: "Unique provider identifier" }),
+						organizationId: z
+							.string()
+							.optional()
+							.meta({ description: "Optional organization id" }),
+					}),
+					metadata: {
+						openapi: {
+							summary: "Generates a new SCIM token for the given provider",
+							description:
+								"Generates a new SCIM token to be used for SCIM operations",
+							responses: {
+								"201": {
+									description: "SCIM token response",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													scimToken: {
+														description: "SCIM token",
+														type: "string",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					use: [sessionMiddleware],
+				},
+				async (ctx) => {
+					const { providerId, organizationId } = ctx.body;
+
+					const isOrgPluginEnabled = ctx.context.options.plugins?.some(
+						(p) => p.id === "organization",
+					);
+
+					if (organizationId && !isOrgPluginEnabled) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Your instance does not support organizations",
+						});
+					}
+
+					if (organizationId) {
+						const member = await ctx.context.adapter.findOne({
+							model: "member",
+							where: [
+								{
+									field: "userId",
+									value: ctx.context.session.user.id,
+								},
+								{
+									field: "organizationId",
+									value: organizationId,
+								},
+							],
+						});
+
+						if (!member) {
+							throw new APIError("BAD_REQUEST", {
+								message: "You are not a member of the organization",
+							});
+						}
+					}
+
+					const scimProvider = await ctx.context.adapter.findOne<SCIMProvider>({
+						model: "scimProvider",
+						where: [{ field: "providerId", value: providerId }],
+					});
+
+					if (scimProvider) {
+						return ctx.json({
+							scimToken: scimProvider.scimToken,
+						});
+					}
+
+					const scimToken = generateRandomString(48);
+					await ctx.context.adapter.create<SCIMProvider>({
+						model: "scimProvider",
+						data: {
+							providerId: providerId,
+							organizationId: organizationId,
+							scimToken,
+						},
+					});
+
+					ctx.setStatus(201);
+
+					return ctx.json({
+						scimToken,
+					});
+				},
+			),
 			createSCIMUser: createAuthEndpoint(
 				"/scim/v2/Users",
 				{
