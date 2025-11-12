@@ -140,10 +140,8 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 							.model(modelName)
 							.field("id", "String")
 							.attribute("id")
-							.attribute("db.Uuid")
-							.attribute(
-								'default(dbgenerated("pg_catalog.gen_random_uuid()"))',
-							);
+							.attribute('default(dbgenerated("pg_catalog.gen_random_uuid()"))')
+							.attribute("db.Uuid");
 					} else {
 						builder.model(modelName).field("id", "String").attribute("id");
 					}
@@ -291,8 +289,12 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				}
 
 				if (attr.references) {
-					if (useUUIDs && provider === "postgresql") {
-						fieldBuilder.attribute(`db.Uuid`);
+					if (
+						useUUIDs &&
+						provider === "postgresql" &&
+						attr.references?.field === "id"
+					) {
+						builder.model(modelName).field(fieldName).attribute(`db.Uuid`);
 					}
 
 					const referencedOriginalModelName = getModelName(
