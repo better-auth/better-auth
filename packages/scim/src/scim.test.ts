@@ -1254,7 +1254,7 @@ describe("SCIM", () => {
 			expect(user.name.formatted).toBe("Juan Perez");
 			expect(user.emails[0]?.value).toBe("primary-email@test.com");
 
-			const patchResult = await auth.api.patchSCIMUser({
+			await auth.api.patchSCIMUser({
 				params: {
 					userId: user.id,
 				},
@@ -1270,8 +1270,6 @@ describe("SCIM", () => {
 					authorization: `Bearer ${scimToken}`,
 				},
 			});
-
-			expect(patchResult).toBe(null);
 
 			const updatedUser = await auth.api.getSCIMUser({
 				params: {
@@ -1846,7 +1844,7 @@ describe("SCIM", () => {
 				},
 			});
 
-			const result = await auth.api.deleteSCIMUser({
+			await auth.api.deleteSCIMUser({
 				params: {
 					userId: newUser.id,
 				},
@@ -1854,8 +1852,6 @@ describe("SCIM", () => {
 					authorization: `Bearer ${scimToken}`,
 				},
 			});
-
-			expect(result).toBe(null);
 
 			const getUser = () =>
 				auth.api.getSCIMUser({

@@ -267,9 +267,7 @@ export const scim = () => {
 						updatedAccount,
 					);
 
-					return ctx.json(userResource, {
-						status: 200,
-					});
+					return ctx.json(userResource);
 				},
 			),
 			listSCIMUsers: createAuthEndpoint(
@@ -491,7 +489,8 @@ export const scim = () => {
 							: Promise.resolve(),
 					]);
 
-					return ctx.json(null, { status: 204 });
+					ctx.setStatus(204);
+					return;
 				},
 			),
 			deleteSCIMUser: createAuthEndpoint(
@@ -529,7 +528,8 @@ export const scim = () => {
 						where: [{ field: "id", value: userId }],
 					});
 
-					return ctx.json(null, { status: 204 });
+					ctx.setStatus(204);
+					return;
 				},
 			),
 			getSCIMServiceProviderConfig: createAuthEndpoint(
