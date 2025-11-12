@@ -25,6 +25,22 @@ export interface PhoneNumberOptions {
 		request?: Request | undefined,
 	) => Promise<void> | void;
 	/**
+	 * Custom OTP verification function
+	 *
+	 * If provided, this function will be called instead of the internal verification logic.
+	 * This is useful when using SMS providers that handle their own OTP generation and verification.
+	 *
+	 * @param data - Contains phone number and OTP code
+	 * @param request - The request object
+	 * @returns true if OTP is valid, false otherwise
+	 */
+	verifyOTP?:
+		| ((
+				data: { phoneNumber: string; code: string },
+				request?: Request | undefined,
+		  ) => Promise<boolean> | boolean)
+		| undefined;
+	/**
 	 * a callback to send otp on user requesting to reset their password
 	 *
 	 * @param data - contains phone number and code

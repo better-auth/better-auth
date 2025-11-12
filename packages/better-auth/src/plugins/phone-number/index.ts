@@ -467,38 +467,59 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 					},
 				},
 				async (ctx) => {
-					const otp = await ctx.context.internalAdapter.findVerificationValue(
-						ctx.body.phoneNumber,
-					);
+					if (options?.verifyOTP) {
+						// Use custom verifyOTP if provided
+						const isValid = await options.verifyOTP(
+							{
+								phoneNumber: ctx.body.phoneNumber,
+								code: ctx.body.code,
+							},
+							ctx.request,
+						);
 
-					if (!otp || otp.expiresAt < new Date()) {
-						if (otp && otp.expiresAt < new Date()) {
+						if (!isValid) {
 							throw new APIError("BAD_REQUEST", {
-								message: "OTP expired",
+								message: "Invalid OTP",
 							});
 						}
-						throw new APIError("BAD_REQUEST", {
-							message: PHONE_NUMBER_ERROR_CODES.OTP_NOT_FOUND,
-						});
-					}
-					const [otpValue, attempts] = otp.value.split(":");
-					const allowedAttempts = options?.allowedAttempts || 3;
-					if (attempts && parseInt(attempts) >= allowedAttempts) {
-						await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
-						throw new APIError("FORBIDDEN", {
-							message: "Too many attempts",
-						});
-					}
-					if (otpValue !== ctx.body.code) {
-						await ctx.context.internalAdapter.updateVerificationValue(otp.id, {
-							value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
-						});
-						throw new APIError("BAD_REQUEST", {
-							message: "Invalid OTP",
-						});
-					}
+					} else {
+						// Default internal verification logic
+						const otp = await ctx.context.internalAdapter.findVerificationValue(
+							ctx.body.phoneNumber,
+						);
 
-					await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
+						if (!otp || otp.expiresAt < new Date()) {
+							if (otp && otp.expiresAt < new Date()) {
+								throw new APIError("BAD_REQUEST", {
+									message: "OTP expired",
+								});
+							}
+							throw new APIError("BAD_REQUEST", {
+								message: PHONE_NUMBER_ERROR_CODES.OTP_NOT_FOUND,
+							});
+						}
+						const [otpValue, attempts] = otp.value.split(":");
+						const allowedAttempts = options?.allowedAttempts || 3;
+						if (attempts && parseInt(attempts) >= allowedAttempts) {
+							await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
+							throw new APIError("FORBIDDEN", {
+								message: "Too many attempts",
+							});
+						}
+						if (otpValue !== ctx.body.code) {
+							await ctx.context.internalAdapter.updateVerificationValue(
+								otp.id,
+								{
+									value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
+								},
+							);
+							throw new APIError("BAD_REQUEST", {
+								message: "Invalid OTP",
+							});
+						}
+
+						await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
+					}
 
 					if (ctx.body.updatePhoneNumber) {
 						const session = await getSessionFromCtx(ctx);
