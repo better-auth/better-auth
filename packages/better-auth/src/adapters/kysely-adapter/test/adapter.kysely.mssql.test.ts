@@ -305,12 +305,24 @@ const { execute } = await testAdapter({
 		});
 	},
 	async runMigrations(betterAuthOptions) {
+		console.log(`Starting MSSQL migrations`);
 		await resetDB();
+		console.log(`Finished resetting MSSQL database`);
 		const opts = Object.assign(betterAuthOptions, {
 			database: { db: kyselyDB, type: "mssql" },
 		} satisfies BetterAuthOptions);
-		const { runMigrations } = await getMigrations(opts);
+		console.log(`Running MSSQL migrations`);
+		const { runMigrations, compileMigrations } = await getMigrations(opts);
+		const CI =
+			process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
+		// Helpful for debugging mssql enviroment issues on Github actions
+		if (CI) {
+			console.log(`Compiling MSSQL migrations`);
+			const migrations = await compileMigrations();
+			console.log(`Migrations:`, migrations);
+		}
 		await runMigrations();
+		console.log(`Finished running MSSQL migrations`);
 	},
 	prefixTests: "mssql",
 	tests: [
