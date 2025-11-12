@@ -1,4 +1,5 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { getCurrentAdapter } from "@better-auth/core/context";
 import { APIError } from "better-call";
 import { z } from "zod";
 import { getSessionFromCtx, requestOnlySessionMiddleware } from "../../../api";
@@ -206,10 +207,16 @@ export const createOrganization = <O extends OrganizationOptions>(
 				| (Member & InferAdditionalFieldsFromPluginOptions<"member", O, false>)
 				| undefined;
 			let teamMember: TeamMember | null = null;
+			const willSetAsActive =
+				ctx.context.session && !ctx.body.keepCurrentActiveOrganization;
+			const orgOptions = ctx.context.orgOptions as any;
 			let data = {
 				userId: user.id,
 				organizationId: organization.id,
 				role: ctx.context.orgOptions.creatorRole || "owner",
+				...(orgOptions?.trackLastActiveOrganization && willSetAsActive
+					? { lastActiveOrganization: true }
+					: {}),
 			};
 			if (options?.organizationHooks?.beforeAddMember) {
 				const response = await options?.organizationHooks.beforeAddMember({
@@ -306,6 +313,30 @@ export const createOrganization = <O extends OrganizationOptions>(
 					organization.id,
 					ctx,
 				);
+				if (orgOptions?.trackLastActiveOrganization && member) {
+					const baseAdapter = await getCurrentAdapter(ctx.context.adapter);
+					const allMembers = await baseAdapter.findMany<InferMember<O>>({
+						model: "member",
+						where: [
+							{
+								field: "userId",
+								value: user.id,
+							},
+						],
+					});
+					await Promise.all(
+						allMembers.map((m) =>
+							baseAdapter.update<InferMember<O>>({
+								model: "member",
+								where: [{ field: "id", value: m.id }],
+								update: {
+									lastActiveOrganization:
+										m.organizationId === (organization.id as string),
+								},
+							}),
+						),
+					);
+				}
 			}
 
 			if (
@@ -822,8 +853,9 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				const sessionOrgId = session.session.activeOrganizationId;
 				if (!sessionOrgId) {
 					return ctx.json(null);
+				} else {
+					organizationId = sessionOrgId;
 				}
-				organizationId = sessionOrgId;
 			}
 
 			if (organizationSlug && !organizationId) {
@@ -866,6 +898,33 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				organization.id,
 				ctx,
 			);
+
+			const orgOptions = ctx.context.orgOptions as any;
+			if (orgOptions?.trackLastActiveOrganization) {
+				const baseAdapter = await getCurrentAdapter(ctx.context.adapter);
+				const allMembers = await baseAdapter.findMany<InferMember<O>>({
+					model: "member",
+					where: [
+						{
+							field: "userId",
+							value: session.user.id,
+						},
+					],
+				});
+				await Promise.all(
+					allMembers.map((m) =>
+						baseAdapter.update<InferMember<O>>({
+							model: "member",
+							where: [{ field: "id", value: m.id }],
+							update: {
+								lastActiveOrganization:
+									m.organizationId === (organization.id as string),
+							},
+						}),
+					),
+				);
+			}
+
 			await setSessionCookie(ctx, {
 				session: updatedSession,
 				user: session.user,

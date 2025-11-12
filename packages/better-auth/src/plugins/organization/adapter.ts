@@ -574,6 +574,22 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					],
 				},
 			);
+
+			if (options?.trackLastActiveOrganization) {
+				const membersMap = new Map<string, (typeof members)[0]>(
+					members.map((member) => [member.organizationId as string, member]),
+				);
+				organizations.sort((a, b) => {
+					const memberA = membersMap.get(a.id as string);
+					const memberB = membersMap.get(b.id as string);
+					const lastActiveA =
+						(memberA as any)?.lastActiveOrganization === true ? 1 : 0;
+					const lastActiveB =
+						(memberB as any)?.lastActiveOrganization === true ? 1 : 0;
+					return lastActiveB - lastActiveA;
+				});
+			}
+
 			return organizations;
 		},
 		createTeam: async (data: Omit<TeamInput, "id">) => {

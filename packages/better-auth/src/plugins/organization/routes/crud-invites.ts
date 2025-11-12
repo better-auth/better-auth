@@ -1,4 +1,5 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { getCurrentAdapter } from "@better-auth/core/context";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
 import { z } from "zod";
@@ -16,6 +17,7 @@ import { hasPermission } from "../has-permission";
 import { parseRoles } from "../organization";
 import {
 	type InferInvitation,
+	type InferMember,
 	type InferOrganizationRolesFromOption,
 	type Invitation,
 	type Member,
@@ -626,11 +628,15 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				}
 			}
 
+			const orgOptions = ctx.context.orgOptions as any;
 			const member = await adapter.createMember({
 				organizationId: invitation.organizationId,
 				userId: session.user.id,
 				role: invitation.role,
 				createdAt: new Date(),
+				...(orgOptions?.trackLastActiveOrganization
+					? { lastActiveOrganization: true }
+					: {}),
 			});
 
 			await adapter.setActiveOrganization(
@@ -638,6 +644,32 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				invitation.organizationId,
 				ctx,
 			);
+
+			if (orgOptions?.trackLastActiveOrganization) {
+				const baseAdapter = await getCurrentAdapter(ctx.context.adapter);
+				const allMembers = await baseAdapter.findMany<InferMember<O>>({
+					model: "member",
+					where: [
+						{
+							field: "userId",
+							value: session.user.id,
+						},
+					],
+				});
+				await Promise.all(
+					allMembers.map((m) =>
+						baseAdapter.update<InferMember<O>>({
+							model: "member",
+							where: [{ field: "id", value: m.id }],
+							update: {
+								lastActiveOrganization:
+									m.organizationId === (invitation.organizationId as string),
+							},
+						}),
+					),
+				);
+			}
+
 			if (!acceptedI) {
 				return ctx.json(null, {
 					status: 400,

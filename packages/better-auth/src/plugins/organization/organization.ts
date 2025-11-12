@@ -1094,6 +1094,16 @@ export function organization<O extends OrganizationOptions>(
 						defaultValue: "member",
 						fieldName: options?.schema?.member?.fields?.role,
 					},
+					...(options?.trackLastActiveOrganization
+						? {
+								lastActiveOrganization: {
+									type: "boolean",
+									required: false,
+									fieldName:
+										options?.schema?.member?.fields?.lastActiveOrganization,
+								},
+							}
+						: {}),
 					createdAt: {
 						type: "date",
 						required: true,
