@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from "vitest";
-import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { bearer } from "../bearer";
 import { phoneNumber } from ".";
@@ -8,28 +7,27 @@ import { phoneNumberClient } from "./client";
 describe("phone-number", async (it) => {
 	let otp = "";
 
-	const { customFetchImpl, sessionSetter } = await getTestInstance({
-		plugins: [
-			phoneNumber({
-				async sendOTP({ code }) {
-					otp = code;
-				},
-				signUpOnVerification: {
-					getTempEmail(phoneNumber) {
-						return `temp-${phoneNumber}`;
+	const { client, sessionSetter } = await getTestInstance(
+		{
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
 					},
-				},
-			}),
-		],
-	});
-
-	const client = createAuthClient({
-		baseURL: "http://localhost:3000",
-		plugins: [phoneNumberClient()],
-		fetchOptions: {
-			customFetchImpl,
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}`;
+						},
+					},
+				}),
+			],
 		},
-	});
+		{
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
 
 	const headers = new Headers();
 
@@ -106,34 +104,33 @@ describe("phone-number", async (it) => {
 describe("phone auth flow", async () => {
 	let otp = "";
 
-	const { customFetchImpl, sessionSetter, auth } = await getTestInstance({
-		plugins: [
-			phoneNumber({
-				async sendOTP({ code }) {
-					otp = code;
-				},
-				signUpOnVerification: {
-					getTempEmail(phoneNumber) {
-						return `temp-${phoneNumber}`;
+	const { client, sessionSetter, auth } = await getTestInstance(
+		{
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
 					},
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}`;
+						},
+					},
+				}),
+				bearer(),
+			],
+			user: {
+				changeEmail: {
+					enabled: true,
 				},
-			}),
-			bearer(),
-		],
-		user: {
-			changeEmail: {
-				enabled: true,
 			},
 		},
-	});
-
-	const client = createAuthClient({
-		baseURL: "http://localhost:3000",
-		plugins: [phoneNumberClient()],
-		fetchOptions: {
-			customFetchImpl,
+		{
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
 		},
-	});
+	);
 
 	it("should send otp", async () => {
 		const res = await client.phoneNumber.sendOtp({
@@ -216,29 +213,28 @@ describe("phone auth flow", async () => {
 describe("verify phone-number", async (it) => {
 	let otp = "";
 
-	const { customFetchImpl, sessionSetter } = await getTestInstance({
-		plugins: [
-			phoneNumber({
-				async sendOTP({ code }) {
-					otp = code;
-				},
-				signUpOnVerification: {
-					getTempEmail(phoneNumber) {
-						return `temp-${phoneNumber}`;
+	const { client, sessionSetter } = await getTestInstance(
+		{
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
 					},
-				},
-				allowedAttempts: 3,
-			}),
-		],
-	});
-
-	const client = createAuthClient({
-		baseURL: "http://localhost:3000",
-		plugins: [phoneNumberClient()],
-		fetchOptions: {
-			customFetchImpl,
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}`;
+						},
+					},
+					allowedAttempts: 3,
+				}),
+			],
 		},
-	});
+		{
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
 
 	const headers = new Headers();
 
@@ -298,33 +294,32 @@ describe("reset password flow attempts", async (it) => {
 	let otp = "";
 	let resetOtp = "";
 
-	const { customFetchImpl, sessionSetter } = await getTestInstance({
-		plugins: [
-			phoneNumber({
-				async sendOTP({ code }) {
-					console.log("sendOTP", code);
-					otp = code;
-				},
-				sendPasswordResetOTP(data, request) {
-					resetOtp = data.code;
-				},
-				signUpOnVerification: {
-					getTempEmail(phoneNumber) {
-						return `temp-${phoneNumber}`;
+	const { client, sessionSetter } = await getTestInstance(
+		{
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						console.log("sendOTP", code);
+						otp = code;
 					},
-				},
-				allowedAttempts: 3,
-			}),
-		],
-	});
-
-	const client = createAuthClient({
-		baseURL: "http://localhost:3000",
-		plugins: [phoneNumberClient()],
-		fetchOptions: {
-			customFetchImpl,
+					sendPasswordResetOTP(data, request) {
+						resetOtp = data.code;
+					},
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}`;
+						},
+					},
+					allowedAttempts: 3,
+				}),
+			],
 		},
-	});
+		{
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
 
 	const testPhoneNumber = "+251911121314";
 
@@ -388,34 +383,33 @@ describe("reset password flow attempts", async (it) => {
 
 describe("phone number verification requirement", async () => {
 	let otp = "";
-	const { customFetchImpl } = await getTestInstance({
-		plugins: [
-			phoneNumber({
-				async sendOTP({ code }) {
-					otp = code;
-				},
-				requireVerification: true,
-				signUpOnVerification: {
-					getTempEmail(phoneNumber) {
-						return `temp-${phoneNumber}`;
+	const { client } = await getTestInstance(
+		{
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
 					},
+					requireVerification: true,
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}`;
+						},
+					},
+				}),
+			],
+			user: {
+				changeEmail: {
+					enabled: true,
 				},
-			}),
-		],
-		user: {
-			changeEmail: {
-				enabled: true,
 			},
 		},
-	});
-
-	const client = createAuthClient({
-		baseURL: "http://localhost:3000",
-		plugins: [phoneNumberClient()],
-		fetchOptions: {
-			customFetchImpl,
+		{
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
 		},
-	});
+	);
 
 	const testPhoneNumber = "+251911121314";
 	const testPassword = "password123";
@@ -441,28 +435,27 @@ describe("phone number verification requirement", async () => {
 describe("updateUser phone number update prevention", async () => {
 	let otp = "";
 
-	const { customFetchImpl, sessionSetter } = await getTestInstance({
-		plugins: [
-			phoneNumber({
-				async sendOTP({ code }) {
-					otp = code;
-				},
-				signUpOnVerification: {
-					getTempEmail(phoneNumber) {
-						return `temp-${phoneNumber}`;
+	const { client, sessionSetter } = await getTestInstance(
+		{
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
 					},
-				},
-			}),
-		],
-	});
-
-	const client = createAuthClient({
-		baseURL: "http://localhost:3000",
-		plugins: [phoneNumberClient()],
-		fetchOptions: {
-			customFetchImpl,
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}`;
+						},
+					},
+				}),
+			],
 		},
-	});
+		{
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
 
 	const headers = new Headers();
 	const initialPhoneNumber = "+251911121314";
@@ -520,29 +513,28 @@ describe("custom verifyOTP", async () => {
 	const mockVerifyOTP = vi.fn();
 	let sentCode = "";
 
-	const { customFetchImpl, sessionSetter } = await getTestInstance({
-		plugins: [
-			phoneNumber({
-				async sendOTP({ code }) {
-					sentCode = code;
-				},
-				verifyOTP: mockVerifyOTP,
-				signUpOnVerification: {
-					getTempEmail(phoneNumber) {
-						return `temp-${phoneNumber}`;
+	const { client, sessionSetter } = await getTestInstance(
+		{
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						sentCode = code;
 					},
-				},
-			}),
-		],
-	});
-
-	const client = createAuthClient({
-		baseURL: "http://localhost:3000",
-		plugins: [phoneNumberClient()],
-		fetchOptions: {
-			customFetchImpl,
+					verifyOTP: mockVerifyOTP,
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}`;
+						},
+					},
+				}),
+			],
 		},
-	});
+		{
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
 
 	const headers = new Headers();
 	const testPhoneNumber = "+1234567890";
