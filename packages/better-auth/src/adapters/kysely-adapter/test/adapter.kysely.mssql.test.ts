@@ -17,51 +17,57 @@ import { kyselyAdapter } from "../kysely-adapter";
 // We are not allowed to handle the mssql connection
 // we must let kysely handle it. This is because if kysely is already
 // handling it, and we were to connect it ourselves, it will create bugs.
-const dialect = new MssqlDialect({
-	tarn: {
-		...Tarn,
-		options: {
-			min: 0,
-			max: 50,
-		},
-	},
-	tedious: {
-		...Tedious,
-		connectionFactory: () =>
-			new Tedious.Connection({
-				authentication: {
-					options: {
-						password: "Password123!",
-						userName: "sa",
-					},
-					type: "default",
-				},
-				options: {
-					database: "better_auth",
-					port: 1433,
-					trustServerCertificate: true,
-					encrypt: false,
-					connectTimeout: 30000,
-					requestTimeout: 30000,
-				},
-				server: "localhost",
-			}),
-		TYPES: {
-			...Tedious.TYPES,
-			DateTime: Tedious.TYPES.DateTime2,
-		},
-	},
-});
 
-const kyselyDB = new Kysely({
-	dialect: dialect,
-});
+// Helper function to create a connection factory for a specific database
+const createConnectionFactory = (database: string) => () =>
+	new Tedious.Connection({
+		authentication: {
+			options: {
+				password: "Password123!",
+				userName: "sa",
+			},
+			type: "default",
+		},
+		options: {
+			database: database,
+			port: 1433,
+			trustServerCertificate: true,
+			encrypt: false,
+			connectTimeout: 30000,
+			requestTimeout: 30000,
+		},
+		server: "localhost",
+	});
 
 // Create better_auth database if it doesn't exist
+// We need to connect to 'master' database first since 'better_auth' may not exist yet
 const ensureDatabaseExists = async () => {
 	try {
 		// console.log("Ensuring better_auth database exists...");
-		await kyselyDB.getExecutor().executeQuery({
+		// Create a temporary connection to 'master' database to create 'better_auth'
+		const masterDialect = new MssqlDialect({
+			tarn: {
+				...Tarn,
+				options: {
+					min: 0,
+					max: 5,
+				},
+			},
+			tedious: {
+				...Tedious,
+				connectionFactory: createConnectionFactory("master"),
+				TYPES: {
+					...Tedious.TYPES,
+					DateTime: Tedious.TYPES.DateTime2,
+				},
+			},
+		});
+
+		const masterDB = new Kysely({
+			dialect: masterDialect,
+		});
+
+		await masterDB.getExecutor().executeQuery({
 			sql: `
 				IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = 'better_auth')
 				BEGIN
@@ -77,12 +83,37 @@ const ensureDatabaseExists = async () => {
 			query: { kind: "SelectQueryNode" },
 			queryId: { queryId: "ensure-db" },
 		});
+
+		await masterDB.destroy();
 		// console.log("Database check/creation completed");
 	} catch (error) {
 		console.error("Failed to ensure database exists:", error);
 		throw error;
 	}
 };
+
+// Create dialect for better_auth database (after ensuring it exists)
+const dialect = new MssqlDialect({
+	tarn: {
+		...Tarn,
+		options: {
+			min: 0,
+			max: 50,
+		},
+	},
+	tedious: {
+		...Tedious,
+		connectionFactory: createConnectionFactory("better_auth"),
+		TYPES: {
+			...Tedious.TYPES,
+			DateTime: Tedious.TYPES.DateTime2,
+		},
+	},
+});
+
+const kyselyDB = new Kysely({
+	dialect: dialect,
+});
 
 // Warm up connection for CI environments
 const warmupConnection = async () => {
