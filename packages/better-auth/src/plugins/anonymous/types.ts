@@ -52,6 +52,13 @@ export interface AnonymousOptions {
 		  ) => Promise<string> | string)
 		| undefined;
 	/**
+	 * A custom random email generation function.
+	 * Useful when you want to specify a temporary email in a different format from the default.
+	 * You are responsible for ensuring the email is unique to avoid conflicts.
+	 * @returns The email address for the anonymous user.
+	 */
+	generateRandomEmail?: (() => Promise<string> | string) | undefined;
+	/**
 	 * Custom schema for the anonymous plugin
 	 */
 	schema?: InferOptionSchema<typeof schema> | undefined;

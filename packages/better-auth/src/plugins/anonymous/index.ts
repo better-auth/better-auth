@@ -3,14 +3,36 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import { z } from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
 import { parseSetCookieHeader, setSessionCookie } from "../../cookies";
 import { mergeSchema } from "../../db/schema";
 import { generateId } from "../../utils/id";
-import { getOrigin } from "../../utils/url";
 import { ANONYMOUS_ERROR_CODES } from "./error-codes";
 import { schema } from "./schema";
 import type { AnonymousOptions } from "./types";
+
+async function getAnonUserEmail(
+	options: AnonymousOptions | undefined,
+): Promise<string> {
+	const customEmail = await options?.generateRandomEmail?.();
+	if (customEmail) {
+		const validation = z.email().safeParse(customEmail);
+		if (!validation.success) {
+			throw new APIError("BAD_REQUEST", {
+				message: ANONYMOUS_ERROR_CODES.INVALID_EMAIL_FORMAT,
+			});
+		}
+		return customEmail;
+	}
+
+	const id = generateId();
+	if (options?.emailDomainName) {
+		return `temp-${id}@${options.emailDomainName}`;
+	}
+
+	return `temp@${id}.com`;
+}
 
 export const anonymous = (options?: AnonymousOptions | undefined) => {
 	return {
@@ -61,10 +83,7 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						});
 					}
 
-					const { emailDomainName = getOrigin(ctx.context.baseURL) } =
-						options || {};
-					const id = generateId();
-					const email = `temp-${id}@${emailDomainName}`;
+					const email = await getAnonUserEmail(options);
 					const name = (await options?.generateName?.(ctx)) || "Anonymous";
 					const newUser = await ctx.context.internalAdapter.createUser({
 						email,
