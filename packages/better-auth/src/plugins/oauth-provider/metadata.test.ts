@@ -7,7 +7,7 @@ import { type JwtOptions, jwt } from "../jwt";
 import { oauthProviderClient } from "./client";
 import { oauthProviderResourceClient } from "./client-server";
 import { oauthProvider } from "./oauth";
-import type { OAuthOptions } from "./types";
+import type { OAuthOptions, Scope } from "./types";
 
 describe("oauth metadata", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
@@ -30,7 +30,10 @@ describe("oauth metadata", async () => {
 	];
 
 	async function createTestInstance(opts?: {
-		oauthProviderConfig?: Omit<OAuthOptions, "loginPage" | "consentPage">;
+		oauthProviderConfig?: Omit<
+			OAuthOptions<Scope[]>,
+			"loginPage" | "consentPage"
+		>;
 		jwtConfig?: JwtOptions;
 	}) {
 		const { auth, customFetchImpl } = await getTestInstance({

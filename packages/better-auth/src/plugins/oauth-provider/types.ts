@@ -1,3 +1,4 @@
+import type { LiteralString } from "@better-auth/core";
 import type { JWTPayload } from "jose";
 import type { GrantType } from "../../oauth-2.1/types";
 import type { InferOptionSchema, Session, User } from "../../types";
@@ -9,11 +10,32 @@ export type StoreTokenType =
 	| "refresh_token"
 	| "authorization_code";
 
-export interface OAuthOptions {
+type InternallySupportedScopes =
+	| "openid"
+	| "profile"
+	| "email"
+	| "offline_access";
+export type Scope = LiteralString | InternallySupportedScopes;
+
+export interface OAuthOptions<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> {
 	/**
 	 * Custom schema definitions
 	 */
 	schema?: InferOptionSchema<typeof schema>;
+	/**
+	 * The scopes that the client is allowed to request.
+	 * Must contain "openid" to be considered an OIDC server,
+	 * otherwise it is just an OAuth server.
+	 *
+	 * @see https://openid.net/specs/openid-connect-core-1_0.html#ScopeClaims
+	 * @default
+	 * ```ts
+	 * ["openid", "profile", "email", "offline_access"]
+	 * ```
+	 */
+	scopes?: Scopes;
 	/**
 	 * List of valid audiences if there are multiple.
 	 *
@@ -28,7 +50,7 @@ export interface OAuthOptions {
 	 * Trusted clients that are configured directly in the provider options.
 	 * These clients bypass database lookups and can optionally skip consent screens.
 	 */
-	trustedClients?: SchemaClient[];
+	trustedClients?: SchemaClient<Scopes>[];
 	/**
 	 * The amount of time in seconds that the access token is valid for.
 	 *
@@ -62,6 +84,23 @@ export interface OAuthOptions {
 	 */
 	codeExpiresIn?: number;
 	/**
+	 * Create access token expirations based on scope.
+	 *
+	 * This is useful for higher-privelege scopes that
+	 * require shorter expiration times. The earliest
+	 * expiration will take precendence. If not specified,
+	 * the default will take place.
+	 *
+	 * Note: values should be lower than the defaults
+	 * `accessTokenExpiresIn` and `m2mAccessTokenExpiresIn`
+	 *
+	 * @example
+	 * { "write:payments": "5m", "read:payments": "30m" }
+	 */
+	scopeExpirations?: {
+		[K in Scopes[number]]?: number | string | Date;
+	};
+	/**
 	 * Allow unauthenticated dynamic client registration.
 	 *
 	 * Support for `allowUnauthenticatedClientRegistration` **will be deprecated**
@@ -88,7 +127,7 @@ export interface OAuthOptions {
 	 *
 	 * @default scopes
 	 */
-	clientRegistrationDefaultScopes?: string[];
+	clientRegistrationDefaultScopes?: Scopes;
 	/**
 	 * List of scopes for allowed clients in addition to
 	 * those listed in the default scope. Finalized allowed list is
@@ -100,7 +139,7 @@ export interface OAuthOptions {
 	 *
 	 * @default - clientRegistrationDefaultScopes
 	 */
-	clientRegistrationAllowedScopes?: string[];
+	clientRegistrationAllowedScopes?: Scopes;
 	/**
 	 * How long a dynamically created confidential client
 	 * should last for.
@@ -142,25 +181,12 @@ export interface OAuthOptions {
 		session?: Session & Record<string, unknown>;
 	}) => Awaitable<string | undefined>;
 	/**
-	 * List of scopes a newly registered client can have.
-	 *
-	 * Leave undefined to throw error if no scope was sent
+	 * List default scopes when using the token endpoint's
+	 * grant type "client_credentials"
 	 *
 	 * @default undefined
 	 */
-	clientCredentialGrantDefaultScopes?: string[];
-	/**
-	 * The scopes that the client is allowed to request.
-	 * Must contain "openid" to be considered an OIDC server,
-	 * otherwise it is just an OAuth server.
-	 *
-	 * @see https://openid.net/specs/openid-connect-core-1_0.html#ScopeClaims
-	 * @default
-	 * ```ts
-	 * ["openid", "profile", "email", "offline_access"]
-	 * ```
-	 */
-	scopes?: string[];
+	clientCredentialGrantDefaultScopes?: Scopes;
 	/**
 	 * Grant types supported by the token endpoint
 	 *
@@ -169,80 +195,10 @@ export interface OAuthOptions {
 	 */
 	grantTypes?: GrantType[];
 	/**
-	 * Create access token expirations based on scope.
-	 *
-	 * This is useful for higher-privelege scopes that
-	 * require shorter expiration times. The earliest
-	 * expiration will take precendence. If not specified,
-	 * the default will take place.
-	 *
-	 * Note: values should be lower than the defaults
-	 * `accessTokenExpiresIn` and `m2mAccessTokenExpiresIn`
-	 *
-	 * @example
-	 * { "write:payments": "5m", "read:payments": "30m" }
-	 */
-	scopeExpirations?: Record<string, number | string | Date>;
-	/**
 	 * The URL to the login page. This is used if the client requests the `login`
 	 * prompt.
 	 */
 	loginPage: string;
-	/**
-	 * A URL to the account selection page where the user will be redirected if
-	 * the user must select an account (eg. multi-session).
-	 *
-	 * Once the user selects an account, you need to call the `/oauth2/continue`
-	 * to continue the login flow.
-	 *
-	 * @default loginPage
-	 */
-	selectAccountPage?: string;
-	/**
-	 * Checks to see if an account needs selection
-	 * for the `/oauth2/authorize` endpoint.
-	 *
-	 * @returns
-	 * - `true`: intended user or account selected
-	 * - `false`: account is not selected and needs selection
-	 */
-	selectedAccount?: (context: {
-		headers: Headers;
-		user: User & Record<string, unknown>;
-		session: Session & Record<string, unknown>;
-		scopes: string[];
-	}) => Awaitable<boolean>;
-	/**
-	 * The page `postLogin` should redirect to.
-	 */
-	postLoginPage?: string;
-	/**
-	 * A value to tie to the consent reference_id.
-	 *
-	 * Note that YOU must fail in this function if the requested
-	 * scope doesn't have a reference id and it should.
-	 */
-	postLoginConsentReferenceId?: (context: {
-		user: User & Record<string, unknown>;
-		session: Session & Record<string, unknown>;
-		scopes: string[];
-	}) => Awaitable<string | undefined>;
-	/**
-	 * After login and before consent, request the user to
-	 * select an additional choice for `/oauth2/authorize`.
-	 * For example, allow selection of an organization or team.
-	 *
-	 * Upon selection of a specific account, use `/oauth2/continue`.
-	 *
-	 * @returns
-	 * - `true`: intended user or account selected
-	 * - `false`: account is not selected and needs selection
-	 */
-	postLogin?: (context: {
-		user: User & Record<string, unknown>;
-		session: Session & Record<string, unknown>;
-		scopes: string[];
-	}) => Awaitable<boolean>;
 	/**
 	 * A URL to the consent page where the user will be redirected if the client
 	 * requests consent.
@@ -268,13 +224,99 @@ export interface OAuthOptions {
 	 */
 	consentPage: string;
 	/**
-	 * Custom function to generate a client ID.
+	 * Select Account page settings associated with `prompt: "select_account"`
 	 */
-	generateClientId?: () => string;
+	selectAccount?: {
+		/**
+		 * A URL to the account selection page where the user will be redirected if
+		 * the user must select an account (eg. multi-session).
+		 *
+		 * Once the user selects an account, you need to call the `/oauth2/continue`
+		 * to continue the login flow.
+		 *
+		 * @default loginPage
+		 */
+		page?: string;
+		/**
+		 * Checks to see if an account needs selection
+		 * for the `/oauth2/authorize` endpoint.
+		 *
+		 * @returns
+		 * - `true`: intended user or account selected
+		 * - `false`: account is not selected and needs selection
+		 */
+		shouldRedirect: (context: {
+			headers: Headers;
+			user: User & Record<string, unknown>;
+			session: Session & Record<string, unknown>;
+			scopes: Scopes;
+		}) => Awaitable<boolean>;
+	};
 	/**
-	 * Custom function to generate a client secret.
+	 * Post login page settings
 	 */
-	generateClientSecret?: () => string;
+	postLogin?: {
+		/**
+		 * The page `shouldRedirect` should redirect to.
+		 */
+		page: string;
+		/**
+		 * A value to tie to the consent reference_id.
+		 *
+		 * Note that YOU must fail in this function if the requested
+		 * scope doesn't have a reference id and it should.
+		 */
+		consentReferenceId: (context: {
+			user: User & Record<string, unknown>;
+			session: Session & Record<string, unknown>;
+			scopes: Scopes;
+		}) => Awaitable<string | undefined>;
+		/**
+		 * After login and before consent, request the user to
+		 * select an additional choice for `/oauth2/authorize`.
+		 * For example, allow selection of an organization or team.
+		 *
+		 * Upon selection of a specific account, use `/oauth2/continue`.
+		 *
+		 * @returns
+		 * - `true`: intended user or account selected
+		 * - `false`: account is not selected and needs selection
+		 */
+		shouldRedirect: (context: {
+			user: User & Record<string, unknown>;
+			session: Session & Record<string, unknown>;
+			scopes: Scopes;
+		}) => Awaitable<boolean>;
+	};
+	/**
+	 * Format your refresh tokens the returned to oauth clients.
+	 * For example with JWE encryption/decryption logic.
+	 *
+	 * If you changed the format after production deployment,
+	 * ensure that the prior version can still be decoded.
+	 *
+	 * NOTE: `prefix.refreshToken` is internally handled,
+	 * so `token` only contains the stored database token.
+	 */
+	formatRefreshToken?: {
+		/**
+		 * Custom session token format sent to client.
+		 */
+		encrypt: (token: string, sessionId?: string) => Awaitable<string>;
+		/**
+		 * Decodes the custom session token.
+		 *
+		 * @returns {string | undefined} sessionId - if returned,
+		 * should be same as the one received in `encode`.
+		 * There is an added benefit that updates to the session occur
+		 * via id instead of token.
+		 * @returns {string} token - should be same as the one
+		 * received in `encode`
+		 */
+		decrypt: (
+			token: string,
+		) => Awaitable<{ sessionId?: string; token: string }>;
+	};
 	/**
 	 * Store the client secret in your database in a secure way
 	 * Note: This will not affect the client secret sent to the user,
@@ -332,7 +374,7 @@ export interface OAuthOptions {
 		user: User & Record<string, unknown>;
 		/** The scopes from the access token used
 		 * in the /userinfo request (matches jwt.scopes) */
-		scopes: string[];
+		scopes: Scopes;
 		/** The access token payload used in the /userinfo request */
 		jwt: JWTPayload;
 	}) => Awaitable<Record<string, any>>;
@@ -350,7 +392,7 @@ export interface OAuthOptions {
 		/** The user object if token is associated to a user. */
 		user: User & Record<string, unknown>;
 		/** Scopes granted for this token */
-		scopes: string[];
+		scopes: Scopes;
 		/** oAuthClient metadata */
 		metadata?: Record<string, any>;
 		/** oAuthClient referenceId field (eg. organization, team) */
@@ -373,7 +415,7 @@ export interface OAuthOptions {
 		/** The user object if token is associated to a user. Null if user doesn't exist. Undefined if user not applicable. */
 		user?: (User & Record<string, unknown>) | null;
 		/** Scopes granted for this token */
-		scopes: string[];
+		scopes: Scopes;
 		/** The resource requesting. */
 		resource?: string;
 		/** oAuthClient metadata */
@@ -392,7 +434,7 @@ export interface OAuthOptions {
 		 *
 		 * All values must be found in the scope field
 		 */
-		scopes_supported?: string[];
+		scopes_supported?: Scopes;
 		/**
 		 * Advertised claims_supported located at /.well-known/openid-configuration
 		 *
@@ -402,53 +444,63 @@ export interface OAuthOptions {
 		claims_supported?: string[];
 	};
 	/**
-	 * Adds a prefix to an opaque access token.
-	 * Note: the prefix is not stored in the database.
+	 * Attach prefixes to returned token types.
+	 * NOTE: The prefix is not stored in the database.
 	 *
 	 * Useful when also using the [API Key Plugin](../api-key/index.ts)
 	 * or Secret Scanners (ie Github Secret Scanning, GitGuardian, Trufflehog).
 	 *
-	 * We recommend to append an underscore to make it more identifiable
-	 * Additionally, we recommend you add the prefix prior to the first deployment
-	 * otherwise you must utilize this with generateOpaqueAccessToken (storing the full
-	 * encoded value on the database).
-	 *
-	 * @example "domain_at_"
-	 * @default undefined
-	 */
-	opaqueAccessTokenPrefix?: string;
-	/**
-	 * Adds a prefix to an opaque refresh token.
-	 * Note: the prefix is not stored in the database.
-	 *
-	 * Useful when using Secret Scanners (ie Github Secret Scanning,
-	 * GitGuardian, Trufflehog).
-	 *
-	 * We recommend to append an underscore to make it more identifiable
-	 * Additionally, we recommend you add the prefix prior to the first deployment
-	 * otherwise you must utilize this with generateRefreshToken (storing the full
-	 * encoded value on the database).
-	 *
-	 * @example "domain_rt_"
-	 * @default undefined
-	 */
-	refreshTokenPrefix?: string;
-	/**
-	 * Adds a prefix to delivered client secrets.
-	 * Note: the prefix is not stored in the database.
-	 *
-	 * Useful when using Secret Scanners (ie Github Secret Scanning,
-	 * GitGuardian, Trufflehog).
-	 *
 	 * We recommend to append an underscore to make it more identifiable.
-	 * Additionally, we recommend you add the prefix prior to the first deployment
-	 * otherwise you must utilize this with generateClientSecret (storing the full
-	 * encoded value on the database).
-	 *
-	 * @example "domain_cs_"
-	 * @default undefined
 	 */
-	clientSecretPrefix?: string;
+	prefix?: {
+		/**
+		 * Prefix on returned opaque access tokens.
+		 *
+		 * Additionally, we recommend you add the prefix prior to the first deployment
+		 * otherwise you must utilize this with `generateOpaqueAccessToken` (storing the full
+		 * encoded value on the database).
+		 *
+		 * @example "domain_at_"
+		 * @default undefined
+		 */
+		opaqueAccessToken?: string;
+		/**
+		 * Prefix on returned refresh tokens.
+		 *
+		 * Additionally, we recommend you add the prefix prior to the first deployment
+		 * otherwise you must utilize this with `generateRefreshToken` (storing the full
+		 * encoded value on the database).
+		 *
+		 * @example "domain_rt_"
+		 * @default undefined
+		 */
+		refreshToken?: string;
+		/**
+		 * Prefix on returned client secrets.
+		 *
+		 * Additionally, we recommend you add the prefix prior to the first deployment
+		 * otherwise you must utilize this with `generateClientSecret` (storing the full
+		 * encoded value on the database).
+		 *
+		 * @example "domain_cs_"
+		 * @default undefined
+		 */
+		clientSecret?: string;
+	};
+	/**
+	 * Custom function to generate a client ID.
+	 *
+	 * @default
+	 * generateRandomString(32, "A-Z", "a-z")
+	 */
+	generateClientId?: () => string;
+	/**
+	 * Custom function to generate a client secret.
+	 *
+	 * @default
+	 * generateRandomString(32, "A-Z", "a-z")
+	 */
+	generateClientSecret?: () => string;
 	/**
 	 * Generate a unique access token to save on the database.
 	 *
@@ -463,32 +515,6 @@ export interface OAuthOptions {
 	 * generateRandomString(32, "A-Z", "a-z")
 	 */
 	generateRefreshToken?: () => Awaitable<string>;
-	/**
-	 * Custom session token formatter. You can
-	 * choose to perform additional functionality such as
-	 * refresh token encryption.
-	 *
-	 * If defined, you must provide the function
-	 * decodeRefreshToken.
-	 */
-	encodeRefreshToken?: (token: string, sessionId?: string) => Awaitable<string>;
-	/**
-	 * Decodes a custom session token format.
-	 * If you changed the format after production deployment,
-	 * ensure that the prior version can still be decoded.
-	 *
-	 * Must be defined when using encodeRefreshToken.
-	 *
-	 * @returns {string | undefined} sessionId - if returned,
-	 * should be same as the one received in encodeRefreshToken.
-	 * There is an added benefit that updates to the session occur
-	 * via id instead of token.
-	 * @returns {string} token - should be same as the one
-	 * received in encodeRefreshToken
-	 */
-	decodeRefreshToken?: (
-		token: string,
-	) => Awaitable<{ sessionId?: string; token: string }>;
 	/**
 	 * Confirmations that individually silences specific well-known endpoint
 	 * configuration warnings.
@@ -650,7 +676,9 @@ export interface VerificationValue {
 /**
  * Client registered values as used within the plugin
  */
-export interface SchemaClient {
+export interface SchemaClient<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> {
 	//---- Required ----//
 	/**
 	 * Client ID
@@ -675,7 +703,7 @@ export interface SchemaClient {
 	 *
 	 * If not defined, any scope can be requested.
 	 */
-	scopes?: string[];
+	scopes?: Scopes;
 	//---- Recommended client data ----//
 	/** User who owns this client */
 	userId?: string | null;
@@ -750,7 +778,9 @@ export interface SchemaClient {
 	metadata?: string; // in JSON format
 }
 
-export interface OAuthOpaqueAccessToken {
+export interface OAuthOpaqueAccessToken<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> {
 	/**
 	 * The opaque access token.
 	 */
@@ -788,13 +818,15 @@ export interface OAuthOpaqueAccessToken {
 	 *
 	 * Shall match the refreshId.scopes if refreshId is provided.
 	 */
-	scopes: string[];
+	scopes: Scopes;
 }
 
 /**
  * Refresh Token Database Schema
  */
-export interface OAuthRefreshToken {
+export interface OAuthRefreshToken<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> {
 	token: string;
 	sessionId: string;
 	userId: string;
@@ -814,17 +846,19 @@ export interface OAuthRefreshToken {
 	 *
 	 * Considered Immutable once granted.
 	 */
-	scopes: string[];
+	scopes: Scopes;
 }
 
 /**
  * Consent Database Schema
  */
-export type OAuthConsent = {
+export type OAuthConsent<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> = {
 	clientId: string;
 	userId: string;
 	referenceId?: string;
-	scopes: string[];
+	scopes: Scopes;
 	consentGiven: boolean;
 	createdAt: Date;
 	updatedAt: Date;
