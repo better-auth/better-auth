@@ -20,3 +20,6 @@ catalogs:
     react-dom: 19.1.1
 
 neverBuiltDependencies: []
+
+patchedDependencies:
+  msw: patches/msw.patch
