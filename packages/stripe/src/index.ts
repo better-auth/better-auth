@@ -2,7 +2,6 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import { defineErrorCodes } from "@better-auth/core/utils";
 import {
 	type BetterAuthPlugin,
 	type GenericEndpointContext,
@@ -17,6 +16,7 @@ import {
 import { defu } from "defu";
 import Stripe, { type Stripe as StripeType } from "stripe";
 import * as z from "zod/v4";
+import { STRIPE_ERROR_CODES } from "./error-codes";
 import {
 	onCheckoutSessionCompleted,
 	onSubscriptionDeleted,
@@ -31,19 +31,6 @@ import type {
 	SubscriptionOptions,
 } from "./types";
 import { getPlanByName, getPlanByPriceInfo, getPlans } from "./utils";
-
-const STRIPE_ERROR_CODES = defineErrorCodes({
-	SUBSCRIPTION_NOT_FOUND: "Subscription not found",
-	SUBSCRIPTION_PLAN_NOT_FOUND: "Subscription plan not found",
-	ALREADY_SUBSCRIBED_PLAN: "You're already subscribed to this plan",
-	UNABLE_TO_CREATE_CUSTOMER: "Unable to create customer",
-	FAILED_TO_FETCH_PLANS: "Failed to fetch plans",
-	EMAIL_VERIFICATION_REQUIRED:
-		"Email verification is required before you can subscribe to a plan",
-	SUBSCRIPTION_NOT_ACTIVE: "Subscription is not active",
-	SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION:
-		"Subscription is not scheduled for cancellation",
-});
 
 const getUrl = (ctx: GenericEndpointContext, url: string) => {
 	if (/^[a-zA-Z][a-zA-Z0-9+\-.]*:/.test(url)) {
@@ -82,7 +69,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 		createAuthMiddleware(async (ctx) => {
 			const session = ctx.context.session;
 			if (!session) {
-				throw new APIError("UNAUTHORIZED");
+				throw new APIError("UNAUTHORIZED", {
+					message: STRIPE_ERROR_CODES.UNAUTHORIZED,
+				});
 			}
 			const referenceId =
 				ctx.body?.referenceId || ctx.query?.referenceId || session.user.id;
@@ -92,8 +81,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					`Passing referenceId into a subscription action isn't allowed if subscription.authorizeReference isn't defined in your stripe plugin config.`,
 				);
 				throw new APIError("BAD_REQUEST", {
-					message:
-						"Reference id is not allowed. Read server logs for more details.",
+					message: STRIPE_ERROR_CODES.REFERENCE_ID_NOT_ALLOWED,
 				});
 			}
 			/**
@@ -116,7 +104,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					: true;
 			if (!isAuthorized) {
 				throw new APIError("UNAUTHORIZED", {
-					message: "Unauthorized",
+					message: STRIPE_ERROR_CODES.UNAUTHORIZED,
 				});
 			}
 		});
@@ -450,7 +438,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 					if (!priceIdToUse) {
 						throw ctx.error("BAD_REQUEST", {
-							message: "Price ID not found for the selected plan",
+							message: STRIPE_ERROR_CODES.PRICE_ID_NOT_FOUND,
 						});
 					}
 
@@ -529,7 +517,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 				if (!subscription) {
 					ctx.context.logger.error("Subscription ID not found");
-					throw new APIError("INTERNAL_SERVER_ERROR");
+					throw new APIError("BAD_REQUEST", {
+						message: STRIPE_ERROR_CODES.SUBSCRIPTION_ID_NOT_FOUND,
+					});
 				}
 
 				const params = await subscriptionOptions.getCheckoutSessionParams?.(
@@ -1200,7 +1190,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 				if (!customerId) {
 					throw new APIError("BAD_REQUEST", {
-						message: "No Stripe customer found for this user",
+						message: STRIPE_ERROR_CODES.CUSTOMER_ID_NOT_FOUND,
 					});
 				}
 
@@ -1238,12 +1228,14 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						isAction: false,
 					},
 					cloneRequest: true,
-					//don't parse the body
+					// don't parse the body
 					disableBody: true,
 				},
 				async (ctx) => {
 					if (!ctx.request?.body) {
-						throw new APIError("INTERNAL_SERVER_ERROR");
+						throw new APIError("BAD_REQUEST", {
+							message: STRIPE_ERROR_CODES.REQUEST_BODY_NOT_FOUND,
+						});
 					}
 					const buf = await ctx.request.text();
 					const sig = ctx.request.headers.get("stripe-signature") as string;
@@ -1252,7 +1244,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					try {
 						if (!sig || !webhookSecret) {
 							throw new APIError("BAD_REQUEST", {
-								message: "Stripe webhook secret not found",
+								message: STRIPE_ERROR_CODES.STRIPE_WEBHOOK_SECRET_NOT_FOUND,
 							});
 						}
 						// Support both Stripe v18 (constructEvent) and v19+ (constructEventAsync)
@@ -1270,12 +1262,12 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					} catch (err: any) {
 						ctx.context.logger.error(`${err.message}`);
 						throw new APIError("BAD_REQUEST", {
-							message: `Webhook Error: ${err.message}`,
+							message: STRIPE_ERROR_CODES.STRIPE_WEBHOOK_ERROR,
 						});
 					}
 					if (!event) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Failed to construct event",
+							message: STRIPE_ERROR_CODES.STRIPE_WEBHOOK_EVENT_NOT_FOUND,
 						});
 					}
 					try {
@@ -1301,7 +1293,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							`Stripe webhook failed. Error: ${e.message}`,
 						);
 						throw new APIError("BAD_REQUEST", {
-							message: "Webhook error: See server logs for more information.",
+							message: STRIPE_ERROR_CODES.STRIPE_WEBHOOK_ERROR,
 						});
 					}
 					return ctx.json({ success: true });
