@@ -144,7 +144,7 @@ export const scim = (options?: SCIMOptions) => {
 
 					if (organizationId && !isOrgPluginEnabled) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Your instance does not support organizations",
+							message: "Restricting a token to an organization requires the organization plugin",
 						});
 					}
 
