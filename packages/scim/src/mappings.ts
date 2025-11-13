@@ -17,7 +17,16 @@ export const getFormattedName = (name: SCIMName) => {
 };
 
 export const getUserFullName = (email: string, name?: SCIMName) => {
-	return name ? (name.formatted ?? getFormattedName(name)) : email;
+	if (name) {
+		const formatted = name.formatted?.trim() ?? "";
+		if (formatted.length > 0) {
+			return formatted;
+		}
+
+		return getFormattedName(name);
+	}
+
+	return email;
 };
 
 export const getUserPrimaryEmail = (userName: string, emails?: SCIMEmail[]) => {
