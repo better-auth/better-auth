@@ -162,6 +162,20 @@ describe("organization", async (it) => {
 		expect(organization.error?.status).toBe(400);
 	});
 
+	it("should allow creating organization without slug", async () => {
+		const { headers } = await signInWithTestUser();
+		const organization = await client.organization.create({
+			name: "test-undefined-slug",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(organization.data?.name).toBe("test-undefined-slug");
+		expect(organization.data?.slug).toBeNull();
+		expect(organization.data?.members.length).toBe(1);
+		expect(organization.data?.members[0]?.role).toBe("owner");
+	});
+
 	it("should prevent creating organization with empty name", async () => {
 		const { headers } = await signInWithTestUser();
 		const organization = await client.organization.create({
@@ -194,13 +208,14 @@ describe("organization", async (it) => {
 		expect(organization?.members.length).toBe(1);
 		expect(organization?.members[0]?.role).toBe("owner");
 	});
+
 	it("should allow listing organizations", async () => {
 		const organizations = await client.organization.list({
 			fetchOptions: {
 				headers,
 			},
 		});
-		expect(organizations.data?.length).toBe(2);
+		expect(organizations.data?.length).toBe(3);
 	});
 
 	it("should allow updating organization", async () => {
