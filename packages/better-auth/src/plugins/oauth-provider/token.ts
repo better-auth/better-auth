@@ -327,16 +327,18 @@ async function checkResource(
 			audience.push(`${ctx.context.baseURL}/oauth2/userinfo`);
 		}
 		// Check valid audiences
-		const validAudiences = [
-			...(opts.validAudiences ?? [ctx.context.baseURL]),
-			scopes?.includes("openid")
-				? `${ctx.context.baseURL}/oauth2/userinfo`
-				: undefined,
-		]
-			.flat()
-			.filter((v) => v?.length);
+		const validAudiences = new Set(
+			[
+				...(opts.validAudiences ?? [ctx.context.baseURL]),
+				scopes?.includes("openid")
+					? `${ctx.context.baseURL}/oauth2/userinfo`
+					: undefined,
+			]
+				.flat()
+				.filter((v) => v?.length),
+		);
 		for (const aud of audience) {
-			if (!validAudiences.includes(aud)) {
+			if (!validAudiences.has(aud)) {
 				throw new APIError("BAD_REQUEST", {
 					error_description: "requested resource invalid",
 					error: "invalid_request",
@@ -731,45 +733,41 @@ async function handleClientCredentialsGrant(
 		});
 	}
 
-	// OIDC scopes should not be requestable (code authorization grant should be used)
-	let requestedScopes = scope?.split(" ");
-	if (requestedScopes) {
-		const invalidScopes = new Set([
-			"openid",
-			"profile",
-			"email",
-			"offline_access",
-		]);
-		const validScopes = opts.scopes ? new Set(opts.scopes) : undefined;
-		for (const sc of requestedScopes) {
-			if (invalidScopes.has(sc)) {
-				throw new APIError("BAD_REQUEST", {
-					error_description: `unable to satisfy scope ${sc}`,
-					error: "invalid_scope",
-				});
-			}
-			if (validScopes && !validScopes.has(sc)) {
-				throw new APIError("BAD_REQUEST", {
-					error_description: `invalid scope ${sc}`,
-					error: "invalid_scope",
-				});
-			}
-		}
-	}
-
+	// Note: Scope check is done below instead of through the function since different requirements
 	const client = await validateClientCredentials(
 		ctx,
 		opts,
 		client_id,
 		client_secret,
-		requestedScopes,
 	);
 
+	// OIDC scopes should not be requestable (code authorization grant should be used)
+	let requestedScopes = scope?.split(" ");
+	if (requestedScopes) {
+		const validScopes = new Set(client.scopes ?? opts.scopes);
+		const oidcScopes = new Set([
+			"openid",
+			"profile",
+			"email",
+			"offline_access",
+		]);
+		const invalidScopes = requestedScopes.filter((scope) => {
+			return !validScopes?.has(scope) || oidcScopes.has(scope);
+		});
+		if (invalidScopes.length) {
+			throw new APIError("BAD_REQUEST", {
+				error_description: `The following scopes are invalid: ${invalidScopes.join(", ")}`,
+				error: "invalid_scope",
+			});
+		}
+	}
 	// Set default scopes to all those available for that client or all provided scopes.
 	if (!requestedScopes) {
-		requestedScopes = client.scopes ??
+		requestedScopes =
+			client.scopes ??
 			opts.clientCredentialGrantDefaultScopes ??
-			opts.scopes ?? ["openid", "profile", "email", "offline_access"];
+			opts.scopes ??
+			[];
 	}
 
 	// Check requested audience if sent as the resource parameter
@@ -949,8 +947,9 @@ async function handleRefreshTokenGrant(
 	const scopes = refreshToken?.scopes;
 	const requestedScopes = scope?.split(" ");
 	if (requestedScopes) {
+		const validScopes = new Set(scopes);
 		for (const requestedScope of requestedScopes) {
-			if (!scopes.includes(requestedScope)) {
+			if (!validScopes.has(requestedScope)) {
 				throw new APIError("BAD_REQUEST", {
 					error_description: `unable to issue scope ${requestedScope}`,
 					error: "invalid_scope",
