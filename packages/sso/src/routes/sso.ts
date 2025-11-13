@@ -1665,15 +1665,10 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			if (existingUser) {
 				user = existingUser;
 			} else {
-				user = await ctx.context.adapter.create({
-					model: "user",
-					data: {
-						email: userInfo.email,
-						name: userInfo.name,
-						emailVerified: userInfo.emailVerified,
-						createdAt: new Date(),
-						updatedAt: new Date(),
-					},
+				user = await ctx.context.internalAdapter.createUser({
+					email: userInfo.email,
+					name: userInfo.name,
+					emailVerified: userInfo.emailVerified,
 				});
 			}
 
@@ -1688,17 +1683,12 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			});
 
 			if (!account) {
-				await ctx.context.adapter.create<Account>({
-					model: "account",
-					data: {
-						userId: user.id,
-						providerId: provider.providerId,
-						accountId: userInfo.id,
-						createdAt: new Date(),
-						updatedAt: new Date(),
-						accessToken: "",
-						refreshToken: "",
-					},
+				await ctx.context.internalAdapter.createAccount({
+					userId: user.id,
+					providerId: provider.providerId,
+					accountId: userInfo.id,
+					accessToken: "",
+					refreshToken: "",
 				});
 			}
 
@@ -2035,47 +2025,32 @@ export const acsEndpoint = (options?: SSOOptions) => {
 							`${parsedSamlConfig.callbackUrl}?error=account_not_found`,
 						);
 					}
-					await ctx.context.adapter.create<Account>({
-						model: "account",
-						data: {
-							userId: existingUser.id,
-							providerId: provider.providerId,
-							accountId: userInfo.id,
-							createdAt: new Date(),
-							updatedAt: new Date(),
-							accessToken: "",
-							refreshToken: "",
-						},
-					});
-				}
-				user = existingUser;
-			} else {
-				user = await ctx.context.adapter.create({
-					model: "user",
-					data: {
-						email: userInfo.email,
-						name: userInfo.name,
-						emailVerified: options?.trustEmailVerified
-							? userInfo.emailVerified || false
-							: false,
-						createdAt: new Date(),
-						updatedAt: new Date(),
-					},
-				});
-				await ctx.context.adapter.create<Account>({
-					model: "account",
-					data: {
-						userId: user.id,
+					await ctx.context.internalAdapter.createAccount({
+						userId: existingUser.id,
 						providerId: provider.providerId,
 						accountId: userInfo.id,
 						accessToken: "",
 						refreshToken: "",
-						accessTokenExpiresAt: new Date(),
-						refreshTokenExpiresAt: new Date(),
-						scope: "",
-						createdAt: new Date(),
-						updatedAt: new Date(),
-					},
+					});
+				}
+				user = existingUser;
+			} else {
+				user = await ctx.context.internalAdapter.createUser({
+					email: userInfo.email,
+					name: userInfo.name,
+					emailVerified: options?.trustEmailVerified
+						? userInfo.emailVerified || false
+						: false,
+				});
+				await ctx.context.internalAdapter.createAccount({
+					userId: user.id,
+					providerId: provider.providerId,
+					accountId: userInfo.id,
+					accessToken: "",
+					refreshToken: "",
+					accessTokenExpiresAt: new Date(),
+					refreshTokenExpiresAt: new Date(),
+					scope: "",
 				});
 			}
 

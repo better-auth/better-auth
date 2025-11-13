@@ -9,7 +9,8 @@ Better Auth manages session using a traditional cookie-based session management.
 
 The session table stores the session data. The session table has the following fields:
 
-- `id`: The session token. Which is also used as the session cookie.
+- `id`: Unique identifier for the session.
+- `token`: The session token. Which is also used as the session cookie.
 - `userId`: The user ID of the user.
 - `expiresAt`: The expiration date of the session.
 - `ipAddress`: The IP address of the user.
@@ -233,30 +234,51 @@ await auth.api.getSession({
 
 ## Stateless Session Management
 
-Better Auth supports fully stateless session management, allowing you to run authentication without any database at all. This is ideal for serverless environments, edge computing, or scenarios where you want to minimize database queries.
-
-In stateless mode, all session data is stored in signed/encrypted cookies. The server never queries a database to validate sessions—it simply verifies the cookie signature and checks expiration. This approach is similar to JWT-based authentication but with Better Auth's full feature set.
+Better Auth supports stateless session management without any database. This means that the session data is stored in a signed/encrypted cookie and the server never queries a database to validate sessions - it simply verifies the cookie signature and checks expiration.
 
 ### Basic Stateless Setup
 
-To enable stateless sessions, configure cookie cache with `refreshCache` enabled:
+If you don't pass a database configuration, Better Auth will automatically enable stateless mode.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
 
 export const auth = betterAuth({
-    // No database configuration needed for stateless mode
-    session: {
-        expiresIn: 60 * 60 * 24 * 7, // 7 days
-        cookieCache: {
-            enabled: true,
-            maxAge: 30 * 24 * 60 * 60, // 30 days cache duration
-            strategy: "jwe", // Use encrypted tokens for better security
-            refreshCache: true // Enable stateless refresh
-        }
-    }
+    // No database configuration
+    socialProviders: {
+        google: {
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        },
+    },
 });
 ```
+
+To manually enable stateless mode, you need to configure `cookieCache` and `oauthConfig` with the following options:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    session: {
+        cookieCache: {
+            enabled: true,
+            maxAge: 7 * 24 * 60 * 60, // 7 days cache duration
+            strategy: "jwe", // can be "jwt" or "compact"
+            refreshCache: true, // Enable stateless refresh
+        },
+    },
+    advanced: {
+        oauthConfig: {
+            storeStateStrategy: "cookie",
+        },
+    },
+});
+```
+
+<Callout type="info">
+If you don't provide a database, by default we provide the above configuration for you.
+</Callout>
 
 ### Understanding `refreshCache`
 
@@ -280,16 +302,23 @@ export const auth = betterAuth({
 });
 ```
 
-### Stateless vs Database-Backed Sessions
+### Versioning Stateless Sessions
 
-| Feature | Stateless (refreshCache enabled) | Database-Backed (default) |
-|---------|----------------------------------|---------------------------|
-| Database queries | None (fully stateless) | Queries DB after cache expires |
-| Session revocation | Not immediate (until cookie expires) | Immediate |
-| Scalability | Excellent (no DB bottleneck) | Good (with proper caching) |
-| Security | Good (encrypted cookies) | Better (server-side validation) |
-| Use case | High-traffic, edge computing | Traditional apps, need revocation |
+One of the biggest drawbacks of stateless sessions is that you can't invalidate session easily. To solve this with better auth, if you would like to invalidate all sessions, you can change the version of the cookie cache and re-deploy your application.
 
+```ts title="auth.ts"
+export const auth = betterAuth({
+    session: {
+        cookieCache: {
+            version: "2", // [!code highlight] Change the version to invalidate all sessions
+        }
+    }
+});
+```
+
+<Callout type="warning">
+This will invalidate all sessions that don't match the new version.
+</Callout>
 
 ### Stateless with Secondary Storage
 
@@ -308,10 +337,8 @@ export const auth = betterAuth({
     },
     session: {
         cookieCache: {
-            enabled: true,
-            maxAge: 60 * 60, // 1 hour
-            strategy: "jwe",
-            refreshCache: false
+            maxAge: 5 * 60, // [!code highlight] 5 minutes (short-lived cookie)
+            refreshCache: false // [!code highlight] Disable stateless refresh
         }
     }
 });
