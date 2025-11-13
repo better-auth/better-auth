@@ -24,10 +24,10 @@ export type SCIMOptions = {
 				| "hashed"
 				| "plain"
 				| "encrypted"
-				| { hash: (otp: string) => Promise<string> }
+				| { hash: (scimToken: string) => Promise<string> }
 				| {
-						encrypt: (otp: string) => Promise<string>;
-						decrypt: (otp: string) => Promise<string>;
+						encrypt: (scimToken: string) => Promise<string>;
+						decrypt: (scimToken: string) => Promise<string>;
 				  }
 		  )
 		| undefined;
