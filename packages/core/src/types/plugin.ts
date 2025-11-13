@@ -3,8 +3,6 @@ import type {
 	EndpointContext,
 	InputContext,
 	Middleware,
-	MiddlewareContext,
-	MiddlewareOptions,
 } from "better-call";
 import type { Migration } from "kysely";
 import type { AuthMiddleware } from "../api";
@@ -30,15 +28,6 @@ export type HookEndpointContext = Partial<
 	};
 	headers?: Headers | undefined;
 };
-
-export type PluginHook =
-	| {
-			matcher: (context: HookEndpointContext) => boolean;
-			handler: AuthMiddleware;
-	  }
-	| ((
-			context: MiddlewareContext<MiddlewareOptions, AuthContext>,
-	  ) => Promise<unknown>);
 
 export type BetterAuthPlugin = {
 	id: LiteralString;
@@ -90,8 +79,14 @@ export type BetterAuthPlugin = {
 		| undefined;
 	hooks?:
 		| {
-				before?: PluginHook[];
-				after?: PluginHook[];
+				before?: {
+					matcher: (context: HookEndpointContext) => boolean;
+					handler: AuthMiddleware;
+				}[];
+				after?: {
+					matcher: (context: HookEndpointContext) => boolean;
+					handler: AuthMiddleware;
+				}[];
 		  }
 		| undefined;
 	/**
