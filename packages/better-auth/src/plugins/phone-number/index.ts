@@ -15,6 +15,7 @@ import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto/random";
 import { mergeSchema } from "../../db/schema";
 import type { User } from "../../types";
+import type { Awaitable } from "../../types/helper";
 import type { InferOptionSchema } from "../../types/plugins";
 import { getDate } from "../../utils/date";
 import { ERROR_CODES } from "./phone-number-error";
@@ -45,6 +46,13 @@ export interface PhoneNumberOptions {
 		data: { phoneNumber: string; code: string },
 		ctx?: GenericEndpointContext | undefined,
 	) => Promise<void> | void;
+	/**
+	 * Generate custom OTP code. If not provided, the default implementation will be used.
+	 *
+	 * @param otpLength - length of the OTP code
+	 * @returns OTP code
+	 */
+	generateOTP?: ((otpLength: number) => Awaitable<string>) | undefined;
 	/**
 	 * a callback to send otp on user requesting to reset their password
 	 *
@@ -251,7 +259,9 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 					}
 					if (opts.requireVerification) {
 						if (!user.phoneNumberVerified) {
-							const otp = generateOTP(opts.otpLength);
+							const otp = opts.generateOTP
+								? await opts.generateOTP(opts.otpLength)
+								: generateOTP(opts.otpLength);
 							await ctx.context.internalAdapter.createVerificationValue({
 								value: otp,
 								identifier: phoneNumber,
@@ -401,7 +411,9 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 						}
 					}
 
-					const code = generateOTP(opts.otpLength);
+					const code = options.generateOTP
+						? await options.generateOTP(opts.otpLength)
+						: generateOTP(opts.otpLength);
 					await ctx.context.internalAdapter.createVerificationValue({
 						value: `${code}:0`,
 						identifier: ctx.body.phoneNumber,
@@ -800,7 +812,9 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 							message: "phone number isn't registered",
 						});
 					}
-					const code = generateOTP(opts.otpLength);
+					const code = options?.generateOTP
+						? await options.generateOTP(opts.otpLength)
+						: generateOTP(opts.otpLength);
 					await ctx.context.internalAdapter.createVerificationValue({
 						value: `${code}:0`,
 						identifier: `${ctx.body.phoneNumber}-request-password-reset`,

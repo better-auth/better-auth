@@ -515,3 +515,61 @@ describe("updateUser phone number update prevention", async () => {
 		expect(sessionAfterUpdate.data?.user.phoneNumber).toBe(initialPhoneNumber);
 	});
 });
+
+describe("custom generateOTP", async () => {
+	let otp = "";
+	let customOTP = "";
+
+	const { customFetchImpl, sessionSetter } = await getTestInstance({
+		plugins: [
+			phoneNumber({
+				async sendOTP({ code }) {
+					otp = code;
+				},
+				generateOTP: async (otpLength) => {
+					return new Array(otpLength).join("");
+				},
+				signUpOnVerification: {
+					getTempEmail(phoneNumber) {
+						return `temp-${phoneNumber}`;
+					},
+				},
+			}),
+		],
+	});
+
+	const client = createAuthClient({
+		baseURL: "http://localhost:3000",
+		plugins: [phoneNumberClient()],
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	const headers = new Headers();
+	const testPhoneNumber = "+251911121314";
+
+	it("should use custom generateOTP function", async () => {
+		await client.phoneNumber.sendOtp({
+			phoneNumber: testPhoneNumber,
+		});
+
+		// Verify that the custom OTP was generated (starts with ABC)
+		expect(otp).toBe(customOTP);
+		expect(otp).toMatch("123456");
+		expect(otp).toHaveLength(6);
+
+		// Verify that the custom OTP works for verification
+		const verifyRes = await client.phoneNumber.verify(
+			{
+				phoneNumber: testPhoneNumber,
+				code: otp,
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+		expect(verifyRes.error).toBe(null);
+		expect(verifyRes.data?.status).toBe(true);
+	});
+});
