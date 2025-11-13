@@ -60,7 +60,7 @@ const _statusCode = {
 export class SCIMAPIError extends APIError {
 	constructor(
 		status: keyof typeof _statusCode | Status = "INTERNAL_SERVER_ERROR",
-		overrides: any,
+		overrides: any = {},
 	) {
 		const body = {
 			schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
