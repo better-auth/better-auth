@@ -160,7 +160,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			id = `uuid("id").default(sql\`pg_catalog.gen_random_uuid()\`).primaryKey()`;
 		} else if (useNumberId) {
 			if (databaseType === "pg") {
-				id = `integer("id").generatedAlwaysAsIdentity().primaryKey()`;
+				id = `integer("id").generatedByDefaultAsIdentity().primaryKey()`;
 			} else if (databaseType === "sqlite") {
 				id = `integer("id", { mode: "number" }).primaryKey({ autoIncrement: true })`;
 			} else {

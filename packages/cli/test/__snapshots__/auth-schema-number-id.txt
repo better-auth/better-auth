@@ -8,7 +8,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 export const custom_user = pgTable("custom_user", {
-  id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
+  id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
@@ -26,7 +26,7 @@ export const custom_user = pgTable("custom_user", {
 export const custom_session = pgTable(
   "custom_session",
   {
-    id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
+    id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
     expiresAt: timestamp("expires_at").notNull(),
     token: text("token").notNull().unique(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -45,7 +45,7 @@ export const custom_session = pgTable(
 export const custom_account = pgTable(
   "custom_account",
   {
-    id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
+    id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
     accountId: text("account_id").notNull(),
     providerId: text("provider_id").notNull(),
     userId: integer("user_id")
@@ -69,7 +69,7 @@ export const custom_account = pgTable(
 export const custom_verification = pgTable(
   "custom_verification",
   {
-    id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
+    id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
     identifier: text("identifier").notNull(),
     value: text("value").notNull(),
     expiresAt: timestamp("expires_at").notNull(),
@@ -85,7 +85,7 @@ export const custom_verification = pgTable(
 export const twoFactor = pgTable(
   "two_factor",
   {
-    id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
+    id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
     secret: text("secret").notNull(),
     backupCodes: text("backup_codes").notNull(),
     userId: integer("user_id")
