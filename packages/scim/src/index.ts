@@ -291,7 +291,6 @@ export const scim = (options?: SCIMOptions) => {
 						const user = await ctx.context.internalAdapter.createUser({
 							email,
 							name,
-							emailVerified: true,
 							createdAt: new Date(),
 							updatedAt: new Date(),
 						});
