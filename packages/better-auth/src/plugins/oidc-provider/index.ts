@@ -1236,7 +1236,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 							.optional(),
 					}),
 					metadata: {
-						SERVER_ONLY: !!opts.allowDynamicClientRegistration,
 						openapi: {
 							description: "Register an OAuth2 application",
 							responses: {
