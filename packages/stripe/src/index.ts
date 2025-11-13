@@ -1220,14 +1220,20 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					}
 					const buf = await ctx.request.text();
 					const sig = ctx.request.headers.get("stripe-signature") as string;
+					if (!sig) {
+						throw new APIError("BAD_REQUEST", {
+							message: STRIPE_ERROR_CODES.STRIPE_SIGNATURE_NOT_FOUND,
+						});
+					}
 					const webhookSecret = options.stripeWebhookSecret;
+					if (!webhookSecret) {
+						throw new APIError("BAD_REQUEST", {
+							message: STRIPE_ERROR_CODES.STRIPE_WEBHOOK_SECRET_NOT_FOUND,
+						});
+					}
+
 					let event: Stripe.Event;
 					try {
-						if (!sig || !webhookSecret) {
-							throw new APIError("BAD_REQUEST", {
-								message: STRIPE_ERROR_CODES.STRIPE_WEBHOOK_SECRET_NOT_FOUND,
-							});
-						}
 						// Support both Stripe v18 (constructEvent) and v19+ (constructEventAsync)
 						if (typeof client.webhooks.constructEventAsync === "function") {
 							// Stripe v19+ - use async method

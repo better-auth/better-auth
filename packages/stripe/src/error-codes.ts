@@ -16,6 +16,7 @@ export const STRIPE_ERROR_CODES = defineErrorCodes({
 	SUBSCRIPTION_ID_NOT_FOUND: "Subscription ID not found",
 	CUSTOMER_ID_NOT_FOUND: "No Stripe customer found for this user",
 	REQUEST_BODY_NOT_FOUND: "Request body not found",
+	STRIPE_SIGNATURE_NOT_FOUND: "Stripe signature not found",
 	STRIPE_WEBHOOK_SECRET_NOT_FOUND: "Stripe webhook secret not found",
 	STRIPE_WEBHOOK_EVENT_NOT_FOUND: "Failed to construct event",
 	STRIPE_WEBHOOK_ERROR: "Stripe webhook error",
