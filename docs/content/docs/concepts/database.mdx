@@ -583,6 +583,45 @@ database to generate the UUID automatically.
 By enabling this option, the Better-Auth CLI will generate or migrate the schema with the `id` field as a UUID type for your database.
 If the `uuid` type is not supported, we will generate a normal `string` type for the `id` field.
 
+### Mixed ID Types
+
+If you need different ID types across tables (e.g., integer IDs for users, UUID strings for sessions/accounts/verification), use a `generateId` callback function.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { db } from "./db";
+
+export const auth = betterAuth({
+  database: db,
+  user: {
+    modelName: "users", // PostgreSQL: id serial primary key
+  },
+  session: {
+    modelName: "session", // PostgreSQL: id text primary key
+  },
+  advanced: {
+    database: {
+      // Do NOT set useNumberId - it's global and affects all tables
+      generateId: (options) => {
+        if (options.model === "user" || options.model === "users") {
+          return false; // Let PostgreSQL serial generate it
+        }
+        return crypto.randomUUID(); // UUIDs for session, account, verification
+      },
+    },
+  },
+});
+```
+
+This configuration allows you to:
+- Use database auto-increment (serial, auto_increment, etc.) for the users table
+- Generate UUIDs for all other tables (session, account, verification)
+- Maintain compatibility with existing schemas that use different ID types
+
+<Callout type="info">
+  **Use Case**: This is particularly useful when migrating from other authentication providers (like Clerk) where you have existing users with integer IDs but want UUID strings for new tables.
+</Callout>
+
 ### Database Hooks
 
 Database hooks allow you to define custom logic that can be executed during the lifecycle of core database operations in Better Auth. You can create hooks for the following models: **user**, **session**, and **account**.
