@@ -9,7 +9,6 @@ import { z } from "zod";
 import { originCheck } from "../../api";
 import { parseJSON } from "../../client/parser";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
-import { handleErrorRedirect } from "../../utils/handle-error-redirect";
 import { getOrigin } from "../../utils/url";
 
 function getVendorBaseURL() {
@@ -143,8 +142,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 						return null;
 					});
 					if (!decryptedCookies) {
-						throw await handleErrorRedirect(
-							ctx,
+						throw await ctx.context.handleErrorRedirect(
 							{
 								error: "OAuthProxy - Invalid cookies or secret",
 							},

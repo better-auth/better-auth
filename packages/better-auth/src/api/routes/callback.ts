@@ -5,7 +5,6 @@ import { setSessionCookie } from "../../cookies";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
 import { setTokenUtil } from "../../oauth2/utils";
-import { handleErrorRedirect } from "../../utils/handle-error-redirect";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { safeJSONParse } from "../../utils/json";
 
@@ -60,7 +59,7 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 		} catch (e) {
 			c.context.logger.error("INVALID_CALLBACK_REQUEST", e);
-			throw await handleErrorRedirect(c, {
+			throw await c.context.handleErrorRedirect({
 				error: "invalid_callback_request",
 			});
 		}
@@ -69,7 +68,7 @@ export const callbackOAuth = createAuthEndpoint(
 
 		if (!state) {
 			c.context.logger.error("State not found", error);
-			throw await handleErrorRedirect(c, {
+			throw await c.context.handleErrorRedirect({
 				error: "state_not_found",
 			});
 		}
@@ -88,8 +87,7 @@ export const callbackOAuth = createAuthEndpoint(
 			description?: string | undefined,
 		) {
 			// 'errorURL' from parseState takes priority
-			throw await handleErrorRedirect(
-				c,
+			throw await c.context.handleErrorRedirect(
 				{ error, error_description: description },
 				{ overrideErrorURL: errorURL },
 			);

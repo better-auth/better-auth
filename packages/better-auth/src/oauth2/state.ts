@@ -7,7 +7,6 @@ import {
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "../crypto";
-import { handleErrorRedirect } from "../utils/handle-error-redirect";
 
 export async function generateState(
 	c: GenericEndpointContext,
@@ -131,7 +130,7 @@ export async function parseState(c: GenericEndpointContext) {
 			c.context.logger.error("State Mismatch. OAuth state cookie not found", {
 				state,
 			});
-			throw await handleErrorRedirect(c, {
+			throw await c.context.handleErrorRedirect({
 				error: "please_restart_the_process",
 			});
 		}
@@ -147,7 +146,7 @@ export async function parseState(c: GenericEndpointContext) {
 			c.context.logger.error("Failed to decrypt or parse OAuth state cookie", {
 				error,
 			});
-			throw await handleErrorRedirect(c, {
+			throw await c.context.handleErrorRedirect({
 				error: "please_restart_the_process",
 			});
 		}
@@ -163,7 +162,7 @@ export async function parseState(c: GenericEndpointContext) {
 			c.context.logger.error("State Mismatch. Verification not found", {
 				state,
 			});
-			throw await handleErrorRedirect(c, {
+			throw await c.context.handleErrorRedirect({
 				error: "please_restart_the_process",
 			});
 		}
@@ -185,7 +184,7 @@ export async function parseState(c: GenericEndpointContext) {
 			!skipStateCookieCheck &&
 			(!stateCookieValue || stateCookieValue !== state)
 		) {
-			throw await handleErrorRedirect(c, {
+			throw await c.context.handleErrorRedirect({
 				error: "state_mismatch",
 			});
 		}
@@ -208,7 +207,7 @@ export async function parseState(c: GenericEndpointContext) {
 
 	// Check expiration
 	if (parsedData.expiresAt < Date.now()) {
-		throw await handleErrorRedirect(c, {
+		throw await c.context.handleErrorRedirect({
 			error: "please_restart_the_process",
 		});
 	}

@@ -2,7 +2,6 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-call";
 import { getSessionFromCtx } from "../../api";
 import { generateRandomString } from "../../crypto";
-import { handleErrorRedirect } from "../../utils/handle-error-redirect";
 import { getClient } from "./index";
 import { getAuthorizePromptSet } from "./middlewares/check-prompt";
 import { getPromptHandled } from "./state/prompt-handled";
@@ -77,14 +76,14 @@ export async function authorize(
 	}
 
 	if (!query.client_id) {
-		throw await handleErrorRedirect(ctx, {
+		throw await ctx.context.handleErrorRedirect({
 			error: "invalid_client",
 			error_description: "client_id is required",
 		});
 	}
 
 	if (!query.response_type) {
-		throw await handleErrorRedirect(ctx, {
+		throw await ctx.context.handleErrorRedirect({
 			error: "invalid_request",
 			error_description: "response_type is required",
 		});
@@ -95,7 +94,7 @@ export async function authorize(
 		options.trustedClients || [],
 	);
 	if (!client) {
-		throw await handleErrorRedirect(ctx, {
+		throw await ctx.context.handleErrorRedirect({
 			error: "invalid_client",
 			error_description: "client_id is required",
 		});
@@ -113,14 +112,14 @@ export async function authorize(
 		});
 	}
 	if (client.disabled) {
-		throw await handleErrorRedirect(ctx, {
+		throw await ctx.context.handleErrorRedirect({
 			error: "client_disabled",
 			error_description: "client is disabled",
 		});
 	}
 
 	if (query.response_type !== "code") {
-		throw await handleErrorRedirect(ctx, {
+		throw await ctx.context.handleErrorRedirect({
 			error: "unsupported_response_type",
 			error_description: "unsupported response type",
 		});

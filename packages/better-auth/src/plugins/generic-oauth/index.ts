@@ -24,7 +24,6 @@ import { setSessionCookie } from "../../cookies";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState, parseState } from "../../oauth2/state";
 import type { User } from "../../types";
-import { handleErrorRedirect } from "../../utils/handle-error-redirect";
 
 /**
  * Configuration interface for generic OAuth providers.
@@ -591,7 +590,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 				},
 				async (ctx) => {
 					if (ctx.query.error || !ctx.query.code) {
-						throw await handleErrorRedirect(ctx, {
+						throw await ctx.context.handleErrorRedirect({
 							error: (ctx.query.error || "oAuth_code_missing") as string,
 							error_description: ctx.query.error_description,
 						});
@@ -622,8 +621,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						error_description?: string,
 					) {
 						// 'errorURL' from parseState takes priority
-						throw await handleErrorRedirect(
-							ctx,
+						throw await ctx.context.handleErrorRedirect(
 							{ error, error_description },
 							{ overrideErrorURL: errorURL },
 						);

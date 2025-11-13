@@ -11,7 +11,6 @@ import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { mergeSchema, parseUserOutput } from "../../db/schema";
 import { type Session } from "../../types";
 import { getDate } from "../../utils/date";
-import { handleErrorRedirect } from "../../utils/handle-error-redirect";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import { type AccessControl } from "../access";
 import { defaultStatements } from "./access";
@@ -131,7 +130,7 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 											(ctx.path.startsWith("/callback") ||
 												ctx.path.startsWith("/oauth2/callback"))
 										) {
-											throw await handleErrorRedirect(ctx, {
+											throw await ctx.context.handleErrorRedirect({
 												error: "banned",
 												error_description: opts.bannedUserMessage,
 											});

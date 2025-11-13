@@ -391,7 +391,9 @@ describe("SSO disable implicit sign in", async () => {
 			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Ftest",
 		);
 		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
-		expect(callbackURL).toContain("/api/auth/error?error=signup_disabled");
+		expect(callbackURL).toContain(
+			"http://localhost:3000/api/auth/error?error=signup_disabled",
+		);
 	});
 
 	it("should create user with SSO provider when sign ups are disabled but sign up is requested", async () => {

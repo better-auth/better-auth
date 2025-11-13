@@ -267,4 +267,28 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 		 * @default false
 		 */
 		skipCSRFCheck: boolean;
+		/**
+		 *
+		 * Redirect to the user-defined error page with the error code and description.
+		 *
+		 * @example
+		 * ```ts
+		 * throw await handleErrorRedirect({
+		 * 	error: "invalid_provider",
+		 * 	error_description: "provider not found",
+		 * });
+		 */
+		handleErrorRedirect: (
+			{
+				error,
+				error_description,
+			}: {
+				error: string;
+				error_description?: string;
+			},
+			options?: {
+				overrideErrorURL?: string;
+				defaultErrorPath?: string;
+			},
+		) => Promise<void>;
 	};
