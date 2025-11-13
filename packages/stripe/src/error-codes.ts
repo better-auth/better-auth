@@ -22,4 +22,13 @@ export const STRIPE_ERROR_CODES = defineErrorCodes({
 	STRIPE_WEBHOOK_ERROR: "Stripe webhook error",
 	REFERENCE_ID_NOT_ALLOWED:
 		"Reference id is not allowed. Read server logs for more details.",
+	ORGANIZATION_HAS_ACTIVE_SUBSCRIPTION:
+		"Cannot delete organization with active subscriptions",
+	ORGANIZATION_STRIPE_CUSTOMER_NOT_FOUND:
+		"No Stripe customer found for this organization",
+	ORGANIZATION_NOT_FOUND: "Organization not found",
+	FAILED_TO_CREATE_ORGANIZATION_CUSTOMER:
+		"Failed to create Stripe customer for organization",
+	FAILED_TO_UPDATE_ORGANIZATION_CUSTOMER:
+		"Failed to update organization with Stripe customer ID",
 });

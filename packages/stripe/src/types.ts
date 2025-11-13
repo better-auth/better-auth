@@ -1,8 +1,23 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import type { Session, User } from "@better-auth/core/db";
+import type { Organization } from "better-auth/plugins";
 import type { InferOptionSchema } from "better-auth/types";
 import type Stripe from "stripe";
 import type { subscriptions, user } from "./schema";
+
+export type WithStripeCustomerId = {
+	stripeCustomerId?: string;
+};
+export type WithStripeAdminUserId = {
+	stripeAdminUserId?: string;
+};
+export type WithActiveOrganizationId = {
+	activeOrganizationId?: string;
+};
+
+export type OrganizationWithStripe = Organization &
+	WithStripeCustomerId &
+	WithStripeAdminUserId;
 
 export type StripePlan = {
 	/**
@@ -307,6 +322,10 @@ export interface StripeOptions {
 	 */
 	createCustomerOnSignUp?: boolean | undefined;
 	/**
+	 * Enable organization customer support
+	 */
+	enableOrganizationCustomer?: boolean | undefined;
+	/**
 	 * A callback to run after a customer has been created
 	 * @param customer - Customer Data
 	 * @param stripeCustomer - Stripe Customer Data
@@ -316,7 +335,23 @@ export interface StripeOptions {
 		| ((
 				data: {
 					stripeCustomer: Stripe.Customer;
-					user: User & { stripeCustomerId: string };
+					user: User & WithStripeCustomerId;
+				},
+				ctx: GenericEndpointContext,
+		  ) => Promise<void>)
+		| undefined;
+	/**
+	 * A callback to run after an organization customer has been created
+	 * @param data - Organization customer data
+	 * @param ctx - Context
+	 * @returns
+	 */
+	onOrganizationCustomerCreate?:
+		| ((
+				data: {
+					stripeCustomer: Stripe.Customer;
+					organization: OrganizationWithStripe;
+					adminUser: User;
 				},
 				ctx: GenericEndpointContext,
 		  ) => Promise<void>)

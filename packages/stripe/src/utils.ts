@@ -1,6 +1,63 @@
-import type { GenericEndpointContext } from "@better-auth/core";
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
+import type { Session, User } from "better-auth";
+import type { OrganizationOptions } from "better-auth/plugins/organization";
 import type Stripe from "stripe";
-import type { StripeOptions } from "./types";
+import type { StripeOptions, WithActiveOrganizationId } from "./types";
+
+/**
+ * Type guard to check if a plugin is an organization plugin with valid options
+ * @internal
+ */
+function isOrganizationPlugin(
+	plugin: BetterAuthPlugin,
+): plugin is BetterAuthPlugin & { options: OrganizationOptions } {
+	// Organization plugin always has options object (even if empty)
+	// We don't check for organizationHooks because Stripe plugin will inject it
+	return (
+		plugin.id === "organization" &&
+		!!plugin.options &&
+		typeof plugin.options === "object"
+	);
+}
+
+/**
+ * Get organization plugin from plugins array with type safety
+ * Returns null if plugin not found or doesn't have valid options
+ */
+export function getOrganizationPlugin(
+	plugins: BetterAuthPlugin[] | undefined,
+): (BetterAuthPlugin & { options: OrganizationOptions }) | null {
+	if (!plugins) return null;
+
+	const orgPlugin = plugins.find((p) => p.id === "organization");
+	if (!orgPlugin) return null;
+
+	if (!isOrganizationPlugin(orgPlugin)) {
+		return null;
+	}
+
+	return orgPlugin;
+}
+
+/**
+ * Get reference ID from request body, session, or user ID
+ *
+ * Priority: ctx.body.referenceId -> session.activeOrganizationId -> user.id
+ */
+export function getReferenceId(
+	bodyReferenceId: string | undefined,
+	session: {
+		user: User;
+		session: Session & WithActiveOrganizationId;
+	},
+): string {
+	return (
+		bodyReferenceId || session.session.activeOrganizationId || session.user.id
+	);
+}
 
 export function getUrl(ctx: GenericEndpointContext, url: string) {
 	if (/^[a-zA-Z][a-zA-Z0-9+\-.]*:/.test(url)) {
