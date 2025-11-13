@@ -36,7 +36,9 @@ export type PluginHook =
 			matcher: (context: HookEndpointContext) => boolean;
 			handler: AuthMiddleware;
 	  }
-	| ((context: MiddlewareContext<MiddlewareOptions, any>) => Promise<unknown>);
+	| ((
+			context: MiddlewareContext<MiddlewareOptions, AuthContext>,
+	  ) => Promise<unknown>);
 
 export type BetterAuthPlugin = {
 	id: LiteralString;
