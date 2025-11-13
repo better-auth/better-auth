@@ -464,13 +464,11 @@ export const auth = betterAuth({
 });
 ```
 
-### 2. Implement Token Rotation
+### 2. Refresh Token Management
 
-Always issue new refresh tokens when refreshing access tokens:
+The plugin issues new refresh tokens when access tokens are refreshed:
 
-```ts title="token-rotation.ts"
-// The plugin automatically implements token rotation
-// Each refresh token can only be used once
+```ts title="refresh-token.ts"
 const response = await fetch("https://your-domain.com/api/auth/mcp/token", {
   method: "POST",
   body: new URLSearchParams({
@@ -481,8 +479,12 @@ const response = await fetch("https://your-domain.com/api/auth/mcp/token", {
 });
 
 const { access_token, refresh_token } = await response.json();
-// New refresh_token invalidates the old one
+// A new refresh_token is issued, but the old one remains valid until expiration
 ```
+
+<Callout type="warn">
+**Token Rotation**: The plugin does not automatically revoke old refresh tokens. For enhanced security, implement manual token revocation by deleting old tokens from the `oauthAccessToken` table after issuing new ones.
+</Callout>
 
 ### 3. Validate Redirect URIs
 
