@@ -776,20 +776,24 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				"/sign-in/email-otp",
 				{
 					method: "POST",
-					body: z.record(
-						z.string().meta({
-							description: "Field name must be a string",
+					body: z.object({
+						email: z.string({}).meta({
+							description: "Email address to sign in",
 						}),
-						z.any(),
-					),
+						otp: z.string().meta({
+							required: true,
+							description: "OTP sent to the email",
+						}),
+						signupData: z
+							.record(
+								z.string().meta({
+									description: "Field name must be a string",
+								}),
+								z.any(),
+							)
+							.optional(),
+					}),
 					metadata: {
-						$Infer: {
-							body: {} as {
-								name?: string;
-								email: string;
-								otp: string;
-							},
-						},
 						openapi: {
 							description: "Sign in with OTP",
 							requestBody: {
@@ -798,10 +802,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 										schema: {
 											type: "object",
 											properties: {
-												name: {
-													type: "string",
-													description: "Name of the user to sign-up",
-												},
 												email: {
 													type: "string",
 													description: "Email address to sign-in",
@@ -809,6 +809,11 @@ export const emailOTP = (options: EmailOTPOptions) => {
 												otp: {
 													type: "string",
 													description: "OTP sent to the email",
+												},
+												signupData: {
+													type: "object",
+													description:
+														"Additional properties to use during automatic signup",
 												},
 											},
 											required: ["otp", "email"],
@@ -843,12 +848,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					},
 				},
 				async (ctx) => {
-					const body = ctx.body as {
-						email: string;
-						otp: string;
-						[key: string]: any;
-					};
-					const { email, otp, name, ...rest } = body;
+					const { email, otp, signupData } = ctx.body;
 					const verificationValue =
 						await ctx.context.internalAdapter.findVerificationValue(
 							`sign-in-otp-${email}`,
@@ -899,13 +899,14 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						}
 						const additionalFields = parseUserInput(
 							ctx.context.options,
-							rest,
+							signupData,
 							"create",
 						);
 						const newUser = await ctx.context.internalAdapter.createUser({
 							email,
 							emailVerified: true,
-							name: name ?? "",
+							name: signupData?.name ?? "",
+							image: signupData?.image ?? "",
 							...additionalFields,
 						});
 						const session = await ctx.context.internalAdapter.createSession(
