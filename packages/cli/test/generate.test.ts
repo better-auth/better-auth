@@ -52,7 +52,7 @@ describe("generate", async () => {
 				plugins: [twoFactor(), username()],
 				advanced: {
 					database: {
-						useNumberId: true,
+						generateId: "serial",
 					},
 				},
 			},
@@ -62,7 +62,7 @@ describe("generate", async () => {
 		);
 	});
 
-	it("should generate prisma schema with default values", async () => {
+	it("should generate prisma schema with uuid id", async () => {
 		const schema = await generatePrismaSchema({
 			file: "test.prisma",
 			adapter: prismaAdapter(
@@ -78,22 +78,51 @@ describe("generate", async () => {
 						provider: "postgresql",
 					},
 				),
-				user: {
-					additionalFields: {
-						role: {
-							fieldName: "role",
-							type: "string",
-							defaultValue: "admin",
-						},
+				plugins: [twoFactor(), username()],
+				advanced: {
+					database: {
+						generateId: "uuid",
 					},
 				},
-				plugins: [twoFactor(), username()],
 			},
 		});
 		expect(schema.code).toMatchFileSnapshot(
-			"./__snapshots__/schema-defaultvalues.prisma",
+			"./__snapshots__/schema-uuid.prisma",
 		);
 	});
+
+  it("should generate prisma schema with default values", async () => {
+    const schema = await generatePrismaSchema({
+      file: "test.prisma",
+      adapter: prismaAdapter(
+        {},
+        {
+          provider: "postgresql",
+        },
+      )({} as BetterAuthOptions),
+      options: {
+        database: prismaAdapter(
+          {},
+          {
+            provider: "postgresql",
+          },
+        ),
+        user: {
+          additionalFields: {
+            role: {
+              fieldName: "role",
+              type: "string",
+              defaultValue: "admin",
+            },
+          },
+        },
+        plugins: [twoFactor(), username()],
+      },
+    });
+    expect(schema.code).toMatchFileSnapshot(
+      "./__snapshots__/schema-defaultvalues.prisma",
+    );
+  });
 
 	it("should generate prisma schema for mongodb", async () => {
 		const schema = await generatePrismaSchema({
@@ -270,7 +299,7 @@ describe("generate", async () => {
 				plugins: [twoFactor(), username()],
 				advanced: {
 					database: {
-						useNumberId: true,
+						generateId: "serial",
 					},
 				},
 				user: {
@@ -425,6 +454,45 @@ describe("JSON field support in CLI generators", () => {
 			} as BetterAuthOptions,
 		});
 		expect(schema.code).toContain("preferences   Json?");
+	});
+
+	it("should generate Prisma schema with JSON default values of arrays and objects", async () => {
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: {
+				id: "prisma",
+				options: {},
+			} as any,
+			options: {
+				database: {} as any,
+				user: {
+					additionalFields: {
+						preferences: {
+							type: "json",
+							defaultValue: {
+								premiumuser: true,
+							},
+						},
+						metadata: {
+							type: "json",
+							defaultValue: [
+								{
+									name: "john",
+									subscribed: false,
+								},
+								{ name: "doe", subscribed: true },
+							],
+						},
+					},
+				},
+			} as BetterAuthOptions,
+		});
+		expect(schema.code).toContain("preferences   Json?");
+		// expect(schema.code).toContain(JSON.stringify(`@default("{\"premiumuser\":true}")`).slice(1,-1));
+		expect(schema.code).toContain('@default("{\\"premiumuser\\":true}")');
+		expect(schema.code).toContain(
+			'@default("[{\\"name\\":\\"john\\",\\"subscribed\\":false},{\\"name\\":\\"doe\\",\\"subscribed\\":true}]")',
+		);
 	});
 });
 

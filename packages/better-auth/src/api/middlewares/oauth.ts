@@ -20,6 +20,6 @@ const {
 	 * @internal This is unsafe to be used directly. Use setOAuthState instead.
 	 */
 	set: setOAuthState,
-} = defineRequestState<OAuthState>();
+} = defineRequestState<OAuthState | null>(() => null);
 
 export { getOAuthState, setOAuthState };
