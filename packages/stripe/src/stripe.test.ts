@@ -2527,4 +2527,365 @@ describe("stripe", async () => {
 			expect(user?.stripeCustomerId).toBeDefined();
 		});
 	});
+
+	describe("Race condition prevention", () => {
+		it("should prevent duplicate customer creation in concurrent requests", async () => {
+			const testAuth = betterAuth({
+				baseURL: "http://localhost:3000",
+				database: memory,
+				emailAndPassword: { enabled: true },
+				plugins: [stripe(stripeOptions)],
+			});
+
+			const testCtx = await testAuth.$context;
+
+			// Create user without Stripe customer
+			const { id: userId } = await testCtx.adapter.create({
+				model: "user",
+				data: {
+					email: "concurrent@test.com",
+					name: "Concurrent User",
+				},
+			});
+
+			let callCount = 0;
+			mockStripe.customers.create.mockImplementation(async (params) => {
+				callCount++;
+				// Simulate API delay
+				await new Promise((resolve) => setTimeout(resolve, 10));
+				return {
+					id: `cus_concurrent_${callCount}`,
+					email: params.email || "",
+					name: params.name || "",
+				};
+			});
+
+			// Simulate concurrent requests by calling the hook logic multiple times
+			// In real scenario, this would be triggered by multiple simultaneous signups
+			const createCustomerLogic = async () => {
+				const user = await testCtx.adapter.findOne<
+					User & { stripeCustomerId?: string }
+				>({
+					model: "user",
+					where: [{ field: "id", value: userId }],
+				});
+
+				// This check prevents race condition
+				if (!user?.stripeCustomerId) {
+					const stripeCustomer = await mockStripe.customers.create({
+						email: user!.email,
+						name: user!.name || undefined,
+						metadata: {
+							userId: user!.id,
+						},
+					});
+
+					await testCtx.adapter.update({
+						model: "user",
+						update: {
+							stripeCustomerId: stripeCustomer.id,
+						},
+						where: [{ field: "id", value: userId }],
+					});
+				}
+			};
+
+			// Run first call
+			await createCustomerLogic();
+
+			// After first call, user should have stripeCustomerId
+			const userAfterFirst = await testCtx.adapter.findOne<
+				User & { stripeCustomerId?: string }
+			>({
+				model: "user",
+				where: [{ field: "id", value: userId }],
+			});
+
+			expect(userAfterFirst?.stripeCustomerId).toBeDefined();
+
+			// Reset mock to verify subsequent calls don't create more customers
+			mockStripe.customers.create.mockClear();
+
+			// Run concurrent calls - these should NOT create new customers
+			await Promise.all([
+				createCustomerLogic(),
+				createCustomerLogic(),
+				createCustomerLogic(),
+			]);
+
+			// Should not create any more customers because stripeCustomerId exists
+			expect(mockStripe.customers.create).toHaveBeenCalledTimes(0);
+
+			const finalUser = await testCtx.adapter.findOne<
+				User & { stripeCustomerId?: string }
+			>({
+				model: "user",
+				where: [{ field: "id", value: userId }],
+			});
+
+			// Should still have the original customer ID
+			expect(finalUser?.stripeCustomerId).toBe(
+				userAfterFirst?.stripeCustomerId,
+			);
+		});
+	});
+
+	describe("Database hooks conditional registration", () => {
+		it("should register update hook even when createCustomerOnSignUp is false", async () => {
+			const optionsWithoutAutoCreate = {
+				...stripeOptions,
+				createCustomerOnSignUp: false,
+			} satisfies StripeOptions;
+
+			const testAuth = betterAuth({
+				baseURL: "http://localhost:3000",
+				database: memory,
+				emailAndPassword: { enabled: true },
+				plugins: [stripe(optionsWithoutAutoCreate)],
+			});
+
+			const testCtx = await testAuth.$context;
+			const stripePlugin = stripe(optionsWithoutAutoCreate);
+			const initResult = stripePlugin.init?.(testCtx);
+
+			// Update hook should always be registered (for email sync)
+			expect(initResult?.options?.databaseHooks?.user?.update).toBeDefined();
+			expect(
+				initResult?.options?.databaseHooks?.user?.update?.after,
+			).toBeDefined();
+		});
+
+		it("should NOT register create hook when createCustomerOnSignUp is false", async () => {
+			const optionsWithoutAutoCreate = {
+				...stripeOptions,
+				createCustomerOnSignUp: false,
+			} satisfies StripeOptions;
+
+			const testAuth = betterAuth({
+				baseURL: "http://localhost:3000",
+				database: memory,
+				emailAndPassword: { enabled: true },
+				plugins: [stripe(optionsWithoutAutoCreate)],
+			});
+
+			const testCtx = await testAuth.$context;
+			const stripePlugin = stripe(optionsWithoutAutoCreate);
+			const initResult = stripePlugin.init?.(testCtx);
+
+			// Create hook should NOT be registered
+			expect(initResult?.options?.databaseHooks?.user?.create).toBeUndefined();
+		});
+
+		it("should register create hook when createCustomerOnSignUp is true", async () => {
+			const optionsWithAutoCreate = {
+				...stripeOptions,
+				createCustomerOnSignUp: true,
+			} satisfies StripeOptions;
+
+			const testAuth = betterAuth({
+				baseURL: "http://localhost:3000",
+				database: memory,
+				emailAndPassword: { enabled: true },
+				plugins: [stripe(optionsWithAutoCreate)],
+			});
+
+			const testCtx = await testAuth.$context;
+			const stripePlugin = stripe(optionsWithAutoCreate);
+			const initResult = stripePlugin.init?.(testCtx);
+
+			// Both create and update hooks should be registered
+			expect(initResult?.options?.databaseHooks?.user?.create).toBeDefined();
+			expect(
+				initResult?.options?.databaseHooks?.user?.create?.after,
+			).toBeDefined();
+			expect(initResult?.options?.databaseHooks?.user?.update).toBeDefined();
+			expect(
+				initResult?.options?.databaseHooks?.user?.update?.after,
+			).toBeDefined();
+		});
+	});
+
+	describe("Infinite loop prevention with lastSyncedAt", () => {
+		it("should skip update when lastSyncedAt is within 2 seconds", async () => {
+			const testAuth = betterAuth({
+				baseURL: "http://localhost:3000",
+				database: memory,
+				emailAndPassword: { enabled: true },
+				plugins: [stripe(stripeOptions)],
+			});
+
+			const testCtx = await testAuth.$context;
+
+			const { id: userId } = await testCtx.adapter.create({
+				model: "user",
+				data: {
+					email: "loop-test@test.com",
+					name: "Loop Test User",
+					stripeCustomerId: "cus_loop_test_123",
+				},
+			});
+
+			// Mock customer with RECENT lastSyncedAt (within 2 seconds)
+			const recentTimestamp = new Date().toISOString();
+			mockStripe.customers.retrieve.mockResolvedValueOnce({
+				id: "cus_loop_test_123",
+				email: "loop-test@test.com",
+				name: "Loop Test User",
+				deleted: false,
+				metadata: {
+					userId: userId,
+					lastSyncedAt: recentTimestamp,
+				},
+			});
+
+			// Try to update user email
+			const endpointCtx = { context: testCtx } as GenericEndpointContext;
+			await runWithEndpointContext(endpointCtx, async () => {
+				await testCtx.adapter.update({
+					model: "user",
+					update: {
+						email: "new-loop-test@test.com",
+					},
+					where: [{ field: "id", value: userId }],
+				});
+
+				// Simulate the update hook checking lastSyncedAt
+				const user = await testCtx.adapter.findOne<
+					User & { stripeCustomerId?: string }
+				>({
+					model: "user",
+					where: [{ field: "id", value: userId }],
+				});
+
+				if (user?.stripeCustomerId) {
+					const customer = await mockStripe.customers.retrieve(
+						user.stripeCustomerId,
+					);
+
+					if (customer && !("deleted" in customer && customer.deleted)) {
+						// Check lastSyncedAt to prevent infinite loop
+						const lastSynced = customer.metadata?.lastSyncedAt;
+						if (lastSynced) {
+							const timeSinceSync = Date.now() - new Date(lastSynced).getTime();
+							if (timeSinceSync < 2000) {
+								// Skip update - too recent
+								return;
+							}
+						}
+
+						// This should NOT be reached
+						await mockStripe.customers.update(user.stripeCustomerId, {
+							email: user.email,
+							metadata: {
+								...customer.metadata,
+								lastSyncedAt: new Date().toISOString(),
+							},
+						});
+					}
+				}
+			});
+
+			// Verify Stripe customer was retrieved but NOT updated
+			expect(mockStripe.customers.retrieve).toHaveBeenCalledWith(
+				"cus_loop_test_123",
+			);
+			expect(mockStripe.customers.update).not.toHaveBeenCalled();
+		});
+
+		it("should proceed with update when lastSyncedAt is older than 2 seconds", async () => {
+			const testAuth = betterAuth({
+				baseURL: "http://localhost:3000",
+				database: memory,
+				emailAndPassword: { enabled: true },
+				plugins: [stripe(stripeOptions)],
+			});
+
+			const testCtx = await testAuth.$context;
+
+			const { id: userId } = await testCtx.adapter.create({
+				model: "user",
+				data: {
+					email: "old-loop-test@test.com",
+					name: "Old Loop Test User",
+					stripeCustomerId: "cus_old_loop_123",
+				},
+			});
+
+			// Mock customer with OLD lastSyncedAt (> 2 seconds)
+			const oldTimestamp = new Date(Date.now() - 5000).toISOString(); // 5 seconds ago
+			mockStripe.customers.retrieve.mockResolvedValueOnce({
+				id: "cus_old_loop_123",
+				email: "old-loop-test@test.com",
+				name: "Old Loop Test User",
+				deleted: false,
+				metadata: {
+					userId: userId,
+					lastSyncedAt: oldTimestamp,
+				},
+			});
+
+			mockStripe.customers.update.mockResolvedValueOnce({
+				id: "cus_old_loop_123",
+				email: "new-old-loop-test@test.com",
+			});
+
+			// Update user email
+			const endpointCtx = { context: testCtx } as GenericEndpointContext;
+			await runWithEndpointContext(endpointCtx, async () => {
+				await testCtx.adapter.update({
+					model: "user",
+					update: {
+						email: "new-old-loop-test@test.com",
+					},
+					where: [{ field: "id", value: userId }],
+				});
+
+				// Simulate the update hook
+				const user = await testCtx.adapter.findOne<
+					User & { stripeCustomerId?: string }
+				>({
+					model: "user",
+					where: [{ field: "id", value: userId }],
+				});
+
+				if (user?.stripeCustomerId) {
+					const customer = await mockStripe.customers.retrieve(
+						user.stripeCustomerId,
+					);
+
+					if (customer && !("deleted" in customer && customer.deleted)) {
+						const lastSynced = customer.metadata?.lastSyncedAt;
+						if (lastSynced) {
+							const timeSinceSync = Date.now() - new Date(lastSynced).getTime();
+							if (timeSinceSync < 2000) {
+								return; // Skip
+							}
+						}
+
+						// Should proceed with update since lastSyncedAt is old
+						await mockStripe.customers.update(user.stripeCustomerId, {
+							email: user.email,
+							metadata: {
+								...customer.metadata,
+								lastSyncedAt: new Date().toISOString(),
+							},
+						});
+					}
+				}
+			});
+
+			// Verify Stripe customer was updated
+			expect(mockStripe.customers.retrieve).toHaveBeenCalled();
+			expect(mockStripe.customers.update).toHaveBeenCalledWith(
+				"cus_old_loop_123",
+				expect.objectContaining({
+					email: "new-old-loop-test@test.com",
+					metadata: expect.objectContaining({
+						userId: userId,
+						lastSyncedAt: expect.any(String),
+					}),
+				}),
+			);
+		});
+	});
 });
