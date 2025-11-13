@@ -646,7 +646,8 @@ export const createAdapterFactory =
 				const isUnique =
 					to === "id" ? true : (foreignKeyAttributes.unique ?? false);
 
-				let limit: number = 100;
+				let limit: number =
+					options.advanced?.database?.defaultFindManyLimit ?? 100;
 				if (isUnique) {
 					limit = 1;
 				} else if (typeof join === "object" && typeof join.limit === "number") {
