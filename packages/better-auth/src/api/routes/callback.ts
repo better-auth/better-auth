@@ -32,12 +32,11 @@ export const callbackOAuth = createAuthEndpoint(
 
 		try {
 			if (c.method === "GET") {
-				queryOrBody = schema.parse(c.query);
+				queryOrBody = (c.query as unknown as z.infer<typeof schema>) || {};
 			} else if (c.method === "POST") {
-				// Merge POST body and query parameters for OAuth callback compatibility
-				const postData = c.body ? schema.parse(c.body) : {};
-				const queryData = c.query ? schema.parse(c.query) : {};
-				queryOrBody = schema.parse({ ...postData, ...queryData });
+				const postData = (c.body as unknown as z.infer<typeof schema>) || {};
+				const queryData = (c.query as unknown as z.infer<typeof schema>) || {};
+				queryOrBody = { ...postData, ...queryData };
 			} else {
 				throw new Error("Unsupported method");
 			}
