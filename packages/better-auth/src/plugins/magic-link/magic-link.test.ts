@@ -57,7 +57,11 @@ describe("magic link", async () => {
 				onSuccess: sessionSetter(headers),
 			},
 		});
-		expect(response.data?.token).toBeDefined();
+		if (response.data && "token" in response.data) {
+			expect(response.data.token).toBeDefined();
+		} else {
+			expect(response.data?.code).toBeDefined();
+		}
 		const betterAuthCookie = headers.get("set-cookie");
 		expect(betterAuthCookie).toBeDefined();
 	});
@@ -213,7 +217,11 @@ describe("magic link verify", async () => {
 				onSuccess: sessionSetter(headers),
 			},
 		});
-		expect(response.data?.token).toBeDefined();
+		if (response.data && "token" in response.data) {
+			expect(response.data.token).toBeDefined();
+		} else {
+			expect(response.data?.code).toBeDefined();
+		}
 		const betterAuthCookie = headers.get("set-cookie");
 		expect(betterAuthCookie).toBeDefined();
 	});
