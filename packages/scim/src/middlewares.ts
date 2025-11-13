@@ -23,7 +23,7 @@ export const authMiddlewareFactory = (opts: SCIMOptions) =>
 			.split(":");
 
 		const [scimToken, providerId] = baseScimTokenParts;
-		const organizationId = baseScimTokenParts.slice(2).join("");
+		const organizationId = baseScimTokenParts.slice(2).join(":");
 
 		if (!scimToken || !providerId) {
 			throw new SCIMAPIError("UNAUTHORIZED", {

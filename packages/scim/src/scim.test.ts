@@ -1453,8 +1453,8 @@ describe("SCIM", () => {
 		it("should only allow access to users that belong to the same provider and organization", async () => {
 			const { auth, getSCIMToken, registerOrganization } = createTestInstance();
 			const [organizationA, organizationB] = await Promise.all([
-				registerOrganization("org-a"),
-				registerOrganization("org-b"),
+				registerOrganization("org:a"),
+				registerOrganization("org:b"),
 			]);
 
 			const [scimTokenProviderA, scimTokenProviderB] = await Promise.all([
