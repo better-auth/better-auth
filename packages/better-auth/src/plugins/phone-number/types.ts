@@ -1,8 +1,8 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import type { User } from "../../types";
+import type { Awaitable } from "../../types/helper";
 import type { InferOptionSchema } from "../../types/plugins";
 import type { schema } from "./schema";
-import type { Awaitable } from "../../types/helper";
 
 export interface UserWithPhoneNumber extends User {
 	phoneNumber: string;
