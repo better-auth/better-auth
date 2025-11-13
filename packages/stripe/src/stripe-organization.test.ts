@@ -1696,10 +1696,7 @@ describe("stripe organization customer support", () => {
 			});
 
 			// Sign in with the user
-			await signInWithUser(
-				"owner@integration.com",
-				"password123",
-			);
+			await signInWithUser("owner@integration.com", "password123");
 
 			// Create organization via actual API call
 			// Note: This would require organization plugin to expose createOrganization endpoint
@@ -2380,7 +2377,7 @@ describe("stripe organization customer support", () => {
 			});
 
 			// Create organization
-			 await testCtx.adapter.create({
+			await testCtx.adapter.create({
 				model: "organization",
 				data: {
 					name: "Billing Org",
