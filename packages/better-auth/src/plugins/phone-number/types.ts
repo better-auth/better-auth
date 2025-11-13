@@ -2,6 +2,7 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import type { User } from "../../types";
 import type { InferOptionSchema } from "../../types/plugins";
 import type { schema } from "./schema";
+import type { Awaitable } from "../../types/helper";
 
 export interface UserWithPhoneNumber extends User {
 	phoneNumber: string;
@@ -24,51 +25,7 @@ export interface PhoneNumberOptions {
 	sendOTP: (
 		data: { phoneNumber: string; code: string },
 		ctx?: GenericEndpointContext | undefined,
-	) => Promise<void> | void;
-	/**
-	 * a callback to send otp on user requesting to reset their password
-	 *
-	 * @param data - contains phone number and code
-	 * @param request - the request object
-	 * @returns
-	 */
-	sendPasswordResetOTP?:
-		| ((
-				data: { phoneNumber: string; code: string },
-				ctx?: GenericEndpointContext,
-		  ) => Promise<void> | void)
-		| undefined;
-	/**
-	 * Expiry time of the OTP code in seconds
-	 * @default 300
-	 */
-	expiresIn?: number | undefined;
-	/**
-	 * Function to validate phone number
-	 *
-	 * by default any string is accepted
-	 */
-	phoneNumberValidator?:
-		| ((phoneNumber: string) => boolean | Promise<boolean>)
-		| undefined;
-	/**
-	 * Require a phone number verification before signing in
-	 *
-	 * @default false
-	 */
-	requireVerification?: boolean | undefined;
-	/**
-	 * Callback when phone number is verified
-	 */
-	callbackOnVerification?:
-		| ((
-				data: {
-					phoneNumber: string;
-					user: UserWithPhoneNumber;
-				},
-				ctx?: GenericEndpointContext,
-		  ) => void | Promise<void>)
-		| undefined;
+	) => Awaitable<void>;
 	/**
 	 * Custom OTP verification function
 	 *
@@ -86,7 +43,51 @@ export interface PhoneNumberOptions {
 					code: string;
 				},
 				ctx?: GenericEndpointContext,
-		  ) => Promise<boolean> | boolean)
+		  ) => Awaitable<boolean>)
+		| undefined;
+	/**
+	 * a callback to send otp on user requesting to reset their password
+	 *
+	 * @param data - contains phone number and code
+	 * @param request - the request object
+	 * @returns
+	 */
+	sendPasswordResetOTP?:
+		| ((
+				data: { phoneNumber: string; code: string },
+				ctx?: GenericEndpointContext,
+		  ) => Awaitable<void>)
+		| undefined;
+	/**
+	 * Expiry time of the OTP code in seconds
+	 * @default 300
+	 */
+	expiresIn?: number | undefined;
+	/**
+	 * Function to validate phone number
+	 *
+	 * by default any string is accepted
+	 */
+	phoneNumberValidator?:
+		| ((phoneNumber: string) => Awaitable<boolean>)
+		| undefined;
+	/**
+	 * Require a phone number verification before signing in
+	 *
+	 * @default false
+	 */
+	requireVerification?: boolean | undefined;
+	/**
+	 * Callback when phone number is verified
+	 */
+	callbackOnVerification?:
+		| ((
+				data: {
+					phoneNumber: string;
+					user: UserWithPhoneNumber;
+				},
+				ctx?: GenericEndpointContext,
+		  ) => Awaitable<void>)
 		| undefined;
 	/**
 	 * Sign up user after phone number verification
