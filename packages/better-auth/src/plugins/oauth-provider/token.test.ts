@@ -907,6 +907,8 @@ describe("oauth token - client_credentials", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
 	const validAudience = "https://myapi.example.com";
+	const allScopes = ["openid", "profile", "email", "read:posts", "write:posts"];
+	const clientScopes = ["openid", "profile", "email", "read:posts"];
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
@@ -920,7 +922,7 @@ describe("oauth token - client_credentials", async () => {
 				consentPage: "/consent",
 				validAudiences: [validAudience],
 				allowDynamicClientRegistration: true,
-				scopes: ["openid", "profile", "email", "read:posts"],
+				scopes: allScopes,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
@@ -952,12 +954,14 @@ describe("oauth token - client_credentials", async () => {
 			body: {
 				redirect_uris: [redirectUri],
 				skip_consent: true,
+				scope: clientScopes.join(" "),
 			},
 		});
 		expect(response?.client_id).toBeDefined();
 		expect(response?.user_id).toBeDefined();
 		expect(response?.client_secret).toBeDefined();
 		expect(response?.redirect_uris).toEqual([redirectUri]);
+		expect(response?.scope).toEqual(clientScopes.join(" "));
 		oauthClient = response;
 
 		// Get jwks
@@ -1004,9 +1008,7 @@ describe("oauth token - client_credentials", async () => {
 		expect(tokens.data?.expires_at).toBeDefined();
 	});
 
-	it("should fail without requested scope and clientCredentialGrantDefaultScopes not set", async ({
-		expect,
-	}) => {
+	it("should match created client scopes", async ({ expect }) => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
@@ -1032,7 +1034,12 @@ describe("oauth token - client_credentials", async () => {
 			body: body,
 			headers: headers,
 		});
-		expect(tokens.error?.status).toBeDefined();
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.id_token).toBeUndefined();
+		expect(tokens.data?.refresh_token).toBeUndefined();
+		expect(tokens.data?.scope).toBe(clientScopes.join(" "));
+		expect(tokens.data?.expires_in).toBe(3600);
+		expect(tokens.data?.expires_at).toBeDefined();
 	});
 
 	it("should obtain a JWT access token", async () => {
