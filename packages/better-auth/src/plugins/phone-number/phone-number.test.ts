@@ -527,7 +527,7 @@ describe("custom generateOTP", async () => {
 					otp = code;
 				},
 				generateOTP: async (otpLength) => {
-					return new Array(otpLength).join("");
+					return "123456";
 				},
 				signUpOnVerification: {
 					getTempEmail(phoneNumber) {
