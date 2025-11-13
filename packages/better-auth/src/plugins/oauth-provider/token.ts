@@ -313,7 +313,6 @@ async function createRefreshToken(
 /**
  * Checks the resource parameter, if provided,
  * and returns a valid audience based on the request
- *
  */
 async function checkResource(
 	ctx: GenericEndpointContext,
@@ -731,37 +730,32 @@ async function handleClientCredentialsGrant(
 			error: "invalid_grant",
 		});
 	}
-	if (!scope) scope = opts.clientCredentialGrantDefaultScopes?.join(" ");
-	if (!scope) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "Missing required scope",
-			error: "invalid_scope",
-		});
-	}
 
 	// OIDC scopes should not be requestable (code authorization grant should be used)
-	const requestedScopes = scope.split(" ");
-	const invalidScopes = ["openid", "profile", "email", "offline_access"];
-	for (const sc of requestedScopes) {
-		if (invalidScopes.includes(sc)) {
-			throw new APIError("BAD_REQUEST", {
-				error_description: `unable to satisfy scope ${sc}`,
-				error: "invalid_scope",
-			});
-		}
-		if (opts.scopes && !opts.scopes.includes(sc)) {
-			throw new APIError("BAD_REQUEST", {
-				error_description: `invalid scope ${sc}`,
-				error: "invalid_scope",
-			});
+	let requestedScopes = scope?.split(" ");
+	if (requestedScopes) {
+		const invalidScopes = new Set([
+			"openid",
+			"profile",
+			"email",
+			"offline_access",
+		]);
+		const validScopes = opts.scopes ? new Set(opts.scopes) : undefined;
+		for (const sc of requestedScopes) {
+			if (invalidScopes.has(sc)) {
+				throw new APIError("BAD_REQUEST", {
+					error_description: `unable to satisfy scope ${sc}`,
+					error: "invalid_scope",
+				});
+			}
+			if (validScopes && !validScopes.has(sc)) {
+				throw new APIError("BAD_REQUEST", {
+					error_description: `invalid scope ${sc}`,
+					error: "invalid_scope",
+				});
+			}
 		}
 	}
-
-	// Check requested audience if sent as the resource parameter
-	const jwtPluginOptions = opts.disableJwtPlugin
-		? undefined
-		: getJwtPlugin(ctx.context).options;
-	const audience = await checkResource(ctx, opts, requestedScopes);
 
 	const client = await validateClientCredentials(
 		ctx,
@@ -771,19 +765,33 @@ async function handleClientCredentialsGrant(
 		requestedScopes,
 	);
 
+	// Set default scopes to all those available for that client or all provided scopes.
+	if (!requestedScopes) {
+		requestedScopes = client.scopes ??
+			opts.clientCredentialGrantDefaultScopes ??
+			opts.scopes ?? ["openid", "profile", "email", "offline_access"];
+	}
+
+	// Check requested audience if sent as the resource parameter
+	const jwtPluginOptions = opts.disableJwtPlugin
+		? undefined
+		: getJwtPlugin(ctx.context).options;
+	const audience = await checkResource(ctx, opts, requestedScopes);
+
 	const iat = Math.floor(Date.now() / 1000);
 	const defaultExp = iat + (opts.m2mAccessTokenExpiresIn ?? 3600);
-	const exp = opts.scopeExpirations
-		? requestedScopes
-				.map((sc) =>
-					opts.scopeExpirations?.[sc]
-						? toExpJWT(opts.scopeExpirations[sc], iat)
-						: defaultExp,
-				)
-				.reduce((prev, curr) => {
-					return prev < curr ? prev : curr;
-				}, defaultExp)
-		: defaultExp;
+	const exp =
+		opts.scopeExpirations && requestedScopes
+			? requestedScopes
+					.map((sc) =>
+						opts.scopeExpirations?.[sc]
+							? toExpJWT(opts.scopeExpirations[sc], iat)
+							: defaultExp,
+					)
+					.reduce((prev, curr) => {
+						return prev < curr ? prev : curr;
+					}, defaultExp)
+			: defaultExp;
 
 	const accessToken =
 		audience && !opts.disableJwtPlugin
