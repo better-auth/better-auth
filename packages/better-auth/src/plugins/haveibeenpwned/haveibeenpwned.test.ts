@@ -63,4 +63,15 @@ describe("have-i-been-pwned", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toBe(400);
 	});
+
+	it("should return invalid credentials for unknown user even with compromised password", async () => {
+		const result = await client.signIn.email({
+			email: `missing-${Date.now()}@example.com`,
+			password: "123456789",
+		});
+
+		expect(result.data).toBeNull();
+		expect(result.error?.status).toBe(401);
+		expect(result.error?.message).toBe("Invalid email or password");
+	});
 });

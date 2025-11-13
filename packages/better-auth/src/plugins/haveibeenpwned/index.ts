@@ -1,4 +1,7 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
+import type {
+	BetterAuthPlugin,
+	PasswordHashOptions,
+} from "@better-auth/core";
 import { defineErrorCodes } from "@better-auth/core/utils";
 import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
@@ -63,16 +66,23 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) =>
 	({
 		id: "haveIBeenPwned",
 		init(ctx) {
+			const originalHash = ctx.password.hash.bind(ctx.password);
 			return {
 				context: {
 					password: {
 						...ctx.password,
-						async hash(password) {
+						async hash(
+							password,
+							hashOptions?: PasswordHashOptions | undefined,
+						) {
+							if (hashOptions?.skipCompromiseCheck) {
+								return originalHash(password, hashOptions);
+							}
 							await checkPasswordCompromise(
 								password,
 								options?.customPasswordCompromisedMessage,
 							);
-							return ctx.password.hash(password);
+							return originalHash(password, hashOptions);
 						},
 					},
 				},

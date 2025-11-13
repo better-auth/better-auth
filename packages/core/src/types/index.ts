@@ -3,6 +3,7 @@ export type {
 	AuthContext,
 	GenericEndpointContext,
 	InternalAdapter,
+	PasswordHashOptions,
 } from "./context";
 export type { BetterAuthCookies } from "./cookie";
 export type * from "./helper";
