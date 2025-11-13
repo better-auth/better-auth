@@ -1,5 +1,9 @@
 import type { AuthContext, HookEndpointContext } from "@better-auth/core";
-import type { AuthEndpoint, AuthMiddleware } from "@better-auth/core/api";
+import {
+	type AuthEndpoint,
+	type AuthMiddleware,
+	createAuthMiddleware,
+} from "@better-auth/core/api";
 import {
 	hasRequestState,
 	runWithEndpointContext,
@@ -321,7 +325,15 @@ function getHooks(authContext: AuthContext) {
 			}
 		})
 		.filter((plugin) => plugin !== undefined)
-		.flat();
+		.flat()
+		.map((hook) =>
+			typeof hook === "object"
+				? hook
+				: {
+						matcher: () => true,
+						handler: createAuthMiddleware(hook),
+					},
+		);
 	const pluginAfterHooks = plugins
 		.map((plugin) => {
 			if (plugin.hooks?.after) {
@@ -329,7 +341,15 @@ function getHooks(authContext: AuthContext) {
 			}
 		})
 		.filter((plugin) => plugin !== undefined)
-		.flat();
+		.flat()
+		.map((hook) =>
+			typeof hook === "object"
+				? hook
+				: {
+						matcher: () => true,
+						handler: createAuthMiddleware(hook),
+					},
+		);
 
 	/**
 	 * Add plugin added hooks at last
