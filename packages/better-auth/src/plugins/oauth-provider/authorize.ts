@@ -130,29 +130,32 @@ export async function authorizeEndpoint(
 	}
 
 	// Check for invalid scopes if requested from query
-	let requestScopes = query.scope?.split(" ").filter((s) => s) ?? [];
-	const invalidScopes = requestScopes.filter((scope) => {
-		return (
-			!(client.scopes ?? opts.scopes)?.includes(scope) ||
-			// offline access must be requested through PKCE
-			(scope === "offline_access" &&
-				(query.code_challenge_method !== "S256" || !query.code_challenge))
-		);
-	});
-	if (invalidScopes.length) {
-		throw ctx.redirect(
-			formatErrorURL(
-				query.redirect_uri,
-				"invalid_scope",
-				`The following scopes are invalid: ${invalidScopes.join(", ")}`,
-				query.state,
-			),
-		);
+	let requestedScopes = query.scope?.split(" ").filter((s) => s);
+	if (requestedScopes) {
+		const validScopes = new Set(client.scopes ?? opts.scopes);
+		const invalidScopes = requestedScopes.filter((scope) => {
+			return (
+				!validScopes?.has(scope) ||
+				// offline access must be requested through PKCE
+				(scope === "offline_access" &&
+					(query.code_challenge_method !== "S256" || !query.code_challenge))
+			);
+		});
+		if (invalidScopes.length) {
+			throw ctx.redirect(
+				formatErrorURL(
+					query.redirect_uri,
+					"invalid_scope",
+					`The following scopes are invalid: ${invalidScopes.join(", ")}`,
+					query.state,
+				),
+			);
+		}
 	}
 	// Always set default scopes if not originally sent
-	if (!query.scope) {
-		requestScopes = client.scopes ?? opts.scopes ?? [];
-		query.scope = requestScopes.join(" ");
+	if (!requestedScopes) {
+		requestedScopes = client.scopes ?? opts.scopes ?? [];
+		query.scope = requestedScopes.join(" ");
 	}
 
 	if (!query.code_challenge || !query.code_challenge_method) {
@@ -216,7 +219,7 @@ export async function authorizeEndpoint(
 			headers: ctx.request.headers,
 			user: session.user,
 			session: session.session,
-			scopes: requestScopes,
+			scopes: requestedScopes,
 		});
 		if (!selectedAccount) {
 			return redirectWithPromptCode(ctx, opts, "select_account", {
@@ -231,7 +234,7 @@ export async function authorizeEndpoint(
 		const postLogin = await opts.postLogin.shouldRedirect({
 			user: session.user,
 			session: session.session,
-			scopes: requestScopes,
+			scopes: requestedScopes,
 		});
 		if (!postLogin) {
 			return redirectWithPromptCode(ctx, opts, "post_login", {
@@ -263,7 +266,7 @@ export async function authorizeEndpoint(
 	const referenceId = await opts.postLogin?.consentReferenceId?.({
 		user: session.user,
 		session: session.session,
-		scopes: requestScopes,
+		scopes: requestedScopes,
 	});
 	const consent = await ctx.context.adapter
 		.findOne<OAuthConsent<Scope[]>>({
@@ -295,7 +298,10 @@ export async function authorizeEndpoint(
 			} as OAuthConsent<Scope[]>;
 		});
 
-	if (!consent || !requestScopes.every((val) => consent.scopes.includes(val))) {
+	if (
+		!consent ||
+		!requestedScopes.every((val) => consent.scopes.includes(val))
+	) {
 		return redirectWithPromptCode(ctx, opts, "consent", {
 			query,
 			userId: session.user.id,

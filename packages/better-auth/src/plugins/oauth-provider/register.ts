@@ -118,8 +118,9 @@ export async function checkOAuthClient(
 		? (opts.clientRegistrationAllowedScopes ?? opts.scopes)
 		: opts.scopes;
 	if (allowedScopes) {
+		const validScopes = new Set(allowedScopes);
 		for (const requestedScope of requestedScopes ?? []) {
-			if (!allowedScopes?.includes(requestedScope)) {
+			if (!validScopes?.has(requestedScope)) {
 				throw new APIError("BAD_REQUEST", {
 					error: "invalid_scope",
 					error_description: `cannot request scope ${requestedScope}`,
