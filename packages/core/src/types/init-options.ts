@@ -22,11 +22,7 @@ import type {
 import type { DBAdapterDebugLogOption, DBAdapterInstance } from "../db/adapter";
 import type { Logger } from "../env";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
-import type {
-	AuthContext,
-	GenericEndpointContext,
-	PasswordHashOptions,
-} from "./context";
+import type { AuthContext, GenericEndpointContext } from "./context";
 import type { LiteralUnion } from "./helper";
 import type { BetterAuthPlugin } from "./plugin";
 
@@ -555,10 +551,7 @@ export type BetterAuthOptions = {
 				 * different algorithm.
 				 */
 				password?: {
-					hash?: (
-						password: string,
-						options?: PasswordHashOptions | undefined,
-					) => Promise<string>;
+					hash?: (password: string) => Promise<string>;
 					verify?: (data: {
 						hash: string;
 						password: string;
