@@ -370,3 +370,4 @@ export { getIp } from "../utils/get-request-ip";
 export * from "./middlewares";
 export * from "./routes";
 export { getOAuthState } from "./state/oauth";
+export { getCompromiseCheck } from "./state/compromise-check";
