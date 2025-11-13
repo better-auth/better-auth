@@ -48,22 +48,23 @@ export async function verifySCIMToken(
 		);
 	}
 	if (opts.storeSCIMToken === "hashed") {
-		const hashedOtp = await defaultKeyHasher(scimToken);
-		return hashedOtp === storedSCIMToken;
+		const hashedSCIMToken = await defaultKeyHasher(scimToken);
+		return hashedSCIMToken === storedSCIMToken;
 	}
 	if (
 		typeof opts.storeSCIMToken === "object" &&
 		"hash" in opts.storeSCIMToken
 	) {
-		const hashedOtp = await opts.storeSCIMToken.hash(scimToken);
-		return hashedOtp === storedSCIMToken;
+		const hashedSCIMTOKEN = await opts.storeSCIMToken.hash(scimToken);
+		return hashedSCIMTOKEN === storedSCIMToken;
 	}
 	if (
 		typeof opts.storeSCIMToken === "object" &&
 		"decrypt" in opts.storeSCIMToken
 	) {
-		const decryptedOtp = await opts.storeSCIMToken.decrypt(storedSCIMToken);
-		return decryptedOtp === scimToken;
+		const decyptedSCIMToken =
+			await opts.storeSCIMToken.decrypt(storedSCIMToken);
+		return decyptedSCIMToken === scimToken;
 	}
 
 	return scimToken === storedSCIMToken;

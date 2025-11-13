@@ -282,11 +282,11 @@ Alternatively, you can pass a custom encryptor or hasher to store the SCIM token
 ```ts title="auth.ts"
 scim({
     storeSCIMToken: { 
-        encrypt: async (otp) => {
-            return myCustomEncryptor(otp);
+        encrypt: async (scimToken) => {
+            return myCustomEncryptor(scimToken);
         },
-        decrypt: async (otp) => {
-            return myCustomDecryptor(otp);
+        decrypt: async (scimToken) => {
+            return myCustomDecryptor(scimToken);
         },
     }
 })
@@ -297,8 +297,8 @@ scim({
 ```ts title="auth.ts"
 scim({
     storeSCIMToken: {
-        hash: async (otp) => {
-            return myCustomHasher(otp);
+        hash: async (scimToken) => {
+            return myCustomHasher(scimToken);
         },
     }
 })
