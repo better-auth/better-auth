@@ -597,3 +597,37 @@ describe("debug mode stack trace", () => {
 		}
 	});
 });
+
+describe("custom response code", () => {
+	const endpoints = {
+		responseWithStatus: createAuthEndpoint(
+			"/response-with-status",
+			{
+				method: "GET",
+			},
+			async (c) => {
+				c.setStatus(201);
+				return { success: true };
+			},
+		),
+	};
+
+	const authContext = init({});
+	const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+	it("should return response with custom status", async () => {
+		const response = await authEndpoints.responseWithStatus({
+			asResponse: true,
+		});
+		expect(response).toBeInstanceOf(Response);
+		expect(response.status).toBe(201);
+	});
+
+	it("should return status code", async () => {
+		const response = await authEndpoints.responseWithStatus({
+			returnStatus: true,
+		});
+		expect(response.status).toBe(201);
+		expect(response.response).toEqual({ success: true });
+	});
+});
