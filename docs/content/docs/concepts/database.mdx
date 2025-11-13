@@ -475,11 +475,12 @@ export const auth = betterAuth({
 
 ### ID Generation
 
-Better Auth by default will generate unique IDs for users, sessions, and other entities. You can customize ID generation behavior using the `advanced.database.generateId` option or `advanced.database.useNumberId`.
+Better Auth by default will generate unique IDs for users, sessions, and other entities.
+You can customize ID generation behavior using the `advanced.database.generateId` option.
 
 #### Option 1: Let Database Generate IDs
 
-Setting `generateId` to `false` or `generateId` to `"serial"` disables ID generation globally, letting your database handle all ID generation:
+Setting `generateId` to `false` allows your database handle all ID generation: (outside of `generateId` being `serial` and some cases of `generateId` being `uuid`)
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -544,7 +545,7 @@ export const auth = betterAuth({
 
 ### Numeric IDs
 
-If you prefer auto-incrementing numeric IDs, you can set the `advanced.database.useNumberId` option to `true`.
+If you prefer auto-incrementing numeric IDs, you can set the `advanced.database.generateId` option to `"serial"`.
 Doing this will disable Better-Auth from generating IDs for any table, and will assume your
 database will generate the numeric ID automatically.
 
@@ -559,7 +560,7 @@ export const auth = betterAuth({
   database: db,
   advanced: {
     database: {
-      useNumberId: true,
+      generateId: "serial",
     },
   },
 });
@@ -573,44 +574,14 @@ export const auth = betterAuth({
   this is normal. It's also expected that all id values passed to Better-Auth (eg via an endpoint body) is expected to be a string.
 </Callout>
 
-### Mixed ID Types
+### UUIDs
 
-If you need different ID types across tables (e.g., integer IDs for users, UUID strings for sessions/accounts/verification), use a `generateId` callback function.
+If you prefer UUIDs for the `id` field, you can set the `advanced.database.generateId` option to `"uuid"`.
+By default, Better-Auth will generate UUIDs for the `id` field for all tables, except adapters that use `PostgreSQL` where we allow the
+database to generate the UUID automatically.
 
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { db } from "./db";
-
-export const auth = betterAuth({
-  database: db,
-  user: {
-    modelName: "users", // PostgreSQL: id serial primary key
-  },
-  session: {
-    modelName: "session", // PostgreSQL: id text primary key
-  },
-  advanced: {
-    database: {
-      // Do NOT set useNumberId - it's global and affects all tables
-      generateId: (options) => {
-        if (options.model === "user" || options.model === "users") {
-          return false; // Let PostgreSQL serial generate it
-        }
-        return crypto.randomUUID(); // UUIDs for session, account, verification
-      },
-    },
-  },
-});
-```
-
-This configuration allows you to:
-- Use database auto-increment (serial, auto_increment, etc.) for the users table
-- Generate UUIDs for all other tables (session, account, verification)
-- Maintain compatibility with existing schemas that use different ID types
-
-<Callout type="info">
-  **Use Case**: This is particularly useful when migrating from other authentication providers (like Clerk) where you have existing users with integer IDs but want UUID strings for new tables.
-</Callout>
+By enabling this option, the Better-Auth CLI will generate or migrate the schema with the `id` field as a UUID type for your database.
+If the `uuid` type is not supported, we will generate a normal `string` type for the `id` field.
 
 ### Database Hooks
 
