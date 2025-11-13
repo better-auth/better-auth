@@ -332,8 +332,9 @@ export async function validateClientCredentials(
 
 	// If scopes set, check against client allowed scopes
 	if (scopes && client.scopes) {
+		const validScopes = new Set(client.scopes);
 		for (const sc of scopes) {
-			if (!client.scopes.includes(sc)) {
+			if (!validScopes.has(sc)) {
 				throw new APIError("BAD_REQUEST", {
 					error_description: `client does not allow scope ${sc}`,
 					error: "invalid_scope",

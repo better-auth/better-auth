@@ -190,9 +190,11 @@ export async function verifyAccessToken(
 
 	// Check scopes if provided
 	if (opts.scopes) {
-		const scopes = (payload.scope as string | undefined)?.split(" ");
+		const validScopes = new Set(
+			(payload.scope as string | undefined)?.split(" "),
+		);
 		for (const sc of opts.scopes) {
-			if (!scopes?.includes(sc)) {
+			if (!validScopes.has(sc)) {
 				throw new APIError("FORBIDDEN", {
 					message: `invalid scope ${sc}`,
 				});
