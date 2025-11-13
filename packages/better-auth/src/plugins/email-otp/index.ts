@@ -30,7 +30,7 @@ export interface EmailOTPOptions {
 			otp: string;
 			type: "sign-in" | "email-verification" | "forget-password";
 		},
-		request?: Request | undefined,
+		ctx?: GenericEndpointContext | undefined,
 	) => Promise<void>;
 	/**
 	 * Length of the OTP
@@ -52,7 +52,7 @@ export interface EmailOTPOptions {
 			email: string;
 			type: "sign-in" | "email-verification" | "forget-password";
 		},
-		request?: Request,
+		ctx?: GenericEndpointContext,
 	) => string | undefined;
 	/**
 	 * Send email verification on sign-up
@@ -248,7 +248,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}
 				}
 				let otp =
-					opts.generateOTP({ email, type: ctx.body.type }, ctx.request) ||
+					opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
 					defaultOTPGenerator(opts);
 
 				let storedOTP = await storeOTP(ctx, otp);
@@ -277,7 +277,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						otp,
 						type: ctx.body.type,
 					},
-					ctx.request,
+					ctx,
 				);
 				return ctx.json({
 					success: true,
@@ -348,7 +348,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				async (ctx) => {
 					const email = ctx.body.email;
 					const otp =
-						opts.generateOTP({ email, type: ctx.body.type }, ctx.request) ||
+						opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
 						defaultOTPGenerator(opts);
 					let storedOTP = await storeOTP(ctx, otp);
 					await ctx.context.internalAdapter.createVerificationValue({
@@ -974,7 +974,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						});
 					}
 					const otp =
-						opts.generateOTP({ email, type: "forget-password" }, ctx.request) ||
+						opts.generateOTP({ email, type: "forget-password" }, ctx) ||
 						defaultOTPGenerator(opts);
 					let storedOTP = await storeOTP(ctx, otp);
 					await ctx.context.internalAdapter.createVerificationValue({
@@ -988,7 +988,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							otp,
 							type: "forget-password",
 						},
-						ctx.request,
+						ctx,
 					);
 					return ctx.json({
 						success: true,
@@ -1152,7 +1152,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					matcher(context) {
 						return !!(
 							context.path?.startsWith("/sign-up") &&
-							opts.sendVerificationOnSignUp
+							opts.sendVerificationOnSignUp &&
+							!opts.overrideDefaultEmailVerification
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
@@ -1162,7 +1163,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						const email = response?.user.email;
 						if (email) {
 							const otp =
-								opts.generateOTP({ email, type: ctx.body.type }, ctx.request) ||
+								opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
 								defaultOTPGenerator(opts);
 							let storedOTP = await storeOTP(ctx, otp);
 							await ctx.context.internalAdapter.createVerificationValue({
@@ -1176,7 +1177,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 									otp,
 									type: "email-verification",
 								},
-								ctx.request,
+								ctx,
 							);
 						}
 					}),

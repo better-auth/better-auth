@@ -1417,6 +1417,9 @@ importers:
       better-auth:
         specifier: workspace:*
         version: link:../packages/better-auth
+      msw:
+        specifier: ^2.12.1
+        version: 2.12.1(patch_hash=c49705980e5ab7228e551c9f65094fd631bf5405f65f28ca99f0f4fa2252c459)(@types/node@24.9.2)(typescript@5.9.3)
       openid-client:
         specifier: ^6.8.1
         version: 6.8.1
