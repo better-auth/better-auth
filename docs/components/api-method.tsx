@@ -55,11 +55,13 @@ export const APIMethod = ({
 	children,
 	noResult,
 	requireSession,
+	requireBearerToken,
 	note,
 	clientOnlyNote,
 	serverOnlyNote,
 	resultVariable = "data",
 	forceAsBody,
+	forceAsParam,
 	forceAsQuery,
 }: {
 	/**
@@ -72,6 +74,12 @@ export const APIMethod = ({
 	 * @default false
 	 */
 	requireSession?: boolean;
+	/**
+	 *  If enabled, will a bearer authorization header to the fetch options
+	 *
+	 * @default false
+	 */
+	requireBearerToken?: boolean;
 	/**
 	 * The HTTP method to the endpoint
 	 *
@@ -126,6 +134,10 @@ export const APIMethod = ({
 	 * Force the server auth API to use `query`, rather than auto choosing
 	 */
 	forceAsQuery?: boolean;
+	/**
+	 * Force the user auth api to use `path`, rather than auto choosing
+	 */
+	forceAsParam?: boolean;
 }) => {
 	let { props, functionName, code_prefix, code_suffix } = parseCode(children);
 
@@ -136,13 +148,16 @@ export const APIMethod = ({
 		method: method ?? "GET",
 		forceAsBody,
 		forceAsQuery,
+		forceAsParam,
 	});
 
 	const serverBody = createServerBody({
 		props,
 		method: method ?? "GET",
 		requireSession: requireSession ?? false,
+		requireBearerToken: requireBearerToken ?? false,
 		forceAsQuery,
+		forceAsParam,
 		forceAsBody,
 	});
 
@@ -633,9 +648,11 @@ function shouldClientUseQueryParams(
 	method: string | undefined,
 	forceAsBody: boolean | undefined,
 	forceAsQuery: boolean | undefined,
+	forceAsParam: boolean | undefined,
 ): boolean {
 	if (forceAsQuery) return true;
 	if (forceAsBody) return false;
+	if (forceAsParam) return false;
 	return method === "GET";
 }
 
@@ -644,16 +661,19 @@ function createClientBody({
 	method,
 	forceAsBody,
 	forceAsQuery,
+	forceAsParam,
 }: {
 	props: Property[];
 	method?: string;
 	forceAsBody?: boolean;
 	forceAsQuery?: boolean;
+	forceAsParam?: boolean;
 }) {
 	const isQueryParam = shouldClientUseQueryParams(
 		method,
 		forceAsBody,
 		forceAsQuery,
+		forceAsParam,
 	);
 	const baseIndentLevel = isQueryParam ? 2 : 1;
 
@@ -701,29 +721,36 @@ function shouldServerUseQueryParams(
 	method: string,
 	forceAsBody: boolean | undefined,
 	forceAsQuery: boolean | undefined,
+	forceAsParam: boolean | undefined,
 ): boolean {
 	if (forceAsQuery) return true;
 	if (forceAsBody) return false;
+	if (forceAsParam) return false;
 	return method === "GET";
 }
 
 function createServerBody({
 	props,
 	requireSession,
+	requireBearerToken,
 	method,
 	forceAsBody,
+	forceAsParam,
 	forceAsQuery,
 }: {
 	props: Property[];
 	requireSession: boolean;
+	requireBearerToken: boolean;
 	method: string;
 	forceAsQuery: boolean | undefined;
+	forceAsParam: boolean | undefined;
 	forceAsBody: boolean | undefined;
 }) {
 	const isQueryParam = shouldServerUseQueryParams(
 		method,
 		forceAsBody,
 		forceAsQuery,
+		forceAsParam,
 	);
 	const clientOnlyProps = props.filter((x) => !x.isClientOnly);
 
@@ -779,11 +806,16 @@ function createServerBody({
 			"\n    // This endpoint requires session cookies.\n    headers: await headers(),";
 	}
 
+	if (requireBearerToken) {
+		fetchOptions +=
+			"\n    // This endpoint requires a bearer authentication token.\n    headers: { authorization: 'Bearer <token>' },";
+	}
+
 	// Assemble final result
 	let result = "";
 	if (clientOnlyProps.length > 0) {
 		result += "{\n";
-		const paramType = isQueryParam ? "query" : "body";
+		const paramType = isQueryParam ? "query" : forceAsParam ? "params" : "body";
 		result += `    ${paramType}: ${propertiesContent}${fetchOptions}\n}`;
 	} else if (fetchOptions.length) {
 		result += `{${fetchOptions}\n}`;

@@ -3,9 +3,8 @@ title: System for Cross-domain Identity Management (SCIM)
 description: Integrate SCIM with your application.
 ---
 
-System for Cross-domain Identity Management ([SCIM](https://simplecloud.info/#Specification))
-makes managing identities in multi-domain scenarios easier
-to support via a standardized protocol.
+System for Cross-domain Identity Management ([SCIM](https://simplecloud.info/#Specification)) makes managing identities in multi-domain scenarios easier to support via a standardized protocol.
+This plugin exposes a [SCIM](https://simplecloud.info/#Specification) server that allows third party identity providers to sync identities to your service.
 
 ## Installation
 
@@ -22,7 +21,7 @@ to support via a standardized protocol.
 
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
-        import { scim } from "@better-auth/scim";
+        import { scim } from "@better-auth/scim"; // [!code highlight]
 
         const auth = betterAuth({
             plugins: [ // [!code highlight]
@@ -34,14 +33,27 @@ to support via a standardized protocol.
     <Step>
         ### Enable HTTP methods
 
-        SCIM requires additional HTTP methods to be supported by your server:
+        SCIM requires the `POST`, `PUT`, `PATCH` and `DELETE` HTTP methods to be supported by your server.
+        For most frameworks, this will work out of the box, but some frameworks may require additional configuration:
 
-        ```ts title="api/auth/[...all]/route.ts"
-        import { auth } from "@/lib/auth";
-        import { toNextJsHandler } from "better-auth/next-js";
+        <Tabs items={["Next.js", "Solid Start"]}>
+            <Tab value="Next.js">
+            ```ts title="api/auth/[...all]/route.ts"
+            import { auth } from "@/lib/auth";
+            import { toNextJsHandler } from "better-auth/next-js";
 
-        export const { POST, GET, PUT, PATCH, DELETE } = toNextJsHandler(auth); // [!code highlight]
-        ```
+            export const { POST, GET, PUT, PATCH, DELETE } = toNextJsHandler(auth); // [!code highlight]
+            ```
+            </Tab>
+            <Tab value="Solid Start">
+            ```ts title="routes/api/auth/*auth.ts"
+            import { auth } from "~/lib/auth";
+            import { toSolidStartHandler } from "better-auth/solid-start";
+
+            export const { GET, POST, PUT, PATCH, DELETE } = toSolidStartHandler(auth); // [!code highlight]
+            ```
+            </Tab>
+        </Tabs>
     </Step>
     <Step>
         ### Migrate the database
@@ -69,33 +81,160 @@ to support via a standardized protocol.
 Upon registration, this plugin will expose compliant [SCIM 2.0](https://simplecloud.info/#Specification) server.
 The following subset of the specification is currently supported:
 
-#### SCIM endpoints
+### SCIM endpoints
 
-- GET `/api/auth/scim/v2/Users` - Get all provisioned users
-- GET `/api/auth/scim/v2/Users/:userId` - Get a provisioned user info
-- POST `/api/auth/scim/v2/Users` - Provision a new user
-- PUT `/api/auth/scim/v2/Users/:userId` - Update an existing provisioned user
-- PATCH `/api/auth/scim/v2/Users/:userId` - Partially update an existing provisioned user
+#### List users
+
+Get a list of available users in the database. This is restricted to list only users associated to the same provider and organization than your SCIM token.
+
+<APIMethod path="/scim/v2/Users" method="GET" requireBearerToken isServerOnly note="Returns the provisioned SCIM user details. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.4.1">
+```ts
+type listSCIMUsers = {
+    /**
+     * SCIM compliant filter expression
+    */
+    filter?: string = 'userName eq "user-a"'
+}
+```
+</APIMethod>
+
+#### Get user
+
+Get an user from the database. The user will be only returned if it belongs to the same provider and organization than the SCIM token.
+
+<APIMethod path="/scim/v2/Users/:userId" method="GET" forceAsParam requireBearerToken isServerOnly note="Returns the provisioned SCIM user details. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.4.1">
+```ts
+type getSCIMUser = {
+    /**
+     * Unique user identifier
+    */
+    userId: string = "user id"
+}
+```
+</APIMethod>
+
+#### Create new user
+
+Provisions a new user to the database. The user will have an account associated to the same provider and will be member of the same org than the SCIM token.
+
+<APIMethod path="/scim/v2/Users" method="POST" requireBearerToken isServerOnly note="Provision a new user via SCIM. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.3">
+```ts
+type createSCIMUser = {
+    /*
+     * Unique external (third party) identifier
+    */
+    externalId?: string = "third party id"
+    /**
+     * User name details
+    */
+    name?: {
+        /**
+         * Formatted name (takes priority over given and family name)
+        */
+        formatted?: string = "Daniel Perez"
+        /**
+         * Given name
+        */
+        givenName?: string = "Daniel"
+        /**
+         * Family name
+        */
+        familyName?: string = "Perez"
+    }
+    /**
+     * List of emails associated to the user, only a single email can be primary
+    */
+    emails?: Array<{ value: string, primary?: boolean }> = [{ value: "daniel@email.com", primary: true }]
+}
+```
+</APIMethod>
+
+#### Update an existing user
+
+Replaces an existing user details in the database. This operation can only update users that belong to the same provider and organization than the SCIM token.
+
+<APIMethod path="/scim/v2/Users/:userId" method="PUT" requireBearerToken isServerOnly note="Updates an existing user via SCIM. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.3">
+```ts
+type updateSCIMUser = {
+    /*
+     * Unique external (third party) identifier
+    */
+    externalId?: string = "third party id"
+    /**
+     * User name details
+    */
+    name?: {
+        /**
+         * Formatted name (takes priority over given and family name)
+        */
+        formatted?: string = "Daniel Perez"
+        /**
+         * Given name
+        */
+        givenName?: string = "Daniel"
+        /**
+         * Family name
+        */
+        familyName?: string = "Perez"
+    }
+    /**
+     * List of emails associated to the user, only a single email can be primary
+    */
+    emails?: Array<{ value: string, primary?: boolean }> = [{ value: "daniel@email.com", primary: true }]
+}
+```
+</APIMethod>
+
+#### Partial update an existing user
+
+Allows to apply a partial update to the user details. This operation can only update users that belong to the same provider and organization than the SCIM token.
+
+<APIMethod path="/scim/v2/Users/:userId" method="PATCH" requireBearerToken isServerOnly note="Partially updates a user resource. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.5.2">
+```ts
+type patchSCIMUser = {
+    /**
+     * Mandatory schema declaration
+    */
+    schemas: string[] = ["urn:ietf:params:scim:api:messages:2.0:PatchOp"]
+    /**
+     * List of JSON patch operations
+    */
+    Operations: Array<{ op: "replace" | "add" | "remove", path?: string, value: any }> = [{ op: "replace", path: "/Username", value: "any value" }]
+}
+```
+</APIMethod>
+
+#### Deletes a user resource
+
+Completely deletes a user resource from the database. This operation can only delete users that belong to the same provider and organization than the SCIM token.
+
+<APIMethod path="/scim/v2/Users/:userId" method="DELETE" forceAsParam requireBearerToken isServerOnly note="Deletes an existing user resource. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.6">
+```ts
+type deleteSCIMUser = {
+    userId: string
+}
+```
+</APIMethod>
 
 Generally, this server is meant to be consumed by a third-party (your identity provider), which will require:
 
 - SCIM base url: This should be the fully qualified URL to be SCIM server (e.g `http://your-app.com/api/auth/scim/v2`)
-- SCIM bearer token: See [generating a SCIM token](#genering-a-scim-token)
+- SCIM bearer token: See [generating a SCIM token](#generating-a-scim-token)
 
 ### Generating a SCIM token
 
-Before your identity provider can start syncing information to your SCIM server
-you need to generate a SCIM token which your identity provider will use to authenticate against it.
+Before your identity provider can start syncing information to your SCIM server,
+you need to generate a SCIM token that your identity provider will use to authenticate against it.
 
 A SCIM token is a simple bearer token that you can generate:
 
 <APIMethod path="/scim/generate-token" method="POST" requireSession>
 ```ts
-type generateToken = {
+type generateSCIMToken = {
   /**
   * The provider id
   */
-  providerId: string = "acme-corp",
+  providerId: string = "acme-corp"
   /**
    * Optional organization id. When specified, the organizations plugin must also be enabled
   */
