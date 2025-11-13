@@ -18,11 +18,12 @@ export const authMiddlewareFactory = (opts: SCIMOptions) =>
 			});
 		}
 
-		const baseScimToken = new TextDecoder().decode(
-			base64Url.decode(authSCIMToken),
-		);
-		const [scimToken, providerId, organizationId, ...rest] =
-			baseScimToken.split(":");
+		const baseScimTokenParts = new TextDecoder()
+			.decode(base64Url.decode(authSCIMToken))
+			.split(":");
+
+		const [scimToken, providerId] = baseScimTokenParts;
+		const organizationId = baseScimTokenParts.slice(2).join("");
 
 		if (!scimToken || !providerId) {
 			throw new SCIMAPIError("UNAUTHORIZED", {
