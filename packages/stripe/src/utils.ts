@@ -1,4 +1,28 @@
+import type { GenericEndpointContext } from "better-auth";
+import type Stripe from "stripe";
 import type { StripeOptions } from "./types";
+
+export function getUrl(ctx: GenericEndpointContext, url: string) {
+	if (/^[a-zA-Z][a-zA-Z0-9+\-.]*:/.test(url)) {
+		return url;
+	}
+	return `${ctx.context.options.baseURL}${
+		url.startsWith("/") ? url : `/${url}`
+	}`;
+}
+
+export async function resolvePriceIdFromLookupKey(
+	stripeClient: Stripe,
+	lookupKey: string,
+): Promise<string | undefined> {
+	if (!lookupKey) return undefined;
+	const prices = await stripeClient.prices.list({
+		lookup_keys: [lookupKey],
+		active: true,
+		limit: 1,
+	});
+	return prices.data[0]?.id;
+}
 
 export async function getPlans(
 	subscriptionOptions: StripeOptions["subscription"],

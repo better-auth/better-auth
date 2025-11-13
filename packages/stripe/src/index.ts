@@ -2,11 +2,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import {
-	type BetterAuthPlugin,
-	type GenericEndpointContext,
-	logger,
-} from "better-auth";
+import { type BetterAuthPlugin, logger } from "better-auth";
 import {
 	APIError,
 	getSessionFromCtx,
@@ -30,29 +26,13 @@ import type {
 	Subscription,
 	SubscriptionOptions,
 } from "./types";
-import { getPlanByName, getPlanByPriceInfo, getPlans } from "./utils";
-
-const getUrl = (ctx: GenericEndpointContext, url: string) => {
-	if (/^[a-zA-Z][a-zA-Z0-9+\-.]*:/.test(url)) {
-		return url;
-	}
-	return `${ctx.context.options.baseURL}${
-		url.startsWith("/") ? url : `/${url}`
-	}`;
-};
-
-async function resolvePriceIdFromLookupKey(
-	stripeClient: Stripe,
-	lookupKey: string,
-): Promise<string | undefined> {
-	if (!lookupKey) return undefined;
-	const prices = await stripeClient.prices.list({
-		lookup_keys: [lookupKey],
-		active: true,
-		limit: 1,
-	});
-	return prices.data[0]?.id;
-}
+import {
+	getPlanByName,
+	getPlanByPriceInfo,
+	getPlans,
+	getUrl,
+	resolvePriceIdFromLookupKey,
+} from "./utils";
 
 export const stripe = <O extends StripeOptions>(options: O) => {
 	const client = options.stripeClient;
