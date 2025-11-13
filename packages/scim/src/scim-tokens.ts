@@ -62,9 +62,9 @@ export async function verifySCIMToken(
 		typeof opts.storeSCIMToken === "object" &&
 		"decrypt" in opts.storeSCIMToken
 	) {
-		const decyptedSCIMToken =
+		const decryptedSCIMToken =
 			await opts.storeSCIMToken.decrypt(storedSCIMToken);
-		return decyptedSCIMToken === scimToken;
+		return decryptedSCIMToken === scimToken;
 	}
 
 	return scimToken === storedSCIMToken;
