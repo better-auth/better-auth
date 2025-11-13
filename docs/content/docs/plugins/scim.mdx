@@ -216,6 +216,61 @@ type deleteSCIMUser = {
 ```
 </APIMethod>
 
+#### Get service provider config
+
+Get SCIM metadata describing supported features of this server.
+
+<APIMethod path="/scim/v2/ServiceProviderConfig" method="GET" isServerOnly note="Standard SCIM metadata endpoint used by identity providers. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
+```ts
+type getSCIMServiceProviderConfig = {
+}
+```
+</APIMethod>
+
+#### Get SCIM schemas
+
+Get the list of supported SCIM schemas.
+
+<APIMethod path="/scim/v2/Schemas" method="GET" isServerOnly note="Standard SCIM metadata endpoint used by identity providers to acquire information about supported schemas. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
+```ts
+type getSCIMSchemas = {
+}
+```
+</APIMethod>
+
+#### Get SCIM schema
+
+Get the details of a supported SCIM schema.
+
+<APIMethod path="/scim/v2/Schemas/:schemaId" method="GET" isServerOnly note="Standard SCIM metadata endpoint used by identity providers to acquire information about a given schema. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
+```ts
+type getSCIMSchema = {
+}
+```
+</APIMethod>
+
+#### Get SCIM resource types
+
+Get the list of supported SCIM types.
+
+<APIMethod path="/scim/v2/ResourceTypes" method="GET" isServerOnly note="Standard SCIM metadata endpoint used by identity providers to get a list of server supported types. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
+```ts
+type getSCIMResourceTypes = {
+}
+```
+</APIMethod>
+
+#### Get SCIM resource type
+
+Get the details of a supported SCIM resource type.
+
+<APIMethod path="/scim/v2/ResourceTypes/:resourceTypeId" method="GET" isServerOnly note="Standard SCIM metadata endpoint used by identity providers to get a server supported type. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
+```ts
+type getSCIMResourceType = {
+}
+```
+</APIMethod>
+
 Generally, this server is meant to be consumed by a third-party (your identity provider), which will require:
 
 - SCIM base url: This should be the fully qualified URL to be SCIM server (e.g `http://your-app.com/api/auth/scim/v2`)
