@@ -738,7 +738,7 @@ describe("SCIM", () => {
 	});
 
 	describe("POST /scim/v2/Users", () => {
-		it.fails("should create a new user", async () => {
+		it("should create a new user", async () => {
 			const { auth, getSCIMToken } = createTestInstance();
 			const scimToken = await getSCIMToken();
 
@@ -753,7 +753,7 @@ describe("SCIM", () => {
 			});
 
 			expect(response.status).toBe(201);
-			expect(response.headers.get("location")).toBe(
+			expect(response.headers.get("location")).toStrictEqual(
 				expect.stringContaining("/scim/v2/Users/"),
 			);
 
@@ -770,8 +770,8 @@ describe("SCIM", () => {
 				externalId: "the-username",
 				id: expect.any(String),
 				meta: expect.objectContaining({
-					created: expect.any(Date),
-					lastModified: expect.any(Date),
+					created: expect.any(String),
+					lastModified: expect.any(String),
 					location: expect.stringContaining("/scim/v2/Users/"),
 					resourceType: "User",
 				}),
