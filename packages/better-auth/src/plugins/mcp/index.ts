@@ -14,7 +14,6 @@ import { createHash } from "@better-auth/utils/hash";
 import { SignJWT } from "jose";
 import { z } from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
-import { parseSetCookieHeader } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { getBaseURL } from "../../utils/url";
 import {
@@ -139,34 +138,35 @@ export const mcp = (options: MCPOptions) => {
 						return true;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
+						// clean up the prompt cookie after a successful login
+						const hasNewSession = !!ctx.context.newSession;
 						const cookie = await ctx.getSignedCookie(
 							"oidc_login_prompt",
 							ctx.context.secret,
 						);
-						const cookieName = ctx.context.authCookies.sessionToken.name;
-						const parsedSetCookieHeader = parseSetCookieHeader(
-							ctx.context.responseHeaders?.get("set-cookie") || "",
+						if (hasNewSession && cookie) {
+							ctx.setCookie("oidc_login_prompt", "", {
+								maxAge: 0,
+							});
+						}
+					}),
+				},
+				{
+					matcher() {
+						return true;
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						const cookie = await ctx.getSignedCookie(
+							"oidc_login_prompt",
+							ctx.context.secret,
 						);
-						const hasSessionToken = parsedSetCookieHeader.has(cookieName);
-						if (!cookie || !hasSessionToken) {
+						if (!cookie) {
 							return;
 						}
-						ctx.setCookie("oidc_login_prompt", "", {
-							maxAge: 0,
-						});
-						const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
-						const sessionToken = sessionCookie?.split(".")[0]!;
-						if (!sessionToken) {
-							return;
-						}
-						const session =
-							await ctx.context.internalAdapter.findSession(sessionToken);
-						if (!session) {
-							return;
-						}
+						await getSessionFromCtx(ctx);
+
 						ctx.query = JSON.parse(cookie);
 						ctx.query!.prompt = "consent";
-						ctx.context.session = session;
 						const response = await authorizeMCPOAuth(ctx, opts);
 						return response;
 					}),
@@ -585,7 +585,7 @@ export const mcp = (options: MCPOptions) => {
 						family_name: user.name.split(" ")[1]!,
 						name: user.name,
 						profile: user.image,
-						updated_at: user.updatedAt.toISOString(),
+						updated_at: Math.floor(new Date(user.updatedAt).getTime() / 1000),
 					};
 					const email = {
 						email: user.email,

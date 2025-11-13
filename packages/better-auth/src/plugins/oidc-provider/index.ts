@@ -9,10 +9,10 @@ import {
 import { getCurrentAuthContext } from "@better-auth/core/context";
 import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
+import defu from "defu";
 import { SignJWT } from "jose";
 import { z } from "zod";
 import { APIError, getSessionFromCtx, sessionMiddleware } from "../../api";
-import { parseSetCookieHeader } from "../../cookies";
 import {
 	generateRandomString,
 	symmetricDecrypt,
@@ -146,24 +146,21 @@ export const oidcProvider = (options: OIDCOptions) => {
 		oauthConsent: "oauthConsent",
 	};
 
-	const opts = {
-		codeExpiresIn: 600,
-		defaultScope: "openid",
-		accessTokenExpiresIn: 3600,
-		refreshTokenExpiresIn: 604800,
-		allowPlainCodeChallengeMethod: true,
-		storeClientSecret: "plain" as const,
-		...options,
-		scopes: [
-			"openid",
-			"profile",
-			"email",
-			"offline_access",
-			...(options?.scopes || []),
-		],
-	};
+	const opts = defu(
+		{
+			codeExpiresIn: 600,
+			defaultScope: "openid",
+			accessTokenExpiresIn: 3600,
+			refreshTokenExpiresIn: 604800,
+			allowPlainCodeChallengeMethod: true,
+			allowDynamicClientRegistration: true,
+			storeClientSecret: "plain" as const,
+			scopes: ["openid", "profile", "email", "offline_access"],
+		},
+		options,
+	);
 
-	const trustedClients = options.trustedClients || [];
+	const trustedClients = opts.trustedClients || [];
 
 	/**
 	 * Store client secret according to the configured storage method
@@ -252,6 +249,24 @@ export const oidcProvider = (options: OIDCOptions) => {
 			],
 			after: [
 				{
+					matcher() {
+						return true;
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						// clean up the prompt cookie after a successful login
+						const hasNewSession = !!ctx.context.newSession;
+						const cookie = await ctx.getSignedCookie(
+							"oidc_login_prompt",
+							ctx.context.secret,
+						);
+						if (hasNewSession && cookie) {
+							ctx.setCookie("oidc_login_prompt", "", {
+								maxAge: 0,
+							});
+						}
+					}),
+				},
+				{
 					matcher(ctx) {
 						return ctx.path === "/oauth2/authorize" && ctx.method === "GET";
 					},
@@ -260,25 +275,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							"oidc_login_prompt",
 							ctx.context.secret,
 						);
-						const cookieName = ctx.context.authCookies.sessionToken.name;
-						const parsedSetCookieHeader = parseSetCookieHeader(
-							ctx.context.responseHeaders?.get("set-cookie") || "",
-						);
-						const hasSessionToken = parsedSetCookieHeader.has(cookieName);
-						if (!cookie || !hasSessionToken) {
-							return;
-						}
-						ctx.setCookie("oidc_login_prompt", "", {
-							maxAge: 0,
-						});
-						const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
-						const sessionToken = sessionCookie?.split(".")[0]!;
-						if (!sessionToken) {
-							return;
-						}
-						const session =
-							await ctx.context.internalAdapter.findSession(sessionToken);
-						if (!session) {
+						if (!cookie) {
 							return;
 						}
 						try {
@@ -303,9 +300,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 							);
 							return;
 						}
-						// Don't force prompt to "consent" - let the authorize function
-						// determine if consent is needed based on OIDC spec requirements
-						ctx.context.session = session;
 						await setPromptHandled(true);
 						const response = await authorize(ctx, opts);
 						return response;
@@ -654,7 +648,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
-					if (options.requirePKCE && !code_verifier) {
+					if (opts.requirePKCE && !code_verifier) {
 						throw new APIError("BAD_REQUEST", {
 							error_description: "code verifier is missing",
 							error: "invalid_request",
@@ -825,7 +819,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						family_name: user.name.split(" ")[1]!,
 						name: user.name,
 						profile: user.image,
-						updated_at: new Date(user.updatedAt).toISOString(),
+						updated_at: Math.floor(new Date(user.updatedAt).getTime() / 1000),
 					};
 					const email = {
 						email: user.email,
@@ -836,8 +830,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 						...(requestedScopes.includes("email") ? email : {}),
 					};
 
-					const additionalUserClaims = options.getAdditionalUserInfoClaim
-						? await options.getAdditionalUserInfoClaim(
+					const additionalUserClaims = opts.getAdditionalUserInfoClaim
+						? await opts.getAdditionalUserInfoClaim(
 								user,
 								requestedScopes,
 								client,
@@ -862,7 +856,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					let idToken: string;
 
 					// The JWT plugin is enabled, so we use the JWKS keys to sign
-					if (options.useJWTPlugin) {
+					if (opts.useJWTPlugin) {
 						const jwtPlugin = getJwtPlugin(ctx);
 						if (!jwtPlugin) {
 							ctx.context.logger.error(
@@ -1080,8 +1074,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 							? user.emailVerified
 							: undefined,
 					};
-					const userClaims = options.getAdditionalUserInfoClaim
-						? await options.getAdditionalUserInfoClaim(
+					const userClaims = opts.getAdditionalUserInfoClaim
+						? await opts.getAdditionalUserInfoClaim(
 								user,
 								requestedScopes,
 								client,
@@ -1338,7 +1332,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					const session = await getSessionFromCtx(ctx);
 
 					// Check authorization
-					if (!session && !options.allowDynamicClientRegistration) {
+					if (!session && !opts.allowDynamicClientRegistration) {
 						throw new APIError("UNAUTHORIZED", {
 							error: "invalid_token",
 							error_description:
@@ -1385,10 +1379,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 
 					const clientId =
-						options.generateClientId?.() ||
-						generateRandomString(32, "a-z", "A-Z");
+						opts.generateClientId?.() || generateRandomString(32, "a-z", "A-Z");
 					const clientSecret =
-						options.generateClientSecret?.() ||
+						opts.generateClientSecret?.() ||
 						generateRandomString(32, "a-z", "A-Z");
 
 					const storedClientSecret = await storeClientSecret(ctx, clientSecret);
@@ -1516,6 +1509,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 			),
 		},
 		schema: mergeSchema(schema, options?.schema),
+		get options(): OIDCOptions {
+			return opts;
+		},
 	} satisfies BetterAuthPlugin;
 };
 export type * from "./types";

@@ -26,7 +26,7 @@ interface MagicLinkopts {
 			url: string;
 			token: string;
 		},
-		request?: Request | undefined,
+		ctx?: GenericEndpointContext | undefined,
 	) => Promise<void> | void;
 	/**
 	 * Disable sign up if user is not found.
@@ -216,7 +216,7 @@ export const magicLink = (options: MagicLinkopts) => {
 							url: url.toString(),
 							token: verificationToken,
 						},
-						ctx.request,
+						ctx,
 					);
 					return ctx.json({
 						status: true,

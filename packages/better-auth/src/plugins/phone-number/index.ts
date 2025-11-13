@@ -1,4 +1,7 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
@@ -40,7 +43,7 @@ export interface PhoneNumberOptions {
 	 */
 	sendOTP: (
 		data: { phoneNumber: string; code: string },
-		request?: Request | undefined,
+		ctx?: GenericEndpointContext | undefined,
 	) => Promise<void> | void;
 	/**
 	 * a callback to send otp on user requesting to reset their password
@@ -52,7 +55,7 @@ export interface PhoneNumberOptions {
 	sendPasswordResetOTP?:
 		| ((
 				data: { phoneNumber: string; code: string },
-				request?: Request,
+				ctx?: GenericEndpointContext,
 		  ) => Promise<void> | void)
 		| undefined;
 	/**
@@ -83,7 +86,7 @@ export interface PhoneNumberOptions {
 					phoneNumber: string;
 					user: UserWithPhoneNumber;
 				},
-				request?: Request,
+				ctx?: GenericEndpointContext,
 		  ) => void | Promise<void>)
 		| undefined;
 	/**
@@ -259,7 +262,7 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 									phoneNumber,
 									code: otp,
 								},
-								ctx.request,
+								ctx,
 							);
 							throw new APIError("UNAUTHORIZED", {
 								message: ERROR_CODES.PHONE_NUMBER_NOT_VERIFIED,
@@ -409,7 +412,7 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 							phoneNumber: ctx.body.phoneNumber,
 							code,
 						},
-						ctx.request,
+						ctx,
 					);
 					return ctx.json({ message: "code sent" });
 				},
@@ -698,7 +701,7 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 							phoneNumber: ctx.body.phoneNumber,
 							user,
 						},
-						ctx.request,
+						ctx,
 					);
 
 					if (!ctx.body.disableSession) {
@@ -808,7 +811,7 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 							phoneNumber: ctx.body.phoneNumber,
 							code,
 						},
-						ctx.request,
+						ctx,
 					);
 					return ctx.json({
 						status: true,

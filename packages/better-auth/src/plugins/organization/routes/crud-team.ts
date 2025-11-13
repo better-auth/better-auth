@@ -148,7 +148,7 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 								organizationId,
 								session,
 							},
-							ctx.request,
+							ctx,
 						)
 					: ctx.context.orgOptions.teams?.maximumTeams;
 
