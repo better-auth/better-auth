@@ -8,12 +8,6 @@ import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { genericOAuth } from ".";
 import { genericOAuthClient } from "./client";
-import { betterFetch } from "@better-fetch/fetch";
-import { OAuth2Server } from "oauth2-mock-server";
-import { parseSetCookieHeader } from "../../cookies";
-import { runWithEndpointContext } from "@better-auth/core/context";
-import type { GenericEndpointContext } from "@better-auth/core";
-import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 
 describe("oauth2", async () => {
 	const providerId = "test";
