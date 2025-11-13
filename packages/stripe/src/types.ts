@@ -1,9 +1,6 @@
-import type {
-	GenericEndpointContext,
-	InferOptionSchema,
-	Session,
-	User,
-} from "better-auth";
+import type { GenericEndpointContext } from "@better-auth/core";
+import type { Session, User } from "@better-auth/core/db";
+import type { InferOptionSchema } from "better-auth/types";
 import type Stripe from "stripe";
 import type { subscriptions, user } from "./schema";
 

@@ -1,4 +1,4 @@
-import type { GenericEndpointContext } from "better-auth";
+import type { GenericEndpointContext } from "@better-auth/core";
 import type Stripe from "stripe";
 import type { StripeOptions } from "./types";
 

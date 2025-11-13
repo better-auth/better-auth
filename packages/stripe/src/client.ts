@@ -1,4 +1,4 @@
-import type { BetterAuthClientPlugin } from "better-auth";
+import type { BetterAuthClientPlugin } from "@better-auth/core";
 import type { stripe } from "./index";
 
 export const stripeClient = <

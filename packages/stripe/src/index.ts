@@ -1,8 +1,9 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import { type BetterAuthPlugin, logger } from "better-auth";
+import { logger } from "better-auth";
 import {
 	APIError,
 	getSessionFromCtx,
