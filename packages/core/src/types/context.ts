@@ -18,10 +18,6 @@ import type {
 	BetterAuthRateLimitOptions,
 } from "./init-options";
 
-export interface PasswordHashOptions {
-	skipCompromiseCheck?: boolean;
-}
-
 export type GenericEndpointContext<
 	Options extends BetterAuthOptions = BetterAuthOptions,
 > = EndpointContext<string, any> & {
@@ -235,10 +231,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 		}) => string | false;
 		secondaryStorage: SecondaryStorage | undefined;
 		password: {
-			hash: (
-				password: string,
-				options?: PasswordHashOptions | undefined,
-			) => Promise<string>;
+			hash: (password: string) => Promise<string>;
 			verify: (data: { password: string; hash: string }) => Promise<boolean>;
 			config: {
 				minPasswordLength: number;

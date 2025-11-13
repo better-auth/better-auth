@@ -1,8 +1,9 @@
-import type { BetterAuthPlugin, PasswordHashOptions } from "@better-auth/core";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { defineErrorCodes } from "@better-auth/core/utils";
 import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "../../api";
+import { getCompromiseCheck } from "../../api/state/compromise-check";
 
 const ERROR_CODES = defineErrorCodes({
 	PASSWORD_COMPROMISED:
@@ -68,18 +69,14 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) =>
 				context: {
 					password: {
 						...ctx.password,
-						async hash(
-							password,
-							hashOptions?: PasswordHashOptions | undefined,
-						) {
-							if (hashOptions?.skipCompromiseCheck) {
-								return originalHash(password, hashOptions);
+						async hash(password) {
+							if ((await getCompromiseCheck()) === true) {
+								await checkPasswordCompromise(
+									password,
+									options?.customPasswordCompromisedMessage,
+								);
 							}
-							await checkPasswordCompromise(
-								password,
-								options?.customPasswordCompromisedMessage,
-							);
-							return originalHash(password, hashOptions);
+							return originalHash(password);
 						},
 					},
 				},

@@ -6,6 +6,7 @@ import { z } from "zod";
 import { setSessionCookie } from "../../cookies";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState } from "../../utils";
+import { setCompromiseCheck } from "../state/compromise-check";
 import { createEmailVerificationToken } from "./email-verification";
 
 export const signInSocial = createAuthEndpoint(
@@ -477,9 +478,8 @@ export const signInEmail = createAuthEndpoint(
 		if (!user) {
 			// Hash password to prevent timing attacks from revealing valid email addresses
 			// By hashing passwords for invalid emails, we ensure consistent response times
-			await ctx.context.password.hash(password, {
-				skipCompromiseCheck: true,
-			});
+			setCompromiseCheck(false);
+			await ctx.context.password.hash(password);
 			ctx.context.logger.error("User not found", { email });
 			throw new APIError("UNAUTHORIZED", {
 				message: BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
