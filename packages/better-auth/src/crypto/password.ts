@@ -21,10 +21,7 @@ async function generateKey(password: string, salt: string) {
 	});
 }
 
-export const hashPassword = async (
-	password: string,
-	_options?: { skipCompromiseCheck?: boolean } | undefined,
-) => {
+export const hashPassword = async (password: string) => {
 	const salt = hex.encode(crypto.getRandomValues(new Uint8Array(16)));
 	const key = await generateKey(password, salt);
 	return `${salt}:${hex.encode(key)}`;
