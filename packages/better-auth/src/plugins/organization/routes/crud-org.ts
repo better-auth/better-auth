@@ -264,7 +264,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 				const defaultTeam =
 					(await options.teams.defaultTeam?.customCreateDefaultTeam?.(
 						organization,
-						ctx.request,
+						ctx,
 					)) || (await adapter.createTeam(teamData));
 
 				teamMember = await adapter.findOrCreateTeamMember({

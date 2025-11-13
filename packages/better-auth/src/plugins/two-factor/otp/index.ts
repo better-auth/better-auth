@@ -50,7 +50,7 @@ export interface OTPOptions {
 				/**
 				 * The request object
 				 */
-				request?: Request,
+				ctx?: GenericEndpointContext,
 		  ) => Promise<void> | void)
 		| undefined;
 	/**
@@ -190,7 +190,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			});
 			await options.sendOTP(
 				{ user: session.user as UserWithTwoFactor, otp: code },
-				ctx.request,
+				ctx,
 			);
 			return ctx.json({ status: true });
 		},
