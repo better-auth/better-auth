@@ -106,7 +106,7 @@ describe("email-otp", async () => {
 		expect(newUser.data?.token).toBeDefined();
 	});
 
-	it("should sign-up with otp and name", async () => {
+	it("should sign-up with otp and other core properties", async () => {
 		const testUser2 = {
 			email: "test-email-2@domain.com",
 		};
@@ -118,7 +118,10 @@ describe("email-otp", async () => {
 			{
 				email: testUser2.email,
 				otp,
-				name: "the user",
+				signupData: {
+					name: "the user",
+					image: "https://user-profiles.com/users/daniel",
+				},
 			},
 			{
 				onSuccess: (ctx) => {
@@ -129,6 +132,9 @@ describe("email-otp", async () => {
 		);
 		expect(newUser.data?.token).toBeDefined();
 		expect(newUser.data?.user.name).toBe("the user");
+		expect(newUser.data?.user.image).toBe(
+			"https://user-profiles.com/users/daniel",
+		);
 	});
 
 	it("should sign-up with otp and any additional field", async () => {
@@ -144,9 +150,11 @@ describe("email-otp", async () => {
 			{
 				email: testUser3.email,
 				otp,
-				name: "the user",
-				// @ts-expect-error testing additional fields
-				firstName: "First",
+				signupData: {
+					name: "the user",
+					image: "https://user-profiles.com/users/daniel",
+					firstName: "First",
+				},
 			},
 			{
 				onSuccess: (ctx) => {
@@ -159,10 +167,9 @@ describe("email-otp", async () => {
 		expect(newUser.data?.token).toBeDefined();
 
 		const response = await auth.api.getSession({ headers });
-		expect(response?.user).toMatchObject({
-			name: "the user",
-			firstName: "First",
-		});
+		expect(response?.user.name).toBe("the user");
+		expect(response?.user.firstName).toBe("First");
+		expect(response?.user.image).toBe("https://user-profiles.com/users/daniel");
 	});
 
 	it("should send verification otp on sign-up", async () => {
