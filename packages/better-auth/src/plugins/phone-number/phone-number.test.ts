@@ -518,7 +518,6 @@ describe("updateUser phone number update prevention", async () => {
 
 describe("custom generateOTP", async () => {
 	let otp = "";
-	let customOTP = "";
 
 	const { customFetchImpl, sessionSetter } = await getTestInstance({
 		plugins: [
@@ -527,7 +526,10 @@ describe("custom generateOTP", async () => {
 					otp = code;
 				},
 				generateOTP: async (otpLength) => {
-					return "123456";
+					return new Array(otpLength)
+						.fill(0)
+						.map((_, i) => i + 1)
+						.join("");
 				},
 				signUpOnVerification: {
 					getTempEmail(phoneNumber) {
@@ -554,10 +556,8 @@ describe("custom generateOTP", async () => {
 			phoneNumber: testPhoneNumber,
 		});
 
-		// Verify that the custom OTP was generated (starts with ABC)
-		expect(otp).toBe(customOTP);
-		expect(otp).toMatch("123456");
-		expect(otp).toHaveLength(6);
+		// Verify that the custom OTP was generated as sequential numbers
+		expect(otp).toBe("123456");
 
 		// Verify that the custom OTP works for verification
 		const verifyRes = await client.phoneNumber.verify(
