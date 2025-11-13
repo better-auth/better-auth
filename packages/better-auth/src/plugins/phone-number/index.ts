@@ -411,8 +411,8 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 						}
 					}
 
-					const code = options.generateOTP
-						? await options.generateOTP(opts.otpLength)
+					const code = opts.generateOTP
+						? await opts.generateOTP(opts.otpLength)
 						: generateOTP(opts.otpLength);
 					await ctx.context.internalAdapter.createVerificationValue({
 						value: `${code}:0`,
@@ -812,8 +812,8 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 							message: "phone number isn't registered",
 						});
 					}
-					const code = options?.generateOTP
-						? await options.generateOTP(opts.otpLength)
+					const code = opts?.generateOTP
+						? await opts.generateOTP(opts.otpLength)
 						: generateOTP(opts.otpLength);
 					await ctx.context.internalAdapter.createVerificationValue({
 						value: `${code}:0`,
