@@ -585,7 +585,7 @@ export const mcp = (options: MCPOptions) => {
 						family_name: user.name.split(" ")[1]!,
 						name: user.name,
 						profile: user.image,
-						updated_at: user.updatedAt.toISOString(),
+						updated_at: Math.floor(new Date(user.updatedAt).getTime() / 1000),
 					};
 					const email = {
 						email: user.email,
