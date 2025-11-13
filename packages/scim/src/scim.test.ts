@@ -6,6 +6,7 @@ import { setCookieToHeader } from "better-auth/cookies";
 import { bearer, organization } from "better-auth/plugins";
 import { describe, expect, it } from "vitest";
 import { scim } from ".";
+import type { SCIMOptions } from "./types";
 
 describe("SCIM", () => {
 	const testUser = {
@@ -14,7 +15,7 @@ describe("SCIM", () => {
 		name: "Test User",
 	};
 
-	const createTestInstance = () => {
+	const createTestInstance = (scimOptions?: SCIMOptions) => {
 		const data = {
 			user: [],
 			session: [],
@@ -33,7 +34,7 @@ describe("SCIM", () => {
 			emailAndPassword: {
 				enabled: true,
 			},
-			plugins: [sso(), scim(), organization()],
+			plugins: [sso(), scim(scimOptions), organization()],
 		});
 
 		const authClient = createAuthClient({
@@ -129,8 +130,29 @@ describe("SCIM", () => {
 			);
 		});
 
-		it("should generate a new scim token", async () => {
-			const { auth, getAuthCookieHeaders } = createTestInstance();
+		it("should fail to generate a SCIM token on invalid provider", async () => {
+			const { auth, getAuthCookieHeaders } = createTestInstance({
+				storeSCIMToken: "plain",
+			});
+			const headers = await getAuthCookieHeaders();
+
+			const generateSCIMToken = (providerId: string, organizationId?: string) =>
+				auth.api.generateSCIMToken({
+					body: { providerId, organizationId },
+					headers,
+				});
+
+			await expect(generateSCIMToken("the:provider")).rejects.toThrowError(
+				expect.objectContaining({
+					message: "Provider or organization id contain forbidden characters",
+				}),
+			);
+		});
+
+		it("should generate a new scim token (plain)", async () => {
+			const { auth, getAuthCookieHeaders } = createTestInstance({
+				storeSCIMToken: "plain",
+			});
 			const headers = await getAuthCookieHeaders();
 
 			const response = await auth.api.generateSCIMToken({
@@ -141,6 +163,121 @@ describe("SCIM", () => {
 			expect(response).toMatchObject({
 				scimToken: expect.any(String),
 			});
+
+			const createUser = () =>
+				auth.api.createSCIMUser({
+					body: {
+						userName: "the-username",
+					},
+					headers: {
+						authorization: `Bearer ${response.scimToken}`,
+					},
+				});
+
+			await expect(createUser()).resolves.toBeTruthy();
+		});
+
+		it("should generate a new scim token (hashed)", async () => {
+			const { auth, getAuthCookieHeaders } = createTestInstance({
+				storeSCIMToken: "hashed",
+			});
+			const headers = await getAuthCookieHeaders();
+
+			const response = await auth.api.generateSCIMToken({
+				body: { providerId: "the id" },
+				headers,
+			});
+
+			expect(response).toMatchObject({
+				scimToken: expect.any(String),
+			});
+
+			const createUser = () =>
+				auth.api.createSCIMUser({
+					body: {
+						userName: "the-username",
+					},
+					headers: {
+						authorization: `Bearer ${response.scimToken}`,
+					},
+				});
+
+			await expect(createUser()).resolves.toBeTruthy();
+		});
+
+		it("should generate a new scim token (custom hash)", async () => {
+			const { auth, getAuthCookieHeaders } = createTestInstance({
+				storeSCIMToken: { hash: async (value) => value + "hello" },
+			});
+
+			const headers = await getAuthCookieHeaders();
+			const response = await auth.api.generateSCIMToken({
+				body: { providerId: "the id" },
+				headers,
+			});
+
+			const createUser = () =>
+				auth.api.createSCIMUser({
+					body: {
+						userName: "the-username",
+					},
+					headers: {
+						authorization: `Bearer ${response.scimToken}`,
+					},
+				});
+
+			await expect(createUser()).resolves.toBeTruthy();
+		});
+
+		it("should generate a new scim token (encrypted)", async () => {
+			const { auth, getAuthCookieHeaders } = createTestInstance({
+				storeSCIMToken: "encrypted",
+			});
+
+			const headers = await getAuthCookieHeaders();
+			const response = await auth.api.generateSCIMToken({
+				body: { providerId: "the id" },
+				headers,
+			});
+
+			const createUser = () =>
+				auth.api.createSCIMUser({
+					body: {
+						userName: "the-username",
+					},
+					headers: {
+						authorization: `Bearer ${response.scimToken}`,
+					},
+				});
+
+			await expect(createUser()).resolves.toBeTruthy();
+		});
+
+		it("should generate a new scim token (custom encryption)", async () => {
+			const { auth, getAuthCookieHeaders } = createTestInstance({
+				storeSCIMToken: {
+					encrypt: async (value) => value,
+					decrypt: async (value) => value,
+				},
+			});
+
+			const headers = await getAuthCookieHeaders();
+			const response = await auth.api.generateSCIMToken({
+				body: { providerId: "the id" },
+				headers,
+			});
+
+			const createUser = () =>
+				auth.api.createSCIMUser({
+					body: {
+						userName: "the-username",
+					},
+					headers: {
+						authorization: `Bearer ${response.scimToken}`,
+					},
+				});
+
+			await expect(createUser()).resolves.toBeTruthy();
 		});
 
 		it("should generate a new scim token associated to an org", async () => {

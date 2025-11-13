@@ -129,3 +129,38 @@ The plugin requires additional fields in the `scimProvider` table to store the p
     ]}
 />
 
+
+## Options
+
+### Server
+
+- `storeSCIMToken`: The method to store the SCIM token in your database, whether `encrypted`, `hashed` or `plain` text. Default is `plain` text.
+
+Alternatively, you can pass a custom encryptor or hasher to store the SCIM token in your database.
+
+**Custom encryptor**
+
+```ts title="auth.ts"
+scim({
+    storeSCIMToken: { 
+        encrypt: async (otp) => {
+            return myCustomEncryptor(otp);
+        },
+        decrypt: async (otp) => {
+            return myCustomDecryptor(otp);
+        },
+    }
+})
+```
+
+**Custom hasher**
+
+```ts title="auth.ts"
+scim({
+    storeSCIMToken: {
+        hash: async (otp) => {
+            return myCustomHasher(otp);
+        },
+    }
+})
+```

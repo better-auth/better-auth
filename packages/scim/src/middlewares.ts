@@ -1,30 +1,63 @@
+import { base64Url } from "@better-auth/utils/base64";
 import { createAuthMiddleware } from "better-auth/plugins";
 import { SCIMAPIError } from "./scim-error";
-import type { SCIMProvider } from "./types";
+import { verifySCIMToken } from "./scim-tokens";
+import type { SCIMOptions, SCIMProvider } from "./types";
 
 /**
  * The middleware forces the endpoint to have a valid token
  */
-export const authMiddleware = createAuthMiddleware(async (ctx) => {
-	const authHeader = ctx.headers?.get("Authorization");
-	const authSCIMToken = authHeader?.replace(/^Bearer\s+/i, "");
+export const authMiddlewareFactory = (opts: SCIMOptions) =>
+	createAuthMiddleware(async (ctx) => {
+		const authHeader = ctx.headers?.get("Authorization");
+		const authSCIMToken = authHeader?.replace(/^Bearer\s+/i, "");
 
-	if (!authSCIMToken) {
-		throw new SCIMAPIError("UNAUTHORIZED", {
-			detail: "SCIM token is required",
+		if (!authSCIMToken) {
+			throw new SCIMAPIError("UNAUTHORIZED", {
+				detail: "SCIM token is required",
+			});
+		}
+
+		const baseScimToken = new TextDecoder().decode(
+			base64Url.decode(authSCIMToken),
+		);
+		const [scimToken, providerId, organizationId, ...rest] =
+			baseScimToken.split(":");
+
+		if (!scimToken || !providerId) {
+			throw new SCIMAPIError("UNAUTHORIZED", {
+				detail: "Invalid SCIM token",
+			});
+		}
+
+		const scimProvider = await ctx.context.adapter.findOne<SCIMProvider>({
+			model: "scimProvider",
+			where: [
+				...(providerId ? [{ field: "providerId", value: providerId }] : []),
+				...(organizationId
+					? [{ field: "organizationId", value: organizationId }]
+					: []),
+			],
 		});
-	}
 
-	const scimProvider = await ctx.context.adapter.findOne<SCIMProvider>({
-		model: "scimProvider",
-		where: [{ field: "scimToken", value: authSCIMToken }],
+		if (!scimProvider) {
+			throw new SCIMAPIError("UNAUTHORIZED", {
+				detail: "Invalid SCIM token",
+			});
+		}
+
+		const isValidToken = await verifySCIMToken(
+			ctx,
+			opts,
+			scimProvider.scimToken,
+			scimToken ?? "",
+		);
+
+		if (!isValidToken) {
+			throw new SCIMAPIError("UNAUTHORIZED", {
+				detail: "Invalid SCIM token",
+			});
+		}
+
+		return { authSCIMToken: scimToken, scimProvider };
 	});
-
-	if (!scimProvider) {
-		throw new SCIMAPIError("UNAUTHORIZED", {
-			detail: "Invalid SCIM token",
-		});
-	}
-
-	return { authSCIMToken, scimProvider };
-});

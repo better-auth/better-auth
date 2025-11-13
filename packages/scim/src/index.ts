@@ -1,3 +1,4 @@
+import { base64Url } from "@better-auth/utils/base64";
 import {
 	type Account,
 	type BetterAuthPlugin,
@@ -9,7 +10,7 @@ import { generateRandomString } from "better-auth/crypto";
 import { createAuthEndpoint, type Member } from "better-auth/plugins";
 import * as z from "zod/v4";
 import { getAccountId, getUserFullName, getUserPrimaryEmail } from "./mappings";
-import { authMiddleware } from "./middlewares";
+import { authMiddlewareFactory } from "./middlewares";
 import { buildUserPatch } from "./patch-operations";
 import { SCIMAPIError } from "./scim-error";
 import {
@@ -18,7 +19,8 @@ import {
 	SCIMParseError,
 } from "./scim-filters";
 import { createUserResource } from "./scim-resources";
-import type { SCIMProvider } from "./types";
+import { storeSCIMToken } from "./scim-tokens";
+import type { SCIMOptions, SCIMProvider } from "./types";
 import {
 	APIUserSchema,
 	OpenAPIUserResourceSchema,
@@ -82,7 +84,14 @@ const findUserById = async (
 	return { user, account };
 };
 
-export const scim = () => {
+export const scim = (options?: SCIMOptions) => {
+	const opts = {
+		storeSCIMToken: "plain",
+		...options,
+	} satisfies SCIMOptions;
+
+	const authMiddleware = authMiddlewareFactory(opts);
+
 	return {
 		id: "scim",
 		endpoints: {
@@ -163,22 +172,39 @@ export const scim = () => {
 
 					const scimProvider = await ctx.context.adapter.findOne<SCIMProvider>({
 						model: "scimProvider",
-						where: [{ field: "providerId", value: providerId }],
+						where: [
+							{ field: "providerId", value: providerId },
+							...(organizationId
+								? [{ field: "organizationId", value: organizationId }]
+								: []),
+						],
 					});
 
 					if (scimProvider) {
-						return ctx.json({
-							scimToken: scimProvider.scimToken,
+						await ctx.context.adapter.delete<SCIMProvider>({
+							model: "scimProvider",
+							where: [{ field: "id", value: scimProvider.id }],
 						});
 					}
 
-					const scimToken = generateRandomString(48);
+					if (providerId.includes(":")) {
+						throw new APIError("BAD_REQUEST", {
+							message:
+								"Provider or organization id contain forbidden characters",
+						});
+					}
+
+					const baseToken = generateRandomString(24);
+					const scimToken = base64Url.encode(
+						`${baseToken}:${providerId}${organizationId ? `:${organizationId}` : ""}`,
+					);
+
 					await ctx.context.adapter.create<SCIMProvider>({
 						model: "scimProvider",
 						data: {
 							providerId: providerId,
 							organizationId: organizationId,
-							scimToken,
+							scimToken: await storeSCIMToken(ctx, opts, baseToken),
 						},
 					});
 
