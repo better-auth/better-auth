@@ -182,7 +182,9 @@ export interface OAuthOptions<
 	}) => Awaitable<string | undefined>;
 	/**
 	 * List default scopes when using the token endpoint's
-	 * grant type "client_credentials"
+	 * grant type "client_credentials". This is used
+	 * only when oauthClients are stored in the database
+	 * without a scope and you do not want all `scopes` to be given.
 	 *
 	 * @default undefined
 	 */
