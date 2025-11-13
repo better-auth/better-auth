@@ -30,29 +30,14 @@ export const callbackOAuth = createAuthEndpoint(
 		const defaultErrorURL =
 			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
 
-		// Handle POST requests by redirecting to GET to ensure cookies are sent
-		if (c.method === "POST") {
-			const postData = c.body ? schema.parse(c.body) : {};
-			const queryData = c.query ? schema.parse(c.query) : {};
-
-			const mergedData = schema.parse({ ...postData, ...queryData });
-			const params = new URLSearchParams();
-
-			for (const [key, value] of Object.entries(mergedData)) {
-				if (value !== undefined && value !== null) {
-					params.set(key, String(value));
-				}
-			}
-
-			const redirectURL = `${c.context.baseURL}/callback/${c.params.id}?${params.toString()}`;
-			throw c.redirect(redirectURL);
-		}
-
 		try {
 			if (c.method === "GET") {
 				queryOrBody = schema.parse(c.query);
 			} else if (c.method === "POST") {
-				queryOrBody = schema.parse(c.body);
+				// Merge POST body and query parameters for OAuth callback compatibility
+				const postData = c.body ? schema.parse(c.body) : {};
+				const queryData = c.query ? schema.parse(c.query) : {};
+				queryOrBody = schema.parse({ ...postData, ...queryData });
 			} else {
 				throw new Error("Unsupported method");
 			}
