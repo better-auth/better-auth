@@ -482,6 +482,14 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 								message: PHONE_NUMBER_ERROR_CODES.INVALID_OTP,
 							});
 						}
+
+						// Clean up verification value
+						const otp = await ctx.context.internalAdapter.findVerificationValue(
+							ctx.body.phoneNumber,
+						);
+						if (otp) {
+							await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
+						}
 					} else {
 						// Default internal verification logic
 						const otp = await ctx.context.internalAdapter.findVerificationValue(
