@@ -5,7 +5,7 @@ import type {
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
-import * as z from "zod";
+import { z } from "zod";
 import { originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
@@ -26,7 +26,7 @@ interface MagicLinkopts {
 			url: string;
 			token: string;
 		},
-		request?: Request | undefined,
+		ctx?: GenericEndpointContext | undefined,
 	) => Promise<void> | void;
 	/**
 	 * Disable sign up if user is not found.
@@ -216,7 +216,7 @@ export const magicLink = (options: MagicLinkopts) => {
 							url: url.toString(),
 							token: verificationToken,
 						},
-						ctx.request,
+						ctx,
 					);
 					return ctx.json({
 						status: true,

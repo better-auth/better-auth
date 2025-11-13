@@ -9,22 +9,20 @@ import {
 	it,
 	test,
 } from "vitest";
-import { createAuthClient } from "../../client";
+import { type AuthClient, createAuthClient } from "../../client";
 import { toNodeHandler } from "../../integrations/node";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { genericOAuth } from "../generic-oauth";
 import { genericOAuthClient } from "../generic-oauth/client";
 import { jwt } from "../jwt";
 import { oidcProvider } from ".";
-import { oidcClient } from "./client";
+import { type OidcClientPlugin, oidcClient } from "./client";
 import type { Client } from "./types";
 
 // Type for the server client with OIDC plugin
-type ServerClient = ReturnType<
-	typeof createAuthClient<{
-		plugins: [ReturnType<typeof oidcClient>];
-	}>
->;
+type ServerClient = AuthClient<{
+	plugins: [OidcClientPlugin];
+}>;
 
 /**
  * Helper to handle OIDC consent flow when required per OIDC spec
@@ -66,6 +64,33 @@ async function handleConsentFlow(
 
 	return response.redirectURI;
 }
+
+describe("oidc init", () => {
+	it("default options", () => {
+		const provider = oidcProvider({
+			loginPage: "/login",
+		});
+		const options = provider.options;
+		expect(options).toMatchInlineSnapshot(`
+      {
+        "accessTokenExpiresIn": 3600,
+        "allowDynamicClientRegistration": true,
+        "allowPlainCodeChallengeMethod": true,
+        "codeExpiresIn": 600,
+        "defaultScope": "openid",
+        "loginPage": "/login",
+        "refreshTokenExpiresIn": 604800,
+        "scopes": [
+          "openid",
+          "profile",
+          "email",
+          "offline_access",
+        ],
+        "storeClientSecret": "plain",
+      }
+    `);
+	});
+});
 
 describe("oidc", async () => {
 	const {
@@ -115,9 +140,8 @@ describe("oidc", async () => {
 	let application: Client = {
 		clientId: "test-client-id",
 		clientSecret: "test-client-secret-oidc",
-		redirectURLs: ["http://localhost:3000/api/auth/oauth2/callback/test"],
+		redirectUrls: ["http://localhost:3000/api/auth/oauth2/callback/test"],
 		metadata: {},
-		icon: "",
 		type: "web",
 		disabled: false,
 		name: "test",
@@ -126,14 +150,13 @@ describe("oidc", async () => {
 	it("should create oidc client", async ({ expect }) => {
 		const createdClient = await serverClient.oauth2.register({
 			client_name: application.name,
-			redirect_uris: application.redirectURLs,
+			redirect_uris: application.redirectUrls,
 			logo_uri: application.icon,
 		});
 		expect(createdClient.data).toMatchObject({
 			client_id: expect.any(String),
 			client_secret: expect.any(String),
 			client_name: "test",
-			logo_uri: "",
 			redirect_uris: ["http://localhost:3000/api/auth/oauth2/callback/test"],
 			grant_types: ["authorization_code"],
 			response_types: ["code"],
@@ -145,14 +168,25 @@ describe("oidc", async () => {
 			application = {
 				clientId: createdClient.data.client_id,
 				clientSecret: createdClient.data.client_secret,
-				redirectURLs: createdClient.data.redirect_uris,
+				redirectUrls: createdClient.data.redirect_uris,
 				metadata: {},
-				icon: createdClient.data.logo_uri || "",
+				icon: createdClient.data.logo_uri,
 				type: "web",
 				disabled: false,
-				name: createdClient.data.client_name || "",
+				name: createdClient.data.client_name!,
 			};
 		}
+		const client = await authorizationServer.api.getOAuthClient({
+			params: {
+				id: application.clientId,
+			},
+			headers,
+		});
+		expect(client).toEqual({
+			clientId: application.clientId,
+			name: application.name,
+			icon: null,
+		});
 	});
 
 	it("should sign in the user with the provider", async ({ expect }) => {
@@ -330,7 +364,9 @@ describe("oidc", async () => {
 		expect(callbackURL).toContain("/dashboard");
 	});
 
-	it("should sign in after a login flow", async ({ expect }) => {
+	it("should authorization server prompt the End-User for reauthentication when prompt=login", async ({
+		expect,
+	}) => {
 		// The RP (Relying Party) - the client application
 		const { customFetchImpl: customFetchImplRP, cookieSetter } =
 			await getTestInstance({
@@ -407,17 +443,7 @@ describe("oidc", async () => {
 			},
 		);
 
-		expect(redirectURI).toContain(
-			"http://localhost:3000/api/auth/oauth2/callback/test?code=",
-		);
-		let callbackURL = "";
-		await client.$fetch(redirectURI, {
-			headers: oAuthHeaders,
-			onError(context) {
-				callbackURL = context.response.headers.get("Location") || "";
-			},
-		});
-		expect(callbackURL).toContain("/dashboard");
+		expect(redirectURI).toContain("/login?response_type=code&client_id=");
 	});
 });
 
@@ -480,7 +506,7 @@ describe("oidc storage", async () => {
 		let application: Client = {
 			clientId: "test-client-id",
 			clientSecret: "test-client-secret-oidc",
-			redirectURLs: ["http://localhost:3000/api/auth/oauth2/callback/test"],
+			redirectUrls: ["http://localhost:3000/api/auth/oauth2/callback/test"],
 			metadata: {},
 			icon: "",
 			type: "web",
@@ -489,7 +515,7 @@ describe("oidc storage", async () => {
 		};
 		const createdClient = await serverClient.oauth2.register({
 			client_name: application.name,
-			redirect_uris: application.redirectURLs,
+			redirect_uris: application.redirectUrls,
 			logo_uri: application.icon,
 		});
 		expect(createdClient.data).toMatchObject({
@@ -508,7 +534,7 @@ describe("oidc storage", async () => {
 			application = {
 				clientId: createdClient.data.client_id,
 				clientSecret: createdClient.data.client_secret,
-				redirectURLs: createdClient.data.redirect_uris,
+				redirectUrls: createdClient.data.redirect_uris,
 				metadata: {},
 				icon: createdClient.data.logo_uri || "",
 				type: "web",
@@ -858,7 +884,7 @@ describe("oidc-jwt", async () => {
 			let application: Client = {
 				clientId: "test-client-id",
 				clientSecret: "test-client-secret-oidc",
-				redirectURLs: ["http://localhost:3000/api/auth/oauth2/callback/test"],
+				redirectUrls: ["http://localhost:3000/api/auth/oauth2/callback/test"],
 				metadata: {},
 				icon: "",
 				type: "web",
@@ -867,7 +893,7 @@ describe("oidc-jwt", async () => {
 			};
 			const createdClient = await serverClient.oauth2.register({
 				client_name: application.name,
-				redirect_uris: application.redirectURLs,
+				redirect_uris: application.redirectUrls,
 				logo_uri: application.icon,
 			});
 			expect(createdClient.data).toMatchObject({
@@ -886,7 +912,7 @@ describe("oidc-jwt", async () => {
 				application = {
 					clientId: createdClient.data.client_id,
 					clientSecret: createdClient.data.client_secret,
-					redirectURLs: createdClient.data.redirect_uris,
+					redirectUrls: createdClient.data.redirect_uris,
 					metadata: {},
 					icon: createdClient.data.logo_uri || "",
 					type: "web",

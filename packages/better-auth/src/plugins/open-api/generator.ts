@@ -10,7 +10,7 @@ import type {
 	OpenAPIParameter,
 	OpenAPISchemaType,
 } from "better-call";
-import * as z from "zod";
+import { z } from "zod";
 import { getEndpoints } from "../../api";
 import { getAuthTables } from "../../db";
 
@@ -385,9 +385,10 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 		const options = value.options as EndpointOptions;
 		if (options.metadata?.SERVER_ONLY) return;
 		const path = toOpenApiPath(value.path);
-		if (options.method === "GET") {
+		if (options.method === "GET" || options.method === "DELETE") {
 			paths[path] = {
-				get: {
+				...paths[path],
+				[options.method.toLowerCase()]: {
 					tags: ["Default", ...(options.metadata?.openapi?.tags || [])],
 					description: options.metadata?.openapi?.description,
 					operationId: options.metadata?.openapi?.operationId,
@@ -402,10 +403,15 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 			};
 		}
 
-		if (options.method === "POST") {
+		if (
+			options.method === "POST" ||
+			options.method === "PATCH" ||
+			options.method === "PUT"
+		) {
 			const body = getRequestBody(options);
 			paths[path] = {
-				post: {
+				...paths[path],
+				[options.method.toLowerCase()]: {
 					tags: ["Default", ...(options.metadata?.openapi?.tags || [])],
 					description: options.metadata?.openapi?.description,
 					operationId: options.metadata?.openapi?.operationId,
@@ -459,9 +465,10 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 			const options = value.options as EndpointOptions;
 			if (options.metadata?.SERVER_ONLY) return;
 			const path = toOpenApiPath(value.path);
-			if (options.method === "GET") {
+			if (options.method === "GET" || options.method === "DELETE") {
 				paths[path] = {
-					get: {
+					...paths[path],
+					[options.method.toLowerCase()]: {
 						tags: options.metadata?.openapi?.tags || [
 							plugin.id.charAt(0).toUpperCase() + plugin.id.slice(1),
 						],
@@ -477,9 +484,14 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 					},
 				};
 			}
-			if (options.method === "POST") {
+			if (
+				options.method === "POST" ||
+				options.method === "PATCH" ||
+				options.method === "PUT"
+			) {
 				paths[path] = {
-					post: {
+					...paths[path],
+					[options.method.toLowerCase()]: {
 						tags: options.metadata?.openapi?.tags || [
 							plugin.id.charAt(0).toUpperCase() + plugin.id.slice(1),
 						],

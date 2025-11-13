@@ -12,9 +12,8 @@ import { getWebcryptoSubtle } from "@better-auth/utils";
 import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { SignJWT } from "jose";
-import * as z from "zod";
+import { z } from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
-import { parseSetCookieHeader } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { getBaseURL } from "../../utils/url";
 import {
@@ -139,34 +138,35 @@ export const mcp = (options: MCPOptions) => {
 						return true;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
+						// clean up the prompt cookie after a successful login
+						const hasNewSession = !!ctx.context.newSession;
 						const cookie = await ctx.getSignedCookie(
 							"oidc_login_prompt",
 							ctx.context.secret,
 						);
-						const cookieName = ctx.context.authCookies.sessionToken.name;
-						const parsedSetCookieHeader = parseSetCookieHeader(
-							ctx.context.responseHeaders?.get("set-cookie") || "",
+						if (hasNewSession && cookie) {
+							ctx.setCookie("oidc_login_prompt", "", {
+								maxAge: 0,
+							});
+						}
+					}),
+				},
+				{
+					matcher() {
+						return true;
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						const cookie = await ctx.getSignedCookie(
+							"oidc_login_prompt",
+							ctx.context.secret,
 						);
-						const hasSessionToken = parsedSetCookieHeader.has(cookieName);
-						if (!cookie || !hasSessionToken) {
+						if (!cookie) {
 							return;
 						}
-						ctx.setCookie("oidc_login_prompt", "", {
-							maxAge: 0,
-						});
-						const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
-						const sessionToken = sessionCookie?.split(".")[0]!;
-						if (!sessionToken) {
-							return;
-						}
-						const session =
-							await ctx.context.internalAdapter.findSession(sessionToken);
-						if (!session) {
-							return;
-						}
+						await getSessionFromCtx(ctx);
+
 						ctx.query = JSON.parse(cookie);
 						ctx.query!.prompt = "consent";
-						ctx.context.session = session;
 						const response = await authorizeMCPOAuth(ctx, opts);
 						return response;
 					}),
@@ -453,7 +453,7 @@ export const mcp = (options: MCPOptions) => {
 							}
 							return {
 								...res,
-								redirectURLs: res.redirectURLs.split(","),
+								redirectUrls: res.redirectUrls.split(","),
 								metadata: res.metadata ? JSON.parse(res.metadata) : {},
 							} as Client;
 						});
@@ -585,7 +585,7 @@ export const mcp = (options: MCPOptions) => {
 						family_name: user.name.split(" ")[1]!,
 						name: user.name,
 						profile: user.image,
-						updated_at: user.updatedAt.toISOString(),
+						updated_at: Math.floor(new Date(user.updatedAt).getTime() / 1000),
 					};
 					const email = {
 						email: user.email,
@@ -722,7 +722,7 @@ export const mcp = (options: MCPOptions) => {
 														description:
 															"Secret key for the client. Not included for public clients.",
 													},
-													redirectURLs: {
+													redirectUrls: {
 														type: "array",
 														items: { type: "string", format: "uri" },
 														description: "List of allowed redirect URLs",
@@ -763,7 +763,7 @@ export const mcp = (options: MCPOptions) => {
 												required: [
 													"name",
 													"clientId",
-													"redirectURLs",
+													"redirectUrls",
 													"type",
 													"authenticationScheme",
 													"disabled",
@@ -844,7 +844,7 @@ export const mcp = (options: MCPOptions) => {
 							metadata: body.metadata ? JSON.stringify(body.metadata) : null,
 							clientId: clientId,
 							clientSecret: finalClientSecret,
-							redirectURLs: body.redirect_uris.join(","),
+							redirectUrls: body.redirect_uris.join(","),
 							type: clientType,
 							authenticationScheme:
 								body.token_endpoint_auth_method || "client_secret_basic",

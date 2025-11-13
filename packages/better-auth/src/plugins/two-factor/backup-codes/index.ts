@@ -1,6 +1,6 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "better-call";
-import * as z from "zod";
+import { z } from "zod";
 import { sessionMiddleware } from "../../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
 import { generateRandomString } from "../../../crypto/random";
@@ -447,22 +447,19 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 			/**
 			 * ### Endpoint
 			 *
-			 * GET `/two-factor/view-backup-codes`
+			 * POST `/two-factor/view-backup-codes`
 			 *
 			 * ### API Methods
 			 *
 			 * **server:**
 			 * `auth.api.viewBackupCodes`
 			 *
-			 * **client:**
-			 * `authClient.twoFactor.viewBackupCodes`
-			 *
 			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-view-backup-codes)
 			 */
 			viewBackupCodes: createAuthEndpoint(
 				"/two-factor/view-backup-codes",
 				{
-					method: "GET",
+					method: "POST",
 					body: z.object({
 						userId: z.coerce.string().meta({
 							description: `The user ID to view all backup codes. Eg: "user-id"`,

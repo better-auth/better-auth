@@ -1,9 +1,15 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
-import { createAuthEndpoint } from "@better-auth/core/api";
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+} from "@better-auth/core/api";
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
-import * as z from "zod";
+import { z } from "zod";
 import { getSessionFromCtx } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto/random";
@@ -37,7 +43,7 @@ export interface PhoneNumberOptions {
 	 */
 	sendOTP: (
 		data: { phoneNumber: string; code: string },
-		request?: Request | undefined,
+		ctx?: GenericEndpointContext | undefined,
 	) => Promise<void> | void;
 	/**
 	 * a callback to send otp on user requesting to reset their password
@@ -49,7 +55,7 @@ export interface PhoneNumberOptions {
 	sendPasswordResetOTP?:
 		| ((
 				data: { phoneNumber: string; code: string },
-				request?: Request,
+				ctx?: GenericEndpointContext,
 		  ) => Promise<void> | void)
 		| undefined;
 	/**
@@ -80,7 +86,7 @@ export interface PhoneNumberOptions {
 					phoneNumber: string;
 					user: UserWithPhoneNumber;
 				},
-				request?: Request,
+				ctx?: GenericEndpointContext,
 		  ) => void | Promise<void>)
 		| undefined;
 	/**
@@ -137,6 +143,20 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 
 	return {
 		id: "phone-number",
+		hooks: {
+			before: [
+				{
+					// Stop any requests attempting to update the user's phone number
+					matcher: (ctx) =>
+						ctx.path === "/update-user" && "phoneNumber" in ctx.body,
+					handler: createAuthMiddleware(async (ctx) => {
+						throw new APIError("BAD_REQUEST", {
+							message: "Phone number cannot be updated",
+						});
+					}),
+				},
+			],
+		},
 		endpoints: {
 			/**
 			 * ### Endpoint
@@ -242,7 +262,7 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 									phoneNumber,
 									code: otp,
 								},
-								ctx.request,
+								ctx,
 							);
 							throw new APIError("UNAUTHORIZED", {
 								message: ERROR_CODES.PHONE_NUMBER_NOT_VERIFIED,
@@ -392,7 +412,7 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 							phoneNumber: ctx.body.phoneNumber,
 							code,
 						},
-						ctx.request,
+						ctx,
 					);
 					return ctx.json({ message: "code sent" });
 				},
@@ -681,7 +701,7 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 							phoneNumber: ctx.body.phoneNumber,
 							user,
 						},
-						ctx.request,
+						ctx,
 					);
 
 					if (!ctx.body.disableSession) {
@@ -791,7 +811,7 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 							phoneNumber: ctx.body.phoneNumber,
 							code,
 						},
-						ctx.request,
+						ctx,
 					);
 					return ctx.json({
 						status: true,
