@@ -1,3 +1,4 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import type { User } from "../../types";
 import type { InferOptionSchema } from "../../types/plugins";
 import type { schema } from "./schema";
@@ -22,24 +23,8 @@ export interface PhoneNumberOptions {
 	 */
 	sendOTP: (
 		data: { phoneNumber: string; code: string },
-		request?: Request | undefined,
+		ctx?: GenericEndpointContext | undefined,
 	) => Promise<void> | void;
-	/**
-	 * Custom OTP verification function
-	 *
-	 * If provided, this function will be called instead of the internal verification logic.
-	 * This is useful when using SMS providers that handle their own OTP generation and verification.
-	 *
-	 * @param data - Contains phone number and OTP code
-	 * @param request - The request object
-	 * @returns true if OTP is valid, false otherwise
-	 */
-	verifyOTP?:
-		| ((
-				data: { phoneNumber: string; code: string },
-				request?: Request | undefined,
-		  ) => Promise<boolean> | boolean)
-		| undefined;
 	/**
 	 * a callback to send otp on user requesting to reset their password
 	 *
@@ -50,7 +35,7 @@ export interface PhoneNumberOptions {
 	sendPasswordResetOTP?:
 		| ((
 				data: { phoneNumber: string; code: string },
-				request?: Request,
+				ctx?: GenericEndpointContext,
 		  ) => Promise<void> | void)
 		| undefined;
 	/**
@@ -81,8 +66,27 @@ export interface PhoneNumberOptions {
 					phoneNumber: string;
 					user: UserWithPhoneNumber;
 				},
-				request?: Request,
+				ctx?: GenericEndpointContext,
 		  ) => void | Promise<void>)
+		| undefined;
+	/**
+	 * Custom OTP verification function
+	 *
+	 * If provided, this function will be called instead of the internal verification logic.
+	 * This is useful when using SMS providers that handle their own OTP generation and verification.
+	 *
+	 * @param data - Contains phone number and OTP code
+	 * @param request - The request object
+	 * @returns true if OTP is valid, false otherwise
+	 */
+	verifyOTP?:
+		| ((
+				data: {
+					phoneNumber: string;
+					code: string;
+				},
+				ctx?: GenericEndpointContext,
+		  ) => Promise<boolean> | boolean)
 		| undefined;
 	/**
 	 * Sign up user after phone number verification
