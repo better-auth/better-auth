@@ -52,7 +52,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			}
 			name = convertToSnakeCase(name, adapter.options?.camelCase);
 			if (field.references?.field === "id") {
-				if (options.advanced?.database?.useNumberId) {
+				const useNumberId =
+					options.advanced?.database?.useNumberId ||
+					options.advanced?.database?.generateId === "serial";
+				const useUUIDs = options.advanced?.database?.generateId === "uuid";
+				if (useNumberId) {
 					if (databaseType === "pg") {
 						return `integer('${name}')`;
 					} else if (databaseType === "mysql") {
@@ -61,6 +65,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 						// using sqlite
 						return `integer('${name}')`;
 					}
+				}
+				if (useUUIDs && databaseType === "pg") {
+					return `uuid('${name}')`;
 				}
 				if (field.references.field) {
 					if (databaseType === "mysql") {
@@ -144,7 +151,14 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		let id: string = "";
 
-		if (options.advanced?.database?.useNumberId) {
+		const useNumberId =
+			options.advanced?.database?.useNumberId ||
+			options.advanced?.database?.generateId === "serial";
+		const useUUIDs = options.advanced?.database?.generateId === "uuid";
+
+		if (useUUIDs && databaseType === "pg") {
+			id = `uuid("id").default(sql\`pg_catalog.gen_random_uuid()\`).primaryKey()`;
+		} else if (useNumberId) {
 			if (databaseType === "pg") {
 				id = `serial("id").primaryKey()`;
 			} else if (databaseType === "sqlite") {
@@ -289,7 +303,11 @@ function generateImport({
 		if (hasJson && hasBigint) break;
 	}
 
-	const useNumberId = options.advanced?.database?.useNumberId;
+	const useNumberId =
+		options.advanced?.database?.useNumberId ||
+		options.advanced?.database?.generateId === "serial";
+
+	const useUUIDs = options.advanced?.database?.generateId === "uuid";
 
 	coreImports.push(`${databaseType}Table`);
 	coreImports.push(
@@ -328,6 +346,10 @@ function generateImport({
 			coreImports.push("mysqlEnum");
 		}
 	} else if (databaseType === "pg") {
+		if (useUUIDs) {
+			rootImports.push("sql");
+		}
+
 		// Only include integer for PG if actually needed
 		const hasNonBigintNumber = Object.values(tables).some((table) =>
 			Object.values(table.fields).some(
@@ -344,14 +366,22 @@ function generateImport({
 		// handles the references field with useNumberId
 		const needsInteger =
 			hasNonBigintNumber ||
-			(options.advanced?.database?.useNumberId && hasFkToId);
+			((options.advanced?.database?.useNumberId ||
+				options.advanced?.database?.generateId === "serial") &&
+				hasFkToId);
 		if (needsInteger) {
 			coreImports.push("integer");
 		}
 	} else {
 		coreImports.push("integer");
 	}
-	coreImports.push(useNumberId ? (databaseType === "pg" ? "serial" : "") : "");
+	if (databaseType === "pg") {
+		if (useNumberId) {
+			coreImports.push("serial");
+		} else if (useUUIDs) {
+			coreImports.push("uuid");
+		}
+	}
 
 	//handle json last on the import order
 	if (hasJson) {

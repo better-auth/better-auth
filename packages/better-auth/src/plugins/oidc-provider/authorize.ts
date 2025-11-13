@@ -5,6 +5,7 @@ import { generateRandomString } from "../../crypto";
 import { handleErrorRedirect } from "../../utils/handle-error-redirect";
 import { getClient } from "./index";
 import { getAuthorizePromptSet } from "./middlewares/check-prompt";
+import { getPromptHandled } from "./state/prompt-handled";
 import type { AuthorizationQuery, OIDCOptions } from "./types";
 
 export async function authorize(
@@ -48,8 +49,10 @@ export async function authorize(
 
 	// Handle prompt=login: force reauthentication even if user has active session
 	// However, if we're being called from the middleware after login, skip the redirect
-	const oidcLoginPromptHandled = !!(ctx.context as any).oidcLoginPromptHandled;
-	if ((promptSet.has("login") && !oidcLoginPromptHandled) || !session) {
+	if (
+		(promptSet.has("login") && (await getPromptHandled()) === false) ||
+		!session
+	) {
 		/**
 		 * If the user is not logged in, OR prompt=login is set, we need to
 		 * redirect them to the login page to (re)authenticate.
