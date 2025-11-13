@@ -1055,7 +1055,7 @@ export function organization<O extends OrganizationOptions>(options?: O): any {
 					},
 					slug: {
 						type: "string",
-						required: true,
+						required: false,
 						unique: true,
 						sortable: true,
 						fieldName: opts.schema?.organization?.fields?.slug,
