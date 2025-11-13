@@ -171,31 +171,28 @@ describe("Domain verification", async () => {
 			});
 		});
 
-		it(
-			"should return the existing active verification token",
-			async () => {
-				const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth();
-				const headers = await getAuthHeaders(testUser);
-				const provider = await registerSSOProvider(headers);
+		it("should return the existing active verification token", async () => {
+			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth();
+			const headers = await getAuthHeaders(testUser);
+			const provider = await registerSSOProvider(headers);
 
-				vi.useFakeTimers({ toFake: ["Date"] });
+			vi.useFakeTimers({ toFake: ["Date"] });
 
-				const newAuthHeaders = await getAuthHeaders(testUser);
+			const newAuthHeaders = await getAuthHeaders(testUser);
 
-				const response = await auth.api.requestDomainVerification({
-					body: {
-						providerId: provider.providerId,
-					},
-					headers: newAuthHeaders,
-					asResponse: true,
-				});
+			const response = await auth.api.requestDomainVerification({
+				body: {
+					providerId: provider.providerId,
+				},
+				headers: newAuthHeaders,
+				asResponse: true,
+			});
 
-				expect(response.status).toBe(201);
-				expect(await response.json()).toEqual({
-					domainVerificationToken: provider.domainVerificationToken,
-				});
-			},
-		);
+			expect(response.status).toBe(201);
+			expect(await response.json()).toEqual({
+				domainVerificationToken: provider.domainVerificationToken,
+			});
+		});
 
 		it("should return forbidden if user does not own the provider", async () => {
 			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth();
@@ -281,20 +278,29 @@ describe("Domain verification", async () => {
 			});
 		});
 
-		it(
-			"should fail to create a new token on an already verified domain",
-			async () => {
-				const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth();
-				const headers = await getAuthHeaders(testUser);
-				const provider = await registerSSOProvider(headers);
+		it("should fail to create a new token on an already verified domain", async () => {
+			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth();
+			const headers = await getAuthHeaders(testUser);
+			const provider = await registerSSOProvider(headers);
 
-				dnsMock.resolveTxt.mockResolvedValue([
-					[
-						`better-auth-token-saml-provider-1=${provider.domainVerificationToken}`,
-					],
-				]);
+			dnsMock.resolveTxt.mockResolvedValue([
+				[
+					`better-auth-token-saml-provider-1=${provider.domainVerificationToken}`,
+				],
+			]);
 
-				const domainVerificationResponse = await auth.api.verifyDomain({
+			const domainVerificationResponse = await auth.api.verifyDomain({
+				body: {
+					providerId: provider.providerId,
+				},
+				headers,
+				asResponse: true,
+			});
+
+			expect(domainVerificationResponse.status).toBe(204);
+
+			const domainVerificationSubmissionResponse =
+				await auth.api.requestDomainVerification({
 					body: {
 						providerId: provider.providerId,
 					},
@@ -302,24 +308,12 @@ describe("Domain verification", async () => {
 					asResponse: true,
 				});
 
-				expect(domainVerificationResponse.status).toBe(204);
-
-				const domainVerificationSubmissionResponse =
-					await auth.api.requestDomainVerification({
-						body: {
-							providerId: provider.providerId,
-						},
-						headers,
-						asResponse: true,
-					});
-
-				expect(domainVerificationSubmissionResponse.status).toBe(409);
-				expect(await domainVerificationSubmissionResponse.json()).toEqual({
-					message: "Domain has already been verified",
-					code: "DOMAIN_VERIFIED",
-				});
-			},
-		);
+			expect(domainVerificationSubmissionResponse.status).toBe(409);
+			expect(await domainVerificationSubmissionResponse.json()).toEqual({
+				message: "Domain has already been verified",
+				code: "DOMAIN_VERIFIED",
+			});
+		});
 	});
 
 	describe("POST /sso/verify-domain", () => {
@@ -491,34 +485,31 @@ describe("Domain verification", async () => {
 			expect(response.status).toBe(204);
 		});
 
-		it(
-			"should verify a provider domain ownership (custom token verification prefix)",
-			async () => {
-				const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth({
-					domainVerification: { tokenPrefix: "auth-prefix" },
-				});
-				const headers = await getAuthHeaders(testUser);
-				const provider = await registerSSOProvider(headers);
+		it("should verify a provider domain ownership (custom token verification prefix)", async () => {
+			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth({
+				domainVerification: { tokenPrefix: "auth-prefix" },
+			});
+			const headers = await getAuthHeaders(testUser);
+			const provider = await registerSSOProvider(headers);
 
-				dnsMock.resolveTxt.mockResolvedValue([
-					["google-site-verification=the-token"],
-					[
-						"v=spf1 ip4:50.242.118.232/29 include:_spf.google.com include:mail.zendesk.com ~all",
-					],
-					[`auth-prefix-saml-provider-1=${provider.domainVerificationToken}`],
-				]);
+			dnsMock.resolveTxt.mockResolvedValue([
+				["google-site-verification=the-token"],
+				[
+					"v=spf1 ip4:50.242.118.232/29 include:_spf.google.com include:mail.zendesk.com ~all",
+				],
+				[`auth-prefix-saml-provider-1=${provider.domainVerificationToken}`],
+			]);
 
-				const response = await auth.api.verifyDomain({
-					body: {
-						providerId: provider.providerId,
-					},
-					headers,
-					asResponse: true,
-				});
+			const response = await auth.api.verifyDomain({
+				body: {
+					providerId: provider.providerId,
+				},
+				headers,
+				asResponse: true,
+			});
 
-				expect(response.status).toBe(204);
-			},
-		);
+			expect(response.status).toBe(204);
+		});
 
 		it("should fail to verify an already verified domain", async () => {
 			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth();
