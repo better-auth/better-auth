@@ -229,7 +229,7 @@ export async function createAuthContext(
 				if (typeof errorURLConfig === "function") {
 					baseURL = await errorURLConfig({ error, error_description });
 				} else {
-					const defaultPath = redirectOptions?.defaultErrorPath || "/error";
+					const defaultPath = redirectOptions?.defaultErrorPath || "/api/auth/error";
 					baseURL = errorURLConfig || `${options.baseURL}${defaultPath}`;
 				}
 			}
