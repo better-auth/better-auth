@@ -1,7 +1,4 @@
-import type {
-	BetterAuthPlugin,
-	PasswordHashOptions,
-} from "@better-auth/core";
+import type { BetterAuthPlugin, PasswordHashOptions } from "@better-auth/core";
 import { defineErrorCodes } from "@better-auth/core/utils";
 import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
