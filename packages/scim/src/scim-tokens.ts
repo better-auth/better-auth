@@ -55,8 +55,8 @@ export async function verifySCIMToken(
 		typeof opts.storeSCIMToken === "object" &&
 		"hash" in opts.storeSCIMToken
 	) {
-		const hashedSCIMTOKEN = await opts.storeSCIMToken.hash(scimToken);
-		return hashedSCIMTOKEN === storedSCIMToken;
+		const hashedSCIMToken = await opts.storeSCIMToken.hash(scimToken);
+		return hashedSCIMToken === storedSCIMToken;
 	}
 	if (
 		typeof opts.storeSCIMToken === "object" &&
