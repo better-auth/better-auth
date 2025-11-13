@@ -175,7 +175,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			id = `uuid("id").default(sql\`pg_catalog.gen_random_uuid()\`).primaryKey()`;
 		} else if (useNumberId) {
 			if (databaseType === "pg") {
-				id = `serial("id").primaryKey()`;
+				id = `integer("id").generatedByDefaultAsIdentity().primaryKey()`;
 			} else if (databaseType === "sqlite") {
 				id = `integer("id", { mode: "number" }).primaryKey({ autoIncrement: true })`;
 			} else {
@@ -489,12 +489,8 @@ function generateImport({
 	} else {
 		coreImports.push("integer");
 	}
-	if (databaseType === "pg") {
-		if (useNumberId) {
-			coreImports.push("serial");
-		} else if (useUUIDs) {
-			coreImports.push("uuid");
-		}
+	if (databaseType === "pg" && useUUIDs) {
+		coreImports.push("uuid");
 	}
 
 	//handle json last on the import order
