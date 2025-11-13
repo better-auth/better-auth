@@ -160,7 +160,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 		options,
 	);
 
-	const trustedClients = options.trustedClients || [];
+	const trustedClients = opts.trustedClients || [];
 
 	/**
 	 * Store client secret according to the configured storage method
