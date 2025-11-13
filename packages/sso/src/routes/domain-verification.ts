@@ -269,7 +269,7 @@ export const verifyDomain = (options: SSOOptions) => {
 			});
 
 			ctx.setStatus(204);
-			return null;
+			return;
 		},
 	);
 };

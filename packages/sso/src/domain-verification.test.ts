@@ -14,8 +14,9 @@ const dnsMock = vi.hoisted(() => {
 	};
 });
 
-vi.mock("dns/promises", () => {
+vi.mock("node:dns/promises", () => {
 	return {
+		...dnsMock,
 		default: dnsMock,
 	};
 });
@@ -170,7 +171,7 @@ describe("Domain verification", async () => {
 			});
 		});
 
-		it.fails(
+		it(
 			"should return the existing active verification token",
 			async () => {
 				const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth();
@@ -257,7 +258,7 @@ describe("Domain verification", async () => {
 			});
 		});
 
-		it.fails("should return a new domain verification token", async () => {
+		it("should return a new domain verification token", async () => {
 			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth();
 			const headers = await getAuthHeaders(testUser);
 			const provider = await registerSSOProvider(headers);
@@ -280,7 +281,7 @@ describe("Domain verification", async () => {
 			});
 		});
 
-		it.fails(
+		it(
 			"should fail to create a new token on an already verified domain",
 			async () => {
 				const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth();
@@ -460,7 +461,7 @@ describe("Domain verification", async () => {
 			});
 		});
 
-		it.fails("should verify a provider domain ownership", async () => {
+		it("should verify a provider domain ownership", async () => {
 			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth();
 			const headers = await getAuthHeaders(testUser);
 			const provider = await registerSSOProvider(headers);
@@ -490,7 +491,7 @@ describe("Domain verification", async () => {
 			expect(response.status).toBe(204);
 		});
 
-		it.fails(
+		it(
 			"should verify a provider domain ownership (custom token verification prefix)",
 			async () => {
 				const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth({
@@ -519,7 +520,7 @@ describe("Domain verification", async () => {
 			},
 		);
 
-		it.fails("should fail to verify an already verified domain", async () => {
+		it("should fail to verify an already verified domain", async () => {
 			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth();
 			const headers = await getAuthHeaders(testUser);
 			const provider = await registerSSOProvider(headers);
