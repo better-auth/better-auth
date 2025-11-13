@@ -39,9 +39,9 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 					// Stop any requests attempting to update the user's phone number
 					matcher: (ctx) =>
 						ctx.path === "/update-user" && "phoneNumber" in ctx.body,
-					handler: createAuthMiddleware(async (ctx) => {
+					handler: createAuthMiddleware(async (_ctx) => {
 						throw new APIError("BAD_REQUEST", {
-							message: "Phone number cannot be updated",
+							message: PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_CANNOT_BE_UPDATED,
 						});
 					}),
 				},
@@ -279,7 +279,7 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 					if (!options?.sendOTP) {
 						ctx.context.logger.warn("sendOTP not implemented");
 						throw new APIError("NOT_IMPLEMENTED", {
-							message: "sendOTP not implemented",
+							message: PHONE_NUMBER_ERROR_CODES.SEND_OTP_NOT_IMPLEMENTED,
 						});
 					}
 
@@ -479,7 +479,7 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 
 						if (!isValid) {
 							throw new APIError("BAD_REQUEST", {
-								message: "Invalid OTP",
+								message: PHONE_NUMBER_ERROR_CODES.INVALID_OTP,
 							});
 						}
 					} else {
@@ -491,7 +491,7 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 						if (!otp || otp.expiresAt < new Date()) {
 							if (otp && otp.expiresAt < new Date()) {
 								throw new APIError("BAD_REQUEST", {
-									message: "OTP expired",
+									message: PHONE_NUMBER_ERROR_CODES.OTP_EXPIRED,
 								});
 							}
 							throw new APIError("BAD_REQUEST", {
@@ -503,7 +503,7 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 						if (attempts && parseInt(attempts) >= allowedAttempts) {
 							await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
 							throw new APIError("FORBIDDEN", {
-								message: "Too many attempts",
+								message: PHONE_NUMBER_ERROR_CODES.TOO_MANY_ATTEMPTS,
 							});
 						}
 						if (otpValue !== ctx.body.code) {
@@ -514,7 +514,7 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 								},
 							);
 							throw new APIError("BAD_REQUEST", {
-								message: "Invalid OTP",
+								message: PHONE_NUMBER_ERROR_CODES.INVALID_OTP,
 							});
 						}
 
@@ -711,7 +711,7 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 					});
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
-							message: "phone number isn't registered",
+							message: PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_NOT_EXIST,
 						});
 					}
 					const code = generateOTP(opts.otpLength);
@@ -798,7 +798,7 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 							verification.id,
 						);
 						throw new APIError("FORBIDDEN", {
-							message: "Too many attempts",
+							message: PHONE_NUMBER_ERROR_CODES.TOO_MANY_ATTEMPTS,
 						});
 					}
 					if (ctx.body.otp !== otpValue) {
