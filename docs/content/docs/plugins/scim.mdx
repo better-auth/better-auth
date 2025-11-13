@@ -243,6 +243,11 @@ type generateSCIMToken = {
 ```
 </APIMethod>
 
+<Callout>
+**Note:** When the `organization` plugin is enabled, only users with an admin role (`adminRoles`) will be able to generate a SCIM token.
+In all other cases, you can use the `adminUserids` option to restrict who can generate a SCIM token
+</Callout>
+
 #### SCIM attribute mapping
 
 By default, the SCIM provisioning will automatically map the following fields:
@@ -273,6 +278,8 @@ The plugin requires additional fields in the `scimProvider` table to store the p
 
 ### Server
 
+- `adminRoles`: The list of roles that are considered admin roles. Only users with these roles will be able to sync information through SCIM. Defaults to `["admin", "owner"]`
+- `adminUserIds`: The list of user ids that are considered admins. Only users with these ids will be able to sync information through SCIM. Defaults to `[]`
 - `storeSCIMToken`: The method to store the SCIM token in your database, whether `encrypted`, `hashed` or `plain` text. Default is `plain` text.
 
 Alternatively, you can pass a custom encryptor or hasher to store the SCIM token in your database.

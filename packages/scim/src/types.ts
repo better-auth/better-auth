@@ -15,6 +15,15 @@ export type SCIMEmail = { value?: string; primary?: boolean };
 
 export type SCIMOptions = {
 	/**
+	 * The list of roles that are considered admin roles. Only users with these roles will be able to sync information through SCIM
+	 * @default ["admin", "owner"]
+	 */
+	adminRoles?: string[];
+	/**
+	 * The list of user ids that are considered admins. Only users with these ids will be able to sync information through SCIM
+	 */
+	adminUserIds?: string[];
+	/**
 	 * Store the SCIM token in your database in a secure way
 	 *
 	 * @default "plain"

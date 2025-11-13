@@ -87,9 +87,13 @@ const findUserById = async (
 export const scim = (options?: SCIMOptions) => {
 	const opts = {
 		storeSCIMToken: "plain",
+		adminRoles: ["admin", "owner"],
+		adminUserIds: [],
 		...options,
 	} satisfies SCIMOptions;
 
+	const adminRoles = new Set(opts.adminRoles);
+	const adminUserIds = new Set(opts.adminUserIds);
 	const authMiddleware = authMiddlewareFactory(opts);
 
 	return {
@@ -144,12 +148,14 @@ export const scim = (options?: SCIMOptions) => {
 
 					if (organizationId && !isOrgPluginEnabled) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Restricting a token to an organization requires the organization plugin",
+							message:
+								"Restricting a token to an organization requires the organization plugin",
 						});
 					}
 
+					let member: Member | null = null;
 					if (organizationId) {
-						const member = await ctx.context.adapter.findOne({
+						member = await ctx.context.adapter.findOne<Member>({
 							model: "member",
 							where: [
 								{
@@ -164,10 +170,27 @@ export const scim = (options?: SCIMOptions) => {
 						});
 
 						if (!member) {
-							throw new APIError("BAD_REQUEST", {
+							throw new APIError("FORBIDDEN", {
 								message: "You are not a member of the organization",
 							});
 						}
+
+						if (!adminRoles.has(member.role)) {
+							throw new APIError("FORBIDDEN", {
+								message:
+									"You do not have enough privileges to generate a SCIM token",
+							});
+						}
+					}
+
+					if (
+						adminUserIds.size > 0 &&
+						!adminUserIds.has(ctx.context.session.user.id)
+					) {
+						throw new APIError("FORBIDDEN", {
+							message:
+								"You do not have enough privileges to generate a SCIM token",
+						});
 					}
 
 					const scimProvider = await ctx.context.adapter.findOne<SCIMProvider>({
