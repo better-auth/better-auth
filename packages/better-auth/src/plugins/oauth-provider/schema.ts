@@ -23,6 +23,10 @@ export const schema = {
 				type: "boolean",
 				required: false,
 			},
+			enableEndSession: {
+				type: "boolean",
+				required: false,
+			},
 			scopes: {
 				type: "string[]",
 				required: false,
@@ -84,6 +88,10 @@ export const schema = {
 			},
 			// Authentication Metadata
 			redirectUris: {
+				type: "string[]",
+				required: true,
+			},
+			postLogoutRedirectUris: {
 				type: "string[]",
 				required: false,
 			},
