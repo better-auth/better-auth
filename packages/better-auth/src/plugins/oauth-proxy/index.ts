@@ -268,23 +268,52 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 							return;
 						}
 
-						const data =
-							await ctx.context.internalAdapter.findVerificationValue(state);
-						if (!data) {
-							return;
+						let parsedState: { callbackURL?: string } | undefined;
+
+						if (ctx.context.oauthConfig.storeStateStrategy === "cookie") {
+							//
+							// Cookie strategy (stateless mode)
+							//
+							const stateCookie = ctx.context.createAuthCookie("oauth_state");
+							const encryptedData = ctx.getCookie(stateCookie.name);
+							if (!encryptedData) {
+								return;
+							}
+							try {
+								const decryptedData = await symmetricDecrypt({
+									key: ctx.context.secret,
+									data: encryptedData,
+								});
+								parsedState = parseJSON<{ callbackURL?: string }>(
+									decryptedData,
+								);
+							} catch {
+								return;
+							}
+						} else {
+							//
+							// Database strategy
+							//
+							const data =
+								await ctx.context.internalAdapter.findVerificationValue(state);
+							if (!data) {
+								return;
+							}
+							try {
+								parsedState = parseJSON<{ callbackURL?: string }>(data.value);
+							} catch {
+								parsedState = undefined;
+							}
 						}
 
-						let parsedState: { callbackURL?: string } | undefined;
-						try {
-							parsedState = parseJSON<{ callbackURL?: string }>(data.value);
-						} catch {
-							parsedState = undefined;
-						}
 						if (!parsedState?.callbackURL?.includes("/oauth-proxy-callback")) {
 							return;
 						}
 
-						ctx.context.oauthConfig.skipStateCookieCheck = true;
+						//  Needed for database strategy where state cookie check happens
+						if (ctx.context.oauthConfig.storeStateStrategy !== "cookie") {
+							ctx.context.oauthConfig.skipStateCookieCheck = true;
+						}
 					}),
 				},
 				{
