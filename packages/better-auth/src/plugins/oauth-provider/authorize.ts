@@ -86,11 +86,12 @@ export async function authorizeEndpoint(
 		);
 	}
 
-	if (query?.prompt === "select_account" && !opts.selectAccount?.page) {
+	const prompts = query.prompt?.split(" ");
+	if (prompts?.includes("select_account") && !opts.selectAccount?.page) {
 		throw ctx.redirect(
 			getErrorURL(
 				ctx,
-				`unsupported_prompt_${query.prompt}`,
+				`unsupported_prompt_${prompts.join("_")}`,
 				"unsupported prompt type",
 			),
 		);
@@ -184,7 +185,7 @@ export async function authorizeEndpoint(
 
 	// Check for session
 	const session = await getSessionFromCtx(ctx);
-	if (!session || query.prompt === "login") {
+	if (!session || prompts?.includes("login")) {
 		const { name: cookieName, attributes: cookieAttributes } =
 			ctx.context.createAuthCookie("oauth_login_prompt");
 		await ctx.setSignedCookie(
@@ -202,7 +203,7 @@ export async function authorizeEndpoint(
 	}
 
 	// Force account selection (eg. multi-session)
-	if (ctx.context.authorize_only && query.prompt === "select_account") {
+	if (ctx.context.authorize_only && prompts?.includes("select_account")) {
 		return redirectWithPromptCode(ctx, opts, "select_account", {
 			query,
 			userId: session.user.id,
@@ -246,7 +247,7 @@ export async function authorizeEndpoint(
 	}
 
 	// Force consent screen
-	if (query.prompt === "consent") {
+	if (prompts?.includes("consent")) {
 		return redirectWithPromptCode(ctx, opts, "consent", {
 			query,
 			userId: session.user.id,
