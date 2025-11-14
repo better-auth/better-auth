@@ -28,8 +28,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	const filePath = file || "./auth-schema.ts";
 	const databaseType: "sqlite" | "mysql" | "pg" | undefined =
 		adapter.options?.provider;
-
-	const isRlsEnabled =
+	const isRLSEnabled =
 		databaseType === "pg" && options.advanced?.database?.enableRLS;
 
 	if (!databaseType) {
@@ -271,7 +270,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							}`;
 						})
 						.join(",\n ")}
-					}${assignIndexes(indexes)})${isRlsEnabled ? ".enableRLS()" : ""};`;
+					}${assignIndexes(indexes)})${isRLSEnabled ? ".enableRLS()" : ""};`;
 		code += `\n${schema}\n`;
 	}
 	const formattedCode = await prettier.format(code, {
