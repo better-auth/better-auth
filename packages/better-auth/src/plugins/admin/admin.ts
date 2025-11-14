@@ -618,6 +618,24 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 									'The operator to use for the search. Can be `contains`, `starts_with` or `ends_with`. Eg: "contains"',
 							})
 							.optional(),
+						searchInFields: z
+							.union([z.array(z.string()), z.string()])
+							.optional()
+							.transform((value) => {
+								if (!value) return undefined;
+								if (Array.isArray(value)) return value;
+								return value.split(",").map((v) => v.trim());
+							})
+
+							.meta({
+								description:
+									"Fields to search across if searchField is not provided",
+							}),
+
+						searchMode: z.enum(["OR", "AND"]).optional().default("OR").meta({
+							description:
+								"Combine multi-field search with OR (default) or AND",
+						}),
 						limit: z
 							.string()
 							.meta({
@@ -722,11 +740,30 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 					const where: Where[] = [];
 
 					if (ctx.query?.searchValue) {
-						where.push({
-							field: ctx.query.searchField || "email",
-							operator: ctx.query.searchOperator || "contains",
-							value: ctx.query.searchValue,
-						});
+						const operator = ctx.query.searchOperator || "contains";
+						const searchValue = ctx.query.searchValue;
+						if (ctx.query.searchField) {
+							where.push({
+								field: ctx.query.searchField,
+								operator,
+								value: searchValue,
+							});
+						} else {
+							const fields = ctx.query.searchInFields?.length
+								? ctx.query.searchInFields
+								: ["email"]; // default
+
+							const connector = ctx.query.searchMode || "OR";
+
+							fields.forEach((field) => {
+								where.push({
+									field,
+									operator,
+									value: searchValue,
+									connector,
+								});
+							});
+						}
 					}
 
 					if (ctx.query?.filterValue) {
