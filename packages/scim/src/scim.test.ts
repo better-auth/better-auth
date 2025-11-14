@@ -823,6 +823,60 @@ describe("SCIM", () => {
 			});
 		});
 
+		it("should create a new account liked to an existing user", async () => {
+			const { auth, authClient, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
+
+			await authClient.signUp.email({
+				email: "existing@email.com",
+				password: "the password",
+				name: "existing user",
+			});
+
+			const response = await auth.api.createSCIMUser({
+				body: {
+					userName: "the-username",
+					emails: [{ value: "existing@email.com" }],
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(201);
+			expect(response.headers.get("location")).toStrictEqual(
+				expect.stringContaining("/scim/v2/Users/"),
+			);
+
+			const user = await response.json();
+			expect(user).toMatchObject({
+				active: true,
+				displayName: "existing user",
+				emails: [
+					{
+						primary: true,
+						value: "existing@email.com",
+					},
+				],
+				externalId: "the-username",
+				id: expect.any(String),
+				meta: expect.objectContaining({
+					created: expect.any(String),
+					lastModified: expect.any(String),
+					location: expect.stringContaining("/scim/v2/Users/"),
+					resourceType: "User",
+				}),
+				name: {
+					formatted: "existing user",
+				},
+				schemas: expect.arrayContaining([
+					"urn:ietf:params:scim:schemas:core:2.0:User",
+				]),
+				userName: "existing@email.com",
+			});
+		});
+
 		it("should create a new user with external id", async () => {
 			const { auth, getSCIMToken } = createTestInstance();
 			const scimToken = await getSCIMToken();

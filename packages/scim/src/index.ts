@@ -281,49 +281,64 @@ export const scim = (options?: SCIMOptions) => {
 						});
 					}
 
-					const [newUser, newAccount] = await ctx.context.adapter.transaction<
-						[User, Account]
-					>(async () => {
-						const email = getUserPrimaryEmail(body.userName, body.emails);
-						const name = getUserFullName(email, body.name);
+					const email = getUserPrimaryEmail(body.userName, body.emails);
+					const name = getUserFullName(email, body.name);
 
-						const user = await ctx.context.internalAdapter.createUser({
-							email,
-							name,
-							createdAt: new Date(),
-							updatedAt: new Date(),
-						});
+					const existingUser = await ctx.context.adapter.findOne<User>({
+						model: "user",
+						where: [{ field: "email", value: email }],
+					});
 
-						const account = await ctx.context.internalAdapter.createAccount({
-							userId: user.id,
+					let user: User;
+					let account: Account;
+
+					if (existingUser) {
+						user = existingUser;
+						account = await ctx.context.internalAdapter.createAccount({
+							userId: existingUser.id,
 							providerId: providerId,
 							accountId: accountId,
-							createdAt: new Date(),
-							updatedAt: new Date(),
 							accessToken: "",
 							refreshToken: "",
 						});
-
-						const organizationId = ctx.context.scimProvider.organizationId;
-						if (organizationId) {
-							await ctx.context.adapter.create<Member>({
-								model: "member",
-								data: {
-									userId: user.id,
-									role: "member",
-									createdAt: new Date(),
-									organizationId,
-								},
+					} else {
+						[user, account] = await ctx.context.adapter.transaction<
+							[User, Account]
+						>(async () => {
+							const user = await ctx.context.internalAdapter.createUser({
+								email,
+								name,
 							});
-						}
 
-						return [user, account];
-					});
+							const account = await ctx.context.internalAdapter.createAccount({
+								userId: user.id,
+								providerId: providerId,
+								accountId: accountId,
+								accessToken: "",
+								refreshToken: "",
+							});
+
+							const organizationId = ctx.context.scimProvider.organizationId;
+							if (organizationId) {
+								await ctx.context.adapter.create<Member>({
+									model: "member",
+									data: {
+										userId: user.id,
+										role: "member",
+										createdAt: new Date(),
+										organizationId,
+									},
+								});
+							}
+
+							return [user, account];
+						});
+					}
 
 					const userResource = createUserResource(
 						ctx.context.baseURL,
-						newUser,
-						newAccount,
+						user,
+						account,
 					);
 
 					ctx.setStatus(201);
