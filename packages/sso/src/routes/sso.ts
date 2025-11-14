@@ -1584,6 +1584,14 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			if (existingUser) {
 				user = existingUser;
 			} else {
+				// if implicit sign up is disabled, we should not create a new user nor a new account.
+				if (options?.disableImplicitSignUp) {
+					throw new APIError("UNAUTHORIZED", {
+						message:
+							"User not found and implicit sign up is disabled for this provider",
+					});
+				}
+
 				user = await ctx.context.internalAdapter.createUser({
 					email: userInfo.email,
 					name: userInfo.name,
