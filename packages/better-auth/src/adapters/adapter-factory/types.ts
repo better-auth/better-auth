@@ -9,10 +9,10 @@ import type {
 } from "@better-auth/core/db/adapter";
 import type {
 	AdapterSchemaCreation,
+	CleanedWhere,
 	TransactionAdapter,
 	Where,
 } from "../../types";
-import type { Prettify } from "../../types/helper";
 
 export type AdapterFactoryOptions = {
 	config: AdapterFactoryConfig;
@@ -137,11 +137,6 @@ export interface CustomAdapter extends Omit<CoreCustomAdapter, "createSchema"> {
 		  }) => Promise<AdapterSchemaCreation>)
 		| undefined;
 }
-
-/**
- * @deprecated Use `CleanedWhere` from `@better-auth/core/db/adapter` instead.
- */
-export type CleanedWhere = Prettify<Required<Where>>;
 
 export type AdapterTestDebugLogs = {
 	resetDebugLogs: () => void;

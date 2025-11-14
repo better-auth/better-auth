@@ -279,7 +279,13 @@ export interface DBAdapterFactoryConfig<
 	disableTransformInput?: boolean | undefined;
 }
 
-export type Where = {
+type WhereUnary = {
+	operator: "is_not_null" | "is_null";
+	value?: never;
+	field: string;
+};
+
+type WhereBinary = {
 	/**
 	 * @default eq
 	 */
@@ -300,6 +306,9 @@ export type Where = {
 		| undefined;
 	value: string | number | boolean | string[] | number[] | Date | null;
 	field: string;
+};
+
+export type Where = (WhereUnary | WhereBinary) & {
 	/**
 	 * @default AND
 	 */
@@ -382,7 +391,9 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 		| undefined;
 };
 
-export type CleanedWhere = Required<Where>;
+export type CleanedWhere = (WhereUnary | Required<WhereBinary>) & {
+	connector: "AND" | "OR";
+};
 
 export interface CustomAdapter {
 	create: <T extends Record<string, any>>({

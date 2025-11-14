@@ -125,6 +125,14 @@ export const kyselyAdapter = (
 					});
 
 					const expr = (eb: any) => {
+						if (operator.toLowerCase() === "is_null") {
+							return eb(field, "is", null);
+						}
+
+						if (operator.toLowerCase() === "is_not_null") {
+							return eb(field, "is not", null);
+						}
+
 						if (operator.toLowerCase() === "in") {
 							return eb(field, "in", Array.isArray(value) ? value : [value]);
 						}

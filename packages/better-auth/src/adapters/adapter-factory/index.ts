@@ -599,8 +599,6 @@ export const createAdapterFactory =
 					}
 				}
 
-				let newValue = value;
-
 				const defaultModelName = getDefaultModelName(model);
 				const defaultFieldName = getDefaultFieldName({
 					field: unsafe_field,
@@ -612,6 +610,17 @@ export const createAdapterFactory =
 						field: defaultFieldName,
 						model: defaultModelName,
 					});
+
+				if (operator === "is_not_null" || operator === "is_null") {
+					return {
+						operator,
+						connector,
+						field: fieldName,
+					} satisfies CleanedWhere;
+				}
+
+				// value is not undefined here, but it seems that TypeScript can't prove that
+				let newValue = value as Exclude<typeof value, undefined>;
 
 				const fieldAttr = getFieldAttributes({
 					field: defaultFieldName,
