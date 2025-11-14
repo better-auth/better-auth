@@ -20,7 +20,7 @@ import {
 } from "../../crypto";
 import { mergeSchema } from "../../db";
 import type { jwt } from "../jwt";
-import { getJwtToken } from '../jwt';
+import { getJwtToken } from "../jwt";
 import { authorize } from "./authorize";
 import type { OAuthApplication } from "./schema";
 import { schema } from "./schema";
@@ -32,7 +32,7 @@ import type {
 	OIDCOptions,
 } from "./types";
 import { defaultClientSecretHasher } from "./utils";
-import { parsePrompt } from './utils/prompt'
+import { parsePrompt } from "./utils/prompt";
 
 const getJwtPlugin = (ctx: GenericEndpointContext) => {
 	return ctx.context.options.plugins?.find(

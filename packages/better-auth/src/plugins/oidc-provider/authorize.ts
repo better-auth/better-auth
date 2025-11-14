@@ -4,7 +4,7 @@ import { getSessionFromCtx } from "../../api";
 import { generateRandomString } from "../../crypto";
 import { getClient } from "./index";
 import type { AuthorizationQuery, OIDCOptions } from "./types";
-import { parsePrompt } from './utils/prompt'
+import { parsePrompt } from "./utils/prompt";
 
 function formatErrorURL(url: string, error: string, description: string) {
 	return `${
@@ -217,7 +217,7 @@ export async function authorize(
 		})
 		.then((res) => !!res?.consentGiven);
 
-	const promptSet = parsePrompt(query.prompt ?? '');
+	const promptSet = parsePrompt(query.prompt ?? "");
 
 	// Handle prompt=none per OIDC spec 3.1.2.1
 	// The Authorization Server MUST NOT display any authentication or consent UI
@@ -297,30 +297,30 @@ export async function authorize(
 		);
 	}
 
-  if (requireLogin) {
-    await ctx.setSignedCookie(
-      "oidc_login_prompt",
-      JSON.stringify(ctx.query),
-      ctx.context.secret,
-      {
-        maxAge: 600,
-        path: "/",
-        sameSite: "lax",
-      }
-    )
-    await ctx.setSignedCookie("oidc_consent_prompt", code, ctx.context.secret, {
-      maxAge: 600,
-      path: "/",
-      sameSite: "lax",
-    });
+	if (requireLogin) {
+		await ctx.setSignedCookie(
+			"oidc_login_prompt",
+			JSON.stringify(ctx.query),
+			ctx.context.secret,
+			{
+				maxAge: 600,
+				path: "/",
+				sameSite: "lax",
+			},
+		);
+		await ctx.setSignedCookie("oidc_consent_prompt", code, ctx.context.secret, {
+			maxAge: 600,
+			path: "/",
+			sameSite: "lax",
+		});
 
-    const loginURI = `${options.loginPage}?${new URLSearchParams({
-      client_id: client.clientId,
-      code,
-      state: query.state,
-    }).toString()}`;
-    return handleRedirect(loginURI);
-  }
+		const loginURI = `${options.loginPage}?${new URLSearchParams({
+			client_id: client.clientId,
+			code,
+			state: query.state,
+		}).toString()}`;
+		return handleRedirect(loginURI);
+	}
 
 	// If consent is not required, redirect with the code immediately
 	if (!requireConsent) {

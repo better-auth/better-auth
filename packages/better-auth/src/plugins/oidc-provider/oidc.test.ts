@@ -784,8 +784,8 @@ describe("oidc", async () => {
 	});
 
 	describe("cookie persistence bug (issue #4594)", () => {
-    // Reproduce issue #4594: oidc_login_prompt cookie persists after OIDC flow
-    // and causes subsequent normal logins to redirect to OIDC client
+		// Reproduce issue #4594: oidc_login_prompt cookie persists after OIDC flow
+		// and causes subsequent normal logins to redirect to OIDC client
 		it("should not redirect to OIDC client on subsequent normal logins", async ({
 			expect,
 		}) => {
