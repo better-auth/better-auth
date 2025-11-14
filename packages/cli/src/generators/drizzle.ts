@@ -28,8 +28,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	const filePath = file || "./auth-schema.ts";
 	const databaseType: "sqlite" | "mysql" | "pg" | undefined =
 		adapter.options?.provider;
-	const isRLSEnabled =
-		databaseType === "pg" && options.advanced?.database?.enableRLS;
+	const isRLSEnabled = databaseType === "pg" && adapter.options?.enableRLS;
 
 	if (!databaseType) {
 		throw new Error(

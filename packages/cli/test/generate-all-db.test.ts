@@ -218,6 +218,7 @@ describe("generate drizzle schema for all databases", async () => {
 				{
 					provider: "pg",
 					schema: {},
+					enableRLS: true,
 				},
 			)({} as BetterAuthOptions),
 			options: {
@@ -226,13 +227,13 @@ describe("generate drizzle schema for all databases", async () => {
 					{
 						provider: "pg",
 						schema: {},
+						enableRLS: true,
 					},
 				),
 				plugins: [twoFactor(), username()],
 				advanced: {
 					database: {
 						generateId: "uuid",
-						enableRLS: true,
 					},
 				},
 				user: {
@@ -464,6 +465,7 @@ describe("generate drizzle schema for all databases with passkey plugin", async 
 				{
 					provider: "pg",
 					schema: {},
+					enableRLS: true,
 				},
 			)({} as BetterAuthOptions),
 			options: {
@@ -472,6 +474,7 @@ describe("generate drizzle schema for all databases with passkey plugin", async 
 					{
 						provider: "pg",
 						schema: {},
+						enableRLS: true,
 					},
 				),
 				plugins: [passkey()],
@@ -486,11 +489,6 @@ describe("generate drizzle schema for all databases with passkey plugin", async 
 				},
 				verification: {
 					modelName: "custom_verification",
-				},
-				advanced: {
-					database: {
-						enableRLS: true,
-					},
 				},
 			},
 		});
