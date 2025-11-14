@@ -182,7 +182,7 @@ describe("SCIM", () => {
 
 			await expect(generateSCIMToken("the:provider")).rejects.toThrowError(
 				expect.objectContaining({
-					message: "Provider or organization id contain forbidden characters",
+					message: "Provider id contains forbidden characters",
 				}),
 			);
 		});

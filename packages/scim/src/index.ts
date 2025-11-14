@@ -144,8 +144,7 @@ export const scim = (options?: SCIMOptions) => {
 
 					if (providerId.includes(":")) {
 						throw new APIError("BAD_REQUEST", {
-							message:
-								"Provider or organization id contain forbidden characters",
+							message: "Provider id contains forbidden characters",
 						});
 					}
 
