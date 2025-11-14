@@ -9,7 +9,6 @@ import {
 import { getCurrentAuthContext } from "@better-auth/core/context";
 import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
-import defu from "defu";
 import { SignJWT } from "jose";
 import { z } from "zod";
 import { APIError, getSessionFromCtx, sessionMiddleware } from "../../api";
@@ -21,11 +20,9 @@ import {
 } from "../../crypto";
 import { mergeSchema } from "../../db";
 import type { jwt } from "../jwt";
-import { getJwtToken } from "../jwt";
+import { getJwtToken } from "../jwt/sign";
 import { authorize } from "./authorize";
-import { checkPromptMiddleware } from "./middlewares/check-prompt";
 import { type OAuthApplication, schema } from "./schema";
-import { setPromptHandled } from "./state/prompt-handled";
 import type {
 	Client,
 	CodeVerificationValue,
@@ -147,18 +144,24 @@ export const oidcProvider = (options: OIDCOptions) => {
 		oauthConsent: "oauthConsent",
 	};
 
-	const opts = defu(options, {
+	const opts = {
 		codeExpiresIn: 600,
 		defaultScope: "openid",
 		accessTokenExpiresIn: 3600,
 		refreshTokenExpiresIn: 604800,
 		allowPlainCodeChallengeMethod: true,
-		allowDynamicClientRegistration: true,
 		storeClientSecret: "plain" as const,
-		scopes: ["openid", "profile", "email", "offline_access"],
-	});
+		...options,
+		scopes: [
+			"openid",
+			"profile",
+			"email",
+			"offline_access",
+			...(options?.scopes || []),
+		],
+	};
 
-	const trustedClients = opts.trustedClients || [];
+	const trustedClients = options.trustedClients || [];
 
 	/**
 	 * Store client secret according to the configured storage method
@@ -235,20 +238,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 	return {
 		id: "oidc",
 		hooks: {
-			before: [
-				{
-					matcher(ctx) {
-						return ctx.path.includes("/oauth2/");
-					},
-					handler: createAuthMiddleware(async (ctx) => {
-						await checkPromptMiddleware(ctx);
-					}),
-				},
-			],
 			after: [
 				{
-					matcher(ctx) {
-						return ctx.path === "/oauth2/authorize" && ctx.method === "GET";
+					matcher() {
+						return true;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const cookie = await ctx.getSignedCookie(
@@ -276,32 +269,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 						if (!session) {
 							return;
 						}
-						try {
-							const parsedQuery = JSON.parse(cookie);
-							if (
-								parsedQuery &&
-								typeof parsedQuery === "object" &&
-								parsedQuery.client_id
-							) {
-								ctx.query = parsedQuery;
-							} else {
-								ctx.context.logger.error(
-									"Invalid or incomplete query data in oidc_login_prompt cookie",
-									parsedQuery,
-								);
-								return;
-							}
-						} catch (e) {
-							ctx.context.logger.error(
-								"Failed to parse oidc_login_prompt cookie",
-								e,
-							);
-							return;
-						}
+						ctx.query = JSON.parse(cookie);
 						// Don't force prompt to "consent" - let the authorize function
 						// determine if consent is needed based on OIDC spec requirements
 						ctx.context.session = session;
-						await setPromptHandled(true);
 						const response = await authorize(ctx, opts);
 						return response;
 					}),
@@ -649,7 +620,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
-					if (opts.requirePKCE && !code_verifier) {
+					if (options.requirePKCE && !code_verifier) {
 						throw new APIError("BAD_REQUEST", {
 							error_description: "code verifier is missing",
 							error: "invalid_request",
@@ -820,7 +791,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						family_name: user.name.split(" ")[1]!,
 						name: user.name,
 						profile: user.image,
-						updated_at: Math.floor(new Date(user.updatedAt).getTime() / 1000),
+						updated_at: new Date(user.updatedAt).toISOString(),
 					};
 					const email = {
 						email: user.email,
@@ -831,8 +802,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 						...(requestedScopes.includes("email") ? email : {}),
 					};
 
-					const additionalUserClaims = opts.getAdditionalUserInfoClaim
-						? await opts.getAdditionalUserInfoClaim(
+					const additionalUserClaims = options.getAdditionalUserInfoClaim
+						? await options.getAdditionalUserInfoClaim(
 								user,
 								requestedScopes,
 								client,
@@ -857,7 +828,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					let idToken: string;
 
 					// The JWT plugin is enabled, so we use the JWKS keys to sign
-					if (opts.useJWTPlugin) {
+					if (options.useJWTPlugin) {
 						const jwtPlugin = getJwtPlugin(ctx);
 						if (!jwtPlugin) {
 							ctx.context.logger.error(
@@ -1075,8 +1046,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 							? user.emailVerified
 							: undefined,
 					};
-					const userClaims = opts.getAdditionalUserInfoClaim
-						? await opts.getAdditionalUserInfoClaim(
+					const userClaims = options.getAdditionalUserInfoClaim
+						? await options.getAdditionalUserInfoClaim(
 								user,
 								requestedScopes,
 								client,
@@ -1333,7 +1304,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					const session = await getSessionFromCtx(ctx);
 
 					// Check authorization
-					if (!session && !opts.allowDynamicClientRegistration) {
+					if (!session && !options.allowDynamicClientRegistration) {
 						throw new APIError("UNAUTHORIZED", {
 							error: "invalid_token",
 							error_description:
@@ -1380,9 +1351,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 
 					const clientId =
-						opts.generateClientId?.() || generateRandomString(32, "a-z", "A-Z");
+						options.generateClientId?.() ||
+						generateRandomString(32, "a-z", "A-Z");
 					const clientSecret =
-						opts.generateClientSecret?.() ||
+						options.generateClientSecret?.() ||
 						generateRandomString(32, "a-z", "A-Z");
 
 					const storedClientSecret = await storeClientSecret(ctx, clientSecret);
@@ -1510,9 +1482,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 			),
 		},
 		schema: mergeSchema(schema, options?.schema),
-		get options(): OIDCOptions {
-			return opts;
-		},
 	} satisfies BetterAuthPlugin;
 };
 export type * from "./types";
