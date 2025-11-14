@@ -2053,7 +2053,9 @@ describe("stripe organization customer support", () => {
 				id: "cus_org_new_456",
 				email: "owner@test.com",
 				name: "No Customer Org",
-			}); // Simulate the logic that runs when organization doesn't have customer
+			});
+
+			// Simulate the logic that runs when organization doesn't have customer
 			const orgEntity = await testCtx.adapter.findOne<OrganizationType>({
 				model: "organization",
 				where: [{ field: "id", value: orgId }],
@@ -2204,7 +2206,9 @@ describe("stripe organization customer support", () => {
 			mockStripe.checkout.sessions.create.mockResolvedValueOnce({
 				url: "https://checkout.stripe.com/org-session",
 				id: "cs_org_checkout_789",
-			}); // Create session with activeOrganizationId
+			});
+
+			// Create session with activeOrganizationId
 			await testCtx.adapter.create({
 				model: "session",
 				data: {
@@ -2434,7 +2438,7 @@ describe("stripe organization customer support", () => {
 			});
 
 			// Create organization
-			const { id: orgId } = await testCtx.adapter.create({
+			await testCtx.adapter.create({
 				model: "organization",
 				data: {
 					name: "Portal Org",
@@ -2574,7 +2578,9 @@ describe("stripe organization customer support", () => {
 						console.error("Failed to delete Stripe customer:", error);
 					}
 				}
-			}); // Verify error was caught and handled
+			});
+
+			// Verify error was caught and handled
 			expect(mockStripe.customers.del).toHaveBeenCalled();
 			expect(errorCaught).toBe(true);
 		});

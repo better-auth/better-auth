@@ -1241,7 +1241,7 @@ describe("stripe", () => {
 			},
 		);
 
-		const userRes = await client.signUp.email(
+		await client.signUp.email(
 			{
 				email: "single-create@email.com",
 				password: "password123456",
@@ -2368,7 +2368,7 @@ describe("stripe", () => {
 				},
 			});
 
-			const { id: subId } = await asyncVerifyTestCtx.adapter.create({
+			await asyncVerifyTestCtx.adapter.create({
 				model: "subscription",
 				data: {
 					referenceId: asyncUserId,
