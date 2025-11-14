@@ -209,6 +209,51 @@ describe("generate drizzle schema for all databases", async () => {
 			"./__snapshots__/auth-schema-pg-uuid.txt",
 		);
 	});
+
+	it("should generate drizzle schema for PostgreSQL with RLS enabled", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: drizzleAdapter(
+				{},
+				{
+					provider: "pg",
+					schema: {},
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: drizzleAdapter(
+					{},
+					{
+						provider: "pg",
+						schema: {},
+					},
+				),
+				plugins: [twoFactor(), username()],
+				advanced: {
+					database: {
+						generateId: "uuid",
+						enableRLS: true,
+					},
+				},
+				user: {
+					modelName: "custom_user",
+				},
+				account: {
+					modelName: "custom_account",
+				},
+				session: {
+					modelName: "custom_session",
+				},
+				verification: {
+					modelName: "custom_verification",
+				},
+			},
+		});
+		expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/auth-schema-pg-rls-enabled.txt",
+		);
+	});
+
 	it("should generate drizzle schema for SQLite with uuid id", async () => {
 		const schema = await generateDrizzleSchema({
 			file: "test.drizzle",
@@ -408,6 +453,49 @@ describe("generate drizzle schema for all databases with passkey plugin", async 
 		});
 		expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-pg-passkey.txt",
+		);
+	});
+
+	it("should generate drizzle schema for PostgreSQL with passkey plugin and RLS enabled", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: drizzleAdapter(
+				{},
+				{
+					provider: "pg",
+					schema: {},
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: drizzleAdapter(
+					{},
+					{
+						provider: "pg",
+						schema: {},
+					},
+				),
+				plugins: [passkey()],
+				user: {
+					modelName: "custom_user",
+				},
+				account: {
+					modelName: "custom_account",
+				},
+				session: {
+					modelName: "custom_session",
+				},
+				verification: {
+					modelName: "custom_verification",
+				},
+				advanced: {
+					database: {
+						enableRLS: true,
+					},
+				},
+			},
+		});
+		expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/auth-schema-pg-passkey-rls-enabled.txt",
 		);
 	});
 
