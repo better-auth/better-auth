@@ -587,7 +587,13 @@ export interface OAuthAuthorizationQuery {
 	/**
 	 * The prompt parameter is used to specify the type of user interaction that is required.
 	 */
-	prompt?: "none" | "consent" | "login" | "select_account";
+	prompt?:
+		| "none"
+		| "consent"
+		| "login"
+		| "select_account"
+		| "login consent"
+		| "select_account consent";
 	/**
 	 * The display parameter is used to specify how the authorization server displays the
 	 * authentication and consent user interface pages to the end user.

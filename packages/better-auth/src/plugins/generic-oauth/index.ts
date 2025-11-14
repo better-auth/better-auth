@@ -83,7 +83,16 @@ export interface GenericOAuthConfig {
 	 * Prompt parameter for the authorization request.
 	 * Controls the authentication experience for the user.
 	 */
-	prompt?: ("none" | "login" | "consent" | "select_account") | undefined;
+	prompt?:
+		| (
+				| "none"
+				| "login"
+				| "consent"
+				| "select_account"
+				| "login consent"
+				| "select_account consent"
+		  )
+		| undefined;
 	/**
 	 * Whether to use PKCE (Proof Key for Code Exchange)
 	 * @default false

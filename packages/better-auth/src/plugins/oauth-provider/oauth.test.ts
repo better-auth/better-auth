@@ -846,7 +846,153 @@ describe("oauth - prompt", async () => {
 		enableSelectAccount = false;
 	});
 
-	it("select_organization - shall allow user to select an organization/team post login and consent", async () => {
+	it("login+consent - should always redirect to login and force consent (notice consent previously given)", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const { customFetchImpl: customFetchImplRP, cookieSetter } =
+			await createTestInstance({
+				prompt: "login consent",
+			});
+		const client = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: rpBaseUrl,
+			fetchOptions: {
+				customFetchImpl: customFetchImplRP,
+			},
+		});
+
+		// Generate authorize url
+		const data = await client.signIn.oauth2(
+			{
+				providerId,
+				callbackURL: "/success",
+			},
+			{
+				throw: true,
+			},
+		);
+		expect(data.url).toContain(
+			`${authServerBaseUrl}/api/auth/oauth2/authorize`,
+		);
+		expect(data.url).toContain(`client_id=${oauthClient.client_id}`);
+
+		// Check for redirection to /login
+		let loginRedirectUri = "";
+		const newHeaders = new Headers();
+		await serverClient.$fetch(data.url, {
+			method: "GET",
+			headers: newHeaders,
+			onError(context) {
+				loginRedirectUri = context.response.headers.get("Location") || "";
+				cookieSetter(newHeaders)(context);
+			},
+		});
+		expect(loginRedirectUri).toContain("/login");
+		expect(loginRedirectUri).toContain(`client_id=${oauthClient.client_id}`);
+		expect(loginRedirectUri).toContain(
+			`redirect_uri=${encodeURIComponent(oauthClient?.redirect_uris?.at(0)!)}`,
+		);
+
+		// Check for redirection to /consent after login
+		const loginRes = await serverClient.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				headers: newHeaders,
+				throw: true,
+			},
+		);
+		expect(loginRes?.redirect).toBeTruthy();
+		expect(loginRes?.url).toContain("/consent");
+		expect(loginRes?.url).toContain("prompt=consent");
+	});
+
+	it("select_account+consent - should always redirect to select_account and force consent (notice consent previously given)", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		enableSelectAccount = true;
+
+		const { customFetchImpl: customFetchImplRP, cookieSetter } =
+			await createTestInstance({
+				prompt: "select_account consent",
+			});
+		const client = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: rpBaseUrl,
+			fetchOptions: {
+				customFetchImpl: customFetchImplRP,
+			},
+		});
+
+		// Generate authorize url
+		const oauthHeaders = new Headers();
+		const data = await client.signIn.oauth2(
+			{
+				providerId,
+				callbackURL: "/success",
+			},
+			{
+				throw: true,
+				onSuccess: cookieSetter(oauthHeaders),
+			},
+		);
+		expect(data.url).toContain(
+			`${authServerBaseUrl}/api/auth/oauth2/authorize`,
+		);
+		expect(data.url).toContain(`client_id=${oauthClient.client_id}`);
+
+		// Check for redirection to /select-account
+		let selectAccountRedirectUri = "";
+		const authClientHeaders = new Headers();
+		await serverClient.$fetch(data.url, {
+			method: "GET",
+			headers,
+			onError(ctx) {
+				selectAccountRedirectUri = ctx.response.headers.get("Location") || "";
+				expect(ctx.response.headers.get("set-cookie")).toContain(
+					"better-auth.oauth_login_prompt=",
+				);
+				cookieSetter(authClientHeaders)(ctx);
+				authClientHeaders.append("Cookie", headers.get("Cookie") || "");
+			},
+		});
+		expect(selectAccountRedirectUri).toContain(`/select-account`);
+		expect(selectAccountRedirectUri).toContain(
+			`client_id=${oauthClient.client_id}`,
+		);
+		expect(selectAccountRedirectUri).toContain(`scope=`);
+		expect(selectAccountRedirectUri).toContain(`state=`);
+
+		// Account selected, continue auth flow
+		const selectedAccountRes = await serverClient.oauth2.continue(
+			{
+				selected: true,
+			},
+			{
+				headers: authClientHeaders,
+				throw: true,
+				onResponse(ctx) {
+					expect(ctx.response.headers.get("set-cookie")).toContain(
+						"better-auth.oauth_consent=",
+					);
+				},
+			},
+		);
+		const consentRedirectUri = selectedAccountRes?.redirect_uri;
+		expect(consentRedirectUri).toContain(`/consent`);
+		expect(consentRedirectUri).toContain(`client_id=${oauthClient.client_id}`);
+		expect(consentRedirectUri).toContain(`scope=`);
+		expect(consentRedirectUri).toContain(`state=`);
+
+		enableSelectAccount = false;
+	});
+
+	it("shall allow user to select an organization/team post login and consent", async () => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}

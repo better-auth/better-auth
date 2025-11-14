@@ -2,7 +2,12 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "../../api";
 import type { Verification } from "../../types";
 import { authorizeEndpoint } from "./authorize";
-import type { OAuthOptions, Scope, VerificationValue } from "./types";
+import type {
+	OAuthAuthorizationQuery,
+	OAuthOptions,
+	Scope,
+	VerificationValue,
+} from "./types";
 import { storeToken } from "./utils";
 
 export async function continueEndpoint(
@@ -38,8 +43,13 @@ async function selected(
 
 	ctx.query = JSON.parse(cookie);
 	ctx.headers?.set("accept", "application/json");
-	if (ctx.query.prompt === "select_account") {
-		ctx.query.prompt = undefined;
+	let prompts:
+		| Exclude<OAuthAuthorizationQuery["prompt"], undefined>[]
+		| undefined = ctx.query.prompt?.split(" ");
+	const foundPrompt = prompts?.findIndex((v) => v === "select_account") ?? -1;
+	if (foundPrompt >= 0) {
+		prompts?.splice(foundPrompt, 1);
+		ctx.query.prompt = prompts?.length ? prompts?.join(" ") : undefined;
 	}
 	const { url } = await authorizeEndpoint(ctx, opts);
 	return {
@@ -128,9 +138,6 @@ async function postLogin(
 	// Return authorization code
 	const query = verificationValue.query;
 	ctx?.headers?.set("accept", "application/json");
-	if (query.prompt === "consent") {
-		query.prompt = undefined;
-	}
 	ctx.context.verification_id = verification.id;
 	ctx.context.post_login = true;
 	ctx.query = query;
