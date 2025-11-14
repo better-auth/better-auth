@@ -21,7 +21,7 @@ import { registerEndpoint } from "./register";
 import { revokeEndpoint } from "./revoke";
 import { schema } from "./schema";
 import { tokenEndpoint } from "./token";
-import type { OAuthOptions, Scope } from "./types";
+import type { OAuthAuthorizationQuery, OAuthOptions, Scope } from "./types";
 import { userInfoEndpoint } from "./userinfo";
 import { getJwtPlugin } from "./utils";
 
@@ -208,10 +208,17 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						// Continue with authorization request by using the initial prompt
 						// but clearing the login prompt cookie if forced login prompt
 						ctx.query = JSON.parse(cookie);
-						if (ctx.query?.prompt === "login") {
-							ctx.query!.prompt = undefined;
-						}
 						ctx.headers?.set("accept", "application/json");
+						let prompts:
+							| Exclude<OAuthAuthorizationQuery["prompt"], undefined>[]
+							| undefined = ctx.query?.prompt?.split(" ");
+						const foundPrompt = prompts?.findIndex((v) => v === "login") ?? -1;
+						if (ctx.query && foundPrompt >= 0) {
+							prompts?.splice(foundPrompt, 1);
+							ctx.query.prompt = prompts?.length
+								? prompts?.join(" ")
+								: undefined;
+						}
 						return await authorizeEndpoint(ctx, opts);
 					}),
 				},
@@ -285,7 +292,15 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						code_challenge: z.string().optional(),
 						code_challenge_method: z.enum(["S256"]).optional(),
 						nonce: z.string().optional(),
-						prompt: z.enum(["consent", "login", "select_account"]).optional(),
+						prompt: z
+							.enum([
+								"consent",
+								"login",
+								"select_account",
+								"login consent",
+								"select_account consent",
+							])
+							.optional(),
 					}),
 					metadata: {
 						openapi: {

@@ -17,7 +17,6 @@ import {
 import type { GenericOAuthConfig, GenericOAuthOptions } from "./types";
 
 export * from "./providers";
-export type { GenericOAuthConfig, GenericOAuthOptions } from "./types";
 
 /**
  * Base type for OAuth provider options.
