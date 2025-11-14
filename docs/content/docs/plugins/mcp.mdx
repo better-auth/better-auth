@@ -74,11 +74,6 @@ import { withMcpAuth } from "better-auth/plugins";
 import { z } from "zod";
 
 const handler = withMcpAuth(auth, (req, session) => {
-    // session contains the access token record with scopes and user ID
-    console.log("User ID:", session.userId);
-    console.log("Scopes:", session.scopes);
-    console.log("Client ID:", session.clientId);
-    
     return createMcpHandler(
         (server) => {
             server.tool(
@@ -154,12 +149,6 @@ const handler = async (req: Request) => {
             }
         );
     }
-    
-    // Access session data
-    console.log("User ID:", session.userId);
-    console.log("Scopes:", session.scopes);
-    console.log("Client ID:", session.clientId);
-    console.log("Expires at:", session.accessTokenExpiresAt);
     
     return createMcpHandler(
         (server) => {
