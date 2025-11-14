@@ -3,6 +3,8 @@ import { initMinimal } from "../context/init-minimal";
 import type { Auth } from "../types";
 import { createBetterAuth } from "./base";
 
+export type { BetterAuthOptions };
+
 /**
  * Better Auth initializer for minimal mode (without Kysely)
  */
