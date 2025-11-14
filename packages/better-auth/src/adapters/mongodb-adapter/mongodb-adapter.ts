@@ -264,7 +264,7 @@ export const mongodbAdapter = (
 			return {
 				async create({ model, data: values }) {
 					const res = await db.collection(model).insertOne(values, { session });
-					const insertedData = { _id: res.insertedId.toString(), ...values };
+					const insertedData = { _id: values.id ?? res.insertedId.toString(), ...values };
 					return insertedData as any;
 				},
 				async findOne({ model, where, select }) {
