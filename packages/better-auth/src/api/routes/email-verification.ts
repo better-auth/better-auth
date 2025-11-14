@@ -332,20 +332,6 @@ export const verifyEmail = createAuthEndpoint(
 			return redirectOnError("user_not_found");
 		}
 		if (parsed.updateTo) {
-			const session = await getSessionFromCtx(ctx);
-			if (!session) {
-				if (ctx.query.callbackURL) {
-					throw ctx.redirect(`${ctx.query.callbackURL}?error=unauthorized`);
-				}
-				return redirectOnError("unauthorized");
-			}
-			if (session.user.email !== parsed.email) {
-				if (ctx.query.callbackURL) {
-					throw ctx.redirect(`${ctx.query.callbackURL}?error=unauthorized`);
-				}
-				return redirectOnError("unauthorized");
-			}
-
 			const updatedUser = await ctx.context.internalAdapter.updateUserByEmail(
 				parsed.email,
 				{
@@ -372,14 +358,17 @@ export const verifyEmail = createAuthEndpoint(
 				ctx.request,
 			);
 
-			await setSessionCookie(ctx, {
-				session: session.session,
-				user: {
-					...session.user,
-					email: parsed.updateTo,
-					emailVerified: false,
-				},
-			});
+			const session = await getSessionFromCtx(ctx);
+			if (session && session.user.email === parsed.email) {
+				await setSessionCookie(ctx, {
+					session: session.session,
+					user: {
+						...session.user,
+						email: parsed.updateTo,
+						emailVerified: false,
+					},
+				});
+			}
 
 			if (ctx.query.callbackURL) {
 				throw ctx.redirect(ctx.query.callbackURL);
