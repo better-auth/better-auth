@@ -204,7 +204,7 @@ export interface AuthorizationQuery {
 	/**
 	 * The prompt parameter is used to specify the type of user interaction that is required.
 	 */
-	prompt?: ("none" | "consent" | "login" | "select_account") | undefined;
+	prompt?: (string & {}) | ("none" | "consent" | "login" | "select_account") | undefined;
 	/**
 	 * The display parameter is used to specify how the authorization server displays the
 	 * authentication and consent user interface pages to the end user.
@@ -354,6 +354,13 @@ export interface CodeVerificationValue {
 	 * with the actual code.
 	 */
 	requireConsent: boolean;
+  /**
+   * Whether the user needs to be logged in to use the client.
+   *
+   * If this is true, then the user will be redirected to the login page.
+   * If the user is already logged in, they will be redirected to the redirect URI.
+   */
+  requireLogin: boolean;
 	/**
 	 * The state parameter from the request
 	 *
