@@ -124,6 +124,7 @@ async function createIdToken(
 	client: SchemaClient<Scope[]>,
 	scopes: string[],
 	nonce?: string,
+	sessionId?: string,
 ) {
 	const iat = Math.floor(Date.now() / 1000);
 	const expiresIn = 60 * 60 * 10; // 10 hour id token lifetime
@@ -162,6 +163,7 @@ async function createIdToken(
 		nonce,
 		iat,
 		exp,
+		sid: client.enableEndSession ? sessionId : undefined,
 	};
 
 	// Public clients without a client secret cannot receive an idToken as it can't be verified
@@ -440,7 +442,7 @@ async function createUserTokens(
 					)
 				: undefined,
 		isIdToken
-			? createIdToken(ctx, opts, user, client, scopes, nonce)
+			? createIdToken(ctx, opts, user, client, scopes, nonce, sessionId)
 			: undefined,
 	]);
 

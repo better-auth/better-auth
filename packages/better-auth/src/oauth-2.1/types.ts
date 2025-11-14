@@ -228,6 +228,12 @@ export interface OIDCMetadata extends AuthServerMetadata {
 	 * ["sub", "iss", "aud", "exp", "nbf", "iat", "jti", "email", "email_verified", "name", "family_name", "given_name", "sid", "scope", "azp"]
 	 */
 	claims_supported: string[];
+	/**
+	 * RP-Initiated Logout Endpoint
+	 *
+	 * @see https://openid.net/specs/openid-connect-rpinitiated-1_0.html
+	 */
+	end_session_endpoint: string;
 }
 
 /**
@@ -262,6 +268,7 @@ export interface OAuthClient {
 	software_statement?: string;
 	//---- Authentication Metadata ----//
 	redirect_uris: string[];
+	post_logout_redirect_uris?: string[];
 	token_endpoint_auth_method?:
 		| "none"
 		| "client_secret_basic"
@@ -275,6 +282,7 @@ export interface OAuthClient {
 	//---- Not Part of RFC7591 Spec ----//
 	disabled?: boolean;
 	skip_consent?: boolean;
+	enable_end_session?: boolean;
 	//---- All other metadata ----//
 	reference_id?: string;
 	[key: string]: unknown;

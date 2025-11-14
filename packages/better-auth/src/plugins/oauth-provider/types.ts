@@ -740,6 +740,13 @@ export interface SchemaClient<
 	 * For example, `https://example.com/auth/callback`
 	 */
 	redirectUris?: string[];
+	/**
+	 * List of registered post-logout redirect URIs. Used for RP-Initiated Logout.
+	 * Must include the whole URL, including the protocol, port, and path.
+	 *
+	 * For example, `https://example.com/logout/callback`
+	 */
+	postLogoutRedirectUris?: string[];
 	tokenEndpointAuthMethod?:
 		| "none"
 		| "client_secret_basic"
@@ -772,6 +779,8 @@ export interface SchemaClient<
 	//---- All other metadata ----//
 	/** Used to indicate if consent screen can be skipped */
 	skipConsent?: boolean;
+	/** Used to enable client to logout via the `/oauth2/end-session` endpoint */
+	enableEndSession?: boolean;
 	/** Reference to the owner of this client. Eg. Organization, Team, Profile */
 	referenceId?: string;
 	/**

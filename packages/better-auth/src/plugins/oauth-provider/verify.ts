@@ -15,24 +15,14 @@ import {
 } from "jose";
 
 /** Last fetched jwks */
-// Never export (used locally in ONLY verifyJwsAccessToken)
+// Never export (used locally in ONLY getJwks)
 let jwks: JSONWebKeySet | undefined;
 
-/**
- * Performs local verification of an access token for your APIs.
- *
- * Can also be configured for remote verification.
- *
- * @internal
- */
-export async function verifyJwsAccessToken(
+export async function getJwks(
 	token: string,
 	opts: {
 		/** Jwks url or promise of a Jwks */
 		jwksFetch: string | (() => Promise<JSONWebKeySet | undefined>);
-		/** Verify options */
-		verifyOptions: JWTVerifyOptions &
-			Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
 	},
 ) {
 	// Attempt to decode the token and find a matching kid in jwks
@@ -65,8 +55,28 @@ export async function verifyJwsAccessToken(
 		if (!jwks) throw new Error("No jwks found");
 	}
 
-	// Actually verify token
+	return jwks;
+}
+
+/**
+ * Performs local verification of an access token for your APIs.
+ *
+ * Can also be configured for remote verification.
+ *
+ * @internal
+ */
+export async function verifyJwsAccessToken(
+	token: string,
+	opts: {
+		/** Jwks url or promise of a Jwks */
+		jwksFetch: string | (() => Promise<JSONWebKeySet | undefined>);
+		/** Verify options */
+		verifyOptions: JWTVerifyOptions &
+			Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
+	},
+) {
 	try {
+		const jwks = await getJwks(token, opts);
 		const jwt = await jwtVerify<JWTPayload>(
 			token,
 			createLocalJWKSet(jwks),
