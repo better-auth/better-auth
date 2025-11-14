@@ -254,6 +254,13 @@ export type BetterAuthAdvancedOptions = {
 				 * function.
 				 */
 				generateId?: GenerateIdFn | false | "serial" | "uuid";
+				/**
+				 * Whether to enable Row Level Security (RLS) for the database.
+				 *
+				 * This is only supported for PostgreSQL.
+				 * @default false
+				 */
+				enableRLS?: boolean;
 		  }
 		| undefined;
 	/**

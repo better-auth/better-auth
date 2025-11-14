@@ -29,11 +29,15 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	const databaseType: "sqlite" | "mysql" | "pg" | undefined =
 		adapter.options?.provider;
 
+	const isRlsEnabled =
+		databaseType === "pg" && options.advanced?.database?.enableRLS;
+
 	if (!databaseType) {
 		throw new Error(
 			`Database provider type is undefined during Drizzle schema generation. Please define a \`provider\` in the Drizzle adapter config. Read more at https://better-auth.com/docs/adapters/drizzle`,
 		);
 	}
+
 	const fileExist = existsSync(filePath);
 
 	let code: string = generateImport({ databaseType, tables, options });
@@ -267,7 +271,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							}`;
 						})
 						.join(",\n ")}
-					}${assignIndexes(indexes)});`;
+					}${assignIndexes(indexes)})${isRlsEnabled ? ".enableRLS()" : ""};`;
 		code += `\n${schema}\n`;
 	}
 	const formattedCode = await prettier.format(code, {
