@@ -17,6 +17,7 @@ Please report any issues or bugs on [GitHub](https://github.com/better-auth/bett
 - **OIDC compatibility**: [OIDC](https://openid.net/specs/openid-connect-core-1_0.html)-compliant with the `openid` scope
   - **UserInfo**: Endpoint providing current user details
   - **id_token**: JWT-signed user information
+  - **OIDC Logout**: [RP-initiated](https://openid.net/specs/openid-connect-rpinitiated-1_0.html)-compliant Logout
 - **Dynamic Client Registration**: Allow clients to register clients dynamically.
   - **Public Clients**: Support public clients for native mobile clients and user-agent clients (like AI)
   - **Confidential Clients**: Supports confidential clients for web clients
@@ -312,6 +313,30 @@ This endpoint revokes the provided token.
 - `refresh_token`: removes all `access_tokens` granted using that `refresh_token` and removes the `refresh_token` to prevent further token issuance.
 
 For an `access_token` type, 
+
+
+### End Session Endpoint
+
+[RP-initiated](https://openid.net/specs/openid-connect-rpinitiated-1_0.html)-compliant Logout
+
+This endpoint allows specified trusted clients to logout remotely.
+
+To allow rp-initiated logout, a trusted client must specifically be created to perform session logout.
+
+```ts
+await auth.api.createOAuthClient({
+  headers,
+  body: {
+    redirect_uris: [redirectUri],
+    enable_end_session: true, // [!code highlight]
+  }
+});
+```
+
+<Callout type="info">
+If `disableJwtPlugin: true`, public clients will never be able to logout using this endpoint since no `id_token` is sent.
+</Callout>
+
 
 ### UserInfo Endpoint
 

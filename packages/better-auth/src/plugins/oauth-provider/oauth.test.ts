@@ -250,7 +250,7 @@ describe("oauth", async () => {
 			},
 			{
 				headers: authClientHeaders,
-				onResponse: (ctx) => {
+				onResponse(ctx) {
 					expect(ctx.response.headers.get("set-cookie")).toContain(
 						"better-auth.oauth_login_prompt=; Max-Age=0",
 					);
@@ -330,7 +330,7 @@ describe("oauth", async () => {
 			},
 			{
 				headers: authClientHeaders,
-				onResponse: (ctx) => {
+				onResponse(ctx) {
 					expect(ctx.response.headers.get("set-cookie")).toContain(
 						"better-auth.oauth_login_prompt=; Max-Age=0",
 					);
@@ -634,8 +634,8 @@ describe("oauth - prompt", async () => {
 			{
 				headers: newHeaders,
 				throw: true,
-				onResponse(context) {
-					expect(context.response.headers.get("set-cookie")).toContain(
+				onResponse(ctx) {
+					expect(ctx.response.headers.get("set-cookie")).toContain(
 						"better-auth.oauth_consent=; Max-Age=0",
 					);
 				},
@@ -912,11 +912,11 @@ describe("oauth - prompt", async () => {
 			{
 				headers: newHeaders,
 				throw: true,
-				onResponse(context) {
-					expect(context.response.headers.get("set-cookie")).toContain(
+				onResponse(ctx) {
+					expect(ctx.response.headers.get("set-cookie")).toContain(
 						"better-auth.oauth_consent=",
 					);
-					cookieSetter(newHeaders)(context);
+					cookieSetter(newHeaders)(ctx);
 				},
 			},
 		);
@@ -934,8 +934,8 @@ describe("oauth - prompt", async () => {
 			{
 				headers: newHeaders,
 				throw: true,
-				onResponse(context) {
-					expect(context.response.headers.get("set-cookie")).toContain(
+				onResponse(ctx) {
+					expect(ctx.response.headers.get("set-cookie")).toContain(
 						"better-auth.oauth_consent=; Max-Age=0",
 					);
 				},

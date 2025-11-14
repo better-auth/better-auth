@@ -221,11 +221,17 @@ export async function createOAuthClientEndpoint(
 export interface DatabaseClient
 	extends Omit<
 		SchemaClient<Scope[]>,
-		"scopes" | "contacts" | "redirectUris" | "grantTypes" | "responseTypes"
+		| "scopes"
+		| "contacts"
+		| "redirectUris"
+		| "postLogoutRedirectUris"
+		| "grantTypes"
+		| "responseTypes"
 	> {
 	scopes?: string;
 	contacts?: string;
 	redirectUris?: string;
+	postLogoutRedirectUris?: string;
 	grantTypes?: string;
 	responseTypes?: string;
 }
@@ -242,6 +248,7 @@ export function databaseToSchema(input: DatabaseClient): SchemaClient<Scope[]> {
 		scopes: input?.scopes?.split(" "),
 		contacts: input?.contacts?.split(","),
 		redirectUris: input?.redirectUris?.split(","),
+		postLogoutRedirectUris: input?.postLogoutRedirectUris?.split(","),
 		grantTypes: input?.grantTypes?.split(",") as SchemaClient<
 			Scope[]
 		>["grantTypes"],
@@ -263,6 +270,7 @@ export function schemaToDatabase(input: SchemaClient<Scope[]>): DatabaseClient {
 		scopes: input.scopes?.join(" "),
 		contacts: input.contacts?.join(","),
 		redirectUris: input.redirectUris?.join(","),
+		postLogoutRedirectUris: input.postLogoutRedirectUris?.join(","),
 		grantTypes: input.grantTypes?.join(","),
 		responseTypes: input.responseTypes?.join(","),
 	};
@@ -300,6 +308,7 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		software_statement: softwareStatement,
 		// Authentication Metadata
 		redirect_uris: redirectUris,
+		post_logout_redirect_uris: postLogoutRedirectUris,
 		token_endpoint_auth_method: tokenEndpointAuthMethod,
 		grant_types: grantTypes,
 		response_types: responseTypes,
@@ -309,6 +318,7 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		// Not Part of RFC7591 Spec
 		disabled,
 		skip_consent: skipConsent,
+		enable_end_session: enableEndSession,
 		reference_id: referenceId,
 		// All other metadata
 		...rest
@@ -344,6 +354,7 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		softwareStatement,
 		// Authentication Metadata
 		redirectUris,
+		postLogoutRedirectUris,
 		tokenEndpointAuthMethod,
 		grantTypes,
 		responseTypes,
@@ -352,6 +363,7 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		type,
 		// All other metadata
 		skipConsent,
+		enableEndSession,
 		referenceId,
 		metadata,
 	};
@@ -388,6 +400,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		softwareStatement,
 		// Authentication Metadata
 		redirectUris,
+		postLogoutRedirectUris,
 		tokenEndpointAuthMethod,
 		grantTypes,
 		responseTypes,
@@ -396,6 +409,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		type,
 		// All other metadata
 		skipConsent,
+		enableEndSession,
 		referenceId,
 		metadata, // in JSON format
 	} = input;
@@ -437,6 +451,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		software_statement: softwareStatement,
 		// Authentication Metadata
 		redirect_uris: redirectUris,
+		post_logout_redirect_uris: postLogoutRedirectUris,
 		token_endpoint_auth_method: tokenEndpointAuthMethod,
 		grant_types: grantTypes,
 		response_types: responseTypes,
@@ -446,6 +461,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		// Not Part of RFC7591 Spec
 		disabled,
 		skip_consent: skipConsent,
+		enable_end_session: enableEndSession,
 		reference_id: referenceId,
 	};
 }
