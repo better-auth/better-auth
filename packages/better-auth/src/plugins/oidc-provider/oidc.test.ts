@@ -72,23 +72,22 @@ describe("oidc init", () => {
 		});
 		const options = provider.options;
 		expect(options).toMatchInlineSnapshot(`
-      {
-        "accessTokenExpiresIn": 3600,
-        "allowDynamicClientRegistration": true,
-        "allowPlainCodeChallengeMethod": true,
-        "codeExpiresIn": 600,
-        "defaultScope": "openid",
-        "loginPage": "/login",
-        "refreshTokenExpiresIn": 604800,
-        "scopes": [
-          "openid",
-          "profile",
-          "email",
-          "offline_access",
-        ],
-        "storeClientSecret": "plain",
-      }
-    `);
+			{
+			  "accessTokenExpiresIn": 3600,
+			  "allowPlainCodeChallengeMethod": true,
+			  "codeExpiresIn": 600,
+			  "defaultScope": "openid",
+			  "loginPage": "/login",
+			  "refreshTokenExpiresIn": 604800,
+			  "scopes": [
+			    "openid",
+			    "profile",
+			    "email",
+			    "offline_access",
+			  ],
+			  "storeClientSecret": "plain",
+			}
+		`);
 	});
 });
 
