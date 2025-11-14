@@ -13,6 +13,7 @@ import defu from "defu";
 import { SignJWT } from "jose";
 import { z } from "zod";
 import { APIError, getSessionFromCtx, sessionMiddleware } from "../../api";
+import { parseSetCookieHeader } from "../../cookies";
 import {
 	generateRandomString,
 	symmetricDecrypt,
@@ -246,24 +247,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 			],
 			after: [
 				{
-					matcher() {
-						return true;
-					},
-					handler: createAuthMiddleware(async (ctx) => {
-						// clean up the prompt cookie after a successful login
-						const hasNewSession = !!ctx.context.newSession;
-						const cookie = await ctx.getSignedCookie(
-							"oidc_login_prompt",
-							ctx.context.secret,
-						);
-						if (hasNewSession && cookie) {
-							ctx.setCookie("oidc_login_prompt", "", {
-								maxAge: 0,
-							});
-						}
-					}),
-				},
-				{
 					matcher(ctx) {
 						return ctx.path === "/oauth2/authorize" && ctx.method === "GET";
 					},
@@ -272,7 +255,25 @@ export const oidcProvider = (options: OIDCOptions) => {
 							"oidc_login_prompt",
 							ctx.context.secret,
 						);
-						if (!cookie) {
+						const cookieName = ctx.context.authCookies.sessionToken.name;
+						const parsedSetCookieHeader = parseSetCookieHeader(
+							ctx.context.responseHeaders?.get("set-cookie") || "",
+						);
+						const hasSessionToken = parsedSetCookieHeader.has(cookieName);
+						if (!cookie || !hasSessionToken) {
+							return;
+						}
+						ctx.setCookie("oidc_login_prompt", "", {
+							maxAge: 0,
+						});
+						const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
+						const sessionToken = sessionCookie?.split(".")[0]!;
+						if (!sessionToken) {
+							return;
+						}
+						const session =
+							await ctx.context.internalAdapter.findSession(sessionToken);
+						if (!session) {
 							return;
 						}
 						try {
@@ -297,6 +298,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 							);
 							return;
 						}
+						// Don't force prompt to "consent" - let the authorize function
+						// determine if consent is needed based on OIDC spec requirements
+						ctx.context.session = session;
 						await setPromptHandled(true);
 						const response = await authorize(ctx, opts);
 						return response;
