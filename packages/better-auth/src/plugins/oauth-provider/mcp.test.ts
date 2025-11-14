@@ -144,7 +144,6 @@ describe("mcp - server-client flows", async () => {
 		{
 			title: "Greeting Resource", // Display name for UI
 			description: "Dynamic greeting generator",
-			securitySchemes: [{ type: "oauth2" }],
 		},
 		async (uri, extra) => {
 			const authInfo = extra.authInfo;
@@ -153,9 +152,7 @@ describe("mcp - server-client flows", async () => {
 				contents: [
 					{
 						uri: uri.href,
-						user_id: jwt.sub,
-						client_id: authInfo?.clientId,
-						text: "Welcome!",
+						text: `Welcome ${jwt.sub} to ${authInfo?.clientId}`,
 					},
 				],
 			};
@@ -431,9 +428,7 @@ describe("mcp - server-client flows", async () => {
 			const content = res.contents[0];
 			expect(content).toMatchObject({
 				uri: "greet://me",
-				user_id: sub,
-				client_id: dynamicRegisteredClient.client_id,
-				text: "Welcome!",
+				text: `Welcome ${sub} to ${dynamicRegisteredClient.client_id}`,
 			});
 		} catch (error) {
 			expect.unreachable();
