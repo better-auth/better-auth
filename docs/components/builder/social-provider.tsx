@@ -2,7 +2,7 @@ import type { SVGProps } from "react";
 
 export const socialProviders = {
 	apple: {
-		Icon: (props: SVGProps<any>) => (
+		Icon: (props?: SVGProps<any>) => (
 			<svg
 				{...props}
 				xmlns="http://www.w3.org/2000/svg"
@@ -29,7 +29,7 @@ export const socialProviders = {
 			</svg>`,
 	},
 	dropbox: {
-		Icon: (props: SVGProps<any>) => (
+		Icon: (props?: SVGProps<any>) => (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
 				width="1em"
@@ -62,7 +62,7 @@ export const socialProviders = {
 			</svg>`,
 	},
 	discord: {
-		Icon: (props: SVGProps<any>) => (
+		Icon: (props?: SVGProps<any>) => (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
 				width="1em"
@@ -89,7 +89,7 @@ export const socialProviders = {
 			</svg>`,
 	},
 	facebook: {
-		Icon: (props: SVGProps<any>) => (
+		Icon: (props?: SVGProps<any>) => (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
 				width="1em"
@@ -116,7 +116,7 @@ export const socialProviders = {
 			</svg>`,
 	},
 	github: {
-		Icon: (props: SVGProps<any>) => (
+		Icon: (props?: SVGProps<any>) => (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
 				width="1em"
@@ -143,7 +143,7 @@ export const socialProviders = {
 			</svg>`,
 	},
 	gitlab: {
-		Icon: (props: SVGProps<any>) => (
+		Icon: (props?: SVGProps<any>) => (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
 				width="1em"
@@ -170,12 +170,13 @@ export const socialProviders = {
 			</svg>`,
 	},
 	google: {
-		Icon: (props: SVGProps<any>) => (
+		Icon: (props?: SVGProps<any>) => (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
-				width="0.98em"
+				width="1em"
 				height="1em"
 				viewBox="0 0 256 262"
+				{...props}
 			>
 				<path
 					fill="#4285F4"
@@ -195,7 +196,7 @@ export const socialProviders = {
 				></path>
 			</svg>
 		),
-		stringIcon: `<svg xmlns="http://www.w3.org/2000/svg" width="0.98em" height="1em" viewBox="0 0 256 262">
+		stringIcon: `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 256 262">
 				<path fill="#4285F4" d="M255.878 133.451c0-10.734-.871-18.567-2.756-26.69H130.55v48.448h71.947c-1.45 12.04-9.283 30.172-26.69 42.356l-.244 1.622l38.755 30.023l2.685.268c24.659-22.774 38.875-56.282 38.875-96.027"></path>
 				<path fill="#34A853" d="M130.55 261.1c35.248 0 64.839-11.605 86.453-31.622l-41.196-31.913c-11.024 7.688-25.82 13.055-45.257 13.055c-34.523 0-63.824-22.773-74.269-54.25l-1.531.13l-40.298 31.187l-.527 1.465C35.393 231.798 79.49 261.1 130.55 261.1"></path>
 				<path fill="#FBBC05" d="M56.281 156.37c-2.756-8.123-4.351-16.827-4.351-25.82c0-8.994 1.595-17.697 4.206-25.82l-.073-1.73L15.26 71.312l-1.335.635C5.077 89.644 0 109.517 0 130.55s5.077 40.905 13.925 58.602z"></path>
@@ -203,7 +204,7 @@ export const socialProviders = {
 			</svg>`,
 	},
 	linear: {
-		Icon: (props: SVGProps<any>) => (
+		Icon: (props?: SVGProps<any>) => (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
 				width="1em"
@@ -231,7 +232,7 @@ export const socialProviders = {
 			</svg>`,
 	},
 	kakao: {
-		Icon: (props: SVGProps<any>) => (
+		Icon: (props?: SVGProps<any>) => (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
 				width="1em"
@@ -250,7 +251,7 @@ export const socialProviders = {
 		stringIcon: `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 512 512"><g><path fill="currentColor" d="M 511.5,203.5 C 511.5,215.5 511.5,227.5 511.5,239.5C 504.002,286.989 482.002,326.489 445.5,358C 390.216,402.375 326.882,424.209 255.5,423.5C 239.751,423.476 224.085,422.643 208.5,421C 174.34,444.581 140.006,467.914 105.5,491C 95.6667,493.167 91.8333,489.333 94,479.5C 101.833,450.667 109.667,421.833 117.5,393C 85.5639,376.077 58.0639,353.577 35,325.5C 15.8353,299.834 4.00193,271.167 -0.5,239.5C -0.5,227.5 -0.5,215.5 -0.5,203.5C 7.09119,155.407 29.4245,115.574 66.5,84C 121.53,39.9708 184.53,18.4708 255.5,19.5C 326.47,18.4708 389.47,39.9708 444.5,84C 481.575,115.574 503.909,155.407 511.5,203.5 Z"/></g></svg>`,
 	},
 	naver: {
-		Icon: (props: SVGProps<any>) => (
+		Icon: (props?: SVGProps<any>) => (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
 				width="1em"
@@ -267,7 +268,7 @@ export const socialProviders = {
 		stringIcon: `<svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" d="M16.273 12.845 7.376 0H0v24h7.726V11.156L16.624 24H24V0h-7.727v12.845Z"/></svg>`,
 	},
 	linkedin: {
-		Icon: (props: SVGProps<any>) => (
+		Icon: (props?: SVGProps<any>) => (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
 				width="1em"
@@ -294,11 +295,11 @@ export const socialProviders = {
 			</svg>`,
 	},
 	microsoft: {
-		Icon: (props: SVGProps<any>) => (
+		Icon: (props?: SVGProps<any>) => (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
-				width="1.2em"
-				height="1.2em"
+				width="1em"
+				height="1em"
 				viewBox="0 0 24 24"
 				{...props}
 			>
@@ -321,7 +322,7 @@ export const socialProviders = {
 			</svg>`,
 	},
 	twitch: {
-		Icon: (props: SVGProps<any>) => (
+		Icon: (props?: SVGProps<any>) => (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
 				width="1em"
@@ -348,7 +349,7 @@ export const socialProviders = {
 			</svg>`,
 	},
 	spotify: {
-		Icon: (props: SVGProps<any>) => (
+		Icon: (props?: SVGProps<any>) => (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
 				width="1em"
@@ -378,7 +379,7 @@ export const socialProviders = {
 		Icon: (props?: SVGProps<any>) => (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
-				width="0.88em"
+				width="1em"
 				height="1em"
 				viewBox="0 0 448 512"
 				{...props}
@@ -391,10 +392,9 @@ export const socialProviders = {
 		),
 		stringIcon: `<svg
 				xmlns="http://www.w3.org/2000/svg"
-				width="0.88em"
+				width="1em"
 				height="1em"
 				viewBox="0 0 448 512"
-				{...props}
 			>
 				<path
 					fill="currentColor"
@@ -406,7 +406,7 @@ export const socialProviders = {
 		Icon: (props?: SVGProps<any>) => (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
-				width="0.88em"
+				width="1em"
 				height="1em"
 				viewBox="0 0 448 512"
 				{...props}
@@ -417,14 +417,14 @@ export const socialProviders = {
 				></path>
 			</svg>
 		),
-		stringIcon: `<svg xmlns="http://www.w3.org/2000/svg" width="1.2em" height="1.2em" viewBox="0 0 448 512"><path fill="currentColor" d="M64 32C28.7 32 0 60.7 0 96v320c0 35.3 28.7 64 64 64h320c35.3 0 64-28.7 64-64V96c0-35.3-28.7-64-64-64zm297.1 84L257.3 234.6L379.4 396h-95.6L209 298.1L123.3 396H75.8l111-126.9L69.7 116h98l67.7 89.5l78.2-89.5zm-37.8 251.6L153.4 142.9h-28.3l171.8 224.7h26.3z"></path></svg>`,
+		stringIcon: `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 448 512"><path fill="currentColor" d="M64 32C28.7 32 0 60.7 0 96v320c0 35.3 28.7 64 64 64h320c35.3 0 64-28.7 64-64V96c0-35.3-28.7-64-64-64zm297.1 84L257.3 234.6L379.4 396h-95.6L209 298.1L123.3 396H75.8l111-126.9L69.7 116h98l67.7 89.5l78.2-89.5zm-37.8 251.6L153.4 142.9h-28.3l171.8 224.7h26.3z"></path></svg>`,
 	},
 	roblox: {
 		Icon: (props?: SVGProps<any>) => (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
-				width="1.2em"
-				height="1.2em"
+				width="1em"
+				height="1em"
 				viewBox="0 0 267 267"
 				{...props}
 			>
@@ -434,14 +434,14 @@ export const socialProviders = {
 				></path>
 			</svg>
 		),
-		stringIcon: `<svg xmlns="http://www.w3.org/2000/svg" width="1.2em" height="1.2em" viewBox="0 0 267 267"><path xmlns="http://www.w3.org/2000/svg" fill="currentColor" d="M 56.926 0.986 L 1.01 210.05 L 210.073 266.014 L 265.989 56.951 L 56.926 0.986 Z M 112.15 96.988 L 170.481 112.619 L 154.849 170.95 L 96.47 155.318 L 112.15 96.988 Z"/></svg>`,
+		stringIcon: `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 267 267"><path xmlns="http://www.w3.org/2000/svg" fill="currentColor" d="M 56.926 0.986 L 1.01 210.05 L 210.073 266.014 L 265.989 56.951 L 56.926 0.986 Z M 112.15 96.988 L 170.481 112.619 L 154.849 170.95 L 96.47 155.318 L 112.15 96.988 Z"/></svg>`,
 	},
 	vk: {
 		Icon: (props?: SVGProps<any>) => (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
-				width="1.2em"
-				height="1.2em"
+				width="1em"
+				height="1em"
 				viewBox="0 0 20 20"
 				{...props}
 			>
@@ -453,15 +453,16 @@ export const socialProviders = {
 				/>
 			</svg>
 		),
-		stringIcon: `<svg xmlns="http://www.w3.org/2000/svg" width="1.2em" height="1.2em" viewBox="0 0 448 512"><path fill="currentColor" d="M64 32C28.7 32 0 60.7 0 96v320c0 35.3 28.7 64 64 64h320c35.3 0 64-28.7 64-64V96c0-35.3-28.7-64-64-64zm297.1 84L257.3 234.6L379.4 396h-95.6L209 298.1L123.3 396H75.8l111-126.9L69.7 116h98l67.7 89.5l78.2-89.5zm-37.8 251.6L153.4 142.9h-28.3l171.8 224.7h26.3z"></path></svg>`,
+		stringIcon: `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 20 20"><path fill="currentColor" fillRule="evenodd" d="M17.802 12.298s1.617 1.597 2.017 2.336a.1.1 0 0 1 .018.035q.244.409.123.645c-.135.261-.592.392-.747.403h-2.858c-.199 0-.613-.052-1.117-.4c-.385-.269-.768-.712-1.139-1.145c-.554-.643-1.033-1.201-1.518-1.201a.6.6 0 0 0-.18.03c-.367.116-.833.639-.833 2.032c0 .436-.344.684-.585.684H9.674c-.446 0-2.768-.156-4.827-2.327C2.324 10.732.058 5.4.036 5.353c-.141-.345.155-.533.475-.533h2.886c.387 0 .513.234.601.444c.102.241.48 1.205 1.1 2.288c1.004 1.762 1.621 2.479 2.114 2.479a.53.53 0 0 0 .264-.07c.644-.354.524-2.654.494-3.128c0-.092-.001-1.027-.331-1.479c-.236-.324-.638-.45-.881-.496c.065-.094.203-.238.38-.323c.441-.22 1.238-.252 2.029-.252h.439c.858.012 1.08.067 1.392.146c.628.15.64.557.585 1.943c-.016.396-.033.842-.033 1.367c0 .112-.005.237-.005.364c-.019.711-.044 1.512.458 1.841a.4.4 0 0 0 .217.062c.174 0 .695 0 2.108-2.425c.62-1.071 1.1-2.334 1.133-2.429c.028-.053.112-.202.214-.262a.5.5 0 0 1 .236-.056h3.395c.37 0 .621.056.67.196c.082.227-.016.92-1.566 3.016c-.261.349-.49.651-.691.915c-1.405 1.844-1.405 1.937.083 3.337" clipRule="evenodd"/></svg>`,
 	},
 	zoom: {
 		Icon: (props?: SVGProps<any>) => (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
-				width="1.2em"
-				height="1.2em"
+				width="1em"
+				height="1em"
 				viewBox="0 0 16 16"
+				{...props}
 			>
 				<path
 					fill="currentColor"
@@ -473,8 +474,8 @@ export const socialProviders = {
 		),
 		stringIcon: `<svg
 						xmlns="http://www.w3.org/2000/svg"
-						width="1.2em"
-						height="1.2em"
+						width="1em"
+						height="1em"
 						viewBox="0 0 16 16"
 					>
 						<path
@@ -543,7 +544,7 @@ export const socialProviders = {
 		Icon: (props?: SVGProps<any>) => (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
-				width="0.67em"
+				width="1em"
 				height="1em"
 				viewBox="0 0 256 384"
 				{...props}
@@ -572,7 +573,7 @@ export const socialProviders = {
 		),
 		stringIcon: `<svg
 				xmlns="http://www.w3.org/2000/svg"
-				width="0.67em"
+				width="1em"
 				height="1em"
 				viewBox="0 0 256 384"
 			>
