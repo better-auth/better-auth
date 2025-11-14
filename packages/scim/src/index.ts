@@ -142,6 +142,13 @@ export const scim = (options?: SCIMOptions) => {
 				async (ctx) => {
 					const { providerId, organizationId } = ctx.body;
 
+					if (providerId.includes(":")) {
+						throw new APIError("BAD_REQUEST", {
+							message:
+								"Provider or organization id contain forbidden characters",
+						});
+					}
+
 					const isOrgPluginEnabled = ctx.context.options.plugins?.some(
 						(p) => p.id === "organization",
 					);
@@ -207,13 +214,6 @@ export const scim = (options?: SCIMOptions) => {
 						await ctx.context.adapter.delete<SCIMProvider>({
 							model: "scimProvider",
 							where: [{ field: "id", value: scimProvider.id }],
-						});
-					}
-
-					if (providerId.includes(":")) {
-						throw new APIError("BAD_REQUEST", {
-							message:
-								"Provider or organization id contain forbidden characters",
 						});
 					}
 
