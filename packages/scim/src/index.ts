@@ -289,48 +289,66 @@ export const scim = (options?: SCIMOptions) => {
 						where: [{ field: "email", value: email }],
 					});
 
-					let user: User;
-					let account: Account;
-
-					if (existingUser) {
-						user = existingUser;
-						account = await ctx.context.internalAdapter.createAccount({
-							userId: existingUser.id,
+					const createAccount = (userId: string) =>
+						ctx.context.internalAdapter.createAccount({
+							userId: userId,
 							providerId: providerId,
 							accountId: accountId,
 							accessToken: "",
 							refreshToken: "",
 						});
-					} else {
-						[user, account] = await ctx.context.adapter.transaction<
-							[User, Account]
-						>(async () => {
-							const user = await ctx.context.internalAdapter.createUser({
-								email,
-								name,
+
+					const createUser = () =>
+						ctx.context.internalAdapter.createUser({
+							email,
+							name,
+						});
+
+					const createOrgMembership = async (userId: string) => {
+						const organizationId = ctx.context.scimProvider.organizationId;
+
+						if (organizationId) {
+							const isOrgMember = await ctx.context.adapter.findOne({
+								model: "member",
+								where: [
+									{ field: "organizationId", value: organizationId },
+									{ field: "userId", value: userId },
+								],
 							});
 
-							const account = await ctx.context.internalAdapter.createAccount({
-								userId: user.id,
-								providerId: providerId,
-								accountId: accountId,
-								accessToken: "",
-								refreshToken: "",
-							});
-
-							const organizationId = ctx.context.scimProvider.organizationId;
-							if (organizationId) {
-								await ctx.context.adapter.create<Member>({
+							if (!isOrgMember) {
+								return await ctx.context.adapter.create<Member>({
 									model: "member",
 									data: {
-										userId: user.id,
+										userId: userId,
 										role: "member",
 										createdAt: new Date(),
 										organizationId,
 									},
 								});
 							}
+						}
+					};
 
+					let user: User;
+					let account: Account;
+
+					if (existingUser) {
+						user = existingUser;
+						account = await ctx.context.adapter.transaction<Account>(
+							async () => {
+								const account = await createAccount(user.id);
+								await createOrgMembership(user.id);
+								return account;
+							},
+						);
+					} else {
+						[user, account] = await ctx.context.adapter.transaction<
+							[User, Account]
+						>(async () => {
+							const user = await createUser();
+							const account = await createAccount(user.id);
+							await createOrgMembership(user.id);
 							return [user, account];
 						});
 					}
