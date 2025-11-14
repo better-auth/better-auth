@@ -1,6 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { generateCodeChallenge, validateAuthorizationCode } from "../oauth2";
+import {
+	generateCodeChallenge,
+	refreshAccessToken,
+	validateAuthorizationCode,
+} from "../oauth2";
 
 export type LoginType =
 	| 0 /** Facebook OAuth */
@@ -180,6 +184,18 @@ export const zoom = (userOptions: ZoomOptions) => {
 				authentication: "post",
 			});
 		},
+		refreshAccessToken: options.refreshAccessToken
+			? options.refreshAccessToken
+			: async (refreshToken) =>
+					refreshAccessToken({
+						refreshToken,
+						options: {
+							clientId: options.clientId,
+							clientKey: options.clientKey,
+							clientSecret: options.clientSecret,
+						},
+						tokenEndpoint: "https://zoom.us/oauth/token",
+					}),
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
