@@ -146,19 +146,16 @@ export const oidcProvider = (options: OIDCOptions) => {
 		oauthConsent: "oauthConsent",
 	};
 
-	const opts = defu(
-		{
-			codeExpiresIn: 600,
-			defaultScope: "openid",
-			accessTokenExpiresIn: 3600,
-			refreshTokenExpiresIn: 604800,
-			allowPlainCodeChallengeMethod: true,
-			allowDynamicClientRegistration: true,
-			storeClientSecret: "plain" as const,
-			scopes: ["openid", "profile", "email", "offline_access"],
-		},
-		options,
-	);
+	const opts = defu(options, {
+		codeExpiresIn: 600,
+		defaultScope: "openid",
+		accessTokenExpiresIn: 3600,
+		refreshTokenExpiresIn: 604800,
+		allowPlainCodeChallengeMethod: true,
+		allowDynamicClientRegistration: true,
+		storeClientSecret: "plain" as const,
+		scopes: ["openid", "profile", "email", "offline_access"],
+	});
 
 	const trustedClients = opts.trustedClients || [];
 
