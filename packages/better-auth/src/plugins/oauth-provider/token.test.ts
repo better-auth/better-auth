@@ -1323,7 +1323,7 @@ describe("oauth token - config", async () => {
 			grant_type: "client_credentials",
 			client_id: oauthClient?.client_id,
 			client_secret: oauthClient?.client_secret,
-			scope: testScopes.join(""),
+			scope: testScopes.join(" "),
 		});
 		expect(tokens.data?.access_token?.startsWith(prefix)).toBeTruthy();
 	});

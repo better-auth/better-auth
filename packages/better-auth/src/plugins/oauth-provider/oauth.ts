@@ -14,6 +14,7 @@ import { authorizeEndpoint } from "./authorize";
 import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
 import { introspectEndpoint } from "./introspect";
+import { rpInitiatedLogoutEndpoint } from "./logout";
 import { authServerMetadata, oidcServerMetadata } from "./metadata";
 import * as oauthClientEndpoints from "./oauthClient";
 import { registerEndpoint } from "./register";
@@ -971,6 +972,53 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					return userInfoEndpoint(ctx, opts);
 				},
 			),
+			oauth2EndSession: createAuthEndpoint(
+				"/oauth2/end-session",
+				{
+					method: "GET",
+					query: z.object({
+						id_token_hint: z.string(),
+						client_id: z.string().optional(),
+						post_logout_redirect_uri: z.string().optional(),
+						state: z.string().optional(),
+						ui_locales: z.string().optional(),
+					}),
+					metadata: {
+						openapi: {
+							description:
+								"RP-Initiated Logout endpoint. Allows clients to notify the OP that the End-User has logged out.",
+							responses: {
+								"200": {
+									description:
+										"Logout successful. May include redirect_uri if post_logout_redirect_uri was provided.",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													redirect_uri: {
+														type: "string",
+														format: "uri",
+														description:
+															"URI to redirect to after logout (if post_logout_redirect_uri was provided)",
+													},
+													message: {
+														type: "string",
+														description: "Success message",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					return rpInitiatedLogoutEndpoint(ctx, opts);
+				},
+			),
 			registerOAuthClient: createAuthEndpoint(
 				"/oauth2/register",
 				{
@@ -987,6 +1035,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						software_id: z.string().optional(),
 						software_version: z.string().optional(),
 						software_statement: z.string().optional(),
+						post_logout_redirect_uris: z.array(z.string()).optional(),
 						token_endpoint_auth_method: z
 							.enum(["none", "client_secret_basic", "client_secret_post"])
 							.default("client_secret_basic")
@@ -1096,6 +1145,14 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 															format: "uri",
 														},
 														description: "List of allowed redirect uris",
+													},
+													post_logout_redirect_uris: {
+														type: "array",
+														items: {
+															type: "string",
+															format: "uri",
+														},
+														description: "List of allowed logout redirect uris",
 													},
 													token_endpoint_auth_method: {
 														type: "string",

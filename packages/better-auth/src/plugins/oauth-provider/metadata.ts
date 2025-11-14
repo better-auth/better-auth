@@ -89,6 +89,7 @@ export function oidcServerMetadata(
 			: opts.disableJwtPlugin
 				? ["HS256"]
 				: ["EdDSA"],
+		end_session_endpoint: `${baseURL}/oauth2/end-session`,
 		acr_values_supported: ["urn:mace:incommon:iap:bronze"],
 	};
 	return metadata;
