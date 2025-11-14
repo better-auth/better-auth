@@ -3,6 +3,7 @@ import { APIError, getSessionFromCtx } from "../../api";
 import type { Verification } from "../../types";
 import { authorizeEndpoint, formatErrorURL } from "./authorize";
 import type {
+	OAuthAuthorizationQuery,
 	OAuthConsent,
 	OAuthOptions,
 	Scope,
@@ -194,8 +195,13 @@ export async function consentEndpoint(
 		scope: consent.scopes.join(" "),
 	};
 	ctx?.headers?.set("accept", "application/json");
-	if (query.prompt === "consent") {
-		query.prompt = undefined;
+	let prompts = query.prompt?.split(" ");
+	const foundPrompt = prompts?.findIndex((v) => v === "consent") ?? -1;
+	if (foundPrompt >= 0) {
+		prompts?.splice(foundPrompt, 1);
+		query.prompt = prompts?.length
+			? (prompts?.join(" ") as OAuthAuthorizationQuery["prompt"])
+			: undefined;
 	}
 	ctx.context.verification_id = verification.id;
 	ctx.context.post_login = true;
