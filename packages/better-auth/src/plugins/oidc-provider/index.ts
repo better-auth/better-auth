@@ -1482,6 +1482,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 			),
 		},
 		schema: mergeSchema(schema, options?.schema),
+		get options() {
+			return opts;
+		},
 	} satisfies BetterAuthPlugin;
 };
 export type * from "./types";
