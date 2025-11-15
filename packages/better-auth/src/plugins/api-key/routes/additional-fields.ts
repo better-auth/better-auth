@@ -5,9 +5,7 @@ const getAdditionalFieldDefinitions = (opts: PredefinedApiKeyOptions) => {
 	return opts.schema?.apikey?.additionalFields ?? {};
 };
 
-export const createAdditionalFieldsSchema = (
-	opts: PredefinedApiKeyOptions,
-) => {
+export const createAdditionalFieldsSchema = (opts: PredefinedApiKeyOptions) => {
 	return toZodSchema({
 		fields: getAdditionalFieldDefinitions(opts),
 		isClientSide: true,
