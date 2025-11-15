@@ -273,7 +273,8 @@ export const kyselyAdapter = (
 
 						// Initialize joined models based on uniqueness
 						for (const [joinModel, joinAttr] of Object.entries(joinConfig)) {
-							entry[getModelName(joinModel)] = joinAttr.isUnique ? null : [];
+							entry[getModelName(joinModel)] =
+								joinAttr.relation === "one-to-one" ? null : [];
 						}
 
 						groupedByMainId.set(mainId, entry);
@@ -283,7 +284,7 @@ export const kyselyAdapter = (
 
 					// Add joined records to the entry
 					for (const [joinModel, joinAttr] of Object.entries(joinConfig)) {
-						const isUnique = joinAttr.isUnique;
+						const isUnique = joinAttr.relation === "one-to-one";
 						const limit = joinAttr.limit ?? 100;
 
 						const joinedObj = joinedModelFields[getModelName(joinModel)];
@@ -337,7 +338,7 @@ export const kyselyAdapter = (
 				// Apply final limit to non-unique join arrays as a safety measure
 				for (const entry of result) {
 					for (const [joinModel, joinAttr] of Object.entries(joinConfig)) {
-						if (!joinAttr.isUnique) {
+						if (joinAttr.relation !== "one-to-one") {
 							const joinModelName = getModelName(joinModel);
 							if (Array.isArray(entry[joinModelName])) {
 								const limit = joinAttr.limit ?? 100;
@@ -384,27 +385,16 @@ export const kyselyAdapter = (
 								.selectFrom(joinModel)
 								.selectAll()
 								.as(`join_${joinModel}`);
-							if (joinAttr.type === "inner") {
-								query = query.innerJoin(
-									() => joinQuery,
-									(join: any) =>
-										join.onRef(
-											`join_${joinModel}.${joinAttr.on.to}`,
-											"=",
-											`${model}.${joinAttr.on.from}`,
-										),
-								);
-							} else {
-								query = query.leftJoin(
-									() => joinQuery,
-									(join: any) =>
-										join.onRef(
-											`join_${joinModel}.${joinAttr.on.to}`,
-											"=",
-											`${model}.${joinAttr.on.from}`,
-										),
-								);
-							}
+
+							query = query.leftJoin(
+								() => joinQuery,
+								(join: any) =>
+									join.onRef(
+										`join_${joinModel}.${joinAttr.on.to}`,
+										"=",
+										`${model}.${joinAttr.on.from}`,
+									),
+							);
 						}
 					}
 
@@ -482,27 +472,16 @@ export const kyselyAdapter = (
 								.selectFrom(joinModel)
 								.selectAll()
 								.as(`join_${joinModel}`);
-							if (joinAttr.type === "inner") {
-								query = query.innerJoin(
-									() => joinQueryBuilder,
-									(join: any) =>
-										join.onRef(
-											`join_${joinModel}.${joinAttr.on.to}`,
-											"=",
-											`${model}.${joinAttr.on.from}`,
-										),
-								);
-							} else {
-								query = query.leftJoin(
-									() => joinQueryBuilder,
-									(join: any) =>
-										join.onRef(
-											`join_${joinModel}.${joinAttr.on.to}`,
-											"=",
-											`${model}.${joinAttr.on.from}`,
-										),
-								);
-							}
+
+							query = query.leftJoin(
+								() => joinQueryBuilder,
+								(join: any) =>
+									join.onRef(
+										`join_${joinModel}.${joinAttr.on.to}`,
+										"=",
+										`${model}.${joinAttr.on.from}`,
+									),
+							);
 						}
 					}
 

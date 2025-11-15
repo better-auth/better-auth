@@ -415,10 +415,13 @@ export const createAdapterFactory =
 
 				// If joinedData is undefined, initialize it based on relationship type
 				if (joinedData === undefined || joinedData === null) {
-					joinedData = joinConfig.isUnique ? null : [];
+					joinedData = joinConfig.relation === "one-to-one" ? null : [];
 				}
 
-				if (!joinConfig.isUnique && !Array.isArray(joinedData)) {
+				if (
+					joinConfig.relation === "one-to-many" &&
+					!Array.isArray(joinedData)
+				) {
 					joinedData = [joinedData];
 				}
 
@@ -442,7 +445,8 @@ export const createAdapterFactory =
 					transformed.push(transformedItem);
 				}
 
-				const result = joinConfig.isUnique ? transformed[0] : transformed;
+				const result =
+					joinConfig.relation === "one-to-one" ? transformed[0] : transformed;
 				transformedData[defaultModelName] = result ?? null;
 			}
 
@@ -659,9 +663,8 @@ export const createAdapterFactory =
 						from,
 						to,
 					},
-					type: "left",
 					limit,
-					isUnique,
+					relation: isUnique ? "one-to-one" : "one-to-many",
 				};
 			}
 			return { join: transformedJoin, select };
@@ -693,7 +696,7 @@ export const createAdapterFactory =
 				// If there is no value, it could mean that the query used a `select` clause that didn't include the field.
 				// or the query result is purely empty.
 				// In any case, we return null/empty array.
-				return joinConfig.isUnique ? null : [];
+				return joinConfig.relation === "one-to-one" ? null : [];
 			}
 			let result: Record<string, any> | Record<string, any>[] | null;
 			const where = transformWhereClause({
@@ -708,16 +711,20 @@ export const createAdapterFactory =
 				],
 			});
 			try {
-				if (joinConfig.isUnique) {
+				if (joinConfig.relation === "one-to-one") {
 					result = await adapterInstance.findOne<Record<string, any>>({
 						model: modelName,
 						where: where,
 					});
 				} else {
+					const limit =
+						joinConfig.limit ??
+						options.advanced?.database?.defaultFindManyLimit ??
+						100;
 					result = await adapterInstance.findMany<Record<string, any>>({
 						model: modelName,
 						where: where,
-						limit: joinConfig.limit,
+						limit,
 					});
 				}
 			} catch (error) {

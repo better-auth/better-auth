@@ -306,8 +306,11 @@ export const mongodbAdapter = (
 							// For unique relationships, limit is ignored (as per JoinConfig type)
 							// For non-unique relationships, apply limit if specified
 							const shouldLimit = !isUnique && joinConfig.limit !== undefined;
-
-							if (shouldLimit && joinConfig.limit > 0) {
+							let limit =
+								joinConfig.limit ??
+								options.advanced?.database?.defaultFindManyLimit ??
+								100;
+							if (shouldLimit && limit > 0) {
 								// Use pipeline syntax to support limit
 								// Construct the field reference string for the foreign field
 								const foreignFieldRef = `$${foreignFieldName}`;
@@ -323,7 +326,7 @@ export const mongodbAdapter = (
 													},
 												},
 											},
-											{ $limit: joinConfig.limit },
+											{ $limit: limit },
 										],
 										as: joinedModel,
 									},
@@ -340,21 +343,12 @@ export const mongodbAdapter = (
 								});
 							}
 
-							// For inner join, filter out documents without matches
-							if (joinConfig.type === "inner") {
-								pipeline.push({
-									$match: {
-										[joinedModel]: { $ne: [] },
-									},
-								});
-							}
-
 							if (isUnique) {
 								// For one-to-one relationships, unwind to flatten to a single object
 								pipeline.push({
 									$unwind: {
 										path: `$${joinedModel}`,
-										preserveNullAndEmptyArrays: joinConfig.type !== "inner",
+										preserveNullAndEmptyArrays: true,
 									},
 								});
 							}
@@ -419,9 +413,14 @@ export const mongodbAdapter = (
 							// For unique relationships, limit is ignored (as per JoinConfig type)
 							// For non-unique relationships, apply limit if specified
 							const shouldLimit =
-								!joinConfig.isUnique && joinConfig.limit !== undefined;
+								joinConfig.relation !== "one-to-one" &&
+								joinConfig.limit !== undefined;
 
-							if (shouldLimit && joinConfig.limit > 0) {
+							let limit =
+								joinConfig.limit ??
+								options.advanced?.database?.defaultFindManyLimit ??
+								100;
+							if (shouldLimit && limit > 0) {
 								// Use pipeline syntax to support limit
 								// Construct the field reference string for the foreign field
 								const foreignFieldRef = `$${foreignFieldName}`;
@@ -437,7 +436,7 @@ export const mongodbAdapter = (
 													},
 												},
 											},
-											{ $limit: joinConfig.limit },
+											{ $limit: limit },
 										],
 										as: joinedModel,
 									},
@@ -454,21 +453,12 @@ export const mongodbAdapter = (
 								});
 							}
 
-							// For inner join, filter out documents without matches
-							if (joinConfig.type === "inner") {
-								pipeline.push({
-									$match: {
-										[joinedModel]: { $ne: [] },
-									},
-								});
-							}
-
 							if (isUnique) {
 								// For one-to-one relationships, unwind to flatten to a single object
 								pipeline.push({
 									$unwind: {
 										path: `$${joinedModel}`,
-										preserveNullAndEmptyArrays: joinConfig.type !== "inner",
+										preserveNullAndEmptyArrays: true,
 									},
 								});
 							}

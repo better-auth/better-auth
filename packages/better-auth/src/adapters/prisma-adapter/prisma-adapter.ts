@@ -108,7 +108,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 
 					for (const [joinModel, joinAttr] of Object.entries(join)) {
 						const key = getJoinKeyName(model, getModelName(joinModel), schema);
-						if (joinAttr.isUnique) {
+						if (joinAttr.relation === "one-to-one") {
 							result[key] = true;
 						} else {
 							result[key] = { take: joinAttr.limit };

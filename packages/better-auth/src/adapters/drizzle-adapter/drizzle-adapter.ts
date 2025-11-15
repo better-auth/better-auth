@@ -381,10 +381,14 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								includes = {};
 								const joinEntries = Object.entries(join);
 								for (const [model, joinAttr] of joinEntries) {
-									const isUnique = joinAttr.isUnique;
+									const limit =
+										joinAttr.limit ??
+										options.advanced?.database?.defaultFindManyLimit ??
+										100;
+									const isUnique = joinAttr.relation === "one-to-one";
 									includes[`${model}${isUnique ? "" : "s"}`] = isUnique
 										? true
-										: { limit: joinAttr.limit };
+										: { limit };
 									if (!isUnique) pluralJoinResults.push(`${model}s`);
 								}
 							}
@@ -434,10 +438,14 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								includes = {};
 								const joinEntries = Object.entries(join);
 								for (const [model, joinAttr] of joinEntries) {
-									const isUnique = joinAttr.isUnique;
+									const isUnique = joinAttr.relation === "one-to-one";
+									const limit =
+										joinAttr.limit ??
+										options.advanced?.database?.defaultFindManyLimit ??
+										100;
 									includes[`${model}${isUnique ? "" : "s"}`] = isUnique
 										? true
-										: { limit: joinAttr.limit };
+										: { limit };
 									if (!isUnique) pluralJoinResults.push(`${model}s`);
 								}
 							}

@@ -120,11 +120,6 @@ const warmupConnection = async () => {
 	const isCI =
 		process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
 	if (isCI) {
-		// console.log("Warming up MSSQL connection for CI environment...");
-		// console.log(
-		// 	`Environment: CI=${process.env.CI}, GITHUB_ACTIONS=${process.env.GITHUB_ACTIONS}`,
-		// );
-
 		try {
 			await ensureDatabaseExists();
 
@@ -135,7 +130,6 @@ const warmupConnection = async () => {
 				query: { kind: "SelectQueryNode" },
 				queryId: { queryId: "warmup" },
 			});
-			// console.log("Connection warmup successful");
 		} catch (error) {
 			console.warn(
 				"Connection warmup failed, will retry during validation:",
@@ -161,10 +155,6 @@ const validateConnection = async (retries: number = 10): Promise<boolean> => {
 		process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
 	const maxRetries = isCI ? 15 : retries; // More retries in CI
 	const baseDelay = isCI ? 2000 : 1000; // Longer delays in CI
-
-	// console.log(
-	// 	`Validating connection (CI: ${isCI}, max retries: ${maxRetries})`,
-	// );
 
 	for (let i = 0; i < maxRetries; i++) {
 		try {
@@ -195,10 +185,6 @@ const query = async (sql: string, timeoutMs: number = 30000) => {
 	const actualTimeout = isCI ? Math.max(timeoutMs, 60000) : timeoutMs; // Minimum 60s timeout in CI
 
 	try {
-		// console.log(
-		// 	`Executing SQL: ${sql.substring(0, 100)}... (timeout: ${actualTimeout}ms, CI: ${isCI})`,
-		// );
-
 		// Ensure we're using the better_auth database for queries
 		const sqlWithContext = sql.includes("USE ")
 			? sql
@@ -218,7 +204,6 @@ const query = async (sql: string, timeoutMs: number = 30000) => {
 				),
 			),
 		])) as any;
-		// console.log(`Query completed successfully`);
 		return { rows: result.rows, rowCount: result.rows.length };
 	} catch (error) {
 		console.error(`Query failed: ${error}`);
@@ -249,10 +234,6 @@ const resetDB = async (retryCount: number = 0) => {
 	const maxRetries = isCI ? 3 : 1; // Allow retries in CI
 
 	try {
-		// console.log(
-		// 	`Starting database reset... (attempt ${retryCount + 1}/${maxRetries + 1})`,
-		// );
-
 		// Warm up connection first (especially important for CI)
 		await warmupConnection();
 
@@ -298,8 +279,6 @@ const resetDB = async (retryCount: number = 0) => {
 		`,
 			15000,
 		);
-
-		// console.log("Database reset completed successfully");
 	} catch (error) {
 		console.error("Database reset failed:", error);
 
@@ -315,7 +294,6 @@ const resetDB = async (retryCount: number = 0) => {
 
 		// Final fallback - try to recreate the database
 		try {
-			// console.log("Attempting database recreation...");
 			// This would require a separate connection to master database
 			// For now, just throw the error with better context
 			throw new Error(`Database reset failed completely: ${error}`);

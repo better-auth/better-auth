@@ -185,7 +185,7 @@ export const memoryAdapter = (
 						// Initialize joined data structures based on isUnique
 						for (const [joinModel, joinAttr] of Object.entries(join)) {
 							const joinModelName = getModelName(joinModel);
-							if (joinAttr.isUnique) {
+							if (joinAttr.relation === "one-to-one") {
 								nested[joinModelName] = null;
 							} else {
 								nested[joinModelName] = [];
@@ -215,7 +215,7 @@ export const memoryAdapter = (
 								joinRecord[joinAttr.on.to] === baseRecord[joinAttr.on.from],
 						);
 
-						if (joinAttr.isUnique) {
+						if (joinAttr.relation === "one-to-one") {
 							// For unique relationships, store a single object (or null)
 							nestedEntry[joinModelName] = matchingRecords[0] || null;
 						} else {

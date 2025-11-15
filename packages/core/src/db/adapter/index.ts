@@ -329,16 +329,8 @@ export type JoinOption = {
 export type JoinConfig = {
 	[model: string]: {
 		/**
-		 * The JoinOption type that will be performed
-		 *
-		 * * **left**: returns all rows from the left table, plus matching rows from the right (if none, NULL fills in).
-		 * * **inner**: returns rows where there’s a match in both tables.
-		 * * Not supported yet: ~~**right**: returns all rows from the right table, plus matching rows from the left (if none, NULL fills in).~~
-		 * * Not supported yet: ~~**full**: returns rows from both sides, filling in gaps with NULLs.~~
-		 *
-		 * @default "left"
+		 * The joining column names.
 		 */
-		type: "left" | "inner";
 		on: {
 			/**
 			 * Column name from the main table
@@ -356,13 +348,17 @@ export type JoinConfig = {
 		 *
 		 * @default 100
 		 */
-		limit: number;
+		limit?: number;
 		/**
-		 * Whether the relation has a unique constraint.
+		 * The relation type. Determines the ouput joined model data.
 		 *
-		 * If set to `true`, then the relation will be treated as a one-to-one relationship.
+		 * `one-to-one` would have a single object in the output.
+		 * `one-to-many` would have an array of objects in the output.
+		 * `many-to-many` would have an array of objects in the output.
+		 *
+		 * @default "one-to-many"
 		 */
-		isUnique: boolean;
+		relation?: "one-to-one" | "one-to-many" | "many-to-many";
 	};
 };
 

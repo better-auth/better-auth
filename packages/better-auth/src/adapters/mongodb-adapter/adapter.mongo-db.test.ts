@@ -28,9 +28,7 @@ const { execute } = await testAdapter({
 	},
 	runMigrations: async (betterAuthOptions) => {},
 	tests: [
-		normalTestSuite({
-			disableTests: {},
-		}),
+		normalTestSuite(),
 		authFlowTestSuite(),
 		transactionsTestSuite(),
 		joinsTestSuite(),
