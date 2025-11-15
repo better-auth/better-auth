@@ -2,11 +2,7 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
 	test: {
-		poolOptions: {
-			forks: {
-				execArgv: ["--expose-gc"],
-			},
-		},
+		execArgv: ["--expose-gc"],
 		// Exclude adapter tests by default - they are run separately via test:adapters
 		exclude: [
 			"**/node_modules/**",

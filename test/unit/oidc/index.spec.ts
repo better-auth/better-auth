@@ -52,9 +52,9 @@ describe("oidc provider", async () => {
 				resolve();
 			});
 		});
+		url = `https://localhost:${(server.address() as any).port}`;
 		// @ts-expect-error
 		auth.options.baseURL = url;
-		url = `https://localhost:${(server.address() as any).port}`;
 	});
 
 	afterEach(() => {
