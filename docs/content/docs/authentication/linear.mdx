@@ -12,8 +12,9 @@ description: Linear provider setup and usage.
 
         When creating your OAuth application in Linear, you'll need to specify the required scopes. The default scope is `read`, but you can also request additional scopes like `write` if needed.
 
-        > [!NOTE]
-        > OAuth2 applications created from October 1, 2025 onwards have refresh tokens enabled by default for user-initiated OAuth with no option to disable them. Access tokens are valid for 24 hours. Older applications have access tokens that are valid for 10 years. This provider handles token rotation automatically.
+        <Callout type="info">
+        OAuth2 applications created from October 1, 2025 onwards have refresh tokens enabled by default for user initiated OAuth with no option to disable them. Access tokens are valid for 24 hours. Older applications have access tokens that are valid for 10 years. This provider handles token rotation automatically.
+        </Callout>
     </Step>
 
     <Step>
