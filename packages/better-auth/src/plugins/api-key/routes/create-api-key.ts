@@ -2,19 +2,20 @@ import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { z } from "zod";
 import { APIError, getSessionFromCtx } from "../../../api";
+import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { getDate } from "../../../utils/date";
 import { safeJSONParse } from "../../../utils/json";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
 import { apiKeySchema } from "../schema";
-import type { ApiKey } from "../types";
+import type { ApiKey, ApiKeyOptions, InferApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 import {
 	createAdditionalFieldsSchema,
 	parseAdditionalFieldInput,
 } from "./additional-fields";
 
-export function createApiKey({
+export function createApiKey<O extends ApiKeyOptions>({
 	keyGenerator,
 	opts,
 	schema,
@@ -24,7 +25,7 @@ export function createApiKey({
 		length: number;
 		prefix: string | undefined;
 	}) => Promise<string> | string;
-	opts: PredefinedApiKeyOptions;
+	opts: PredefinedApiKeyOptions<O>;
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
@@ -32,95 +33,105 @@ export function createApiKey({
 	): void;
 }) {
 	const additionalFieldsSchema = createAdditionalFieldsSchema(opts);
+
+	const baseSchema = z.object({
+		name: z.string().meta({ description: "Name of the Api Key" }).optional(),
+		expiresIn: z
+			.number()
+			.meta({
+				description: "Expiration time of the Api Key in seconds",
+			})
+			.min(1)
+			.optional()
+			.nullable()
+			.default(null),
+		userId: z.coerce
+			.string()
+			.meta({
+				description:
+					'User Id of the user that the Api Key belongs to. server-only. Eg: "user-id"',
+			})
+			.optional(),
+		prefix: z
+			.string()
+			.meta({ description: "Prefix of the Api Key" })
+			.regex(/^[a-zA-Z0-9_-]+$/, {
+				message:
+					"Invalid prefix format, must be alphanumeric and contain only underscores and hyphens.",
+			})
+			.optional(),
+		remaining: z
+			.number()
+			.meta({
+				description: "Remaining number of requests. Server side only",
+			})
+			.min(0)
+			.optional()
+			.nullable()
+			.default(null),
+		metadata: z.any().optional(),
+		refillAmount: z
+			.number()
+			.meta({
+				description:
+					"Amount to refill the remaining count of the Api Key. server-only. Eg: 100",
+			})
+			.min(1)
+			.optional(),
+		refillInterval: z
+			.number()
+			.meta({
+				description:
+					"Interval to refill the Api Key in milliseconds. server-only. Eg: 1000",
+			})
+			.optional(),
+		rateLimitTimeWindow: z
+			.number()
+			.meta({
+				description:
+					"The duration in milliseconds where each request is counted. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 1000",
+			})
+			.optional(),
+		rateLimitMax: z
+			.number()
+			.meta({
+				description:
+					"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 100",
+			})
+			.optional(),
+		rateLimitEnabled: z
+			.boolean()
+			.meta({
+				description:
+					"Whether the key has rate limiting enabled. server-only. Eg: true",
+			})
+			.optional(),
+		permissions: z
+			.record(z.string(), z.array(z.string()))
+			.meta({
+				description: "Permissions of the Api Key.",
+			})
+			.optional(),
+	});
+
+	type Body = InferAdditionalFieldsFromPluginOptions<"apikey", O> &
+		Omit<z.infer<typeof baseSchema>, "expiresIn" | "remaining"> & {
+			expiresIn?: number | null;
+			remaining?: number | null;
+		};
+
 	return createAuthEndpoint(
 		"/api-key/create",
 		{
 			method: "POST",
 			body: z.object({
-				name: z
-					.string()
-					.meta({ description: "Name of the Api Key" })
-					.optional(),
-				expiresIn: z
-					.number()
-					.meta({
-						description: "Expiration time of the Api Key in seconds",
-					})
-					.min(1)
-					.optional()
-					.nullable()
-					.default(null),
-
-				userId: z.coerce
-					.string()
-					.meta({
-						description:
-							'User Id of the user that the Api Key belongs to. server-only. Eg: "user-id"',
-					})
-					.optional(),
-				prefix: z
-					.string()
-					.meta({ description: "Prefix of the Api Key" })
-					.regex(/^[a-zA-Z0-9_-]+$/, {
-						message:
-							"Invalid prefix format, must be alphanumeric and contain only underscores and hyphens.",
-					})
-					.optional(),
-				remaining: z
-					.number()
-					.meta({
-						description: "Remaining number of requests. Server side only",
-					})
-					.min(0)
-					.optional()
-					.nullable()
-					.default(null),
-				metadata: z.any().optional(),
-				refillAmount: z
-					.number()
-					.meta({
-						description:
-							"Amount to refill the remaining count of the Api Key. server-only. Eg: 100",
-					})
-					.min(1)
-					.optional(),
-				refillInterval: z
-					.number()
-					.meta({
-						description:
-							"Interval to refill the Api Key in milliseconds. server-only. Eg: 1000",
-					})
-					.optional(),
-				rateLimitTimeWindow: z
-					.number()
-					.meta({
-						description:
-							"The duration in milliseconds where each request is counted. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 1000",
-					})
-					.optional(),
-				rateLimitMax: z
-					.number()
-					.meta({
-						description:
-							"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 100",
-					})
-					.optional(),
-				rateLimitEnabled: z
-					.boolean()
-					.meta({
-						description:
-							"Whether the key has rate limiting enabled. server-only. Eg: true",
-					})
-					.optional(),
-				permissions: z
-					.record(z.string(), z.array(z.string()))
-					.meta({
-						description: "Permissions of the Api Key.",
-					})
-					.optional(),
+				...baseSchema.shape,
 				...additionalFieldsSchema.shape,
 			}),
 			metadata: {
+				$Infer: {
+					body: {} as Body,
+				},
 				openapi: {
 					description: "Create a new API key for a user",
 					responses: {
@@ -466,20 +477,20 @@ export function createApiKey({
 
 			const apiKey = await ctx.context.adapter.create<
 				typeof dataWithAdditionalFields,
-				ApiKey
+				InferApiKey<O, false>
 			>({
 				model: API_KEY_TABLE_NAME,
 				data: dataWithAdditionalFields,
 			});
 
 			return ctx.json({
-				...(apiKey as ApiKey),
+				...(apiKey as InferApiKey<O, false>),
 				key: key,
 				metadata: metadata ?? null,
 				permissions: apiKey.permissions
 					? safeJSONParse(apiKey.permissions)
 					: null,
-			});
+			} as InferApiKey<O, false> & { key: string });
 		},
 	);
 }

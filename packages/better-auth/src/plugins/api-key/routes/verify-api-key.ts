@@ -8,10 +8,10 @@ import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
 import { isRateLimited } from "../rate-limit";
 import type { apiKeySchema } from "../schema";
-import type { ApiKey } from "../types";
+import type { ApiKey, ApiKeyOptions, InferApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 
-export async function validateApiKey({
+export async function validateApiKey<O extends ApiKeyOptions = ApiKeyOptions>({
 	hashedKey,
 	ctx,
 	opts,
@@ -19,12 +19,12 @@ export async function validateApiKey({
 	permissions,
 }: {
 	hashedKey: string;
-	opts: PredefinedApiKeyOptions;
+	opts: PredefinedApiKeyOptions<O>;
 	schema: ReturnType<typeof apiKeySchema>;
 	permissions?: Record<string, string[]> | undefined;
 	ctx: GenericEndpointContext;
-}) {
-	const apiKey = await ctx.context.adapter.findOne<ApiKey>({
+}): Promise<InferApiKey<O, false>> {
+	const apiKey = await ctx.context.adapter.findOne<InferApiKey<O, false>>({
 		model: API_KEY_TABLE_NAME,
 		where: [
 			{
@@ -95,8 +95,8 @@ export async function validateApiKey({
 		}
 	}
 
-	let remaining = apiKey.remaining;
-	let lastRefillAt = apiKey.lastRefillAt;
+	let remaining: number | null = apiKey.remaining;
+	let lastRefillAt: Date | null = apiKey.lastRefillAt;
 
 	if (apiKey.remaining === 0 && apiKey.refillAmount === null) {
 		// if there is no more remaining requests, and there is no refill amount, than the key is revoked
@@ -147,7 +147,7 @@ export async function validateApiKey({
 
 	const { message, success, update, tryAgainIn } = isRateLimited(apiKey, opts);
 
-	const newApiKey = await ctx.context.adapter.update<ApiKey>({
+	const newApiKey = await ctx.context.adapter.update<InferApiKey<O, false>>({
 		model: API_KEY_TABLE_NAME,
 		where: [
 			{
@@ -159,7 +159,7 @@ export async function validateApiKey({
 			...update,
 			remaining,
 			lastRefillAt,
-		},
+		} as any,
 	});
 
 	if (!newApiKey) {
@@ -182,12 +182,12 @@ export async function validateApiKey({
 	return newApiKey;
 }
 
-export function verifyApiKey({
+export function verifyApiKey<O extends ApiKeyOptions>({
 	opts,
 	schema,
 	deleteAllExpiredApiKeys,
 }: {
-	opts: PredefinedApiKeyOptions;
+	opts: PredefinedApiKeyOptions<O>;
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,

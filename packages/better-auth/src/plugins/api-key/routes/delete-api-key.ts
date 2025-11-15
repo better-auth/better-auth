@@ -4,14 +4,14 @@ import { z } from "zod";
 import { APIError, sessionMiddleware } from "../../../api";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
-import type { ApiKey } from "../types";
+import type { ApiKey, ApiKeyOptions } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
-export function deleteApiKey({
+export function deleteApiKey<O extends ApiKeyOptions>({
 	opts,
 	schema,
 	deleteAllExpiredApiKeys,
 }: {
-	opts: PredefinedApiKeyOptions;
+	opts: PredefinedApiKeyOptions<O>;
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,

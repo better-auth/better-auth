@@ -753,8 +753,8 @@ describe("api-key", async () => {
 		});
 
 		expect(apiKey).not.toBeNull();
-		expect(apiKey.metadata.test).toBeDefined();
-		expect(apiKey.metadata.test).toEqual(metadata.test);
+		expect(apiKey.metadata?.test).toBeDefined();
+		expect(apiKey.metadata?.test).toEqual(metadata.test);
 	});
 
 	it("create API key with with metadata when metadata is disabled (should fail)", async () => {

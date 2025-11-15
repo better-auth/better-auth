@@ -5,15 +5,15 @@ import { APIError, sessionMiddleware } from "../../../api";
 import { safeJSONParse } from "../../../utils/json";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
-import type { ApiKey } from "../types";
+import type { ApiKeyOptions, InferApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 
-export function getApiKey({
+export function getApiKey<O extends ApiKeyOptions>({
 	opts,
 	schema,
 	deleteAllExpiredApiKeys,
 }: {
-	opts: PredefinedApiKeyOptions;
+	opts: PredefinedApiKeyOptions<O>;
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
@@ -172,7 +172,7 @@ export function getApiKey({
 
 			const session = ctx.context.session;
 
-			let apiKey = await ctx.context.adapter.findOne<ApiKey>({
+			let apiKey = await ctx.context.adapter.findOne<InferApiKey<O, false>>({
 				model: API_KEY_TABLE_NAME,
 				where: [
 					{
@@ -208,7 +208,7 @@ export function getApiKey({
 							[key: string]: string[];
 						}>(returningApiKey.permissions)
 					: null,
-			});
+			} as Omit<InferApiKey<O, false>, "key">);
 		},
 	);
 }

@@ -7,10 +7,14 @@ import { APIError } from "../../api";
 import { mergeSchema } from "../../db";
 import { getDate } from "../../utils/date";
 import { getIp } from "../../utils/get-request-ip";
-import { createApiKeyRoutes, deleteAllExpiredApiKeys } from "./routes";
+import {
+	createApiKeyRoutes,
+	deleteAllExpiredApiKeys,
+	type PredefinedApiKeyOptions,
+} from "./routes";
 import { validateApiKey } from "./routes/verify-api-key";
 import { apiKeySchema } from "./schema";
-import type { ApiKeyOptions } from "./types";
+import type { ApiKeyOptions, InferApiKey } from "./types";
 
 export const defaultKeyHasher = async (key: string) => {
 	const hash = await createHash("SHA-256").digest(
@@ -58,7 +62,7 @@ export const ERROR_CODES = defineErrorCodes({
 
 export const API_KEY_TABLE_NAME = "apikey";
 
-export const apiKey = (options?: ApiKeyOptions | undefined) => {
+export const apiKey = <O extends ApiKeyOptions>(options?: O | undefined) => {
 	const opts = {
 		...options,
 		apiKeyHeaders: options?.apiKeyHeaders ?? "x-api-key",
@@ -91,7 +95,7 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 				options?.startingCharactersConfig?.charactersLength ?? 6,
 		},
 		enableSessionForAPIKeys: options?.enableSessionForAPIKeys ?? false,
-	} satisfies ApiKeyOptions;
+	} as PredefinedApiKeyOptions<O>;
 
 	const schema = mergeSchema(
 		apiKeySchema({
@@ -134,6 +138,9 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 	return {
 		id: "api-key",
 		$ERROR_CODES: ERROR_CODES,
+		$Infer: {
+			ApiKey: {} as InferApiKey<O>,
+		},
 		hooks: {
 			before: [
 				{

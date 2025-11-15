@@ -1,26 +1,35 @@
-import { parseInputData, toZodSchema } from "../../../db";
+import {
+	type InferAdditionalFieldsFromPluginOptions,
+	parseInputData,
+	toZodSchema,
+} from "../../../db";
+import type { ApiKeyOptions } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 
-const getAdditionalFieldDefinitions = (opts: PredefinedApiKeyOptions) => {
+const getAdditionalFieldDefinitions = <O extends ApiKeyOptions>(
+	opts: PredefinedApiKeyOptions<O>,
+) => {
 	return opts.schema?.apikey?.additionalFields ?? {};
 };
 
-export const createAdditionalFieldsSchema = (opts: PredefinedApiKeyOptions) => {
+export const createAdditionalFieldsSchema = <O extends ApiKeyOptions>(
+	opts: PredefinedApiKeyOptions<O>,
+) => {
 	return toZodSchema({
 		fields: getAdditionalFieldDefinitions(opts),
 		isClientSide: true,
 	});
 };
 
-export const parseAdditionalFieldInput = (
-	opts: PredefinedApiKeyOptions,
+export const parseAdditionalFieldInput = <O extends ApiKeyOptions>(
+	opts: PredefinedApiKeyOptions<O>,
 	data: Record<string, any>,
 	action: "create" | "update",
 ) => {
 	const additionalFields = getAdditionalFieldDefinitions(opts);
 	const entries = Object.keys(additionalFields);
 	if (entries.length === 0) {
-		return {};
+		return {} as Partial<InferAdditionalFieldsFromPluginOptions<"apikey", O>>;
 	}
 	const payload: Record<string, any> = {};
 	for (const key of entries) {
@@ -37,5 +46,5 @@ export const parseAdditionalFieldInput = (
 			delete parsed[key];
 		}
 	}
-	return parsed;
+	return parsed as Partial<InferAdditionalFieldsFromPluginOptions<"apikey", O>>;
 };
