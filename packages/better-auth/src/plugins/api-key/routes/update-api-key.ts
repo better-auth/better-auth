@@ -8,6 +8,10 @@ import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
+import {
+	createAdditionalFieldsSchema,
+	parseAdditionalFieldInput,
+} from "./additional-fields";
 export function updateApiKey({
 	opts,
 	schema,
@@ -20,6 +24,7 @@ export function updateApiKey({
 		byPassLastCheckTime?: boolean | undefined,
 	): void;
 }) {
+	const additionalFieldsSchema = createAdditionalFieldsSchema(opts).partial();
 	return createAuthEndpoint(
 		"/api-key/update",
 		{
@@ -102,6 +107,7 @@ export function updateApiKey({
 					})
 					.optional()
 					.nullable(),
+				...additionalFieldsSchema.shape,
 			}),
 			metadata: {
 				openapi: {
@@ -255,6 +261,11 @@ export function updateApiKey({
 				rateLimitTimeWindow,
 				rateLimitMax,
 			} = ctx.body;
+			const additionalFields = parseAdditionalFieldInput(
+				opts,
+				ctx.body,
+				"update",
+			);
 
 			const session = await getSessionFromCtx(ctx);
 			const authRequired = ctx.request || ctx.headers;
@@ -313,7 +324,7 @@ export function updateApiKey({
 				});
 			}
 
-			let newValues: Partial<ApiKey> = {};
+			let newValues: Partial<ApiKey> & Record<string, any> = {};
 
 			if (name !== undefined) {
 				if (name.length < opts.minimumNameLength) {
@@ -394,6 +405,12 @@ export function updateApiKey({
 			if (permissions !== undefined) {
 				//@ts-expect-error - we need this to be a string to save into DB.
 				newValues.permissions = JSON.stringify(permissions);
+			}
+			if (Object.keys(additionalFields).length > 0) {
+				newValues = {
+					...newValues,
+					...additionalFields,
+				};
 			}
 
 			if (Object.keys(newValues).length === 0) {

@@ -9,6 +9,10 @@ import { defaultKeyHasher } from "../";
 import { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
+import {
+	createAdditionalFieldsSchema,
+	parseAdditionalFieldInput,
+} from "./additional-fields";
 
 export function createApiKey({
 	keyGenerator,
@@ -27,6 +31,7 @@ export function createApiKey({
 		byPassLastCheckTime?: boolean | undefined,
 	): void;
 }) {
+	const additionalFieldsSchema = createAdditionalFieldsSchema(opts);
 	return createAuthEndpoint(
 		"/api-key/create",
 		{
@@ -113,6 +118,7 @@ export function createApiKey({
 						description: "Permissions of the Api Key.",
 					})
 					.optional(),
+				...additionalFieldsSchema.shape,
 			}),
 			metadata: {
 				openapi: {
@@ -267,6 +273,11 @@ export function createApiKey({
 				rateLimitTimeWindow,
 				rateLimitEnabled,
 			} = ctx.body;
+			const additionalFields = parseAdditionalFieldInput(
+				opts,
+				ctx.body,
+				"create",
+			);
 
 			const session = await getSessionFromCtx(ctx);
 			const authRequired = ctx.request || ctx.headers;
@@ -410,7 +421,7 @@ export function createApiKey({
 					? JSON.stringify(defaultPermissions)
 					: undefined;
 
-			let data: Omit<ApiKey, "id"> = {
+			const data: Omit<ApiKey, "id"> = {
 				createdAt: new Date(),
 				updatedAt: new Date(),
 				name: name ?? null,
@@ -442,18 +453,23 @@ export function createApiKey({
 				//@ts-expect-error - we intentionally save the permissions as string on DB.
 				permissions: permissionsToApply,
 			};
+			const dataWithAdditionalFields = {
+				...data,
+				...additionalFields,
+			};
 
 			if (metadata) {
 				//@ts-expect-error - we intentionally save the metadata as string on DB.
-				data.metadata = schema.apikey.fields.metadata.transform.input(metadata);
+				dataWithAdditionalFields.metadata =
+					schema.apikey.fields.metadata.transform.input(metadata);
 			}
 
 			const apiKey = await ctx.context.adapter.create<
-				Omit<ApiKey, "id">,
+				typeof dataWithAdditionalFields,
 				ApiKey
 			>({
 				model: API_KEY_TABLE_NAME,
-				data: data,
+				data: dataWithAdditionalFields,
 			});
 
 			return ctx.json({
