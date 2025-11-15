@@ -253,6 +253,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 							username,
 						});
 						throw new APIError("UNPROCESSABLE_ENTITY", {
+							code: "USERNAME_TOO_SHORT",
 							message: ERROR_CODES.USERNAME_TOO_SHORT,
 						});
 					}
@@ -429,6 +430,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 
 					if (username.length < minUsernameLength) {
 						throw new APIError("UNPROCESSABLE_ENTITY", {
+							code: "USERNAME_TOO_SHORT",
 							message: ERROR_CODES.USERNAME_TOO_SHORT,
 						});
 					}
@@ -495,6 +497,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 							const maxUsernameLength = options?.maxUsernameLength || 30;
 							if (username.length < minUsernameLength) {
 								throw new APIError("BAD_REQUEST", {
+									code: "USERNAME_TOO_SHORT",
 									message: ERROR_CODES.USERNAME_TOO_SHORT,
 								});
 							}
