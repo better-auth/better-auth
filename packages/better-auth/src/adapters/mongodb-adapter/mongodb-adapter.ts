@@ -285,11 +285,17 @@ export const mongodbAdapter = (
 					const cursor = db.collection(model).find(clause, { session });
 					if (limit) cursor.limit(limit);
 					if (offset) cursor.skip(offset);
-					if (sortBy)
+					if (sortBy) {
+						const orderBy = Array.isArray(sortBy) ? sortBy : [sortBy];
 						cursor.sort(
-							getFieldName({ field: sortBy.field, model }),
-							sortBy.direction === "desc" ? -1 : 1,
+							Object.fromEntries(
+								orderBy.map(({ field, direction }) => [
+									getFieldName({ field, model }),
+									direction === "desc" ? -1 : 1,
+								]),
+							),
 						);
+					}
 					const res = await cursor.toArray();
 					return res as any;
 				},
