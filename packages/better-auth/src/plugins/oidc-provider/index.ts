@@ -284,6 +284,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/.well-known/openid-configuration",
 				{
 					method: "GET",
+					operationId: "getOpenIdConfig",
 					metadata: {
 						isAction: false,
 					},
@@ -297,6 +298,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/authorize",
 				{
 					method: "GET",
+					operationId: "oauth2Authorize",
 					query: z.record(z.string(), z.any()),
 					metadata: {
 						openapi: {
@@ -327,6 +329,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/consent",
 				{
 					method: "POST",
+					operationId: "oauth2Consent",
 					body: z.object({
 						accept: z.boolean(),
 						consent_code: z.string().optional().nullish(),
@@ -480,6 +483,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/token",
 				{
 					method: "POST",
+					operationId: "oauth2Token",
 					body: z.record(z.any(), z.any()),
 					metadata: {
 						isAction: false,
@@ -908,7 +912,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/userinfo",
 				{
 					method: "GET",
-
+					operationId: "oauth2Userinfo",
+					use: [sessionMiddleware],
 					metadata: {
 						isAction: false,
 						openapi: {
