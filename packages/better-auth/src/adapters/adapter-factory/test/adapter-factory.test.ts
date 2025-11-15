@@ -1659,3 +1659,355 @@ describe("Create Adapter Helper", async () => {
 		});
 	});
 });
+
+describe("Fallback JoinOption System", async () => {
+	describe("supportsJoin: false (Fallback mode)", () => {
+		test("findOne: Should handle forward joins (joined model has FK to base model) by making separate queries", async () => {
+			let adapterCalls: Array<{ method: string; model: string }> = [];
+
+			const adapter = await createTestAdapter({
+				config: {
+					debugLogs: {},
+				},
+				options: {
+					experimental: {
+						// explicitally defining since in the future `join` will likely be default which would break this test
+						joins: false,
+					},
+				},
+				adapter: () =>
+					({
+						async findOne({ model, where, join }: any) {
+							adapterCalls.push({ method: "findOne", model });
+
+							if (model === "user") {
+								return {
+									id: "user-123",
+									email: "test@test.com",
+									emailVerified: false,
+									createdAt: new Date(),
+									updatedAt: new Date(),
+									name: "Test User",
+								};
+							}
+							return null;
+						},
+						async findMany({ model, where }: any) {
+							adapterCalls.push({ method: "findMany", model });
+
+							if (model === "session") {
+								return [
+									{
+										id: "session-1",
+										userId: "user-123",
+										expiresAt: new Date(),
+										createdAt: new Date(),
+									},
+								];
+							}
+							return [];
+						},
+					}) as any,
+			});
+
+			adapterCalls = [];
+			const res = await adapter.findOne({
+				model: "user",
+				where: [{ field: "id", value: "user-123" }],
+				join: { session: true },
+			});
+
+			// Should make two separate queries: one for user, one for sessions
+			expect(adapterCalls.length).toBeGreaterThanOrEqual(2);
+			expect(adapterCalls.some((c) => c.model === "user")).toBe(true);
+			expect(adapterCalls.some((c) => c.model === "session")).toBe(true);
+			expect(res).toHaveProperty("id");
+			// Adapter-factory's fallback join system should have added session data
+			expect(res).toHaveProperty("session");
+		});
+
+		test("findMany: Should handle forward joins efficiently using IN operator", async () => {
+			let adapterCalls: Array<{ method: string; model: string; where?: any }> =
+				[];
+
+			const adapter = await createTestAdapter({
+				config: {
+					debugLogs: {},
+				},
+				options: {
+					experimental: {
+						// explicitally defining since in the future `join` will likely be default which would break this test
+						joins: false,
+					},
+				},
+				adapter: () =>
+					({
+						async findMany({ model, where }: any) {
+							adapterCalls.push({ method: "findMany", model, where });
+
+							if (model === "user") {
+								return [
+									{
+										id: "user-1",
+										email: "test1@test.com",
+										emailVerified: false,
+										createdAt: new Date(),
+										updatedAt: new Date(),
+										name: "User 1",
+									},
+									{
+										id: "user-2",
+										email: "test2@test.com",
+										emailVerified: false,
+										createdAt: new Date(),
+										updatedAt: new Date(),
+										name: "User 2",
+									},
+								];
+							}
+
+							if (model === "session") {
+								// Should receive an IN query with user IDs
+								return [
+									{
+										id: "session-1",
+										userId: "user-1",
+										expiresAt: new Date(),
+										createdAt: new Date(),
+									},
+									{
+										id: "session-2",
+										userId: "user-2",
+										expiresAt: new Date(),
+										createdAt: new Date(),
+									},
+								];
+							}
+							return [];
+						},
+					}) as any,
+			});
+
+			adapterCalls = [];
+			const res = await adapter.findMany({
+				model: "user",
+				where: [],
+				join: { session: true },
+			});
+
+			// Should use IN operator for joined data query, not individual queries
+			const sessionCall = adapterCalls.find((c) => c.model === "session");
+			expect(sessionCall).toBeDefined();
+			expect(sessionCall?.where).toBeDefined();
+
+			// Result should have session data attached by fallback join system
+			expect(res).toBeInstanceOf(Array);
+			expect(res.length).toBeGreaterThan(0);
+			res.forEach((item) => {
+				expect(item).toHaveProperty("session");
+			});
+		});
+
+		test("findOne: Should not pass join to adapter when supportsJoin is false", async () => {
+			let joinPassedToAdapter = null;
+
+			const adapter = await createTestAdapter({
+				config: {
+					debugLogs: {},
+				},
+				options: {
+					experimental: {
+						// explicitally defining since in the future `join` will likely be default which would break this test
+						joins: false,
+					},
+				},
+				adapter: () =>
+					({
+						async findOne({ model, join }: any) {
+							joinPassedToAdapter = join;
+							return {
+								id: "user-123",
+								email: "test@test.com",
+								emailVerified: false,
+								createdAt: new Date(),
+								updatedAt: new Date(),
+								name: "Test User",
+							};
+						},
+					}) as any,
+			});
+
+			await adapter.findOne({
+				model: "user",
+				where: [{ field: "id", value: "user-123" }],
+				join: { session: true },
+			});
+
+			// JoinOption should NOT be passed to adapter when supportsJoin is false
+			expect(joinPassedToAdapter).toBeUndefined();
+		});
+
+		test("findMany: Should not pass join to adapter when supportsJoin is false", async () => {
+			let joinPassedToAdapter = null;
+
+			const adapter = await createTestAdapter({
+				config: {
+					debugLogs: {},
+				},
+				options: {
+					experimental: {
+						// explicitally defining since in the future `join` will likely be default which would break this test
+						joins: false,
+					},
+				},
+				adapter: () =>
+					({
+						async findMany({ model, join }: any) {
+							joinPassedToAdapter = join;
+							return [
+								{
+									id: "user-123",
+									email: "test@test.com",
+									emailVerified: false,
+									createdAt: new Date(),
+									updatedAt: new Date(),
+									name: "Test User",
+								},
+							];
+						},
+					}) as any,
+			});
+
+			await adapter.findMany({
+				model: "user",
+				where: [],
+				join: { session: true },
+			});
+
+			// JoinOption should NOT be passed to adapter when supportsJoin is false
+			expect(joinPassedToAdapter).toBeUndefined();
+		});
+	});
+
+	describe("supportsJoin: true (Native join support)", () => {
+		test("findOne: Should pass join to adapter when supportsJoin is true", async () => {
+			let joinPassedToAdapter = null;
+
+			const adapter = await createTestAdapter({
+				config: {
+					debugLogs: {},
+				},
+				options: {
+					experimental: {
+						joins: true,
+					},
+				},
+				adapter: () =>
+					({
+						async findOne({ model, join }: any) {
+							joinPassedToAdapter = join;
+							// When adapter supports joins, it returns data with joined structure
+							return {
+								id: "user-123",
+								email: "test@test.com",
+								emailVerified: false,
+								createdAt: new Date(),
+								updatedAt: new Date(),
+								name: "Test User",
+							};
+						},
+					}) as any,
+			});
+
+			await adapter.findOne({
+				model: "user",
+				where: [{ field: "id", value: "user-123" }],
+				join: { session: true },
+			});
+
+			// JoinOption SHOULD be passed to adapter when supportsJoin is true
+			// It's then the adapter's responsibility to handle the join
+			expect(joinPassedToAdapter).not.toBeUndefined();
+			expect(joinPassedToAdapter).toHaveProperty("session");
+		});
+
+		test("findMany: Should pass join to adapter when supportsJoin is true", async () => {
+			let joinPassedToAdapter = null;
+
+			const adapter = await createTestAdapter({
+				config: {
+					debugLogs: {},
+				},
+				options: {
+					experimental: {
+						joins: true,
+					},
+				},
+				adapter: () =>
+					({
+						async findMany({ model, join }: any) {
+							joinPassedToAdapter = join;
+							// When adapter supports joins, it returns data with joined structure
+							return [
+								{
+									id: "user-123",
+									email: "test@test.com",
+									emailVerified: false,
+									createdAt: new Date(),
+									updatedAt: new Date(),
+									name: "Test User",
+								},
+							];
+						},
+					}) as any,
+			});
+
+			await adapter.findMany({
+				model: "user",
+				where: [],
+				join: { session: true },
+			});
+
+			// JoinOption SHOULD be passed to adapter when supportsJoin is true
+			// It's then the adapter's responsibility to handle the join
+			expect(joinPassedToAdapter).not.toBeUndefined();
+			expect(joinPassedToAdapter).toHaveProperty("session");
+		});
+	});
+
+	describe("Default behavior (supportsJoin not specified)", () => {
+		test("Should default to supportsJoin: false and use fallback join system", async () => {
+			let joinPassedToAdapter = null;
+
+			const adapter = await createTestAdapter({
+				config: {
+					// supportsJoin not specified, should default to false
+					debugLogs: {},
+				},
+				adapter: () =>
+					({
+						async findOne({ model, join }: any) {
+							joinPassedToAdapter = join;
+							return {
+								id: "user-123",
+								email: "test@test.com",
+								emailVerified: false,
+								createdAt: new Date(),
+								updatedAt: new Date(),
+								name: "Test User",
+							};
+						},
+					}) as any,
+			});
+
+			await adapter.findOne({
+				model: "user",
+				where: [{ field: "id", value: "user-123" }],
+				join: { session: true },
+			});
+
+			// Since supportsJoin defaults to false, join should NOT be passed
+			expect(joinPassedToAdapter).toBeUndefined();
+		});
+	});
+});

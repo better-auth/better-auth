@@ -2,6 +2,7 @@ import { MongoClient, ObjectId } from "mongodb";
 import { testAdapter } from "../test-adapter";
 import {
 	authFlowTestSuite,
+	joinsTestSuite,
 	normalTestSuite,
 	transactionsTestSuite,
 } from "../tests";
@@ -30,6 +31,7 @@ const { execute } = await testAdapter({
 		normalTestSuite(),
 		authFlowTestSuite(),
 		transactionsTestSuite(),
+		joinsTestSuite(),
 		// numberIdTestSuite(), // no support
 		// uuidTestSuite() // no support
 	],

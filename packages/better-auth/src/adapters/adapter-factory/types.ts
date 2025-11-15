@@ -6,6 +6,7 @@ import type {
 import type {
 	CustomAdapter as CoreCustomAdapter,
 	DBAdapterFactoryConfig,
+	JoinConfig,
 } from "@better-auth/core/db/adapter";
 import type {
 	AdapterSchemaCreation,
@@ -110,6 +111,7 @@ export type AdapterFactoryCustomizeAdapterCreator = (config: {
 		data: Record<string, any>,
 		defaultModelName: string,
 		select?: string[] | undefined,
+		joinConfig?: JoinConfig | undefined,
 	) => Promise<Record<string, any>>;
 	transformWhereClause: <W extends Where[] | undefined>({
 		model,

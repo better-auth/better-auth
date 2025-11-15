@@ -1,7 +1,7 @@
 import { expect } from "vitest";
 import type { User } from "../../../../core/src/db/schema/user";
 import { createTestSuite } from "../create-test-suite";
-import { getNormalTestSuiteTests } from "./normal";
+import { getNormalTestSuiteTests } from "./basic";
 
 export const uuidTestSuite = createTestSuite(
 	"uuid",
