@@ -17,7 +17,7 @@ import {
 	useState,
 } from "react";
 import { RemoveScroll } from "react-remove-scroll";
-import type { z } from "zod";
+import * as z from "zod";
 import {
 	Popover,
 	PopoverContent,
