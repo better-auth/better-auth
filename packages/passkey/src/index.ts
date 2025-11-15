@@ -22,7 +22,7 @@ import { setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { mergeSchema } from "better-auth/db";
 import { APIError } from "better-call";
-import { z } from "zod";
+import * as z from "zod";
 import { PASSKEY_ERROR_CODES } from "./error-codes";
 import { schema } from "./schema";
 import type { Passkey, PasskeyOptions, WebAuthnChallengeValue } from "./types";
