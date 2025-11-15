@@ -193,6 +193,7 @@ export type BetterAuthAdvancedOptions = {
 	 * - "session_token"
 	 * - "session_data"
 	 * - "dont_remember"
+	 * - "account_data"
 	 *
 	 * plugins can also add additional cookies
 	 */
@@ -254,29 +255,6 @@ export type BetterAuthAdvancedOptions = {
 				 * function.
 				 */
 				generateId?: GenerateIdFn | false | "serial" | "uuid";
-		  }
-		| undefined;
-	/**
-	 * OAuth configuration
-	 */
-	oauthConfig?:
-		| {
-				/**
-				 * Skip state cookie check
-				 *
-				 * ⚠︎ this has security implications and should only be enabled if you know what you are doing.
-				 * @default false
-				 */
-				skipStateCookieCheck?: boolean;
-				/**
-				 * Strategy for storing OAuth state
-				 *
-				 * - "cookie": Store state in an encrypted cookie (stateless)
-				 * - "database": Store state in the database
-				 *
-				 * @default "cookie"
-				 */
-				storeStateStrategy?: "database" | "cookie";
 		  }
 		| undefined;
 };
@@ -901,6 +879,30 @@ export type BetterAuthOptions = {
 				 * @default false
 				 */
 				encryptOAuthTokens?: boolean;
+				/**
+				 * Skip state cookie check
+				 *
+				 * ⚠︎ this has security implications and should only be enabled if you know what you are doing.
+				 * @default false
+				 */
+				skipStateCookieCheck?: boolean;
+				/**
+				 * Strategy for storing OAuth state
+				 *
+				 * - "cookie": Store state in an encrypted cookie (stateless)
+				 * - "database": Store state in the database
+				 *
+				 * @default "cookie"
+				 */
+				storeStateStrategy?: "database" | "cookie";
+				/**
+				 * Store account data after oauth flow on a cookie
+				 *
+				 * This is useful for database less flow
+				 *
+				 * @default false (true if you haven't passed a database)
+				 */
+				storeAccountCookie?: boolean;
 		  }
 		| undefined;
 	/**
