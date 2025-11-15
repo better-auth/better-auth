@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { z } from "zod";
+import * as z from "zod";
 import { APIError } from "../../api";
 import type { Role } from "../access";
 import { defaultRoles } from "./access";

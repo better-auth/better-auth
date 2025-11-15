@@ -1,6 +1,6 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { describe, expect } from "vitest";
-import { z } from "zod";
+import * as z from "zod";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { isSimpleRequest, originCheck } from "./origin-check";

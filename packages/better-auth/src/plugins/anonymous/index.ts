@@ -3,7 +3,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import { z } from "zod";
+import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
 import { parseSetCookieHeader, setSessionCookie } from "../../cookies";
 import { mergeSchema } from "../../db/schema";

@@ -7,7 +7,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import { z } from "zod";
+import * as z from "zod";
 import { getSession } from "../../api";
 import type { InferSession, InferUser } from "../../types";
 import { getEndpointResponse } from "../../utils/plugin-helper";

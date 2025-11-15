@@ -14,6 +14,19 @@
   "linter": {
     "enabled": true,
     "rules": {
+      "style": {
+        "noRestrictedImports": {
+          "options": {
+            "paths": {
+              "zod": {
+                "importNames": ["z"],
+                "message": "Use `import * as z from \"zod\"` instead of `import { z }`."
+              }
+            }
+          },
+          "level": "error"
+        }
+      },
       "recommended": false,
       "suspicious": {
         "noImplicitAnyLet": "warn",

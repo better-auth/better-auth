@@ -3,7 +3,7 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { defineErrorCodes } from "@better-auth/core/utils";
 import { APIError } from "better-call";
 import { type StringValue as MSStringValue, ms } from "ms";
-import { z } from "zod";
+import * as z from "zod";
 import { getSessionFromCtx } from "../../api/routes/session";
 import { generateRandomString } from "../../crypto";
 import { mergeSchema } from "../../db";

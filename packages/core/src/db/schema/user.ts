@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import { coreSchema } from "./shared";
 
 export const userSchema = coreSchema.extend({

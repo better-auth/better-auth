@@ -5,7 +5,7 @@ import {
 	defineDocs,
 } from "fumadocs-mdx/config";
 import { createGenerator, remarkAutoTypeTable } from "fumadocs-typescript";
-import { z } from "zod";
+import * as z from "zod";
 
 export const docs = defineDocs({
 	dir: "./content/docs",

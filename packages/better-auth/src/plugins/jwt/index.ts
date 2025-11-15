@@ -5,7 +5,7 @@ import {
 } from "@better-auth/core/api";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { JSONWebKeySet, JWTPayload } from "jose";
-import { z } from "zod";
+import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../api";
 import { mergeSchema } from "../../db/schema";
 import { getJwksAdapter } from "./adapter";

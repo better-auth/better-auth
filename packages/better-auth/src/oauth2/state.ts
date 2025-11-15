@@ -1,6 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-call";
-import { z } from "zod";
+import * as z from "zod";
 import { setOAuthState } from "../api/middlewares/oauth";
 import {
 	generateRandomString,
