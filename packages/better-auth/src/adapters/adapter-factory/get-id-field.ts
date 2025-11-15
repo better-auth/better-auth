@@ -45,9 +45,9 @@ export const initGetIdField = ({
 			} else if (useNumberId && !forceAllowId) {
 				// if force allow is true, then we should be using their custom provided id.
 				return false;
-			} else if (useUUIDs && !supportsUUIDs) {
+			} else if (useUUIDs) {
 				// should only generate UUIDs via JS if the database doesn't support natively generating UUIDs.
-				return true;
+				return !supportsUUIDs;
 			} else {
 				return true;
 			}
