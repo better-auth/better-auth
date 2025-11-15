@@ -240,12 +240,16 @@ export async function authorize(
 	// max_age=0 is equivalent to prompt=login
 	let requireLogin = promptSet.has("login");
 	if (query.max_age !== undefined) {
-		const sessionAge =
-			(Date.now() - new Date(session.session.createdAt).getTime()) / 1000;
-		if (sessionAge > query.max_age) {
-			// Session is older than max_age, force reauthentication
-			requireLogin = true;
+		const maxAge = Number(query.max_age);
+		if (Number.isInteger(maxAge) && maxAge >= 0) {
+			const sessionAge =
+				(Date.now() - new Date(session.session.createdAt).getTime()) / 1000;
+			if (sessionAge > maxAge) {
+				// Session is older than max_age, force reauthentication
+				requireLogin = true;
+			}
 		}
+		// If max_age is invalid (not a non-negative integer), ignore it per OIDC spec
 	}
 
 	const requireConsent =
