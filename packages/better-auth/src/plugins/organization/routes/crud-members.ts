@@ -65,6 +65,10 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 						: {}) &
 						InferAdditionalFieldsFromPluginOptions<"member", O>,
 				},
+				openapi: {
+					operationId: "addOrganizationMember",
+					description: "Add a member to an organization",
+				},
 			},
 		},
 		async (ctx) => {
@@ -441,6 +445,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 					},
 				},
 				openapi: {
+					operationId: "updateOrganizationMemberRole",
 					description: "Update the role of a member in an organization",
 					responses: {
 						"200": {
