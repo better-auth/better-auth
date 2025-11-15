@@ -67,12 +67,12 @@ export interface HaveIBeenPwnedOptions {
 }
 
 export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
-  const paths = [
+  const paths = options?.paths || [
     "/sign-up/email",
     "/change-password",
     "/reset-password",
-    ...(options?.paths || []),
   ];
+
   return {
     id: "haveIBeenPwned",
     init(ctx) {
@@ -82,7 +82,7 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
             ...ctx.password,
             async hash(password) {
               const c = await getCurrentAuthContext();
-              if (!c.path || (c.path && !paths.includes(c.path))) {
+              if (!c.path || !paths.includes(c.path)) {
                 return ctx.password.hash(password);
               }
               await checkPasswordCompromise(
