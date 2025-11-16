@@ -2,10 +2,11 @@ import { getAuthTables } from "../../db";
 import { testAdapter } from "../test-adapter";
 import {
 	authFlowTestSuite,
+	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
-	performanceTestSuite,
 	transactionsTestSuite,
+	uuidTestSuite,
 } from "../tests";
 import { memoryAdapter } from "./memory-adapter";
 
@@ -29,7 +30,8 @@ const { execute } = await testAdapter({
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
-		performanceTestSuite(),
+		joinsTestSuite(),
+		uuidTestSuite(),
 	],
 	async onFinish() {},
 });

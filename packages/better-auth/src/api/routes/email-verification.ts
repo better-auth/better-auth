@@ -3,7 +3,7 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "better-call";
 import { type JWTPayload, type JWTVerifyResult, jwtVerify } from "jose";
 import { JWTExpired } from "jose/errors";
-import { z } from "zod";
+import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
 import { signJWT } from "../../crypto/jwt";
 import type { User } from "../../types";
@@ -69,6 +69,7 @@ export const sendVerificationEmail = createAuthEndpoint(
 	"/send-verification-email",
 	{
 		method: "POST",
+		operationId: "sendVerificationEmail",
 		body: z.object({
 			email: z.email().meta({
 				description: "The email to send the verification email to",
@@ -82,6 +83,7 @@ export const sendVerificationEmail = createAuthEndpoint(
 		}),
 		metadata: {
 			openapi: {
+				operationId: "sendVerificationEmail",
 				description: "Send a verification email to the user",
 				requestBody: {
 					content: {
@@ -191,6 +193,7 @@ export const verifyEmail = createAuthEndpoint(
 	"/verify-email",
 	{
 		method: "GET",
+		operationId: "verifyEmail",
 		query: z.object({
 			token: z.string().meta({
 				description: "The token to verify the email",
@@ -236,46 +239,7 @@ export const verifyEmail = createAuthEndpoint(
 									properties: {
 										user: {
 											type: "object",
-											properties: {
-												id: {
-													type: "string",
-													description: "User ID",
-												},
-												email: {
-													type: "string",
-													description: "User email",
-												},
-												name: {
-													type: "string",
-													description: "User name",
-												},
-												image: {
-													type: "string",
-													description: "User image URL",
-												},
-												emailVerified: {
-													type: "boolean",
-													description:
-														"Indicates if the user email is verified",
-												},
-												createdAt: {
-													type: "string",
-													description: "User creation date",
-												},
-												updatedAt: {
-													type: "string",
-													description: "User update date",
-												},
-											},
-											required: [
-												"id",
-												"email",
-												"name",
-												"image",
-												"emailVerified",
-												"createdAt",
-												"updatedAt",
-											],
+											$ref: "#/components/schemas/User",
 										},
 										status: {
 											type: "boolean",

@@ -4,7 +4,7 @@ import type {
 } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { atom, computed } from "nanostores";
-import { z } from "zod";
+import * as z from "zod";
 import { useAuthQuery } from "./query";
 
 const serverPlugin = {

@@ -334,6 +334,9 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						if (!userInfo) {
 							return null;
 						}
+
+						const userMap = await c.mapProfileToUser?.(userInfo);
+
 						return {
 							user: {
 								id: userInfo?.id,
@@ -341,7 +344,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								emailVerified: userInfo?.emailVerified,
 								image: userInfo?.image,
 								name: userInfo?.name,
-								...c.mapProfileToUser?.(userInfo),
+								...userMap,
 							},
 							data: userInfo,
 						};

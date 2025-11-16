@@ -1,6 +1,6 @@
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import type { Prettify } from "better-call";
-import { z } from "zod";
+import * as z from "zod";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
 import { generateId } from "../../utils";
 import type { OrganizationOptions } from "./types";
@@ -272,7 +272,7 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 					};
 				};
 
-export const role = z.string();
+export const roleSchema = z.string();
 export const invitationStatus = z
 	.enum(["pending", "accepted", "rejected", "canceled"])
 	.default("pending");
@@ -293,7 +293,7 @@ export const memberSchema = z.object({
 	id: z.string().default(generateId),
 	organizationId: z.string(),
 	userId: z.coerce.string(),
-	role,
+	role: roleSchema,
 	createdAt: z.date().default(() => new Date()),
 });
 
@@ -301,7 +301,7 @@ export const invitationSchema = z.object({
 	id: z.string().default(generateId),
 	organizationId: z.string(),
 	email: z.string(),
-	role,
+	role: roleSchema,
 	status: invitationStatus,
 	teamId: z.string().nullish(),
 	inviterId: z.string(),

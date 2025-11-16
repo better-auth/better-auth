@@ -1,6 +1,6 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
-import { z } from "zod";
+import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
@@ -21,6 +21,7 @@ export const callbackOAuth = createAuthEndpoint(
 	"/callback/:id",
 	{
 		method: ["GET", "POST"],
+		operationId: "handleOAuthCallback",
 		body: schema.optional(),
 		query: schema.optional(),
 		metadata: HIDE_METADATA,
