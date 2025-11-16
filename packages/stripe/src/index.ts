@@ -13,7 +13,7 @@ import {
 } from "better-auth/api";
 import { defu } from "defu";
 import Stripe, { type Stripe as StripeType } from "stripe";
-import { z } from "zod";
+import * as z from "zod";
 import { STRIPE_ERROR_CODES } from "./error-codes";
 import {
 	onCheckoutSessionCompleted,
