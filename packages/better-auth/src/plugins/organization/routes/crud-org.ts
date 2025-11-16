@@ -1,6 +1,6 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "better-call";
-import { z } from "zod";
+import * as z from "zod";
 import { getSessionFromCtx, requestOnlySessionMiddleware } from "../../../api";
 import { setSessionCookie } from "../../../cookies";
 import {
@@ -682,6 +682,7 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
 				openapi: {
+					operationId: "getOrganization",
 					description: "Get the full organization",
 					responses: {
 						"200": {
@@ -777,6 +778,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 			use: [orgSessionMiddleware, orgMiddleware],
 			metadata: {
 				openapi: {
+					operationId: "setActiveOrganization",
 					description: "Set the active organization",
 					responses: {
 						"200": {
