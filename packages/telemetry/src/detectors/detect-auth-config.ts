@@ -3,7 +3,7 @@ import type { TelemetryContext } from "../types";
 
 export function getTelemetryAuthConfig(
 	options: BetterAuthOptions,
-	context?: TelemetryContext,
+	context?: TelemetryContext | undefined,
 ) {
 	return {
 		database: context?.database,
@@ -117,7 +117,9 @@ export function getTelemetryAuthConfig(
 					options.advanced?.crossSubDomainCookies?.additionalCookies,
 			},
 			database: {
-				useNumberId: !!options.advanced?.database?.useNumberId,
+				useNumberId:
+					!!options.advanced?.database?.useNumberId ||
+					options.advanced?.database?.generateId === "serial",
 				generateId: options.advanced?.database?.generateId,
 				defaultFindManyLimit: options.advanced?.database?.defaultFindManyLimit,
 			},

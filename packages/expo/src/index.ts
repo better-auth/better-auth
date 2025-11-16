@@ -4,17 +4,17 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { APIError } from "better-call";
-import { z } from "zod";
+import * as z from "zod";
 
 export interface ExpoOptions {
 	/**
 	 * Disable origin override for expo API routes
 	 * When set to true, the origin header will not be overridden for expo API routes
 	 */
-	disableOriginOverride?: boolean;
+	disableOriginOverride?: boolean | undefined;
 }
 
-export const expo = (options?: ExpoOptions) => {
+export const expo = (options?: ExpoOptions | undefined) => {
 	return {
 		id: "expo",
 		init: (ctx) => {

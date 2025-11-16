@@ -17,12 +17,12 @@ import type {
 
 export interface SIWEPluginOptions {
 	domain: string;
-	emailDomainName?: string;
-	anonymous?: boolean;
+	emailDomainName?: string | undefined;
+	anonymous?: boolean | undefined;
 	getNonce: () => Promise<string>;
 	verifyMessage: (args: SIWEVerifyMessageArgs) => Promise<boolean>;
-	ensLookup?: (args: ENSLookupArgs) => Promise<ENSLookupResult>;
-	schema?: InferOptionSchema<typeof schema>;
+	ensLookup?: ((args: ENSLookupArgs) => Promise<ENSLookupResult>) | undefined;
+	schema?: InferOptionSchema<typeof schema> | undefined;
 }
 
 export const siwe = (options: SIWEPluginOptions) =>
@@ -82,7 +82,7 @@ export const siwe = (options: SIWEPluginOptions) =>
 								.max(2147483647)
 								.optional()
 								.default(1),
-							email: z.string().email().optional(),
+							email: z.email().optional(),
 						})
 						.refine((data) => options.anonymous !== false || !!data.email, {
 							message:

@@ -21,10 +21,12 @@ export function getWithHooks(
 	async function createWithHooks<T extends Record<string, any>>(
 		data: T,
 		model: BaseModels,
-		customCreateFn?: {
-			fn: (data: Record<string, any>) => void | Promise<any>;
-			executeMainFn?: boolean;
-		},
+		customCreateFn?:
+			| {
+					fn: (data: Record<string, any>) => void | Promise<any>;
+					executeMainFn?: boolean;
+			  }
+			| undefined,
 	) {
 		const context = await getCurrentAuthContext();
 		let actualData = data;
@@ -73,10 +75,12 @@ export function getWithHooks(
 		data: any,
 		where: Where[],
 		model: BaseModels,
-		customUpdateFn?: {
-			fn: (data: Record<string, any>) => void | Promise<any>;
-			executeMainFn?: boolean;
-		},
+		customUpdateFn?:
+			| {
+					fn: (data: Record<string, any>) => void | Promise<any>;
+					executeMainFn?: boolean;
+			  }
+			| undefined,
 	) {
 		const context = await getCurrentAuthContext();
 		let actualData = data;
@@ -89,8 +93,13 @@ export function getWithHooks(
 				if (result === false) {
 					return null;
 				}
-				const isObject = typeof result === "object";
-				actualData = isObject ? (result as any).data : result;
+				const isObject = typeof result === "object" && "data" in result;
+				if (isObject) {
+					actualData = {
+						...actualData,
+						...result.data,
+					};
+				}
 			}
 		}
 
@@ -121,10 +130,12 @@ export function getWithHooks(
 		data: any,
 		where: Where[],
 		model: BaseModels,
-		customUpdateFn?: {
-			fn: (data: Record<string, any>) => void | Promise<any>;
-			executeMainFn?: boolean;
-		},
+		customUpdateFn?:
+			| {
+					fn: (data: Record<string, any>) => void | Promise<any>;
+					executeMainFn?: boolean;
+			  }
+			| undefined,
 	) {
 		const context = await getCurrentAuthContext();
 		let actualData = data;
@@ -137,8 +148,13 @@ export function getWithHooks(
 				if (result === false) {
 					return null;
 				}
-				const isObject = typeof result === "object";
-				actualData = isObject ? (result as any).data : result;
+				const isObject = typeof result === "object" && "data" in result;
+				if (isObject) {
+					actualData = {
+						...actualData,
+						...result.data,
+					};
+				}
 			}
 		}
 
@@ -169,10 +185,12 @@ export function getWithHooks(
 	async function deleteWithHooks<T extends Record<string, any>>(
 		where: Where[],
 		model: BaseModels,
-		customDeleteFn?: {
-			fn: (where: Where[]) => void | Promise<any>;
-			executeMainFn?: boolean;
-		},
+		customDeleteFn?:
+			| {
+					fn: (where: Where[]) => void | Promise<any>;
+					executeMainFn?: boolean;
+			  }
+			| undefined,
 	) {
 		const context = await getCurrentAuthContext();
 		let entityToDelete: T | null = null;
@@ -229,10 +247,12 @@ export function getWithHooks(
 	async function deleteManyWithHooks<T extends Record<string, any>>(
 		where: Where[],
 		model: BaseModels,
-		customDeleteFn?: {
-			fn: (where: Where[]) => void | Promise<any>;
-			executeMainFn?: boolean;
-		},
+		customDeleteFn?:
+			| {
+					fn: (where: Where[]) => void | Promise<any>;
+					executeMainFn?: boolean;
+			  }
+			| undefined,
 	) {
 		const context = await getCurrentAuthContext();
 		let entitiesToDelete: T[] = [];

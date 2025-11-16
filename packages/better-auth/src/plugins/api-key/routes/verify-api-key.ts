@@ -21,7 +21,7 @@ export async function validateApiKey({
 	hashedKey: string;
 	opts: PredefinedApiKeyOptions;
 	schema: ReturnType<typeof apiKeySchema>;
-	permissions?: Record<string, string[]>;
+	permissions?: Record<string, string[]> | undefined;
 	ctx: GenericEndpointContext;
 }) {
 	const apiKey = await ctx.context.adapter.findOne<ApiKey>({
@@ -48,7 +48,7 @@ export async function validateApiKey({
 	}
 
 	if (apiKey.expiresAt) {
-		const now = new Date().getTime();
+		const now = Date.now();
 		const expiresAt = new Date(apiKey.expiresAt).getTime();
 		if (now > expiresAt) {
 			try {
@@ -119,7 +119,7 @@ export async function validateApiKey({
 			code: "USAGE_EXCEEDED" as const,
 		});
 	} else if (remaining !== null) {
-		let now = new Date().getTime();
+		let now = Date.now();
 		const refillInterval = apiKey.refillInterval;
 		const refillAmount = apiKey.refillAmount;
 		let lastTime = new Date(lastRefillAt ?? apiKey.createdAt).getTime();
@@ -191,7 +191,7 @@ export function verifyApiKey({
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
-		byPassLastCheckTime?: boolean,
+		byPassLastCheckTime?: boolean | undefined,
 	): void;
 }) {
 	return createAuthEndpoint(

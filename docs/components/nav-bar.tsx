@@ -3,7 +3,7 @@ import { MobileSearchIcon } from "@/components/mobile-search-icon";
 import { ThemeToggle } from "@/components/theme-toggler";
 import DarkPng from "../public/branding/better-auth-logo-dark.png";
 import WhitePng from "../public/branding/better-auth-logo-light.png";
-import HalloweenLogo from "./halloween/logo";
+import { Logo } from "./logo";
 import LogoContextMenu from "./logo-context-menu";
 import { NavLink } from "./nav-link";
 import { NavbarMobile, NavbarMobileBtn } from "./nav-mobile";
@@ -90,13 +90,10 @@ export const Navbar = () => {
 					<div className="flex flex-col gap-2 w-full">
 						<LogoContextMenu
 							logo={
-								// TODO: Revert to original logo after Halloween
-								//
-								// <div className="flex items-center gap-2">
-								// 	<Logo />
-								// 	<p className="select-none">BETTER-AUTH.</p>
-								// </div>
-								<HalloweenLogo />
+								<div className="flex items-center gap-2">
+									<Logo />
+									<p className="select-none">BETTER-AUTH.</p>
+								</div>
 							}
 							logoAssets={logoAssets}
 						/>
@@ -111,7 +108,7 @@ export const Navbar = () => {
 						))}
 						<NavLink
 							href="https://github.com/better-auth/better-auth"
-							className=" bg-muted/20"
+							className="bg-muted/20"
 							external
 						>
 							<svg

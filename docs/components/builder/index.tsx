@@ -268,19 +268,9 @@ export function Builder() {
 					</DialogDescription>
 				</DialogHeader>
 
-				<div className="flex gap-4 md:gap-12 flex-col md:flex-row items-center md:items-start">
+				<div className="overflow-y-scroll no-scrollbar flex gap-4 md:gap-12 flex-col md:flex-row items-center md:items-start">
 					<div className={cn("w-4/12")}>
-						<div
-							className="overflow-scroll h-[580px] relative"
-							style={{
-								scrollbarWidth: "none",
-								scrollbarColor: "transparent transparent",
-								//@ts-expect-error
-								"&::-webkit-scrollbar": {
-									display: "none",
-								},
-							}}
-						>
+						<div className="overflow-scroll h-[580px] relative no-scrollbar">
 							{options.signUp ? (
 								<AuthTabs
 									tabs={[
@@ -301,17 +291,7 @@ export function Builder() {
 							)}
 						</div>
 					</div>
-					<ScrollArea
-						className="w-[45%] flex-grow"
-						style={{
-							scrollbarWidth: "none",
-							scrollbarColor: "transparent transparent",
-							//@ts-expect-error
-							"&::-webkit-scrollbar": {
-								display: "none",
-							},
-						}}
-					>
+					<ScrollArea className="w-[45%] flex-grow no-scrollbar">
 						<div className="h-[580px]">
 							{currentStep === 0 ? (
 								<Card className="rounded-none flex-grow h-full">

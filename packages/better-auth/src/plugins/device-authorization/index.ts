@@ -447,13 +447,13 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 						id: string;
 						deviceCode: string;
 						userCode: string;
-						userId?: string;
+						userId?: string | undefined;
 						expiresAt: Date;
 						status: string;
-						lastPolledAt?: Date;
-						pollingInterval?: number;
-						clientId?: string;
-						scope?: string;
+						lastPolledAt?: Date | undefined;
+						pollingInterval?: number | undefined;
+						clientId?: string | undefined;
+						scope?: string | undefined;
 					}>({
 						model: "deviceCode",
 						where: [

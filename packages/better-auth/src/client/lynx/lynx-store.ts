@@ -14,12 +14,12 @@ export interface UseStoreOptions<SomeStore> {
 	 * [store, options.keys]
 	 * ```
 	 */
-	deps?: DependencyList;
+	deps?: DependencyList | undefined;
 
 	/**
 	 * Will re-render components only on specific key changes.
 	 */
-	keys?: StoreKeys<SomeStore>[];
+	keys?: StoreKeys<SomeStore>[] | undefined;
 }
 
 /**

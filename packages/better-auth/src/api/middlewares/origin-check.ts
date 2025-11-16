@@ -9,7 +9,13 @@ import { wildcardMatch } from "../../utils/wildcard";
  * trustedOrigins.
  */
 export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
-	if (ctx.request?.method !== "POST" || !ctx.request) {
+	// Skip origin check for GET, OPTIONS, HEAD requests - we don't mutate state here.
+	if (
+		ctx.request?.method === "GET" ||
+		ctx.request?.method === "OPTIONS" ||
+		ctx.request?.method === "HEAD" ||
+		!ctx.request
+	) {
 		return;
 	}
 	const headers = ctx.request?.headers;
@@ -46,8 +52,11 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 			if (pattern.includes("://")) {
 				return wildcardMatch(pattern)(getOrigin(url) || url);
 			}
-			// For host-only wildcards, match just the host
-			return wildcardMatch(pattern)(getHost(url));
+			const host = getHost(url);
+			if (!host) {
+				return false;
+			}
+			return wildcardMatch(pattern)(host);
 		}
 
 		const protocol = getProtocol(url);
@@ -118,8 +127,12 @@ export const originCheck = (
 				if (pattern.includes("://")) {
 					return wildcardMatch(pattern)(getOrigin(url) || url);
 				}
+				const host = getHost(url);
+				if (!host) {
+					return false;
+				}
 				// For host-only wildcards, match just the host
-				return wildcardMatch(pattern)(getHost(url));
+				return wildcardMatch(pattern)(host);
 			}
 			const protocol = getProtocol(url);
 			return protocol === "http:" || protocol === "https:" || !protocol

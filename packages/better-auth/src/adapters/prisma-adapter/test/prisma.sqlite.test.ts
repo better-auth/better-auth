@@ -4,10 +4,11 @@ import { join } from "path";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
+	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
-	performanceTestSuite,
 	transactionsTestSuite,
+	uuidTestSuite,
 } from "../../tests";
 import { prismaAdapter } from "../prisma-adapter";
 import { generateAuthConfigFile } from "./generate-auth-config";
@@ -44,11 +45,12 @@ const { execute } = await testAdapter({
 		destroyPrismaClient({ migrationCount: migrationCount - 1, dialect });
 	},
 	tests: [
-		normalTestSuite({}),
+		normalTestSuite(),
 		transactionsTestSuite(),
 		authFlowTestSuite(),
-		numberIdTestSuite({}),
-		performanceTestSuite({ dialect }),
+		numberIdTestSuite(),
+		joinsTestSuite(),
+		uuidTestSuite(),
 	],
 	onFinish: async () => {},
 	prefixTests: dialect,

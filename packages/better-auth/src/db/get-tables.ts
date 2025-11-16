@@ -98,6 +98,7 @@ export const getAuthTables = (
 						onDelete: "cascade",
 					},
 					required: true,
+					index: true,
 				},
 				...session?.fields,
 				...options.session?.additionalFields,
@@ -128,6 +129,7 @@ export const getAuthTables = (
 					defaultValue: false,
 					required: true,
 					fieldName: options.user?.fields?.emailVerified || "emailVerified",
+					input: false,
 				},
 				image: {
 					type: "string",
@@ -178,6 +180,7 @@ export const getAuthTables = (
 					},
 					required: true,
 					fieldName: options.account?.fields?.userId || "userId",
+					index: true,
 				},
 				accessToken: {
 					type: "string",
@@ -242,6 +245,7 @@ export const getAuthTables = (
 					type: "string",
 					required: true,
 					fieldName: options.verification?.fields?.identifier || "identifier",
+					index: true,
 				},
 				value: {
 					type: "string",

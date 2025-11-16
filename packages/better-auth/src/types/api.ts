@@ -37,12 +37,14 @@ export type InferSessionAPI<API> = API extends {
 								H extends boolean = false,
 							>(context: {
 								headers: Headers;
-								query?: {
-									disableCookieCache?: boolean;
-									disableRefresh?: boolean;
-								};
-								asResponse?: R;
-								returnHeaders?: H;
+								query?:
+									| {
+											disableCookieCache?: boolean;
+											disableRefresh?: boolean;
+									  }
+									| undefined;
+								asResponse?: R | undefined;
+								returnHeaders?: H | undefined;
 							}) => false extends R
 								? H extends true
 									? Promise<{

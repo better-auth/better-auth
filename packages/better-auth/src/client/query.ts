@@ -7,7 +7,7 @@ import { atom, onMount, type PreinitializedWritableAtom } from "nanostores";
 import type { SessionQueryParams } from "./types";
 
 // SSR detection
-const isServer = typeof window === "undefined";
+const isServer = () => typeof window === "undefined";
 
 export const useAuthQuery = <T>(
 	initializedAtom:
@@ -16,30 +16,33 @@ export const useAuthQuery = <T>(
 	path: string,
 	$fetch: BetterFetch,
 	options?:
-		| ((value: {
-				data: null | T;
-				error: null | BetterFetchError;
-				isPending: boolean;
-		  }) => BetterFetchOption)
-		| BetterFetchOption,
+		| (
+				| ((value: {
+						data: null | T;
+						error: null | BetterFetchError;
+						isPending: boolean;
+				  }) => BetterFetchOption)
+				| BetterFetchOption
+		  )
+		| undefined,
 ) => {
 	const value = atom<{
 		data: null | T;
 		error: null | BetterFetchError;
 		isPending: boolean;
 		isRefetching: boolean;
-		refetch: (queryParams?: { query?: SessionQueryParams }) => void;
+		refetch: (queryParams?: { query?: SessionQueryParams } | undefined) => void;
 	}>({
 		data: null,
 		error: null,
 		isPending: true,
 		isRefetching: false,
-		refetch: (queryParams?: { query?: SessionQueryParams }) => {
+		refetch: (queryParams?: { query?: SessionQueryParams } | undefined) => {
 			return fn(queryParams);
 		},
 	});
 
-	const fn = (queryParams?: { query?: SessionQueryParams }) => {
+	const fn = (queryParams?: { query?: SessionQueryParams } | undefined) => {
 		const opts =
 			typeof options === "function"
 				? options({
@@ -110,7 +113,7 @@ export const useAuthQuery = <T>(
 
 	for (const initAtom of initializedAtom) {
 		initAtom.subscribe(() => {
-			if (isServer) {
+			if (isServer()) {
 				// On server, don't trigger fetch
 				return;
 			}

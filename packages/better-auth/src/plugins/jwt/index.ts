@@ -17,7 +17,7 @@ import { createJwk } from "./utils";
 export type * from "./types";
 export { createJwk, generateExportedKeyPair } from "./utils";
 
-export const jwt = (options?: JwtOptions) => {
+export const jwt = (options?: JwtOptions | undefined) => {
 	// Remote url must be set when using signing function
 	if (options?.jwt?.sign && !options.jwks?.remoteUrl) {
 		throw new BetterAuthError(
@@ -44,6 +44,7 @@ export const jwt = (options?: JwtOptions) => {
 					method: "GET",
 					metadata: {
 						openapi: {
+							operationId: "getJSONWebKeySet",
 							description: "Get the JSON Web Key Set",
 							responses: {
 								"200": {
@@ -133,13 +134,18 @@ export const jwt = (options?: JwtOptions) => {
 
 					const adapter = getJwksAdapter(ctx.context.adapter);
 
-					const keySets = await adapter.getAllKeys();
+					let keySets = await adapter.getAllKeys(ctx);
 
-					if (keySets.length === 0) {
+					if (!keySets || keySets?.length === 0) {
 						const key = await createJwk(ctx, options);
-						keySets.push(key);
+						keySets = [key];
 					}
 
+					if (!keySets?.length) {
+						throw new BetterAuthError(
+							"No key sets found. Make sure you have a key in your database.",
+						);
+					}
 					const keyPairConfig = options?.jwks?.keyPairConfig;
 					const defaultCrv = keyPairConfig
 						? "crv" in keyPairConfig
@@ -167,6 +173,7 @@ export const jwt = (options?: JwtOptions) => {
 					use: [sessionMiddleware],
 					metadata: {
 						openapi: {
+							operationId: "getJSONWebToken",
 							description: "Get a JWT token",
 							responses: {
 								200: {
@@ -204,7 +211,7 @@ export const jwt = (options?: JwtOptions) => {
 						$Infer: {
 							body: {} as {
 								payload: JWTPayload;
-								overrideOptions?: JwtOptions;
+								overrideOptions?: JwtOptions | undefined;
 							},
 						},
 					},

@@ -21,13 +21,13 @@ export interface OTPOptions {
 	 *
 	 * @default "3 mins"
 	 */
-	period?: number;
+	period?: number | undefined;
 	/**
 	 * Number of digits for the OTP code
 	 *
 	 * @default 6
 	 */
-	digits?: number;
+	digits?: number | undefined;
 	/**
 	 * Send the otp to the user
 	 *
@@ -36,42 +36,47 @@ export interface OTPOptions {
 	 * @param request - The request object
 	 * @returns void | Promise<void>
 	 */
-	sendOTP?: (
-		/**
-		 * The user to send the otp to
-		 * @type UserWithTwoFactor
-		 * @default UserWithTwoFactors
-		 */
-		data: {
-			user: UserWithTwoFactor;
-			otp: string;
-		},
-		/**
-		 * The request object
-		 */
-		request?: Request,
-	) => Promise<void> | void;
+	sendOTP?:
+		| ((
+				/**
+				 * The user to send the otp to
+				 * @type UserWithTwoFactor
+				 * @default UserWithTwoFactors
+				 */
+				data: {
+					user: UserWithTwoFactor;
+					otp: string;
+				},
+				/**
+				 * The request object
+				 */
+				ctx?: GenericEndpointContext,
+		  ) => Promise<void> | void)
+		| undefined;
 	/**
 	 * The number of allowed attempts for the OTP
 	 *
 	 * @default 5
 	 */
-	allowedAttempts?: number;
+	allowedAttempts?: number | undefined;
 	storeOTP?:
-		| "plain"
-		| "encrypted"
-		| "hashed"
-		| { hash: (token: string) => Promise<string> }
-		| {
-				encrypt: (token: string) => Promise<string>;
-				decrypt: (token: string) => Promise<string>;
-		  };
+		| (
+				| "plain"
+				| "encrypted"
+				| "hashed"
+				| { hash: (token: string) => Promise<string> }
+				| {
+						encrypt: (token: string) => Promise<string>;
+						decrypt: (token: string) => Promise<string>;
+				  }
+		  )
+		| undefined;
 }
 
 /**
  * The otp adapter is created from the totp adapter.
  */
-export const otp2fa = (options?: OTPOptions) => {
+export const otp2fa = (options?: OTPOptions | undefined) => {
 	const opts = {
 		storeOTP: "plain",
 		digits: 6,
@@ -185,7 +190,7 @@ export const otp2fa = (options?: OTPOptions) => {
 			});
 			await options.sendOTP(
 				{ user: session.user as UserWithTwoFactor, otp: code },
-				ctx.request,
+				ctx,
 			);
 			return ctx.json({ status: true });
 		},
