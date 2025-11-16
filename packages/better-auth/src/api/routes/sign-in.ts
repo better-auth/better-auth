@@ -407,7 +407,7 @@ export const signInEmail = createAuthEndpoint(
 			});
 		}
 		const { email, password } = ctx.body;
-		const isValidEmail = z.string().email().safeParse(email);
+		const isValidEmail = z.email().safeParse(email);
 		if (!isValidEmail.success) {
 			throw new APIError("BAD_REQUEST", {
 				message: BASE_ERROR_CODES.INVALID_EMAIL,

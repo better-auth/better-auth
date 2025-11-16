@@ -185,7 +185,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			}
 
 			const email = ctx.body.email.toLowerCase();
-			const isValidEmail = z.string().email().safeParse(email);
+			const isValidEmail = z.email().safeParse(email);
 			if (!isValidEmail.success) {
 				throw new APIError("BAD_REQUEST", {
 					message: BASE_ERROR_CODES.INVALID_EMAIL,

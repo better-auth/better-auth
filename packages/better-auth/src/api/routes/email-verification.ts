@@ -285,7 +285,7 @@ export const verifyEmail = createAuthEndpoint(
 			return redirectOnError("invalid_token");
 		}
 		const schema = z.object({
-			email: z.string().email(),
+			email: z.email(),
 			updateTo: z.string().optional(),
 		});
 		const parsed = schema.parse(jwt.payload);
