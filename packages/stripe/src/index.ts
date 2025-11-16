@@ -212,6 +212,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						})
 						.default(false),
 				}),
+				metadata: {
+					openapi: {
+						operationId: "upgradeSubscription",
+					},
+				},
 				use: [
 					sessionMiddleware,
 					originCheck((c) => {
@@ -761,7 +766,12 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			{
 				method: "GET",
 				query: z.record(z.string(), z.any()).optional(),
-				use: [originCheck((ctx) => ctx.query.callbackURL)], // sessionMiddleware not used for redirect
+				metadata: {
+					openapi: {
+						operationId: "cancelSubscriptionCallback",
+					},
+				},
+				use: [originCheck((ctx) => ctx.query.callbackURL)],
 			},
 			async (ctx) => {
 				if (!ctx.query || !ctx.query.callbackURL || !ctx.query.subscriptionId) {
@@ -870,9 +880,14 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						.optional(),
 					returnUrl: z.string().meta({
 						description:
-							'URL to take customers to when they click on the billing portal’s link to return to your website. Eg: "https://example.com/dashboard"',
+							'URL to take customers to when they click on the billing portal\'s link to return to your website. Eg: "/account"',
 					}),
 				}),
+				metadata: {
+					openapi: {
+						operationId: "cancelSubscription",
+					},
+				},
 				use: [
 					sessionMiddleware,
 					originCheck((ctx) => ctx.body.returnUrl),
@@ -1016,6 +1031,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						})
 						.optional(),
 				}),
+				metadata: {
+					openapi: {
+						operationId: "restoreSubscription",
+					},
+				},
 				use: [sessionMiddleware, referenceMiddleware("restore-subscription")],
 			},
 			async (ctx) => {
@@ -1147,6 +1167,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							.optional(),
 					}),
 				),
+				metadata: {
+					openapi: {
+						operationId: "listActiveSubscriptions",
+					},
+				},
 				use: [sessionMiddleware, referenceMiddleware("list-subscription")],
 			},
 			async (ctx) => {
@@ -1193,7 +1218,12 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			{
 				method: "GET",
 				query: z.record(z.string(), z.any()).optional(),
-				use: [originCheck((ctx) => ctx.query.callbackURL)], // sessionMiddleware not used for redirect
+				metadata: {
+					openapi: {
+						operationId: "handleSubscriptionSuccess",
+					},
+				},
+				use: [originCheck((ctx) => ctx.query.callbackURL)],
 			},
 			async (ctx) => {
 				if (!ctx.query || !ctx.query.callbackURL || !ctx.query.subscriptionId) {
@@ -1303,6 +1333,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					referenceId: z.string().optional(),
 					returnUrl: z.string().default("/"),
 				}),
+				metadata: {
+					openapi: {
+						operationId: "createBillingPortal",
+					},
+				},
 				use: [
 					sessionMiddleware,
 					originCheck((ctx) => ctx.body.returnUrl),
@@ -1401,6 +1436,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					method: "POST",
 					metadata: {
 						isAction: false,
+						openapi: {
+							operationId: "handleStripeWebhook",
+						},
 					},
 					cloneRequest: true,
 					// don't parse the body

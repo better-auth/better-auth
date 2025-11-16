@@ -6,6 +6,8 @@ import { parseCookies, parseSetCookieHeader } from "../../cookies";
 import { signJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
+import { genericOAuthClient } from "../generic-oauth/client";
+import { genericOAuth } from "../generic-oauth/index";
 import { lastLoginMethod } from ".";
 import { lastLoginMethodClient } from "./client";
 
@@ -41,6 +43,9 @@ beforeAll(async () => {
 				refresh_token: "test-refresh-token",
 				id_token: testIdToken,
 			});
+		}),
+		http.post("https://provider.example.com/oauth/token", () => {
+			return HttpResponse.json({});
 		}),
 	];
 
@@ -274,5 +279,87 @@ describe("lastLoginMethod", async () => {
 			},
 		});
 		expect((oauthSession?.data?.user as any).lastLoginMethod).toBe("google");
+	});
+
+	it("should set the last login method for generic OAuth provider with /oauth2/callback/:providerId", async () => {
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				plugins: [
+					lastLoginMethod({ storeInDatabase: true }),
+					genericOAuth({
+						config: [
+							{
+								providerId: "my-provider-id",
+								clientId: "test-client-id",
+								clientSecret: "test-client-secret",
+								authorizationUrl:
+									"https://provider.example.com/oauth/authorize",
+								tokenUrl: "https://provider.example.com/oauth/token",
+								scopes: ["openid", "profile", "email"],
+								async getUserInfo(token) {
+									return {
+										id: "provider-user-123",
+										name: "Generic OAuth User",
+										email: "generic@example.com",
+										image: "https://example.com/avatar.jpg",
+										emailVerified: true,
+									};
+								},
+							},
+						],
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [lastLoginMethodClient(), genericOAuthClient()],
+				},
+			},
+		);
+
+		const oAuthHeaders = new Headers();
+		const signInRes = await client.signIn.oauth2({
+			providerId: "my-provider-id",
+			fetchOptions: {
+				onSuccess: cookieSetter(oAuthHeaders),
+			},
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		const headers = new Headers();
+		await client.$fetch("/oauth2/callback/my-provider-id", {
+			query: {
+				state,
+				code: "test",
+			},
+			headers: oAuthHeaders,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location");
+				expect(location).toBeDefined();
+
+				cookieSetter(headers)(context as any);
+
+				const cookies = parseSetCookieHeader(
+					context.response.headers.get("set-cookie") || "",
+				);
+				const lastLoginMethod = cookies.get(
+					"better-auth.last_used_login_method",
+				)?.value;
+				if (lastLoginMethod) {
+					expect(lastLoginMethod).toBe("my-provider-id");
+				}
+			},
+		});
+
+		const oauthSession = await client.getSession({
+			fetchOptions: {
+				headers: headers,
+			},
+		});
+		expect((oauthSession?.data?.user as any).lastLoginMethod).toBe(
+			"my-provider-id",
+		);
 	});
 });
