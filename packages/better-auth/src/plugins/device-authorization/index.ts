@@ -103,7 +103,7 @@ export const deviceAuthorizationOptionsSchema = z.object({
 		.string()
 		.optional()
 		.describe(
-			"The URI where users verify their device code. Can be an absolute URL (https://example.com/device) or relative path (/device). This will be returned as verification_uri in the device code response. If not provided, verification_uri will not be included in the response.",
+			"The URI where users verify their device code. Can be an absolute URL (https://example.com/device) or relative path (/custom-path). This will be returned as verification_uri in the device code response. If not provided, defaults to /device.",
 		),
 	schema: z.custom<InferOptionSchema<typeof schema>>(() => true),
 });
@@ -139,21 +139,16 @@ const buildVerificationUris = (
 	baseURL: string,
 	userCode: string,
 ): {
-	verificationUri: string | null;
-	verificationUriComplete: string | null;
+	verificationUri: string;
+	verificationUriComplete: string;
 } => {
-	if (!verificationUri) {
-		return {
-			verificationUri: null,
-			verificationUriComplete: null,
-		};
-	}
+	const uri = verificationUri || "/device";
 
 	let verificationUrl: URL;
 	try {
-		verificationUrl = new URL(verificationUri);
+		verificationUrl = new URL(uri);
 	} catch {
-		verificationUrl = new URL(verificationUri, baseURL);
+		verificationUrl = new URL(uri, baseURL);
 	}
 
 	const verificationUriCompleteUrl = new URL(verificationUrl);
@@ -237,16 +232,14 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 													verification_uri: {
 														type: "string",
 														format: "uri",
-														nullable: true,
 														description:
-															"The URL for user verification. null if verificationUri option is not configured.",
+															"The URL for user verification. Defaults to /device if not configured.",
 													},
 													verification_uri_complete: {
 														type: "string",
 														format: "uri",
-														nullable: true,
 														description:
-															"The complete URL with user code as query parameter. null if verificationUri option is not configured.",
+															"The complete URL with user code as query parameter.",
 													},
 													expires_in: {
 														type: "number",
