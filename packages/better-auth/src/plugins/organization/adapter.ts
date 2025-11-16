@@ -534,7 +534,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		listOrganizations: async (userId: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const result = await adapter.findMany<
-				InferMember<O, false> & { organization: InferOrganization<O> }
+				InferMember<O, false> & { organization: InferOrganization<O, false> }
 			>({
 				model: "member",
 				where: [
