@@ -299,7 +299,10 @@ export function updateApiKey({
 
 			let apiKey: ApiKey | null = null;
 
-			if (opts.useSecondaryStorage && ctx.context.secondaryStorage) {
+			if (
+				opts.storage === "secondary-storage" &&
+				ctx.context.secondaryStorage
+			) {
 				apiKey = await getApiKeyByIdFromSecondaryStorage(ctx, keyId);
 				if (apiKey && apiKey.userId !== user.id) {
 					apiKey = null;
@@ -417,7 +420,10 @@ export function updateApiKey({
 
 			let newApiKey: ApiKey = apiKey;
 			try {
-				if (opts.useSecondaryStorage && ctx.context.secondaryStorage) {
+				if (
+					opts.storage === "secondary-storage" &&
+					ctx.context.secondaryStorage
+				) {
 					const result = await updateApiKeyInSecondaryStorage(
 						ctx,
 						apiKey.id,

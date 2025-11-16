@@ -168,7 +168,10 @@ export function listApiKeys({
 			const session = ctx.context.session;
 			let apiKeys: ApiKey[];
 
-			if (opts.useSecondaryStorage && ctx.context.secondaryStorage) {
+			if (
+				opts.storage === "secondary-storage" &&
+				ctx.context.secondaryStorage
+			) {
 				apiKeys = await listApiKeysFromSecondaryStorage(ctx, session.user.id);
 			} else {
 				apiKeys = await ctx.context.adapter.findMany<ApiKey>({

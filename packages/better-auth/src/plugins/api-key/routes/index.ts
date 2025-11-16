@@ -27,7 +27,7 @@ export type PredefinedApiKeyOptions = ApiKeyOptions &
 			| "enableMetadata"
 			| "enableSessionForAPIKeys"
 			| "startingCharactersConfig"
-			| "useSecondaryStorage"
+			| "storage"
 		>
 	> & {
 		keyExpiration: Required<ApiKeyOptions["keyExpiration"]>;

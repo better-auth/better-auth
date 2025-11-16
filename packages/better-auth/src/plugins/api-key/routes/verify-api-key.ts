@@ -31,7 +31,7 @@ export async function validateApiKey({
 }) {
 	let apiKey: ApiKey | null = null;
 
-	if (opts.useSecondaryStorage && ctx.context.secondaryStorage) {
+	if (opts.storage === "secondary-storage" && ctx.context.secondaryStorage) {
 		apiKey = await getApiKeyFromSecondaryStorage(ctx, hashedKey);
 	} else {
 		apiKey = await ctx.context.adapter.findOne<ApiKey>({
@@ -63,7 +63,10 @@ export async function validateApiKey({
 		const expiresAt = new Date(apiKey.expiresAt).getTime();
 		if (now > expiresAt) {
 			try {
-				if (opts.useSecondaryStorage && ctx.context.secondaryStorage) {
+				if (
+					opts.storage === "secondary-storage" &&
+					ctx.context.secondaryStorage
+				) {
 					await deleteApiKeyFromSecondaryStorage(ctx, apiKey);
 				} else {
 					await ctx.context.adapter.delete({
@@ -116,7 +119,10 @@ export async function validateApiKey({
 	if (apiKey.remaining === 0 && apiKey.refillAmount === null) {
 		// if there is no more remaining requests, and there is no refill amount, than the key is revoked
 		try {
-			if (opts.useSecondaryStorage && ctx.context.secondaryStorage) {
+			if (
+				opts.storage === "secondary-storage" &&
+				ctx.context.secondaryStorage
+			) {
 				await deleteApiKeyFromSecondaryStorage(ctx, apiKey);
 			} else {
 				await ctx.context.adapter.delete({
@@ -168,7 +174,7 @@ export async function validateApiKey({
 
 	let newApiKey: ApiKey | null = null;
 
-	if (opts.useSecondaryStorage && ctx.context.secondaryStorage) {
+	if (opts.storage === "secondary-storage" && ctx.context.secondaryStorage) {
 		// We already have the apiKey object, so we can update it directly
 		const updated: ApiKey = {
 			...apiKey,

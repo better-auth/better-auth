@@ -70,7 +70,7 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 		enableMetadata: options?.enableMetadata ?? false,
 		disableKeyHashing: options?.disableKeyHashing ?? false,
 		requireName: options?.requireName ?? false,
-		useSecondaryStorage: options?.useSecondaryStorage ?? false,
+		storage: options?.storage ?? "database",
 		rateLimit: {
 			enabled:
 				options?.rateLimit?.enabled === undefined

@@ -2178,7 +2178,7 @@ describe("api-key", async () => {
 				},
 				plugins: [
 					apiKey({
-						useSecondaryStorage: true,
+						storage: "secondary-storage",
 						enableMetadata: true,
 					}),
 				],
@@ -2446,7 +2446,7 @@ describe("api-key", async () => {
 					{
 						plugins: [
 							apiKey({
-								useSecondaryStorage: true, // Enabled but no secondaryStorage configured - on purpose
+								storage: "secondary-storage", // Enabled but no secondaryStorage configured - on purpose
 								enableMetadata: true,
 							}),
 						],

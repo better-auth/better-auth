@@ -175,7 +175,10 @@ export function getApiKey({
 
 			let apiKey: ApiKey | null = null;
 
-			if (opts.useSecondaryStorage && ctx.context.secondaryStorage) {
+			if (
+				opts.storage === "secondary-storage" &&
+				ctx.context.secondaryStorage
+			) {
 				apiKey = await getApiKeyByIdFromSecondaryStorage(ctx, id);
 				if (apiKey && apiKey.userId !== session.user.id) {
 					apiKey = null;

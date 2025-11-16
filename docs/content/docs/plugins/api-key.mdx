@@ -454,7 +454,7 @@ This can significantly improve performance for high-frequency API key lookups, e
 To enable secondary storage for API keys, you need to:
 
 1. Configure `secondaryStorage` in your Better Auth options (see [Secondary Storage](/docs/concepts/database#secondary-storage) for more details)
-2. Enable `useSecondaryStorage` in the API Key plugin options
+2. Set `storage: "secondary-storage"` in the API Key plugin options
 
 ```ts
 import { createClient } from "redis";
@@ -479,7 +479,7 @@ export const auth = betterAuth({
   },
   plugins: [
     apiKey({
-      useSecondaryStorage: true,
+      storage: "secondary-storage",
     }),
   ],
 });
@@ -487,7 +487,7 @@ export const auth = betterAuth({
 
 ### How It Works
 
-When `useSecondaryStorage` is enabled:
+When `storage` is set to `"secondary-storage"`:
 
 - API keys are stored in secondary storage using specific key patterns:
   - `api-key:${hashedKey}` - Primary lookup by hashed key (for validation)
@@ -501,7 +501,7 @@ When `useSecondaryStorage` is enabled:
 </Callout>
 
 <Callout type="warn">
-  If you enable `useSecondaryStorage` but don't configure `secondaryStorage` in your Better Auth options, API keys will fall back to using the database adapter.
+  If you set `storage: "secondary-storage"` but don't configure `secondaryStorage` in your Better Auth options, API keys will fall back to using the database adapter.
 </Callout>
 
 ## Rate Limiting
@@ -829,12 +829,15 @@ Custom schema for the API key plugin.
 
 An API Key can represent a valid session, so we can mock a session for the user if we find a valid API key in the request headers. Default is `false`.
 
-`useSecondaryStorage` <span className="opacity-70">`boolean`</span>
+`storage` <span className="opacity-70">`"database" | "secondary-storage"`</span>
 
-Whether to store API keys in secondary storage instead of the database adapter. When enabled, API keys will be stored in the configured secondary storage (e.g., Redis). This can improve performance for high-frequency API key lookups. Default is `false`.
+Storage backend for API keys. Default is `"database"`.
+
+- `"database"`: Store API keys in the database adapter (default)
+- `"secondary-storage"`: Store API keys in the configured secondary storage (e.g., Redis). This can improve performance for high-frequency API key lookups.
 
 <Callout>
-  When `useSecondaryStorage` is enabled, you must configure `secondaryStorage` in your Better Auth options. API keys will be stored using key-value patterns:
+  When `storage` is set to `"secondary-storage"`, you must configure `secondaryStorage` in your Better Auth options. API keys will be stored using key-value patterns:
   - `api-key:${hashedKey}` - Primary lookup by hashed key
   - `api-key:by-id:${id}` - Lookup by ID
   - `api-key:by-user:${userId}` - User's API key list
@@ -858,7 +861,7 @@ export const auth = betterAuth({
   },
   plugins: [
     apiKey({
-      useSecondaryStorage: true,
+      storage: "secondary-storage",
     }),
   ],
 });

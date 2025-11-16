@@ -210,14 +210,15 @@ export interface ApiKeyOptions {
 		  }
 		| undefined;
 	/**
-	 * Whether to store API keys in secondary storage instead of the database adapter.
+	 * Storage backend for API keys.
 	 *
-	 * When enabled, API keys will be stored in the configured secondary storage (e.g., Redis).
-	 * This can improve performance for high-frequency API key lookups.
+	 * - `"database"`: Store API keys in the database adapter (default)
+	 * - `"secondary-storage"`: Store API keys in the configured secondary storage (e.g., Redis).
+	 *   This can improve performance for high-frequency API key lookups.
 	 *
-	 * @default false
+	 * @default "database"
 	 */
-	useSecondaryStorage?: boolean | undefined;
+	storage?: "database" | "secondary-storage" | undefined;
 }
 
 export type ApiKey = {

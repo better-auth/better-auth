@@ -85,7 +85,10 @@ export function deleteApiKey({
 
 			let apiKey: ApiKey | null = null;
 
-			if (opts.useSecondaryStorage && ctx.context.secondaryStorage) {
+			if (
+				opts.storage === "secondary-storage" &&
+				ctx.context.secondaryStorage
+			) {
 				apiKey = await getApiKeyByIdFromSecondaryStorage(ctx, keyId);
 			} else {
 				apiKey = await ctx.context.adapter.findOne<ApiKey>({
@@ -106,7 +109,10 @@ export function deleteApiKey({
 			}
 
 			try {
-				if (opts.useSecondaryStorage && ctx.context.secondaryStorage) {
+				if (
+					opts.storage === "secondary-storage" &&
+					ctx.context.secondaryStorage
+				) {
 					await deleteApiKeyFromSecondaryStorage(ctx, apiKey);
 				} else {
 					await ctx.context.adapter.delete<ApiKey>({

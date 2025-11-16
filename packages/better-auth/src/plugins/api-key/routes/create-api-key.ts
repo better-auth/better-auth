@@ -452,7 +452,10 @@ export function createApiKey({
 
 			let apiKey: ApiKey;
 
-			if (opts.useSecondaryStorage && ctx.context.secondaryStorage) {
+			if (
+				opts.storage === "secondary-storage" &&
+				ctx.context.secondaryStorage
+			) {
 				const id =
 					ctx.context.generateId({
 						model: API_KEY_TABLE_NAME,
