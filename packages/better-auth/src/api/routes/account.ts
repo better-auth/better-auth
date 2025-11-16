@@ -525,8 +525,12 @@ export const getAccessToken = createAuthEndpoint(
 			: null;
 
 		let account: Account | undefined = undefined;
-		if (accountData && providerId === accountData.providerId) {
-			account = accountData || undefined;
+		if (
+			accountData &&
+			providerId === accountData.providerId &&
+			(!accountId || accountData.id === accountId)
+		) {
+			account = accountData;
 		} else {
 			const accounts =
 				await ctx.context.internalAdapter.findAccounts(resolvedUserId);
@@ -696,22 +700,22 @@ export const refreshToken = createAuthEndpoint(
 			? safeJSONParse<Account>(accountDataCookie)
 			: null;
 
-		const accounts =
-			await ctx.context.internalAdapter.findAccounts(resolvedUserId);
-		account = accounts.find((acc) =>
-			accountId
-				? acc.id === accountId && acc.providerId === providerId
-				: acc.providerId === providerId,
-		);
+		if (accountData && providerId === accountData?.providerId) {
+			account = accountData;
+		} else {
+			const accounts =
+				await ctx.context.internalAdapter.findAccounts(resolvedUserId);
+			account = accounts.find((acc) =>
+				accountId
+					? acc.id === accountId && acc.providerId === providerId
+					: acc.providerId === providerId,
+			);
+		}
 
 		if (!account) {
-			if (accountData && providerId === accountData.providerId) {
-				account = accountData;
-			} else {
-				throw new APIError("BAD_REQUEST", {
-					message: "Account not found",
-				});
-			}
+			throw new APIError("BAD_REQUEST", {
+				message: "Account not found",
+			});
 		}
 
 		let refreshToken: string | null | undefined = undefined;
@@ -738,7 +742,7 @@ export const refreshToken = createAuthEndpoint(
 
 			if (account.id) {
 				const updateData = {
-					...(accountData || {}),
+					...(account || {}),
 					accessToken: await setTokenUtil(tokens.accessToken, ctx.context),
 					refreshToken: await setTokenUtil(tokens.refreshToken, ctx.context),
 					accessTokenExpiresAt: tokens.accessTokenExpiresAt,
