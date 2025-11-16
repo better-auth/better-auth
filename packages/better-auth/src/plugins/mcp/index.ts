@@ -12,8 +12,9 @@ import { getWebcryptoSubtle } from "@better-auth/utils";
 import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { SignJWT } from "jose";
-import { z } from "zod";
+import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
+import { parseSetCookieHeader } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { getBaseURL } from "../../utils/url";
 import {
@@ -138,35 +139,34 @@ export const mcp = (options: MCPOptions) => {
 						return true;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						// clean up the prompt cookie after a successful login
-						const hasNewSession = !!ctx.context.newSession;
 						const cookie = await ctx.getSignedCookie(
 							"oidc_login_prompt",
 							ctx.context.secret,
 						);
-						if (hasNewSession && cookie) {
-							ctx.setCookie("oidc_login_prompt", "", {
-								maxAge: 0,
-							});
-						}
-					}),
-				},
-				{
-					matcher() {
-						return true;
-					},
-					handler: createAuthMiddleware(async (ctx) => {
-						const cookie = await ctx.getSignedCookie(
-							"oidc_login_prompt",
-							ctx.context.secret,
+						const cookieName = ctx.context.authCookies.sessionToken.name;
+						const parsedSetCookieHeader = parseSetCookieHeader(
+							ctx.context.responseHeaders?.get("set-cookie") || "",
 						);
-						if (!cookie) {
+						const hasSessionToken = parsedSetCookieHeader.has(cookieName);
+						if (!cookie || !hasSessionToken) {
 							return;
 						}
-						await getSessionFromCtx(ctx);
-
+						ctx.setCookie("oidc_login_prompt", "", {
+							maxAge: 0,
+						});
+						const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
+						const sessionToken = sessionCookie?.split(".")[0]!;
+						if (!sessionToken) {
+							return;
+						}
+						const session =
+							await ctx.context.internalAdapter.findSession(sessionToken);
+						if (!session) {
+							return;
+						}
 						ctx.query = JSON.parse(cookie);
 						ctx.query!.prompt = "consent";
+						ctx.context.session = session;
 						const response = await authorizeMCPOAuth(ctx, opts);
 						return response;
 					}),
