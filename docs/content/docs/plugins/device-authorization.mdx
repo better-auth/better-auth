@@ -42,7 +42,7 @@ This will demonstrate the complete device authorization flow by:
           plugins: [ // [!code highlight]
             deviceAuthorization({ // [!code highlight]
               // Optional configuration
-              verificationUri: "/device/verification", // The URL where users verify their device code. // [!code highlight]
+              verificationUri: "/device/verify", // Custom URL where users verify their device code (default: /device) // [!code highlight]
               expiresIn: "30m", // Device code expiration time // [!code highlight]
               interval: "5s",    // Minimum polling interval // [!code highlight]
             }), // [!code highlight]
@@ -457,15 +457,10 @@ async function authenticateCLI() {
     console.log(`Please visit: ${verification_uri}`);
     console.log(`Enter code: ${user_code}\n`);
     
-    // Open browser
-    //
-    // These URIs come from the `verificationUri` option.
-    // If not provided, they are null.
+    // Open browser to verification page
     const urlToOpen = verification_uri_complete || verification_uri;
-    if (urlToOpen) {
-      console.log("🌐 Opening browser...");
-      await open(urlToOpen);
-    }
+    console.log("🌐 Opening browser...");
+    await open(urlToOpen);
     
     console.log(`⏳ Waiting for authorization... (polling every ${interval}s)`);
     
@@ -561,7 +556,7 @@ authenticateCLI().catch((err) => {
 
 ### Server
 
-**verificationUri**: The URL (absolute or relative) where users verify their device code. It is typically the page where users enter the code. Returned as `verification_uri` in the response. If not provided, it will be null.
+**verificationUri**: The URL (absolute or relative) where users verify their device code. It is typically the page where users enter the code. Returned as `verification_uri` in the response. Default: `"/device"`.
 
 **expiresIn**: The expiration time for device codes. Default: `"30m"` (30 minutes).
 
