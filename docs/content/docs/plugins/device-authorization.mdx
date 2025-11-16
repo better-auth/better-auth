@@ -42,7 +42,7 @@ This will demonstrate the complete device authorization flow by:
           plugins: [ // [!code highlight]
             deviceAuthorization({ // [!code highlight]
               // Optional configuration
-              verificationUri: "/device/verification" // The URL where users verify their device code. // [!code highlight]
+              verificationUri: "/device/verification", // The URL where users verify their device code. // [!code highlight]
               expiresIn: "30m", // Device code expiration time // [!code highlight]
               interval: "5s",    // Minimum polling interval // [!code highlight]
             }), // [!code highlight]
