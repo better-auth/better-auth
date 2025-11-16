@@ -120,22 +120,21 @@ describe("client validation", async () => {
 });
 
 describe("device authorization flow", async () => {
-	const { auth, client, sessionSetter, signInWithTestUser } =
-		await getTestInstance(
-			{
-				plugins: [
-					deviceAuthorization({
-						expiresIn: "5min",
-						interval: "2s",
-					}),
-				],
+	const { auth, signInWithTestUser } = await getTestInstance(
+		{
+			plugins: [
+				deviceAuthorization({
+					expiresIn: "5min",
+					interval: "2s",
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [deviceAuthorizationClient()],
 			},
-			{
-				clientOptions: {
-					plugins: [deviceAuthorizationClient()],
-				},
-			},
-		);
+		},
+	);
 
 	describe("device code request", () => {
 		it("should generate device and user codes", async () => {
@@ -147,8 +146,13 @@ describe("device authorization flow", async () => {
 
 			expect(response.device_code).toBeDefined();
 			expect(response.user_code).toBeDefined();
-			expect(response.verification_uri).toBeNull();
-			expect(response.verification_uri_complete).toBeNull();
+			expect(response.verification_uri).toBeDefined();
+			expect(response.verification_uri).toContain("/device");
+			expect(response.verification_uri_complete).toBeDefined();
+			expect(response.verification_uri_complete).toContain("/device");
+			expect(response.verification_uri_complete).toContain(
+				`user_code=${response.user_code}`,
+			);
 			expect(response.expires_in).toBe(300);
 			expect(response.interval).toBe(2);
 			expect(response.user_code).toMatch(/^[A-Z0-9]{8}$/);
@@ -553,7 +557,7 @@ describe("verificationUri option", async () => {
 		}).toThrow();
 	});
 
-	it("should return null verification URIs when not configured", async () => {
+	it("should return default /device verification URIs when not configured", async () => {
 		const { auth } = await getTestInstance({
 			plugins: [deviceAuthorization({})],
 		});
@@ -564,8 +568,13 @@ describe("verificationUri option", async () => {
 			},
 		});
 
-		expect(response.verification_uri).toBeNull();
-		expect(response.verification_uri_complete).toBeNull();
+		expect(response.verification_uri).toBeDefined();
+		expect(response.verification_uri).toContain("/device");
+		expect(response.verification_uri_complete).toBeDefined();
+		expect(response.verification_uri_complete).toContain("/device");
+		expect(response.verification_uri_complete).toContain(
+			`user_code=${response.user_code}`,
+		);
 	});
 
 	it("should use custom relative path for verificationUri", async () => {
