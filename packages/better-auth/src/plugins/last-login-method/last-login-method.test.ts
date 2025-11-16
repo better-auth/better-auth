@@ -8,10 +8,10 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { genericOAuthClient } from "../generic-oauth/client";
 import { genericOAuth } from "../generic-oauth/index";
-import { lastLoginMethod } from ".";
-import { lastLoginMethodClient } from "./client";
 import { siwe } from "../siwe";
 import { siweClient } from "../siwe/client";
+import { lastLoginMethod } from ".";
+import { lastLoginMethodClient } from "./client";
 
 let testIdToken: string;
 let handlers: ReturnType<typeof http.post>[];
