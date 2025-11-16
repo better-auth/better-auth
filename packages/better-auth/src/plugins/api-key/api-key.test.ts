@@ -1,5 +1,5 @@
 import { APIError } from "better-call";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { apiKey, ERROR_CODES } from ".";
 import { apiKeyClient } from "./client";
@@ -2155,5 +2155,396 @@ describe("api-key", async () => {
 		expect(result.key?.remaining).toBe(refillAmount - 1);
 
 		vi.useRealTimers();
+	});
+
+	describe("secondary storage", async () => {
+		let store = new Map<string, string>();
+		const expirationMap = new Map<string, number>();
+
+		const { client, auth, signInWithTestUser } = await getTestInstance(
+			{
+				secondaryStorage: {
+					set(key, value, ttl) {
+						store.set(key, value);
+						if (ttl) expirationMap.set(key, ttl);
+					},
+					get(key) {
+						return store.get(key) || null;
+					},
+					delete(key) {
+						store.delete(key);
+						expirationMap.delete(key);
+					},
+				},
+				plugins: [
+					apiKey({
+						useSecondaryStorage: true,
+						enableMetadata: true,
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+
+		beforeEach(() => {
+			store.clear();
+			expirationMap.clear();
+		});
+
+		it("should create API key in secondary storage", async () => {
+			const { headers, user } = await signInWithTestUser();
+			const { data: apiKey } = await client.apiKey.create(
+				{},
+				{ headers: headers },
+			);
+
+			expect(apiKey).not.toBeNull();
+			expect(apiKey?.key).toBeDefined();
+
+			// Check that API key is stored in secondary storage by ID
+			expect(store.has(`api-key:by-id:${apiKey?.id}`)).toBe(true);
+
+			// Check that user's API key list is updated
+			expect(store.has(`api-key:by-user:${user.id}`)).toBe(true);
+
+			// Verify the stored data can be retrieved
+			const storedData = store.get(`api-key:by-id:${apiKey?.id}`);
+			expect(storedData).toBeDefined();
+			const parsed = JSON.parse(storedData!);
+			expect(parsed.id).toBe(apiKey?.id);
+			expect(parsed.userId).toBe(user.id);
+		});
+
+		it("should get API key from secondary storage", async () => {
+			const { headers, user } = await signInWithTestUser();
+			const { data: createdKey } = await client.apiKey.create(
+				{},
+				{ headers: headers },
+			);
+
+			expect(createdKey).not.toBeNull();
+
+			const { data: retrievedKey } = await client.apiKey.get(
+				{ query: { id: createdKey!.id } },
+				{ headers: headers },
+			);
+
+			expect(retrievedKey).not.toBeNull();
+			expect(retrievedKey?.id).toBe(createdKey?.id);
+			expect(retrievedKey?.userId).toBe(user.id);
+		});
+
+		it("should list API keys from secondary storage", async () => {
+			const { headers, user } = await signInWithTestUser();
+
+			// Create multiple API keys
+			const { data: key1 } = await client.apiKey.create(
+				{},
+				{ headers: headers },
+			);
+			const { data: key2 } = await client.apiKey.create(
+				{},
+				{ headers: headers },
+			);
+
+			const { data: keys } = await client.apiKey.list({
+				fetchOptions: { headers: headers },
+			});
+
+			expect(keys).not.toBeNull();
+			expect(keys?.length).toBeGreaterThanOrEqual(2);
+			expect(keys?.some((k) => k.id === key1?.id)).toBe(true);
+			expect(keys?.some((k) => k.id === key2?.id)).toBe(true);
+		});
+
+		it("should update API key in secondary storage", async () => {
+			const { headers, user } = await signInWithTestUser();
+			const { data: createdKey } = await client.apiKey.create(
+				{ name: "Original Name" },
+				{ headers: headers },
+			);
+
+			expect(createdKey).not.toBeNull();
+
+			const { data: updatedKey } = await client.apiKey.update(
+				{
+					keyId: createdKey!.id,
+					name: "Updated Name",
+				},
+				{ headers: headers },
+			);
+
+			expect(updatedKey).not.toBeNull();
+			expect(updatedKey?.name).toBe("Updated Name");
+			expect(updatedKey?.id).toBe(createdKey?.id);
+		});
+
+		it("should delete API key from secondary storage", async () => {
+			const { headers, user } = await signInWithTestUser();
+			const { data: createdKey } = await client.apiKey.create(
+				{},
+				{ headers: headers },
+			);
+
+			expect(createdKey).not.toBeNull();
+
+			const { data: deleteResult } = await client.apiKey.delete(
+				{ keyId: createdKey!.id },
+				{ headers: headers },
+			);
+
+			expect(deleteResult?.success).toBe(true);
+
+			// Verify it's deleted from secondary storage
+			expect(store.has(`api-key:by-id:${createdKey!.id}`)).toBe(false);
+
+			// Verify it's removed from user's list
+			const userListData = store.get(`api-key:by-user:${user.id}`);
+			if (userListData) {
+				const userIds = JSON.parse(userListData);
+				expect(userIds.includes(createdKey!.id)).toBe(false);
+			}
+		});
+
+		it("should verify API key from secondary storage", async () => {
+			const { headers, user } = await signInWithTestUser();
+			const { data: createdKey } = await client.apiKey.create(
+				{},
+				{ headers: headers },
+			);
+
+			expect(createdKey).not.toBeNull();
+
+			const result = await auth.api.verifyApiKey({
+				body: {
+					key: createdKey!.key,
+				},
+			});
+
+			expect(result.valid).toBe(true);
+			expect(result.key).not.toBeNull();
+			expect(result.key?.id).toBe(createdKey?.id);
+		});
+
+		it("should set TTL when API key has expiration", async () => {
+			const { headers, user } = await signInWithTestUser();
+			const expiresIn = 60 * 60 * 24; // 1 day in seconds
+
+			const { data: createdKey } = await client.apiKey.create(
+				{ expiresIn },
+				{ headers: headers },
+			);
+
+			expect(createdKey).not.toBeNull();
+			expect(createdKey?.expiresAt).not.toBeNull();
+
+			// Check that TTL was set in expiration map (check by ID key)
+			const storedKey = `api-key:by-id:${createdKey!.id}`;
+			const ttl = expirationMap.get(storedKey);
+			expect(ttl).toBeDefined();
+			expect(ttl).toBeGreaterThan(0);
+			// TTL should be approximately expiresIn seconds (within 5 seconds tolerance)
+			expect(Math.abs(ttl! - expiresIn)).toBeLessThan(5);
+		});
+
+		it("should handle metadata in secondary storage", async () => {
+			const { headers, user } = await signInWithTestUser();
+			const metadata = { plan: "premium", environment: "production" };
+
+			const { data: createdKey } = await client.apiKey.create(
+				{ metadata },
+				{ headers: headers },
+			);
+
+			expect(createdKey).not.toBeNull();
+			expect(createdKey?.metadata).toEqual(metadata);
+
+			const { data: retrievedKey } = await client.apiKey.get(
+				{ query: { id: createdKey!.id } },
+				{ headers: headers },
+			);
+
+			expect(retrievedKey?.metadata).toEqual(metadata);
+		});
+
+		it("should handle rate limiting with secondary storage", async () => {
+			const { headers, user } = await signInWithTestUser();
+			const createdKey = await auth.api.createApiKey({
+				body: {
+					rateLimitEnabled: true,
+					rateLimitMax: 2,
+					rateLimitTimeWindow: 1000 * 60, // 1 minute
+					userId: user.id,
+				},
+			});
+			expect(createdKey).not.toBeNull();
+
+			// First request should succeed
+			let result = await auth.api.verifyApiKey({
+				body: {
+					key: createdKey!.key,
+				},
+			});
+			expect(result.valid).toBe(true);
+
+			// Second request should succeed
+			result = await auth.api.verifyApiKey({
+				body: {
+					key: createdKey!.key,
+				},
+			});
+			expect(result.valid).toBe(true);
+
+			// Third request should fail due to rate limit
+			result = await auth.api.verifyApiKey({
+				body: {
+					key: createdKey!.key,
+				},
+			});
+			expect(result.valid).toBe(false);
+			expect(result.error?.code).toBe("RATE_LIMITED");
+		});
+
+		it("should handle remaining count with secondary storage", async () => {
+			const { headers, user } = await signInWithTestUser();
+			const remaining = 5;
+
+			const createdKey = await auth.api.createApiKey({
+				body: {
+					remaining,
+					userId: user.id,
+				},
+			});
+
+			expect(createdKey).not.toBeNull();
+			expect(createdKey?.remaining).toBe(remaining);
+
+			let result = await auth.api.verifyApiKey({
+				body: {
+					key: createdKey!.key,
+				},
+			});
+			expect(result.valid).toBe(true);
+			expect(result.key?.remaining).toBe(remaining - 1);
+
+			result = await auth.api.verifyApiKey({
+				body: {
+					key: createdKey!.key,
+				},
+			});
+			expect(result.valid).toBe(true);
+			expect(result.key?.remaining).toBe(remaining - 2);
+		});
+
+		it("should fall back to database when secondary storage is not configured", async () => {
+			const { client: fallbackClient, signInWithTestUser: fallbackSignIn } =
+				await getTestInstance(
+					{
+						plugins: [
+							apiKey({
+								useSecondaryStorage: true, // Enabled but no secondaryStorage configured - on purpose
+								enableMetadata: true,
+							}),
+						],
+					},
+					{
+						clientOptions: {
+							plugins: [apiKeyClient()],
+						},
+					},
+				);
+
+			const { headers, user } = await fallbackSignIn();
+
+			// Should still work, falling back to database
+			const { data: createdKey } = await fallbackClient.apiKey.create(
+				{},
+				{ headers: headers },
+			);
+
+			expect(createdKey).not.toBeNull();
+			expect(createdKey?.key).toBeDefined();
+
+			// Should be able to retrieve it
+			const { data: retrievedKey } = await fallbackClient.apiKey.get(
+				{ query: { id: createdKey!.id } },
+				{ headers: headers },
+			);
+
+			expect(retrievedKey).not.toBeNull();
+			expect(retrievedKey?.id).toBe(createdKey?.id);
+		});
+
+		it("should handle expired keys with TTL in secondary storage", async () => {
+			vi.useFakeTimers();
+			const { headers, user } = await signInWithTestUser();
+			// Use 1 day in seconds (minimum allowed) + 1 second for testing expiration
+			const expiresIn = 60 * 60 * 24 + 1; // 86401 seconds = 1 day + 1 second
+
+			const { data: createdKey } = await client.apiKey.create(
+				{ expiresIn },
+				{ headers: headers },
+			);
+
+			expect(createdKey).not.toBeNull();
+			expect(createdKey?.expiresAt).not.toBeNull();
+
+			// Advance time past expiration
+			await vi.advanceTimersByTimeAsync((expiresIn + 1) * 1000);
+
+			const result = await auth.api.verifyApiKey({
+				body: {
+					key: createdKey!.key,
+				},
+			});
+
+			expect(result.valid).toBe(false);
+			expect(result.error?.code).toBe("KEY_EXPIRED");
+
+			vi.useRealTimers();
+		});
+
+		it("should maintain user's API key list in secondary storage", async () => {
+			const { headers, user } = await signInWithTestUser();
+
+			// Create multiple API keys for the same user
+			const { data: key1 } = await client.apiKey.create(
+				{},
+				{ headers: headers },
+			);
+			const { data: key2 } = await client.apiKey.create(
+				{},
+				{ headers: headers },
+			);
+			const { data: key3 } = await client.apiKey.create(
+				{},
+				{ headers: headers },
+			);
+
+			// List should return all keys
+			const { data: keys } = await client.apiKey.list({
+				fetchOptions: { headers: headers },
+			});
+
+			expect(keys?.length).toBeGreaterThanOrEqual(3);
+			expect(keys?.some((k) => k.id === key1?.id)).toBe(true);
+			expect(keys?.some((k) => k.id === key2?.id)).toBe(true);
+			expect(keys?.some((k) => k.id === key3?.id)).toBe(true);
+
+			// Delete one key
+			await client.apiKey.delete({ keyId: key2!.id }, { headers: headers });
+
+			// List should now have one less key
+			const { data: keysAfterDelete } = await client.apiKey.list({
+				fetchOptions: { headers: headers },
+			});
+
+			expect(keysAfterDelete?.length).toBe(keys!.length - 1);
+			expect(keysAfterDelete?.some((k) => k.id === key2?.id)).toBe(false);
+		});
 	});
 });

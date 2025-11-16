@@ -6,6 +6,10 @@ import { getDate } from "../../../utils/date";
 import { safeJSONParse } from "../../../utils/json";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
+import {
+	getApiKeyByIdFromSecondaryStorage,
+	updateApiKeyInSecondaryStorage,
+} from "../secondary-storage";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 export function updateApiKey({
@@ -293,19 +297,28 @@ export function updateApiKey({
 				}
 			}
 
-			const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-				model: API_KEY_TABLE_NAME,
-				where: [
-					{
-						field: "id",
-						value: keyId,
-					},
-					{
-						field: "userId",
-						value: user.id,
-					},
-				],
-			});
+			let apiKey: ApiKey | null = null;
+
+			if (opts.useSecondaryStorage && ctx.context.secondaryStorage) {
+				apiKey = await getApiKeyByIdFromSecondaryStorage(ctx, keyId);
+				if (apiKey && apiKey.userId !== user.id) {
+					apiKey = null;
+				}
+			} else {
+				apiKey = await ctx.context.adapter.findOne<ApiKey>({
+					model: API_KEY_TABLE_NAME,
+					where: [
+						{
+							field: "id",
+							value: keyId,
+						},
+						{
+							field: "userId",
+							value: user.id,
+						},
+					],
+				});
+			}
 
 			if (!apiKey) {
 				throw new APIError("NOT_FOUND", {
@@ -404,19 +417,28 @@ export function updateApiKey({
 
 			let newApiKey: ApiKey = apiKey;
 			try {
-				let result = await ctx.context.adapter.update<ApiKey>({
-					model: API_KEY_TABLE_NAME,
-					where: [
-						{
-							field: "id",
-							value: apiKey.id,
+				if (opts.useSecondaryStorage && ctx.context.secondaryStorage) {
+					const result = await updateApiKeyInSecondaryStorage(
+						ctx,
+						apiKey.id,
+						newValues,
+					);
+					if (result) newApiKey = result;
+				} else {
+					const result = await ctx.context.adapter.update<ApiKey>({
+						model: API_KEY_TABLE_NAME,
+						where: [
+							{
+								field: "id",
+								value: apiKey.id,
+							},
+						],
+						update: {
+							...newValues,
 						},
-					],
-					update: {
-						...newValues,
-					},
-				});
-				if (result) newApiKey = result;
+					});
+					if (result) newApiKey = result;
+				}
 			} catch (error: any) {
 				throw new APIError("INTERNAL_SERVER_ERROR", {
 					message: error?.message,

@@ -4,6 +4,10 @@ import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../../api";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
+import {
+	deleteApiKeyFromSecondaryStorage,
+	getApiKeyByIdFromSecondaryStorage,
+} from "../secondary-storage";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 export function deleteApiKey({
@@ -78,15 +82,22 @@ export function deleteApiKey({
 					message: ERROR_CODES.USER_BANNED,
 				});
 			}
-			const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-				model: API_KEY_TABLE_NAME,
-				where: [
-					{
-						field: "id",
-						value: keyId,
-					},
-				],
-			});
+
+			let apiKey: ApiKey | null = null;
+
+			if (opts.useSecondaryStorage && ctx.context.secondaryStorage) {
+				apiKey = await getApiKeyByIdFromSecondaryStorage(ctx, keyId);
+			} else {
+				apiKey = await ctx.context.adapter.findOne<ApiKey>({
+					model: API_KEY_TABLE_NAME,
+					where: [
+						{
+							field: "id",
+							value: keyId,
+						},
+					],
+				});
+			}
 
 			if (!apiKey || apiKey.userId !== session.user.id) {
 				throw new APIError("NOT_FOUND", {
@@ -95,15 +106,19 @@ export function deleteApiKey({
 			}
 
 			try {
-				await ctx.context.adapter.delete<ApiKey>({
-					model: API_KEY_TABLE_NAME,
-					where: [
-						{
-							field: "id",
-							value: apiKey.id,
-						},
-					],
-				});
+				if (opts.useSecondaryStorage && ctx.context.secondaryStorage) {
+					await deleteApiKeyFromSecondaryStorage(ctx, apiKey);
+				} else {
+					await ctx.context.adapter.delete<ApiKey>({
+						model: API_KEY_TABLE_NAME,
+						where: [
+							{
+								field: "id",
+								value: apiKey.id,
+							},
+						],
+					});
+				}
 			} catch (error: any) {
 				throw new APIError("INTERNAL_SERVER_ERROR", {
 					message: error?.message,

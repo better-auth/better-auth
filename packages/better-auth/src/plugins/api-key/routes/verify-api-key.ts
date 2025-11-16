@@ -8,6 +8,11 @@ import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
 import { isRateLimited } from "../rate-limit";
 import type { apiKeySchema } from "../schema";
+import {
+	deleteApiKeyFromSecondaryStorage,
+	getApiKeyFromSecondaryStorage,
+	setApiKeyInSecondaryStorage,
+} from "../secondary-storage";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 
@@ -24,15 +29,21 @@ export async function validateApiKey({
 	permissions?: Record<string, string[]> | undefined;
 	ctx: GenericEndpointContext;
 }) {
-	const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-		model: API_KEY_TABLE_NAME,
-		where: [
-			{
-				field: "key",
-				value: hashedKey,
-			},
-		],
-	});
+	let apiKey: ApiKey | null = null;
+
+	if (opts.useSecondaryStorage && ctx.context.secondaryStorage) {
+		apiKey = await getApiKeyFromSecondaryStorage(ctx, hashedKey);
+	} else {
+		apiKey = await ctx.context.adapter.findOne<ApiKey>({
+			model: API_KEY_TABLE_NAME,
+			where: [
+				{
+					field: "key",
+					value: hashedKey,
+				},
+			],
+		});
+	}
 
 	if (!apiKey) {
 		throw new APIError("UNAUTHORIZED", {
@@ -52,15 +63,19 @@ export async function validateApiKey({
 		const expiresAt = new Date(apiKey.expiresAt).getTime();
 		if (now > expiresAt) {
 			try {
-				ctx.context.adapter.delete({
-					model: API_KEY_TABLE_NAME,
-					where: [
-						{
-							field: "id",
-							value: apiKey.id,
-						},
-					],
-				});
+				if (opts.useSecondaryStorage && ctx.context.secondaryStorage) {
+					await deleteApiKeyFromSecondaryStorage(ctx, apiKey);
+				} else {
+					await ctx.context.adapter.delete({
+						model: API_KEY_TABLE_NAME,
+						where: [
+							{
+								field: "id",
+								value: apiKey.id,
+							},
+						],
+					});
+				}
 			} catch (error) {
 				ctx.context.logger.error(`Failed to delete expired API keys:`, error);
 			}
@@ -101,15 +116,19 @@ export async function validateApiKey({
 	if (apiKey.remaining === 0 && apiKey.refillAmount === null) {
 		// if there is no more remaining requests, and there is no refill amount, than the key is revoked
 		try {
-			ctx.context.adapter.delete({
-				model: API_KEY_TABLE_NAME,
-				where: [
-					{
-						field: "id",
-						value: apiKey.id,
-					},
-				],
-			});
+			if (opts.useSecondaryStorage && ctx.context.secondaryStorage) {
+				await deleteApiKeyFromSecondaryStorage(ctx, apiKey);
+			} else {
+				await ctx.context.adapter.delete({
+					model: API_KEY_TABLE_NAME,
+					where: [
+						{
+							field: "id",
+							value: apiKey.id,
+						},
+					],
+				});
+			}
 		} catch (error) {
 			ctx.context.logger.error(`Failed to delete expired API keys:`, error);
 		}
@@ -147,20 +166,35 @@ export async function validateApiKey({
 
 	const { message, success, update, tryAgainIn } = isRateLimited(apiKey, opts);
 
-	const newApiKey = await ctx.context.adapter.update<ApiKey>({
-		model: API_KEY_TABLE_NAME,
-		where: [
-			{
-				field: "id",
-				value: apiKey.id,
-			},
-		],
-		update: {
+	let newApiKey: ApiKey | null = null;
+
+	if (opts.useSecondaryStorage && ctx.context.secondaryStorage) {
+		// We already have the apiKey object, so we can update it directly
+		const updated: ApiKey = {
+			...apiKey,
 			...update,
 			remaining,
 			lastRefillAt,
-		},
-	});
+			updatedAt: new Date(),
+		};
+		await setApiKeyInSecondaryStorage(ctx, updated);
+		newApiKey = updated;
+	} else {
+		newApiKey = await ctx.context.adapter.update<ApiKey>({
+			model: API_KEY_TABLE_NAME,
+			where: [
+				{
+					field: "id",
+					value: apiKey.id,
+				},
+			],
+			update: {
+				...update,
+				remaining,
+				lastRefillAt,
+			},
+		});
+	}
 
 	if (!newApiKey) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {

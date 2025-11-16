@@ -5,6 +5,7 @@ import { APIError, sessionMiddleware } from "../../../api";
 import { safeJSONParse } from "../../../utils/json";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
+import { getApiKeyByIdFromSecondaryStorage } from "../secondary-storage";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 
@@ -172,19 +173,28 @@ export function getApiKey({
 
 			const session = ctx.context.session;
 
-			let apiKey = await ctx.context.adapter.findOne<ApiKey>({
-				model: API_KEY_TABLE_NAME,
-				where: [
-					{
-						field: "id",
-						value: id,
-					},
-					{
-						field: "userId",
-						value: session.user.id,
-					},
-				],
-			});
+			let apiKey: ApiKey | null = null;
+
+			if (opts.useSecondaryStorage && ctx.context.secondaryStorage) {
+				apiKey = await getApiKeyByIdFromSecondaryStorage(ctx, id);
+				if (apiKey && apiKey.userId !== session.user.id) {
+					apiKey = null;
+				}
+			} else {
+				apiKey = await ctx.context.adapter.findOne<ApiKey>({
+					model: API_KEY_TABLE_NAME,
+					where: [
+						{
+							field: "id",
+							value: id,
+						},
+						{
+							field: "userId",
+							value: session.user.id,
+						},
+					],
+				});
+			}
 
 			if (!apiKey) {
 				throw new APIError("NOT_FOUND", {

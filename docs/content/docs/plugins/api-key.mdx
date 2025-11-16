@@ -13,6 +13,7 @@ The API Key plugin allows you to create and manage API keys for your application
 - [metadata for API keys](/docs/plugins/api-key#metadata)
 - Custom prefix
 - [Sessions from API keys](/docs/plugins/api-key#sessions-from-api-keys)
+- [Secondary storage support](/docs/plugins/api-key#secondary-storage) for high-performance API key lookups
 
 ## Installation
 
@@ -436,6 +437,73 @@ export const auth = betterAuth({
 });
 ```
 
+## Secondary Storage
+
+The API Key plugin supports storing API keys in secondary storage (e.g., Redis) instead of the database adapter.
+This can significantly improve performance for high-frequency API key lookups, especially in high-traffic applications.
+
+### Benefits
+
+- **Performance**: Faster lookups compared to database queries
+- **Scalability**: Better suited for high-traffic scenarios
+- **Automatic TTL**: Expired keys are automatically cleaned up when TTL is set
+- **Reduced Database Load**: Offloads API key lookups from your primary database
+
+### Configuration
+
+To enable secondary storage for API keys, you need to:
+
+1. Configure `secondaryStorage` in your Better Auth options (see [Secondary Storage](/docs/concepts/database#secondary-storage) for more details)
+2. Enable `useSecondaryStorage` in the API Key plugin options
+
+```ts
+import { createClient } from "redis";
+import { betterAuth } from "better-auth";
+import { apiKey } from "better-auth/plugins";
+
+const redis = createClient();
+await redis.connect();
+
+export const auth = betterAuth({
+  secondaryStorage: {
+    get: async (key) => {
+      return await redis.get(key);
+    },
+    set: async (key, value, ttl) => {
+      if (ttl) await redis.set(key, value, { EX: ttl });
+      else await redis.set(key, value);
+    },
+    delete: async (key) => {
+      await redis.del(key);
+    },
+  },
+  plugins: [
+    apiKey({
+      useSecondaryStorage: true,
+    }),
+  ],
+});
+```
+
+### How It Works
+
+When `useSecondaryStorage` is enabled:
+
+- API keys are stored in secondary storage using specific key patterns:
+  - `api-key:${hashedKey}` - Primary lookup by hashed key (for validation)
+  - `api-key:by-id:${id}` - Lookup by ID (for get/update/delete operations)
+  - `api-key:by-user:${userId}` - User's API key list (for listing operations)
+
+- **Automatic TTL**: If an API key has an expiration date (`expiresAt`), a TTL is automatically calculated and set in secondary storage. This ensures expired keys are automatically removed.
+
+<Callout>
+  When using secondary storage, ensure your secondary storage implementation supports TTL (time-to-live) for automatic expiration of keys. Most key-value stores like Redis, Memcached, and similar systems support this feature.
+</Callout>
+
+<Callout type="warn">
+  If you enable `useSecondaryStorage` but don't configure `secondaryStorage` in your Better Auth options, API keys will fall back to using the database adapter.
+</Callout>
+
 ## Rate Limiting
 
 Every API key can have its own rate limit settings. The built-in rate-limiting applies whenever an API key is validated, which includes:
@@ -760,6 +828,41 @@ Custom schema for the API key plugin.
 `enableSessionForAPIKeys` <span className="opacity-70">`boolean`</span>
 
 An API Key can represent a valid session, so we can mock a session for the user if we find a valid API key in the request headers. Default is `false`.
+
+`useSecondaryStorage` <span className="opacity-70">`boolean`</span>
+
+Whether to store API keys in secondary storage instead of the database adapter. When enabled, API keys will be stored in the configured secondary storage (e.g., Redis). This can improve performance for high-frequency API key lookups. Default is `false`.
+
+<Callout>
+  When `useSecondaryStorage` is enabled, you must configure `secondaryStorage` in your Better Auth options. API keys will be stored using key-value patterns:
+  - `api-key:${hashedKey}` - Primary lookup by hashed key
+  - `api-key:by-id:${id}` - Lookup by ID
+  - `api-key:by-user:${userId}` - User's API key list
+  
+  If an API key has an expiration date (`expiresAt`), a TTL will be automatically set in secondary storage to ensure automatic cleanup.
+</Callout>
+
+```ts
+export const auth = betterAuth({
+  secondaryStorage: {
+    get: async (key) => {
+      return await redis.get(key);
+    },
+    set: async (key, value, ttl) => {
+      if (ttl) await redis.set(key, value, { EX: ttl });
+      else await redis.set(key, value);
+    },
+    delete: async (key) => {
+      await redis.del(key);
+    },
+  },
+  plugins: [
+    apiKey({
+      useSecondaryStorage: true,
+    }),
+  ],
+});
+```
 
 `permissions` <span className="opacity-70">`{ defaultPermissions?: Statements | ((userId: string, ctx: GenericEndpointContext) => Statements | Promise<Statements>) }`</span>
 

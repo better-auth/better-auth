@@ -2,11 +2,13 @@ import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../../api";
+import { generateId } from "../../../utils";
 import { getDate } from "../../../utils/date";
 import { safeJSONParse } from "../../../utils/json";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
 import { apiKeySchema } from "../schema";
+import { setApiKeyInSecondaryStorage } from "../secondary-storage";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 
@@ -448,13 +450,24 @@ export function createApiKey({
 				data.metadata = schema.apikey.fields.metadata.transform.input(metadata);
 			}
 
-			const apiKey = await ctx.context.adapter.create<
-				Omit<ApiKey, "id">,
-				ApiKey
-			>({
-				model: API_KEY_TABLE_NAME,
-				data: data,
-			});
+			let apiKey: ApiKey;
+
+			if (opts.useSecondaryStorage && ctx.context.secondaryStorage) {
+				const id =
+					ctx.context.generateId({
+						model: API_KEY_TABLE_NAME,
+					}) ?? generateId();
+				apiKey = {
+					...data,
+					id,
+				} as ApiKey;
+				await setApiKeyInSecondaryStorage(ctx, apiKey);
+			} else {
+				apiKey = await ctx.context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
+					model: API_KEY_TABLE_NAME,
+					data: data,
+				});
+			}
 
 			return ctx.json({
 				...(apiKey as ApiKey),

@@ -4,6 +4,7 @@ import { sessionMiddleware } from "../../../api";
 import { safeJSONParse } from "../../../utils/json";
 import { API_KEY_TABLE_NAME } from "..";
 import type { apiKeySchema } from "../schema";
+import { listApiKeysFromSecondaryStorage } from "../secondary-storage";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 export function listApiKeys({
@@ -165,15 +166,21 @@ export function listApiKeys({
 		},
 		async (ctx) => {
 			const session = ctx.context.session;
-			let apiKeys = await ctx.context.adapter.findMany<ApiKey>({
-				model: API_KEY_TABLE_NAME,
-				where: [
-					{
-						field: "userId",
-						value: session.user.id,
-					},
-				],
-			});
+			let apiKeys: ApiKey[];
+
+			if (opts.useSecondaryStorage && ctx.context.secondaryStorage) {
+				apiKeys = await listApiKeysFromSecondaryStorage(ctx, session.user.id);
+			} else {
+				apiKeys = await ctx.context.adapter.findMany<ApiKey>({
+					model: API_KEY_TABLE_NAME,
+					where: [
+						{
+							field: "userId",
+							value: session.user.id,
+						},
+					],
+				});
+			}
 
 			deleteAllExpiredApiKeys(ctx.context);
 			apiKeys = apiKeys.map((apiKey) => {
