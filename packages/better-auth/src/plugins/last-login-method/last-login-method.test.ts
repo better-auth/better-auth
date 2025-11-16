@@ -65,11 +65,24 @@ afterAll(() => server.close());
 describe("lastLoginMethod", async () => {
 	const { client, cookieSetter, testUser } = await getTestInstance(
 		{
-			plugins: [lastLoginMethod()],
+			plugins: [
+				lastLoginMethod(),
+				siwe({
+					domain: "example.com",
+					async getNonce() {
+						return "A1b2C3d4E5f6G7h8J";
+					},
+					async verifyMessage({ message, signature }) {
+						return (
+							signature === "valid_signature" && message === "valid_message"
+						);
+					},
+				}),
+			],
 		},
 		{
 			clientOptions: {
-				plugins: [lastLoginMethodClient()],
+				plugins: [lastLoginMethodClient(), siweClient()],
 			},
 		},
 	);
@@ -95,28 +108,6 @@ describe("lastLoginMethod", async () => {
 		const headers = new Headers();
 		const walletAddress = "0x000000000000000000000000000000000000dEaD";
 		const chainId = 1;
-		const { client, cookieSetter } = await getTestInstance(
-			{
-				plugins: [
-					siwe({
-						domain: "example.com",
-						async getNonce() {
-							return "A1b2C3d4E5f6G7h8J";
-						},
-						async verifyMessage({ message, signature }) {
-							return (
-								signature === "valid_signature" && message === "valid_message"
-							);
-						},
-					}),
-				],
-			},
-			{
-				clientOptions: {
-					plugins: [siweClient()],
-				},
-			},
-		);
 		await client.siwe.nonce({ walletAddress, chainId });
 		await client.siwe.verify(
 			{
