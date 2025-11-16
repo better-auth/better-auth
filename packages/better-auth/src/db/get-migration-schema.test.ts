@@ -2,13 +2,15 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { betterAuth } from "../auth";
+import { admin } from "../plugins/admin";
 import { getMigrations } from "./get-migration";
 
+const CONNECTION_STRING = "postgres://user:password@localhost:5433/better_auth";
 // Check if PostgreSQL is available
 let isPostgresAvailable = false;
 try {
 	const testPool = new Pool({
-		connectionString: "postgres://user:password@localhost:5433/better_auth",
+		connectionString: CONNECTION_STRING,
 		connectionTimeoutMillis: 2000,
 	});
 	await testPool.query("SELECT 1");
@@ -26,11 +28,11 @@ describe.runIf(isPostgresAvailable)(
 
 		// Create two separate connection pools
 		const publicPool = new Pool({
-			connectionString: "postgres://user:password@localhost:5433/better_auth",
+			connectionString: CONNECTION_STRING,
 		});
 
 		const customSchemaPool = new Pool({
-			connectionString: `postgres://user:password@localhost:5433/better_auth?options=-c search_path=${customSchema}`,
+			connectionString: `${CONNECTION_STRING}?options=-c search_path=${customSchema}`,
 		});
 
 		beforeAll(async () => {
@@ -182,12 +184,12 @@ describe.runIf(isPostgresAvailable)(
 	"PostgreSQL Schema Detection in Migrations",
 	() => {
 		const pool = new Pool({
-			connectionString: "postgres://user:password@localhost:5433/better_auth",
+			connectionString: CONNECTION_STRING,
 		});
 		const schema = "uuid_test";
 
 		const schemaPool = new Pool({
-			connectionString: `postgres://user:password@localhost:5433/better_auth?options=-c search_path=${schema}`,
+			connectionString: `${CONNECTION_STRING}?options=-c search_path=${schema}`,
 		});
 
 		beforeAll(async () => {
@@ -242,12 +244,12 @@ describe.runIf(isPostgresAvailable)(
 	"PostgreSQL Identity Column Generation",
 	() => {
 		const pool = new Pool({
-			connectionString: "postgres://user:password@localhost:5433/better_auth",
+			connectionString: CONNECTION_STRING,
 		});
 		const schema = "identity_test";
 
 		const schemaPool = new Pool({
-			connectionString: `postgres://user:password@localhost:5433/better_auth?options=-c search_path=${schema}`,
+			connectionString: `${CONNECTION_STRING}?options=-c search_path=${schema}`,
 		});
 
 		beforeAll(async () => {
@@ -291,3 +293,50 @@ describe.runIf(isPostgresAvailable)(
 		});
 	},
 );
+
+describe.runIf(isPostgresAvailable)("PostgreSQL Column Additions", () => {
+	const pool = new Pool({
+		connectionString: CONNECTION_STRING,
+	});
+
+	afterAll(async () => {
+		await pool.query(`DROP TABLE IF EXISTS public.user CASCADE`);
+		await pool.end();
+	});
+
+	it("should update default tables with plugin schema fields", async () => {
+		const config: BetterAuthOptions = {
+			database: pool,
+			emailAndPassword: {
+				enabled: true,
+			},
+		};
+
+		// Run the initial migration
+		const migration = await getMigrations(config);
+		await migration.runMigrations();
+
+		// Change the config to add the admin plugin
+		config.plugins = [admin()];
+		const { toBeAdded, toBeCreated } = await getMigrations(config);
+
+		expect(toBeCreated.length).toBe(0);
+		expect(toBeAdded.length).toBe(2);
+		expect(toBeAdded).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					table: "user",
+					fields: expect.objectContaining({
+						role: expect.objectContaining({ type: "string" }),
+					}),
+				}),
+				expect.objectContaining({
+					table: "session",
+					fields: expect.objectContaining({
+						impersonatedBy: expect.objectContaining({ type: "string" }),
+					}),
+				}),
+			]),
+		);
+	});
+});
