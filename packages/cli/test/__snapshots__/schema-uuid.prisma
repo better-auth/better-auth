@@ -9,7 +9,7 @@ datasource db {
 }
 
 model User {
-  id               String      @id @db.Uuid @default(dbgenerated("pg_catalog.gen_random_uuid()"))
+  id               String      @id @default(dbgenerated("pg_catalog.gen_random_uuid()")) @db.Uuid
   name             String
   email            String
   emailVerified    Boolean     @default(false)
@@ -29,7 +29,7 @@ model User {
 }
 
 model Session {
-  id        String   @id @db.Uuid @default(dbgenerated("pg_catalog.gen_random_uuid()"))
+  id        String   @id @default(dbgenerated("pg_catalog.gen_random_uuid()")) @db.Uuid
   expiresAt DateTime
   token     String
   createdAt DateTime @default(now())
@@ -45,7 +45,7 @@ model Session {
 }
 
 model Account {
-  id                    String    @id @db.Uuid @default(dbgenerated("pg_catalog.gen_random_uuid()"))
+  id                    String    @id @default(dbgenerated("pg_catalog.gen_random_uuid()")) @db.Uuid
   accountId             String
   providerId            String
   userId                String    @db.Uuid
@@ -65,7 +65,7 @@ model Account {
 }
 
 model Verification {
-  id         String   @id @db.Uuid @default(dbgenerated("pg_catalog.gen_random_uuid()"))
+  id         String   @id @default(dbgenerated("pg_catalog.gen_random_uuid()")) @db.Uuid
   identifier String
   value      String
   expiresAt  DateTime
@@ -77,7 +77,7 @@ model Verification {
 }
 
 model TwoFactor {
-  id          String @id @db.Uuid @default(dbgenerated("pg_catalog.gen_random_uuid()"))
+  id          String @id @default(dbgenerated("pg_catalog.gen_random_uuid()")) @db.Uuid
   secret      String
   backupCodes String
   userId      String @db.Uuid
