@@ -8,7 +8,7 @@ import {
 } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { defineErrorCodes } from "@better-auth/core/utils";
-import { z } from "zod";
+import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
 import { setCookieCache, setSessionCookie } from "../../cookies";
 import {
@@ -227,7 +227,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					});
 				}
 				const email = ctx.body.email.toLowerCase();
-				const isValidEmail = z.string().email().safeParse(email);
+				const isValidEmail = z.email().safeParse(email);
 				if (!isValidEmail.success) {
 					throw ctx.error("BAD_REQUEST", {
 						message: BASE_ERROR_CODES.INVALID_EMAIL,
@@ -511,7 +511,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 				async (ctx) => {
 					const email = ctx.body.email.toLowerCase();
-					const isValidEmail = z.string().email().safeParse(email);
+					const isValidEmail = z.email().safeParse(email);
 					if (!isValidEmail.success) {
 						throw new APIError("BAD_REQUEST", {
 							message: BASE_ERROR_CODES.INVALID_EMAIL,
@@ -636,7 +636,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 				async (ctx) => {
 					const email = ctx.body.email.toLowerCase();
-					const isValidEmail = z.string().email().safeParse(email);
+					const isValidEmail = z.email().safeParse(email);
 					if (!isValidEmail.success) {
 						throw new APIError("BAD_REQUEST", {
 							message: BASE_ERROR_CODES.INVALID_EMAIL,
