@@ -1,6 +1,6 @@
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import type { Prettify } from "better-call";
-import { z } from "zod";
+import * as z from "zod";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
 import { generateId } from "../../utils";
 import type { OrganizationOptions } from "./types";

@@ -10,8 +10,9 @@ import { getCurrentAuthContext } from "@better-auth/core/context";
 import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { SignJWT } from "jose";
-import { z } from "zod";
+import * as z from "zod";
 import { APIError, getSessionFromCtx, sessionMiddleware } from "../../api";
+import { parseSetCookieHeader } from "../../cookies";
 import {
 	generateRandomString,
 	symmetricDecrypt,
@@ -19,11 +20,9 @@ import {
 } from "../../crypto";
 import { mergeSchema } from "../../db";
 import type { jwt } from "../jwt";
-import { getJwtToken } from "../jwt";
+import { getJwtToken } from "../jwt/sign";
 import { authorize } from "./authorize";
-import { checkPromptMiddleware } from "./middlewares/check-prompt";
 import { type OAuthApplication, schema } from "./schema";
-import { setPromptHandled } from "./state/prompt-handled";
 import type {
 	Client,
 	CodeVerificationValue,
@@ -239,70 +238,41 @@ export const oidcProvider = (options: OIDCOptions) => {
 	return {
 		id: "oidc",
 		hooks: {
-			before: [
-				{
-					matcher(ctx) {
-						return ctx.path.includes("/oauth2/");
-					},
-					handler: createAuthMiddleware(async (ctx) => {
-						await checkPromptMiddleware(ctx);
-					}),
-				},
-			],
 			after: [
 				{
 					matcher() {
 						return true;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						// clean up the prompt cookie after a successful login
-						const hasNewSession = !!ctx.context.newSession;
 						const cookie = await ctx.getSignedCookie(
 							"oidc_login_prompt",
 							ctx.context.secret,
 						);
-						if (hasNewSession && cookie) {
-							ctx.setCookie("oidc_login_prompt", "", {
-								maxAge: 0,
-							});
-						}
-					}),
-				},
-				{
-					matcher(ctx) {
-						return ctx.path === "/oauth2/authorize" && ctx.method === "GET";
-					},
-					handler: createAuthMiddleware(async (ctx) => {
-						const cookie = await ctx.getSignedCookie(
-							"oidc_login_prompt",
-							ctx.context.secret,
+						const cookieName = ctx.context.authCookies.sessionToken.name;
+						const parsedSetCookieHeader = parseSetCookieHeader(
+							ctx.context.responseHeaders?.get("set-cookie") || "",
 						);
-						if (!cookie) {
+						const hasSessionToken = parsedSetCookieHeader.has(cookieName);
+						if (!cookie || !hasSessionToken) {
 							return;
 						}
-						try {
-							const parsedQuery = JSON.parse(cookie);
-							if (
-								parsedQuery &&
-								typeof parsedQuery === "object" &&
-								parsedQuery.client_id
-							) {
-								ctx.query = parsedQuery;
-							} else {
-								ctx.context.logger.error(
-									"Invalid or incomplete query data in oidc_login_prompt cookie",
-									parsedQuery,
-								);
-								return;
-							}
-						} catch (e) {
-							ctx.context.logger.error(
-								"Failed to parse oidc_login_prompt cookie",
-								e,
-							);
+						ctx.setCookie("oidc_login_prompt", "", {
+							maxAge: 0,
+						});
+						const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
+						const sessionToken = sessionCookie?.split(".")[0]!;
+						if (!sessionToken) {
 							return;
 						}
-						await setPromptHandled(true);
+						const session =
+							await ctx.context.internalAdapter.findSession(sessionToken);
+						if (!session) {
+							return;
+						}
+						ctx.query = JSON.parse(cookie);
+						// Don't force prompt to "consent" - let the authorize function
+						// determine if consent is needed based on OIDC spec requirements
+						ctx.context.session = session;
 						const response = await authorize(ctx, opts);
 						return response;
 					}),
@@ -314,6 +284,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/.well-known/openid-configuration",
 				{
 					method: "GET",
+					operationId: "getOpenIdConfig",
 					metadata: {
 						isAction: false,
 					},
@@ -327,6 +298,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/authorize",
 				{
 					method: "GET",
+					operationId: "oauth2Authorize",
 					query: z.record(z.string(), z.any()),
 					metadata: {
 						openapi: {
@@ -357,6 +329,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/consent",
 				{
 					method: "POST",
+					operationId: "oauth2Consent",
 					body: z.object({
 						accept: z.boolean(),
 						consent_code: z.string().optional().nullish(),
@@ -510,6 +483,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/token",
 				{
 					method: "POST",
+					operationId: "oauth2Token",
 					body: z.record(z.any(), z.any()),
 					metadata: {
 						isAction: false,
@@ -938,7 +912,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/userinfo",
 				{
 					method: "GET",
-
+					operationId: "oauth2Userinfo",
+					use: [sessionMiddleware],
 					metadata: {
 						isAction: false,
 						openapi: {
@@ -1512,6 +1487,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 			),
 		},
 		schema: mergeSchema(schema, options?.schema),
+		get options() {
+			return opts;
+		},
 	} satisfies BetterAuthPlugin;
 };
 export type * from "./types";
