@@ -900,7 +900,9 @@ export type BetterAuthOptions = {
 				 *
 				 * This is useful for database less flow
 				 *
-				 * @default false (true if you haven't passed a database)
+				 * @default false
+				 *
+				 * @note This is automatically set to true if you haven't passed a database
 				 */
 				storeAccountCookie?: boolean;
 		  }
