@@ -5,7 +5,7 @@ import {
 } from "@better-auth/core/api";
 import { env } from "@better-auth/core/env";
 import type { EndpointContext } from "better-call";
-import { z } from "zod";
+import * as z from "zod";
 import { originCheck } from "../../api";
 import { parseJSON } from "../../client/parser";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
@@ -89,6 +89,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 				"/oauth-proxy-callback",
 				{
 					method: "GET",
+					operationId: "oauthProxyCallback",
 					query: z.object({
 						callbackURL: z.string().meta({
 							description: "The URL to redirect to after the proxy",
@@ -100,6 +101,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 					use: [originCheck((ctx) => ctx.query.callbackURL)],
 					metadata: {
 						openapi: {
+							operationId: "oauthProxyCallback",
 							description: "OAuth Proxy Callback",
 							parameters: [
 								{

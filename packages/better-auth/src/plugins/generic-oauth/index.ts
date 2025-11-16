@@ -18,7 +18,7 @@ import { defineErrorCodes } from "@better-auth/core/utils";
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
 import { decodeJwt } from "jose";
-import { z } from "zod";
+import * as z from "zod";
 import { sessionMiddleware } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";

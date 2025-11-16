@@ -3,6 +3,7 @@ import { createPool } from "mysql2/promise";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
+	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
 	transactionsTestSuite,
@@ -47,6 +48,7 @@ const { execute } = await testAdapter({
 		transactionsTestSuite(),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
+		joinsTestSuite(),
 		uuidTestSuite(),
 	],
 	onFinish: async () => {},
