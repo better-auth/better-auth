@@ -217,7 +217,7 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 					use: [adminMiddleware],
 					metadata: {
 						openapi: {
-							operationId: "setRole",
+							operationId: "setUserRole",
 							summary: "Set the role of a user",
 							description: "Set the role of a user",
 							responses: {

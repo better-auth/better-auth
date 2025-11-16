@@ -121,7 +121,8 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 						InferAdditionalFieldsFromPluginOptions<"invitation", O, false>,
 				},
 				openapi: {
-					description: "Invite a user to an organization",
+					operationId: "createOrganizationInvitation",
+					description: "Create an invitation to an organization",
 					responses: {
 						"200": {
 							description: "Success",
@@ -781,6 +782,7 @@ export const cancelInvitation = <O extends OrganizationOptions>(options: O) =>
 			}),
 			use: [orgMiddleware, orgSessionMiddleware],
 			openapi: {
+				operationId: "cancelOrganizationInvitation",
 				description: "Cancel an invitation to an organization",
 				responses: {
 					"200": {
