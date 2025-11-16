@@ -898,7 +898,7 @@ export type BetterAuthOptions = {
 				/**
 				 * Store account data after oauth flow on a cookie
 				 *
-				 * This is useful for database less flow
+				 * This is useful for database-less flow
 				 *
 				 * @default false
 				 *
