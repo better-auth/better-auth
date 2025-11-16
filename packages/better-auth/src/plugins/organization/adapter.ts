@@ -249,7 +249,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			const { user, ...member } = result;
 
 			return {
-				...member,
+				...(member as unknown as InferMember<O, false>),
 				user: {
 					id: user.id,
 					name: user.name,
