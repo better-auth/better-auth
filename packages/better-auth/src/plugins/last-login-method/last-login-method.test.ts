@@ -8,6 +8,8 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { genericOAuthClient } from "../generic-oauth/client";
 import { genericOAuth } from "../generic-oauth/index";
+import { siwe } from "../siwe";
+import { siweClient } from "../siwe/client";
 import { lastLoginMethod } from ".";
 import { lastLoginMethodClient } from "./client";
 
@@ -63,11 +65,24 @@ afterAll(() => server.close());
 describe("lastLoginMethod", async () => {
 	const { client, cookieSetter, testUser } = await getTestInstance(
 		{
-			plugins: [lastLoginMethod()],
+			plugins: [
+				lastLoginMethod(),
+				siwe({
+					domain: "example.com",
+					async getNonce() {
+						return "A1b2C3d4E5f6G7h8J";
+					},
+					async verifyMessage({ message, signature }) {
+						return (
+							signature === "valid_signature" && message === "valid_message"
+						);
+					},
+				}),
+			],
 		},
 		{
 			clientOptions: {
-				plugins: [lastLoginMethodClient()],
+				plugins: [lastLoginMethodClient(), siweClient()],
 			},
 		},
 	);
@@ -89,6 +104,30 @@ describe("lastLoginMethod", async () => {
 		expect(cookies.get("better-auth.last_used_login_method")).toBe("email");
 	});
 
+	it("should set the last login method cookie for siwe", async () => {
+		const headers = new Headers();
+		const walletAddress = "0x000000000000000000000000000000000000dEaD";
+		const chainId = 1;
+		await client.siwe.nonce({ walletAddress, chainId });
+		await client.siwe.verify(
+			{
+				message: "valid_message",
+				signature: "valid_signature",
+				walletAddress,
+				chainId,
+				email: "user@example.com",
+			},
+			{
+				onSuccess(context) {
+					cookieSetter(headers)(context);
+				},
+			},
+		);
+		const cookies = parseCookies(headers.get("cookie") || "");
+		console.log("rans" + cookies);
+		expect(cookies.get("better-auth.last_used_login_method")).toBe("siwe");
+	});
+
 	it("should set the last login method in the database", async () => {
 		const { client, auth } = await getTestInstance({
 			plugins: [lastLoginMethod({ storeInDatabase: true })],
@@ -106,6 +145,48 @@ describe("lastLoginMethod", async () => {
 			}),
 		});
 		expect(session?.user.lastLoginMethod).toBe("email");
+	});
+
+	it("should set the last login method for siwe in the database", async () => {
+		const walletAddress = "0x000000000000000000000000000000000000dEaD";
+		const chainId = 1;
+		const { client, auth } = await getTestInstance(
+			{
+				plugins: [
+					lastLoginMethod({ storeInDatabase: true }),
+					siwe({
+						domain: "example.com",
+						async getNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifyMessage({ message, signature }) {
+							return (
+								signature === "valid_signature" && message === "valid_message"
+							);
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [siweClient()],
+				},
+			},
+		);
+		await client.siwe.nonce({ walletAddress, chainId });
+		const { data } = await client.siwe.verify({
+			message: "valid_message",
+			signature: "valid_signature",
+			walletAddress,
+			chainId,
+			email: "user@example.com",
+		});
+		const session = await auth.api.getSession({
+			headers: new Headers({
+				authorization: `Bearer ${data?.token}`,
+			}),
+		});
+		expect(session?.user.lastLoginMethod).toBe("siwe");
 	});
 
 	it("should NOT set the last login method cookie on failed authentication", async () => {
