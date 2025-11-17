@@ -2601,6 +2601,105 @@ describe("api-key", async () => {
 			expect(createdKey).not.toBeNull();
 			expect(store.has(`api-key:by-id:${createdKey!.id}`)).toBe(true);
 		});
+
+		it("should create in both database and secondary storage when fallbackToDatabase is true", async () => {
+			const { headers, user } = await signInWithTestUser();
+			const { data: createdKey } = await client.apiKey.create(
+				{ name: "Fallback Test Key" },
+				{ headers: headers },
+			);
+
+			expect(createdKey).not.toBeNull();
+
+			// Should be in secondary storage
+			expect(store.has(`api-key:by-id:${createdKey!.id}`)).toBe(true);
+
+			// Should also be in database (verify by direct DB query)
+			const dbKey = await auth.api.getApiKey({
+				query: { id: createdKey!.id },
+				headers,
+			});
+			expect(dbKey).not.toBeNull();
+			expect(dbKey?.id).toBe(createdKey?.id);
+			expect(dbKey?.name).toBe("Fallback Test Key");
+		});
+
+		it("should update both database and secondary storage when fallbackToDatabase is true", async () => {
+			const { headers, user } = await signInWithTestUser();
+			const { data: createdKey } = await client.apiKey.create(
+				{ name: "Original Name" },
+				{ headers: headers },
+			);
+
+			expect(createdKey).not.toBeNull();
+
+			// Update the key
+			const { data: updatedKey } = await client.apiKey.update(
+				{
+					keyId: createdKey!.id,
+					name: "Updated Name",
+				},
+				{ headers: headers },
+			);
+
+			expect(updatedKey).not.toBeNull();
+			expect(updatedKey?.name).toBe("Updated Name");
+
+			// Verify cache is updated
+			const cachedData = store.get(`api-key:by-id:${createdKey!.id}`);
+			expect(cachedData).toBeDefined();
+			const parsed = JSON.parse(cachedData!);
+			expect(parsed.name).toBe("Updated Name");
+
+			// Verify database is updated
+			const dbKey = await auth.api.getApiKey({
+				query: { id: createdKey!.id },
+				headers,
+			});
+			expect(dbKey?.name).toBe("Updated Name");
+		});
+
+		it("should delete from both database and secondary storage when fallbackToDatabase is true", async () => {
+			const { headers, user } = await signInWithTestUser();
+			const { data: createdKey } = await client.apiKey.create(
+				{},
+				{ headers: headers },
+			);
+
+			expect(createdKey).not.toBeNull();
+			expect(store.has(`api-key:by-id:${createdKey!.id}`)).toBe(true);
+
+			// Verify it exists in DB
+			const dbKeyBefore = await auth.api.getApiKey({
+				query: { id: createdKey!.id },
+				headers,
+			});
+			expect(dbKeyBefore).not.toBeNull();
+
+			// Delete the key
+			const { data: deleteResult } = await client.apiKey.delete(
+				{ keyId: createdKey!.id },
+				{ headers: headers },
+			);
+
+			expect(deleteResult?.success).toBe(true);
+
+			// Should be deleted from secondary storage
+			expect(store.has(`api-key:by-id:${createdKey!.id}`)).toBe(false);
+
+			// Should be deleted from database
+			let error: any = null;
+			try {
+				await auth.api.getApiKey({
+					query: { id: createdKey!.id },
+					headers,
+				});
+			} catch (e) {
+				error = e;
+			}
+			expect(error).not.toBeNull();
+			expect(error.status).toBe("NOT_FOUND");
+		});
 	});
 
 	describe("cache mode", async () => {

@@ -453,14 +453,21 @@ export function createApiKey({
 			let apiKey: ApiKey;
 
 			if (opts.cacheEnabled) {
-				// Cache mode: create in DB first, then cache
+				apiKey = await ctx.context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
+					model: API_KEY_TABLE_NAME,
+					data: data,
+				});
+				await setApiKey(ctx, apiKey, opts);
+			} else if (
+				opts.storage === "secondary-storage" &&
+				opts.fallbackToDatabase
+			) {
 				apiKey = await ctx.context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
 					model: API_KEY_TABLE_NAME,
 					data: data,
 				});
 				await setApiKey(ctx, apiKey, opts);
 			} else if (opts.storage === "secondary-storage") {
-				// Secondary storage mode: create in storage only
 				const id =
 					ctx.context.generateId({
 						model: API_KEY_TABLE_NAME,
@@ -471,7 +478,6 @@ export function createApiKey({
 				} as ApiKey;
 				await setApiKey(ctx, apiKey, opts);
 			} else {
-				// Database mode: create in DB only
 				apiKey = await ctx.context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
 					model: API_KEY_TABLE_NAME,
 					data: data,

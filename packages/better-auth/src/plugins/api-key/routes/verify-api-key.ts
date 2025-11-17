@@ -57,11 +57,23 @@ export async function validateApiKey({
 							},
 						],
 					});
+				} else if (
+					opts.storage === "secondary-storage" &&
+					opts.fallbackToDatabase
+				) {
+					await deleteApiKey(ctx, apiKey, opts);
+					await ctx.context.adapter.delete({
+						model: API_KEY_TABLE_NAME,
+						where: [
+							{
+								field: "id",
+								value: apiKey.id,
+							},
+						],
+					});
 				} else if (opts.storage === "secondary-storage") {
-					// Secondary storage mode: delete from storage
 					await deleteApiKey(ctx, apiKey, opts);
 				} else {
-					// Database mode: delete from DB
 					await ctx.context.adapter.delete({
 						model: API_KEY_TABLE_NAME,
 						where: [

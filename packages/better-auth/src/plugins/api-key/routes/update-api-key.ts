@@ -415,6 +415,24 @@ export function updateApiKey({
 						await setApiKey(ctx, dbUpdated, opts);
 						newApiKey = dbUpdated;
 					}
+				} else if (
+					opts.storage === "secondary-storage" &&
+					opts.fallbackToDatabase
+				) {
+					const dbUpdated = await ctx.context.adapter.update<ApiKey>({
+						model: API_KEY_TABLE_NAME,
+						where: [
+							{
+								field: "id",
+								value: apiKey.id,
+							},
+						],
+						update: newValues,
+					});
+					if (dbUpdated) {
+						await setApiKey(ctx, dbUpdated, opts);
+						newApiKey = dbUpdated;
+					}
 				} else if (opts.storage === "database") {
 					const result = await ctx.context.adapter.update<ApiKey>({
 						model: API_KEY_TABLE_NAME,
