@@ -1,12 +1,9 @@
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
+import type { Account, Session, User, Verification } from "better-auth";
 import {
-	type Account,
 	createAuthorizationURL,
 	generateState,
 	parseState,
-	type Session,
-	type User,
-	type Verification,
 	validateAuthorizationCode,
 	validateToken,
 } from "better-auth";

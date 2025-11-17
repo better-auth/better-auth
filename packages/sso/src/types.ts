@@ -185,6 +185,29 @@ export interface SSOOptions {
 	 */
 	disableImplicitSignUp?: boolean | undefined;
 	/**
+	 * The model name for the SSO provider table. Defaults to "ssoProvider".
+	 */
+	modelName?: string;
+	/**
+	 * Map fields
+	 *
+	 * @example
+	 * ```ts
+	 * {
+	 *  samlConfig: "saml_config"
+	 * }
+	 * ```
+	 */
+	fields?: {
+		issuer?: string | undefined;
+		oidcConfig?: string | undefined;
+		samlConfig?: string | undefined;
+		userId?: string | undefined;
+		providerId?: string | undefined;
+		organizationId?: string | undefined;
+		domain?: string | undefined;
+	};
+	/**
 	 * Configure the maximum number of SSO providers a user can register.
 	 * You can also pass a function that returns a number.
 	 * Set to 0 to disable SSO provider registration.
