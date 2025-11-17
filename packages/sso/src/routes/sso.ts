@@ -984,6 +984,9 @@ export const signInSSO = (options?: SSOOptions) => {
 				}
 				const sp = saml.ServiceProvider({
 					metadata: parsedSamlConfig.spMetadata.metadata,
+					privateKey: parsedSamlConfig.spMetadata.privateKey,
+					privateKeyPass: parsedSamlConfig.spMetadata.privateKeyPass,
+					relayState: body.callbackURL,
 					allowCreate: true,
 				});
 
@@ -1004,9 +1007,7 @@ export const signInSSO = (options?: SSOOptions) => {
 					});
 				}
 				return ctx.json({
-					url: `${loginRequest.context}&RelayState=${encodeURIComponent(
-						body.callbackURL,
-					)}`,
+					url: loginRequest.context,
 					redirect: true,
 				});
 			}
