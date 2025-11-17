@@ -1,6 +1,6 @@
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import type { Prettify } from "better-call";
-import { z } from "zod";
+import * as z from "zod";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
 import { generateId } from "../../utils";
 import type { OrganizationOptions } from "./types";
@@ -207,6 +207,14 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 					"organizationRole",
 					OrganizationRoleDefaultFields
 				>;
+			} & {
+				session: {
+					fields: InferSchema<
+						O["schema"] extends BetterAuthPluginDBSchema ? O["schema"] : {},
+						"session",
+						SessionDefaultFields
+					>["fields"];
+				};
 			}
 		: {} & (O["teams"] extends { enabled: true }
 				? {

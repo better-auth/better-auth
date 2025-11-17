@@ -6,6 +6,7 @@ import path from "path";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
+	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
 	transactionsTestSuite,
@@ -24,7 +25,7 @@ let sqliteDB = new Database(dbFilePath);
 const { execute } = await testAdapter({
 	adapter: async (options) => {
 		const { schema } = await generateDrizzleSchema(sqliteDB, options, "sqlite");
-		return drizzleAdapter(drizzle(sqliteDB), {
+		return drizzleAdapter(drizzle(sqliteDB, { schema }), {
 			debugLogs: { isRunningAdapterTests: true },
 			schema,
 			provider: "sqlite",
@@ -66,6 +67,7 @@ const { execute } = await testAdapter({
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
+		joinsTestSuite(),
 		uuidTestSuite(),
 	],
 	async onFinish() {

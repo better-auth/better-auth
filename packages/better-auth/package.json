@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.4.0-beta.20",
+  "version": "1.4.0-beta.21",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -26,6 +26,7 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest",
+    "test:adapters": "vitest run --config vitest.config.adapters.ts",
     "prepare": "prisma generate --schema ./src/adapters/prisma-adapter/test/base.prisma",
     "typecheck": "tsc --project tsconfig.json"
   },
@@ -503,7 +504,7 @@
     "concurrently": "^9.2.1",
     "deepmerge": "^4.3.1",
     "drizzle-kit": "^0.31.4",
-    "drizzle-orm": "^0.38.2",
+    "drizzle-orm": "^0.41.0",
     "happy-dom": "^20.0.0",
     "hono": "^4.9.7",
     "listhen": "^1.9.0",
