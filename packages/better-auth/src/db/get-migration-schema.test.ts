@@ -308,6 +308,7 @@ describe.runIf(isPostgresAvailable)("PostgreSQL Column Additions", () => {
 	afterAll(async () => {
 		await schemaPool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
 		await pool.end();
+		await schemaPool.end();
 	});
 	beforeAll(async () => {
 		await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
