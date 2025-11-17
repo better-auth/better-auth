@@ -227,7 +227,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					});
 				}
 				const email = ctx.body.email.toLowerCase();
-				const isValidEmail = z.string().email().safeParse(email);
+				const isValidEmail = z.email().safeParse(email);
 				if (!isValidEmail.success) {
 					throw ctx.error("BAD_REQUEST", {
 						message: BASE_ERROR_CODES.INVALID_EMAIL,
@@ -511,7 +511,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 				async (ctx) => {
 					const email = ctx.body.email.toLowerCase();
-					const isValidEmail = z.string().email().safeParse(email);
+					const isValidEmail = z.email().safeParse(email);
 					if (!isValidEmail.success) {
 						throw new APIError("BAD_REQUEST", {
 							message: BASE_ERROR_CODES.INVALID_EMAIL,
@@ -636,7 +636,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 				async (ctx) => {
 					const email = ctx.body.email.toLowerCase();
-					const isValidEmail = z.string().email().safeParse(email);
+					const isValidEmail = z.email().safeParse(email);
 					if (!isValidEmail.success) {
 						throw new APIError("BAD_REQUEST", {
 							message: BASE_ERROR_CODES.INVALID_EMAIL,
