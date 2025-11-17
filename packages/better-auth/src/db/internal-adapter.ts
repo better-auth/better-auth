@@ -35,7 +35,7 @@ function getPluginSessionFields(
 		for (const [fieldName, field] of Object.entries(sessionFields)) {
 			if (!field) continue;
 
-			if (field.defaultValue !== undefined) {
+			if ("defaultValue" in field) {
 				pluginFields[fieldName] = field.defaultValue; // could be a function
 			} else if (!field.required) {
 				pluginFields[fieldName] = null;
