@@ -43,6 +43,20 @@ const JwtPayloadSchema = z.object({
 });
 
 /**
+ * Build verification URL with safely encoded callbackURL
+ */
+function buildVerificationUrl(
+	ctx: GenericEndpointContext,
+	token: string,
+	callbackURL?: string,
+) {
+	const cb = callbackURL
+		? encodeURIComponent(callbackURL)
+		: encodeURIComponent("/");
+	return `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${cb}`;
+}
+
+/**
  * Ensure email verification is enabled in options and return the object
  */
 function ensureEmailVerificationEnabled(ctx: GenericEndpointContext) {
@@ -96,10 +110,7 @@ export async function sendVerificationEmailFn(
 		undefined,
 		ctx.context.options.emailVerification?.expiresIn,
 	);
-	const callbackURL = ctx.body.callbackURL
-		? encodeURIComponent(ctx.body.callbackURL)
-		: encodeURIComponent("/");
-	const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
+	const url = buildVerificationUrl(ctx, token, ctx.body.callbackURL);
 	await emailVerification.sendVerificationEmail(
 		{
 			user: user,
@@ -375,14 +386,11 @@ export const verifyEmail = createAuthEndpoint(
 			);
 
 			//send verification email to the new email
-			const updateCallbackURL = ctx.query.callbackURL
-				? encodeURIComponent(ctx.query.callbackURL)
-				: encodeURIComponent("/");
 			const emailVerification = ensureEmailVerificationEnabled(ctx);
 			await emailVerification.sendVerificationEmail(
 				{
 					user: updatedUser,
-					url: `${ctx.context.baseURL}/verify-email?token=${newToken}&callbackURL=${updateCallbackURL}`,
+					url: buildVerificationUrl(ctx, newToken, ctx.query.callbackURL),
 					token: newToken,
 				},
 				ctx.request,
