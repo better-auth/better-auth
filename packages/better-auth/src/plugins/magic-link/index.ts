@@ -112,12 +112,9 @@ export const magicLink = (options: MagicLinkopts) => {
 					method: "POST",
 					requireHeaders: true,
 					body: z.object({
-						email: z
-							.string()
-							.meta({
-								description: "Email address to send the magic link",
-							})
-							.email(),
+						email: z.email().meta({
+							description: "Email address to send the magic link",
+						}),
 						name: z
 							.string()
 							.meta({
