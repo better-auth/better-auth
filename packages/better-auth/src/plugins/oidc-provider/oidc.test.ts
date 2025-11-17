@@ -65,6 +65,32 @@ async function handleConsentFlow(
 	return response.redirectURI;
 }
 
+describe("oidc init", () => {
+	it("default options", () => {
+		const provider = oidcProvider({
+			loginPage: "/login",
+		});
+		const options = provider.options;
+		expect(options).toMatchInlineSnapshot(`
+			{
+			  "accessTokenExpiresIn": 3600,
+			  "allowPlainCodeChallengeMethod": true,
+			  "codeExpiresIn": 600,
+			  "defaultScope": "openid",
+			  "loginPage": "/login",
+			  "refreshTokenExpiresIn": 604800,
+			  "scopes": [
+			    "openid",
+			    "profile",
+			    "email",
+			    "offline_access",
+			  ],
+			  "storeClientSecret": "plain",
+			}
+		`);
+	});
+});
+
 describe("oidc", async () => {
 	const {
 		auth: authorizationServer,

@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`init > should match config 1`] = `
+exports[`base context creation > should match config 1`] = `
 {
   "adapter": {
     "count": [Function],
@@ -10,24 +10,24 @@ exports[`init > should match config 1`] = `
     "deleteMany": [Function],
     "findMany": [Function],
     "findOne": [Function],
-    "id": "kysely",
+    "id": "memory",
     "options": {
       "adapterConfig": {
-        "adapterId": "kysely",
-        "adapterName": "Kysely Adapter",
+        "adapterId": "memory",
+        "adapterName": "Memory Adapter",
+        "customTransformInput": [Function],
         "debugLogs": false,
         "disableTransformInput": false,
+        "disableTransformJoin": false,
         "disableTransformOutput": false,
-        "supportsBooleans": false,
-        "supportsDates": false,
+        "supportsBooleans": true,
+        "supportsDates": true,
         "supportsJSON": false,
         "supportsNumericIds": true,
-        "transaction": false,
-        "usePlural": undefined,
+        "supportsUUIDs": false,
+        "transaction": [Function],
+        "usePlural": false,
       },
-      "debugLogs": false,
-      "transaction": undefined,
-      "type": "sqlite",
     },
     "transaction": [Function],
     "update": [Function],
@@ -113,20 +113,25 @@ exports[`init > should match config 1`] = `
   "newSession": null,
   "oauthConfig": {
     "skipStateCookieCheck": false,
-    "storeStateStrategy": "database",
+    "storeStateStrategy": "cookie",
   },
   "options": {
+    "advanced": {
+      "oauthConfig": {
+        "storeStateStrategy": "cookie",
+      },
+    },
     "basePath": "/api/auth",
     "baseURL": "http://localhost:3000",
-    "database": Database {
-      "inTransaction": false,
-      "memory": true,
-      "name": ":memory:",
-      "open": true,
-      "readonly": false,
-    },
     "plugins": [],
     "secret": "better-auth-secret-123456789",
+    "session": {
+      "cookieCache": {
+        "enabled": true,
+        "refreshCache": true,
+        "strategy": "jwe",
+      },
+    },
   },
   "password": {
     "checkPassword": [Function],
@@ -149,7 +154,10 @@ exports[`init > should match config 1`] = `
   "secret": "better-auth-secret-123456789",
   "session": null,
   "sessionConfig": {
-    "cookieRefreshCache": false,
+    "cookieRefreshCache": {
+      "enabled": true,
+      "updateAge": 60,
+    },
     "expiresIn": 604800,
     "freshAge": 86400,
     "updateAge": 86400,
@@ -220,6 +228,7 @@ exports[`init > should match config 1`] = `
         },
         "userId": {
           "fieldName": "userId",
+          "index": true,
           "references": {
             "field": "id",
             "model": "user",
@@ -269,6 +278,7 @@ exports[`init > should match config 1`] = `
         },
         "userId": {
           "fieldName": "userId",
+          "index": true,
           "references": {
             "field": "id",
             "model": "user",
@@ -340,6 +350,7 @@ exports[`init > should match config 1`] = `
         },
         "identifier": {
           "fieldName": "identifier",
+          "index": true,
           "required": true,
           "type": "string",
         },
