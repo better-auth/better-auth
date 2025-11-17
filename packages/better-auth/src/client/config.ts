@@ -51,7 +51,9 @@ export const getClientConfig = (
 		plugins: [
 			lifeCyclePlugin,
 			...(restOfFetchOptions.plugins || []),
-			...(options?.disableDefaultFetchPlugins ? [] : [userAgentPlugin, redirectPlugin]),
+			...(options?.disableDefaultFetchPlugins
+				? []
+				: [userAgentPlugin, redirectPlugin]),
 			...pluginsFetchPlugins,
 		],
 	});
