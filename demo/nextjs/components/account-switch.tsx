@@ -18,7 +18,7 @@ import {
 	PopoverTrigger,
 } from "@/components/ui/popover";
 import { client, useSession } from "@/lib/auth-client";
-import { Session } from "@/lib/auth-types";
+import type { Session } from "@/lib/auth-types";
 
 export default function AccountSwitcher({ sessions }: { sessions: Session[] }) {
 	const { data: currentUser } = useSession();
