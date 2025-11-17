@@ -267,7 +267,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 							return;
 						}
 						const session =
-							await ctx.context.internalAdapter.findSession(sessionToken);
+							(await ctx.context.internalAdapter.findSession(sessionToken)) ||
+							ctx.context.newSession;
 						if (!session) {
 							return;
 						}
