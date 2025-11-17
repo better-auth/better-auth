@@ -39,7 +39,7 @@ describe.runIf(isPostgresAvailable)(
 			// Setup: Create custom schema and a table in public schema
 			await publicPool.query(`DROP SCHEMA IF EXISTS ${customSchema} CASCADE`);
 			await publicPool.query(`CREATE SCHEMA ${customSchema}`);
-			publicPool.query(
+			await publicPool.query(
 				`DROP TABLE IF EXISTS public.user CASCADE; DROP TABLE IF EXISTS public.session CASCADE; DROP TABLE IF EXISTS public.account CASCADE; DROP TABLE IF EXISTS public.verification CASCADE;`,
 			);
 			// Create a conflicting table in the public schema
