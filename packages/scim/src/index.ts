@@ -1,23 +1,16 @@
 import { base64Url } from "@better-auth/utils/base64";
-import {
-	type Account,
-	type BetterAuthPlugin,
-	type DBAdapter,
-	type User,
-} from "better-auth";
+import type { Account, BetterAuthPlugin, DBAdapter, User } from "better-auth";
 import { APIError, sessionMiddleware } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
-import { createAuthEndpoint, type Member } from "better-auth/plugins";
-import * as z from "zod/v4";
+import type { Member } from "better-auth/plugins";
+import { createAuthEndpoint } from "better-auth/plugins";
+import { z } from "zod";
 import { getAccountId, getUserFullName, getUserPrimaryEmail } from "./mappings";
 import { authMiddlewareFactory } from "./middlewares";
 import { buildUserPatch } from "./patch-operations";
 import { SCIMAPIError } from "./scim-error";
-import {
-	type DBFilter,
-	parseSCIMUserFilter,
-	SCIMParseError,
-} from "./scim-filters";
+import type { DBFilter } from "./scim-filters";
+import { parseSCIMUserFilter, SCIMParseError } from "./scim-filters";
 import { createUserResource } from "./scim-resources";
 import { storeSCIMToken } from "./scim-tokens";
 import type { SCIMOptions, SCIMProvider } from "./types";

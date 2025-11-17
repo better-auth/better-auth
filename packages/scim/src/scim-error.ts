@@ -1,4 +1,5 @@
-import { APIError, type Status } from "better-auth";
+import type { Status } from "better-auth";
+import { APIError } from "better-auth";
 
 const _statusCode = {
 	OK: 200,

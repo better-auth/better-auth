@@ -1,4 +1,4 @@
-import { type User } from "better-auth";
+import type { User } from "better-auth";
 import { getUserFullName } from "./mappings";
 
 type Operation = {
