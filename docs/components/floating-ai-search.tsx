@@ -546,7 +546,7 @@ export function AISearchTrigger() {
 				<Presence present={open}>
 					<div
 						className={cn(
-							"absolute inset-0 flex flex-col items-center bg-fd-background/80 backdrop-blur-sm z-30",
+							"fixed inset-0 flex flex-col items-center bg-fd-background/80 backdrop-blur-sm z-30",
 							isMobile
 								? "p-4 pb-40"
 								: "p-2 right-(--removed-body-scroll-bar-size,0) pb-[8.375rem]",
@@ -585,7 +585,7 @@ export function AISearchTrigger() {
 						<List
 							messageCount={chat.messages.length}
 							className={cn(
-								"overscroll-contain",
+								"overscroll-contain flex-1",
 								isMobile
 									? "px-2 pt-6 pb-28 w-full"
 									: "py-10 pr-2 w-[min(800px,90vw)]",
@@ -627,7 +627,7 @@ export function AISearchTrigger() {
 				</Presence>
 				<div
 					className={cn(
-						"fixed bg-transparent transition-[width,height] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] -translate-x-1/2 shadow-xl z-30 border",
+						"fixed bg-transparent transition-[width,height] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] -translate-x-1/2 shadow-md z-30 border",
 						isMobile ? "bottom-4" : "bottom-4",
 						open
 							? isMobile
@@ -645,7 +645,7 @@ export function AISearchTrigger() {
 					{!open && (
 						<button
 							className={cn(
-								"absolute inset-0 flex items-center justify-between px-3 py-4 transition-colors text-fd-muted-foreground hover:bg-fd-accent hover:text-fd-accent-foreground rounded-none text-sm",
+								"fixed inset-0 flex items-center justify-between px-3 py-4 transition-colors text-fd-muted-foreground hover:bg-fd-accent hover:text-fd-accent-foreground rounded-none text-sm",
 							)}
 							onClick={() => setOpen(true)}
 						>
