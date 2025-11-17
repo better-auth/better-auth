@@ -1,4 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import type { SecondaryStorage } from "@better-auth/core/db";
+import type { PredefinedApiKeyOptions } from "./routes";
 import type { ApiKey } from "./types";
 
 /**
@@ -60,78 +62,90 @@ function deserializeApiKey(data: unknown): ApiKey | null {
 }
 
 /**
- * Get API key from secondary storage by hashed key
+ * Get the storage instance to use (custom methods take precedence)
  */
-export async function getApiKeyFromSecondaryStorage(
+function getStorageInstance(
 	ctx: GenericEndpointContext,
-	hashedKey: string,
-): Promise<ApiKey | null> {
-	if (!ctx.context.secondaryStorage) {
-		return null;
+	opts: PredefinedApiKeyOptions,
+): SecondaryStorage | null {
+	if (opts.storageMethods) {
+		return opts.storageMethods as SecondaryStorage;
 	}
-
-	const key = getStorageKeyByHashedKey(hashedKey);
-	const data = await ctx.context.secondaryStorage.get(key);
-	return deserializeApiKey(data);
+	return ctx.context.secondaryStorage || null;
 }
 
 /**
- * Get API key from secondary storage by ID
+ * Calculate TTL in seconds for an API key
  */
-export async function getApiKeyByIdFromSecondaryStorage(
-	ctx: GenericEndpointContext,
-	id: string,
-): Promise<ApiKey | null> {
-	if (!ctx.context.secondaryStorage) {
-		return null;
-	}
-
-	const key = getStorageKeyById(id);
-	const data = await ctx.context.secondaryStorage.get(key);
-	return deserializeApiKey(data);
-}
-
-/**
- * Store API key in secondary storage
- */
-export async function setApiKeyInSecondaryStorage(
-	ctx: GenericEndpointContext,
+function calculateTTL(
 	apiKey: ApiKey,
-): Promise<void> {
-	if (!ctx.context.secondaryStorage) {
-		return;
+	cacheTTL: number | null | undefined,
+): number | undefined {
+	if (cacheTTL !== null && cacheTTL !== undefined) {
+		return cacheTTL;
 	}
 
-	const serialized = serializeApiKey(apiKey);
-	const hashedKey = apiKey.key;
-	const id = apiKey.id;
-
-	let ttl: number | undefined;
 	if (apiKey.expiresAt) {
 		const now = Date.now();
 		const expiresAt = new Date(apiKey.expiresAt).getTime();
 		const ttlSeconds = Math.floor((expiresAt - now) / 1000);
 		// Only set TTL if expiration is in the future
 		if (ttlSeconds > 0) {
-			ttl = ttlSeconds;
+			return ttlSeconds;
 		}
 	}
 
-	await ctx.context.secondaryStorage.set(
-		getStorageKeyByHashedKey(hashedKey),
-		serialized,
-		ttl,
-	);
+	return undefined;
+}
 
-	await ctx.context.secondaryStorage.set(
-		getStorageKeyById(id),
-		serialized,
-		ttl,
-	);
+/**
+ * Get API key from secondary storage by hashed key
+ */
+async function getApiKeyFromStorage(
+	ctx: GenericEndpointContext,
+	hashedKey: string,
+	storage: SecondaryStorage,
+): Promise<ApiKey | null> {
+	const key = getStorageKeyByHashedKey(hashedKey);
+	const data = await storage.get(key);
+	return deserializeApiKey(data);
+}
+
+/**
+ * Get API key from secondary storage by ID
+ */
+async function getApiKeyByIdFromStorage(
+	ctx: GenericEndpointContext,
+	id: string,
+	storage: SecondaryStorage,
+): Promise<ApiKey | null> {
+	const key = getStorageKeyById(id);
+	const data = await storage.get(key);
+	return deserializeApiKey(data);
+}
+
+/**
+ * Store API key in secondary storage
+ */
+async function setApiKeyInStorage(
+	ctx: GenericEndpointContext,
+	apiKey: ApiKey,
+	storage: SecondaryStorage,
+	ttl?: number | undefined,
+): Promise<void> {
+	const serialized = serializeApiKey(apiKey);
+	const hashedKey = apiKey.key;
+	const id = apiKey.id;
+
+	// Store by hashed key (primary lookup)
+	await storage.set(getStorageKeyByHashedKey(hashedKey), serialized, ttl);
+
+	// Store by ID (for ID-based lookups)
+	await storage.set(getStorageKeyById(id), serialized, ttl);
 
 	// Update user's API key list
 	const userKey = getStorageKeyByUserId(apiKey.userId);
-	const userListData = await ctx.context.secondaryStorage.get(userKey);
+	const userListData = await storage.get(userKey);
 	let userIds: string[] = [];
 
 	if (userListData && typeof userListData === "string") {
@@ -146,34 +160,31 @@ export async function setApiKeyInSecondaryStorage(
 
 	if (!userIds.includes(id)) {
 		userIds.push(id);
-		await ctx.context.secondaryStorage.set(userKey, JSON.stringify(userIds));
+		await storage.set(userKey, JSON.stringify(userIds));
 	}
 }
 
 /**
  * Delete API key from secondary storage
  */
-export async function deleteApiKeyFromSecondaryStorage(
+async function deleteApiKeyFromStorage(
 	ctx: GenericEndpointContext,
 	apiKey: ApiKey,
+	storage: SecondaryStorage,
 ): Promise<void> {
-	if (!ctx.context.secondaryStorage) {
-		return;
-	}
-
 	const hashedKey = apiKey.key;
 	const id = apiKey.id;
 	const userId = apiKey.userId;
 
-	await ctx.context.secondaryStorage.delete(
-		getStorageKeyByHashedKey(hashedKey),
-	);
+	// Delete by hashed key
+	await storage.delete(getStorageKeyByHashedKey(hashedKey));
 
-	await ctx.context.secondaryStorage.delete(getStorageKeyById(id));
+	// Delete by ID
+	await storage.delete(getStorageKeyById(id));
 
 	// Update user's API key list
 	const userKey = getStorageKeyByUserId(userId);
-	const userListData = await ctx.context.secondaryStorage.get(userKey);
+	const userListData = await storage.get(userKey);
 	let userIds: string[] = [];
 
 	if (userListData && typeof userListData === "string") {
@@ -188,76 +199,391 @@ export async function deleteApiKeyFromSecondaryStorage(
 
 	const filteredIds = userIds.filter((keyId) => keyId !== id);
 	if (filteredIds.length === 0) {
-		await ctx.context.secondaryStorage.delete(userKey);
+		await storage.delete(userKey);
 	} else {
-		await ctx.context.secondaryStorage.set(
-			userKey,
-			JSON.stringify(filteredIds),
-		);
+		await storage.set(userKey, JSON.stringify(filteredIds));
 	}
 }
 
 /**
- * List API keys for a user from secondary storage
+ * Unified getter for API keys with support for all storage modes
  */
-export async function listApiKeysFromSecondaryStorage(
+export async function getApiKey(
 	ctx: GenericEndpointContext,
-	userId: string,
-): Promise<ApiKey[]> {
-	if (!ctx.context.secondaryStorage) {
-		return [];
+	hashedKey: string,
+	opts: PredefinedApiKeyOptions,
+): Promise<ApiKey | null> {
+	const storage = getStorageInstance(ctx, opts);
+
+	if (opts.storage === "database") {
+		return await ctx.context.adapter.findOne<ApiKey>({
+			model: "apikey",
+			where: [
+				{
+					field: "key",
+					value: hashedKey,
+				},
+			],
+		});
 	}
 
-	const userKey = getStorageKeyByUserId(userId);
-	const userListData = await ctx.context.secondaryStorage.get(userKey);
-	let userIds: string[] = [];
-
-	if (userListData && typeof userListData === "string") {
-		try {
-			userIds = JSON.parse(userListData);
-		} catch {
-			return [];
+	if (opts.storage === "secondary-storage") {
+		if (!storage) {
+			return null;
 		}
-	} else if (Array.isArray(userListData)) {
-		userIds = userListData;
-	} else {
-		return [];
+		return await getApiKeyFromStorage(ctx, hashedKey, storage);
 	}
 
-	const apiKeys: ApiKey[] = [];
-	for (const id of userIds) {
-		const apiKey = await getApiKeyByIdFromSecondaryStorage(ctx, id);
-		if (apiKey) {
-			apiKeys.push(apiKey);
+	if (opts.storage === "secondary-storage-with-fallback") {
+		if (storage) {
+			const cached = await getApiKeyFromStorage(ctx, hashedKey, storage);
+			if (cached) {
+				return cached;
+			}
 		}
+		return await ctx.context.adapter.findOne<ApiKey>({
+			model: "apikey",
+			where: [
+				{
+					field: "key",
+					value: hashedKey,
+				},
+			],
+		});
 	}
 
-	return apiKeys;
+	// Mode: cache
+	if (opts.storage === "cache") {
+		if (storage) {
+			const cached = await getApiKeyFromStorage(ctx, hashedKey, storage);
+			if (cached) {
+				return cached;
+			}
+		}
+		const dbKey = await ctx.context.adapter.findOne<ApiKey>({
+			model: "apikey",
+			where: [
+				{
+					field: "key",
+					value: hashedKey,
+				},
+			],
+		});
+
+		if (dbKey && storage) {
+			// Auto-populate cache
+			const ttl = calculateTTL(dbKey, opts.cacheTTL);
+			await setApiKeyInStorage(ctx, dbKey, storage, ttl);
+		}
+
+		return dbKey;
+	}
+
+	return await ctx.context.adapter.findOne<ApiKey>({
+		model: "apikey",
+		where: [
+			{
+				field: "key",
+				value: hashedKey,
+			},
+		],
+	});
 }
 
 /**
- * Update API key in secondary storage
+ * Unified getter for API keys by ID
  */
-export async function updateApiKeyInSecondaryStorage(
+export async function getApiKeyById(
 	ctx: GenericEndpointContext,
 	id: string,
-	updates: Partial<ApiKey>,
+	opts: PredefinedApiKeyOptions,
 ): Promise<ApiKey | null> {
-	if (!ctx.context.secondaryStorage) {
-		return null;
+	const storage = getStorageInstance(ctx, opts);
+
+	if (opts.storage === "database") {
+		return await ctx.context.adapter.findOne<ApiKey>({
+			model: "apikey",
+			where: [
+				{
+					field: "id",
+					value: id,
+				},
+			],
+		});
 	}
 
-	const existing = await getApiKeyByIdFromSecondaryStorage(ctx, id);
-	if (!existing) {
-		return null;
+	if (opts.storage === "secondary-storage") {
+		if (!storage) {
+			return null;
+		}
+		return await getApiKeyByIdFromStorage(ctx, id, storage);
 	}
 
-	const updated: ApiKey = {
-		...existing,
-		...updates,
-		updatedAt: new Date(),
-	};
+	if (opts.storage === "secondary-storage-with-fallback") {
+		if (storage) {
+			const cached = await getApiKeyByIdFromStorage(ctx, id, storage);
+			if (cached) {
+				return cached;
+			}
+		}
+		return await ctx.context.adapter.findOne<ApiKey>({
+			model: "apikey",
+			where: [
+				{
+					field: "id",
+					value: id,
+				},
+			],
+		});
+	}
 
-	await setApiKeyInSecondaryStorage(ctx, updated);
-	return updated;
+	if (opts.storage === "cache") {
+		if (storage) {
+			const cached = await getApiKeyByIdFromStorage(ctx, id, storage);
+			if (cached) {
+				return cached;
+			}
+		}
+		const dbKey = await ctx.context.adapter.findOne<ApiKey>({
+			model: "apikey",
+			where: [
+				{
+					field: "id",
+					value: id,
+				},
+			],
+		});
+
+		if (dbKey && storage) {
+			// Auto-populate cache
+			const ttl = calculateTTL(dbKey, opts.cacheTTL);
+			await setApiKeyInStorage(ctx, dbKey, storage, ttl);
+		}
+
+		return dbKey;
+	}
+
+	return await ctx.context.adapter.findOne<ApiKey>({
+		model: "apikey",
+		where: [
+			{
+				field: "id",
+				value: id,
+			},
+		],
+	});
+}
+
+/**
+ * Unified setter for API keys with support for all storage modes
+ */
+export async function setApiKey(
+	ctx: GenericEndpointContext,
+	apiKey: ApiKey,
+	opts: PredefinedApiKeyOptions,
+): Promise<void> {
+	const storage = getStorageInstance(ctx, opts);
+	const ttl = calculateTTL(apiKey, opts.cacheTTL);
+
+	if (opts.storage === "database") {
+		// Already handled by adapter.create/update in route handlers
+		return;
+	}
+
+	if (opts.storage === "secondary-storage") {
+		if (!storage) {
+			throw new Error(
+				"Secondary storage is required when storage mode is 'secondary-storage'",
+			);
+		}
+		await setApiKeyInStorage(ctx, apiKey, storage, ttl);
+		return;
+	}
+
+	if (opts.storage === "secondary-storage-with-fallback") {
+		if (!storage) {
+			throw new Error(
+				"Secondary storage is required when storage mode is 'secondary-storage-with-fallback'",
+			);
+		}
+		await setApiKeyInStorage(ctx, apiKey, storage, ttl);
+		return;
+	}
+
+	if (opts.storage === "cache") {
+		// Write to database first (handled by adapter in route handlers)
+		// Then write to cache
+		if (storage) {
+			await setApiKeyInStorage(ctx, apiKey, storage, ttl);
+		}
+		return;
+	}
+}
+
+/**
+ * Unified deleter for API keys with support for all storage modes
+ */
+export async function deleteApiKey(
+	ctx: GenericEndpointContext,
+	apiKey: ApiKey,
+	opts: PredefinedApiKeyOptions,
+): Promise<void> {
+	const storage = getStorageInstance(ctx, opts);
+
+	if (opts.storage === "database") {
+		// Already handled by adapter.delete in route handlers
+		return;
+	}
+
+	if (opts.storage === "secondary-storage") {
+		if (!storage) {
+			throw new Error(
+				"Secondary storage is required when storage mode is 'secondary-storage'",
+			);
+		}
+		await deleteApiKeyFromStorage(ctx, apiKey, storage);
+		return;
+	}
+
+	if (opts.storage === "secondary-storage-with-fallback") {
+		if (!storage) {
+			throw new Error(
+				"Secondary storage is required when storage mode is 'secondary-storage-with-fallback'",
+			);
+		}
+		await deleteApiKeyFromStorage(ctx, apiKey, storage);
+		return;
+	}
+
+	if (opts.storage === "cache") {
+		// Delete from database (handled by adapter in route handlers)
+		// Also delete from cache
+		if (storage) {
+			await deleteApiKeyFromStorage(ctx, apiKey, storage);
+		}
+		return;
+	}
+}
+
+/**
+ * List API keys for a user with support for all storage modes
+ */
+export async function listApiKeys(
+	ctx: GenericEndpointContext,
+	userId: string,
+	opts: PredefinedApiKeyOptions,
+): Promise<ApiKey[]> {
+	const storage = getStorageInstance(ctx, opts);
+
+	if (opts.storage === "database") {
+		return await ctx.context.adapter.findMany<ApiKey>({
+			model: "apikey",
+			where: [
+				{
+					field: "userId",
+					value: userId,
+				},
+			],
+		});
+	}
+
+	if (opts.storage === "secondary-storage") {
+		if (!storage) {
+			return [];
+		}
+
+		const userKey = getStorageKeyByUserId(userId);
+		const userListData = await storage.get(userKey);
+		let userIds: string[] = [];
+
+		if (userListData && typeof userListData === "string") {
+			try {
+				userIds = JSON.parse(userListData);
+			} catch {
+				return [];
+			}
+		} else if (Array.isArray(userListData)) {
+			userIds = userListData;
+		} else {
+			return [];
+		}
+
+		const apiKeys: ApiKey[] = [];
+		for (const id of userIds) {
+			const apiKey = await getApiKeyByIdFromStorage(ctx, id, storage);
+			if (apiKey) {
+				apiKeys.push(apiKey);
+			}
+		}
+
+		return apiKeys;
+	}
+
+	if (opts.storage === "secondary-storage-with-fallback") {
+		if (storage) {
+			const userKey = getStorageKeyByUserId(userId);
+			const userListData = await storage.get(userKey);
+			let userIds: string[] = [];
+
+			if (userListData && typeof userListData === "string") {
+				try {
+					userIds = JSON.parse(userListData);
+				} catch {
+					userIds = [];
+				}
+			} else if (Array.isArray(userListData)) {
+				userIds = userListData;
+			}
+
+			if (userIds.length > 0) {
+				const apiKeys: ApiKey[] = [];
+				for (const id of userIds) {
+					const apiKey = await getApiKeyByIdFromStorage(ctx, id, storage);
+					if (apiKey) {
+						apiKeys.push(apiKey);
+					}
+				}
+				return apiKeys;
+			}
+		}
+		return await ctx.context.adapter.findMany<ApiKey>({
+			model: "apikey",
+			where: [
+				{
+					field: "userId",
+					value: userId,
+				},
+			],
+		});
+	}
+
+	if (opts.storage === "cache") {
+		const dbKeys = await ctx.context.adapter.findMany<ApiKey>({
+			model: "apikey",
+			where: [
+				{
+					field: "userId",
+					value: userId,
+				},
+			],
+		});
+
+		if (storage && dbKeys.length > 0) {
+			// Update user's key list in cache
+			const userIds = dbKeys.map((k) => k.id);
+			await storage.set(getStorageKeyByUserId(userId), JSON.stringify(userIds));
+		}
+
+		return dbKeys;
+	}
+
+	return await ctx.context.adapter.findMany<ApiKey>({
+		model: "apikey",
+		where: [
+			{
+				field: "userId",
+				value: userId,
+			},
+		],
+	});
 }

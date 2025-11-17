@@ -212,13 +212,57 @@ export interface ApiKeyOptions {
 	/**
 	 * Storage backend for API keys.
 	 *
-	 * - `"database"`: Store API keys in the database adapter (default)
-	 * - `"secondary-storage"`: Store API keys in the configured secondary storage (e.g., Redis).
-	 *   This can improve performance for high-frequency API key lookups.
+	 * - `"database"`: Store only in database (default)
+	 * - `"secondary-storage"`: Store only in secondary storage (no fallback)
+	 * - `"secondary-storage-with-fallback"`: Check secondary storage first, fallback to database
+	 * - `"cache"`: Use secondary storage as cache (write-through: write to both, read cache first, auto-populate cache from DB)
 	 *
 	 * @default "database"
 	 */
-	storage?: "database" | "secondary-storage" | undefined;
+	storage?:
+		| "database"
+		| "secondary-storage"
+		| "secondary-storage-with-fallback"
+		| "cache"
+		| undefined;
+	/**
+	 * Custom storage methods for API keys.
+	 *
+	 * If provided, these methods will be used instead of `ctx.context.secondaryStorage`.
+	 * Custom methods take precedence over global secondary storage.
+	 *
+	 * Useful when you want to use a different storage backend specifically for API keys,
+	 * or when you need custom logic for storage operations.
+	 */
+	storageMethods?:
+		| {
+				/**
+				 * Get a value from storage
+				 */
+				get: (key: string) => Promise<unknown> | unknown;
+				/**
+				 * Set a value in storage
+				 */
+				set: (
+					key: string,
+					value: string,
+					ttl?: number | undefined,
+				) => Promise<void | null | unknown> | void;
+				/**
+				 * Delete a value from storage
+				 */
+				delete: (key: string) => Promise<void | null | string> | void;
+		  }
+		| undefined;
+	/**
+	 * Cache TTL in seconds for cache mode.
+	 *
+	 * If not provided, the API key's expiration date will be used to calculate TTL.
+	 * Only applies when `storage` is set to `"cache"`.
+	 *
+	 * @default null
+	 */
+	cacheTTL?: number | null | undefined;
 }
 
 export type ApiKey = {

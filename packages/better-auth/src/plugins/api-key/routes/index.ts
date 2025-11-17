@@ -28,6 +28,7 @@ export type PredefinedApiKeyOptions = ApiKeyOptions &
 			| "enableSessionForAPIKeys"
 			| "startingCharactersConfig"
 			| "storage"
+			| "cacheTTL"
 		>
 	> & {
 		keyExpiration: Required<ApiKeyOptions["keyExpiration"]>;

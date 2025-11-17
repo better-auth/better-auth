@@ -6,10 +6,7 @@ import { getDate } from "../../../utils/date";
 import { safeJSONParse } from "../../../utils/json";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
-import {
-	getApiKeyByIdFromSecondaryStorage,
-	updateApiKeyInSecondaryStorage,
-} from "../secondary-storage";
+import { getApiKeyById, setApiKey } from "../secondary-storage";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 export function updateApiKey({
@@ -299,28 +296,11 @@ export function updateApiKey({
 
 			let apiKey: ApiKey | null = null;
 
-			if (
-				opts.storage === "secondary-storage" &&
-				ctx.context.secondaryStorage
-			) {
-				apiKey = await getApiKeyByIdFromSecondaryStorage(ctx, keyId);
-				if (apiKey && apiKey.userId !== user.id) {
-					apiKey = null;
-				}
-			} else {
-				apiKey = await ctx.context.adapter.findOne<ApiKey>({
-					model: API_KEY_TABLE_NAME,
-					where: [
-						{
-							field: "id",
-							value: keyId,
-						},
-						{
-							field: "userId",
-							value: user.id,
-						},
-					],
-				});
+			apiKey = await getApiKeyById(ctx, keyId, opts);
+
+			// Verify ownership
+			if (apiKey && apiKey.userId !== user.id) {
+				apiKey = null;
 			}
 
 			if (!apiKey) {
@@ -420,17 +400,23 @@ export function updateApiKey({
 
 			let newApiKey: ApiKey = apiKey;
 			try {
-				if (
-					opts.storage === "secondary-storage" &&
-					ctx.context.secondaryStorage
-				) {
-					const result = await updateApiKeyInSecondaryStorage(
-						ctx,
-						apiKey.id,
-						newValues,
-					);
-					if (result) newApiKey = result;
-				} else {
+				if (opts.storage === "cache") {
+					// Write-through: update both DB and cache
+					const dbUpdated = await ctx.context.adapter.update<ApiKey>({
+						model: API_KEY_TABLE_NAME,
+						where: [
+							{
+								field: "id",
+								value: apiKey.id,
+							},
+						],
+						update: newValues,
+					});
+					if (dbUpdated) {
+						await setApiKey(ctx, dbUpdated, opts);
+						newApiKey = dbUpdated;
+					}
+				} else if (opts.storage === "database") {
 					const result = await ctx.context.adapter.update<ApiKey>({
 						model: API_KEY_TABLE_NAME,
 						where: [
@@ -439,11 +425,18 @@ export function updateApiKey({
 								value: apiKey.id,
 							},
 						],
-						update: {
-							...newValues,
-						},
+						update: newValues,
 					});
 					if (result) newApiKey = result;
+				} else {
+					// Secondary storage modes: update in storage
+					const updated: ApiKey = {
+						...apiKey,
+						...newValues,
+						updatedAt: new Date(),
+					};
+					await setApiKey(ctx, updated, opts);
+					newApiKey = updated;
 				}
 			} catch (error: any) {
 				throw new APIError("INTERNAL_SERVER_ERROR", {

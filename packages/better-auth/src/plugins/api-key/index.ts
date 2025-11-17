@@ -92,6 +92,8 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 				options?.startingCharactersConfig?.charactersLength ?? 6,
 		},
 		enableSessionForAPIKeys: options?.enableSessionForAPIKeys ?? false,
+		cacheTTL: options?.cacheTTL ?? null,
+		storageMethods: options?.storageMethods,
 	} satisfies ApiKeyOptions;
 
 	const schema = mergeSchema(

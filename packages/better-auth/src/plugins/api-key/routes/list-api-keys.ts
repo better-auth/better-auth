@@ -2,9 +2,8 @@ import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { sessionMiddleware } from "../../../api";
 import { safeJSONParse } from "../../../utils/json";
-import { API_KEY_TABLE_NAME } from "..";
 import type { apiKeySchema } from "../schema";
-import { listApiKeysFromSecondaryStorage } from "../secondary-storage";
+import { listApiKeys as listApiKeysFromStorage } from "../secondary-storage";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 export function listApiKeys({
@@ -168,22 +167,7 @@ export function listApiKeys({
 			const session = ctx.context.session;
 			let apiKeys: ApiKey[];
 
-			if (
-				opts.storage === "secondary-storage" &&
-				ctx.context.secondaryStorage
-			) {
-				apiKeys = await listApiKeysFromSecondaryStorage(ctx, session.user.id);
-			} else {
-				apiKeys = await ctx.context.adapter.findMany<ApiKey>({
-					model: API_KEY_TABLE_NAME,
-					where: [
-						{
-							field: "userId",
-							value: session.user.id,
-						},
-					],
-				});
-			}
+			apiKeys = await listApiKeysFromStorage(ctx, session.user.id, opts);
 
 			deleteAllExpiredApiKeys(ctx.context);
 			apiKeys = apiKeys.map((apiKey) => {

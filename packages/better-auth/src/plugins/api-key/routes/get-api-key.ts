@@ -3,9 +3,9 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../../api";
 import { safeJSONParse } from "../../../utils/json";
-import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
+import { ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
-import { getApiKeyByIdFromSecondaryStorage } from "../secondary-storage";
+import { getApiKeyById } from "../secondary-storage";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 
@@ -175,28 +175,11 @@ export function getApiKey({
 
 			let apiKey: ApiKey | null = null;
 
-			if (
-				opts.storage === "secondary-storage" &&
-				ctx.context.secondaryStorage
-			) {
-				apiKey = await getApiKeyByIdFromSecondaryStorage(ctx, id);
-				if (apiKey && apiKey.userId !== session.user.id) {
-					apiKey = null;
-				}
-			} else {
-				apiKey = await ctx.context.adapter.findOne<ApiKey>({
-					model: API_KEY_TABLE_NAME,
-					where: [
-						{
-							field: "id",
-							value: id,
-						},
-						{
-							field: "userId",
-							value: session.user.id,
-						},
-					],
-				});
+			apiKey = await getApiKeyById(ctx, id, opts);
+
+			// Verify ownership
+			if (apiKey && apiKey.userId !== session.user.id) {
+				apiKey = null;
 			}
 
 			if (!apiKey) {

@@ -5,8 +5,8 @@ import { APIError, sessionMiddleware } from "../../../api";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
 import {
-	deleteApiKeyFromSecondaryStorage,
-	getApiKeyByIdFromSecondaryStorage,
+	deleteApiKey as deleteApiKeyFromStorage,
+	getApiKeyById,
 } from "../secondary-storage";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
@@ -85,22 +85,7 @@ export function deleteApiKey({
 
 			let apiKey: ApiKey | null = null;
 
-			if (
-				opts.storage === "secondary-storage" &&
-				ctx.context.secondaryStorage
-			) {
-				apiKey = await getApiKeyByIdFromSecondaryStorage(ctx, keyId);
-			} else {
-				apiKey = await ctx.context.adapter.findOne<ApiKey>({
-					model: API_KEY_TABLE_NAME,
-					where: [
-						{
-							field: "id",
-							value: keyId,
-						},
-					],
-				});
-			}
+			apiKey = await getApiKeyById(ctx, keyId, opts);
 
 			if (!apiKey || apiKey.userId !== session.user.id) {
 				throw new APIError("NOT_FOUND", {
@@ -109,12 +94,9 @@ export function deleteApiKey({
 			}
 
 			try {
-				if (
-					opts.storage === "secondary-storage" &&
-					ctx.context.secondaryStorage
-				) {
-					await deleteApiKeyFromSecondaryStorage(ctx, apiKey);
-				} else {
+				if (opts.storage === "cache") {
+					// Delete from both DB and cache
+					await deleteApiKeyFromStorage(ctx, apiKey, opts);
 					await ctx.context.adapter.delete<ApiKey>({
 						model: API_KEY_TABLE_NAME,
 						where: [
@@ -124,6 +106,19 @@ export function deleteApiKey({
 							},
 						],
 					});
+				} else if (opts.storage === "database") {
+					await ctx.context.adapter.delete<ApiKey>({
+						model: API_KEY_TABLE_NAME,
+						where: [
+							{
+								field: "id",
+								value: apiKey.id,
+							},
+						],
+					});
+				} else {
+					// Secondary storage modes: delete from storage
+					await deleteApiKeyFromStorage(ctx, apiKey, opts);
 				}
 			} catch (error: any) {
 				throw new APIError("INTERNAL_SERVER_ERROR", {

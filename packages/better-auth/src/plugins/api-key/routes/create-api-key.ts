@@ -8,7 +8,7 @@ import { safeJSONParse } from "../../../utils/json";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
 import { apiKeySchema } from "../schema";
-import { setApiKeyInSecondaryStorage } from "../secondary-storage";
+import { setApiKey } from "../secondary-storage";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 
@@ -452,9 +452,15 @@ export function createApiKey({
 
 			let apiKey: ApiKey;
 
-			if (
-				opts.storage === "secondary-storage" &&
-				ctx.context.secondaryStorage
+			if (opts.storage === "cache") {
+				apiKey = await ctx.context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
+					model: API_KEY_TABLE_NAME,
+					data: data,
+				});
+				await setApiKey(ctx, apiKey, opts);
+			} else if (
+				opts.storage === "secondary-storage" ||
+				opts.storage === "secondary-storage-with-fallback"
 			) {
 				const id =
 					ctx.context.generateId({
@@ -464,7 +470,7 @@ export function createApiKey({
 					...data,
 					id,
 				} as ApiKey;
-				await setApiKeyInSecondaryStorage(ctx, apiKey);
+				await setApiKey(ctx, apiKey, opts);
 			} else {
 				apiKey = await ctx.context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
 					model: API_KEY_TABLE_NAME,
