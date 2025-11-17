@@ -1,104 +1,26 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "../../api";
-import type { Verification } from "../../types";
 import { authorizeEndpoint, formatErrorURL } from "./authorize";
-import type {
-	OAuthAuthorizationQuery,
-	OAuthConsent,
-	OAuthOptions,
-	Scope,
-	VerificationValue,
-} from "./types";
-import { storeToken } from "./utils";
+import type { OAuthConsent, OAuthOptions, Scope } from "./types";
 
 export async function consentEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	const { name: cookieName, attributes: cookieAttributes } =
-		ctx.context.createAuthCookie("oauth_consent");
-	const storedCode = await ctx.getSignedCookie(cookieName, ctx.context.secret);
-	ctx.setCookie(cookieName, "", {
-		path: ctx.context.options.basePath,
-		sameSite: "lax",
-		...cookieAttributes,
-		maxAge: 0,
-	});
-	if (!storedCode) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "No consent code found",
-			error: "invalid_request",
-		});
-	}
-
-	const verification = await ctx.context.internalAdapter
-		.findVerificationValue(
-			await storeToken(opts.storeTokens, storedCode, "authorization_code"),
-		)
-		.then((val) => {
-			if (!val) return null;
-			let parsedValue: VerificationValue | undefined;
-			if (val.value) {
-				try {
-					parsedValue = JSON.parse(val.value);
-				} catch (err) {
-					throw new APIError("UNAUTHORIZED", {
-						error_description: "invalid code",
-						error: "invalid_request",
-					});
-				}
-			}
-			return {
-				...val,
-				value: parsedValue,
-			} as Omit<Verification, "value"> & { value?: VerificationValue };
-		});
-	const verificationValue = verification?.value;
-
-	// Check verification
-	if (!verification) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "Invalid code",
-			error: "invalid_request",
-		});
-	}
-	if (verification.expiresAt < new Date()) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "Code expired",
-			error: "invalid_request",
-		});
-	}
-
-	// Check verification value
-	if (!verificationValue) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "missing verification value content",
-			error: "invalid_verification",
-		});
-	}
-	if (verificationValue.type !== "consent") {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "incorrect token type",
-			error: "invalid_request",
-		});
-	}
-	if (!verificationValue.query) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "Missing query",
-			error: "invalid_request",
-		});
-	}
-	if (!verificationValue.query.scope) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "Missing orginal requested scopes",
-			error: "invalid_request",
+	// Obtain oauth query
+	const query = ctx.context.oauth.query;
+	const originalRequestedScopes = query.get("scope")?.split(" ") ?? [];
+	const clientId = query.get("client_id");
+	if (!clientId) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "client_id is required",
+			error: "invalid_client",
 		});
 	}
 
 	// Check scopes if received (can only be equal or lesser than originally requested scopes)
 	const requestedScopes = (ctx.body.scope as string | undefined)?.split(" ");
 	if (requestedScopes) {
-		const originalRequestedScopes = verificationValue.query.scope;
 		if (!requestedScopes.every((sc) => originalRequestedScopes?.includes(sc))) {
 			throw new APIError("BAD_REQUEST", {
 				error_description: "Scope not originally requested",
@@ -110,13 +32,12 @@ export async function consentEndpoint(
 	// Consent not accepted (ensure it's strictly boolean true)
 	const accepted = ctx.body.accept === true;
 	if (!accepted) {
-		await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
 		return ctx.json({
 			redirect_uri: formatErrorURL(
-				verificationValue.query.redirect_uri,
+				query.get("redirect_uri") ?? "",
 				"access_denied",
 				"User denied access",
-				verificationValue.query?.state,
+				query.get("state") ?? undefined,
 			),
 		});
 	}
@@ -126,7 +47,7 @@ export async function consentEndpoint(
 	const referenceId = await opts.postLogin?.consentReferenceId?.({
 		user: session?.user!,
 		session: session?.session!,
-		scopes: requestedScopes ?? verificationValue.query.scope.split(" "),
+		scopes: requestedScopes ?? originalRequestedScopes,
 	});
 	const foundConsent = await ctx.context.adapter
 		.findOne<OAuthConsent<Scope[]>>({
@@ -134,11 +55,11 @@ export async function consentEndpoint(
 			where: [
 				{
 					field: "clientId",
-					value: verificationValue.query.client_id,
+					value: clientId,
 				},
 				{
 					field: "userId",
-					value: verificationValue.userId,
+					value: session?.user.id!,
 				},
 				...(referenceId
 					? [
@@ -159,9 +80,9 @@ export async function consentEndpoint(
 		});
 	const iat = Math.floor(Date.now() / 1000);
 	const consent: OAuthConsent<Scope[]> = {
-		clientId: verificationValue.query.client_id,
-		userId: verificationValue.userId,
-		scopes: requestedScopes ?? verificationValue.query.scope.split(" "),
+		clientId: clientId,
+		userId: session?.user.id!,
+		scopes: requestedScopes ?? originalRequestedScopes,
 		consentGiven: true,
 		createdAt: new Date(iat * 1000),
 		updatedAt: new Date(iat * 1000),
@@ -190,22 +111,17 @@ export async function consentEndpoint(
 			});
 
 	// Return authorization code
-	const query = {
-		...verificationValue.query,
-		scope: consent.scopes.join(" "),
-	};
 	ctx?.headers?.set("accept", "application/json");
-	let prompts = query.prompt?.split(" ");
+	let prompts = query.get("prompt")?.split(" ");
 	const foundPrompt = prompts?.findIndex((v) => v === "consent") ?? -1;
 	if (foundPrompt >= 0) {
 		prompts?.splice(foundPrompt, 1);
-		query.prompt = prompts?.length
-			? (prompts?.join(" ") as OAuthAuthorizationQuery["prompt"])
-			: undefined;
+		prompts?.length
+			? query.set("prompt", prompts.join(" "))
+			: query.delete("prompt");
 	}
-	ctx.context.verification_id = verification.id;
 	ctx.context.post_login = true;
-	ctx.query = query;
+	ctx.query = Object.fromEntries(query);
 	const { url } = await authorizeEndpoint(ctx, opts);
 	return {
 		redirect_uri: url,
