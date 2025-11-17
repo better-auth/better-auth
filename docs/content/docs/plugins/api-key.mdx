@@ -494,10 +494,12 @@ Check secondary storage first, then fallback to database if not found. Ideal for
 **Read behavior:**
 - Checks secondary storage first
 - If not found, queries the database
-- Does not automatically populate secondary storage on fallback
+- **Automatically populates secondary storage** when falling back to database (cache warming)
+- Ensures frequently accessed keys stay in cache over time
 
 **Write behavior:**
-- Writes to secondary storage only
+- Writes to **both** database and secondary storage
+- Ensures consistency between both storage layers
 
 ```ts
 export const auth = betterAuth({
@@ -619,10 +621,11 @@ All storage modes (except `"database"`) use the following key patterns in second
    })
    ```
    This allows existing keys in the database to be accessible while new keys are stored in secondary storage.
+   
+2. **Migrate existing keys** (optional): For faster initial cache population, you can write a migration script to
+copy existing keys from database to secondary storage. However, this is optional since the cache will warm up automatically as keys are accessed.
 
-2. **Migrate existing keys** (optional): Write a migration script to copy existing keys from database to secondary storage.
-
-3. **Disable fallback** once all keys are migrated:
+3. **Disable fallback** once all keys are migrated or when you're confident the cache is sufficiently populated:
    ```ts
    apiKey({
      storage: "secondary-storage",
