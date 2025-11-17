@@ -63,6 +63,7 @@ export const spMetadata = () => {
 			}),
 			metadata: {
 				openapi: {
+					operationId: "getSSOServiceProviderMetadata",
 					summary: "Get Service Provider metadata",
 					description: "Returns the SAML metadata for the Service Provider",
 					responses: {
@@ -337,6 +338,7 @@ export const registerSSOProvider = (options?: SSOOptions) => {
 			use: [sessionMiddleware],
 			metadata: {
 				openapi: {
+					operationId: "registerSSOProvider",
 					summary: "Register an OIDC provider",
 					description:
 						"This endpoint is used to register an OIDC provider. This is used to configure the provider and link it to an organization",
@@ -726,6 +728,7 @@ export const signInSSO = (options?: SSOOptions) => {
 			}),
 			metadata: {
 				openapi: {
+					operationId: "signInWithSSO",
 					summary: "Sign in with SSO provider",
 					description:
 						"This endpoint is used to sign in with an SSO provider. It redirects to the provider's authorization URL",
@@ -1014,6 +1017,7 @@ export const callbackSSO = (options?: SSOOptions) => {
 			metadata: {
 				isAction: false,
 				openapi: {
+					operationId: "handleSSOCallback",
 					summary: "Callback URL for SSO provider",
 					description:
 						"This endpoint is used as the callback URL for SSO providers. It handles the authorization code and exchanges it for an access token",
@@ -1362,6 +1366,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			metadata: {
 				isAction: false,
 				openapi: {
+					operationId: "handleSAMLCallback",
 					summary: "Callback URL for SAML provider",
 					description:
 						"This endpoint is used as the callback URL for SAML providers.",
@@ -1695,6 +1700,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			metadata: {
 				isAction: false,
 				openapi: {
+					operationId: "handleSAMLAssertionConsumerService",
 					summary: "SAML Assertion Consumer Service",
 					description:
 						"Handles SAML responses from IdP after successful authentication",
