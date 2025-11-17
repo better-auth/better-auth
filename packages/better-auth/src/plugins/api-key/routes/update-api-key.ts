@@ -400,8 +400,8 @@ export function updateApiKey({
 
 			let newApiKey: ApiKey = apiKey;
 			try {
-				if (opts.storage === "cache") {
-					// Write-through: update both DB and cache
+				if (opts.cacheEnabled) {
+					// Cache mode: write-through - update both DB and cache
 					const dbUpdated = await ctx.context.adapter.update<ApiKey>({
 						model: API_KEY_TABLE_NAME,
 						where: [
@@ -417,6 +417,7 @@ export function updateApiKey({
 						newApiKey = dbUpdated;
 					}
 				} else if (opts.storage === "database") {
+					// Database mode: update in DB only
 					const result = await ctx.context.adapter.update<ApiKey>({
 						model: API_KEY_TABLE_NAME,
 						where: [
@@ -429,7 +430,7 @@ export function updateApiKey({
 					});
 					if (result) newApiKey = result;
 				} else {
-					// Secondary storage modes: update in storage
+					// Secondary storage mode: update in storage
 					const updated: ApiKey = {
 						...apiKey,
 						...newValues,

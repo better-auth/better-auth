@@ -212,19 +212,34 @@ export interface ApiKeyOptions {
 	/**
 	 * Storage backend for API keys.
 	 *
-	 * - `"database"`: Store only in database (default)
-	 * - `"secondary-storage"`: Store only in secondary storage (no fallback)
-	 * - `"secondary-storage-with-fallback"`: Check secondary storage first, fallback to database
-	 * - `"cache"`: Use secondary storage as cache (write-through: write to both, read cache first, auto-populate cache from DB)
+	 * - `"database"`: Store API keys in the database adapter (default)
+	 * - `"secondary-storage"`: Store API keys in the configured secondary storage (e.g., Redis)
 	 *
 	 * @default "database"
 	 */
-	storage?:
-		| "database"
-		| "secondary-storage"
-		| "secondary-storage-with-fallback"
-		| "cache"
-		| undefined;
+	storage?: "database" | "secondary-storage" | undefined;
+	/**
+	 * When `storage` is `"secondary-storage"`, enable fallback to database if key is not found in secondary storage.
+	 *
+	 * Useful for gradual migration from database to secondary storage.
+	 *
+	 * @default false
+	 */
+	fallbackToDatabase?: boolean | undefined;
+	/**
+	 * Use secondary storage as a write-through cache layer.
+	 *
+	 * When enabled:
+	 * - API keys are stored in both database and secondary storage
+	 * - Reads check cache first, then fallback to database and auto-populate cache
+	 * - Writes update both database and cache
+	 * - Deletes remove from both database and cache
+	 *
+	 * Requires `storage: "database"` to be set (or use default).
+	 *
+	 * @default false
+	 */
+	cacheEnabled?: boolean | undefined;
 	/**
 	 * Custom storage methods for API keys.
 	 *
@@ -255,10 +270,10 @@ export interface ApiKeyOptions {
 		  }
 		| undefined;
 	/**
-	 * Cache TTL in seconds for cache mode.
+	 * Cache TTL in seconds when using `cacheEnabled`.
 	 *
 	 * If not provided, the API key's expiration date will be used to calculate TTL.
-	 * Only applies when `storage` is set to `"cache"`.
+	 * Only applies when `cacheEnabled` is `true`.
 	 *
 	 * @default null
 	 */

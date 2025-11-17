@@ -92,6 +92,8 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 				options?.startingCharactersConfig?.charactersLength ?? 6,
 		},
 		enableSessionForAPIKeys: options?.enableSessionForAPIKeys ?? false,
+		fallbackToDatabase: options?.fallbackToDatabase ?? false,
+		cacheEnabled: options?.cacheEnabled ?? false,
 		cacheTTL: options?.cacheTTL ?? null,
 		storageMethods: options?.storageMethods,
 	} satisfies ApiKeyOptions;

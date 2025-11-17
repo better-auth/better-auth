@@ -2530,7 +2530,8 @@ describe("api-key", async () => {
 				},
 				plugins: [
 					apiKey({
-						storage: "secondary-storage-with-fallback",
+						storage: "secondary-storage",
+						fallbackToDatabase: true,
 						enableMetadata: true,
 					}),
 				],
@@ -2623,7 +2624,8 @@ describe("api-key", async () => {
 				},
 				plugins: [
 					apiKey({
-						storage: "cache",
+						storage: "database",
+						cacheEnabled: true,
 						enableMetadata: true,
 					}),
 				],
@@ -2774,7 +2776,8 @@ describe("api-key", async () => {
 						},
 						plugins: [
 							apiKey({
-								storage: "cache",
+								storage: "database",
+								cacheEnabled: true,
 								cacheTTL: 3600, // 1 hour
 								enableMetadata: true,
 							}),

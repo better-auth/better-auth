@@ -45,27 +45,23 @@ export async function validateApiKey({
 		const expiresAt = new Date(apiKey.expiresAt).getTime();
 		if (now > expiresAt) {
 			try {
-				if (
-					opts.storage === "cache" ||
-					opts.storage === "secondary-storage-with-fallback"
-				) {
-					// For cache mode, delete from both DB and cache
-					// For fallback mode, delete from storage (DB deletion handled by adapter if needed)
+				if (opts.cacheEnabled) {
+					// Cache mode: delete from both DB and cache
 					await deleteApiKey(ctx, apiKey, opts);
-					if (opts.storage === "cache") {
-						await ctx.context.adapter.delete({
-							model: API_KEY_TABLE_NAME,
-							where: [
-								{
-									field: "id",
-									value: apiKey.id,
-								},
-							],
-						});
-					}
+					await ctx.context.adapter.delete({
+						model: API_KEY_TABLE_NAME,
+						where: [
+							{
+								field: "id",
+								value: apiKey.id,
+							},
+						],
+					});
 				} else if (opts.storage === "secondary-storage") {
+					// Secondary storage mode: delete from storage
 					await deleteApiKey(ctx, apiKey, opts);
 				} else {
+					// Database mode: delete from DB
 					await ctx.context.adapter.delete({
 						model: API_KEY_TABLE_NAME,
 						where: [
@@ -116,25 +112,23 @@ export async function validateApiKey({
 	if (apiKey.remaining === 0 && apiKey.refillAmount === null) {
 		// if there is no more remaining requests, and there is no refill amount, than the key is revoked
 		try {
-			if (
-				opts.storage === "cache" ||
-				opts.storage === "secondary-storage-with-fallback"
-			) {
+			if (opts.cacheEnabled) {
+				// Cache mode: delete from both DB and cache
 				await deleteApiKey(ctx, apiKey, opts);
-				if (opts.storage === "cache") {
-					await ctx.context.adapter.delete({
-						model: API_KEY_TABLE_NAME,
-						where: [
-							{
-								field: "id",
-								value: apiKey.id,
-							},
-						],
-					});
-				}
+				await ctx.context.adapter.delete({
+					model: API_KEY_TABLE_NAME,
+					where: [
+						{
+							field: "id",
+							value: apiKey.id,
+						},
+					],
+				});
 			} else if (opts.storage === "secondary-storage") {
+				// Secondary storage mode: delete from storage
 				await deleteApiKey(ctx, apiKey, opts);
 			} else {
+				// Database mode: delete from DB
 				await ctx.context.adapter.delete({
 					model: API_KEY_TABLE_NAME,
 					where: [
@@ -191,8 +185,8 @@ export async function validateApiKey({
 		updatedAt: new Date(),
 	};
 
-	if (opts.storage === "cache") {
-		// Write-through: update both DB and cache
+	if (opts.cacheEnabled) {
+		// Cache mode: write-through - update both DB and cache
 		const dbUpdated = await ctx.context.adapter.update<ApiKey>({
 			model: API_KEY_TABLE_NAME,
 			where: [
@@ -208,7 +202,7 @@ export async function validateApiKey({
 			newApiKey = dbUpdated;
 		}
 	} else if (opts.storage === "database") {
-		// Database only
+		// Database mode only
 		newApiKey = await ctx.context.adapter.update<ApiKey>({
 			model: API_KEY_TABLE_NAME,
 			where: [
@@ -220,6 +214,7 @@ export async function validateApiKey({
 			update: updated,
 		});
 	} else {
+		// Secondary storage mode: update in storage
 		await setApiKey(ctx, updated, opts);
 		newApiKey = updated;
 	}

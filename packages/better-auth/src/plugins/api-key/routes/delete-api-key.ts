@@ -94,8 +94,7 @@ export function deleteApiKey({
 			}
 
 			try {
-				if (opts.storage === "cache") {
-					// Delete from both DB and cache
+				if (opts.cacheEnabled) {
 					await deleteApiKeyFromStorage(ctx, apiKey, opts);
 					await ctx.context.adapter.delete<ApiKey>({
 						model: API_KEY_TABLE_NAME,
@@ -117,7 +116,6 @@ export function deleteApiKey({
 						],
 					});
 				} else {
-					// Secondary storage modes: delete from storage
 					await deleteApiKeyFromStorage(ctx, apiKey, opts);
 				}
 			} catch (error: any) {

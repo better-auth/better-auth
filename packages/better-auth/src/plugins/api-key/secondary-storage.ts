@@ -215,45 +215,8 @@ export async function getApiKey(
 ): Promise<ApiKey | null> {
 	const storage = getStorageInstance(ctx, opts);
 
-	if (opts.storage === "database") {
-		return await ctx.context.adapter.findOne<ApiKey>({
-			model: "apikey",
-			where: [
-				{
-					field: "key",
-					value: hashedKey,
-				},
-			],
-		});
-	}
-
-	if (opts.storage === "secondary-storage") {
-		if (!storage) {
-			return null;
-		}
-		return await getApiKeyFromStorage(ctx, hashedKey, storage);
-	}
-
-	if (opts.storage === "secondary-storage-with-fallback") {
-		if (storage) {
-			const cached = await getApiKeyFromStorage(ctx, hashedKey, storage);
-			if (cached) {
-				return cached;
-			}
-		}
-		return await ctx.context.adapter.findOne<ApiKey>({
-			model: "apikey",
-			where: [
-				{
-					field: "key",
-					value: hashedKey,
-				},
-			],
-		});
-	}
-
-	// Mode: cache
-	if (opts.storage === "cache") {
+	// Database mode with cache
+	if (opts.storage === "database" && opts.cacheEnabled) {
 		if (storage) {
 			const cached = await getApiKeyFromStorage(ctx, hashedKey, storage);
 			if (cached) {
@@ -279,6 +242,47 @@ export async function getApiKey(
 		return dbKey;
 	}
 
+	// Database mode only
+	if (opts.storage === "database") {
+		return await ctx.context.adapter.findOne<ApiKey>({
+			model: "apikey",
+			where: [
+				{
+					field: "key",
+					value: hashedKey,
+				},
+			],
+		});
+	}
+
+	// Secondary storage mode with fallback
+	if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
+		if (storage) {
+			const cached = await getApiKeyFromStorage(ctx, hashedKey, storage);
+			if (cached) {
+				return cached;
+			}
+		}
+		return await ctx.context.adapter.findOne<ApiKey>({
+			model: "apikey",
+			where: [
+				{
+					field: "key",
+					value: hashedKey,
+				},
+			],
+		});
+	}
+
+	// Secondary storage mode only
+	if (opts.storage === "secondary-storage") {
+		if (!storage) {
+			return null;
+		}
+		return await getApiKeyFromStorage(ctx, hashedKey, storage);
+	}
+
+	// Default fallback
 	return await ctx.context.adapter.findOne<ApiKey>({
 		model: "apikey",
 		where: [
@@ -300,44 +304,8 @@ export async function getApiKeyById(
 ): Promise<ApiKey | null> {
 	const storage = getStorageInstance(ctx, opts);
 
-	if (opts.storage === "database") {
-		return await ctx.context.adapter.findOne<ApiKey>({
-			model: "apikey",
-			where: [
-				{
-					field: "id",
-					value: id,
-				},
-			],
-		});
-	}
-
-	if (opts.storage === "secondary-storage") {
-		if (!storage) {
-			return null;
-		}
-		return await getApiKeyByIdFromStorage(ctx, id, storage);
-	}
-
-	if (opts.storage === "secondary-storage-with-fallback") {
-		if (storage) {
-			const cached = await getApiKeyByIdFromStorage(ctx, id, storage);
-			if (cached) {
-				return cached;
-			}
-		}
-		return await ctx.context.adapter.findOne<ApiKey>({
-			model: "apikey",
-			where: [
-				{
-					field: "id",
-					value: id,
-				},
-			],
-		});
-	}
-
-	if (opts.storage === "cache") {
+	// Database mode with cache
+	if (opts.storage === "database" && opts.cacheEnabled) {
 		if (storage) {
 			const cached = await getApiKeyByIdFromStorage(ctx, id, storage);
 			if (cached) {
@@ -363,6 +331,47 @@ export async function getApiKeyById(
 		return dbKey;
 	}
 
+	// Database mode only
+	if (opts.storage === "database") {
+		return await ctx.context.adapter.findOne<ApiKey>({
+			model: "apikey",
+			where: [
+				{
+					field: "id",
+					value: id,
+				},
+			],
+		});
+	}
+
+	// Secondary storage mode with fallback
+	if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
+		if (storage) {
+			const cached = await getApiKeyByIdFromStorage(ctx, id, storage);
+			if (cached) {
+				return cached;
+			}
+		}
+		return await ctx.context.adapter.findOne<ApiKey>({
+			model: "apikey",
+			where: [
+				{
+					field: "id",
+					value: id,
+				},
+			],
+		});
+	}
+
+	// Secondary storage mode only
+	if (opts.storage === "secondary-storage") {
+		if (!storage) {
+			return null;
+		}
+		return await getApiKeyByIdFromStorage(ctx, id, storage);
+	}
+
+	// Default fallback
 	return await ctx.context.adapter.findOne<ApiKey>({
 		model: "apikey",
 		where: [
@@ -385,11 +394,20 @@ export async function setApiKey(
 	const storage = getStorageInstance(ctx, opts);
 	const ttl = calculateTTL(apiKey, opts.cacheTTL);
 
-	if (opts.storage === "database") {
-		// Already handled by adapter.create/update in route handlers
+	// Database mode with cache - write to cache (DB write handled by route handlers)
+	if (opts.storage === "database" && opts.cacheEnabled) {
+		if (storage) {
+			await setApiKeyInStorage(ctx, apiKey, storage, ttl);
+		}
 		return;
 	}
 
+	// Database mode only - handled by adapter in route handlers
+	if (opts.storage === "database") {
+		return;
+	}
+
+	// Secondary storage mode (with or without fallback)
 	if (opts.storage === "secondary-storage") {
 		if (!storage) {
 			throw new Error(
@@ -397,25 +415,6 @@ export async function setApiKey(
 			);
 		}
 		await setApiKeyInStorage(ctx, apiKey, storage, ttl);
-		return;
-	}
-
-	if (opts.storage === "secondary-storage-with-fallback") {
-		if (!storage) {
-			throw new Error(
-				"Secondary storage is required when storage mode is 'secondary-storage-with-fallback'",
-			);
-		}
-		await setApiKeyInStorage(ctx, apiKey, storage, ttl);
-		return;
-	}
-
-	if (opts.storage === "cache") {
-		// Write to database first (handled by adapter in route handlers)
-		// Then write to cache
-		if (storage) {
-			await setApiKeyInStorage(ctx, apiKey, storage, ttl);
-		}
 		return;
 	}
 }
@@ -430,11 +429,20 @@ export async function deleteApiKey(
 ): Promise<void> {
 	const storage = getStorageInstance(ctx, opts);
 
-	if (opts.storage === "database") {
-		// Already handled by adapter.delete in route handlers
+	// Database mode with cache - delete from cache (DB delete handled by route handlers)
+	if (opts.storage === "database" && opts.cacheEnabled) {
+		if (storage) {
+			await deleteApiKeyFromStorage(ctx, apiKey, storage);
+		}
 		return;
 	}
 
+	// Database mode only - handled by adapter in route handlers
+	if (opts.storage === "database") {
+		return;
+	}
+
+	// Secondary storage mode (with or without fallback)
 	if (opts.storage === "secondary-storage") {
 		if (!storage) {
 			throw new Error(
@@ -442,25 +450,6 @@ export async function deleteApiKey(
 			);
 		}
 		await deleteApiKeyFromStorage(ctx, apiKey, storage);
-		return;
-	}
-
-	if (opts.storage === "secondary-storage-with-fallback") {
-		if (!storage) {
-			throw new Error(
-				"Secondary storage is required when storage mode is 'secondary-storage-with-fallback'",
-			);
-		}
-		await deleteApiKeyFromStorage(ctx, apiKey, storage);
-		return;
-	}
-
-	if (opts.storage === "cache") {
-		// Delete from database (handled by adapter in route handlers)
-		// Also delete from cache
-		if (storage) {
-			await deleteApiKeyFromStorage(ctx, apiKey, storage);
-		}
 		return;
 	}
 }
@@ -475,6 +464,28 @@ export async function listApiKeys(
 ): Promise<ApiKey[]> {
 	const storage = getStorageInstance(ctx, opts);
 
+	// Database mode with cache - read from DB, optionally update cache
+	if (opts.storage === "database" && opts.cacheEnabled) {
+		const dbKeys = await ctx.context.adapter.findMany<ApiKey>({
+			model: "apikey",
+			where: [
+				{
+					field: "userId",
+					value: userId,
+				},
+			],
+		});
+
+		if (storage && dbKeys.length > 0) {
+			// Update user's key list in cache
+			const userIds = dbKeys.map((k) => k.id);
+			await storage.set(getStorageKeyByUserId(userId), JSON.stringify(userIds));
+		}
+
+		return dbKeys;
+	}
+
+	// Database mode only
 	if (opts.storage === "database") {
 		return await ctx.context.adapter.findMany<ApiKey>({
 			model: "apikey",
@@ -487,39 +498,8 @@ export async function listApiKeys(
 		});
 	}
 
-	if (opts.storage === "secondary-storage") {
-		if (!storage) {
-			return [];
-		}
-
-		const userKey = getStorageKeyByUserId(userId);
-		const userListData = await storage.get(userKey);
-		let userIds: string[] = [];
-
-		if (userListData && typeof userListData === "string") {
-			try {
-				userIds = JSON.parse(userListData);
-			} catch {
-				return [];
-			}
-		} else if (Array.isArray(userListData)) {
-			userIds = userListData;
-		} else {
-			return [];
-		}
-
-		const apiKeys: ApiKey[] = [];
-		for (const id of userIds) {
-			const apiKey = await getApiKeyByIdFromStorage(ctx, id, storage);
-			if (apiKey) {
-				apiKeys.push(apiKey);
-			}
-		}
-
-		return apiKeys;
-	}
-
-	if (opts.storage === "secondary-storage-with-fallback") {
+	// Secondary storage mode with fallback
+	if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
 		if (storage) {
 			const userKey = getStorageKeyByUserId(userId);
 			const userListData = await storage.get(userKey);
@@ -557,26 +537,40 @@ export async function listApiKeys(
 		});
 	}
 
-	if (opts.storage === "cache") {
-		const dbKeys = await ctx.context.adapter.findMany<ApiKey>({
-			model: "apikey",
-			where: [
-				{
-					field: "userId",
-					value: userId,
-				},
-			],
-		});
-
-		if (storage && dbKeys.length > 0) {
-			// Update user's key list in cache
-			const userIds = dbKeys.map((k) => k.id);
-			await storage.set(getStorageKeyByUserId(userId), JSON.stringify(userIds));
+	// Secondary storage mode only
+	if (opts.storage === "secondary-storage") {
+		if (!storage) {
+			return [];
 		}
 
-		return dbKeys;
+		const userKey = getStorageKeyByUserId(userId);
+		const userListData = await storage.get(userKey);
+		let userIds: string[] = [];
+
+		if (userListData && typeof userListData === "string") {
+			try {
+				userIds = JSON.parse(userListData);
+			} catch {
+				return [];
+			}
+		} else if (Array.isArray(userListData)) {
+			userIds = userListData;
+		} else {
+			return [];
+		}
+
+		const apiKeys: ApiKey[] = [];
+		for (const id of userIds) {
+			const apiKey = await getApiKeyByIdFromStorage(ctx, id, storage);
+			if (apiKey) {
+				apiKeys.push(apiKey);
+			}
+		}
+
+		return apiKeys;
 	}
 
+	// Default fallback
 	return await ctx.context.adapter.findMany<ApiKey>({
 		model: "apikey",
 		where: [

@@ -28,6 +28,8 @@ export type PredefinedApiKeyOptions = ApiKeyOptions &
 			| "enableSessionForAPIKeys"
 			| "startingCharactersConfig"
 			| "storage"
+			| "fallbackToDatabase"
+			| "cacheEnabled"
 			| "cacheTTL"
 		>
 	> & {
