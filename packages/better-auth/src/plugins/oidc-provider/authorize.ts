@@ -277,12 +277,6 @@ export async function authorize(
 				 * updated with the actual authorization code.
 				 */
 				requireConsent,
-				/**
-				 * Login is required when:
-				 * 1. prompt=login is explicitly set
-				 * 2. Session age exceeds max_age parameter
-				 */
-				requireLogin,
 				state: requireConsent ? query.state : null,
 				codeChallenge: query.code_challenge,
 				codeChallengeMethod: query.code_challenge_method,
