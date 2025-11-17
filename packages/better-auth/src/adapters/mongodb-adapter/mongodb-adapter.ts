@@ -625,7 +625,7 @@ export const mongodbAdapter = (
 							const oid = new ObjectId(data);
 							return oid;
 						} catch (error) {
-							return new ObjectId();
+							return data;
 						}
 					}
 					if (
