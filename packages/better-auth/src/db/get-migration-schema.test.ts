@@ -2,7 +2,6 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { betterAuth } from "../auth";
-import { admin } from "../plugins/admin";
 import { getMigrations } from "./get-migration";
 
 const CONNECTION_STRING = "postgres://user:password@localhost:5433/better_auth";
@@ -327,10 +326,30 @@ describe.runIf(isPostgresAvailable)("PostgreSQL Column Additions", () => {
 		const migration = await getMigrations(config);
 		await migration.runMigrations();
 
-		// Change the config to add the admin plugin
-		config.plugins = [admin()];
+		// Change the config to add a plugin schema
+		config.plugins = [
+			{
+				id: "test",
+				schema: {
+					user: {
+						fields: {
+							role: {
+								type: "string",
+							},
+						},
+					},
+					session: {
+						fields: {
+							impersonatedBy: {
+								type: "string",
+							},
+						},
+					},
+				},
+			},
+		];
 		const { toBeAdded, toBeCreated } = await getMigrations(config);
-
+		console.log(toBeAdded);
 		expect(toBeCreated.length).toBe(0);
 		expect(toBeAdded.length).toBe(2);
 		expect(toBeAdded).toEqual(
