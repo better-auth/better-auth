@@ -1,3 +1,6 @@
+import type { User } from "better-auth";
+import type { Member } from "better-auth/plugins";
+
 export interface SCIMProvider {
 	id: string;
 	providerId: string;
@@ -15,14 +18,33 @@ export type SCIMEmail = { value?: string; primary?: boolean };
 
 export type SCIMOptions = {
 	/**
-	 * The list of roles that are considered admin roles. Only users with these roles will be able to sync information through SCIM
-	 * @default ["admin", "owner"]
+	 * A callback that runs before a new SCIM token is generated.
+	 * @returns
 	 */
-	adminRoles?: string[];
+	beforeSCIMTokenGenerated?: ({
+		user,
+		member,
+		scimToken,
+	}: {
+		user: User;
+		member?: Member | null;
+		scimToken: string;
+	}) => Promise<void>;
+
 	/**
-	 * The list of user ids that are considered admins. Only users with these ids will be able to sync information through SCIM
+	 * A callback that runs before a new SCIM token is generated
+	 * @returns
 	 */
-	adminUserIds?: string[];
+	afterSCIMTokenGenerated?: ({
+		user,
+		member,
+		scimProvider,
+	}: {
+		user: User;
+		member?: Member | null;
+		scimToken: string;
+		scimProvider: SCIMProvider;
+	}) => Promise<void>;
 	/**
 	 * Store the SCIM token in your database in a secure way
 	 *

@@ -80,13 +80,9 @@ const findUserById = async (
 export const scim = (options?: SCIMOptions) => {
 	const opts = {
 		storeSCIMToken: "plain",
-		adminRoles: ["admin", "owner"],
-		adminUserIds: [],
 		...options,
 	} satisfies SCIMOptions;
 
-	const adminRoles = new Set(opts.adminRoles);
-	const adminUserIds = new Set(opts.adminUserIds);
 	const authMiddleware = authMiddlewareFactory(opts);
 
 	return {
@@ -134,6 +130,7 @@ export const scim = (options?: SCIMOptions) => {
 				},
 				async (ctx) => {
 					const { providerId, organizationId } = ctx.body;
+					const user = ctx.context.session.user;
 
 					if (providerId.includes(":")) {
 						throw new APIError("BAD_REQUEST", {
@@ -159,7 +156,7 @@ export const scim = (options?: SCIMOptions) => {
 							where: [
 								{
 									field: "userId",
-									value: ctx.context.session.user.id,
+									value: user.id,
 								},
 								{
 									field: "organizationId",
@@ -173,23 +170,6 @@ export const scim = (options?: SCIMOptions) => {
 								message: "You are not a member of the organization",
 							});
 						}
-
-						if (!adminRoles.has(member.role)) {
-							throw new APIError("FORBIDDEN", {
-								message:
-									"You do not have enough privileges to generate a SCIM token",
-							});
-						}
-					}
-
-					if (
-						adminUserIds.size > 0 &&
-						!adminUserIds.has(ctx.context.session.user.id)
-					) {
-						throw new APIError("FORBIDDEN", {
-							message:
-								"You do not have enough privileges to generate a SCIM token",
-						});
 					}
 
 					const scimProvider = await ctx.context.adapter.findOne<SCIMProvider>({
@@ -214,14 +194,32 @@ export const scim = (options?: SCIMOptions) => {
 						`${baseToken}:${providerId}${organizationId ? `:${organizationId}` : ""}`,
 					);
 
-					await ctx.context.adapter.create<SCIMProvider>({
-						model: "scimProvider",
-						data: {
-							providerId: providerId,
-							organizationId: organizationId,
-							scimToken: await storeSCIMToken(ctx, opts, baseToken),
-						},
-					});
+					if (opts.beforeSCIMTokenGenerated) {
+						await opts.beforeSCIMTokenGenerated({
+							user,
+							member,
+							scimToken,
+						});
+					}
+
+					const newSCIMProvider =
+						await ctx.context.adapter.create<SCIMProvider>({
+							model: "scimProvider",
+							data: {
+								providerId: providerId,
+								organizationId: organizationId,
+								scimToken: await storeSCIMToken(ctx, opts, baseToken),
+							},
+						});
+
+					if (opts.afterSCIMTokenGenerated) {
+						await opts.afterSCIMTokenGenerated({
+							user,
+							member,
+							scimToken,
+							scimProvider: newSCIMProvider,
+						});
+					}
 
 					ctx.setStatus(201);
 

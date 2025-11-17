@@ -1,5 +1,5 @@
 import { sso } from "@better-auth/sso";
-import { betterAuth } from "better-auth";
+import { APIError, betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
 import { setCookieToHeader } from "better-auth/cookies";
@@ -126,44 +126,6 @@ describe("SCIM", () => {
 			await expect(generateSCIMToken()).rejects.toThrowError(
 				expect.objectContaining({
 					message: "You are not a member of the organization",
-				}),
-			);
-		});
-
-		it("should fail if the authenticated user does not have enough permissions (admin role)", async () => {
-			const { auth, getAuthCookieHeaders, registerOrganization } =
-				createTestInstance({ adminRoles: ["something"] });
-			const headers = await getAuthCookieHeaders();
-			const orgA = await registerOrganization("the org");
-
-			const generateSCIMToken = () =>
-				auth.api.generateSCIMToken({
-					body: { providerId: "the id", organizationId: orgA?.id },
-					headers,
-				});
-
-			await expect(generateSCIMToken()).rejects.toThrowError(
-				expect.objectContaining({
-					message: "You do not have enough privileges to generate a SCIM token",
-				}),
-			);
-		});
-
-		it("should fail if the authenticated user does not have enough permissions (admin id)", async () => {
-			const { auth, getAuthCookieHeaders } = createTestInstance({
-				adminUserIds: ["super"],
-			});
-			const headers = await getAuthCookieHeaders();
-
-			const generateSCIMToken = () =>
-				auth.api.generateSCIMToken({
-					body: { providerId: "the id" },
-					headers,
-				});
-
-			await expect(generateSCIMToken()).rejects.toThrowError(
-				expect.objectContaining({
-					message: "You do not have enough privileges to generate a SCIM token",
 				}),
 			);
 		});
@@ -326,6 +288,58 @@ describe("SCIM", () => {
 
 			const response = await auth.api.generateSCIMToken({
 				body: { providerId: "the id", organizationId: orgA?.id },
+				headers,
+			});
+
+			expect(response).toMatchObject({
+				scimToken: expect.any(String),
+			});
+		});
+
+		it("should execute hooks before SCIM token generation", async () => {
+			const { auth, getAuthCookieHeaders, registerOrganization } =
+				createTestInstance({
+					beforeSCIMTokenGenerated: async ({ user, member, scimToken }) => {
+						if (member?.role === "owner") {
+							throw new APIError("FORBIDDEN", {
+								message:
+									"You do not have enough privileges to generate a SCIM token",
+							});
+						}
+					},
+				});
+			const headers = await getAuthCookieHeaders();
+			const orgA = await registerOrganization("the org");
+
+			const generateSCIMToken = () =>
+				auth.api.generateSCIMToken({
+					body: { providerId: "the id", organizationId: orgA?.id },
+					headers,
+				});
+
+			await expect(generateSCIMToken()).rejects.toThrowError(
+				expect.objectContaining({
+					message: "You do not have enough privileges to generate a SCIM token",
+				}),
+			);
+		});
+
+		it("should execute hokos after SCIM token generation", async () => {
+			const { auth, getAuthCookieHeaders } = createTestInstance({
+				storeSCIMToken: "plain",
+				afterSCIMTokenGenerated: async ({
+					user,
+					member,
+					scimProvider,
+					scimToken,
+				}) => {
+					expect(scimProvider.scimToken).toBeTypeOf("string");
+				},
+			});
+			const headers = await getAuthCookieHeaders();
+
+			const response = await auth.api.generateSCIMToken({
+				body: { providerId: "the id" },
 				headers,
 			});
 

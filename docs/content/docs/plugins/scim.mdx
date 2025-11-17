@@ -333,8 +333,6 @@ The plugin requires additional fields in the `scimProvider` table to store the p
 
 ### Server
 
-- `adminRoles`: The list of roles that are considered admin roles. Only users with these roles will be able to sync information through SCIM. Defaults to `["admin", "owner"]`
-- `adminUserIds`: The list of user ids that are considered admins. Only users with these ids will be able to sync information through SCIM. Defaults to `[]`
 - `storeSCIMToken`: The method to store the SCIM token in your database, whether `encrypted`, `hashed` or `plain` text. Default is `plain` text.
 
 Alternatively, you can pass a custom encryptor or hasher to store the SCIM token in your database.
@@ -365,3 +363,28 @@ scim({
     }
 })
 ```
+
+### Hooks
+
+The following hooks allow to intercept the lifecycle of the `SCIM` token generation:
+
+```ts
+scim({
+    beforeSCIMTokenGenerated: async ({ user, member, scimToken }) => {
+        // Callback called before the scim token is persisted
+        // can be useful to intercept the generation
+        if (member?.role !== "admin") {
+            throw new APIError("FORBIDDEN", { message: "User does not have enough permissions" });
+        }
+    },
+    afterSCIMTokenGenerated: async ({ user, member, scimToken, scimProvider }) => {
+        // Callback called after the scim token has been persisted
+        // can be useful to send a notification or otherwise share the token
+        await shareSCIMTokenWithInterestedParty(scimToken);
+    },
+})
+```
+
+<Callout>
+**Note**: All hooks support error handling. Throwing an error in a before hook will prevent the operation from proceeding.
+</Callout>
