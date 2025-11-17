@@ -263,7 +263,7 @@ export async function getApiKey(
 				return cached;
 			}
 		}
-		return await ctx.context.adapter.findOne<ApiKey>({
+		const dbKey = await ctx.context.adapter.findOne<ApiKey>({
 			model: "apikey",
 			where: [
 				{
@@ -272,6 +272,14 @@ export async function getApiKey(
 				},
 			],
 		});
+
+		if (dbKey && storage) {
+			// Populate secondary storage for future reads
+			const ttl = calculateTTL(dbKey, opts.cacheTTL);
+			await setApiKeyInStorage(ctx, dbKey, storage, ttl);
+		}
+
+		return dbKey;
 	}
 
 	// Secondary storage mode only
@@ -352,7 +360,7 @@ export async function getApiKeyById(
 				return cached;
 			}
 		}
-		return await ctx.context.adapter.findOne<ApiKey>({
+		const dbKey = await ctx.context.adapter.findOne<ApiKey>({
 			model: "apikey",
 			where: [
 				{
@@ -361,6 +369,14 @@ export async function getApiKeyById(
 				},
 			],
 		});
+
+		if (dbKey && storage) {
+			// Populate secondary storage for future reads
+			const ttl = calculateTTL(dbKey, opts.cacheTTL);
+			await setApiKeyInStorage(ctx, dbKey, storage, ttl);
+		}
+
+		return dbKey;
 	}
 
 	// Secondary storage mode only
@@ -500,8 +516,9 @@ export async function listApiKeys(
 
 	// Secondary storage mode with fallback
 	if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
+		const userKey = getStorageKeyByUserId(userId);
+		
 		if (storage) {
-			const userKey = getStorageKeyByUserId(userId);
 			const userListData = await storage.get(userKey);
 			let userIds: string[] = [];
 
@@ -526,7 +543,8 @@ export async function listApiKeys(
 				return apiKeys;
 			}
 		}
-		return await ctx.context.adapter.findMany<ApiKey>({
+		// Fallback to database
+		const dbKeys = await ctx.context.adapter.findMany<ApiKey>({
 			model: "apikey",
 			where: [
 				{
@@ -535,6 +553,21 @@ export async function listApiKeys(
 				},
 			],
 		});
+
+		// Populate secondary storage with fetched keys
+		if (storage && dbKeys.length > 0) {
+			const userIds: string[] = [];
+			for (const apiKey of dbKeys) {
+				// Store each key in secondary storage
+				const ttl = calculateTTL(apiKey, opts.cacheTTL);
+				await setApiKeyInStorage(ctx, apiKey, storage, ttl);
+				userIds.push(apiKey.id);
+			}
+			// Update user's key list in secondary storage
+			await storage.set(userKey, JSON.stringify(userIds));
+		}
+
+		return dbKeys;
 	}
 
 	// Secondary storage mode only

@@ -2567,21 +2567,45 @@ describe("api-key", async () => {
 			expect(retrievedKey?.id).toBe(createdKey?.id);
 		});
 
-		it("should fallback to database when not found in storage", async () => {
+		it("should fallback to database when not found in storage and auto-populate storage", async () => {
 			const { headers, user } = await signInWithTestUser();
 
-			// Create key directly in database (bypassing storage)
-			const dbKey = await auth.api.createApiKey({
-				body: {
+			// Create key directly in database adapter (bypassing storage)
+			const context = await auth.$context;
+			const hashedKey = "test_hashed_key_123";
+			const dbKey = await context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
+				model: "apikey",
+				data: {
+					createdAt: new Date(),
+					updatedAt: new Date(),
+					name: "Test Key",
+					prefix: "test",
+					start: "test_",
+					key: hashedKey,
+					enabled: true,
+					expiresAt: null,
 					userId: user.id,
+					lastRefillAt: null,
+					lastRequest: null,
+					metadata: null,
+					rateLimitMax: null,
+					rateLimitTimeWindow: null,
+					remaining: null,
+					refillAmount: null,
+					refillInterval: null,
+					rateLimitEnabled: false,
+					requestCount: 0,
+					permissions: null,
 				},
 			});
 
 			expect(dbKey).not.toBeNull();
 
-			expect(store.has(`api-key:by-id:${dbKey!.id}`)).toBe(true);
+			// Ensure key is NOT in storage initially
+			expect(store.has(`api-key:by-id:${dbKey!.id}`)).toBe(false);
+			expect(store.has(`api-key:${hashedKey}`)).toBe(false);
 
-			// Should still be able to retrieve it (fallback to DB)
+			// Retrieve it via API (should fallback to DB and auto-populate storage)
 			const { data: retrievedKey } = await client.apiKey.get(
 				{ query: { id: dbKey!.id } },
 				{ headers: headers },
@@ -2589,6 +2613,95 @@ describe("api-key", async () => {
 
 			expect(retrievedKey).not.toBeNull();
 			expect(retrievedKey?.id).toBe(dbKey?.id);
+
+			// Verify it's now in storage (auto-populated)
+			expect(store.has(`api-key:by-id:${dbKey!.id}`)).toBe(true);
+			expect(store.has(`api-key:${hashedKey}`)).toBe(true);
+		});
+
+		it("should populate storage when listing keys falls back to database", async () => {
+			const { headers, user } = await signInWithTestUser();
+
+			// Create keys directly in database adapter (bypassing storage)
+			const context = await auth.$context;
+			const hashedKey1 = "test_hashed_key_1";
+			const hashedKey2 = "test_hashed_key_2";
+
+			const dbKey1 = await context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
+				model: "apikey",
+				data: {
+					createdAt: new Date(),
+					updatedAt: new Date(),
+					name: "Test Key 1",
+					prefix: "test",
+					start: "test_",
+					key: hashedKey1,
+					enabled: true,
+					expiresAt: null,
+					userId: user.id,
+					lastRefillAt: null,
+					lastRequest: null,
+					metadata: null,
+					rateLimitMax: null,
+					rateLimitTimeWindow: null,
+					remaining: null,
+					refillAmount: null,
+					refillInterval: null,
+					rateLimitEnabled: false,
+					requestCount: 0,
+					permissions: null,
+				},
+			});
+
+			const dbKey2 = await context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
+				model: "apikey",
+				data: {
+					createdAt: new Date(),
+					updatedAt: new Date(),
+					name: "Test Key 2",
+					prefix: "test",
+					start: "test_",
+					key: hashedKey2,
+					enabled: true,
+					expiresAt: null,
+					userId: user.id,
+					lastRefillAt: null,
+					lastRequest: null,
+					metadata: null,
+					rateLimitMax: null,
+					rateLimitTimeWindow: null,
+					remaining: null,
+					refillAmount: null,
+					refillInterval: null,
+					rateLimitEnabled: false,
+					requestCount: 0,
+					permissions: null,
+				},
+			});
+
+			expect(dbKey1).not.toBeNull();
+			expect(dbKey2).not.toBeNull();
+
+			// Ensure keys are NOT in storage initially
+			expect(store.has(`api-key:by-id:${dbKey1!.id}`)).toBe(false);
+			expect(store.has(`api-key:by-id:${dbKey2!.id}`)).toBe(false);
+			expect(store.has(`api-key:by-user:${user.id}`)).toBe(false);
+
+			// List keys via API (should fallback to DB and auto-populate storage)
+			const { data: keys } = await client.apiKey.list({}, { headers: headers });
+
+			expect(keys).not.toBeNull();
+			expect(keys?.length).toBeGreaterThanOrEqual(2);
+			expect(keys?.some((k) => k.id === dbKey1!.id)).toBe(true);
+			expect(keys?.some((k) => k.id === dbKey2!.id)).toBe(true);
+
+			// Verify keys are now in storage (auto-populated)
+			expect(store.has(`api-key:by-id:${dbKey1!.id}`)).toBe(true);
+			expect(store.has(`api-key:by-id:${dbKey2!.id}`)).toBe(true);
+			expect(store.has(`api-key:${hashedKey1}`)).toBe(true);
+			expect(store.has(`api-key:${hashedKey2}`)).toBe(true);
+			// Verify user's key list is populated
+			expect(store.has(`api-key:by-user:${user.id}`)).toBe(true);
 		});
 
 		it("should write to secondary storage only", async () => {
