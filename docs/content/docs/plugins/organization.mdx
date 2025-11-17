@@ -716,6 +716,21 @@ To retrieve the active organization for the user, you can call the `useActiveOrg
 
 To get the full details of an organization, you can use the `getFullOrganization` function.
 By default, if you don't pass any properties, it will use the active organization.
+Only users with the `owner` or `admin` role can access this endpoint unless you opt in to broader access.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins";
+
+export const auth = betterAuth({
+  plugins: [
+    organization({
+      // Allow members to read the full org roster as well.
+      fullOrganizationAccessRoles: ["owner", "admin", "member"],
+    }),
+  ],
+});
+```
 
 <APIMethod
   path="/organization/get-full-organization"

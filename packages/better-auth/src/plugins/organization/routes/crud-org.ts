@@ -724,15 +724,28 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
 			}
-			const isMember = await adapter.checkMembership({
+			const member = await adapter.checkMembership({
 				userId: session.user.id,
 				organizationId: organization.id,
 			});
-			if (!isMember) {
+			if (!member) {
 				await adapter.setActiveOrganization(session.session.token, null, ctx);
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+				});
+			}
+
+			const allowedRoles =
+				Array.isArray(ctx.context.orgOptions.fullOrganizationAccessRoles) &&
+				ctx.context.orgOptions.fullOrganizationAccessRoles.length > 0
+					? ctx.context.orgOptions.fullOrganizationAccessRoles
+					: ["owner", "admin"];
+
+			if (!allowedRoles.includes(member.role)) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_READ_THIS_ORGANIZATION,
 				});
 			}
 

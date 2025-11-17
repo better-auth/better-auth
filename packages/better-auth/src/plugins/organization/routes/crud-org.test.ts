@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../../client";
 import { getTestInstance } from "../../../test-utils/test-instance";
@@ -164,6 +165,54 @@ describe("get-full-organization", async () => {
 		expect(invitation?.role).toBe("member");
 	});
 
+	it("should forbid member role from reading full organization by default", async () => {
+		const isolatedOrg = await client.organization.create({
+			name: `forbid-${randomUUID()}`,
+			slug: `forbid-${randomUUID()}`,
+			fetchOptions: {
+				headers,
+			},
+		});
+		const memberEmail = `member-default-${randomUUID()}@test.com`;
+		const memberPassword = "password";
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: memberEmail,
+				password: memberPassword,
+				name: "Member Default",
+			},
+		});
+		await auth.api.addMember({
+			body: {
+				userId: newUser.user.id,
+				role: "member",
+				organizationId: isolatedOrg.data?.id as string,
+			},
+		});
+		const memberHeaders = new Headers();
+		await client.signIn.email(
+			{
+				email: memberEmail,
+				password: memberPassword,
+			},
+			{
+				onSuccess: cookieSetter(memberHeaders),
+			},
+		);
+		const result = await client.organization.getFullOrganization({
+			query: {
+				organizationId: isolatedOrg.data?.id as string,
+			},
+			fetchOptions: {
+				headers: memberHeaders,
+			},
+		});
+		expect(result.error?.status).toBe(403);
+		expect(result.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_READ_THIS_ORGANIZATION,
+		);
+	});
+
 	it("should prioritize organizationSlug over organizationId when both are provided", async () => {
 		const result = await client.organization.getFullOrganization({
 			query: {
@@ -250,6 +299,76 @@ describe("get-full-organization", async () => {
 
 		expect(fullOrg.data?.members.length).toBeGreaterThan(3);
 		expect(fullOrg.data?.members.length).toBeLessThanOrEqual(6);
+	});
+});
+
+describe("get-full-organization role overrides", async () => {
+	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance({
+		plugins: [
+			organization({
+				fullOrganizationAccessRoles: ["owner", "admin", "member"],
+			}),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
+	const org = await client.organization.create({
+		name: "role-override-org",
+		slug: "role-override-org",
+		fetchOptions: {
+			headers,
+		},
+	});
+
+	it("should allow configured member role to read full organization", async () => {
+		const memberEmail = `member-override-${randomUUID()}@test.com`;
+		const memberPassword = "password";
+		const member = await auth.api.signUpEmail({
+			body: {
+				email: memberEmail,
+				password: memberPassword,
+				name: "Member Override",
+			},
+		});
+		await auth.api.addMember({
+			body: {
+				userId: member.user.id,
+				role: "member",
+				organizationId: org.data?.id as string,
+			},
+		});
+		const memberHeaders = new Headers();
+		await client.signIn.email(
+			{
+				email: memberEmail,
+				password: memberPassword,
+			},
+			{
+				onSuccess: cookieSetter(memberHeaders),
+			},
+		);
+		const result = await client.organization.getFullOrganization({
+			query: {
+				organizationId: org.data?.id as string,
+			},
+			fetchOptions: {
+				headers: memberHeaders,
+			},
+		});
+		expect(result.error).toBeNull();
+		expect(result.data?.id).toBe(org.data?.id);
+		expect(result.data?.members?.some((m: any) => m.userId === member.user.id)).toBe(
+			true,
+		);
 	});
 });
 

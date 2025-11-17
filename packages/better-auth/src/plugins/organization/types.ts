@@ -66,6 +66,12 @@ export interface OrganizationOptions {
 		  }
 		| undefined;
 	/**
+	 * Allowed roles for `/organization/get-full-organization`.
+	 *
+	 * @default ["owner", "admin"]
+	 */
+	fullOrganizationAccessRoles?: string[] | undefined;
+	/**
 	 * Dynamic access control for the organization plugin.
 	 */
 	dynamicAccessControl?:
