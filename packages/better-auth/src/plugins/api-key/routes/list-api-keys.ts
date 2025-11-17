@@ -4,14 +4,14 @@ import { sessionMiddleware } from "../../../api";
 import { safeJSONParse } from "../../../utils/json";
 import { API_KEY_TABLE_NAME } from "..";
 import type { apiKeySchema } from "../schema";
-import type { ApiKey } from "../types";
+import type { ApiKeyOptions, InferApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
-export function listApiKeys({
+export function listApiKeys<O extends ApiKeyOptions>({
 	opts,
 	schema,
 	deleteAllExpiredApiKeys,
 }: {
-	opts: PredefinedApiKeyOptions;
+	opts: PredefinedApiKeyOptions<O>;
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
@@ -165,7 +165,7 @@ export function listApiKeys({
 		},
 		async (ctx) => {
 			const session = ctx.context.session;
-			let apiKeys = await ctx.context.adapter.findMany<ApiKey>({
+			let apiKeys = await ctx.context.adapter.findMany<InferApiKey<O, false>>({
 				model: API_KEY_TABLE_NAME,
 				where: [
 					{
@@ -197,7 +197,7 @@ export function listApiKeys({
 				};
 			});
 
-			return ctx.json(returningApiKey);
+			return ctx.json(returningApiKey as Omit<InferApiKey<O, false>, "key">[]);
 		},
 	);
 }

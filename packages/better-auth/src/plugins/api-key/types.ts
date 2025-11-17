@@ -2,7 +2,9 @@ import type {
 	GenericEndpointContext,
 	HookEndpointContext,
 } from "@better-auth/core";
+import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
 import type { InferOptionSchema } from "../../types";
+import type { Prettify } from "../../types/helper";
 import type { Statements } from "../access";
 import type { apiKeySchema } from "./schema";
 export interface ApiKeyOptions {
@@ -306,3 +308,13 @@ export type ApiKey = {
 		  } | null)
 		| undefined;
 };
+
+export type InferApiKey<
+	O extends ApiKeyOptions | undefined,
+	isClientSide extends boolean = true,
+> = Prettify<
+	ApiKey &
+		(O extends ApiKeyOptions
+			? InferAdditionalFieldsFromPluginOptions<"apikey", O, isClientSide>
+			: {})
+>;

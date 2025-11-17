@@ -178,6 +178,7 @@ export function mergeSchema<S extends BetterAuthPluginDBSchema>(
 					fields?: {
 						[P: string]: string;
 					};
+					additionalFields?: Record<string, DBFieldAttribute>;
 				};
 		  }
 		| undefined,
@@ -185,17 +186,31 @@ export function mergeSchema<S extends BetterAuthPluginDBSchema>(
 	if (!newSchema) {
 		return schema;
 	}
-	for (const table in newSchema) {
-		const newModelName = newSchema[table]?.modelName;
-		if (newModelName) {
-			schema[table]!.modelName = newModelName;
+	for (const tableKey in newSchema) {
+		const table = tableKey as keyof typeof newSchema;
+		const overrides = newSchema[table];
+		if (!overrides) {
+			continue;
 		}
-		for (const field in schema[table]!.fields) {
-			const newField = newSchema[table]?.fields?.[field];
+		const baseTable = schema[table as keyof S];
+		if (!baseTable) {
+			continue;
+		}
+		if (overrides.modelName) {
+			baseTable.modelName = overrides.modelName;
+		}
+		if (overrides.additionalFields) {
+			baseTable.fields = {
+				...baseTable.fields,
+				...overrides.additionalFields,
+			};
+		}
+		for (const field in baseTable.fields) {
+			const newField = overrides.fields?.[field];
 			if (!newField) {
 				continue;
 			}
-			schema[table]!.fields[field]!.fieldName = newField;
+			baseTable.fields[field]!.fieldName = newField;
 		}
 	}
 	return schema;

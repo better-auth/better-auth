@@ -753,8 +753,8 @@ describe("api-key", async () => {
 		});
 
 		expect(apiKey).not.toBeNull();
-		expect(apiKey.metadata.test).toBeDefined();
-		expect(apiKey.metadata.test).toEqual(metadata.test);
+		expect(apiKey.metadata?.test).toBeDefined();
+		expect(apiKey.metadata?.test).toEqual(metadata.test);
 	});
 
 	it("create API key with with metadata when metadata is disabled (should fail)", async () => {
@@ -2155,5 +2155,43 @@ describe("api-key", async () => {
 		expect(result.key?.remaining).toBe(refillAmount - 1);
 
 		vi.useRealTimers();
+	});
+
+	it("should allow configuring additional API key fields", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				apiKey({
+					schema: {
+						apikey: {
+							additionalFields: {
+								organizationId: {
+									type: "string",
+									required: true,
+								},
+							},
+						},
+					},
+				}),
+			],
+		});
+		const { user } = await signInWithTestUser();
+		const createdKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+				organizationId: "org_123",
+			},
+		});
+
+		expect(createdKey.organizationId).toBe("org_123");
+
+		const updatedKey = await auth.api.updateApiKey({
+			body: {
+				keyId: createdKey.id,
+				userId: user.id,
+				organizationId: "org_456",
+			},
+		});
+
+		expect(updatedKey.organizationId).toBe("org_456");
 	});
 });

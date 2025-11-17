@@ -10,30 +10,45 @@ import { listApiKeys } from "./list-api-keys";
 import { updateApiKey } from "./update-api-key";
 import { verifyApiKey } from "./verify-api-key";
 
-export type PredefinedApiKeyOptions = ApiKeyOptions &
-	Required<
-		Pick<
-			ApiKeyOptions,
-			| "apiKeyHeaders"
-			| "defaultKeyLength"
-			| "keyExpiration"
-			| "rateLimit"
-			| "maximumPrefixLength"
-			| "minimumPrefixLength"
-			| "maximumNameLength"
-			| "disableKeyHashing"
-			| "minimumNameLength"
-			| "requireName"
-			| "enableMetadata"
-			| "enableSessionForAPIKeys"
-			| "startingCharactersConfig"
-		>
-	> & {
-		keyExpiration: Required<ApiKeyOptions["keyExpiration"]>;
-		startingCharactersConfig: Required<
-			ApiKeyOptions["startingCharactersConfig"]
-		>;
-	};
+export type PredefinedApiKeyOptions<O extends ApiKeyOptions = ApiKeyOptions> =
+	O &
+		Required<
+			Pick<
+				ApiKeyOptions,
+				| "apiKeyHeaders"
+				| "defaultKeyLength"
+				| "keyExpiration"
+				| "rateLimit"
+				| "maximumPrefixLength"
+				| "minimumPrefixLength"
+				| "maximumNameLength"
+				| "disableKeyHashing"
+				| "minimumNameLength"
+				| "requireName"
+				| "enableMetadata"
+				| "enableSessionForAPIKeys"
+				| "startingCharactersConfig"
+			>
+		> & {
+			keyExpiration: Required<NonNullable<ApiKeyOptions["keyExpiration"]>>;
+			startingCharactersConfig: Required<
+				NonNullable<ApiKeyOptions["startingCharactersConfig"]>
+			>;
+			rateLimit: Required<NonNullable<ApiKeyOptions["rateLimit"]>>;
+		};
+
+export interface RouteContext<O extends ApiKeyOptions> {
+	keyGenerator: (options: {
+		length: number;
+		prefix: string | undefined;
+	}) => Promise<string> | string;
+	opts: PredefinedApiKeyOptions<O>;
+	schema: ReturnType<typeof apiKeySchema>;
+	deleteAllExpiredApiKeys?: (
+		ctx: AuthContext,
+		byPassLastCheckTime?: boolean | undefined,
+	) => void;
+}
 
 let lastChecked: Date | null = null;
 
@@ -70,7 +85,7 @@ export async function deleteAllExpiredApiKeys(
 		});
 }
 
-export function createApiKeyRoutes({
+export function createApiKeyRoutes<O extends ApiKeyOptions>({
 	keyGenerator,
 	opts,
 	schema,
@@ -79,21 +94,21 @@ export function createApiKeyRoutes({
 		length: number;
 		prefix: string | undefined;
 	}) => Promise<string> | string;
-	opts: PredefinedApiKeyOptions;
+	opts: PredefinedApiKeyOptions<O>;
 	schema: ReturnType<typeof apiKeySchema>;
 }) {
 	return {
-		createApiKey: createApiKey({
+		createApiKey: createApiKey<O>({
 			keyGenerator,
 			opts,
 			schema,
 			deleteAllExpiredApiKeys,
 		}),
-		verifyApiKey: verifyApiKey({ opts, schema, deleteAllExpiredApiKeys }),
-		getApiKey: getApiKey({ opts, schema, deleteAllExpiredApiKeys }),
-		updateApiKey: updateApiKey({ opts, schema, deleteAllExpiredApiKeys }),
-		deleteApiKey: deleteApiKey({ opts, schema, deleteAllExpiredApiKeys }),
-		listApiKeys: listApiKeys({ opts, schema, deleteAllExpiredApiKeys }),
+		verifyApiKey: verifyApiKey<O>({ opts, schema, deleteAllExpiredApiKeys }),
+		getApiKey: getApiKey<O>({ opts, schema, deleteAllExpiredApiKeys }),
+		updateApiKey: updateApiKey<O>({ opts, schema, deleteAllExpiredApiKeys }),
+		deleteApiKey: deleteApiKey<O>({ opts, schema, deleteAllExpiredApiKeys }),
+		listApiKeys: listApiKeys<O>({ opts, schema, deleteAllExpiredApiKeys }),
 		deleteAllExpiredApiKeys: deleteAllExpiredApiKeysEndpoint({
 			deleteAllExpiredApiKeys,
 		}),
