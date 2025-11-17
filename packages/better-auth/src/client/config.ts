@@ -3,7 +3,7 @@ import type {
 	ClientAtomListener,
 } from "@better-auth/core";
 import { createFetch } from "@better-fetch/fetch";
-import { type WritableAtom } from "nanostores";
+import type { WritableAtom } from "nanostores";
 import { getBaseURL } from "../utils/url";
 import { redirectPlugin, userAgentPlugin } from "./fetch-plugins";
 import { parseJSON } from "./parser";

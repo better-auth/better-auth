@@ -1,4 +1,4 @@
-import { type BetterAuthPlugin } from "better-auth";
+import type { BetterAuthPlugin } from "better-auth";
 import { XMLValidator } from "fast-xml-parser";
 import * as saml from "samlify";
 import {

@@ -22,7 +22,8 @@ import { mergeSchema } from "../../db";
 import type { jwt } from "../jwt";
 import { getJwtToken } from "../jwt/sign";
 import { authorize } from "./authorize";
-import { type OAuthApplication, schema } from "./schema";
+import type { OAuthApplication } from "./schema";
+import { schema } from "./schema";
 import type {
 	Client,
 	CodeVerificationValue,

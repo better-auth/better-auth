@@ -12,7 +12,8 @@ import { setSessionCookie } from "../../cookies";
 import { mergeSchema } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
 import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
-import { getSchema, type UsernameSchema } from "./schema";
+import type { UsernameSchema } from "./schema";
+import { getSchema } from "./schema";
 
 export { USERNAME_ERROR_CODES } from "./error-codes";
 
