@@ -517,7 +517,7 @@ export async function listApiKeys(
 	// Secondary storage mode with fallback
 	if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
 		const userKey = getStorageKeyByUserId(userId);
-		
+
 		if (storage) {
 			const userListData = await storage.get(userKey);
 			let userIds: string[] = [];
