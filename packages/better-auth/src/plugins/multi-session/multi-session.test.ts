@@ -150,7 +150,6 @@ describe("multi-session", async () => {
 	});
 
 	it("should reject forged multi-session cookies on sign-out", async () => {
-		// Create attacker and victim users
 		const attackerUser = {
 			email: "attacker@test.com",
 			password: "password",
@@ -162,7 +161,6 @@ describe("multi-session", async () => {
 			name: "Victim",
 		};
 
-		// Sign up both users and get their sessions
 		const attackerHeaders = new Headers();
 		let attackerSessionToken = "";
 		await client.signUp.email(attackerUser, {
@@ -187,7 +185,6 @@ describe("multi-session", async () => {
 			},
 		});
 
-		// Verify both users have valid sessions
 		const attackerSession = await client.getSession({
 			fetchOptions: { headers: attackerHeaders },
 		});
@@ -197,12 +194,9 @@ describe("multi-session", async () => {
 		expect(attackerSession.data?.user.email).toBe(attackerUser.email);
 		expect(victimSession.data?.user.email).toBe(victimUser.email);
 
-		// Create a forged multi-session cookie with the victim's token
-		// This simulates an attacker trying to forge a cookie to delete the victim's session
 		const forgedCookieName = `better-auth.session_token_multi-${victimSessionToken.toLowerCase()}`;
 		const forgedCookieValue = `${victimSessionToken}.fake-signature`;
 
-		// Attempt sign-out with attacker's valid session + forged victim cookie
 		const signOutHeaders = new Headers(attackerHeaders);
 		signOutHeaders.set(
 			"cookie",
@@ -215,14 +209,12 @@ describe("multi-session", async () => {
 			},
 		});
 
-		// Verify the victim's session is still valid (not deleted by forged cookie)
 		const victimSessionAfter = await client.getSession({
 			fetchOptions: { headers: victimHeaders },
 		});
 		expect(victimSessionAfter.data?.user.email).toBe(victimUser.email);
 		expect(victimSessionAfter.data?.session.token).toBe(victimSessionToken);
 
-		// Verify the attacker's session was deleted (as expected)
 		const attackerSessionAfter = await client.getSession({
 			fetchOptions: { headers: attackerHeaders },
 		});
