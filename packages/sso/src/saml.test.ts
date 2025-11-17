@@ -752,16 +752,6 @@ describe("SAML SSO with defaultSSO array and IDP requires signed Authn requests"
 
 	const ctx = await auth.$context;
 
-	const authClient = createAuthClient({
-		baseURL: "http://localhost:3000",
-		plugins: [bearer(), ssoClient()],
-		fetchOptions: {
-			customFetchImpl: async (url, init) => {
-				return auth.handler(new Request(url, init));
-			},
-		},
-	});
-
 	beforeAll(async () => {
 		await mockIdP.start();
 	});
