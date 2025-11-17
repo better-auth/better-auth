@@ -2,9 +2,9 @@ import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { parseSetCookieHeader } from "../cookies";
 
-export const reactStartCookies = () => {
+export const tanstackStartCookies = () => {
 	return {
-		id: "react-start-cookies",
+		id: "tanstack-start-cookies",
 		hooks: {
 			after: [
 				{
