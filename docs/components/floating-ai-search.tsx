@@ -1,15 +1,15 @@
 "use client";
 
-import { type UIMessage, type UseChatHelpers, useChat } from "@ai-sdk/react";
+import type { UIMessage, UseChatHelpers } from "@ai-sdk/react";
+import { useChat } from "@ai-sdk/react";
 import { Presence } from "@radix-ui/react-presence";
 import { DefaultChatTransport } from "ai";
 import Link from "fumadocs-core/link";
 import { buttonVariants } from "fumadocs-ui/components/ui/button";
 import { Bot, InfoIcon, Loader2, Send, Trash2, X } from "lucide-react";
+import type { ComponentProps, SyntheticEvent } from "react";
 import {
-	type ComponentProps,
 	createContext,
-	type SyntheticEvent,
 	use,
 	useEffect,
 	useMemo,
@@ -17,7 +17,7 @@ import {
 	useState,
 } from "react";
 import { RemoveScroll } from "react-remove-scroll";
-import * as z from "zod";
+import type * as z from "zod";
 import {
 	Popover,
 	PopoverContent,

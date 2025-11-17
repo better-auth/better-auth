@@ -17,7 +17,7 @@ import { DEFAULT_SECRET } from "../../utils/constants";
 import { createAccessControl } from "../access";
 import { admin } from "./admin";
 import { adminClient } from "./client";
-import { type UserWithRole } from "./types";
+import type { UserWithRole } from "./types";
 
 let testIdToken: string;
 let handlers: ReturnType<typeof http.post>[];

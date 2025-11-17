@@ -1,6 +1,6 @@
-import { type InferOptionSchema, type Session, type User } from "../../types";
-import { type AccessControl, type Role } from "../access";
-import { type AdminSchema } from "./schema";
+import type { InferOptionSchema, Session, User } from "../../types";
+import type { AccessControl, Role } from "../access";
+import type { AdminSchema } from "./schema";
 
 export interface UserWithRole extends User {
 	role?: string | undefined;

@@ -1,10 +1,12 @@
+import type {
+	AdapterFactory,
+	AdapterFactoryConfig,
+	AdapterFactoryCustomizeAdapterCreator,
+	AdapterFactoryOptions,
+	AdapterTestDebugLogs,
+	CustomAdapter,
+} from "./adapter-factory";
 import {
-	type AdapterFactory,
-	type AdapterFactoryConfig,
-	type AdapterFactoryCustomizeAdapterCreator,
-	type AdapterFactoryOptions,
-	type AdapterTestDebugLogs,
-	type CustomAdapter,
 	createAdapterFactory,
 	initGetDefaultFieldName,
 	initGetDefaultModelName,

@@ -13,7 +13,7 @@ import type {
 	Response as ExpressResponse,
 } from "express";
 import express from "express";
-import { createServer } from "http";
+import type { createServer } from "http";
 import * as saml from "samlify";
 import {
 	afterAll,

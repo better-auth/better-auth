@@ -3,10 +3,8 @@ import { APIError } from "better-call";
 import * as z from "zod";
 import { getSessionFromCtx, requestOnlySessionMiddleware } from "../../../api";
 import { setSessionCookie } from "../../../cookies";
-import {
-	type InferAdditionalFieldsFromPluginOptions,
-	toZodSchema,
-} from "../../../db";
+import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
+import { toZodSchema } from "../../../db";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";

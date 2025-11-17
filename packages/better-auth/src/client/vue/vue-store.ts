@@ -1,13 +1,11 @@
 import type { Store, StoreValue } from "nanostores";
+import type { DeepReadonly, ShallowRef, UnwrapNestedRefs } from "vue";
 import {
-	type DeepReadonly,
 	getCurrentInstance,
 	getCurrentScope,
 	onScopeDispose,
 	readonly,
-	type ShallowRef,
 	shallowRef,
-	type UnwrapNestedRefs,
 } from "vue";
 
 export function registerStore(store: Store) {

@@ -14,11 +14,8 @@ import { symmetricEncrypt } from "../../crypto";
 import { generateRandomString } from "../../crypto/random";
 import { mergeSchema } from "../../db/schema";
 import { validatePassword } from "../../utils/password";
-import {
-	type BackupCodeOptions,
-	backupCode2fa,
-	generateBackupCodes,
-} from "./backup-codes";
+import type { BackupCodeOptions } from "./backup-codes";
+import { backupCode2fa, generateBackupCodes } from "./backup-codes";
 import {
 	TRUST_DEVICE_COOKIE_MAX_AGE,
 	TRUST_DEVICE_COOKIE_NAME,

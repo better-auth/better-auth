@@ -1,12 +1,7 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { expect } from "vitest";
-import {
-	type Invitation,
-	type Member,
-	type Organization,
-	organization,
-	type Team,
-} from "../../plugins";
+import type { Invitation, Member, Organization, Team } from "../../plugins";
+import { organization } from "../../plugins";
 import type { Account, Session, User } from "../../types";
 import { createTestSuite } from "../create-test-suite";
 

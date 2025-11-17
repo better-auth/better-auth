@@ -2,6 +2,7 @@ import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
+import type { MockInstance } from "vitest";
 import {
 	afterAll,
 	afterEach,
@@ -9,7 +10,6 @@ import {
 	describe,
 	expect,
 	it,
-	type MockInstance,
 	vi,
 } from "vitest";
 import { parseSetCookieHeader } from "../../cookies";

@@ -9,7 +9,7 @@ import type {
 	Verification,
 } from "../db";
 import type { DBAdapter, Where } from "../db/adapter";
-import { createLogger } from "../env";
+import type { createLogger } from "../env";
 import type { OAuthProvider } from "../oauth2";
 import type { BetterAuthCookies } from "./cookie";
 import type { LiteralUnion } from "./helper";

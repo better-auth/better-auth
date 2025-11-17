@@ -1,5 +1,6 @@
 import { isMarkdownPreferred, rewritePath } from "fumadocs-core/negotiation";
-import { NextRequest, NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
 const { rewrite: rewriteLLM } = rewritePath("/docs/*path", "/llms.txt/*path");
 

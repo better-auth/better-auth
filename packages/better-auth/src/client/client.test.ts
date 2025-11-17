@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { isProxy } from "node:util/types";
-import { BetterFetchError } from "@better-fetch/fetch";
+import type { BetterFetchError } from "@better-fetch/fetch";
 import type { ReadableAtom } from "nanostores";
 import type { Accessor } from "solid-js";
 import { describe, expect, expectTypeOf, it, vi } from "vitest";

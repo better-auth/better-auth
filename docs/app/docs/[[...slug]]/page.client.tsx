@@ -13,13 +13,8 @@ import {
 	ExternalLink,
 	MessageCircle,
 } from "lucide-react";
-import {
-	type MouseEventHandler,
-	useEffect,
-	useRef,
-	useState,
-	useTransition,
-} from "react";
+import type { MouseEventHandler } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 

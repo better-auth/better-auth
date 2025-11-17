@@ -1,9 +1,6 @@
-import { type spinner as clackSpinner } from "@clack/prompts";
+import type { spinner as clackSpinner } from "@clack/prompts";
 import { logger } from "better-auth";
-import {
-	type SupportedDatabases,
-	type SupportedPlugin,
-} from "../commands/init";
+import type { SupportedDatabases, SupportedPlugin } from "../commands/init";
 
 export type Import = {
 	path: string;

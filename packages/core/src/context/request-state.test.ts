@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
+import type { RequestStateWeakMap } from "./request-state";
 import {
 	defineRequestState,
 	getCurrentRequestState,
 	hasRequestState,
-	type RequestStateWeakMap,
 	runWithRequestState,
 } from "./request-state";
 

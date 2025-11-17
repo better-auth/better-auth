@@ -25,6 +25,12 @@
             }
           },
           "level": "error"
+        },
+        "useImportType": {
+          "level": "error",
+          "options": {
+            "style": "separatedType"
+          }
         }
       },
       "recommended": false,

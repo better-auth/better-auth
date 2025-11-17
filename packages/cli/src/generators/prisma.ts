@@ -1,7 +1,8 @@
 import { produceSchema } from "@mrleebo/prisma-ast";
 import { capitalizeFirstLetter } from "better-auth";
 import { initGetFieldName, initGetModelName } from "better-auth/adapters";
-import { type FieldType, getAuthTables } from "better-auth/db";
+import type { FieldType } from "better-auth/db";
+import { getAuthTables } from "better-auth/db";
 import { existsSync } from "fs";
 import fs from "fs/promises";
 import path from "path";

@@ -1,4 +1,5 @@
-import { PageTree } from "fumadocs-core/server";
+import type { PageTree } from "fumadocs-core/server";
+import type { LucideIcon } from "lucide-react";
 import {
 	Binoculars,
 	Book,
@@ -8,7 +9,6 @@ import {
 	Key,
 	KeyRound,
 	LucideAArrowDown,
-	LucideIcon,
 	Mail,
 	Mailbox,
 	Phone,
@@ -18,7 +18,7 @@ import {
 	UserSquare2,
 	Users2,
 } from "lucide-react";
-import { ReactNode, SVGProps } from "react";
+import type { ReactNode, SVGProps } from "react";
 import { Icons } from "./icons";
 
 interface Content {

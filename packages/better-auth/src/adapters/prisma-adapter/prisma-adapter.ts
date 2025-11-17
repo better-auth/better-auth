@@ -6,11 +6,11 @@ import type {
 	Where,
 } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
-import {
-	type AdapterFactoryCustomizeAdapterCreator,
-	type AdapterFactoryOptions,
-	createAdapterFactory,
+import type {
+	AdapterFactoryCustomizeAdapterCreator,
+	AdapterFactoryOptions,
 } from "../adapter-factory";
+import { createAdapterFactory } from "../adapter-factory";
 
 export interface PrismaConfig {
 	/**
