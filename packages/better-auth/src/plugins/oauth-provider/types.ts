@@ -675,7 +675,7 @@ export interface OAuthAuthorizationQuery {
  * direct searches by field on the db
  */
 export interface VerificationValue {
-	type: "authorization_code" | "consent" | "post_login";
+	type: "authorization_code";
 	query: OAuthAuthorizationQuery;
 	sessionId: string;
 	userId: string;

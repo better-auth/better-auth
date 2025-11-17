@@ -8,6 +8,7 @@ import {
 	sessionMiddleware,
 } from "../../api";
 import { parseSetCookieHeader } from "../../cookies";
+import { makeSignature, timingSafeEqual } from "../../crypto";
 import { mergeSchema } from "../../db";
 import type { BetterAuthPlugin } from "../../types";
 import { authorizeEndpoint } from "./authorize";
@@ -168,31 +169,65 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			}
 		},
 		hooks: {
-			after: [
-				/**
-				 * If a session cookie is being set (ie user has logged in)
-				 * complete response with /authorize request.
-				 */
+			before: [
 				{
+					// Add oauth.query to additional data
+					matcher(ctx) {
+						return ctx.body?.oauth_query;
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						// Verify query signature
+						const query = ctx.body.oauth_query;
+						let queryParams = new URLSearchParams(query);
+						const sig = queryParams.get("sig");
+						const exp = Number(queryParams.get("exp"));
+						queryParams.delete("sig");
+						queryParams = new URLSearchParams(queryParams);
+						const verifySig = await makeSignature(
+							queryParams.toString(),
+							ctx.context.secret,
+						);
+						if (
+							!sig ||
+							!timingSafeEqual(sig, verifySig) ||
+							new Date(exp * 1000) < new Date()
+						) {
+							throw new APIError("BAD_REQUEST", {
+								error: "invalid_signature",
+							});
+						}
+						queryParams.delete("exp");
+						ctx.context.oauth = {
+							query: new URLSearchParams(queryParams),
+						};
+
+						// If path starts oauth2 authorize (ie /sign-in/social, /sign-in/oauth2), add to additional data body
+						if (
+							ctx.path === "/sign-in/social" ||
+							ctx.path === "/sign-in/oauth2"
+						) {
+							if (ctx.body.additionalData.query) return;
+							if (!ctx.body.additionalData) ctx.body.additionalData = {};
+							ctx.body.additionalData.query = query;
+						}
+					}),
+				},
+			],
+			after: [
+				{
+					// Should only capture when session cookie is set (ie after login)
 					matcher(ctx) {
 						return (
-							(ctx.path.startsWith("/oauth2") ||
-								ctx.path.startsWith("/sign-in")) &&
+							!!ctx.context?.oauth?.query &&
+							(ctx.path === "/sign-in/email" ||
+								ctx.path === "/sign-in/social" ||
+								ctx.path.startsWith("/oauth2/callback")) &&
 							parseSetCookieHeader(
 								ctx.context.responseHeaders?.get("set-cookie") || "",
 							).has(ctx.context.authCookies.sessionToken.name)
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						// Obtain original prompt
-						const { name: loginPromptCookieName } =
-							ctx.context.createAuthCookie("oauth_login_prompt");
-						const cookie = await ctx.getSignedCookie(
-							loginPromptCookieName,
-							ctx.context.secret,
-						);
-						if (!cookie) return;
-
 						// Check if session cookie is being set and obtain its session (needed in context)
 						const sessionToken = parseSetCookieHeader(
 							ctx.context.responseHeaders?.get("set-cookie") || "",
@@ -207,7 +242,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 
 						// Continue with authorization request by using the initial prompt
 						// but clearing the login prompt cookie if forced login prompt
-						ctx.query = JSON.parse(cookie);
+						ctx.query = Object.fromEntries(ctx.context.oauth.query);
 						ctx.headers?.set("accept", "application/json");
 						let prompts:
 							| Exclude<OAuthAuthorizationQuery["prompt"], undefined>[]
@@ -216,7 +251,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						if (ctx.query && foundPrompt >= 0) {
 							prompts?.splice(foundPrompt, 1);
 							ctx.query.prompt = prompts?.length
-								? prompts?.join(" ")
+								? (prompts?.join(" ") as OAuthAuthorizationQuery["prompt"])
 								: undefined;
 						}
 						return await authorizeEndpoint(ctx, opts);
@@ -417,6 +452,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							description:
 								"List of accept of accepted space-separated scopes. If none is provided, then all originally requested scopes are accepted.",
 						}),
+						query: z.string().optional().meta({
+							description: "The redirected page's query parameters",
+						}),
 					}),
 					use: [sessionMiddleware],
 					metadata: {
@@ -461,6 +499,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						}),
 						postLogin: z.boolean().optional().meta({
 							description: "Confirms organization and/or team selection.",
+						}),
+						query: z.string().optional().meta({
+							description: "The redirected page's query parameters",
 						}),
 					}),
 					use: [sessionMiddleware],

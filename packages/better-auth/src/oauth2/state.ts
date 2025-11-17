@@ -112,6 +112,7 @@ export async function parseState(c: GenericEndpointContext) {
 				userId: z.coerce.string(),
 			})
 			.optional(),
+		query: z.string().optional(),
 		requestSignUp: z.boolean().optional(),
 	});
 

@@ -225,15 +225,10 @@ describe("oauth", async () => {
 		expect(data.url).toContain(`client_id=${oauthClient.client_id}`);
 
 		let loginRedirectUri = "";
-		const authClientHeaders = new Headers();
 		await authClient.$fetch(data.url, {
 			method: "GET",
 			onError(ctx) {
 				loginRedirectUri = ctx.response.headers.get("Location") || "";
-				expect(ctx.response.headers.get("set-cookie")).toContain(
-					"better-auth.oauth_login_prompt=",
-				);
-				cookieSetter(authClientHeaders)(ctx);
 			},
 		});
 		expect(loginRedirectUri).toContain("/login");
@@ -241,22 +236,19 @@ describe("oauth", async () => {
 		expect(loginRedirectUri).toContain(
 			`redirect_uri=${encodeURIComponent(oauthClient?.redirect_uris?.at(0)!)}`,
 		);
-
-		authClientHeaders.append("accept", "application/json");
-		const res = await authClient.signIn.email(
-			{
-				email: testUser.email,
-				password: testUser.password,
-			},
-			{
-				headers: authClientHeaders,
-				onResponse(ctx) {
-					expect(ctx.response.headers.get("set-cookie")).toContain(
-						"better-auth.oauth_login_prompt=; Max-Age=0",
-					);
+		Object.defineProperty(global, "window", {
+			value: {
+				location: {
+					search: new URL(loginRedirectUri, authServerBaseUrl).search,
 				},
 			},
-		);
+			writable: true,
+		});
+
+		const res = await authClient.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
 		expect(res.data?.redirect).toBeTruthy();
 		expect(res.data?.url).toContain(rpBaseUrl);
 
@@ -305,15 +297,11 @@ describe("oauth", async () => {
 		expect(data.url).toContain(`client_id=${oauthClient.client_id}`);
 
 		let loginRedirectUri = "";
-		const authClientHeaders = new Headers();
 		await authClient.$fetch(data.url, {
 			method: "GET",
+			headers,
 			onError(ctx) {
 				loginRedirectUri = ctx.response.headers.get("Location") || "";
-				expect(ctx.response.headers.get("set-cookie")).toContain(
-					"better-auth.oauth_login_prompt=",
-				);
-				cookieSetter(authClientHeaders)(ctx);
 			},
 		});
 		expect(loginRedirectUri).toContain("/login");
@@ -321,22 +309,19 @@ describe("oauth", async () => {
 		expect(loginRedirectUri).toContain(
 			`redirect_uri=${encodeURIComponent(oauthClient?.redirect_uris?.at(0)!)}`,
 		);
-
-		authClientHeaders.append("accept", "application/json");
-		const res = await authClient.signIn.email(
-			{
-				email: testUser.email,
-				password: testUser.password,
-			},
-			{
-				headers: authClientHeaders,
-				onResponse(ctx) {
-					expect(ctx.response.headers.get("set-cookie")).toContain(
-						"better-auth.oauth_login_prompt=; Max-Age=0",
-					);
+		Object.defineProperty(global, "window", {
+			value: {
+				location: {
+					search: new URL(loginRedirectUri, authServerBaseUrl).search,
 				},
 			},
-		);
+			writable: true,
+		});
+
+		const res = await authClient.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
 		expect(res.data?.redirect).toBeTruthy();
 		expect(res.data?.url).toContain(rpBaseUrl);
 
@@ -556,13 +541,10 @@ describe("oauth - prompt", async () => {
 
 		// Check for redirection to /login
 		let loginRedirectUri = "";
-		const newHeaders = new Headers();
 		await serverClient.$fetch(data.url, {
 			method: "GET",
-			headers: newHeaders,
 			onError(context) {
 				loginRedirectUri = context.response.headers.get("Location") || "";
-				cookieSetter(newHeaders)(context);
 			},
 		});
 		expect(loginRedirectUri).toContain("/login");
@@ -614,9 +596,6 @@ describe("oauth - prompt", async () => {
 			method: "GET",
 			onError(context) {
 				consentRedirectUri = context.response.headers.get("Location") || "";
-				expect(context.response.headers.get("set-cookie")).toContain(
-					"better-auth.oauth_consent=",
-				);
 				cookieSetter(newHeaders)(context);
 				newHeaders.append("Cookie", headers.get("Cookie") || "");
 			},
@@ -625,6 +604,14 @@ describe("oauth - prompt", async () => {
 		expect(consentRedirectUri).toContain(`client_id=${oauthClient.client_id}`);
 		expect(consentRedirectUri).toContain(`scope=`);
 		expect(consentRedirectUri).toContain(`state=`);
+		Object.defineProperty(global, "window", {
+			value: {
+				location: {
+					search: new URL(consentRedirectUri, authServerBaseUrl).search,
+				},
+			},
+			writable: true,
+		});
 
 		// Give consent and obtain redirect callback
 		const consentRes = await serverClient.oauth2.consent(
@@ -634,15 +621,18 @@ describe("oauth - prompt", async () => {
 			{
 				headers: newHeaders,
 				throw: true,
-				onResponse(ctx) {
-					expect(ctx.response.headers.get("set-cookie")).toContain(
-						"better-auth.oauth_consent=; Max-Age=0",
-					);
-				},
 			},
 		);
 		expect(consentRes.redirect_uri).toContain(redirectUri);
 		expect(consentRes.redirect_uri).toContain(`code=`);
+		Object.defineProperty(global, "window", {
+			value: {
+				location: {
+					search: new URL(consentRes.redirect_uri, authServerBaseUrl).search,
+				},
+			},
+			writable: true,
+		});
 
 		let callbackURL = "";
 		await client.$fetch(consentRes.redirect_uri, {
@@ -704,6 +694,14 @@ describe("oauth - prompt", async () => {
 		expect(callbackRedirectUrl).toContain(redirectUri);
 		expect(callbackRedirectUrl).toContain("code=");
 		expect(callbackRedirectUrl).toContain("state=");
+		Object.defineProperty(global, "window", {
+			value: {
+				location: {
+					search: new URL(callbackRedirectUrl, authServerBaseUrl).search,
+				},
+			},
+			writable: true,
+		});
 
 		// Code exchange should be successful
 		let callbackURL = "";
@@ -758,11 +756,6 @@ describe("oauth - prompt", async () => {
 			method: "GET",
 			onError(context) {
 				consentRedirectUri = context.response.headers.get("Location") || "";
-				expect(context.response.headers.get("set-cookie")).toContain(
-					"better-auth.oauth_consent=",
-				);
-				cookieSetter(newHeaders)(context);
-				newHeaders.append("Cookie", headers.get("Cookie") || "");
 			},
 		});
 		expect(consentRedirectUri).toContain(`/consent`);
@@ -811,9 +804,6 @@ describe("oauth - prompt", async () => {
 			headers,
 			onError(ctx) {
 				selectAccountRedirectUri = ctx.response.headers.get("Location") || "";
-				expect(ctx.response.headers.get("set-cookie")).toContain(
-					"better-auth.oauth_login_prompt=",
-				);
 				cookieSetter(authClientHeaders)(ctx);
 				authClientHeaders.append("Cookie", headers.get("Cookie") || "");
 			},
@@ -824,6 +814,14 @@ describe("oauth - prompt", async () => {
 		);
 		expect(selectAccountRedirectUri).toContain(`scope=`);
 		expect(selectAccountRedirectUri).toContain(`state=`);
+		Object.defineProperty(global, "window", {
+			value: {
+				location: {
+					search: new URL(selectAccountRedirectUri, authServerBaseUrl).search,
+				},
+			},
+			writable: true,
+		});
 
 		// Account selected, continue auth flow
 		const selectedAccountRes = await serverClient.oauth2.continue(
@@ -833,11 +831,6 @@ describe("oauth - prompt", async () => {
 			{
 				headers: authClientHeaders,
 				throw: true,
-				onResponse(ctx) {
-					expect(ctx.response.headers.get("set-cookie")).toContain(
-						"better-auth.oauth_login_prompt=; Max-Age=0",
-					);
-				},
 			},
 		);
 		expect(selectedAccountRes.redirect_uri).toContain(redirectUri);
@@ -894,6 +887,14 @@ describe("oauth - prompt", async () => {
 		expect(loginRedirectUri).toContain(
 			`redirect_uri=${encodeURIComponent(oauthClient?.redirect_uris?.at(0)!)}`,
 		);
+		Object.defineProperty(global, "window", {
+			value: {
+				location: {
+					search: new URL(loginRedirectUri, authServerBaseUrl).search,
+				},
+			},
+			writable: true,
+		});
 
 		// Check for redirection to /consent after login
 		const loginRes = await serverClient.signIn.email(
@@ -954,9 +955,6 @@ describe("oauth - prompt", async () => {
 			headers,
 			onError(ctx) {
 				selectAccountRedirectUri = ctx.response.headers.get("Location") || "";
-				expect(ctx.response.headers.get("set-cookie")).toContain(
-					"better-auth.oauth_login_prompt=",
-				);
 				cookieSetter(authClientHeaders)(ctx);
 				authClientHeaders.append("Cookie", headers.get("Cookie") || "");
 			},
@@ -967,6 +965,14 @@ describe("oauth - prompt", async () => {
 		);
 		expect(selectAccountRedirectUri).toContain(`scope=`);
 		expect(selectAccountRedirectUri).toContain(`state=`);
+		Object.defineProperty(global, "window", {
+			value: {
+				location: {
+					search: new URL(selectAccountRedirectUri, authServerBaseUrl).search,
+				},
+			},
+			writable: true,
+		});
 
 		// Account selected, continue auth flow
 		const selectedAccountRes = await serverClient.oauth2.continue(
@@ -976,11 +982,6 @@ describe("oauth - prompt", async () => {
 			{
 				headers: authClientHeaders,
 				throw: true,
-				onResponse(ctx) {
-					expect(ctx.response.headers.get("set-cookie")).toContain(
-						"better-auth.oauth_consent=",
-					);
-				},
 			},
 		);
 		const consentRedirectUri = selectedAccountRes?.redirect_uri;
@@ -1032,9 +1033,6 @@ describe("oauth - prompt", async () => {
 			onError(context) {
 				selectAccountRedirectUri =
 					context.response.headers.get("Location") || "";
-				expect(context.response.headers.get("set-cookie")).toContain(
-					"better-auth.oauth_post_login=",
-				);
 				cookieSetter(newHeaders)(context);
 				newHeaders.append("Cookie", headers.get("Cookie") || "");
 			},
@@ -1058,12 +1056,7 @@ describe("oauth - prompt", async () => {
 			{
 				headers: newHeaders,
 				throw: true,
-				onResponse(ctx) {
-					expect(ctx.response.headers.get("set-cookie")).toContain(
-						"better-auth.oauth_consent=",
-					);
-					cookieSetter(newHeaders)(ctx);
-				},
+				onResponse: cookieSetter(newHeaders),
 			},
 		);
 		const consentRedirectUri = selectedAccountRes?.redirect_uri;
@@ -1071,6 +1064,14 @@ describe("oauth - prompt", async () => {
 		expect(consentRedirectUri).toContain(`client_id=${oauthClient.client_id}`);
 		expect(consentRedirectUri).toContain(`scope=`);
 		expect(consentRedirectUri).toContain(`state=`);
+		Object.defineProperty(global, "window", {
+			value: {
+				location: {
+					search: new URL(consentRedirectUri, authServerBaseUrl).search,
+				},
+			},
+			writable: true,
+		});
 
 		// Give consent and obtain redirect callback
 		const consentRes = await serverClient.oauth2.consent(
@@ -1080,11 +1081,6 @@ describe("oauth - prompt", async () => {
 			{
 				headers: newHeaders,
 				throw: true,
-				onResponse(ctx) {
-					expect(ctx.response.headers.get("set-cookie")).toContain(
-						"better-auth.oauth_consent=; Max-Age=0",
-					);
-				},
 			},
 		);
 		expect(consentRes.redirect_uri).toContain(redirectUri);
@@ -1439,11 +1435,7 @@ describe("oauth - config", () => {
 			});
 
 			const client = createAuthClient({
-				plugins: [
-					oauthProviderClient(),
-					oauthProviderResourceClient(),
-					genericOAuthClient(),
-				],
+				plugins: [oauthProviderResourceClient(), genericOAuthClient()],
 				baseURL: rpBaseUrl,
 				fetchOptions: {
 					customFetchImpl: customFetchImplRP,

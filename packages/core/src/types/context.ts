@@ -190,6 +190,9 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			 */
 			storeStateStrategy: "database" | "cookie";
 		};
+		oauth: {
+			query: URLSearchParams;
+		};
 		/**
 		 * New session that will be set after the request
 		 * meaning: there is a `set-cookie` header that will set
