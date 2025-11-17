@@ -45,7 +45,7 @@ export const siwe = (options: SIWEPluginOptions) =>
 							.positive()
 							.max(2147483647)
 							.optional()
-							.default(1), // Default to Ethereum mainnet
+							.default(1),
 					}),
 				},
 				async (ctx) => {
@@ -53,7 +53,6 @@ export const siwe = (options: SIWEPluginOptions) =>
 					const walletAddress = toChecksumAddress(rawWalletAddress);
 					const nonce = await options.getNonce();
 
-					// Store nonce with wallet address and chain ID context
 					await ctx.context.internalAdapter.createVerificationValue({
 						identifier: `siwe:${walletAddress}:${chainId}`,
 						value: nonce,
@@ -85,8 +84,7 @@ export const siwe = (options: SIWEPluginOptions) =>
 							email: z.string().email().optional(),
 						})
 						.refine((data) => options.anonymous !== false || !!data.email, {
-							message:
-								"Email is required when the anonymous plugin option is disabled.",
+							message: "Email is required when the anonymous plugin option is disabled.",
 							path: ["email"],
 						}),
 					requireRequest: true,
@@ -110,13 +108,11 @@ export const siwe = (options: SIWEPluginOptions) =>
 					}
 
 					try {
-						// Find stored nonce with wallet address and chain ID context
 						const verification =
 							await ctx.context.internalAdapter.findVerificationValue(
 								`siwe:${walletAddress}:${chainId}`,
 							);
 
-						// Ensure nonce is valid and not expired
 						if (!verification || new Date() > verification.expiresAt) {
 							throw new APIError("UNAUTHORIZED", {
 								message: "Unauthorized: Invalid or expired nonce",
@@ -125,7 +121,6 @@ export const siwe = (options: SIWEPluginOptions) =>
 							});
 						}
 
-						// Verify SIWE message with enhanced parameters
 						const { value: nonce } = verification;
 						const verified = await options.verifyMessage({
 							message,
@@ -152,15 +147,12 @@ export const siwe = (options: SIWEPluginOptions) =>
 							});
 						}
 
-						// Clean up used nonce
 						await ctx.context.internalAdapter.deleteVerificationValue(
 							verification.id,
 						);
 
-						// Look for existing user by their wallet addresses
 						let user: User | null = null;
 
-						// Check if there's a wallet address record for this exact address+chainId combination
 						const existingWalletAddress: WalletAddress | null =
 							await ctx.context.adapter.findOne({
 								model: "walletAddress",
@@ -171,7 +163,6 @@ export const siwe = (options: SIWEPluginOptions) =>
 							});
 
 						if (existingWalletAddress) {
-							// Get the user associated with this wallet address
 							user = await ctx.context.adapter.findOne({
 								model: "user",
 								where: [
@@ -183,7 +174,6 @@ export const siwe = (options: SIWEPluginOptions) =>
 								],
 							});
 						} else {
-							// No exact match found, check if this address exists on any other chain
 							const anyWalletAddress: WalletAddress | null =
 								await ctx.context.adapter.findOne({
 									model: "walletAddress",
@@ -193,7 +183,6 @@ export const siwe = (options: SIWEPluginOptions) =>
 								});
 
 							if (anyWalletAddress) {
-								// Same address exists on different chain, get that user
 								user = await ctx.context.adapter.findOne({
 									model: "user",
 									where: [
@@ -207,11 +196,9 @@ export const siwe = (options: SIWEPluginOptions) =>
 							}
 						}
 
-						// Create new user if none exists
 						if (!user) {
 							const domain =
 								options.emailDomainName ?? getOrigin(ctx.context.baseURL);
-							// Use checksummed address for email generation
 							const userEmail =
 								!isAnon && email ? email : `${walletAddress}@${domain}`;
 							const { name, avatar } =
@@ -223,19 +210,17 @@ export const siwe = (options: SIWEPluginOptions) =>
 								image: avatar ?? "",
 							});
 
-							// Create wallet address record
 							await ctx.context.adapter.create({
 								model: "walletAddress",
 								data: {
 									userId: user.id,
 									address: walletAddress,
 									chainId,
-									isPrimary: true, // First address is primary
+									isPrimary: true,
 									createdAt: new Date(),
 								},
 							});
 
-							// Create account record for wallet authentication
 							await ctx.context.internalAdapter.createAccount({
 								userId: user.id,
 								providerId: "siwe",
@@ -244,21 +229,18 @@ export const siwe = (options: SIWEPluginOptions) =>
 								updatedAt: new Date(),
 							});
 						} else {
-							// User exists, but check if this specific address/chain combo exists
 							if (!existingWalletAddress) {
-								// Add this new chainId to existing user's addresses
 								await ctx.context.adapter.create({
 									model: "walletAddress",
 									data: {
 										userId: user.id,
 										address: walletAddress,
 										chainId,
-										isPrimary: false, // Additional addresses are not primary by default
+										isPrimary: false,
 										createdAt: new Date(),
 									},
 								});
 
-								// Create account record for this new wallet+chain combination
 								await ctx.context.internalAdapter.createAccount({
 									userId: user.id,
 									providerId: "siwe",
@@ -267,6 +249,11 @@ export const siwe = (options: SIWEPluginOptions) =>
 									updatedAt: new Date(),
 								});
 							}
+
+							/* ✔ ONLY CHANGE ADDED */
+							await ctx.context.internalAdapter.updateUser(user.id, {
+								lastLoginMethod: "siwe",
+							});
 						}
 
 						const session = await ctx.context.internalAdapter.createSession(
