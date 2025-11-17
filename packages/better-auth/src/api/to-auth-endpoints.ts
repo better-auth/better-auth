@@ -108,6 +108,7 @@ export function toAuthEndpoints<
 
 					internalContext.asResponse = false;
 					internalContext.returnHeaders = true;
+					internalContext.returnStatus = true;
 					const result = (await runWithEndpointContext(internalContext, () =>
 						(endpoint as any)(internalContext as any),
 					).catch((e: any) => {
@@ -118,6 +119,7 @@ export function toAuthEndpoints<
 							 */
 							return {
 								response: e,
+								status: e.statusCode,
 								headers: e.headers ? new Headers(e.headers) : null,
 							};
 						}
@@ -125,6 +127,7 @@ export function toAuthEndpoints<
 					})) as {
 						headers: Headers;
 						response: any;
+						status: number;
 					};
 
 					//if response object is returned we skip after hooks and post processing
@@ -156,13 +159,22 @@ export function toAuthEndpoints<
 					const response = context?.asResponse
 						? toResponse(result.response, {
 								headers: result.headers,
+								status: result.status,
 							})
 						: context?.returnHeaders
-							? {
-									headers: result.headers,
-									response: result.response,
-								}
-							: result.response;
+							? context?.returnStatus
+								? {
+										headers: result.headers,
+										response: result.response,
+										status: result.status,
+									}
+								: {
+										headers: result.headers,
+										response: result.response,
+									}
+							: context?.returnStatus
+								? { response: result.response, status: result.status }
+								: result.response;
 					return response;
 				});
 			};

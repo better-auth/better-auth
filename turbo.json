@@ -22,20 +22,14 @@
     },
     "//#format": {},
     "lint": {},
-    "knip": {
-      "cache": true
-    },
     "test": {
-      "dependsOn": ["build"],
-      "cache": false
+      "dependsOn": ["build"]
     },
     "e2e:smoke": {
-      "dependsOn": ["build"],
-      "cache": false
+      "dependsOn": ["build"]
     },
     "e2e:integration": {
-      "dependsOn": ["build"],
-      "cache": false
+      "dependsOn": ["build"]
     },
     "deploy": {
       "cache": false

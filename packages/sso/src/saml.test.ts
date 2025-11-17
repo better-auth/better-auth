@@ -1118,4 +1118,68 @@ describe("SAML SSO", async () => {
 			},
 		});
 	});
+
+	it("should reject SAML sign-in when disableImplicitSignUp is true and user doesn't exist", async () => {
+		const { auth: authWithDisabledSignUp, signInWithTestUser } =
+			await getTestInstance({
+				plugins: [sso({ disableImplicitSignUp: true })],
+			});
+
+		const { headers } = await signInWithTestUser();
+
+		// Register SAML provider
+		await authWithDisabledSignUp.api.registerSSOProvider({
+			body: {
+				providerId: "saml-test-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers: headers,
+		});
+
+		// Identity Provider-initiated: Get SAML response directly from IdP
+		// The mock IdP will return test@email.com, which doesn't exist in the DB
+		let samlResponse: any;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		// Attempt to complete SAML callback - should fail because test@email.com doesn't exist
+		// and disableImplicitSignUp is true
+		await expect(
+			authWithDisabledSignUp.api.callbackSSOSAML({
+				body: {
+					SAMLResponse: samlResponse.samlResponse,
+					RelayState: "http://localhost:3000/dashboard",
+				},
+				params: {
+					providerId: "saml-test-provider",
+				},
+			}),
+		).rejects.toMatchObject({
+			status: "UNAUTHORIZED",
+			body: {
+				message:
+					"User not found and implicit sign up is disabled for this provider",
+			},
+		});
+	});
 });

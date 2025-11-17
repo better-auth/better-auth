@@ -12,7 +12,7 @@ import { getWebcryptoSubtle } from "@better-auth/utils";
 import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { SignJWT } from "jose";
-import { z } from "zod";
+import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
 import { parseSetCookieHeader } from "../../cookies";
 import { generateRandomString } from "../../crypto";
@@ -585,7 +585,7 @@ export const mcp = (options: MCPOptions) => {
 						family_name: user.name.split(" ")[1]!,
 						name: user.name,
 						profile: user.image,
-						updated_at: user.updatedAt.toISOString(),
+						updated_at: Math.floor(new Date(user.updatedAt).getTime() / 1000),
 					};
 					const email = {
 						email: user.email,

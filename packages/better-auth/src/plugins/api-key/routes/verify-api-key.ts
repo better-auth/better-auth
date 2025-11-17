@@ -1,6 +1,6 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { z } from "zod";
+import * as z from "zod";
 import { APIError } from "../../../api";
 import { safeJSONParse } from "../../../utils/json";
 import { role } from "../../access";
@@ -48,7 +48,7 @@ export async function validateApiKey({
 	}
 
 	if (apiKey.expiresAt) {
-		const now = new Date().getTime();
+		const now = Date.now();
 		const expiresAt = new Date(apiKey.expiresAt).getTime();
 		if (now > expiresAt) {
 			try {
@@ -119,7 +119,7 @@ export async function validateApiKey({
 			code: "USAGE_EXCEEDED" as const,
 		});
 	} else if (remaining !== null) {
-		let now = new Date().getTime();
+		let now = Date.now();
 		const refillInterval = apiKey.refillInterval;
 		const refillAmount = apiKey.refillAmount;
 		let lastTime = new Date(lastRefillAt ?? apiKey.createdAt).getTime();

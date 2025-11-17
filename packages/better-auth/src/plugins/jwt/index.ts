@@ -5,7 +5,7 @@ import {
 } from "@better-auth/core/api";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { JSONWebKeySet, JWTPayload } from "jose";
-import { z } from "zod";
+import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../api";
 import { mergeSchema } from "../../db/schema";
 import { getJwksAdapter } from "./adapter";
@@ -44,6 +44,7 @@ export const jwt = (options?: JwtOptions | undefined) => {
 					method: "GET",
 					metadata: {
 						openapi: {
+							operationId: "getJSONWebKeySet",
 							description: "Get the JSON Web Key Set",
 							responses: {
 								"200": {
@@ -172,6 +173,7 @@ export const jwt = (options?: JwtOptions | undefined) => {
 					use: [sessionMiddleware],
 					metadata: {
 						openapi: {
+							operationId: "getJSONWebToken",
 							description: "Get a JWT token",
 							responses: {
 								200: {

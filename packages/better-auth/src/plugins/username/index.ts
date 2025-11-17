@@ -6,7 +6,7 @@ import {
 import type { Account, User } from "@better-auth/core/db";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
-import { z } from "zod";
+import * as z from "zod";
 import { createEmailVerificationToken } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { mergeSchema } from "../../db";

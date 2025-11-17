@@ -1,4 +1,4 @@
-import { betterAuth } from "better-auth";
+import { betterAuth } from "better-auth/minimal";
 
 const baseURL: string | undefined =
 	process.env.VERCEL === "1"
@@ -11,24 +11,10 @@ const baseURL: string | undefined =
 
 export const auth = betterAuth({
 	baseURL,
-	secret: process.env.BETTER_AUTH_SECRET,
-
 	socialProviders: {
 		github: {
 			clientId: process.env.GITHUB_CLIENT_ID as string,
 			clientSecret: process.env.GITHUB_CLIENT_SECRET as string,
-		},
-	},
-
-	session: {
-		cookieCache: {
-			enabled: true,
-		},
-	},
-
-	advanced: {
-		oauthConfig: {
-			storeStateStrategy: "cookie",
 		},
 	},
 });

@@ -1,8 +1,5 @@
-import type {
-	AuthContext,
-	BetterAuthOptions,
-	BetterAuthPlugin,
-} from "@better-auth/core";
+import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
+import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { createLogger, env, isProduction, isTest } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { OAuthProvider } from "@better-auth/core/oauth2";
@@ -11,22 +8,46 @@ import {
 	socialProviders,
 } from "@better-auth/core/social-providers";
 import { createTelemetry } from "@better-auth/telemetry";
-import { defu } from "defu";
+import defu from "defu";
 import type { Entries } from "type-fest";
-import { getKyselyDatabaseType } from "./adapters/kysely-adapter";
-import { checkEndpointConflicts } from "./api";
-import { createCookieGetter, getCookies } from "./cookies";
-import { hashPassword, verifyPassword } from "./crypto/password";
-import { createInternalAdapter, getAuthTables, getMigrations } from "./db";
-import { getAdapter } from "./db/utils";
-import { generateId } from "./utils";
-import { DEFAULT_SECRET } from "./utils/constants";
-import { isPromise } from "./utils/is-promise";
-import { checkPassword } from "./utils/password";
-import { getBaseURL } from "./utils/url";
+import { checkEndpointConflicts } from "../api";
+import { createCookieGetter, getCookies } from "../cookies";
+import { hashPassword, verifyPassword } from "../crypto/password";
+import { getAuthTables } from "../db/get-tables";
+import { createInternalAdapter } from "../db/internal-adapter";
+import { generateId } from "../utils";
+import { DEFAULT_SECRET } from "../utils/constants";
+import { isPromise } from "../utils/is-promise";
+import { checkPassword } from "../utils/password";
+import { getBaseURL } from "../utils/url";
+import {
+	getInternalPlugins,
+	getTrustedOrigins,
+	runPluginInit,
+} from "./helpers";
 
-export const init = async (options: BetterAuthOptions) => {
-	const adapter = await getAdapter(options);
+export async function createAuthContext(
+	adapter: DBAdapter<BetterAuthOptions>,
+	options: BetterAuthOptions,
+	getDatabaseType: (database: BetterAuthOptions["database"]) => string,
+): Promise<AuthContext> {
+	//set default options for stateless mode
+	if (!options.database) {
+		options = defu(options, {
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe" as const,
+					refreshCache: true,
+				},
+			},
+			advanced: {
+				oauthConfig: {
+					storeStateStrategy: "cookie" as const,
+				},
+			},
+		});
+	}
 	const plugins = options.plugins || [];
 	const internalPlugins = getInternalPlugins(options);
 	const logger = createLogger(options.logger);
@@ -96,7 +117,7 @@ export const init = async (options: BetterAuthOptions) => {
 		database:
 			typeof options.database === "function"
 				? "adapter"
-				: getKyselyDatabaseType(options.database) || "unknown",
+				: getDatabaseType(options.database),
 	});
 
 	let ctx: AuthContext = {
@@ -116,11 +137,11 @@ export const init = async (options: BetterAuthOptions) => {
 			updateAge:
 				options.session?.updateAge !== undefined
 					? options.session.updateAge
-					: 24 * 60 * 60, // 24 hours
-			expiresIn: options.session?.expiresIn || 60 * 60 * 24 * 7, // 7 days
+					: 24 * 60 * 60,
+			expiresIn: options.session?.expiresIn || 60 * 60 * 24 * 7,
 			freshAge:
 				options.session?.freshAge === undefined
-					? 60 * 60 * 24 // 24 hours
+					? 60 * 60 * 24
 					: options.session.freshAge,
 			cookieRefreshCache: (() => {
 				const refreshCache = options.session?.cookieCache?.refreshCache;
@@ -131,7 +152,6 @@ export const init = async (options: BetterAuthOptions) => {
 				}
 
 				if (refreshCache === true) {
-					// Default: refresh when 80% of maxAge is reached (20% remaining)
 					return {
 						enabled: true,
 						updateAge: Math.floor(maxAge * 0.2),
@@ -143,7 +163,7 @@ export const init = async (options: BetterAuthOptions) => {
 					updateAge:
 						refreshCache.updateAge !== undefined
 							? refreshCache.updateAge
-							: Math.floor(maxAge * 0.2), // Default to 20% of maxAge
+							: Math.floor(maxAge * 0.2),
 				};
 			})(),
 		},
@@ -184,14 +204,9 @@ export const init = async (options: BetterAuthOptions) => {
 		}),
 		createAuthCookie: createCookieGetter(options),
 		async runMigrations() {
-			//only run migrations if database is provided and it's not an adapter
-			if (!options.database || "updateMany" in options.database) {
-				throw new BetterAuthError(
-					"Database is not provided or it's an adapter. Migrations are only supported with a database instance.",
-				);
-			}
-			const { runMigrations } = await getMigrations(options);
-			await runMigrations();
+			throw new BetterAuthError(
+				"runMigrations will be set by the specific init implementation",
+			);
 		},
 		publishTelemetry: publish,
 		skipCSRFCheck: !!options.advanced?.disableCSRFCheck,
@@ -202,6 +217,7 @@ export const init = async (options: BetterAuthOptions) => {
 					? true
 					: false,
 	};
+
 	const initOrPromise = runPluginInit(ctx);
 	let context: AuthContext;
 	if (isPromise(initOrPromise)) {
@@ -209,77 +225,6 @@ export const init = async (options: BetterAuthOptions) => {
 	} else {
 		({ context } = initOrPromise);
 	}
+
 	return context;
-};
-
-async function runPluginInit(ctx: AuthContext) {
-	let options = ctx.options;
-	const plugins = options.plugins || [];
-	let context: AuthContext = ctx;
-	const dbHooks: BetterAuthOptions["databaseHooks"][] = [];
-	for (const plugin of plugins) {
-		if (plugin.init) {
-			let initPromise = plugin.init(context);
-			let result: ReturnType<Required<BetterAuthPlugin>["init"]>;
-			if (isPromise(initPromise)) {
-				result = await initPromise;
-			} else {
-				result = initPromise;
-			}
-			if (typeof result === "object") {
-				if (result.options) {
-					const { databaseHooks, ...restOpts } = result.options;
-					if (databaseHooks) {
-						dbHooks.push(databaseHooks);
-					}
-					options = defu(options, restOpts);
-				}
-				if (result.context) {
-					context = {
-						...context,
-						...(result.context as Partial<AuthContext>),
-					};
-				}
-			}
-		}
-	}
-	// Add the global database hooks last
-	dbHooks.push(options.databaseHooks);
-	context.internalAdapter = createInternalAdapter(ctx.adapter, {
-		options,
-		logger: ctx.logger,
-		hooks: dbHooks.filter((u) => u !== undefined),
-		generateId: ctx.generateId,
-	});
-	context.options = options;
-	return { context };
-}
-
-function getInternalPlugins(options: BetterAuthOptions) {
-	const plugins: BetterAuthPlugin[] = [];
-	if (options.advanced?.crossSubDomainCookies?.enabled) {
-		//TODO: add internal plugin
-	}
-	return plugins;
-}
-
-function getTrustedOrigins(options: BetterAuthOptions) {
-	const baseURL = getBaseURL(options.baseURL, options.basePath);
-	if (!baseURL) {
-		return [];
-	}
-	const trustedOrigins = [new URL(baseURL).origin];
-	if (options.trustedOrigins && Array.isArray(options.trustedOrigins)) {
-		trustedOrigins.push(...options.trustedOrigins);
-	}
-	const envTrustedOrigins = env.BETTER_AUTH_TRUSTED_ORIGINS;
-	if (envTrustedOrigins) {
-		trustedOrigins.push(...envTrustedOrigins.split(","));
-	}
-	if (trustedOrigins.filter((x) => !x).length) {
-		throw new BetterAuthError(
-			"A provided trusted origin is invalid, make sure your trusted origins list is properly defined.",
-		);
-	}
-	return trustedOrigins;
 }

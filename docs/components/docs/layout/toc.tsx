@@ -57,7 +57,7 @@ export function Toc(props: HTMLAttributes<HTMLDivElement>) {
 				{
 					...props.style,
 					"--fd-toc-height":
-						"calc(100dvh - var(--fd-banner-height) - var(--fd-nav-height))",
+						"calc(100dvh - var(--fd-banner-height) - var(--fd-nav-height) - 4rem)",
 				} as object
 			}
 		>

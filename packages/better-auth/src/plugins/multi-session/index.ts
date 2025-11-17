@@ -4,7 +4,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { defineErrorCodes } from "@better-auth/core/utils";
-import { z } from "zod";
+import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../api";
 import {
 	deleteSessionCookie,

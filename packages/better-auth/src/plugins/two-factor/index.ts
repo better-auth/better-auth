@@ -7,7 +7,7 @@ import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { createOTP } from "@better-auth/utils/otp";
 import { APIError } from "better-call";
-import { z } from "zod";
+import * as z from "zod";
 import { sessionMiddleware } from "../../api";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { symmetricEncrypt } from "../../crypto";

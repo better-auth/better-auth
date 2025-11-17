@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import * as z from "zod";
 import { getEndpoints, router } from "./api";
 import { createAuthClient } from "./client";
-import { init } from "./init";
+import { init } from "./context/init";
 import { bearer } from "./plugins";
 
 describe("call", async () => {

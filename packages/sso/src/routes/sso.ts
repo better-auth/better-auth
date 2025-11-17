@@ -63,6 +63,7 @@ export const spMetadata = () => {
 			}),
 			metadata: {
 				openapi: {
+					operationId: "getSSOServiceProviderMetadata",
 					summary: "Get Service Provider metadata",
 					description: "Returns the SAML metadata for the Service Provider",
 					responses: {
@@ -337,6 +338,7 @@ export const registerSSOProvider = (options?: SSOOptions) => {
 			use: [sessionMiddleware],
 			metadata: {
 				openapi: {
+					operationId: "registerSSOProvider",
 					summary: "Register an OIDC provider",
 					description:
 						"This endpoint is used to register an OIDC provider. This is used to configure the provider and link it to an organization",
@@ -726,6 +728,7 @@ export const signInSSO = (options?: SSOOptions) => {
 			}),
 			metadata: {
 				openapi: {
+					operationId: "signInWithSSO",
 					summary: "Sign in with SSO provider",
 					description:
 						"This endpoint is used to sign in with an SSO provider. It redirects to the provider's authorization URL",
@@ -1014,6 +1017,7 @@ export const callbackSSO = (options?: SSOOptions) => {
 			metadata: {
 				isAction: false,
 				openapi: {
+					operationId: "handleSSOCallback",
 					summary: "Callback URL for SSO provider",
 					description:
 						"This endpoint is used as the callback URL for SSO providers. It handles the authorization code and exchanges it for an access token",
@@ -1362,6 +1366,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			metadata: {
 				isAction: false,
 				openapi: {
+					operationId: "handleSAMLCallback",
 					summary: "Callback URL for SAML provider",
 					description:
 						"This endpoint is used as the callback URL for SAML providers.",
@@ -1584,15 +1589,18 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			if (existingUser) {
 				user = existingUser;
 			} else {
-				user = await ctx.context.adapter.create({
-					model: "user",
-					data: {
-						email: userInfo.email,
-						name: userInfo.name,
-						emailVerified: userInfo.emailVerified,
-						createdAt: new Date(),
-						updatedAt: new Date(),
-					},
+				// if implicit sign up is disabled, we should not create a new user nor a new account.
+				if (options?.disableImplicitSignUp) {
+					throw new APIError("UNAUTHORIZED", {
+						message:
+							"User not found and implicit sign up is disabled for this provider",
+					});
+				}
+
+				user = await ctx.context.internalAdapter.createUser({
+					email: userInfo.email,
+					name: userInfo.name,
+					emailVerified: userInfo.emailVerified,
 				});
 			}
 
@@ -1607,17 +1615,12 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			});
 
 			if (!account) {
-				await ctx.context.adapter.create<Account>({
-					model: "account",
-					data: {
-						userId: user.id,
-						providerId: provider.providerId,
-						accountId: userInfo.id,
-						createdAt: new Date(),
-						updatedAt: new Date(),
-						accessToken: "",
-						refreshToken: "",
-					},
+				await ctx.context.internalAdapter.createAccount({
+					userId: user.id,
+					providerId: provider.providerId,
+					accountId: userInfo.id,
+					accessToken: "",
+					refreshToken: "",
 				});
 			}
 
@@ -1697,6 +1700,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			metadata: {
 				isAction: false,
 				openapi: {
+					operationId: "handleSAMLAssertionConsumerService",
 					summary: "SAML Assertion Consumer Service",
 					description:
 						"Handles SAML responses from IdP after successful authentication",
@@ -1942,47 +1946,32 @@ export const acsEndpoint = (options?: SSOOptions) => {
 							`${parsedSamlConfig.callbackUrl}?error=account_not_found`,
 						);
 					}
-					await ctx.context.adapter.create<Account>({
-						model: "account",
-						data: {
-							userId: existingUser.id,
-							providerId: provider.providerId,
-							accountId: userInfo.id,
-							createdAt: new Date(),
-							updatedAt: new Date(),
-							accessToken: "",
-							refreshToken: "",
-						},
-					});
-				}
-				user = existingUser;
-			} else {
-				user = await ctx.context.adapter.create({
-					model: "user",
-					data: {
-						email: userInfo.email,
-						name: userInfo.name,
-						emailVerified: options?.trustEmailVerified
-							? userInfo.emailVerified || false
-							: false,
-						createdAt: new Date(),
-						updatedAt: new Date(),
-					},
-				});
-				await ctx.context.adapter.create<Account>({
-					model: "account",
-					data: {
-						userId: user.id,
+					await ctx.context.internalAdapter.createAccount({
+						userId: existingUser.id,
 						providerId: provider.providerId,
 						accountId: userInfo.id,
 						accessToken: "",
 						refreshToken: "",
-						accessTokenExpiresAt: new Date(),
-						refreshTokenExpiresAt: new Date(),
-						scope: "",
-						createdAt: new Date(),
-						updatedAt: new Date(),
-					},
+					});
+				}
+				user = existingUser;
+			} else {
+				user = await ctx.context.internalAdapter.createUser({
+					email: userInfo.email,
+					name: userInfo.name,
+					emailVerified: options?.trustEmailVerified
+						? userInfo.emailVerified || false
+						: false,
+				});
+				await ctx.context.internalAdapter.createAccount({
+					userId: user.id,
+					providerId: provider.providerId,
+					accountId: userInfo.id,
+					accessToken: "",
+					refreshToken: "",
+					accessTokenExpiresAt: new Date(),
+					refreshTokenExpiresAt: new Date(),
+					scope: "",
 				});
 			}
 

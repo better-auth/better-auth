@@ -81,7 +81,8 @@ export const getClientConfig = (
 					path === "/delete-user" ||
 					path === "/verify-email" ||
 					path === "/revoke-sessions" ||
-					path === "/revoke-session";
+					path === "/revoke-session" ||
+					path === "/change-email";
 
 				return matchesCommonPaths;
 			},

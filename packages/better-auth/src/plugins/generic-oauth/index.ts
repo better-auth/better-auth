@@ -18,7 +18,7 @@ import { defineErrorCodes } from "@better-auth/core/utils";
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
 import { decodeJwt } from "jose";
-import { z } from "zod";
+import * as z from "zod";
 import { sessionMiddleware } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
@@ -321,6 +321,9 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						if (!userInfo) {
 							return null;
 						}
+
+						const userMap = await c.mapProfileToUser?.(userInfo);
+
 						return {
 							user: {
 								id: userInfo?.id,
@@ -328,7 +331,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								emailVerified: userInfo?.emailVerified,
 								image: userInfo?.image,
 								name: userInfo?.name,
-								...c.mapProfileToUser?.(userInfo),
+								...userMap,
 							},
 							data: userInfo,
 						};

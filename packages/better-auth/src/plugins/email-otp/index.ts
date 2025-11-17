@@ -8,7 +8,7 @@ import {
 } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { defineErrorCodes } from "@better-auth/core/utils";
-import { z } from "zod";
+import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
 import { setCookieCache, setSessionCookie } from "../../cookies";
 import {
@@ -31,7 +31,7 @@ export interface EmailOTPOptions {
 			otp: string;
 			type: "sign-in" | "email-verification" | "forget-password";
 		},
-		request?: Request | undefined,
+		ctx?: GenericEndpointContext | undefined,
 	) => Promise<void>;
 	/**
 	 * Length of the OTP
@@ -53,7 +53,7 @@ export interface EmailOTPOptions {
 			email: string;
 			type: "sign-in" | "email-verification" | "forget-password";
 		},
-		request?: Request,
+		ctx?: GenericEndpointContext,
 	) => string | undefined;
 	/**
 	 * Send email verification on sign-up
@@ -196,7 +196,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				}),
 				metadata: {
 					openapi: {
-						description: "Send verification OTP",
+						operationId: "sendEmailVerificationOTP",
+						description: "Send a verification OTP to an email",
 						responses: {
 							200: {
 								description: "Success",
@@ -227,7 +228,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					});
 				}
 				const email = ctx.body.email.toLowerCase();
-				const isValidEmail = z.string().email().safeParse(email);
+				const isValidEmail = z.email().safeParse(email);
 				if (!isValidEmail.success) {
 					throw ctx.error("BAD_REQUEST", {
 						message: BASE_ERROR_CODES.INVALID_EMAIL,
@@ -249,7 +250,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}
 				}
 				let otp =
-					opts.generateOTP({ email, type: ctx.body.type }, ctx.request) ||
+					opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
 					defaultOTPGenerator(opts);
 
 				let storedOTP = await storeOTP(ctx, otp);
@@ -278,7 +279,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						otp,
 						type: ctx.body.type,
 					},
-					ctx.request,
+					ctx,
 				);
 				return ctx.json({
 					success: true,
@@ -330,7 +331,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					metadata: {
 						SERVER_ONLY: true,
 						openapi: {
-							description: "Create verification OTP",
+							operationId: "createEmailVerificationOTP",
+							description: "Create a verification OTP for an email",
 							responses: {
 								200: {
 									description: "Success",
@@ -349,7 +351,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				async (ctx) => {
 					const email = ctx.body.email;
 					const otp =
-						opts.generateOTP({ email, type: ctx.body.type }, ctx.request) ||
+						opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
 						defaultOTPGenerator(opts);
 					let storedOTP = await storeOTP(ctx, otp);
 					await ctx.context.internalAdapter.createVerificationValue({
@@ -388,7 +390,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					metadata: {
 						SERVER_ONLY: true,
 						openapi: {
-							description: "Get verification OTP",
+							operationId: "getEmailVerificationOTP",
+							description: "Get a verification OTP for an email",
 							responses: {
 								"200": {
 									description:
@@ -485,7 +488,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}),
 					metadata: {
 						openapi: {
-							description: "Check if a verification OTP is valid",
+							operationId: "verifyEmailWithOTP",
+							description: "Verify an email with an OTP",
 							responses: {
 								200: {
 									description: "Success",
@@ -508,7 +512,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 				async (ctx) => {
 					const email = ctx.body.email.toLowerCase();
-					const isValidEmail = z.string().email().safeParse(email);
+					const isValidEmail = z.email().safeParse(email);
 					if (!isValidEmail.success) {
 						throw new APIError("BAD_REQUEST", {
 							message: BASE_ERROR_CODES.INVALID_EMAIL,
@@ -633,7 +637,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 				async (ctx) => {
 					const email = ctx.body.email.toLowerCase();
-					const isValidEmail = z.string().email().safeParse(email);
+					const isValidEmail = z.email().safeParse(email);
 					if (!isValidEmail.success) {
 						throw new APIError("BAD_REQUEST", {
 							message: BASE_ERROR_CODES.INVALID_EMAIL,
@@ -795,7 +799,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}),
 					metadata: {
 						openapi: {
-							description: "Sign in with OTP",
+							operationId: "signInWithEmailOTP",
+							description: "Sign in with email and OTP",
 							requestBody: {
 								content: {
 									"application/json": {
@@ -983,7 +988,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}),
 					metadata: {
 						openapi: {
-							description: "Send a password reset OTP to the user",
+							operationId: "forgetPasswordWithEmailOTP",
+							description: "Forget password with email and OTP",
 							responses: {
 								200: {
 									description: "Success",
@@ -1015,7 +1021,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						});
 					}
 					const otp =
-						opts.generateOTP({ email, type: "forget-password" }, ctx.request) ||
+						opts.generateOTP({ email, type: "forget-password" }, ctx) ||
 						defaultOTPGenerator(opts);
 					let storedOTP = await storeOTP(ctx, otp);
 					await ctx.context.internalAdapter.createVerificationValue({
@@ -1029,7 +1035,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							otp,
 							type: "forget-password",
 						},
-						ctx.request,
+						ctx,
 					);
 					return ctx.json({
 						success: true,
@@ -1068,7 +1074,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}),
 					metadata: {
 						openapi: {
-							description: "Reset user password with OTP",
+							operationId: "resetPasswordWithEmailOTP",
+							description: "Reset password with email and OTP",
 							responses: {
 								200: {
 									description: "Success",
@@ -1193,7 +1200,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					matcher(context) {
 						return !!(
 							context.path?.startsWith("/sign-up") &&
-							opts.sendVerificationOnSignUp
+							opts.sendVerificationOnSignUp &&
+							!opts.overrideDefaultEmailVerification
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
@@ -1203,7 +1211,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						const email = response?.user.email;
 						if (email) {
 							const otp =
-								opts.generateOTP({ email, type: ctx.body.type }, ctx.request) ||
+								opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
 								defaultOTPGenerator(opts);
 							let storedOTP = await storeOTP(ctx, otp);
 							await ctx.context.internalAdapter.createVerificationValue({
@@ -1217,7 +1225,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 									otp,
 									type: "email-verification",
 								},
-								ctx.request,
+								ctx,
 							);
 						}
 					}),
