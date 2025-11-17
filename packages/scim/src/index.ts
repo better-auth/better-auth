@@ -4,7 +4,7 @@ import { APIError, sessionMiddleware } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import type { Member } from "better-auth/plugins";
 import { createAuthEndpoint } from "better-auth/plugins";
-import { z } from "zod";
+import * as z from "zod";
 import { getAccountId, getUserFullName, getUserPrimaryEmail } from "./mappings";
 import { authMiddlewareFactory } from "./middlewares";
 import { buildUserPatch } from "./patch-operations";
