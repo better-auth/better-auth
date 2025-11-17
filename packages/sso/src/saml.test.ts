@@ -1183,3 +1183,145 @@ describe("SAML SSO", async () => {
 		});
 	});
 });
+
+describe("SAML SSO with custom fields", () => {
+	const ssoOptions = {
+		modelName: "sso_provider",
+		fields: {
+			issuer: "the_issuer",
+			oidcConfig: "oidc_config",
+			samlConfig: "saml_config",
+			userId: "user_id",
+			providerId: "provider_id",
+			organizationId: "organization_id",
+			domain: "the_domain",
+		},
+	};
+
+	const data = {
+		user: [],
+		session: [],
+		verification: [],
+		account: [],
+		sso_provider: [],
+	};
+
+	const memory = memoryAdapter(data);
+	const mockIdP = createMockSAMLIdP(8081); // Different port from your main app
+
+	const auth = betterAuth({
+		database: memory,
+		baseURL: "http://localhost:3000",
+		emailAndPassword: {
+			enabled: true,
+		},
+		plugins: [sso(ssoOptions)],
+	});
+
+	const authClient = createAuthClient({
+		baseURL: "http://localhost:3000",
+		plugins: [bearer(), ssoClient()],
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
+	const testUser = {
+		email: "test@email.com",
+		password: "password",
+		name: "Test User",
+	};
+
+	beforeAll(async () => {
+		await mockIdP.start();
+		const res = await authClient.signUp.email({
+			email: testUser.email,
+			password: testUser.password,
+			name: testUser.name,
+		});
+	});
+
+	afterAll(async () => {
+		await mockIdP.stop();
+	});
+
+	beforeEach(() => {
+		data.user = [];
+		data.session = [];
+		data.verification = [];
+		data.account = [];
+		data.sso_provider = [];
+
+		vi.clearAllMocks();
+	});
+
+	async function getAuthHeaders() {
+		const headers = new Headers();
+		await authClient.signUp.email({
+			email: testUser.email,
+			password: testUser.password,
+			name: testUser.name,
+		});
+		await authClient.signIn.email(testUser, {
+			throw: true,
+			onSuccess: setCookieToHeader(headers),
+		});
+		return headers;
+	}
+
+	it("should register a new SAML provider", async () => {
+		const headers = await getAuthHeaders();
+
+		const provider = await auth.api.registerSSOProvider({
+			body: {
+				providerId: "saml-provider-1",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: mockIdP.metadataUrl,
+					cert: certificate,
+					callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+						privateKey: idpPrivateKey,
+						privateKeyPass: "q9ALNhGT5EhfcRmp8Pg7e9zTQeP2x1bW",
+						isAssertionEncrypted: true,
+						encPrivateKey: idpEncryptionKey,
+						encPrivateKeyPass: "g7hGcRmp8PxT5QeP2q9Ehf1bWe9zTALN",
+					},
+					spMetadata: {
+						metadata: spMetadata,
+						binding: "post",
+						privateKey: spPrivateKey,
+						privateKeyPass: "VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px",
+						isAssertionEncrypted: true,
+						encPrivateKey: spEncryptionKey,
+						encPrivateKeyPass: "BXFNKpxrsjrCkGA8cAu5wUVHOSpci1RU",
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+		expect(provider).toMatchObject({
+			id: expect.any(String),
+			issuer: "http://localhost:8081",
+			samlConfig: {
+				entryPoint: mockIdP.metadataUrl,
+				cert: expect.any(String),
+				callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
+				wantAssertionsSigned: false,
+				signatureAlgorithm: "sha256",
+				digestAlgorithm: "sha256",
+				identifierFormat:
+					"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+			},
+		});
+	});
+});

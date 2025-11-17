@@ -816,5 +816,47 @@ If you want to allow account linking for specific trusted providers, enable the 
             },
         },
     },
+    modelName: {
+        description: "The model name for the SSO provider table",
+        type: "string",
+        default: "ssoProvider"
+    },
+    fields: {
+        issuer: {
+            description: "Custom name for the issuer column",
+            type: "string",
+            default: "issuer",
+        },
+		oidcConfig: {
+            description: "Custom name for the oidcConfig column",
+            type: "string",
+            default: "oidcConfig",
+        },
+		samlConfig: {
+            description: "Custom name for the samlConfig column",
+            type: "string",
+            default: "samlConfig",
+        },
+		userId: {
+            description: "Custom name for the userId column",
+            type: "string",
+            default: "userId",
+        },
+		providerId: {
+            description: "Custom name for the providerId column",
+            type: "string",
+            default: "providerId",
+        },
+		organizationId: {
+            description: "Custom name for the organizationId column",
+            type: "string",
+            default: "organizationId",
+        },
+		domain: {
+            description: "Custom name for the domain column",
+            type: "string",
+            default: "domain",
+        }
+    }
   }}
 />
