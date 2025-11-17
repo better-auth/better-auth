@@ -65,15 +65,13 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 		if (event?.event === "poll") {
 			$fetch("/get-session")
 				.then((res) => {
-					if (res.data) {
-						sessionAtom.set({
-							...currentSession,
-							data: res.data,
-							error: null,
-						});
-						state.lastSync = now();
-						sessionSignal.set(!sessionSignal.get());
-					}
+					sessionAtom.set({
+						...currentSession,
+						data: res.data,
+						error: res.error || null,
+					});
+					state.lastSync = now();
+					sessionSignal.set(!sessionSignal.get());
 				})
 				.catch(() => {});
 			return;
