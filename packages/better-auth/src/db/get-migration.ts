@@ -268,6 +268,9 @@ export async function getMigrations(config: BetterAuthOptions) {
 	)[] = [];
 
 	const useUUIDs = config.advanced?.database?.generateId === "uuid";
+	const useNumberId =
+		config.advanced?.database?.useNumberId ||
+		config.advanced?.database?.generateId === "serial";
 
 	function getType(field: DBFieldAttribute, fieldName: string) {
 		const type = field.type;
@@ -435,10 +438,6 @@ export async function getMigrations(config: BetterAuthOptions) {
 	}
 
 	let toBeIndexed: CreateIndexBuilder[] = [];
-
-	const useNumberId =
-		config.advanced?.database?.useNumberId ||
-		config.advanced?.database?.generateId === "serial";
 
 	if (config.advanced?.database?.useNumberId) {
 		logger.warn(
