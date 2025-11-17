@@ -303,6 +303,14 @@ describe("mcp - server-client flows", async () => {
 				cookieSetter(headers)(ctx);
 			},
 		});
+		Object.defineProperty(global, "window", {
+			value: {
+				location: {
+					search: new URL(location, authServerUrl).search,
+				},
+			},
+			writable: true,
+		});
 		if (location.startsWith("/consent")) {
 			const consentRes = await authClient.oauth2.consent(
 				{

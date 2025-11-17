@@ -305,9 +305,11 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 				errorURL,
 				requestSignUp,
 				newUserURL,
+				query,
 				link,
 			} = parsedState;
 			const code = ctx.query.code;
+			if (query) ctx.context.oauth.query = new URLSearchParams(query);
 
 			function redirectOnError(error: string) {
 				const defaultErrorURL =

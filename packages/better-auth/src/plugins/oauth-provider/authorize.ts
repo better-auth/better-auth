@@ -1,7 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-call";
 import { getSessionFromCtx } from "../../api";
-import { generateRandomString } from "../../crypto";
+import { generateRandomString, makeSignature } from "../../crypto";
 import type { Verification } from "../../db";
 import type {
 	OAuthAuthorizationQuery,
@@ -186,29 +186,13 @@ export async function authorizeEndpoint(
 	// Check for session
 	const session = await getSessionFromCtx(ctx);
 	if (!session || prompts?.includes("login")) {
-		const { name: cookieName, attributes: cookieAttributes } =
-			ctx.context.createAuthCookie("oauth_login_prompt");
-		await ctx.setSignedCookie(
-			cookieName,
-			JSON.stringify(ctx.query),
-			ctx.context.secret,
-			{
-				path: ctx.context.options.basePath,
-				sameSite: "lax",
-				...cookieAttributes,
-			},
-		);
-		const requestUrl = new URL(ctx.request.url);
-		return handleRedirect(ctx, `${opts.loginPage}${requestUrl.search}`);
+		const queryParams = await signParams(ctx, opts);
+		return handleRedirect(ctx, `${opts.loginPage}?${queryParams}`);
 	}
 
 	// Force account selection (eg. multi-session)
 	if (ctx.context.authorize_only && prompts?.includes("select_account")) {
-		return redirectWithPromptCode(ctx, opts, "select_account", {
-			query,
-			userId: session.user.id,
-			sessionId: session.session.id,
-		});
+		return redirectWithPromptCode(ctx, opts, "select_account");
 	}
 
 	if (
@@ -223,11 +207,7 @@ export async function authorizeEndpoint(
 			scopes: requestedScopes,
 		});
 		if (!selectedAccount) {
-			return redirectWithPromptCode(ctx, opts, "select_account", {
-				query,
-				userId: session.user.id,
-				sessionId: session.session.id,
-			});
+			return redirectWithPromptCode(ctx, opts, "select_account");
 		}
 	}
 
@@ -238,21 +218,13 @@ export async function authorizeEndpoint(
 			scopes: requestedScopes,
 		});
 		if (!postLogin) {
-			return redirectWithPromptCode(ctx, opts, "post_login", {
-				query,
-				userId: session.user.id,
-				sessionId: session.session.id,
-			});
+			return redirectWithPromptCode(ctx, opts, "post_login");
 		}
 	}
 
 	// Force consent screen
 	if (prompts?.includes("consent")) {
-		return redirectWithPromptCode(ctx, opts, "consent", {
-			query,
-			userId: session.user.id,
-			sessionId: session.session.id,
-		});
+		return redirectWithPromptCode(ctx, opts, "consent");
 	}
 
 	// Can skip consent (unless forced by prompt above)
@@ -303,11 +275,7 @@ export async function authorizeEndpoint(
 		!consent ||
 		!requestedScopes.every((val) => consent.scopes.includes(val))
 	) {
-		return redirectWithPromptCode(ctx, opts, "consent", {
-			query,
-			userId: session.user.id,
-			sessionId: session.session.id,
-		});
+		return redirectWithPromptCode(ctx, opts, "consent");
 	}
 
 	return redirectWithAuthorizationCode(ctx, opts, {
@@ -362,22 +330,6 @@ async function redirectWithAuthorizationCode(
 		);
 	}
 
-	// Clear prompt cookie upon receipt of authorization code if it exists
-	const { name: loginPromptCookieName, attributes: cookieAttributes } =
-		ctx.context.createAuthCookie("oauth_login_prompt");
-	const cookie = await ctx.getSignedCookie(
-		loginPromptCookieName,
-		ctx.context.secret,
-	);
-	if (cookie) {
-		ctx.setCookie(loginPromptCookieName, "", {
-			path: ctx.context.options.basePath,
-			sameSite: "lax",
-			...cookieAttributes,
-			maxAge: 0,
-		});
-	}
-
 	return handleRedirect(ctx, redirectUriWithCode.toString());
 }
 
@@ -385,72 +337,28 @@ async function redirectWithPromptCode(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	type: "consent" | "select_account" | "post_login",
-	verificationValue: {
-		query: OAuthAuthorizationQuery;
-		userId: string;
-		sessionId: string;
-	},
 ) {
-	const code = generateRandomString(32, "a-z", "A-Z", "0-9");
+	const queryParams = await signParams(ctx, opts);
+	const path =
+		type === "select_account"
+			? (opts.selectAccount?.page ?? opts.loginPage)
+			: type === "post_login"
+				? opts.postLogin?.page
+				: opts.consentPage;
+	return handleRedirect(ctx, `${path}?${queryParams}`);
+}
+
+async function signParams(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+) {
+	// Add expiration to query parameters
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + (opts.codeExpiresIn ?? 600);
-
-	if (type === "select_account") {
-		const { name: cookieName, attributes: cookieAttributes } =
-			ctx.context.createAuthCookie("oauth_login_prompt");
-		await ctx.setSignedCookie(
-			cookieName,
-			JSON.stringify(ctx.query),
-			ctx.context.secret,
-			{
-				path: ctx.context.options.basePath,
-				sameSite: "lax",
-				...cookieAttributes,
-			},
-		);
-		const params = new URLSearchParams(ctx.query);
-		return handleRedirect(
-			ctx,
-			`${opts.selectAccount?.page ?? opts.loginPage}?${params.toString()}`,
-		);
-	}
-
-	if (!ctx.query.scope) {
-		ctx.query.scope = opts.scopes?.join(" ");
-	}
-	const data: Omit<Verification, "id" | "createdAt"> = {
-		identifier: await storeToken(opts.storeTokens, code, "authorization_code"),
-		updatedAt: new Date(iat * 1000),
-		expiresAt: new Date(exp * 1000),
-		value: JSON.stringify({
-			type,
-			query: ctx.query,
-			userId: verificationValue.userId,
-			sessionId: verificationValue?.sessionId,
-		} satisfies VerificationValue),
-	};
-	ctx.context.verification_id
-		? await ctx.context.internalAdapter.updateVerificationValue(
-				ctx.context.verification_id,
-				data,
-			)
-		: await ctx.context.internalAdapter.createVerificationValue({
-				...data,
-				createdAt: new Date(iat * 1000),
-			});
-
-	const { name: cookieName, attributes: cookieAttributes } =
-		ctx.context.createAuthCookie(`oauth_${type}`);
-	await ctx.setSignedCookie(cookieName, code, ctx.context.secret, {
-		path: ctx.context.options.basePath,
-		sameSite: "lax",
-		...cookieAttributes,
-	});
-
 	const params = new URLSearchParams(ctx.query);
-	const consentUri = `${
-		type === "post_login" ? opts.postLogin?.page : opts.consentPage
-	}?${params.toString()}`;
+	params.set("exp", String(exp));
 
-	return handleRedirect(ctx, consentUri);
+	const signature = await makeSignature(params.toString(), ctx.context.secret);
+	params.append("sig", signature);
+	return params.toString();
 }

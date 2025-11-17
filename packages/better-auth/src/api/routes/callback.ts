@@ -76,6 +76,7 @@ export const callbackOAuth = createAuthEndpoint(
 			const url = `${defaultErrorURL}${sep}state=state_not_found`;
 			throw c.redirect(url);
 		}
+		const parsedState = await parseState(c);
 
 		const {
 			codeVerifier,
@@ -83,8 +84,10 @@ export const callbackOAuth = createAuthEndpoint(
 			link,
 			errorURL,
 			newUserURL,
+			query,
 			requestSignUp,
-		} = await parseState(c);
+		} = parsedState;
+		if (query) c.context.oauth.query = new URLSearchParams(query);
 
 		function redirectOnError(error: string, description?: string | undefined) {
 			const baseURL = errorURL ?? defaultErrorURL;
