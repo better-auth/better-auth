@@ -138,10 +138,10 @@
       "types": "./dist/integrations/next-js.d.mts",
       "default": "./dist/integrations/next-js.mjs"
     },
-    "./react-start": {
-      "dev-source": "./src/integrations/react-start.ts",
-      "types": "./dist/integrations/react-start.d.mts",
-      "default": "./dist/integrations/react-start.mjs"
+    "./tanstack-start": {
+      "dev-source": "./src/integrations/tanstack-start.ts",
+      "types": "./dist/integrations/tanstack-start.d.mts",
+      "default": "./dist/integrations/tanstack-start.mjs"
     },
     "./node": {
       "dev-source": "./src/integrations/node.ts",
@@ -351,8 +351,8 @@
       "next-js": [
         "./dist/integrations/next-js.d.mts"
       ],
-      "react-start": [
-        "./dist/integrations/react-start.d.mts"
+      "tanstack-start": [
+        "./dist/integrations/tanstack-start.d.mts"
       ],
       "adapters": [
         "./dist/adapters/index.d.mts"
@@ -460,7 +460,8 @@
     "react-dom": "^18.0.0 || ^19.0.0",
     "solid-js": "^1.0.0",
     "svelte": "^4.0.0 || ^5.0.0",
-    "vue": "^3.0.0"
+    "vue": "^3.0.0",
+    "@tanstack/start": "^1.120.20"
   },
   "peerDependenciesMeta": {
     "@lynx-js/react": {
@@ -486,13 +487,15 @@
     },
     "vue": {
       "optional": true
+    },
+    "@tanstack/start": {
+      "optional": true
     }
   },
   "devDependencies": {
     "@lynx-js/react": "^0.114.0",
     "@prisma/client": "^5.22.0",
     "@sveltejs/kit": "^2.37.1",
-    "@tanstack/react-start": "^1.131.3",
     "@tanstack/start": "^1.120.20",
     "@tanstack/start-server-core": "^1.131.36",
     "@types/better-sqlite3": "^7.6.13",
