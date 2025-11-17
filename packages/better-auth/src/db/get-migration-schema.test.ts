@@ -39,10 +39,11 @@ describe.runIf(isPostgresAvailable)(
 			// Setup: Create custom schema and a table in public schema
 			await publicPool.query(`DROP SCHEMA IF EXISTS ${customSchema} CASCADE`);
 			await publicPool.query(`CREATE SCHEMA ${customSchema}`);
-
+			publicPool.query(
+				`DROP TABLE IF EXISTS public.user CASCADE; DROP TABLE IF EXISTS public.session CASCADE; DROP TABLE IF EXISTS public.account CASCADE; DROP TABLE IF EXISTS public.verification CASCADE;`,
+			);
 			// Create a conflicting table in the public schema
 			await publicPool.query(`
-			DROP TABLE IF EXISTS public.user CASCADE;
 			CREATE TABLE public.user (
 				id SERIAL PRIMARY KEY,
 				email VARCHAR(255) NOT NULL,
@@ -298,15 +299,24 @@ describe.runIf(isPostgresAvailable)("PostgreSQL Column Additions", () => {
 	const pool = new Pool({
 		connectionString: CONNECTION_STRING,
 	});
+	const schema = "column_test";
+
+	const schemaPool = new Pool({
+		connectionString: `${CONNECTION_STRING}?options=-c search_path=${schema}`,
+	});
 
 	afterAll(async () => {
-		await pool.query(`DROP TABLE IF EXISTS public.user CASCADE`);
+		await schemaPool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
 		await pool.end();
+	});
+	beforeAll(async () => {
+		await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+		await schemaPool.query(`CREATE SCHEMA ${schema}`);
 	});
 
 	it("should update default tables with plugin schema fields", async () => {
 		const config: BetterAuthOptions = {
-			database: pool,
+			database: schemaPool,
 			emailAndPassword: {
 				enabled: true,
 			},
