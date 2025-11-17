@@ -645,7 +645,7 @@ export function AISearchTrigger() {
 					{!open && (
 						<button
 							className={cn(
-								"fixed inset-0 flex items-center justify-between px-3 py-4 transition-colors text-fd-muted-foreground hover:bg-fd-accent hover:text-fd-accent-foreground rounded-none text-sm",
+								"absolute inset-0 flex items-center justify-between px-3 py-4 transition-colors text-fd-muted-foreground hover:bg-fd-accent hover:text-fd-accent-foreground rounded-none text-sm",
 							)}
 							onClick={() => setOpen(true)}
 						>
