@@ -78,8 +78,7 @@ async function createJwtAccessToken(
 	},
 ) {
 	const iat = overrides?.iat ?? Math.floor(Date.now() / 1000);
-	const expiresIn = opts.accessTokenExpiresIn ?? 3600;
-	const exp = overrides?.exp ?? iat + expiresIn;
+	const exp = overrides?.exp ?? iat + (opts.accessTokenExpiresIn ?? 3600);
 	const customClaims = opts.customAccessTokenClaims
 		? await opts.customAccessTokenClaims({
 				user,
@@ -128,8 +127,7 @@ async function createIdToken(
 	sessionId?: string,
 ) {
 	const iat = Math.floor(Date.now() / 1000);
-	const expiresIn = 60 * 60 * 10; // 10 hour id token lifetime
-	const exp = iat + expiresIn;
+	const exp = iat + (opts.idTokenExpiresIn ?? 36000);
 	const userClaims = userNormalClaims(user, scopes);
 	const authTime = Math.floor(
 		(ctx.context.session?.session.createdAt ?? new Date(iat * 1000)).getTime() /
@@ -242,8 +240,7 @@ async function createOpaqueAccessToken(
 	refreshId?: string,
 ) {
 	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
-	const expiresIn = opts.accessTokenExpiresIn ?? 3600;
-	const exp = payload?.exp ?? iat + expiresIn;
+	const exp = payload?.exp ?? iat + (opts.accessTokenExpiresIn ?? 3600);
 	const token = opts.generateOpaqueAccessToken
 		? await opts.generateOpaqueAccessToken()
 		: generateRandomString(32, "A-Z", "a-z");
@@ -885,7 +882,7 @@ async function handleRefreshTokenGrant(
 
 	const refreshToken = await ctx.context.adapter
 		.findOne<OAuthRefreshToken<Scope[]> & { id: string }>({
-			model: "oauthRefreshToken",
+			model: opts.schema?.oauthRefreshToken?.modelName ?? "oauthRefreshToken",
 			where: [
 				{
 					field: "token",

@@ -282,7 +282,9 @@ describe("mcp - server-client flows", async () => {
 				res.setHeader("Content-Type", "application/json");
 				if (error instanceof APIError) {
 					res.statusCode = error.statusCode;
-					res.setHeaders(new Headers(error.headers));
+					for (const [key, value] of Object.entries(error.headers || {})) {
+						res.setHeader(key, value as string);
+					}
 					res.end(JSON.stringify(error.body));
 				} else {
 					res.statusCode = 500;
@@ -325,7 +327,7 @@ describe("mcp - server-client flows", async () => {
 			);
 			const url = new URL(consentRes.data?.redirect_uri ?? "");
 			const _state = url.searchParams.get("state");
-			if ((state || _state) && state !== state) {
+			if ((state || _state) && state !== _state) {
 				throw new Error("state mismatch");
 			}
 			const code = url.searchParams.get("code");

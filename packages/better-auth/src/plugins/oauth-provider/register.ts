@@ -247,8 +247,12 @@ export function databaseToSchema(input: DatabaseClient): SchemaClient<Scope[]> {
 		...input,
 		scopes: input?.scopes?.split(" "),
 		contacts: input?.contacts?.split(","),
-		redirectUris: input?.redirectUris?.split(","),
-		postLogoutRedirectUris: input?.postLogoutRedirectUris?.split(","),
+		redirectUris: input?.redirectUris
+			? JSON.parse(input?.redirectUris)
+			: undefined,
+		postLogoutRedirectUris: input?.postLogoutRedirectUris
+			? JSON.parse(input?.postLogoutRedirectUris)
+			: undefined,
 		grantTypes: input?.grantTypes?.split(",") as SchemaClient<
 			Scope[]
 		>["grantTypes"],
@@ -269,8 +273,12 @@ export function schemaToDatabase(input: SchemaClient<Scope[]>): DatabaseClient {
 		...input,
 		scopes: input.scopes?.join(" "),
 		contacts: input.contacts?.join(","),
-		redirectUris: input.redirectUris?.join(","),
-		postLogoutRedirectUris: input.postLogoutRedirectUris?.join(","),
+		redirectUris: input.redirectUris
+			? JSON.stringify(input.redirectUris)
+			: undefined,
+		postLogoutRedirectUris: input.postLogoutRedirectUris
+			? JSON.stringify(input.postLogoutRedirectUris)
+			: undefined,
 		grantTypes: input.grantTypes?.join(","),
 		responseTypes: input.responseTypes?.join(","),
 	};

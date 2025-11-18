@@ -27,7 +27,10 @@ export const oauthProviderClient = () => {
 							const body = JSON.parse(ctx.body ?? "{}");
 							ctx.body = JSON.stringify({
 								...body,
-								oauth_query: window?.location?.search,
+								oauth_query:
+									typeof window !== "undefined"
+										? window?.location?.search
+										: undefined,
 							});
 						}
 					},
