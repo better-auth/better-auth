@@ -10,7 +10,13 @@ import {
 } from "@better-auth/core/context";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import type { InternalLogger } from "@better-auth/core/env";
-import type { Account, Session, User, Verification } from "../types";
+import type {
+	Account,
+	Session,
+	SessionWithSoftDelete,
+	User,
+	Verification,
+} from "../types";
 import { generateId } from "../utils";
 import { getDate } from "../utils/date";
 import { getIp } from "../utils/get-request-ip";
