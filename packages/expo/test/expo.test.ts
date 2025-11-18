@@ -21,6 +21,10 @@ vi.mock("expo-web-browser", async () => {
 
 vi.mock("react-native", async () => {
 	return {
+		AppState: {
+			addEventListener: vi.fn(),
+			removeEventListener: vi.fn(),
+		},
 		Platform: {
 			OS: "android",
 		},
