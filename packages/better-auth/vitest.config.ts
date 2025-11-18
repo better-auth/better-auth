@@ -1,11 +1,13 @@
-import { defineConfig } from "vitest/config";
+import { defineProject } from "vitest/config";
 
-export default defineConfig({
+export default defineProject({
 	test: {
-		poolOptions: {
-			forks: {
-				execArgv: ["--expose-gc"],
-			},
-		},
+		execArgv: ["--expose-gc"],
+		// Exclude adapter tests by default - they are run separately via test:adapters
+		exclude: [
+			"**/node_modules/**",
+			"**/dist/**",
+			"**/src/adapters/**/*.test.ts",
+		],
 	},
 });

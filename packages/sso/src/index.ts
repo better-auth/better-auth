@@ -1,4 +1,4 @@
-import { type BetterAuthPlugin } from "better-auth";
+import type { BetterAuthPlugin } from "better-auth";
 import { XMLValidator } from "fast-xml-parser";
 import * as saml from "samlify";
 import {
@@ -9,9 +9,9 @@ import {
 	signInSSO,
 	spMetadata,
 } from "./routes/sso";
-import type { OIDCConfig, SAMLConfig, SSOOptions } from "./types";
+import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "./types";
 
-export type { SAMLConfig, OIDCConfig, SSOOptions };
+export type { SAMLConfig, OIDCConfig, SSOOptions, SSOProvider };
 
 const fastValidator = {
 	async validate(xml: string) {
@@ -54,18 +54,22 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 		},
 		schema: {
 			ssoProvider: {
+				modelName: options?.modelName ?? "ssoProvider",
 				fields: {
 					issuer: {
 						type: "string",
 						required: true,
+						fieldName: options?.fields?.issuer ?? "issuer",
 					},
 					oidcConfig: {
 						type: "string",
 						required: false,
+						fieldName: options?.fields?.oidcConfig ?? "oidcConfig",
 					},
 					samlConfig: {
 						type: "string",
 						required: false,
+						fieldName: options?.fields?.samlConfig ?? "samlConfig",
 					},
 					userId: {
 						type: "string",
@@ -73,19 +77,23 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 							model: "user",
 							field: "id",
 						},
+						fieldName: options?.fields?.userId ?? "userId",
 					},
 					providerId: {
 						type: "string",
 						required: true,
 						unique: true,
+						fieldName: options?.fields?.providerId ?? "providerId",
 					},
 					organizationId: {
 						type: "string",
 						required: false,
+						fieldName: options?.fields?.organizationId ?? "organizationId",
 					},
 					domain: {
 						type: "string",
 						required: true,
+						fieldName: options?.fields?.domain ?? "domain",
 					},
 				},
 			},

@@ -1,23 +1,37 @@
 import type { BetterAuthOptions } from "@better-auth/core";
-import type { DBFieldAttribute } from "@better-auth/core/db";
 import type {
 	CleanedWhere,
 	DBAdapter,
 	DBTransactionAdapter,
+	JoinConfig,
+	JoinOption,
 	Where,
 } from "@better-auth/core/db/adapter";
 import { getColorDepth, logger, TTY_COLORS } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import { withApplyDefault } from "../../adapters/utils";
 import { getAuthTables } from "../../db/get-tables";
-import { generateId as defaultGenerateId } from "../../utils";
 import { safeJSONParse } from "../../utils/json";
+import { initGetDefaultFieldName } from "./get-default-field-name";
+import { initGetDefaultModelName } from "./get-default-model-name";
+import { initGetFieldAttributes } from "./get-field-attributes";
+import { initGetFieldName } from "./get-field-name";
+import { initGetIdField } from "./get-id-field";
+import { initGetModelName } from "./get-model-name";
 import type {
 	AdapterFactoryConfig,
 	AdapterFactoryOptions,
 	AdapterTestDebugLogs,
 } from "./types";
 
+export {
+	initGetDefaultModelName,
+	initGetDefaultFieldName,
+	initGetModelName,
+	initGetFieldName,
+	initGetFieldAttributes,
+	initGetIdField,
+};
 export * from "./types";
 
 let debugLogs: { instance: string; args: any[] }[] = [];
@@ -53,6 +67,7 @@ export const createAdapterFactory =
 			transaction: cfg.transaction ?? false,
 			disableTransformInput: cfg.disableTransformInput ?? false,
 			disableTransformOutput: cfg.disableTransformOutput ?? false,
+			disableTransformJoin: cfg.disableTransformJoin ?? false,
 		} satisfies AdapterFactoryConfig;
 		const useNumberId =
 			options.advanced?.database?.useNumberId === true ||
@@ -65,131 +80,6 @@ export const createAdapterFactory =
 
 		// End-user's Better-Auth instance's schema
 		const schema = getAuthTables(options);
-
-		/**
-		 * This function helps us get the default field name from the schema defined by devs.
-		 * Often times, the user will be using the `fieldName` which could had been customized by the users.
-		 * This function helps us get the actual field name useful to match against the schema. (eg: schema[model].fields[field])
-		 *
-		 * If it's still unclear what this does:
-		 *
-		 * 1. User can define a custom fieldName.
-		 * 2. When using a custom fieldName, doing something like `schema[model].fields[field]` will not work.
-		 */
-		const getDefaultFieldName = ({
-			field,
-			model: unsafe_model,
-		}: {
-			model: string;
-			field: string;
-		}) => {
-			// Plugin `schema`s can't define their own `id`. Better-auth auto provides `id` to every schema model.
-			// Given this, we can't just check if the `field` (that being `id`) is within the schema's fields, since it is never defined.
-			// So we check if the `field` is `id` and if so, we return `id` itself. Otherwise, we return the `field` from the schema.
-			if (field === "id" || field === "_id") {
-				return "id";
-			}
-			const model = getDefaultModelName(unsafe_model); // Just to make sure the model name is correct.
-
-			let f = schema[model]?.fields[field];
-			if (!f) {
-				const result = Object.entries(schema[model]!.fields!).find(
-					([_, f]) => f.fieldName === field,
-				);
-				if (result) {
-					f = result[1];
-					field = result[0];
-				}
-			}
-			if (!f) {
-				debugLog(`Field ${field} not found in model ${model}`);
-				debugLog(`Schema:`, schema);
-				throw new BetterAuthError(`Field ${field} not found in model ${model}`);
-			}
-			return field;
-		};
-
-		/**
-		 * This function helps us get the default model name from the schema defined by devs.
-		 * Often times, the user will be using the `modelName` which could had been customized by the users.
-		 * This function helps us get the actual model name useful to match against the schema. (eg: schema[model])
-		 *
-		 * If it's still unclear what this does:
-		 *
-		 * 1. User can define a custom modelName.
-		 * 2. When using a custom modelName, doing something like `schema[model]` will not work.
-		 * 3. Using this function helps us get the actual model name based on the user's defined custom modelName.
-		 */
-		const getDefaultModelName = (model: string) => {
-			// It's possible this `model` could had applied `usePlural`.
-			// Thus we'll try the search but without the trailing `s`.
-			if (config.usePlural && model.charAt(model.length - 1) === "s") {
-				let pluralessModel = model.slice(0, -1);
-				let m = schema[pluralessModel] ? pluralessModel : undefined;
-				if (!m) {
-					m = Object.entries(schema).find(
-						([_, f]) => f.modelName === pluralessModel,
-					)?.[0];
-				}
-
-				if (m) {
-					return m;
-				}
-			}
-
-			let m = schema[model] ? model : undefined;
-			if (!m) {
-				m = Object.entries(schema).find(([_, f]) => f.modelName === model)?.[0];
-			}
-
-			if (!m) {
-				debugLog(`Model "${model}" not found in schema`);
-				debugLog(`Schema:`, schema);
-				throw new BetterAuthError(`Model "${model}" not found in schema`);
-			}
-			return m;
-		};
-
-		/**
-		 * Users can overwrite the default model of some tables. This function helps find the correct model name.
-		 * Furthermore, if the user passes `usePlural` as true in their adapter config,
-		 * then we should return the model name ending with an `s`.
-		 */
-		const getModelName = (model: string) => {
-			const defaultModelKey = getDefaultModelName(model);
-			const usePlural = config && config.usePlural;
-			const useCustomModelName =
-				schema &&
-				schema[defaultModelKey] &&
-				schema[defaultModelKey].modelName !== model;
-
-			if (useCustomModelName) {
-				return usePlural
-					? `${schema[defaultModelKey]!.modelName}s`
-					: schema[defaultModelKey]!.modelName;
-			}
-
-			return usePlural ? `${model}s` : model;
-		};
-		/**
-		 * Get the field name which is expected to be saved in the database based on the user's schema.
-		 *
-		 * This function is useful if you need to save the field name to the database.
-		 *
-		 * For example, if the user has defined a custom field name for the `user` model, then you can use this function to get the actual field name from the schema.
-		 */
-		function getFieldName({
-			model: model_name,
-			field: field_name,
-		}: {
-			model: string;
-			field: string;
-		}) {
-			const model = getDefaultModelName(model_name);
-			const field = getDefaultFieldName({ model, field: field_name });
-
-			return schema[model]?.fields[field]?.fieldName || field;
-		}
 
 		const debugLog = (...args: any[]) => {
 			if (config.debugLogs === true || typeof config.debugLogs === "object") {
@@ -248,151 +138,46 @@ export const createAdapterFactory =
 			}
 		};
 
-		const idField = ({
-			customModelName,
-			forceAllowId,
-		}: {
-			customModelName?: string;
-			forceAllowId?: boolean;
-		}) => {
-			const useNumberId =
-				options.advanced?.database?.useNumberId ||
-				options.advanced?.database?.generateId === "serial";
-			const useUUIDs = options.advanced?.database?.generateId === "uuid";
+		const getDefaultModelName = initGetDefaultModelName({
+			usePlural: config.usePlural,
+			schema,
+		});
 
-			let shouldGenerateId: boolean = (() => {
-				if (config.disableIdGeneration) {
-					return false;
-				} else if (useNumberId && !forceAllowId) {
-					// if force allow is true, then we should be using their custom provided id.
-					return false;
-				} else if (useUUIDs && !config.supportsUUIDs) {
-					// should only generate UUIDs via JS if the database doesn't support natively generating UUIDs.
-					return true;
-				} else {
-					return true;
-				}
-			})();
+		const getDefaultFieldName = initGetDefaultFieldName({
+			usePlural: config.usePlural,
+			schema,
+		});
 
-			const model = getDefaultModelName(customModelName ?? "id");
-			return {
-				type: useNumberId ? "number" : "string",
-				required: shouldGenerateId ? true : false,
-				...(shouldGenerateId
-					? {
-							defaultValue() {
-								if (config.disableIdGeneration) return undefined;
-								let generateId = options.advanced?.database?.generateId;
-								if (options.advanced?.generateId !== undefined) {
-									logger.warn(
-										"Your Better Auth config includes advanced.generateId which is deprecated. Please use advanced.database.generateId instead. This will be removed in future releases.",
-									);
-									generateId = options.advanced?.generateId;
-								}
-								if (generateId === false || useNumberId) return undefined;
-								if (typeof generateId === "function") {
-									return generateId({
-										model,
-									});
-								}
-								if (config.customIdGenerator) {
-									return config.customIdGenerator({ model });
-								}
-								if (generateId === "uuid") {
-									return crypto.randomUUID();
-								}
-								return defaultGenerateId();
-							},
-						}
-					: {}),
-				transform: {
-					input: (value) => {
-						// Uncomment if need to debug id transformation
-						// console.log(`transforming id: `, {
-						// 	id: value,
-						// 	...(useNumberId ? { useNumberId } : {}),
-						// 	...(useUUIDs ? { useUUIDs } : {}),
-						// 	...(forceAllowId ? { forceAllowId } : {}),
-						// });
-						if (!value) return undefined;
+		const getModelName = initGetModelName({
+			usePlural: config.usePlural,
+			schema,
+		});
+		const getFieldName = initGetFieldName({
+			schema,
+			usePlural: config.usePlural,
+		});
 
-						if (useNumberId) {
-							const numberValue = Number(value);
-							// if invalid number, fallback to DB generated number id.
-							if (isNaN(numberValue)) {
-								return undefined;
-							}
-							return numberValue;
-						}
+		const idField = initGetIdField({
+			schema,
+			options,
+			usePlural: config.usePlural,
+			disableIdGeneration: config.disableIdGeneration,
+			customIdGenerator: config.customIdGenerator,
+			supportsUUIDs: config.supportsUUIDs,
+		});
 
-						if (useUUIDs) {
-							// if it's generated by us, then we should return the value as is.
-							if (shouldGenerateId && !forceAllowId) return value;
-							if (config.disableIdGeneration) return undefined;
-							// if DB will handle UUID generation, then we should return undefined.
-							if (config.supportsUUIDs) return undefined;
-							// if forceAllowId is true, it means we should be using the ID provided during the adapter call.
-							if (forceAllowId && typeof value === "string") {
-								const uuidRegex =
-									/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-								if (uuidRegex.test(value)) {
-									return value;
-								} else {
-									const err = new Error();
-									const stack = err.stack
-										?.split("\n")
-										.filter((_, i) => i !== 1)
-										.join("\n")
-										.replace("Error:", "");
-									logger.warn(
-										"[Adapter Factory] - Invalid UUID value for field `id` provided when `forceAllowId` is true. Generating a new UUID.",
-										stack,
-									);
-								}
-							}
-							// if the value is not a string, and the database doesn't support generating it's own UUIDs, then we should be generating the UUID.
-							if (typeof value !== "string" && !config.supportsUUIDs) {
-								return crypto.randomUUID();
-							}
-							return undefined;
-						}
-
-						return value;
-					},
-					output: (value) => {
-						if (!value) return undefined;
-						return String(value);
-					},
-				},
-			} satisfies DBFieldAttribute;
-		};
-
-		const getFieldAttributes = ({
-			model,
-			field,
-		}: {
-			model: string;
-			field: string;
-		}) => {
-			const defaultModelName = getDefaultModelName(model);
-			const defaultFieldName = getDefaultFieldName({
-				field: field,
-				model: defaultModelName,
-			});
-
-			const fields = schema[defaultModelName]!.fields;
-			fields.id = idField({ customModelName: defaultModelName });
-			const fieldAttributes = fields[defaultFieldName];
-			if (!fieldAttributes) {
-				throw new BetterAuthError(`Field ${field} not found in model ${model}`);
-			}
-			return fieldAttributes;
-		};
+		const getFieldAttributes = initGetFieldAttributes({
+			schema,
+			options,
+			usePlural: config.usePlural,
+			disableIdGeneration: config.disableIdGeneration,
+			customIdGenerator: config.customIdGenerator,
+		});
 
 		const transformInput = async (
 			data: Record<string, any>,
 			defaultModelName: string,
-			action: "create" | "update",
+			action: "create" | "update" | "findOne" | "findMany",
 			forceAllowId?: boolean,
 		) => {
 			const transformedData: Record<string, any> = {};
@@ -498,81 +283,173 @@ export const createAdapterFactory =
 			data: Record<string, any> | null,
 			unsafe_model: string,
 			select: string[] = [],
+			join: JoinConfig | undefined,
 		) => {
-			if (!data) return null;
-			const newMappedKeys = config.mapKeysTransformOutput ?? {};
-			const transformedData: Record<string, any> = {};
-			const tableSchema = schema[unsafe_model]!.fields;
-			const idKey = Object.entries(newMappedKeys).find(
-				([_, v]) => v === "id",
-			)?.[0];
-			const useNumberId =
-				options.advanced?.database?.useNumberId ||
-				options.advanced?.database?.generateId === "serial";
-			tableSchema[idKey ?? "id"] = {
-				type: useNumberId ? "number" : "string",
+			const transformSingleOutput = async (
+				data: Record<string, any> | null,
+				unsafe_model: string,
+				select: string[] = [],
+			) => {
+				if (!data) return null;
+				const newMappedKeys = config.mapKeysTransformOutput ?? {};
+				const transformedData: Record<string, any> = {};
+				const tableSchema = schema[getDefaultModelName(unsafe_model)]!.fields;
+				const idKey = Object.entries(newMappedKeys).find(
+					([_, v]) => v === "id",
+				)?.[0];
+				const useNumberId =
+					options.advanced?.database?.useNumberId ||
+					options.advanced?.database?.generateId === "serial";
+				tableSchema[idKey ?? "id"] = {
+					type: useNumberId ? "number" : "string",
+				};
+				for (const key in tableSchema) {
+					if (select.length && !select.includes(key)) {
+						continue;
+					}
+					const field = tableSchema[key];
+					if (field) {
+						const originalKey = field.fieldName || key;
+
+						// If the field is mapped, we'll use the mapped key. Otherwise, we'll use the original key.
+						let newValue =
+							data[
+								Object.entries(newMappedKeys).find(
+									([_, v]) => v === originalKey,
+								)?.[0] || originalKey
+							];
+
+						if (field.transform?.output) {
+							newValue = await field.transform.output(newValue);
+						}
+
+						let newFieldName: string = newMappedKeys[key] || key;
+
+						if (originalKey === "id" || field.references?.field === "id") {
+							// Even if `useNumberId` is true, we must always return a string `id` output.
+							if (typeof newValue !== "undefined" && newValue !== null)
+								newValue = String(newValue);
+						} else if (
+							config.supportsJSON === false &&
+							typeof newValue === "string" &&
+							field.type === "json"
+						) {
+							newValue = safeJSONParse(newValue);
+						} else if (
+							config.supportsDates === false &&
+							typeof newValue === "string" &&
+							field.type === "date"
+						) {
+							newValue = new Date(newValue);
+						} else if (
+							config.supportsBooleans === false &&
+							typeof newValue === "number" &&
+							field.type === "boolean"
+						) {
+							newValue = newValue === 1;
+						}
+
+						if (config.customTransformOutput) {
+							newValue = config.customTransformOutput({
+								data: newValue,
+								field: newFieldName,
+								fieldAttributes: field,
+								select,
+								model: getModelName(unsafe_model),
+								schema,
+								options,
+							});
+						}
+
+						transformedData[newFieldName] = newValue;
+					}
+				}
+				return transformedData as any;
 			};
-			for (const key in tableSchema) {
-				if (select.length && !select.includes(key)) {
-					continue;
-				}
-				const field = tableSchema[key];
-				if (field) {
-					const originalKey = field.fieldName || key;
 
-					// If the field is mapped, we'll use the mapped key. Otherwise, we'll use the original key.
-					let newValue =
-						data[
-							Object.entries(newMappedKeys).find(
-								([_, v]) => v === originalKey,
-							)?.[0] || originalKey
-						];
-
-					if (field.transform?.output) {
-						newValue = await field.transform.output(newValue);
-					}
-
-					let newFieldName: string = newMappedKeys[key] || key;
-
-					if (originalKey === "id" || field.references?.field === "id") {
-						// Even if `useNumberId` is true, we must always return a string `id` output.
-						if (typeof newValue !== "undefined" && newValue !== null)
-							newValue = String(newValue);
-					} else if (
-						config.supportsJSON === false &&
-						typeof newValue === "string" &&
-						field.type === "json"
-					) {
-						newValue = safeJSONParse(newValue);
-					} else if (
-						config.supportsDates === false &&
-						typeof newValue === "string" &&
-						field.type === "date"
-					) {
-						newValue = new Date(newValue);
-					} else if (
-						config.supportsBooleans === false &&
-						typeof newValue === "number" &&
-						field.type === "boolean"
-					) {
-						newValue = newValue === 1;
-					}
-
-					if (config.customTransformOutput) {
-						newValue = config.customTransformOutput({
-							data: newValue,
-							field: newFieldName,
-							fieldAttributes: field,
-							select,
-							model: getModelName(unsafe_model),
-							schema,
-							options,
-						});
-					}
-
-					transformedData[newFieldName] = newValue;
-				}
+			if (!join || Object.keys(join).length === 0) {
+				return await transformSingleOutput(data, unsafe_model, select);
 			}
+
+			unsafe_model = getDefaultModelName(unsafe_model);
+			// for now we just transform the base model
+			// later we append the joined models to this object.
+			let transformedData: Record<string, any> = await transformSingleOutput(
+				data,
+				unsafe_model,
+				select,
+			);
+
+			// Get all the models that are required to be joined.
+			const requiredModels = Object.entries(join).map(
+				([model, joinConfig]) => ({
+					modelName: getModelName(model),
+					defaultModelName: getDefaultModelName(model),
+					joinConfig,
+				}),
+			);
+
+			if (!data) return null;
+			// Data is now the base model object directly (not wrapped under a key)
+
+			for (const {
+				modelName,
+				defaultModelName,
+				joinConfig,
+			} of requiredModels) {
+				let joinedData = await (async () => {
+					if (options.experimental?.joins) {
+						const result = data[modelName];
+						return result;
+					} else {
+						// doesn't support joins, so fallback to handleFallbackJoin
+						const result = await handleFallbackJoin({
+							baseModel: unsafe_model,
+							baseData: transformedData,
+							joinModel: modelName,
+							specificJoinConfig: joinConfig,
+						});
+						return result;
+					}
+				})();
+
+				// If joinedData is undefined, initialize it based on relationship type
+				if (joinedData === undefined || joinedData === null) {
+					joinedData = joinConfig.relation === "one-to-one" ? null : [];
+				}
+
+				if (
+					joinConfig.relation === "one-to-many" &&
+					!Array.isArray(joinedData)
+				) {
+					joinedData = [joinedData];
+				}
+
+				let transformed = [];
+
+				if (Array.isArray(joinedData)) {
+					for (const item of joinedData) {
+						const transformedItem = await transformSingleOutput(
+							item,
+							modelName,
+							[],
+						);
+						transformed.push(transformedItem);
+					}
+				} else {
+					const transformedItem = await transformSingleOutput(
+						joinedData,
+						modelName,
+						[],
+					);
+					transformed.push(transformedItem);
+				}
+
+				const result =
+					joinConfig.relation === "one-to-one" ? transformed[0] : transformed;
+				transformedData[defaultModelName] = result ?? null;
+			}
+
 			return transformedData as any;
 		};
 
@@ -676,6 +553,191 @@ export const createAdapterFactory =
 			}) as any;
 		};
 
+		const transformJoinClause = (
+			baseModel: string,
+			unsanitizedJoin: JoinOption | undefined,
+			select: string[] | undefined,
+		): { join: JoinConfig; select: string[] | undefined } | undefined => {
+			if (!unsanitizedJoin) return undefined;
+			if (Object.keys(unsanitizedJoin).length === 0) return undefined;
+			const transformedJoin: JoinConfig = {};
+			for (const [model, join] of Object.entries(unsanitizedJoin)) {
+				if (!join) continue;
+				const defaultModelName = getDefaultModelName(model);
+				const defaultBaseModelName = getDefaultModelName(baseModel);
+
+				// First, check if the joined model has FKs to the base model (forward join)
+				let foreignKeys = Object.entries(
+					schema[defaultModelName]!.fields,
+				).filter(
+					([field, fieldAttributes]) =>
+						fieldAttributes.references &&
+						getDefaultModelName(fieldAttributes.references.model) ===
+							defaultBaseModelName,
+				);
+
+				let isForwardJoin = true;
+
+				// If no forward join found, check backwards: does the base model have FKs to the joined model?
+				if (!foreignKeys.length) {
+					foreignKeys = Object.entries(
+						schema[defaultBaseModelName]!.fields,
+					).filter(
+						([field, fieldAttributes]) =>
+							fieldAttributes.references &&
+							getDefaultModelName(fieldAttributes.references.model) ===
+								defaultModelName,
+					);
+					isForwardJoin = false;
+				}
+
+				if (!foreignKeys.length) {
+					throw new BetterAuthError(
+						`No foreign key found for model ${model} and base model ${baseModel} while performing join operation.`,
+					);
+				} else if (foreignKeys.length > 1) {
+					throw new BetterAuthError(
+						`Multiple foreign keys found for model ${model} and base model ${baseModel} while performing join operation. Only one foreign key is supported.`,
+					);
+				}
+
+				const [foreignKey, foreignKeyAttributes] = foreignKeys[0]!;
+				if (!foreignKeyAttributes.references) {
+					// this should never happen, as we filter for references in the foreign keys.
+					// it's here for typescript to be happy.
+					throw new BetterAuthError(
+						`No references found for foreign key ${foreignKey} on model ${model} while performing join operation.`,
+					);
+				}
+
+				let from: string;
+				let to: string;
+				let requiredSelectField: string;
+
+				if (isForwardJoin) {
+					// joined model has FK to base model
+					// The field we need in select is the referenced field in the base model
+					requiredSelectField = foreignKeyAttributes.references.field;
+					from = getFieldName({
+						model: baseModel,
+						field: requiredSelectField,
+					});
+
+					to = getFieldName({
+						model,
+						field: foreignKey,
+					});
+				} else {
+					// base model has FK to joined model
+					// The field we need in select is the foreign key field in the base model
+					requiredSelectField = foreignKey;
+					from = getFieldName({
+						model: baseModel,
+						field: requiredSelectField,
+					});
+
+					to = getFieldName({
+						model,
+						field: foreignKeyAttributes.references.field,
+					});
+				}
+
+				// Ensure the required field is in select if select is provided
+				if (select && !select.includes(requiredSelectField)) {
+					select.push(requiredSelectField);
+				}
+
+				const isUnique =
+					to === "id" ? true : (foreignKeyAttributes.unique ?? false);
+
+				let limit: number =
+					options.advanced?.database?.defaultFindManyLimit ?? 100;
+				if (isUnique) {
+					limit = 1;
+				} else if (typeof join === "object" && typeof join.limit === "number") {
+					limit = join.limit;
+				}
+
+				transformedJoin[getModelName(model)] = {
+					on: {
+						from,
+						to,
+					},
+					limit,
+					relation: isUnique ? "one-to-one" : "one-to-many",
+				};
+			}
+			return { join: transformedJoin, select };
+		};
+
+		/**
+		 * Handle joins by making separate queries and combining results (fallback for adapters that don't support native joins).
+		 */
+		const handleFallbackJoin = async <T extends Record<string, any> | null>({
+			baseModel,
+			baseData,
+			joinModel,
+			specificJoinConfig: joinConfig,
+		}: {
+			baseModel: string;
+			baseData: T;
+			joinModel: string;
+			specificJoinConfig: JoinConfig[number];
+		}) => {
+			if (!baseData) return baseData;
+			const modelName = getModelName(joinModel);
+			const field = joinConfig.on.to;
+			const value =
+				baseData[
+					getDefaultFieldName({ field: joinConfig.on.from, model: baseModel })
+				];
+
+			if (value === null || value === undefined) {
+				// If there is no value, it could mean that the query used a `select` clause that didn't include the field.
+				// or the query result is purely empty.
+				// In any case, we return null/empty array.
+				return joinConfig.relation === "one-to-one" ? null : [];
+			}
+			let result: Record<string, any> | Record<string, any>[] | null;
+			const where = transformWhereClause({
+				model: modelName,
+				where: [
+					{
+						field,
+						value,
+						operator: "eq",
+						connector: "AND",
+					},
+				],
+			});
+			try {
+				if (joinConfig.relation === "one-to-one") {
+					result = await adapterInstance.findOne<Record<string, any>>({
+						model: modelName,
+						where: where,
+					});
+				} else {
+					const limit =
+						joinConfig.limit ??
+						options.advanced?.database?.defaultFindManyLimit ??
+						100;
+					result = await adapterInstance.findMany<Record<string, any>>({
+						model: modelName,
+						where: where,
+						limit,
+					});
+				}
+			} catch (error) {
+				logger.error(`Failed to query fallback join for model ${modelName}:`, {
+					where,
+					limit: joinConfig.limit,
+				});
+				console.error(error);
+				throw error;
+			}
+			return result;
+		};
+
 		const adapterInstance = customAdapter({
 			options,
 			schema,
@@ -775,7 +837,12 @@ export const createAdapterFactory =
 				);
 				let transformed = res as any;
 				if (!config.disableTransformOutput) {
-					transformed = await transformOutput(res as any, unsafeModel, select);
+					transformed = await transformOutput(
+						res as any,
+						unsafeModel,
+						select,
+						undefined,
+					);
 				}
 				debugLog(
 					{ method: "create" },
@@ -831,7 +898,12 @@ export const createAdapterFactory =
 				);
 				let transformed = res as any;
 				if (!config.disableTransformOutput) {
-					transformed = await transformOutput(res as any, unsafeModel);
+					transformed = await transformOutput(
+						res as any,
+						unsafeModel,
+						undefined,
+						undefined,
+					);
 				}
 				debugLog(
 					{ method: "update" },
@@ -898,10 +970,12 @@ export const createAdapterFactory =
 				model: unsafeModel,
 				where: unsafeWhere,
 				select,
+				join: unsafeJoin,
 			}: {
 				model: string;
 				where: Where[];
 				select?: string[];
+				join?: JoinOption;
 			}) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
@@ -911,16 +985,35 @@ export const createAdapterFactory =
 					where: unsafeWhere,
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
+				let join: JoinConfig | undefined;
+				let passJoinToAdapter = true;
+				if (!config.disableTransformJoin) {
+					const result = transformJoinClause(unsafeModel, unsafeJoin, select);
+					if (result) {
+						join = result.join;
+						select = result.select;
+					}
+					// If adapter doesn't support joins and we have joins, don't pass them to the adapter
+					const experimentalJoins = options.experimental?.joins;
+					if (!experimentalJoins && join && Object.keys(join).length > 0) {
+						passJoinToAdapter = false;
+					}
+				} else {
+					// assume it's already transformed if transformation is disabled
+					join = unsafeJoin as never as JoinConfig;
+				}
 				debugLog(
 					{ method: "findOne" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
 					`${formatMethod("findOne")}:`,
-					{ model, where, select },
+					{ model, where, select, join },
 				);
+
 				const res = await adapterInstance.findOne<T>({
 					model,
 					where,
 					select,
+					join: passJoinToAdapter ? join : undefined,
 				});
 				debugLog(
 					{ method: "findOne" },
@@ -928,9 +1021,11 @@ export const createAdapterFactory =
 					`${formatMethod("findOne")} ${formatAction("DB Result")}:`,
 					{ model, data: res },
 				);
+
+				// Handle fallback join if adapter doesn't support joins
 				let transformed = res as any;
 				if (!config.disableTransformOutput) {
-					transformed = await transformOutput(res as any, unsafeModel, select);
+					transformed = await transformOutput(res, unsafeModel, select, join);
 				}
 				debugLog(
 					{ method: "findOne" },
@@ -946,12 +1041,14 @@ export const createAdapterFactory =
 				limit: unsafeLimit,
 				sortBy,
 				offset,
+				join: unsafeJoin,
 			}: {
 				model: string;
 				where?: Where[];
 				limit?: number;
 				sortBy?: { field: string; direction: "asc" | "desc" };
 				offset?: number;
+				join?: JoinOption;
 			}) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
@@ -965,11 +1062,31 @@ export const createAdapterFactory =
 					where: unsafeWhere,
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
+				let join: JoinConfig | undefined;
+				let passJoinToAdapter = true;
+				if (!config.disableTransformJoin) {
+					const result = transformJoinClause(
+						unsafeModel,
+						unsafeJoin,
+						undefined,
+					);
+					if (result) {
+						join = result.join;
+					}
+					// If adapter doesn't support joins and we have joins, don't pass them to the adapter
+					const experimentalJoins = options.experimental?.joins;
+					if (!experimentalJoins && join && Object.keys(join).length > 0) {
+						passJoinToAdapter = false;
+					}
+				} else {
+					// assume it's already transformed if transformation is disabled
+					join = unsafeJoin as never as JoinConfig;
+				}
 				debugLog(
 					{ method: "findMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
 					`${formatMethod("findMany")}:`,
-					{ model, where, limit, sortBy, offset },
+					{ model, where, limit, sortBy, offset, join },
 				);
 				const res = await adapterInstance.findMany<T>({
 					model,
@@ -977,6 +1094,7 @@ export const createAdapterFactory =
 					limit: limit,
 					sortBy,
 					offset,
+					join: passJoinToAdapter ? join : undefined,
 				});
 				debugLog(
 					{ method: "findMany" },
@@ -984,12 +1102,16 @@ export const createAdapterFactory =
 					`${formatMethod("findMany")} ${formatAction("DB Result")}:`,
 					{ model, data: res },
 				);
+
 				let transformed = res as any;
 				if (!config.disableTransformOutput) {
 					transformed = await Promise.all(
-						res.map(async (r) => await transformOutput(r as any, unsafeModel)),
+						res.map(async (r: Record<string, any>) => {
+							return await transformOutput(r, unsafeModel, undefined, join);
+						}),
 					);
 				}
+
 				debugLog(
 					{ method: "findMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 3)}`,
