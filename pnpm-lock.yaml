@@ -1308,6 +1308,9 @@ importers:
       better-auth:
         specifier: workspace:*
         version: link:../better-auth
+      better-call:
+        specifier: 'catalog:'
+        version: 1.0.26
       zod:
         specifier: ^4.1.5
         version: 4.1.12
@@ -18227,7 +18230,9 @@ snapshots:
       metro-runtime: 0.83.3
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
     optional: true
 
   '@react-native/normalize-colors@0.74.89': {}
