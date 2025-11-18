@@ -1,6 +1,6 @@
 ---
-title: Migrating from NextAuth.js to Better Auth
-description: A step-by-step guide to transitioning from NextAuth.js to Better Auth.
+title: Migrating from Auth.js to Better Auth
+description: A step-by-step guide to transitioning from Auth.js to Better Auth.
 ---
 
 ## Introduction
@@ -8,8 +8,6 @@ description: A step-by-step guide to transitioning from NextAuth.js to Better Au
 In this guide, we'll walk through the steps to migrate a project from [Auth.js](https://authjs.dev/) (formerly [NextAuth.js](https://next-auth.js.org/)) to Better Auth. Since these projects have different design philosophies, the migration requires careful planning and work. If your current setup is working well, there's no urgent need to migrate. We continue to handle security patches and critical issues for Auth.js.
 
 However, if you're starting a new project or facing challenges with your current setup, we strongly recommend using Better Auth. Our roadmap includes features previously exclusive to Auth.js, and we hope this will unite the ecosystem more strongly without causing fragmentation.
-
----
 
 <Steps>
 <Step>
@@ -19,8 +17,8 @@ Before starting the migration process, set up Better Auth in your project. Follo
 
 For example, if you use the GitHub OAuth provider, here is a comparison of the `auth.ts` file.
 
-<Tabs items={["NextAuth.js", "Better Auth"]}>
-<Tab value="NextAuth.js">
+<Tabs items={["Auth.js", "Better Auth"]}>
+<Tab value="Auth.js">
 ```ts 
 import NextAuth from "next-auth"
 import GitHub from "next-auth/providers/github"
@@ -48,7 +46,7 @@ export const auth = betterAuth({
 </Tabs>
 
 <Callout type="info">
-Now Better Auth supports stateless session management without any database. If you were using a Database adapter in NextAuth.js, you can refer to the [Database Adapters Section](#database-adapters) below to check the differences with Better Auth's core schema.
+Now Better Auth supports stateless session management without any database. If you were using a Database adapter in Auth.js, you can refer to the [Database models](#database-models) below to check the differences with Better Auth's core schema.
 </Callout>
 </Step>
 
@@ -69,8 +67,8 @@ export const authClient = createAuthClient()
 
 Rename the `/app/api/auth/[...nextauth]` folder to `/app/api/auth/[...all]` to avoid confusion. Then, update the `route.ts` file as follows:
 
-<Tabs items={["NextAuth.js", "Better Auth"]}>
-<Tab value="NextAuth.js">
+<Tabs items={["Auth.js", "Better Auth"]}>
+<Tab value="Auth.js">
 ```ts 
 import { handlers } from "@/lib/auth"
 
@@ -92,16 +90,16 @@ export const { POST, GET } = toNextJsHandler(auth)
 <Step>
 ## Session Management
 
-In this section, we'll look at how to manage sessions in Better Auth compared to NextAuth.js. For more information, see [here](/docs/concepts/session-management).
+In this section, we'll look at how to manage sessions in Better Auth compared to Auth.js. For more information, see [here](/docs/concepts/session-management).
 
 ### Client-side
 
 #### Sign In
 
-Here are the differences between NextAuth.js and Better Auth for signing in users. For example, with the GitHub OAuth provider:
+Here are the differences between Auth.js and Better Auth for signing in users. For example, with the GitHub OAuth provider:
 
-<Tabs items={["NextAuth.js", "Better Auth"]}>
-<Tab value="NextAuth.js">
+<Tabs items={["Auth.js", "Better Auth"]}>
+<Tab value="Auth.js">
 ```ts 
 "use client"
 
@@ -126,10 +124,10 @@ const { data, error } = await authClient.signIn.social({
 
 #### Sign Out
 
-Here are the differences between NextAuth.js and Better Auth when signing out users.
+Here are the differences between Auth.js and Better Auth when signing out users.
 
-<Tabs items={["NextAuth.js", "Better Auth"]}>
-<Tab value="NextAuth.js">
+<Tabs items={["Auth.js", "Better Auth"]}>
+<Tab value="Auth.js">
 ```ts 
 "use client"
 
@@ -145,23 +143,23 @@ signOut()
 
 import { authClient } from "@/lib/auth-client";
 
-const { data, error } = await authClient.signOut();
+const { data, error } = await authClient.signOut()
 ```
 </Tab>
 </Tabs>
 
 #### Get Session
 
-Here are the differences between NextAuth.js and Better Auth for getting the current active session.
+Here are the differences between Auth.js and Better Auth for getting the current active session.
 
-<Tabs items={["NextAuth.js", "Better Auth"]}>
-<Tab value="NextAuth.js">
+<Tabs items={["Auth.js", "Better Auth"]}>
+<Tab value="Auth.js">
 ```ts 
 "use client"
 
 import { useSession } from "next-auth/react"
 
-const { data, status, update } = useSession();
+const { data, status, update } = useSession()
 ```
 </Tab>
 
@@ -180,10 +178,10 @@ const { data, error, refetch, isPending, isRefetching } = authClient.useSession(
 
 #### Sign In
 
-Here are the differences between NextAuth.js and Better Auth for signing in users. For example, with the GitHub OAuth provider:
+Here are the differences between Auth.js and Better Auth for signing in users. For example, with the GitHub OAuth provider:
 
-<Tabs items={["NextAuth.js", "Better Auth"]}>
-<Tab value="NextAuth.js">
+<Tabs items={["Auth.js", "Better Auth"]}>
+<Tab value="Auth.js">
 ```ts 
 import { signIn } from "@/lib/auth"
 
@@ -192,38 +190,53 @@ await signIn("github")
 </Tab>
 
 <Tab value="Better Auth">
-In Better Auth, sign-in is typically triggered using the Client Instance. If you need to perform any work on the server side before or after, you can use [hooks](/docs/concepts/hooks).
+```ts
+import { auth } from "@/lib/auth";
+
+const { redirect, url } = await auth.api.signInSocial({
+  body: {
+    provider: "github",
+  },
+})
+```
 </Tab>
 </Tabs>
 
 #### Sign Out
 
-Here are the differences between NextAuth.js and Better Auth when signing out users.
+Here are the differences between Auth.js and Better Auth when signing out users.
 
-<Tabs items={["NextAuth.js", "Better Auth"]}>
-<Tab value="NextAuth.js">
+<Tabs items={["Auth.js", "Better Auth"]}>
+<Tab value="Auth.js">
 ```ts 
 import { signOut } from "@/lib/auth"
 
-await signOut();
+await signOut()
 ```
 </Tab>
 
 <Tab value="Better Auth">
-In Better Auth, sign-out is typically triggered using the Client Instance. If you need to perform any work on the server side before or after, you can use [hooks](/docs/concepts/hooks).
+```ts
+import { auth } from "@/lib/auth";
+import { headers } from "next/headers";
+
+const { success } = await auth.api.signOut({
+  headers: await headers(),
+})
+```
 </Tab>
 </Tabs>
 
 #### Get Session
 
-Here are the differences between NextAuth.js and Better Auth for getting the current active session.
+Here are the differences between Auth.js and Better Auth for getting the current active session.
 
-<Tabs items={["NextAuth.js", "Better Auth"]}>
-<Tab value="NextAuth.js">
+<Tabs items={["Auth.js", "Better Auth"]}>
+<Tab value="Auth.js">
 ```ts 
 import { auth } from "@/lib/auth";
 
-const session = await auth();
+const session = await auth()
 ```
 </Tab>
 
@@ -234,7 +247,7 @@ import { headers } from "next/headers";
 
 const session = await auth.api.getSession({
   headers: await headers(),
-});
+})
 ```
 </Tab>
 </Tabs>
@@ -245,7 +258,7 @@ const session = await auth.api.getSession({
 
 > Proxy(Middleware) is not intended for slow data fetching. While Proxy can be helpful for optimistic checks such as permission-based redirects, it should not be used as a full session management or authorization solution. - [Next.js docs](https://nextjs.org/docs/app/getting-started/proxy#use-cases)
 
-NextAuth.js offers approaches using Proxy (Middleware), but we recommend handling auth checks on each page or route rather than in a Proxy or Layout. Here is a basic example of protecting resources with Better Auth.
+Auth.js offers approaches using Proxy (Middleware), but we recommend handling auth checks on each page or route rather than in a Proxy or Layout. Here is a basic example of protecting resources with Better Auth.
 
 <Tabs items={["Client-side", "Server-side"]}>
 <Tab value="Client-side">
@@ -306,2382 +319,148 @@ export default DashboardPage;
 </Step>
 
 <Step>
-## Wrapping Up
+## Database models
 
-Now you're ready to migrate from NextAuth.js to Better Auth. For a complete implementation with multiple authentication methods, check out the [demo app](https://github.com/better-auth/better-auth/tree/canary/demo/nextjs). We offers greater flexibility and more features—be sure to explore the [documentation](/docs) to unlock its full potential.
+Both Auth.js and Better Auth provide stateless (JWT) and database session strategies. If you were using the database session strategy in Auth.js and plan to continue using it in Better Auth, you will also need to migrate your database.
 
+Just like Auth.js has database models, Better Auth also has a core schema. In this section, we'll compare the two and explore the differences between them.
+
+<Tabs items={["Auth.js", "Better Auth"]}>
+<Tab value="Auth.js">
+<Mermaid
+  chart={`
+  erDiagram
+    User ||--|{ Account : ""
+    User {
+      string id
+      string name
+      string email
+      timestamp emailVerified
+      string image
+    }
+    User ||--|{ Session : ""
+    Session {
+      string id
+      timestamp expires
+      string sessionToken
+      string userId
+    }
+    Account {
+      string id
+      string userId
+      string type
+      string provider
+      string providerAccountId
+      string refresh_token
+      string access_token
+      int expires_at
+      string token_type
+      string scope
+      string id_token
+      string session_state
+    }
+    User ||--|{ VerificationToken : ""
+    VerificationToken {
+      string identifier
+      string token
+      timestamp expires
+    }
+  `}
+/>
+</Tab>
+<Tab value="Better Auth">
+<Mermaid
+  chart={`
+  erDiagram
+    User ||--|{ Account : ""
+    User {
+      string id
+      string name
+      string email
+      boolean emailVerified
+      string image
+      timestamp createdAt
+      timestamp updatedAt
+    }
+    User ||--|{ Session : ""
+    Session {
+      string id
+      string userId
+      string token
+      timestamp expiresAt
+      string ipAddress
+      string userAgent
+      timestamp createdAt
+      timestamp updatedAt
+    }
+    Account {
+      string id
+      string userId
+      string accountId
+      string providerId
+      string accessToken
+      string refreshToken
+      timestamp accessTokenExpiresAt
+      timestamp refreshTokenExpiresAt
+      string scope
+      string idToken
+      string password
+      timestamp createdAt
+      timestamp updatedAt
+    }
+    User ||--|{ Verification : ""
+    Verification {
+      string id
+      string identifier
+      string value
+      timestamp expiresAt
+      timestamp createdAt
+      timestamp updatedAt
+    }
+  `}
+/>
+</Tab>
+</Tabs>
+
+### Comparison
+
+Table: <strong className='underline italic'>User</strong>
+- `emailVerified` uses a boolean in Better Auth, while Auth.js uses a timestamp
+- Better Auth includes `createdAt` and `updatedAt` timestamps
+
+Table: <strong className='underline italic'>Session</strong>
+- Better Auth uses `token` instead of `sessionToken`
+- Better Auth uses `expiresAt` instead of `expires`
+- Better Auth includes `ipAddress` and `userAgent` fields
+- Better Auth includes `createdAt` and `updatedAt` timestamps
+
+Table: <strong className='underline italic'>Account</strong>
+- Better Auth uses camelCase naming (e.g. `refreshToken` vs `refresh_token`)
+- Better Auth includes `accountId` to distinguish between the account ID and internal ID
+- Better Auth uses `providerId` instead of `provider`
+- Better Auth includes `accessTokenExpiresAt` and `refreshTokenExpiresAt` for token management
+- Better Auth includes `password` field to support built-in credential authentication
+- Better Auth does not have a `type` field as it's determined by the `providerId`
+- Better Auth includes `createdAt` and `updatedAt` timestamps
+
+Table: <strong className='underline italic'>VerificationToken -> Verification</strong>
+- Better Auth uses `Verification` table instead of `VerificationToken`
+- Better Auth uses `value` instead of `token` to support various verification types
+- Better Auth uses `expiresAt` instead of `expires`
+- Better Auth includes `createdAt` and `updatedAt` timestamps
 
 <Callout type="info">
-If you need help with migration, join our [community](/community) or reach out to [contact@better-auth.com](mailto:contact@better-auth.com).
+If you were using Auth.js v4, note that v5 does not introduce any breaking changes to the database schema. Optional fields like `oauth_token_secret` and `oauth_token` can be removed if you are not using them. Rarely used fields like `refresh_token_expires_in` can also be removed.
 </Callout>
+
+### Customization
+
+You may have extended the database models or implemented additional logic in Auth.js. Better Auth allows you to customize the core schema in a type-safe way. You can also define custom logic during the lifecycle of database operations. For more details, see [Concepts - Database](/docs/concepts/database). 
 </Step>
 </Steps>
 
-## <div className="border-t" />
+## Wrapping Up
 
-## Database Adapters
+Now you're ready to migrate from Auth.js to Better Auth. For a complete implementation with multiple authentication methods, check out the [Next.js Demo App](https://github.com/better-auth/better-auth/tree/canary/demo/nextjs). Better Auth offers greater flexibility and more features, so be sure to explore the [documentation](/docs) to unlock its full potential.
 
-This section compares the differences between NextAuth.js database adapters and Better Auth core schema. While this guide focuses on the core schema, you can customize the schema through the Better Auth instance. For more details, see [Concepts - Database](/docs/concepts/database).
-
-### Kysely Adapter
-
-#### PostgreSQL
-
-This section compares the Better Auth instance configured as follows with the Auth.js official documentation.
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { Pool } from "pg";
-
-export const auth = betterAuth({
-	database: new Pool({
-	connectionString: "postgres://user:password@localhost:5432/better_auth",
-	}),
-	advanced: {
-		database: {
-			generateId: "uuid",
-		},
-	},
-});
-```
-
-<Accordions>
-     <Accordion title="NextAuth.js">
-    ```sql
-CREATE TABLE "User" (
-  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  "name" TEXT, 
-  "email" TEXT UNIQUE NOT NULL, 
-  "emailVerified" TIMESTAMPTZ, 
-  "image" TEXT
-);
-CREATE TABLE "Account" (
-  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(), 
-  "userId" UUID NOT NULL REFERENCES "User"("id") ON DELETE CASCADE, 
-  "type" TEXT NOT NULL, 
-  "provider" TEXT NOT NULL, 
-  "providerAccountId" TEXT NOT NULL, 
-  "refresh_token" TEXT, 
-  "access_token" TEXT, 
-  "expires_at" BIGINT, 
-  "token_type" TEXT, 
-  "scope" TEXT, 
-  "id_token" TEXT, 
-  "session_state" TEXT
-);
-CREATE TABLE "Session" (
-  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(), 
-  "userId" UUID NOT NULL REFERENCES "User"("id") ON DELETE CASCADE, 
-  "sessionToken" TEXT UNIQUE NOT NULL, 
-  "expires" TIMESTAMPTZ NOT NULL
-);
-CREATE TABLE "VerificationToken" (
-  "identifier" TEXT NOT NULL, "token" TEXT UNIQUE NOT NULL, 
-  "expires" TIMESTAMPTZ NOT NULL
-);
-CREATE INDEX "Account_userId_index" ON "Account"("userId");
-CREATE INDEX "Session_userId_index" ON "Session"("userId");
-
-    ```
-    </Accordion>
-    <Accordion title="Better Auth">
-    ```sql
-create table "user" (
-  "id" uuid default pg_catalog.gen_random_uuid() not null primary key, 
-  "name" text not null, 
-  "email" text not null unique, 
-  "emailVerified" boolean not null, 
-  "image" text, 
-  "createdAt" timestamptz default CURRENT_TIMESTAMP not null, 
-  "updatedAt" timestamptz default CURRENT_TIMESTAMP not null
-);
-create table "session" (
-  "id" uuid default pg_catalog.gen_random_uuid() not null primary key, 
-  "expiresAt" timestamptz not null, 
-  "token" text not null unique, 
-  "createdAt" timestamptz default CURRENT_TIMESTAMP not null, 
-  "updatedAt" timestamptz not null, 
-  "ipAddress" text, 
-  "userAgent" text, 
-  "userId" uuid not null references "user" ("id") on delete cascade
-);
-create table "account" (
-  "id" uuid default pg_catalog.gen_random_uuid() not null primary key, 
-  "accountId" text not null, 
-  "providerId" text not null, 
-  "userId" uuid not null references "user" ("id") on delete cascade, 
-  "accessToken" text, 
-  "refreshToken" text, 
-  "idToken" text, 
-  "accessTokenExpiresAt" timestamptz, 
-  "refreshTokenExpiresAt" timestamptz, 
-  "scope" text, 
-  "password" text, 
-  "createdAt" timestamptz default CURRENT_TIMESTAMP not null, 
-  "updatedAt" timestamptz not null
-);
-create table "verification" (
-  "id" uuid default pg_catalog.gen_random_uuid() not null primary key, 
-  "identifier" text not null, 
-  "value" text not null, 
-  "expiresAt" timestamptz not null, 
-  "createdAt" timestamptz default CURRENT_TIMESTAMP not null, 
-  "updatedAt" timestamptz default CURRENT_TIMESTAMP not null
-);
-create index "session_userId_idx" on "session" ("userId");
-create index "account_userId_idx" on "account" ("userId");
-create index "verification_identifier_idx" on "verification" ("identifier");
-
-    ```
-    </Accordion>
-</Accordions>
-
-<br/>
-
-<div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-<div>
-
-**NextAuth.js: `User`**
-
-<DatabaseTable
-  fields={[
-    { name: "id", type: "UUID", isPrimaryKey: true, description: "Primary key" },
-    { name: "name", type: "TEXT", description: "User's name" },
-    { name: "email", type: "TEXT", description: "User's email" },
-    { name: "emailVerified", type: "TIMESTAMPTZ", description: "Email verification timestamp" },
-    { name: "image", type: "TEXT", isOptional: true, description: "User's profile image" },
-    { isEmpty: true, description: "Not in NextAuth" },
-    { isEmpty: true, description: "Not in NextAuth" },
-  ]}
-/>
-
-</div>
-<div>
-
-**Better Auth: `user`**
-
-<DatabaseTable
-  fields={[
-    { name: "id", type: "UUID", isPrimaryKey: true, description: "Primary key" },
-    { name: "name", type: "TEXT", description: "User's name" },
-    { name: "email", type: "TEXT", description: "User's email" },
-    { name: "emailVerified", type: "BOOLEAN", description: "Email verification status" },
-    { name: "image", type: "TEXT", isOptional: true, description: "User's profile image" },
-    { name: "createdAt", type: "TIMESTAMPTZ", description: "Creation timestamp" },
-    { name: "updatedAt", type: "TIMESTAMPTZ", description: "Last update timestamp" },
-  ]}
-/>
-
-</div>
-</div>
-
-**Migration guides:**
-- Rename table: `User` → `user`
-- Make `name` NOT NULL (set default value for existing NULL values first)
-- Convert `emailVerified`: TIMESTAMPTZ → BOOLEAN (NULL → FALSE, date → TRUE)
-- Add `createdAt` with DEFAULT CURRENT_TIMESTAMP
-- Add `updatedAt` with DEFAULT CURRENT_TIMESTAMP
-
----
-
-<div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-<div>
-
-**NextAuth.js: `Session`**
-
-<DatabaseTable
-  fields={[
-    { name: "id", type: "UUID", isPrimaryKey: true, description: "Primary key" },
-    { name: "userId", type: "UUID", isForeignKey: true, description: "Reference to User" },
-    { name: "sessionToken", type: "TEXT", description: "Unique session token" },
-    { name: "expires", type: "TIMESTAMPTZ", description: "Session expiration time" },
-    { isEmpty: true, description: "Not in NextAuth" },
-    { isEmpty: true, description: "Not in NextAuth" },
-    { isEmpty: true, description: "Not in NextAuth" },
-    { isEmpty: true, description: "Not in NextAuth" },
-  ]}
-/>
-
-</div>
-<div>
-
-**Better Auth: `session`**
-
-<DatabaseTable
-  fields={[
-    { name: "id", type: "UUID", isPrimaryKey: true, description: "Primary key" },
-    { name: "userId", type: "UUID", isForeignKey: true, description: "Reference to user" },
-    { name: "token", type: "TEXT", description: "Unique session token" },
-    { name: "expiresAt", type: "TIMESTAMPTZ", description: "Session expiration time" },
-    { name: "ipAddress", type: "TEXT", isOptional: true, description: "IP address of the session" },
-    { name: "userAgent", type: "TEXT", isOptional: true, description: "User agent of the session" },
-    { name: "createdAt", type: "TIMESTAMPTZ", description: "Creation timestamp" },
-    { name: "updatedAt", type: "TIMESTAMPTZ", description: "Last update timestamp" },
-  ]}
-/>
-
-</div>
-</div>
-
-**Migration guides:**
-- Rename table: `Session` → `session`
-- Rename column: `sessionToken` → `token`
-- Rename column: `expires` → `expiresAt`
-- Add `ipAddress` for session tracking
-- Add `userAgent` for session tracking
-- Add `createdAt` with DEFAULT CURRENT_TIMESTAMP
-- Add `updatedAt`
-- Rename index: `Session_userId_index` → `session_userId_idx`
-
----
-
-<div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-<div>
-
-**NextAuth.js: `Account`**
-
-<DatabaseTable
-  fields={[
-    { name: "id", type: "UUID", isPrimaryKey: true, description: "Primary key" },
-    { name: "userId", type: "UUID", isForeignKey: true, description: "Reference to User" },
-    { name: "type", type: "TEXT", description: "Account type" },
-    { name: "provider", type: "TEXT", description: "OAuth provider" },
-    { name: "providerAccountId", type: "TEXT", description: "Provider account ID" },
-    { name: "refresh_token", type: "TEXT", isOptional: true, description: "OAuth refresh token" },
-    { name: "access_token", type: "TEXT", isOptional: true, description: "OAuth access token" },
-    { name: "expires_at", type: "BIGINT", isOptional: true, description: "Token expiration (unix timestamp)" },
-    { name: "token_type", type: "TEXT", isOptional: true, description: "Token type" },
-    { name: "scope", type: "TEXT", isOptional: true, description: "OAuth scope" },
-    { name: "id_token", type: "TEXT", isOptional: true, description: "OAuth ID token" },
-    { name: "session_state", type: "TEXT", isOptional: true, description: "Session state" },
-  ]}
-/>
-
-</div>
-<div>
-
-**Better Auth: `account`**
-
-<DatabaseTable
-  fields={[
-    { name: "id", type: "UUID", isPrimaryKey: true, description: "Primary key" },
-    { name: "userId", type: "UUID", isForeignKey: true, description: "Reference to user" },
-    { isEmpty: true, description: "Removed in Better Auth" },
-    { name: "providerId", type: "TEXT", description: "OAuth provider ID (was: provider)" },
-    { name: "accountId", type: "TEXT", description: "Provider account ID (was: providerAccountId)" },
-    { name: "refreshToken", type: "TEXT", isOptional: true, description: "OAuth refresh token (was: refresh_token)" },
-    { name: "accessToken", type: "TEXT", isOptional: true, description: "OAuth access token (was: access_token)" },
-    { name: "accessTokenExpiresAt", type: "TIMESTAMPTZ", isOptional: true, description: "Access token expiration (was: expires_at)" },
-    { isEmpty: true, description: "Removed in Better Auth" },
-    { name: "scope", type: "TEXT", isOptional: true, description: "OAuth scope" },
-    { name: "idToken", type: "TEXT", isOptional: true, description: "OAuth ID token (was: id_token)" },
-    { isEmpty: true, description: "Removed in Better Auth" },
-    { name: "refreshTokenExpiresAt", type: "TIMESTAMPTZ", isOptional: true, description: "Refresh token expiration (new)" },
-    { name: "password", type: "TEXT", isOptional: true, description: "Hashed password for credentials (new)" },
-    { name: "createdAt", type: "TIMESTAMPTZ", description: "Creation timestamp (new)" },
-    { name: "updatedAt", type: "TIMESTAMPTZ", description: "Last update timestamp (new)" },
-  ]}
-/>
-
-</div>
-</div>
-
-**Migration guides:**
-- Rename table: `Account` → `account`
-- Drop column: `type` (not used in Better Auth)
-- Rename column: `provider` → `providerId`
-- Rename column: `providerAccountId` → `accountId`
-- Rename column: `refresh_token` → `refreshToken`
-- Rename column: `access_token` → `accessToken`
-- Rename and convert: `expires_at` (BIGINT) → `accessTokenExpiresAt` (TIMESTAMPTZ)
-- Drop column: `token_type` (not used in Better Auth)
-- Drop column: `session_state` (not used in Better Auth)
-- Rename column: `id_token` → `idToken`
-- Add `refreshTokenExpiresAt` for refresh token tracking
-- Add `password` for credential-based authentication
-- Add `createdAt` with DEFAULT CURRENT_TIMESTAMP
-- Add `updatedAt`
-- Rename index: `Account_userId_index` → `account_userId_idx`
-
----
-
-<div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-<div>
-
-**NextAuth.js: `VerificationToken`**
-
-<DatabaseTable
-  fields={[
-    { isEmpty: true, description: "Not in NextAuth (no primary key)" },
-    { name: "identifier", type: "TEXT", description: "Verification identifier (e.g., email)" },
-    { name: "token", type: "TEXT", description: "Verification token" },
-    { name: "expires", type: "TIMESTAMPTZ", description: "Token expiration time" },
-    { isEmpty: true, description: "Not in NextAuth" },
-    { isEmpty: true, description: "Not in NextAuth" },
-  ]}
-/>
-
-</div>
-<div>
-
-**Better Auth: `verification`**
-
-<DatabaseTable
-  fields={[
-    { name: "id", type: "UUID", isPrimaryKey: true, description: "Primary key" },
-    { name: "identifier", type: "TEXT", description: "Verification identifier (e.g., email)" },
-    { name: "value", type: "TEXT", description: "Verification token value" },
-    { name: "expiresAt", type: "TIMESTAMPTZ", description: "Token expiration time" },
-    { name: "createdAt", type: "TIMESTAMPTZ", description: "Creation timestamp" },
-    { name: "updatedAt", type: "TIMESTAMPTZ", description: "Last update timestamp" },
-  ]}
-/>
-
-</div>
-</div>
-
-**Migration guides:**
-- Rename table: `VerificationToken` → `verification`
-- Add `id` as UUID PRIMARY KEY (NextAuth has no primary key)
-- Rename column: `token` → `value`
-- Rename column: `expires` → `expiresAt`
-- Add `createdAt` with DEFAULT CURRENT_TIMESTAMP
-- Add `updatedAt` with DEFAULT CURRENT_TIMESTAMP
-- Add index: `verification_identifier_idx` on `identifier`
-
----
-
-#### MySQL
-
-This section compares the Better Auth instance configured as follows with the Auth.js official documentation.
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { createPool } from "mysql2/promise";
-
-export const auth = betterAuth({
-	database: createPool({
-	host: "localhost",
-	user: "user",
-	password: "password",
-	database: "better_auth",
-	timezone: "Z", // Important to ensure consistent timezone values
-    });
-	advanced: {
-		database: {
-			generateId: "uuid",
-		},
-	},
-});
-```
-<Accordions>
-     <Accordion title="NextAuth.js">
-    ```sql
-CREATE TABLE `User` (
-    `id` VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    `name` VARCHAR(255),
-    `email` VARCHAR(255) UNIQUE NOT NULL,
-    `emailVerified` TIMESTAMP,
-    `image` TEXT
-);
-CREATE TABLE `Account` (
-    `id` VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    `userId` VARCHAR(36) NOT NULL,
-    `type` VARCHAR(255) NOT NULL,
-    `provider` VARCHAR(255) NOT NULL,
-    `providerAccountId` VARCHAR(255) NOT NULL,
-    `refresh_token` TEXT,
-    `access_token` TEXT,
-    `expires_at` BIGINT,
-    `token_type` VARCHAR(255),
-    `scope` TEXT,
-    `id_token` TEXT,
-    `session_state` TEXT,
-    FOREIGN KEY (`userId`) REFERENCES `User`(`id`) ON DELETE CASCADE
-);
-CREATE TABLE `Session` (
-    `id` VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    `userId` VARCHAR(36) NOT NULL,
-    `sessionToken` VARCHAR(255) UNIQUE NOT NULL,
-    `expires` TIMESTAMP NOT NULL,
-    FOREIGN KEY (`userId`) REFERENCES `User`(`id`) ON DELETE CASCADE
-);
-CREATE TABLE `VerificationToken` (
-    `identifier` VARCHAR(255) NOT NULL,
-    `token` VARCHAR(255) UNIQUE NOT NULL,
-    `expires` TIMESTAMP NOT NULL
-);
-CREATE INDEX `Account_userId_index` ON `Account`(`userId`);
-CREATE INDEX `Session_userId_index` ON `Session`(`userId`);
-    ```
-    </Accordion>
-    <Accordion title="Better Auth">
-    ```sql
-create table `user` (
-  `id` varchar(36) not null primary key, 
-  `name` varchar(255) not null, 
-  `email` varchar(255) not null unique, 
-  `emailVerified` boolean not null, 
-  `image` text, 
-  `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, 
-  `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null
-);
-create table `session` (
-  `id` varchar(36) not null primary key, 
-  `expiresAt` timestamp(3) not null, 
-  `token` varchar(255) not null unique, 
-  `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, 
-  `updatedAt` timestamp(3) not null, 
-  `ipAddress` text, 
-  `userAgent` text, 
-  `userId` varchar(36) not null references `user` (`id`) on delete cascade
-);
-create table `account` (
-  `id` varchar(36) not null primary key, 
-  `accountId` text not null, 
-  `providerId` text not null, 
-  `userId` varchar(36) not null references `user` (`id`) on delete cascade, 
-  `accessToken` text, 
-  `refreshToken` text, 
-  `idToken` text, 
-  `accessTokenExpiresAt` timestamp(3), 
-  `refreshTokenExpiresAt` timestamp(3), 
-  `scope` text, 
-  `password` text, 
-  `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, 
-  `updatedAt` timestamp(3) not null
-);
-create table `verification` (
-  `id` varchar(36) not null primary key, 
-  `identifier` varchar(255) not null, 
-  `value` text not null, 
-  `expiresAt` timestamp(3) not null, 
-  `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, 
-  `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null
-);
-create index `session_userId_idx` on `session` (`userId`);
-create index `account_userId_idx` on `account` (`userId`);
-create index `verification_identifier_idx` on `verification` (`identifier`);
-    ```
-    </Accordion>
-</Accordions>
-
-<br/>
-
-<div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-<div>
-
-**NextAuth.js: `User`**
-
-<DatabaseTable
-  fields={[
-    { name: "id", type: "VARCHAR(36)", isPrimaryKey: true, description: "Primary key" },
-    { name: "name", type: "VARCHAR(255)", description: "User's name" },
-    { name: "email", type: "VARCHAR(255)", description: "User's email" },
-    { name: "emailVerified", type: "TIMESTAMP", description: "Email verification timestamp" },
-    { name: "image", type: "TEXT", isOptional: true, description: "User's profile image" },
-    { isEmpty: true, description: "Not in NextAuth" },
-    { isEmpty: true, description: "Not in NextAuth" },
-  ]}
-/>
-
-</div>
-<div>
-
-**Better Auth: `user`**
-
-<DatabaseTable
-  fields={[
-    { name: "id", type: "VARCHAR(36)", isPrimaryKey: true, description: "Primary key" },
-    { name: "name", type: "VARCHAR(255)", description: "User's name" },
-    { name: "email", type: "VARCHAR(255)", description: "User's email" },
-    { name: "emailVerified", type: "BOOLEAN", description: "Email verification status" },
-    { name: "image", type: "TEXT", isOptional: true, description: "User's profile image" },
-    { name: "createdAt", type: "TIMESTAMP(3)", description: "Creation timestamp (millisecond precision)" },
-    { name: "updatedAt", type: "TIMESTAMP(3)", description: "Last update timestamp (millisecond precision)" },
-  ]}
-/>
-
-</div>
-</div>
-
-**Migration guides:**
-- Rename table: `User` → `user`
-- Make `name` NOT NULL (set default value for existing NULL values first)
-- Convert `emailVerified`: TIMESTAMP → BOOLEAN (NULL → FALSE, date → TRUE)
-- Add `createdAt` with DEFAULT CURRENT_TIMESTAMP(3)
-- Add `updatedAt` with DEFAULT CURRENT_TIMESTAMP(3)
-
----
-
-<div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-<div>
-
-**NextAuth.js: `Session`**
-
-<DatabaseTable
-  fields={[
-    { name: "id", type: "VARCHAR(36)", isPrimaryKey: true, description: "Primary key" },
-    { name: "userId", type: "VARCHAR(36)", isForeignKey: true, description: "Reference to User" },
-    { name: "sessionToken", type: "VARCHAR(255)", description: "Unique session token" },
-    { name: "expires", type: "TIMESTAMP", description: "Session expiration time" },
-    { isEmpty: true, description: "Not in NextAuth" },
-    { isEmpty: true, description: "Not in NextAuth" },
-    { isEmpty: true, description: "Not in NextAuth" },
-    { isEmpty: true, description: "Not in NextAuth" },
-  ]}
-/>
-
-</div>
-<div>
-
-**Better Auth: `session`**
-
-<DatabaseTable
-  fields={[
-    { name: "id", type: "VARCHAR(36)", isPrimaryKey: true, description: "Primary key" },
-    { name: "userId", type: "VARCHAR(36)", isForeignKey: true, description: "Reference to user" },
-    { name: "token", type: "VARCHAR(255)", description: "Unique session token" },
-    { name: "expiresAt", type: "TIMESTAMP(3)", description: "Session expiration time" },
-    { name: "ipAddress", type: "TEXT", isOptional: true, description: "IP address of the session" },
-    { name: "userAgent", type: "TEXT", isOptional: true, description: "User agent of the session" },
-    { name: "createdAt", type: "TIMESTAMP(3)", description: "Creation timestamp" },
-    { name: "updatedAt", type: "TIMESTAMP(3)", description: "Last update timestamp" },
-  ]}
-/>
-
-</div>
-</div>
-
-**Migration guides:**
-- Rename table: `Session` → `session`
-- Rename column: `sessionToken` → `token`
-- Rename column: `expires` → `expiresAt`
-- Add `ipAddress` for session tracking
-- Add `userAgent` for session tracking
-- Add `createdAt` with DEFAULT CURRENT_TIMESTAMP
-- Add `updatedAt`
-- Rename index: `Session_userId_index` → `session_userId_idx`
-
----
-
-<div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-<div>
-
-**NextAuth.js: `Account`**
-
-<DatabaseTable
-  fields={[
-    { name: "id", type: "VARCHAR(36)", isPrimaryKey: true, description: "Primary key" },
-    { name: "userId", type: "VARCHAR(36)", isForeignKey: true, description: "Reference to User" },
-    { name: "type", type: "VARCHAR(255)", description: "Account type" },
-    { name: "provider", type: "VARCHAR(255)", description: "OAuth provider" },
-    { name: "providerAccountId", type: "VARCHAR(255)", description: "Provider account ID" },
-    { name: "refresh_token", type: "TEXT", isOptional: true, description: "OAuth refresh token" },
-    { name: "access_token", type: "TEXT", isOptional: true, description: "OAuth access token" },
-    { name: "expires_at", type: "BIGINT", isOptional: true, description: "Token expiration (unix timestamp)" },
-    { name: "token_type", type: "VARCHAR(255)", isOptional: true, description: "Token type" },
-    { name: "scope", type: "TEXT", isOptional: true, description: "OAuth scope" },
-    { name: "id_token", type: "TEXT", isOptional: true, description: "OAuth ID token" },
-    { name: "session_state", type: "TEXT", isOptional: true, description: "Session state" },
-  ]}
-/>
-
-</div>
-<div>
-
-**Better Auth: `account`**
-
-<DatabaseTable
-  fields={[
-    { name: "id", type: "VARCHAR(36)", isPrimaryKey: true, description: "Primary key" },
-    { name: "userId", type: "VARCHAR(36)", isForeignKey: true, description: "Reference to user" },
-    { isEmpty: true, description: "Removed in Better Auth" },
-    { name: "providerId", type: "TEXT", description: "OAuth provider ID (was: provider)" },
-    { name: "accountId", type: "TEXT", description: "Provider account ID (was: providerAccountId)" },
-    { name: "refreshToken", type: "TEXT", isOptional: true, description: "OAuth refresh token (was: refresh_token)" },
-    { name: "accessToken", type: "TEXT", isOptional: true, description: "OAuth access token (was: access_token)" },
-    { name: "accessTokenExpiresAt", type: "TIMESTAMP(3)", isOptional: true, description: "Access token expiration (was: expires_at)" },
-    { isEmpty: true, description: "Removed in Better Auth" },
-    { name: "scope", type: "TEXT", isOptional: true, description: "OAuth scope" },
-    { name: "idToken", type: "TEXT", isOptional: true, description: "OAuth ID token (was: id_token)" },
-    { isEmpty: true, description: "Removed in Better Auth" },
-    { name: "refreshTokenExpiresAt", type: "TIMESTAMP(3)", isOptional: true, description: "Refresh token expiration (new)" },
-    { name: "password", type: "TEXT", isOptional: true, description: "Hashed password for credentials (new)" },
-    { name: "createdAt", type: "TIMESTAMP(3)", description: "Creation timestamp (new)" },
-    { name: "updatedAt", type: "TIMESTAMP(3)", description: "Last update timestamp (new)" },
-  ]}
-/>
-
-</div>
-</div>
-
-**Migration guides:**
-- Rename table: `Account` → `account`
-- Drop column: `type` (not used in Better Auth)
-- Rename column: `provider` → `providerId`
-- Rename column: `providerAccountId` → `accountId`
-- Rename column: `refresh_token` → `refreshToken`
-- Rename column: `access_token` → `accessToken`
-- Rename and convert: `expires_at` (BIGINT) → `accessTokenExpiresAt` (TIMESTAMP)
-- Drop column: `token_type` (not used in Better Auth)
-- Drop column: `session_state` (not used in Better Auth)
-- Rename column: `id_token` → `idToken`
-- Add `refreshTokenExpiresAt` for refresh token tracking
-- Add `password` for credential-based authentication
-- Add `createdAt` with DEFAULT CURRENT_TIMESTAMP
-- Add `updatedAt`
-- Rename index: `Account_userId_index` → `account_userId_idx`
-
----
-
-<div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-<div>
-
-**NextAuth.js: `VerificationToken`**
-
-<DatabaseTable
-  fields={[
-    { isEmpty: true, description: "Not in NextAuth (no primary key)" },
-    { name: "identifier", type: "VARCHAR(255)", description: "Verification identifier (e.g., email)" },
-    { name: "token", type: "VARCHAR(255)", description: "Verification token" },
-    { name: "expires", type: "TIMESTAMP", description: "Token expiration time" },
-    { isEmpty: true, description: "Not in NextAuth" },
-    { isEmpty: true, description: "Not in NextAuth" },
-  ]}
-/>
-
-</div>
-<div>
-
-**Better Auth: `verification`**
-
-<DatabaseTable
-  fields={[
-    { name: "id", type: "VARCHAR(36)", isPrimaryKey: true, description: "Primary key" },
-    { name: "identifier", type: "VARCHAR(255)", description: "Verification identifier (e.g., email)" },
-    { name: "value", type: "TEXT", description: "Verification token value" },
-    { name: "expiresAt", type: "TIMESTAMP(3)", description: "Token expiration time" },
-    { name: "createdAt", type: "TIMESTAMP(3)", description: "Creation timestamp" },
-    { name: "updatedAt", type: "TIMESTAMP(3)", description: "Last update timestamp" },
-  ]}
-/>
-
-</div>
-</div>
-
-**Migration guides:**
-- Rename table: `VerificationToken` → `verification`
-- Add `id` as VARCHAR(36) PRIMARY KEY (NextAuth has no primary key)
-- Rename column: `token` → `value`
-- Rename column: `expires` → `expiresAt`
-- Add `createdAt` with DEFAULT CURRENT_TIMESTAMP
-- Add `updatedAt` with DEFAULT CURRENT_TIMESTAMP
-- Add index: `verification_identifier_idx` on `identifier`
-
----
-
-#### SQLite
-
-This section compares the Better Auth instance configured as follows with the Auth.js official documentation.
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import Database from "better-sqlite3";
-
-export const auth = betterAuth({
-	database: new Database("database.sqlite");
-	advanced: {
-		database: {
-			generateId: "uuid",
-		},
-	},
-});
-```
-
-<Accordions>
-     <Accordion title="NextAuth.js">
-    ```sql
-CREATE TABLE "User" (
-    "id" TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
-    "name" TEXT,
-    "email" TEXT UNIQUE NOT NULL,
-    "emailVerified" INTEGER,
-    "image" TEXT
-);
-CREATE TABLE "Account" (
-    "id" TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
-    "userId" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
-    "type" TEXT NOT NULL,
-    "provider" TEXT NOT NULL,
-    "providerAccountId" TEXT NOT NULL,
-    "refresh_token" TEXT,
-    "access_token" TEXT,
-    "expires_at" INTEGER,
-    "token_type" TEXT,
-    "scope" TEXT,
-    "id_token" TEXT,
-    "session_state" TEXT
-);
-CREATE TABLE "Session" (
-    "id" TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
-    "userId" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
-    "sessionToken" TEXT UNIQUE NOT NULL,
-    "expires" INTEGER NOT NULL
-);
-CREATE TABLE "VerificationToken" (
-    "identifier" TEXT NOT NULL,
-    "token" TEXT UNIQUE NOT NULL,
-    "expires" INTEGER NOT NULL
-);
-CREATE INDEX "Account_userId_index" ON "Account"("userId");
-CREATE INDEX "Session_userId_index" ON "Session"("userId");
-    ```
-    </Accordion>
-    <Accordion title="Better Auth">
-    ```sql
-create table "user" (
-  "id" text not null primary key,
-  "name" text not null, 
-  "email" text not null unique,
-  "emailVerified" integer not null, 
-  "image" text, "createdAt" date not null, 
-  "updatedAt" date not null
-);
-create table "session" (
-  "id" text not null primary key, 
-  "expiresAt" date not null, 
-  "token" text not null unique, 
-  "createdAt" date not null, 
-  "updatedAt" date not null, 
-  "ipAddress" text, 
-  "userAgent" text, 
-  "userId" text not null references "user" ("id") on delete cascade
-);
-create table "account" (
-  "id" text not null primary key, 
-  "accountId" text not null, 
-  "providerId" text not null, 
-  "userId" text not null references "user" ("id") on delete cascade, 
-  "accessToken" text, 
-  "refreshToken" text, 
-  "idToken" text, 
-  "accessTokenExpiresAt" date, 
-  "refreshTokenExpiresAt" date, 
-  "scope" text, 
-  "password" text, 
-  "createdAt" date not null, 
-  "updatedAt" date not null
-);
-create table "verification" (
-  "id" text not null primary key, "identifier" text not null, 
-  "value" text not null, "expiresAt" date not null, 
-  "createdAt" date not null, "updatedAt" date not null
-);
-create index "session_userId_idx" on "session" ("userId");
-create index "account_userId_idx" on "account" ("userId");
-create index "verification_identifier_idx" on "verification" ("identifier");
-    ```
-    </Accordion>
-</Accordions>
-
-<br/>
-
-<div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-<div>
-
-**NextAuth.js: `User`**
-
-<DatabaseTable
-  fields={[
-    { name: "id", type: "TEXT", isPrimaryKey: true, description: "Primary key" },
-    { name: "name", type: "TEXT", description: "User's name" },
-    { name: "email", type: "TEXT", description: "User's email" },
-    { name: "emailVerified", type: "INTEGER", description: "Email verification timestamp (unix)" },
-    { name: "image", type: "TEXT", isOptional: true, description: "User's profile image" },
-    { isEmpty: true, description: "Not in NextAuth" },
-    { isEmpty: true, description: "Not in NextAuth" },
-  ]}
-/>
-
-</div>
-<div>
-
-**Better Auth: `user`**
-
-<DatabaseTable
-  fields={[
-    { name: "id", type: "TEXT", isPrimaryKey: true, description: "Primary key" },
-    { name: "name", type: "TEXT", description: "User's name" },
-    { name: "email", type: "TEXT", description: "User's email" },
-    { name: "emailVerified", type: "INTEGER", description: "Email verification status (0 or 1)" },
-    { name: "image", type: "TEXT", isOptional: true, description: "User's profile image" },
-    { name: "createdAt", type: "DATE", description: "Creation date" },
-    { name: "updatedAt", type: "DATE", description: "Last update date" },
-  ]}
-/>
-
-</div>
-</div>
-
-**Migration guides:**
-- Rename table: `User` → `user`
-- Make `name` NOT NULL (set default value for existing NULL values first)
-- Convert `emailVerified`: INTEGER timestamp → INTEGER boolean (NULL → 0, timestamp → 1)
-- Add `createdAt` as DATE type
-- Add `updatedAt` as DATE type
-
----
-
-<div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-<div>
-
-**NextAuth.js: `Session`**
-
-<DatabaseTable
-  fields={[
-    { name: "id", type: "TEXT", isPrimaryKey: true, description: "Primary key" },
-    { name: "userId", type: "TEXT", isForeignKey: true, description: "Reference to User" },
-    { name: "sessionToken", type: "TEXT", description: "Unique session token" },
-    { name: "expires", type: "INTEGER", description: "Session expiration time (unix)" },
-    { isEmpty: true, description: "Not in NextAuth" },
-    { isEmpty: true, description: "Not in NextAuth" },
-    { isEmpty: true, description: "Not in NextAuth" },
-    { isEmpty: true, description: "Not in NextAuth" },
-  ]}
-/>
-
-</div>
-<div>
-
-**Better Auth: `session`**
-
-<DatabaseTable
-  fields={[
-    { name: "id", type: "TEXT", isPrimaryKey: true, description: "Primary key" },
-    { name: "userId", type: "TEXT", isForeignKey: true, description: "Reference to user" },
-    { name: "token", type: "TEXT", description: "Unique session token" },
-    { name: "expiresAt", type: "DATE", description: "Session expiration date" },
-    { name: "ipAddress", type: "TEXT", isOptional: true, description: "IP address of the session" },
-    { name: "userAgent", type: "TEXT", isOptional: true, description: "User agent of the session" },
-    { name: "createdAt", type: "DATE", description: "Creation date" },
-    { name: "updatedAt", type: "DATE", description: "Last update date" },
-  ]}
-/>
-
-</div>
-</div>
-
-**Migration guides:**
-- Rename table: `Session` → `session`
-- Rename column: `sessionToken` → `token`
-- Rename and convert: `expires` (INTEGER unix) → `expiresAt` (DATE)
-- Add `ipAddress` for session tracking
-- Add `userAgent` for session tracking
-- Add `createdAt` as DATE type
-- Add `updatedAt` as DATE type
-- Rename index: `Session_userId_index` → `session_userId_idx`
-
----
-
-<div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-<div>
-
-**NextAuth.js: `Account`**
-
-<DatabaseTable
-  fields={[
-    { name: "id", type: "TEXT", isPrimaryKey: true, description: "Primary key" },
-    { name: "userId", type: "TEXT", isForeignKey: true, description: "Reference to User" },
-    { name: "type", type: "TEXT", description: "Account type" },
-    { name: "provider", type: "TEXT", description: "OAuth provider" },
-    { name: "providerAccountId", type: "TEXT", description: "Provider account ID" },
-    { name: "refresh_token", type: "TEXT", isOptional: true, description: "OAuth refresh token" },
-    { name: "access_token", type: "TEXT", isOptional: true, description: "OAuth access token" },
-    { name: "expires_at", type: "INTEGER", isOptional: true, description: "Token expiration (unix timestamp)" },
-    { name: "token_type", type: "TEXT", isOptional: true, description: "Token type" },
-    { name: "scope", type: "TEXT", isOptional: true, description: "OAuth scope" },
-    { name: "id_token", type: "TEXT", isOptional: true, description: "OAuth ID token" },
-    { name: "session_state", type: "TEXT", isOptional: true, description: "Session state" },
-  ]}
-/>
-
-</div>
-<div>
-
-**Better Auth: `account`**
-
-<DatabaseTable
-  fields={[
-    { name: "id", type: "TEXT", isPrimaryKey: true, description: "Primary key" },
-    { name: "userId", type: "TEXT", isForeignKey: true, description: "Reference to user" },
-    { isEmpty: true, description: "Removed in Better Auth" },
-    { name: "providerId", type: "TEXT", description: "OAuth provider ID (was: provider)" },
-    { name: "accountId", type: "TEXT", description: "Provider account ID (was: providerAccountId)" },
-    { name: "refreshToken", type: "TEXT", isOptional: true, description: "OAuth refresh token (was: refresh_token)" },
-    { name: "accessToken", type: "TEXT", isOptional: true, description: "OAuth access token (was: access_token)" },
-    { name: "accessTokenExpiresAt", type: "DATE", isOptional: true, description: "Access token expiration (was: expires_at)" },
-    { isEmpty: true, description: "Removed in Better Auth" },
-    { name: "scope", type: "TEXT", isOptional: true, description: "OAuth scope" },
-    { name: "idToken", type: "TEXT", isOptional: true, description: "OAuth ID token (was: id_token)" },
-    { isEmpty: true, description: "Removed in Better Auth" },
-    { name: "refreshTokenExpiresAt", type: "DATE", isOptional: true, description: "Refresh token expiration (new)" },
-    { name: "password", type: "TEXT", isOptional: true, description: "Hashed password for credentials (new)" },
-    { name: "createdAt", type: "DATE", description: "Creation date (new)" },
-    { name: "updatedAt", type: "DATE", description: "Last update date (new)" },
-  ]}
-/>
-
-</div>
-</div>
-
-**Migration guides:**
-- Rename table: `Account` → `account`
-- Drop column: `type` (not used in Better Auth)
-- Rename column: `provider` → `providerId`
-- Rename column: `providerAccountId` → `accountId`
-- Rename column: `refresh_token` → `refreshToken`
-- Rename column: `access_token` → `accessToken`
-- Rename and convert: `expires_at` (INTEGER unix) → `accessTokenExpiresAt` (DATE)
-- Drop column: `token_type` (not used in Better Auth)
-- Drop column: `session_state` (not used in Better Auth)
-- Rename column: `id_token` → `idToken`
-- Add `refreshTokenExpiresAt` for refresh token tracking
-- Add `password` for credential-based authentication
-- Add `createdAt` as DATE type
-- Add `updatedAt` as DATE type
-- Rename index: `Account_userId_index` → `account_userId_idx`
-
----
-
-<div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-<div>
-
-**NextAuth.js: `VerificationToken`**
-
-<DatabaseTable
-  fields={[
-    { isEmpty: true, description: "Not in NextAuth (no primary key)" },
-    { name: "identifier", type: "TEXT", description: "Verification identifier (e.g., email)" },
-    { name: "token", type: "TEXT", description: "Verification token" },
-    { name: "expires", type: "INTEGER", description: "Token expiration time (unix)" },
-    { isEmpty: true, description: "Not in NextAuth" },
-    { isEmpty: true, description: "Not in NextAuth" },
-  ]}
-/>
-
-</div>
-<div>
-
-**Better Auth: `verification`**
-
-<DatabaseTable
-  fields={[
-    { name: "id", type: "TEXT", isPrimaryKey: true, description: "Primary key" },
-    { name: "identifier", type: "TEXT", description: "Verification identifier (e.g., email)" },
-    { name: "value", type: "TEXT", description: "Verification token value" },
-    { name: "expiresAt", type: "DATE", description: "Token expiration date" },
-    { name: "createdAt", type: "DATE", description: "Creation date" },
-    { name: "updatedAt", type: "DATE", description: "Last update date" },
-  ]}
-/>
-
-</div>
-</div>
-
-**Migration guides:**
-- Rename table: `VerificationToken` → `verification`
-- Add `id` as TEXT PRIMARY KEY (NextAuth has no primary key)
-- Rename column: `token` → `value`
-- Rename and convert: `expires` (INTEGER unix) → `expiresAt` (DATE)
-- Add `createdAt` as DATE type
-- Add `updatedAt` as DATE type
-- Add index: `verification_identifier_idx` on `identifier`
-
----
-
-### Drizzle ORM Adapter
-
-#### PostgreSQL
-
-This section compares the Better Auth instance configured as follows with the Auth.js official documentation.
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { Pool } from "pg";
-
-const pg = new Pool({
-	connectionString: "postgres://user:password@localhost:5432/better_auth",
-});
-
-
-export const auth = betterAuth({
-	database: drizzleAdapter(sqlite, {
-		provider: "sqlite",
-	}),
-	advanced: {
-		database: {
-			generateId: "uuid",
-		},
-	},
-});
-```
-
-<Accordions>
-<Accordion title="NextAuth.js Schema">
-```typescript
-import {
-  boolean,
-  timestamp,
-  pgTable,
-  text,
-  primaryKey,
-  integer,
-} from "drizzle-orm/pg-core"
-import type { AdapterAccountType } from "@auth/core/adapters"
- 
-export const users = pgTable("user", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  name: text("name"),
-  email: text("email").unique(),
-  emailVerified: timestamp("emailVerified", { mode: "date" }),
-  image: text("image"),
-})
- 
-export const accounts = pgTable(
-  "account",
-  {
-    userId: text("userId")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    type: text("type").$type<AdapterAccountType>().notNull(),
-    provider: text("provider").notNull(),
-    providerAccountId: text("providerAccountId").notNull(),
-    refresh_token: text("refresh_token"),
-    access_token: text("access_token"),
-    expires_at: integer("expires_at"),
-    token_type: text("token_type"),
-    scope: text("scope"),
-    id_token: text("id_token"),
-    session_state: text("session_state"),
-  },
-  (account) => [
-    {
-      compoundKey: primaryKey({
-        columns: [account.provider, account.providerAccountId],
-      }),
-    },
-  ]
-)
- 
-export const sessions = pgTable("session", {
-  sessionToken: text("sessionToken").primaryKey(),
-  userId: text("userId")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  expires: timestamp("expires", { mode: "date" }).notNull(),
-})
- 
-export const verificationTokens = pgTable(
-  "verificationToken",
-  {
-    identifier: text("identifier").notNull(),
-    token: text("token").notNull(),
-    expires: timestamp("expires", { mode: "date" }).notNull(),
-  },
-  (verificationToken) => [
-    {
-      compositePk: primaryKey({
-        columns: [verificationToken.identifier, verificationToken.token],
-      }),
-    },
-  ]
-)
-
-// Optional for WebAuthn support
-export const authenticators = pgTable(
-  "authenticator",
-  {
-    credentialID: text("credentialID").notNull().unique(),
-    userId: text("userId")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    providerAccountId: text("providerAccountId").notNull(),
-    credentialPublicKey: text("credentialPublicKey").notNull(),
-    counter: integer("counter").notNull(),
-    credentialDeviceType: text("credentialDeviceType").notNull(),
-    credentialBackedUp: boolean("credentialBackedUp").notNull(),
-    transports: text("transports"),
-  },
-  (authenticator) => [
-    {
-      compositePK: primaryKey({
-        columns: [authenticator.userId, authenticator.credentialID],
-      }),
-    },
-  ],
-)
-```
-</Accordion>
-<Accordion title="Better Auth Schema">
-```typescript
-import { sql } from "drizzle-orm";
-import {
-  pgTable,
-  text,
-  timestamp,
-  boolean,
-  uuid,
-  index,
-} from "drizzle-orm/pg-core";
-
-export const user = pgTable("user", {
-  id: uuid("id")
-    .default(sql`pg_catalog.gen_random_uuid()`)
-    .primaryKey(),
-  name: text("name").notNull(),
-  email: text("email").notNull().unique(),
-  emailVerified: boolean("email_verified").default(false).notNull(),
-  image: text("image"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at")
-    .defaultNow()
-    .$onUpdate(() => new Date())
-    .notNull(),
-});
-
-export const session = pgTable(
-  "session",
-  {
-    id: uuid("id")
-      .default(sql`pg_catalog.gen_random_uuid()`)
-      .primaryKey(),
-    expiresAt: timestamp("expires_at").notNull(),
-    token: text("token").notNull().unique(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at")
-      .$onUpdate(() => new Date())
-      .notNull(),
-    ipAddress: text("ip_address"),
-    userAgent: text("user_agent"),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
-  },
-  (table) => [index("session_userId_idx").on(table.userId)],
-);
-
-export const account = pgTable(
-  "account",
-  {
-    id: uuid("id")
-      .default(sql`pg_catalog.gen_random_uuid()`)
-      .primaryKey(),
-    accountId: text("account_id").notNull(),
-    providerId: text("provider_id").notNull(),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
-    accessToken: text("access_token"),
-    refreshToken: text("refresh_token"),
-    idToken: text("id_token"),
-    accessTokenExpiresAt: timestamp("access_token_expires_at"),
-    refreshTokenExpiresAt: timestamp("refresh_token_expires_at"),
-    scope: text("scope"),
-    password: text("password"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at")
-      .$onUpdate(() => new Date())
-      .notNull(),
-  },
-  (table) => [index("account_userId_idx").on(table.userId)],
-);
-
-export const verification = pgTable(
-  "verification",
-  {
-    id: uuid("id")
-      .default(sql`pg_catalog.gen_random_uuid()`)
-      .primaryKey(),
-    identifier: text("identifier").notNull(),
-    value: text("value").notNull(),
-    expiresAt: timestamp("expires_at").notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at")
-      .defaultNow()
-      .$onUpdate(() => new Date())
-      .notNull(),
-  },
-  (table) => [index("verification_identifier_idx").on(table.identifier)],
-);
-```
-</Accordion>
-</Accordions>
-
-<br/>
-
-**Notes:**
-
-1. **Optional Tables:**
-   - NextAuth includes an `Authenticator` table for WebAuthn (passkey) support
-   - **This guide focuses on core authentication tables only** (User, Account, Session, VerificationToken)
-
-2. **Schema Property Names vs Database Column Names:**
-   - Drizzle schema properties use **camelCase** (e.g., `emailVerified`, `createdAt`)
-   - Actual database columns use **snake_case** (e.g., `email_verified`, `created_at`)
-   - Drizzle ORM handles this mapping automatically
-
-3. **Primary Key Structure Changes:**
-   - **Account**: Composite key (`provider`, `providerAccountId`) → Single UUID `id`
-   - **Session**: `sessionToken` PK → UUID `id` PK (token becomes unique field)
-   - **VerificationToken**: Composite key (`identifier`, `token`) → Single UUID `id` PK
-
-4. **Database Schema Reference:**
-   - The actual database table structures are identical to Kysely adapter
-   - See **Kysely Adapter - PostgreSQL** section above for detailed table comparisons
-
-**Migration guides:**
-1. Add new `id` UUID column to Account, Session, VerificationToken tables
-2. Copy existing composite key data to maintain references
-3. Create new UUID values for existing rows
-4. Update foreign key references if needed
-5. Remove old composite primary keys
-6. Follow all other migration steps from Kysely PostgreSQL section
-
----
-
-#### MySQL
-
-This section compares the Better Auth instance configured as follows with the Auth.js official documentation.
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { createPool } from "mysql2/promise";
-
-const mysql = createPool({
-	host: "localhost",
-	user: "user",
-	password: "password",
-	database: "better_auth",
-	timezone: "Z", // Important to ensure consistent timezone values
-});
-
-export const auth = betterAuth({
-	database: drizzleAdapter(sqlite, {
-		provider: "sqlite",
-	}),
-	advanced: {
-		database: {
-			generateId: "uuid",
-		},
-	},
-});
-```
-
-<Accordions>
-<Accordion title="NextAuth.js Schema">
-```typescript
-import {
-  boolean,
-  int,
-  timestamp,
-  mysqlTable,
-  primaryKey,
-  varchar,
-} from "drizzle-orm/mysql-core"
-import type { AdapterAccountType } from "next-auth/adapters"
- 
-export const users = mysqlTable("user", {
-  id: varchar("id", { length: 255 })
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  name: varchar("name", { length: 255 }),
-  email: varchar("email", { length: 255 }).unique(),
-  emailVerified: timestamp("emailVerified", {
-    mode: "date",
-    fsp: 3,
-  }),
-  image: varchar("image", { length: 255 }),
-})
- 
-export const accounts = mysqlTable(
-  "account",
-  {
-    userId: varchar("userId", { length: 255 })
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    type: varchar("type", { length: 255 })
-      .$type<AdapterAccountType>()
-      .notNull(),
-    provider: varchar("provider", { length: 255 }).notNull(),
-    providerAccountId: varchar("providerAccountId", { length: 255 }).notNull(),
-    refresh_token: varchar("refresh_token", { length: 255 }),
-    access_token: varchar("access_token", { length: 255 }),
-    expires_at: int("expires_at"),
-    token_type: varchar("token_type", { length: 255 }),
-    scope: varchar("scope", { length: 255 }),
-    id_token: varchar("id_token", { length: 2048 }),
-    session_state: varchar("session_state", { length: 255 }),
-  },
-  (account) => ({
-    compoundKey: primaryKey({
-      columns: [account.provider, account.providerAccountId],
-    }),
-  })
-)
- 
-export const sessions = mysqlTable("session", {
-  sessionToken: varchar("sessionToken", { length: 255 }).primaryKey(),
-  userId: varchar("userId", { length: 255 })
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  expires: timestamp("expires", { mode: "date" }).notNull(),
-})
- 
-export const verificationTokens = mysqlTable(
-  "verificationToken",
-  {
-    identifier: varchar("identifier", { length: 255 }).notNull(),
-    token: varchar("token", { length: 255 }).notNull(),
-    expires: timestamp("expires", { mode: "date" }).notNull(),
-  },
-  (verificationToken) => ({
-    compositePk: primaryKey({
-      columns: [verificationToken.identifier, verificationToken.token],
-    }),
-  })
-)
-
-// Optional for WebAuthn support
-export const authenticators = mysqlTable(
-  "authenticator",
-  {
-    credentialID: varchar("credentialID", { length: 255 }).notNull().unique(),
-    userId: varchar("userId", { length: 255 })
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    providerAccountId: varchar("providerAccountId", { length: 255 }).notNull(),
-    credentialPublicKey: varchar("credentialPublicKey", {
-      length: 255,
-    }).notNull(),
-    counter: int("counter").notNull(),
-    credentialDeviceType: varchar("credentialDeviceType", {
-      length: 255,
-    }).notNull(),
-    credentialBackedUp: boolean("credentialBackedUp").notNull(),
-    transports: varchar("transports", { length: 255 }),
-  },
-  (authenticator) => ({
-    compositePk: primaryKey({
-      columns: [authenticator.userId, authenticator.credentialID],
-    }),
-  })
-)
-```
-</Accordion>
-<Accordion title="Better Auth Schema">
-```typescript
-import {
-  mysqlTable,
-  varchar,
-  text,
-  timestamp,
-  boolean,
-  index,
-} from "drizzle-orm/mysql-core";
-
-export const user = mysqlTable("user", {
-  id: varchar("id", { length: 36 }).primaryKey(),
-  name: varchar("name", { length: 255 }).notNull(),
-  email: varchar("email", { length: 255 }).notNull().unique(),
-  emailVerified: boolean("email_verified").default(false).notNull(),
-  image: text("image"),
-  createdAt: timestamp("created_at", { fsp: 3 }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { fsp: 3 })
-    .defaultNow()
-    .$onUpdate(() => new Date())
-    .notNull(),
-});
-
-export const session = mysqlTable(
-  "session",
-  {
-    id: varchar("id", { length: 36 }).primaryKey(),
-    expiresAt: timestamp("expires_at", { fsp: 3 }).notNull(),
-    token: varchar("token", { length: 255 }).notNull().unique(),
-    createdAt: timestamp("created_at", { fsp: 3 }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { fsp: 3 })
-      .$onUpdate(() => new Date())
-      .notNull(),
-    ipAddress: text("ip_address"),
-    userAgent: text("user_agent"),
-    userId: varchar("user_id", { length: 36 })
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
-  },
-  (table) => [index("session_userId_idx").on(table.userId)],
-);
-
-export const account = mysqlTable(
-  "account",
-  {
-    id: varchar("id", { length: 36 }).primaryKey(),
-    accountId: text("account_id").notNull(),
-    providerId: text("provider_id").notNull(),
-    userId: varchar("user_id", { length: 36 })
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
-    accessToken: text("access_token"),
-    refreshToken: text("refresh_token"),
-    idToken: text("id_token"),
-    accessTokenExpiresAt: timestamp("access_token_expires_at", { fsp: 3 }),
-    refreshTokenExpiresAt: timestamp("refresh_token_expires_at", { fsp: 3 }),
-    scope: text("scope"),
-    password: text("password"),
-    createdAt: timestamp("created_at", { fsp: 3 }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { fsp: 3 })
-      .$onUpdate(() => new Date())
-      .notNull(),
-  },
-  (table) => [index("account_userId_idx").on(table.userId)],
-);
-
-export const verification = mysqlTable(
-  "verification",
-  {
-    id: varchar("id", { length: 36 }).primaryKey(),
-    identifier: varchar("identifier", { length: 255 }).notNull(),
-    value: text("value").notNull(),
-    expiresAt: timestamp("expires_at", { fsp: 3 }).notNull(),
-    createdAt: timestamp("created_at", { fsp: 3 }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { fsp: 3 })
-      .defaultNow()
-      .$onUpdate(() => new Date())
-      .notNull(),
-  },
-  (table) => [index("verification_identifier_idx").on(table.identifier)],
-);
-```
-</Accordion>
-</Accordions>
-
-<br/>
-
-**Notes:**
-
-1. **Optional Tables:**
-   - NextAuth includes an `Authenticator` table for WebAuthn (passkey) support
-   - **This guide focuses on core authentication tables only** (User, Account, Session, VerificationToken)
-
-2. **Schema Property Names vs Database Column Names:**
-   - Drizzle schema properties use **camelCase** (e.g., `emailVerified`, `userId`)
-   - Actual database columns use **snake_case** (e.g., `email_verified`, `user_id`)
-   - Drizzle ORM handles this mapping automatically
-
-3. **Type Differences:**
-   - NextAuth ID: `varchar(255)` → Better Auth: `varchar(36)` (UUID format)
-   - NextAuth: Many `varchar` fields → Better Auth: `text` for flexibility
-   - NextAuth: No `fsp` (fractional seconds) → Better Auth: `timestamp(3)` with millisecond precision
-
-4. **Primary Key Structure Changes** (same as PostgreSQL):
-   - **Account**: Composite key → Single `varchar(36)` `id`
-   - **Session**: `sessionToken` PK → `varchar(36)` `id` PK
-   - **VerificationToken**: Composite key → Single `varchar(36)` `id` PK
-
-5. **Database Schema Reference:**
-   - See **Kysely Adapter - MySQL** section above for detailed table comparisons
-
----
-
-#### SQLite
-
-This section compares the Better Auth instance configured as follows with the Auth.js official documentation.
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import Database from "better-sqlite3";
-
-const sqlite = new Database("database.sqlite");
-
-export const auth = betterAuth({
-	database: drizzleAdapter(sqlite, {
-		provider: "sqlite",
-	}),
-	advanced: {
-		database: {
-			generateId: "uuid",
-		},
-	},
-});
-```
-<Accordions>
-<Accordion title="NextAuth.js Schema">
-```typescript
-import { integer, sqliteTable, text, primaryKey } from "drizzle-orm/sqlite-core"
-import type { AdapterAccountType } from "next-auth/adapters"
- 
-export const users = sqliteTable("user", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  name: text("name"),
-  email: text("email").unique(),
-  emailVerified: integer("emailVerified", { mode: "timestamp_ms" }),
-  image: text("image"),
-})
- 
-export const accounts = sqliteTable(
-  "account",
-  {
-    userId: text("userId")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    type: text("type").$type<AdapterAccountType>().notNull(),
-    provider: text("provider").notNull(),
-    providerAccountId: text("providerAccountId").notNull(),
-    refresh_token: text("refresh_token"),
-    access_token: text("access_token"),
-    expires_at: integer("expires_at"),
-    token_type: text("token_type"),
-    scope: text("scope"),
-    id_token: text("id_token"),
-    session_state: text("session_state"),
-  },
-  (account) => [
-    primaryKey({
-      columns: [account.provider, account.providerAccountId],
-    }),
-  ]
-)
- 
-export const sessions = sqliteTable("session", {
-  sessionToken: text("sessionToken").primaryKey(),
-  userId: text("userId")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  expires: integer("expires", { mode: "timestamp_ms" }).notNull(),
-})
- 
-export const verificationTokens = sqliteTable(
-  "verificationToken",
-  {
-    identifier: text("identifier").notNull(),
-    token: text("token").notNull(),
-    expires: integer("expires", { mode: "timestamp_ms" }).notNull(),
-  },
-  (verificationToken) => [
-    primaryKey({
-      columns: [verificationToken.identifier, verificationToken.token],
-    }),
-  ]
-)
-
-// Optional for WebAuthn support
-export const authenticators = sqliteTable(
-  "authenticator",
-  {
-    credentialID: text("credentialID").notNull().unique(),
-    userId: text("userId")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    providerAccountId: text("providerAccountId").notNull(),
-    credentialPublicKey: text("credentialPublicKey").notNull(),
-    counter: integer("counter").notNull(),
-    credentialDeviceType: text("credentialDeviceType").notNull(),
-    credentialBackedUp: integer("credentialBackedUp", {
-      mode: "boolean",
-    }).notNull(),
-    transports: text("transports"),
-  },
-  (authenticator) => [
-    primaryKey({
-      columns: [authenticator.userId, authenticator.credentialID],
-    }),
-  ]
-)
-```
-</Accordion>
-<Accordion title="Better Auth Schema">
-```typescript
-import { sql } from "drizzle-orm";
-import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
-
-export const user = sqliteTable("user", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  email: text("email").notNull().unique(),
-  emailVerified: integer("email_verified", { mode: "boolean" })
-    .default(false)
-    .notNull(),
-  image: text("image"),
-  createdAt: integer("created_at", { mode: "timestamp_ms" })
-    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
-    .notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" })
-    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
-    .$onUpdate(() => new Date())
-    .notNull(),
-});
-
-export const session = sqliteTable(
-  "session",
-  {
-    id: text("id").primaryKey(),
-    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
-    token: text("token").notNull().unique(),
-    createdAt: integer("created_at", { mode: "timestamp_ms" })
-      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
-      .notNull(),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
-      .$onUpdate(() => new Date())
-      .notNull(),
-    ipAddress: text("ip_address"),
-    userAgent: text("user_agent"),
-    userId: text("user_id")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
-  },
-  (table) => [index("session_userId_idx").on(table.userId)],
-);
-
-export const account = sqliteTable(
-  "account",
-  {
-    id: text("id").primaryKey(),
-    accountId: text("account_id").notNull(),
-    providerId: text("provider_id").notNull(),
-    userId: text("user_id")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
-    accessToken: text("access_token"),
-    refreshToken: text("refresh_token"),
-    idToken: text("id_token"),
-    accessTokenExpiresAt: integer("access_token_expires_at", {
-      mode: "timestamp_ms",
-    }),
-    refreshTokenExpiresAt: integer("refresh_token_expires_at", {
-      mode: "timestamp_ms",
-    }),
-    scope: text("scope"),
-    password: text("password"),
-    createdAt: integer("created_at", { mode: "timestamp_ms" })
-      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
-      .notNull(),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
-      .$onUpdate(() => new Date())
-      .notNull(),
-  },
-  (table) => [index("account_userId_idx").on(table.userId)],
-);
-
-export const verification = sqliteTable(
-  "verification",
-  {
-    id: text("id").primaryKey(),
-    identifier: text("identifier").notNull(),
-    value: text("value").notNull(),
-    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
-    createdAt: integer("created_at", { mode: "timestamp_ms" })
-      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
-      .notNull(),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
-      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
-      .$onUpdate(() => new Date())
-      .notNull(),
-  },
-  (table) => [index("verification_identifier_idx").on(table.identifier)],
-);
-```
-</Accordion>
-</Accordions>
-
-<br/>
-
-**Notes:**
-
-1. **Optional Tables:**
-   - NextAuth includes an `Authenticator` table for WebAuthn (passkey) support
-   - **This guide focuses on core authentication tables only** (User, Account, Session, VerificationToken)
-
-2. **Schema Property Names vs Database Column Names:**
-   - Drizzle schema properties use **camelCase** (e.g., `emailVerified`, `userId`)
-   - Actual database columns use **snake_case** (e.g., `email_verified`, `user_id`)
-   - Drizzle ORM handles this mapping automatically
-
-3. **Type Differences:**
-   - NextAuth `emailVerified`: `integer` with `timestamp_ms` mode → Better Auth: `integer` with `boolean` mode
-   - Better Auth timestamps: Uses `unixepoch('subsecond') * 1000` for millisecond precision defaults
-   - Both use `integer` with `timestamp_ms` mode for date fields
-
-4. **Primary Key Structure Changes** (same as PostgreSQL/MySQL):
-   - **Account**: Composite key → Single `text` `id`
-   - **Session**: `sessionToken` PK → `text` `id` PK
-   - **VerificationToken**: Composite key → Single `text` `id` PK
-
-5. **Database Schema Reference:**
-   - See **Kysely Adapter - SQLite** section above for detailed table comparisons
-
----
-
-### Prisma Adapter
-
-#### PostgreSQL
-
-This section compares NextAuth.js and Better Auth configured as follows:
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
-
-export const auth = betterAuth({
-	database: prismaAdapter(prisma),
-	advanced: {
-		database: {
-			generateId: "uuid",
-		},
-	},
-});
-```
-
-<Accordions>
-<Accordion title="NextAuth.js Schema">
-```prisma
-generator client {
-  provider = "prisma-client-js"
-}
-
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
- 
-model User {
-  id            String          @id @default(cuid())
-  name          String?
-  email         String          @unique
-  emailVerified DateTime?
-  image         String?
-  accounts      Account[]
-  sessions      Session[]
-  // Optional for WebAuthn support
-  Authenticator Authenticator[]
- 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
- 
-model Account {
-  userId            String
-  type              String
-  provider          String
-  providerAccountId String
-  refresh_token     String?
-  access_token      String?
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String?
-  session_state     String?
- 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
- 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
- 
-  @@id([provider, providerAccountId])
-}
- 
-model Session {
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
- 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
- 
-model VerificationToken {
-  identifier String
-  token      String
-  expires    DateTime
- 
-  @@id([identifier, token])
-}
- 
-// Optional for WebAuthn support
-model Authenticator {
-  credentialID         String  @unique
-  userId               String
-  providerAccountId    String
-  credentialPublicKey  String
-  counter              Int
-  credentialDeviceType String
-  credentialBackedUp   Boolean
-  transports           String?
- 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
- 
-  @@id([userId, credentialID])
-}
-```
-</Accordion>
-<Accordion title="Better Auth Schema">
-```prisma
-generator client {
-  provider = "prisma-client-js"
-}
-
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-
-model User {
-  id            String    @id @db.Uuid @default(dbgenerated("pg_catalog.gen_random_uuid()"))
-  name          String
-  email         String
-  emailVerified Boolean   @default(false)
-  image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  sessions      Session[]
-  accounts      Account[]
-
-  @@unique([email])
-  @@map("user")
-}
-
-model Session {
-  id        String   @id @db.Uuid @default(dbgenerated("pg_catalog.gen_random_uuid()"))
-  expiresAt DateTime
-  token     String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  ipAddress String?
-  userAgent String?
-  userId    String   @db.Uuid
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([token])
-  @@index([userId])
-  @@map("session")
-}
-
-model Account {
-  id                    String    @id @db.Uuid @default(dbgenerated("pg_catalog.gen_random_uuid()"))
-  accountId             String
-  providerId            String
-  userId                String    @db.Uuid
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  accessToken           String?
-  refreshToken          String?
-  idToken               String?
-  accessTokenExpiresAt  DateTime?
-  refreshTokenExpiresAt DateTime?
-  scope                 String?
-  password              String?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
-
-  @@index([userId])
-  @@map("account")
-}
-
-model Verification {
-  id         String   @id @db.Uuid @default(dbgenerated("pg_catalog.gen_random_uuid()"))
-  identifier String
-  value      String
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@index([identifier])
-  @@map("verification")
-}
-```
-</Accordion>
-</Accordions>
-
-<br/>
-
-**Notes:**
-
-1. **Optional Tables:**
-   - NextAuth includes an `Authenticator` model for WebAuthn (passkey) support
-   - **This guide focuses on core authentication tables only** (User, Account, Session, VerificationToken)
-
-2. **Model Names:**
-   - NextAuth: PascalCase model names (`User`, `Account`, `Session`, `VerificationToken`)
-   - Better Auth: lowercase model names with `@@map()` directive (`user`, `account`, `session`, `verification`)
-   - This allows TypeScript code to use camelCase while database uses lowercase table names
-
-3. **Primary Key Structure Changes:**
-   - **User**: No change (single `id`)
-   - **Account**: Composite key `@@id([provider, providerAccountId])` → Single UUID `id`
-   - **Session**: No explicit `id` field → UUID `id` as primary key (token becomes unique field)
-   - **VerificationToken**: Composite key `@@id([identifier, token])` → Single UUID `id` (renamed to `Verification`)
-
-4. **Field Type Conversions:**
-   - `emailVerified`: `DateTime?` → `Boolean` (NULL → false, date → true)
-   - NextAuth `expires_at` (Int unix timestamp) → Better Auth `accessTokenExpiresAt` (DateTime)
-   - All IDs: `String @default(cuid())` → `String @db.Uuid @default(dbgenerated(...))`
-
-5. **Database Schema Reference:**
-   - The actual database table structures are identical to Kysely adapter
-   - See **Kysely Adapter - PostgreSQL** section above for detailed field-by-field comparisons
-
-**Migration guides:**
-1. Add `id` UUID field to Account, Session, Verification models
-2. Handle composite key → single key migration:
-   - Create new UUID IDs for all existing rows
-   - Update foreign key references if needed
-   - Remove old composite primary keys
-3. Convert `emailVerified` from DateTime to Boolean
-4. Rename and convert field types (see Kysely section for details)
-5. Add `@@map()` directives to maintain lowercase table names
-6. Run `prisma migrate dev` to generate migration
-
----
-
-#### MySQL
-
-This section compares NextAuth.js and Better Auth configured as follows:
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
-
-export const auth = betterAuth({
-	database: prismaAdapter(prisma),
-	advanced: {
-		database: {
-			generateId: "uuid",
-		},
-	},
-});
-```
-
-<Accordions>
-<Accordion title="NextAuth.js Schema">
-```prisma
-generator client {
-  provider = "prisma-client-js"
-}
-
-datasource db {
-  provider = "mysql"
-  url      = env("DATABASE_URL")
-}
- 
-model User {
-  id            String          @id @default(cuid())
-  name          String?
-  username      String?         @unique
-  email         String?         @unique
-  emailVerified DateTime?
-  image         String?
-  accounts      Account[]
-  sessions      Session[]
-  // Optional for WebAuthn support
-  Authenticator Authenticator[]
- 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
- 
-model Account {
-  id                       String  @id @default(cuid())
-  userId                   String  @unique
-  type                     String
-  provider                 String
-  providerAccountId        String
-  refresh_token            String? @db.Text
-  access_token             String? @db.Text
-  expires_at               Int?
-  token_type               String?
-  scope                    String?
-  id_token                 String? @db.Text
-  session_state            String?
-  refresh_token_expires_in Int?
-  user                     User?   @relation(fields: [userId], references: [id])
- 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
- 
-  @@unique([provider, providerAccountId])
-  @@index([userId])
-}
- 
-model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-  user         User     @relation(fields: [userId], references: [id])
- 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
- 
-  @@index([userId])
-}
- 
-model VerificationToken {
-  identifier String
-  token      String
-  expires    DateTime
- 
-  @@unique([identifier, token])
-}
- 
-// Optional for WebAuthn support
-model Authenticator {
-  credentialID         String  @unique
-  userId               String
-  providerAccountId    String
-  credentialPublicKey  String
-  counter              Int
-  credentialDeviceType String
-  credentialBackedUp   Boolean
-  transports           String?
- 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
- 
-  @@id([userId, credentialID])
-}
-```
-</Accordion>
-<Accordion title="Better Auth Schema">
-```prisma
-generator client {
-  provider = "prisma-client-js"
-}
-
-datasource db {
-  provider = "mysql"
-  url      = env("DATABASE_URL")
-}
-
-model User {
-  id            String    @id
-  name          String    @db.Text
-  email         String
-  emailVerified Boolean   @default(false)
-  image         String?   @db.Text
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  sessions      Session[]
-  accounts      Account[]
-
-  @@unique([email])
-  @@map("user")
-}
-
-model Session {
-  id        String   @id
-  expiresAt DateTime
-  token     String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  ipAddress String?  @db.Text
-  userAgent String?  @db.Text
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([token])
-  @@index([userId])
-  @@map("session")
-}
-
-model Account {
-  id                    String    @id
-  accountId             String    @db.Text
-  providerId            String    @db.Text
-  userId                String
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  accessToken           String?   @db.Text
-  refreshToken          String?   @db.Text
-  idToken               String?   @db.Text
-  accessTokenExpiresAt  DateTime?
-  refreshTokenExpiresAt DateTime?
-  scope                 String?   @db.Text
-  password              String?   @db.Text
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
-
-  @@index([userId])
-  @@map("account")
-}
-
-model Verification {
-  id         String   @id
-  identifier String   @db.Text
-  value      String   @db.Text
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@index([identifier(length: 191)])
-  @@map("verification")
-}
-```
-</Accordion>
-</Accordions>
-
-<br/>
-
-**Notes:**
-
-1. **Optional Tables:**
-   - NextAuth includes an `Authenticator` model for WebAuthn (passkey) support
-   - **This guide focuses on core authentication tables only** (User, Account, Session, VerificationToken)
-
-2. **Model Names** (same as PostgreSQL):
-   - NextAuth: PascalCase (`User`, `Account`, `Session`, `VerificationToken`)
-   - Better Auth: lowercase with `@@map()` (`user`, `account`, `session`, `verification`)
-
-3. **MySQL-Specific Differences:**
-   - NextAuth Account has `id` field with `@@unique([provider, providerAccountId])`
-   - Better Auth uses simple VARCHAR `id` (no UUID type in MySQL)
-   - Better Auth uses `@db.Text` extensively for longer strings
-   - Better Auth adds `@@index([identifier(length: 191)])` for MySQL index limits
-
-4. **Primary Key Structure:**
-   - **User**: Single `id` (no change)
-   - **Account**: NextAuth has both `id` PK and composite unique constraint → Better Auth single `id` PK
-   - **Session**: Already has `id` PK (no change in structure)
-   - **VerificationToken**: `@@unique([identifier, token])` → Single `id` PK
-
-5. **Database Schema Reference:**
-   - See **Kysely Adapter - MySQL** section above for detailed field-by-field comparisons
-
-**Migration guides:**
-1. Add `id` VARCHAR(36) field to Verification model
-2. Convert `emailVerified` from DateTime to Boolean (TINYINT(1) in MySQL)
-3. Rename and convert field types (see Kysely MySQL section)
-4. Add `@@map()` directives for lowercase table names
-5. Run `prisma migrate dev` to generate migration
-
----
-
-#### SQLite
-
-This section compares NextAuth.js and Better Auth configured as follows:
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
-
-export const auth = betterAuth({
-	database: prismaAdapter(prisma),
-	advanced: {
-		database: {
-			generateId: "uuid",
-		},
-	},
-});
-```
-
-<Accordions>
-<Accordion title="NextAuth.js Schema">
-```prisma
-generator client {
-  provider = "prisma-client-js"
-}
-
-datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
-}
- 
-model User {
-  id            String          @id @default(cuid())
-  name          String?
-  email         String?         @unique
-  emailVerified DateTime?
-  image         String?
-  accounts      Account[]
-  sessions      Session[]
-  // Optional for WebAuthn support
-  Authenticator Authenticator[]
- 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
- 
-model Account {
-  id                String  @id @default(cuid())
-  userId            String
-  type              String
-  provider          String
-  providerAccountId String
-  refresh_token     String?
-  access_token      String?
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String?
-  session_state     String?
- 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
- 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
- 
-  @@unique([provider, providerAccountId])
-}
- 
-model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
- 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
- 
-model VerificationToken {
-  identifier String
-  token      String
-  expires    DateTime
- 
-  @@unique([identifier, token])
-}
- 
-// Optional for WebAuthn support
-model Authenticator {
-  credentialID         String  @unique
-  userId               String
-  providerAccountId    String
-  credentialPublicKey  String
-  counter              Int
-  credentialDeviceType String
-  credentialBackedUp   Boolean
-  transports           String?
- 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
- 
-  @@id([userId, credentialID])
-}
-```
-</Accordion>
-<Accordion title="Better Auth Schema">
-```prisma
-generator client {
-  provider = "prisma-client-js"
-}
-
-datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
-}
-
-model User {
-  id            String    @id
-  name          String
-  email         String
-  emailVerified Boolean   @default(false)
-  image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  sessions      Session[]
-  accounts      Account[]
-
-  @@unique([email])
-  @@map("user")
-}
-
-model Session {
-  id        String   @id
-  expiresAt DateTime
-  token     String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  ipAddress String?
-  userAgent String?
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([token])
-  @@index([userId])
-  @@map("session")
-}
-
-model Account {
-  id                    String    @id
-  accountId             String
-  providerId            String
-  userId                String
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  accessToken           String?
-  refreshToken          String?
-  idToken               String?
-  accessTokenExpiresAt  DateTime?
-  refreshTokenExpiresAt DateTime?
-  scope                 String?
-  password              String?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
-
-  @@index([userId])
-  @@map("account")
-}
-
-model Verification {
-  id         String   @id
-  identifier String
-  value      String
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@index([identifier])
-  @@map("verification")
-}
-```
-</Accordion>
-</Accordions>
-
-<br/>
-
-**Notes:**
-
-1. **Optional Tables:**
-   - NextAuth includes an `Authenticator` model for WebAuthn (passkey) support
-   - **This guide focuses on core authentication tables only** (User, Account, Session, VerificationToken)
-
-2. **Model Names** (same as PostgreSQL/MySQL):
-   - NextAuth: PascalCase (`User`, `Account`, `Session`, `VerificationToken`)
-   - Better Auth: lowercase with `@@map()` (`user`, `account`, `session`, `verification`)
-
-3. **SQLite-Specific Characteristics:**
-   - No native UUID type - uses TEXT for IDs
-   - No native Boolean type - uses INTEGER (0/1) for `emailVerified`
-   - DateTime stored as TEXT in ISO 8601 format
-   - No `@db.Text` annotations needed (all text fields are TEXT)
-
-4. **Primary Key Structure:**
-   - **User**: Single `id` (no change)
-   - **Account**: Already has `id` PK with composite unique constraint → Keep `id` PK
-   - **Session**: Already has `id` PK (no change)
-   - **VerificationToken**: `@@unique([identifier, token])` → Single `id` PK
-
-5. **Database Schema Reference:**
-   - See **Kysely Adapter - SQLite** section above for detailed field-by-field comparisons
-
-**Migration guides:**
-1. Add `id` TEXT field to Verification model
-2. Convert `emailVerified` from DateTime (TEXT) to Boolean (INTEGER 0/1)
-3. Rename and convert field types (see Kysely SQLite section)
-4. Add `@@map()` directives for lowercase table names
-5. Run `prisma migrate dev` to generate migration
+If you need help with migration, join our [community](/community) or reach out to [contact@better-auth.com](mailto:contact@better-auth.com).
