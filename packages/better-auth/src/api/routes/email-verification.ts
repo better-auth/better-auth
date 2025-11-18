@@ -48,9 +48,10 @@ export async function sendVerificationEmailFn(
 			message: "Verification email isn't enabled",
 		});
 	}
+	const normalizedEmail = user.email.toLowerCase();
 	const token = await createEmailVerificationToken(
 		ctx.context.secret,
-		user.email,
+		normalizedEmail,
 		undefined,
 		ctx.context.options.emailVerification?.expiresIn,
 	);
@@ -68,7 +69,7 @@ export async function sendVerificationEmailFn(
 		// Store OTP in verification values table
 		const expiresIn = ctx.context.options.emailVerification?.expiresIn || 3600;
 		await ctx.context.internalAdapter.createVerificationValue({
-			identifier: `email-verification-otp-${user.email}`,
+			identifier: `email-verification-otp-${normalizedEmail}`,
 			value: otp,
 			expiresAt: new Date(Date.now() + expiresIn * 1000),
 		});
@@ -514,7 +515,8 @@ export const verifyEmailWithOTP = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		const { email, otp } = ctx.body;
+		const { email: rawEmail, otp } = ctx.body;
+		const email = rawEmail.toLowerCase();
 
 		// Check if OTP feature is enabled
 		if (!ctx.context.options.emailVerification?.includeOTP) {
