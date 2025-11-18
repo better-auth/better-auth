@@ -55,7 +55,7 @@
     "nanostores": "^1.0.1"
   },
   "files": [
-    "./dist"
+    "dist"
   ],
   "repository": {
     "type": "git",
