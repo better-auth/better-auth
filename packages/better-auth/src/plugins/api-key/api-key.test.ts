@@ -959,11 +959,12 @@ describe("api-key", async () => {
 	const { headers: rateLimitUserHeaders } = await rateLimitTestUser();
 
 	it("should fail to verify API key 20 times in a row due to rate-limit", async () => {
-		const { data: apiKey2 } = await rateLimitClient.apiKey.create(
+		const createResult = await rateLimitClient.apiKey.create(
 			{},
 			{ headers: rateLimitUserHeaders },
 		);
-		if (!apiKey2) return;
+		expect(createResult.data).not.toBeNull();
+		const apiKey2 = createResult.data!;
 		rateLimitedApiKey = apiKey2;
 		for (let i = 0; i < 20; i++) {
 			const response = await rateLimitAuth.api.verifyApiKey({
@@ -995,13 +996,12 @@ describe("api-key", async () => {
 
 	it("should check if verifying an API key's remaining count does go down", async () => {
 		const remaining = 10;
-		const { data: apiKey } = await client.apiKey.create(
-			{
-				remaining: remaining,
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				remaining,
+				userId: user.id,
 			},
-			{ headers: headers },
-		);
-		if (!apiKey) return;
+		});
 		const afterVerificationOnce = await auth.api.verifyApiKey({
 			body: {
 				key: apiKey.key,
@@ -1242,9 +1242,9 @@ describe("api-key", async () => {
 		);
 		const { headers } = await signInWithTestUser();
 
-		const { data: firstApiKey } = await client.apiKey.create({}, { headers });
-
-		if (!firstApiKey) return;
+		const createResult = await client.apiKey.create({}, { headers });
+		expect(createResult.data).not.toBeNull();
+		const firstApiKey = createResult.data!;
 
 		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
 			data: null,
@@ -1289,9 +1289,9 @@ describe("api-key", async () => {
 		);
 		const { headers } = await signInWithTestUser();
 
-		const { data: firstApiKey } = await client.apiKey.create({}, { headers });
-
-		if (!firstApiKey) return;
+		const createResult = await client.apiKey.create({}, { headers });
+		expect(createResult.data).not.toBeNull();
+		const firstApiKey = createResult.data!;
 
 		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
 			data: null,
@@ -1336,9 +1336,9 @@ describe("api-key", async () => {
 		);
 		const { headers } = await signInWithTestUser();
 
-		const { data: firstApiKey } = await client.apiKey.create({}, { headers });
-
-		if (!firstApiKey) return;
+		const createResult = await client.apiKey.create({}, { headers });
+		expect(createResult.data).not.toBeNull();
+		const firstApiKey = createResult.data!;
 
 		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
 			data: null,
@@ -1809,11 +1809,12 @@ describe("api-key", async () => {
 
 		const { headers: userHeaders } = await signInWithTestUser();
 
-		const { data: apiKey2 } = await client.apiKey.create(
+		const createResult = await client.apiKey.create(
 			{},
 			{ headers: userHeaders },
 		);
-		if (!apiKey2) return;
+		expect(createResult.data).not.toBeNull();
+		const apiKey2 = createResult.data!;
 		const headers = new Headers();
 		headers.set("x-api-key", apiKey2.key);
 
@@ -1862,12 +1863,13 @@ describe("api-key", async () => {
 	});
 
 	it("should delete an API key by ID with headers using auth-client", async () => {
-		const newApiKey = await client.apiKey.create({}, { headers: headers });
-		if (!newApiKey.data) return;
+		const createResult = await client.apiKey.create({}, { headers: headers });
+		expect(createResult.data).not.toBeNull();
+		const newApiKey = createResult.data!;
 
 		const apiKey = await client.apiKey.delete(
 			{
-				keyId: newApiKey.data.id,
+				keyId: newApiKey.id,
 			},
 			{ headers },
 		);
@@ -1903,12 +1905,13 @@ describe("api-key", async () => {
 	});
 
 	it("should fail to delete API key from client if userId is provided with own id", async () => {
-		const newApiKey = await client.apiKey.create({}, { headers: headers });
-		if (!newApiKey.data) return;
+		const createResult = await client.apiKey.create({}, { headers: headers });
+		expect(createResult.data).not.toBeNull();
+		const newApiKey = createResult.data!;
 
 		const response = await client.apiKey.delete(
 			{
-				keyId: newApiKey.data.id,
+				keyId: newApiKey.id,
 				userId: user.id,
 			},
 			{ headers },
@@ -1918,8 +1921,9 @@ describe("api-key", async () => {
 	});
 
 	it("should fail to delete API key from client if userId is provided with different user id", async () => {
-		const newApiKey = await client.apiKey.create({}, { headers: headers });
-		if (!newApiKey.data) return;
+		const createResult = await client.apiKey.create({}, { headers: headers });
+		expect(createResult.data).not.toBeNull();
+		const newApiKey = createResult.data!;
 
 		const newUser = await auth.api.signUpEmail({
 			body: {
@@ -1931,7 +1935,7 @@ describe("api-key", async () => {
 
 		const response = await client.apiKey.delete(
 			{
-				keyId: newApiKey.data.id,
+				keyId: newApiKey.id,
 				userId: newUser.user.id,
 			},
 			{ headers },
@@ -1942,7 +1946,7 @@ describe("api-key", async () => {
 		// Clean up the test API key
 		await auth.api.deleteApiKey({
 			body: {
-				keyId: newApiKey.data.id,
+				keyId: newApiKey.id,
 			},
 			headers,
 		});
