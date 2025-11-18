@@ -1,14 +1,14 @@
 // @vitest-environment happy-dom
 
 import { isProxy } from "node:util/types";
-import { BetterFetchError } from "@better-fetch/fetch";
+import type { BetterFetchError } from "@better-fetch/fetch";
 import type { ReadableAtom } from "nanostores";
 import type { Accessor } from "solid-js";
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { Ref } from "vue";
 import { twoFactorClient } from "../plugins";
 import type { Session, SessionQueryParams } from "../types";
-import { organizationClient, passkeyClient } from "./plugins";
+import { emailOTPClient, organizationClient } from "./plugins";
 import { createAuthClient as createReactClient } from "./react";
 import { createAuthClient as createSolidClient } from "./solid";
 import { createAuthClient as createSvelteClient } from "./svelte";
@@ -59,6 +59,7 @@ describe("run time proxy", async () => {
 	});
 
 	it("should call useSession", async () => {
+		vi.useFakeTimers();
 		let returnNull = false;
 		const client = createSolidClient({
 			plugins: [testClientPlugin()],
@@ -80,8 +81,7 @@ describe("run time proxy", async () => {
 			},
 		});
 		const res = client.useSession();
-		vi.useFakeTimers();
-		await vi.advanceTimersByTimeAsync(1);
+		await vi.runAllTimersAsync();
 		expect(res()).toMatchObject({
 			data: { user: { id: 1, email: "test@email.com" } },
 			error: null,
@@ -92,12 +92,13 @@ describe("run time proxy", async () => {
 		 */
 		returnNull = true;
 		await client.test2.signOut();
-		await vi.advanceTimersByTimeAsync(10);
+		await vi.runAllTimersAsync();
 		expect(res()).toMatchObject({
 			data: null,
 			error: null,
 			isPending: false,
 		});
+		vi.useRealTimers();
 	});
 
 	it("should allow second argument fetch options", async () => {
@@ -278,7 +279,7 @@ describe("type", () => {
 
 	it("should infer session react", () => {
 		const client = createReactClient({
-			plugins: [organizationClient(), twoFactorClient(), passkeyClient()],
+			plugins: [organizationClient(), twoFactorClient(), emailOTPClient()],
 		});
 		const $infer = client.$Infer.Session;
 		expectTypeOf<typeof $infer.user>().toEqualTypeOf<{

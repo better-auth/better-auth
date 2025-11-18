@@ -52,7 +52,7 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 ) => {
 	const paths = [
 		"/callback/:id",
-		"/oauth2/callback/:id",
+		"/oauth2/callback/:providerId",
 		"/sign-in/email",
 		"/sign-up/email",
 		"/passkey/verify-authentication",
@@ -69,8 +69,11 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 			return pathToMethod[ctx.path];
 		}
 		if (paths.includes(ctx.path)) {
-			return ctx.params?.id ? ctx.params.id : ctx.path.split("/").pop();
+			return (
+				ctx.params?.id || ctx.params?.providerId || ctx.path.split("/").pop()
+			);
 		}
+		if (ctx.path.includes("siwe")) return "siwe";
 		return null;
 	};
 

@@ -19,6 +19,7 @@ export const listUserAccounts = createAuthEndpoint(
 		use: [sessionMiddleware],
 		metadata: {
 			openapi: {
+				operationId: "listUserAccounts",
 				description: "List all accounts linked to the user",
 				responses: {
 					"200": {
@@ -163,11 +164,16 @@ export const linkSocialAccount = createAuthEndpoint(
 						"Disable automatic redirection to the provider. Useful for handling the redirection yourself",
 				})
 				.optional(),
+			/**
+			 * Any additional data to pass through the oauth flow.
+			 */
+			additionalData: z.record(z.string(), z.any()).optional(),
 		}),
 		use: [sessionMiddleware],
 		metadata: {
 			openapi: {
 				description: "Link a social account to the user",
+				operationId: "linkSocialAccount",
 				responses: {
 					"200": {
 						description: "Success",
@@ -344,10 +350,14 @@ export const linkSocialAccount = createAuthEndpoint(
 		}
 
 		// Handle OAuth flow
-		const state = await generateState(c, {
-			userId: session.user.id,
-			email: session.user.email,
-		});
+		const state = await generateState(
+			c,
+			{
+				userId: session.user.id,
+				email: session.user.email,
+			},
+			c.body.additionalData,
+		);
 
 		const url = await provider.createAuthorizationURL({
 			state: state.state,
