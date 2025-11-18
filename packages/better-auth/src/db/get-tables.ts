@@ -56,7 +56,7 @@ export const getAuthTables = (
 		session: {
 			modelName: options.session?.modelName || "session",
 			fields: {
-				id:{
+				id: {
 					type: "string",
 					fieldName: options.session?.fields?.id || "id",
 				},
@@ -115,7 +115,7 @@ export const getAuthTables = (
 		user: {
 			modelName: options.user?.modelName || "user",
 			fields: {
-				id:{
+				id: {
 					type: "string",
 					fieldName: options.user?.fields?.id || "id",
 				},
@@ -169,7 +169,7 @@ export const getAuthTables = (
 		account: {
 			modelName: options.account?.modelName || "account",
 			fields: {
-					id:{
+				id: {
 					type: "string",
 					fieldName: options.account?.fields?.id || "id",
 				},

@@ -194,8 +194,8 @@ export const createAdapterFactory =
 			const generatedIdField = idField({
 				customModelName: defaultModelName,
 				forceAllowId: forceAllowId && "id" in data,
-			})as any;
-			if(fields.id && (fields.id as any).fieldName){
+			}) as any;
+			if (fields.id && (fields.id as any).fieldName) {
 				generatedIdField.fieldName = (fields.id as any).fieldName;
 			}
 			fields.id = generatedIdField;
