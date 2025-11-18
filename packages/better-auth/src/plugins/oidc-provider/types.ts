@@ -358,13 +358,6 @@ export interface CodeVerificationValue {
 	 */
 	requireConsent: boolean;
 	/**
-	 * Whether the user needs to be logged in to use the client.
-	 *
-	 * If this is true, then the user will be redirected to the login page.
-	 * If the user is already logged in, they will be redirected to the redirect URI.
-	 */
-	requireLogin: boolean;
-	/**
 	 * The state parameter from the request
 	 *
 	 * If the prompt is set to `consent`, then the state
