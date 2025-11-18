@@ -750,7 +750,6 @@ describe("SAML SSO with defaultSSO array and IDP requires signed Authn requests"
 		plugins: [sso(ssoOptions)],
 	});
 
-
 	beforeAll(async () => {
 		await mockIdP.start();
 	});

@@ -984,16 +984,16 @@ export const signInSSO = (options?: SSOOptions) => {
 				}
 				const sp = parsedSamlConfig.spMetadata.metadata
 					? saml.ServiceProvider({
-						metadata: parsedSamlConfig.spMetadata.metadata,
-						privateKey: parsedSamlConfig.spMetadata.privateKey,
-						privateKeyPass: parsedSamlConfig.spMetadata.privateKeyPass,
-						relayState: body.callbackURL,
-						allowCreate: true,
-					})
+							metadata: parsedSamlConfig.spMetadata.metadata,
+							privateKey: parsedSamlConfig.spMetadata.privateKey,
+							privateKeyPass: parsedSamlConfig.spMetadata.privateKeyPass,
+							relayState: body.callbackURL,
+							allowCreate: true,
+						})
 					: saml.ServiceProvider({
-						relayState: body.callbackURL,
-						allowCreate: true,
-					});
+							relayState: body.callbackURL,
+							allowCreate: true,
+						});
 
 				const idp = saml.IdentityProvider({
 					metadata: parsedSamlConfig.idpMetadata?.metadata,
