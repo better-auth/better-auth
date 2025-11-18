@@ -17,18 +17,18 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 		{
 			method: "POST",
 			body: z.object({
-				redirect_uris: z.array(z.string()),
+				redirect_uris: z.array(z.string().min(1)).min(1),
 				scope: z.string().optional(),
 				client_name: z.string().optional(),
 				client_uri: z.string().optional(),
 				logo_uri: z.string().optional(),
-				contacts: z.array(z.string()).optional(),
+				contacts: z.array(z.string().min(1)).min(1).optional(),
 				tos_uri: z.string().optional(),
 				policy_uri: z.string().optional(),
 				software_id: z.string().optional(),
 				software_version: z.string().optional(),
 				software_statement: z.string().optional(),
-				post_logout_redirect_uris: z.array(z.string()).optional(),
+				post_logout_redirect_uris: z.array(z.string().min(1)).min(1).optional(),
 				token_endpoint_auth_method: z
 					.enum(["none", "client_secret_basic", "client_secret_post"])
 					.default("client_secret_basic")
@@ -281,18 +281,18 @@ export const updateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 		{
 			method: "PATCH",
 			body: z.object({
-				redirect_uris: z.array(z.string()).optional(),
+				redirect_uris: z.array(z.string().min(1)).min(1).optional(),
 				scope: z.string().optional(),
 				client_name: z.string().optional(),
 				client_uri: z.string().optional(),
 				logo_uri: z.string().optional(),
-				contacts: z.array(z.string()).optional(),
+				contacts: z.array(z.string().min(1)).min(1).optional(),
 				tos_uri: z.string().optional(),
 				policy_uri: z.string().optional(),
 				software_id: z.string().optional(),
 				software_version: z.string().optional(),
 				software_statement: z.string().optional(),
-				post_logout_redirect_uris: z.array(z.string()).optional(),
+				post_logout_redirect_uris: z.array(z.string().min(1)).min(1).optional(),
 				// NOTE: token_endpoint_auth_method is currently immutable since it changes isPublic definition
 				grant_types: z
 					.array(
