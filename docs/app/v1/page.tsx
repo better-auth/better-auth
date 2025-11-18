@@ -1,6 +1,6 @@
 import { DiscordLogoIcon, GitHubLogoIcon } from "@radix-ui/react-icons";
 import { ArrowRight } from "lucide-react";
-import { Metadata } from "next";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { BackgroundLines } from "./bg-line";
