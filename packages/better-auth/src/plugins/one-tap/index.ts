@@ -21,20 +21,19 @@ interface OneTapOptions {
 	 */
 	clientId?: string | undefined;
 	/**
-	 * Enable FedCM (Federated Credential Management) support
+	 * FedCM (Federated Credential Management) configuration
 	 *
 	 * When enabled, additional endpoints will be created to support
 	 * the browser's native FedCM API alongside traditional One Tap.
-	 *
-	 * @default false
-	 */
-	enableFedCM?: boolean | undefined;
-	/**
-	 * FedCM configuration options
-	 * Only used when enableFedCM is true
 	 */
 	fedcm?:
 		| {
+				/**
+				 * Enable FedCM support
+				 *
+				 * @default false
+				 */
+				enabled: boolean;
 				/**
 				 * Privacy policy URL
 				 * Required for FedCM in production
@@ -217,8 +216,8 @@ function createFedCMHeaders(
  * betterAuth({
  *   plugins: [
  *     oneTap({
- *       enableFedCM: true,
  *       fedcm: {
+ *         enabled: true,
  *         privacyPolicyUrl: "/privacy",
  *         termsOfServiceUrl: "/terms"
  *       }
@@ -292,7 +291,7 @@ export const oneTap = (options?: OneTapOptions) => {
 					});
 					payload = verifiedPayload;
 				} catch (error) {
-					if (options?.enableFedCM) {
+					if (options?.fedcm?.enabled) {
 						try {
 							const { payload: selfIssuedPayload } = await jwtVerify(
 								idToken,
@@ -413,7 +412,7 @@ export const oneTap = (options?: OneTapOptions) => {
 		),
 	};
 
-	const fedcmEndpoints = options?.enableFedCM
+	const fedcmEndpoints = options?.fedcm?.enabled
 		? {
 				// Well-Known Web Identity endpoint
 				fedcmWebIdentity: createAuthEndpoint(

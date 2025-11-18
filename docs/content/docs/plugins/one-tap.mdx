@@ -124,8 +124,8 @@ await authClient.oneTap({
 
 - **disableSignUp**:  Disable the sign-up option, allowing only existing users to sign in. Default is `false`.
 - **clientId**: Optionally, pass a client ID here if it is not provided in your social provider configuration.
-- **enableFedCM**: Enable FedCM (Federated Credential Management) support. Default is `false`. See [FedCM Support](#fedcm-support) section for details.
-- **fedcm**: FedCM configuration options (only used when `enableFedCM` is `true`):
+- **fedcm**: FedCM (Federated Credential Management) configuration options. See [FedCM Support](#fedcm-support) section for details.
+  - **enabled**: Enable FedCM support. Default is `false`.
   - **privacyPolicyUrl**: URL to your privacy policy (required for production)
   - **termsOfServiceUrl**: URL to your terms of service (required for production)
   - **branding**: Customize the FedCM dialog appearance
@@ -175,8 +175,8 @@ import { oneTap } from "better-auth/plugins";
 export const auth = betterAuth({
   plugins: [
     oneTap({
-      enableFedCM: true,  // Enable FedCM endpoints
       fedcm: {
+        enabled: true,  // Enable FedCM endpoints
         privacyPolicyUrl: "https://your-domain.com/privacy",
         termsOfServiceUrl: "https://your-domain.com/terms",
         branding: {
@@ -211,7 +211,7 @@ oneTapClient({
 
 ### FedCM Requirements
 
-When `enableFedCM` is enabled, the following endpoints will be created:
+When FedCM is enabled (`fedcm.enabled: true`), the following endpoints will be created:
 
 - `GET /.well-known/web-identity` - FedCM discovery endpoint
 - `GET /one-tap/fedcm/config` - FedCM configuration
@@ -240,7 +240,7 @@ ngrok http 3000
 
 2. **Future**: When you're ready, enable FedCM on the server
    ```ts
-   oneTap({ enableFedCM: true })
+   oneTap({ fedcm: { enabled: true } })
    ```
 
 3. **Let Google handle it**: The Google script will automatically choose the best method based on browser support
@@ -255,7 +255,7 @@ ngrok http 3000
 - **Solution**: Disable FedCM with `use_fedcm_for_prompt: false` in `additionalOptions`
 
 **Issue: "FedCM endpoints not found"**
-- **Solution**: Make sure `enableFedCM: true` is set in server configuration
+- **Solution**: Make sure `fedcm: { enabled: true }` is set in server configuration
 
 **Issue: "Invalid client_id"**
 - **Solution**: Ensure the same `clientId` is used in both server and client configuration

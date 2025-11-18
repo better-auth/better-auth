@@ -7,8 +7,8 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { oneTap } from ".";
 import { oneTapClient } from "./client";
 
-describe("oneTap - Traditional Mode", async () => {
-	const { auth, customFetchImpl, testUser } = await getTestInstance({
+describe("oneTap - Traditional Mode", () => {
+	const baseOptions = {
 		plugins: [oneTap()],
 		socialProviders: {
 			google: {
@@ -16,17 +16,18 @@ describe("oneTap - Traditional Mode", async () => {
 				clientSecret: "test-client-secret",
 			},
 		},
-	});
-
-	const client = createAuthClient({
-		plugins: [oneTapClient({ clientId: "test-client-id" })],
-		baseURL: "http://localhost:3000/api/auth",
-		fetchOptions: {
-			customFetchImpl,
-		},
-	});
+	};
 
 	it("should accept valid Google ID token", async () => {
+		const { customFetchImpl } = await getTestInstance(baseOptions);
+		const client = createAuthClient({
+			plugins: [oneTapClient({ clientId: "test-client-id" })],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
 		const mockGoogleToken = await new SignJWT({
 			email: "newuser@gmail.com",
 			email_verified: true,
@@ -51,6 +52,15 @@ describe("oneTap - Traditional Mode", async () => {
 	});
 
 	it("should handle callback endpoint", async () => {
+		const { customFetchImpl } = await getTestInstance(baseOptions);
+		const client = createAuthClient({
+			plugins: [oneTapClient({ clientId: "test-client-id" })],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
 		const response = await client.$fetch("/one-tap/callback", {
 			method: "POST",
 			body: {
@@ -63,6 +73,8 @@ describe("oneTap - Traditional Mode", async () => {
 	});
 
 	it("should reject invalid token", async () => {
+		const { auth } = await getTestInstance(baseOptions);
+
 		try {
 			await auth.api.oneTapCallback({
 				body: {
@@ -70,47 +82,48 @@ describe("oneTap - Traditional Mode", async () => {
 				},
 			});
 			expect(true).toBe(false);
-		} catch (error: any) {
-			expect(error).toBeDefined();
-			expect(error.status).toBe("BAD_REQUEST");
+		} catch (error) {
+			const typedError = error as { status?: string };
+			expect(typedError).toBeDefined();
+			expect(typedError.status).toBe("BAD_REQUEST");
 		}
 	});
 });
 
-describe("oneTap - FedCM Mode", async () => {
-	const { auth, customFetchImpl, testUser, signInWithTestUser } =
-		await getTestInstance({
-			plugins: [
-				oneTap({
-					enableFedCM: true,
-					fedcm: {
-						privacyPolicyUrl: "https://example.com/privacy",
-						termsOfServiceUrl: "https://example.com/terms",
-						branding: {
-							backgroundColor: "#1a73e8",
-							color: "#ffffff",
-							iconUrl: "https://example.com/icon.png",
-						},
+describe("oneTap - FedCM Mode", () => {
+	const baseOptions = {
+		plugins: [
+			oneTap({
+				fedcm: {
+					enabled: true,
+					privacyPolicyUrl: "https://example.com/privacy",
+					termsOfServiceUrl: "https://example.com/terms",
+					branding: {
+						backgroundColor: "#1a73e8",
+						color: "#ffffff",
+						iconUrl: "https://example.com/icon.png",
 					},
-				}),
-			],
-			socialProviders: {
-				google: {
-					clientId: "test-client-id",
-					clientSecret: "test-client-secret",
 				},
+			}),
+		],
+		socialProviders: {
+			google: {
+				clientId: "test-client-id",
+				clientSecret: "test-client-secret",
+			},
+		},
+	};
+
+	it("should serve /.well-known/web-identity endpoint", async () => {
+		const { customFetchImpl } = await getTestInstance(baseOptions);
+		const client = createAuthClient({
+			plugins: [oneTapClient({ clientId: "test-client-id" })],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl,
 			},
 		});
 
-	const client = createAuthClient({
-		plugins: [oneTapClient({ clientId: "test-client-id" })],
-		baseURL: "http://localhost:3000/api/auth",
-		fetchOptions: {
-			customFetchImpl,
-		},
-	});
-
-	it("should serve /.well-known/web-identity endpoint", async () => {
 		const response = await client.$fetch<{
 			provider_urls: string[];
 		}>("/.well-known/web-identity", {
@@ -126,6 +139,15 @@ describe("oneTap - FedCM Mode", async () => {
 	});
 
 	it("should serve FedCM config endpoint", async () => {
+		const { customFetchImpl } = await getTestInstance(baseOptions);
+		const client = createAuthClient({
+			plugins: [oneTapClient({ clientId: "test-client-id" })],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
 		const response = await client.$fetch<{
 			accounts_endpoint: string;
 			client_metadata_endpoint: string;
@@ -159,6 +181,15 @@ describe("oneTap - FedCM Mode", async () => {
 	});
 
 	it("should return empty accounts when not logged in", async () => {
+		const { customFetchImpl } = await getTestInstance(baseOptions);
+		const client = createAuthClient({
+			plugins: [oneTapClient({ clientId: "test-client-id" })],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
 		const response = await client.$fetch<{
 			accounts: Array<{
 				id: string;
@@ -175,6 +206,17 @@ describe("oneTap - FedCM Mode", async () => {
 	});
 
 	it("should return user accounts when logged in", async () => {
+		const { customFetchImpl, testUser, signInWithTestUser } =
+			await getTestInstance(baseOptions);
+
+		const client = createAuthClient({
+			plugins: [oneTapClient({ clientId: "test-client-id" })],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
 		const { headers } = await signInWithTestUser();
 
 		const headersObject: Record<string, string> = {};
@@ -203,6 +245,15 @@ describe("oneTap - FedCM Mode", async () => {
 	});
 
 	it("should serve client metadata endpoint", async () => {
+		const { customFetchImpl } = await getTestInstance(baseOptions);
+		const client = createAuthClient({
+			plugins: [oneTapClient({ clientId: "test-client-id" })],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
 		const response = await client.$fetch<{
 			privacy_policy_url: string;
 			terms_of_service_url: string;
@@ -222,6 +273,15 @@ describe("oneTap - FedCM Mode", async () => {
 	});
 
 	it("should reject assertion without authentication", async () => {
+		const { customFetchImpl } = await getTestInstance(baseOptions);
+		const client = createAuthClient({
+			plugins: [oneTapClient({ clientId: "test-client-id" })],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
 		const response = await client.$fetch("/one-tap/fedcm/assertion", {
 			method: "POST",
 			body: {
@@ -236,6 +296,16 @@ describe("oneTap - FedCM Mode", async () => {
 	});
 
 	it("should validate that assertion requires Google account linked", async () => {
+		const { customFetchImpl, testUser } = await getTestInstance(baseOptions);
+
+		const client = createAuthClient({
+			plugins: [oneTapClient({ clientId: "test-client-id" })],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
 		const response = await client.$fetch("/one-tap/fedcm/assertion", {
 			method: "POST",
 			body: {
@@ -248,29 +318,26 @@ describe("oneTap - FedCM Mode", async () => {
 	});
 });
 
-describe("oneTap - FedCM Disabled", async () => {
-	const { customFetchImpl } = await getTestInstance({
-		plugins: [
-			oneTap({
-				enableFedCM: false,
-			}),
-		],
+describe("oneTap - FedCM Disabled", () => {
+	const baseOptions = {
+		plugins: [oneTap()],
 		socialProviders: {
 			google: {
 				clientId: "test-client-id",
 				clientSecret: "test-client-secret",
 			},
 		},
-	});
-
-	const client = createAuthClient({
-		baseURL: "http://localhost:3000/api/auth",
-		fetchOptions: {
-			customFetchImpl,
-		},
-	});
+	};
 
 	it("should not serve FedCM endpoints when disabled", async () => {
+		const { customFetchImpl } = await getTestInstance(baseOptions);
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
 		const wellKnownResponse = await client.$fetch("/.well-known/web-identity", {
 			method: "GET",
 		});
@@ -294,6 +361,14 @@ describe("oneTap - FedCM Disabled", async () => {
 	});
 
 	it("should still serve callback endpoint", async () => {
+		const { customFetchImpl } = await getTestInstance(baseOptions);
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
 		const response = await client.$fetch("/one-tap/callback", {
 			method: "POST",
 			body: {
@@ -305,7 +380,7 @@ describe("oneTap - FedCM Disabled", async () => {
 	});
 });
 
-describe("oneTap - Configuration", async () => {
+describe("oneTap - Configuration", () => {
 	it("should use clientId from socialProviders when plugin clientId not provided", async () => {
 		const { auth } = await getTestInstance({
 			plugins: [oneTap()],
@@ -356,22 +431,24 @@ describe("oneTap - Configuration", async () => {
 	});
 });
 
-describe("oneTap - Account Linking", async () => {
-	const { auth } = await getTestInstance({
-		plugins: [
-			oneTap({
-				enableFedCM: true,
-			}),
-		],
-		account: {
-			accountLinking: {
-				enabled: true,
-				trustedProviders: ["google"],
-			},
-		},
-	});
-
+describe("oneTap - Account Linking", () => {
 	it("should have account linking configured", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				oneTap({
+					fedcm: {
+						enabled: true,
+					},
+				}),
+			],
+			account: {
+				accountLinking: {
+					enabled: true,
+					trustedProviders: ["google"],
+				},
+			},
+		});
+
 		const ctx = await auth.$context;
 		const accountLinking = ctx.options.account?.accountLinking;
 		expect(accountLinking?.enabled).toBe(true);
@@ -379,29 +456,31 @@ describe("oneTap - Account Linking", async () => {
 	});
 });
 
-describe("oneTap - FedCM Token Verification", async () => {
-	const { customFetchImpl } = await getTestInstance({
-		plugins: [
-			oneTap({
-				enableFedCM: true,
-			}),
-		],
-		socialProviders: {
-			google: {
-				clientId: "test-client-id",
-				clientSecret: "test-client-secret",
-			},
-		},
-	});
-
-	const client = createAuthClient({
-		baseURL: "http://localhost:3000/api/auth",
-		fetchOptions: {
-			customFetchImpl,
-		},
-	});
-
+describe("oneTap - FedCM Token Verification", () => {
 	it("should verify assertion endpoint requires authentication", async () => {
+		const { customFetchImpl } = await getTestInstance({
+			plugins: [
+				oneTap({
+					fedcm: {
+						enabled: true,
+					},
+				}),
+			],
+			socialProviders: {
+				google: {
+					clientId: "test-client-id",
+					clientSecret: "test-client-secret",
+				},
+			},
+		});
+
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
 		const response = await client.$fetch("/one-tap/fedcm/assertion", {
 			method: "POST",
 			body: {
@@ -417,11 +496,7 @@ describe("oneTap - FedCM Token Verification", async () => {
 
 	it("should reject FedCM token when FedCM is disabled", async () => {
 		const { customFetchImpl: fetchNoFedCM } = await getTestInstance({
-			plugins: [
-				oneTap({
-					enableFedCM: false,
-				}),
-			],
+			plugins: [oneTap()],
 			socialProviders: {
 				google: {
 					clientId: "test-client-id",
@@ -460,29 +535,31 @@ describe("oneTap - FedCM Token Verification", async () => {
 	});
 });
 
-describe("oneTap - Edge Cases", async () => {
-	const { auth, customFetchImpl } = await getTestInstance({
-		plugins: [
-			oneTap({
-				enableFedCM: true,
-			}),
-		],
-		socialProviders: {
-			google: {
-				clientId: "test-client-id",
-				clientSecret: "test-client-secret",
-			},
-		},
-	});
-
-	const client = createAuthClient({
-		baseURL: "http://localhost:3000/api/auth",
-		fetchOptions: {
-			customFetchImpl,
-		},
-	});
-
+describe("oneTap - Edge Cases", () => {
 	it("should handle missing email in token", async () => {
+		const { customFetchImpl } = await getTestInstance({
+			plugins: [
+				oneTap({
+					fedcm: {
+						enabled: true,
+					},
+				}),
+			],
+			socialProviders: {
+				google: {
+					clientId: "test-client-id",
+					clientSecret: "test-client-secret",
+				},
+			},
+		});
+
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
 		const tokenWithoutEmail = await new SignJWT({
 			sub: "test-user-id",
 		})
@@ -507,6 +584,29 @@ describe("oneTap - Edge Cases", async () => {
 	});
 
 	it("should handle user with no name gracefully", async () => {
+		const { auth, customFetchImpl } = await getTestInstance({
+			plugins: [
+				oneTap({
+					fedcm: {
+						enabled: true,
+					},
+				}),
+			],
+			socialProviders: {
+				google: {
+					clientId: "test-client-id",
+					clientSecret: "test-client-secret",
+				},
+			},
+		});
+
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
 		const ctx = await auth.$context;
 
 		const result = await runWithEndpointContext(
@@ -552,13 +652,14 @@ describe("oneTap - Edge Cases", async () => {
 	});
 });
 
-describe("oneTap - Branding Configuration", async () => {
+describe("oneTap - Branding Configuration", () => {
 	it("should use default branding when not specified", async () => {
 		const { customFetchImpl } = await getTestInstance({
 			plugins: [
 				oneTap({
-					enableFedCM: true,
-					fedcm: {},
+					fedcm: {
+						enabled: true,
+					},
 				}),
 			],
 		});
@@ -590,8 +691,8 @@ describe("oneTap - Branding Configuration", async () => {
 		const { customFetchImpl } = await getTestInstance({
 			plugins: [
 				oneTap({
-					enableFedCM: true,
 					fedcm: {
+						enabled: true,
 						branding: {
 							backgroundColor: "#ff0000",
 							color: "#000000",
