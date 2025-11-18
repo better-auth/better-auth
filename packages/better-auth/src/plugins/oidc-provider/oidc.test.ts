@@ -1,5 +1,6 @@
 import { createLocalJWKSet, decodeProtectedHeader, jwtVerify } from "jose";
-import { type Listener, listen } from "listhen";
+import type { Listener } from "listhen";
+import { listen } from "listhen";
 import {
 	afterAll,
 	afterEach,
@@ -9,14 +10,16 @@ import {
 	it,
 	test,
 } from "vitest";
-import { type AuthClient, createAuthClient } from "../../client";
+import type { AuthClient } from "../../client";
+import { createAuthClient } from "../../client";
 import { toNodeHandler } from "../../integrations/node";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { genericOAuth } from "../generic-oauth";
 import { genericOAuthClient } from "../generic-oauth/client";
 import { jwt } from "../jwt";
 import { oidcProvider } from ".";
-import { type OidcClientPlugin, oidcClient } from "./client";
+import type { OidcClientPlugin } from "./client";
+import { oidcClient } from "./client";
 import type { Client } from "./types";
 
 // Type for the server client with OIDC plugin

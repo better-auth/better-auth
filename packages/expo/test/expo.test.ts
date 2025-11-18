@@ -21,6 +21,10 @@ vi.mock("expo-web-browser", async () => {
 
 vi.mock("react-native", async () => {
 	return {
+		AppState: {
+			addEventListener: vi.fn(),
+			removeEventListener: vi.fn(),
+		},
 		Platform: {
 			OS: "android",
 		},
@@ -210,10 +214,23 @@ describe("expo", async () => {
 			hasBetterAuthCookies(multipleNonBetterAuthHeader, "better-auth"),
 		).toBe(false);
 
+		// Non-session better-auth cookies should still be detected (e.g., passkey cookies)
 		const nonSessionBetterAuthHeader = "better-auth.other_cookie=abc; Path=/";
 		expect(
 			hasBetterAuthCookies(nonSessionBetterAuthHeader, "better-auth"),
-		).toBe(false);
+		).toBe(true);
+
+		// Passkey cookie should be detected
+		const passkeyHeader = "better-auth-passkey=xyz; Path=/";
+		expect(hasBetterAuthCookies(passkeyHeader, "better-auth")).toBe(true);
+
+		// Secure passkey cookie should be detected
+		const securePasskeyHeader = "__Secure-better-auth-passkey=xyz; Path=/";
+		expect(hasBetterAuthCookies(securePasskeyHeader, "better-auth")).toBe(true);
+
+		// Custom passkey cookie name should be detected
+		const customPasskeyHeader = "better-auth-custom-challenge=xyz; Path=/";
+		expect(hasBetterAuthCookies(customPasskeyHeader, "better-auth")).toBe(true);
 	});
 
 	it("should preserve unchanged client store session properties on signout", async () => {
