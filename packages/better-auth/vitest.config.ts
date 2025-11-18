@@ -1,6 +1,6 @@
-import { defineConfig } from "vitest/config";
+import { defineProject } from "vitest/config";
 
-export default defineConfig({
+export default defineProject({
 	test: {
 		execArgv: ["--expose-gc"],
 		// Exclude adapter tests by default - they are run separately via test:adapters
