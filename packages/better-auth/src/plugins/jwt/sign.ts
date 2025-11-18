@@ -1,6 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
-import { importJWK, type JWTPayload, SignJWT } from "jose";
+import type { JWTPayload } from "jose";
+import { importJWK, SignJWT } from "jose";
 import { symmetricDecrypt } from "../../crypto";
 import { getJwksAdapter } from "./adapter";
 import type { JwtOptions } from "./types";
@@ -51,8 +52,11 @@ export async function signJWT(
 		return options.jwt.sign(jwtPayload);
 	}
 
-	const adapter = getJwksAdapter(ctx.context.adapter);
-	let key = await adapter.getLatestKey();
+	const adapter = getJwksAdapter(ctx.context.adapter, options);
+	let key = await adapter.getLatestKey(ctx);
+	if (!key) {
+		key = await createJwk(ctx, options);
+	}
 	const privateKeyEncryptionEnabled =
 		!options?.jwks?.disablePrivateKeyEncryption;
 

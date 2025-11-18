@@ -4,7 +4,7 @@ import Database from "better-sqlite3";
 import { Kysely, SqliteDialect } from "kysely";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { betterAuth } from "../auth";
-import { init } from "../init";
+import { init } from "../context/init";
 import { getTestInstance } from "../test-utils/test-instance";
 import type {
 	BetterAuthOptions,
@@ -15,7 +15,7 @@ import type {
 import { safeJSONParse } from "../utils/json";
 import { getMigrations } from "./get-migration";
 
-describe("adapter test", async () => {
+describe("internal adapter test", async () => {
 	const sqliteDialect = new SqliteDialect({
 		database: new Database(":memory:"),
 	});

@@ -6,10 +6,8 @@ import {
 import { nextCookies } from "better-auth/next-js";
 import { organization } from "better-auth/plugins";
 import { createAuthClient } from "better-auth/react";
-import Database from "better-sqlite3";
 
 const auth = betterAuth({
-	database: new Database("./sqlite.db"),
 	trustedOrigins: [],
 	emailAndPassword: {
 		enabled: true,

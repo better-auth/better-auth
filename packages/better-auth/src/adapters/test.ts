@@ -1069,7 +1069,7 @@ export function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
 		await opts.getAdapter({
 			advanced: {
 				database: {
-					useNumberId: true,
+					generateId: "serial",
 				},
 			},
 		});
@@ -1151,7 +1151,7 @@ export function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
 				predefinedOptions: {
 					advanced: {
 						database: {
-							useNumberId: true,
+							generateId: "serial",
 						},
 					},
 				},
