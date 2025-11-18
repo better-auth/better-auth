@@ -6,10 +6,11 @@ import { getMigrations } from "../../../db";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
+	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
-	performanceTestSuite,
 	transactionsTestSuite,
+	uuidTestSuite,
 } from "../../tests";
 import { kyselyAdapter } from "../kysely-adapter";
 
@@ -42,11 +43,12 @@ const { execute } = await testAdapter({
 		await runMigrations();
 	},
 	tests: [
-		normalTestSuite({}),
-		transactionsTestSuite({ disableTests: { ALL: true } }),
+		normalTestSuite(),
+		transactionsTestSuite(),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
-		performanceTestSuite({ dialect: "sqlite" }),
+		joinsTestSuite(),
+		uuidTestSuite({}),
 	],
 	async onFinish() {
 		database.close();

@@ -5,6 +5,7 @@ export default defineConfig({
 	format: ["esm"],
 	entry: [
 		"./src/index.ts",
+		"./src/auth/minimal.ts",
 		"./src/social-providers/index.ts",
 		"./src/client/index.ts",
 		"./src/client/plugins/index.ts",
@@ -51,7 +52,6 @@ export default defineConfig({
 		"./src/plugins/oauth-proxy/index.ts",
 		"./src/plugins/organization/index.ts",
 		"./src/plugins/organization/access/index.ts",
-		"./src/plugins/passkey/index.ts",
 		"./src/plugins/phone-number/index.ts",
 		"./src/plugins/two-factor/index.ts",
 		"./src/plugins/username/index.ts",

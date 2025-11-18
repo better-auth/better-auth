@@ -3,13 +3,10 @@ import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
 } from "@better-auth/core";
-import { type InternalLogger, logger } from "@better-auth/core/env";
-import {
-	APIError,
-	createRouter,
-	type Endpoint,
-	type Middleware,
-} from "better-call";
+import type { InternalLogger } from "@better-auth/core/env";
+import { logger } from "@better-auth/core/env";
+import type { Endpoint, Middleware } from "better-call";
+import { APIError, createRouter } from "better-call";
 import type { UnionToIntersection } from "../types/helper";
 import { originCheckMiddleware } from "./middlewares";
 import { onRequestRateLimit } from "./rate-limiter";
@@ -368,5 +365,6 @@ export {
 	optionsMiddleware,
 } from "@better-auth/core/api";
 export { APIError } from "better-call";
+export { getIp } from "../utils/get-request-ip";
 export * from "./middlewares";
 export * from "./routes";
