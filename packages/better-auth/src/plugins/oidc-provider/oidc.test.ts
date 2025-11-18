@@ -147,6 +147,7 @@ describe("oidc", async () => {
 		type: "web",
 		disabled: false,
 		name: "test",
+		tokenEndpointAuthMethod: "client_secret_post",
 	};
 
 	it("should create oidc client", async ({ expect }) => {
@@ -176,6 +177,7 @@ describe("oidc", async () => {
 				type: "web",
 				disabled: false,
 				name: createdClient.data.client_name!,
+				tokenEndpointAuthMethod: "client_secret_post",
 			};
 		}
 		const client = await authorizationServer.api.getOAuthClient({
@@ -522,6 +524,7 @@ describe("oidc storage", async () => {
 			type: "web",
 			disabled: false,
 			name: "test",
+			tokenEndpointAuthMethod: "client_secret_post",
 		};
 		const createdClient = await serverClient.oauth2.register({
 			client_name: application.name,
@@ -550,6 +553,7 @@ describe("oidc storage", async () => {
 				type: "web",
 				disabled: false,
 				name: createdClient.data.client_name || "",
+				tokenEndpointAuthMethod: "client_secret_post",
 			};
 		}
 		// The RP (Relying Party) - the client application
@@ -900,6 +904,7 @@ describe("oidc-jwt", async () => {
 				type: "web",
 				disabled: false,
 				name: "test",
+				tokenEndpointAuthMethod: "client_secret_post",
 			};
 			const createdClient = await serverClient.oauth2.register({
 				client_name: application.name,
@@ -928,6 +933,7 @@ describe("oidc-jwt", async () => {
 					type: "web",
 					disabled: false,
 					name: createdClient.data.client_name || "",
+					tokenEndpointAuthMethod: "client_secret_post",
 				};
 			}
 
@@ -1067,4 +1073,310 @@ describe("oidc-jwt", async () => {
 			expect(decoded.alg).toBe(expected);
 		},
 	);
+});
+
+describe("private_key_jwt authentication", async () => {
+	const {
+		auth: authorizationServer,
+		db,
+		testUser: testUserCredentials,
+	} = await getTestInstance({
+		plugins: [
+			oidcProvider({
+				loginPage: "/login",
+			}),
+		],
+	});
+
+	const { generateKeyPair, SignJWT, exportJWK } = await import("jose");
+
+	let clientId: string;
+	let publicKeyJWKS: any;
+	let privateKey: any;
+	let testUser: any;
+
+	it("should setup client with JWKS", async () => {
+		const users = await db.findMany({ model: "user" });
+		testUser = users[0];
+		expect(testUser).toBeDefined();
+		expect(testUser.id).toBeDefined();
+
+		const keyPair = await generateKeyPair("RS256");
+		privateKey = keyPair.privateKey;
+		const publicKeyJWK = await exportJWK(keyPair.publicKey);
+		publicKeyJWKS = {
+			keys: [
+				{
+					...publicKeyJWK,
+					kid: "test-key-1",
+					alg: "RS256",
+					use: "sig",
+				},
+			],
+		};
+
+		const client = await db.create({
+			model: "oauthApplication",
+			data: {
+				clientId: "test-private-key-jwt-client",
+				name: "Test Private Key JWT Client",
+				type: "web",
+				redirectUrls: "http://localhost:3000/callback",
+				jwks: JSON.stringify(publicKeyJWKS),
+				tokenEndpointAuthMethod: "private_key_jwt",
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		clientId = client.clientId;
+		expect(clientId).toBe("test-private-key-jwt-client");
+	});
+
+	it("should authenticate with private_key_jwt", async () => {
+		const now = Math.floor(Date.now() / 1000);
+		const clientAssertion = await new SignJWT({
+			iss: clientId,
+			sub: clientId,
+			aud: "http://localhost:3000/api/auth/oauth2/token",
+			jti: `test-jti-${now}`,
+			iat: now,
+		})
+			.setProtectedHeader({ alg: "RS256", kid: "test-key-1" })
+			.setExpirationTime(now + 300)
+			.sign(privateKey);
+
+		const codeChallenge = "test-challenge";
+		await db.create({
+			model: "verification",
+			data: {
+				identifier: "test-code-123",
+				value: JSON.stringify({
+					clientId: clientId,
+					redirectURI: "http://localhost:3000/callback",
+					scope: ["openid", "profile", "offline_access"],
+					userId: testUser.id,
+					authTime: now,
+					requireConsent: false,
+					state: "test-state",
+					codeChallenge: codeChallenge,
+					codeChallengeMethod: "plain",
+				}),
+				expiresAt: new Date(Date.now() + 600000),
+			},
+		});
+
+		const response = await authorizationServer.api.oAuth2token({
+			body: {
+				grant_type: "authorization_code",
+				code: "test-code-123",
+				redirect_uri: "http://localhost:3000/callback",
+				client_id: clientId,
+				client_assertion_type:
+					"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+				client_assertion: clientAssertion,
+				code_verifier: codeChallenge,
+			},
+		});
+
+		expect(response.access_token).toBeDefined();
+		expect(response.refresh_token).toBeDefined();
+		expect(response.token_type).toBe("Bearer");
+	});
+
+	it("should reject invalid jwt signature", async () => {
+		const now = Math.floor(Date.now() / 1000);
+		const wrongKeyPair = await generateKeyPair("RS256");
+		const clientAssertion = await new SignJWT({
+			iss: clientId,
+			sub: clientId,
+			aud: "http://localhost:3000/api/auth/oauth2/token",
+			jti: `test-jti-invalid-${now}`,
+			iat: now,
+		})
+			.setProtectedHeader({ alg: "RS256", kid: "test-key-1" })
+			.setExpirationTime(now + 300)
+			.sign(wrongKeyPair.privateKey);
+
+		const codeChallenge = "test-challenge-2";
+		await db.create({
+			model: "verification",
+			data: {
+				identifier: "test-code-456",
+				value: JSON.stringify({
+					clientId: clientId,
+					redirectURI: "http://localhost:3000/callback",
+					scope: ["openid", "profile"],
+					userId: testUser.id,
+					authTime: now,
+					requireConsent: false,
+					state: "test-state",
+					codeChallenge: codeChallenge,
+					codeChallengeMethod: "plain",
+				}),
+				expiresAt: new Date(Date.now() + 600000),
+			},
+		});
+
+		await expect(
+			authorizationServer.api.oAuth2token({
+				body: {
+					grant_type: "authorization_code",
+					code: "test-code-456",
+					redirect_uri: "http://localhost:3000/callback",
+					client_id: clientId,
+					client_assertion_type:
+						"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+					client_assertion: clientAssertion,
+					code_verifier: codeChallenge,
+				},
+			}),
+		).rejects.toThrow();
+	});
+
+	it("should reject expired jwt", async () => {
+		const now = Math.floor(Date.now() / 1000);
+		const clientAssertion = await new SignJWT({
+			iss: clientId,
+			sub: clientId,
+			aud: "http://localhost:3000/api/auth/oauth2/token",
+			jti: `test-jti-expired-${now}`,
+			iat: now - 600,
+		})
+			.setProtectedHeader({ alg: "RS256", kid: "test-key-1" })
+			.setExpirationTime(now - 300)
+			.sign(privateKey);
+
+		const codeChallenge = "test-challenge-3";
+		await db.create({
+			model: "verification",
+			data: {
+				identifier: "test-code-789",
+				value: JSON.stringify({
+					clientId: clientId,
+					redirectURI: "http://localhost:3000/callback",
+					scope: ["openid", "profile"],
+					userId: testUser.id,
+					authTime: now,
+					requireConsent: false,
+					state: "test-state",
+					codeChallenge: codeChallenge,
+					codeChallengeMethod: "plain",
+				}),
+				expiresAt: new Date(Date.now() + 600000),
+			},
+		});
+
+		await expect(
+			authorizationServer.api.oAuth2token({
+				body: {
+					grant_type: "authorization_code",
+					code: "test-code-789",
+					redirect_uri: "http://localhost:3000/callback",
+					client_id: clientId,
+					client_assertion_type:
+						"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+					client_assertion: clientAssertion,
+					code_verifier: codeChallenge,
+				},
+			}),
+		).rejects.toThrow();
+	});
+
+	it("should reject reused jti", async () => {
+		const now = Math.floor(Date.now() / 1000);
+		const jti = `test-jti-reuse-${now}`;
+
+		const clientAssertion1 = await new SignJWT({
+			iss: clientId,
+			sub: clientId,
+			aud: "http://localhost:3000/api/auth/oauth2/token",
+			jti: jti,
+			iat: now,
+		})
+			.setProtectedHeader({ alg: "RS256", kid: "test-key-1" })
+			.setExpirationTime(now + 300)
+			.sign(privateKey);
+
+		const codeChallenge1 = "test-challenge-4";
+		await db.create({
+			model: "verification",
+			data: {
+				identifier: "test-code-reuse-1",
+				value: JSON.stringify({
+					clientId: clientId,
+					redirectURI: "http://localhost:3000/callback",
+					scope: ["openid", "profile"],
+					userId: testUser.id,
+					authTime: now,
+					requireConsent: false,
+					state: "test-state",
+					codeChallenge: codeChallenge1,
+					codeChallengeMethod: "plain",
+				}),
+				expiresAt: new Date(Date.now() + 600000),
+			},
+		});
+
+		const response1 = await authorizationServer.api.oAuth2token({
+			body: {
+				grant_type: "authorization_code",
+				code: "test-code-reuse-1",
+				redirect_uri: "http://localhost:3000/callback",
+				client_id: clientId,
+				client_assertion_type:
+					"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+				client_assertion: clientAssertion1,
+				code_verifier: codeChallenge1,
+			},
+		});
+
+		expect(response1.access_token).toBeDefined();
+
+		const clientAssertion2 = await new SignJWT({
+			iss: clientId,
+			sub: clientId,
+			aud: "http://localhost:3000/api/auth/oauth2/token",
+			jti: jti,
+			iat: now,
+		})
+			.setProtectedHeader({ alg: "RS256", kid: "test-key-1" })
+			.setExpirationTime(now + 300)
+			.sign(privateKey);
+
+		const codeChallenge2 = "test-challenge-5";
+		await db.create({
+			model: "verification",
+			data: {
+				identifier: "test-code-reuse-2",
+				value: JSON.stringify({
+					clientId: clientId,
+					redirectURI: "http://localhost:3000/callback",
+					scope: ["openid", "profile"],
+					userId: testUser.id,
+					authTime: now,
+					requireConsent: false,
+					state: "test-state",
+					codeChallenge: codeChallenge2,
+					codeChallengeMethod: "plain",
+				}),
+				expiresAt: new Date(Date.now() + 600000),
+			},
+		});
+
+		await expect(
+			authorizationServer.api.oAuth2token({
+				body: {
+					grant_type: "authorization_code",
+					code: "test-code-reuse-2",
+					redirect_uri: "http://localhost:3000/callback",
+					client_id: clientId,
+					client_assertion_type:
+						"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+					client_assertion: clientAssertion2,
+					code_verifier: codeChallenge2,
+				},
+			}),
+		).rejects.toThrow();
+	});
 });
