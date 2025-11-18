@@ -30,7 +30,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 		name: z.string().min(1).meta({
 			description: "The name of the organization",
 		}),
-		slug: z.string().min(1).meta({
+		slug: z.string().min(1).optional().meta({
 			description: "The slug of the organization",
 		}),
 		userId: z.coerce
@@ -145,13 +145,15 @@ export const createOrganization = <O extends OrganizationOptions>(
 				});
 			}
 
-			const existingOrganization = await adapter.findOrganizationBySlug(
-				ctx.body.slug,
-			);
-			if (existingOrganization) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_ALREADY_EXISTS,
-				});
+			if (typeof ctx.body.slug === "string") {
+				const existingOrganization = await adapter.findOrganizationBySlug(
+					ctx.body.slug,
+				);
+				if (existingOrganization) {
+					throw new APIError("BAD_REQUEST", {
+						message: ORGANIZATION_ERROR_CODES.ORGANIZATION_ALREADY_EXISTS,
+					});
+				}
 			}
 
 			let {
