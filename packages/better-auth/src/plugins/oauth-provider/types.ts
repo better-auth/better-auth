@@ -47,10 +47,13 @@ export interface OAuthOptions<
 	 */
 	validAudiences?: string[];
 	/**
-	 * Trusted clients that are configured directly in the provider options.
-	 * These clients bypass database lookups and can optionally skip consent screens.
+	 * Automatically cache trusted clients by client_id.
+	 * Clients are cached at request.
+	 *
+	 * Additionally, cached trusted clients are immutable
+	 * through the CRUD endpoints.
 	 */
-	trustedClients?: SchemaClient<Scopes>[];
+	cachedTrustedClients?: Set<string>;
 	/**
 	 * The amount of time in seconds that the access token is valid for.
 	 *

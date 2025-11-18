@@ -13,7 +13,31 @@ import type { jwt } from "../jwt";
 import type { oauthProvider } from "../oauth-provider";
 import type { DatabaseClient } from "./register";
 import { databaseToSchema } from "./register";
-import type { OAuthOptions, Scope, StoreTokenType } from "./types";
+import type {
+	OAuthOptions,
+	SchemaClient,
+	Scope,
+	StoreTokenType,
+} from "./types";
+
+class TTLCache<K, V extends { expiresAt?: Date }> {
+	private cache = new Map<K, V>();
+	constructor() {}
+
+	set(key: K, value: V) {
+		this.cache.set(key, value);
+	}
+
+	get(key: K): V | undefined {
+		const entry = this.cache.get(key);
+		if (!entry) return undefined;
+		if (entry.expiresAt && entry.expiresAt < new Date()) {
+			this.cache.delete(key);
+			return undefined;
+		}
+		return entry;
+	}
+}
 
 /**
  * Gets the oAuth Provider Plugin
@@ -37,6 +61,8 @@ export const getJwtPlugin = (ctx: AuthContext | Auth) => {
 	return plugin as ReturnType<typeof jwt>;
 };
 
+const cachedTrustedClients = new TTLCache<string, SchemaClient<Scope[]>>();
+
 /**
  * Get a client by ID, checking trusted clients first, then database
  */
@@ -45,12 +71,11 @@ export async function getClient(
 	options: OAuthOptions<Scope[]>,
 	clientId: string,
 ) {
-	const trustedClient = options.trustedClients?.find(
-		(client) => client.clientId === clientId,
-	);
+	const trustedClient = cachedTrustedClients.get(clientId);
 	if (trustedClient) {
 		return Object.assign({}, trustedClient);
 	}
+
 	const dbClient = await ctx.context.adapter
 		.findOne<DatabaseClient>({
 			model: options.schema?.oauthClient?.modelName ?? "oauthClient",
@@ -60,6 +85,11 @@ export async function getClient(
 			if (!res) return null;
 			return databaseToSchema(res);
 		});
+
+	if (dbClient && options.cachedTrustedClients?.has(clientId)) {
+		cachedTrustedClients.set(clientId, dbClient);
+	}
+
 	return dbClient;
 }
 
