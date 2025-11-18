@@ -30,7 +30,9 @@ async function selected(
 	const foundPrompt = prompts?.findIndex((v) => v === "select_account") ?? -1;
 	if (foundPrompt >= 0) {
 		prompts?.splice(foundPrompt, 1);
-		ctx.query.prompt = prompts?.length ? prompts?.join(" ") : undefined;
+		prompts?.length
+			? query.set("prompt", prompts.join(" "))
+			: query.delete("prompt");
 	}
 	ctx.query = Object.fromEntries(query);
 	const { url } = await authorizeEndpoint(ctx, opts);
@@ -49,7 +51,9 @@ async function postLogin(
 	const foundPrompt = prompts?.findIndex((v) => v === "select_account") ?? -1;
 	if (foundPrompt >= 0) {
 		prompts?.splice(foundPrompt, 1);
-		ctx.query.prompt = prompts?.length ? prompts?.join(" ") : undefined;
+		prompts?.length
+			? query.set("prompt", prompts.join(" "))
+			: query.delete("prompt");
 	}
 	ctx.context.post_login = true;
 	ctx.query = Object.fromEntries(query);

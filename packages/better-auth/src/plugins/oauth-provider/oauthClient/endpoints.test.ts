@@ -47,6 +47,7 @@ describe("oauthClient", async () => {
 	let oauthClient: OAuthClient;
 	let oauthPublicClient: OAuthClient;
 	let oauthUiClient: OAuthClient;
+
 	it("should create clients with minimum requirements", async () => {
 		const client = await auth.api.createOAuthClient({
 			headers,

@@ -21,6 +21,7 @@ Please report any issues or bugs on [GitHub](https://github.com/better-auth/bett
 - **Dynamic Client Registration**: Allow clients to register clients dynamically.
   - **Public Clients**: Support public clients for native mobile clients and user-agent clients (like AI)
   - **Confidential Clients**: Supports confidential clients for web clients
+  - **Trusted Clients**: Configure hard-coded trusted clients with optional consent bypass.
 - **JWT Plugin compatibility**: required by default with an option to disable
   - **JWT Signing**: sign JWT tokens when requesting a `resource`
   - **JWKS Verifiable**: verify tokens remotely at the [`/jwks`](/docs/plugins/jwt#verifying-the-token) endpoint
@@ -48,7 +49,7 @@ Please report any issues or bugs on [GitHub](https://github.com/better-auth/bett
 
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth";
-    import { oauthProvider } from "better-auth/plugins";
+    import { oauthProvider, jwt } from "better-auth/plugins";
 
     const auth = betterAuth({
       disabledPaths: [
@@ -154,124 +155,9 @@ const authClient = createAuthClient({
 The plugin operates as an OAuth 2.1 server with OIDC compatable endpoints and JWT verifiable access tokens. The following provides more detailed information about each endpoint.
 
 
-### OAuth Client Endpoints
+### OAuth Clients
 
-The majority of these endpoints are server-only to allow implementers to describe their own RBAC checks through their own api.
-
-#### Create
-
-There are two types of OAuth Clients:
-- **Public Clients**: Applications such as native mobile clients and user-agent clients (like AI) which are unable to hold client secrets.
-- **Confidential Clients**: Applications such as web clients able to hold client secrets.
-
-An example confidential client. Note that the client secret is displayed once and cannot be seen again:
-```ts
-await auth.api.createOAuthClient({
-  headers,
-  body: {
-    name: "Internal Dashboard",
-    redirectUris: ["https://dashboard.company.com/auth/callback"], // [!code highlight]
-    type: "web",
-    disabled: false,
-    skipConsent: true, // Skip consent for this trusted client
-    metadata: { internal: true },
-  }
-});
-```
-
-An example public client:
-```ts
-await auth.api.createOAuthClient({
-  headers,
-  body: {
-    token_endpoint_auth_method: "none", // [!code highlight]
-    name: "Company Mobile App",
-    redirectUris: ["com.company.app://auth"], // [!code highlight]
-    type: "native",
-    disabled: false,
-    skipConsent: false, // Still require consent if needed
-    metadata: {},
-  },
-});
-```
-
-#### List
-
-Can obtain OAuth clients from their `user_id` or `reference_id`.
-
-```ts
-await auth.api.getOAuthClients({
-  headers,
-  query: {
-    user_id: userId,
-  },
-});
-```
-
-#### Get
-
-Can obtain information about a specified client.
-
-```ts
-await auth.api.getOAuthClient({
-  headers,
-  params: {
-    id: client_id,
-  },
-});
-```
-
-#### Get Public
-
-Obtains public information about a client. Useful for login flow pages such as consent where you'd need to display public client information.
-
-```ts
-await client.oauth2.clients.public({
-  query: {
-    client_id: client_id,
-  },
-});
-```
-
-#### Update
-
-Can update fields for a specific client. The combination must still be a valid OAuthClient configuration. Converting between public and confidential clients cannot be performed and client_secrets cannot be changed.
-
-```ts
-await auth.api.updateOAuthClient({
-  headers,
-  params: {
-    id: client_id,
-  },
-  body: {
-    name: "new name",
-  },
-});
-```
-
-To rotate a secret, use the rotate function. Note that the secret updates immediately and is displayed only once.
-
-```ts
-await auth.api.rotateClientSecret({
-  headers,
-  params: {
-    id: client_id,
-  },
-});
-```
-
-#### Delete
-
-Delete an oauth client.
-
-```ts
-await auth.api.deleteOAuthClient({
-  headers,
-  params: {
-    id: client_id,
-  },
-});
-```
+In OAuth there
 
 
 ### Dynamic Registeration Endpoint
@@ -314,7 +200,7 @@ oauthProvider({
 To register a new OIDC client, use the `oauth2.register` method.
 
 ```ts
-await client.oauth2.register({
+const client = await client.oauth2.register({
   client_name: "My Client",
   redirect_uris: ["https://client.example.com/callback"],
 });
@@ -679,7 +565,7 @@ await authClient.multiSession.setActive({
   sessionToken,
 });
 await client.oauth2.oauth2Continue({
-  confirm: true,
+  selected: true,
 });
 ```
 
