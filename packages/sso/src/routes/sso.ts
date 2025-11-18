@@ -10,6 +10,7 @@ import {
 import {
 	APIError,
 	createAuthEndpoint,
+	originCheck,
 	sessionMiddleware,
 } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
@@ -107,9 +108,7 @@ export const spMetadata = () => {
 						assertionConsumerService: [
 							{
 								Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-								Location:
-									parsedSamlConfig.callbackUrl ||
-									`${ctx.context.baseURL}/sso/saml2/sp/acs/${provider.id}`,
+								Location: `${ctx.context.baseURL}/sso/saml2/sp/acs/${provider.id}`,
 							},
 						],
 						wantMessageSigned: parsedSamlConfig.wantAssertionsSigned || false,
@@ -1361,6 +1360,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 				SAMLResponse: z.string(),
 				RelayState: z.string().optional(),
 			}),
+			use: [originCheck((ctx) => ctx.body.RelayState)],
 			metadata: {
 				isAction: false,
 				openapi: {
@@ -1472,7 +1472,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 					: [
 							{
 								Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-								Location: parsedSamlConfig.callbackUrl,
+								Location: `${ctx.context.baseURL}/sso/saml2/sp/acs/${providerId}`,
 							},
 						],
 				privateKey: spData?.privateKey || parsedSamlConfig.privateKey,
@@ -1773,9 +1773,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 				assertionConsumerService: [
 					{
 						Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-						Location:
-							parsedSamlConfig.callbackUrl ||
-							`${ctx.context.baseURL}/sso/saml2/sp/acs/${providerId}`,
+						Location: `${ctx.context.baseURL}/sso/saml2/sp/acs/${providerId}`,
 					},
 				],
 				wantMessageSigned: parsedSamlConfig.wantAssertionsSigned || false,
