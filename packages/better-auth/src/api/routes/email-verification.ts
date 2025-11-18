@@ -362,6 +362,15 @@ export const verifyEmail = createAuthEndpoint(
 				},
 			});
 		}
+		if (user.user.emailVerified) {
+			if (ctx.query.callbackURL) {
+				throw ctx.redirect(ctx.query.callbackURL);
+			}
+			return ctx.json({
+				status: true,
+				user: null,
+			});
+		}
 		if (ctx.context.options.emailVerification?.onEmailVerification) {
 			await ctx.context.options.emailVerification.onEmailVerification(
 				user.user,
