@@ -400,22 +400,7 @@ export function updateApiKey({
 
 			let newApiKey: ApiKey = apiKey;
 			try {
-				if (opts.cacheEnabled) {
-					const dbUpdated = await ctx.context.adapter.update<ApiKey>({
-						model: API_KEY_TABLE_NAME,
-						where: [
-							{
-								field: "id",
-								value: apiKey.id,
-							},
-						],
-						update: newValues,
-					});
-					if (dbUpdated) {
-						await setApiKey(ctx, dbUpdated, opts);
-						newApiKey = dbUpdated;
-					}
-				} else if (
+				if (
 					opts.storage === "secondary-storage" &&
 					opts.fallbackToDatabase
 				) {

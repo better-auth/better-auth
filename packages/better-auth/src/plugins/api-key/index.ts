@@ -93,9 +93,7 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 		},
 		enableSessionForAPIKeys: options?.enableSessionForAPIKeys ?? false,
 		fallbackToDatabase: options?.fallbackToDatabase ?? false,
-		cacheEnabled: options?.cacheEnabled ?? false,
-		cacheTTL: options?.cacheTTL ?? null,
-		storageMethods: options?.storageMethods,
+		customStorage: options?.customStorage,
 	} satisfies ApiKeyOptions;
 
 	const schema = mergeSchema(

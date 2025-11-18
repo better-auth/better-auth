@@ -489,7 +489,7 @@ export const auth = betterAuth({
 
 #### Secondary Storage with Fallback
 
-Check secondary storage first, then fallback to database if not found. Ideal for gradual migration from database to secondary storage.
+Check secondary storage first, then fallback to database if not found.
 
 **Read behavior:**
 - Checks secondary storage first
@@ -520,42 +520,6 @@ export const auth = betterAuth({
 });
 ```
 
-#### Database with Cache Layer
-
-Use secondary storage as a write-through cache. API keys are stored in both the database and cache, with cache serving as a fast lookup layer.
-
-**Read behavior:**
-- Checks cache first
-- On cache miss, fetches from database and automatically populates cache
-- Ensures frequently accessed keys stay in cache
-
-**Write behavior:**
-- Writes to both database and cache (write-through)
-- Updates both on modifications
-
-**Delete behavior:**
-- Deletes from both database and cache
-
-```ts
-export const auth = betterAuth({
-  secondaryStorage: {
-    get: async (key) => await redis.get(key),
-    set: async (key, value, ttl) => {
-      if (ttl) await redis.set(key, value, { EX: ttl });
-      else await redis.set(key, value);
-    },
-    delete: async (key) => await redis.del(key),
-  },
-  plugins: [
-    apiKey({
-      storage: "database",
-      cacheEnabled: true,
-      cacheTTL: 3600, // Optional: Custom TTL in seconds
-    }),
-  ],
-});
-```
-
 ### Custom Storage Methods
 
 You can provide custom storage methods specifically for API keys, overriding the global `secondaryStorage` configuration:
@@ -565,7 +529,7 @@ export const auth = betterAuth({
   plugins: [
     apiKey({
       storage: "secondary-storage",
-      storageMethods: {
+      customStorage: {
         get: async (key) => {
           // Custom get logic for API keys
           return await customStorage.get(key);
@@ -584,72 +548,9 @@ export const auth = betterAuth({
 });
 ```
 
-### Cache TTL Configuration
 
-When using `"cache"` mode, you can configure a custom TTL for cache entries:
 
-```ts
-export const auth = betterAuth({
-  plugins: [
-    apiKey({
-      storage: "cache",
-      cacheTTL: 3600, // Cache for 1 hour (in seconds)
-    }),
-  ],
-});
-```
 
-If `cacheTTL` is not provided, the API key's expiration date (`expiresAt`) will be used to calculate the TTL automatically.
-
-### How Storage Works
-
-All storage modes (except `"database"`) use the following key patterns in secondary storage:
-
-- `api-key:${hashedKey}` - Primary lookup by hashed key (for validation)
-- `api-key:by-id:${id}` - Lookup by ID (for get/update/delete operations)
-- `api-key:by-user:${userId}` - User's API key list (for listing operations)
-
-### Migration Guide
-
-#### Migrating from Database to Secondary Storage
-
-1. **Start with fallback enabled**:
-   ```ts
-   apiKey({
-     storage: "secondary-storage",
-     fallbackToDatabase: true,
-   })
-   ```
-   This allows existing keys in the database to be accessible while new keys are stored in secondary storage.
-   
-2. **Migrate existing keys** (optional): For faster initial cache population, you can write a migration script to
-copy existing keys from database to secondary storage. However, this is optional since the cache will warm up automatically as keys are accessed.
-
-3. **Disable fallback** once all keys are migrated or when you're confident the cache is sufficiently populated:
-   ```ts
-   apiKey({
-     storage: "secondary-storage",
-     fallbackToDatabase: false, // or omit, false is default
-   })
-   ```
-
-#### Using Cache Layer for Performance
-
-If you want to keep database as the source of truth but improve performance:
-
-```ts
-apiKey({
-  storage: "database",
-  cacheEnabled: true,
-  cacheTTL: 3600, // Cache for 1 hour
-})
-```
-
-This provides:
-- Fast lookups from cache
-- Automatic cache population on misses
-- Database remains the authoritative source
-- Write-through ensures consistency
 
 ## Rate Limiting
 
@@ -985,24 +886,11 @@ Storage backend for API keys. Default is `"database"`.
 
 `fallbackToDatabase` <span className="opacity-70">`boolean`</span>
 
-When `storage` is `"secondary-storage"`, enable fallback to database if key is not found in secondary storage. Useful for gradual migration from database to secondary storage.
-
-Default is `false`.
-
-`cacheEnabled` <span className="opacity-70">`boolean`</span>
-
-Use secondary storage as a write-through cache layer. When enabled:
-- API keys are stored in both database and secondary storage
-- Reads check cache first, then fallback to database and auto-populate cache
-- Writes update both database and cache
-- Deletes remove from both database and cache
-
-Requires `storage: "database"` to be set (or use default).
-
+When `storage` is `"secondary-storage"`, enable fallback to database if key is not found in secondary storage.
 Default is `false`.
 
 <Callout>
-  When `storage` is set to `"secondary-storage"` or `cacheEnabled` is `true`, you must configure `secondaryStorage` in your Better Auth options. API keys will be stored using key-value patterns:
+  When `storage` is set to `"secondary-storage"`, you must configure `secondaryStorage` in your Better Auth options. API keys will be stored using key-value patterns:
   - `api-key:${hashedKey}` - Primary lookup by hashed key
   - `api-key:by-id:${id}` - Lookup by ID
   - `api-key:by-user:${userId}` - User's API key list
@@ -1032,7 +920,7 @@ export const auth = betterAuth({
 });
 ```
 
-`storageMethods` <span className="opacity-70">`{ get: (key: string) => Promise<unknown> | unknown; set: (key: string, value: string, ttl?: number) => Promise<void | null | unknown> | void; delete: (key: string) => Promise<void | null | string> | void; }`</span>
+`customStorage` <span className="opacity-70">`{ get: (key: string) => Promise<unknown> | unknown; set: (key: string, value: string, ttl?: number) => Promise<void | null | unknown> | void; delete: (key: string) => Promise<void | null | string> | void; }`</span>
 
 Custom storage methods for API keys. If provided, these methods will be used instead of `ctx.context.secondaryStorage`. Custom methods take precedence over global secondary storage.
 
@@ -1043,29 +931,11 @@ export const auth = betterAuth({
   plugins: [
     apiKey({
       storage: "secondary-storage",
-      storageMethods: {
+      customStorage: {
         get: async (key) => await customStorage.get(key),
         set: async (key, value, ttl) => await customStorage.set(key, value, ttl),
-        delete: async (key) => await customStorage.delete(key),
+        delete: async (key) => await customStorage.delete(key),Secondary Storage with 
       },
-    }),
-  ],
-});
-```
-
-`cacheTTL` <span className="opacity-70">`number | null`</span>
-
-Cache TTL in seconds when using `cacheEnabled`. If not provided, the API key's expiration date will be used to calculate TTL. Only applies when `cacheEnabled` is `true`.
-
-Default is `null`.
-
-```ts
-export const auth = betterAuth({
-  plugins: [
-    apiKey({
-      storage: "database",
-      cacheEnabled: true,
-      cacheTTL: 3600, // Cache for 1 hour
     }),
   ],
 });

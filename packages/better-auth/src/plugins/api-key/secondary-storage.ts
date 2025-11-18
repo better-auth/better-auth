@@ -68,8 +68,8 @@ function getStorageInstance(
 	ctx: GenericEndpointContext,
 	opts: PredefinedApiKeyOptions,
 ): SecondaryStorage | null {
-	if (opts.storageMethods) {
-		return opts.storageMethods as SecondaryStorage;
+	if (opts.customStorage) {
+		return opts.customStorage as SecondaryStorage;
 	}
 	return ctx.context.secondaryStorage || null;
 }
@@ -77,14 +77,7 @@ function getStorageInstance(
 /**
  * Calculate TTL in seconds for an API key
  */
-function calculateTTL(
-	apiKey: ApiKey,
-	cacheTTL: number | null | undefined,
-): number | undefined {
-	if (cacheTTL !== null && cacheTTL !== undefined) {
-		return cacheTTL;
-	}
-
+function calculateTTL(apiKey: ApiKey): number | undefined {
 	if (apiKey.expiresAt) {
 		const now = Date.now();
 		const expiresAt = new Date(apiKey.expiresAt).getTime();
@@ -215,33 +208,6 @@ export async function getApiKey(
 ): Promise<ApiKey | null> {
 	const storage = getStorageInstance(ctx, opts);
 
-	// Database mode with cache
-	if (opts.storage === "database" && opts.cacheEnabled) {
-		if (storage) {
-			const cached = await getApiKeyFromStorage(ctx, hashedKey, storage);
-			if (cached) {
-				return cached;
-			}
-		}
-		const dbKey = await ctx.context.adapter.findOne<ApiKey>({
-			model: "apikey",
-			where: [
-				{
-					field: "key",
-					value: hashedKey,
-				},
-			],
-		});
-
-		if (dbKey && storage) {
-			// Auto-populate cache
-			const ttl = calculateTTL(dbKey, opts.cacheTTL);
-			await setApiKeyInStorage(ctx, dbKey, storage, ttl);
-		}
-
-		return dbKey;
-	}
-
 	// Database mode only
 	if (opts.storage === "database") {
 		return await ctx.context.adapter.findOne<ApiKey>({
@@ -275,7 +241,7 @@ export async function getApiKey(
 
 		if (dbKey && storage) {
 			// Populate secondary storage for future reads
-			const ttl = calculateTTL(dbKey, opts.cacheTTL);
+			const ttl = calculateTTL(dbKey);
 			await setApiKeyInStorage(ctx, dbKey, storage, ttl);
 		}
 
@@ -312,33 +278,6 @@ export async function getApiKeyById(
 ): Promise<ApiKey | null> {
 	const storage = getStorageInstance(ctx, opts);
 
-	// Database mode with cache
-	if (opts.storage === "database" && opts.cacheEnabled) {
-		if (storage) {
-			const cached = await getApiKeyByIdFromStorage(ctx, id, storage);
-			if (cached) {
-				return cached;
-			}
-		}
-		const dbKey = await ctx.context.adapter.findOne<ApiKey>({
-			model: "apikey",
-			where: [
-				{
-					field: "id",
-					value: id,
-				},
-			],
-		});
-
-		if (dbKey && storage) {
-			// Auto-populate cache
-			const ttl = calculateTTL(dbKey, opts.cacheTTL);
-			await setApiKeyInStorage(ctx, dbKey, storage, ttl);
-		}
-
-		return dbKey;
-	}
-
 	// Database mode only
 	if (opts.storage === "database") {
 		return await ctx.context.adapter.findOne<ApiKey>({
@@ -372,7 +311,7 @@ export async function getApiKeyById(
 
 		if (dbKey && storage) {
 			// Populate secondary storage for future reads
-			const ttl = calculateTTL(dbKey, opts.cacheTTL);
+			const ttl = calculateTTL(dbKey);
 			await setApiKeyInStorage(ctx, dbKey, storage, ttl);
 		}
 
@@ -408,15 +347,7 @@ export async function setApiKey(
 	opts: PredefinedApiKeyOptions,
 ): Promise<void> {
 	const storage = getStorageInstance(ctx, opts);
-	const ttl = calculateTTL(apiKey, opts.cacheTTL);
-
-	// Database mode with cache - write to cache (DB write handled by route handlers)
-	if (opts.storage === "database" && opts.cacheEnabled) {
-		if (storage) {
-			await setApiKeyInStorage(ctx, apiKey, storage, ttl);
-		}
-		return;
-	}
+	const ttl = calculateTTL(apiKey);
 
 	// Database mode only - handled by adapter in route handlers
 	if (opts.storage === "database") {
@@ -445,14 +376,6 @@ export async function deleteApiKey(
 ): Promise<void> {
 	const storage = getStorageInstance(ctx, opts);
 
-	// Database mode with cache - delete from cache (DB delete handled by route handlers)
-	if (opts.storage === "database" && opts.cacheEnabled) {
-		if (storage) {
-			await deleteApiKeyFromStorage(ctx, apiKey, storage);
-		}
-		return;
-	}
-
 	// Database mode only - handled by adapter in route handlers
 	if (opts.storage === "database") {
 		return;
@@ -479,27 +402,6 @@ export async function listApiKeys(
 	opts: PredefinedApiKeyOptions,
 ): Promise<ApiKey[]> {
 	const storage = getStorageInstance(ctx, opts);
-
-	// Database mode with cache - read from DB, optionally update cache
-	if (opts.storage === "database" && opts.cacheEnabled) {
-		const dbKeys = await ctx.context.adapter.findMany<ApiKey>({
-			model: "apikey",
-			where: [
-				{
-					field: "userId",
-					value: userId,
-				},
-			],
-		});
-
-		if (storage && dbKeys.length > 0) {
-			// Update user's key list in cache
-			const userIds = dbKeys.map((k) => k.id);
-			await storage.set(getStorageKeyByUserId(userId), JSON.stringify(userIds));
-		}
-
-		return dbKeys;
-	}
 
 	// Database mode only
 	if (opts.storage === "database") {
@@ -559,7 +461,7 @@ export async function listApiKeys(
 			const userIds: string[] = [];
 			for (const apiKey of dbKeys) {
 				// Store each key in secondary storage
-				const ttl = calculateTTL(apiKey, opts.cacheTTL);
+				const ttl = calculateTTL(apiKey);
 				await setApiKeyInStorage(ctx, apiKey, storage, ttl);
 				userIds.push(apiKey.id);
 			}

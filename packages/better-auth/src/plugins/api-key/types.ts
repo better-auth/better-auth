@@ -227,20 +227,6 @@ export interface ApiKeyOptions {
 	 */
 	fallbackToDatabase?: boolean | undefined;
 	/**
-	 * Use secondary storage as a write-through cache layer.
-	 *
-	 * When enabled:
-	 * - API keys are stored in both database and secondary storage
-	 * - Reads check cache first, then fallback to database and auto-populate cache
-	 * - Writes update both database and cache
-	 * - Deletes remove from both database and cache
-	 *
-	 * Requires `storage: "database"` to be set (or use default).
-	 *
-	 * @default false
-	 */
-	cacheEnabled?: boolean | undefined;
-	/**
 	 * Custom storage methods for API keys.
 	 *
 	 * If provided, these methods will be used instead of `ctx.context.secondaryStorage`.
@@ -249,7 +235,7 @@ export interface ApiKeyOptions {
 	 * Useful when you want to use a different storage backend specifically for API keys,
 	 * or when you need custom logic for storage operations.
 	 */
-	storageMethods?:
+	customStorage?:
 		| {
 				/**
 				 * Get a value from storage
@@ -269,15 +255,6 @@ export interface ApiKeyOptions {
 				delete: (key: string) => Promise<void | null | string> | void;
 		  }
 		| undefined;
-	/**
-	 * Cache TTL in seconds when using `cacheEnabled`.
-	 *
-	 * If not provided, the API key's expiration date will be used to calculate TTL.
-	 * Only applies when `cacheEnabled` is `true`.
-	 *
-	 * @default null
-	 */
-	cacheTTL?: number | null | undefined;
 }
 
 export type ApiKey = {

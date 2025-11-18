@@ -29,8 +29,6 @@ export type PredefinedApiKeyOptions = ApiKeyOptions &
 			| "startingCharactersConfig"
 			| "storage"
 			| "fallbackToDatabase"
-			| "cacheEnabled"
-			| "cacheTTL"
 		>
 	> & {
 		keyExpiration: Required<ApiKeyOptions["keyExpiration"]>;

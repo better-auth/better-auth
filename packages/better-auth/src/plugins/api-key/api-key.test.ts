@@ -2758,7 +2758,7 @@ describe("api-key", async () => {
 			expect(updatedKey).not.toBeNull();
 			expect(updatedKey?.name).toBe("Updated Name");
 
-			// Verify cache is updated
+			// Verify secondary storage is updated
 			const cachedData = store.get(`api-key:by-id:${createdKey!.id}`);
 			expect(cachedData).toBeDefined();
 			const parsed = JSON.parse(cachedData!);
@@ -2815,208 +2815,6 @@ describe("api-key", async () => {
 		});
 	});
 
-	describe("cache mode", async () => {
-		let store = new Map<string, string>();
-		const expirationMap = new Map<string, number>();
-
-		const { client, auth, signInWithTestUser } = await getTestInstance(
-			{
-				secondaryStorage: {
-					set(key, value, ttl) {
-						store.set(key, value);
-						if (ttl) expirationMap.set(key, ttl);
-					},
-					get(key) {
-						return store.get(key) || null;
-					},
-					delete(key) {
-						store.delete(key);
-						expirationMap.delete(key);
-					},
-				},
-				plugins: [
-					apiKey({
-						storage: "database",
-						cacheEnabled: true,
-						enableMetadata: true,
-					}),
-				],
-			},
-			{
-				clientOptions: {
-					plugins: [apiKeyClient()],
-				},
-			},
-		);
-
-		beforeEach(() => {
-			store.clear();
-			expirationMap.clear();
-		});
-
-		it("should write to both database and cache", async () => {
-			const { headers, user } = await signInWithTestUser();
-			const { data: createdKey } = await client.apiKey.create(
-				{},
-				{ headers: headers },
-			);
-
-			expect(createdKey).not.toBeNull();
-
-			// Should be in cache
-			expect(store.has(`api-key:by-id:${createdKey!.id}`)).toBe(true);
-
-			// Should also be in database (verify by direct DB query)
-			const dbKey = await auth.api.getApiKey({
-				query: { id: createdKey!.id },
-				headers,
-			});
-			expect(dbKey).not.toBeNull();
-			expect(dbKey?.id).toBe(createdKey?.id);
-		});
-
-		it("should read from cache first, then fallback to DB and populate cache", async () => {
-			const { headers, user } = await signInWithTestUser();
-
-			// Create key directly in database (bypassing cache)
-			const dbKey = await auth.api.createApiKey({
-				body: {
-					userId: user.id,
-				},
-			});
-
-			expect(dbKey).not.toBeNull();
-
-			expect(store.has(`api-key:by-id:${dbKey!.id}`)).toBe(true);
-
-			// First read should fetch from DB and populate cache
-			const { data: retrievedKey } = await client.apiKey.get(
-				{ query: { id: dbKey!.id } },
-				{ headers: headers },
-			);
-
-			expect(retrievedKey).not.toBeNull();
-			expect(retrievedKey?.id).toBe(dbKey?.id);
-
-			expect(store.has(`api-key:by-id:${dbKey!.id}`)).toBe(true);
-		});
-
-		it("should update both database and cache", async () => {
-			const { headers, user } = await signInWithTestUser();
-			const { data: createdKey } = await client.apiKey.create(
-				{ name: "Original Name" },
-				{ headers: headers },
-			);
-
-			expect(createdKey).not.toBeNull();
-
-			const { data: updatedKey } = await client.apiKey.update(
-				{
-					keyId: createdKey!.id,
-					name: "Updated Name",
-				},
-				{ headers: headers },
-			);
-
-			expect(updatedKey).not.toBeNull();
-			expect(updatedKey?.name).toBe("Updated Name");
-
-			// Verify cache is updated
-			const cachedData = store.get(`api-key:by-id:${createdKey!.id}`);
-			expect(cachedData).toBeDefined();
-			const parsed = JSON.parse(cachedData!);
-			expect(parsed.name).toBe("Updated Name");
-
-			// Verify database is updated
-			const dbKey = await auth.api.getApiKey({
-				query: { id: createdKey!.id },
-				headers,
-			});
-			expect(dbKey?.name).toBe("Updated Name");
-		});
-
-		it("should delete from both database and cache", async () => {
-			const { headers, user } = await signInWithTestUser();
-			const { data: createdKey } = await client.apiKey.create(
-				{},
-				{ headers: headers },
-			);
-
-			expect(createdKey).not.toBeNull();
-			expect(store.has(`api-key:by-id:${createdKey!.id}`)).toBe(true);
-
-			const { data: deleteResult } = await client.apiKey.delete(
-				{ keyId: createdKey!.id },
-				{ headers: headers },
-			);
-
-			expect(deleteResult?.success).toBe(true);
-
-			// Should be deleted from cache
-			expect(store.has(`api-key:by-id:${createdKey!.id}`)).toBe(false);
-
-			// Should be deleted from database
-			let error: any = null;
-			try {
-				await auth.api.getApiKey({
-					query: { id: createdKey!.id },
-					headers,
-				});
-			} catch (e) {
-				error = e;
-			}
-			expect(error).not.toBeNull();
-			expect(error.status).toBe("NOT_FOUND");
-		});
-
-		it("should use custom cacheTTL when provided", async () => {
-			const { client: cacheClient, signInWithTestUser: cacheSignIn } =
-				await getTestInstance(
-					{
-						secondaryStorage: {
-							set(key, value, ttl) {
-								store.set(key, value);
-								if (ttl) expirationMap.set(key, ttl);
-							},
-							get(key) {
-								return store.get(key) || null;
-							},
-							delete(key) {
-								store.delete(key);
-								expirationMap.delete(key);
-							},
-						},
-						plugins: [
-							apiKey({
-								storage: "database",
-								cacheEnabled: true,
-								cacheTTL: 3600, // 1 hour
-								enableMetadata: true,
-							}),
-						],
-					},
-					{
-						clientOptions: {
-							plugins: [apiKeyClient()],
-						},
-					},
-				);
-
-			const { headers, user } = await cacheSignIn();
-			const { data: createdKey } = await cacheClient.apiKey.create(
-				{},
-				{ headers: headers },
-			);
-
-			expect(createdKey).not.toBeNull();
-
-			// Check that custom TTL was set
-			const storedKey = `api-key:by-id:${createdKey!.id}`;
-			const ttl = expirationMap.get(storedKey);
-			expect(ttl).toBe(3600);
-		});
-	});
-
 	describe("custom storage methods", async () => {
 		let customStore = new Map<string, string>();
 		let customGetCalled = false;
@@ -3029,7 +2827,7 @@ describe("api-key", async () => {
 				plugins: [
 					apiKey({
 						storage: "secondary-storage",
-						storageMethods: {
+						customStorage: {
 							set(key, value, ttl) {
 								customSetCalled = true;
 								customStore.set(key, value);
