@@ -12,7 +12,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "module": "dist/index.js",
+  "module": "dist/index.mjs",
   "description": "SCIM plugin for Better Auth",
   "scripts": {
     "test": "vitest",
@@ -25,12 +25,20 @@
       "dev-source": "./src/index.ts",
       "types": "./dist/index.d.mts",
       "default": "./dist/index.mjs"
+    },
+    "./client": {
+      "dev-source": "./src/client.ts",
+      "types": "./dist/client.d.mts",
+      "default": "./dist/client.mjs"
     }
   },
   "typesVersions": {
     "*": {
       "*": [
-        "./dist/index.d.ts"
+        "./dist/index.d.mts"
+      ],
+      "client": [
+        "./dist/client.d.mts"
       ]
     }
   },

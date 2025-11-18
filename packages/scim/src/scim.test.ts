@@ -6,6 +6,7 @@ import { setCookieToHeader } from "better-auth/cookies";
 import { bearer, organization } from "better-auth/plugins";
 import { describe, expect, it } from "vitest";
 import { scim } from ".";
+import { scimClient } from "./client";
 import type { SCIMOptions } from "./types";
 
 describe("SCIM", () => {
@@ -39,7 +40,7 @@ describe("SCIM", () => {
 
 		const authClient = createAuthClient({
 			baseURL: "http://localhost:3000",
-			plugins: [bearer()],
+			plugins: [bearer(), scimClient()],
 			fetchOptions: {
 				customFetchImpl: async (url, init) => {
 					return auth.handler(new Request(url, init));
@@ -147,6 +148,34 @@ describe("SCIM", () => {
 					message: "Provider id contains forbidden characters",
 				}),
 			);
+		});
+
+		it("should generate a new scim token (client)", async () => {
+			const { auth, authClient, getAuthCookieHeaders } = createTestInstance();
+
+			const headers = await getAuthCookieHeaders();
+			const response = await authClient.scim.generateToken(
+				{
+					providerId: "the id",
+				},
+				{ headers },
+			);
+
+			expect(response.data).toMatchObject({
+				scimToken: expect.any(String),
+			});
+
+			const createUser = () =>
+				auth.api.createSCIMUser({
+					body: {
+						userName: "the-username",
+					},
+					headers: {
+						authorization: `Bearer ${response.data?.scimToken}`,
+					},
+				});
+
+			await expect(createUser()).resolves.toBeTruthy();
 		});
 
 		it("should generate a new scim token (plain)", async () => {
