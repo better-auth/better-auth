@@ -455,6 +455,48 @@ describe("expo with cookieCache", async () => {
 		expect(hasBetterAuthCookies(customCookieHeader, "better-auth")).toBe(false);
 	});
 
+	it("should support array of cookie prefixes", async () => {
+		const { hasBetterAuthCookies } = await import("../src/client");
+
+		// Test with multiple prefixes - should match any of them
+		const betterAuthHeader = "better-auth.session_token=abc; Path=/";
+		expect(
+			hasBetterAuthCookies(betterAuthHeader, ["better-auth", "my-app"]),
+		).toBe(true);
+
+		const myAppHeader = "my-app.session_data=xyz; Path=/";
+		expect(hasBetterAuthCookies(myAppHeader, ["better-auth", "my-app"])).toBe(
+			true,
+		);
+
+		const otherAppHeader = "other-app.session_token=def; Path=/";
+		expect(
+			hasBetterAuthCookies(otherAppHeader, ["better-auth", "my-app"]),
+		).toBe(false);
+
+		// Test with passkey cookies
+		const passkeyHeader1 = "better-auth-passkey=xyz; Path=/";
+		expect(
+			hasBetterAuthCookies(passkeyHeader1, ["better-auth", "my-app"]),
+		).toBe(true);
+
+		const passkeyHeader2 = "my-app-passkey=xyz; Path=/";
+		expect(
+			hasBetterAuthCookies(passkeyHeader2, ["better-auth", "my-app"]),
+		).toBe(true);
+
+		// Test with __Secure- prefix
+		const secureHeader = "__Secure-my-app.session_token=abc; Path=/";
+		expect(hasBetterAuthCookies(secureHeader, ["better-auth", "my-app"])).toBe(
+			true,
+		);
+
+		// Test with empty array (should check for suffixes)
+		const sessionTokenHeader = "session_token=abc; Path=/";
+		expect(hasBetterAuthCookies(sessionTokenHeader, [])).toBe(false);
+		expect(hasBetterAuthCookies(sessionTokenHeader, [""])).toBe(true);
+	});
+
 	it("should normalize colons in secure storage name via storage adapter", async () => {
 		const map = new Map<string, string>();
 		const storage = storageAdapter({
