@@ -1,7 +1,8 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "better-call";
-import { type JWTPayload, type JWTVerifyResult, jwtVerify } from "jose";
+import type { JWTPayload, JWTVerifyResult } from "jose";
+import { jwtVerify } from "jose";
 import { JWTExpired } from "jose/errors";
 import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
@@ -285,7 +286,7 @@ export const verifyEmail = createAuthEndpoint(
 			return redirectOnError("invalid_token");
 		}
 		const schema = z.object({
-			email: z.string().email(),
+			email: z.email(),
 			updateTo: z.string().optional(),
 		});
 		const parsed = schema.parse(jwt.payload);
