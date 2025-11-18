@@ -810,6 +810,10 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 								field: "id",
 								value: ctx.body.id,
 							},
+							{
+								field: "userId",
+								value: ctx.context.session.user.id,
+							},
 						],
 					});
 					return ctx.json(null, {
