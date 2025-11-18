@@ -55,7 +55,7 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					.default(0),
 				skip_consent: z.boolean().optional(),
 				enable_end_session: z.boolean().optional(),
-				metadata: z.object().optional(),
+				metadata: z.record(z.string(), z.unknown()).optional(),
 			}),
 			metadata: {
 				SERVER_ONLY: true,
@@ -316,7 +316,7 @@ export const updateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					.default(0),
 				skip_consent: z.boolean().optional(),
 				enable_end_session: z.boolean().optional(),
-				metadata: z.object().optional(),
+				metadata: z.record(z.string(), z.unknown()).optional(),
 			}),
 			metadata: {
 				SERVER_ONLY: true,

@@ -16,6 +16,7 @@ export function authServerMetadata(
 		scopes_supported?: AuthServerMetadata["scopes_supported"];
 		public_client_supported?: boolean;
 		grant_types_supported?: GrantType[];
+		jwt_disabled?: boolean;
 	},
 ) {
 	const baseURL = ctx.context.baseURL;
@@ -24,7 +25,9 @@ export function authServerMetadata(
 		issuer: opts?.jwt?.issuer ?? baseURL,
 		authorization_endpoint: `${baseURL}/oauth2/authorize`,
 		token_endpoint: `${baseURL}/oauth2/token`,
-		jwks_uri: opts?.jwks?.remoteUrl ?? `${baseURL}/jwks`,
+		jwks_uri: overrides?.jwt_disabled
+			? undefined
+			: (opts?.jwks?.remoteUrl ?? `${baseURL}/jwks`),
 		registration_endpoint: `${baseURL}/oauth2/register`,
 		introspection_endpoint: `${baseURL}/oauth2/introspect`,
 		revocation_endpoint: `${baseURL}/oauth2/revoke`,
@@ -71,6 +74,7 @@ export function oidcServerMetadata(
 		scopes_supported: opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
 		public_client_supported: opts.allowUnauthenticatedClientRegistration,
 		grant_types_supported: opts.grantTypes,
+		jwt_disabled: opts.disableJwtPlugin,
 	});
 	const metadata: Omit<
 		OIDCMetadata,
