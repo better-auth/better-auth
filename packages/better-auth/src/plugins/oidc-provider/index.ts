@@ -1184,7 +1184,12 @@ export const oidcProvider = (options: OIDCOptions) => {
 								'A list of redirect URIs. Eg: ["https://client.example.com/callback"]',
 						}),
 						token_endpoint_auth_method: z
-							.enum(["none", "client_secret_basic", "client_secret_post"])
+							.enum([
+								"none",
+								"client_secret_basic",
+								"client_secret_post",
+								"private_key_jwt",
+							])
 							.meta({
 								description:
 									'The authentication method for the token endpoint. Eg: "client_secret_basic"',

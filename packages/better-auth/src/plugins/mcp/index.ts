@@ -700,7 +700,12 @@ export const mcp = (options: MCPOptions) => {
 					body: z.object({
 						redirect_uris: z.array(z.string()),
 						token_endpoint_auth_method: z
-							.enum(["none", "client_secret_basic", "client_secret_post"])
+							.enum([
+								"none",
+								"client_secret_basic",
+								"client_secret_post",
+								"private_key_jwt",
+							])
 							.default("client_secret_basic")
 							.optional(),
 						grant_types: z
