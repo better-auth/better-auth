@@ -45,7 +45,7 @@ export const siwe = (options: SIWEPluginOptions) =>
 							.positive()
 							.max(2147483647)
 							.optional()
-							.default(1),
+							.default(1), // Default to Ethereum mainnet
 					}),
 				},
 				async (ctx) => {
@@ -208,6 +208,7 @@ export const siwe = (options: SIWEPluginOptions) =>
 								name: name ?? walletAddress,
 								email: userEmail,
 								image: avatar ?? "",
+								lastLoginMethod: "siwe", 
 							});
 
 							await ctx.context.adapter.create({
@@ -254,10 +255,17 @@ export const siwe = (options: SIWEPluginOptions) =>
 							await ctx.context.internalAdapter.updateUser(user.id, {
 								lastLoginMethod: "siwe",
 							});
+
+							user = await ctx.context.adapter.findOne({
+								model: "user",
+								where: [{ field: "id", operator: "eq", value: user.id }],
+							});
 						}
 
+						if (!user) throw new Error("User not found");
+
 						const session = await ctx.context.internalAdapter.createSession(
-							user.id,
+							user!.id,
 						);
 
 						if (!session) {
@@ -273,7 +281,7 @@ export const siwe = (options: SIWEPluginOptions) =>
 							token: session.token,
 							success: true,
 							user: {
-								id: user.id,
+								id: user!.id,
 								walletAddress,
 								chainId,
 							},

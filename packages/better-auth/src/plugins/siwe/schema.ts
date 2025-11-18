@@ -29,4 +29,13 @@ export const schema = {
 			},
 		},
 	},
+	user: {
+		fields: {
+			lastLoginMethod: {
+				type: "string",
+				required: false,
+			},
+		},
+	},
+
 } satisfies BetterAuthPluginDBSchema;
