@@ -30,6 +30,40 @@ export async function getClientEndpoint(
 	return res;
 }
 
+/**
+ * Provides public client fields for any logged-in user.
+ * This is commonly used to display information on login flow pages.
+ */
+export async function getClientPublicEndpoint(
+	ctx: GenericEndpointContext & { query: { client_id: string } },
+	opts: OAuthOptions<Scope[]>,
+) {
+	const client = await getClient(ctx, opts, ctx.query.client_id);
+	if (!client) {
+		throw new APIError("NOT_FOUND", {
+			error_description: "client not found",
+			error: "not_found",
+		});
+	}
+	if (client.disabled) {
+		throw new APIError("NOT_FOUND", {
+			error_description: "client not found",
+			error: "not_found",
+		});
+	}
+	// Manually provide common client fields for login flow pages
+	const res = schemaToOAuth({
+		clientId: client.clientId,
+		name: client.name,
+		uri: client.uri,
+		contacts: client.contacts,
+		icon: client.icon,
+		tos: client.tos,
+		policy: client.policy,
+	});
+	return res;
+}
+
 export async function getClientsEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
