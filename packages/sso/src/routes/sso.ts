@@ -108,7 +108,7 @@ export const spMetadata = () => {
 						assertionConsumerService: [
 							{
 								Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-								Location: `${ctx.context.baseURL}/sso/saml2/sp/acs/${provider.id}`,
+								Location: `${ctx.context.baseURL}/sso/saml2/sp/acs/${ctx.query.providerId}`,
 							},
 						],
 						wantMessageSigned: parsedSamlConfig.wantAssertionsSigned || false,
@@ -1688,9 +1688,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 		"/sso/saml2/sp/acs/:providerId",
 		{
 			method: "POST",
-			params: z.object({
-				providerId: z.string().optional(),
-			}),
+
 			body: z.object({
 				SAMLResponse: z.string(),
 				RelayState: z.string().optional(),
