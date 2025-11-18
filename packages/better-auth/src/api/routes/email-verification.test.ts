@@ -571,10 +571,11 @@ describe("Email Verification with OTP", async () => {
 			},
 		});
 
+		const invalidOtp = otp === "000000" ? "000001" : "000000";
 		// Use client SDK with nested path
 		const res = await client.verifyEmail.otp({
 			email: testUser.email,
-			otp: "000000",
+			otp: invalidOtp,
 		});
 
 		expect(res.error).toBeDefined();

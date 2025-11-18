@@ -224,7 +224,7 @@ export default function VerifyEmailWithOTP() {
       setError(verifyError.message || "Invalid OTP");
       setIsVerifying(false);
     } else {
-      // Email verified successfully! Session is automatically updated.
+      // Email verified successfully! If autoSignInAfterVerification is enabled, the session is updated.
       router.push("/dashboard");
     }
   };
@@ -257,8 +257,7 @@ export default function VerifyEmailWithOTP() {
 
 After successful verification:
 - The user's `emailVerified` status is updated to `true`
-- If `autoSignInAfterVerification` is enabled, the user is automatically signed in
-- The session is automatically updated on the client
+- If `autoSignInAfterVerification` is enabled, the user is automatically signed in and the session is updated on the client
 
 ### Auto Sign In After Verification
 
