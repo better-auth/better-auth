@@ -35,6 +35,7 @@ export type BetterAuthPlugin = {
 	 * The init function is called when the plugin is initialized.
 	 * You can return a new context or modify the existing context.
 	 */
+	enabled?: boolean;
 	init?:
 		| ((ctx: AuthContext) =>
 				| Awaitable<{

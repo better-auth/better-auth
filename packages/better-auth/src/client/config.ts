@@ -18,10 +18,14 @@ export const getClientConfig = (
 	const baseURL =
 		getBaseURL(options?.baseURL, options?.basePath, undefined, loadEnv) ??
 		"/api/auth";
+	const userPlugins = (options?.plugins || []).filter(
+		(p) => p?.enabled !== false,
+	);
 	const pluginsFetchPlugins =
-		options?.plugins
-			?.flatMap((plugin) => plugin.fetchPlugins)
+		userPlugins
+			.flatMap((plugin) => plugin.fetchPlugins)
 			.filter((pl) => pl !== undefined) || [];
+
 	const lifeCyclePlugin = {
 		id: "lifecycle-hooks",
 		name: "lifecycle-hooks",

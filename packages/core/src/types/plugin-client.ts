@@ -65,6 +65,7 @@ export interface BetterAuthClientPlugin {
 	 * only used for type inference. don't pass the
 	 * actual plugin
 	 */
+	enabled?: boolean;
 	$InferServerPlugin?: BetterAuthPlugin | undefined;
 	/**
 	 * Custom actions

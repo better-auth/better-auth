@@ -1,9 +1,11 @@
 import Database from "better-sqlite3";
+import { create } from "domain";
+import { adapter } from "next/dist/server/web/adapter";
 import { describe, expect, it, vi } from "vitest";
 import { createAuthEndpoint } from "../api";
 import { getAdapter } from "../db";
 import { getTestInstance } from "../test-utils/test-instance";
-import type { BetterAuthOptions } from "../types";
+import type { BetterAuthOptions, BetterAuthPlugin } from "../types";
 import { createAuthContext } from "./create-context";
 
 describe("base context creation", () => {
@@ -16,6 +18,16 @@ describe("base context creation", () => {
 		const getDatabaseType = () => "memory";
 		return createAuthContext(adapter, opts, getDatabaseType);
 	};
+	const makePlugin = (
+		opts: Partial<BetterAuthPlugin> = {},
+	): BetterAuthPlugin => ({
+		id: "test",
+		init(ctx) {
+			// return a minimal context change; cast to any to satisfy the plugin init return type in tests
+			return { context: { _pluginRan: true } } as any;
+		},
+		...opts,
+	});
 
 	it("should match config", async () => {
 		const res = await initBase({
@@ -203,6 +215,28 @@ describe("base context creation", () => {
 			],
 		});
 		expect(initFn).toHaveBeenCalled();
+	});
+
+	it("plugin init runs when enabled is omitted", async () => {
+		const ctx = await initBase({
+			baseURL: "http://localhost:3000",
+			plugins: [makePlugin()],
+		});
+		expect((ctx as any)._pluginRan).toBe(true);
+	});
+
+	it("plugin init runs when enabled: true", async () => {
+		const ctx = await initBase({
+			baseURL: "http://localhost:3000",
+			plugins: [makePlugin({ enabled: true })],
+		});
+	});
+
+	it("plugin init is skipped when enabled: false", async () => {
+		const ctx = await initBase({
+			baseURL: "http://localhost:3000",
+			plugins: [makePlugin({ enabled: false })],
+		});
 	});
 
 	it("handles empty basePath", async () => {
