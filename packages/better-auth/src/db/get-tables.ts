@@ -98,6 +98,7 @@ export const getAuthTables = (
 						onDelete: "cascade",
 					},
 					required: true,
+					index: true,
 				},
 				...(options.session?.deleteSessionOnSignOut?.enabled === false
 					? options.session?.deleteSessionOnSignOut?.timestamp === true
@@ -201,6 +202,7 @@ export const getAuthTables = (
 					},
 					required: true,
 					fieldName: options.account?.fields?.userId || "userId",
+					index: true,
 				},
 				accessToken: {
 					type: "string",
@@ -265,6 +267,7 @@ export const getAuthTables = (
 					type: "string",
 					required: true,
 					fieldName: options.verification?.fields?.identifier || "identifier",
+					index: true,
 				},
 				value: {
 					type: "string",

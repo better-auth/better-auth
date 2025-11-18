@@ -1,0 +1,16 @@
+{
+  "name": "@better-auth/test",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest"
+  },
+  "devDependencies": {
+    "@better-auth/core": "workspace:*",
+    "@better-fetch/fetch": "catalog:",
+    "better-auth": "workspace:*",
+    "msw": "^2.12.1",
+    "openid-client": "^6.8.1",
+    "vitest": "catalog:"
+  }
+}

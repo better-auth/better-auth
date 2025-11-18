@@ -4,7 +4,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { APIError } from "better-call";
-import { z } from "zod";
+import * as z from "zod";
 
 export interface ExpoOptions {
 	/**
@@ -106,7 +106,6 @@ export const expo = (options?: ExpoOptions | undefined) => {
 						});
 					}
 					const stateCookie = ctx.context.createAuthCookie("state", {
-						sameSite: "none",
 						maxAge: 5 * 60 * 1000, // 5 minutes
 					});
 					await ctx.setSignedCookie(
