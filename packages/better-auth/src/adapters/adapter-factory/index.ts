@@ -187,10 +187,19 @@ export const createAdapterFactory =
 			const useNumberId =
 				options.advanced?.database?.useNumberId ||
 				options.advanced?.database?.generateId === "serial";
-			fields.id = idField({
+			// fields.id = idField({
+			// 	customModelName: defaultModelName,
+			// 	forceAllowId: forceAllowId && "id" in data,
+			// });
+			const generatedIdField = idField({
 				customModelName: defaultModelName,
 				forceAllowId: forceAllowId && "id" in data,
-			});
+			})as any;
+			if(fields.id && (fields.id as any).fieldName){
+				generatedIdField.fieldName = (fields.id as any).fieldName;
+			}
+			fields.id = generatedIdField;
+
 			for (const field in fields) {
 				let value = data[field];
 				const fieldAttributes = fields[field];
