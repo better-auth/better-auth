@@ -3,7 +3,7 @@ import type { JWTPayload } from "jose";
 import type { GrantType } from "../../oauth-2.1/types";
 import type { InferOptionSchema, Session, User } from "../../types";
 import type { Awaitable } from "../../types/helper";
-import { schema } from "./schema";
+import type { schema } from "./schema";
 
 export type StoreTokenType =
 	| "access_token"
