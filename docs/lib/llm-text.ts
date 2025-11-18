@@ -8,7 +8,7 @@ import { remark } from "remark";
 import remarkGfm from "remark-gfm";
 import remarkMdx from "remark-mdx";
 import remarkStringify from "remark-stringify";
-import { source } from "@/lib/source";
+import type { source } from "@/lib/source";
 
 type PropertyDefinition = {
 	name: string;

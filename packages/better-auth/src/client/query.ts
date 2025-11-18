@@ -1,9 +1,10 @@
-import {
-	type BetterFetch,
+import type {
+	BetterFetch,
 	BetterFetchError,
-	type BetterFetchOption,
+	BetterFetchOption,
 } from "@better-fetch/fetch";
-import { atom, onMount, type PreinitializedWritableAtom } from "nanostores";
+import type { PreinitializedWritableAtom } from "nanostores";
+import { atom, onMount } from "nanostores";
 import type { SessionQueryParams } from "./types";
 
 // SSR detection

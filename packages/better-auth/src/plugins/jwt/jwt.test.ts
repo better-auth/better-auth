@@ -1,4 +1,5 @@
-import { createLocalJWKSet, type JSONWebKeySet, jwtVerify } from "jose";
+import type { JSONWebKeySet } from "jose";
+import { createLocalJWKSet, jwtVerify } from "jose";
 import { describe, expect, it } from "vitest";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";

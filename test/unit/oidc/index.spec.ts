@@ -3,8 +3,8 @@ import type { IncomingMessage } from "node:http";
 import https from "node:https";
 import path from "node:path";
 import { betterFetch } from "@better-fetch/fetch";
-import { type Auth, betterAuth } from "better-auth";
-import { createAuthClient } from "better-auth/client";
+import type { Auth } from "better-auth";
+import { betterAuth } from "better-auth";
 import { toNodeHandler } from "better-auth/node";
 import { jwt, oidcProvider } from "better-auth/plugins";
 import * as client from "openid-client";
@@ -28,25 +28,10 @@ const options = {
 };
 
 describe("oidc provider", async () => {
-	const testClient = {
-		clientId: "test-client",
-		clientSecret: "test-secret",
-		type: "web" as const,
-		name: "Test Client",
-		redirectUrls: ["https://client.example.com/callback"],
-		disabled: false,
-		metadata: {},
-		skipConsent: true,
-	};
-
 	const authConfig = () => ({
-		emailAndPassword: {
-			enabled: true,
-		},
 		plugins: [
 			oidcProvider({
 				loginPage: "/auth/login",
-				trustedClients: [testClient],
 			}),
 			jwt(),
 		],
@@ -68,9 +53,9 @@ describe("oidc provider", async () => {
 				resolve();
 			});
 		});
+		url = `https://localhost:${(server.address() as any).port}`;
 		// @ts-expect-error
 		auth.options.baseURL = url;
-		url = `https://localhost:${(server.address() as any).port}`;
 	});
 
 	afterEach(() => {
@@ -160,65 +145,5 @@ describe("oidc provider", async () => {
 				"/auth/login?client_id=mock&response_type=code",
 			);
 		}
-	});
-
-	it("should clear oidc_login_prompt cookie when user has valid session", async () => {
-		const authClient = createAuthClient({
-			baseURL: `${url}/api/auth`,
-		});
-
-		let oidcLoginPromptCookie: string | undefined;
-		let sessionCookieValue: string | undefined;
-
-		await betterFetch(
-			`${url}/api/auth/oauth2/authorize?client_id=${testClient.clientId}&response_type=code&redirect_uri=${encodeURIComponent("https://client.example.com/callback")}&scope=openid%20profile%20email`,
-			{
-				method: "GET",
-				throw: false,
-				onResponse(context) {
-					const setCookies = context.response.headers.get("set-cookie");
-					if (setCookies) {
-						// Extract oidc_login_prompt cookie
-						const match = setCookies.match(/oidc_login_prompt=([^;]+)/);
-						if (match) {
-							oidcLoginPromptCookie = `oidc_login_prompt=${match[1]}`;
-						}
-					}
-				},
-			},
-		);
-
-		expect(oidcLoginPromptCookie).toBeDefined();
-
-		let cookieCleared = false;
-		await authClient.signUp.email(
-			{
-				email: "test@example.com",
-				password: "password123",
-				name: "Test User",
-			},
-			{
-				headers: new Headers({ cookie: oidcLoginPromptCookie! }),
-				onResponse(context) {
-					const setCookies = context.response.headers.get("set-cookie");
-					if (setCookies) {
-						// Extract session cookie
-						const match = setCookies.match(
-							/better-auth\.session_token=([^;]+)/,
-						);
-						if (match) {
-							sessionCookieValue = `better-auth.session_token=${match[1]}`;
-						}
-						cookieCleared =
-							setCookies.includes("oidc_login_prompt=") &&
-							(setCookies.includes("Max-Age=0") ||
-								setCookies.includes("expires=Thu, 01 Jan 1970"));
-					}
-				},
-			},
-		);
-
-		expect(sessionCookieValue).toBeDefined();
-		expect(cookieCleared).toBe(true);
 	});
 });

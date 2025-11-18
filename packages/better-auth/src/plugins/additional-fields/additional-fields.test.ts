@@ -1,7 +1,7 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { type Session } from "./../../types";
+import type { Session } from "./../../types";
 import { twoFactor, twoFactorClient } from "../two-factor";
 import { inferAdditionalFields } from "./client";
 

@@ -1,7 +1,7 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
-import { z } from "zod";
+import * as z from "zod";
 import { getSessionFromCtx, sessionMiddleware } from "../../../api";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db/to-zod";
@@ -68,6 +68,10 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 						? { teamId?: string | undefined }
 						: {}) &
 						InferAdditionalFieldsFromPluginOptions<"member", O>,
+				},
+				openapi: {
+					operationId: "addOrganizationMember",
+					description: "Add a member to an organization",
 				},
 			},
 		},
@@ -448,6 +452,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 					},
 				},
 				openapi: {
+					operationId: "updateOrganizationMemberRole",
 					description: "Update the role of a member in an organization",
 					responses: {
 						"200": {

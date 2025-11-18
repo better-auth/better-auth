@@ -34,6 +34,15 @@ same browser session that started it.
 * Check that cookies are not blocked by browser settings or privacy modes.
 * Ensure you're starting and ending the OAuth flow in the same browser session.
 
+### Skip state cookie check
+
+If you know what you are doing, you can skip the state cookie check by
+setting the `advanced.oauthConfig.skipStateCookieCheck` option to `true` in your auth config.
+
+<Callout type="warn">
+  Please note that this is a security risk and should only be enabled if you know what you are doing.
+</Callout>
+
 ### Production Debug
 
 Head to your production site, and use your browser's DevTools → Application → Cookies to confirm:

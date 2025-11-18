@@ -1,5 +1,6 @@
 import { createLocalJWKSet, decodeProtectedHeader, jwtVerify } from "jose";
-import { type Listener, listen } from "listhen";
+import type { Listener } from "listhen";
+import { listen } from "listhen";
 import {
 	afterAll,
 	afterEach,
@@ -9,14 +10,16 @@ import {
 	it,
 	test,
 } from "vitest";
-import { type AuthClient, createAuthClient } from "../../client";
+import type { AuthClient } from "../../client";
+import { createAuthClient } from "../../client";
 import { toNodeHandler } from "../../integrations/node";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { genericOAuth } from "../generic-oauth";
 import { genericOAuthClient } from "../generic-oauth/client";
 import { jwt } from "../jwt";
 import { oidcProvider } from ".";
-import { type OidcClientPlugin, oidcClient } from "./client";
+import type { OidcClientPlugin } from "./client";
+import { oidcClient } from "./client";
 import type { Client } from "./types";
 
 // Type for the server client with OIDC plugin
@@ -72,23 +75,22 @@ describe("oidc init", () => {
 		});
 		const options = provider.options;
 		expect(options).toMatchInlineSnapshot(`
-      {
-        "accessTokenExpiresIn": 3600,
-        "allowDynamicClientRegistration": true,
-        "allowPlainCodeChallengeMethod": true,
-        "codeExpiresIn": 600,
-        "defaultScope": "openid",
-        "loginPage": "/login",
-        "refreshTokenExpiresIn": 604800,
-        "scopes": [
-          "openid",
-          "profile",
-          "email",
-          "offline_access",
-        ],
-        "storeClientSecret": "plain",
-      }
-    `);
+			{
+			  "accessTokenExpiresIn": 3600,
+			  "allowPlainCodeChallengeMethod": true,
+			  "codeExpiresIn": 600,
+			  "defaultScope": "openid",
+			  "loginPage": "/login",
+			  "refreshTokenExpiresIn": 604800,
+			  "scopes": [
+			    "openid",
+			    "profile",
+			    "email",
+			    "offline_access",
+			  ],
+			  "storeClientSecret": "plain",
+			}
+		`);
 	});
 });
 
@@ -364,9 +366,7 @@ describe("oidc", async () => {
 		expect(callbackURL).toContain("/dashboard");
 	});
 
-	it("should authorization server prompt the End-User for reauthentication when prompt=login", async ({
-		expect,
-	}) => {
+	it("should sign in after a login flow", async ({ expect }) => {
 		// The RP (Relying Party) - the client application
 		const { customFetchImpl: customFetchImplRP, cookieSetter } =
 			await getTestInstance({
@@ -443,7 +443,17 @@ describe("oidc", async () => {
 			},
 		);
 
-		expect(redirectURI).toContain("/login?response_type=code&client_id=");
+		expect(redirectURI).toContain(
+			"http://localhost:3000/api/auth/oauth2/callback/test?code=",
+		);
+		let callbackURL = "";
+		await client.$fetch(redirectURI, {
+			headers: oAuthHeaders,
+			onError(context) {
+				callbackURL = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackURL).toContain("/dashboard");
 	});
 });
 

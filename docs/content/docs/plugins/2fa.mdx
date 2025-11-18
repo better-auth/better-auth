@@ -276,7 +276,7 @@ export const auth = betterAuth({
     plugins: [
         twoFactor({
           	otpOptions: {
-				async sendOTP({ user, otp }, request) {
+				async sendOTP({ user, otp }, ctx) {
                     // send otp to user
 				},
 			},

@@ -1,3 +1,4 @@
+import { relations } from "drizzle-orm";
 import {
   pgTable,
   text,
@@ -97,3 +98,30 @@ export const twoFactor = pgTable(
     index("twoFactor_userId_idx").on(table.userId),
   ],
 );
+
+export const custom_userRelations = relations(custom_user, ({ many }) => ({
+  custom_sessions: many(custom_session),
+  custom_accounts: many(custom_account),
+  twoFactors: many(twoFactor),
+}));
+
+export const custom_sessionRelations = relations(custom_session, ({ one }) => ({
+  custom_user: one(custom_user, {
+    fields: [custom_session.userId],
+    references: [custom_user.id],
+  }),
+}));
+
+export const custom_accountRelations = relations(custom_account, ({ one }) => ({
+  custom_user: one(custom_user, {
+    fields: [custom_account.userId],
+    references: [custom_user.id],
+  }),
+}));
+
+export const twoFactorRelations = relations(twoFactor, ({ one }) => ({
+  custom_user: one(custom_user, {
+    fields: [twoFactor.userId],
+    references: [custom_user.id],
+  }),
+}));

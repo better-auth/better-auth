@@ -2,13 +2,15 @@ import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { defineErrorCodes } from "@better-auth/core/utils";
 import { APIError } from "better-call";
-import { type StringValue as MSStringValue, ms } from "ms";
-import { z } from "zod";
+import type { StringValue as MSStringValue } from "ms";
+import { ms } from "ms";
+import * as z from "zod";
 import { getSessionFromCtx } from "../../api/routes/session";
 import { generateRandomString } from "../../crypto";
 import { mergeSchema } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
-import { type DeviceCode, schema } from "./schema";
+import type { DeviceCode } from "./schema";
+import { schema } from "./schema";
 
 const msStringValueSchema = z.custom<MSStringValue>(
 	(val) => {

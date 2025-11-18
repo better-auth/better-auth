@@ -1,4 +1,4 @@
-import { ReadonlyURLSearchParams } from "next/navigation";
+import type { ReadonlyURLSearchParams } from "next/navigation";
 
 const allowedCallbackSet: ReadonlySet<string> = new Set([
 	"/dashboard",

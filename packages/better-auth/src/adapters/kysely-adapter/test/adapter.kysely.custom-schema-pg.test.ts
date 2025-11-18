@@ -5,9 +5,11 @@ import { getMigrations } from "../../../db";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
+	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
 	transactionsTestSuite,
+	uuidTestSuite,
 } from "../../tests";
 import { kyselyAdapter } from "../kysely-adapter";
 
@@ -20,7 +22,7 @@ const CUSTOM_SCHEMA = "auth";
 
 // Connection string with custom schema in search_path
 const pgDB = new Pool({
-	connectionString: `postgres://user:password@localhost:5433/better_auth?options=-c search_path=${CUSTOM_SCHEMA}`,
+	connectionString: `postgres://user:password@localhost:5435/better_auth?options=-c search_path=${CUSTOM_SCHEMA}`,
 });
 
 let kyselyDB = new Kysely({
@@ -96,6 +98,8 @@ const { execute } = await testAdapter({
 		transactionsTestSuite(),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
+		uuidTestSuite(),
+		joinsTestSuite(),
 	],
 	async onFinish() {
 		// Clean up

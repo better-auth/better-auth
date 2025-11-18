@@ -1,6 +1,6 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { isDevelopment, isTest } from "@better-auth/core/env";
-import { z } from "zod";
+import * as z from "zod";
 
 // Localhost IP used for test and development environments
 const LOCALHOST_IP = "127.0.0.1";

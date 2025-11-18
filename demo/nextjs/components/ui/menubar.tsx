@@ -6,7 +6,7 @@ import {
 	DotFilledIcon,
 } from "@radix-ui/react-icons";
 import * as MenubarPrimitive from "@radix-ui/react-menubar";
-import * as React from "react";
+import type * as React from "react";
 
 import { cn } from "@/lib/utils";
 

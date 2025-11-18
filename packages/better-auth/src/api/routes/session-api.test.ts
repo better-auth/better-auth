@@ -1,7 +1,8 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
-import { type MemoryDB, memoryAdapter } from "../../adapters/memory-adapter";
+import type { MemoryDB } from "../../adapters/memory-adapter";
+import { memoryAdapter } from "../../adapters/memory-adapter";
 import { parseCookies, parseSetCookieHeader } from "../../cookies";
 import { signJWT, verifyJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";

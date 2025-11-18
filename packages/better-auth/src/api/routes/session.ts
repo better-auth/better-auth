@@ -11,7 +11,7 @@ import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { APIError } from "better-call";
-import { z } from "zod";
+import * as z from "zod";
 import {
 	deleteSessionCookie,
 	getChunkedCookie,
@@ -31,10 +31,12 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 		"/get-session",
 		{
 			method: "GET",
+			operationId: "getSession",
 			query: getSessionQuerySchema,
 			requireHeaders: true,
 			metadata: {
 				openapi: {
+					operationId: "getSession",
 					description: "Get the current session",
 					responses: {
 						"200": {
@@ -467,6 +469,7 @@ export const getSessionFromCtx = async <
 		asResponse: false,
 		headers: ctx.headers!,
 		returnHeaders: false,
+		returnStatus: false,
 		query: {
 			...config,
 			...ctx.query,
@@ -541,8 +544,9 @@ export const freshSessionMiddleware = createAuthMiddleware(async (ctx) => {
 		};
 	}
 	const freshAge = ctx.context.sessionConfig.freshAge;
-	const lastUpdated =
-		session.session.updatedAt?.valueOf() || session.session.createdAt.valueOf();
+	const lastUpdated = new Date(
+		session.session.updatedAt || session.session.createdAt,
+	).getTime();
 	const now = Date.now();
 	const isFresh = now - lastUpdated < freshAge * 1000;
 	if (!isFresh) {
@@ -562,10 +566,12 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 		"/list-sessions",
 		{
 			method: "GET",
+			operationId: "listUserSessions",
 			use: [sessionMiddleware],
 			requireHeaders: true,
 			metadata: {
 				openapi: {
+					operationId: "listUserSessions",
 					description: "List all active sessions for the user",
 					responses: {
 						"200": {

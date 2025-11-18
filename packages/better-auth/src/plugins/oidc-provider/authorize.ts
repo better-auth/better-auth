@@ -3,8 +3,6 @@ import { APIError } from "better-call";
 import { getSessionFromCtx } from "../../api";
 import { generateRandomString } from "../../crypto";
 import { getClient } from "./index";
-import { getAuthorizePromptSet } from "./middlewares/check-prompt";
-import { getPromptHandled } from "./state/prompt-handled";
 import type { AuthorizationQuery, OIDCOptions } from "./types";
 
 function formatErrorURL(url: string, error: string, description: string) {
@@ -59,22 +57,10 @@ export async function authorize(
 		});
 	}
 	const session = await getSessionFromCtx(ctx);
-	const query = (ctx.query || {}) as AuthorizationQuery;
-
-	const promptSet = await getAuthorizePromptSet();
-
-	// Handle prompt=login: force reauthentication even if user has active session
-	// However, if we're being called from the middleware after login, skip the redirect
-	if (
-		(promptSet.has("login") && (await getPromptHandled()) === false) ||
-		!session
-	) {
+	if (!session) {
 		/**
-		 * If the user is not logged in, OR prompt=login is set, we need to
-		 * redirect them to the login page to (re)authenticate.
-		 *
-		 * Per OIDC spec: prompt=login forces reauthentication regardless
-		 * of the existing session.
+		 * If the user is not logged in, we need to redirect them to the
+		 * login page.
 		 */
 		await ctx.setSignedCookie(
 			"oidc_login_prompt",
@@ -86,12 +72,11 @@ export async function authorize(
 				sameSite: "lax",
 			},
 		);
-		const queryFromURL = ctx.request.url?.split("?")[1] || "";
-		return handleRedirect(
-			queryFromURL ? `${options.loginPage}?${queryFromURL}` : options.loginPage,
-		);
+		const queryFromURL = ctx.request.url?.split("?")[1]!;
+		return handleRedirect(`${options.loginPage}?${queryFromURL}`);
 	}
 
+	const query = ctx.query as AuthorizationQuery;
 	if (!query.client_id) {
 		const errorURL = getErrorURL(
 			ctx,
@@ -222,7 +207,7 @@ export async function authorize(
 
 	const requireConsent =
 		!skipConsentForTrustedClient &&
-		(!hasAlreadyConsented || promptSet.has("consent"));
+		(!hasAlreadyConsented || query.prompt === "consent");
 
 	try {
 		/**

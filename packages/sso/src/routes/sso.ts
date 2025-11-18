@@ -1,11 +1,9 @@
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
+import type { Account, Session, User } from "better-auth";
 import {
-	type Account,
 	createAuthorizationURL,
 	generateState,
 	parseState,
-	type Session,
-	type User,
 	validateAuthorizationCode,
 	validateToken,
 } from "better-auth";
@@ -63,6 +61,7 @@ export const spMetadata = () => {
 			}),
 			metadata: {
 				openapi: {
+					operationId: "getSSOServiceProviderMetadata",
 					summary: "Get Service Provider metadata",
 					description: "Returns the SAML metadata for the Service Provider",
 					responses: {
@@ -337,6 +336,7 @@ export const registerSSOProvider = (options?: SSOOptions) => {
 			use: [sessionMiddleware],
 			metadata: {
 				openapi: {
+					operationId: "registerSSOProvider",
 					summary: "Register an OIDC provider",
 					description:
 						"This endpoint is used to register an OIDC provider. This is used to configure the provider and link it to an organization",
@@ -726,6 +726,7 @@ export const signInSSO = (options?: SSOOptions) => {
 			}),
 			metadata: {
 				openapi: {
+					operationId: "signInWithSSO",
 					summary: "Sign in with SSO provider",
 					description:
 						"This endpoint is used to sign in with an SSO provider. It redirects to the provider's authorization URL",
@@ -1014,6 +1015,7 @@ export const callbackSSO = (options?: SSOOptions) => {
 			metadata: {
 				isAction: false,
 				openapi: {
+					operationId: "handleSSOCallback",
 					summary: "Callback URL for SSO provider",
 					description:
 						"This endpoint is used as the callback URL for SSO providers. It handles the authorization code and exchanges it for an access token",
@@ -1362,6 +1364,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			metadata: {
 				isAction: false,
 				openapi: {
+					operationId: "handleSAMLCallback",
 					summary: "Callback URL for SAML provider",
 					description:
 						"This endpoint is used as the callback URL for SAML providers.",
@@ -1584,6 +1587,14 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			if (existingUser) {
 				user = existingUser;
 			} else {
+				// if implicit sign up is disabled, we should not create a new user nor a new account.
+				if (options?.disableImplicitSignUp) {
+					throw new APIError("UNAUTHORIZED", {
+						message:
+							"User not found and implicit sign up is disabled for this provider",
+					});
+				}
+
 				user = await ctx.context.internalAdapter.createUser({
 					email: userInfo.email,
 					name: userInfo.name,
@@ -1687,6 +1698,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			metadata: {
 				isAction: false,
 				openapi: {
+					operationId: "handleSAMLAssertionConsumerService",
 					summary: "SAML Assertion Consumer Service",
 					description:
 						"Handles SAML responses from IdP after successful authentication",

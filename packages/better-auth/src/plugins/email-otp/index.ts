@@ -8,7 +8,7 @@ import {
 } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { defineErrorCodes } from "@better-auth/core/utils";
-import { z } from "zod";
+import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
 import { setCookieCache, setSessionCookie } from "../../cookies";
 import {
@@ -195,7 +195,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				}),
 				metadata: {
 					openapi: {
-						description: "Send verification OTP",
+						operationId: "sendEmailVerificationOTP",
+						description: "Send a verification OTP to an email",
 						responses: {
 							200: {
 								description: "Success",
@@ -226,7 +227,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					});
 				}
 				const email = ctx.body.email.toLowerCase();
-				const isValidEmail = z.string().email().safeParse(email);
+				const isValidEmail = z.email().safeParse(email);
 				if (!isValidEmail.success) {
 					throw ctx.error("BAD_REQUEST", {
 						message: BASE_ERROR_CODES.INVALID_EMAIL,
@@ -329,7 +330,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					metadata: {
 						SERVER_ONLY: true,
 						openapi: {
-							description: "Create verification OTP",
+							operationId: "createEmailVerificationOTP",
+							description: "Create a verification OTP for an email",
 							responses: {
 								200: {
 									description: "Success",
@@ -387,7 +389,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					metadata: {
 						SERVER_ONLY: true,
 						openapi: {
-							description: "Get verification OTP",
+							operationId: "getEmailVerificationOTP",
+							description: "Get a verification OTP for an email",
 							responses: {
 								"200": {
 									description:
@@ -484,7 +487,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}),
 					metadata: {
 						openapi: {
-							description: "Check if a verification OTP is valid",
+							operationId: "verifyEmailWithOTP",
+							description: "Verify an email with an OTP",
 							responses: {
 								200: {
 									description: "Success",
@@ -507,7 +511,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 				async (ctx) => {
 					const email = ctx.body.email.toLowerCase();
-					const isValidEmail = z.string().email().safeParse(email);
+					const isValidEmail = z.email().safeParse(email);
 					if (!isValidEmail.success) {
 						throw new APIError("BAD_REQUEST", {
 							message: BASE_ERROR_CODES.INVALID_EMAIL,
@@ -632,7 +636,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 				async (ctx) => {
 					const email = ctx.body.email.toLowerCase();
-					const isValidEmail = z.string().email().safeParse(email);
+					const isValidEmail = z.email().safeParse(email);
 					if (!isValidEmail.success) {
 						throw new APIError("BAD_REQUEST", {
 							message: BASE_ERROR_CODES.INVALID_EMAIL,
@@ -786,7 +790,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}),
 					metadata: {
 						openapi: {
-							description: "Sign in with OTP",
+							operationId: "signInWithEmailOTP",
+							description: "Sign in with email and OTP",
 							responses: {
 								200: {
 									description: "Success",
@@ -942,7 +947,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}),
 					metadata: {
 						openapi: {
-							description: "Send a password reset OTP to the user",
+							operationId: "forgetPasswordWithEmailOTP",
+							description: "Forget password with email and OTP",
 							responses: {
 								200: {
 									description: "Success",
@@ -1027,7 +1033,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					}),
 					metadata: {
 						openapi: {
-							description: "Reset user password with OTP",
+							operationId: "resetPasswordWithEmailOTP",
+							description: "Reset password with email and OTP",
 							responses: {
 								200: {
 									description: "Success",

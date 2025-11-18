@@ -5,7 +5,7 @@ import type {
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
-import { z } from "zod";
+import * as z from "zod";
 import { originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
@@ -112,12 +112,9 @@ export const magicLink = (options: MagicLinkopts) => {
 					method: "POST",
 					requireHeaders: true,
 					body: z.object({
-						email: z
-							.string()
-							.meta({
-								description: "Email address to send the magic link",
-							})
-							.email(),
+						email: z.email().meta({
+							description: "Email address to send the magic link",
+						}),
 						name: z
 							.string()
 							.meta({
@@ -147,6 +144,7 @@ export const magicLink = (options: MagicLinkopts) => {
 					}),
 					metadata: {
 						openapi: {
+							operationId: "signInWithMagicLink",
 							description: "Sign in with magic link",
 							responses: {
 								200: {
@@ -287,6 +285,7 @@ export const magicLink = (options: MagicLinkopts) => {
 					requireHeaders: true,
 					metadata: {
 						openapi: {
+							operationId: "verifyMagicLink",
 							description: "Verify magic link",
 							responses: {
 								200: {
