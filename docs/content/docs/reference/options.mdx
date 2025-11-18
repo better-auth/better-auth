@@ -465,18 +465,23 @@ export const auth = betterAuth({
 			httpOnly: true,
 			secure: true
 		},
+		oauthConfig: {
+			skipStateCookieCheck: false,
+			storeStateStrategy: "database"
+		},
 		cookiePrefix: "myapp",
 		database: {
-			// If your DB is using auto-incrementing IDs, set this to true.
-			useNumberId: false,
-			// Use your own custom ID generator, or disable generating IDs as a whole.
+			// Use your own custom ID generator,
+			// disable generating IDS so your database will generate them,
+			// or use "serial" to use your database's auto-incrementing ID, or "uuid" to use a random UUID.
 			generateId: (((options: {
 				model: LiteralUnion<Models, string>;
 				size?: number;
 			}) => {
 				return "my-super-unique-id";
-			})) | false,
+			})) | false | "serial" | "uuid",
 			defaultFindManyLimit: 100,
+			experimentalJoins: false,
 		}
 	},
 })
@@ -489,7 +494,8 @@ export const auth = betterAuth({
 - `cookies`: Customize cookie names and attributes
 - `defaultCookieAttributes`: Default attributes for all cookies
 - `cookiePrefix`: Prefix for cookies
-- `generateId`: Function to generate a unique ID for a model
+- `database`: Database configuration options
+- `oauthConfig`: OAuth configuration options
 
 ## `logger`
 

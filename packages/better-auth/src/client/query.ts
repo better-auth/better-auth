@@ -1,13 +1,14 @@
-import {
-	type BetterFetch,
+import type {
+	BetterFetch,
 	BetterFetchError,
-	type BetterFetchOption,
+	BetterFetchOption,
 } from "@better-fetch/fetch";
-import { atom, onMount, type PreinitializedWritableAtom } from "nanostores";
+import type { PreinitializedWritableAtom } from "nanostores";
+import { atom, onMount } from "nanostores";
 import type { SessionQueryParams } from "./types";
 
 // SSR detection
-const isServer = typeof window === "undefined";
+const isServer = () => typeof window === "undefined";
 
 export const useAuthQuery = <T>(
 	initializedAtom:
@@ -113,7 +114,7 @@ export const useAuthQuery = <T>(
 
 	for (const initAtom of initializedAtom) {
 		initAtom.subscribe(() => {
-			if (isServer) {
+			if (isServer()) {
 				// On server, don't trigger fetch
 				return;
 			}

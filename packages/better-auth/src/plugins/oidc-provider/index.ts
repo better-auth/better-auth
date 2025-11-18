@@ -6,6 +6,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import { getCurrentAuthContext } from "@better-auth/core/context";
 import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { SignJWT } from "jose";
@@ -21,6 +22,7 @@ import { mergeSchema } from "../../db";
 import type { jwt } from "../jwt";
 import { getJwtToken } from "../jwt/sign";
 import { authorize } from "./authorize";
+import type { OAuthApplication } from "./schema";
 import { schema } from "./schema";
 import type {
 	Client,
@@ -42,32 +44,38 @@ const getJwtPlugin = (ctx: GenericEndpointContext) => {
  */
 export async function getClient(
 	clientId: string,
-	adapter: any,
 	trustedClients: (Client & { skipConsent?: boolean | undefined })[] = [],
 ): Promise<(Client & { skipConsent?: boolean | undefined }) | null> {
+	const {
+		context: { adapter },
+	} = await getCurrentAuthContext();
 	const trustedClient = trustedClients.find(
 		(client) => client.clientId === clientId,
 	);
 	if (trustedClient) {
 		return trustedClient;
 	}
-	const dbClient = await adapter
-		.findOne({
+	return adapter
+		.findOne<OAuthApplication>({
 			model: "oauthApplication",
 			where: [{ field: "clientId", value: clientId }],
 		})
-		.then((res: Record<string, any> | null) => {
+		.then((res) => {
 			if (!res) {
 				return null;
 			}
+			// omit sensitive fields
 			return {
-				...res,
-				redirectURLs: (res.redirectURLs ?? "").split(","),
+				clientId: res.clientId,
+				clientSecret: res.clientSecret,
+				type: res.type,
+				name: res.name,
+				icon: res.icon,
+				disabled: res.disabled,
+				redirectUrls: (res.redirectUrls ?? "").split(","),
 				metadata: res.metadata ? JSON.parse(res.metadata) : {},
-			} as Client;
+			} satisfies Client;
 		});
-
-	return dbClient;
 }
 
 export const getMetadata = (
@@ -277,6 +285,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/.well-known/openid-configuration",
 				{
 					method: "GET",
+					operationId: "getOpenIdConfig",
 					metadata: {
 						isAction: false,
 					},
@@ -290,6 +299,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/authorize",
 				{
 					method: "GET",
+					operationId: "oauth2Authorize",
 					query: z.record(z.string(), z.any()),
 					metadata: {
 						openapi: {
@@ -320,6 +330,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/consent",
 				{
 					method: "POST",
+					operationId: "oauth2Consent",
 					body: z.object({
 						accept: z.boolean(),
 						consent_code: z.string().optional().nullish(),
@@ -473,6 +484,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/token",
 				{
 					method: "POST",
+					operationId: "oauth2Token",
 					body: z.record(z.any(), z.any()),
 					metadata: {
 						isAction: false,
@@ -670,11 +682,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
-					const client = await getClient(
-						client_id.toString(),
-						ctx.context.adapter,
-						trustedClients,
-					);
+					const client = await getClient(client_id.toString(), trustedClients);
 					if (!client) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "invalid client_id",
@@ -905,7 +913,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/userinfo",
 				{
 					method: "GET",
-
+					operationId: "oauth2Userinfo",
+					use: [sessionMiddleware],
 					metadata: {
 						isAction: false,
 						openapi: {
@@ -1008,11 +1017,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
-					const client = await getClient(
-						accessToken.clientId,
-						ctx.context.adapter,
-						trustedClients,
-					);
+					const client = await getClient(accessToken.clientId, trustedClients);
 					if (!client) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "client not found",
@@ -1369,7 +1374,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							metadata: body.metadata ? JSON.stringify(body.metadata) : null,
 							clientId: clientId,
 							clientSecret: storedClientSecret,
-							redirectURLs: body.redirect_uris.join(","),
+							redirectUrls: body.redirect_uris.join(","),
 							type: "web",
 							authenticationScheme:
 								body.token_endpoint_auth_method || "client_secret_basic",
@@ -1460,12 +1465,14 @@ export const oidcProvider = (options: OIDCOptions) => {
 						},
 					},
 				},
-				async (ctx) => {
-					const client = await getClient(
-						ctx.params.id,
-						ctx.context.adapter,
-						trustedClients,
-					);
+				async (
+					ctx,
+				): Promise<{
+					clientId: string;
+					name: string;
+					icon: string | null;
+				}> => {
+					const client = await getClient(ctx.params.id, trustedClients);
 					if (!client) {
 						throw new APIError("NOT_FOUND", {
 							error_description: "client not found",
@@ -1473,14 +1480,17 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 					return ctx.json({
-						clientId: client.clientId as string,
-						name: client.name as string,
-						icon: client.icon as string,
+						clientId: client.clientId,
+						name: client.name,
+						icon: client.icon || null,
 					});
 				},
 			),
 		},
 		schema: mergeSchema(schema, options?.schema),
+		get options() {
+			return opts;
+		},
 	} satisfies BetterAuthPlugin;
 };
 export type * from "./types";

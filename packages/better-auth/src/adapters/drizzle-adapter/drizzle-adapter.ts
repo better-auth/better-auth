@@ -4,7 +4,9 @@ import type {
 	DBAdapterDebugLogOption,
 	Where,
 } from "@better-auth/core/db/adapter";
+import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
+import type { SQL } from "drizzle-orm";
 import {
 	and,
 	asc,
@@ -20,14 +22,13 @@ import {
 	ne,
 	notInArray,
 	or,
-	SQL,
 	sql,
 } from "drizzle-orm";
-import {
-	type AdapterFactoryCustomizeAdapterCreator,
-	type AdapterFactoryOptions,
-	createAdapterFactory,
+import type {
+	AdapterFactoryCustomizeAdapterCreator,
+	AdapterFactoryOptions,
 } from "../adapter-factory";
+import { createAdapterFactory } from "../adapter-factory";
 
 export interface DB {
 	[key: string]: any;
@@ -75,7 +76,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	const createCustomAdapter =
 		(db: DB): AdapterFactoryCustomizeAdapterCreator =>
-		({ getFieldName, debugLog }) => {
+		({ getFieldName, options }) => {
 			function getSchema(model: string) {
 				const schema = config.schema || db._.fullSchema;
 				if (!schema) {
@@ -351,6 +352,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					}
 				}
 			}
+
 			return {
 				async create({ model, data: values }) {
 					const schemaModel = getSchema(model);
@@ -359,34 +361,144 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const returned = await withReturning(model, builder, values);
 					return returned;
 				},
-				async findOne({ model, where }) {
+				async findOne({ model, where, join }) {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
-					const res = await db
+
+					if (options.experimental?.joins) {
+						if (!db.query || !db.query[model]) {
+							logger.error(
+								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your schema to include relations or re-generate using "npx auth generate".`,
+							);
+							logger.info("Falling back to regular query");
+						} else {
+							let includes:
+								| Record<string, { limit: number } | boolean>
+								| undefined;
+
+							const pluralJoinResults: string[] = [];
+							if (join) {
+								includes = {};
+								const joinEntries = Object.entries(join);
+								for (const [model, joinAttr] of joinEntries) {
+									const limit =
+										joinAttr.limit ??
+										options.advanced?.database?.defaultFindManyLimit ??
+										100;
+									const isUnique = joinAttr.relation === "one-to-one";
+									includes[`${model}${isUnique ? "" : "s"}`] = isUnique
+										? true
+										: { limit };
+									if (!isUnique) pluralJoinResults.push(`${model}s`);
+								}
+							}
+							let query = db.query[model].findFirst({
+								where: clause[0],
+								with: includes,
+							});
+							const res = await query;
+							if (res) {
+								for (const pluralJoinResult of pluralJoinResults) {
+									const singularJoinResultName = pluralJoinResult.slice(0, -1);
+									res[singularJoinResultName] = res[pluralJoinResult];
+									delete res[pluralJoinResult];
+								}
+							}
+							return res;
+						}
+					}
+
+					let query = db
 						.select()
 						.from(schemaModel)
 						.where(...clause);
+
+					const res = await query;
 					if (!res.length) return null;
 					return res[0];
 				},
-				async findMany({ model, where, sortBy, limit, offset }) {
+				async findMany({ model, where, sortBy, limit, offset, join }) {
 					const schemaModel = getSchema(model);
 					const clause = where ? convertWhereClause(where, model) : [];
-
 					const sortFn = sortBy?.direction === "desc" ? desc : asc;
-					const builder = db
-						.select()
-						.from(schemaModel)
-						.limit(limit || 100)
-						.offset(offset || 0);
+
+					if (options.experimental?.joins) {
+						if (!db.query[model]) {
+							logger.error(
+								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your schema to include relations or re-generate using "npx auth generate".`,
+							);
+							logger.info("Falling back to regular query");
+						} else {
+							let includes:
+								| Record<string, { limit: number } | boolean>
+								| undefined;
+
+							const pluralJoinResults: string[] = [];
+							if (join) {
+								includes = {};
+								const joinEntries = Object.entries(join);
+								for (const [model, joinAttr] of joinEntries) {
+									const isUnique = joinAttr.relation === "one-to-one";
+									const limit =
+										joinAttr.limit ??
+										options.advanced?.database?.defaultFindManyLimit ??
+										100;
+									includes[`${model}${isUnique ? "" : "s"}`] = isUnique
+										? true
+										: { limit };
+									if (!isUnique) pluralJoinResults.push(`${model}s`);
+								}
+							}
+							let orderBy: SQL<unknown>[] | undefined = undefined;
+							if (sortBy?.field) {
+								orderBy = [
+									sortFn(
+										schemaModel[getFieldName({ model, field: sortBy?.field })],
+									),
+								];
+							}
+							let query = db.query[model].findMany({
+								where: clause[0],
+								with: includes,
+								limit: limit ?? 100,
+								offset: offset ?? 0,
+								orderBy,
+							});
+							let res = await query;
+							if (res) {
+								for (const item of res) {
+									for (const pluralJoinResult of pluralJoinResults) {
+										const singularJoinResultName = pluralJoinResult.slice(
+											0,
+											-1,
+										);
+										item[singularJoinResultName] = item[pluralJoinResult];
+										delete item[pluralJoinResult];
+									}
+								}
+							}
+							return res;
+						}
+					}
+
+					let builder = db.select().from(schemaModel);
+
+					const effectiveLimit = limit ?? 100;
+					const effectiveOffset = offset ?? 0;
+
+					builder = builder.limit(effectiveLimit);
+					builder = builder.offset(effectiveOffset);
+
 					if (sortBy?.field) {
-						builder.orderBy(
+						builder = builder.orderBy(
 							sortFn(
 								schemaModel[getFieldName({ model, field: sortBy?.field })],
 							),
 						);
 					}
-					return (await builder.where(...clause)) as any[];
+
+					const res = await builder.where(...clause);
+					return res;
 				},
 				async count({ model, where }) {
 					const schemaModel = getSchema(model);
@@ -425,7 +537,22 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
 					const builder = db.delete(schemaModel).where(...clause);
-					return await builder;
+					const res = await builder;
+					let count = 0;
+					if (res && "rowCount" in res) count = res.rowCount;
+					else if (Array.isArray(res)) count = res.length;
+					else if (
+						res &&
+						("affectedRows" in res || "rowsAffected" in res || "changes" in res)
+					)
+						count = res.affectedRows ?? res.rowsAffected ?? res.changes;
+					if (typeof count !== "number") {
+						logger.error(
+							"[Drizzle Adapter] The result of the deleteMany operation is not a number. This is likely a bug in the adapter. Please report this issue to the Better Auth team.",
+							{ res, model, where },
+						);
+					}
+					return count;
 				},
 				options: config,
 			};
@@ -437,6 +564,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			adapterName: "Drizzle Adapter",
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
+			supportsUUIDs: config.provider === "pg" ? true : false,
 			transaction:
 				(config.transaction ?? false)
 					? (cb) =>
