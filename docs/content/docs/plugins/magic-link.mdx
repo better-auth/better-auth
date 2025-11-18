@@ -20,7 +20,7 @@ Magic link or email link is a way to authenticate users without a password. When
     export const auth = betterAuth({
         plugins: [
             magicLink({
-                sendMagicLink: async ({ email, token, url }, request) => {
+                sendMagicLink: async ({ email, token, url }, ctx) => {
                     // send email to user
                 }
             })
@@ -130,7 +130,7 @@ type magicLinkVerify = {
 - `url`: The URL to be sent to the user. This URL contains the token.
 - `token`: The token if you want to send the token with custom URL.
 
-and a `request` object as the second parameter.
+and a `ctx` context object as the second parameter.
 
 **expiresIn**: specifies the time in seconds after which the magic link will expire. The default value is `300` seconds (5 minutes).
 
