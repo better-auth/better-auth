@@ -162,6 +162,12 @@ export const sendVerificationEmail = createAuthEndpoint(
 		if (!session) {
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user) {
+				await createEmailVerificationToken(
+					ctx.context.secret,
+					email,
+					undefined,
+					ctx.context.options.emailVerification?.expiresIn,
+				);
 				//we're returning true to avoid leaking information about the user
 				return ctx.json({
 					status: true,
