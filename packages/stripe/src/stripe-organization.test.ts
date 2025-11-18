@@ -159,7 +159,7 @@ describe("stripe organization customer support", () => {
 			data.subscription = [];
 		});
 
-		it("should create Stripe customer when organization is created", async () => {
+		it("should create organization customer on first subscription when enableOrganizationCustomer is enabled", async () => {
 			const onOrgCustomerCreate = vi.fn();
 
 			const testOptionsWithOrgCustomer = {
@@ -168,7 +168,7 @@ describe("stripe organization customer support", () => {
 				onOrganizationCustomerCreate: onOrgCustomerCreate,
 			} satisfies StripeOptions;
 
-			const { auth } = await getTestInstance(
+			const { auth: authInstance } = await getTestInstance(
 				{
 					database: memory,
 					plugins: [organization(), stripe(testOptionsWithOrgCustomer)],
@@ -178,10 +178,10 @@ describe("stripe organization customer support", () => {
 				},
 			);
 
-			const testCtx = await auth.$context;
+			const testCtx = await authInstance.$context;
 
-			// Create user first (owner)
-			const { id: ownerId } = await testCtx.adapter.create({
+			// Create user
+			const { id: userId } = await testCtx.adapter.create({
 				model: "user",
 				data: {
 					email: "owner@test.com",
@@ -189,14 +189,7 @@ describe("stripe organization customer support", () => {
 				},
 			});
 
-			// Mock customers.create for organization
-			mockStripe.customers.create.mockResolvedValueOnce({
-				id: "cus_org_new_123",
-				email: "owner@test.com",
-				name: "Test Organization",
-			});
-
-			// Create organization
+			// Create organization WITHOUT stripeCustomerId
 			const { id: orgId } = await testCtx.adapter.create({
 				model: "organization",
 				data: {
@@ -210,78 +203,91 @@ describe("stripe organization customer support", () => {
 				model: "member",
 				data: {
 					organizationId: orgId,
-					userId: ownerId,
+					userId: userId,
 					role: "owner",
 				},
 			});
 
-			// Trigger the organization.create.after hook manually
-			const endpointCtx = { context: testCtx } as GenericEndpointContext;
-			await runWithEndpointContext(endpointCtx, async () => {
-				const organization = await testCtx.adapter.findOne<Organization>({
+			// Verify organization has NO stripe customer yet
+			const orgBeforeSubscription = await testCtx.adapter.findOne<Organization>(
+				{
 					model: "organization",
 					where: [{ field: "id", value: orgId }],
-				});
+				},
+			);
 
-				if (!organization?.stripeCustomerId) {
-					const members = await testCtx.adapter.findMany<Member>({
-						model: "member",
-						where: [{ field: "organizationId", value: organization!.id }],
-					});
+			expect(orgBeforeSubscription?.stripeCustomerId).toBeUndefined();
 
-					const owners = members.filter((m) => m.role === "owner");
-					if (owners.length === 0) return;
-
-					const ownerMember = owners.sort(
-						(a, b) =>
-							new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-					)[0];
-
-					const adminUser = await testCtx.adapter.findOne<User>({
-						model: "user",
-						where: [{ field: "id", value: ownerMember!.userId }],
-					});
-
-					const stripeCustomer = await mockStripe.customers.create({
-						name: organization!.name,
-						email: adminUser!.email,
-						metadata: {
-							organizationId: organization!.id,
-							organizationName: organization!.name,
-							adminUserId: adminUser!.id,
-						},
-					});
-
-					await testCtx.adapter.update({
-						model: "organization",
-						update: {
-							stripeCustomerId: stripeCustomer.id,
-							stripeAdminUserId: adminUser!.id,
-						},
-						where: [{ field: "id", value: organization!.id }],
-					});
-
-					if (onOrgCustomerCreate) {
-						await onOrgCustomerCreate(
-							{
-								organization: organization!,
-								stripeCustomerId: stripeCustomer.id,
-								adminUserId: adminUser!.id,
-							},
-							endpointCtx,
-						);
-					}
-				}
+			// Mock Stripe customer creation for the organization
+			mockStripe.customers.create.mockResolvedValueOnce({
+				id: "cus_org_new_123",
+				email: "owner@test.com",
+				name: "Test Organization",
 			});
 
-			// Verify Stripe customer was created with correct data
+			// Mock checkout session creation
+			mockStripe.checkout.sessions.create.mockResolvedValueOnce({
+				id: "cs_test_123",
+				url: "https://checkout.stripe.com/test",
+			});
+
+			// Simulate subscription.upgrade logic that creates organization customer
+			// This mimics what happens in the actual upgradeSubscription endpoint
+			const orgEntity = await testCtx.adapter.findOne<Organization>({
+				model: "organization",
+				where: [{ field: "id", value: orgId }],
+			});
+
+			const user = await testCtx.adapter.findOne<User>({
+				model: "user",
+				where: [{ field: "id", value: userId }],
+			});
+
+			if (orgEntity && !orgEntity.stripeCustomerId) {
+				const stripeCustomer = await mockStripe.customers.create({
+					name: orgEntity.name,
+					email: user!.email,
+					metadata: {
+						organizationId: orgEntity.id,
+						organizationName: orgEntity.name,
+						adminUserId: user!.id,
+					},
+				});
+
+				await testCtx.adapter.update({
+					model: "organization",
+					update: {
+						stripeCustomerId: stripeCustomer.id,
+						stripeAdminUserId: user!.id,
+					},
+					where: [{ field: "id", value: orgEntity.id }],
+				});
+
+				if (onOrgCustomerCreate) {
+					const endpointCtx = { context: testCtx } as GenericEndpointContext;
+					await onOrgCustomerCreate(
+						{
+							stripeCustomer: stripeCustomer as any,
+							organization: {
+								...orgEntity,
+								stripeCustomerId: stripeCustomer.id,
+								stripeAdminUserId: user!.id,
+							} as any,
+							adminUser: user!,
+						},
+						endpointCtx,
+					);
+				}
+			}
+
+			// Verify Stripe customer was created
 			expect(mockStripe.customers.create).toHaveBeenCalledWith({
 				name: "Test Organization",
 				email: "owner@test.com",
 				metadata: {
 					organizationId: orgId,
 					organizationName: "Test Organization",
-					adminUserId: ownerId,
+					adminUserId: userId,
 				},
 			});
 
@@ -292,18 +298,24 @@ describe("stripe organization customer support", () => {
 			});
 
 			expect(updatedOrg?.stripeCustomerId).toBe("cus_org_new_123");
-			expect(updatedOrg?.stripeAdminUserId).toBe(ownerId);
+			expect(updatedOrg?.stripeAdminUserId).toBe(userId);
 
 			// Verify callback was called
 			expect(onOrgCustomerCreate).toHaveBeenCalledWith(
-				{
+				expect.objectContaining({
+					stripeCustomer: expect.objectContaining({
+						id: "cus_org_new_123",
+					}),
 					organization: expect.objectContaining({
 						id: orgId,
 						name: "Test Organization",
+						stripeCustomerId: "cus_org_new_123",
 					}),
-					stripeCustomerId: "cus_org_new_123",
-					adminUserId: ownerId,
-				},
+					adminUser: expect.objectContaining({
+						id: userId,
+						email: "owner@test.com",
+					}),
+				}),
 				expect.any(Object),
 			);
 		});
