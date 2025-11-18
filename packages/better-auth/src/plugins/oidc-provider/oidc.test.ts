@@ -20,6 +20,7 @@ import { jwt } from "../jwt";
 import { oidcProvider } from ".";
 import type { OidcClientPlugin } from "./client";
 import { oidcClient } from "./client";
+import type { OAuthApplication } from "./schema";
 import type { Client } from "./types";
 
 // Type for the server client with OIDC plugin
@@ -100,6 +101,7 @@ describe("oidc", async () => {
 		signInWithTestUser,
 		customFetchImpl,
 		testUser,
+		db,
 	} = await getTestInstance({
 		baseURL: "http://localhost:3000",
 		plugins: [
@@ -191,6 +193,47 @@ describe("oidc", async () => {
 			name: application.name,
 			icon: null,
 		});
+	});
+
+	it("should persist jwks and auth method for private_key_jwt clients", async ({
+		expect,
+	}) => {
+		const jwks = {
+			keys: [
+				{
+					kty: "RSA",
+					use: "sig",
+					kid: "test-key-registration",
+					n: "test-modulus",
+					e: "AQAB",
+				},
+			],
+		};
+
+		const createdClient = await serverClient.oauth2.register({
+			client_name: "pk-client",
+			redirect_uris: [
+				"http://localhost:3000/api/auth/oauth2/callback/pk-client",
+			],
+			logo_uri: "",
+			token_endpoint_auth_method: "private_key_jwt",
+			jwks_uri: "https://client.example.com/jwks",
+			jwks,
+		});
+
+		expect(createdClient.data).toBeDefined();
+		const clientId = createdClient.data!.client_id;
+
+		const apps = await db.findMany<OAuthApplication>({
+			model: "oauthApplication",
+			where: [{ field: "clientId", value: clientId }],
+		});
+
+		expect(apps.length).toBe(1);
+		const app = apps[0]!;
+		expect(app.tokenEndpointAuthMethod).toBe("private_key_jwt");
+		expect(app.jwksUri).toBe("https://client.example.com/jwks");
+		expect(app.jwks).toBe(JSON.stringify(jwks));
 	});
 
 	it("should sign in the user with the provider", async ({ expect }) => {
@@ -1321,6 +1364,52 @@ describe("private_key_jwt authentication", async () => {
 				body: {
 					grant_type: "authorization_code",
 					code: "test-code-no-exp",
+					redirect_uri: "http://localhost:3000/callback",
+					client_id: clientId,
+					client_assertion_type:
+						"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+					client_assertion: clientAssertion,
+					code_verifier: codeChallenge,
+				},
+			}),
+		).rejects.toThrow();
+	});
+
+	it("should reject malformed client_assertion payload with invalid_client", async () => {
+		const now = Math.floor(Date.now() / 1000);
+		// Construct a fake "JWT" where payload is not valid JSON
+		const header = Buffer.from(
+			JSON.stringify({ alg: "RS256", kid: "malformed-payload" }),
+		).toString("base64url");
+		const invalidJsonPayload = Buffer.from("{not-json").toString("base64url");
+		const signature = "dummy-signature";
+		const clientAssertion = `${header}.${invalidJsonPayload}.${signature}`;
+
+		const codeChallenge = "test-challenge-malformed";
+		await db.create({
+			model: "verification",
+			data: {
+				identifier: "test-code-malformed",
+				value: JSON.stringify({
+					clientId: clientId,
+					redirectURI: "http://localhost:3000/callback",
+					scope: ["openid", "profile"],
+					userId: testUser.id,
+					authTime: now,
+					requireConsent: false,
+					state: "test-state",
+					codeChallenge: codeChallenge,
+					codeChallengeMethod: "plain",
+				}),
+				expiresAt: new Date(Date.now() + 600000),
+			},
+		});
+
+		await expect(
+			authorizationServer.api.oAuth2token({
+				body: {
+					grant_type: "authorization_code",
+					code: "test-code-malformed",
 					redirect_uri: "http://localhost:3000/callback",
 					client_id: clientId,
 					client_assertion_type:

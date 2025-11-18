@@ -576,10 +576,22 @@ export const oidcProvider = (options: OIDCOptions) => {
 									error: "invalid_client",
 								});
 							}
-							const payload = JSON.parse(
-								new TextDecoder().decode(base64.decode(parts[1])),
-							);
-							client_id = payload.iss || payload.sub;
+							let payload: unknown;
+							try {
+								payload = JSON.parse(
+									new TextDecoder().decode(base64.decode(parts[1])),
+								);
+							} catch {
+								throw new APIError("UNAUTHORIZED", {
+									error_description: "invalid jwt payload",
+									error: "invalid_client",
+								});
+							}
+							const { iss, sub } = payload as {
+								iss?: string;
+								sub?: string;
+							};
+							client_id = iss || sub;
 						}
 
 						authenticatedViaAssertion = true;
@@ -1471,11 +1483,15 @@ export const oidcProvider = (options: OIDCOptions) => {
 							name: body.client_name,
 							icon: body.logo_uri,
 							metadata: body.metadata ? JSON.stringify(body.metadata) : null,
-							clientId: clientId,
+							clientId,
 							clientSecret: storedClientSecret,
 							redirectUrls: body.redirect_uris.join(","),
 							type: "web",
 							authenticationScheme:
+								body.token_endpoint_auth_method || "client_secret_basic",
+							jwks: body.jwks ? JSON.stringify(body.jwks) : undefined,
+							jwksUri: body.jwks_uri,
+							tokenEndpointAuthMethod:
 								body.token_endpoint_auth_method || "client_secret_basic",
 							disabled: false,
 							userId: session?.session.userId,

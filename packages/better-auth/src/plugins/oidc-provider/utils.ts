@@ -52,8 +52,16 @@ export async function verifyClientAssertion(params: {
 		});
 	}
 
-	const header = JSON.parse(new TextDecoder().decode(base64.decode(parts[0])));
-	const kid = header.kid;
+	let header: unknown;
+	try {
+		header = JSON.parse(new TextDecoder().decode(base64.decode(parts[0])));
+	} catch {
+		throw new APIError("UNAUTHORIZED", {
+			error_description: "invalid jwt header",
+			error: "invalid_client",
+		});
+	}
+	const kid = (header as { kid?: string }).kid;
 
 	let key = keys[0];
 	if (kid) {
