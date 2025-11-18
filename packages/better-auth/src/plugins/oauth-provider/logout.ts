@@ -1,11 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-call";
-import {
-	compactVerify,
-	createLocalJWKSet,
-	decodeJwt,
-	type JWTPayload,
-} from "jose";
+import type { JWTPayload } from "jose";
+import { compactVerify, createLocalJWKSet, decodeJwt } from "jose";
 import type { Session } from "../../types";
 import { handleRedirect } from "./authorize";
 import type { OAuthOptions, Scope } from "./types";
