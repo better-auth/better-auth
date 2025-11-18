@@ -22,7 +22,7 @@ import { registerEndpoint } from "./register";
 import { revokeEndpoint } from "./revoke";
 import { schema } from "./schema";
 import { tokenEndpoint } from "./token";
-import type { OAuthAuthorizationQuery, OAuthOptions, Scope } from "./types";
+import type { OAuthOptions, Scope } from "./types";
 import { userInfoEndpoint } from "./userinfo";
 import { getJwtPlugin } from "./utils";
 
@@ -206,7 +206,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							ctx.path === "/sign-in/social" ||
 							ctx.path === "/sign-in/oauth2"
 						) {
-							if (ctx.body.additionalData.query) return;
+							if (ctx.body.additionalData?.query) return;
 							if (!ctx.body.additionalData) ctx.body.additionalData = {};
 							ctx.body.additionalData.query = query;
 						}
@@ -242,18 +242,17 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 
 						// Continue with authorization request by using the initial prompt
 						// but clearing the login prompt cookie if forced login prompt
-						ctx.query = Object.fromEntries(ctx.context.oauth.query);
+						const query = ctx.context.oauth.query;
 						ctx.headers?.set("accept", "application/json");
-						let prompts:
-							| Exclude<OAuthAuthorizationQuery["prompt"], undefined>[]
-							| undefined = ctx.query?.prompt?.split(" ");
+						let prompts = query.get("prompt")?.split(" ");
 						const foundPrompt = prompts?.findIndex((v) => v === "login") ?? -1;
 						if (ctx.query && foundPrompt >= 0) {
 							prompts?.splice(foundPrompt, 1);
-							ctx.query.prompt = prompts?.length
-								? (prompts?.join(" ") as OAuthAuthorizationQuery["prompt"])
-								: undefined;
+							prompts?.length
+								? query.set("prompt", prompts.join(" "))
+								: query.delete("prompt");
 						}
+						ctx.query = Object.fromEntries(query);
 						return await authorizeEndpoint(ctx, opts);
 					}),
 				},
