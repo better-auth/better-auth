@@ -21,3 +21,76 @@ export class SCIMAPIError extends APIError {
 		this.message = body.detail ?? body.message;
 	}
 }
+
+export const SCIMErrorOpenAPISchema = {
+	type: "object",
+	properties: {
+		schemas: {
+			type: "array",
+			items: { type: "string" },
+		},
+		status: {
+			type: "number",
+		},
+		detail: {
+			type: "string",
+		},
+		scimType: {
+			type: "string",
+		},
+	},
+} as const;
+
+export const SCIMErrorOpenAPISchemas = {
+	"400": {
+		description:
+			"Bad Request. Usually due to missing parameters, or invalid parameters",
+		content: {
+			"application/json": {
+				schema: SCIMErrorOpenAPISchema,
+			},
+		},
+	},
+	"401": {
+		description: "Unauthorized. Due to missing or invalid authentication.",
+		content: {
+			"application/json": {
+				schema: SCIMErrorOpenAPISchema,
+			},
+		},
+	},
+	"403": {
+		description: "Unauthorized. Due to missing or invalid authentication.",
+		content: {
+			"application/json": {
+				schema: SCIMErrorOpenAPISchema,
+			},
+		},
+	},
+	"404": {
+		description: "Not Found. The requested resource was not found.",
+		content: {
+			"application/json": {
+				schema: SCIMErrorOpenAPISchema,
+			},
+		},
+	},
+	"429": {
+		description:
+			"Too Many Requests. You have exceeded the rate limit. Try again later.",
+		content: {
+			"application/json": {
+				schema: SCIMErrorOpenAPISchema,
+			},
+		},
+	},
+	"500": {
+		description:
+			"Internal Server Error. This is a problem with the server that you cannot fix.",
+		content: {
+			"application/json": {
+				schema: SCIMErrorOpenAPISchema,
+			},
+		},
+	},
+};

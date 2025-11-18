@@ -1,10 +1,6 @@
 import type { Account, User } from "better-auth";
 import { SCIMUserResourceSchema } from "./user-schemas";
 
-const getUserResourceLocation = (baseURL: string, userId: string) => {
-	return;
-};
-
 export const createUserResource = (
 	baseURL: string,
 	user: User,

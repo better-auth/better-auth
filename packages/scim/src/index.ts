@@ -8,9 +8,14 @@ import * as z from "zod";
 import { getAccountId, getUserFullName, getUserPrimaryEmail } from "./mappings";
 import { authMiddlewareFactory } from "./middlewares";
 import { buildUserPatch } from "./patch-operations";
-import { SCIMAPIError } from "./scim-error";
+import { SCIMAPIError, SCIMErrorOpenAPISchemas } from "./scim-error";
 import type { DBFilter } from "./scim-filters";
 import { parseSCIMUserFilter, SCIMParseError } from "./scim-filters";
+import {
+	ResourceTypeOpenAPISchema,
+	SCIMSchemaOpenAPISchema,
+	ServiceProviderOpenAPISchema,
+} from "./scim-metadata";
 import { createUserResource } from "./scim-resources";
 import { storeSCIMToken } from "./scim-tokens";
 import type { SCIMOptions, SCIMProvider } from "./types";
@@ -249,6 +254,7 @@ export const scim = (options?: SCIMOptions) => {
 										},
 									},
 								},
+								...SCIMErrorOpenAPISchemas,
 							},
 						},
 					},
@@ -370,7 +376,7 @@ export const scim = (options?: SCIMOptions) => {
 							description:
 								"Updates an existing user into the linked organization via SCIM. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.3",
 							responses: {
-								"201": {
+								"200": {
 									description: "SCIM user resource",
 									content: {
 										"application/json": {
@@ -378,6 +384,7 @@ export const scim = (options?: SCIMOptions) => {
 										},
 									},
 								},
+								...SCIMErrorOpenAPISchemas,
 							},
 						},
 					},
@@ -471,6 +478,7 @@ export const scim = (options?: SCIMOptions) => {
 										},
 									},
 								},
+								...SCIMErrorOpenAPISchemas,
 							},
 						},
 					},
@@ -547,6 +555,7 @@ export const scim = (options?: SCIMOptions) => {
 										},
 									},
 								},
+								...SCIMErrorOpenAPISchemas,
 							},
 						},
 					},
@@ -602,6 +611,12 @@ export const scim = (options?: SCIMOptions) => {
 						openapi: {
 							summary: "Patch SCIM user",
 							description: "Updates fields on a SCIM user record",
+							responses: {
+								"204": {
+									description: "Patch update applied correctly",
+								},
+								...SCIMErrorOpenAPISchemas,
+							},
 						},
 					},
 					use: [authMiddleware],
@@ -667,6 +682,12 @@ export const scim = (options?: SCIMOptions) => {
 							summary: "Delete SCIM user",
 							description:
 								"Deletes (or deactivates) a user within the linked organization.",
+							responses: {
+								"204": {
+									description: "Delete applied successfully",
+								},
+								...SCIMErrorOpenAPISchemas,
+							},
 						},
 					},
 					use: [authMiddleware],
@@ -708,7 +729,13 @@ export const scim = (options?: SCIMOptions) => {
 							responses: {
 								"200": {
 									description: "SCIM metadata object",
+									content: {
+										"application/json": {
+											schema: ServiceProviderOpenAPISchema,
+										},
+									},
 								},
+								...SCIMErrorOpenAPISchemas,
 							},
 						},
 					},
@@ -754,7 +781,16 @@ export const scim = (options?: SCIMOptions) => {
 							responses: {
 								"200": {
 									description: "SCIM metadata object",
+									content: {
+										"application/json": {
+											schema: {
+												type: "array",
+												items: SCIMSchemaOpenAPISchema,
+											},
+										},
+									},
 								},
+								...SCIMErrorOpenAPISchemas,
 							},
 						},
 					},
@@ -794,7 +830,13 @@ export const scim = (options?: SCIMOptions) => {
 							responses: {
 								"200": {
 									description: "SCIM metadata object",
+									content: {
+										"application/json": {
+											schema: SCIMSchemaOpenAPISchema,
+										},
+									},
 								},
+								...SCIMErrorOpenAPISchemas,
 							},
 						},
 					},
@@ -833,7 +875,24 @@ export const scim = (options?: SCIMOptions) => {
 							responses: {
 								"200": {
 									description: "SCIM metadata object",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													totalResults: { type: "number" },
+													itemsPerPage: { type: "number" },
+													startIndex: { type: "number" },
+													Resources: {
+														type: "array",
+														items: ResourceTypeOpenAPISchema,
+													},
+												},
+											},
+										},
+									},
 								},
+								...SCIMErrorOpenAPISchemas,
 							},
 						},
 					},
@@ -873,7 +932,13 @@ export const scim = (options?: SCIMOptions) => {
 							responses: {
 								"200": {
 									description: "SCIM metadata object",
+									content: {
+										"application/json": {
+											schema: ResourceTypeOpenAPISchema,
+										},
+									},
 								},
+								...SCIMErrorOpenAPISchemas,
 							},
 						},
 					},
