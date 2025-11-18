@@ -47,8 +47,7 @@ export const mongodbAdapter = (
 	let lazyOptions: BetterAuthOptions | null;
 
 	const getCustomIdGenerator = (options: BetterAuthOptions) => {
-		const generator =
-			options.advanced?.database?.generateId || options.advanced?.generateId;
+		const generator = options.advanced?.database?.generateId;
 		if (typeof generator === "function") {
 			return generator;
 		}
