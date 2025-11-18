@@ -87,9 +87,16 @@ export async function verifyClientAssertion(params: {
 		});
 	}
 
+	if (typeof payload.exp !== "number") {
+		throw new APIError("UNAUTHORIZED", {
+			error_description: "exp claim is required",
+			error: "invalid_client",
+		});
+	}
+
 	const jtiUsed = await checkJtiReplay(
 		payload.jti as string,
-		payload.exp as number,
+		payload.exp,
 		clientId,
 		ctx,
 	);

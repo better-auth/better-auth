@@ -1283,6 +1283,55 @@ describe("private_key_jwt authentication", async () => {
 		).rejects.toThrow();
 	});
 
+	it("should reject jwt without exp claim", async () => {
+		const now = Math.floor(Date.now() / 1000);
+		const clientAssertion = await new SignJWT({
+			iss: clientId,
+			sub: clientId,
+			aud: "http://localhost:3000/api/auth/oauth2/token",
+			jti: `test-jti-no-exp-${now}`,
+			iat: now,
+		})
+			.setProtectedHeader({ alg: "RS256", kid: "test-key-1" })
+			// intentionally do not set exp
+			.sign(privateKey);
+
+		const codeChallenge = "test-challenge-no-exp";
+		await db.create({
+			model: "verification",
+			data: {
+				identifier: "test-code-no-exp",
+				value: JSON.stringify({
+					clientId: clientId,
+					redirectURI: "http://localhost:3000/callback",
+					scope: ["openid", "profile"],
+					userId: testUser.id,
+					authTime: now,
+					requireConsent: false,
+					state: "test-state",
+					codeChallenge: codeChallenge,
+					codeChallengeMethod: "plain",
+				}),
+				expiresAt: new Date(Date.now() + 600000),
+			},
+		});
+
+		await expect(
+			authorizationServer.api.oAuth2token({
+				body: {
+					grant_type: "authorization_code",
+					code: "test-code-no-exp",
+					redirect_uri: "http://localhost:3000/callback",
+					client_id: clientId,
+					client_assertion_type:
+						"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+					client_assertion: clientAssertion,
+					code_verifier: codeChallenge,
+				},
+			}),
+		).rejects.toThrow();
+	});
+
 	it("should reject reused jti", async () => {
 		const now = Math.floor(Date.now() / 1000);
 		const jti = `test-jti-reuse-${now}`;
