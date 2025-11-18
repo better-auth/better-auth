@@ -5,18 +5,18 @@ import type {
 	JoinConfig,
 	Where,
 } from "@better-auth/core/db/adapter";
-import {
-	type InsertQueryBuilder,
-	type Kysely,
-	type RawBuilder,
-	sql,
-	type UpdateQueryBuilder,
+import type {
+	InsertQueryBuilder,
+	Kysely,
+	RawBuilder,
+	UpdateQueryBuilder,
 } from "kysely";
-import {
-	type AdapterFactoryCustomizeAdapterCreator,
-	type AdapterFactoryOptions,
-	createAdapterFactory,
+import { sql } from "kysely";
+import type {
+	AdapterFactoryCustomizeAdapterCreator,
+	AdapterFactoryOptions,
 } from "../adapter-factory";
+import { createAdapterFactory } from "../adapter-factory";
 import type { KyselyDatabaseType } from "./types";
 
 interface KyselyAdapterConfig {

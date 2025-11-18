@@ -4,7 +4,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { env } from "@better-auth/core/env";
-import type { EndpointContext } from "better-call";
+import type { CookieOptions, EndpointContext } from "better-call";
 import * as z from "zod";
 import { originCheck } from "../../api";
 import { parseJSON } from "../../client/parser";
@@ -187,12 +187,53 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 								filteredAttrs.push("Secure");
 							}
 
-							return filteredAttrs.length > 0
-								? `${name}=${value}; ${filteredAttrs.join("; ")}`
-								: `${name}=${value}`;
+							// Build options
+							const options: CookieOptions = {};
+							for (const attr of filteredAttrs) {
+								const [attrName, attrValue] = attr.split("=");
+								if (!attrName) continue;
+								switch (attrName.toLowerCase()) {
+									case "path":
+										options.path = attrValue;
+										break;
+									case "expires":
+										if (!attrValue) break;
+										options.expires = new Date(attrValue);
+										break;
+									case "samesite":
+										options.sameSite = attrValue as "lax" | "strict" | "none";
+										break;
+									case "httponly":
+										options.httpOnly = true;
+										break;
+									case "max-age":
+										if (!attrValue) break;
+										options.maxAge = parseInt(attrValue, 10);
+										break;
+									case "prefix":
+										if (!attrValue) break;
+										options.prefix = attrValue as "host" | "secure";
+										break;
+									case "partitioned": {
+										options.partitioned = true;
+										break;
+									}
+								}
+							}
+
+							return {
+								name,
+								value,
+								options,
+							};
 						});
 
-					ctx.setHeader("set-cookie", processedCookies.join(", "));
+					for (const cookie of processedCookies) {
+						// using `ctx.setHeader` overrides previous Set-Cookie headers
+						// so use ctx.setCookie helper instead
+						// https://github.com/Bekacru/better-call/blob/d27ac20e64b329a4851e97adf864098a9bc2a260/src/context.ts#L217
+						ctx.setCookie(cookie.name, cookie.value, cookie.options);
+					}
 					throw ctx.redirect(ctx.query.callbackURL);
 				},
 			),
