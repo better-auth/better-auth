@@ -7,7 +7,7 @@ import { getDate } from "../../../utils/date";
 import { safeJSONParse } from "../../../utils/json";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
-import { apiKeySchema } from "../schema";
+import type { apiKeySchema } from "../schema";
 import { setApiKey } from "../secondary-storage";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
