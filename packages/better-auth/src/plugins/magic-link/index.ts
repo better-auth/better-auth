@@ -11,7 +11,26 @@ import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { defaultKeyHasher } from "./utils";
 
-interface MagicLinkopts {
+type JsonValue =
+	| string
+	| number
+	| boolean
+	| null
+	| JsonValue[]
+	| { [key: string]: JsonValue };
+
+const jsonSchema: z.ZodType<JsonValue> = z.lazy(() =>
+	z.union([
+		z.string(),
+		z.number(),
+		z.boolean(),
+		z.null(),
+		z.array(jsonSchema),
+		z.record(z.string(), jsonSchema),
+	]),
+);
+
+interface MagicLinkOptions<DS extends z.ZodType> {
 	/**
 	 * Time in seconds until the magic link expires.
 	 * @default (60 * 5) // 5 minutes
@@ -25,9 +44,19 @@ interface MagicLinkopts {
 			email: string;
 			url: string;
 			token: string;
+			additionalData?: z.infer<DS>;
 		},
 		ctx?: GenericEndpointContext | undefined,
 	) => Promise<void> | void;
+	/**
+	 * Zod schema for the additionalData property of the sendMagicLink function.
+	 * This schema is used to validate and type-safeguard the additional data passed to the sign-in endpoint.
+	 *
+	 * @default z.record(z.string(), jsonSchema)
+	 * @see {@link https://zod.dev/basics}
+	 * @type jsonSchema is a Zod schema that validates JSON-serializable values.
+	 */
+	additionalDataSchema?: DS;
 	/**
 	 * Disable sign up if user is not found.
 	 *
@@ -68,11 +97,15 @@ interface MagicLinkopts {
 		| undefined;
 }
 
-export const magicLink = (options: MagicLinkopts) => {
+export const magicLink = <
+	DS extends z.ZodType<JsonValue> = z.ZodRecord<z.ZodString, typeof jsonSchema>,
+>(
+	options: MagicLinkOptions<DS>,
+) => {
 	const opts = {
 		storeToken: "plain",
 		...options,
-	} satisfies MagicLinkopts;
+	} satisfies MagicLinkOptions<DS>;
 
 	async function storeToken(ctx: GenericEndpointContext, token: string) {
 		if (opts.storeToken === "hashed") {
@@ -87,6 +120,9 @@ export const magicLink = (options: MagicLinkopts) => {
 		}
 		return token;
 	}
+
+	const additionalDataSchema = (options.additionalDataSchema ??
+		z.record(z.string(), jsonSchema)) as DS;
 
 	return {
 		id: "magic-link",
@@ -141,6 +177,12 @@ export const magicLink = (options: MagicLinkopts) => {
 								description: "URL to redirect after error.",
 							})
 							.optional(),
+						additionalData: additionalDataSchema
+							.meta({
+								description:
+									"Additional data to pass to the sendMagicLink function",
+							})
+							.optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -167,7 +209,7 @@ export const magicLink = (options: MagicLinkopts) => {
 					},
 				},
 				async (ctx) => {
-					const { email } = ctx.body;
+					const { email, additionalData } = ctx.body;
 
 					if (opts.disableSignUp) {
 						const user =
@@ -213,6 +255,7 @@ export const magicLink = (options: MagicLinkopts) => {
 							email,
 							url: url.toString(),
 							token: verificationToken,
+							additionalData,
 						},
 						ctx,
 					);

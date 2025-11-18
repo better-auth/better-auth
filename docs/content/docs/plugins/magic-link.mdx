@@ -20,7 +20,7 @@ Magic link or email link is a way to authenticate users without a password. When
     export const auth = betterAuth({
         plugins: [
             magicLink({
-                sendMagicLink: async ({ email, token, url }, request) => {
+                sendMagicLink: async ({ email, token, url, additionalData }, request) => {
                     // send email to user
                 }
             })
@@ -84,6 +84,11 @@ type signInMagicLink = {
      * redirected to the callbackURL with an `error` query parameter.
      */
     errorCallbackURL?: string = "/error"
+    /**
+     * If you want to provide additional data to the `sendMagicLink` function you can do so in key-value
+     * pairs here. See below on how to make a schema to validate these values.
+     */
+    additionalData?: Record<string, JsonValue> = { message: "Hello from better-auth!" }
 }
 ```
 </APIMethod>
@@ -122,13 +127,59 @@ type magicLinkVerify = {
 ```
 </APIMethod>
 
+### Additional Data
+
+If you want to include additional data for your sendMagicLink function, for type-safety and runtime schema validation you can supply a [Zod schema](https://zod.dev/) to the plugin through options.
+
+```ts title="server.ts"
+import { betterAuth } from "better-auth";
+import { magicLink } from "better-auth/plugins";
+ 
+export const auth = betterAuth({
+    plugins: [
+        magicLink({
+            sendMagicLink: async ({ email, token, url, additionalData }, request) => {
+                const message = additionalData?.message ?? "No message provided!"; // [!code highlight]
+
+                // send email to user
+            }
+        })
+    ]
+})
+```
+
+```ts title="server.ts"
+import { betterAuth } from "better-auth";
+import { magicLink } from "better-auth/plugins";
+import z from "zod"; // [!code highlight]
+
+export const auth = betterAuth({
+    plugins: [
+        magicLink({
+            additionalDataSchema: z.object({ message: z.string() }), // Create your schema here! // [!code highlight]
+            sendMagicLink: async ({ email, token, url, additionalData }, request) => {
+                const message = additionalData?.message ?? "No message provided!";
+
+                // send email to user
+            }
+        })
+    ]
+})
+```
+<Callout type="warn">
+  If no `additionalDataSchema` is provided, the type will default to `Record<string, JsonValue>` and the value is not validated during runtime. JsonValue is a "generic" type that is constrained to only types that can be serialized into JSON.
+</Callout>
+
 ## Configuration Options
+
+**additionalDataSchema**: [Zod schema](https://zod.dev/) used for validation and type-safety of the `additionalData` field in `sendMagicLink`.
 
 **sendMagicLink**: The `sendMagicLink` function is called when a user requests a magic link. It takes an object with the following properties:
 
 - `email`: The email address of the user.
 - `url`: The URL to be sent to the user. This URL contains the token.
 - `token`: The token if you want to send the token with custom URL.
+- `additionalData`: Additional properties provided when calling the `signIn.magicLink()` function.
 
 and a `request` object as the second parameter.
 
