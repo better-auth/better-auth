@@ -45,10 +45,7 @@ export async function validateApiKey({
 		const expiresAt = new Date(apiKey.expiresAt).getTime();
 		if (now > expiresAt) {
 			try {
-				if (
-					opts.storage === "secondary-storage" &&
-					opts.fallbackToDatabase
-				) {
+				if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
 					await deleteApiKey(ctx, apiKey, opts);
 					await ctx.context.adapter.delete({
 						model: API_KEY_TABLE_NAME,

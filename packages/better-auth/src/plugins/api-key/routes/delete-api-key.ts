@@ -94,10 +94,7 @@ export function deleteApiKey({
 			}
 
 			try {
-				if (
-					opts.storage === "secondary-storage" &&
-					opts.fallbackToDatabase
-				) {
+				if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
 					await deleteApiKeyFromStorage(ctx, apiKey, opts);
 					await ctx.context.adapter.delete<ApiKey>({
 						model: API_KEY_TABLE_NAME,

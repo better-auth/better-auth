@@ -400,10 +400,7 @@ export function updateApiKey({
 
 			let newApiKey: ApiKey = apiKey;
 			try {
-				if (
-					opts.storage === "secondary-storage" &&
-					opts.fallbackToDatabase
-				) {
+				if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
 					const dbUpdated = await ctx.context.adapter.update<ApiKey>({
 						model: API_KEY_TABLE_NAME,
 						where: [

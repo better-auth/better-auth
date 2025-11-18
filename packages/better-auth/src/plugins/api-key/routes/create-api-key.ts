@@ -452,10 +452,7 @@ export function createApiKey({
 
 			let apiKey: ApiKey;
 
-			if (
-				opts.storage === "secondary-storage" &&
-				opts.fallbackToDatabase
-			) {
+			if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
 				apiKey = await ctx.context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
 					model: API_KEY_TABLE_NAME,
 					data: data,
