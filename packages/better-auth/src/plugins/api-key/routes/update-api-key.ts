@@ -1,6 +1,6 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { z } from "zod";
+import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../../api";
 import { getDate } from "../../../utils/date";
 import { safeJSONParse } from "../../../utils/json";

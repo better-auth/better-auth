@@ -10,7 +10,7 @@ import { getCurrentAuthContext } from "@better-auth/core/context";
 import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { SignJWT } from "jose";
-import { z } from "zod";
+import * as z from "zod";
 import { APIError, getSessionFromCtx, sessionMiddleware } from "../../api";
 import { parseSetCookieHeader } from "../../cookies";
 import {
@@ -22,7 +22,8 @@ import { mergeSchema } from "../../db";
 import type { jwt } from "../jwt";
 import { getJwtToken } from "../jwt/sign";
 import { authorize } from "./authorize";
-import { type OAuthApplication, schema } from "./schema";
+import type { OAuthApplication } from "./schema";
+import { schema } from "./schema";
 import type {
 	Client,
 	CodeVerificationValue,
@@ -284,6 +285,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/.well-known/openid-configuration",
 				{
 					method: "GET",
+					operationId: "getOpenIdConfig",
 					metadata: {
 						isAction: false,
 					},
@@ -297,6 +299,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/authorize",
 				{
 					method: "GET",
+					operationId: "oauth2Authorize",
 					query: z.record(z.string(), z.any()),
 					metadata: {
 						openapi: {
@@ -327,6 +330,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/consent",
 				{
 					method: "POST",
+					operationId: "oauth2Consent",
 					body: z.object({
 						accept: z.boolean(),
 						consent_code: z.string().optional().nullish(),
@@ -480,6 +484,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/token",
 				{
 					method: "POST",
+					operationId: "oauth2Token",
 					body: z.record(z.any(), z.any()),
 					metadata: {
 						isAction: false,
@@ -908,7 +913,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/userinfo",
 				{
 					method: "GET",
-
+					operationId: "oauth2Userinfo",
+					use: [sessionMiddleware],
 					metadata: {
 						isAction: false,
 						openapi: {
@@ -1482,6 +1488,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 			),
 		},
 		schema: mergeSchema(schema, options?.schema),
+		get options() {
+			return opts;
+		},
 	} satisfies BetterAuthPlugin;
 };
 export type * from "./types";

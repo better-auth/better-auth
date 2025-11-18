@@ -1,13 +1,13 @@
 import { createAuthMiddleware } from "@better-auth/core/api";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
+import { getOAuthState } from "better-auth/api";
+import { signJWT } from "better-auth/crypto";
+import { getTestInstance } from "better-auth/test";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { getOAuthState } from "../src/api";
-import { signJWT } from "../src/crypto";
-import { getTestInstance } from "../src/test-utils";
-import { DEFAULT_SECRET } from "../src/utils/constants";
 
+const DEFAULT_SECRET = "better-auth-secret-123456789";
 const mswServer = setupServer();
 
 beforeAll(async () => {
@@ -44,8 +44,9 @@ beforeAll(async () => {
 afterAll(() => mswServer.close());
 
 test("should login with google successfully", async () => {
-	let latestOauthStore: Record<string, any> | undefined = undefined;
+	let latestOauthStore: Record<string, any> | null = null;
 	const { client } = await getTestInstance({
+		secret: DEFAULT_SECRET,
 		hooks: {
 			after: createAuthMiddleware(async (ctx) => {
 				if (ctx.path === "/callback/:id" && ctx.params.id === "google") {
