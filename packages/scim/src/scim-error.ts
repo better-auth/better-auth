@@ -1,6 +1,6 @@
 import type { Status } from "better-auth";
 import { APIError } from "better-auth";
-import { _statusCode } from "better-call";
+import { statusCodes } from "better-call";
 
 /**
  * SCIM compliant error
@@ -8,12 +8,12 @@ import { _statusCode } from "better-call";
  */
 export class SCIMAPIError extends APIError {
 	constructor(
-		status: keyof typeof _statusCode | Status = "INTERNAL_SERVER_ERROR",
+		status: keyof typeof statusCodes | Status = "INTERNAL_SERVER_ERROR",
 		overrides: any = {},
 	) {
 		const body = {
 			schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
-			status: typeof status === "number" ? status : _statusCode[status],
+			status: typeof status === "number" ? status : statusCodes[status],
 			detail: overrides.detail,
 			...overrides,
 		};
