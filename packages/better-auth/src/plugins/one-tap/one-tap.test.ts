@@ -620,7 +620,7 @@ describe("oneTap - Edge Cases", () => {
 	});
 
 	it("should handle user with no name gracefully", async () => {
-		const { auth, customFetchImpl } = await getTestInstance({
+		const { auth, customFetchImpl, sessionSetter } = await getTestInstance({
 			plugins: [
 				oneTap({
 					fedcm: {
@@ -645,7 +645,8 @@ describe("oneTap - Edge Cases", () => {
 
 		const ctx = await auth.$context;
 
-		const result = await runWithEndpointContext(
+		const headers = new Headers();
+		await runWithEndpointContext(
 			{ context: ctx } as GenericEndpointContext,
 			async () => {
 				const user = await ctx.internalAdapter.createOAuthUser(
@@ -660,15 +661,17 @@ describe("oneTap - Edge Cases", () => {
 					},
 				);
 
+				// create a real session so that the cookie + DB are consistent
 				const session = await ctx.internalAdapter.createSession(user.user.id);
-				return { user, session };
-			},
-		);
 
-		const headers = new Headers();
-		headers.set(
-			"cookie",
-			`${ctx.authCookies.sessionToken.name}=${result.session.token}`,
+				const onSuccess = sessionSetter(headers);
+				await client.getSession({
+					fetchOptions: {
+						headers,
+						onSuccess,
+					},
+				});
+			},
 		);
 
 		const response = await client.$fetch<{

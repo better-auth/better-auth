@@ -121,10 +121,10 @@ async function generateFedCMIdToken(
 }
 
 /**
- * Extract and validate session from cookie header
+ * Extract and validate session from cookies
  *
- * Parses the cookie header, extracts the session token, and retrieves
- * the corresponding session from the database. Used by FedCM accounts endpoint.
+ * Uses the same signed cookie mechanism as the core session route, so we
+ * always look up the bare session token (without signature) in the database.
  *
  * @param ctx - Endpoint context containing request headers
  * @returns Session object if found and valid, null otherwise
@@ -133,21 +133,14 @@ async function generateFedCMIdToken(
  */
 async function getSessionFromCookie(ctx: any) {
 	try {
-		const cookieHeader = ctx.request?.headers.get("cookie");
-		if (!cookieHeader) return null;
-
-		const sessionTokenName = ctx.context.authCookies.sessionToken.name;
-		const cookies = cookieHeader.split(";").reduce(
-			(acc: Record<string, string>, cookie: string) => {
-				const [key, value] = cookie.trim().split("=");
-				if (key && value) acc[key] = value;
-				return acc;
-			},
-			{} as Record<string, string>,
+		const sessionToken = await ctx.getSignedCookie(
+			ctx.context.authCookies.sessionToken.name,
+			ctx.context.secret,
 		);
 
-		const sessionToken = cookies[sessionTokenName];
-		if (!sessionToken) return null;
+		if (!sessionToken) {
+			return null;
+		}
 
 		const session = await ctx.context.internalAdapter.findSession(sessionToken);
 		if (!session || !session.userId) return null;
