@@ -12,6 +12,7 @@ import {
 	lastLoginMethod,
 	multiSession,
 	oAuthProxy,
+	oidcProvider,
 	oneTap,
 	openAPI,
 	organization,
@@ -184,6 +185,9 @@ export const auth = betterAuth({
 		oAuthProxy(),
 		nextCookies(),
 		oneTap(),
+		oidcProvider({
+			loginPage: "/sign-in",
+		}),
 		customSession(async (session) => {
 			return {
 				...session,
