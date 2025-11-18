@@ -3,8 +3,8 @@
   "version": "1.4.0-beta.21",
   "type": "module",
   "description": "Better Auth integration for Expo and React Native applications.",
-  "main": "dist/index.mjs",
-  "module": "dist/index.mjs",
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
   "repository": {
     "type": "git",
     "url": "https://github.com/better-auth/better-auth",
@@ -85,6 +85,6 @@
     "zod": "^4.1.12"
   },
   "files": [
-    "dist"
+    "./dist"
   ]
 }
