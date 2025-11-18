@@ -1,10 +1,11 @@
 import { z } from "zod";
-import { createAuthEndpoint } from "../../../api";
+import { createAuthEndpoint, sessionMiddleware } from "../../../api";
 import { createOAuthClientEndpoint } from "../register";
 import type { OAuthOptions, Scope } from "../types";
 import {
 	deleteClientEndpoint,
 	getClientEndpoint,
+	getClientPublicEndpoint,
 	getClientsEndpoint,
 	rotateClientSecretEndpoint,
 	updateClientEndpoint,
@@ -229,6 +230,26 @@ export const getOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 		},
 		async (ctx) => {
 			return getClientEndpoint(ctx, opts);
+		},
+	);
+
+export const getOAuthClientPublic = (opts: OAuthOptions<Scope[]>) =>
+	createAuthEndpoint(
+		"/oauth2/clients/public",
+		{
+			method: "GET",
+			use: [sessionMiddleware],
+			query: z.object({
+				client_id: z.string(),
+			}),
+			metadata: {
+				openapi: {
+					description: "Gets publically available client fields",
+				},
+			},
+		},
+		async (ctx) => {
+			return getClientPublicEndpoint(ctx, opts);
 		},
 	);
 
