@@ -479,10 +479,10 @@ const publicKey = await exportJWK(keyPair.publicKey);
 const client = await db.create({
   model: 'oauthApplication',
   data: {
-    clientId: 'financial-app',
-    name: 'Financial Services App',
+    clientId: 'example-app',
+    name: 'Example App',
     type: 'web',
-    redirectUrls: 'https://financial.example.com/callback',
+    redirectUrls: 'https://example.com/callback',
     jwks: JSON.stringify({
       keys: [{
         ...publicKey,
@@ -520,8 +520,8 @@ const response = await fetch('https://your-domain.com/api/auth/oauth2/token', {
   body: new URLSearchParams({
     grant_type: 'authorization_code',
     code: authorizationCode,
-    redirect_uri: 'https://financial.example.com/callback',
-    client_id: 'financial-app',
+    redirect_uri: 'https://example.com/callback',
+    client_id: 'example-app',
     client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
     client_assertion: clientAssertion,
   }),
@@ -540,7 +540,7 @@ const response = await fetch('https://your-domain.com/api/auth/oauth2/token', {
 - **Signature verification**: Server validates using client's public key
 
 <Callout type="info">
-The `private_key_jwt` method is recommended for financial-grade APIs and scenarios requiring enhanced security. It's used by providers like Okta and is part of the FAPI (Financial-grade API) security profile.
+The `private_key_jwt` method is recommended for scenarios requiring enhanced security.
 </Callout>
 
 #### Public Clients (PKCE)
