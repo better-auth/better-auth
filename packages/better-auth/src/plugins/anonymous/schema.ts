@@ -7,6 +7,7 @@ export const schema = {
 				type: "boolean",
 				required: false,
 				input: false,
+				defaultValue: false,
 			},
 		},
 	},
