@@ -12,9 +12,9 @@ import {
 	sessionMiddleware,
 } from "better-auth/api";
 import { defu } from "defu";
-import Stripe, { type Stripe as StripeType } from "stripe";
-import * as z from "zod";
-import { STRIPE_ERROR_CODES } from "./error-codes";
+import type Stripe from "stripe";
+import type { Stripe as StripeType } from "stripe";
+import * as z from "zod/v4";
 import {
 	onCheckoutSessionCompleted,
 	onSubscriptionDeleted,
@@ -63,7 +63,10 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			const referenceId =
 				ctx.body?.referenceId || ctx.query?.referenceId || session.user.id;
 
-			if (ctx.body?.referenceId && !subscriptionOptions.authorizeReference) {
+			if (
+				referenceId !== session.user.id &&
+				!subscriptionOptions.authorizeReference
+			) {
 				logger.error(
 					`Passing referenceId into a subscription action isn't allowed if subscription.authorizeReference isn't defined in your stripe plugin config.`,
 				);

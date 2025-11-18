@@ -5,7 +5,8 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { getTestInstance } from "better-auth/test";
 import type Stripe from "stripe";
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
-import { type StripePlugin, stripe } from ".";
+import type { StripePlugin } from ".";
+import { stripe } from ".";
 import { stripeClient } from "./client";
 import type { StripeOptions, Subscription } from "./types";
 

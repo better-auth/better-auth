@@ -17,14 +17,14 @@ import { APIError, getSessionFromCtx } from "../../api";
 import { parseSetCookieHeader } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { getBaseURL } from "../../utils/url";
-import {
-	type Client,
-	type CodeVerificationValue,
-	type OAuthAccessToken,
-	type OIDCMetadata,
-	type OIDCOptions,
-	oidcProvider,
+import type {
+	Client,
+	CodeVerificationValue,
+	OAuthAccessToken,
+	OIDCMetadata,
+	OIDCOptions,
 } from "../oidc-provider";
+import { oidcProvider } from "../oidc-provider";
 import { schema } from "../oidc-provider/schema";
 import { authorizeMCPOAuth } from "./authorize";
 

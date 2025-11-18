@@ -23,7 +23,7 @@ interface SessionRefreshState {
 }
 
 export function createSessionRefreshManager(opts: SessionRefreshOptions) {
-	const { sessionAtom, sessionSignal, options = {} } = opts;
+	const { sessionAtom, sessionSignal, $fetch, options = {} } = opts;
 
 	const {
 		refetchInterval = 0,
@@ -62,10 +62,24 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 
 		const currentSession = sessionAtom.get();
 
+		if (event?.event === "poll") {
+			$fetch("/get-session")
+				.then((res) => {
+					sessionAtom.set({
+						...currentSession,
+						data: res.data,
+						error: res.error || null,
+					});
+					state.lastSync = now();
+					sessionSignal.set(!sessionSignal.get());
+				})
+				.catch(() => {});
+			return;
+		}
+
 		if (
 			currentSession?.data === null ||
 			currentSession?.data === undefined ||
-			event?.event === "poll" ||
 			event?.event === "visibilitychange"
 		) {
 			state.lastSync = now();
