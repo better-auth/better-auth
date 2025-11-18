@@ -1,8 +1,5 @@
-import {
-	kOnlineManager,
-	type OnlineListener,
-	type OnlineManager,
-} from "better-auth/client";
+import type { OnlineListener, OnlineManager } from "better-auth/client";
+import { kOnlineManager } from "better-auth/client";
 
 class ExpoOnlineManager implements OnlineManager {
 	listeners = new Set<OnlineListener>();

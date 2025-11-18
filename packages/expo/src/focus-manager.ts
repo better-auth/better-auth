@@ -1,9 +1,7 @@
-import {
-	type FocusListener,
-	type FocusManager,
-	kFocusManager,
-} from "better-auth/client";
-import { AppState, type AppStateStatus } from "react-native";
+import type { FocusListener, FocusManager } from "better-auth/client";
+import { kFocusManager } from "better-auth/client";
+import type { AppStateStatus } from "react-native";
+import { AppState } from "react-native";
 
 class ExpoFocusManager implements FocusManager {
 	listeners = new Set<FocusListener>();
