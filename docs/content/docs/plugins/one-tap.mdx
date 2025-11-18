@@ -147,9 +147,19 @@ FedCM (Federated Credential Management) is a browser-native API that provides pr
 
 ### Fixing CORS Errors (Chrome 108+)
 
-If you're seeing errors like "Server did not send the correct CORS headers" or "FedCM get() rejects with IdentityCredentialError", it's because Chrome is trying to use FedCM but the server doesn't support it yet.
+If you're seeing errors like "Server did not send the correct CORS headers" or "FedCM get() rejects with IdentityCredentialError", Chrome is trying to use FedCM but the request/response does not meet FedCM's CORS requirements.
 
-**Quick Fix** - Disable FedCM (recommended for now):
+With FedCM enabled in Better Auth:
+
+- The **discovery and config endpoints** (`/.well-known/web-identity`, `/one-tap/fedcm/config`, `/one-tap/fedcm/client-metadata`) return public data and can be accessed from any origin (no credentials).
+- The **accounts and assertion endpoints** (`/one-tap/fedcm/accounts`, `/one-tap/fedcm/assertion`) are **restricted to the same origin as your `baseURL`** and only allow credentialed CORS from that origin for security reasons.
+
+**Checklist before disabling FedCM:**
+
+- Make sure your **frontend origin exactly matches** the origin of `baseURL` (e.g. both `https://app.example.com`, not mixing ports or protocols).
+- Ensure you're serving over **HTTPS** (FedCM requires it in production).
+
+If you still want to temporarily fall back to traditional One Tap in the browser, you can disable FedCM at the client:
 
 ```ts title="auth-client.ts"
 oneTapClient({
@@ -252,7 +262,7 @@ ngrok http 3000
 ### Troubleshooting
 
 **Issue: "Server did not send the correct CORS headers"**
-- **Solution**: Disable FedCM with `use_fedcm_for_prompt: false` in `additionalOptions`
+- **Solution**: First ensure your frontend runs on the same origin as `baseURL` and over HTTPS. If you still need to force traditional mode in the browser, disable FedCM with `use_fedcm_for_prompt: false` in `additionalOptions`.
 
 **Issue: "FedCM endpoints not found"**
 - **Solution**: Make sure `fedcm: { enabled: true }` is set in server configuration

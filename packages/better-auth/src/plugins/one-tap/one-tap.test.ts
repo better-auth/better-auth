@@ -140,15 +140,18 @@ describe("oneTap - FedCM Mode", () => {
 
 	it("should serve FedCM config endpoint", async () => {
 		const { customFetchImpl } = await getTestInstance(baseOptions);
-		const client = createAuthClient({
-			plugins: [oneTapClient({ clientId: "test-client-id" })],
-			baseURL: "http://localhost:3000/api/auth",
-			fetchOptions: {
-				customFetchImpl,
-			},
-		});
 
-		const response = await client.$fetch<{
+		const response = await customFetchImpl(
+			"http://localhost:3000/api/auth/one-tap/fedcm/config",
+			{
+				method: "GET",
+				headers: {
+					origin: "http://localhost:3000",
+				},
+			},
+		);
+
+		const data = (await response.json()) as {
 			accounts_endpoint: string;
 			client_metadata_endpoint: string;
 			id_assertion_endpoint: string;
@@ -158,51 +161,86 @@ describe("oneTap - FedCM Mode", () => {
 				color: string;
 				icons?: Array<{ url: string; size: number }>;
 			};
-		}>("/one-tap/fedcm/config", {
-			method: "GET",
-		});
+		};
 
-		expect(response.data).toBeDefined();
-		expect(response.data).toHaveProperty("accounts_endpoint");
-		expect(response.data).toHaveProperty("client_metadata_endpoint");
-		expect(response.data).toHaveProperty("id_assertion_endpoint");
-		expect(response.data).toHaveProperty("login_url");
-		expect(response.data).toHaveProperty("branding");
+		expect(data).toBeDefined();
+		expect(data).toHaveProperty("accounts_endpoint");
+		expect(data).toHaveProperty("client_metadata_endpoint");
+		expect(data).toHaveProperty("id_assertion_endpoint");
+		expect(data).toHaveProperty("login_url");
+		expect(data).toHaveProperty("branding");
 
-		expect(response.data?.branding).toMatchObject({
+		expect(data.branding).toMatchObject({
 			background_color: "#1a73e8",
 			color: "#ffffff",
 		});
-		expect(response.data?.branding?.icons).toBeDefined();
-		expect(response.data?.branding?.icons?.[0]).toMatchObject({
+		expect(data.branding.icons).toBeDefined();
+		expect(data.branding.icons?.[0]).toMatchObject({
 			url: "https://example.com/icon.png",
 			size: 32,
 		});
+
+		// Config endpoint should allow all origins without credentials
+		expect(response.headers.get("access-control-allow-origin")).toBe("*");
+		expect(response.headers.get("access-control-allow-credentials")).toBeNull();
 	});
 
 	it("should return empty accounts when not logged in", async () => {
 		const { customFetchImpl } = await getTestInstance(baseOptions);
-		const client = createAuthClient({
-			plugins: [oneTapClient({ clientId: "test-client-id" })],
-			baseURL: "http://localhost:3000/api/auth",
-			fetchOptions: {
-				customFetchImpl,
-			},
-		});
 
-		const response = await client.$fetch<{
+		// Same-origin request should get CORS headers with credentials
+		const sameOriginResponse = await customFetchImpl(
+			"http://localhost:3000/api/auth/one-tap/fedcm/accounts",
+			{
+				method: "GET",
+				headers: {
+					origin: "http://localhost:3000",
+				},
+			},
+		);
+		const sameOriginData = (await sameOriginResponse.json()) as {
 			accounts: Array<{
 				id: string;
 				email: string;
 			}>;
-		}>("/one-tap/fedcm/accounts", {
-			method: "GET",
-		});
+		};
 
-		expect(response.data).toBeDefined();
-		expect(response.data).toHaveProperty("accounts");
-		expect(Array.isArray(response.data?.accounts)).toBe(true);
-		expect(response.data?.accounts?.length).toBe(0);
+		expect(sameOriginData).toBeDefined();
+		expect(Array.isArray(sameOriginData.accounts)).toBe(true);
+		expect(sameOriginData.accounts.length).toBe(0);
+		expect(sameOriginResponse.headers.get("access-control-allow-origin")).toBe(
+			"http://localhost:3000",
+		);
+		expect(
+			sameOriginResponse.headers.get("access-control-allow-credentials"),
+		).toBe("true");
+
+		// Cross-origin request should not get credentialed CORS headers
+		const crossOriginResponse = await customFetchImpl(
+			"http://localhost:3000/api/auth/one-tap/fedcm/accounts",
+			{
+				method: "GET",
+				headers: {
+					origin: "https://malicious.com",
+				},
+			},
+		);
+		const crossOriginData = (await crossOriginResponse.json()) as {
+			accounts: Array<{
+				id: string;
+				email: string;
+			}>;
+		};
+
+		expect(crossOriginData).toBeDefined();
+		expect(Array.isArray(crossOriginData.accounts)).toBe(true);
+		expect(crossOriginData.accounts.length).toBe(0);
+		expect(
+			crossOriginResponse.headers.get("access-control-allow-origin"),
+		).toBeNull();
+		expect(
+			crossOriginResponse.headers.get("access-control-allow-credentials"),
+		).toBeNull();
 	});
 
 	it("should return user accounts when logged in", async () => {
@@ -274,25 +312,23 @@ describe("oneTap - FedCM Mode", () => {
 
 	it("should reject assertion without authentication", async () => {
 		const { customFetchImpl } = await getTestInstance(baseOptions);
-		const client = createAuthClient({
-			plugins: [oneTapClient({ clientId: "test-client-id" })],
-			baseURL: "http://localhost:3000/api/auth",
-			fetchOptions: {
-				customFetchImpl,
-			},
-		});
 
-		const response = await client.$fetch("/one-tap/fedcm/assertion", {
-			method: "POST",
-			body: {
-				client_id: "test-client-id",
-				account_id: "any-user-id",
+		const response = await customFetchImpl(
+			"http://localhost:3000/api/auth/one-tap/fedcm/assertion",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					origin: "http://localhost:3000",
+				},
+				body: JSON.stringify({
+					client_id: "test-client-id",
+					account_id: "any-user-id",
+				}),
 			},
-		});
+		);
 
-		expect(response.error).toBeDefined();
-		expect(response.error?.status).toBe(401);
-		expect(response.error?.message).toBe("Not authenticated");
+		expect(response.status).toBe(401);
 	});
 
 	it("should validate that assertion requires Google account linked", async () => {

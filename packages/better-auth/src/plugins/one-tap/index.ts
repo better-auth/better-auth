@@ -162,11 +162,11 @@ async function getSessionFromCookie(ctx: any) {
  * Create CORS headers for FedCM endpoints according to spec
  *
  * FedCM requires specific CORS headers for different endpoints:
- * - Well-known and config: Allow all origins (*)
- * - Accounts and assertion: Allow specific origin with credentials
+ * - Well-known and config: Allow all origins (*), without credentials
+ * - Accounts and assertion: Allow specific trusted origins with credentials
  *
- * @param origin - Request origin (null for wildcard)
- * @param allowCredentials - Whether to allow credentials
+ * @param origin - Trusted request origin. If omitted, no credentialed CORS is enabled.
+ * @param allowCredentials - Whether to allow credentials (only if origin is provided)
  * @returns Object containing CORS headers
  *
  * @internal
@@ -181,12 +181,13 @@ function createFedCMHeaders(
 
 	if (origin) {
 		headers["Access-Control-Allow-Origin"] = origin;
-	} else {
+		if (allowCredentials) {
+			headers["Access-Control-Allow-Credentials"] = "true";
+		}
+	} else if (!allowCredentials) {
+		// For non-credentialed endpoints (e.g. well-known and config),
+		// we can safely allow all origins.
 		headers["Access-Control-Allow-Origin"] = "*";
-	}
-
-	if (allowCredentials) {
-		headers["Access-Control-Allow-Credentials"] = "true";
 	}
 
 	return headers;
@@ -234,6 +235,29 @@ function createFedCMHeaders(
  * @see https://w3c-fedid.github.io/FedCM/ (FedCM spec)
  */
 export const oneTap = (options?: OneTapOptions) => {
+	const getTrustedFedCMOrigin = (ctx: any): string | null => {
+		const requestOrigin = ctx.request?.headers.get("origin");
+		if (!requestOrigin) {
+			return null;
+		}
+
+		const baseURL = ctx.context.baseURL;
+		if (!baseURL) {
+			return null;
+		}
+
+		try {
+			const idpOrigin = new URL(baseURL).origin;
+			if (requestOrigin === idpOrigin) {
+				return requestOrigin;
+			}
+		} catch {
+			return null;
+		}
+
+		return null;
+	};
+
 	const coreEndpoints = {
 		oneTapCallback: createAuthEndpoint(
 			"/one-tap/callback",
@@ -472,7 +496,9 @@ export const oneTap = (options?: OneTapOptions) => {
 
 						return new Response(JSON.stringify(config), {
 							status: 200,
-							headers: createFedCMHeaders(ctx.request?.headers.get("origin")),
+							// FedCM config does not require credentials and can be shared
+							// with any origin. Use wildcard without credentials.
+							headers: createFedCMHeaders(null, false),
 						});
 					},
 				),
@@ -492,7 +518,7 @@ export const oneTap = (options?: OneTapOptions) => {
 						if (!session) {
 							return new Response(JSON.stringify({ accounts: [] }), {
 								status: 200,
-								headers: createFedCMHeaders(ctx.request?.headers.get("origin")),
+								headers: createFedCMHeaders(getTrustedFedCMOrigin(ctx), true),
 							});
 						}
 
@@ -502,7 +528,7 @@ export const oneTap = (options?: OneTapOptions) => {
 						if (!userData) {
 							return new Response(JSON.stringify({ accounts: [] }), {
 								status: 200,
-								headers: createFedCMHeaders(ctx.request?.headers.get("origin")),
+								headers: createFedCMHeaders(getTrustedFedCMOrigin(ctx), true),
 							});
 						}
 
@@ -520,7 +546,7 @@ export const oneTap = (options?: OneTapOptions) => {
 
 						return new Response(JSON.stringify({ accounts }), {
 							status: 200,
-							headers: createFedCMHeaders(ctx.request?.headers.get("origin")),
+							headers: createFedCMHeaders(getTrustedFedCMOrigin(ctx), true),
 						});
 					},
 				),
@@ -546,7 +572,10 @@ export const oneTap = (options?: OneTapOptions) => {
 
 						return new Response(JSON.stringify(metadata), {
 							status: 200,
-							headers: createFedCMHeaders(ctx.request?.headers.get("origin")),
+							// Client metadata does not require credentials and contains
+							// only public URLs, so we can allow all origins without
+							// credentials.
+							headers: createFedCMHeaders(null, false),
 						});
 					},
 				),
@@ -629,7 +658,7 @@ export const oneTap = (options?: OneTapOptions) => {
 
 						return new Response(JSON.stringify({ token: idToken }), {
 							status: 200,
-							headers: createFedCMHeaders(ctx.request?.headers.get("origin")),
+							headers: createFedCMHeaders(getTrustedFedCMOrigin(ctx), true),
 						});
 					},
 				),
