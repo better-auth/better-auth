@@ -85,7 +85,10 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			const referenceId =
 				ctx.body?.referenceId || ctx.query?.referenceId || session.user.id;
 
-			if (ctx.body?.referenceId && !subscriptionOptions.authorizeReference) {
+			if (
+				referenceId !== session.user.id &&
+				!subscriptionOptions.authorizeReference
+			) {
 				logger.error(
 					`Passing referenceId into a subscription action isn't allowed if subscription.authorizeReference isn't defined in your stripe plugin config.`,
 				);
