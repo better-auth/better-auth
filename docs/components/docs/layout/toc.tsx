@@ -7,11 +7,9 @@ import type { TOCItemType } from "fumadocs-core/server";
 import * as Primitive from "fumadocs-core/toc";
 import { useI18n, usePageStyles } from "fumadocs-ui/provider";
 import { ChevronRight, Text } from "lucide-react";
+import type { ComponentProps, HTMLAttributes, ReactNode } from "react";
 import {
-	type ComponentProps,
 	createContext,
-	type HTMLAttributes,
-	type ReactNode,
 	use,
 	useEffect,
 	useMemo,

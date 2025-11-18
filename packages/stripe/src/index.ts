@@ -3,11 +3,8 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { defineErrorCodes } from "@better-auth/core/utils";
-import {
-	type BetterAuthPlugin,
-	type GenericEndpointContext,
-	logger,
-} from "better-auth";
+import type { BetterAuthPlugin, GenericEndpointContext } from "better-auth";
+import { logger } from "better-auth";
 import {
 	APIError,
 	getSessionFromCtx,
@@ -15,7 +12,8 @@ import {
 	sessionMiddleware,
 } from "better-auth/api";
 import { defu } from "defu";
-import Stripe, { type Stripe as StripeType } from "stripe";
+import type Stripe from "stripe";
+import type { Stripe as StripeType } from "stripe";
 import * as z from "zod/v4";
 import {
 	onCheckoutSessionCompleted,
