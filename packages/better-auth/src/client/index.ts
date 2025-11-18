@@ -5,6 +5,16 @@ import type {
 } from "@better-auth/core";
 
 export * from "./broadcast-channel";
+export {
+	type FocusListener,
+	type FocusManager,
+	kFocusManager,
+} from "./focus-manager";
+export {
+	kOnlineManager,
+	type OnlineListener,
+	type OnlineManager,
+} from "./online-manager";
 export * from "./query";
 export * from "./session-refresh";
 export * from "./types";

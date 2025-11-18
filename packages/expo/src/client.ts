@@ -3,6 +3,13 @@ import type { BetterFetchOption } from "@better-fetch/fetch";
 import Constants from "expo-constants";
 import * as Linking from "expo-linking";
 import { Platform } from "react-native";
+import { setupExpoFocusManager } from "./focus-manager";
+import { setupExpoOnlineManager } from "./online-manager";
+
+if (Platform.OS !== "web") {
+	setupExpoFocusManager();
+	setupExpoOnlineManager();
+}
 
 interface CookieAttributes {
 	value: string;
@@ -440,3 +447,6 @@ export const expoClient = (opts: ExpoClientOptions) => {
 		],
 	} satisfies BetterAuthClientPlugin;
 };
+
+export * from "./focus-manager";
+export * from "./online-manager";
