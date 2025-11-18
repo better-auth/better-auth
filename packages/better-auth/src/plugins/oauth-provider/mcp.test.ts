@@ -1,8 +1,6 @@
 import { logger } from "@better-auth/core/env";
-import {
-	type OAuthClientProvider,
-	UnauthorizedError,
-} from "@modelcontextprotocol/sdk/client/auth.js";
+import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
+import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
@@ -12,8 +10,10 @@ import type { OAuthTokens } from "@modelcontextprotocol/sdk/shared/auth.js";
 import type { Implementation } from "@modelcontextprotocol/sdk/types.js";
 import { APIError } from "better-call";
 import type { IncomingMessage, ServerResponse } from "http";
-import { decodeJwt, type JWTPayload } from "jose";
-import { type Listener, listen } from "listhen";
+import type { JWTPayload } from "jose";
+import { decodeJwt } from "jose";
+import type { Listener } from "listhen";
+import { listen } from "listhen";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createAuthClient } from "../../client";
 import { generateRandomString } from "../../crypto";

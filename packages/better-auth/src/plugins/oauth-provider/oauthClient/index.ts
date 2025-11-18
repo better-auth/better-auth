@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import { createAuthEndpoint, sessionMiddleware } from "../../../api";
 import { createOAuthClientEndpoint } from "../register";
 import type { OAuthOptions, Scope } from "../types";

@@ -1,6 +1,6 @@
 import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
-import { z } from "zod";
+import * as z from "zod";
 import {
 	APIError,
 	createAuthEndpoint,

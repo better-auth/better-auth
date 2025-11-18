@@ -11,7 +11,8 @@ import {
 import type { Auth } from "../../types";
 import type { jwt } from "../jwt";
 import type { oauthProvider } from "../oauth-provider";
-import { type DatabaseClient, databaseToSchema } from "./register";
+import type { DatabaseClient } from "./register";
+import { databaseToSchema } from "./register";
 import type { OAuthOptions, Scope, StoreTokenType } from "./types";
 
 /**

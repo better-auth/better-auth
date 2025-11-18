@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { type JWTPayload, SignJWT } from "jose";
+import type { JWTPayload } from "jose";
+import { SignJWT } from "jose";
 import { APIError } from "../../api";
 import { generateRandomString } from "../../crypto";
 import type { GrantType } from "../../oauth-2.1/types";

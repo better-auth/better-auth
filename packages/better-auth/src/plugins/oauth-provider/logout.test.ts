@@ -3,7 +3,8 @@ import {
 	createAuthorizationURL,
 } from "@better-auth/core/oauth2";
 import { decodeJwt } from "jose";
-import { type Listener, listen } from "listhen";
+import type { Listener } from "listhen";
+import { listen } from "listhen";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createAuthClient } from "../../client";
 import { generateRandomString } from "../../crypto";
