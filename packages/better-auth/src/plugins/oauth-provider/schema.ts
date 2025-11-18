@@ -259,6 +259,7 @@ export const schema = {
 		fields: {
 			clientId: {
 				type: "string",
+				required: true,
 				references: {
 					model: "oauthClient",
 					field: "clientId",
