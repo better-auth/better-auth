@@ -134,9 +134,7 @@ export async function updateClientEndpoint(
 	ctx: GenericEndpointContext & { params: { id: string } },
 	opts: OAuthOptions<Scope[]>,
 ) {
-	const trustedClient = opts.trustedClients?.find(
-		(client) => client.clientId === ctx.params.id,
-	);
+	const trustedClient = opts.cachedTrustedClients?.has(ctx.params.id);
 	if (trustedClient) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {
 			error_description: "trusted clients must be updated manually",
@@ -193,9 +191,7 @@ export async function rotateClientSecretEndpoint(
 	ctx: GenericEndpointContext & { params: { id: string } },
 	opts: OAuthOptions<Scope[]>,
 ) {
-	const trustedClient = opts.trustedClients?.find(
-		(client) => client.clientId === ctx.params.id,
-	);
+	const trustedClient = opts.cachedTrustedClients?.has(ctx.params.id);
 	if (trustedClient) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {
 			error_description: "trusted clients must be updated manually",

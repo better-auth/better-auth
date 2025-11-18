@@ -21,7 +21,6 @@ Please report any issues or bugs on [GitHub](https://github.com/better-auth/bett
 - **Dynamic Client Registration**: Allow clients to register clients dynamically.
   - **Public Clients**: Support public clients for native mobile clients and user-agent clients (like AI)
   - **Confidential Clients**: Supports confidential clients for web clients
-  - **Trusted Clients**: Configure hard-coded trusted clients with optional consent bypass.
 - **JWT Plugin compatibility**: required by default with an option to disable
   - **JWT Signing**: sign JWT tokens when requesting a `resource`
   - **JWKS Verifiable**: verify tokens remotely at the [`/jwks`](/docs/plugins/jwt#verifying-the-token) endpoint
@@ -110,7 +109,7 @@ Please report any issues or bugs on [GitHub](https://github.com/better-auth/bett
 				redirect_uris: [redirectUri],
 			}
 		});
-    console.log(client); // You may add this to `trustedClients`
+    console.log(client); // If you wish, you may add the `client_id` to `cachedTrustedClients`
     ```
 
     <Callout type="info">
@@ -120,7 +119,7 @@ Please report any issues or bugs on [GitHub](https://github.com/better-auth/bett
 </Steps>
 
 
-## Clients
+## Client Plugins
 
 There exists two clients. You may wish to add one or both depending on your setup.
 
@@ -611,9 +610,9 @@ await client.oauth2.oauth2Continue({
 ```
 
 
-### Trusted Clients
+### Cached Trusted Clients
 
-For first-party applications and internal services, you can configure trusted clients directly in your OIDC provider configuration. Trusted clients bypass database lookups for better performance and can optionally skip consent screens for improved user experience.
+For first-party applications and internal services, you can cache trusted clients for better performance. Values are cached in memory for all mentioned clients. Additionally, they prevent changes through the CRUD endpoints.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -623,6 +622,11 @@ const auth = betterAuth({
   plugins: [
     oauthProvider({
       loginPage: "/sign-in",
+      // List of clientIds of the clients
+      cachedTrustedClients: new Set[
+        "internal-dashboard",
+        "mobile-app",
+      ],
       trustedClients: [
         {
           clientId: "internal-dashboard",
@@ -1112,9 +1116,9 @@ If you are using "openid" and confidential MCP clients, you cannot disable the J
 
 ## Schema
 
-The OIDC Provider plugin adds the following tables to the database:
+The OAuth Provider plugin adds the following tables to the database:
 
-### OAuth Application
+### OAuth Client
 
 Table Name: `oauthClient`
 
