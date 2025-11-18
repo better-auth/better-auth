@@ -830,26 +830,46 @@ describe("organization", async (it) => {
 	});
 
 	it("should allow deleting organization", async () => {
-		const { headers: adminHeaders } = await signInWithUser(
-			adminUser.email,
-			adminUser.password,
-		);
+		const rng = crypto.randomUUID();
+		const createdOrg = await client.organization.create({
+			name: `test-delete-org-success-${rng}`,
+			slug: `test-delete-org-success-${rng}`,
+			fetchOptions: {
+				headers,
+			},
+		});
+		const orgId = createdOrg.data?.id as string;
 
-		const r = await client.organization.delete({
-			organizationId,
-			fetchOptions: {
-				headers: adminHeaders,
-			},
-		});
-		const org = await client.organization.getFullOrganization({
+		const orgBeforeDelete = await client.organization.getFullOrganization({
 			query: {
-				organizationId,
+				organizationId: orgId,
 			},
 			fetchOptions: {
-				headers: adminHeaders,
+				headers,
 			},
 		});
-		expect(org.error?.status).toBe(403);
+		expect(orgBeforeDelete.data?.id).toBe(orgId);
+
+		const deleteResult = await client.organization.delete({
+			organizationId: orgId,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(deleteResult.data?.id).toBe(orgId);
+
+		const orgAfterDelete = await client.organization.getFullOrganization({
+			query: {
+				organizationId: orgId,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(orgAfterDelete.error?.status).toBe(400);
+		expect(orgAfterDelete.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+		);
 	});
 
 	it("should have server side methods", async () => {
