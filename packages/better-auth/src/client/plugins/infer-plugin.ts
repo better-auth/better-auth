@@ -2,6 +2,7 @@ import type {
 	BetterAuthClientPlugin,
 	BetterAuthOptions,
 } from "@better-auth/core";
+import type { EnabledPluginsFromOptions } from "../../types/helper";
 
 export const InferServerPlugin = <
 	AuthOrOption extends
@@ -12,10 +13,8 @@ export const InferServerPlugin = <
 	ID extends string,
 >() => {
 	type Option = AuthOrOption extends { options: infer O } ? O : AuthOrOption;
-	type Plugin = Option["plugins"] extends Array<infer P>
-		? P extends {
-				id: ID;
-			}
+	type Plugin = EnabledPluginsFromOptions<Option> extends infer P
+		? P extends { id: ID }
 			? P
 			: never
 		: never;

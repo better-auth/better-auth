@@ -1,7 +1,7 @@
 import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
-import type { UnionToIntersection } from "./helper";
+import type { UnionToIntersection, EnabledPluginsFromOptions } from "./helper";
 
 export type InferOptionSchema<S extends BetterAuthPluginDBSchema> =
 	S extends Record<string, { fields: infer Fields }>
@@ -18,12 +18,12 @@ export type InferOptionSchema<S extends BetterAuthPluginDBSchema> =
 		: never;
 
 export type InferPluginErrorCodes<O extends BetterAuthOptions> =
-	O["plugins"] extends Array<infer P>
-		? UnionToIntersection<
-				P extends BetterAuthPlugin
-					? P["$ERROR_CODES"] extends Record<string, any>
-						? P["$ERROR_CODES"]
-						: {}
+	UnionToIntersection<
+		EnabledPluginsFromOptions<O> extends infer EP
+			? EP extends BetterAuthPlugin
+				? EP["$ERROR_CODES"] extends Record<string, any>
+					? EP["$ERROR_CODES"]
 					: {}
-			>
-		: {};
+				: {}
+			: {}
+	>;

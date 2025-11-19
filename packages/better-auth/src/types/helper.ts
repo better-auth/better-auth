@@ -63,3 +63,17 @@ export type DeepPartial<T> = T extends Function
 		? { [K in keyof T]?: DeepPartial<T[K]> }
 		: T;
 export type Expand<T> = T extends infer O ? { [K in keyof O]: O[K] } : never;
+
+// Helper: produce a union of plugins that are considered enabled
+// (`enabled: false` as explicitly disabled; omitted or `true` => enabled)
+export type EnabledPluginUnion<T> = T extends Array<infer P>
+	? P extends { enabled: false }
+		? never
+		: P
+	: never;
+
+export type EnabledPluginsFromOptions<O extends { plugins?: any[] } | any> =
+	O extends { plugins?: any[] }
+		? EnabledPluginUnion<O["plugins"]>
+		: never;
+
