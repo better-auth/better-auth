@@ -1729,12 +1729,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 									],
 								});
 
-							for (const token of tokens) {
-								await ctx.context.adapter.delete({
-									model: modelName.oauthAccessToken,
-									where: [{ field: "accessToken", value: token.accessToken }],
-								});
-							}
+							await ctx.context.adapter.deleteMany({
+								model: modelName.oauthAccessToken,
+								where: [{ field: "userId", value: userId }],
+							});
 						}
 					}
 
