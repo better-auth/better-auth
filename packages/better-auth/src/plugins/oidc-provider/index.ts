@@ -1753,11 +1753,18 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 
 					if (post_logout_redirect_uri) {
-						const redirectUrl = new URL(post_logout_redirect_uri);
-						if (state) {
-							redirectUrl.searchParams.set("state", state);
+						try {
+							const redirectUrl = new URL(post_logout_redirect_uri);
+							if (state) {
+								redirectUrl.searchParams.set("state", state);
+							}
+							return ctx.redirect(redirectUrl.toString());
+						} catch (error) {
+							throw new APIError("BAD_REQUEST", {
+								error: "invalid_request",
+								error_description: "Invalid post_logout_redirect_uri format",
+							});
 						}
-						return ctx.redirect(redirectUrl.toString());
 					}
 
 					return ctx.json({
