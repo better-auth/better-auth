@@ -263,7 +263,7 @@ export const router = <Option extends BetterAuthOptions>(
 			},
 			...middlewares,
 		],
-		allowedContentTypes: ["application/json"],
+		allowedMediaTypes: ["application/json"],
 		async onRequest(req) {
 			//handle disabled paths
 			const disabledPaths = ctx.options.disabledPaths || [];
