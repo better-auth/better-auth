@@ -22,6 +22,7 @@ import type { IdentityProvider } from "samlify/types/src/entity-idp";
 import type { FlowResult } from "samlify/types/src/flow";
 import * as z from "zod/v4";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
+import { validateEmailDomain } from "../utils";
 
 /**
  * Safely parses a value that might be a JSON string or already a parsed object
@@ -2050,7 +2051,10 @@ export const acsEndpoint = (options?: SSOOptions) => {
 					const isTrustedProvider =
 						ctx.context.options.account?.accountLinking?.trustedProviders?.includes(
 							provider.providerId,
-						);
+						) ||
+						("domainVerified" in provider &&
+							provider.domainVerified &&
+							validateEmailDomain(userInfo.email, provider.domain));
 					if (!isTrustedProvider) {
 						throw ctx.redirect(
 							`${parsedSamlConfig.callbackUrl}?error=account_not_found`,
