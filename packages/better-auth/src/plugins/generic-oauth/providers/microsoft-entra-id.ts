@@ -1,50 +1,14 @@
 import type { OAuth2Tokens, OAuth2UserInfo } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
-import type { GenericOAuthConfig } from "../index";
+import type { BaseOAuthProviderOptions, GenericOAuthConfig } from "../index";
 
-/**
- * Provider definition based on Auth.js/NextAuth.js
- * Source: https://github.com/nextauthjs/next-auth
- * Adapted for Better Auth's GenericOAuthConfig format
- */
 
-export interface MicrosoftEntraIdOptions {
-	/** Microsoft Entra ID (Azure AD) application (client) ID */
-	clientId: string;
-	/** Microsoft Entra ID (Azure AD) client secret */
-	clientSecret: string;
+export interface MicrosoftEntraIdOptions extends BaseOAuthProviderOptions {
 	/**
 	 * Microsoft Entra ID tenant ID.
 	 * Can be a GUID, "common", "organizations", or "consumers"
 	 */
 	tenantId: string;
-	/**
-	 * Array of OAuth scopes to request.
-	 * @default ["openid", "profile", "email"]
-	 */
-	scopes?: string[];
-	/**
-	 * Custom redirect URI.
-	 * If not provided, a default URI will be constructed.
-	 */
-	redirectURI?: string;
-	/**
-	 * Whether to use PKCE (Proof Key for Code Exchange)
-	 * @default false
-	 */
-	pkce?: boolean;
-	/**
-	 * Disable implicit sign up for new users.
-	 */
-	disableImplicitSignUp?: boolean;
-	/**
-	 * Disable sign up for new users.
-	 */
-	disableSignUp?: boolean;
-	/**
-	 * Override user info with the provider info on sign in.
-	 */
-	overrideUserInfo?: boolean;
 }
 
 interface MicrosoftEntraIdProfile {

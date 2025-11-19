@@ -163,6 +163,28 @@ export interface GenericOAuthConfig {
 	overrideUserInfo?: boolean | undefined;
 }
 
+/**
+ * Base type for OAuth provider options.
+ * Extracts common fields from GenericOAuthConfig and makes clientSecret required.
+ */
+export type BaseOAuthProviderOptions = Omit<
+	Pick<
+		GenericOAuthConfig,
+		| "clientId"
+		| "clientSecret"
+		| "scopes"
+		| "redirectURI"
+		| "pkce"
+		| "disableImplicitSignUp"
+		| "disableSignUp"
+		| "overrideUserInfo"
+	>,
+	"clientSecret"
+> & {
+	/** OAuth client secret (required for provider options) */
+	clientSecret: string;
+};
+
 interface GenericOAuthOptions {
 	/**
 	 * Array of OAuth provider configurations.

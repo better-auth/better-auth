@@ -1,50 +1,14 @@
 import type { OAuth2Tokens, OAuth2UserInfo } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
-import type { GenericOAuthConfig } from "../index";
+import type { BaseOAuthProviderOptions, GenericOAuthConfig } from "../index";
 
-/**
- * Provider definition based on Auth.js/NextAuth.js
- * Source: https://github.com/nextauthjs/next-auth
- * Adapted for Better Auth's GenericOAuthConfig format
- */
 
-export interface OktaOptions {
-	/** Okta OAuth client ID */
-	clientId: string;
-	/** Okta OAuth client secret */
-	clientSecret: string;
+export interface OktaOptions extends BaseOAuthProviderOptions {
 	/**
 	 * Okta issuer URL (e.g., https://dev-xxxxx.okta.com/oauth2/default)
 	 * This will be used to construct the discovery URL.
 	 */
 	issuer: string;
-	/**
-	 * Array of OAuth scopes to request.
-	 * @default ["openid", "profile", "email"]
-	 */
-	scopes?: string[];
-	/**
-	 * Custom redirect URI.
-	 * If not provided, a default URI will be constructed.
-	 */
-	redirectURI?: string;
-	/**
-	 * Whether to use PKCE
-	 * @default false
-	 */
-	pkce?: boolean;
-	/**
-	 * Disable implicit sign up for new users.
-	 */
-	disableImplicitSignUp?: boolean;
-	/**
-	 * Disable sign up for new users.
-	 */
-	disableSignUp?: boolean;
-	/**
-	 * Override user info with the provider info on sign in.
-	 */
-	overrideUserInfo?: boolean;
 }
 
 interface OktaProfile {

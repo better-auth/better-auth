@@ -1,8 +1,7 @@
 /**
  * Provider helpers for generic-oauth plugin
  *
- * These helpers provide pre-configured OAuth provider definitions
- * based on Auth.js/NextAuth.js provider configurations.
+ * These helpers provide pre-configured OAuth provider definitions.
  *
  * @example
  * ```ts
