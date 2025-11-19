@@ -522,11 +522,10 @@ export const deleteUser = createAuthEndpoint(
 							1000,
 				),
 			});
-			const url = `${
-				ctx.context.baseURL
-			}/delete-user/callback?token=${token}&callbackURL=${
-				ctx.body.callbackURL || "/"
-			}`;
+			const callbackURL = ctx.body.callbackURL
+				? encodeURIComponent(ctx.body.callbackURL)
+				: encodeURIComponent("/");
+			const url = `${ctx.context.baseURL}/delete-user/callback?token=${token}&callbackURL=${callbackURL}`;
 			await ctx.context.options.user.deleteUser.sendDeleteAccountVerification(
 				{
 					user: session.user,
@@ -787,11 +786,10 @@ export const changeEmail = createAuthEndpoint(
 					undefined,
 					ctx.context.options.emailVerification?.expiresIn,
 				);
-				const url = `${
-					ctx.context.baseURL
-				}/verify-email?token=${token}&callbackURL=${
-					ctx.body.callbackURL || "/"
-				}`;
+				const callbackURL = ctx.body.callbackURL
+					? encodeURIComponent(ctx.body.callbackURL)
+					: encodeURIComponent("/");
+				const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
 				await ctx.context.options.emailVerification.sendVerificationEmail(
 					{
 						user: {
@@ -866,9 +864,10 @@ export const changeEmail = createAuthEndpoint(
 				requestType: "change-email-verification",
 			},
 		);
-		const url = `${
-			ctx.context.baseURL
-		}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
+		const callbackURL = ctx.body.callbackURL
+			? encodeURIComponent(ctx.body.callbackURL)
+			: encodeURIComponent("/");
+		const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
 		await ctx.context.options.emailVerification.sendVerificationEmail(
 			{
 				user: {
