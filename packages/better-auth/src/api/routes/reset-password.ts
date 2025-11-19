@@ -100,6 +100,14 @@ export const requestPasswordReset = createAuthEndpoint(
 			includeAccounts: true,
 		});
 		if (!user) {
+			/**
+			 * We simulate the verification token generation and the database lookup
+			 * to mitigate timing attacks.
+			 */
+			generateId(24);
+			await ctx.context.internalAdapter.findVerificationValue(
+				"dummy-verification-token",
+			);
 			ctx.context.logger.error("Reset Password: User not found", { email });
 			return ctx.json({
 				status: true,
@@ -121,14 +129,22 @@ export const requestPasswordReset = createAuthEndpoint(
 		});
 		const callbackURL = redirectTo ? encodeURIComponent(redirectTo) : "";
 		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${callbackURL}`;
-		await ctx.context.options.emailAndPassword.sendResetPassword(
-			{
-				user: user.user,
-				url,
-				token: verificationToken,
-			},
-			ctx.request,
-		);
+		/**
+		 * We send the email in the background to prevent timing attacks.
+		 * This is to ensure that the response time is consistent regardless of whether the email was sent or not.
+		 */
+		void ctx.context.options.emailAndPassword
+			.sendResetPassword(
+				{
+					user: user.user,
+					url,
+					token: verificationToken,
+				},
+				ctx.request,
+			)
+			.catch((e) => {
+				ctx.context.logger.error("Failed to send reset password email", e);
+			});
 		return ctx.json({
 			status: true,
 			message:
