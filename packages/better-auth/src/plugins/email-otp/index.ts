@@ -400,7 +400,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					method: "POST",
 					body: z.object({
 						username: z.string().meta({
-							description: "Username to send the OTP",
+							description: "Username of the account to send the OTP to",
 						}),
 					}),
 					metadata: {
@@ -1109,7 +1109,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					method: "POST",
 					body: z.object({
 						username: z.string({}).meta({
-							description: "Username to sign in",
+							description: "Username of the account to sign in",
 						}),
 						otp: z.string().meta({
 							required: true,
