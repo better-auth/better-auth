@@ -34,7 +34,7 @@ export const authMiddlewareFactory = (opts: SCIMOptions) =>
 		const scimProvider = await ctx.context.adapter.findOne<SCIMProvider>({
 			model: "scimProvider",
 			where: [
-				...(providerId ? [{ field: "providerId", value: providerId }] : []),
+				{ field: "providerId", value: providerId },
 				...(organizationId
 					? [{ field: "organizationId", value: organizationId }]
 					: []),
@@ -51,7 +51,7 @@ export const authMiddlewareFactory = (opts: SCIMOptions) =>
 			ctx,
 			opts,
 			scimProvider.scimToken,
-			scimToken ?? "",
+			scimToken,
 		);
 
 		if (!isValidToken) {
