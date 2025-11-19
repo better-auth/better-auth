@@ -535,4 +535,10 @@ export interface OIDCMetadata {
 	 * @default ["S256"]
 	 */
 	code_challenge_methods_supported: ["S256"];
+	/**
+	 * The URL of the RP-initiated logout endpoint.
+	 *
+	 * @default `/oauth2/endsession`
+	 */
+	end_session_endpoint?: string;
 }
