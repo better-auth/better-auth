@@ -3,6 +3,7 @@ import { APIError } from "better-call";
 import { getSessionFromCtx } from "../../api";
 import { generateRandomString, makeSignature } from "../../crypto";
 import type { Verification } from "../../db";
+import { parsePrompt } from "../oidc-provider/utils/prompt";
 import type {
 	OAuthAuthorizationQuery,
 	OAuthConsent,
@@ -86,12 +87,14 @@ export async function authorizeEndpoint(
 		);
 	}
 
-	const prompts = query.prompt?.split(" ");
-	if (prompts?.includes("select_account") && !opts.selectAccount?.page) {
+	const promptSet = ctx.query?.prompt
+		? parsePrompt(ctx.query?.prompt)
+		: undefined;
+	if (promptSet?.has("select_account") && !opts.selectAccount?.page) {
 		throw ctx.redirect(
 			getErrorURL(
 				ctx,
-				`unsupported_prompt_${prompts.join("_")}`,
+				`unsupported_prompt_select_account`,
 				"unsupported prompt type",
 			),
 		);
@@ -185,13 +188,13 @@ export async function authorizeEndpoint(
 
 	// Check for session
 	const session = await getSessionFromCtx(ctx);
-	if (!session || prompts?.includes("login")) {
+	if (!session || promptSet?.has("login")) {
 		const queryParams = await signParams(ctx, opts);
 		return handleRedirect(ctx, `${opts.loginPage}?${queryParams}`);
 	}
 
 	// Force account selection (eg. multi-session)
-	if (ctx.context.authorize_only && prompts?.includes("select_account")) {
+	if (ctx.context.authorize_only && promptSet?.has("select_account")) {
 		return redirectWithPromptCode(ctx, opts, "select_account");
 	}
 
@@ -223,7 +226,7 @@ export async function authorizeEndpoint(
 	}
 
 	// Force consent screen
-	if (prompts?.includes("consent")) {
+	if (promptSet?.has("consent")) {
 		return redirectWithPromptCode(ctx, opts, "consent");
 	}
 
