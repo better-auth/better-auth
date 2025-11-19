@@ -25,6 +25,7 @@ import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState, parseState } from "../../oauth2/state";
 import type { User } from "../../types";
 import { HIDE_METADATA } from "../../utils";
+import { oauthQuery } from "../oauth-provider/utils";
 import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
 
 export * from "./providers";
@@ -717,7 +718,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						link,
 					} = parsedState;
 					const code = ctx.query.code;
-					if (query) ctx.context.oauth.query = new URLSearchParams(query);
+					if (query)
+						oauthQuery.set({
+							query: new URLSearchParams(query),
+						});
 
 					function redirectOnError(error: string) {
 						const defaultErrorURL =
