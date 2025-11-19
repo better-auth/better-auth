@@ -917,10 +917,8 @@ describe("oauth2", async () => {
 					],
 				}),
 			],
-			advanced: {
-				oauthConfig: {
-					storeStateStrategy: "cookie",
-				},
+			account: {
+				storeStateStrategy: "cookie",
 			},
 		});
 		const headers = new Headers();
