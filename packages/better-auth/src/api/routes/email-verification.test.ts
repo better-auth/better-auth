@@ -422,8 +422,8 @@ describe("Email Verification Secondary Storage", async () => {
 
 	it("should set emailVerified on all sessions", async () => {
 		const sampleUser = {
-			name: "sampler",
-			email: "sample@sample.com",
+			name: "sampler2",
+			email: "sample2@sample.com",
 			password: "samplesssss",
 		};
 
