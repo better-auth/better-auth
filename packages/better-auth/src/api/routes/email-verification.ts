@@ -167,6 +167,12 @@ export const sendVerificationEmail = createAuthEndpoint(
 		if (!session) {
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user) {
+				await createEmailVerificationToken(
+					ctx.context.secret,
+					email,
+					undefined,
+					ctx.context.options.emailVerification?.expiresIn,
+				);
 				//we're returning true to avoid leaking information about the user
 				return ctx.json({
 					status: true,
@@ -424,6 +430,15 @@ export const verifyEmail = createAuthEndpoint(
 					createdAt: updatedUser.createdAt,
 					updatedAt: updatedUser.updatedAt,
 				},
+			});
+		}
+		if (user.user.emailVerified) {
+			if (ctx.query.callbackURL) {
+				throw ctx.redirect(ctx.query.callbackURL);
+			}
+			return ctx.json({
+				status: true,
+				user: null,
 			});
 		}
 		if (ctx.context.options.emailVerification?.onEmailVerification) {
