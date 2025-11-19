@@ -108,6 +108,49 @@ describe("sign-in", async (it) => {
 
 		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
 	});
+
+	it("should properly encode callbackURL with query parameters when sending verification email on sign-in", async () => {
+		let capturedUrl = "";
+		const { auth, testUser } = await getTestInstance({
+			trustedOrigins: ["https://example.com"],
+			emailVerification: {
+				sendOnSignIn: true,
+				async sendVerificationEmail({ user, url, token }) {
+					capturedUrl = url;
+				},
+			},
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+		});
+
+		const callbackURL =
+			"https://example.com/app?redirect=/dashboard&tab=settings";
+
+		await expect(
+			auth.api.signInEmail({
+				body: {
+					email: testUser.email,
+					password: testUser.password,
+					callbackURL,
+				},
+			}),
+		).rejects.toThrowError(
+			new APIError("FORBIDDEN", {
+				message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
+			}),
+		);
+
+		expect(capturedUrl).toBeDefined();
+		expect(capturedUrl).not.toBe("");
+
+		const emailUrl = new URL(capturedUrl);
+		const callbackURLParam = emailUrl.searchParams.get("callbackURL");
+
+		expect(callbackURLParam).toBe(callbackURL);
+		expect(callbackURLParam).toContain("?redirect=/dashboard&tab=settings");
+	});
 });
 
 describe("url checks", async (it) => {
