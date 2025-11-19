@@ -1783,6 +1783,10 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			}),
 			metadata: {
 				isAction: false,
+				allowedMediaTypes: [
+					"application/x-www-form-urlencoded",
+					"application/json",
+				],
 				openapi: {
 					operationId: "handleSAMLAssertionConsumerService",
 					summary: "SAML Assertion Consumer Service",
