@@ -24,7 +24,13 @@ export const callbackOAuth = createAuthEndpoint(
 		operationId: "handleOAuthCallback",
 		body: schema.optional(),
 		query: schema.optional(),
-		metadata: HIDE_METADATA,
+		metadata: {
+			...HIDE_METADATA,
+			allowedMediaTypes: [
+				"application/x-www-form-urlencoded",
+				"application/json",
+			],
+		},
 	},
 	async (c) => {
 		let queryOrBody: z.infer<typeof schema>;

@@ -667,25 +667,20 @@ export const revokeSession = createAuthEndpoint(
 	},
 	async (ctx) => {
 		const token = ctx.body.token;
-		const findSession = await ctx.context.internalAdapter.findSession(token);
-		if (!findSession) {
-			throw new APIError("BAD_REQUEST", {
-				message: "Session not found",
-			});
-		}
-		if (findSession.session.userId !== ctx.context.session.user.id) {
-			throw new APIError("UNAUTHORIZED");
-		}
-		try {
-			await ctx.context.internalAdapter.deleteSession(token);
-		} catch (error) {
-			ctx.context.logger.error(
-				error && typeof error === "object" && "name" in error
-					? (error.name as string)
-					: "",
-				error,
-			);
-			throw new APIError("INTERNAL_SERVER_ERROR");
+		const session = await ctx.context.internalAdapter.findSession(token);
+
+		if (session?.session.userId === ctx.context.session.user.id) {
+			try {
+				await ctx.context.internalAdapter.deleteSession(token);
+			} catch (error) {
+				ctx.context.logger.error(
+					error && typeof error === "object" && "name" in error
+						? (error.name as string)
+						: "",
+					error,
+				);
+				throw new APIError("INTERNAL_SERVER_ERROR");
+			}
 		}
 		return ctx.json({
 			status: true,
