@@ -19,53 +19,52 @@ import { admin } from "./admin";
 import { adminClient } from "./client";
 import type { UserWithRole } from "./types";
 
-let testIdToken: string;
-let handlers: ReturnType<typeof http.post>[];
-
-const server = setupServer();
-
-beforeAll(async () => {
-	const data: GoogleProfile = {
-		email: "user@email.com",
-		email_verified: true,
-		name: "First Last",
-		picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
-		exp: 1234567890,
-		sub: "1234567890",
-		iat: 1234567890,
-		aud: "test",
-		azp: "test",
-		nbf: 1234567890,
-		iss: "test",
-		locale: "en",
-		jti: "test",
-		given_name: "First",
-		family_name: "Last",
-	};
-	testIdToken = await signJWT(data, DEFAULT_SECRET);
-
-	handlers = [
-		http.post("https://oauth2.googleapis.com/token", () => {
-			return HttpResponse.json({
-				access_token: "test",
-				refresh_token: "test",
-				id_token: testIdToken,
-			});
-		}),
-	];
-
-	server.listen({ onUnhandledRequest: "bypass" });
-	server.use(...handlers);
-});
-
-afterEach(() => {
-	server.resetHandlers();
-	server.use(...handlers);
-});
-
-afterAll(() => server.close());
-
 describe("Admin plugin", async () => {
+	let testIdToken: string;
+	let handlers: ReturnType<typeof http.post>[];
+
+	const server = setupServer();
+
+	beforeAll(async () => {
+		const data: GoogleProfile = {
+			email: "user@email.com",
+			email_verified: true,
+			name: "First Last",
+			picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
+			exp: 1234567890,
+			sub: "1234567890",
+			iat: 1234567890,
+			aud: "test",
+			azp: "test",
+			nbf: 1234567890,
+			iss: "test",
+			locale: "en",
+			jti: "test",
+			given_name: "First",
+			family_name: "Last",
+		};
+		testIdToken = await signJWT(data, DEFAULT_SECRET);
+
+		handlers = [
+			http.post("https://oauth2.googleapis.com/token", () => {
+				return HttpResponse.json({
+					access_token: "test",
+					refresh_token: "test",
+					id_token: testIdToken,
+				});
+			}),
+		];
+
+		server.listen({ onUnhandledRequest: "bypass" });
+		server.use(...handlers);
+	});
+
+	afterEach(() => {
+		server.resetHandlers();
+		server.use(...handlers);
+	});
+
+	afterAll(() => server.close());
 	const {
 		auth,
 		signInWithTestUser,
