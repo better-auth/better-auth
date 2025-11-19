@@ -934,7 +934,7 @@ export const auth = betterAuth({
       customStorage: {
         get: async (key) => await customStorage.get(key),
         set: async (key, value, ttl) => await customStorage.set(key, value, ttl),
-        delete: async (key) => await customStorage.delete(key),Secondary Storage with 
+        delete: async (key) => await customStorage.delete(key), 
       },
     }),
   ],
