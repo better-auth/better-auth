@@ -2,11 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { bearer } from "../bearer";
+import { username } from "../username";
+import { usernameClient } from "../username/client";
 import { emailOTP } from ".";
 import { emailOTPClient } from "./client";
 import { splitAtLastColon } from "./utils";
-import { username } from "../username";
-import { usernameClient } from "../username/client";
 
 describe("email-otp", async () => {
 	const otpFn = vi.fn();

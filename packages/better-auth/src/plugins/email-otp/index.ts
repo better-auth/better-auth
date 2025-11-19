@@ -6,6 +6,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import type { User } from "@better-auth/core/db";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { defineErrorCodes } from "@better-auth/core/utils";
 import * as z from "zod";
@@ -18,10 +19,9 @@ import {
 } from "../../crypto";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
-import { defaultKeyHasher, splitAtLastColon } from "./utils";
-import { USERNAME_ERROR_CODES } from "../username";
 import type { UsernameOptions } from "../username";
-import type { User } from "@better-auth/core/db";
+import { USERNAME_ERROR_CODES } from "../username";
+import { defaultKeyHasher, splitAtLastColon } from "./utils";
 
 export interface EmailOTPOptions {
 	/**
