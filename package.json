@@ -28,5 +28,8 @@
     "turbo": "^2.6.1",
     "typescript": "catalog:",
     "vitest": "catalog:"
+  },
+  "dependencies": {
+    "better-call": "link:../../../Library/pnpm/global/5/node_modules/better-call"
   }
 }

@@ -156,6 +156,11 @@ export const signInSocial = createAuthEndpoint(
 			}),
 		}),
 		metadata: {
+			//providers like apple support only form data
+			allowedContentTypes: [
+				"application/x-www-form-urlencoded",
+				"application/json",
+			],
 			openapi: {
 				description: "Sign in with a social provider",
 				operationId: "socialSignIn",

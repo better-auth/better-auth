@@ -21,5 +21,8 @@ catalogs:
 
 neverBuiltDependencies: []
 
+overrides:
+  better-call: 1.0.28-beta.1
+
 patchedDependencies:
   msw: patches/msw.patch
