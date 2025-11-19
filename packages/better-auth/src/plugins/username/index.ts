@@ -357,9 +357,9 @@ export const username = (options?: UsernameOptions | undefined) => {
 								undefined,
 								ctx.context.options.emailVerification?.expiresIn,
 							);
-							const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${
-								ctx.body.callbackURL || "/"
-							}`;
+							const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
+								ctx.body.callbackURL || "/",
+							)}`;
 							await ctx.context.options.emailVerification.sendVerificationEmail(
 								{
 									user: user,
