@@ -3,6 +3,7 @@ import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 import { APIError } from "better-call";
 import * as z from "zod";
+import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState } from "../../utils";
@@ -195,9 +196,9 @@ export const signInSocial = createAuthEndpoint(
 		},
 	},
 	async (c) => {
-		const provider = c.context.socialProviders.find(
-			(p) => p.id === c.body.provider,
-		);
+		const provider = await getAwaitableValue(c.context.socialProviders, {
+			value: c.body.provider,
+		});
 		if (!provider) {
 			c.context.logger.error(
 				"Provider not found. Make sure to add the provider in your auth config",
