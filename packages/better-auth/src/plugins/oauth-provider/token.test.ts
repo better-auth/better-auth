@@ -1213,13 +1213,21 @@ describe("oauth token - config", async () => {
 				},
 			});
 			// Client credentials
-			const tokens = await client.oauth2.token({
-				resource: validAudience,
-				grant_type: "client_credentials",
-				client_id: oauthClient?.client_id,
-				client_secret: oauthClient?.client_secret,
-				scope: testScopes.join(" "),
-			});
+			const tokens = await client.oauth2.token(
+				{
+					resource: validAudience,
+					grant_type: "client_credentials",
+					client_id: oauthClient?.client_id,
+					client_secret: oauthClient?.client_secret,
+					scope: testScopes.join(" "),
+				},
+				{
+					headers: {
+						accept: "application/json",
+						"content-type": "application/x-www-form-urlencoded",
+					},
+				},
+			);
 			expect(tokens.data?.expires_in).toBe(result); // 5m lowest
 			// NOTE: verification is done in other tests (we only care about the exp fields in this test)
 			const accessToken = decodeJwt(tokens.data?.access_token ?? "");
@@ -1274,29 +1282,45 @@ describe("oauth token - config", async () => {
 			const url = new URL(callbackRedirectUrl);
 
 			// Authorization code
-			const tokens = await client.oauth2.token({
-				code: url.searchParams.get("code")!,
-				code_verifier: codeVerifier,
-				grant_type: "authorization_code",
-				resource: validAudience,
-				client_id: oauthClient?.client_id,
-				client_secret: oauthClient?.client_secret,
-				redirect_uri: redirectUri,
-			});
+			const tokens = await client.oauth2.token(
+				{
+					code: url.searchParams.get("code")!,
+					code_verifier: codeVerifier,
+					grant_type: "authorization_code",
+					resource: validAudience,
+					client_id: oauthClient?.client_id,
+					client_secret: oauthClient?.client_secret,
+					redirect_uri: redirectUri,
+				},
+				{
+					headers: {
+						accept: "application/json",
+						"content-type": "application/x-www-form-urlencoded",
+					},
+				},
+			);
 			expect(tokens.data?.expires_in).toBe(result); // 5m lowest
 			// NOTE: verification is done in other tests (we only care about the exp fields in this test)
 			const accessToken = decodeJwt(tokens.data?.access_token ?? "");
 			expect((accessToken.exp ?? 0) - (accessToken.iat ?? 0)).toBe(result); // 5m lowest
 
 			// Refresh token
-			const refreshedTokens = await client.oauth2.token({
-				resource: validAudience,
-				// @ts-expect-error refresh token is sent
-				refresh_token: tokens.data?.refresh_token,
-				grant_type: "refresh_token",
-				client_id: oauthClient?.client_id,
-				client_secret: oauthClient?.client_secret,
-			});
+			const refreshedTokens = await client.oauth2.token(
+				{
+					resource: validAudience,
+					// @ts-expect-error refresh token is sent
+					refresh_token: tokens.data?.refresh_token,
+					grant_type: "refresh_token",
+					client_id: oauthClient?.client_id,
+					client_secret: oauthClient?.client_secret,
+				},
+				{
+					headers: {
+						accept: "application/json",
+						"content-type": "application/x-www-form-urlencoded",
+					},
+				},
+			);
 			expect(refreshedTokens.data?.expires_in).toBe(result); // 5m lowest
 			// NOTE: verification is done in other tests (we only care about the exp fields in this test)
 			const refreshedAccessToken = decodeJwt(
@@ -1319,12 +1343,20 @@ describe("oauth token - config", async () => {
 			},
 		});
 		// Client credentials
-		const tokens = await client.oauth2.token({
-			grant_type: "client_credentials",
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-			scope: testScopes.join(" "),
-		});
+		const tokens = await client.oauth2.token(
+			{
+				grant_type: "client_credentials",
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				scope: testScopes.join(" "),
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(tokens.data?.access_token?.startsWith(prefix)).toBeTruthy();
 	});
 
@@ -1355,14 +1387,22 @@ describe("oauth token - config", async () => {
 		const url = new URL(callbackRedirectUrl);
 
 		// Authorization code
-		const tokens = await client.oauth2.token({
-			code: url.searchParams.get("code")!,
-			code_verifier: codeVerifier,
-			grant_type: "authorization_code",
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-			redirect_uri: redirectUri,
-		});
+		const tokens = await client.oauth2.token(
+			{
+				code: url.searchParams.get("code")!,
+				code_verifier: codeVerifier,
+				grant_type: "authorization_code",
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				redirect_uri: redirectUri,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(
 			tokens.data?.access_token?.startsWith(accessTokenPrefix),
 		).toBeTruthy();
@@ -1377,13 +1417,21 @@ describe("oauth token - config", async () => {
 		}
 
 		// Refresh token
-		const refreshedTokens = await client.oauth2.token({
-			// @ts-expect-error refresh token is sent
-			refresh_token: tokens.data?.refresh_token,
-			grant_type: "refresh_token",
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-		});
+		const refreshedTokens = await client.oauth2.token(
+			{
+				// @ts-expect-error refresh token is sent
+				refresh_token: tokens.data?.refresh_token,
+				grant_type: "refresh_token",
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(
 			refreshedTokens.data?.access_token?.startsWith(accessTokenPrefix),
 		).toBeTruthy();
@@ -1411,12 +1459,20 @@ describe("oauth token - config", async () => {
 		expect(oauthClient?.client_secret?.startsWith(prefix)).toBeTruthy();
 
 		// Test successful utilization of client_secret
-		const tokens = await client.oauth2.token({
-			grant_type: "client_credentials",
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-			scope: testScopes.join(""),
-		});
+		const tokens = await client.oauth2.token(
+			{
+				grant_type: "client_credentials",
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				scope: testScopes.join(""),
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(tokens.error?.status).toBeUndefined();
 		expect(tokens.data?.access_token).toBeDefined();
 	});

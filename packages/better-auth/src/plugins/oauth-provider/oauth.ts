@@ -338,6 +338,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							.optional(),
 					}),
 					metadata: {
+						allowedMediaTypes: ["application/x-www-form-urlencoded"],
 						openapi: {
 							description: "Authorize an OAuth2 request",
 							parameters: [
@@ -557,6 +558,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					}),
 					metadata: {
 						isAction: false,
+						allowedMediaTypes: ["application/x-www-form-urlencoded"],
 						openapi: {
 							description: "Obtain an OAuth2.1 access token",
 							requestBody: {
@@ -699,7 +701,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						resource: z.string().optional(),
 					}),
 					metadata: {
-						isAction: false,
+						allowedMediaTypes: ["application/x-www-form-urlencoded"],
 						openapi: {
 							description: "Introspect an OAuth2 access or refresh token",
 							requestBody: {
@@ -841,6 +843,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					}),
 					metadata: {
 						isAction: false,
+						allowedMediaTypes: ["application/x-www-form-urlencoded"],
 						openapi: {
 							description: "Revoke an OAuth2 access or refresh token",
 							requestBody: {

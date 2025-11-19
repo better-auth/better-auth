@@ -155,99 +155,171 @@ describe("oauth revoke", async () => {
 
 	it("should fail unauthenticated request", async () => {
 		const tokens = await getTokens();
-		const revocation = await client.oauth2.revoke({
-			token: tokens.data?.access_token!,
-		});
+		const revocation = await client.oauth2.revoke(
+			{
+				token: tokens.data?.access_token!,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(revocation.error?.status).toBe(401);
 	});
 
 	it("should pass verification with token_type_hint access_token and sent jwt access_token", async () => {
 		const tokens = await getTokens(undefined, validAudience);
-		const revocation = await client.oauth2.revoke({
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-			token: tokens.data?.access_token!,
-			token_type_hint: "access_token",
-		});
+		const revocation = await client.oauth2.revoke(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.access_token!,
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(revocation.data).toBe(null);
 		expect(revocation.error).toBe(null);
 	});
 
 	it("should pass verification with token_type_hint access_token and sent opaque access_token", async () => {
 		const tokens = await getTokens();
-		const revocation = await client.oauth2.revoke({
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-			token: tokens.data?.access_token!,
-			token_type_hint: "access_token",
-		});
+		const revocation = await client.oauth2.revoke(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.access_token!,
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(revocation.data).toBe(null);
 		expect(revocation.error).toBe(null);
 	});
 
 	it("should fail with token_type_hint access_token and sent refresh_token", async () => {
 		const tokens = await getTokens();
-		const revocation = await client.oauth2.revoke({
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-			token: tokens.data?.refresh_token!,
-			token_type_hint: "access_token",
-		});
+		const revocation = await client.oauth2.revoke(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.refresh_token!,
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(revocation.error?.status).toBe(400);
 	});
 
 	it("should pass verification with token_type_hint refresh_token and sent refresh_token", async () => {
 		const tokens = await getTokens();
-		const revocation = await client.oauth2.revoke({
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-			token: tokens.data?.refresh_token!,
-			token_type_hint: "refresh_token",
-		});
+		const revocation = await client.oauth2.revoke(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.refresh_token!,
+				token_type_hint: "refresh_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(revocation.data).toBe(null);
 		expect(revocation.error).toBe(null);
 	});
 
 	it("should fail verification with token_type_hint refresh_token and sent access_token", async () => {
 		const tokens = await getTokens();
-		const revocation = await client.oauth2.revoke({
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-			token: tokens.data?.access_token!,
-			token_type_hint: "refresh_token",
-		});
+		const revocation = await client.oauth2.revoke(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.access_token!,
+				token_type_hint: "refresh_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(revocation.error?.status).toBe(400);
 	});
 
 	it("should pass verification without token_type_hint and sent jwt access_token", async () => {
 		const tokens = await getTokens(undefined, validAudience);
-		const revocation = await client.oauth2.revoke({
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-			token: tokens.data?.access_token!,
-		});
+		const revocation = await client.oauth2.revoke(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.access_token!,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(revocation.data).toBe(null);
 		expect(revocation.error).toBe(null);
 	});
 
 	it("should pass verification without token_type_hint and sent opaque access_token", async () => {
 		const tokens = await getTokens();
-		const revocation = await client.oauth2.revoke({
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-			token: tokens.data?.access_token!,
-		});
+		const revocation = await client.oauth2.revoke(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.access_token!,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(revocation.data).toBe(null);
 		expect(revocation.error).toBe(null);
 	});
 
 	it("should pass verification without token_type_hint and sent refresh_token", async () => {
 		const tokens = await getTokens();
-		const revocation = await client.oauth2.revoke({
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-			token: tokens.data?.refresh_token!,
-		});
+		const revocation = await client.oauth2.revoke(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.refresh_token!,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(revocation.data).toBe(null);
 		expect(revocation.error).toBe(null);
 	});
@@ -360,21 +432,37 @@ describe("oauth revoke - config", async () => {
 				scopes: testScopes,
 			},
 		});
-		const tokens = await client.oauth2.token({
-			grant_type: "client_credentials",
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-			scope: testScopes.join(" "),
-			redirect_uri: redirectUri,
-		});
+		const tokens = await client.oauth2.token(
+			{
+				grant_type: "client_credentials",
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				scope: testScopes.join(" "),
+				redirect_uri: redirectUri,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(tokens.data?.access_token?.startsWith(prefix)).toBeTruthy();
 
-		const revocation = await client.oauth2.revoke({
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-			token: tokens.data?.access_token ?? "",
-			token_type_hint: "access_token",
-		});
+		const revocation = await client.oauth2.revoke(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.access_token ?? "",
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(revocation.data).toBe(null);
 		expect(revocation.error).toBe(null);
 	});
@@ -402,15 +490,23 @@ describe("oauth revoke - config", async () => {
 			},
 		});
 		const url = new URL(callbackRedirectUrl);
-		const tokens = await client.oauth2.token({
-			grant_type: "authorization_code",
-			code: url.searchParams.get("code") ?? undefined,
-			code_verifier: codeVerifier,
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-			scope: testScopes.join(" "),
-			redirect_uri: redirectUri,
-		});
+		const tokens = await client.oauth2.token(
+			{
+				grant_type: "authorization_code",
+				code: url.searchParams.get("code") ?? undefined,
+				code_verifier: codeVerifier,
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				scope: testScopes.join(" "),
+				redirect_uri: redirectUri,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		if ("refresh_token" in (tokens.data ?? {})) {
 			expect(
 				(tokens.data as { refresh_token?: string }).refresh_token?.startsWith(
@@ -421,13 +517,21 @@ describe("oauth revoke - config", async () => {
 			expect.unreachable();
 		}
 
-		const revocation = await client.oauth2.revoke({
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-			// @ts-expect-error refresh token sent
-			token: tokens.data?.refresh_token,
-			token_type_hint: "refresh_token",
-		});
+		const revocation = await client.oauth2.revoke(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				// @ts-expect-error refresh token sent
+				token: tokens.data?.refresh_token,
+				token_type_hint: "refresh_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(revocation.data).toBe(null);
 		expect(revocation.error).toBe(null);
 	});
