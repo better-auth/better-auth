@@ -118,18 +118,18 @@ export const useAuthQuery = <T>(
 	let isMounted = false;
 
 	for (const initAtom of initializedAtom) {
-		initAtom.subscribe(() => {
+		initAtom.subscribe(async () => {
 			if (isServer()) {
 				// On server, don't trigger fetch
 				return;
 			}
 			if (isMounted) {
-				fn();
+				await fn();
 			} else {
 				onMount(value, () => {
-					const timeoutId = setTimeout(() => {
+					const timeoutId = setTimeout(async () => {
 						if (!isMounted) {
-							fn();
+							await fn();
 							isMounted = true;
 						}
 					}, 0);
