@@ -81,7 +81,7 @@ export interface SAMLConfig {
 	mapping?: SAMLMapping | undefined;
 }
 
-export type SSOProvider = {
+type BaseSSOProvider = {
 	issuer: string;
 	oidcConfig?: OIDCConfig | undefined;
 	samlConfig?: SAMLConfig | undefined;
@@ -90,6 +90,13 @@ export type SSOProvider = {
 	organizationId?: string | undefined;
 	domain: string;
 };
+
+export type SSOProvider<O extends SSOOptions> =
+	O["domainVerification"] extends { enabled: true }
+		? {
+				domainVerified: boolean;
+			} & BaseSSOProvider
+		: BaseSSOProvider;
 
 export interface SSOOptions {
 	/**
@@ -112,7 +119,7 @@ export interface SSOOptions {
 				/**
 				 * The SSO provider
 				 */
-				provider: SSOProvider;
+				provider: SSOProvider<SSOOptions>;
 		  }) => Promise<void>)
 		| undefined;
 	/**
@@ -138,7 +145,7 @@ export interface SSOOptions {
 					/**
 					 * The SSO provider
 					 */
-					provider: SSOProvider;
+					provider: SSOProvider<SSOOptions>;
 				}) => Promise<"member" | "admin">;
 		  }
 		| undefined;
@@ -228,4 +235,22 @@ export interface SSOOptions {
 	 * @default false
 	 */
 	trustEmailVerified?: boolean | undefined;
+	/**
+	 * Enable domain verification on SSO providers
+	 *
+	 * When this option is enabled, new SSO providers will require the associated domain to be verified by the owner
+	 * prior to allowing sign-ins.
+	 */
+	domainVerification?: {
+		/**
+		 * Enables or disables the domain verification feature
+		 */
+		enabled?: boolean;
+		/**
+		 * Prefix used to generate the domain verification token
+		 *
+		 * @default "better-auth-token-"
+		 */
+		tokenPrefix?: string;
+	};
 }
