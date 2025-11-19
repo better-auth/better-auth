@@ -13,7 +13,10 @@ export class SCIMAPIError extends APIError {
 	) {
 		const body = {
 			schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
-			status: typeof status === "number" ? status : statusCodes[status],
+			status: (typeof status === "number"
+				? status
+				: statusCodes[status]
+			).toString(),
 			detail: overrides.detail,
 			...overrides,
 		};
@@ -30,7 +33,7 @@ export const SCIMErrorOpenAPISchema = {
 			items: { type: "string" },
 		},
 		status: {
-			type: "number",
+			type: "string",
 		},
 		detail: {
 			type: "string",

@@ -730,7 +730,7 @@ describe("SCIM", () => {
 					body: {
 						detail: "Schema not found",
 						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
-						status: 404,
+						status: "404",
 					},
 				}),
 			);
@@ -811,7 +811,7 @@ describe("SCIM", () => {
 					body: {
 						detail: "Resource type not found",
 						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
-						status: 404,
+						status: "404",
 					},
 				}),
 			);
@@ -1178,7 +1178,7 @@ describe("SCIM", () => {
 					body: {
 						detail: "SCIM token is required",
 						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
-						status: 401,
+						status: "401",
 					},
 				}),
 			);
@@ -1273,7 +1273,7 @@ describe("SCIM", () => {
 					body: {
 						detail: "SCIM token is required",
 						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
-						status: 401,
+						status: "401",
 					},
 				}),
 			);
@@ -1302,7 +1302,7 @@ describe("SCIM", () => {
 					body: {
 						detail: "User not found",
 						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
-						status: 404,
+						status: "404",
 					},
 				}),
 			);
@@ -1416,7 +1416,7 @@ describe("SCIM", () => {
 					body: {
 						detail: "User not found",
 						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
-						status: 404,
+						status: "404",
 					},
 				}),
 			);
@@ -1455,7 +1455,7 @@ describe("SCIM", () => {
 					body: {
 						detail: "No valid fields to update",
 						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
-						status: 400,
+						status: "400",
 					},
 				}),
 			);
@@ -1488,7 +1488,7 @@ describe("SCIM", () => {
 					body: {
 						detail: "SCIM token is required",
 						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
-						status: 401,
+						status: "401",
 					},
 				}),
 			);
@@ -1696,7 +1696,7 @@ describe("SCIM", () => {
 					body: {
 						detail: "SCIM token is required",
 						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
-						status: 401,
+						status: "401",
 					},
 				}),
 			);
@@ -1773,7 +1773,7 @@ describe("SCIM", () => {
 					body: {
 						detail: "User not found",
 						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
-						status: 404,
+						status: "404",
 					},
 				}),
 			);
@@ -1787,7 +1787,7 @@ describe("SCIM", () => {
 					body: {
 						detail: "User not found",
 						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
-						status: 404,
+						status: "404",
 					},
 				}),
 			);
@@ -1841,7 +1841,7 @@ describe("SCIM", () => {
 					body: {
 						detail: "User not found",
 						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
-						status: 404,
+						status: "404",
 					},
 				}),
 			);
@@ -1855,7 +1855,7 @@ describe("SCIM", () => {
 					body: {
 						detail: "User not found",
 						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
-						status: 404,
+						status: "404",
 					},
 				}),
 			);
@@ -1881,7 +1881,7 @@ describe("SCIM", () => {
 					body: {
 						detail: "User not found",
 						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
-						status: 404,
+						status: "404",
 					},
 				}),
 			);
@@ -1937,7 +1937,7 @@ describe("SCIM", () => {
 					body: {
 						detail: "User not found",
 						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
-						status: 404,
+						status: "404",
 					},
 				}),
 			);
@@ -1960,7 +1960,7 @@ describe("SCIM", () => {
 					body: {
 						detail: "SCIM token is required",
 						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
-						status: 401,
+						status: "401",
 					},
 				}),
 			);
@@ -1986,7 +1986,7 @@ describe("SCIM", () => {
 					body: {
 						detail: "User not found",
 						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
-						status: 404,
+						status: "404",
 					},
 				}),
 			);
