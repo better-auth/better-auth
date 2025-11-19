@@ -1694,12 +1694,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						}
 
 						const isValidRedirectUri = client.redirectUrls.some(
-							(registeredUri) => {
-								return (
-									post_logout_redirect_uri === registeredUri ||
-									post_logout_redirect_uri.startsWith(registeredUri)
-								);
-							},
+							(registeredUri) => post_logout_redirect_uri === registeredUri,
 						);
 
 						if (!isValidRedirectUri) {
