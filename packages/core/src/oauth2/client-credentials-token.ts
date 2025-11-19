@@ -1,17 +1,20 @@
 import { base64Url } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
+import { importJWK, SignJWT } from "jose";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
 
-export function createClientCredentialsTokenRequest({
+export async function createClientCredentialsTokenRequest({
 	options,
 	scope,
 	authentication,
 	resource,
+	tokenEndpoint,
 }: {
 	options: ProviderOptions & { clientSecret: string };
 	scope?: string | undefined;
-	authentication?: ("basic" | "post") | undefined;
+	authentication?: ("basic" | "post" | "pk") | undefined;
 	resource?: (string | string[]) | undefined;
+	tokenEndpoint?: string | undefined;
 }) {
 	const body = new URLSearchParams();
 	const headers: Record<string, any> = {
@@ -38,12 +41,37 @@ export function createClientCredentialsTokenRequest({
 			`${primaryClientId}:${options.clientSecret}`,
 		);
 		headers["authorization"] = `Basic ${encodedCredentials}`;
-	} else {
+	} else if (authentication === "post") {
 		const primaryClientId = Array.isArray(options.clientId)
 			? options.clientId[0]
 			: options.clientId;
 		body.set("client_id", primaryClientId);
 		body.set("client_secret", options.clientSecret);
+	} else {
+		const primaryClientId = Array.isArray(options.clientId)
+			? options.clientId[0]
+			: options.clientId;
+
+		const privateKey = await importJWK(
+			JSON.parse(options.clientPrivateKey || "{}"),
+			"RS256",
+		);
+		const clientAssertion = await new SignJWT()
+			.setProtectedHeader({ alg: "RS256" })
+			.setIssuer(primaryClientId)
+			.setSubject(primaryClientId)
+			.setAudience(tokenEndpoint ?? "")
+			.setIssuedAt()
+			.setExpirationTime("5m")
+			.setJti(crypto.randomUUID())
+			.sign(privateKey);
+
+		body.set("client_id", primaryClientId);
+		body.set(
+			"client_assertion_type",
+			"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+		);
+		body.set("client_assertion", clientAssertion);
 	}
 
 	return {
@@ -62,14 +90,15 @@ export async function clientCredentialsToken({
 	options: ProviderOptions & { clientSecret: string };
 	tokenEndpoint: string;
 	scope: string;
-	authentication?: ("basic" | "post") | undefined;
+	authentication?: ("basic" | "post" | "pk") | undefined;
 	resource?: (string | string[]) | undefined;
 }): Promise<OAuth2Tokens> {
-	const { body, headers } = createClientCredentialsTokenRequest({
+	const { body, headers } = await createClientCredentialsTokenRequest({
 		options,
 		scope,
 		authentication,
 		resource,
+		tokenEndpoint,
 	});
 
 	const { data, error } = await betterFetch<{

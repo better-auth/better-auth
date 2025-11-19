@@ -101,6 +101,10 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 */
 	clientSecret?: string | undefined;
 	/**
+	 * The client private key of your application
+	 */
+	clientPrivateKey?: string | undefined;
+	/**
 	 * The scopes you want to request from the provider
 	 */
 	scope?: string[] | undefined;

@@ -1,10 +1,10 @@
 import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
-import { jwtVerify } from "jose";
+import { importJWK, jwtVerify, SignJWT } from "jose";
 import type { ProviderOptions } from "./index";
 import { getOAuth2Tokens } from "./index";
 
-export function createAuthorizationCodeRequest({
+export async function createAuthorizationCodeRequest({
 	code,
 	codeVerifier,
 	redirectURI,
@@ -14,16 +14,18 @@ export function createAuthorizationCodeRequest({
 	headers,
 	additionalParams = {},
 	resource,
+	tokenEndpoint,
 }: {
 	code: string;
 	redirectURI: string;
 	options: Partial<ProviderOptions>;
 	codeVerifier?: string | undefined;
 	deviceId?: string | undefined;
-	authentication?: ("basic" | "post") | undefined;
+	authentication?: ("basic" | "post" | "pk") | undefined;
 	headers?: Record<string, string> | undefined;
 	additionalParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
+	tokenEndpoint?: string;
 }) {
 	const body = new URLSearchParams();
 	const requestHeaders: Record<string, any> = {
@@ -56,7 +58,7 @@ export function createAuthorizationCodeRequest({
 			`${primaryClientId}:${options.clientSecret ?? ""}`,
 		);
 		requestHeaders["authorization"] = `Basic ${encodedCredentials}`;
-	} else {
+	} else if (authentication === "post") {
 		const primaryClientId = Array.isArray(options.clientId)
 			? options.clientId[0]
 			: options.clientId;
@@ -64,6 +66,33 @@ export function createAuthorizationCodeRequest({
 		if (options.clientSecret) {
 			body.set("client_secret", options.clientSecret);
 		}
+	} else {
+		const primaryClientId = Array.isArray(options.clientId)
+			? options.clientId[0]
+			: options.clientId;
+
+		const privateKey = await importJWK(
+			JSON.parse(options.clientPrivateKey || "{}"),
+			"RS256",
+		);
+		const clientAssertion = await new SignJWT()
+			.setProtectedHeader({
+				alg: "RS256",
+			})
+			.setIssuer(primaryClientId)
+			.setSubject(primaryClientId)
+			.setAudience(tokenEndpoint ?? "")
+			.setIssuedAt()
+			.setExpirationTime("5m")
+			.setJti(crypto.randomUUID())
+			.sign(privateKey);
+
+		body.set("client_id", primaryClientId);
+		body.set(
+			"client_assertion_type",
+			"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+		);
+		body.set("client_assertion", clientAssertion);
 	}
 
 	for (const [key, value] of Object.entries(additionalParams)) {
@@ -94,22 +123,24 @@ export async function validateAuthorizationCode({
 	codeVerifier?: string | undefined;
 	deviceId?: string | undefined;
 	tokenEndpoint: string;
-	authentication?: ("basic" | "post") | undefined;
+	authentication?: ("basic" | "post" | "pk") | undefined;
 	headers?: Record<string, string> | undefined;
 	additionalParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
 }) {
-	const { body, headers: requestHeaders } = createAuthorizationCodeRequest({
-		code,
-		codeVerifier,
-		redirectURI,
-		options,
-		authentication,
-		deviceId,
-		headers,
-		additionalParams,
-		resource,
-	});
+	const { body, headers: requestHeaders } =
+		await createAuthorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI,
+			options,
+			authentication,
+			deviceId,
+			headers,
+			additionalParams,
+			resource,
+			tokenEndpoint,
+		});
 
 	const { data, error } = await betterFetch<object>(tokenEndpoint, {
 		method: "POST",
