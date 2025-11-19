@@ -519,11 +519,14 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							});
 						});
 
-					await options.sendVerificationOTP({
-						email: user.email,
-						otp,
-						type: "sign-in",
-					});
+					await options.sendVerificationOTP(
+						{
+							email: user.email,
+							otp,
+							type: "sign-in",
+						},
+						ctx,
+					);
 
 					return ctx.json({ success: true });
 				},
