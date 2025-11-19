@@ -227,7 +227,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					});
 				}
 				const email = ctx.body.email.toLowerCase();
-				const isValidEmail = z.string().email().safeParse(email);
+				const isValidEmail = z.email().safeParse(email);
 				if (!isValidEmail.success) {
 					throw ctx.error("BAD_REQUEST", {
 						message: BASE_ERROR_CODES.INVALID_EMAIL,
@@ -236,8 +236,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				if (opts.disableSignUp) {
 					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					if (!user) {
-						throw new APIError("BAD_REQUEST", {
-							message: BASE_ERROR_CODES.USER_NOT_FOUND,
+						// Return success to prevent user enumeration
+						return ctx.json({
+							success: true,
 						});
 					}
 				} else if (ctx.body.type === "forget-password") {
@@ -511,7 +512,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 				async (ctx) => {
 					const email = ctx.body.email.toLowerCase();
-					const isValidEmail = z.string().email().safeParse(email);
+					const isValidEmail = z.email().safeParse(email);
 					if (!isValidEmail.success) {
 						throw new APIError("BAD_REQUEST", {
 							message: BASE_ERROR_CODES.INVALID_EMAIL,
@@ -636,7 +637,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 				async (ctx) => {
 					const email = ctx.body.email.toLowerCase();
-					const isValidEmail = z.string().email().safeParse(email);
+					const isValidEmail = z.email().safeParse(email);
 					if (!isValidEmail.success) {
 						throw new APIError("BAD_REQUEST", {
 							message: BASE_ERROR_CODES.INVALID_EMAIL,

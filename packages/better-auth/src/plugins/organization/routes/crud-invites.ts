@@ -4,23 +4,21 @@ import { APIError } from "better-call";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../../api/routes";
 import { setSessionCookie } from "../../../cookies";
-import {
-	type InferAdditionalFieldsFromPluginOptions,
-	toZodSchema,
-} from "../../../db";
+import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
+import { toZodSchema } from "../../../db";
 import { getDate } from "../../../utils/date";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
 import { parseRoles } from "../organization";
-import {
-	type InferInvitation,
-	type InferOrganizationRolesFromOption,
-	type Invitation,
-	type Member,
+import type {
+	InferInvitation,
+	InferOrganizationRolesFromOption,
+	Invitation,
+	Member,
 } from "../schema";
-import { type OrganizationOptions } from "../types";
+import type { OrganizationOptions } from "../types";
 
 export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 	const additionalFieldsSchema = toZodSchema({
@@ -185,7 +183,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			}
 
 			const email = ctx.body.email.toLowerCase();
-			const isValidEmail = z.string().email().safeParse(email);
+			const isValidEmail = z.email().safeParse(email);
 			if (!isValidEmail.success) {
 				throw new APIError("BAD_REQUEST", {
 					message: BASE_ERROR_CODES.INVALID_EMAIL,

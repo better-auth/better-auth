@@ -9,11 +9,11 @@ import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { mergeSchema, parseUserOutput } from "../../db/schema";
-import { type Session } from "../../types";
+import type { Session } from "../../types";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
-import { type AccessControl } from "../access";
-import { defaultStatements } from "./access";
+import type { AccessControl } from "../access";
+import type { defaultStatements } from "./access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import { hasPermission } from "./has-permission";
 import { schema } from "./schema";
@@ -466,7 +466,7 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 					}
 
 					const email = ctx.body.email.toLowerCase();
-					const isValidEmail = z.string().email().safeParse(email);
+					const isValidEmail = z.email().safeParse(email);
 					if (!isValidEmail.success) {
 						throw new APIError("BAD_REQUEST", {
 							message: BASE_ERROR_CODES.INVALID_EMAIL,
