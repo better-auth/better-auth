@@ -325,99 +325,397 @@ Both Auth.js and Better Auth provide stateless (JWT) and database session strate
 
 Just like Auth.js has database models, Better Auth also has a core schema. In this section, we'll compare the two and explore the differences between them.
 
+### User -> User
+
 <Tabs items={["Auth.js", "Better Auth"]}>
 <Tab value="Auth.js">
-<Mermaid
-  chart={`
-  erDiagram
-    User ||--|{ Account : ""
-    User {
-      string id
-      string name
-      string email
-      timestamp emailVerified
-      string image
-    }
-    User ||--|{ Session : ""
-    Session {
-      string id
-      timestamp expires
-      string sessionToken
-      string userId
-    }
-    Account {
-      string id
-      string userId
-      string type
-      string provider
-      string providerAccountId
-      string refresh_token
-      string access_token
-      int expires_at
-      string token_type
-      string scope
-      string id_token
-      string session_state
-    }
-    User ||--|{ VerificationToken : ""
-    VerificationToken {
-      string identifier
-      string token
-      timestamp expires
-    }
-  `}
+<DatabaseTable
+  fields={[
+    {
+      name: "id",
+      type: "string",
+      description: "Unique identifier for each user",
+      isPrimaryKey: true,
+    },
+    {
+      name: "name",
+      type: "string",
+      description: "User's chosen display name",
+      isOptional: true,
+    },
+    {
+      name: "email",
+      type: "string",
+      description: "User's email address for communication and login",
+      isOptional: true,
+    },
+    {
+      name: "emailVerified",
+      type: "Date",
+      description: "When the user's email was verified",
+      isOptional: true,
+    },
+    {
+      name: "image",
+      type: "string",
+      description: "User's image url",
+      isOptional: true,
+    },
+  ]}
 />
 </Tab>
 <Tab value="Better Auth">
-<Mermaid
-  chart={`
-  erDiagram
-    User ||--|{ Account : ""
-    User {
-      string id
-      string name
-      string email
-      boolean emailVerified
-      string image
-      timestamp createdAt
-      timestamp updatedAt
-    }
-    User ||--|{ Session : ""
-    Session {
-      string id
-      string userId
-      string token
-      timestamp expiresAt
-      string ipAddress
-      string userAgent
-      timestamp createdAt
-      timestamp updatedAt
-    }
-    Account {
-      string id
-      string userId
-      string accountId
-      string providerId
-      string accessToken
-      string refreshToken
-      timestamp accessTokenExpiresAt
-      timestamp refreshTokenExpiresAt
-      string scope
-      string idToken
-      string password
-      timestamp createdAt
-      timestamp updatedAt
-    }
-    User ||--|{ Verification : ""
-    Verification {
-      string id
-      string identifier
-      string value
-      timestamp expiresAt
-      timestamp createdAt
-      timestamp updatedAt
-    }
-  `}
+<DatabaseTable
+  fields={[
+    {
+      name: "id",
+      type: "string",
+      description: "Unique identifier for each user",
+      isPrimaryKey: true,
+    },
+    {
+      name: "name",
+      type: "string",
+      description: "User's chosen display name",
+    },
+    {
+      name: "email",
+      type: "string",
+      description: "User's email address for communication and login",
+    },
+    {
+      name: "emailVerified",
+      type: "boolean",
+      description: "Whether the user's email is verified",
+    },
+    {
+      name: "image",
+      type: "string",
+      description: "User's image url",
+      isOptional: true,
+    },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the user account was created",
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "Timestamp of the last update to the user's information",
+    },
+  ]}
+/>
+</Tab>
+</Tabs>
+
+### Session -> Session
+
+<Tabs items={["Auth.js", "Better Auth"]}>
+<Tab value="Auth.js">
+<DatabaseTable
+  fields={[
+    {
+      name: "id",
+      type: "string",
+      description: "Unique identifier for each session",
+      isPrimaryKey: true,
+    },
+    {
+      name: "userId",
+      type: "string",
+      description: "The ID of the user",
+      isForeignKey: true,
+    },
+    {
+      name: "sessionToken",
+      type: "string",
+      description: "The unique session token",
+    },
+    {
+      name: "expires",
+      type: "Date",
+      description: "The time when the session expires",
+    },
+  ]}
+/>
+</Tab>
+<Tab value="Better Auth">
+<DatabaseTable
+  fields={[
+    {
+      name: "id",
+      type: "string",
+      description: "Unique identifier for each session",
+      isPrimaryKey: true,
+    },
+    {
+      name: "userId",
+      type: "string",
+      description: "The ID of the user",
+      isForeignKey: true,
+    },
+    {
+      name: "token",
+      type: "string",
+      description: "The unique session token",
+      isUnique: true,
+    },
+    {
+      name: "expiresAt",
+      type: "Date",
+      description: "The time when the session expires",
+    },
+    {
+      name: "ipAddress",
+      type: "string",
+      description: "The IP address of the device",
+      isOptional: true,
+    },
+    {
+      name: "userAgent",
+      type: "string",
+      description: "The user agent information of the device",
+      isOptional: true,
+    },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the session was created",
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "Timestamp of when the session was updated",
+    },
+  ]}
+/>
+</Tab>
+</Tabs>
+
+### Account -> Account
+
+<Tabs items={["Auth.js", "Better Auth"]}>
+<Tab value="Auth.js">
+<DatabaseTable
+  fields={[
+    {
+      name: "id",
+      type: "string",
+      description: "Unique identifier for each account",
+      isPrimaryKey: true,
+    },
+    {
+      name: "userId",
+      type: "string",
+      description: "The ID of the user",
+      isForeignKey: true,
+    },
+    {
+      name: "type",
+      type: "string",
+      description: "Type of the account (e.g. 'oauth', 'email', 'credentials')",
+    },
+    {
+      name: "provider",
+      type: "string",
+      description: "Provider identifier",
+    },
+    {
+      name: "providerAccountId",
+      type: "string",
+      description: "Account ID from the provider",
+    },
+    {
+      name: "refresh_token",
+      type: "string",
+      description: "The refresh token of the account. Returned by the provider",
+      isOptional: true,
+    },
+    {
+      name: "access_token",
+      type: "string",
+      description: "The access token of the account. Returned by the provider",
+      isOptional: true,
+    },
+    {
+      name: "expires_at",
+      type: "number",
+      description: "The time when the access token expires",
+      isOptional: true,
+    },
+    {
+      name: "token_type",
+      type: "string",
+      description: "Type of the token",
+      isOptional: true,
+    },
+    {
+      name: "scope",
+      type: "string",
+      description: "The scope of the account. Returned by the provider",
+      isOptional: true,
+    },
+    {
+      name: "id_token",
+      type: "string",
+      description: "The ID token returned from the provider",
+      isOptional: true,
+    },
+    {
+      name: "session_state",
+      type: "string",
+      description: "OAuth session state",
+      isOptional: true,
+    },
+  ]}
+/>
+</Tab>
+<Tab value="Better Auth">
+<DatabaseTable
+  fields={[
+    {
+      name: "id",
+      type: "string",
+      description: "Unique identifier for each account",
+      isPrimaryKey: true,
+    },
+    {
+      name: "userId",
+      type: "string",
+      description: "The ID of the user",
+      isForeignKey: true,
+    },
+    {
+      name: "accountId",
+      type: "string",
+      description:
+        "The ID of the account as provided by the SSO or equal to userId for credential accounts",
+    },
+    {
+      name: "providerId",
+      type: "string",
+      description: "The ID of the provider",
+    },
+    {
+      name: "accessToken",
+      type: "string",
+      description: "The access token of the account. Returned by the provider",
+      isOptional: true,
+    },
+    {
+      name: "refreshToken",
+      type: "string",
+      description: "The refresh token of the account. Returned by the provider",
+      isOptional: true,
+    },
+    {
+      name: "accessTokenExpiresAt",
+      type: "Date",
+      description: "The time when the access token expires",
+      isOptional: true,
+    },
+    {
+      name: "refreshTokenExpiresAt",
+      type: "Date",
+      description: "The time when the refresh token expires",
+      isOptional: true,
+    },
+    {
+      name: "scope",
+      type: "string",
+      description: "The scope of the account. Returned by the provider",
+      isOptional: true,
+    },
+    {
+      name: "idToken",
+      type: "string",
+      description: "The ID token returned from the provider",
+      isOptional: true,
+    },
+    {
+      name: "password",
+      type: "string",
+      description:
+        "The password of the account. Mainly used for email and password authentication",
+      isOptional: true,
+    },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the account was created",
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "Timestamp of when the account was updated",
+    },
+  ]}
+/>
+</Tab>
+</Tabs>
+
+### VerificationToken -> Verification
+
+<Tabs items={["Auth.js", "Better Auth"]}>
+<Tab value="Auth.js">
+<DatabaseTable
+  fields={[
+    {
+      name: "identifier",
+      type: "string",
+      description: "Identifier for the verification request",
+      isPrimaryKey: true,
+    },
+    {
+      name: "token",
+      type: "string",
+      description: "The verification token",
+      isPrimaryKey: true,
+    },
+    {
+      name: "expires",
+      type: "Date",
+      description: "The time when the verification token expires",
+    },
+  ]}
+/>
+</Tab>
+<Tab value="Better Auth">
+<DatabaseTable
+  fields={[
+    {
+      name: "id",
+      type: "string",
+      description: "Unique identifier for each verification",
+      isPrimaryKey: true,
+    },
+    {
+      name: "identifier",
+      type: "string",
+      description: "The identifier for the verification request",
+    },
+    {
+      name: "value",
+      type: "string",
+      description: "The value to be verified",
+    },
+    {
+      name: "expiresAt",
+      type: "Date",
+      description: "The time when the verification request expires",
+    },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the verification request was created",
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "Timestamp of when the verification request was updated",
+    },
+  ]}
 />
 </Tab>
 </Tabs>
@@ -425,6 +723,7 @@ Just like Auth.js has database models, Better Auth also has a core schema. In th
 ### Comparison
 
 Table: <strong className='underline italic'>User</strong>
+- `name`, `email`, and `emailVerified` are required in Better Auth, while optional in Auth.js
 - `emailVerified` uses a boolean in Better Auth, while Auth.js uses a timestamp
 - Better Auth includes `createdAt` and `updatedAt` timestamps
 
@@ -441,10 +740,12 @@ Table: <strong className='underline italic'>Account</strong>
 - Better Auth includes `accessTokenExpiresAt` and `refreshTokenExpiresAt` for token management
 - Better Auth includes `password` field to support built-in credential authentication
 - Better Auth does not have a `type` field as it's determined by the `providerId`
+- Better Auth removes `token_type` and `session_state` fields
 - Better Auth includes `createdAt` and `updatedAt` timestamps
 
 Table: <strong className='underline italic'>VerificationToken -> Verification</strong>
 - Better Auth uses `Verification` table instead of `VerificationToken`
+- Better Auth uses a single `id` primary key instead of composite primary key
 - Better Auth uses `value` instead of `token` to support various verification types
 - Better Auth uses `expiresAt` instead of `expires`
 - Better Auth includes `createdAt` and `updatedAt` timestamps
