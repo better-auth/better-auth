@@ -613,6 +613,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					}),
 					metadata: {
 						client: false,
+						allowedMediaTypes: [
+							"application/x-www-form-urlencoded",
+							"application/json",
+						],
 						openapi: {
 							description: "OAuth2 callback",
 							responses: {
