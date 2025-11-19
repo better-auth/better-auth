@@ -2,6 +2,7 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "../../api";
 import { authorizeEndpoint } from "./authorize";
 import type { OAuthOptions, Scope } from "./types";
+import { oauthQuery } from "./utils";
 
 export async function continueEndpoint(
 	ctx: GenericEndpointContext,
@@ -24,7 +25,7 @@ async function selected(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	const query = ctx.context.oauth.query;
+	const query = (await oauthQuery.get()).query;
 	ctx.headers?.set("accept", "application/json");
 	let prompts = query.get("prompt")?.split(" ");
 	const foundPrompt = prompts?.findIndex((v) => v === "select_account") ?? -1;
@@ -45,7 +46,7 @@ async function postLogin(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	const query = ctx.context.oauth.query;
+	const query = (await oauthQuery.get()).query;
 	ctx.headers?.set("accept", "application/json");
 	ctx.context.post_login = true;
 	ctx.query = Object.fromEntries(query);

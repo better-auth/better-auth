@@ -25,7 +25,7 @@ import { schema } from "./schema";
 import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
 import { userInfoEndpoint } from "./userinfo";
-import { getJwtPlugin } from "./utils";
+import { getJwtPlugin, oauthQuery } from "./utils";
 
 /**
  * oAuth 2.1 provider plugin for Better Auth.
@@ -172,7 +172,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		hooks: {
 			before: [
 				{
-					// Add oauth.query to additional data
+					// Add oauth_query to request state
 					matcher(ctx) {
 						return ctx.body?.oauth_query;
 					},
@@ -198,9 +198,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							});
 						}
 						queryParams.delete("exp");
-						ctx.context.oauth = {
+						await oauthQuery.set({
 							query: new URLSearchParams(queryParams),
-						};
+						});
 
 						// If path starts oauth2 authorize (ie /sign-in/social, /sign-in/oauth2), add to additional data body
 						if (
@@ -219,7 +219,6 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					// Should only capture when session cookie is set (ie after login)
 					matcher(ctx) {
 						return (
-							!!ctx.context?.oauth?.query &&
 							(ctx.path === "/sign-in/email" ||
 								ctx.path === "/sign-in/social" ||
 								ctx.path.startsWith("/oauth2/callback")) &&
@@ -243,7 +242,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 
 						// Continue with authorization request by using the initial prompt
 						// but clearing the login prompt cookie if forced login prompt
-						const query = ctx.context.oauth.query;
+						const query = (await oauthQuery.get()).query;
+						if (!query) return;
 						ctx.headers?.set("accept", "application/json");
 						let prompts = query.get("prompt")?.split(" ");
 						const foundPrompt = prompts?.findIndex((v) => v === "login") ?? -1;
