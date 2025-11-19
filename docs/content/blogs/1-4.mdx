@@ -1,0 +1,96 @@
+---
+title: "Better Auth 1.4"
+description: "Stateless Auth, Database Joins & Indexes, Additional State in OAuth Flows, Performance Improvements, SSO Domain Verification, and more!"
+date: 2025-11-21
+author:
+  name: "Bereket Engida"
+  avatar: "/avatars/beka.jpg"
+  twitter: "iambereket"
+image: "/release-og/1-4.png"
+tags: ["1.4", "stateless sessions", "SCIM", "database indexing", "database join", "SSO domain verification", "uuid"]
+---
+
+## Better Auth 1.4 Release
+
+We're excited to announce the release of Better Auth 1.4.
+This release includes several new features, performance improvements and several bug fixes.
+
+To upgrade, run:
+
+```package-install
+npm install better-auth@1.4
+```
+
+---
+
+## 🚀 Highlights
+
+### Stateless Auth
+
+The long awaited stateless auth is here! Omit the `database` option in your auth config
+to enable stateless session management without any database. 
+
+[👉 Read more about stateless auth](/docs/concepts/session-management#stateless-session-management)
+
+```ts
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    // No database configuration
+    socialProviders: {
+        google: {
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        },
+    },
+});
+```
+
+---
+
+### Database Joins
+
+Better-Auth now supports joins, improving over 50 endpoints by 2 to 3x in latency.
+
+To enable, simply set the `joins` flag to `true` under `experimental` in your auth config.
+Then, if you use Prisma, Drizzle, or Kysely with `PostgreSQL` / `MySQL` / `MSSQL` / `SQLite`,
+re-run migrations or schema generation to get the updated schema which supports joins. 
+
+[👉 Read more about database joins](/docs/concepts/database#experimental-joins)
+
+```ts
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    experimental: {
+        joins: true,
+    },
+});
+```
+
+---
+
+### Custom State for OAuth Flows
+
+You can now provide any additional state through the OAuth flow.
+
+[👉 Read more about custom state for OAuth flows](/docs/concepts/oauth#passing-additional-data-through-oauth-flow)
+
+```ts
+import { authClient } from "@/lib/auth-client";
+
+await authClient.signIn.social({
+    provider: "google",
+    additionalData: {
+        referralCode: "ABC123",
+        source: "landing-page",
+    },
+});
+
+```
+---
+
+A lot of refinements to make everything smoother, faster, and more reliable.
+👉 [Check the full changelog](https://github.com/better-auth/better-auth/releases/tag/v1.4.0)
+
+---
