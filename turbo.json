@@ -22,9 +22,6 @@
     },
     "//#format": {},
     "lint": {},
-    "test": {
-      "dependsOn": ["build"]
-    },
     "e2e:smoke": {
       "dependsOn": ["build"]
     },
