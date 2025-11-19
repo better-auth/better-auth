@@ -240,7 +240,6 @@ export const scim = (options?: SCIMOptions) => {
 					body: APIUserSchema,
 					metadata: {
 						isAction: false,
-						SERVER_ONLY: true,
 						openapi: {
 							summary: "Create SCIM user.",
 							description:
@@ -370,7 +369,6 @@ export const scim = (options?: SCIMOptions) => {
 					body: APIUserSchema,
 					metadata: {
 						isAction: false,
-						SERVER_ONLY: true,
 						openapi: {
 							summary: "Update SCIM user.",
 							description:
@@ -453,7 +451,6 @@ export const scim = (options?: SCIMOptions) => {
 						.optional(),
 					metadata: {
 						isAction: false,
-						SERVER_ONLY: true,
 						openapi: {
 							summary: "List SCIM users",
 							description:
@@ -541,7 +538,6 @@ export const scim = (options?: SCIMOptions) => {
 					method: "GET",
 					metadata: {
 						isAction: false,
-						SERVER_ONLY: true,
 						openapi: {
 							summary: "Get SCIM user details",
 							description:
@@ -607,7 +603,6 @@ export const scim = (options?: SCIMOptions) => {
 					}),
 					metadata: {
 						isAction: false,
-						SERVER_ONLY: true,
 						openapi: {
 							summary: "Patch SCIM user",
 							description: "Updates fields on a SCIM user record",
@@ -677,7 +672,6 @@ export const scim = (options?: SCIMOptions) => {
 					method: "DELETE",
 					metadata: {
 						isAction: false,
-						SERVER_ONLY: true,
 						openapi: {
 							summary: "Delete SCIM user",
 							description:
@@ -721,7 +715,6 @@ export const scim = (options?: SCIMOptions) => {
 					method: "GET",
 					metadata: {
 						isAction: false,
-						SERVER_ONLY: true,
 						openapi: {
 							summary: "SCIM Service Provider Configuration",
 							description:
@@ -773,7 +766,6 @@ export const scim = (options?: SCIMOptions) => {
 					method: "GET",
 					metadata: {
 						isAction: false,
-						SERVER_ONLY: true,
 						openapi: {
 							summary: "SCIM Service Provider Configuration Schemas",
 							description:
@@ -822,7 +814,6 @@ export const scim = (options?: SCIMOptions) => {
 					method: "GET",
 					metadata: {
 						isAction: false,
-						SERVER_ONLY: true,
 						openapi: {
 							summary: "SCIM a Service Provider Configuration Schema",
 							description:
@@ -867,7 +858,6 @@ export const scim = (options?: SCIMOptions) => {
 					method: "GET",
 					metadata: {
 						isAction: false,
-						SERVER_ONLY: true,
 						openapi: {
 							summary: "SCIM Service Provider Suppoted Resource Types",
 							description:
@@ -924,7 +914,6 @@ export const scim = (options?: SCIMOptions) => {
 					method: "GET",
 					metadata: {
 						isAction: false,
-						SERVER_ONLY: true,
 						openapi: {
 							summary: "SCIM Service Provider Supported Resource Type",
 							description:
