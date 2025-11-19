@@ -99,7 +99,7 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 					method,
 					async onSuccess(context) {
 						await options?.onSuccess?.(context);
-						if (!atomListeners || fetchOptions.disableSignal) return;
+						if (!atomListeners || options.disableSignal) return;
 						/**
 						 * We trigger listeners
 						 */
