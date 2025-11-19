@@ -26,6 +26,7 @@ import type {
 } from "../oidc-provider";
 import { oidcProvider } from "../oidc-provider";
 import { schema } from "../oidc-provider/schema";
+import { parsePrompt } from "../oidc-provider/utils/prompt";
 import { authorizeMCPOAuth } from "./authorize";
 
 interface MCPOptions {
@@ -160,12 +161,22 @@ export const mcp = (options: MCPOptions) => {
 							return;
 						}
 						const session =
-							await ctx.context.internalAdapter.findSession(sessionToken);
+							(await ctx.context.internalAdapter.findSession(sessionToken)) ||
+							ctx.context.newSession;
 						if (!session) {
 							return;
 						}
-						ctx.query = JSON.parse(cookie);
-						ctx.query!.prompt = "consent";
+						// Remove "login" from prompt since user just logged in
+						const promptSet = parsePrompt(String(ctx.query?.prompt));
+						if (promptSet.has("login")) {
+							const newPromptSet = new Set(promptSet);
+							newPromptSet.delete("login");
+							ctx.query = {
+								...ctx.query,
+								prompt: Array.from(newPromptSet).join(" "),
+							};
+						}
+
 						ctx.context.session = session;
 						const response = await authorizeMCPOAuth(ctx, opts);
 						return response;
@@ -243,6 +254,10 @@ export const mcp = (options: MCPOptions) => {
 					body: z.record(z.any(), z.any()),
 					metadata: {
 						isAction: false,
+						allowedMediaTypes: [
+							"application/x-www-form-urlencoded",
+							"application/json",
+						],
 					},
 				},
 				async (ctx) => {

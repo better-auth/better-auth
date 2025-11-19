@@ -692,7 +692,12 @@ export const refreshToken = createAuthEndpoint(
 				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 				refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
 			});
-			return ctx.json(tokens);
+			return ctx.json({
+				accessToken: tokens.accessToken,
+				refreshToken: tokens.refreshToken,
+				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+				refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+			});
 		} catch (error) {
 			throw new APIError("BAD_REQUEST", {
 				message: "Failed to refresh access token",
