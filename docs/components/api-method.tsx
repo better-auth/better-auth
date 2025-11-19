@@ -51,6 +51,7 @@ export const APIMethod = ({
 	path,
 	isServerOnly,
 	isClientOnly,
+	isExternalOnly,
 	method,
 	children,
 	noResult,
@@ -98,6 +99,10 @@ export const APIMethod = ({
 	 * @default false
 	 */
 	isClientOnly?: boolean;
+	/**
+	 * Wether the code example is meant for external consumers
+	 */
+	isExternalOnly?: boolean;
 	/**
 	 * The `ts` codeblock which describes the API method.
 	 * I recommend checking other parts of the Better-Auth docs which is using this component to get an idea of how to
@@ -170,6 +175,43 @@ export const APIMethod = ({
 			allowCopy={!isClientOnly}
 		/>
 	);
+
+	const serverTabContent = (
+		<>
+			{isClientOnly ? null : (
+				<Endpoint
+					method={method || "GET"}
+					path={path}
+					isServerOnly={isServerOnly ?? false}
+					className=""
+				/>
+			)}
+			{serverOnlyNote || note ? (
+				<Note>
+					{note && tsxifyBackticks(note)}
+					{serverOnlyNote ? (
+						<>
+							{note ? <br /> : null}
+							{tsxifyBackticks(serverOnlyNote)}
+						</>
+					) : null}
+				</Note>
+			) : null}
+			<div className={cn("relative w-full")}>
+				{serverCodeBlock}
+				{isClientOnly ? (
+					<div className="flex absolute inset-0 justify-center items-center w-full h-full rounded-lg border backdrop-brightness-50 backdrop-blur-xs border-border">
+						<span>This is a client-only endpoint</span>
+					</div>
+				) : null}
+			</div>
+			{!isClientOnly ? <TypeTable props={props} isServer /> : null}
+		</>
+	);
+
+	if (isExternalOnly) {
+		return serverTabContent;
+	}
 
 	let pathId = path.replaceAll("/", "-");
 
@@ -278,34 +320,7 @@ export const APIMethod = ({
 					{!isServerOnly ? <TypeTable props={props} isServer={false} /> : null}
 				</ApiMethodTabsContent>
 				<ApiMethodTabsContent value="server">
-					{isClientOnly ? null : (
-						<Endpoint
-							method={method || "GET"}
-							path={path}
-							isServerOnly={isServerOnly ?? false}
-							className=""
-						/>
-					)}
-					{serverOnlyNote || note ? (
-						<Note>
-							{note && tsxifyBackticks(note)}
-							{serverOnlyNote ? (
-								<>
-									{note ? <br /> : null}
-									{tsxifyBackticks(serverOnlyNote)}
-								</>
-							) : null}
-						</Note>
-					) : null}
-					<div className={cn("relative w-full")}>
-						{serverCodeBlock}
-						{isClientOnly ? (
-							<div className="flex absolute inset-0 justify-center items-center w-full h-full rounded-lg border backdrop-brightness-50 backdrop-blur-xs border-border">
-								<span>This is a client-only endpoint</span>
-							</div>
-						) : null}
-					</div>
-					{!isClientOnly ? <TypeTable props={props} isServer /> : null}
+					{serverTabContent}
 				</ApiMethodTabsContent>
 			</ApiMethodTabs>
 		</>

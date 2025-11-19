@@ -87,7 +87,7 @@ The following subset of the specification is currently supported:
 
 Get a list of available users in the database. This is restricted to list only users associated to the same provider and organization than your SCIM token.
 
-<APIMethod path="/scim/v2/Users" method="GET" requireBearerToken isServerOnly note="Returns the provisioned SCIM user details. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.4.1">
+<APIMethod path="/scim/v2/Users" method="GET" requireBearerToken isExternalOnly note="Returns the provisioned SCIM user details. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.4.1">
 ```ts
 type listSCIMUsers = {
     /**
@@ -102,7 +102,7 @@ type listSCIMUsers = {
 
 Get an user from the database. The user will be only returned if it belongs to the same provider and organization than the SCIM token.
 
-<APIMethod path="/scim/v2/Users/:userId" method="GET" forceAsParam requireBearerToken isServerOnly note="Returns the provisioned SCIM user details. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.4.1">
+<APIMethod path="/scim/v2/Users/:userId" method="GET" forceAsParam requireBearerToken isExternalOnly note="Returns the provisioned SCIM user details. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.4.1">
 ```ts
 type getSCIMUser = {
     /**
@@ -117,7 +117,7 @@ type getSCIMUser = {
 
 Provisions a new user to the database. The user will have an account associated to the same provider and will be member of the same org than the SCIM token.
 
-<APIMethod path="/scim/v2/Users" method="POST" requireBearerToken isServerOnly note="Provision a new user via SCIM. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.3">
+<APIMethod path="/scim/v2/Users" method="POST" requireBearerToken isExternalOnly note="Provision a new user via SCIM. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.3">
 ```ts
 type createSCIMUser = {
     /*
@@ -153,7 +153,7 @@ type createSCIMUser = {
 
 Replaces an existing user details in the database. This operation can only update users that belong to the same provider and organization than the SCIM token.
 
-<APIMethod path="/scim/v2/Users/:userId" method="PUT" requireBearerToken isServerOnly note="Updates an existing user via SCIM. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.3">
+<APIMethod path="/scim/v2/Users/:userId" method="PUT" requireBearerToken isExternalOnly note="Updates an existing user via SCIM. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.3">
 ```ts
 type updateSCIMUser = {
     /*
@@ -189,7 +189,7 @@ type updateSCIMUser = {
 
 Allows to apply a partial update to the user details. This operation can only update users that belong to the same provider and organization than the SCIM token.
 
-<APIMethod path="/scim/v2/Users/:userId" method="PATCH" requireBearerToken isServerOnly note="Partially updates a user resource. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.5.2">
+<APIMethod path="/scim/v2/Users/:userId" method="PATCH" requireBearerToken isExternalOnly note="Partially updates a user resource. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.5.2">
 ```ts
 type patchSCIMUser = {
     /**
@@ -208,7 +208,7 @@ type patchSCIMUser = {
 
 Completely deletes a user resource from the database. This operation can only delete users that belong to the same provider and organization than the SCIM token.
 
-<APIMethod path="/scim/v2/Users/:userId" method="DELETE" forceAsParam requireBearerToken isServerOnly note="Deletes an existing user resource. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.6">
+<APIMethod path="/scim/v2/Users/:userId" method="DELETE" forceAsParam requireBearerToken isExternalOnly note="Deletes an existing user resource. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.6">
 ```ts
 type deleteSCIMUser = {
     userId: string
@@ -220,7 +220,7 @@ type deleteSCIMUser = {
 
 Get SCIM metadata describing supported features of this server.
 
-<APIMethod path="/scim/v2/ServiceProviderConfig" method="GET" isServerOnly note="Standard SCIM metadata endpoint used by identity providers. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
+<APIMethod path="/scim/v2/ServiceProviderConfig" method="GET" isExternalOnly note="Standard SCIM metadata endpoint used by identity providers. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
 ```ts
 type getSCIMServiceProviderConfig = {
 }
@@ -231,7 +231,7 @@ type getSCIMServiceProviderConfig = {
 
 Get the list of supported SCIM schemas.
 
-<APIMethod path="/scim/v2/Schemas" method="GET" isServerOnly note="Standard SCIM metadata endpoint used by identity providers to acquire information about supported schemas. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
+<APIMethod path="/scim/v2/Schemas" method="GET" isExternalOnly note="Standard SCIM metadata endpoint used by identity providers to acquire information about supported schemas. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
 ```ts
 type getSCIMSchemas = {
 }
@@ -242,7 +242,7 @@ type getSCIMSchemas = {
 
 Get the details of a supported SCIM schema.
 
-<APIMethod path="/scim/v2/Schemas/:schemaId" method="GET" isServerOnly note="Standard SCIM metadata endpoint used by identity providers to acquire information about a given schema. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
+<APIMethod path="/scim/v2/Schemas/:schemaId" method="GET" isExternalOnly note="Standard SCIM metadata endpoint used by identity providers to acquire information about a given schema. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
 ```ts
 type getSCIMSchema = {
 }
@@ -253,7 +253,7 @@ type getSCIMSchema = {
 
 Get the list of supported SCIM types.
 
-<APIMethod path="/scim/v2/ResourceTypes" method="GET" isServerOnly note="Standard SCIM metadata endpoint used by identity providers to get a list of server supported types. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
+<APIMethod path="/scim/v2/ResourceTypes" method="GET" isExternalOnly note="Standard SCIM metadata endpoint used by identity providers to get a list of server supported types. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
 ```ts
 type getSCIMResourceTypes = {
 }
@@ -264,7 +264,7 @@ type getSCIMResourceTypes = {
 
 Get the details of a supported SCIM resource type.
 
-<APIMethod path="/scim/v2/ResourceTypes/:resourceTypeId" method="GET" isServerOnly note="Standard SCIM metadata endpoint used by identity providers to get a server supported type. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
+<APIMethod path="/scim/v2/ResourceTypes/:resourceTypeId" method="GET" isExternalOnly note="Standard SCIM metadata endpoint used by identity providers to get a server supported type. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
 ```ts
 type getSCIMResourceType = {
 }
@@ -297,11 +297,6 @@ type generateSCIMToken = {
 }
 ```
 </APIMethod>
-
-<Callout>
-**Note:** When the `organization` plugin is enabled, only users with an admin role (`adminRoles`) will be able to generate a SCIM token.
-In all other cases, you can use the `adminUserids` option to restrict who can generate a SCIM token
-</Callout>
 
 #### SCIM attribute mapping
 
