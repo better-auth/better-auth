@@ -2,8 +2,23 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import AccountSwitcher from "@/components/account-switch";
 import { auth } from "@/lib/auth";
+import { OAuthProvidersCard } from "./oauth-providers-card";
 import { OrganizationCard } from "./organization-card";
 import UserCard from "./user-card";
+
+interface OAuthApplication {
+	clientId: string;
+	clientSecret?: string;
+	type: string;
+	name: string;
+	icon?: string;
+	metadata?: string;
+	disabled?: boolean;
+	redirectUrls: string;
+	userId?: string;
+	createdAt: Date;
+	updatedAt: Date;
+}
 
 export default async function DashboardPage() {
 	const [session, activeSessions, deviceSessions, organization, subscriptions] =
@@ -27,6 +42,22 @@ export default async function DashboardPage() {
 			console.log(e);
 			throw redirect("/sign-in");
 		});
+
+	// Fetch OAuth providers for the current user
+	const oauthProviders =
+		(await (
+			await auth.$context
+		).adapter
+			.findMany<OAuthApplication>({
+				model: "oauthApplication",
+				where: [
+					{
+						field: "userId",
+						value: session?.user.id!,
+					},
+				],
+			})
+			.catch(() => [])) || [];
 	return (
 		<div className="w-full">
 			<div className="flex gap-4 flex-col">
@@ -43,6 +74,9 @@ export default async function DashboardPage() {
 				<OrganizationCard
 					session={JSON.parse(JSON.stringify(session))}
 					activeOrganization={JSON.parse(JSON.stringify(organization))}
+				/>
+				<OAuthProvidersCard
+					providers={JSON.parse(JSON.stringify(oauthProviders))}
 				/>
 			</div>
 		</div>
