@@ -9,6 +9,9 @@ catalogs:
     '@better-fetch/fetch':
       specifier: 1.1.18
       version: 1.1.18
+    better-call:
+      specifier: 1.0.28-beta.1
+      version: 1.0.28-beta.1
     tsdown:
       specifier: ^0.16.0
       version: 0.16.5
@@ -18,9 +21,6 @@ catalogs:
     vitest:
       specifier: 4.0.9
       version: 4.0.9
-
-overrides:
-  better-call: 1.0.28-beta.1
 
 patchedDependencies:
   msw:
@@ -950,7 +950,7 @@ importers:
         specifier: ^1.0.0
         version: 1.0.0
       better-call:
-        specifier: 1.0.28-beta.1
+        specifier: 'catalog:'
         version: 1.0.28-beta.1
       defu:
         specifier: ^6.1.4
@@ -1208,7 +1208,7 @@ importers:
         specifier: ^7.6.13
         version: 7.6.13
       better-call:
-        specifier: 1.0.28-beta.1
+        specifier: 'catalog:'
         version: 1.0.28-beta.1
       better-sqlite3:
         specifier: ^12.4.1
@@ -1232,7 +1232,7 @@ importers:
         specifier: 'catalog:'
         version: 1.1.18
       better-call:
-        specifier: 1.0.28-beta.1
+        specifier: 'catalog:'
         version: 1.0.28-beta.1
       zod:
         specifier: ^4.1.12
@@ -1284,7 +1284,7 @@ importers:
         specifier: ^13.1.2
         version: 13.1.2
       better-call:
-        specifier: 1.0.28-beta.1
+        specifier: 'catalog:'
         version: 1.0.28-beta.1
       nanostores:
         specifier: ^1.0.1
@@ -1331,7 +1331,7 @@ importers:
         specifier: workspace:*
         version: link:../better-auth
       better-call:
-        specifier: 1.0.28-beta.1
+        specifier: 'catalog:'
         version: 1.0.28-beta.1
       body-parser:
         specifier: ^2.2.0
@@ -1362,7 +1362,7 @@ importers:
         specifier: workspace:*
         version: link:../better-auth
       better-call:
-        specifier: 1.0.28-beta.1
+        specifier: 'catalog:'
         version: 1.0.28-beta.1
       stripe:
         specifier: ^19.1.0
