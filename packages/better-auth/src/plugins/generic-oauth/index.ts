@@ -662,13 +662,19 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							}&error_description=${ctx.query.error_description}`,
 						);
 					}
+					const providerId = ctx.params?.providerId;
+					if (!providerId) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Provider ID is required",
+						});
+					}
 					const provider = options.config.find(
-						(p) => p.providerId === ctx.params.providerId,
+						(p) => p.providerId === providerId,
 					);
 
 					if (!provider) {
 						throw new APIError("BAD_REQUEST", {
-							message: `No config found for provider ${ctx.params.providerId}`,
+							message: `No config found for provider ${providerId}`,
 						});
 					}
 					let tokens: OAuth2Tokens | undefined = undefined;
@@ -967,6 +973,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 				},
 				async (c: GenericEndpointContext) => {
 					const session = c.context.session;
+					if (!session) {
+						throw new APIError("UNAUTHORIZED", {
+							message: "Session is required",
+						});
+					}
 					const provider = options.config.find(
 						(p) => p.providerId === c.body.providerId,
 					);
