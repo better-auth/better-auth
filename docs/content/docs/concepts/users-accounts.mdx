@@ -31,15 +31,26 @@ export const auth = betterAuth({
         changeEmail: {
             enabled: true,
         }
+    },
+    emailVerification: {
+        // Required to send the verification email
+        sendVerificationEmail: async ({ user, url, token }) => {
+            await sendEmail({
+                to: user.email,
+            })
+        }
     }
 })
 ```
 
-By default, when a user requests to change their email, a verification email is sent to the **new** email address. The email is only updated after the user verifies the new email.
+By default, when a user requests to change their email, a verification email is sent to the **new** email address.
+The email is only updated after the user verifies the new email.
+
 
 #### Confirming with Current Email
 
-For added security, you can require users to confirm the change via their **current** email before the verification email is sent to the new address. To do this, provide the `sendChangeEmailConfirmation` function.
+For added security, you can require users to confirm the change via their **current** email before
+the verification email is sent to the new address. To do this, provide the `sendChangeEmailConfirmation` function.
 
 ```ts
 export const auth = betterAuth({
@@ -54,7 +65,8 @@ export const auth = betterAuth({
                 })
             }
         }
-    }
+    },
+    // ...
 })
 ```
 
