@@ -897,6 +897,101 @@ describe("oidc", async () => {
 			);
 		});
 	});
+
+	describe("end session endpoint", () => {
+		it("should return end_session_endpoint in metadata", async ({ expect }) => {
+			const response: any = await serverClient.$fetch(
+				"/.well-known/openid-configuration",
+				{
+					method: "GET",
+				},
+			);
+			const metadata = response.data || response;
+			expect(metadata.end_session_endpoint).toBe(
+				"http://localhost:3000/api/auth/oauth2/endsession",
+			);
+		});
+
+		it("should logout successfully without parameters", async ({ expect }) => {
+			const response = await serverClient.$fetch("/oauth2/endsession", {
+				method: "GET",
+			});
+			expect(response.data).toMatchObject({
+				success: true,
+				message: "Logout successful",
+			});
+		});
+
+		it("should logout with post_logout_redirect_uri and state", async ({
+			expect,
+		}) => {
+			let redirectLocation = "";
+			await serverClient.$fetch(
+				`/oauth2/endsession?client_id=${application.clientId}&post_logout_redirect_uri=${encodeURIComponent(application.redirectUrls[0]!)}&state=test-state`,
+				{
+					method: "GET",
+					onError(context) {
+						redirectLocation = context.response.headers.get("Location") || "";
+					},
+				},
+			);
+			expect(redirectLocation).toContain(application.redirectUrls[0]);
+			expect(redirectLocation).toContain("state=test-state");
+		});
+
+		it("should fail with invalid client_id", async ({ expect }) => {
+			const response = await serverClient.$fetch(
+				"/oauth2/endsession?client_id=invalid-client",
+				{
+					method: "GET",
+				},
+			);
+			expect(response.error).toMatchObject({
+				error: "invalid_client",
+				error_description: "Invalid client_id",
+			});
+		});
+
+		it("should fail with post_logout_redirect_uri without client_id", async ({
+			expect,
+		}) => {
+			const response = await serverClient.$fetch(
+				`/oauth2/endsession?post_logout_redirect_uri=${encodeURIComponent("http://localhost:3000/callback")}`,
+				{
+					method: "GET",
+				},
+			);
+			expect(response.error).toMatchObject({
+				error: "invalid_request",
+				error_description: expect.stringContaining("client_id is required"),
+			});
+		});
+
+		it("should fail with unregistered post_logout_redirect_uri", async ({
+			expect,
+		}) => {
+			const response = await serverClient.$fetch(
+				`/oauth2/endsession?client_id=${application.clientId}&post_logout_redirect_uri=${encodeURIComponent("http://evil.com/callback")}`,
+				{
+					method: "GET",
+				},
+			);
+			expect(response.error).toMatchObject({
+				error: "invalid_request",
+				error_description: expect.stringContaining("not registered"),
+			});
+		});
+
+		it("should support POST method", async ({ expect }) => {
+			const response = await serverClient.$fetch("/oauth2/endsession", {
+				method: "POST",
+			});
+			expect(response.data).toMatchObject({
+				success: true,
+				message: "Logout successful",
+			});
+		});
+	});
 });
 
 describe("oidc storage", async () => {
