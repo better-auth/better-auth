@@ -413,10 +413,11 @@ export const signInEmail = createAuthEndpoint(
 				message: BASE_ERROR_CODES.INVALID_EMAIL,
 			});
 		}
+		console.time("step 1: findUserByEmail");
 		const user = await ctx.context.internalAdapter.findUserByEmail(email, {
 			includeAccounts: true,
 		});
-
+		console.timeEnd("step 1: findUserByEmail");
 		if (!user) {
 			// Hash password to prevent timing attacks from revealing valid email addresses
 			// By hashing passwords for invalid emails, we ensure consistent response times
@@ -445,10 +446,12 @@ export const signInEmail = createAuthEndpoint(
 				message: BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
 			});
 		}
+		console.time("step 2: verifyPassword");
 		const validPassword = await ctx.context.password.verify({
 			hash: currentPassword,
 			password,
 		});
+		console.timeEnd("step 2: verifyPassword");
 		if (!validPassword) {
 			ctx.context.logger.error("Invalid password");
 			throw new APIError("UNAUTHORIZED", {
@@ -492,11 +495,13 @@ export const signInEmail = createAuthEndpoint(
 			});
 		}
 
+		console.time("step 3: createSession");
+
 		const session = await ctx.context.internalAdapter.createSession(
 			user.user.id,
 			ctx.body.rememberMe === false,
 		);
-
+		console.timeEnd("step 3: createSession");
 		if (!session) {
 			ctx.context.logger.error("Failed to create session");
 			throw new APIError("UNAUTHORIZED", {
