@@ -142,29 +142,35 @@ Most of the features of Better Auth will not work correctly.`,
 	checkEndpointConflicts(options, logger);
 	const cookies = getCookies(options);
 	const tables = getAuthTables(options);
-	const providers: OAuthProvider[] = (
-		Object.entries(
-			options.socialProviders || {},
-		) as unknown as Entries<SocialProviders>
-	)
-		.map(([key, config]) => {
-			if (config == null) {
-				return null;
-			}
-			if (config.enabled === false) {
-				return null;
-			}
-			if (!config.clientId) {
-				logger.warn(
-					`Social provider ${key} is missing clientId or clientSecret`,
-				);
-			}
-			const provider = socialProviders[key](config as never);
-			(provider as OAuthProvider).disableImplicitSignUp =
-				config.disableImplicitSignUp;
-			return provider;
-		})
-		.filter((x) => x !== null);
+	const providers = (
+		await Promise.all(
+			(
+				Object.entries(
+					options.socialProviders || {},
+				) as unknown as Entries<SocialProviders>
+			).map(async ([key, originalConfig]) => {
+				const config =
+					typeof originalConfig === "function"
+						? await originalConfig()
+						: originalConfig;
+				if (config == null) {
+					return null;
+				}
+				if (config.enabled === false) {
+					return null;
+				}
+				if (!config.clientId) {
+					logger.warn(
+						`Social provider ${key} is missing clientId or clientSecret`,
+					);
+				}
+				const provider = socialProviders[key](originalConfig as never);
+				(provider as OAuthProvider).disableImplicitSignUp =
+					config.disableImplicitSignUp;
+				return provider as OAuthProvider;
+			}),
+		)
+	).filter((x) => x !== null);
 
 	const generateIdFunc: AuthContext["generateId"] = ({ model, size }) => {
 		if (typeof (options.advanced as any)?.generateId === "function") {

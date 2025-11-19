@@ -85,14 +85,16 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 						const JWKS = createRemoteJWKSet(
 							new URL("https://www.googleapis.com/oauth2/v3/certs"),
 						);
+						const googleProvider =
+							typeof ctx.context.options.socialProviders?.google === "function"
+								? await ctx.context.options.socialProviders?.google()
+								: ctx.context.options.socialProviders?.google;
 						const { payload: verifiedPayload } = await jwtVerify(
 							idToken,
 							JWKS,
 							{
 								issuer: ["https://accounts.google.com", "accounts.google.com"],
-								audience:
-									options?.clientId ||
-									ctx.context.options.socialProviders?.google?.clientId,
+								audience: options?.clientId || googleProvider?.clientId,
 							},
 						);
 						payload = verifiedPayload;

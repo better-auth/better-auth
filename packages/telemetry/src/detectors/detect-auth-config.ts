@@ -39,25 +39,30 @@ export function getTelemetryAuthConfig(
 			revokeSessionsOnPasswordReset:
 				!!options.emailAndPassword?.revokeSessionsOnPasswordReset,
 		},
-		socialProviders: Object.keys(options.socialProviders || {}).map((p) => {
-			const provider =
-				options.socialProviders?.[p as keyof typeof options.socialProviders];
-			if (!provider) return {};
-			return {
-				id: p,
-				mapProfileToUser: !!provider.mapProfileToUser,
-				disableDefaultScope: !!provider.disableDefaultScope,
-				disableIdTokenSignIn: !!provider.disableIdTokenSignIn,
-				disableImplicitSignUp: provider.disableImplicitSignUp,
-				disableSignUp: provider.disableSignUp,
-				getUserInfo: !!provider.getUserInfo,
-				overrideUserInfoOnSignIn: !!provider.overrideUserInfoOnSignIn,
-				prompt: provider.prompt,
-				verifyIdToken: !!provider.verifyIdToken,
-				scope: provider.scope,
-				refreshAccessToken: !!provider.refreshAccessToken,
-			};
-		}),
+		socialProviders: Object.keys(options.socialProviders || {}).map(
+			async (key) => {
+				const p =
+					options.socialProviders?.[
+						key as keyof typeof options.socialProviders
+					];
+				if (!p) return {};
+				const provider = typeof p === "function" ? await p() : p;
+				return {
+					id: p,
+					mapProfileToUser: !!provider.mapProfileToUser,
+					disableDefaultScope: !!provider.disableDefaultScope,
+					disableIdTokenSignIn: !!provider.disableIdTokenSignIn,
+					disableImplicitSignUp: provider.disableImplicitSignUp,
+					disableSignUp: provider.disableSignUp,
+					getUserInfo: !!provider.getUserInfo,
+					overrideUserInfoOnSignIn: !!provider.overrideUserInfoOnSignIn,
+					prompt: provider.prompt,
+					verifyIdToken: !!provider.verifyIdToken,
+					scope: provider.scope,
+					refreshAccessToken: !!provider.refreshAccessToken,
+				};
+			},
+		),
 		plugins: options.plugins?.map((p) => p.id.toString()),
 		user: {
 			modelName: options.user?.modelName,

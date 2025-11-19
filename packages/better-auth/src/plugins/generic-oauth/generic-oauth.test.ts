@@ -4,6 +4,7 @@ import { betterFetch } from "@better-fetch/fetch";
 import { OAuth2Server } from "oauth2-mock-server";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createAuthClient } from "../../client";
+import { getAwaitableValue } from "../../context/helpers";
 import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { genericOAuth } from ".";
@@ -1015,7 +1016,10 @@ describe("oauth2", async () => {
 		});
 
 		const context = await auth.$context;
-		const provider = context.socialProviders.find((p) => p.id === "test-async");
+
+		const provider = await getAwaitableValue(context.socialProviders, {
+			value: "test-async",
+		});
 
 		const result = await provider!.getUserInfo({
 			accessToken: "test-access-token",

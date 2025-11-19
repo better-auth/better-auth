@@ -1,8 +1,9 @@
 import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
+import type { AwaitableFunction } from "../types";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
 
-export function createRefreshAccessTokenRequest({
+export async function createRefreshAccessTokenRequest({
 	refreshToken,
 	options,
 	authentication,
@@ -10,7 +11,7 @@ export function createRefreshAccessTokenRequest({
 	resource,
 }: {
 	refreshToken: string;
-	options: Partial<ProviderOptions>;
+	options: AwaitableFunction<Partial<ProviderOptions>>;
 	authentication?: ("basic" | "post") | undefined;
 	extraParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
@@ -20,6 +21,7 @@ export function createRefreshAccessTokenRequest({
 		"content-type": "application/x-www-form-urlencoded",
 		accept: "application/json",
 	};
+	options = typeof options === "function" ? await options() : options;
 
 	body.set("grant_type", "refresh_token");
 	body.set("refresh_token", refreshToken);
@@ -81,7 +83,7 @@ export async function refreshAccessToken({
 	authentication?: ("basic" | "post") | undefined;
 	extraParams?: Record<string, string> | undefined;
 }): Promise<OAuth2Tokens> {
-	const { body, headers } = createRefreshAccessTokenRequest({
+	const { body, headers } = await createRefreshAccessTokenRequest({
 		refreshToken,
 		options,
 		authentication,
