@@ -241,6 +241,26 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							c,
 							ctx,
 						);
+						let finalAuthUrl = c.authorizationUrl;
+						if (!finalAuthUrl && c.discoveryUrl) {
+							const discovery = await betterFetch<{
+								authorization_endpoint: string;
+								userinfo_endpoint: string;
+							}>(c.discoveryUrl, {
+								method: "GET",
+								headers: c.discoveryHeaders,
+							});
+							if (discovery.data) {
+								finalAuthUrl = discovery.data.authorization_endpoint;
+								finalUserInfoUrl =
+									finalUserInfoUrl ?? discovery.data.userinfo_endpoint;
+							}
+						}
+						if (!finalAuthUrl) {
+							throw new APIError("BAD_REQUEST", {
+								message: ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
+							});
+						}
 						return createAuthorizationURL({
 							id: c.providerId,
 							options: {
@@ -248,7 +268,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								clientSecret: clientSecret,
 								redirectURI: c.redirectURI,
 							},
-							authorizationEndpoint: c.authorizationUrl!,
+							authorizationEndpoint: finalAuthUrl,
 							state: data.state,
 							codeVerifier: c.pkce ? data.codeVerifier : undefined,
 							scopes: c.scopes || [],
@@ -584,6 +604,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					}),
 					metadata: {
 						client: false,
+						allowedMediaTypes: [
+							"application/x-www-form-urlencoded",
+							"application/json",
+						],
 						openapi: {
 							description: "OAuth2 callback",
 							responses: {
