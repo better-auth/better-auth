@@ -2,7 +2,11 @@ import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import type { Session, User } from "@better-auth/core/db";
 import type { InferFieldsFromOptions, InferFieldsFromPlugins } from "../db";
 import type { Auth } from "./auth";
-import type { StripEmptyObjects, UnionToIntersection, EnabledPluginsFromOptions } from "./helper";
+import type {
+	EnabledPluginsFromOptions,
+	StripEmptyObjects,
+	UnionToIntersection,
+} from "./helper";
 
 export type AdditionalUserFieldsInput<Options extends BetterAuthOptions> =
 	InferFieldsFromPlugins<Options, "user", "input"> &
@@ -43,16 +47,15 @@ export type InferSession<O extends BetterAuthOptions | Auth> =
 		>
 	>;
 
-export type InferPluginTypes<O extends BetterAuthOptions> =
-	UnionToIntersection<
-		EnabledPluginsFromOptions<O> extends infer EP
-			? EP extends BetterAuthPlugin
-				? EP["$Infer"] extends Record<string, any>
-					? EP["$Infer"]
-					: {}
+export type InferPluginTypes<O extends BetterAuthOptions> = UnionToIntersection<
+	EnabledPluginsFromOptions<O> extends infer EP
+		? EP extends BetterAuthPlugin
+			? EP["$Infer"] extends Record<string, any>
+				? EP["$Infer"]
 				: {}
 			: {}
-	>;
+		: {}
+>;
 
 export type {
 	Account,

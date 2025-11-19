@@ -73,7 +73,4 @@ export type EnabledPluginUnion<T> = T extends Array<infer P>
 	: never;
 
 export type EnabledPluginsFromOptions<O extends { plugins?: any[] } | any> =
-	O extends { plugins?: any[] }
-		? EnabledPluginUnion<O["plugins"]>
-		: never;
-
+	O extends { plugins?: any[] } ? EnabledPluginUnion<O["plugins"]> : never;
