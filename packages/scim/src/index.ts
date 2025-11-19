@@ -25,6 +25,7 @@ import {
 	SCIMUserResourceSchema,
 	SCIMUserResourceType,
 } from "./user-schemas";
+import { getResourceURL } from "./utils";
 
 const supportedSCIMSchemas = [SCIMUserResourceSchema];
 const supportedSCIMResourceTypes = [SCIMUserResourceType];
@@ -798,10 +799,10 @@ export const scim = (options?: SCIMOptions) => {
 								...s,
 								meta: {
 									...s.meta,
-									location: new URL(
+									location: getResourceURL(
 										s.meta.location,
 										ctx.context.baseURL,
-									).toString(),
+									),
 								},
 							};
 						}),
@@ -847,7 +848,10 @@ export const scim = (options?: SCIMOptions) => {
 						...schema,
 						meta: {
 							...schema.meta,
-							location: new URL(schema.meta.location, ctx.context.baseURL),
+							location: getResourceURL(
+								schema.meta.location,
+								ctx.context.baseURL,
+							),
 						},
 					});
 				},
@@ -898,10 +902,10 @@ export const scim = (options?: SCIMOptions) => {
 								...s,
 								meta: {
 									...s.meta,
-									location: new URL(
+									location: getResourceURL(
 										s.meta.location,
 										ctx.context.baseURL,
-									).toString(),
+									),
 								},
 							};
 						}),
@@ -947,7 +951,7 @@ export const scim = (options?: SCIMOptions) => {
 						...resourceType,
 						meta: {
 							...resourceType.meta,
-							location: new URL(
+							location: getResourceURL(
 								resourceType.meta.location,
 								ctx.context.baseURL,
 							),

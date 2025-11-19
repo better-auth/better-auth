@@ -553,7 +553,7 @@ describe("SCIM", () => {
 				      "description": "User Account",
 				      "id": "urn:ietf:params:scim:schemas:core:2.0:User",
 				      "meta": {
-				        "location": "http://localhost:3000/scim/v2/Schemas/urn:ietf:params:scim:schemas:core:2.0:User",
+				        "location": "http://localhost:3000/api/auth/scim/v2/Schemas/urn:ietf:params:scim:schemas:core:2.0:User",
 				        "resourceType": "Schema",
 				      },
 				      "name": "User",
@@ -703,7 +703,7 @@ describe("SCIM", () => {
 				  "description": "User Account",
 				  "id": "urn:ietf:params:scim:schemas:core:2.0:User",
 				  "meta": {
-				    "location": "http://localhost:3000/scim/v2/Schemas/urn:ietf:params:scim:schemas:core:2.0:User",
+				    "location": "http://localhost:3000/api/auth/scim/v2/Schemas/urn:ietf:params:scim:schemas:core:2.0:User",
 				    "resourceType": "Schema",
 				  },
 				  "name": "User",
@@ -750,7 +750,7 @@ describe("SCIM", () => {
 				      "endpoint": "/Users",
 				      "id": "User",
 				      "meta": {
-				        "location": "http://localhost:3000/scim/v2/ResourceTypes/User",
+				        "location": "http://localhost:3000/api/auth/scim/v2/ResourceTypes/User",
 				        "resourceType": "ResourceType",
 				      },
 				      "name": "User",
@@ -784,7 +784,7 @@ describe("SCIM", () => {
 				  "endpoint": "/Users",
 				  "id": "User",
 				  "meta": {
-				    "location": "http://localhost:3000/scim/v2/ResourceTypes/User",
+				    "location": "http://localhost:3000/api/auth/scim/v2/ResourceTypes/User",
 				    "resourceType": "ResourceType",
 				  },
 				  "name": "User",
@@ -835,7 +835,7 @@ describe("SCIM", () => {
 
 			expect(response.status).toBe(201);
 			expect(response.headers.get("location")).toStrictEqual(
-				expect.stringContaining("/scim/v2/Users/"),
+				expect.stringContaining("/api/auth/scim/v2/Users/"),
 			);
 
 			const user = await response.json();
@@ -853,7 +853,7 @@ describe("SCIM", () => {
 				meta: expect.objectContaining({
 					created: expect.any(String),
 					lastModified: expect.any(String),
-					location: expect.stringContaining("/scim/v2/Users/"),
+					location: expect.stringContaining("/api/auth/scim/v2/Users/"),
 					resourceType: "User",
 				}),
 				name: {
@@ -889,7 +889,7 @@ describe("SCIM", () => {
 
 			expect(response.status).toBe(201);
 			expect(response.headers.get("location")).toStrictEqual(
-				expect.stringContaining("/scim/v2/Users/"),
+				expect.stringContaining("/api/auth/scim/v2/Users/"),
 			);
 
 			const user = await response.json();
@@ -907,7 +907,7 @@ describe("SCIM", () => {
 				meta: expect.objectContaining({
 					created: expect.any(String),
 					lastModified: expect.any(String),
-					location: expect.stringContaining("/scim/v2/Users/"),
+					location: expect.stringContaining("/api/auth/scim/v2/Users/"),
 					resourceType: "User",
 				}),
 				name: {
@@ -948,7 +948,7 @@ describe("SCIM", () => {
 				meta: expect.objectContaining({
 					created: expect.any(Date),
 					lastModified: expect.any(Date),
-					location: expect.stringContaining("/scim/v2/Users/"),
+					location: expect.stringContaining("/api/auth/scim/v2/Users/"),
 					resourceType: "User",
 				}),
 				name: {
@@ -992,7 +992,7 @@ describe("SCIM", () => {
 				meta: expect.objectContaining({
 					created: expect.any(Date),
 					lastModified: expect.any(Date),
-					location: expect.stringContaining("/scim/v2/Users/"),
+					location: expect.stringContaining("/api/auth/scim/v2/Users/"),
 					resourceType: "User",
 				}),
 				name: {
@@ -1035,7 +1035,7 @@ describe("SCIM", () => {
 				meta: expect.objectContaining({
 					created: expect.any(Date),
 					lastModified: expect.any(Date),
-					location: expect.stringContaining("/scim/v2/Users/"),
+					location: expect.stringContaining("/api/auth/scim/v2/Users/"),
 					resourceType: "User",
 				}),
 				name: {
@@ -1082,7 +1082,7 @@ describe("SCIM", () => {
 				meta: expect.objectContaining({
 					created: expect.any(Date),
 					lastModified: expect.any(Date),
-					location: expect.stringContaining("/scim/v2/Users/"),
+					location: expect.stringContaining("/api/auth/scim/v2/Users/"),
 					resourceType: "User",
 				}),
 				name: {
@@ -1129,7 +1129,7 @@ describe("SCIM", () => {
 				meta: expect.objectContaining({
 					created: expect.any(Date),
 					lastModified: expect.any(Date),
-					location: expect.stringContaining("/scim/v2/Users/"),
+					location: expect.stringContaining("/api/auth/scim/v2/Users/"),
 					resourceType: "User",
 				}),
 				name: {
@@ -1240,7 +1240,7 @@ describe("SCIM", () => {
 				meta: expect.objectContaining({
 					created: expect.any(Date),
 					lastModified: expect.any(Date),
-					location: expect.stringContaining("/scim/v2/Users/"),
+					location: expect.stringContaining("/api/auth/scim/v2/Users/"),
 					resourceType: "User",
 				}),
 				name: {
@@ -1373,7 +1373,7 @@ describe("SCIM", () => {
 				meta: expect.objectContaining({
 					created: expect.any(Date),
 					lastModified: expect.any(Date),
-					location: expect.stringContaining("/scim/v2/Users/"),
+					location: expect.stringContaining("/api/auth/scim/v2/Users/"),
 					resourceType: "User",
 				}),
 				name: {
