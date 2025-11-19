@@ -24,6 +24,7 @@ import { setSessionCookie } from "../../cookies";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState, parseState } from "../../oauth2/state";
 import type { User } from "../../types";
+import { oauthQuery } from "../oauth-provider/utils";
 
 /**
  * Configuration interface for generic OAuth providers.
@@ -657,7 +658,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						link,
 					} = parsedState;
 					const code = ctx.query.code;
-					if (query) ctx.context.oauth.query = new URLSearchParams(query);
+					if (query)
+						oauthQuery.set({
+							query: new URLSearchParams(query),
+						});
 
 					function redirectOnError(error: string) {
 						const defaultErrorURL =
