@@ -2,7 +2,6 @@ import type { OAuth2Tokens, OAuth2UserInfo } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
 import type { BaseOAuthProviderOptions, GenericOAuthConfig } from "../index";
 
-
 export interface KeycloakOptions extends BaseOAuthProviderOptions {
 	/**
 	 * Keycloak issuer URL (includes realm, e.g., https://my-domain/realms/MyRealm)
@@ -95,4 +94,3 @@ export function keycloak(options: KeycloakOptions): GenericOAuthConfig {
 		getUserInfo,
 	};
 }
-

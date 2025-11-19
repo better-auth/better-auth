@@ -2,9 +2,7 @@ import type { OAuth2Tokens, OAuth2UserInfo } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
 import type { BaseOAuthProviderOptions, GenericOAuthConfig } from "../index";
 
-
-export interface SlackOptions extends BaseOAuthProviderOptions {
-}
+export interface SlackOptions extends BaseOAuthProviderOptions {}
 
 interface SlackProfile {
 	sub: string;
@@ -88,4 +86,3 @@ export function slack(options: SlackOptions): GenericOAuthConfig {
 		getUserInfo,
 	};
 }
-

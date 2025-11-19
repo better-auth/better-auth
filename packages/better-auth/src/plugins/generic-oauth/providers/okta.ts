@@ -2,7 +2,6 @@ import type { OAuth2Tokens, OAuth2UserInfo } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
 import type { BaseOAuthProviderOptions, GenericOAuthConfig } from "../index";
 
-
 export interface OktaOptions extends BaseOAuthProviderOptions {
 	/**
 	 * Okta issuer URL (e.g., https://dev-xxxxx.okta.com/oauth2/default)
@@ -92,4 +91,3 @@ export function okta(options: OktaOptions): GenericOAuthConfig {
 		getUserInfo,
 	};
 }
-

@@ -2,7 +2,6 @@ import type { OAuth2Tokens, OAuth2UserInfo } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
 import type { BaseOAuthProviderOptions, GenericOAuthConfig } from "../index";
 
-
 export interface MicrosoftEntraIdOptions extends BaseOAuthProviderOptions {
 	/**
 	 * Microsoft Entra ID tenant ID.
@@ -72,12 +71,15 @@ export function microsoftEntraId(
 
 		return {
 			id: profile.sub,
-			name: profile.name ?? (`${profile.given_name ?? ""} ${profile.family_name ?? ""}`.trim() || undefined),
+			name:
+				profile.name ??
+				(`${profile.given_name ?? ""} ${profile.family_name ?? ""}`.trim() ||
+					undefined),
 			email: profile.email ?? profile.preferred_username ?? undefined,
 			image: profile.picture,
 			// Note: Microsoft Entra ID does NOT include email_verified claim by default.
 			// It must be configured as an optional claim in the app registration.
-			// We default to false when not provided 
+			// We default to false when not provided
 			// The built-in provider hardcodes this to true, assuming Microsoft accounts are verified.
 			emailVerified: profile.email_verified ?? false,
 		};
@@ -99,4 +101,3 @@ export function microsoftEntraId(
 		getUserInfo,
 	};
 }
-

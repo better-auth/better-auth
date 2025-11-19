@@ -218,8 +218,8 @@ export const microsoft = (options: MicrosoftOptions) => {
 				user.email_verified !== undefined
 					? user.email_verified
 					: user.email &&
-						(user.verified_primary_email?.includes(user.email) ||
-							user.verified_secondary_email?.includes(user.email))
+							(user.verified_primary_email?.includes(user.email) ||
+								user.verified_secondary_email?.includes(user.email))
 						? true
 						: false;
 			return {

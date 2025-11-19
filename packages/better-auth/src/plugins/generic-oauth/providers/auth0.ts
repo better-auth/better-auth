@@ -2,7 +2,6 @@ import type { OAuth2Tokens, OAuth2UserInfo } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
 import type { BaseOAuthProviderOptions, GenericOAuthConfig } from "../index";
 
-
 export interface Auth0Options extends BaseOAuthProviderOptions {
 	/**
 	 * Auth0 domain (e.g., dev-xxx.eu.auth0.com)
@@ -92,4 +91,3 @@ export function auth0(options: Auth0Options): GenericOAuthConfig {
 		getUserInfo,
 	};
 }
-

@@ -23,8 +23,11 @@
  * ```
  */
 
-export { type OktaOptions, okta } from "./okta";
 export { type Auth0Options, auth0 } from "./auth0";
-export { type MicrosoftEntraIdOptions, microsoftEntraId } from "./microsoft-entra-id";
-export { type SlackOptions, slack } from "./slack";
 export { type KeycloakOptions, keycloak } from "./keycloak";
+export {
+	type MicrosoftEntraIdOptions,
+	microsoftEntraId,
+} from "./microsoft-entra-id";
+export { type OktaOptions, okta } from "./okta";
+export { type SlackOptions, slack } from "./slack";

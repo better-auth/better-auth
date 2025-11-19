@@ -8,11 +8,11 @@ import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { genericOAuth } from ".";
 import { genericOAuthClient } from "./client";
-import { okta } from "./providers/okta";
 import { auth0 } from "./providers/auth0";
-import { microsoftEntraId } from "./providers/microsoft-entra-id";
-import { slack } from "./providers/slack";
 import { keycloak } from "./providers/keycloak";
+import { microsoftEntraId } from "./providers/microsoft-entra-id";
+import { okta } from "./providers/okta";
+import { slack } from "./providers/slack";
 
 describe("oauth2", async () => {
 	const providerId = "test";
@@ -1004,7 +1004,6 @@ describe("oauth2", async () => {
 		expect(result?.user).toHaveProperty("customField", "async-custom-data");
 	});
 
-
 	describe("Okta Provider Helper", () => {
 		it("should return correct GenericOAuthConfig", () => {
 			const oktaConfig = okta({
@@ -1191,8 +1190,12 @@ describe("oauth2", async () => {
 			expect(slackConfig.authorizationUrl).toBe(
 				"https://slack.com/openid/connect/authorize",
 			);
-			expect(slackConfig.tokenUrl).toBe("https://slack.com/api/openid.connect.token");
-			expect(slackConfig.userInfoUrl).toBe("https://slack.com/api/openid.connect.userInfo");
+			expect(slackConfig.tokenUrl).toBe(
+				"https://slack.com/api/openid.connect.token",
+			);
+			expect(slackConfig.userInfoUrl).toBe(
+				"https://slack.com/api/openid.connect.userInfo",
+			);
 			expect(slackConfig.scopes).toEqual(["openid", "profile", "email"]);
 			expect(slackConfig.clientId).toBe("slack-client-id");
 			expect(slackConfig.clientSecret).toBe("slack-client-secret");

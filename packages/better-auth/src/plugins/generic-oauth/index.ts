@@ -1,4 +1,5 @@
 import type {
+	AuthContext,
 	BetterAuthPlugin,
 	GenericEndpointContext,
 } from "@better-auth/core";
@@ -233,8 +234,7 @@ async function getUserInfo(
 		},
 	});
 	return {
-		// @ts-expect-error sub is optional in the type
-		id: userInfo.data?.sub,
+		id: userInfo.data?.sub ?? "",
 		emailVerified: userInfo.data?.email_verified ?? false,
 		email: userInfo.data?.email,
 		image: userInfo.data?.picture,
@@ -253,13 +253,20 @@ const ERROR_CODES = defineErrorCodes({
 export const genericOAuth = (options: GenericOAuthOptions) => {
 	return {
 		id: "generic-oauth",
-		init: (ctx) => {
+		init: (ctx: AuthContext) => {
 			const genericProviders = options.config.map((c) => {
 				let finalUserInfoUrl = c.userInfoUrl;
 				return {
 					id: c.providerId,
 					name: c.providerId,
-					async createAuthorizationURL(data) {
+					async createAuthorizationURL(data: {
+						state: string;
+						codeVerifier: string;
+						scopes?: string[] | undefined;
+						redirectURI: string;
+						display?: string | undefined;
+						loginHint?: string | undefined;
+					}) {
 						let finalAuthUrl = c.authorizationUrl;
 						if (!finalAuthUrl && c.discoveryUrl) {
 							const discovery = await betterFetch<{
@@ -294,7 +301,12 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							redirectURI: `${ctx.baseURL}/oauth2/callback/${c.providerId}`,
 						});
 					},
-					async validateAuthorizationCode(data) {
+					async validateAuthorizationCode(data: {
+						code: string;
+						redirectURI: string;
+						codeVerifier?: string | undefined;
+						deviceId?: string | undefined;
+					}) {
 						let finalTokenUrl = c.tokenUrl;
 						if (c.discoveryUrl) {
 							const discovery = await betterFetch<{
@@ -358,7 +370,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							tokenEndpoint: finalTokenUrl,
 						});
 					},
-					async getUserInfo(tokens) {
+					async getUserInfo(tokens: OAuth2Tokens) {
 						const userInfo = c.getUserInfo
 							? await c.getUserInfo(tokens)
 							: await getUserInfo(tokens, finalUserInfoUrl);
@@ -485,7 +497,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						},
 					},
 				},
-				async (ctx) => {
+				async (ctx: GenericEndpointContext) => {
 					const { providerId } = ctx.body;
 					const config = options.config.find(
 						(c) => c.providerId === providerId,
@@ -639,7 +651,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						},
 					},
 				},
-				async (ctx) => {
+				async (ctx: GenericEndpointContext) => {
 					const defaultErrorURL =
 						ctx.context.options.onAPIError?.errorURL ||
 						`${ctx.context.baseURL}/error`;
@@ -953,7 +965,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						},
 					},
 				},
-				async (c) => {
+				async (c: GenericEndpointContext) => {
 					const session = c.context.session;
 					const provider = options.config.find(
 						(p) => p.providerId === c.body.providerId,
