@@ -8,6 +8,7 @@ import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { genericOAuth } from ".";
 import { genericOAuthClient } from "./client";
+import { github } from "./providers/github";
 
 describe("oauth2", async () => {
 	const providerId = "test";
@@ -997,5 +998,67 @@ describe("oauth2", async () => {
 		});
 
 		expect(result?.user).toHaveProperty("customField", "async-custom-data");
+	});
+
+	describe("GitHub Provider Helper", () => {
+		it("should return correct GenericOAuthConfig", () => {
+			const githubConfig = github({
+				clientId: "github-client-id",
+				clientSecret: "github-client-secret",
+			});
+
+			expect(githubConfig.providerId).toBe("github");
+			expect(githubConfig.authorizationUrl).toBe(
+				"https://github.com/login/oauth/authorize",
+			);
+			expect(githubConfig.tokenUrl).toBe(
+				"https://github.com/login/oauth/access_token",
+			);
+			expect(githubConfig.userInfoUrl).toBe("https://api.github.com/user");
+			expect(githubConfig.scopes).toEqual(["read:user", "user:email"]);
+			expect(githubConfig.clientId).toBe("github-client-id");
+			expect(githubConfig.clientSecret).toBe("github-client-secret");
+			expect(githubConfig.getUserInfo).toBeDefined();
+			expect(typeof githubConfig.getUserInfo).toBe("function");
+		});
+
+		it("should allow overriding scopes", () => {
+			const githubConfig = github({
+				clientId: "github-client-id",
+				clientSecret: "github-client-secret",
+				scopes: ["read:user"],
+			});
+
+			expect(githubConfig.scopes).toEqual(["read:user"]);
+		});
+
+		it("should allow overriding other options", () => {
+			const githubConfig = github({
+				clientId: "github-client-id",
+				clientSecret: "github-client-secret",
+				pkce: true,
+				disableImplicitSignUp: true,
+			});
+
+			expect(githubConfig.pkce).toBe(true);
+			expect(githubConfig.disableImplicitSignUp).toBe(true);
+		});
+	});
+
+	it("should integrate github provider helper with genericOAuth", async () => {
+		const { auth: testAuth } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						github({
+							clientId: "github-client-id",
+							clientSecret: "github-client-secret",
+						}),
+					],
+				}),
+			],
+		});
+
+		expect(testAuth).toBeDefined();
 	});
 });

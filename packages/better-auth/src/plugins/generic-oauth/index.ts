@@ -25,6 +25,8 @@ import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState, parseState } from "../../oauth2/state";
 import type { User } from "../../types";
 
+export * from "./providers";
+
 /**
  * Configuration interface for generic OAuth providers.
  */
