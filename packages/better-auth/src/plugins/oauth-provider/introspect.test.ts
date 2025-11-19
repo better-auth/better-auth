@@ -158,20 +158,36 @@ describe("oauth introspect", async () => {
 
 	it("should fail unauthenticated request - no client_id or client_secret", async () => {
 		const tokens = await getTokens();
-		const introspection = await client.oauth2.introspect({
-			token: tokens.data?.access_token!,
-		});
+		const introspection = await client.oauth2.introspect(
+			{
+				token: tokens.data?.access_token!,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(introspection.error?.status).toBe(401);
 	});
 
 	it("should pass with token_type_hint access_token and sent jwt access_token", async () => {
 		const tokens = await getTokens(undefined, validAudience);
-		const introspection = await client.oauth2.introspect({
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-			token: tokens.data?.access_token!,
-			token_type_hint: "access_token",
-		});
+		const introspection = await client.oauth2.introspect(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.access_token!,
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(introspection.data).toMatchObject({
 			active: true,
 			client_id: oauthClient?.client_id,
@@ -187,12 +203,20 @@ describe("oauth introspect", async () => {
 
 	it("should pass with token_type_hint access_token and sent opaque access_token", async () => {
 		const tokens = await getTokens();
-		const introspection = await client.oauth2.introspect({
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-			token: tokens.data?.access_token!,
-			token_type_hint: "access_token",
-		});
+		const introspection = await client.oauth2.introspect(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.access_token!,
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(introspection.data).toMatchObject({
 			active: true,
 			client_id: oauthClient?.client_id,
@@ -207,23 +231,39 @@ describe("oauth introspect", async () => {
 
 	it("should fail with token_type_hint access_token and sent refresh_token", async () => {
 		const tokens = await getTokens();
-		const introspection = await client.oauth2.introspect({
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-			token: tokens.data?.refresh_token!,
-			token_type_hint: "access_token",
-		});
+		const introspection = await client.oauth2.introspect(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.refresh_token!,
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(introspection.data?.active).toBeFalsy();
 	});
 
 	it("should pass with token_type_hint refresh_token and sent refresh_token", async () => {
 		const tokens = await getTokens();
-		const introspection = await client.oauth2.introspect({
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-			token: tokens.data?.refresh_token!,
-			token_type_hint: "refresh_token",
-		});
+		const introspection = await client.oauth2.introspect(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.refresh_token!,
+				token_type_hint: "refresh_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(introspection.data).toMatchObject({
 			active: true,
 			client_id: oauthClient?.client_id,
@@ -238,22 +278,38 @@ describe("oauth introspect", async () => {
 
 	it("should fail with token_type_hint refresh_token and sent access_token", async () => {
 		const tokens = await getTokens();
-		const introspection = await client.oauth2.introspect({
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-			token: tokens.data?.access_token!,
-			token_type_hint: "refresh_token",
-		});
+		const introspection = await client.oauth2.introspect(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.access_token!,
+				token_type_hint: "refresh_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(introspection.data?.active).toBeFalsy();
 	});
 
 	it("should pass without token_type_hint and sent jwt access_token", async () => {
 		const tokens = await getTokens(undefined, validAudience);
-		const introspection = await client.oauth2.introspect({
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-			token: tokens.data?.access_token!,
-		});
+		const introspection = await client.oauth2.introspect(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.access_token!,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(introspection.data).toMatchObject({
 			active: true,
 			client_id: oauthClient?.client_id,
@@ -268,11 +324,19 @@ describe("oauth introspect", async () => {
 
 	it("should pass without token_type_hint and sent opaque access_token", async () => {
 		const tokens = await getTokens();
-		const introspection = await client.oauth2.introspect({
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-			token: tokens.data?.access_token!,
-		});
+		const introspection = await client.oauth2.introspect(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.access_token!,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(introspection.data).toMatchObject({
 			active: true,
 			client_id: oauthClient?.client_id,
@@ -287,11 +351,19 @@ describe("oauth introspect", async () => {
 
 	it("should pass without token_type_hint and sent refresh_token", async () => {
 		const tokens = await getTokens();
-		const introspection = await client.oauth2.introspect({
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-			token: tokens.data?.refresh_token!,
-		});
+		const introspection = await client.oauth2.introspect(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.refresh_token!,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(introspection.data).toMatchObject({
 			active: true,
 			client_id: oauthClient?.client_id,
@@ -312,12 +384,20 @@ describe("oauth introspect", async () => {
 		});
 		expect(signOut.success).toBe(true);
 
-		const introspection = await client.oauth2.introspect({
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-			token: tokens.data?.access_token!,
-			token_type_hint: "access_token",
-		});
+		const introspection = await client.oauth2.introspect(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.access_token!,
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(introspection.data).toMatchObject({
 			active: true,
 			client_id: oauthClient?.client_id,
@@ -338,12 +418,20 @@ describe("oauth introspect", async () => {
 		});
 		expect(signOut.success).toBe(true);
 
-		const introspection = await client.oauth2.introspect({
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-			token: tokens.data?.access_token!,
-			token_type_hint: "access_token",
-		});
+		const introspection = await client.oauth2.introspect(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.access_token!,
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(introspection.data).toMatchObject({
 			active: true,
 			client_id: oauthClient?.client_id,
@@ -365,12 +453,20 @@ describe("oauth introspect", async () => {
 		});
 		expect(signOut.success).toBe(true);
 
-		const introspection = await client.oauth2.introspect({
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-			token: tokens.data?.refresh_token!,
-			token_type_hint: "refresh_token",
-		});
+		const introspection = await client.oauth2.introspect(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.refresh_token!,
+				token_type_hint: "refresh_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(introspection.data).toMatchObject({
 			active: true,
 			client_id: oauthClient?.client_id,
@@ -491,21 +587,37 @@ describe("oauth introspect - config", async () => {
 				scopes: testScopes,
 			},
 		});
-		const tokens = await client.oauth2.token({
-			grant_type: "client_credentials",
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-			scope: testScopes.join(" "),
-			redirect_uri: redirectUri,
-		});
+		const tokens = await client.oauth2.token(
+			{
+				grant_type: "client_credentials",
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				scope: testScopes.join(" "),
+				redirect_uri: redirectUri,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(tokens.data?.access_token?.startsWith(prefix)).toBeTruthy();
 
-		const introspection = await client.oauth2.introspect({
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-			token: tokens.data?.access_token ?? "",
-			token_type_hint: "access_token",
-		});
+		const introspection = await client.oauth2.introspect(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.access_token ?? "",
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(introspection.data).toMatchObject({
 			active: true,
 			client_id: oauthClient?.client_id,
@@ -539,15 +651,23 @@ describe("oauth introspect - config", async () => {
 			},
 		});
 		const url = new URL(callbackRedirectUrl);
-		const tokens = await client.oauth2.token({
-			grant_type: "authorization_code",
-			code: url.searchParams.get("code") ?? undefined,
-			code_verifier: codeVerifier,
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-			scope: testScopes.join(" "),
-			redirect_uri: redirectUri,
-		});
+		const tokens = await client.oauth2.token(
+			{
+				grant_type: "authorization_code",
+				code: url.searchParams.get("code") ?? undefined,
+				code_verifier: codeVerifier,
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				scope: testScopes.join(" "),
+				redirect_uri: redirectUri,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		if ("refresh_token" in (tokens.data ?? {})) {
 			expect(
 				(tokens.data as { refresh_token?: string }).refresh_token?.startsWith(
@@ -558,13 +678,21 @@ describe("oauth introspect - config", async () => {
 			expect.unreachable();
 		}
 
-		const introspection = await client.oauth2.introspect({
-			client_id: oauthClient?.client_id,
-			client_secret: oauthClient?.client_secret,
-			// @ts-expect-error refresh token sent
-			token: tokens.data?.refresh_token,
-			token_type_hint: "refresh_token",
-		});
+		const introspection = await client.oauth2.introspect(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				// @ts-expect-error refresh token sent
+				token: tokens.data?.refresh_token,
+				token_type_hint: "refresh_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(introspection.data).toMatchObject({
 			active: true,
 			client_id: oauthClient?.client_id,
