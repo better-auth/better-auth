@@ -1,3 +1,5 @@
+import { SCIMUserResourceSchema } from "./user-schemas";
+
 export type DBFilter = {
 	field: string;
 	value: string | string[];
@@ -44,14 +46,22 @@ export const parseSCIMUserFilter = (filter: string) => {
 
 	const filters: DBFilter[] = [];
 	const targetAttribute = SCIMUserAttributes[attribute];
+	const resourceAttribute = SCIMUserResourceSchema.attributes.find(
+		(attr) => attr.name === attribute,
+	);
 
-	if (!targetAttribute) {
+	if (!targetAttribute || !resourceAttribute) {
 		throw new SCIMParseError(`The attribute "${attribute}" is not supported`);
+	}
+
+	let finalValue = value.replaceAll('"', "");
+	if (!resourceAttribute.caseExact) {
+		finalValue = finalValue.toLowerCase();
 	}
 
 	filters.push({
 		field: targetAttribute,
-		value: value.replaceAll('"', ""),
+		value: finalValue,
 		operator,
 	});
 

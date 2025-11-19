@@ -17,6 +17,10 @@ const identity = (user: User, op: Operation) => {
 	return op.value;
 };
 
+const lowerCase = (user: User, op: Operation) => {
+	return op.value.toLowerCase();
+};
+
 const givenName = (user: User, op: Operation) => {
 	const familyName = user.name.split(" ").slice(1).join(" ").trim();
 	const givenName = op.value;
@@ -51,7 +55,7 @@ const userPatchMappings: Record<string, Mapping> = {
 		target: "accountId",
 		map: identity,
 	},
-	"/userName": { resource: "user", target: "email", map: identity },
+	"/userName": { resource: "user", target: "email", map: lowerCase },
 };
 
 export const buildUserPatch = (user: User, operations: Operation[]) => {

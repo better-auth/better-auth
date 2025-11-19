@@ -1,7 +1,7 @@
 import * as z from "zod";
 
 export const APIUserSchema = z.object({
-	userName: z.string(),
+	userName: z.string().lowercase(),
 	externalId: z.string().optional(),
 	name: z
 		.object({
@@ -85,7 +85,7 @@ export const SCIMUserResourceSchema = {
 			description:
 				"Unique identifier for the User, typically used by the user to directly authenticate to the service provider",
 			required: true,
-			caseExact: true,
+			caseExact: false,
 			mutability: "readWrite",
 			returned: "default",
 			uniqueness: "server",

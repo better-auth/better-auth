@@ -445,7 +445,7 @@ describe("SCIM", () => {
 				          "uniqueness": "server",
 				        },
 				        {
-				          "caseExact": true,
+				          "caseExact": false,
 				          "description": "Unique identifier for the User, typically used by the user to directly authenticate to the service provider",
 				          "multiValued": false,
 				          "mutability": "readWrite",
@@ -595,7 +595,7 @@ describe("SCIM", () => {
 				      "uniqueness": "server",
 				    },
 				    {
-				      "caseExact": true,
+				      "caseExact": false,
 				      "description": "Unique identifier for the User, typically used by the user to directly authenticate to the service provider",
 				      "multiValued": false,
 				      "mutability": "readWrite",
@@ -1667,7 +1667,7 @@ describe("SCIM", () => {
 
 			const users = await auth.api.listSCIMUsers({
 				query: {
-					filter: 'userName eq "user-a"',
+					filter: 'userName eq "user-A"',
 				},
 				headers: {
 					authorization: `Bearer ${scimToken}`,
