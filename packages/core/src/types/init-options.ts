@@ -936,14 +936,7 @@ export type BetterAuthOptions = {
 	/**
 	 * Advanced options
 	 */
-	advanced?:
-		| (BetterAuthAdvancedOptions & {
-				/**
-				 * @deprecated Please use `database.generateId` instead.
-				 */
-				generateId?: never;
-		  })
-		| undefined;
+	advanced?: BetterAuthAdvancedOptions | undefined;
 	logger?: Logger | undefined;
 	/**
 	 * allows you to define custom hooks that can be

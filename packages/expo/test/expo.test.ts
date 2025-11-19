@@ -21,6 +21,10 @@ vi.mock("expo-web-browser", async () => {
 
 vi.mock("react-native", async () => {
 	return {
+		AppState: {
+			addEventListener: vi.fn(),
+			removeEventListener: vi.fn(),
+		},
 		Platform: {
 			OS: "android",
 		},
@@ -210,10 +214,23 @@ describe("expo", async () => {
 			hasBetterAuthCookies(multipleNonBetterAuthHeader, "better-auth"),
 		).toBe(false);
 
+		// Non-session better-auth cookies should still be detected (e.g., passkey cookies)
 		const nonSessionBetterAuthHeader = "better-auth.other_cookie=abc; Path=/";
 		expect(
 			hasBetterAuthCookies(nonSessionBetterAuthHeader, "better-auth"),
-		).toBe(false);
+		).toBe(true);
+
+		// Passkey cookie should be detected
+		const passkeyHeader = "better-auth-passkey=xyz; Path=/";
+		expect(hasBetterAuthCookies(passkeyHeader, "better-auth")).toBe(true);
+
+		// Secure passkey cookie should be detected
+		const securePasskeyHeader = "__Secure-better-auth-passkey=xyz; Path=/";
+		expect(hasBetterAuthCookies(securePasskeyHeader, "better-auth")).toBe(true);
+
+		// Custom passkey cookie name should be detected
+		const customPasskeyHeader = "better-auth-custom-challenge=xyz; Path=/";
+		expect(hasBetterAuthCookies(customPasskeyHeader, "better-auth")).toBe(true);
 	});
 
 	it("should preserve unchanged client store session properties on signout", async () => {
@@ -436,6 +453,48 @@ describe("expo with cookieCache", async () => {
 		expect(hasBetterAuthCookies(customCookieHeader, "my-app")).toBe(true);
 
 		expect(hasBetterAuthCookies(customCookieHeader, "better-auth")).toBe(false);
+	});
+
+	it("should support array of cookie prefixes", async () => {
+		const { hasBetterAuthCookies } = await import("../src/client");
+
+		// Test with multiple prefixes - should match any of them
+		const betterAuthHeader = "better-auth.session_token=abc; Path=/";
+		expect(
+			hasBetterAuthCookies(betterAuthHeader, ["better-auth", "my-app"]),
+		).toBe(true);
+
+		const myAppHeader = "my-app.session_data=xyz; Path=/";
+		expect(hasBetterAuthCookies(myAppHeader, ["better-auth", "my-app"])).toBe(
+			true,
+		);
+
+		const otherAppHeader = "other-app.session_token=def; Path=/";
+		expect(
+			hasBetterAuthCookies(otherAppHeader, ["better-auth", "my-app"]),
+		).toBe(false);
+
+		// Test with passkey cookies
+		const passkeyHeader1 = "better-auth-passkey=xyz; Path=/";
+		expect(
+			hasBetterAuthCookies(passkeyHeader1, ["better-auth", "my-app"]),
+		).toBe(true);
+
+		const passkeyHeader2 = "my-app-passkey=xyz; Path=/";
+		expect(
+			hasBetterAuthCookies(passkeyHeader2, ["better-auth", "my-app"]),
+		).toBe(true);
+
+		// Test with __Secure- prefix
+		const secureHeader = "__Secure-my-app.session_token=abc; Path=/";
+		expect(hasBetterAuthCookies(secureHeader, ["better-auth", "my-app"])).toBe(
+			true,
+		);
+
+		// Test with empty array (should check for suffixes)
+		const sessionTokenHeader = "session_token=abc; Path=/";
+		expect(hasBetterAuthCookies(sessionTokenHeader, [])).toBe(false);
+		expect(hasBetterAuthCookies(sessionTokenHeader, [""])).toBe(true);
 	});
 
 	it("should normalize colons in secure storage name via storage adapter", async () => {

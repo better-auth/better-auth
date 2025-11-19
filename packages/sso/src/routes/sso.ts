@@ -926,6 +926,22 @@ export const signInSSO = (options?: SSOOptions) => {
 			}
 
 			if (provider.oidcConfig && body.providerType !== "saml") {
+				let finalAuthUrl = provider.oidcConfig.authorizationEndpoint;
+				if (!finalAuthUrl && provider.oidcConfig.discoveryEndpoint) {
+					const discovery = await betterFetch<{
+						authorization_endpoint: string;
+					}>(provider.oidcConfig.discoveryEndpoint, {
+						method: "GET",
+					});
+					if (discovery.data) {
+						finalAuthUrl = discovery.data.authorization_endpoint;
+					}
+				}
+				if (!finalAuthUrl) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Invalid OIDC configuration. Authorization URL not found.",
+					});
+				}
 				const state = await generateState(ctx, undefined, false);
 				const redirectURI = `${ctx.context.baseURL}/sso/callback/${provider.providerId}`;
 				const authorizationURL = await createAuthorizationURL({
@@ -947,7 +963,7 @@ export const signInSSO = (options?: SSOOptions) => {
 							"offline_access",
 						],
 					loginHint: ctx.body.loginHint || email,
-					authorizationEndpoint: provider.oidcConfig.authorizationEndpoint!,
+					authorizationEndpoint: finalAuthUrl,
 				});
 				return ctx.json({
 					url: authorizationURL.toString(),
@@ -1012,6 +1028,10 @@ export const callbackSSO = (options?: SSOOptions) => {
 				error: z.string().optional(),
 				error_description: z.string().optional(),
 			}),
+			allowedMediaTypes: [
+				"application/x-www-form-urlencoded",
+				"application/json",
+			],
 			metadata: {
 				isAction: false,
 				openapi: {
