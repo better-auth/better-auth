@@ -20,7 +20,7 @@ import {
 } from "../../crypto";
 import { mergeSchema } from "../../db";
 import type { jwt } from "../jwt";
-import { getJwtToken } from "../jwt/sign";
+import { getJwtToken } from "../jwt";
 import { authorize } from "./authorize";
 import type { OAuthApplication } from "./schema";
 import { schema } from "./schema";
@@ -32,6 +32,7 @@ import type {
 	OIDCOptions,
 } from "./types";
 import { defaultClientSecretHasher } from "./utils";
+import { parsePrompt } from "./utils/prompt";
 
 const getJwtPlugin = (ctx: GenericEndpointContext) => {
 	return ctx.context.options.plugins?.find(
@@ -245,7 +246,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						return true;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const cookie = await ctx.getSignedCookie(
+						const loginPromptCookie = await ctx.getSignedCookie(
 							"oidc_login_prompt",
 							ctx.context.secret,
 						);
@@ -254,7 +255,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							ctx.context.responseHeaders?.get("set-cookie") || "",
 						);
 						const hasSessionToken = parsedSetCookieHeader.has(cookieName);
-						if (!cookie || !hasSessionToken) {
+						if (!loginPromptCookie || !hasSessionToken) {
 							return;
 						}
 						ctx.setCookie("oidc_login_prompt", "", {
@@ -266,13 +267,24 @@ export const oidcProvider = (options: OIDCOptions) => {
 							return;
 						}
 						const session =
-							await ctx.context.internalAdapter.findSession(sessionToken);
+							(await ctx.context.internalAdapter.findSession(sessionToken)) ||
+							ctx.context.newSession;
 						if (!session) {
 							return;
 						}
-						ctx.query = JSON.parse(cookie);
-						// Don't force prompt to "consent" - let the authorize function
-						// determine if consent is needed based on OIDC spec requirements
+						ctx.query = JSON.parse(loginPromptCookie);
+
+						// Remove "login" from prompt since user just logged in
+						const promptSet = parsePrompt(String(ctx.query?.prompt));
+						if (promptSet.has("login")) {
+							const newPromptSet = new Set(promptSet);
+							newPromptSet.delete("login");
+							ctx.query = {
+								...ctx.query,
+								prompt: Array.from(newPromptSet).join(" "),
+							};
+						}
+
 						ctx.context.session = session;
 						const response = await authorize(ctx, opts);
 						return response;
