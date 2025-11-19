@@ -30,10 +30,6 @@ patchedDependencies:
 importers:
 
   .:
-    dependencies:
-      better-call:
-        specifier: 1.0.28-beta.1
-        version: 1.0.28-beta.1
     devDependencies:
       '@biomejs/biome':
         specifier: 2.3.5
