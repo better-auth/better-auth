@@ -1,6 +1,4 @@
 import Database from "better-sqlite3";
-import { create } from "domain";
-import { adapter } from "next/dist/server/web/adapter";
 import { describe, expect, it, vi } from "vitest";
 import { createAuthEndpoint } from "../api";
 import { getAdapter } from "../db";
