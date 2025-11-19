@@ -572,12 +572,28 @@ export const getAccessToken = createAuthEndpoint(
 					ctx.context,
 				);
 				newTokens = await provider.refreshAccessToken(refreshToken);
-				await ctx.context.internalAdapter.updateAccount(account.id, {
-					accessToken: await setTokenUtil(newTokens.accessToken, ctx.context),
-					accessTokenExpiresAt: newTokens.accessTokenExpiresAt,
-					refreshToken: await setTokenUtil(newTokens.refreshToken, ctx.context),
-					refreshTokenExpiresAt: newTokens.refreshTokenExpiresAt,
-				});
+				const updatedAccount = await ctx.context.internalAdapter.updateAccount(
+					account.id,
+					{
+						accessToken: await setTokenUtil(newTokens.accessToken, ctx.context),
+						accessTokenExpiresAt: newTokens.accessTokenExpiresAt,
+						refreshToken: await setTokenUtil(
+							newTokens.refreshToken,
+							ctx.context,
+						),
+						refreshTokenExpiresAt: newTokens.refreshTokenExpiresAt,
+					},
+				);
+				const storeAccountCookie =
+					ctx.context.options.account?.storeAccountCookie;
+				if (storeAccountCookie && updatedAccount) {
+					await ctx.setSignedCookie(
+						accountDataCookieName,
+						JSON.stringify(updatedAccount),
+						ctx.context.secret,
+						ctx.context.authCookies.accountData.options,
+					);
+				}
 			}
 			const tokens = {
 				accessToken:
@@ -702,7 +718,10 @@ export const refreshToken = createAuthEndpoint(
 			? safeJSONParse<Account>(accountDataCookie)
 			: null;
 
-		if (accountData && providerId === accountData?.providerId) {
+		if (
+			accountData &&
+			(!providerId || providerId === accountData?.providerId)
+		) {
 			account = accountData;
 		} else {
 			const accounts =
@@ -776,7 +795,16 @@ export const refreshToken = createAuthEndpoint(
 					ctx.context.authCookies.accountData.options,
 				);
 			}
-			return ctx.json(tokens);
+			return ctx.json({
+				accessToken: tokens.accessToken,
+				refreshToken: tokens.refreshToken,
+				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+				refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+				scope: tokens.scopes?.join(",") || account.scope,
+				idToken: tokens.idToken || account.idToken,
+				providerId: account.providerId,
+				accountId: account.accountId,
+			});
 		} catch (error) {
 			throw new APIError("BAD_REQUEST", {
 				message: "Failed to refresh access token",
@@ -786,10 +814,22 @@ export const refreshToken = createAuthEndpoint(
 	},
 );
 
+const accountInfoQuerySchema = z.optional(
+	z.object({
+		accountId: z
+			.string()
+			.meta({
+				description:
+					"The provider given account id for which to get the account info",
+			})
+			.optional(),
+	}),
+);
+
 export const accountInfo = createAuthEndpoint(
 	"/account-info",
 	{
-		method: "POST",
+		method: "GET",
 		use: [sessionMiddleware],
 		metadata: {
 			openapi: {
@@ -838,17 +878,34 @@ export const accountInfo = createAuthEndpoint(
 				},
 			},
 		},
-		body: z.object({
-			accountId: z.string().meta({
-				description:
-					"The provider given account id for which to get the account info",
-			}),
-		}),
+		query: accountInfoQuerySchema,
 	},
 	async (ctx) => {
-		const account = await ctx.context.internalAdapter.findAccount(
-			ctx.body.accountId,
-		);
+		const providedAccountId = ctx.query?.accountId;
+		let account: Account | undefined = undefined;
+		if (!providedAccountId) {
+			const storeAccountCookie =
+				ctx.context.options.account?.storeAccountCookie;
+			if (storeAccountCookie) {
+				const accountCookieName = ctx.context.authCookies.accountData.name;
+				const accountCookie = await ctx.getSignedCookie(
+					accountCookieName,
+					ctx.context.secret,
+				);
+				if (accountCookie) {
+					const accountData = safeJSONParse<Account>(accountCookie);
+					if (accountData) {
+						account = accountData;
+					}
+				}
+			}
+		} else {
+			const accountData =
+				await ctx.context.internalAdapter.findAccount(providedAccountId);
+			if (accountData) {
+				account = accountData;
+			}
+		}
 
 		if (!account || account.userId !== ctx.context.session.user.id) {
 			throw new APIError("BAD_REQUEST", {
@@ -867,11 +924,13 @@ export const accountInfo = createAuthEndpoint(
 		}
 		const tokens = await getAccessToken({
 			...ctx,
+			method: "POST",
 			body: {
 				accountId: account.id,
 				providerId: account.providerId,
 			},
 			returnHeaders: false,
+			returnStatus: false,
 		});
 		if (!tokens.accessToken) {
 			throw new APIError("BAD_REQUEST", {

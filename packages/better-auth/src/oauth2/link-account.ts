@@ -165,20 +165,20 @@ export async function handleOAuthUserInfo(
 				providerId: account.providerId,
 				accountId: userInfo.id.toString(),
 			};
-			user = await c.context.internalAdapter
-				.createOAuthUser(
+			const { user: createdUser, account: createdAccount } =
+				await c.context.internalAdapter.createOAuthUser(
 					{
 						...restUserInfo,
 						email: userInfo.email.toLowerCase(),
 					},
 					accountData,
-				)
-				.then((res) => res?.user);
+				);
+			user = createdUser;
 			if (c.context.options.account?.storeAccountCookie) {
 				const accountDataCookie = c.context.authCookies.accountData;
 				await c.setSignedCookie(
 					accountDataCookie.name,
-					JSON.stringify(accountData),
+					JSON.stringify(createdAccount),
 					c.context.secret,
 					accountDataCookie.options,
 				);
