@@ -204,7 +204,10 @@ export interface AuthorizationQuery {
 	/**
 	 * The prompt parameter is used to specify the type of user interaction that is required.
 	 */
-	prompt?: ("none" | "consent" | "login" | "select_account") | undefined;
+	prompt?:
+		| (string & {})
+		| ("none" | "consent" | "login" | "select_account")
+		| undefined;
 	/**
 	 * The display parameter is used to specify how the authorization server displays the
 	 * authentication and consent user interface pages to the end user.
