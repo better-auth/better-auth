@@ -23,7 +23,7 @@ export const getUserFullName = (email: string, name?: SCIMName) => {
 			return formatted;
 		}
 
-		return getFormattedName(name);
+		return getFormattedName(name) ?? email;
 	}
 
 	return email;
