@@ -1391,6 +1391,29 @@ The plugin provides an easy way to define your own set of permissions for each r
 
 </Steps>
 
+### Missing roles & `hasPermission` behavior
+
+When you define custom `roles` for the `organization` plugin you replace the built-in defaults. If you want to keep the library defaults (`owner`, `admin`, `member`) you must explicitly merge them into your configuration. Example:
+
+```ts
+import { defaultRoles } from "better-auth/plugins/organization";
+
+organization({
+  roles: {
+    ...defaultRoles, // Include defaults!
+    manager: managerRole,
+  },
+});
+```
+
+Behavior for missing roles
+
+- Current behavior (non-breaking): `hasPermission` will return `false` for any missing/unknown role and does not throw. The implementation logs a simple client-side warning via `console.warn` and continues.
+```
+
+- When seeding or migrating data, include `defaultRoles` (or merge them) so test and production data align with runtime configuration.
+- Add CI checks or unit tests that verify the configured role set and ensure stored DB roles match the configured set.
+
 ### Access Control Usage
 
 **Has Permission**:

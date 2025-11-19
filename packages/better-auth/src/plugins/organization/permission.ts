@@ -18,6 +18,13 @@ export const hasPermissionFn = (
 
 	for (const role of roles) {
 		const _role = acRoles[role as keyof typeof acRoles];
+		if (!_role) {
+			// Log warning for debugging
+			console.warn(
+				`[hasPermission] Role "${role}" not found in configured roles. Available roles: ${Object.keys(acRoles).join(", ")}`,
+			);
+			continue;
+		}
 		const result = _role?.authorize(input.permissions ?? input.permission);
 		if (result?.success) {
 			return true;
