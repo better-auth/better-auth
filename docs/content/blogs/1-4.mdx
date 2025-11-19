@@ -90,6 +90,21 @@ await authClient.signIn.social({
 ```
 ---
 
+### SCIM Provisioning
+
+SCIM makes managing identities in multi-domain scenarios easier to support via a standardized protocol.
+
+[👉 Read more about SCIM provisioning](/docs/concepts/scim)
+
+```ts
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    scim: true,
+});
+```
+---
+
 A lot of refinements to make everything smoother, faster, and more reliable.
 👉 [Check the full changelog](https://github.com/better-auth/better-auth/releases/tag/v1.4.0)
 
