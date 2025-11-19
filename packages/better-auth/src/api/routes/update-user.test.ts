@@ -156,7 +156,7 @@ describe("updateUser", async () => {
 		});
 
 		const callbackURL =
-			"https://example.com/profile?verified=true&source=email";
+			"https://example.com/app?redirect=/dashboard&tab=settings&user=Jane+Doe&email=test%40example.com#main";
 
 		await runWithUser(async () => {
 			await client.changeEmail({
@@ -172,24 +172,23 @@ describe("updateUser", async () => {
 		const callbackURLParam = emailUrl.searchParams.get("callbackURL");
 
 		expect(callbackURLParam).toBe(callbackURL);
-		expect(callbackURLParam).toContain("?verified=true&source=email");
+		expect(callbackURLParam).toContain(
+			"?redirect=/dashboard&tab=settings&user=Jane+Doe&email=test%40example.com#main",
+		);
 	});
 
 	it("should properly encode callbackURL in verification email when current email is verified", async () => {
 		let capturedUrl = "";
 		const { client, db, signInWithTestUser, testUser } = await getTestInstance({
 			trustedOrigins: ["https://example.com"],
+			emailVerification: {
+				async sendVerificationEmail({ user, url, token }) {
+					capturedUrl = url;
+				},
+			},
 			user: {
 				changeEmail: {
 					enabled: true,
-					sendChangeEmailVerification: async ({
-						user,
-						newEmail,
-						url,
-						token,
-					}) => {
-						capturedUrl = url;
-					},
 				},
 			},
 		});
@@ -210,7 +209,7 @@ describe("updateUser", async () => {
 		});
 
 		const callbackURL =
-			"https://example.com/profile?verified=true&source=email";
+			"https://example.com/app?redirect=/dashboard&tab=settings&user=Jane+Doe&email=test%40example.com#main";
 
 		await runWithUser(async () => {
 			await client.changeEmail({
@@ -226,7 +225,9 @@ describe("updateUser", async () => {
 		const callbackURLParam = emailUrl.searchParams.get("callbackURL");
 
 		expect(callbackURLParam).toBe(callbackURL);
-		expect(callbackURLParam).toContain("?verified=true&source=email");
+		expect(callbackURLParam).toContain(
+			"?redirect=/dashboard&tab=settings&user=Jane+Doe&email=test%40example.com#main",
+		);
 	});
 
 	it("should update the user's password", async () => {
@@ -595,7 +596,7 @@ describe("delete user", async () => {
 
 		const { runWithUser } = await signInWithTestUser();
 		const callbackURL =
-			"https://example.com/profile?verified=true&source=email";
+			"https://example.com/app?redirect=/dashboard&tab=settings&user=Jane+Doe&email=test%40example.com#main";
 
 		await runWithUser(async () => {
 			await client.deleteUser({
@@ -611,7 +612,9 @@ describe("delete user", async () => {
 		const callbackURLParam = emailUrl.searchParams.get("callbackURL");
 
 		expect(callbackURLParam).toBe(callbackURL);
-		expect(callbackURLParam).toContain("?verified=true&source=email");
+		expect(callbackURLParam).toContain(
+			"?redirect=/dashboard&tab=settings&user=Jane+Doe&email=test%40example.com#main",
+		);
 	});
 
 	it("should ignore cookie cache for sensitive operations like changePassword", async () => {

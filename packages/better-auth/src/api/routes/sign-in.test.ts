@@ -126,7 +126,7 @@ describe("sign-in", async (it) => {
 		});
 
 		const callbackURL =
-			"https://example.com/app?redirect=/dashboard&tab=settings";
+			"https://example.com/app?redirect=/dashboard&tab=settings&user=Jane+Doe&email=test%40example.com#main";
 
 		await expect(
 			auth.api.signInEmail({
@@ -149,7 +149,9 @@ describe("sign-in", async (it) => {
 		const callbackURLParam = emailUrl.searchParams.get("callbackURL");
 
 		expect(callbackURLParam).toBe(callbackURL);
-		expect(callbackURLParam).toContain("?redirect=/dashboard&tab=settings");
+		expect(callbackURLParam).toContain(
+			"?redirect=/dashboard&tab=settings&user=Jane+Doe&email=test%40example.com#main",
+		);
 	});
 });
 
