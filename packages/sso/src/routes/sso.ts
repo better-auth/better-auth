@@ -1028,6 +1028,10 @@ export const callbackSSO = (options?: SSOOptions) => {
 				error: z.string().optional(),
 				error_description: z.string().optional(),
 			}),
+			allowedMediaTypes: [
+				"application/x-www-form-urlencoded",
+				"application/json",
+			],
 			metadata: {
 				isAction: false,
 				openapi: {
