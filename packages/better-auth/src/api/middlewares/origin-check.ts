@@ -21,14 +21,6 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	const headers = ctx.request?.headers;
 	const request = ctx.request;
 	const { body, query, context } = ctx;
-	/**
-	 * We only allow requests with the x-auth-request header set to
-	 * true or application/json content type. This is to prevent
-	 * simple requests from being processed
-	 */
-	if (isSimpleRequest(headers) && !ctx.context.skipCSRFCheck) {
-		throw new APIError("FORBIDDEN", { message: "Invalid request" });
-	}
 	const originHeader = headers?.get("origin") || headers?.get("referer") || "";
 	const callbackURL = body?.callbackURL || query?.callbackURL;
 	const redirectURL = body?.redirectTo;
@@ -167,31 +159,3 @@ export const originCheck = (
 			validateURL(url, "callbackURL");
 		}
 	});
-
-export function isSimpleRequest(headers: Headers) {
-	const SIMPLE_HEADERS = [
-		"accept",
-		"accept-language",
-		"content-language",
-		"content-type",
-	];
-	const SIMPLE_CONTENT_TYPES = [
-		"application/x-www-form-urlencoded",
-		"multipart/form-data",
-		"text/plain",
-	];
-	for (const [key, value] of headers.entries()) {
-		if (!SIMPLE_HEADERS.includes(key.toLowerCase())) {
-			return false; // has non-simple header
-		}
-		if (
-			key.toLowerCase() === "content-type" &&
-			!SIMPLE_CONTENT_TYPES.includes(
-				value?.split(";")[0]?.trim()?.toLowerCase() || "",
-			)
-		) {
-			return false;
-		}
-	}
-	return true;
-}
