@@ -76,7 +76,7 @@ export const APIMethod = ({
 	 */
 	requireSession?: boolean;
 	/**
-	 *  If enabled, will a bearer authorization header to the fetch options
+	 *  If enabled, will add a bearer authorization header to the fetch options
 	 *
 	 * @default false
 	 */
@@ -140,7 +140,7 @@ export const APIMethod = ({
 	 */
 	forceAsQuery?: boolean;
 	/**
-	 * Force the user auth api to use `path`, rather than auto choosing
+	 * Force the server auth api to use `path`, rather than auto choosing
 	 */
 	forceAsParam?: boolean;
 }) => {

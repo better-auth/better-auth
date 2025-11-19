@@ -353,7 +353,7 @@ describe("SCIM", () => {
 			);
 		});
 
-		it("should execute hokos after SCIM token generation", async () => {
+		it("should execute hooks after SCIM token generation", async () => {
 			const { auth, getAuthCookieHeaders } = createTestInstance({
 				storeSCIMToken: "plain",
 				afterSCIMTokenGenerated: async ({
@@ -866,7 +866,7 @@ describe("SCIM", () => {
 			});
 		});
 
-		it("should create a new account liked to an existing user", async () => {
+		it("should create a new account linked to an existing user", async () => {
 			const { auth, authClient, getSCIMToken } = createTestInstance();
 			const scimToken = await getSCIMToken();
 

@@ -863,7 +863,7 @@ export const scim = (options?: SCIMOptions) => {
 					metadata: {
 						isAction: false,
 						openapi: {
-							summary: "SCIM Service Provider Suppoted Resource Types",
+							summary: "SCIM Service Provider Supported Resource Types",
 							description:
 								"Standard SCIM metadata endpoint used by identity providers to get a list of server supported types. See https://datatracker.ietf.org/doc/html/rfc7644#section-4",
 							responses: {
