@@ -488,6 +488,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 					body: z.record(z.any(), z.any()),
 					metadata: {
 						isAction: false,
+						allowedMediaTypes: [
+							"application/x-www-form-urlencoded",
+							"application/json",
+						],
 					},
 				},
 				async (ctx) => {
