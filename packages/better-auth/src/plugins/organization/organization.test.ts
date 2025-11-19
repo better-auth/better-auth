@@ -18,6 +18,7 @@ import { adminAc, defaultStatements, memberAc, ownerAc } from "./access";
 import { inferOrgAdditionalFields, organizationClient } from "./client";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { organization } from "./organization";
+import { hasPermissionFn } from "./permission";
 import type {
 	InferInvitation,
 	InferMember,
@@ -25,7 +26,6 @@ import type {
 	InvitationStatus,
 } from "./schema";
 import type { OrganizationOptions } from "./types";
-import { hasPermissionFn } from "./permission";
 
 describe("organization type", () => {
 	it("empty org type should works", () => {
