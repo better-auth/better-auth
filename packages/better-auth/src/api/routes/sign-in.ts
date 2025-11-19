@@ -431,6 +431,7 @@ export const signInEmail = createAuthEndpoint(
 			(a) => a.providerId === "credential",
 		);
 		if (!credentialAccount) {
+			await ctx.context.password.hash(password);
 			ctx.context.logger.error("Credential account not found", { email });
 			throw new APIError("UNAUTHORIZED", {
 				message: BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
@@ -438,6 +439,7 @@ export const signInEmail = createAuthEndpoint(
 		}
 		const currentPassword = credentialAccount?.password;
 		if (!currentPassword) {
+			await ctx.context.password.hash(password);
 			ctx.context.logger.error("Password not found", { email });
 			throw new APIError("UNAUTHORIZED", {
 				message: BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
