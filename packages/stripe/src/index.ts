@@ -3,11 +3,8 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { defineErrorCodes } from "@better-auth/core/utils";
-import {
-	type BetterAuthPlugin,
-	type GenericEndpointContext,
-	logger,
-} from "better-auth";
+import type { BetterAuthPlugin, GenericEndpointContext } from "better-auth";
+import { logger } from "better-auth";
 import {
 	APIError,
 	getSessionFromCtx,
@@ -15,7 +12,8 @@ import {
 	sessionMiddleware,
 } from "better-auth/api";
 import { defu } from "defu";
-import Stripe, { type Stripe as StripeType } from "stripe";
+import type Stripe from "stripe";
+import type { Stripe as StripeType } from "stripe";
 import * as z from "zod/v4";
 import {
 	onCheckoutSessionCompleted,
@@ -87,7 +85,10 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			const referenceId =
 				ctx.body?.referenceId || ctx.query?.referenceId || session.user.id;
 
-			if (ctx.body?.referenceId && !subscriptionOptions.authorizeReference) {
+			if (
+				referenceId !== session.user.id &&
+				!subscriptionOptions.authorizeReference
+			) {
 				logger.error(
 					`Passing referenceId into a subscription action isn't allowed if subscription.authorizeReference isn't defined in your stripe plugin config.`,
 				);
