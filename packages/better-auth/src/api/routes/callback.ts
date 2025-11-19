@@ -6,6 +6,7 @@ import { setSessionCookie } from "../../cookies";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
 import { setTokenUtil } from "../../oauth2/utils";
+import { oauthQuery } from "../../plugins/oauth-provider/utils";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 
 const schema = z.object({
@@ -87,7 +88,10 @@ export const callbackOAuth = createAuthEndpoint(
 			query,
 			requestSignUp,
 		} = parsedState;
-		if (query) c.context.oauth.query = new URLSearchParams(query);
+		if (query)
+			oauthQuery.set({
+				query: new URLSearchParams(query),
+			});
 
 		function redirectOnError(error: string, description?: string | undefined) {
 			const baseURL = errorURL ?? defaultErrorURL;

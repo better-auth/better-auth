@@ -1,4 +1,5 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
+import { defineRequestState } from "@better-auth/core/context";
 import { BetterAuthError } from "@better-auth/core/error";
 import { base64, base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
@@ -19,6 +20,10 @@ import type {
 	Scope,
 	StoreTokenType,
 } from "./types";
+
+export const oauthQuery = defineRequestState(
+	() => ({}) as { query: URLSearchParams },
+);
 
 class TTLCache<K, V extends { expiresAt?: Date }> {
 	private cache = new Map<K, V>();

@@ -2,13 +2,14 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "../../api";
 import { authorizeEndpoint, formatErrorURL } from "./authorize";
 import type { OAuthConsent, OAuthOptions, Scope } from "./types";
+import { oauthQuery } from "./utils";
 
 export async function consentEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
 	// Obtain oauth query
-	const query = ctx.context.oauth.query;
+	const query = (await oauthQuery.get()).query;
 	const originalRequestedScopes = query.get("scope")?.split(" ") ?? [];
 	const clientId = query.get("client_id");
 	if (!clientId) {
