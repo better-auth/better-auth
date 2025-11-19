@@ -17,22 +17,20 @@ export function getSessionAtom(
 		method: "GET",
 	});
 
-	if (typeof window !== "undefined") {
-		onMount(session, () => {
-			const refreshManager = createSessionRefreshManager({
-				sessionAtom: session,
-				sessionSignal: $signal,
-				$fetch,
-				options,
-			});
-
-			refreshManager.init();
-
-			return () => {
-				refreshManager.cleanup();
-			};
+	onMount(session, () => {
+		const refreshManager = createSessionRefreshManager({
+			sessionAtom: session,
+			sessionSignal: $signal,
+			$fetch,
+			options,
 		});
-	}
+
+		refreshManager.init();
+
+		return () => {
+			refreshManager.cleanup();
+		};
+	});
 
 	return {
 		session,
