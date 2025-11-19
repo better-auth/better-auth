@@ -1716,11 +1716,17 @@ export const oidcProvider = (options: OIDCOptions) => {
 					if (validatedUserId || session) {
 						const userId = validatedUserId || session?.user.id;
 						if (userId) {
-							// Revoke all access tokens for this user
+							// Revoke access tokens for this user and client (client-scoped logout by default)
+							const globalLogout = ctx.context.options?.globalLogout === true;
 							const tokens =
 								await ctx.context.adapter.findMany<OAuthAccessToken>({
 									model: modelName.oauthAccessToken,
-									where: [{ field: "userId", value: userId }],
+									where: [
+										{ field: "userId", value: userId },
+										...(!globalLogout && validatedClientId
+											? [{ field: "clientId", value: validatedClientId }]
+											: []),
+									],
 								});
 
 							for (const token of tokens) {
