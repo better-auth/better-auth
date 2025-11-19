@@ -10,6 +10,7 @@ import {
 import { parseSetCookieHeader } from "../../cookies";
 import { makeSignature, timingSafeEqual } from "../../crypto";
 import { mergeSchema } from "../../db";
+import { SafeUrlSchema } from "../../oauth-2.1/utils";
 import type { BetterAuthPlugin } from "../../types";
 import { authorizeEndpoint } from "./authorize";
 import { consentEndpoint } from "./consent";
@@ -320,7 +321,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					query: z.object({
 						response_type: z.enum(["code"]),
 						client_id: z.string(),
-						redirect_uri: z.string().optional(),
+						redirect_uri: SafeUrlSchema.optional(),
 						scope: z.string().optional(),
 						state: z.string().optional(),
 						code_challenge: z.string().optional(),
@@ -549,7 +550,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						client_secret: z.string().optional(),
 						code: z.string().optional(),
 						code_verifier: z.string().optional(),
-						redirect_uri: z.string().optional(),
+						redirect_uri: SafeUrlSchema.optional(),
 						refresh_token: z.string().optional(),
 						resource: z.string().optional(),
 						scope: z.string().optional(),
@@ -1034,7 +1035,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					query: z.object({
 						id_token_hint: z.string(),
 						client_id: z.string().optional(),
-						post_logout_redirect_uri: z.string().optional(),
+						post_logout_redirect_uri: SafeUrlSchema.optional(),
 						state: z.string().optional(),
 						ui_locales: z.string().optional(),
 					}),
@@ -1079,7 +1080,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						redirect_uris: z.array(z.string().min(1)).min(1).min(1),
+						redirect_uris: z.array(SafeUrlSchema).min(1).min(1),
 						scope: z.string().optional(),
 						client_name: z.string().optional(),
 						client_uri: z.string().optional(),
@@ -1090,10 +1091,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						software_id: z.string().optional(),
 						software_version: z.string().optional(),
 						software_statement: z.string().optional(),
-						post_logout_redirect_uris: z
-							.array(z.string().min(1))
-							.min(1)
-							.optional(),
+						post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
 						token_endpoint_auth_method: z
 							.enum(["none", "client_secret_basic", "client_secret_post"])
 							.default("client_secret_basic")
