@@ -29,6 +29,7 @@ async function checkPasswordCompromise(
 					"Add-Padding": "true",
 					"User-Agent": "BetterAuth Password Checker",
 				},
+				timeout: 5000, // 5s timeout
 			},
 		);
 
@@ -81,15 +82,19 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
 					password: {
 						...ctx.password,
 						async hash(password) {
-							const c = await getCurrentAuthContext();
-							if (!c.path || !paths.includes(c.path)) {
+							try {
+								const c = await getCurrentAuthContext();
+								if (!c.path || !paths.includes(c.path)) {
+									return ctx.password.hash(password);
+								}
+								await checkPasswordCompromise(
+									password,
+									options?.customPasswordCompromisedMessage,
+								);
+								return ctx.password.hash(password);
+							} catch (e) {
 								return ctx.password.hash(password);
 							}
-							await checkPasswordCompromise(
-								password,
-								options?.customPasswordCompromisedMessage,
-							);
-							return ctx.password.hash(password);
 						},
 					},
 				},
