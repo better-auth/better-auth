@@ -330,7 +330,7 @@ describe("oauth-proxy", async () => {
 		});
 
 		it("should handle OAuth callback with encrypted state package", async () => {
-			const { client, auth } = await getTestInstance({
+			const { client } = await getTestInstance({
 				database: undefined, // Stateless mode
 				plugins: [
 					oAuthProxy({
