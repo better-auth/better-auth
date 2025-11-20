@@ -9,6 +9,7 @@ import { figma } from "./figma";
 import { github } from "./github";
 import { gitlab } from "./gitlab";
 import { google } from "./google";
+import { hubspot } from "./hubspot";
 import { huggingface } from "./huggingface";
 import { kakao } from "./kakao";
 import { kick } from "./kick";
@@ -65,6 +66,7 @@ export const socialProviders = {
 	paybin,
 	paypal,
 	polar,
+	hubspot,
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
@@ -96,6 +98,7 @@ export * from "./figma";
 export * from "./github";
 export * from "./gitlab";
 export * from "./google";
+export * from "./hubspot";
 export * from "./huggingface";
 export * from "./kakao";
 export * from "./kick";
