@@ -1,6 +1,18 @@
 import type { BetterAuthClientPlugin } from "../../types";
 import type { oauthProvider } from "./oauth";
 
+function parseSignedQuery(search: string) {
+	const params = new URLSearchParams(search);
+	if (params.has("sig")) {
+		const signedParams = new URLSearchParams();
+		for (const [key, value] of params.entries()) {
+			signedParams.append(key, value);
+			if (key === "sig") break;
+		}
+		return signedParams.toString();
+	}
+}
+
 export const oauthProviderClient = () => {
 	return {
 		id: "oauth-provider-client",
@@ -29,7 +41,7 @@ export const oauthProviderClient = () => {
 								...body,
 								oauth_query:
 									typeof window !== "undefined"
-										? window?.location?.search
+										? parseSignedQuery(window?.location?.search)
 										: undefined,
 							});
 						}
