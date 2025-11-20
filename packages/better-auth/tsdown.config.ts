@@ -58,7 +58,7 @@ export default defineConfig({
 		"./src/plugins/haveibeenpwned/index.ts",
 		"./src/plugins/one-time-token/index.ts",
 		"./src/plugins/siwe/index.ts",
-		// "./src/plugins/graph/index.ts",
+		"./src/plugins/graph/index.ts",
 		// "./src/plugins/agents/index.ts",
 		// "./src/plugins/permissions/index.ts",
 		// "./src/plugins/subscriptions/index.ts",

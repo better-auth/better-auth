@@ -852,6 +852,74 @@ export const createAdapterFactory =
 				);
 				return transformed;
 			},
+			createMany: async <T extends Record<string, any>, R = T>({
+				model: unsafeModel,
+				data: unsafeDataArray,
+				select,
+				forceAllowId,
+			}: {
+				model: string;
+				data: Record<string, any>[];
+				select?: any;
+				forceAllowId?: boolean;
+			}): Promise<R[]> => {
+				transactionId++;
+				let thisTransactionId = transactionId;
+				const model = getModelName(getDefaultModelName(unsafeModel));
+				let processedDataArray = unsafeDataArray;
+
+				debugLog(
+					{ method: "createMany" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
+					`${formatMethod("createMany")} ${formatAction("Unsafe Input")}:`,
+					{ model, data: unsafeDataArray },
+				);
+
+				if (!config.disableTransformInput) {
+					processedDataArray = await Promise.all(
+						unsafeDataArray.map((d) =>
+							transformInput(d, unsafeModel, "create", forceAllowId),
+						),
+					);
+				}
+
+				debugLog(
+					{ method: "createMany" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 3)}`,
+					`${formatMethod("createMany")} ${formatAction("Parsed Input")}:`,
+					{ model, data: processedDataArray },
+				);
+
+				const res = await adapterInstance.createMany<T>({
+					model,
+					data: processedDataArray as T[],
+				});
+
+				debugLog(
+					{ method: "createMany" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 3)}`,
+					`${formatMethod("createMany")} ${formatAction("DB Result")}:`,
+					{ model, data: res },
+				);
+
+				let transformed = res as any;
+				if (!config.disableTransformOutput) {
+					transformed = await Promise.all(
+						(res as any[]).map((r) =>
+							transformOutput(r, unsafeModel, select, undefined),
+						),
+					);
+				}
+
+				debugLog(
+					{ method: "createMany" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(4, 4)}`,
+					`${formatMethod("createMany")} ${formatAction("Parsed Result")}:`,
+					{ model, data: transformed },
+				);
+
+				return transformed;
+			},
 			update: async <T>({
 				model: unsafeModel,
 				where: unsafeWhere,

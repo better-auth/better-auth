@@ -361,6 +361,16 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const returned = await withReturning(model, builder, values);
 					return returned;
 				},
+
+				async createMany({ model, data: rows }) {
+					const schemaModel = getSchema(model);
+					rows.forEach((row) => {
+						checkMissingFields(schemaModel, model, row);
+					});
+					const builder = db.insert(schemaModel).values(rows);
+					await builder.execute();
+					return rows;
+				},
 				async findOne({ model, where, join }) {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);

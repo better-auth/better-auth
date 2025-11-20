@@ -8,7 +8,9 @@ import { socialProviders } from "@better-auth/core/social-providers";
 import { createTelemetry } from "@better-auth/telemetry";
 import defu from "defu";
 import type { Entries } from "type-fest";
-import type { GraphAdapter, Relationship } from "@better-auth/core/context";
+import type { GraphAdapter } from "@better-auth/core/context";
+import type { Relationship } from "@better-auth/core/context";
+import { getCurrentAdapter } from "@better-auth/core/context";
 import { AuthzedSyncClient } from "../adapters/authzed-adapter";
 import { checkEndpointConflicts } from "../api";
 import { createCookieGetter, getCookies } from "../cookies";
@@ -30,7 +32,10 @@ type RelationshipWriteRequest = Relationship & {
 	operation: "create" | "delete" | "touch";
 };
 
-function createGraphAdapter(options: BetterAuthOptions): GraphAdapter {
+function createGraphAdapter(
+	adapter: DBAdapter<BetterAuthOptions>,
+	options: BetterAuthOptions,
+): GraphAdapter {
 	let relations: RelationshipWriteRequest[] = [];
 	const authzedClient = new AuthzedSyncClient({
 		token: options.graph?.authzed?.token || "",
@@ -65,11 +70,24 @@ function createGraphAdapter(options: BetterAuthOptions): GraphAdapter {
 			);
 		},
 		commit: async () => {
+			const dbAdapter = await getCurrentAdapter(adapter);
+			// await dbAdapter.createMany({
+			// 	model: "relationship",
+			// 	data: relations.map((relation) => ({
+			// 		objectId: relation.objectId,
+			// 		objectType: relation.objectType,
+			// 		relationshipType: relation.relationshipType,
+			// 		subjectId: relation.subjectId,
+			// 		subjectType: relation.subjectType,
+			// 		createdAt: new Date(),
+			// 		updatedAt: new Date(),
+			// 	})),
+			// });
 			await authzedClient.syncRelationshipsBatch(relations);
 			relations = [];
 		},
 		transaction: () => {
-			return createGraphAdapter(options);
+			return createGraphAdapter(adapter, options);
 		},
 	};
 }
@@ -167,7 +185,7 @@ export async function createAuthContext(
 				: getDatabaseType(options.database),
 	});
 
-	const graphAdapter = createGraphAdapter(options);
+	const graphAdapter = createGraphAdapter(adapter, options);
 
 	let ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
