@@ -11,6 +11,11 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { oidcProvider } from "../oidc-provider";
 import { genericOAuth } from ".";
 import { genericOAuthClient } from "./client";
+import { auth0 } from "./providers/auth0";
+import { keycloak } from "./providers/keycloak";
+import { microsoftEntraId } from "./providers/microsoft-entra-id";
+import { okta } from "./providers/okta";
+import { slack } from "./providers/slack";
 
 describe("oauth2", async () => {
 	const providerId = "test";
@@ -1067,5 +1072,372 @@ describe("oauth2", async () => {
 		});
 
 		expect(result?.user).toHaveProperty("customField", "async-custom-data");
+	});
+
+	describe("Okta Provider Helper", () => {
+		it("should return correct GenericOAuthConfig", () => {
+			const oktaConfig = okta({
+				clientId: "okta-client-id",
+				clientSecret: "okta-client-secret",
+				issuer: "https://dev-12345.okta.com/oauth2/default",
+			});
+
+			expect(oktaConfig.providerId).toBe("okta");
+			expect(oktaConfig.discoveryUrl).toBe(
+				"https://dev-12345.okta.com/oauth2/default/.well-known/openid-configuration",
+			);
+			expect(oktaConfig.scopes).toEqual(["openid", "profile", "email"]);
+			expect(oktaConfig.clientId).toBe("okta-client-id");
+			expect(oktaConfig.clientSecret).toBe("okta-client-secret");
+			expect(oktaConfig.getUserInfo).toBeDefined();
+			expect(typeof oktaConfig.getUserInfo).toBe("function");
+		});
+
+		it("should handle issuer with trailing slash", () => {
+			const oktaConfig = okta({
+				clientId: "okta-client-id",
+				clientSecret: "okta-client-secret",
+				issuer: "https://dev-12345.okta.com/oauth2/default/",
+			});
+
+			expect(oktaConfig.discoveryUrl).toBe(
+				"https://dev-12345.okta.com/oauth2/default/.well-known/openid-configuration",
+			);
+		});
+
+		it("should allow overriding scopes", () => {
+			const oktaConfig = okta({
+				clientId: "okta-client-id",
+				clientSecret: "okta-client-secret",
+				issuer: "https://dev-12345.okta.com/oauth2/default",
+				scopes: ["openid", "profile"],
+			});
+
+			expect(oktaConfig.scopes).toEqual(["openid", "profile"]);
+		});
+
+		it("should allow overriding other options", () => {
+			const oktaConfig = okta({
+				clientId: "okta-client-id",
+				clientSecret: "okta-client-secret",
+				issuer: "https://dev-12345.okta.com/oauth2/default",
+				pkce: true,
+				disableImplicitSignUp: true,
+			});
+
+			expect(oktaConfig.pkce).toBe(true);
+			expect(oktaConfig.disableImplicitSignUp).toBe(true);
+		});
+	});
+
+	describe("Auth0 Provider Helper", () => {
+		it("should return correct GenericOAuthConfig", () => {
+			const auth0Config = auth0({
+				clientId: "auth0-client-id",
+				clientSecret: "auth0-client-secret",
+				domain: "dev-xxx.eu.auth0.com",
+			});
+
+			expect(auth0Config.providerId).toBe("auth0");
+			expect(auth0Config.discoveryUrl).toBe(
+				"https://dev-xxx.eu.auth0.com/.well-known/openid-configuration",
+			);
+			expect(auth0Config.scopes).toEqual(["openid", "profile", "email"]);
+			expect(auth0Config.clientId).toBe("auth0-client-id");
+			expect(auth0Config.clientSecret).toBe("auth0-client-secret");
+			expect(auth0Config.getUserInfo).toBeDefined();
+			expect(typeof auth0Config.getUserInfo).toBe("function");
+		});
+
+		it("should handle domain with protocol prefix", () => {
+			const auth0Config = auth0({
+				clientId: "auth0-client-id",
+				clientSecret: "auth0-client-secret",
+				domain: "https://dev-xxx.eu.auth0.com",
+			});
+
+			expect(auth0Config.discoveryUrl).toBe(
+				"https://dev-xxx.eu.auth0.com/.well-known/openid-configuration",
+			);
+		});
+
+		it("should allow overriding scopes", () => {
+			const auth0Config = auth0({
+				clientId: "auth0-client-id",
+				clientSecret: "auth0-client-secret",
+				domain: "dev-xxx.eu.auth0.com",
+				scopes: ["openid", "profile"],
+			});
+
+			expect(auth0Config.scopes).toEqual(["openid", "profile"]);
+		});
+
+		it("should allow overriding other options", () => {
+			const auth0Config = auth0({
+				clientId: "auth0-client-id",
+				clientSecret: "auth0-client-secret",
+				domain: "dev-xxx.eu.auth0.com",
+				pkce: true,
+				disableImplicitSignUp: true,
+			});
+
+			expect(auth0Config.pkce).toBe(true);
+			expect(auth0Config.disableImplicitSignUp).toBe(true);
+		});
+	});
+
+	describe("Microsoft Entra ID Provider Helper", () => {
+		it("should return correct GenericOAuthConfig", () => {
+			const msConfig = microsoftEntraId({
+				clientId: "ms-client-id",
+				clientSecret: "ms-client-secret",
+				tenantId: "common",
+			});
+
+			expect(msConfig.providerId).toBe("microsoft-entra-id");
+			expect(msConfig.authorizationUrl).toBe(
+				"https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+			);
+			expect(msConfig.tokenUrl).toBe(
+				"https://login.microsoftonline.com/common/oauth2/v2.0/token",
+			);
+			expect(msConfig.userInfoUrl).toBe(
+				"https://graph.microsoft.com/oidc/userinfo",
+			);
+			expect(msConfig.scopes).toEqual(["openid", "profile", "email"]);
+			expect(msConfig.clientId).toBe("ms-client-id");
+			expect(msConfig.clientSecret).toBe("ms-client-secret");
+			expect(msConfig.getUserInfo).toBeDefined();
+			expect(typeof msConfig.getUserInfo).toBe("function");
+		});
+
+		it("should handle tenant ID as GUID", () => {
+			const tenantId = "12345678-1234-1234-1234-123456789012";
+			const msConfig = microsoftEntraId({
+				clientId: "ms-client-id",
+				clientSecret: "ms-client-secret",
+				tenantId,
+			});
+
+			expect(msConfig.authorizationUrl).toBe(
+				`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize`,
+			);
+		});
+
+		it("should allow overriding scopes", () => {
+			const msConfig = microsoftEntraId({
+				clientId: "ms-client-id",
+				clientSecret: "ms-client-secret",
+				tenantId: "common",
+				scopes: ["openid", "profile"],
+			});
+
+			expect(msConfig.scopes).toEqual(["openid", "profile"]);
+		});
+
+		it("should allow overriding other options", () => {
+			const msConfig = microsoftEntraId({
+				clientId: "ms-client-id",
+				clientSecret: "ms-client-secret",
+				tenantId: "common",
+				pkce: true,
+				disableImplicitSignUp: true,
+			});
+
+			expect(msConfig.pkce).toBe(true);
+			expect(msConfig.disableImplicitSignUp).toBe(true);
+		});
+	});
+
+	describe("Slack Provider Helper", () => {
+		it("should return correct GenericOAuthConfig", () => {
+			const slackConfig = slack({
+				clientId: "slack-client-id",
+				clientSecret: "slack-client-secret",
+			});
+
+			expect(slackConfig.providerId).toBe("slack");
+			expect(slackConfig.authorizationUrl).toBe(
+				"https://slack.com/openid/connect/authorize",
+			);
+			expect(slackConfig.tokenUrl).toBe(
+				"https://slack.com/api/openid.connect.token",
+			);
+			expect(slackConfig.userInfoUrl).toBe(
+				"https://slack.com/api/openid.connect.userInfo",
+			);
+			expect(slackConfig.scopes).toEqual(["openid", "profile", "email"]);
+			expect(slackConfig.clientId).toBe("slack-client-id");
+			expect(slackConfig.clientSecret).toBe("slack-client-secret");
+			expect(slackConfig.getUserInfo).toBeDefined();
+			expect(typeof slackConfig.getUserInfo).toBe("function");
+		});
+
+		it("should allow overriding scopes", () => {
+			const slackConfig = slack({
+				clientId: "slack-client-id",
+				clientSecret: "slack-client-secret",
+				scopes: ["openid", "profile"],
+			});
+
+			expect(slackConfig.scopes).toEqual(["openid", "profile"]);
+		});
+
+		it("should allow overriding other options", () => {
+			const slackConfig = slack({
+				clientId: "slack-client-id",
+				clientSecret: "slack-client-secret",
+				pkce: true,
+				disableImplicitSignUp: true,
+			});
+
+			expect(slackConfig.pkce).toBe(true);
+			expect(slackConfig.disableImplicitSignUp).toBe(true);
+		});
+	});
+
+	describe("Keycloak Provider Helper", () => {
+		it("should return correct GenericOAuthConfig", () => {
+			const keycloakConfig = keycloak({
+				clientId: "keycloak-client-id",
+				clientSecret: "keycloak-client-secret",
+				issuer: "https://my-domain.com/realms/MyRealm",
+			});
+
+			expect(keycloakConfig.providerId).toBe("keycloak");
+			expect(keycloakConfig.discoveryUrl).toBe(
+				"https://my-domain.com/realms/MyRealm/.well-known/openid-configuration",
+			);
+			expect(keycloakConfig.scopes).toEqual(["openid", "profile", "email"]);
+			expect(keycloakConfig.clientId).toBe("keycloak-client-id");
+			expect(keycloakConfig.clientSecret).toBe("keycloak-client-secret");
+			expect(keycloakConfig.getUserInfo).toBeDefined();
+			expect(typeof keycloakConfig.getUserInfo).toBe("function");
+		});
+
+		it("should handle issuer with trailing slash", () => {
+			const keycloakConfig = keycloak({
+				clientId: "keycloak-client-id",
+				clientSecret: "keycloak-client-secret",
+				issuer: "https://my-domain.com/realms/MyRealm/",
+			});
+
+			expect(keycloakConfig.discoveryUrl).toBe(
+				"https://my-domain.com/realms/MyRealm/.well-known/openid-configuration",
+			);
+		});
+
+		it("should allow overriding scopes", () => {
+			const keycloakConfig = keycloak({
+				clientId: "keycloak-client-id",
+				clientSecret: "keycloak-client-secret",
+				issuer: "https://my-domain.com/realms/MyRealm",
+				scopes: ["openid", "profile"],
+			});
+
+			expect(keycloakConfig.scopes).toEqual(["openid", "profile"]);
+		});
+
+		it("should allow overriding other options", () => {
+			const keycloakConfig = keycloak({
+				clientId: "keycloak-client-id",
+				clientSecret: "keycloak-client-secret",
+				issuer: "https://my-domain.com/realms/MyRealm",
+				pkce: true,
+				disableImplicitSignUp: true,
+			});
+
+			expect(keycloakConfig.pkce).toBe(true);
+			expect(keycloakConfig.disableImplicitSignUp).toBe(true);
+		});
+	});
+
+	it("should integrate okta provider helper with genericOAuth", async () => {
+		const { auth: testAuth } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						okta({
+							clientId: "okta-client-id",
+							clientSecret: "okta-client-secret",
+							issuer: "https://dev-12345.okta.com/oauth2/default",
+						}),
+					],
+				}),
+			],
+		});
+
+		expect(testAuth).toBeDefined();
+	});
+
+	it("should integrate auth0 provider helper with genericOAuth", async () => {
+		const { auth: testAuth } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						auth0({
+							clientId: "auth0-client-id",
+							clientSecret: "auth0-client-secret",
+							domain: "dev-xxx.eu.auth0.com",
+						}),
+					],
+				}),
+			],
+		});
+
+		expect(testAuth).toBeDefined();
+	});
+
+	it("should integrate microsoftEntraId provider helper with genericOAuth", async () => {
+		const { auth: testAuth } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						microsoftEntraId({
+							clientId: "ms-client-id",
+							clientSecret: "ms-client-secret",
+							tenantId: "common",
+						}),
+					],
+				}),
+			],
+		});
+
+		expect(testAuth).toBeDefined();
+	});
+
+	it("should integrate slack provider helper with genericOAuth", async () => {
+		const { auth: testAuth } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						slack({
+							clientId: "slack-client-id",
+							clientSecret: "slack-client-secret",
+						}),
+					],
+				}),
+			],
+		});
+
+		expect(testAuth).toBeDefined();
+	});
+
+	it("should integrate keycloak provider helper with genericOAuth", async () => {
+		const { auth: testAuth } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						keycloak({
+							clientId: "keycloak-client-id",
+							clientSecret: "keycloak-client-secret",
+							issuer: "https://my-domain.com/realms/MyRealm",
+						}),
+					],
+				}),
+			],
+		});
+
+		expect(testAuth).toBeDefined();
 	});
 });
