@@ -184,7 +184,7 @@ describe("oidc scope consent", async () => {
 		}
 
 		{
-			// 6. Thrid request with EXPANDED scopes (adding email)
+			// 6. Third request with EXPANDED scopes (adding email)
 			const authorizationUrl2 = client.buildAuthorizationUrl(config, {
 				redirect_uri: "https://rp.example.com/callback",
 				scope: "openid profile email",
