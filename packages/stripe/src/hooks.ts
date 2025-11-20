@@ -1,8 +1,4 @@
-import {
-	type GenericEndpointContext,
-	type User,
-	type Where,
-} from "better-auth";
+import type { GenericEndpointContext, User, Where } from "better-auth";
 import { logger } from "better-auth";
 import type Stripe from "stripe";
 import type { InputSubscription, StripeOptions, Subscription } from "./types";
