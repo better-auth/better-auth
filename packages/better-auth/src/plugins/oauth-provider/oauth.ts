@@ -1036,7 +1036,6 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						client_id: z.string().optional(),
 						post_logout_redirect_uri: SafeUrlSchema.optional(),
 						state: z.string().optional(),
-						ui_locales: z.string().optional(),
 					}),
 					metadata: {
 						openapi: {
