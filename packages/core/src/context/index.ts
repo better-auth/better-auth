@@ -23,4 +23,5 @@ export {
 	getCurrentGraphContext,
 	runWithGraphContext,
 	withTransaction,
+	runWithGraphTransaction,
 } from "./graph-context";

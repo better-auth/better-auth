@@ -1,10 +1,8 @@
-import type { EndpointContext, InputContext } from "better-call";
-
 import type { AsyncLocalStorage } from "../async_hooks";
 import { getAsyncLocalStorage } from "../async_hooks";
-import type { AuthContext } from "../types";
 import type { GenericEndpointContext, GraphAdapter } from "../types/context";
 import { runWithTransaction } from "./transaction";
+import type { DBAdapter } from "../db/adapter";
 
 let currentContextAsyncStorage: AsyncLocalStorage<GraphAdapter> | null = null;
 
@@ -29,7 +27,7 @@ export async function getCurrentGraphContext(): Promise<GraphAdapter> {
 
 export async function runWithGraphContext<T>(
 	adapter: GraphAdapter,
-	fn: () => T,
+	fn: () => Promise<T>,
 ): Promise<T> {
 	const als = await ensureAsyncStorage();
 	const transactionAdapter = adapter.transaction();
@@ -48,4 +46,14 @@ export function withTransaction(
 			});
 		});
 	};
+}
+
+export function runWithGraphTransaction<R>(
+	dbAdapter: DBAdapter,
+	graphAdapter: GraphAdapter,
+	fn: () => Promise<R>,
+): Promise<R> {
+	return runWithTransaction(dbAdapter, async () => {
+		return await runWithGraphContext(graphAdapter, fn);
+	});
 }

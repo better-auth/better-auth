@@ -54,7 +54,7 @@ export const runWithAdapter = async <R>(
 
 export const runWithTransaction = async <R>(
 	adapter: DBAdapter,
-	fn: () => R,
+	fn: () => Promise<R>,
 ): Promise<R> => {
 	let called = true;
 	return ensureAsyncStorage()
