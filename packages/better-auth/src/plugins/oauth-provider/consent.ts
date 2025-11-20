@@ -80,11 +80,10 @@ export async function consentEndpoint(
 			} as OAuthConsent<Scope[]> & { id: string };
 		});
 	const iat = Math.floor(Date.now() / 1000);
-	const consent: OAuthConsent<Scope[]> = {
+	const consent: Omit<OAuthConsent<Scope[]>, "id"> = {
 		clientId: clientId,
 		userId: session?.user.id!,
 		scopes: requestedScopes ?? originalRequestedScopes,
-		consentGiven: true,
 		createdAt: new Date(iat * 1000),
 		updatedAt: new Date(iat * 1000),
 		referenceId,

@@ -286,9 +286,6 @@ export const schema = {
 			updatedAt: {
 				type: "date",
 			},
-			consentGiven: {
-				type: "boolean",
-			},
 		},
 	},
 } satisfies BetterAuthPluginDBSchema;
