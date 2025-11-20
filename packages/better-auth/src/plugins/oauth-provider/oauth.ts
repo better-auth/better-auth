@@ -19,6 +19,7 @@ import { introspectEndpoint } from "./introspect";
 import { rpInitiatedLogoutEndpoint } from "./logout";
 import { authServerMetadata, oidcServerMetadata } from "./metadata";
 import * as oauthClientEndpoints from "./oauthClient";
+import * as oauthConsentEndpoints from "./oauthConsent";
 import { registerEndpoint } from "./register";
 import { revokeEndpoint } from "./revoke";
 import { schema } from "./schema";
@@ -1275,6 +1276,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			updateOAuthClient: oauthClientEndpoints.updateOAuthClient(opts),
 			rotateClientSecret: oauthClientEndpoints.rotateClientSecret(opts),
 			deleteOAuthClient: oauthClientEndpoints.deleteOAuthClient(opts),
+			getOAuthConsent: oauthConsentEndpoints.getOAuthConsent(opts),
+			getOAuthConsents: oauthConsentEndpoints.getOAuthConsents(opts),
+			updateOAuthConsent: oauthConsentEndpoints.updateOAuthConsent(opts),
+			deleteOAuthConsent: oauthConsentEndpoints.deleteOAuthConsent(opts),
 		},
 		schema: mergeSchema(schema, opts?.schema),
 	} satisfies BetterAuthPlugin;

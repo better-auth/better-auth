@@ -875,11 +875,11 @@ export interface OAuthRefreshToken<
 export type OAuthConsent<
 	Scopes extends readonly Scope[] = InternallySupportedScopes[],
 > = {
+	id: string;
 	clientId: string;
 	userId: string;
 	referenceId?: string;
 	scopes: Scopes;
-	consentGiven: boolean;
 	createdAt: Date;
 	updatedAt: Date;
 };
