@@ -586,7 +586,11 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					? (cb) =>
 							db.transaction((tx: DB) => {
 								const adapter = createAdapterFactory({
-									config: adapterOptions!.config,
+									config: {
+										...adapterOptions!.config,
+										adapterName: "Drizzle Adapter (Transaction)",
+										adapterId: "drizzle-transaction",
+									},
 									adapter: createCustomAdapter(tx),
 								})(lazyOptions!);
 								return cb(adapter);
