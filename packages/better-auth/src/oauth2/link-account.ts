@@ -1,10 +1,8 @@
-import { APIError, createEmailVerificationToken } from "../api";
-import type { Account } from "../types";
-import type { User } from "../types";
-import { logger } from "@better-auth/core/env";
-import { isDevelopment } from "@better-auth/core/env";
-import { setTokenUtil } from "./utils";
 import type { GenericEndpointContext } from "@better-auth/core";
+import { isDevelopment, logger } from "@better-auth/core/env";
+import { APIError, createEmailVerificationToken } from "../api";
+import type { Account, User } from "../types";
+import { setTokenUtil } from "./utils";
 
 export async function handleOAuthUserInfo(
 	c: GenericEndpointContext,
@@ -17,9 +15,9 @@ export async function handleOAuthUserInfo(
 	}: {
 		userInfo: Omit<User, "createdAt" | "updatedAt">;
 		account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
-		callbackURL?: string;
-		disableSignUp?: boolean;
-		overrideUserInfo?: boolean;
+		callbackURL?: string | undefined;
+		disableSignUp?: boolean | undefined;
+		overrideUserInfo?: boolean | undefined;
 	},
 ) {
 	const dbUser = await c.context.internalAdapter
@@ -129,7 +127,7 @@ export async function handleOAuthUserInfo(
 		if (overrideUserInfo) {
 			const { id: _, ...restUserInfo } = userInfo;
 			// update user info from the provider if overrideUserInfo is true
-			await c.context.internalAdapter.updateUser(dbUser.user.id, {
+			user = await c.context.internalAdapter.updateUser(dbUser.user.id, {
 				...restUserInfo,
 				email: userInfo.email.toLowerCase(),
 				emailVerified:

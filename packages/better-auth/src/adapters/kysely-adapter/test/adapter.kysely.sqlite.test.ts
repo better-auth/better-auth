@@ -1,17 +1,18 @@
-import { Kysely, SqliteDialect } from "kysely";
-import { testAdapter } from "../../test-adapter";
-import { kyselyAdapter } from "../kysely-adapter";
 import Database from "better-sqlite3";
-import {
-	authFlowTestSuite,
-	normalTestSuite,
-	numberIdTestSuite,
-	performanceTestSuite,
-	transactionsTestSuite,
-} from "../../tests";
+import fs from "fs/promises";
+import { Kysely, SqliteDialect } from "kysely";
 import path from "path";
 import { getMigrations } from "../../../db";
-import fs from "fs/promises";
+import { testAdapter } from "../../test-adapter";
+import {
+	authFlowTestSuite,
+	joinsTestSuite,
+	normalTestSuite,
+	numberIdTestSuite,
+	transactionsTestSuite,
+	uuidTestSuite,
+} from "../../tests";
+import { kyselyAdapter } from "../kysely-adapter";
 
 const dbPath = path.join(__dirname, "test.db");
 let database = new Database(dbPath);
@@ -42,11 +43,12 @@ const { execute } = await testAdapter({
 		await runMigrations();
 	},
 	tests: [
-		normalTestSuite({}),
-		transactionsTestSuite({ disableTests: { ALL: true } }),
+		normalTestSuite(),
+		transactionsTestSuite(),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
-		performanceTestSuite({ dialect: "sqlite" }),
+		joinsTestSuite(),
+		uuidTestSuite({}),
 	],
 	async onFinish() {
 		database.close();

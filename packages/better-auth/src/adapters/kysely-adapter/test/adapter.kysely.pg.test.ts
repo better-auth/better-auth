@@ -1,16 +1,17 @@
+import type { BetterAuthOptions } from "@better-auth/core";
 import { Kysely, PostgresDialect } from "kysely";
-import { testAdapter } from "../../test-adapter";
-import { kyselyAdapter } from "../kysely-adapter";
 import { Pool } from "pg";
+import { getMigrations } from "../../../db";
+import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
+	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
-	performanceTestSuite,
 	transactionsTestSuite,
+	uuidTestSuite,
 } from "../../tests";
-import { getMigrations } from "../../../db";
-import type { BetterAuthOptions } from "@better-auth/core";
+import { kyselyAdapter } from "../kysely-adapter";
 
 const pgDB = new Pool({
 	connectionString: "postgres://user:password@localhost:5433/better_auth",
@@ -36,7 +37,8 @@ const { execute } = await testAdapter({
 		const opts = Object.assign(betterAuthOptions, {
 			database: pgDB,
 		} satisfies BetterAuthOptions);
-		const { runMigrations } = await getMigrations(opts);
+		const { runMigrations, compileMigrations } = await getMigrations(opts);
+		// console.log(await compileMigrations());
 		await runMigrations();
 	},
 	tests: [
@@ -44,7 +46,8 @@ const { execute } = await testAdapter({
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
-		performanceTestSuite({ dialect: "pg" }),
+		joinsTestSuite(),
+		uuidTestSuite(),
 	],
 	async onFinish() {
 		await pgDB.end();

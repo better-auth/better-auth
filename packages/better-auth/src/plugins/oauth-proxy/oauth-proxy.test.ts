@@ -1,11 +1,11 @@
-import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
-import { setupServer } from "msw/node";
-import { http, HttpResponse } from "msw";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { oAuthProxy } from ".";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
+import { HttpResponse, http } from "msw";
+import { setupServer } from "msw/node";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { signJWT, symmetricEncrypt } from "../../crypto";
+import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
-import { signJWT } from "../../crypto";
+import { oAuthProxy } from ".";
 
 let testIdToken: string;
 let handlers: ReturnType<typeof http.post>[];
@@ -243,5 +243,54 @@ describe("oauth-proxy", async () => {
 				expect(location).toContain("/dashboard");
 			},
 		});
+	});
+	it("should redirect to proxy url", async () => {
+		const { client, auth } = await getTestInstance({
+			plugins: [
+				oAuthProxy({
+					currentURL: "http://preview-localhost:3000",
+				}),
+			],
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+				},
+			},
+		});
+		const { secret } = await auth.$context;
+
+		const mockCookies = {
+			sessionid: "abcd1234",
+			state: "statevalue",
+		};
+		const mockCookiesString = Object.entries(mockCookies)
+			.map(([k, v]) => `${k}=${v}`)
+			.join(", ");
+		const cookies = await symmetricEncrypt({
+			key: secret,
+			data: mockCookiesString,
+		});
+
+		await client.$fetch(
+			`/oauth-proxy-callback?callbackURL=%2Fdashboard&cookies=${cookies}`,
+			{
+				onError(context) {
+					const headersList = [...context.response.headers];
+					const parsedCookies: Record<string, string> = {};
+					for (const [key, value] of headersList) {
+						if (key.toLowerCase() === "set-cookie") {
+							const [cookiePair] = value.split(";");
+							if (!cookiePair) continue;
+							const [cookieKey, cookieValue] = cookiePair.split("=");
+							if (cookieKey === undefined || cookieValue === undefined)
+								continue;
+							parsedCookies[cookieKey] = cookieValue;
+						}
+					}
+					expect(mockCookies).toEqual(parsedCookies);
+				},
+			},
+		);
 	});
 });

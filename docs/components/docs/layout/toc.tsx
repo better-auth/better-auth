@@ -1,11 +1,15 @@
 "use client";
+import type {
+	PopoverContentProps,
+	PopoverTriggerProps,
+} from "@radix-ui/react-popover";
 import type { TOCItemType } from "fumadocs-core/server";
 import * as Primitive from "fumadocs-core/toc";
+import { useI18n, usePageStyles } from "fumadocs-ui/provider";
+import { ChevronRight, Text } from "lucide-react";
+import type { ComponentProps, HTMLAttributes, ReactNode } from "react";
 import {
-	type ComponentProps,
 	createContext,
-	type HTMLAttributes,
-	type ReactNode,
 	use,
 	useEffect,
 	useMemo,
@@ -13,20 +17,13 @@ import {
 	useState,
 } from "react";
 import { cn } from "@/lib/utils";
-import { useI18n } from "fumadocs-ui/provider";
-import { TocThumb } from "./toc-thumb";
-import { ScrollArea, ScrollViewport } from "../ui/scroll-area";
-import type {
-	PopoverContentProps,
-	PopoverTriggerProps,
-} from "@radix-ui/react-popover";
-import { ChevronRight, Text } from "lucide-react";
-import { usePageStyles } from "fumadocs-ui/provider";
 import {
 	Collapsible,
 	CollapsibleContent,
 	CollapsibleTrigger,
 } from "../ui/collapsible";
+import { ScrollArea, ScrollViewport } from "../ui/scroll-area";
+import { TocThumb } from "./toc-thumb";
 
 export interface TOCProps {
 	/**
@@ -58,7 +55,7 @@ export function Toc(props: HTMLAttributes<HTMLDivElement>) {
 				{
 					...props.style,
 					"--fd-toc-height":
-						"calc(100dvh - var(--fd-banner-height) - var(--fd-nav-height))",
+						"calc(100dvh - var(--fd-banner-height) - var(--fd-nav-height) - 4rem)",
 				} as object
 			}
 		>
@@ -181,6 +178,7 @@ export function TOCItems({ items }: { items: TOCItemType[] }) {
 					<TocThumb
 						containerRef={containerRef}
 						className="mt-(--fd-top) h-(--fd-height) bg-fd-primary transition-all"
+						style={{ willChange: "height, marginTop" }}
 					/>
 				</div>
 			) : null}

@@ -1,23 +1,22 @@
 "use client";
-import { useState, useTransition } from "react";
-import {
-	Check,
-	Copy,
-	ChevronDown,
-	ExternalLink,
-	MessageCircle,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import { buttonVariants } from "@/components/ui/button";
+import { cva } from "class-variance-authority";
+import { useEffectEvent } from "fumadocs-core/utils/use-effect-event";
 import {
 	Popover,
 	PopoverContent,
 	PopoverTrigger,
 } from "fumadocs-ui/components/ui/popover";
-import { cva } from "class-variance-authority";
-
-import { type MouseEventHandler, useEffect, useRef } from "react";
-import { useEffectEvent } from "fumadocs-core/utils/use-effect-event";
+import {
+	Check,
+	ChevronDown,
+	Copy,
+	ExternalLink,
+	MessageCircle,
+} from "lucide-react";
+import type { MouseEventHandler } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export function useCopyButton(
 	onCopy: () => void | Promise<void>,

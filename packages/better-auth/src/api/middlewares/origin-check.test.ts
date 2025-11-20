@@ -1,9 +1,9 @@
-import { describe, expect } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { createAuthClient } from "../../client";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { isSimpleRequest, originCheck } from "./origin-check";
+import { describe, expect } from "vitest";
 import * as z from "zod";
+import { createAuthClient } from "../../client";
+import { getTestInstance } from "../../test-utils/test-instance";
+import { originCheck } from "./origin-check";
 
 describe("Origin Check", async (it) => {
 	const { customFetchImpl, testUser } = await getTestInstance({
@@ -139,6 +139,31 @@ describe("Origin Check", async (it) => {
 			});
 			expect(res.error?.status).toBe(403);
 		}
+	});
+
+	it("should reject callback url with malicious domain with wildcard trusted origins", async (ctx) => {
+		const { customFetchImpl, testUser } = await getTestInstance({
+			trustedOrigins: ["*.example.com"],
+			emailAndPassword: {
+				enabled: true,
+				async sendResetPassword(url, user) {},
+			},
+		});
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					cookie: "session=123",
+				},
+			},
+		});
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			callbackURL: "malicious.com?.example.com",
+		});
+		expect(res.error?.status).toBe(403);
 	});
 
 	it("should reject untrusted origin headers", async (ctx) => {
@@ -489,38 +514,4 @@ describe("origin check middleware", async (it) => {
 		);
 		expect(sampleInternalEndpointInvalid.error?.status).toBe(403);
 	});
-});
-
-describe("is simple request", async (it) => {
-	it("should return true for simple requests", async () => {
-		const request = new Request("http://localhost:3000/test", {
-			method: "GET",
-		});
-		const isSimple = isSimpleRequest(request.headers);
-		expect(isSimple).toBe(true);
-	});
-
-	it("should return false for non-simple requests", async () => {
-		const request = new Request("http://localhost:3000/test", {
-			method: "POST",
-			headers: {
-				"custom-header": "value",
-			},
-		});
-		const isSimple = isSimpleRequest(request.headers);
-		expect(isSimple).toBe(false);
-	});
-
-	it("should return false for requests with a content type that is not simple", async () => {
-		const request = new Request("http://localhost:3000/test", {
-			method: "POST",
-			headers: {
-				"content-type": "application/json",
-			},
-		});
-		const isSimple = isSimpleRequest(request.headers);
-		expect(isSimple).toBe(false);
-	});
-
-	it;
 });

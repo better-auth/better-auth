@@ -1,5 +1,6 @@
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { submitFeedbackToAnalytics } from "@/lib/inkeep-analytics";
-import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "edge";
 

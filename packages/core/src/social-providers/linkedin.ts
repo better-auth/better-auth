@@ -2,8 +2,8 @@ import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
-	validateAuthorizationCode,
 	refreshAccessToken,
+	validateAuthorizationCode,
 } from "../oauth2";
 
 export interface LinkedInProfile {
@@ -41,8 +41,8 @@ export const linkedin = (options: LinkedInOptions) => {
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["profile", "email", "openid"];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			return await createAuthorizationURL({
 				id: "linkedin",
 				options,

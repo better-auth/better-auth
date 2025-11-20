@@ -1,3 +1,8 @@
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import type { GoogleProfile } from "@better-auth/core/social-providers";
+import { HttpResponse, http } from "msw";
+import { setupServer } from "msw/node";
+import type { MockInstance } from "vitest";
 import {
 	afterAll,
 	afterEach,
@@ -6,17 +11,12 @@ import {
 	expect,
 	it,
 	vi,
-	type MockInstance,
 } from "vitest";
-import { setupServer } from "msw/node";
-import { http, HttpResponse } from "msw";
-import { getTestInstance } from "../../test-utils/test-instance";
 import { parseSetCookieHeader } from "../../cookies";
-import type { GoogleProfile } from "@better-auth/core/social-providers";
-import { DEFAULT_SECRET } from "../../utils/constants";
 import { signJWT } from "../../crypto";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { getTestInstance } from "../../test-utils/test-instance";
 import type { Account } from "../../types";
+import { DEFAULT_SECRET } from "../../utils/constants";
 
 let email = "";
 let handlers: ReturnType<typeof http.post>[];

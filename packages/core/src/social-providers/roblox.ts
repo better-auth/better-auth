@@ -1,6 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { validateAuthorizationCode, refreshAccessToken } from "../oauth2";
+import { refreshAccessToken, validateAuthorizationCode } from "../oauth2";
 
 export interface RobloxProfile extends Record<string, any> {
 	/** the user's id */
@@ -22,11 +22,14 @@ export interface RobloxProfile extends Record<string, any> {
 export interface RobloxOptions extends ProviderOptions<RobloxProfile> {
 	clientId: string;
 	prompt?:
-		| "none"
-		| "consent"
-		| "login"
-		| "select_account"
-		| "select_account consent";
+		| (
+				| "none"
+				| "consent"
+				| "login"
+				| "select_account"
+				| "select_account consent"
+		  )
+		| undefined;
 }
 
 export const roblox = (options: RobloxOptions) => {
@@ -35,8 +38,8 @@ export const roblox = (options: RobloxOptions) => {
 		name: "Roblox",
 		createAuthorizationURL({ state, scopes, redirectURI }) {
 			const _scopes = options.disableDefaultScope ? [] : ["openid", "profile"];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			return new URL(
 				`https://apis.roblox.com/oauth/v1/authorize?scope=${_scopes.join(
 					"+",
@@ -87,14 +90,15 @@ export const roblox = (options: RobloxOptions) => {
 			}
 
 			const userMap = await options.mapProfileToUser?.(profile);
-
+			// Roblox does not provide email or email_verified claim.
+			// We default to false for security consistency.
 			return {
 				user: {
 					id: profile.sub,
 					name: profile.nickname || profile.preferred_username || "",
 					image: profile.picture,
 					email: profile.preferred_username || null, // Roblox does not provide email
-					emailVerified: true,
+					emailVerified: false,
 					...userMap,
 				},
 				data: {

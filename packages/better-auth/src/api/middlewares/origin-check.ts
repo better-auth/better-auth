@@ -1,28 +1,26 @@
-import { APIError } from "better-call";
-import { createAuthMiddleware } from "@better-auth/core/api";
-import { wildcardMatch } from "../../utils/wildcard";
-import { getHost, getOrigin, getProtocol } from "../../utils/url";
 import type { GenericEndpointContext } from "@better-auth/core";
+import { createAuthMiddleware } from "@better-auth/core/api";
+import { APIError } from "better-call";
+import { getHost, getOrigin, getProtocol } from "../../utils/url";
+import { wildcardMatch } from "../../utils/wildcard";
 
 /**
  * A middleware to validate callbackURL and origin against
  * trustedOrigins.
  */
 export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
-	if (ctx.request?.method !== "POST" || !ctx.request) {
+	// Skip origin check for GET, OPTIONS, HEAD requests - we don't mutate state here.
+	if (
+		ctx.request?.method === "GET" ||
+		ctx.request?.method === "OPTIONS" ||
+		ctx.request?.method === "HEAD" ||
+		!ctx.request
+	) {
 		return;
 	}
 	const headers = ctx.request?.headers;
 	const request = ctx.request;
 	const { body, query, context } = ctx;
-	/**
-	 * We only allow requests with the x-auth-request header set to
-	 * true or application/json content type. This is to prevent
-	 * simple requests from being processed
-	 */
-	if (isSimpleRequest(headers) && !ctx.context.skipCSRFCheck) {
-		throw new APIError("FORBIDDEN", { message: "Invalid request" });
-	}
 	const originHeader = headers?.get("origin") || headers?.get("referer") || "";
 	const callbackURL = body?.callbackURL || query?.callbackURL;
 	const redirectURL = body?.redirectTo;
@@ -46,8 +44,11 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 			if (pattern.includes("://")) {
 				return wildcardMatch(pattern)(getOrigin(url) || url);
 			}
-			// For host-only wildcards, match just the host
-			return wildcardMatch(pattern)(getHost(url));
+			const host = getHost(url);
+			if (!host) {
+				return false;
+			}
+			return wildcardMatch(pattern)(host);
 		}
 
 		const protocol = getProtocol(url);
@@ -118,8 +119,12 @@ export const originCheck = (
 				if (pattern.includes("://")) {
 					return wildcardMatch(pattern)(getOrigin(url) || url);
 				}
+				const host = getHost(url);
+				if (!host) {
+					return false;
+				}
 				// For host-only wildcards, match just the host
-				return wildcardMatch(pattern)(getHost(url));
+				return wildcardMatch(pattern)(host);
 			}
 			const protocol = getProtocol(url);
 			return protocol === "http:" || protocol === "https:" || !protocol
@@ -154,31 +159,3 @@ export const originCheck = (
 			validateURL(url, "callbackURL");
 		}
 	});
-
-export function isSimpleRequest(headers: Headers) {
-	const SIMPLE_HEADERS = [
-		"accept",
-		"accept-language",
-		"content-language",
-		"content-type",
-	];
-	const SIMPLE_CONTENT_TYPES = [
-		"application/x-www-form-urlencoded",
-		"multipart/form-data",
-		"text/plain",
-	];
-	for (const [key, value] of headers.entries()) {
-		if (!SIMPLE_HEADERS.includes(key.toLowerCase())) {
-			return false; // has non-simple header
-		}
-		if (
-			key.toLowerCase() === "content-type" &&
-			!SIMPLE_CONTENT_TYPES.includes(
-				value?.split(";")[0]?.trim()?.toLowerCase() || "",
-			)
-		) {
-			return false;
-		}
-	}
-	return true;
-}

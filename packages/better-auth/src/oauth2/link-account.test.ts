@@ -1,11 +1,19 @@
-import { describe, expect, it, beforeAll, afterAll, afterEach } from "vitest";
-import { setupServer } from "msw/node";
-import { http, HttpResponse } from "msw";
-import { getTestInstance } from "../test-utils/test-instance";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
-import { DEFAULT_SECRET } from "../utils/constants";
+import { HttpResponse, http } from "msw";
+import { setupServer } from "msw/node";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import { signJWT } from "../crypto";
+import { getTestInstance } from "../test-utils/test-instance";
 import type { User } from "../types";
+import { DEFAULT_SECRET } from "../utils/constants";
 
 let mockEmail = "";
 let mockEmailVerified = true;
@@ -220,5 +228,100 @@ describe("oauth2 - email verification on link", async () => {
 			where: [{ field: "id", value: userId }],
 		});
 		expect(user?.emailVerified).toBe(true);
+	});
+});
+
+describe("oauth2 - override user info on sign-in", async () => {
+	const { auth, client, cookieSetter } = await getTestInstance({
+		socialProviders: {
+			google: {
+				clientId: "test",
+				clientSecret: "test",
+				enabled: true,
+				overrideUserInfoOnSignIn: true,
+			},
+		},
+		account: {
+			accountLinking: {
+				enabled: true,
+				trustedProviders: ["google"],
+			},
+		},
+		session: {
+			cookieCache: {
+				enabled: true,
+				maxAge: 300,
+			},
+		},
+	});
+
+	const ctx = await auth.$context;
+
+	it("should update user info when overrideUserInfo is enabled", async () => {
+		const testEmail = "override@example.com";
+
+		await ctx.adapter.create({
+			model: "user",
+			data: {
+				email: testEmail,
+				name: "Initial Name",
+				emailVerified: false,
+			},
+		});
+
+		// Simulate DB latency
+		const originalUpdateUser = ctx.internalAdapter.updateUser.bind(
+			ctx.internalAdapter,
+		);
+		vi.spyOn(ctx.internalAdapter, "updateUser").mockImplementation(
+			async (id, data) => {
+				const result = await originalUpdateUser(id, data);
+				await new Promise((resolve) => setTimeout(resolve, 100));
+				return result;
+			},
+		);
+
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile: GoogleProfile = {
+					sub: "google_123",
+					email: testEmail,
+					email_verified: true,
+					name: "Updated Name",
+				} as GoogleProfile;
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "test_token",
+					id_token: idToken,
+				});
+			}),
+		);
+
+		const oAuthHeaders = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/",
+			fetchOptions: {
+				onSuccess: cookieSetter(oAuthHeaders),
+			},
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers: oAuthHeaders,
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				cookieSetter(oAuthHeaders)(context as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers: oAuthHeaders,
+			},
+		});
+
+		expect(session.data?.user.name).toBe("Updated Name");
 	});
 });

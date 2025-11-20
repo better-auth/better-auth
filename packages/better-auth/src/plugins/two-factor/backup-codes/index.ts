@@ -1,17 +1,17 @@
-import { generateRandomString } from "../../../crypto/random";
-import * as z from "zod";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { APIError } from "better-call";
+import * as z from "zod";
 import { sessionMiddleware } from "../../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
+import { generateRandomString } from "../../../crypto/random";
+import { safeJSONParse } from "../../../utils/json";
+import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import type {
 	TwoFactorProvider,
 	TwoFactorTable,
 	UserWithTwoFactor,
 } from "../types";
-import { APIError } from "better-call";
-import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import { verifyTwoFactor } from "../verify-two-factor";
-import { safeJSONParse } from "../../../utils/json";
 
 export interface BackupCodeOptions {
 	/**
@@ -19,30 +19,33 @@ export interface BackupCodeOptions {
 	 *
 	 * @default 10
 	 */
-	amount?: number;
+	amount?: number | undefined;
 	/**
 	 * The length of the backup codes
 	 *
 	 * @default 10
 	 */
-	length?: number;
+	length?: number | undefined;
 	/**
 	 * An optional custom function to generate backup codes
 	 */
-	customBackupCodesGenerate?: () => string[];
+	customBackupCodesGenerate?: (() => string[]) | undefined;
 	/**
 	 * How to store the backup codes in the database, whether encrypted or plain.
 	 */
 	storeBackupCodes?:
-		| "plain"
-		| "encrypted"
-		| {
-				encrypt: (token: string) => Promise<string>;
-				decrypt: (token: string) => Promise<string>;
-		  };
+		| (
+				| "plain"
+				| "encrypted"
+				| {
+						encrypt: (token: string) => Promise<string>;
+						decrypt: (token: string) => Promise<string>;
+				  }
+		  )
+		| undefined;
 }
 
-function generateBackupCodesFn(options?: BackupCodeOptions) {
+function generateBackupCodesFn(options?: BackupCodeOptions | undefined) {
 	return Array.from({ length: options?.amount ?? 10 })
 		.fill(null)
 		.map(() => generateRandomString(options?.length ?? 10, "a-z", "0-9", "A-Z"))
@@ -51,7 +54,7 @@ function generateBackupCodesFn(options?: BackupCodeOptions) {
 
 export async function generateBackupCodes(
 	secret: string,
-	options?: BackupCodeOptions,
+	options?: BackupCodeOptions | undefined,
 ) {
 	const backupCodes = options?.customBackupCodesGenerate
 		? options.customBackupCodesGenerate()
@@ -89,7 +92,7 @@ export async function verifyBackupCode(
 		code: string;
 	},
 	key: string,
-	options?: BackupCodeOptions,
+	options?: BackupCodeOptions | undefined,
 ) {
 	const codes = await getBackupCodes(data.backupCodes, key, options);
 	if (!codes) {
@@ -107,7 +110,7 @@ export async function verifyBackupCode(
 export async function getBackupCodes(
 	backupCodes: string,
 	key: string,
-	options?: BackupCodeOptions,
+	options?: BackupCodeOptions | undefined,
 ) {
 	if (options?.storeBackupCodes === "encrypted") {
 		const decrypted = await symmetricDecrypt({ key, data: backupCodes });
@@ -444,22 +447,19 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 			/**
 			 * ### Endpoint
 			 *
-			 * GET `/two-factor/view-backup-codes`
+			 * POST `/two-factor/view-backup-codes`
 			 *
 			 * ### API Methods
 			 *
 			 * **server:**
 			 * `auth.api.viewBackupCodes`
 			 *
-			 * **client:**
-			 * `authClient.twoFactor.viewBackupCodes`
-			 *
 			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-view-backup-codes)
 			 */
 			viewBackupCodes: createAuthEndpoint(
 				"/two-factor/view-backup-codes",
 				{
-					method: "GET",
+					method: "POST",
 					body: z.object({
 						userId: z.coerce.string().meta({
 							description: `The user ID to view all backup codes. Eg: "user-id"`,

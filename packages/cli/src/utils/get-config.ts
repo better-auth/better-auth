@@ -1,16 +1,16 @@
-import { loadConfig } from "c12";
-import type { BetterAuthOptions } from "better-auth";
-import { logger } from "better-auth";
-import path from "path";
-// @ts-expect-error
-import babelPresetTypeScript from "@babel/preset-typescript";
 // @ts-expect-error
 import babelPresetReact from "@babel/preset-react";
+// @ts-expect-error
+import babelPresetTypeScript from "@babel/preset-typescript";
+import type { BetterAuthOptions } from "better-auth";
+import { BetterAuthError, logger } from "better-auth";
+import { loadConfig } from "c12";
 import fs, { existsSync } from "fs";
-import { BetterAuthError } from "better-auth";
+import type { JitiOptions } from "jiti";
+import path from "path";
+import { addCloudflareModules } from "./add-cloudflare-modules";
 import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
 import { getTsconfigInfo } from "./get-tsconfig-info";
-import type { JitiOptions } from "jiti";
 
 let possiblePaths = [
 	"auth.ts",
@@ -119,6 +119,7 @@ function getPathAliases(cwd: string): Record<string, string> | null {
 	try {
 		const result = getPathAliasesRecursive(tsConfigPath);
 		addSvelteKitEnvModules(result);
+		addCloudflareModules(result);
 		return result;
 	} catch (error) {
 		console.error(error);

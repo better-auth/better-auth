@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import { createAuthClient } from "../../client";
+import { inferAdditionalFields } from "../../client/plugins";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { Account } from "../../types";
 
@@ -52,31 +54,8 @@ describe("updateUser", async () => {
 		});
 	});
 
-	it("should update user email", async () => {
-		const newEmail = "new-email@email.com";
-		await globalRunWithClient(async () => {
-			const res = await client.changeEmail({
-				newEmail,
-			});
-			const sessionRes = await client.getSession();
-			expect(sessionRes.data?.user.email).toBe(newEmail);
-			expect(sessionRes.data?.user.emailVerified).toBe(false);
-		});
-	});
-
-	it("should verify email", async () => {
-		await globalRunWithClient(async () => {
-			await client.verifyEmail({
-				query: {
-					token: emailVerificationToken,
-				},
-			});
-			const sessionRes = await client.getSession();
-			expect(sessionRes.data?.user.emailVerified).toBe(true);
-		});
-	});
-
-	it("should send email verification before update", async () => {
+	it("should not update user email immediately (default secure flow)", async () => {
+		// Ensure user is verified to trigger the confirmation flow
 		await db.update({
 			model: "user",
 			update: {
@@ -85,27 +64,68 @@ describe("updateUser", async () => {
 			where: [
 				{
 					field: "email",
-					value: "new-email@email.com",
+					value: testUser.email,
 				},
 			],
 		});
+
+		const newEmail = "new-email@email.com";
 		await globalRunWithClient(async () => {
-			await client.changeEmail({
-				newEmail: "new-email-2@email.com",
+			const res = await client.changeEmail({
+				newEmail,
 			});
+			const sessionRes = await client.getSession();
+			// Should NOT update email yet
+			expect(sessionRes.data?.user.email).not.toBe(newEmail);
+			expect(sessionRes.data?.user.email).toBe(testUser.email);
 		});
-		expect(sendChangeEmail).toHaveBeenCalledWith(
-			expect.objectContaining({
-				email: "new-email@email.com",
-			}),
-			"new-email-2@email.com",
-			expect.any(String),
-			expect.any(String),
-		);
+	});
+
+	it("should verify email change (flow with confirmation)", async () => {
+		// The previous test triggered changeEmail.
+		// Since testUser is verified, and sendChangeEmailVerification is provided,
+		// it should have sent a confirmation email to the OLD email.
+
+		expect(sendChangeEmail).toHaveBeenCalled();
+		const call = sendChangeEmail.mock.calls[0];
+		const token = call?.[3]; // token is 4th arg
+		if (!token) throw new Error("Token not found");
+
+		await globalRunWithClient(async () => {
+			// 1. Verify the confirmation token (sent to old email)
+			const res = await client.verifyEmail({
+				query: {
+					token: token,
+				},
+			});
+			expect(res.data?.status).toBe(true);
+
+			// This should trigger sending verification to the NEW email.
+			// emailVerification.sendVerificationEmail should have been called.
+			// We captured this in emailVerificationToken variable in setup.
+			expect(emailVerificationToken).toBeDefined();
+
+			// User email should STILL be old email
+			const sessionRes = await client.getSession();
+			expect(sessionRes.data?.user.email).toBe(testUser.email);
+
+			// 2. Verify the new email token
+			const res2 = await client.verifyEmail({
+				query: {
+					token: emailVerificationToken,
+				},
+			});
+			expect(res2.data?.status).toBe(true);
+
+			// NOW user email should be updated
+			const sessionRes2 = await client.getSession();
+			expect(sessionRes2.data?.user.email).toBe("new-email@email.com");
+			expect(sessionRes2.data?.user.emailVerified).toBe(true);
+		});
 	});
 
 	it("should update the user's password", async () => {
-		const newEmail = "new-email@email.com";
+		const newEmail = "new-email@email.com"; // User email is now this
 		await globalRunWithClient(async () => {
 			const updated = await client.changePassword({
 				newPassword: "newPassword",
@@ -120,7 +140,7 @@ describe("updateUser", async () => {
 		});
 		expect(signInRes.data?.user).toBeDefined();
 		const signInCurrentPassword = await client.signIn.email({
-			email: testUser.email,
+			email: testUser.email, // Old email
 			password: testUser.password,
 		});
 		expect(signInCurrentPassword.data).toBeNull();
@@ -345,6 +365,41 @@ describe("updateUser", async () => {
 		});
 
 		expect(firstSession?.user.name).toBe("updatedName");
+	});
+
+	it("should not allow updating user with additional fields that are input: false", async () => {
+		const { auth, customFetchImpl, signInWithTestUser } = await getTestInstance(
+			{
+				user: {
+					additionalFields: {
+						newField: {
+							type: "string",
+							defaultValue: "default",
+							input: false,
+						},
+					},
+				},
+			},
+		);
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+			plugins: [inferAdditionalFields<typeof auth>()],
+		});
+		const { headers } = await signInWithTestUser();
+		const res = await client.updateUser(
+			{
+				//@ts-expect-error - newField is not available in the user input
+				newField: "new",
+			},
+			{
+				headers,
+			},
+		);
+		expect(res.error).toBeDefined();
+		expect(res.error?.message).toBe("newField is not allowed to be set");
 	});
 });
 

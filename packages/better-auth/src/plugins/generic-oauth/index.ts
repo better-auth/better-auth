@@ -1,27 +1,32 @@
-import { betterFetch } from "@better-fetch/fetch";
-import { APIError } from "better-call";
-import { decodeJwt } from "jose";
-import * as z from "zod";
+import type {
+	AuthContext,
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { setSessionCookie } from "../../cookies";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import {
-	createAuthorizationURL,
-	validateAuthorizationCode,
-} from "@better-auth/core/oauth2";
 import type {
 	OAuth2Tokens,
 	OAuth2UserInfo,
 	OAuthProvider,
 } from "@better-auth/core/oauth2";
+import {
+	createAuthorizationURL,
+	refreshAccessToken,
+	validateAuthorizationCode,
+} from "@better-auth/core/oauth2";
+import { defineErrorCodes } from "@better-auth/core/utils";
+import { betterFetch } from "@better-fetch/fetch";
+import { APIError } from "better-call";
+import { decodeJwt } from "jose";
+import * as z from "zod";
+import { sessionMiddleware } from "../../api";
+import { setSessionCookie } from "../../cookies";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
-import { refreshAccessToken } from "@better-auth/core/oauth2";
 import { generateState, parseState } from "../../oauth2/state";
 import type { User } from "../../types";
-import type { BetterAuthPlugin } from "@better-auth/core";
-import type { GenericEndpointContext } from "@better-auth/core";
-import { sessionMiddleware } from "../../api";
-import { defineErrorCodes } from "@better-auth/core/utils";
+
+export * from "./providers";
 
 /**
  * Configuration interface for generic OAuth providers.
@@ -33,112 +38,122 @@ export interface GenericOAuthConfig {
 	 * URL to fetch OAuth 2.0 configuration.
 	 * If provided, the authorization and token endpoints will be fetched from this URL.
 	 */
-	discoveryUrl?: string;
+	discoveryUrl?: string | undefined;
 	/**
 	 * URL for the authorization endpoint.
 	 * Optional if using discoveryUrl.
 	 */
-	authorizationUrl?: string;
+	authorizationUrl?: string | undefined;
 	/**
 	 * URL for the token endpoint.
 	 * Optional if using discoveryUrl.
 	 */
-	tokenUrl?: string;
+	tokenUrl?: string | undefined;
 	/**
 	 * URL for the user info endpoint.
 	 * Optional if using discoveryUrl.
 	 */
-	userInfoUrl?: string;
+	userInfoUrl?: string | undefined;
 	/** OAuth client ID */
 	clientId: string;
 	/** OAuth client secret */
-	clientSecret?: string;
+	clientSecret?: string | undefined;
 	/**
 	 * Array of OAuth scopes to request.
 	 * @default []
 	 */
-	scopes?: string[];
+	scopes?: string[] | undefined;
 	/**
 	 * Custom redirect URI.
 	 * If not provided, a default URI will be constructed.
 	 */
-	redirectURI?: string;
+	redirectURI?: string | undefined;
 	/**
 	 * OAuth response type.
 	 * @default "code"
 	 */
-	responseType?: string;
+	responseType?: string | undefined;
 	/**
 	 * The response mode to use for the authorization code request.
 
 	 */
-	responseMode?: "query" | "form_post";
+	responseMode?: ("query" | "form_post") | undefined;
 	/**
 	 * Prompt parameter for the authorization request.
 	 * Controls the authentication experience for the user.
 	 */
-	prompt?: "none" | "login" | "consent" | "select_account";
+	prompt?: ("none" | "login" | "consent" | "select_account") | undefined;
 	/**
 	 * Whether to use PKCE (Proof Key for Code Exchange)
 	 * @default false
 	 */
-	pkce?: boolean;
+	pkce?: boolean | undefined;
 	/**
 	 * Access type for the authorization request.
 	 * Use "offline" to request a refresh token.
 	 */
-	accessType?: string;
+	accessType?: string | undefined;
 	/**
 	 * Custom function to fetch user info.
 	 * If provided, this function will be used instead of the default user info fetching logic.
 	 * @param tokens - The OAuth tokens received after successful authentication
 	 * @returns A promise that resolves to a User object or null
 	 */
-	getUserInfo?: (tokens: OAuth2Tokens) => Promise<OAuth2UserInfo | null>;
+	getUserInfo?:
+		| ((tokens: OAuth2Tokens) => Promise<OAuth2UserInfo | null>)
+		| undefined;
 	/**
 	 * Custom function to map the user profile to a User object.
 	 */
-	mapProfileToUser?: (
-		profile: Record<string, any>,
-	) => Partial<Partial<User>> | Promise<Partial<User>>;
+	mapProfileToUser?:
+		| ((
+				profile: Record<string, any>,
+		  ) => Partial<Partial<User>> | Promise<Partial<User>>)
+		| undefined;
 	/**
 	 * Additional search-params to add to the authorizationUrl.
 	 * Warning: Search-params added here overwrite any default params.
 	 */
 	authorizationUrlParams?:
-		| Record<string, string>
-		| ((ctx: GenericEndpointContext) => Record<string, string>);
+		| (
+				| Record<string, string>
+				| ((ctx: GenericEndpointContext) => Record<string, string>)
+		  )
+		| undefined;
 	/**
 	 * Additional search-params to add to the tokenUrl.
 	 * Warning: Search-params added here overwrite any default params.
 	 */
 	tokenUrlParams?:
-		| Record<string, string>
-		| ((ctx: GenericEndpointContext) => Record<string, string>);
+		| (
+				| Record<string, string>
+				| ((ctx: GenericEndpointContext) => Record<string, string>)
+		  )
+		| undefined;
 	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
 	 * sign-in need to be called with with requestSignUp as true to create new users.
 	 */
-	disableImplicitSignUp?: boolean;
+	disableImplicitSignUp?: boolean | undefined;
 	/**
 	 * Disable sign up for new users.
 	 */
-	disableSignUp?: boolean;
+	disableSignUp?: boolean | undefined;
 	/**
 	 * Authentication method for token requests.
 	 * @default "post"
 	 */
-	authentication?: "basic" | "post";
+	authentication?: ("basic" | "post") | undefined;
 	/**
 	 * Custom headers to include in the discovery request.
 	 * Useful for providers like Epic that require specific headers (e.g., Epic-Client-ID).
 	 */
-	discoveryHeaders?: Record<string, string>;
+	discoveryHeaders?: Record<string, string> | undefined;
 	/**
 	 * Custom headers to include in the authorization request.
 	 * Useful for providers like Qonto that require specific headers (e.g., X-Qonto-Staging-Token for local development).
 	 */
-	authorizationHeaders?: Record<string, string>;
+	authorizationHeaders?: Record<string, string> | undefined;
 	/**
 	 * Override user info with the provider info.
 	 *
@@ -146,8 +161,30 @@ export interface GenericOAuthConfig {
 	 * when the user signs in with the provider.
 	 * @default false
 	 */
-	overrideUserInfo?: boolean;
+	overrideUserInfo?: boolean | undefined;
 }
+
+/**
+ * Base type for OAuth provider options.
+ * Extracts common fields from GenericOAuthConfig and makes clientSecret required.
+ */
+export type BaseOAuthProviderOptions = Omit<
+	Pick<
+		GenericOAuthConfig,
+		| "clientId"
+		| "clientSecret"
+		| "scopes"
+		| "redirectURI"
+		| "pkce"
+		| "disableImplicitSignUp"
+		| "disableSignUp"
+		| "overrideUserInfo"
+	>,
+	"clientSecret"
+> & {
+	/** OAuth client secret (required for provider options) */
+	clientSecret: string;
+};
 
 interface GenericOAuthOptions {
 	/**
@@ -186,7 +223,7 @@ async function getUserInfo(
 
 	const userInfo = await betterFetch<{
 		email: string;
-		sub?: string;
+		sub?: string | undefined;
 		name: string;
 		email_verified: boolean;
 		picture: string;
@@ -197,8 +234,7 @@ async function getUserInfo(
 		},
 	});
 	return {
-		// @ts-expect-error sub is optional in the type
-		id: userInfo.data?.sub,
+		id: userInfo.data?.sub ?? "",
 		emailVerified: userInfo.data?.email_verified ?? false,
 		email: userInfo.data?.email,
 		image: userInfo.data?.picture,
@@ -217,13 +253,40 @@ const ERROR_CODES = defineErrorCodes({
 export const genericOAuth = (options: GenericOAuthOptions) => {
 	return {
 		id: "generic-oauth",
-		init: (ctx) => {
+		init: (ctx: AuthContext) => {
 			const genericProviders = options.config.map((c) => {
 				let finalUserInfoUrl = c.userInfoUrl;
 				return {
 					id: c.providerId,
 					name: c.providerId,
-					createAuthorizationURL(data) {
+					async createAuthorizationURL(data: {
+						state: string;
+						codeVerifier: string;
+						scopes?: string[] | undefined;
+						redirectURI: string;
+						display?: string | undefined;
+						loginHint?: string | undefined;
+					}) {
+						let finalAuthUrl = c.authorizationUrl;
+						if (!finalAuthUrl && c.discoveryUrl) {
+							const discovery = await betterFetch<{
+								authorization_endpoint: string;
+								userinfo_endpoint: string;
+							}>(c.discoveryUrl, {
+								method: "GET",
+								headers: c.discoveryHeaders,
+							});
+							if (discovery.data) {
+								finalAuthUrl = discovery.data.authorization_endpoint;
+								finalUserInfoUrl =
+									finalUserInfoUrl ?? discovery.data.userinfo_endpoint;
+							}
+						}
+						if (!finalAuthUrl) {
+							throw new APIError("BAD_REQUEST", {
+								message: ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
+							});
+						}
 						return createAuthorizationURL({
 							id: c.providerId,
 							options: {
@@ -231,14 +294,19 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								clientSecret: c.clientSecret,
 								redirectURI: c.redirectURI,
 							},
-							authorizationEndpoint: c.authorizationUrl!,
+							authorizationEndpoint: finalAuthUrl,
 							state: data.state,
 							codeVerifier: c.pkce ? data.codeVerifier : undefined,
 							scopes: c.scopes || [],
 							redirectURI: `${ctx.baseURL}/oauth2/callback/${c.providerId}`,
 						});
 					},
-					async validateAuthorizationCode(data) {
+					async validateAuthorizationCode(data: {
+						code: string;
+						redirectURI: string;
+						codeVerifier?: string | undefined;
+						deviceId?: string | undefined;
+					}) {
 						let finalTokenUrl = c.tokenUrl;
 						if (c.discoveryUrl) {
 							const discovery = await betterFetch<{
@@ -302,14 +370,16 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							tokenEndpoint: finalTokenUrl,
 						});
 					},
-
-					async getUserInfo(tokens) {
+					async getUserInfo(tokens: OAuth2Tokens) {
 						const userInfo = c.getUserInfo
 							? await c.getUserInfo(tokens)
 							: await getUserInfo(tokens, finalUserInfoUrl);
 						if (!userInfo) {
 							return null;
 						}
+
+						const userMap = await c.mapProfileToUser?.(userInfo);
+
 						return {
 							user: {
 								id: userInfo?.id,
@@ -317,10 +387,13 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								emailVerified: userInfo?.emailVerified,
 								image: userInfo?.image,
 								name: userInfo?.name,
-								...c.mapProfileToUser?.(userInfo),
+								...userMap,
 							},
 							data: userInfo,
 						};
+					},
+					options: {
+						overrideUserInfoOnSignIn: c.overrideUserInfo,
 					},
 				} as OAuthProvider;
 			});
@@ -393,6 +466,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 									"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider. Eg: false",
 							})
 							.optional(),
+						/**
+						 * Any additional data to pass through the oauth flow.
+						 */
+						additionalData: z.record(z.string(), z.any()).optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -420,7 +497,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						},
 					},
 				},
-				async (ctx) => {
+				async (ctx: GenericEndpointContext) => {
 					const { providerId } = ctx.body;
 					const config = options.config.find(
 						(c) => c.providerId === providerId,
@@ -485,7 +562,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							? authorizationUrlParams(ctx)
 							: authorizationUrlParams;
 
-					const { state, codeVerifier } = await generateState(ctx);
+					const { state, codeVerifier } = await generateState(
+						ctx,
+						undefined,
+						ctx.body.additionalData,
+					);
 					const authUrl = await createAuthorizationURL({
 						id: providerId,
 						options: {
@@ -544,6 +625,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					}),
 					metadata: {
 						client: false,
+						allowedMediaTypes: [
+							"application/x-www-form-urlencoded",
+							"application/json",
+						],
 						openapi: {
 							description: "OAuth2 callback",
 							responses: {
@@ -566,7 +651,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						},
 					},
 				},
-				async (ctx) => {
+				async (ctx: GenericEndpointContext) => {
 					const defaultErrorURL =
 						ctx.context.options.onAPIError?.errorURL ||
 						`${ctx.context.baseURL}/error`;
@@ -577,13 +662,19 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							}&error_description=${ctx.query.error_description}`,
 						);
 					}
+					const providerId = ctx.params?.providerId;
+					if (!providerId) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Provider ID is required",
+						});
+					}
 					const provider = options.config.find(
-						(p) => p.providerId === ctx.params.providerId,
+						(p) => p.providerId === providerId,
 					);
 
 					if (!provider) {
 						throw new APIError("BAD_REQUEST", {
-							message: `No config found for provider ${ctx.params.providerId}`,
+							message: `No config found for provider ${providerId}`,
 						});
 					}
 					let tokens: OAuth2Tokens | undefined = undefined;
@@ -880,8 +971,13 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						},
 					},
 				},
-				async (c) => {
+				async (c: GenericEndpointContext) => {
 					const session = c.context.session;
+					if (!session) {
+						throw new APIError("UNAUTHORIZED", {
+							message: "Session is required",
+						});
+					}
 					const provider = options.config.find(
 						(p) => p.providerId === c.body.providerId,
 					);
@@ -934,10 +1030,14 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						});
 					}
 
-					const state = await generateState(c, {
-						userId: session.user.id,
-						email: session.user.email,
-					});
+					const state = await generateState(
+						c,
+						{
+							userId: session.user.id,
+							email: session.user.email,
+						},
+						undefined,
+					);
 
 					const additionalParams =
 						typeof authorizationUrlParams === "function"

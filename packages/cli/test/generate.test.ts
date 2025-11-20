@@ -1,14 +1,14 @@
-import { describe, expect, it } from "vitest";
-import { prismaAdapter } from "better-auth/adapters/prisma";
-import { generatePrismaSchema } from "../src/generators/prisma";
-import { organization, twoFactor, username } from "better-auth/plugins";
-import { generateDrizzleSchema } from "../src/generators/drizzle";
-import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { generateMigrations } from "../src/generators/kysely";
-import Database from "better-sqlite3";
 import type { BetterAuthOptions } from "better-auth";
-import { generateAuthConfig } from "../src/generators/auth-config";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { prismaAdapter } from "better-auth/adapters/prisma";
+import { organization, twoFactor, username } from "better-auth/plugins";
+import Database from "better-sqlite3";
+import { describe, expect, it } from "vitest";
 import type { SupportedPlugin } from "../src/commands/init";
+import { generateAuthConfig } from "../src/generators/auth-config";
+import { generateDrizzleSchema } from "../src/generators/drizzle";
+import { generateMigrations } from "../src/generators/kysely";
+import { generatePrismaSchema } from "../src/generators/prisma";
 
 describe("generate", async () => {
 	it("should generate prisma schema", async () => {
@@ -30,7 +30,9 @@ describe("generate", async () => {
 				plugins: [twoFactor(), username()],
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot("./__snapshots__/schema.prisma");
+		await expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/schema.prisma",
+		);
 	});
 
 	it("should generate prisma schema with number id", async () => {
@@ -52,13 +54,42 @@ describe("generate", async () => {
 				plugins: [twoFactor(), username()],
 				advanced: {
 					database: {
-						useNumberId: true,
+						generateId: "serial",
 					},
 				},
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot(
+		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/schema-numberid.prisma",
+		);
+	});
+
+	it("should generate prisma schema with uuid id", async () => {
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: prismaAdapter(
+				{},
+				{
+					provider: "postgresql",
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: prismaAdapter(
+					{},
+					{
+						provider: "postgresql",
+					},
+				),
+				plugins: [twoFactor(), username()],
+				advanced: {
+					database: {
+						generateId: "uuid",
+					},
+				},
+			},
+		});
+		await expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/schema-uuid.prisma",
 		);
 	});
 
@@ -81,7 +112,7 @@ describe("generate", async () => {
 				plugins: [twoFactor(), username()],
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot(
+		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/schema-mongodb.prisma",
 		);
 	});
@@ -105,7 +136,7 @@ describe("generate", async () => {
 				plugins: [twoFactor(), username()],
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot(
+		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/schema-mysql.prisma",
 		);
 	});
@@ -142,7 +173,7 @@ describe("generate", async () => {
 				],
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot(
+		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/schema-mysql-custom.prisma",
 		);
 	});
@@ -180,7 +211,9 @@ describe("generate", async () => {
 				},
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot("./__snapshots__/auth-schema.txt");
+		await expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/auth-schema.txt",
+		);
 	});
 
 	it("should generate drizzle schema with number id", async () => {
@@ -204,7 +237,7 @@ describe("generate", async () => {
 				plugins: [twoFactor(), username()],
 				advanced: {
 					database: {
-						useNumberId: true,
+						generateId: "serial",
 					},
 				},
 				user: {
@@ -221,7 +254,7 @@ describe("generate", async () => {
 				},
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot(
+		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-number-id.txt",
 		);
 	});
@@ -234,7 +267,9 @@ describe("generate", async () => {
 			},
 			adapter: {} as any,
 		});
-		expect(schema.code).toMatchFileSnapshot("./__snapshots__/migrations.sql");
+		await expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/migrations.sql",
+		);
 	});
 
 	it("should add plugin to empty plugins array without leading comma", async () => {
@@ -359,6 +394,45 @@ describe("JSON field support in CLI generators", () => {
 			} as BetterAuthOptions,
 		});
 		expect(schema.code).toContain("preferences   Json?");
+	});
+
+	it("should generate Prisma schema with JSON default values of arrays and objects", async () => {
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: {
+				id: "prisma",
+				options: {},
+			} as any,
+			options: {
+				database: {} as any,
+				user: {
+					additionalFields: {
+						preferences: {
+							type: "json",
+							defaultValue: {
+								premiumuser: true,
+							},
+						},
+						metadata: {
+							type: "json",
+							defaultValue: [
+								{
+									name: "john",
+									subscribed: false,
+								},
+								{ name: "doe", subscribed: true },
+							],
+						},
+					},
+				},
+			} as BetterAuthOptions,
+		});
+		expect(schema.code).toContain("preferences   Json?");
+		// expect(schema.code).toContain(JSON.stringify(`@default("{\"premiumuser\":true}")`).slice(1,-1));
+		expect(schema.code).toContain('@default("{\\"premiumuser\\":true}")');
+		expect(schema.code).toContain(
+			'@default("[{\\"name\\":\\"john\\",\\"subscribed\\":false},{\\"name\\":\\"doe\\",\\"subscribed\\":true}]")',
+		);
 	});
 });
 

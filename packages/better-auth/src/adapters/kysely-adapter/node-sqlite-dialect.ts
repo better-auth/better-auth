@@ -1,27 +1,30 @@
 /**
  * @see {@link https://nodejs.org/api/sqlite.html} - Node.js SQLite API documentation
  */
-import {
+
+import type { DatabaseSync } from "node:sqlite";
+import type {
+	DatabaseConnection,
+	DatabaseIntrospector,
+	DatabaseMetadata,
+	DatabaseMetadataOptions,
+	Dialect,
+	DialectAdapter,
+	DialectAdapterBase,
+	Driver,
 	Kysely,
+	QueryCompiler,
+	QueryResult,
+	SchemaMetadata,
+	TableMetadata,
+} from "kysely";
+import {
 	CompiledQuery,
 	DEFAULT_MIGRATION_LOCK_TABLE,
 	DEFAULT_MIGRATION_TABLE,
+	DefaultQueryCompiler,
 	sql,
-	type DatabaseConnection,
-	type QueryResult,
-	type DatabaseIntrospector,
-	type SchemaMetadata,
-	type DatabaseMetadataOptions,
-	type TableMetadata,
-	type DatabaseMetadata,
-	type Driver,
-	type Dialect,
-	type QueryCompiler,
-	type DialectAdapter,
 } from "kysely";
-import { DefaultQueryCompiler } from "kysely";
-import { DialectAdapterBase } from "kysely";
-import type { DatabaseSync } from "node:sqlite";
 
 export class NodeSqliteAdapter implements DialectAdapterBase {
 	get supportsCreateIfNotExists(): boolean {
@@ -64,7 +67,9 @@ export interface NodeSqliteDialectConfig {
 	/**
 	 * Called once when the first query is executed.
 	 */
-	onCreateConnection?: (connection: DatabaseConnection) => Promise<void>;
+	onCreateConnection?:
+		| ((connection: DatabaseConnection) => Promise<void>)
+		| undefined;
 }
 
 export class NodeSqliteDriver implements Driver {
@@ -201,7 +206,7 @@ export class NodeSqliteIntrospector implements DatabaseIntrospector {
 	}
 
 	async getMetadata(
-		options?: DatabaseMetadataOptions,
+		options?: DatabaseMetadataOptions | undefined,
 	): Promise<DatabaseMetadata> {
 		return {
 			tables: await this.getTables(options),

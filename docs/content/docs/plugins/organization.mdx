@@ -866,7 +866,7 @@ type createInvitation = {
      */
     email: string = "example@gmail.com"
     /**
-     * The role(s) to assign to the user. It can be `admin`, `member`, or `guest`.  
+     * The role(s) to assign to the user. It can be `admin`, `member`, `owner`
      */
     role: string | string[] = "member"
     /**
@@ -1464,7 +1464,7 @@ const canCreateProjectAndCreateSale =
 ```
 
 <Callout type="warn">
-  This will not include any dynamic roles as everything is ran syncronously on the client side.
+  This will not include any dynamic roles as everything is ran synchronously on the client side.
   Please use the [hasPermission](#access-control-usage) APIs to include checks for any dynamic roles & permissions.
 </Callout>
 
@@ -1520,7 +1520,7 @@ export const authClient = createAuthClient({
 
 
 <Callout type="warn">
-  The `authClient.organization.checkRolePermission` function will not include any dynamic roles as everything is ran syncronously on the client side.
+  The `authClient.organization.checkRolePermission` function will not include any dynamic roles as everything is ran synchronously on the client side.
   Please use the [hasPermission](#access-control-usage) APIs to include checks for any dynamic roles.
 </Callout>
 
@@ -1968,7 +1968,7 @@ List all teams that the current user is a part of.
 
 List the members of the given team.
 
-<APIMethod path="/organization/list-team-members" method="POST">
+<APIMethod path="/organization/list-team-members" method="POST" forceAsQuery>
 ```ts
 type listTeamMembers = {
     /**
@@ -2041,14 +2041,14 @@ The teams feature supports several configuration options:
     enabled: true,
     maximumTeams: 10 // Fixed number
     // OR
-    maximumTeams: async ({ organizationId, session }, request) => {
+    maximumTeams: async ({ organizationId, session }, ctx) => {
       // Dynamic limit based on organization plan
       const plan = await getPlan(organizationId)
       return plan === 'pro' ? 20 : 5
     },
     maximumMembersPerTeam: 10 // Fixed number
     // OR
-    maximumMembersPerTeam: async ({ teamId, session, organizationId }, request) => {
+    maximumMembersPerTeam: async ({ teamId, session, organizationId }, ctx) => {
       // Dynamic limit based on team plan
       const plan = await getPlan(organizationId, teamId)
       return plan === 'pro' ? 50 : 10

@@ -1,10 +1,11 @@
 //@ts-nocheck
+
+import * as z from "zod";
 import {
 	createAuthEndpoint,
-	sessionMiddleware,
 	referenceMiddleware,
+	sessionMiddleware,
 } from "./index";
-import { z } from "zod";
 
 export const restoreSubscription = createAuthEndpoint(
 	"/subscription/restore",

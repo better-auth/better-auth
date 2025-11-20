@@ -137,11 +137,11 @@ You can customize the customer creation process:
 stripe({
     // ... other options
     createCustomerOnSignUp: true,
-    onCustomerCreate: async ({ customer, stripeCustomer, user }, request) => {
+    onCustomerCreate: async ({ stripeCustomer, user }, ctx) => {
         // Do something with the newly created customer
-        console.log(`Customer ${customer.id} created for user ${user.id}`);
+        console.log(`Customer ${stripeCustomer.id} created for user ${user.id}`);
     },
-    getCustomerCreateParams: async ({ user, session }, request) => {
+    getCustomerCreateParams: async (user, ctx) => {
         // Customize the Stripe customer creation parameters
         return {
             metadata: {
@@ -570,11 +570,11 @@ You can configure trial periods for your plans:
             // Called when a trial starts
             await sendTrialStartEmail(subscription.referenceId);
         },
-        onTrialEnd: async ({ subscription, user }, request) => {
+        onTrialEnd: async ({ subscription }, ctx) => {
             // Called when a trial ends
-            await sendTrialEndEmail(user.email);
+            await sendTrialEndEmail(subscription.referenceId);
         },
-        onTrialExpired: async (subscription) => {
+        onTrialExpired: async (subscription, ctx) => {
             // Called when a trial expires without conversion
             await sendTrialExpiredEmail(subscription.referenceId);
         }
@@ -612,69 +612,71 @@ The Stripe plugin adds the following tables to your database:
             description: "Unique identifier for each subscription",
         },
         { 
-            fieldName: "plan", 
-            type: "string", 
-            description: "The name of the subscription plan" 
+          name: "plan", 
+          type: "string", 
+          description: "The name of the subscription plan" 
         },
         { 
-            fieldName: "referenceId", 
-            type: "string", 
-            description: "The ID this subscription is associated with (user ID by default)",
+          name: "referenceId", 
+          type: "string", 
+          description: "The ID this subscription is associated with (user ID by default). This should NOT be a unique field in your database, as it must allow users to resubscribe after a cancellation.",
         },
         { 
-            fieldName: "stripeCustomerId", 
-            type: "string", 
-            description: "The Stripe customer ID",
-            required: false,
+          name: "stripeCustomerId", 
+          type: "string", 
+          description: "The Stripe customer ID",
+          required: false
         },
         { 
-            fieldName: "stripeSubscriptionId", 
-            type: "string", 
-            description: "The Stripe subscription ID",
-            required: false,
+          name: "stripeSubscriptionId", 
+          type: "string", 
+          description: "The Stripe subscription ID",
+          required: false
         },
         { 
-            fieldName: "status", 
-            type: "string",
-            description: "The status of the subscription (active, canceled, etc.)",
+          name: "status", 
+          type: "string", 
+          description: "The status of the subscription (active, canceled, etc.)",
+          defaultValue: "incomplete"
         },
         { 
-            fieldName: "periodStart", 
-            type: "date", 
-            description: "Start date of the current billing period",
-            required: false,
+          name: "periodStart", 
+          type: "Date", 
+          description: "Start date of the current billing period",
+          required: false
         },
         { 
-            fieldName: "periodEnd", 
-            type: "date", 
-            description: "End date of the current billing period",
-            required: false,
+          name: "periodEnd", 
+          type: "Date", 
+          description: "End date of the current billing period",
+          required: false
         },
         { 
-            fieldName: "cancelAtPeriodEnd", 
-            type: "boolean", 
-            description: "Whether the subscription will be canceled at the end of the period",
-            required: false,
+          name: "cancelAtPeriodEnd", 
+          type: "boolean", 
+          description: "Whether the subscription will be canceled at the end of the period",
+          defaultValue: false,
+          isOptional: true
         },
         { 
-            fieldName: "seats", 
-            type: "number", 
-            description: "Number of seats for team plans",
-            required: false,
+          name: "seats", 
+          type: "number", 
+          description: "Number of seats for team plans",
+          required: false
         },
         { 
-            fieldName: "trialStart", 
-            type: "date", 
-            description: "Start date of the trial period",
-            required: false,
+          name: "trialStart", 
+          type: "Date", 
+          description: "Start date of the trial period",
+          required: false
         },
         { 
-            fieldName: "trialEnd", 
-            type: "date", 
-            description: "End date of the trial period",
-            required: false,
+          name: "trialEnd", 
+          type: "Date", 
+          description: "End date of the trial period",
+          required: false
         }
-    ]}
+  ]}
 />
 
 ### Customizing the Schema
@@ -705,9 +707,9 @@ stripe({
 
 **createCustomerOnSignUp**: `boolean` - Whether to automatically create a Stripe customer when a user signs up. Default: `false`.
 
-**onCustomerCreate**: `(data: { customer: Customer, stripeCustomer: Stripe.Customer, user: User }, request?: Request) => Promise<void>` - A function called after a customer is created.
+**onCustomerCreate**: `(data: { stripeCustomer: Stripe.Customer, user: User }, ctx: GenericEndpointContext) => Promise<void>` - A function called after a customer is created.
 
-**getCustomerCreateParams**: `(data: { user: User, session: Session }, request?: Request) => Promise<{}>` - A function to customize the Stripe customer creation parameters.
+**getCustomerCreateParams**: `(user: User, ctx: GenericEndpointContext) => Promise<{}>` - A function to customize the Stripe customer creation parameters.
 
 **onEvent**: `(event: Stripe.Event) => Promise<void>` - A function called for any Stripe webhook event.
 
@@ -719,7 +721,7 @@ stripe({
 
 **requireEmailVerification**: `boolean` - Whether to require email verification before allowing subscription upgrades. Default: `false`.
 
-**authorizeReference**: `(data: { user: User, session: Session, referenceId: string, action: "upgrade-subscription" | "list-subscription" | "cancel-subscription" | "restore-subscription"}, request?: Request) => Promise<boolean>` - A function to authorize reference IDs.
+**authorizeReference**: `(data: { user: User, session: Session, referenceId: string, action: "upgrade-subscription" | "list-subscription" | "cancel-subscription" | "restore-subscription"}, ctx: GenericEndpointContext) => Promise<boolean>` - A function to authorize reference IDs.
 
 ### Plan Configuration
 
@@ -735,15 +737,15 @@ Each plan can have the following properties:
 
 **annualDiscountLookupKey**: `string` - The Stripe price lookup key for annual billing. Alternative to `annualDiscountPriceId`.
 
-**limits**: `Record<string, number>` - Limits associated with the plan (e.g., `{ projects: 10, storage: 5 }`).
+**limits**: `Record<string, unknown>` - Limits associated with the plan (e.g., `{ projects: 10, storage: 5 }`). Useful when you want to define plan-specific metadata.
 
 **group**: `string` - A group name for the plan, useful for categorizing plans.
 
 **freeTrial**: Object containing trial configuration:
   - **days**: `number` - Number of trial days.
   - **onTrialStart**: `(subscription: Subscription) => Promise<void>` - Called when a trial starts.
-  - **onTrialEnd**: `(data: { subscription: Subscription, user: User }, request?: Request) => Promise<void>` - Called when a trial ends.
-  - **onTrialExpired**: `(subscription: Subscription) => Promise<void>` - Called when a trial expires without conversion.
+  - **onTrialEnd**: `(data: { subscription: Subscription }, ctx: GenericEndpointContext) => Promise<void>` - Called when a trial ends.
+  - **onTrialExpired**: `(subscription: Subscription, ctx: GenericEndpointContext) => Promise<void>` - Called when a trial expires without conversion.
 
 ## Advanced Usage
 
@@ -789,7 +791,7 @@ subscription: {
 You can customize the Stripe Checkout session with additional parameters:
 
 ```ts title="auth.ts"
-getCheckoutSessionParams: async ({ user, session, plan, subscription }, request) => {
+getCheckoutSessionParams: async ({ user, session, plan, subscription }, ctx) => {
     return {
         params: {
             allow_promotion_codes: true,
@@ -821,7 +823,7 @@ To collect tax IDs from the customer, set `tax_id_collection` to true:
 ```ts title="auth.ts"
 subscription: {
     // ... other options
-    getCheckoutSessionParams: async ({ user, session, plan, subscription }, request) => {
+    getCheckoutSessionParams: async ({ user, session, plan, subscription }, ctx) => {
         return {
             params: {
                 tax_id_collection: {
@@ -840,7 +842,7 @@ To enable automatic tax calculation using the customer's location, set `automati
 ```ts title="auth.ts"
 subscription: {
     // ... other options
-    getCheckoutSessionParams: async ({ user, session, plan, subscription }, request) => {
+    getCheckoutSessionParams: async ({ user, session, plan, subscription }, ctx) => {
         return {
             params: {
                 automatic_tax: {

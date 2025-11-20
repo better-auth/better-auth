@@ -1,13 +1,15 @@
 import { getAuthTables } from "../../db";
 import { testAdapter } from "../test-adapter";
-import { memoryAdapter } from "./memory-adapter";
 import {
-	performanceTestSuite,
-	normalTestSuite,
-	transactionsTestSuite,
 	authFlowTestSuite,
+	joinsTestSuite,
+	normalTestSuite,
 	numberIdTestSuite,
+	transactionsTestSuite,
+	uuidTestSuite,
 } from "../tests";
+import { memoryAdapter } from "./memory-adapter";
+
 let db: Record<string, any[]> = {};
 
 const { execute } = await testAdapter({
@@ -28,7 +30,8 @@ const { execute } = await testAdapter({
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
-		performanceTestSuite(),
+		joinsTestSuite(),
+		uuidTestSuite(),
 	],
 	async onFinish() {},
 });

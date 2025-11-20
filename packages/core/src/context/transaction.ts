@@ -1,5 +1,6 @@
-import { getAsyncLocalStorage, type AsyncLocalStorage } from "../async_hooks";
-import type { DBTransactionAdapter, DBAdapter } from "../db/adapter";
+import type { AsyncLocalStorage } from "../async_hooks";
+import { getAsyncLocalStorage } from "../async_hooks";
+import type { DBAdapter, DBTransactionAdapter } from "../db/adapter";
 
 let currentAdapterAsyncStorage: AsyncLocalStorage<DBTransactionAdapter> | null =
 	null;

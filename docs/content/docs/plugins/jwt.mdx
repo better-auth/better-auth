@@ -436,3 +436,29 @@ jwt({
   }
 })
 ```
+
+### Custom Adapter
+
+By default, the JWT plugin stores and retrieves JWKS from your database. You can provide a custom adapter to override this behavior, allowing you to store JWKS in alternative locations such as Redis, external services, or in-memory storage.
+
+```ts title="auth.ts"
+jwt({
+  adapter: {
+    getJwks: async (ctx) => {
+      // Custom implementation to get all JWKS
+      // This overrides the default database query
+      return await yourCustomStorage.getAllKeys()
+    },
+    getLatestKey: async (ctx) => {
+      // Custom implementation to get the latest key
+      // This overrides the default database query
+      return await yourCustomStorage.getLatestKey()
+    },
+    createJwk: async (ctx, webKey) => {
+      // Custom implementation to create a new key
+      // This overrides the default database insert
+      return await yourCustomStorage.createKey(webKey)
+    }
+  }
+})
+```
