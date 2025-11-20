@@ -8,6 +8,8 @@ import { socialProviders } from "@better-auth/core/social-providers";
 import { createTelemetry } from "@better-auth/telemetry";
 import defu from "defu";
 import type { Entries } from "type-fest";
+import type { GraphAdapter, Relationship } from "@better-auth/core/context";
+import { AuthzedSyncClient } from "../adapters/authzed-adapter";
 import { checkEndpointConflicts } from "../api";
 import { createCookieGetter, getCookies } from "../cookies";
 import { hashPassword, verifyPassword } from "../crypto/password";
@@ -23,6 +25,54 @@ import {
 	getTrustedOrigins,
 	runPluginInit,
 } from "./helpers";
+
+type RelationshipWriteRequest = Relationship & {
+	operation: "create" | "delete" | "touch";
+};
+
+function createGraphAdapter(options: BetterAuthOptions): GraphAdapter {
+	let relations: RelationshipWriteRequest[] = [];
+	const authzedClient = new AuthzedSyncClient({
+		token: options.graph?.authzed?.token || "",
+		endpoint: options.graph?.authzed?.endpoint || "http://localhost:50051",
+	});
+	return {
+		addRelationship: async (relationship: Relationship) => {
+			relations.push({
+				...relationship,
+				operation: "create",
+			});
+		},
+		deleteRelationship: async (relationship: Relationship) => {
+			relations.push({
+				...relationship,
+				operation: "delete",
+			});
+		},
+		check: async (
+			subjectType: string,
+			subjectId: string,
+			relationshipType: string,
+			objectType: string,
+			objectId: string,
+		) => {
+			return await authzedClient.checkPermission(
+				subjectType,
+				subjectId,
+				relationshipType,
+				objectType,
+				objectId,
+			);
+		},
+		commit: async () => {
+			await authzedClient.syncRelationshipsBatch(relations);
+			relations = [];
+		},
+		transaction: () => {
+			return createGraphAdapter(options);
+		},
+	};
+}
 
 export async function createAuthContext(
 	adapter: DBAdapter<BetterAuthOptions>,
@@ -117,6 +167,8 @@ export async function createAuthContext(
 				: getDatabaseType(options.database),
 	});
 
+	const graphAdapter = createGraphAdapter(options);
+
 	let ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
 		socialProviders: providers,
@@ -196,7 +248,9 @@ export async function createAuthContext(
 			logger,
 			hooks: options.databaseHooks ? [options.databaseHooks] : [],
 			generateId: generateIdFunc,
+			graphAdapter,
 		}),
+		graphAdapter: graphAdapter,
 		createAuthCookie: createCookieGetter(options),
 		async runMigrations() {
 			throw new BetterAuthError(
