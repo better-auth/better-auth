@@ -63,6 +63,7 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 				ctx.params?.id || ctx.params?.providerId || ctx.path.split("/").pop()
 			);
 		}
+		if (ctx.path.includes("siwe")) return "siwe";
 		return null;
 	};
 

@@ -1,11 +1,12 @@
-import { APIError, type Prettify } from "better-call";
+import type { Prettify } from "better-call";
+import { APIError } from "better-call";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { memoryAdapter } from "../../adapters/memory-adapter";
-import {
-	type BetterFetchError,
-	createAuthClient,
-	type PreinitializedWritableAtom,
+import type {
+	BetterFetchError,
+	PreinitializedWritableAtom,
 } from "../../client";
+import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
 import { nextCookies } from "../../integrations/next-js";
 import { getTestInstance } from "../../test-utils/test-instance";

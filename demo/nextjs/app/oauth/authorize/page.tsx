@@ -1,5 +1,5 @@
 import { ArrowLeftRight, ArrowUpRight, Mail, Users } from "lucide-react";
-import { Metadata } from "next";
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import Image from "next/image";
 import { Logo } from "@/components/logo";
