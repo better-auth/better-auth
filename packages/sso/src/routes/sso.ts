@@ -1039,10 +1039,18 @@ export const signInSSO = (options?: SSOOptions) => {
 						message: "Invalid SAML configuration",
 					});
 				}
-				const sp = saml.ServiceProvider({
-					metadata: parsedSamlConfig.spMetadata.metadata,
-					allowCreate: true,
-				});
+				const sp = parsedSamlConfig.spMetadata.metadata
+					? saml.ServiceProvider({
+							metadata: parsedSamlConfig.spMetadata.metadata,
+							privateKey: parsedSamlConfig.spMetadata.privateKey,
+							privateKeyPass: parsedSamlConfig.spMetadata.privateKeyPass,
+							relayState: body.callbackURL,
+							allowCreate: true,
+						})
+					: saml.ServiceProvider({
+							relayState: body.callbackURL,
+							allowCreate: true,
+						});
 
 				const idp = saml.IdentityProvider({
 					metadata: parsedSamlConfig.idpMetadata?.metadata,
@@ -1061,9 +1069,7 @@ export const signInSSO = (options?: SSOOptions) => {
 					});
 				}
 				return ctx.json({
-					url: `${loginRequest.context}&RelayState=${encodeURIComponent(
-						body.callbackURL,
-					)}`,
+					url: loginRequest.context,
 					redirect: true,
 				});
 			}
