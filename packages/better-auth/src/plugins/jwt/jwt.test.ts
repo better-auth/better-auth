@@ -713,9 +713,6 @@ describe("jwt - custom adapter", async () => {
 						getJwks: async () => {
 							return storage;
 						},
-						getLatestKey: async () => {
-							return storage[0] ?? null;
-						},
 						createJwk: async (data) => {
 							const key = {
 								...data,

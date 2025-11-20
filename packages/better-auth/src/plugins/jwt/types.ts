@@ -143,18 +143,6 @@ export interface JwtOptions {
 			ctx: GenericEndpointContext,
 		) => Promise<Jwk[] | null | undefined>;
 		/**
-		 * A custom function to get the latest key from the database or
-		 * other source
-		 *
-		 * This will override the default getLatestKey from the database
-		 *
-		 * @param ctx - The context of the request
-		 * @returns The latest key
-		 */
-		getLatestKey?: (
-			ctx: GenericEndpointContext,
-		) => Promise<Jwk | null | undefined>;
-		/**
 		 * A custom function to create a new key in the database or
 		 * other source
 		 *

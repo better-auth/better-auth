@@ -15,7 +15,6 @@ describe("jwt rotation", async () => {
 					},
 					adapter: {
 						getJwks: async () => storage,
-						getLatestKey: async () => storage[storage.length - 1] ?? null,
 						createJwk: async (data) => {
 							const key = {
 								...data,
@@ -65,7 +64,6 @@ describe("jwt rotation", async () => {
 					},
 					adapter: {
 						getJwks: async () => storage,
-						getLatestKey: async () => storage[storage.length - 1] ?? null,
 						createJwk: async (data) => {
 							const key = {
 								...data,
