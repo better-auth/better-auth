@@ -192,6 +192,7 @@ describe("passkey", async () => {
 		const setCookie = signInResponse.headers.get("set-cookie");
 		const cookies = parseSetCookieHeader(setCookie || "");
 		const sessionToken = cookies.get("better-auth.session_token")?.value;
+		expect(sessionToken).toBeDefined();
 
 		const headers2 = new Headers();
 		headers2.set("cookie", `better-auth.session_token=${sessionToken}`);
