@@ -9,7 +9,8 @@ import { generateRandomString } from "../../crypto";
 import { mergeSchema } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
 import { DEVICE_AUTHORIZATION_ERROR_CODES } from "./error-codes";
-import { type DeviceCode, schema } from "./schema";
+import type { DeviceCode } from "./schema";
+import { schema } from "./schema";
 
 const msStringValueSchema = z.custom<MSStringValue>(
 	(val) => {
