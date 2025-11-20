@@ -128,9 +128,7 @@ export const getPasskeyActions = (
 				optionsJSON: options.data,
 				useAutoRegister: opts?.useAutoRegister,
 			});
-			const verified = await $fetch<{
-				passkey: Passkey;
-			}>("/passkey/verify-registration", {
+			const verified = await $fetch<Passkey>("/passkey/verify-registration", {
 				...opts?.fetchOptions,
 				...fetchOpts,
 				body: {
@@ -145,6 +143,7 @@ export const getPasskeyActions = (
 				return verified;
 			}
 			$listPasskeys.set(Math.random());
+			return verified;
 		} catch (e) {
 			if (e instanceof WebAuthnError) {
 				if (e.code === "ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED") {
