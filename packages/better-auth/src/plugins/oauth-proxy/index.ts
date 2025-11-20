@@ -161,171 +161,6 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 			),
 		},
 		hooks: {
-			after: [
-				{
-					matcher(context) {
-						return !!(
-							context.path?.startsWith("/sign-in/social") ||
-							context.path?.startsWith("/sign-in/oauth2")
-						);
-					},
-					handler: createAuthMiddleware(async (ctx) => {
-						const skipProxy = checkSkipProxy(ctx, opts);
-						if (skipProxy) {
-							return;
-						}
-
-						// Only process in stateless mode
-						if (ctx.context.oauthConfig.storeStateStrategy !== "cookie") {
-							return;
-						}
-
-						// Extract OAuth provider URL from sign-in response
-						const signInResponse = ctx.context.returned;
-						if (
-							!signInResponse ||
-							typeof signInResponse !== "object" ||
-							!("url" in signInResponse)
-						) {
-							return;
-						}
-
-						const { url: providerURL } = signInResponse;
-						if (typeof providerURL !== "string") {
-							return;
-						}
-
-						// Parse provider URL and extract state parameter
-						const oauthURL = new URL(providerURL);
-						const originalState = oauthURL.searchParams.get("state");
-						if (!originalState) {
-							return;
-						}
-
-						// Extract state cookie from response headers
-						const headers = ctx.context.responseHeaders;
-						const setCookieHeader = headers?.get("set-cookie");
-						if (!setCookieHeader) {
-							return;
-						}
-
-						const stateCookie = ctx.context.createAuthCookie("oauth_state");
-						const parsedStateCookies = parseSetCookieHeader(setCookieHeader);
-						const stateCookieAttrs = parsedStateCookies.get(stateCookie.name);
-						if (!stateCookieAttrs?.value) {
-							return;
-						}
-
-						const stateCookieValue = stateCookieAttrs.value;
-
-						try {
-							// Create and encrypt state package
-							const statePackage: OAuthProxyStatePackage = {
-								state: originalState,
-								stateCookie: stateCookieValue,
-								isOAuthProxy: true,
-							};
-							const encryptedPackage = await symmetricEncrypt({
-								key: ctx.context.secret,
-								data: JSON.stringify(statePackage),
-							});
-
-							// Replace state parameter with encrypted package
-							oauthURL.searchParams.set("state", encryptedPackage);
-
-							// Update response with modified URL
-							ctx.context.returned = {
-								...signInResponse,
-								url: oauthURL.toString(),
-							};
-						} catch (e) {
-							ctx.context.logger.error(
-								"Failed to encrypt OAuth proxy state package:",
-								e,
-							);
-							// Continue without proxy
-						}
-					}),
-				},
-				{
-					matcher(context) {
-						return !!(
-							context.path?.startsWith("/callback") ||
-							context.path?.startsWith("/oauth2/callback")
-						);
-					},
-					handler: createAuthMiddleware(async (ctx) => {
-						const headers = ctx.context.responseHeaders;
-						const location = headers?.get("location");
-
-						if (
-							!location?.includes("/oauth-proxy-callback?callbackURL") ||
-							!location.startsWith("http")
-						) {
-							return;
-						}
-
-						const productionURL =
-							opts?.productionURL ||
-							ctx.context.options.baseURL ||
-							ctx.context.baseURL;
-						const productionOrigin = getOrigin(productionURL);
-
-						const locationURL = new URL(location);
-						const locationOrigin = locationURL.origin;
-
-						//
-						// Same origin: unwrap proxy redirect to original destination
-						//
-						if (locationOrigin === productionOrigin) {
-							const newLocation = locationURL.searchParams.get("callbackURL");
-							if (!newLocation) {
-								return;
-							}
-							ctx.setHeader("location", newLocation);
-							return;
-						}
-
-						//
-						// Cross-origin: encrypt and forward cookies through proxy
-						//
-						const setCookies = headers?.get("set-cookie");
-						if (!setCookies) {
-							return;
-						}
-						const encryptedCookies = await symmetricEncrypt({
-							key: ctx.context.secret,
-							data: setCookies,
-						});
-						const locationWithCookies = `${location}&cookies=${encodeURIComponent(
-							encryptedCookies,
-						)}`;
-
-						throw ctx.redirect(locationWithCookies);
-					}),
-				},
-				{
-					// Restore OAuth config after processing callback
-					matcher(context) {
-						return !!(
-							context.path?.startsWith("/callback") ||
-							context.path?.startsWith("/oauth2/callback")
-						);
-					},
-					handler: createAuthMiddleware(async (ctx) => {
-						const snapshot = snapshotMap.get(ctx);
-						if (snapshot) {
-							ctx.context.oauthConfig.storeStateStrategy =
-								snapshot.storeStateStrategy;
-							ctx.context.oauthConfig.skipStateCookieCheck =
-								snapshot.skipStateCookieCheck;
-							ctx.context.internalAdapter = snapshot.internalAdapter;
-
-							snapshotMap.delete(ctx);
-						}
-					}),
-				},
-			],
 			before: [
 				{
 					matcher(context) {
@@ -495,6 +330,171 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 							});
 						}
 						ctx.context.oauthConfig.skipStateCookieCheck = true;
+					}),
+				},
+			],
+			after: [
+				{
+					matcher(context) {
+						return !!(
+							context.path?.startsWith("/sign-in/social") ||
+							context.path?.startsWith("/sign-in/oauth2")
+						);
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						const skipProxy = checkSkipProxy(ctx, opts);
+						if (skipProxy) {
+							return;
+						}
+
+						// Only process in stateless mode
+						if (ctx.context.oauthConfig.storeStateStrategy !== "cookie") {
+							return;
+						}
+
+						// Extract OAuth provider URL from sign-in response
+						const signInResponse = ctx.context.returned;
+						if (
+							!signInResponse ||
+							typeof signInResponse !== "object" ||
+							!("url" in signInResponse)
+						) {
+							return;
+						}
+
+						const { url: providerURL } = signInResponse;
+						if (typeof providerURL !== "string") {
+							return;
+						}
+
+						// Parse provider URL and extract state parameter
+						const oauthURL = new URL(providerURL);
+						const originalState = oauthURL.searchParams.get("state");
+						if (!originalState) {
+							return;
+						}
+
+						// Extract state cookie from response headers
+						const headers = ctx.context.responseHeaders;
+						const setCookieHeader = headers?.get("set-cookie");
+						if (!setCookieHeader) {
+							return;
+						}
+
+						const stateCookie = ctx.context.createAuthCookie("oauth_state");
+						const parsedStateCookies = parseSetCookieHeader(setCookieHeader);
+						const stateCookieAttrs = parsedStateCookies.get(stateCookie.name);
+						if (!stateCookieAttrs?.value) {
+							return;
+						}
+
+						const stateCookieValue = stateCookieAttrs.value;
+
+						try {
+							// Create and encrypt state package
+							const statePackage: OAuthProxyStatePackage = {
+								state: originalState,
+								stateCookie: stateCookieValue,
+								isOAuthProxy: true,
+							};
+							const encryptedPackage = await symmetricEncrypt({
+								key: ctx.context.secret,
+								data: JSON.stringify(statePackage),
+							});
+
+							// Replace state parameter with encrypted package
+							oauthURL.searchParams.set("state", encryptedPackage);
+
+							// Update response with modified URL
+							ctx.context.returned = {
+								...signInResponse,
+								url: oauthURL.toString(),
+							};
+						} catch (e) {
+							ctx.context.logger.error(
+								"Failed to encrypt OAuth proxy state package:",
+								e,
+							);
+							// Continue without proxy
+						}
+					}),
+				},
+				{
+					matcher(context) {
+						return !!(
+							context.path?.startsWith("/callback") ||
+							context.path?.startsWith("/oauth2/callback")
+						);
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						const headers = ctx.context.responseHeaders;
+						const location = headers?.get("location");
+
+						if (
+							!location?.includes("/oauth-proxy-callback?callbackURL") ||
+							!location.startsWith("http")
+						) {
+							return;
+						}
+
+						const productionURL =
+							opts?.productionURL ||
+							ctx.context.options.baseURL ||
+							ctx.context.baseURL;
+						const productionOrigin = getOrigin(productionURL);
+
+						const locationURL = new URL(location);
+						const locationOrigin = locationURL.origin;
+
+						//
+						// Same origin: unwrap proxy redirect to original destination
+						//
+						if (locationOrigin === productionOrigin) {
+							const newLocation = locationURL.searchParams.get("callbackURL");
+							if (!newLocation) {
+								return;
+							}
+							ctx.setHeader("location", newLocation);
+							return;
+						}
+
+						//
+						// Cross-origin: encrypt and forward cookies through proxy
+						//
+						const setCookies = headers?.get("set-cookie");
+						if (!setCookies) {
+							return;
+						}
+						const encryptedCookies = await symmetricEncrypt({
+							key: ctx.context.secret,
+							data: setCookies,
+						});
+						const locationWithCookies = `${location}&cookies=${encodeURIComponent(
+							encryptedCookies,
+						)}`;
+
+						throw ctx.redirect(locationWithCookies);
+					}),
+				},
+				{
+					// Restore OAuth config after processing callback
+					matcher(context) {
+						return !!(
+							context.path?.startsWith("/callback") ||
+							context.path?.startsWith("/oauth2/callback")
+						);
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						const snapshot = snapshotMap.get(ctx);
+						if (snapshot) {
+							ctx.context.oauthConfig.storeStateStrategy =
+								snapshot.storeStateStrategy;
+							ctx.context.oauthConfig.skipStateCookieCheck =
+								snapshot.skipStateCookieCheck;
+							ctx.context.internalAdapter = snapshot.internalAdapter;
+
+							snapshotMap.delete(ctx);
+						}
 					}),
 				},
 			],
