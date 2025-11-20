@@ -48,6 +48,9 @@ export interface OAuthProxyOptions {
 export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 	const resolveCurrentURL = (ctx: EndpointContext<string, any>) => {
 		// Skip request.url if it's localhost/127.0.0.1 (behind reverse proxy)
+		// When the app is behind a reverse proxy, the request.url reflects the internal
+		// network address (localhost), not the public-facing URL. We need to fall back
+		// to environment variables or vendor base URLs to get the correct public URL.
 		let requestUrl = ctx.request?.url;
 		if (requestUrl) {
 			try {
