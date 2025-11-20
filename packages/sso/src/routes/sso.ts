@@ -1043,28 +1043,33 @@ export const signInSSO = (options?: SSOOptions) => {
 				let metadata = parsedSamlConfig.spMetadata.metadata;
 
 				if (!metadata) {
-					metadata = saml.SPMetadata({
-						entityID:
-							parsedSamlConfig.spMetadata?.entityID || parsedSamlConfig.issuer,
-						assertionConsumerService: [
-							{
-								Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-								Location:
-									parsedSamlConfig.callbackUrl ||
-									`${ctx.context.baseURL}/sso/saml2/sp/acs/${provider.providerId}`,
-							},
-						],
-						wantMessageSigned: parsedSamlConfig.wantAssertionsSigned || false,
-						nameIDFormat: parsedSamlConfig.identifierFormat
-							? [parsedSamlConfig.identifierFormat]
-							: undefined,
-					}).getMetadata() || "";
+					metadata =
+						saml
+							.SPMetadata({
+								entityID:
+									parsedSamlConfig.spMetadata?.entityID ||
+									parsedSamlConfig.issuer,
+								assertionConsumerService: [
+									{
+										Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+										Location:
+											parsedSamlConfig.callbackUrl ||
+											`${ctx.context.baseURL}/sso/saml2/sp/acs/${provider.providerId}`,
+									},
+								],
+								wantMessageSigned:
+									parsedSamlConfig.wantAssertionsSigned || false,
+								nameIDFormat: parsedSamlConfig.identifierFormat
+									? [parsedSamlConfig.identifierFormat]
+									: undefined,
+							})
+							.getMetadata() || "";
 				}
-	
+
 				const sp = saml.ServiceProvider({
 					metadata: metadata,
 					allowCreate: true,
-				});	
+				});
 
 				const idp = saml.IdentityProvider({
 					metadata: parsedSamlConfig.idpMetadata?.metadata,
