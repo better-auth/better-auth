@@ -1,4 +1,4 @@
-import { DBFieldAttribute } from "./types";
+import type { DBFieldAttribute } from "./types";
 
 export function getTypeFactory(
 	getTypeMap: (

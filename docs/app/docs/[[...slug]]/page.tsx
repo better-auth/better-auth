@@ -1,10 +1,3 @@
-import { source } from "@/lib/source";
-import { DocsPage, DocsBody, DocsTitle } from "@/components/docs/page";
-import { notFound } from "next/navigation";
-import { absoluteUrl } from "@/lib/utils";
-import DatabaseTable from "@/components/mdx/database-tables";
-import { CopySchemaDialogProvider } from "@/components/copy-schema";
-import { cn } from "@/lib/utils";
 import { AutoTypeTable } from "fumadocs-typescript/ui";
 import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 import { File, Files, Folder } from "fumadocs-ui/components/files";
@@ -16,6 +9,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { APIMethod } from "@/components/api-method";
 import { Features } from "@/components/blocks/features";
+import { CopySchemaDialogProvider } from "@/components/copy-schema";
 import { DividerText } from "@/components/divider-text";
 import { DocsBody, DocsPage, DocsTitle } from "@/components/docs/page";
 import { Endpoint } from "@/components/endpoint";

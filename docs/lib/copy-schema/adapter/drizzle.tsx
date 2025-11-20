@@ -1,4 +1,4 @@
-import type { Resolver } from "../types";
+import { CopySchemaToggleButtonSwitch } from "@/components/copy-schema";
 import { Label } from "@/components/ui/label";
 import {
 	Select,
@@ -7,8 +7,8 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import type { Resolver } from "../types";
 import { getTypeFactory } from "../utils";
-import { CopySchemaToggleButtonSwitch } from "@/components/copy-schema";
 
 export type DrizzleResolverOptions = {
 	/**

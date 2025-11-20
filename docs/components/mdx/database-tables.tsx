@@ -1,5 +1,8 @@
 "use client";
 
+import { CopyIcon, Key, LinkIcon } from "lucide-react";
+import { useCopySchemaDialog } from "@/components/copy-schema";
+import { Badge } from "@/components/ui/badge";
 import {
 	Table,
 	TableBody,
@@ -8,17 +11,14 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { CopyIcon, Key, LinkIcon } from "lucide-react";
+import type { DBFieldAttribute } from "@/lib/copy-schema/types";
+import { Button } from "../ui/button";
 import {
 	Tooltip,
 	TooltipContent,
 	TooltipProvider,
 	TooltipTrigger,
 } from "../ui/tooltip-docs";
-import { DBFieldAttribute } from "@/lib/copy-schema/types";
-import { Button } from "../ui/button";
-import { useCopySchemaDialog } from "@/components/copy-schema";
 
 export interface DatabaseTableProps {
 	modelName: string;

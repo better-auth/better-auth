@@ -1,7 +1,7 @@
-import { mysqlResolver } from "./dialects/mysql";
-import { sqliteResolver } from "./dialects/sqlite";
-import { postgresqlResolver } from "./dialects/postgresql";
 import { mssqlResolver } from "./dialects/mssql";
+import { mysqlResolver } from "./dialects/mysql";
+import { postgresqlResolver } from "./dialects/postgresql";
+import { sqliteResolver } from "./dialects/sqlite";
 import type {
 	CopySchemaOptions,
 	DBSchema,

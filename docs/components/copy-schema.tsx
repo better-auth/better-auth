@@ -1,24 +1,18 @@
 "use client";
 
+import * as TabsPrimitive from "@radix-ui/react-tabs";
+import clsx from "clsx";
 import {
-	CopyIcon,
-	SlashIcon,
 	CheckIcon,
 	CircleHelpIcon,
+	CopyIcon,
 	ExpandIcon,
 	MinimizeIcon,
+	SlashIcon,
 } from "lucide-react";
-import { DefaultDialects } from "@/lib/copy-schema/types";
-import { Button, buttonVariants } from "@/components/ui/button";
-import {
-	Dialog,
-	DialogHeader,
-	DialogTitle,
-	DialogDescription,
-	DialogContent,
-	DialogClose,
-	DialogFooter,
-} from "@/components/ui/dialog";
+import Link from "next/link";
+import { useTheme } from "next-themes";
+import { Highlight, Prism, themes } from "prism-react-renderer";
 import {
 	createContext,
 	useContext,
@@ -28,12 +22,22 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { DatabaseTableProps } from "@/components/mdx/database-tables";
-import { useTheme } from "next-themes";
+import { toast } from "sonner";
+import type { DatabaseTableProps } from "@/components/mdx/database-tables";
+import { Button, buttonVariants } from "@/components/ui/button";
+import {
+	Dialog,
+	DialogClose,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
 import { copySchema } from "@/lib/copy-schema";
 import { drizzleResolver } from "@/lib/copy-schema/adapter/drizzle";
 import { prismaResolver } from "@/lib/copy-schema/adapter/prisma";
-import { useCopyButton } from "./ui/use-copy-button";
+import type { DefaultDialects } from "@/lib/copy-schema/types";
 import { ScrollArea, ScrollBar, ScrollViewport } from "./docs/ui/scroll-area";
 import {
 	Accordion,
@@ -43,11 +47,7 @@ import {
 } from "./ui/accordion";
 import { Label } from "./ui/label";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
-import Link from "next/link";
-import * as TabsPrimitive from "@radix-ui/react-tabs";
-import clsx from "clsx";
-import { Highlight, themes, Prism } from "prism-react-renderer";
-import { toast } from "sonner";
+import { useCopyButton } from "./ui/use-copy-button";
 
 Prism.languages.prisma = {
 	comment: /\/\/.*|\/\*[\s\S]*?\*\//,

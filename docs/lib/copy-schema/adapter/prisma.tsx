@@ -1,5 +1,4 @@
-import type { Resolver } from "../types";
-import { capitalize, getTypeFactory } from "../utils";
+import { CopySchemaToggleButtonSwitch } from "@/components/copy-schema";
 import { Label } from "@/components/ui/label";
 import {
 	Select,
@@ -8,7 +7,8 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import { CopySchemaToggleButtonSwitch } from "@/components/copy-schema";
+import type { Resolver } from "../types";
+import { capitalize, getTypeFactory } from "../utils";
 
 export type PrismaResolverOptions = {
 	/**
