@@ -1040,11 +1040,10 @@ export const signInSSO = (options?: SSOOptions) => {
 					});
 				}
 
-				const sp = parsedSamlConfig.spMetadata.metadata
-				? saml.ServiceProvider({
-						metadata: parsedSamlConfig.spMetadata.metadata,
-					})
-				: saml.SPMetadata({
+				let metadata = parsedSamlConfig.spMetadata.metadata;
+
+				if (!metadata) {
+					metadata = saml.SPMetadata({
 						entityID:
 							parsedSamlConfig.spMetadata?.entityID || parsedSamlConfig.issuer,
 						assertionConsumerService: [
@@ -1059,7 +1058,13 @@ export const signInSSO = (options?: SSOOptions) => {
 						nameIDFormat: parsedSamlConfig.identifierFormat
 							? [parsedSamlConfig.identifierFormat]
 							: undefined,
-					});
+					}).getMetadata() || "";
+				}
+	
+				const sp = saml.ServiceProvider({
+					metadata: metadata,
+					allowCreate: true,
+				});	
 
 				const idp = saml.IdentityProvider({
 					metadata: parsedSamlConfig.idpMetadata?.metadata,
