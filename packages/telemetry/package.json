@@ -31,12 +31,12 @@
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
-    "tsdown": "catalog:",
+    "tsdown": "latest",
     "type-fest": "^5.2.0"
   },
   "dependencies": {
     "@better-auth/utils": "0.3.0",
-    "@better-fetch/fetch": "catalog:"
+    "@better-fetch/fetch": "latest"
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:*"

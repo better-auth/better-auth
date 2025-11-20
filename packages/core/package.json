@@ -112,14 +112,14 @@
   },
   "devDependencies": {
     "@better-auth/utils": "0.3.0",
-    "@better-fetch/fetch": "catalog:",
+    "@better-fetch/fetch": "latest",
     "@types/better-sqlite3": "^7.6.13",
-    "better-call": "catalog:",
+    "better-call": "latest",
     "better-sqlite3": "^12.4.1",
     "jose": "^6.1.0",
     "kysely": "^0.28.5",
     "nanostores": "^1.0.1",
-    "tsdown": "catalog:"
+    "tsdown": "latest"
   },
   "dependencies": {
     "@standard-schema/spec": "^1.0.0",
@@ -127,8 +127,8 @@
   },
   "peerDependencies": {
     "@better-auth/utils": "0.3.0",
-    "@better-fetch/fetch": "catalog:",
-    "better-call": "catalog:",
+    "@better-fetch/fetch": "latest",
+    "better-call": "latest",
     "jose": "^6.1.0",
     "kysely": "^0.28.5",
     "nanostores": "^1.0.1"

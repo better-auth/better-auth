@@ -57,7 +57,7 @@
     }
   },
   "dependencies": {
-    "@better-fetch/fetch": "catalog:",
+    "@better-fetch/fetch": "latest",
     "fast-xml-parser": "^5.2.5",
     "jose": "^6.1.0",
     "samlify": "^2.10.1",
@@ -67,11 +67,11 @@
     "@types/body-parser": "^1.19.6",
     "@types/express": "^5.0.5",
     "better-auth": "workspace:*",
-    "better-call": "catalog:",
+    "better-call": "latest",
     "body-parser": "^2.2.0",
     "express": "^5.1.0",
     "oauth2-mock-server": "^8.2.0",
-    "tsdown": "catalog:"
+    "tsdown": "latest"
   },
   "peerDependencies": {
     "better-auth": "workspace:*"

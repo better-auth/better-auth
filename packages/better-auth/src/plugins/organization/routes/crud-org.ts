@@ -18,6 +18,8 @@ import type {
 	TeamMember,
 } from "../schema";
 import type { OrganizationOptions } from "../types";
+import type { GenericEndpointContext } from "@better-auth/core";
+import { withTransaction } from "@better-auth/core/context";
 
 export const createOrganization = <O extends OrganizationOptions>(
 	options?: O | undefined,
@@ -96,7 +98,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 				},
 			},
 		},
-		async (ctx) => {
+		withTransaction(async (ctx) => {
 			const session = await getSessionFromCtx(ctx);
 
 			if (!session && (ctx.request || ctx.headers)) {
@@ -115,19 +117,21 @@ export const createOrganization = <O extends OrganizationOptions>(
 				});
 			}
 			const options = ctx.context.orgOptions;
-			const canCreateOrg =
-				typeof options?.allowUserToCreateOrganization === "function"
-					? await options.allowUserToCreateOrganization(user)
-					: options?.allowUserToCreateOrganization === undefined
-						? true
-						: options.allowUserToCreateOrganization;
+			// const graphAdapter = ctx.context.graphAdapter;
+			// const canCreateOrg =
+			// 	typeof options?.allowUserToCreateOrganization === "function"
+			// 		? await options.allowUserToCreateOrganization(user)
+			// 		: options?.allowUserToCreateOrganization === undefined
+			// 			? true
+			// 			: options.allowUserToCreateOrganization;
 
-			if (!canCreateOrg) {
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_ORGANIZATION,
-				});
-			}
+			// if (!canCreateOrg) {
+			// 	throw new APIError("FORBIDDEN", {
+			// 		message:
+			// 			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_ORGANIZATION,
+			// 	});
+			// }
+
 			const adapter = getOrgAdapter<O>(ctx.context, options as O);
 
 			const userOrganizations = await adapter.listOrganizations(user.id);
@@ -326,7 +330,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 						: organization.metadata,
 				members: [member],
 			});
-		},
+		}),
 	);
 };
 
