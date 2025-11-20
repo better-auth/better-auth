@@ -79,7 +79,6 @@ describe("jwt rotation", async () => {
 
 		// Create first key
 		await auth.api.signJWT({ body: { payload: { sub: "user1" } } });
-		const firstKey = storage[0];
 
 		// Advance time past rotation interval but within grace period
 		vi.advanceTimersByTime(1100);
