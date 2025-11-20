@@ -75,7 +75,7 @@ describe("oidc scope consent", async () => {
 
 	it("should require new consent when scopes are expanded", async () => {
 		// 1. Create a user and login
-		const user = await auth.api.signUpEmail({
+		await auth.api.signUpEmail({
 			body: {
 				email: "test@example.com",
 				password: "password123",
