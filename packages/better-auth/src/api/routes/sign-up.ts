@@ -1,6 +1,6 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { runWithTransaction } from "@better-auth/core/context";
+import { runWithGraphTransaction } from "@better-auth/core/context";
 import { isDevelopment } from "@better-auth/core/env";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
@@ -155,7 +155,8 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			},
 		},
 		async (ctx) => {
-			return runWithTransaction(ctx.context.adapter, async () => {
+			const { adapter, graphAdapter } = ctx.context;
+			return runWithGraphTransaction(adapter, graphAdapter, async () => {
 				if (
 					!ctx.context.options.emailAndPassword?.enabled ||
 					ctx.context.options.emailAndPassword?.disableSignUp
