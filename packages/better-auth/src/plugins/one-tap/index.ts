@@ -1,7 +1,7 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { createRemoteJWKSet, jwtVerify } from "jose";
-import { z } from "zod";
+import * as z from "zod";
 import { APIError } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { toBoolean } from "../../utils/boolean";

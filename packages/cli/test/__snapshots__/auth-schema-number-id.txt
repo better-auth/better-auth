@@ -1,15 +1,15 @@
+import { relations } from "drizzle-orm";
 import {
   pgTable,
   text,
   timestamp,
   boolean,
   integer,
-  serial,
   index,
 } from "drizzle-orm/pg-core";
 
 export const custom_user = pgTable("custom_user", {
-  id: serial("id").primaryKey(),
+  id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
@@ -27,7 +27,7 @@ export const custom_user = pgTable("custom_user", {
 export const custom_session = pgTable(
   "custom_session",
   {
-    id: serial("id").primaryKey(),
+    id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
     expiresAt: timestamp("expires_at").notNull(),
     token: text("token").notNull().unique(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -46,7 +46,7 @@ export const custom_session = pgTable(
 export const custom_account = pgTable(
   "custom_account",
   {
-    id: serial("id").primaryKey(),
+    id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
     accountId: text("account_id").notNull(),
     providerId: text("provider_id").notNull(),
     userId: integer("user_id")
@@ -70,7 +70,7 @@ export const custom_account = pgTable(
 export const custom_verification = pgTable(
   "custom_verification",
   {
-    id: serial("id").primaryKey(),
+    id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
     identifier: text("identifier").notNull(),
     value: text("value").notNull(),
     expiresAt: timestamp("expires_at").notNull(),
@@ -86,7 +86,7 @@ export const custom_verification = pgTable(
 export const twoFactor = pgTable(
   "two_factor",
   {
-    id: serial("id").primaryKey(),
+    id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
     secret: text("secret").notNull(),
     backupCodes: text("backup_codes").notNull(),
     userId: integer("user_id")
@@ -98,3 +98,30 @@ export const twoFactor = pgTable(
     index("twoFactor_userId_idx").on(table.userId),
   ],
 );
+
+export const custom_userRelations = relations(custom_user, ({ many }) => ({
+  custom_sessions: many(custom_session),
+  custom_accounts: many(custom_account),
+  twoFactors: many(twoFactor),
+}));
+
+export const custom_sessionRelations = relations(custom_session, ({ one }) => ({
+  custom_user: one(custom_user, {
+    fields: [custom_session.userId],
+    references: [custom_user.id],
+  }),
+}));
+
+export const custom_accountRelations = relations(custom_account, ({ one }) => ({
+  custom_user: one(custom_user, {
+    fields: [custom_account.userId],
+    references: [custom_user.id],
+  }),
+}));
+
+export const twoFactorRelations = relations(twoFactor, ({ one }) => ({
+  custom_user: one(custom_user, {
+    fields: [twoFactor.userId],
+    references: [custom_user.id],
+  }),
+}));

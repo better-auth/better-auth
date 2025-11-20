@@ -109,3 +109,31 @@ describe("sign-in", async (it) => {
 		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
 	});
 });
+
+describe("url checks", async (it) => {
+	it("should reject untrusted origins", async () => {
+		const { client } = await getTestInstance();
+		const res = await client.signIn.social({
+			provider: "google",
+			callbackURL: "http://malicious.com",
+		});
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.message).toBe("Invalid callbackURL");
+
+		const errorCallbackRes = await client.signIn.social({
+			provider: "google",
+			errorCallbackURL: "http://malicious.com",
+		});
+		expect(errorCallbackRes.error?.status).toBe(403);
+		expect(errorCallbackRes.error?.message).toBe("Invalid errorCallbackURL");
+
+		const newUserCallbackRes = await client.signIn.social({
+			provider: "google",
+			newUserCallbackURL: "http://malicious.com",
+		});
+		expect(newUserCallbackRes.error?.status).toBe(403);
+		expect(newUserCallbackRes.error?.message).toBe(
+			"Invalid newUserCallbackURL",
+		);
+	});
+});

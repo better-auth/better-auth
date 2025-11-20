@@ -152,15 +152,17 @@ export const facebook = (options: FacebookOptions) => {
 				};
 
 				// https://developers.facebook.com/docs/facebook-login/limited-login/permissions
+				// Facebook ID token does not include email_verified claim.
+				// We default to false for security consistency.
 				const userMap = await options.mapProfileToUser?.({
 					...user,
-					email_verified: true,
+					email_verified: false,
 				});
 
 				return {
 					user: {
 						...user,
-						emailVerified: true,
+						emailVerified: false,
 						...userMap,
 					},
 					data: profile,

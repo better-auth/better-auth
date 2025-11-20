@@ -3,7 +3,7 @@ import type { DBFieldAttribute } from "@better-auth/core/db";
 export function withApplyDefault(
 	value: any,
 	field: DBFieldAttribute,
-	action: "create" | "update",
+	action: "create" | "update" | "findOne" | "findMany",
 ) {
 	if (action === "update") {
 		// Apply onUpdate if value is undefined

@@ -1,6 +1,7 @@
 import { cva } from "class-variance-authority";
 import { CircleCheck, CircleX, Info, TriangleAlert } from "lucide-react";
-import { forwardRef, type HTMLAttributes, type ReactNode } from "react";
+import type { HTMLAttributes, ReactNode } from "react";
+import { forwardRef } from "react";
 import { cn } from "@/lib/utils";
 
 type CalloutProps = Omit<

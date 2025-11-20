@@ -16,7 +16,7 @@ same browser session that started it.
 
 ## Common Causes
 
-* The cookie wasn't set or readable during callback (common with .vercel.app preview domains or cross-domain issues).
+* The cookie wasn't set or readable during callback (common with `.vercel.app` preview domains or cross-domain issues).
 * The cookie domain/path doesn't match between your app and callback route.
 * The browser blocked third-party cookies (especially on Safari / iOS).
 * You started the OAuth flow in one tab but finished it in another (different cookie context).
@@ -34,9 +34,18 @@ same browser session that started it.
 * Check that cookies are not blocked by browser settings or privacy modes.
 * Ensure you're starting and ending the OAuth flow in the same browser session.
 
-### Debug locally
+### Skip state cookie check
 
-Use your browser's DevTools → Application → Cookies to confirm:
+If you know what you are doing, you can skip the state cookie check by
+setting the `advanced.oauthConfig.skipStateCookieCheck` option to `true` in your auth config.
+
+<Callout type="warn">
+  Please note that this is a security risk and should only be enabled if you know what you are doing.
+</Callout>
+
+### Production Debug
+
+Head to your production site, and use your browser's DevTools → Application → Cookies to confirm:
 
 * The state cookie is being set before redirect.
 * It still exists when the OAuth provider redirects back.

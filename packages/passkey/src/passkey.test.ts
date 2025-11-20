@@ -1,7 +1,8 @@
 import { createAuthClient } from "better-auth/client";
 import { getTestInstance } from "better-auth/test";
 import { describe, expect, it } from "vitest";
-import { type Passkey, passkey } from ".";
+import type { Passkey } from ".";
+import { passkey } from ".";
 import { passkeyClient } from "./client";
 
 describe("passkey", async () => {

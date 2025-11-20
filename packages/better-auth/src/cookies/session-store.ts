@@ -1,7 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import type { InternalLogger } from "@better-auth/core/env";
 import type { CookieOptions } from "better-call";
-import { z } from "zod";
+import * as z from "zod";
 
 // Cookie size constants based on browser limits
 const ALLOWED_COOKIE_SIZE = 4096;

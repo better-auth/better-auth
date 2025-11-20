@@ -479,21 +479,6 @@ describe("base context creation", () => {
 	});
 
 	describe("generate ID", () => {
-		it("should use custom advanced.generateId", async () => {
-			const customGenerateId = vi.fn(() => "custom-id");
-			const res = await initBase({
-				advanced: {
-					generateId: customGenerateId as any,
-				},
-			});
-			const id = res.generateId({ model: "user", size: 16 });
-			expect(customGenerateId).toHaveBeenCalledWith({
-				model: "user",
-				size: 16,
-			});
-			expect(id).toBe("custom-id");
-		});
-
 		it("should fallback to advanced.database.generateId", async () => {
 			const databaseGenerateId = vi.fn(() => "db-id");
 			const res = await initBase({
@@ -958,7 +943,9 @@ describe("base context creation", () => {
 			const customGenerateId = vi.fn(() => "custom-id");
 			const ctx = await initBase({
 				advanced: {
-					generateId: customGenerateId as any,
+					database: {
+						generateId: customGenerateId as any,
+					},
 				},
 			});
 			expect(ctx.internalAdapter).toBeDefined();

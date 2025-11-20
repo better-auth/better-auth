@@ -9,7 +9,8 @@ Better Auth manages session using a traditional cookie-based session management.
 
 The session table stores the session data. The session table has the following fields:
 
-- `id`: The session token. Which is also used as the session cookie.
+- `id`: Unique identifier for the session.
+- `token`: The session token. Which is also used as the session cookie.
 - `userId`: The user ID of the user.
 - `expiresAt`: The expiration date of the session.
 - `ipAddress`: The IP address of the user.

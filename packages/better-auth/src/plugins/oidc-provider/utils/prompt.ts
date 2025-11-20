@@ -26,5 +26,5 @@ export function parsePrompt(prompt: string) {
 		throw new InvalidRequest("prompt none must only be used alone");
 	}
 
-	return new Set(set) as ReadonlySet<AuthorizePrompt>;
+	return new Set(set) as AuthorizePromptSet;
 }

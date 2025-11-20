@@ -3,10 +3,8 @@ import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { createLogger, env, isProduction, isTest } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { OAuthProvider } from "@better-auth/core/oauth2";
-import {
-	type SocialProviders,
-	socialProviders,
-} from "@better-auth/core/social-providers";
+import type { SocialProviders } from "@better-auth/core/social-providers";
+import { socialProviders } from "@better-auth/core/social-providers";
 import { createTelemetry } from "@better-auth/telemetry";
 import defu from "defu";
 import type { Entries } from "type-fest";

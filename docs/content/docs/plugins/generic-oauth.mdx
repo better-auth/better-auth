@@ -125,9 +125,81 @@ type oAuth2LinkAccount = {
 
 The plugin mounts a route to handle the OAuth callback `/oauth2/callback/:providerId`. This means by default `${baseURL}/api/auth/oauth2/callback/:providerId` will be used as the callback URL. Make sure your OAuth provider is configured to use this URL.
 
+## Pre-configured Provider Helpers
+
+Better Auth provides pre-configured helper functions for popular OAuth providers. These helpers handle the provider-specific configuration, including discovery URLs and user info endpoints.
+
+### Supported Providers
+
+- **Auth0** - `auth0(options)`
+- **Keycloak** - `keycloak(options)`
+- **Okta** - `okta(options)`
+- **Microsoft Entra ID (Azure AD)** - `microsoftEntraId(options)`
+- **Slack** - `slack(options)`
+
+### Example: Using Pre-configured Providers
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { genericOAuth, auth0, keycloak, okta, microsoftEntraId, slack } from "better-auth/plugins"
+
+export const auth = betterAuth({
+  plugins: [
+    genericOAuth({
+      config: [
+        auth0({
+          clientId: process.env.AUTH0_CLIENT_ID,
+          clientSecret: process.env.AUTH0_CLIENT_SECRET,
+          domain: process.env.AUTH0_DOMAIN,
+        }),
+        keycloak({
+          clientId: process.env.KEYCLOAK_CLIENT_ID,
+          clientSecret: process.env.KEYCLOAK_CLIENT_SECRET,
+          issuer: process.env.KEYCLOAK_ISSUER,
+        }),
+        okta({
+          clientId: process.env.OKTA_CLIENT_ID,
+          clientSecret: process.env.OKTA_CLIENT_SECRET,
+          issuer: process.env.OKTA_ISSUER,
+        }),
+        microsoftEntraId({
+          clientId: process.env.MS_APP_ID,
+          clientSecret: process.env.MS_CLIENT_SECRET,
+          tenantId: process.env.MS_TENANT_ID,
+        }),
+        slack({
+          clientId: process.env.SLACK_CLIENT_ID,
+          clientSecret: process.env.SLACK_CLIENT_SECRET,
+        }),
+      ],
+    }),
+  ],
+})
+```
+
+Each provider helper accepts common OAuth options (extending `BaseOAuthProviderOptions`) plus provider-specific fields:
+
+- **Auth0**: Requires `domain` (e.g., `dev-xxx.eu.auth0.com`)
+- **Keycloak**: Requires `issuer` (e.g., `https://my-domain/realms/MyRealm`)
+- **Okta**: Requires `issuer` (e.g., `https://dev-xxxxx.okta.com/oauth2/default`)
+- **Microsoft Entra ID**: Requires `tenantId` (can be a GUID, `"common"`, `"organizations"`, or `"consumers"`)
+- **Slack**: No additional required fields
+
+All providers support the same optional fields:
+- `scopes?: string[]` - Array of OAuth scopes to request
+- `redirectURI?: string` - Custom redirect URI
+- `pkce?: boolean` - Enable PKCE (defaults to `false`)
+- `disableImplicitSignUp?: boolean` - Disable automatic sign-up for new users
+- `disableSignUp?: boolean` - Disable sign-up entirely
+- `overrideUserInfo?: boolean` - Override user info on sign in
+
 ## Configuration
 
-When adding the plugin to your auth config, you can configure multiple OAuth providers. Each provider configuration object supports the following options:
+When adding the plugin to your auth config, you can configure multiple OAuth providers. You can either use the pre-configured provider helpers (shown above) or create custom configurations manually.
+
+### Manual Configuration
+
+Each provider configuration object supports the following options:
 
 ```ts
 interface GenericOAuthConfig {

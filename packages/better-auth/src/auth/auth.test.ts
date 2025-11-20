@@ -1,5 +1,5 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { router } from "better-auth/api";
+import type { router } from "better-auth/api";
 import { describe, expectTypeOf, test } from "vitest";
 import type { Auth } from "../types";
 import { betterAuth } from "./auth";

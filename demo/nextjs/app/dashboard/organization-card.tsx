@@ -40,7 +40,7 @@ import {
 	useListOrganizations,
 	useSession,
 } from "@/lib/auth-client";
-import { ActiveOrganization, Session } from "@/lib/auth-types";
+import type { ActiveOrganization, Session } from "@/lib/auth-types";
 
 export function OrganizationCard(props: {
 	session: Session | null;

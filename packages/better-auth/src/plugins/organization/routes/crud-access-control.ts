@@ -1,12 +1,10 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { Where } from "@better-auth/core/db/adapter";
-import { z } from "zod";
+import * as z from "zod";
 import { APIError } from "../../../api";
-import {
-	type InferAdditionalFieldsFromPluginOptions,
-	toZodSchema,
-} from "../../../db";
+import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
+import { toZodSchema } from "../../../db";
 import type { User } from "../../../types";
 import type { AccessControl } from "../../access";
 import { orgSessionMiddleware } from "../call";

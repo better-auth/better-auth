@@ -85,23 +85,13 @@ Once installed, you can utilize the OIDC Provider to manage authentication flows
 
 ### Register a New Client
 
-To register a new OIDC client, use the `oauth2.register` method.
+To register a new OIDC client, use the `oauth2.register` method on the client or `auth.api.registerOAuthApplication` on the server.
 
-
-#### Simple Example
-
-```ts
-const application = await client.oauth2.register({
-    client_name: "My Client",
-    redirect_uris: ["https://client.example.com/callback"],
-});
-```
-
-
-#### Full Method
-
-
-<APIMethod path="/oauth2/register" method="POST">
+<APIMethod 
+  path="/oauth2/register" 
+  method="POST"
+  note="By default, client registration requires authentication. Set `allowDynamicClientRegistration: true` to allow public registration. Make sure to add the `oidcClient()` plugin to your auth client configuration."
+>
 ```ts
 type registerOAuthApplication = {
     /**
@@ -226,8 +216,24 @@ The OIDC Provider includes a UserInfo endpoint that allows clients to retrieve i
 
 <Endpoint path="/oauth2/userinfo" method="GET" />
 
-```ts title="client-app.ts"
-// Example of how a client would use the UserInfo endpoint
+#### Server-Side Usage
+
+```ts title="server.ts"
+import { auth } from "@/lib/auth";
+
+const userInfo = await auth.api.oAuth2userInfo({
+  headers: {
+    authorization: "Bearer ACCESS_TOKEN"
+  }
+});
+// userInfo contains user details based on the scopes granted
+```
+
+#### Client-Side Usage (For Third-Party OAuth Clients)
+
+Third-party OAuth clients can call the UserInfo endpoint using standard HTTP requests:
+
+```ts title="external-client.ts"
 const response = await fetch('https://your-domain.com/api/auth/oauth2/userinfo', {
   headers: {
     'Authorization': 'Bearer ACCESS_TOKEN'
@@ -235,16 +241,46 @@ const response = await fetch('https://your-domain.com/api/auth/oauth2/userinfo',
 });
 
 const userInfo = await response.json();
-// userInfo contains user details based on the scopes granted
 ```
 
-The UserInfo endpoint returns different claims based on the scopes that were granted during authorization:
+**Returned claims based on scopes:**
 
 - With `openid` scope: Returns the user's ID (`sub` claim)
-- With `profile` scope: Returns name, picture, given_name, family_name
-- With `email` scope: Returns email and email_verified
+- With `profile` scope: Returns `name`, `picture`, `given_name`, `family_name`
+- With `email` scope: Returns `email` and `email_verified`
+
+#### Custom Claims
 
 The `getAdditionalUserInfoClaim` function receives the user object, requested scopes array, and the client, allowing you to conditionally include claims based on the scopes granted during authorization. These additional claims will be included in both the UserInfo endpoint response and the ID token.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { oidcProvider } from "better-auth/plugins";
+
+export const auth = betterAuth({
+    plugins: [
+        oidcProvider({
+            loginPage: "/sign-in",
+            getAdditionalUserInfoClaim: async (user, scopes, client) => {
+                const claims: Record<string, any> = {};
+                
+                // Add custom claims based on scopes
+                if (scopes.includes("profile")) {
+                    claims.department = user.department;
+                    claims.job_title = user.jobTitle;
+                }
+                
+                // Add claims based on client metadata
+                if (client.metadata?.includeRoles) {
+                    claims.roles = user.roles;
+                }
+                
+                return claims;
+            }
+        })
+    ]
+});
+```
 
 ### Consent Screen
 

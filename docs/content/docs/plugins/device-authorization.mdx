@@ -42,6 +42,7 @@ This will demonstrate the complete device authorization flow by:
           plugins: [ // [!code highlight]
             deviceAuthorization({ // [!code highlight]
               // Optional configuration
+              verificationUri: "/device/verify", // Custom URL where users verify their device code (default: /device) // [!code highlight]
               expiresIn: "30m", // Device code expiration time // [!code highlight]
               interval: "5s",    // Minimum polling interval // [!code highlight]
             }), // [!code highlight]
@@ -129,8 +130,9 @@ const { data } = await authClient.device.code({
 });
 
 if (data) {
-  console.log(`Please visit: ${data.verification_uri}`);
-  console.log(`And enter code: ${data.user_code}`);
+  console.log(`User code: ${data.user_code}`);
+  console.log(`Verification URL: ${data.verification_uri}`);
+  console.log(`Complete verification URL: ${data.verification_uri_complete}`);
 }
 ```
 
@@ -455,12 +457,10 @@ async function authenticateCLI() {
     console.log(`Please visit: ${verification_uri}`);
     console.log(`Enter code: ${user_code}\n`);
     
-    // Open browser with the complete URL
+    // Open browser to verification page
     const urlToOpen = verification_uri_complete || verification_uri;
-    if (urlToOpen) {
-      console.log("🌐 Opening browser...");
-      await open(urlToOpen);
-    }
+    console.log("🌐 Opening browser...");
+    await open(urlToOpen);
     
     console.log(`⏳ Waiting for authorization... (polling every ${interval}s)`);
     
@@ -555,6 +555,8 @@ authenticateCLI().catch((err) => {
 ## Options
 
 ### Server
+
+**verificationUri**: The URL (absolute or relative) where users verify their device code. It is typically the page where users enter the code. Returned as `verification_uri` in the response. Default: `"/device"`.
 
 **expiresIn**: The expiration time for device codes. Default: `"30m"` (30 minutes).
 

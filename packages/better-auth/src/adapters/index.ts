@@ -1,11 +1,19 @@
+import type {
+	AdapterFactory,
+	AdapterFactoryConfig,
+	AdapterFactoryCustomizeAdapterCreator,
+	AdapterFactoryOptions,
+	AdapterTestDebugLogs,
+	CustomAdapter,
+} from "./adapter-factory";
 import {
-	type AdapterFactory,
-	type AdapterFactoryConfig,
-	type AdapterFactoryCustomizeAdapterCreator,
-	type AdapterFactoryOptions,
-	type AdapterTestDebugLogs,
-	type CustomAdapter,
 	createAdapterFactory,
+	initGetDefaultFieldName,
+	initGetDefaultModelName,
+	initGetFieldAttributes,
+	initGetFieldName,
+	initGetIdField,
+	initGetModelName,
 } from "./adapter-factory";
 
 export * from "@better-auth/core/db/adapter";
@@ -18,8 +26,15 @@ export type {
 	CustomAdapter,
 	AdapterFactoryCustomizeAdapterCreator,
 };
-
-export { createAdapterFactory };
+export {
+	createAdapterFactory,
+	initGetDefaultFieldName,
+	initGetDefaultModelName,
+	initGetFieldName,
+	initGetModelName,
+	initGetFieldAttributes,
+	initGetIdField,
+};
 
 /**
  * @deprecated Use `createAdapterFactory` instead. This export will be removed in the next major version.

@@ -2,7 +2,7 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createOTP } from "@better-auth/utils/otp";
 import { APIError } from "better-call";
-import { z } from "zod";
+import * as z from "zod";
 import { sessionMiddleware } from "../../../api";
 import { setSessionCookie } from "../../../cookies";
 import { symmetricDecrypt } from "../../../crypto";
