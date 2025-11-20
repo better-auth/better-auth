@@ -1452,6 +1452,10 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			}),
 			metadata: {
 				isAction: false,
+				allowedMediaTypes: [
+					"application/x-www-form-urlencoded",
+					"application/json",
+				],
 				openapi: {
 					operationId: "handleSAMLCallback",
 					summary: "Callback URL for SAML provider",
