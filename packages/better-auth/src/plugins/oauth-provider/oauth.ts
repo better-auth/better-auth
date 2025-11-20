@@ -556,7 +556,6 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						scope: z.string().optional(),
 					}),
 					metadata: {
-						isAction: false,
 						allowedMediaTypes: ["application/x-www-form-urlencoded"],
 						openapi: {
 							description: "Obtain an OAuth2.1 access token",
@@ -841,7 +840,6 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							.optional(),
 					}),
 					metadata: {
-						isAction: false,
 						allowedMediaTypes: ["application/x-www-form-urlencoded"],
 						openapi: {
 							description: "Revoke an OAuth2 access or refresh token",
@@ -919,7 +917,6 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				{
 					method: "GET",
 					metadata: {
-						isAction: false,
 						openapi: {
 							description:
 								"Get OpenID Connect user information (UserInfo endpoint)",
