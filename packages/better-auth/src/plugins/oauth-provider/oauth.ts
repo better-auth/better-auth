@@ -338,7 +338,6 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							.optional(),
 					}),
 					metadata: {
-						allowedMediaTypes: ["application/x-www-form-urlencoded"],
 						openapi: {
 							description: "Authorize an OAuth2 request",
 							parameters: [
