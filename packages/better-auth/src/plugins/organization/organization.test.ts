@@ -2298,10 +2298,11 @@ describe("Additional Fields", async () => {
 		type ExpectedInvitations = {
 			id: string;
 			organizationId: string;
-			email: string;
+			email?: string | undefined;
 			role: "member" | "admin" | "owner";
 			status: InvitationStatus;
 			inviterId: string;
+			domainWhitelist?: string | undefined;
 			expiresAt: Date;
 			createdAt: Date;
 			teamId?: string | undefined;
@@ -2497,10 +2498,11 @@ describe("Additional Fields", async () => {
 	let invitation: {
 		id: string;
 		organizationId: string;
-		email: string;
+		email?: string | undefined;
 		role: "member" | "admin" | "owner";
 		status: InvitationStatus;
 		inviterId: string;
+		domainWhitelist?: string | undefined;
 		expiresAt: Date;
 		teamId?: string | undefined;
 		invitationRequiredField: string;
@@ -2590,10 +2592,11 @@ describe("Additional Fields", async () => {
 		type ExpectedResult = {
 			id: string;
 			organizationId: string;
-			email: string;
+			email?: string | undefined;
 			role: "member" | "admin" | "owner";
 			status: InvitationStatus;
 			inviterId: string;
+			domainWhitelist?: string | undefined;
 			createdAt: Date;
 			expiresAt: Date;
 			teamId?: string | undefined;
@@ -2624,10 +2627,11 @@ describe("Additional Fields", async () => {
 			invitation: {
 				id: string;
 				organizationId: string;
-				email: string;
+				email?: string | undefined;
 				role: "member" | "admin" | "owner";
 				status: InvitationStatus;
 				inviterId: string;
+				domainWhitelist?: string | undefined;
 				createdAt: Date;
 				expiresAt: Date;
 				teamId?: string | undefined;
