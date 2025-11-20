@@ -1043,15 +1043,22 @@ export const signInSSO = (options?: SSOOptions) => {
 				const sp = parsedSamlConfig.spMetadata.metadata
 				? saml.ServiceProvider({
 						metadata: parsedSamlConfig.spMetadata.metadata,
-						allowCreate: true,
 					})
-				: saml.ServiceProvider({
-						entityID: parsedSamlConfig.spMetadata?.entityID || parsedSamlConfig.issuer,
-						assertionConsumerService: [{
-							Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-							Location: parsedSamlConfig.callbackUrl,
-						}],
-						allowCreate: true,
+				: saml.SPMetadata({
+						entityID:
+							parsedSamlConfig.spMetadata?.entityID || parsedSamlConfig.issuer,
+						assertionConsumerService: [
+							{
+								Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+								Location:
+									parsedSamlConfig.callbackUrl ||
+									`${ctx.context.baseURL}/sso/saml2/sp/acs/${provider.providerId}`,
+							},
+						],
+						wantMessageSigned: parsedSamlConfig.wantAssertionsSigned || false,
+						nameIDFormat: parsedSamlConfig.identifierFormat
+							? [parsedSamlConfig.identifierFormat]
+							: undefined,
 					});
 
 				const idp = saml.IdentityProvider({
