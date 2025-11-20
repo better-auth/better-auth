@@ -397,7 +397,6 @@ export const kyselyAdapter = (
 
 					if (join) {
 						for (const [joinModel, joinAttr] of Object.entries(join)) {
-
 							const [_joinModelSchema, joinModelName] = joinModel.includes(".")
 								? joinModel.split(".")
 								: [undefined, joinModel];

@@ -8,7 +8,6 @@ import type { Account, Session, User, Verification } from "../types";
 import { generateId } from "../utils";
 import {
 	createAdapterFactory,
-	initGetDefaultFieldName,
 	initGetDefaultModelName,
 } from "./adapter-factory";
 import type { Logger } from "./test-adapter";
