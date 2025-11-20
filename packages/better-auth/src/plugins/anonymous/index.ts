@@ -2,6 +2,7 @@ import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
+	type AuthMiddleware,
 } from "@better-auth/core/api";
 import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
@@ -84,7 +85,10 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 					}
 
 					const email = await getAnonUserEmail(options);
-					const name = (await options?.generateName?.(ctx)) || "Anonymous";
+					const name =
+						(options && typeof options.generateName === "function"
+							? await options.generateName(ctx as any)
+							: undefined) || "Anonymous";
 					const newUser = await ctx.context.internalAdapter.createUser({
 						email,
 						emailVerified: false,
@@ -199,7 +203,7 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						if (!options?.disableDeleteAnonymousUser) {
 							await ctx.context.internalAdapter.deleteUser(session.user.id);
 						}
-					}),
+					}) as AuthMiddleware,
 				},
 			],
 		},
