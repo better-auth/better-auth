@@ -23,14 +23,12 @@ export async function rpInitiatedLogoutEndpoint(
 		client_id,
 		post_logout_redirect_uri,
 		state,
-		ui_locales,
 	}: {
 		// Spec says `id_token_hint` recommended but we make it required for DOS
 		id_token_hint: string;
 		client_id?: string;
 		post_logout_redirect_uri?: string;
 		state?: string;
-		ui_locales?: string;
 	} = ctx.query;
 
 	const baseURL = ctx.context.baseURL;
@@ -183,6 +181,10 @@ export async function rpInitiatedLogoutEndpoint(
 	if (post_logout_redirect_uri) {
 		const registeredUris = client.postLogoutRedirectUris;
 		if (registeredUris?.includes(post_logout_redirect_uri)) {
+			const redirectUri = new URL(post_logout_redirect_uri);
+			if (state) {
+				redirectUri.searchParams.set("state", state);
+			}
 			const { url } = await handleRedirect(ctx, post_logout_redirect_uri);
 			return {
 				redirect_uri: url,
