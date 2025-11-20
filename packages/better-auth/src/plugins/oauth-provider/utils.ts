@@ -92,7 +92,7 @@ export async function getClient(
 		});
 
 	if (dbClient && options.cachedTrustedClients?.has(clientId)) {
-		cachedTrustedClients.set(clientId, dbClient);
+		cachedTrustedClients.set(clientId, Object.assign({}, dbClient));
 	}
 
 	return dbClient;
