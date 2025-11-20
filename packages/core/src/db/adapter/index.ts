@@ -379,6 +379,12 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 		 */
 		forceAllowId?: boolean | undefined;
 	}) => Promise<R>;
+	createMany: <T extends Record<string, any>, R = T>(data: {
+		model: string;
+		data: T[];
+		select?: string[] | undefined;
+		forceAllowId?: boolean | undefined;
+	}) => Promise<R[]>;
 	findOne: <T>(data: {
 		model: string;
 		where: Where[];
@@ -452,6 +458,10 @@ export interface CustomAdapter {
 		data: T;
 		select?: string[] | undefined;
 	}) => Promise<T>;
+	createMany: <T extends Record<string, any>>(data: {
+		model: string;
+		data: T[];
+	}) => Promise<T[]>;
 	update: <T>(data: {
 		model: string;
 		where: CleanedWhere[];
