@@ -6,7 +6,11 @@ import { betterAuth } from "../auth";
 import { getAuthTables } from "../db/get-tables";
 import type { Account, Session, User, Verification } from "../types";
 import { generateId } from "../utils";
-import { createAdapterFactory } from "./adapter-factory";
+import {
+	createAdapterFactory,
+	initGetDefaultFieldName,
+	initGetDefaultModelName,
+} from "./adapter-factory";
 import type { Logger } from "./test-adapter";
 import { deepmerge } from "./utils";
 
@@ -76,24 +80,6 @@ export type InsertRandomFn = <
 								: [undefined]
 			>
 >;
-
-export const createTestSuite2 = <
-	Tests extends Record<
-		string,
-		(context: {
-			/**
-			 * Mark tests as skipped. All execution after this call will be skipped.
-			 * This function throws an error, so make sure you are not catching it accidentally.
-			 * @see {@link https://vitest.dev/guide/test-context#skip}
-			 */
-			readonly skip: {
-				(note?: string | undefined): never;
-				(condition: boolean, note?: string | undefined): void;
-			};
-		}) => Promise<void>
-	>,
-	AdditionalOptions extends Record<string, any> = {},
->() => {};
 
 export const createTestSuite = <
 	Tests extends Record<
@@ -278,7 +264,17 @@ export const createTestSuite = <
 				for (const model of Object.keys(createdRows)) {
 					for (const row of createdRows[model]!) {
 						const schema = getAuthTables(helpers.getBetterAuthOptions());
-						if (!schema[model]) continue; // model doesn't exist in the schema anymore, so we skip it
+						const getDefaultModelName = initGetDefaultModelName({
+							schema,
+							usePlural: adapter.options?.adapterConfig.usePlural,
+						});
+						let defaultModelName: string;
+						try {
+							defaultModelName = getDefaultModelName(model);
+						} catch {
+							return;
+						}
+						if (!schema[defaultModelName]) continue; // model doesn't exist in the schema anymore, so we skip it
 						try {
 							await adapter.delete({
 								model,
