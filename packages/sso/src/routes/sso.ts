@@ -1039,8 +1039,35 @@ export const signInSSO = (options?: SSOOptions) => {
 						message: "Invalid SAML configuration",
 					});
 				}
+
+				let metadata = parsedSamlConfig.spMetadata.metadata;
+
+				if (!metadata) {
+					metadata =
+						saml
+							.SPMetadata({
+								entityID:
+									parsedSamlConfig.spMetadata?.entityID ||
+									parsedSamlConfig.issuer,
+								assertionConsumerService: [
+									{
+										Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+										Location:
+											parsedSamlConfig.callbackUrl ||
+											`${ctx.context.baseURL}/sso/saml2/sp/acs/${provider.providerId}`,
+									},
+								],
+								wantMessageSigned:
+									parsedSamlConfig.wantAssertionsSigned || false,
+								nameIDFormat: parsedSamlConfig.identifierFormat
+									? [parsedSamlConfig.identifierFormat]
+									: undefined,
+							})
+							.getMetadata() || "";
+				}
+
 				const sp = saml.ServiceProvider({
-					metadata: parsedSamlConfig.spMetadata.metadata,
+					metadata: metadata,
 					allowCreate: true,
 				});
 
@@ -1452,6 +1479,10 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			}),
 			metadata: {
 				isAction: false,
+				allowedMediaTypes: [
+					"application/x-www-form-urlencoded",
+					"application/json",
+				],
 				openapi: {
 					operationId: "handleSAMLCallback",
 					summary: "Callback URL for SAML provider",
