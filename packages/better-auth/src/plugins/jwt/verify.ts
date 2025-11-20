@@ -1,7 +1,8 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { getCurrentAuthContext } from "@better-auth/core/context";
 import { base64 } from "@better-auth/utils/base64";
-import { importJWK, jwtVerify } from "jose";
+import type { JWTPayload } from "jose";
+import { importJWK, jwtVerify, } from "jose";
 import { getJwksAdapter } from "./adapter";
 import type { JwtOptions } from "./types";
 
@@ -9,10 +10,10 @@ import type { JwtOptions } from "./types";
  * Verify a JWT token using the JWKS public keys
  * Returns the payload if valid, null otherwise
  */
-export async function verifyJWT(
+export async function verifyJWT<T extends JWTPayload = JWTPayload>(
 	token: string,
 	options?: JwtOptions,
-): Promise<{ sub: string; aud: string; [key: string]: any } | null> {
+): Promise<(T & Required<Pick<JWTPayload, "sub" | "aud">>) | null> {
 	const ctx = await getCurrentAuthContext();
 	try {
 		const parts = token.split(".");
@@ -56,7 +57,7 @@ export async function verifyJWT(
 			return null;
 		}
 
-		return payload as { sub: string; aud: string; [key: string]: any };
+		return payload as T & Required<Pick<JWTPayload, "sub" | "aud">>;
 	} catch (error) {
 		ctx.context.logger.debug("JWT verification failed", error);
 		return null;
