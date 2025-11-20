@@ -55,7 +55,11 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 		if (requestUrl) {
 			try {
 				const url = new URL(requestUrl);
-				if (url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "::1") {
+				if (
+					url.hostname === "localhost" ||
+					url.hostname === "127.0.0.1" ||
+					url.hostname === "::1"
+				) {
 					requestUrl = undefined; // Skip localhost URLs
 				}
 			} catch {
@@ -309,7 +313,9 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 							if (newLocation.startsWith("http")) {
 								absoluteLocation = newLocation;
 							} else {
-								const path = newLocation.startsWith("/") ? newLocation : `/${newLocation}`;
+								const path = newLocation.startsWith("/")
+									? newLocation
+									: `/${newLocation}`;
 								absoluteLocation = `${productionOrigin}${path}`;
 							}
 							ctx.setHeader("location", absoluteLocation);
