@@ -55,6 +55,7 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 		"/oauth2/callback/:providerId",
 		"/sign-in/email",
 		"/sign-up/email",
+		"/passkey/verify-authentication",
 	];
 
 	const defaultResolveMethod = (ctx: GenericEndpointContext) => {
@@ -63,6 +64,7 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 				ctx.params?.id || ctx.params?.providerId || ctx.path.split("/").pop()
 			);
 		}
+		if (ctx.path.includes("passkey")) return "passkey";
 		if (ctx.path.includes("siwe")) return "siwe";
 		return null;
 	};
