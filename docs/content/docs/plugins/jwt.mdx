@@ -338,6 +338,12 @@ Table Name: `jwks`
       type: "Date", 
       description: "Timestamp of when the web key was created" 
     },
+    { 
+      name: "expiresAt", 
+      type: "Date", 
+      description: "Timestamp of when the web key expires",
+      isOptional: true
+    },
   ]}
   />
 
@@ -403,6 +409,24 @@ jwt({
   }
 })
 ```
+
+### Key Rotation
+
+You can enable key rotation by setting the `rotationInterval` option. This will automatically rotate the key pair at the specified interval.
+
+The default value is `undefined` (disabled).
+
+```ts title="auth.ts"
+jwt({
+  jwks: {
+    rotationInterval: 60 * 60 * 24 * 30, // 30 days
+    gracePeriod: 60 * 60 * 24 * 30 // 30 days
+  }
+})
+```
+
+- `rotationInterval`: The interval in seconds to rotate the key pair.
+- `gracePeriod`: The period in seconds to keep the old key pair valid after rotation. This is useful to allow clients to verify tokens signed by the old key pair. The default value is 1 day.
 
 ### Modify JWT payload
 

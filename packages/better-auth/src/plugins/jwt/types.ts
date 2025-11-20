@@ -30,6 +30,18 @@ export interface JwtOptions {
 				 * @default false
 				 */
 				disablePrivateKeyEncryption?: boolean;
+				/**
+				 * The key rotation interval in seconds.
+				 *
+				 * @default undefined (disabled)
+				 */
+				rotationInterval?: number;
+				/**
+				 * The grace period in seconds.
+				 *
+				 * @default 2592000 (30 days)
+				 */
+				gracePeriod?: number;
 		  }
 		| undefined;
 
@@ -194,6 +206,7 @@ export interface Jwk {
 	publicKey: string;
 	privateKey: string;
 	createdAt: Date;
+	expiresAt?: Date;
 	alg?: JWSAlgorithms | undefined;
 	crv?: ("Ed25519" | "P-256" | "P-521") | undefined;
 }

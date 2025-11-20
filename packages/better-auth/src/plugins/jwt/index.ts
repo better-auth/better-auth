@@ -132,13 +132,13 @@ export const jwt = (options?: JwtOptions | undefined) => {
 						throw new APIError("NOT_FOUND");
 					}
 
-					const adapter = getJwksAdapter(ctx.context.adapter);
+					const adapter = getJwksAdapter(ctx.context.adapter, options);
 
 					let keySets = await adapter.getAllKeys(ctx);
 
 					if (!keySets || keySets?.length === 0) {
-						const key = await createJwk(ctx, options);
-						keySets = [key];
+						await createJwk(ctx, options);
+						keySets = await adapter.getAllKeys(ctx);
 					}
 
 					if (!keySets?.length) {
@@ -146,6 +146,19 @@ export const jwt = (options?: JwtOptions | undefined) => {
 							"No key sets found. Make sure you have a key in your database.",
 						);
 					}
+
+					const now = Date.now();
+					const DEFAULT_GRACE_PERIOD = 60 * 60 * 24 * 30;
+					const gracePeriod =
+						(options?.jwks?.gracePeriod ?? DEFAULT_GRACE_PERIOD) * 1000;
+
+					const keys = keySets.filter((key) => {
+						if (!key.expiresAt) {
+							return true;
+						}
+						return key.expiresAt.getTime() + gracePeriod > now;
+					});
+
 					const keyPairConfig = options?.jwks?.keyPairConfig;
 					const defaultCrv = keyPairConfig
 						? "crv" in keyPairConfig
@@ -153,7 +166,7 @@ export const jwt = (options?: JwtOptions | undefined) => {
 							: undefined
 						: undefined;
 					return ctx.json({
-						keys: keySets.map((keySet) => {
+						keys: keys.map((keySet) => {
 							return {
 								alg: keySet.alg ?? options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
 								crv: keySet.crv ?? defaultCrv,
