@@ -1,4 +1,5 @@
 import type { CookieOptions, EndpointContext } from "better-call";
+
 import type {
 	Account,
 	BetterAuthDBSchema,
@@ -23,6 +24,30 @@ export type GenericEndpointContext<
 > = EndpointContext<string, any> & {
 	context: AuthContext<Options>;
 };
+
+export type Relationship = {
+	objectId: string;
+	objectType: string;
+	relationshipType: string;
+	subjectId: string;
+	subjectType: string;
+	optionalRelation?: string;
+	attributes?: Record<string, unknown>;
+};
+
+export interface GraphAdapter {
+	addRelationship(relationship: Relationship): Promise<void>;
+	deleteRelationship(relationship: Relationship): Promise<void>;
+	check(
+		subjectType: string,
+		subjectId: string,
+		permissionName: string,
+		objectType: string,
+		objectId: string,
+	): Promise<boolean>;
+	commit: () => Promise<void>;
+	transaction: () => GraphAdapter;
+}
 
 export interface InternalAdapter<
 	Options extends BetterAuthOptions = BetterAuthOptions,
@@ -212,6 +237,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 		} & BetterAuthRateLimitOptions;
 		adapter: DBAdapter<Options>;
 		internalAdapter: InternalAdapter<Options>;
+		graphAdapter: GraphAdapter;
 		createAuthCookie: CreateCookieGetterFn;
 		secret: string;
 		sessionConfig: {

@@ -19,3 +19,8 @@ export {
 	runWithAdapter,
 	runWithTransaction,
 } from "./transaction";
+export {
+	getCurrentGraphContext,
+	runWithGraphContext,
+	withTransaction,
+} from "./graph-context";
