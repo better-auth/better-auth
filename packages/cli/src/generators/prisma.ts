@@ -102,7 +102,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				if (type === "date") {
 					return isOptional ? "DateTime?" : "DateTime";
 				}
-				if (type === "json") {
+				if (type === "json" || type === "jsonb") {
 					return isOptional ? "Json?" : "Json";
 				}
 				if (type === "string[]") {
@@ -208,7 +208,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					if (Array.isArray(attr.defaultValue)) {
 						// for json objects and array of object
 
-						if (attr.type === "json") {
+						if (attr.type === "json" || attr.type === "jsonb") {
 							if (
 								Object.prototype.toString.call(attr.defaultValue[0]) ===
 								"[object Object]"

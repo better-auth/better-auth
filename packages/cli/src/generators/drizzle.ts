@@ -157,6 +157,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					pg: `jsonb('${name}')`,
 					mysql: `json('${name}')`,
 				},
+				jsonb: {
+					sqlite: `text('${name}')`,
+					pg: `jsonb('${name}')`,
+					mysql: `json('${name}')`,
+				},
 			} as const;
 			return typeMap[type][databaseType];
 		}
@@ -409,7 +414,7 @@ function generateImport({
 	for (const table of Object.values(tables)) {
 		for (const field of Object.values(table.fields)) {
 			if (field.bigint) hasBigint = true;
-			if (field.type === "json") hasJson = true;
+			if (field.type === "json" || field.type === "jsonb") hasJson = true;
 		}
 		if (hasJson && hasBigint) break;
 	}
