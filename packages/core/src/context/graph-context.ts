@@ -36,10 +36,10 @@ export async function runWithGraphContext<T>(
 	return result;
 }
 
-export function withTransaction(
-	endpoint: (ctx: GenericEndpointContext) => Promise<any>,
+export function withTransaction<T extends GenericEndpointContext>(
+	endpoint: (ctx: T) => Promise<any>,
 ) {
-	return async (ctx: GenericEndpointContext) => {
+	return async (ctx: T) => {
 		return await runWithTransaction(ctx.context.adapter, async () => {
 			return await runWithGraphContext(ctx.context.graphAdapter, async () => {
 				return await endpoint(ctx);
@@ -53,6 +53,7 @@ export function runWithGraphTransaction<R>(
 	graphAdapter: GraphAdapter,
 	fn: () => Promise<R>,
 ): Promise<R> {
+	console.log(dbAdapter, graphAdapter);
 	return runWithTransaction(dbAdapter, async () => {
 		return await runWithGraphContext(graphAdapter, fn);
 	});

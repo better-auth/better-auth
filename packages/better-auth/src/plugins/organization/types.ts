@@ -1,7 +1,6 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
 import type { Session, User } from "../../types";
-import type { AccessControl, Role } from "../access";
 import type {
 	Invitation,
 	Member,
@@ -46,46 +45,20 @@ export interface OrganizationOptions {
 	 * @default "owner"
 	 */
 	creatorRole?: string | undefined;
+
+	builtInOrganizationRoles?:
+		| {
+				type: string;
+				name: string;
+				description: string;
+		  }[]
+		| undefined;
 	/**
 	 * The maximum number of members allowed in an organization.
 	 *
 	 * @default 100
 	 */
 	membershipLimit?: number | undefined;
-	/**
-	 * Configure the roles and permissions for the
-	 * organization plugin.
-	 */
-	ac?: AccessControl | undefined;
-	/**
-	 * Custom permissions for roles.
-	 */
-	roles?:
-		| {
-				[key in string]?: Role<any>;
-		  }
-		| undefined;
-	/**
-	 * Dynamic access control for the organization plugin.
-	 */
-	dynamicAccessControl?:
-		| {
-				/**
-				 * Whether to enable dynamic access control for the organization plugin.
-				 *
-				 * @default false
-				 */
-				enabled?: boolean;
-				/**
-				 * The maximum number of roles that can be created for an organization.
-				 *
-				 * @default Infinite
-				 */
-				maximumRolesPerOrganization?:
-					| number
-					| ((organizationId: string) => Promise<number> | number);
-		  }
-		| undefined;
 	/**
 	 * Support for team.
 	 */
@@ -226,9 +199,13 @@ export interface OrganizationOptions {
 					 */
 					id: string;
 					/**
-					 * the role of the user
+					 * the organization roles assigned to the user
 					 */
-					role: string;
+					organizationRoles: string[];
+					/**
+					 * the team roles assigned to the user
+					 */
+					teamRoles: string[];
 					/**
 					 * the email of the user
 					 */
@@ -311,6 +288,39 @@ export interface OrganizationOptions {
 					modelName?: string;
 					fields?: {
 						[key in keyof Omit<OrganizationRole, "id">]?: string;
+					};
+					additionalFields?: {
+						[key in string]: DBFieldAttribute;
+					};
+				};
+				teamRole?: {
+					modelName?: string;
+					fields?: {
+						[key in keyof Omit<import("./schema").TeamRole, "id">]?: string;
+					};
+					additionalFields?: {
+						[key in string]: DBFieldAttribute;
+					};
+				};
+				memberOrganizationRole?: {
+					modelName?: string;
+					fields?: {
+						[key in keyof Omit<
+							import("./schema").MemberOrganizationRole,
+							"id"
+						>]?: string;
+					};
+					additionalFields?: {
+						[key in string]: DBFieldAttribute;
+					};
+				};
+				memberTeamRole?: {
+					modelName?: string;
+					fields?: {
+						[key in keyof Omit<
+							import("./schema").MemberTeamRole,
+							"id"
+						>]?: string;
 					};
 					additionalFields?: {
 						[key in string]: DBFieldAttribute;
@@ -526,7 +536,7 @@ export interface OrganizationOptions {
 				 * 	return {
 				 * 		data: {
 				 * 			...data.member,
-				 * 			role: "custom-role"
+				 * 			organizationRoles: ["admin", "member"]
 				 * 		}
 				 * 	};
 				 * }
@@ -536,7 +546,7 @@ export interface OrganizationOptions {
 					member: {
 						userId: string;
 						organizationId: string;
-						role: string;
+						organizationRoles: string[];
 						[key: string]: any;
 					};
 					user: User & Record<string, any>;
@@ -573,28 +583,28 @@ export interface OrganizationOptions {
 				}) => Promise<void>;
 
 				/**
-				 * A callback that runs before a member's role is updated
+				 * A callback that runs before a member's roles are updated
 				 *
 				 * You can return a `data` object to override the default data.
 				 */
 				beforeUpdateMemberRole?: (data: {
 					member: Member & Record<string, any>;
-					newRole: string;
+					newRoles: string[];
 					user: User & Record<string, any>;
 					organization: Organization & Record<string, any>;
 				}) => Promise<void | {
 					data: {
-						role: string;
+						organizationRoles: string[];
 						[key: string]: any;
 					};
 				}>;
 
 				/**
-				 * A callback that runs after a member's role is updated
+				 * A callback that runs after a member's roles are updated
 				 */
 				afterUpdateMemberRole?: (data: {
 					member: Member & Record<string, any>;
-					previousRole: string;
+					previousRoles: string[];
 					user: User & Record<string, any>;
 					organization: Organization & Record<string, any>;
 				}) => Promise<void>;
@@ -623,7 +633,8 @@ export interface OrganizationOptions {
 				beforeCreateInvitation?: (data: {
 					invitation: {
 						email: string;
-						role: string;
+						organizationRoles: string[];
+						teamRoles: string[];
 						organizationId: string;
 						inviterId: string;
 						teamId?: string;

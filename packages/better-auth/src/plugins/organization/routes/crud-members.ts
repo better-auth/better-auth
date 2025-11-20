@@ -5,17 +5,10 @@ import * as z from "zod";
 import { getSessionFromCtx, sessionMiddleware } from "../../../api";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db/to-zod";
-import type { LiteralString } from "../../../types/helper";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import { hasPermission } from "../has-permission";
-import { parseRoles } from "../organization";
-import type {
-	InferMember,
-	InferOrganizationRolesFromOption,
-	Member,
-} from "../schema";
+import type { InferMember, Member } from "../schema";
 import type { OrganizationOptions } from "../types";
 
 export const addMember = <O extends OrganizationOptions>(option: O) => {
@@ -28,9 +21,9 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 			description:
 				'The user Id which represents the user to be added as a member. If `null` is provided, then it\'s expected to provide session headers. Eg: "user-id"',
 		}),
-		role: z.union([z.string(), z.array(z.string())]).meta({
+		organizationRoles: z.array(z.string()).meta({
 			description:
-				'The role(s) to assign to the new member. Eg: ["admin", "sale"]',
+				'The organization role(s) to assign to the new member. Eg: ["admin", "member"]',
 		}),
 		organizationId: z
 			.string()
@@ -60,14 +53,10 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 				$Infer: {
 					body: {} as {
 						userId: string;
-						role:
-							| InferOrganizationRolesFromOption<O>
-							| InferOrganizationRolesFromOption<O>[];
+						organizationRoles: string[];
 						organizationId?: string | undefined;
-					} & (O extends { teams: { enabled: true } }
-						? { teamId?: string | undefined }
-						: {}) &
-						InferAdditionalFieldsFromPluginOptions<"member", O>,
+						teamId?: string | undefined;
+					} & InferAdditionalFieldsFromPluginOptions<"member", O>,
 				},
 				openapi: {
 					operationId: "addOrganizationMember",
@@ -96,12 +85,6 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 
 			const teamId =
 				"teamId" in ctx.body ? (ctx.body.teamId as string) : undefined;
-			if (teamId && !ctx.context.orgOptions.teams?.enabled) {
-				ctx.context.logger.error("Teams are not enabled");
-				throw new APIError("BAD_REQUEST", {
-					message: "Teams are not enabled",
-				});
-			}
 
 			const adapter = getOrgAdapter<O>(ctx.context, option);
 
@@ -150,7 +133,7 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 			}
 
 			const {
-				role: _,
+				organizationRoles: _,
 				userId: __,
 				organizationId: ___,
 				...additionalFields
@@ -163,10 +146,27 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 				});
 			}
 
+			// Validate organization roles exist
+			const organizationRoles = ctx.body.organizationRoles || [];
+			if (organizationRoles.length > 0) {
+				const existingRoles = await adapter.getOrganizationRolesByTypes(
+					orgId,
+					organizationRoles as any,
+				);
+				const existingTypes = new Set<string>(existingRoles.map((r) => r.type));
+				const missingTypes = (organizationRoles as string[]).filter(
+					(r: string) => !existingTypes.has(r),
+				);
+				if (missingTypes.length > 0) {
+					throw new APIError("BAD_REQUEST", {
+						message: `Role type(s) '${missingTypes.join(", ")}' do not exist for this organization`,
+					});
+				}
+			}
+
 			let memberData = {
 				organizationId: orgId,
 				userId: user.id,
-				role: parseRoles(ctx.body.role),
 				createdAt: new Date(),
 				...(additionalFields ? additionalFields : {}),
 			};
@@ -177,9 +177,9 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 					member: {
 						userId: user.id,
 						organizationId: orgId,
-						role: parseRoles(ctx.body.role as string | string[]),
+						organizationRoles: organizationRoles,
 						...additionalFields,
-					},
+					} as any,
 					user,
 					organization,
 				});
@@ -192,6 +192,15 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 			}
 
 			const createdMember = await adapter.createMember(memberData);
+
+			// Assign organization roles via junction table
+			if (organizationRoles.length > 0) {
+				await adapter.assignOrganizationRolesToMember(
+					createdMember.id,
+					orgId,
+					organizationRoles,
+				);
+			}
 
 			if (teamId) {
 				await adapter.findOrCreateTeamMember({
@@ -263,7 +272,12 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 														type: "string",
 													},
 												},
-												required: ["id", "userId", "organizationId", "role"],
+												required: [
+													"id",
+													"userId",
+													"organizationId",
+													"organizationRoles",
+												],
 											},
 										},
 										required: ["member"],
@@ -316,11 +330,12 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				});
 			}
-			const roles = toBeRemovedMember.role.split(",");
 			const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
-			const isOwner = roles.includes(creatorRole);
+			const isOwner =
+				toBeRemovedMember.organizationRoles?.includes(creatorRole);
 			if (isOwner) {
-				if (member.role !== creatorRole) {
+				const updaterIsOwner = member.organizationRoles?.includes(creatorRole);
+				if (!updaterIsOwner) {
 					throw new APIError("BAD_REQUEST", {
 						message:
 							ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER,
@@ -329,10 +344,9 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				const { members } = await adapter.listMembers({
 					organizationId: organizationId,
 				});
-				const owners = members.filter((member) => {
-					const roles = member.role.split(",");
-					return roles.includes(creatorRole);
-				});
+				const owners = members.filter((m) =>
+					m.organizationRoles?.includes(creatorRole),
+				);
 				if (owners.length <= 1) {
 					throw new APIError("BAD_REQUEST", {
 						message:
@@ -340,24 +354,7 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 					});
 				}
 			}
-			const canDeleteMember = await hasPermission(
-				{
-					role: member.role,
-					options: ctx.context.orgOptions,
-					permissions: {
-						member: ["delete"],
-					},
-					organizationId,
-				},
-				ctx,
-			);
-
-			if (!canDeleteMember) {
-				throw new APIError("UNAUTHORIZED", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_MEMBER,
-				});
-			}
+			// Permission checking will be implemented via Zed schema evaluation
 
 			if (toBeRemovedMember?.organizationId !== organizationId) {
 				throw new APIError("BAD_REQUEST", {
@@ -423,9 +420,9 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 		{
 			method: "POST",
 			body: z.object({
-				role: z.union([z.string(), z.array(z.string())]).meta({
+				organizationRoles: z.array(z.string()).meta({
 					description:
-						'The new role to be applied. This can be a string or array of strings representing the roles. Eg: ["admin", "sale"]',
+						'The new organization role(s) to be applied. Eg: ["admin", "member"]',
 				}),
 				memberId: z.string().meta({
 					description:
@@ -444,11 +441,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 			metadata: {
 				$Infer: {
 					body: {} as {
-						role:
-							| InferOrganizationRolesFromOption<O>
-							| InferOrganizationRolesFromOption<O>[]
-							| LiteralString
-							| LiteralString[];
+						organizationRoles: string[];
 						memberId: string;
 						/**
 						 * If not provided, the active organization will be used
@@ -483,7 +476,12 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 														type: "string",
 													},
 												},
-												required: ["id", "userId", "organizationId", "role"],
+												required: [
+													"id",
+													"userId",
+													"organizationId",
+													"organizationRoles",
+												],
 											},
 										},
 										required: ["member"],
@@ -498,8 +496,14 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 		async (ctx) => {
 			const session = ctx.context.session;
 
-			if (!ctx.body.role) {
-				throw new APIError("BAD_REQUEST");
+			if (
+				!ctx.body.organizationRoles
+				//  ||
+				// ctx.body.organizationRoles.length === 0
+			) {
+				throw new APIError("BAD_REQUEST", {
+					message: "organizationRoles is required",
+				});
 			}
 
 			const organizationId =
@@ -512,11 +516,22 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 			}
 
 			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
-			const roleToSet: string[] = Array.isArray(ctx.body.role)
-				? ctx.body.role
-				: ctx.body.role
-					? [ctx.body.role]
-					: [];
+			const roleToSet: string[] = ctx.body.organizationRoles || [];
+
+			// Validate organization roles exist
+			if (roleToSet.length > 0) {
+				const existingRoles = await adapter.getOrganizationRolesByTypes(
+					organizationId,
+					roleToSet as any,
+				);
+				const existingTypes = new Set(existingRoles.map((r) => r.type));
+				const missingTypes = roleToSet.filter((r) => !existingTypes.has(r));
+				if (missingTypes.length > 0) {
+					throw new APIError("BAD_REQUEST", {
+						message: `Role type(s) '${missingTypes.join(", ")}' do not exist for this organization`,
+					});
+				}
+			}
 
 			const member = await adapter.findMemberByOrgId({
 				userId: session.user.id,
@@ -552,8 +567,8 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 
 			const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
 
-			const updatingMemberRoles = member.role.split(",");
-			const toBeUpdatedMemberRoles = toBeUpdatedMember.role.split(",");
+			const updatingMemberRoles = member.organizationRoles || [];
+			const toBeUpdatedMemberRoles = toBeUpdatedMember.organizationRoles || [];
 
 			const isUpdatingCreator = toBeUpdatedMemberRoles.includes(creatorRole);
 			const updaterIsCreator = updatingMemberRoles.includes(creatorRole);
@@ -573,19 +588,12 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 			}
 
 			if (updaterIsCreator && memberIsUpdatingThemselves) {
-				const members = await ctx.context.adapter.findMany<Member>({
-					model: "member",
-					where: [
-						{
-							field: "organizationId",
-							value: organizationId,
-						},
-					],
+				const { members } = await adapter.listMembers({
+					organizationId: organizationId,
 				});
-				const owners = members.filter((member: Member) => {
-					const roles = member.role.split(",");
-					return roles.includes(creatorRole);
-				});
+				const owners = members.filter((m) =>
+					m.organizationRoles?.includes(creatorRole),
+				);
 				if (owners.length <= 1 && !isSettingCreatorRole) {
 					throw new APIError("BAD_REQUEST", {
 						message:
@@ -594,25 +602,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				}
 			}
 
-			const canUpdateMember = await hasPermission(
-				{
-					role: member.role,
-					options: ctx.context.orgOptions,
-					permissions: {
-						member: ["update"],
-					},
-					allowCreatorAllPermissions: true,
-					organizationId,
-				},
-				ctx,
-			);
-
-			if (!canUpdateMember) {
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
-				});
-			}
+			// Permission checking will be implemented via Zed schema evaluation
 
 			const organization = await adapter.findOrganizationById(organizationId);
 			if (!organization) {
@@ -630,25 +620,28 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				});
 			}
 
-			const previousRole = toBeUpdatedMember.role;
-			const newRole = parseRoles(ctx.body.role as string | string[]);
+			const previousRoles = toBeUpdatedMember.organizationRoles || [];
+			const newRoles = roleToSet;
 
 			// Run beforeUpdateMemberRole hook
 			if (option?.organizationHooks?.beforeUpdateMemberRole) {
 				const response = await option?.organizationHooks.beforeUpdateMemberRole(
 					{
 						member: toBeUpdatedMember,
-						newRole,
+						newRole: newRoles,
 						user: userBeingUpdated,
 						organization,
-					},
+					} as any,
 				);
 				if (response && typeof response === "object" && "data" in response) {
 					// Allow the hook to modify the role
-					const updatedMember = await adapter.updateMember(
+					const hookRoles = response.data.organizationRoles || newRoles;
+					await adapter.assignOrganizationRolesToMember(
 						ctx.body.memberId,
-						response.data.role || newRole,
+						organizationId,
+						hookRoles as any,
 					);
+					const updatedMember = await adapter.findMemberById(ctx.body.memberId);
 					if (!updatedMember) {
 						throw new APIError("BAD_REQUEST", {
 							message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
@@ -659,20 +652,24 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 					if (option?.organizationHooks?.afterUpdateMemberRole) {
 						await option?.organizationHooks.afterUpdateMemberRole({
 							member: updatedMember,
-							previousRole,
+							previousRole: previousRoles,
 							user: userBeingUpdated,
 							organization,
-						});
+						} as any);
 					}
 
 					return ctx.json(updatedMember);
 				}
 			}
 
-			const updatedMember = await adapter.updateMember(
+			// Update roles via junction table
+			await adapter.assignOrganizationRolesToMember(
 				ctx.body.memberId,
-				newRole,
+				organizationId,
+				newRoles,
 			);
+
+			const updatedMember = await adapter.findMemberById(ctx.body.memberId);
 			if (!updatedMember) {
 				throw new APIError("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
@@ -683,10 +680,10 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 			if (option?.organizationHooks?.afterUpdateMemberRole) {
 				await option?.organizationHooks.afterUpdateMemberRole({
 					member: updatedMember,
-					previousRole,
+					previousRole: previousRoles,
 					user: userBeingUpdated,
 					organization,
-				});
+				} as any);
 			}
 
 			return ctx.json(updatedMember);
@@ -720,8 +717,11 @@ export const getActiveMember = <O extends OrganizationOptions>(options: O) =>
 											organizationId: {
 												type: "string",
 											},
-											role: {
-												type: "string",
+											organizationRoles: {
+												type: "array",
+												items: {
+													type: "string",
+												},
 											},
 										},
 										required: ["id", "userId", "organizationId", "role"],
@@ -789,19 +789,13 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 			const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
-			const isOwnerLeaving = member.role.split(",").includes(creatorRole);
+			const isOwnerLeaving = member.organizationRoles?.includes(creatorRole);
 			if (isOwnerLeaving) {
-				const members = await ctx.context.adapter.findMany<Member>({
-					model: "member",
-					where: [
-						{
-							field: "organizationId",
-							value: ctx.body.organizationId,
-						},
-					],
+				const { members } = await adapter.listMembers({
+					organizationId: ctx.body.organizationId,
 				});
-				const owners = members.filter((member) =>
-					member.role.split(",").includes(creatorRole),
+				const owners = members.filter((m) =>
+					m.organizationRoles?.includes(creatorRole),
 				);
 				if (owners.length <= 1) {
 					throw new APIError("BAD_REQUEST", {
@@ -1031,7 +1025,7 @@ export const getActiveMemberRole = <O extends OrganizationOptions>(
 			}
 
 			return ctx.json({
-				role: member?.role,
+				organizationRoles: member?.organizationRoles || [],
 			});
 		},
 	);

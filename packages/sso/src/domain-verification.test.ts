@@ -38,6 +38,12 @@ describe("Domain verification", async () => {
 			ssoProvider: [],
 			member: [],
 			organization: [],
+			organizationRole: [],
+			memberOrganizationRole: [],
+			teamRole: [],
+			memberTeamRole: [],
+			team: [],
+			teamMember: [],
 		};
 
 		const memory = memoryAdapter(data);
@@ -91,7 +97,7 @@ describe("Domain verification", async () => {
 				await auth.api.addMember({
 					body: {
 						userId: response.data.user.id,
-						role: "member",
+						organizationRoles: ["member"],
 					},
 					headers,
 				});

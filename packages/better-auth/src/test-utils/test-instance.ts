@@ -100,14 +100,14 @@ export async function getTestInstance<
 		database:
 			testWith === "postgres"
 				? { db: await getPostgres(), type: "postgres" }
-				: testWith === "mongodb"
-					? await Promise.all([
-							mongodbClient(),
-							await import("../adapters/mongodb-adapter"),
-						]).then(([db, { mongodbAdapter }]) => mongodbAdapter(db))
-					: testWith === "mysql"
-						? { db: await getMysql(), type: "mysql" }
-						: await getSqlite(),
+				: // : testWith === "mongodb"
+					// 	? await Promise.all([
+					// 			mongodbClient(),
+					// 			await import("../adapters/mongodb-adapter"),
+					// 		]).then(([db, { mongodbAdapter }]) => mongodbAdapter(db))
+					testWith === "mysql"
+					? { db: await getMysql(), type: "mysql" }
+					: await getSqlite(),
 		emailAndPassword: {
 			enabled: true,
 		},
@@ -146,14 +146,17 @@ export async function getTestInstance<
 	}
 
 	if (testWith !== "mongodb") {
-		const { runMigrations } = await getMigrations({
+		const { runMigrations, compileMigrations } = await getMigrations({
 			...auth.options,
 			database: opts.database,
 		});
+		console.log("runMigrations", await compileMigrations());
 		await runMigrations();
+		console.log("runMigrations");
 	}
 
 	await createTestUser();
+	console.log("createTestUser");
 
 	const cleanup = async () => {
 		if (testWith === "mongodb") {

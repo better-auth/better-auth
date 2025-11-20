@@ -53,7 +53,7 @@ describe("listMembers", async () => {
 			body: {
 				organizationId: org.data?.id as string,
 				userId: user.id,
-				role: "member",
+				organizationRoles: ["member"],
 			},
 		});
 	}
@@ -265,20 +265,20 @@ describe("updateMemberRole", async () => {
 			body: {
 				organizationId: org.data?.id as string,
 				userId: newUser.user.id,
-				role: "member",
+				organizationRoles: ["member"],
 			},
 		});
 		const updatedMember = await client.organization.updateMemberRole(
 			{
 				organizationId: org.data?.id as string,
 				memberId: member?.id as string,
-				role: "admin",
+				organizationRoles: ["admin"],
 			},
 			{
 				headers,
 			},
 		);
-		expect(updatedMember.data?.role).toBe("admin");
+		expect(updatedMember.data?.organizationRoles).toBe(["admin"]);
 	});
 
 	it("should not update the member role if the member updating is not a member	", async () => {
@@ -327,14 +327,14 @@ describe("updateMemberRole", async () => {
 			body: {
 				organizationId: newOrg.data?.id as string,
 				userId: user.id,
-				role: "admin",
+				organizationRoles: ["admin"],
 			},
 		});
 		const updatedMember = await client.organization.updateMemberRole(
 			{
 				organizationId: newOrg.data?.id as string,
 				memberId: newOrg.data?.members[0]?.id as string,
-				role: "admin",
+				organizationRoles: ["admin"],
 			},
 			{
 				headers,
@@ -401,7 +401,7 @@ describe("activeMemberRole", async () => {
 			body: {
 				organizationId: org.data?.id as string,
 				userId: user.id,
-				role: "member",
+				organizationRoles: ["member"],
 			},
 		});
 	}
@@ -420,7 +420,7 @@ describe("activeMemberRole", async () => {
 			},
 		});
 
-		expect(activeMember.data?.role).toBe("owner");
+		expect(activeMember.data?.organizationRoles).toBe(["owner"]);
 	});
 
 	it("should return active member role on organization", async () => {
@@ -440,6 +440,6 @@ describe("activeMemberRole", async () => {
 			},
 		});
 
-		expect(activeMember.data?.role).toBe("member");
+		expect(activeMember.data?.organizationRoles).toBe(["member"]);
 	});
 });

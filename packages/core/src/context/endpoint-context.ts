@@ -42,7 +42,7 @@ export async function getCurrentAuthContext(): Promise<AuthEndpointContext> {
 
 export async function runWithEndpointContext<T>(
 	context: AuthEndpointContext,
-	fn: () => T,
+	fn: () => Promise<T>,
 ): Promise<T> {
 	const als = await ensureAsyncStorage();
 	return als.run(context, fn);

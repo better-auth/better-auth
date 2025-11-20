@@ -48,6 +48,7 @@ export async function runPluginInit(ctx: AuthContext) {
 		logger: context.logger,
 		hooks: dbHooks.filter((u) => u !== undefined),
 		generateId: context.generateId,
+		graphAdapter: context.graphAdapter,
 	});
 	context.options = options;
 	return { context };

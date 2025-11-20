@@ -59,6 +59,8 @@ describe("get-full-organization", async () => {
 				headers,
 			},
 		});
+
+		console.log(orgById);
 		expect(orgById.data?.name).toBe("test");
 	});
 
@@ -143,7 +145,7 @@ describe("get-full-organization", async () => {
 		// Create an invitation
 		await client.organization.inviteMember({
 			email: "invited@test.com",
-			role: "member",
+			organizationRoles: ["member"],
 			fetchOptions: {
 				headers,
 			},
@@ -161,7 +163,7 @@ describe("get-full-organization", async () => {
 			(inv: any) => inv.email === "invited@test.com",
 		);
 		expect(invitation).toBeDefined();
-		expect(invitation?.role).toBe("member");
+		expect(invitation?.organizationRoles).toMatchObject(["member"]);
 	});
 
 	it("should prioritize organizationSlug over organizationId when both are provided", async () => {
@@ -196,7 +198,7 @@ describe("get-full-organization", async () => {
 		await auth.api.addMember({
 			body: {
 				userId: newUser.user.id,
-				role: "member",
+				organizationRoles: ["member"],
 				organizationId: org.data?.id as string,
 			},
 		});
@@ -236,7 +238,7 @@ describe("get-full-organization", async () => {
 			await auth.api.addMember({
 				body: {
 					userId: newUser.user.id,
-					role: "member",
+					organizationRoles: ["member"],
 					organizationId: org.data?.id as string,
 				},
 			});
@@ -327,12 +329,34 @@ describe("organization hooks", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [
 				organization({
+					builtInOrganizationRoles: [
+						{
+							type: "owner",
+							name: "Owner",
+							description: "Full organization access",
+						},
+						{
+							type: "admin",
+							name: "Admin",
+							description: "Administrative access",
+						},
+						{
+							type: "member",
+							name: "Member",
+							description: "Basic member access",
+						},
+						{
+							type: "changed-role",
+							name: "Changed role",
+							description: "Changed role",
+						},
+					],
 					organizationHooks: {
 						beforeAddMember: async (data) => {
 							beforeAddMember();
 							return {
 								data: {
-									role: "changed-role",
+									organizationRoles: ["changed-role"],
 								},
 							};
 						},
@@ -352,7 +376,7 @@ describe("organization hooks", async () => {
 		const member = await auth.api.getActiveMember({
 			headers,
 		});
-		expect(member?.role).toBe("changed-role");
+		expect(member?.organizationRoles).toMatchObject(["changed-role"]);
 	});
 
 	it("should apply afterAddMember hook", async () => {

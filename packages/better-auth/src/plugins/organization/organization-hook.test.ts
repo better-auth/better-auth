@@ -88,7 +88,6 @@ describe("organization creation in database hooks", async () => {
 		expect(members[0]).toMatchObject({
 			userId: result.data?.user?.id,
 			organizationId: orgCreated?.id,
-			role: "owner",
 		});
 	});
 

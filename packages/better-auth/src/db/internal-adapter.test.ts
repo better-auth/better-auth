@@ -122,6 +122,7 @@ describe("internal adapter test", async () => {
 	const internalAdapter = authContext.internalAdapter;
 
 	it("should create oauth user with custom generate id", async () => {
+		console.log("createOAuthUser", ctx);
 		const user = await runWithEndpointContext(ctx, () =>
 			internalAdapter.createOAuthUser(
 				{

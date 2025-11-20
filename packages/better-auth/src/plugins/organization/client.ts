@@ -12,36 +12,12 @@ import type {
 import type { BetterAuthOptions, BetterAuthPlugin } from "../../types";
 import type { Prettify } from "../../types/helper";
 import type { AccessControl, Role } from "../access";
-import type { defaultStatements } from "./access";
-import { adminAc, defaultRoles, memberAc, ownerAc } from "./access";
 import type { OrganizationPlugin } from "./organization";
 import type { HasPermissionBaseInput } from "./permission";
 import { hasPermissionFn } from "./permission";
 import type { OrganizationOptions } from "./types";
 
-/**
- * Using the same `hasPermissionFn` function, but without the need for a `ctx` parameter or the `organizationId` parameter.
- */
-export const clientSideHasPermission = (input: HasPermissionBaseInput) => {
-	const acRoles: {
-		[x: string]: Role<any> | undefined;
-	} = input.options.roles || defaultRoles;
-
-	return hasPermissionFn(input, acRoles);
-};
-
 interface OrganizationClientOptions {
-	ac?: AccessControl | undefined;
-	roles?:
-		| {
-				[key in string]: Role;
-		  }
-		| undefined;
-	teams?:
-		| {
-				enabled: boolean;
-		  }
-		| undefined;
 	schema?:
 		| {
 				organization?: {
@@ -86,37 +62,6 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 	const $activeMemberSignal = atom<boolean>(false);
 	const $activeMemberRoleSignal = atom<boolean>(false);
 
-	type DefaultStatements = typeof defaultStatements;
-	type Statements = CO["ac"] extends AccessControl<infer S>
-		? S
-		: DefaultStatements;
-	type PermissionType = {
-		[key in keyof Statements]?: Array<
-			Statements[key] extends readonly unknown[]
-				? Statements[key][number]
-				: never
-		>;
-	};
-	type PermissionExclusive =
-		| {
-				/**
-				 * @deprecated Use `permissions` instead
-				 */
-				permission: PermissionType;
-				permissions?: never | undefined;
-		  }
-		| {
-				permissions: PermissionType;
-				permission?: never | undefined;
-		  };
-
-	const roles = {
-		admin: adminAc,
-		member: memberAc,
-		owner: ownerAc,
-		...options?.roles,
-	};
-
 	type OrganizationReturn = CO["teams"] extends { enabled: true }
 		? {
 				members: InferMember<CO, false>[];
@@ -132,16 +77,6 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 	return {
 		id: "organization",
 		$InferServerPlugin: {} as OrganizationPlugin<{
-			ac: CO["ac"] extends AccessControl
-				? CO["ac"]
-				: AccessControl<DefaultStatements>;
-			roles: CO["roles"] extends Record<string, Role>
-				? CO["roles"]
-				: {
-						admin: Role;
-						member: Role;
-						owner: Role;
-					};
 			teams: {
 				enabled: CO["teams"] extends { enabled: true } ? true : false;
 			};
@@ -160,27 +95,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 				Member: {} as InferMember<CO, false>,
 				Team: {} as InferTeam<CO, false>,
 			},
-			organization: {
-				checkRolePermission: <
-					R extends CO extends { roles: any }
-						? keyof CO["roles"]
-						: "admin" | "member" | "owner",
-				>(
-					data: PermissionExclusive & {
-						role: R;
-					},
-				) => {
-					const isAuthorized = clientSideHasPermission({
-						role: data.role as string,
-						options: {
-							ac: options?.ac,
-							roles: roles,
-						},
-						permissions: (data.permissions ?? data.permission) as any,
-					});
-					return isAuthorized;
-				},
-			},
+			organization: {},
 		}),
 		getAtoms: ($fetch) => {
 			const listOrganizations = useAuthQuery<InferOrganization<CO, false>[]>(

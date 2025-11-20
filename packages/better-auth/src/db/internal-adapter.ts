@@ -85,6 +85,7 @@ export const createInternalAdapter = (
 			account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
 				Partial<Account>,
 		) => {
+			console.log("createOAuthUser", user, account, adapter, ctx);
 			return runWithGraphTransaction(adapter, ctx.graphAdapter, async () => {
 				const createdUser = await createWithHooks(
 					{

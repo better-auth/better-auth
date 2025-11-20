@@ -9,8 +9,7 @@ import type { PrettifyDeep } from "../../../types/helper";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import { hasPermission } from "../has-permission";
-import { teamSchema } from "../schema";
+import { teamSchema, type MemberTeamRole } from "../schema";
 import type { OrganizationOptions } from "../types";
 
 export const createTeam = <O extends OrganizationOptions>(options: O) => {
@@ -118,24 +117,7 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 							ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION,
 					});
 				}
-				const canCreate = await hasPermission(
-					{
-						role: member.role,
-						options: ctx.context.orgOptions,
-						permissions: {
-							team: ["create"],
-						},
-						organizationId,
-					},
-					ctx,
-				);
-
-				if (!canCreate) {
-					throw new APIError("FORBIDDEN", {
-						message:
-							ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_TEAMS_IN_THIS_ORGANIZATION,
-					});
-				}
+				// Permission checking will be implemented via Zed schema evaluation
 			}
 
 			const existingTeams = await adapter.listTeams(organizationId);
@@ -194,6 +176,44 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 			}
 
 			const createdTeam = await adapter.createTeam(teamData);
+
+			// Create built-in team roles
+			const builtInTeamRoles = [
+				{
+					type: "lead",
+					name: "Lead",
+					description: "Team leadership role",
+					isBuiltIn: true,
+					permissions: {
+						team: {
+							manage: true,
+							view: true,
+							invite: true,
+							manage_members: true,
+						},
+					},
+				},
+				{
+					type: "member",
+					name: "Member",
+					description: "Basic team member",
+					isBuiltIn: true,
+					permissions: {
+						team: {
+							view: true,
+						},
+					},
+				},
+			];
+
+			await Promise.all(
+				builtInTeamRoles.map((role) =>
+					adapter.createTeamRole({
+						teamId: createdTeam.id,
+						...role,
+					}),
+				),
+			);
 
 			// Run afterCreateTeam hook
 			if (options?.organizationHooks?.afterCreateTeam) {
@@ -282,24 +302,7 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 					});
 				}
 
-				const canRemove = await hasPermission(
-					{
-						role: member.role,
-						options: ctx.context.orgOptions,
-						permissions: {
-							team: ["delete"],
-						},
-						organizationId,
-					},
-					ctx,
-				);
-
-				if (!canRemove) {
-					throw new APIError("FORBIDDEN", {
-						message:
-							ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_TEAMS_IN_THIS_ORGANIZATION,
-					});
-				}
+				// Permission checking will be implemented via Zed schema evaluation
 			}
 			const team = await adapter.findTeamById({
 				teamId: ctx.body.teamId,
@@ -460,24 +463,7 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			const canUpdate = await hasPermission(
-				{
-					role: member.role,
-					options: ctx.context.orgOptions,
-					permissions: {
-						team: ["update"],
-					},
-					organizationId,
-				},
-				ctx,
-			);
-
-			if (!canUpdate) {
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_TEAM,
-				});
-			}
+			// Permission checking will be implemented via Zed schema evaluation
 
 			const team = await adapter.findTeamById({
 				teamId: ctx.body.teamId,
@@ -882,7 +868,33 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 			const members = await adapter.listTeamMembers({
 				teamId,
 			});
-			return ctx.json(members);
+			// Get team roles for each member
+			const memberIds = members.map((m) => m.id);
+			const teamRoleAssignments =
+				memberIds.length > 0
+					? await adapter.findMany<MemberTeamRole>({
+							model: "memberTeamRole",
+							where: [
+								{
+									field: "team_member_id",
+									value: memberIds,
+									operator: "in",
+								},
+							],
+						})
+					: [];
+			const rolesMap = new Map<string, string[]>();
+			teamRoleAssignments.forEach((ra) => {
+				const existing = rolesMap.get(ra.team_member_id) || [];
+				existing.push(ra.role);
+				rolesMap.set(ra.team_member_id, existing);
+			});
+			return ctx.json(
+				members.map((member) => ({
+					...member,
+					teamRoles: rolesMap.get(member.id) || [],
+				})),
+			);
 		},
 	);
 
@@ -966,24 +978,7 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
-			const canUpdateMember = await hasPermission(
-				{
-					role: currentMember.role,
-					options: ctx.context.orgOptions,
-					permissions: {
-						member: ["update"],
-					},
-					organizationId: session.session.activeOrganizationId,
-				},
-				ctx,
-			);
-
-			if (!canUpdateMember) {
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_TEAM_MEMBER,
-				});
-			}
+			// Permission checking will be implemented via Zed schema evaluation
 
 			const toBeAddedMember = await adapter.findMemberByOrgId({
 				userId: ctx.body.userId,
@@ -1126,24 +1121,7 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
-			const canDeleteMember = await hasPermission(
-				{
-					role: currentMember.role,
-					options: ctx.context.orgOptions,
-					permissions: {
-						member: ["delete"],
-					},
-					organizationId: session.session.activeOrganizationId,
-				},
-				ctx,
-			);
-
-			if (!canDeleteMember) {
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REMOVE_A_TEAM_MEMBER,
-				});
-			}
+			// Permission checking will be implemented via Zed schema evaluation
 
 			const toBeAddedMember = await adapter.findMemberByOrgId({
 				userId: ctx.body.userId,

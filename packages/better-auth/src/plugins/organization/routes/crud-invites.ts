@@ -10,14 +10,7 @@ import { getDate } from "../../../utils/date";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import { hasPermission } from "../has-permission";
-import { parseRoles } from "../organization";
-import type {
-	InferInvitation,
-	InferOrganizationRolesFromOption,
-	Invitation,
-	Member,
-} from "../schema";
+import type { InferInvitation, Invitation, Member } from "../schema";
 import type { OrganizationOptions } from "../types";
 
 export const createInvitation = <O extends OrganizationOptions>(option: O) => {
@@ -30,21 +23,20 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 		email: z.string().meta({
 			description: "The email address of the user to invite",
 		}),
-		role: z
-			.union([
-				z.string().meta({
-					description: "The role to assign to the user",
-				}),
-				z.array(
-					z.string().meta({
-						description: "The roles to assign to the user",
-					}),
-				),
-			])
+		organizationRoles: z
+			.array(z.string())
 			.meta({
 				description:
-					'The role(s) to assign to the user. It can be `admin`, `member`, owner. Eg: "member"',
-			}),
+					'The organization role(s) to assign to the user. Eg: ["admin", "member"]',
+			})
+			.optional(),
+		teamRoles: z
+			.array(z.string())
+			.meta({
+				description:
+					'The team role(s) to assign to the user. Eg: ["lead", "member"]',
+			})
+			.optional(),
 		organizationId: z
 			.string()
 			.meta({
@@ -93,11 +85,13 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 						 */
 						email: string;
 						/**
-						 * The role to assign to the user
+						 * The organization role(s) to assign to the user
 						 */
-						role:
-							| InferOrganizationRolesFromOption<O>
-							| InferOrganizationRolesFromOption<O>[];
+						organizationRoles?: string[];
+						/**
+						 * The team role(s) to assign to the user
+						 */
+						teamRoles?: string[];
 						/**
 						 * The organization ID to invite
 						 * the user to
@@ -158,7 +152,6 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 										required: [
 											"id",
 											"email",
-											"role",
 											"organizationId",
 											"inviterId",
 											"status",
@@ -201,33 +194,34 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				});
 			}
-			const canInvite = await hasPermission(
-				{
-					role: member.role,
-					options: ctx.context.orgOptions,
-					permissions: {
-						invitation: ["create"],
-					},
-					organizationId,
-				},
-				ctx,
-			);
-
-			if (!canInvite) {
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION,
-				});
-			}
+			// Permission checking will be implemented via Zed schema evaluation
 
 			const creatorRole = ctx.context.orgOptions.creatorRole || "owner";
+			const organizationRoles = ctx.body.organizationRoles || [];
 
-			const roles = parseRoles(ctx.body.role);
+			// Validate organization roles exist
+			if (organizationRoles.length > 0) {
+				const orgRolesArray = [...organizationRoles] as string[];
+				const existingRoles = await adapter.getOrganizationRolesByTypes(
+					organizationId,
+					orgRolesArray as any,
+				);
+				const existingTypes = new Set<string>(
+					existingRoles.map((r) => r.type as string),
+				);
+				const missingTypes = orgRolesArray.filter(
+					(r: string) => !existingTypes.has(r as string),
+				);
+				if (missingTypes.length > 0) {
+					throw new APIError("BAD_REQUEST", {
+						message: `Role type(s) '${missingTypes.join(", ")}' do not exist for this organization`,
+					});
+				}
+			}
 
-			if (
-				member.role !== creatorRole &&
-				roles.split(",").includes(creatorRole)
-			) {
+			// Check if non-owner is trying to assign owner role
+			const updaterIsCreator = member.organizationRoles?.includes(creatorRole);
+			if (!updaterIsCreator && organizationRoles.includes(creatorRole)) {
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE,
@@ -294,7 +288,8 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				await ctx.context.orgOptions.sendInvitationEmail?.(
 					{
 						id: updatedInvitation.id!,
-						role: updatedInvitation.role! as string,
+						organizationRoles: updatedInvitation.organizationRoles || [],
+						teamRoles: updatedInvitation.teamRoles || [],
 						email: updatedInvitation.email!.toLowerCase(),
 						organization: organization,
 						inviter: {
@@ -302,7 +297,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 							user: session.user,
 						},
 						invitation: updatedInvitation as unknown as Invitation,
-					},
+					} as any,
 					ctx.request,
 				);
 
@@ -341,10 +336,9 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				});
 			}
 
+			const teamRoles = ctx.body.teamRoles || [];
 			if (
-				ctx.context.orgOptions.teams &&
-				ctx.context.orgOptions.teams.enabled &&
-				typeof ctx.context.orgOptions.teams.maximumMembersPerTeam !==
+				typeof ctx.context.orgOptions.teams?.maximumMembersPerTeam !==
 					"undefined" &&
 				"teamId" in ctx.body &&
 				ctx.body.teamId
@@ -368,14 +362,14 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					}
 
 					const maximumMembersPerTeam =
-						typeof ctx.context.orgOptions.teams.maximumMembersPerTeam ===
+						typeof ctx.context.orgOptions.teams?.maximumMembersPerTeam ===
 						"function"
-							? await ctx.context.orgOptions.teams.maximumMembersPerTeam({
+							? await ctx.context.orgOptions.teams?.maximumMembersPerTeam({
 									teamId,
 									session: session,
 									organizationId: organizationId,
 								})
-							: ctx.context.orgOptions.teams.maximumMembersPerTeam;
+							: ctx.context.orgOptions.teams?.maximumMembersPerTeam;
 					if (team.members.length >= maximumMembersPerTeam) {
 						throw new APIError("FORBIDDEN", {
 							message: ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
@@ -391,16 +385,40 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 						: ((ctx.body.teamId as string[]) ?? [])
 					: [];
 
+			// Validate team roles if provided
+			if (teamRoles.length > 0 && teamIds.length > 0) {
+				const teamRolesArray = [...teamRoles] as string[];
+				for (const teamId of teamIds) {
+					const existingTeamRoles = await adapter.getTeamRolesByTypes(
+						teamId,
+						teamRolesArray as any,
+					);
+					const existingTypes = new Set<string>(
+						existingTeamRoles.map((r) => r.type as string),
+					);
+					const missingTypes = teamRolesArray.filter(
+						(r: string) => !existingTypes.has(r as string),
+					);
+					if (missingTypes.length > 0) {
+						throw new APIError("BAD_REQUEST", {
+							message: `Role type(s) '${missingTypes.join(", ")}' do not exist for team ${teamId}`,
+						});
+					}
+				}
+			}
+
 			const {
 				email: _,
-				role: __,
-				organizationId: ___,
-				resend: ____,
+				organizationRoles: __,
+				teamRoles: ___,
+				organizationId: ____,
+				resend: _____,
 				...additionalFields
 			} = ctx.body;
 
 			let invitationData = {
-				role: roles,
+				organizationRoles: organizationRoles,
+				teamRoles: teamRoles,
 				email: email,
 				organizationId: organizationId,
 				teamIds,
@@ -415,7 +433,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 							...invitationData,
 							inviterId: session.user.id,
 							teamId: teamIds.length > 0 ? teamIds[0] : undefined,
-						},
+						} as any,
 						inviter: session.user,
 						organization,
 					},
@@ -436,7 +454,8 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			await ctx.context.orgOptions.sendInvitationEmail?.(
 				{
 					id: invitation.id,
-					role: invitation.role,
+					organizationRoles: invitation.organizationRoles || [],
+					teamRoles: invitation.teamRoles || [],
 					email: invitation.email.toLowerCase(),
 					organization: organization,
 					inviter: {
@@ -444,7 +463,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 						user: session.user,
 					},
 					invitation,
-				},
+				} as any,
 				ctx.request,
 			);
 
@@ -573,36 +592,85 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 					message: ORGANIZATION_ERROR_CODES.FAILED_TO_RETRIEVE_INVITATION,
 				});
 			}
-			if (
-				ctx.context.orgOptions.teams &&
-				ctx.context.orgOptions.teams.enabled &&
-				"teamId" in acceptedI &&
-				acceptedI.teamId
-			) {
+			// Create member first
+			const member = await adapter.createMember({
+				organizationId: invitation.organizationId,
+				userId: session.user.id,
+				createdAt: new Date(),
+			});
+
+			// Assign organization roles from invitation
+			const organizationRoles = invitation.organizationRoles || [];
+			if (organizationRoles.length > 0) {
+				const orgRolesArray = [...organizationRoles] as string[];
+				// Validate roles still exist (they might have been deleted)
+				const existingRoles = await adapter.getOrganizationRolesByTypes(
+					invitation.organizationId,
+					orgRolesArray as any,
+				);
+				const existingTypes = new Set<string>(existingRoles.map((r) => r.type));
+				const validRoles = orgRolesArray.filter((r: string) =>
+					existingTypes.has(r),
+				);
+				if (validRoles.length > 0) {
+					await adapter.assignOrganizationRolesToMember(
+						member.id,
+						invitation.organizationId,
+						validRoles,
+					);
+				}
+			}
+
+			// Handle team invitations
+			if ("teamId" in acceptedI && acceptedI.teamId) {
 				const teamIds = (acceptedI.teamId as string).split(",");
 				const onlyOne = teamIds.length === 1;
+				const teamRoles = acceptedI.teamRoles || [];
 
 				for (const teamId of teamIds) {
-					await adapter.findOrCreateTeamMember({
+					const teamMember = await adapter.findOrCreateTeamMember({
 						teamId: teamId,
 						userId: session.user.id,
 					});
 
+					// Assign team roles if provided
+					if (teamRoles.length > 0) {
+						const teamRolesArray = [...teamRoles] as string[];
+						// Validate team roles still exist
+						const existingTeamRoles = await adapter.getTeamRolesByTypes(
+							teamId,
+							teamRolesArray as any,
+						);
+						const existingTypes = new Set<string>(
+							existingTeamRoles.map((r) => r.type),
+						);
+						const validTeamRoles = teamRolesArray.filter((r: string) =>
+							existingTypes.has(r),
+						);
+						if (validTeamRoles.length > 0) {
+							await adapter.assignTeamRolesToMember(
+								teamMember.id,
+								teamId,
+								validTeamRoles,
+							);
+						}
+					}
+
 					if (
-						typeof ctx.context.orgOptions.teams.maximumMembersPerTeam !==
+						typeof ctx.context.orgOptions.teams?.maximumMembersPerTeam !==
 						"undefined"
 					) {
 						const members = await adapter.countTeamMembers({ teamId });
 
 						const maximumMembersPerTeam =
-							typeof ctx.context.orgOptions.teams.maximumMembersPerTeam ===
+							typeof ctx.context.orgOptions.teams?.maximumMembersPerTeam ===
 							"function"
-								? await ctx.context.orgOptions.teams.maximumMembersPerTeam({
+								? await ctx.context.orgOptions.teams?.maximumMembersPerTeam({
 										teamId,
 										session: session,
 										organizationId: invitation.organizationId,
 									})
-								: ctx.context.orgOptions.teams.maximumMembersPerTeam;
+								: ctx.context.orgOptions.teams?.maximumMembersPerTeam;
 
 						if (members >= maximumMembersPerTeam) {
 							throw new APIError("FORBIDDEN", {
@@ -626,13 +694,6 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 					});
 				}
 			}
-
-			const member = await adapter.createMember({
-				organizationId: invitation.organizationId,
-				userId: session.user.id,
-				role: invitation.role,
-				createdAt: new Date(),
-			});
 
 			await adapter.setActiveOrganization(
 				session.session.token,
@@ -825,24 +886,7 @@ export const cancelInvitation = <O extends OrganizationOptions>(options: O) =>
 					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				});
 			}
-			const canCancel = await hasPermission(
-				{
-					role: member.role,
-					options: ctx.context.orgOptions,
-					permissions: {
-						invitation: ["cancel"],
-					},
-					organizationId: invitation.organizationId,
-				},
-				ctx,
-			);
-
-			if (!canCancel) {
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CANCEL_THIS_INVITATION,
-				});
-			}
+			// Permission checking will be implemented via Zed schema evaluation
 
 			const organization = await adapter.findOrganizationById(
 				invitation.organizationId,

@@ -8,7 +8,6 @@ import { toZodSchema } from "../../../db";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import { hasPermission } from "../has-permission";
 import type {
 	InferInvitation,
 	InferMember,
@@ -18,7 +17,6 @@ import type {
 	TeamMember,
 } from "../schema";
 import type { OrganizationOptions } from "../types";
-import type { GenericEndpointContext } from "@better-auth/core";
 import { withTransaction } from "@better-auth/core/context";
 
 export const createOrganization = <O extends OrganizationOptions>(
@@ -204,6 +202,37 @@ export const createOrganization = <O extends OrganizationOptions>(
 				},
 			});
 
+			// Create built-in organization roles
+			const builtInOrgRoles = options.builtInOrganizationRoles ?? [
+				{
+					type: "owner",
+					name: "Owner",
+					description: "Full organization access",
+					isBuiltIn: true,
+				},
+				{
+					type: "admin",
+					name: "Admin",
+					description: "Administrative access",
+					isBuiltIn: true,
+				},
+				{
+					type: "member",
+					name: "Member",
+					description: "Basic member access",
+					isBuiltIn: true,
+				},
+			];
+
+			await Promise.all(
+				builtInOrgRoles.map((role) =>
+					adapter.createOrganizationRole({
+						organizationId: organization.id,
+						...role,
+					}),
+				),
+			);
+
 			let member:
 				| (Member & InferAdditionalFieldsFromPluginOptions<"member", O, false>)
 				| undefined;
@@ -211,14 +240,15 @@ export const createOrganization = <O extends OrganizationOptions>(
 			let data = {
 				userId: user.id,
 				organizationId: organization.id,
-				role: ctx.context.orgOptions.creatorRole || "owner",
 			};
+
+			let roles = [ctx.context.orgOptions.creatorRole || "owner"];
 			if (options?.organizationHooks?.beforeAddMember) {
 				const response = await options?.organizationHooks.beforeAddMember({
 					member: {
 						userId: user.id,
 						organizationId: organization.id,
-						role: ctx.context.orgOptions.creatorRole || "owner",
+						organizationRoles: roles,
 					},
 					user,
 					organization,
@@ -231,6 +261,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 				}
 			}
 			member = await adapter.createMember(data);
+
 			if (options?.organizationHooks?.afterAddMember) {
 				await options?.organizationHooks.afterAddMember({
 					member,
@@ -238,49 +269,78 @@ export const createOrganization = <O extends OrganizationOptions>(
 					organization,
 				});
 			}
-			if (
-				options?.teams?.enabled &&
-				options.teams.defaultTeam?.enabled !== false
-			) {
-				let teamData = {
-					organizationId: organization.id,
-					name: `${organization.name}`,
-					createdAt: new Date(),
-				};
-				if (options?.organizationHooks?.beforeCreateTeam) {
-					const response = await options?.organizationHooks.beforeCreateTeam({
-						team: {
-							organizationId: organization.id,
-							name: `${organization.name}`,
-						},
-						user,
-						organization,
-					});
-					if (response && typeof response === "object" && "data" in response) {
-						teamData = {
-							...teamData,
-							...response.data,
-						};
-					}
-				}
-				const defaultTeam =
-					(await options.teams.defaultTeam?.customCreateDefaultTeam?.(
-						organization,
-						ctx,
-					)) || (await adapter.createTeam(teamData));
-
-				teamMember = await adapter.findOrCreateTeamMember({
-					teamId: defaultTeam.id,
-					userId: user.id,
+			let teamData = {
+				organizationId: organization.id,
+				name: `${organization.name}`,
+				createdAt: new Date(),
+			};
+			if (options?.organizationHooks?.beforeCreateTeam) {
+				const response = await options?.organizationHooks.beforeCreateTeam({
+					team: {
+						organizationId: organization.id,
+						name: `${organization.name}`,
+					},
+					user,
+					organization,
 				});
-
-				if (options?.organizationHooks?.afterCreateTeam) {
-					await options?.organizationHooks.afterCreateTeam({
-						team: defaultTeam,
-						user,
-						organization,
-					});
+				if (response && typeof response === "object" && "data" in response) {
+					teamData = {
+						...teamData,
+						...response.data,
+					};
 				}
+			}
+			const defaultTeam = await adapter.createTeam(teamData);
+
+			// Create built-in team roles
+			const builtInTeamRoles = [
+				{
+					type: "lead",
+					name: "Lead",
+					description: "Team leadership role",
+					isBuiltIn: true,
+					permissions: {
+						team: {
+							manage: true,
+							view: true,
+							invite: true,
+							manage_members: true,
+						},
+					},
+				},
+				{
+					type: "member",
+					name: "Member",
+					description: "Basic team member",
+					isBuiltIn: true,
+					permissions: {
+						team: {
+							view: true,
+						},
+					},
+				},
+			];
+
+			await Promise.all(
+				builtInTeamRoles.map((role) =>
+					adapter.createTeamRole({
+						teamId: defaultTeam.id,
+						...role,
+					}),
+				),
+			);
+
+			teamMember = await adapter.findOrCreateTeamMember({
+				teamId: defaultTeam.id,
+				userId: user.id,
+			});
+
+			if (options?.organizationHooks?.afterCreateTeam) {
+				await options?.organizationHooks.afterCreateTeam({
+					team: defaultTeam,
+					user,
+					organization,
+				});
 			}
 
 			if (options.organizationCreation?.afterCreate) {
@@ -471,23 +531,8 @@ export const updateOrganization = <O extends OrganizationOptions>(
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				});
 			}
-			const canUpdateOrg = await hasPermission(
-				{
-					permissions: {
-						organization: ["update"],
-					},
-					role: member.role,
-					options: ctx.context.orgOptions,
-					organizationId,
-				},
-				ctx,
-			);
-			if (!canUpdateOrg) {
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_ORGANIZATION,
-				});
-			}
+			// TODO: Check permissions using platform roles or organization roles
+			// Permission checking will be implemented via Zed schema evaluation
 			// Check if slug is being updated and validate uniqueness
 			if (typeof ctx.body.data.slug === "string") {
 				const existingOrganization = await adapter.findOrganizationBySlug(
@@ -604,23 +649,8 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				});
 			}
-			const canDeleteOrg = await hasPermission(
-				{
-					role: member.role,
-					permissions: {
-						organization: ["delete"],
-					},
-					organizationId,
-					options: ctx.context.orgOptions,
-				},
-				ctx,
-			);
-			if (!canDeleteOrg) {
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_ORGANIZATION,
-				});
-			}
+			// TODO: Check permissions using platform roles or organization roles
+			// Permission checking will be implemented via Zed schema evaluation
 			if (organizationId === session.session.activeOrganizationId) {
 				/**
 				 * If the organization is deleted, we set the active organization to null

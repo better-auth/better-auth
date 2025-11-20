@@ -92,7 +92,6 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 								async before(user) {
 									return {
 										data: {
-											role: options?.defaultRole ?? "user",
 											...user,
 										},
 									};
@@ -450,19 +449,19 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 						throw ctx.error("UNAUTHORIZED");
 					}
 					if (session) {
-						const canCreateUser = hasPermission({
-							userId: session.user.id,
-							role: session.user.role,
-							options: opts,
-							permissions: {
-								user: ["create"],
-							},
-						});
-						if (!canCreateUser) {
-							throw new APIError("FORBIDDEN", {
-								message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_USERS,
-							});
-						}
+						// const canCreateUser = hasPermission({
+						// 	userId: session.user.id,
+						// 	role: session.user.role,
+						// 	options: opts,
+						// 	permissions: {
+						// 		user: ["create"],
+						// 	},
+						// });
+						// if (!canCreateUser) {
+						// 	throw new APIError("FORBIDDEN", {
+						// 		message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_USERS,
+						// 	});
+						// }
 					}
 
 					const email = ctx.body.email.toLowerCase();

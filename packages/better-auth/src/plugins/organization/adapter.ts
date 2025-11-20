@@ -9,23 +9,30 @@ import type {
 	InferInvitation,
 	InferMember,
 	InferOrganization,
+	InferOrganizationRole,
 	InferTeam,
+	InferTeamRole,
 	InvitationInput,
 	Member,
 	MemberInput,
+	MemberOrganizationRole,
+	MemberTeamRole,
 	OrganizationInput,
+	OrganizationRole,
 	Team,
 	TeamInput,
 	TeamMember,
+	TeamRole,
 } from "./schema";
 import type { OrganizationOptions } from "./types";
+import { APIError } from "better-call";
 
 export const getOrgAdapter = <O extends OrganizationOptions>(
 	context: AuthContext,
 	options?: O | undefined,
 ) => {
 	const baseAdapter = context.adapter;
-	return {
+	const orgAdapter = {
 		findOrganizationBySlug: async (slug: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const organization = await adapter.findOne<InferOrganization<O, false>>({
@@ -125,7 +132,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				| undefined;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const members = await Promise.all([
+			const [members, total, roleAssignments] = await Promise.all([
 				adapter.findMany<InferMember<O, false>>({
 					model: "member",
 					where: [
@@ -159,19 +166,33 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 							: []),
 					],
 				}),
+				// Get all role assignments for this organization
+				data.organizationId
+					? adapter.findMany<MemberOrganizationRole>({
+							model: "memberOrganizationRole",
+							where: [{ field: "organizationId", value: data.organizationId }],
+						})
+					: Promise.resolve([]),
 			]);
 			const users = await adapter.findMany<User>({
 				model: "user",
 				where: [
 					{
 						field: "id",
-						value: members[0].map((member) => member.userId),
+						value: members.map((member) => member.userId),
 						operator: "in",
 					},
 				],
 			});
+			// Create a map of memberId -> roles
+			const rolesMap = new Map<string, string[]>();
+			roleAssignments.forEach((ra) => {
+				const existing = rolesMap.get(ra.memberId) || [];
+				existing.push(ra.role);
+				rolesMap.set(ra.memberId, existing);
+			});
 			return {
-				members: members[0].map((member) => {
+				members: members.map((member) => {
 					const user = users.find((user) => user.id === member.userId);
 					if (!user) {
 						throw new BetterAuthError(
@@ -180,6 +201,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					}
 					return {
 						...member,
+						organizationRoles: rolesMap.get(member.id) || [],
 						user: {
 							id: user.id,
 							name: user.name,
@@ -188,7 +210,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 						},
 					};
 				}),
-				total: members[1],
+				total,
 			};
 		},
 		findMemberByOrgId: async (data: {
@@ -196,29 +218,44 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			organizationId: string;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const result = await adapter.findOne<
-				InferMember<O, false> & { user: User }
-			>({
-				model: "member",
-				where: [
-					{
-						field: "userId",
-						value: data.userId,
+			const [{ user, ...member }, roleAssignments] = await Promise.all([
+				adapter.findOne<InferMember<O, false> & { user: User }>({
+					model: "member",
+					where: [
+						{
+							field: "userId",
+							value: data.userId,
+						},
+						{
+							field: "organizationId",
+							value: data.organizationId,
+						},
+					],
+					join: {
+						user: true,
 					},
-					{
-						field: "organizationId",
-						value: data.organizationId,
-					},
-				],
-				join: {
-					user: true,
-				},
-			});
-			if (!result || !result.user) return null;
-			const { user, ...member } = result;
-
+				}),
+				// Get role types from junction table
+				adapter.findMany<MemberOrganizationRole>({
+					model: "memberOrganizationRole",
+					where: [
+						{
+							field: "organizationId",
+							value: data.organizationId,
+						},
+					],
+				}),
+			]);
+			if (!user || !member) {
+				return null;
+			}
+			// Filter roles for this specific member
+			const memberRoles = roleAssignments
+				.filter((ra) => ra.memberId === member.id)
+				.map((ra) => ra.role);
 			return {
 				...member,
+				organizationRoles: memberRoles,
 				user: {
 					id: user.id,
 					name: user.name,
@@ -229,27 +266,34 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		findMemberById: async (memberId: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const result = await adapter.findOne<
-				InferMember<O, false> & { user: User }
-			>({
-				model: "member",
-				where: [
-					{
-						field: "id",
-						value: memberId,
+			const [{ user, ...member }, roleAssignments] = await Promise.all([
+				adapter.findOne<InferMember<O, false> & { user: User }>({
+					model: "member",
+					where: [
+						{
+							field: "id",
+							value: memberId,
+						},
+					],
+					join: {
+						user: true,
 					},
-				],
-				join: {
-					user: true,
-				},
-			});
-			if (!result) {
+				}),
+				adapter.findMany<MemberOrganizationRole>({
+					model: "memberOrganizationRole",
+					where: [{ field: "memberId", value: memberId }],
+				}),
+			]);
+
+			if (!member) {
 				return null;
 			}
-			const { user, ...member } = result;
-
+			if (!user) {
+				return null;
+			}
 			return {
 				...(member as unknown as InferMember<O, false>),
+				organizationRoles: roleAssignments.map((ra) => ra.role),
 				user: {
 					id: user.id,
 					name: user.name,
@@ -274,23 +318,404 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					createdAt: new Date(),
 				},
 			});
+
+			await orgAdapter.assignOrganizationRolesToMember(
+				member.id,
+				data.organizationId,
+				data.organizationRoles ?? ["owner"],
+			);
 			return member;
 		},
-		updateMember: async (memberId: string, role: string) => {
+		// Organization Role Management
+		createOrganizationRole: async (data: {
+			organizationId: string;
+			type: string;
+			name: string;
+			description?: string;
+			isBuiltIn?: boolean;
+			permissions?: Record<string, unknown>;
+		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const member = await adapter.update<InferMember<O, false>>({
-				model: "member",
+			// Check if role type already exists for this organization
+			const existing = await adapter.findOne<OrganizationRole>({
+				model: "organizationRole",
 				where: [
-					{
-						field: "id",
-						value: memberId,
-					},
+					{ field: "organizationId", value: data.organizationId },
+					{ field: "type", value: data.type },
 				],
-				update: {
-					role,
+			});
+			if (existing) {
+				throw new BetterAuthError(
+					`Role type '${data.type}' already exists for this organization`,
+				);
+			}
+			const role = await adapter.create<
+				typeof data,
+				InferOrganizationRole<O, false>
+			>({
+				model: "organizationRole",
+				data: {
+					...data,
+					isBuiltIn: data.isBuiltIn ?? false,
 				},
 			});
-			return member;
+			return role;
+		},
+		updateOrganizationRole: async (
+			roleId: string,
+			data: {
+				name?: string;
+				description?: string;
+				permissions?: Record<string, unknown>;
+			},
+		) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const role = await adapter.findOne<OrganizationRole>({
+				model: "organizationRole",
+				where: [{ field: "id", value: roleId }],
+			});
+			if (!role) {
+				throw new BetterAuthError("Role not found");
+			}
+			if (role.isBuiltIn) {
+				throw new BetterAuthError("Cannot update built-in roles");
+			}
+			const updated = await adapter.update<InferOrganizationRole<O, false>>({
+				model: "organizationRole",
+				where: [{ field: "id", value: roleId }],
+				update: {
+					...data,
+					updatedAt: new Date(),
+				},
+			});
+			return updated;
+		},
+		deleteOrganizationRole: async (roleId: string) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const role = await adapter.findOne<OrganizationRole>({
+				model: "organizationRole",
+				where: [{ field: "id", value: roleId }],
+			});
+			if (!role) {
+				throw new BetterAuthError("Role not found");
+			}
+			if (role.isBuiltIn) {
+				throw new BetterAuthError("Cannot delete built-in roles");
+			}
+			// Check if role is in use
+			const inUse = await adapter.findOne<MemberOrganizationRole>({
+				model: "memberOrganizationRole",
+				where: [
+					{ field: "organizationId", value: role.organizationId },
+					{ field: "role", value: role.type },
+				],
+			});
+			if (inUse) {
+				throw new BetterAuthError(
+					"Cannot delete role that is assigned to members",
+				);
+			}
+			await adapter.delete<InferOrganizationRole<O, false>>({
+				model: "organizationRole",
+				where: [{ field: "id", value: roleId }],
+			});
+			return roleId;
+		},
+		listOrganizationRoles: async (data: {
+			organizationId: string;
+			types?: string[];
+		}) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const where: Array<{
+				field: string;
+				value: any;
+				operator?: "in" | "eq";
+			}> = [{ field: "organizationId", value: data.organizationId }];
+			if (data.types && data.types.length > 0) {
+				where.push({ field: "type", value: data.types, operator: "in" });
+			}
+			const roles = await adapter.findMany<InferOrganizationRole<O, false>>({
+				model: "organizationRole",
+				where,
+			});
+			return roles;
+		},
+		getOrganizationRole: async (roleId: string) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const role = await adapter.findOne<InferOrganizationRole<O, false>>({
+				model: "organizationRole",
+				where: [{ field: "id", value: roleId }],
+			});
+			return role;
+		},
+		getOrganizationRolesByTypes: async (
+			organizationId: string,
+			types: string[],
+		) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const roles = await adapter.findMany<InferOrganizationRole<O, false>>({
+				model: "organizationRole",
+				where: [
+					{ field: "organizationId", value: organizationId },
+					{ field: "type", value: types, operator: "in" },
+				],
+			});
+			return roles;
+		},
+		assignOrganizationRolesToMember: async (
+			memberId: string,
+			organizationId: string,
+			roles: string[],
+		) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			// Validate all role types exist
+			const existingRoles = await adapter.findMany<OrganizationRole>({
+				model: "organizationRole",
+				where: [
+					{ field: "organizationId", value: organizationId },
+					{ field: "type", value: roles, operator: "in" },
+				],
+			});
+			const existingTypes = new Set(existingRoles.map((r) => r.type));
+			const missingTypes = roles.filter((r) => !existingTypes.has(r));
+			if (missingTypes.length > 0) {
+				throw new APIError("BAD_REQUEST", {
+					message: `Role type(s) '${missingTypes.join(", ")}' do not exist for this organization`,
+				});
+			}
+			// Remove existing roles for this member
+			await adapter.deleteMany({
+				model: "memberOrganizationRole",
+				where: [{ field: "memberId", value: memberId }],
+			});
+			// Create new role assignments
+			await Promise.all(
+				roles.map((role) =>
+					adapter.create<
+						Omit<MemberOrganizationRole, "id" | "createdAt">,
+						MemberOrganizationRole
+					>({
+						model: "memberOrganizationRole",
+						data: {
+							memberId,
+							organizationId,
+							role,
+						},
+					}),
+				),
+			);
+		},
+		removeOrganizationRolesFromMember: async (
+			memberId: string,
+			roles: string[],
+		) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			await adapter.deleteMany({
+				model: "memberOrganizationRole",
+				where: [
+					{ field: "memberId", value: memberId },
+					{ field: "role", value: roles, operator: "in" },
+				],
+			});
+		},
+		getMemberOrganizationRoles: async (memberId: string) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const roleAssignments = await adapter.findMany<MemberOrganizationRole>({
+				model: "memberOrganizationRole",
+				where: [{ field: "memberId", value: memberId }],
+			});
+			return roleAssignments.map((ra) => ra.role);
+		},
+		// Team Role Management
+		createTeamRole: async (data: {
+			teamId: string;
+			type: string;
+			name: string;
+			description?: string;
+			isBuiltIn?: boolean;
+			permissions?: Record<string, unknown>;
+		}) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			// Check if role type already exists for this team
+			const existing = await adapter.findOne<TeamRole>({
+				model: "teamRole",
+				where: [
+					{ field: "teamId", value: data.teamId },
+					{ field: "type", value: data.type },
+				],
+			});
+			if (existing) {
+				throw new BetterAuthError(
+					`Role type '${data.type}' already exists for this team`,
+				);
+			}
+			const role = await adapter.create<typeof data, InferTeamRole<O, false>>({
+				model: "teamRole",
+				data: {
+					...data,
+					isBuiltIn: data.isBuiltIn ?? false,
+				},
+			});
+			return role;
+		},
+		updateTeamRole: async (
+			roleId: string,
+			data: {
+				name?: string;
+				description?: string;
+				permissions?: Record<string, unknown>;
+			},
+		) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const role = await adapter.findOne<TeamRole>({
+				model: "teamRole",
+				where: [{ field: "id", value: roleId }],
+			});
+			if (!role) {
+				throw new BetterAuthError("Role not found");
+			}
+			if (role.isBuiltIn) {
+				throw new BetterAuthError("Cannot update built-in roles");
+			}
+			const updated = await adapter.update<InferTeamRole<O, false>>({
+				model: "teamRole",
+				where: [{ field: "id", value: roleId }],
+				update: {
+					...data,
+					updatedAt: new Date(),
+				},
+			});
+			return updated;
+		},
+		deleteTeamRole: async (roleId: string) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const role = await adapter.findOne<TeamRole>({
+				model: "teamRole",
+				where: [{ field: "id", value: roleId }],
+			});
+			if (!role) {
+				throw new BetterAuthError("Role not found");
+			}
+			if (role.isBuiltIn) {
+				throw new BetterAuthError("Cannot delete built-in roles");
+			}
+			// Check if role is in use
+			const inUse = await adapter.findOne<MemberTeamRole>({
+				model: "memberTeamRole",
+				where: [
+					{ field: "teamId", value: role.teamId },
+					{ field: "role", value: role.type },
+				],
+			});
+			if (inUse) {
+				throw new BetterAuthError(
+					"Cannot delete role that is assigned to team members",
+				);
+			}
+			await adapter.delete<InferTeamRole<O, false>>({
+				model: "teamRole",
+				where: [{ field: "id", value: roleId }],
+			});
+			return roleId;
+		},
+		listTeamRoles: async (data: { teamId: string; types?: string[] }) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const where: Array<{
+				field: string;
+				value: any;
+				operator?: "in" | "eq";
+			}> = [{ field: "teamId", value: data.teamId }];
+			if (data.types && data.types.length > 0) {
+				where.push({ field: "type", value: data.types, operator: "in" });
+			}
+			const roles = await adapter.findMany<InferTeamRole<O, false>>({
+				model: "teamRole",
+				where,
+			});
+			return roles;
+		},
+		getTeamRole: async (roleId: string) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const role = await adapter.findOne<InferTeamRole<O, false>>({
+				model: "teamRole",
+				where: [{ field: "id", value: roleId }],
+			});
+			return role;
+		},
+		getTeamRolesByTypes: async (teamId: string, types: string[]) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const roles = await adapter.findMany<InferTeamRole<O, false>>({
+				model: "teamRole",
+				where: [
+					{ field: "teamId", value: teamId },
+					{ field: "type", value: types, operator: "in" },
+				],
+			});
+			return roles;
+		},
+		assignTeamRolesToMember: async (
+			teamMemberId: string,
+			teamId: string,
+			roles: string[],
+		) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			// Validate all role types exist
+			const existingRoles = await adapter.findMany<TeamRole>({
+				model: "teamRole",
+				where: [
+					{ field: "teamId", value: teamId },
+					{ field: "type", value: roles, operator: "in" },
+				],
+			});
+			const existingTypes = new Set(existingRoles.map((r) => r.type));
+			const missingTypes = roles.filter((r) => !existingTypes.has(r));
+			if (missingTypes.length > 0) {
+				throw new BetterAuthError(
+					`Role type(s) '${missingTypes.join(", ")}' do not exist for this team`,
+				);
+			}
+			// Remove existing roles for this team member
+			await adapter.deleteMany({
+				model: "memberTeamRole",
+				where: [{ field: "team_member_id", value: teamMemberId }],
+			});
+			// Create new role assignments
+			await Promise.all(
+				roles.map((role) =>
+					adapter.create<
+						Omit<MemberTeamRole, "id" | "createdAt">,
+						MemberTeamRole
+					>({
+						model: "memberTeamRole",
+						data: {
+							team_member_id: teamMemberId,
+							teamId,
+							role,
+						},
+					}),
+				),
+			);
+		},
+		removeTeamRolesFromMember: async (
+			teamMemberId: string,
+			roles: string[],
+		) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			await adapter.deleteMany({
+				model: "memberTeamRole",
+				where: [
+					{ field: "team_member_id", value: teamMemberId },
+					{ field: "role", value: roles, operator: "in" },
+				],
+			});
+		},
+		getMemberTeamRoles: async (teamMemberId: string) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const roleAssignments = await adapter.findMany<MemberTeamRole>({
+				model: "memberTeamRole",
+				where: [{ field: "team_member_id", value: teamMemberId }],
+			});
+			return roleAssignments.map((ra) => ra.role);
 		},
 		deleteMember: async ({
 			memberId,
@@ -524,10 +949,28 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				};
 			});
 
+			// Get role assignments for all members
+			const memberIds = members.map((m) => m.id);
+			const roleAssignments =
+				memberIds.length > 0
+					? await adapter.findMany<MemberOrganizationRole>({
+							model: "memberOrganizationRole",
+							where: [{ field: "memberId", value: memberIds, operator: "in" }],
+						})
+					: [];
+			const rolesMap = new Map<string, string[]>();
+			roleAssignments.forEach((ra) => {
+				const existing = rolesMap.get(ra.memberId) || [];
+				existing.push(ra.role);
+				rolesMap.set(ra.memberId, existing);
+			});
 			return {
 				...org,
 				invitations,
-				members: membersWithUsers,
+				members: membersWithUsers.map((member) => ({
+					...member,
+					organizationRoles: rolesMap.get(member.id) || [],
+				})),
 				teams,
 			};
 		},
@@ -681,14 +1124,14 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 
 		createTeamInvitation: async ({
 			email,
-			role,
+			teamRoles,
 			teamId,
 			organizationId,
 			inviterId,
 			expiresIn = 1000 * 60 * 60 * 48, // Default expiration: 48 hours
 		}: {
 			email: string;
-			role: string;
+			teamRoles?: string[];
 			teamId: string;
 			organizationId: string;
 			inviterId: string;
@@ -704,7 +1147,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				model: "invitation",
 				data: {
 					email,
-					role,
+					teamRoles: teamRoles || [],
 					organizationId,
 					teamId,
 					inviterId,
@@ -872,7 +1315,8 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		}: {
 			invitation: {
 				email: string;
-				role: string;
+				organizationRoles?: string[];
+				teamRoles?: string[];
 				organizationId: string;
 				teamIds: string[];
 			} & Record<string, any>; // This represents the additionalFields for the invitation
@@ -895,8 +1339,9 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					createdAt: new Date(),
 					inviterId: user.id,
 					...invitation,
-					teamId:
-						invitation.teamIds.length > 0 ? invitation.teamIds.join(",") : null,
+					organizationRoles: invitation.organizationRoles || [],
+					teamRoles: invitation.teamRoles || [],
+					teamId: invitation.teamIds.length > 0 ? invitation.teamIds[0] : null,
 				},
 			});
 
@@ -993,4 +1438,6 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			return invitation;
 		},
 	};
+
+	return orgAdapter;
 };

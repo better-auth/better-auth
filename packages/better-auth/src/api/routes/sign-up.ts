@@ -225,6 +225,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				let createdUser: User;
 				try {
 					const data = parseUserInput(ctx.context.options, rest, "create");
+					console.log("data", data);
 					createdUser = await ctx.context.internalAdapter.createUser({
 						email: email.toLowerCase(),
 						name,
@@ -244,6 +245,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					if (e instanceof APIError) {
 						throw e;
 					}
+					console.log("e", e);
 					ctx.context.logger?.error("Failed to create user", e);
 					throw new APIError("UNPROCESSABLE_ENTITY", {
 						message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,

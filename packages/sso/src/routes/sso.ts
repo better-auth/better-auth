@@ -885,6 +885,7 @@ export const signInSSO = (options?: SSOOptions) => {
 						return res.id;
 					});
 			}
+			console.log("orgId", orgId, organizationSlug);
 			let provider: SSOProvider<SSOOptions> | null = null;
 			if (options?.defaultSSO?.length) {
 				// Find matching default SSO provider by providerId

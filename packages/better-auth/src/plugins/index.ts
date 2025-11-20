@@ -35,4 +35,5 @@ export * from "./organization";
 export * from "./phone-number";
 export * from "./siwe";
 export * from "./two-factor";
+export * from "./graph";
 export * from "./username";
