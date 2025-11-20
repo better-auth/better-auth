@@ -6,13 +6,16 @@ import type { DeviceCode } from "./schema";
 
 describe("device authorization plugin input validation", () => {
 	it("basic validation", async () => {
-		const options = deviceAuthorizationOptionsSchema.parse({});
+		const options = deviceAuthorizationOptionsSchema.parse({
+			verificationUri: "/device",
+		});
 		expect(options).toMatchInlineSnapshot(`
 			{
 			  "deviceCodeLength": 40,
 			  "expiresIn": "30m",
 			  "interval": "5s",
 			  "userCodeLength": 8,
+			  "verificationUri": "/device",
 			}
 		`);
 	});
@@ -23,6 +26,7 @@ describe("device authorization plugin input validation", () => {
 			interval: 2 * 1000,
 			deviceCodeLength: 50,
 			userCodeLength: 10,
+			verificationUri: "/device",
 		});
 		expect(options).toMatchInlineSnapshot(`
 			{
@@ -30,6 +34,7 @@ describe("device authorization plugin input validation", () => {
 			  "expiresIn": 60000,
 			  "interval": 2000,
 			  "userCodeLength": 10,
+			  "verificationUri": "/device",
 			}
 		`);
 	});
@@ -41,6 +46,7 @@ describe("client validation", async () => {
 	const { auth } = await getTestInstance({
 		plugins: [
 			deviceAuthorization({
+				verificationUri: "/device",
 				validateClient: async (clientId) => {
 					return validClients.includes(clientId);
 				},
@@ -124,6 +130,7 @@ describe("device authorization flow", async () => {
 		{
 			plugins: [
 				deviceAuthorization({
+					verificationUri: "/device",
 					expiresIn: "5min",
 					interval: "2s",
 				}),
@@ -478,6 +485,7 @@ describe("device authorization with custom options", async () => {
 		const { auth, client, db } = await getTestInstance({
 			plugins: [
 				deviceAuthorization({
+					verificationUri: "/device",
 					interval: "5s",
 				}),
 			],
@@ -515,6 +523,7 @@ describe("device authorization with custom options", async () => {
 		const { auth } = await getTestInstance({
 			plugins: [
 				deviceAuthorization({
+					verificationUri: "/device",
 					generateDeviceCode: () => customDeviceCode,
 					generateUserCode: () => customUserCode,
 				}),
@@ -534,6 +543,7 @@ describe("device authorization with custom options", async () => {
 		const { auth } = await getTestInstance({
 			plugins: [
 				deviceAuthorization({
+					verificationUri: "/device",
 					expiresIn: "1min",
 				}),
 			],
@@ -555,11 +565,15 @@ describe("verificationUri option", async () => {
 				verificationUri: 123,
 			});
 		}).toThrow();
+
+		expect(() => {
+			deviceAuthorizationOptionsSchema.parse({});
+		}).toThrow();
 	});
 
-	it("should return default /device verification URIs when not configured", async () => {
+	it("should return /device verification URIs when configured", async () => {
 		const { auth } = await getTestInstance({
-			plugins: [deviceAuthorization({})],
+			plugins: [deviceAuthorization({ verificationUri: "/device" })],
 		});
 
 		const response = await auth.api.deviceCode({

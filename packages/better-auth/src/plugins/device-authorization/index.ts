@@ -103,9 +103,8 @@ export const deviceAuthorizationOptionsSchema = z.object({
 		),
 	verificationUri: z
 		.string()
-		.optional()
 		.describe(
-			"The URI where users verify their device code. Can be an absolute URL (https://example.com/device) or relative path (/custom-path). This will be returned as verification_uri in the device code response. If not provided, defaults to /device.",
+			"The URI where users verify their device code. Can be an absolute URL (https://example.com/device) or relative path (/custom-path). This will be returned as verification_uri in the device code response.",
 		),
 	schema: z.custom<InferOptionSchema<typeof schema>>(() => true),
 });
@@ -137,26 +136,24 @@ const defaultGenerateUserCode = (length: number) => {
  * @internal
  */
 const buildVerificationUris = (
-	verificationUri: string | undefined,
+	verificationUri: string,
 	baseURL: string,
 	userCode: string,
 ): {
 	verificationUri: string;
 	verificationUriComplete: string;
 } => {
-	const uri = verificationUri || "/device";
-
-	let verificationUrl: URL;
+	let resolvedVerificationUrl: URL;
 	try {
-		verificationUrl = new URL(uri);
+		resolvedVerificationUrl = new URL(verificationUri);
 	} catch {
-		verificationUrl = new URL(uri, baseURL);
+		resolvedVerificationUrl = new URL(verificationUri, baseURL);
 	}
 
-	const verificationUriCompleteUrl = new URL(verificationUrl);
+	const verificationUriCompleteUrl = new URL(resolvedVerificationUrl);
 	verificationUriCompleteUrl.searchParams.set("user_code", userCode);
 
-	const verificationUriString = verificationUrl.toString();
+	const verificationUriString = resolvedVerificationUrl.toString();
 	const verificationUriCompleteString = verificationUriCompleteUrl.toString();
 
 	return {
@@ -166,7 +163,8 @@ const buildVerificationUris = (
 };
 
 export const deviceAuthorization = (
-	options: Partial<DeviceAuthorizationOptions> = {},
+	options: Pick<DeviceAuthorizationOptions, "verificationUri"> &
+		Partial<Omit<DeviceAuthorizationOptions, "verificationUri">>,
 ) => {
 	const opts = deviceAuthorizationOptionsSchema.parse(options);
 	const generateDeviceCode = async () => {
@@ -234,8 +232,7 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 													verification_uri: {
 														type: "string",
 														format: "uri",
-														description:
-															"The URL for user verification. Defaults to /device if not configured.",
+														description: "The URL for user verification.",
 													},
 													verification_uri_complete: {
 														type: "string",
