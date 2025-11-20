@@ -10,8 +10,8 @@ catalogs:
       specifier: 1.1.18
       version: 1.1.18
     better-call:
-      specifier: 1.0.26
-      version: 1.0.26
+      specifier: 1.0.28
+      version: 1.0.28
     tsdown:
       specifier: ^0.16.0
       version: 0.16.5
@@ -951,7 +951,7 @@ importers:
         version: 1.0.0
       better-call:
         specifier: 'catalog:'
-        version: 1.0.26
+        version: 1.0.28
       defu:
         specifier: ^6.1.4
         version: 6.1.4
@@ -1209,7 +1209,7 @@ importers:
         version: 7.6.13
       better-call:
         specifier: 'catalog:'
-        version: 1.0.26
+        version: 1.0.28
       better-sqlite3:
         specifier: ^12.4.1
         version: 12.4.1
@@ -1233,7 +1233,7 @@ importers:
         version: 1.1.18
       better-call:
         specifier: 'catalog:'
-        version: 1.0.26
+        version: 1.0.28
       zod:
         specifier: ^4.1.12
         version: 4.1.12
@@ -1285,7 +1285,7 @@ importers:
         version: 13.1.2
       better-call:
         specifier: 'catalog:'
-        version: 1.0.26
+        version: 1.0.28
       nanostores:
         specifier: ^1.0.1
         version: 1.0.1
@@ -1332,7 +1332,7 @@ importers:
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.0.26
+        version: 1.0.28
       body-parser:
         specifier: ^2.2.0
         version: 2.2.0
@@ -1363,7 +1363,7 @@ importers:
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.0.26
+        version: 1.0.28
       stripe:
         specifier: ^19.1.0
         version: 19.1.0(@types/node@24.9.2)
@@ -6762,8 +6762,8 @@ packages:
     peerDependencies:
       better-auth: ^1.0.3
 
-  better-call@1.0.26:
-    resolution: {integrity: sha512-/5AaTPC8IRXV5yWxpAI7eR2RNiGHq4q/mjBm9DiikIkmJhzuqO1Ub66oYYqJ3eBFF+6BfdtZFRnuW0me8T0Emg==}
+  better-call@1.0.28:
+    resolution: {integrity: sha512-b2nF+LgRvqimUe31tVOIxmYVVb8vOFmXuD+rOkI3Qvqaw8OgC3kqykdz7cY40tjcMWPeHxneGgd5ukMlEs5MYQ==}
 
   better-opn@3.0.2:
     resolution: {integrity: sha512-aVNobHnJqLiUelTaHat9DZ1qM2w0C0Eym4LPI/3JxOnSokGVdsl1T1kN7TFvsEAD8G47A6VKQ0TVHqbBnYMJlQ==}
@@ -17969,9 +17969,7 @@ snapshots:
       metro-runtime: 0.83.3
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
     optional: true
 
   '@react-native/normalize-colors@0.74.89': {}
@@ -20020,7 +20018,7 @@ snapshots:
       mailchecker: 6.0.18
       validator: 13.15.15
 
-  better-call@1.0.26:
+  better-call@1.0.28:
     dependencies:
       '@better-auth/utils': 0.3.0
       '@better-fetch/fetch': 1.1.18
