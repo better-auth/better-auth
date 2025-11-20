@@ -18,6 +18,7 @@ export {
 	getCurrentDBAdapterAsyncLocalStorage,
 	runWithAdapter,
 	runWithTransaction,
+	getCurrentTransactionAdapter,
 } from "./transaction";
 export {
 	getCurrentGraphContext,

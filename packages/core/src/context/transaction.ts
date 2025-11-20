@@ -1,6 +1,7 @@
 import type { AsyncLocalStorage } from "../async_hooks";
 import { getAsyncLocalStorage } from "../async_hooks";
 import type { DBAdapter, DBTransactionAdapter } from "../db/adapter";
+import { getCurrentAuthContext } from "./endpoint-context";
 
 let currentAdapterAsyncStorage: AsyncLocalStorage<DBTransactionAdapter> | null =
 	null;
@@ -33,6 +34,11 @@ export const getCurrentAdapter = async (
 			return fallback;
 		});
 };
+
+export async function getCurrentTransactionAdapter() {
+	const authContext = await getCurrentAuthContext();
+	return getCurrentAdapter(authContext.context.adapter);
+}
 
 export const runWithAdapter = async <R>(
 	adapter: DBAdapter,
