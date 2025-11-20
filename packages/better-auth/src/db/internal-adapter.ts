@@ -6,10 +6,14 @@ import type {
 import {
 	getCurrentAdapter,
 	getCurrentAuthContext,
+	runWithGraphContext,
+	runWithGraphTransaction,
 	runWithTransaction,
 } from "@better-auth/core/context";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import type { InternalLogger } from "@better-auth/core/env";
+
+import type { GraphAdapter } from "../../../core/src/types/context";
 import type { Account, Session, User, Verification } from "../types";
 import { generateId } from "../utils";
 import { getDate } from "../utils/date";
@@ -24,6 +28,7 @@ export const createInternalAdapter = (
 		options: Omit<BetterAuthOptions, "logger">;
 		logger: InternalLogger;
 		hooks: Exclude<BetterAuthOptions["databaseHooks"], undefined>[];
+		graphAdapter: GraphAdapter;
 		generateId: AuthContext["generateId"];
 	},
 ): InternalAdapter => {
@@ -80,7 +85,7 @@ export const createInternalAdapter = (
 			account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
 				Partial<Account>,
 		) => {
-			return runWithTransaction(adapter, async () => {
+			return runWithGraphTransaction(adapter, ctx.graphAdapter, async () => {
 				const createdUser = await createWithHooks(
 					{
 						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
