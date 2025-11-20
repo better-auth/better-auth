@@ -930,6 +930,10 @@ You can configure the script using `CONFIG` inside the script.
 <Step>
 ### Run the migration script
 
+<Callout type="warning">
+  **Large Datasets (100k+ users)**: Use streaming/pagination with [`pg-cursor`](https://www.npmjs.com/package/pg-cursor) or [keyset pagination](https://use-the-index-luke.com/no-offset) to avoid OOM errors. Process in batches of 1000 rows with concurrency limit of 8. Add `NODE_OPTIONS="--max-old-space-size=8192"` as temporary fix.
+</Callout>
+
 Run the migration script to migrate the users and accounts from Supabase to Better Auth.
 
 ```bash title="Terminal"
