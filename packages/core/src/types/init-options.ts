@@ -1376,4 +1376,12 @@ export type BetterAuthOptions = {
 		 */
 		joins?: boolean;
 	};
+
+	graph?: {
+		enabled?: boolean;
+		authzed?: {
+			endpoint?: string;
+			token?: string;
+		};
+	};
 };
