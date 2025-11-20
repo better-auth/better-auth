@@ -74,5 +74,8 @@ export const hasPermission = async (
 	}
 	cacheAllRoles.set(input.organizationId, acRoles);
 
-	return hasPermissionFn(input, acRoles);
+	// Pass the endpoint context (`ctx`) as `tx` on the input so
+	// `hasPermissionFn` can use `tx.context.logger` when available.
+	// Use a cast to `any` to avoid TypeScript excess-property checks here.
+	return hasPermissionFn({ ...(input as any), tx: ctx } as any, acRoles);
 };
