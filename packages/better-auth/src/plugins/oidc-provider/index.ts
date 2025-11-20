@@ -9,7 +9,7 @@ import {
 import { getCurrentAuthContext } from "@better-auth/core/context";
 import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
-import { importJWK, jwtVerify, SignJWT } from "jose";
+import { jwtVerify, SignJWT } from "jose";
 import * as z from "zod";
 import { APIError, getSessionFromCtx, sessionMiddleware } from "../../api";
 import { parseSetCookieHeader } from "../../cookies";
@@ -20,8 +20,7 @@ import {
 } from "../../crypto";
 import { mergeSchema } from "../../db";
 import type { jwt } from "../jwt";
-import { getJwtToken } from "../jwt";
-import { getJwksAdapter } from "../jwt/adapter";
+import { getJwtToken, verifyJWT } from "../jwt";
 import { authorize } from "./authorize";
 import type { OAuthApplication } from "./schema";
 import { schema } from "./schema";
@@ -40,68 +39,6 @@ const getJwtPlugin = (ctx: GenericEndpointContext) => {
 		(plugin) => plugin.id === "jwt",
 	) as ReturnType<typeof jwt>;
 };
-
-/**
- * Verify a JWT token using the JWKS public keys
- * Returns the payload if valid, null otherwise
- */
-async function verifyJwtWithJWKS(
-	ctx: GenericEndpointContext,
-	token: string,
-	jwtPlugin: ReturnType<typeof jwt>,
-): Promise<{ sub: string; aud: string } | null> {
-	try {
-		const parts = token.split(".");
-		if (parts.length !== 3) {
-			return null;
-		}
-
-		const headerStr = new TextDecoder().decode(base64.decode(parts[0]!));
-		const header = JSON.parse(headerStr);
-		const kid = header.kid;
-
-		if (!kid) {
-			ctx.context.logger.debug("JWT missing kid in header");
-			return null;
-		}
-
-		// Get all JWKS keys
-		const adapter = getJwksAdapter(ctx.context.adapter, jwtPlugin.options);
-		const keys = await adapter.getAllKeys(ctx);
-
-		if (!keys || keys.length === 0) {
-			ctx.context.logger.debug("No JWKS keys available");
-			return null;
-		}
-
-		const key = keys.find((k) => k.id === kid);
-		if (!key) {
-			ctx.context.logger.debug(`No JWKS key found for kid: ${kid}`);
-			return null;
-		}
-
-		const publicKey = JSON.parse(key.publicKey);
-		const alg =
-			key.alg ?? jwtPlugin.options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
-		const cryptoKey = await importJWK(publicKey, alg);
-
-		const { payload } = await jwtVerify(token, cryptoKey, {
-			issuer: jwtPlugin.options?.jwt?.issuer ?? ctx.context.options.baseURL,
-		});
-
-		if (!payload.sub || !payload.aud) {
-			return null;
-		}
-
-		return {
-			sub: payload.sub as string,
-			aud: payload.aud as string,
-		};
-	} catch (error) {
-		ctx.context.logger.debug("JWT verification failed", error);
-		return null;
-	}
-}
 
 /**
  * Get a client by ID, checking trusted clients first, then database
@@ -1677,10 +1614,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 							const jwtPlugin = getJwtPlugin(ctx);
 							if (jwtPlugin && jwtPlugin.options && options?.useJWTPlugin) {
 								// For JWT plugin tokens, verify using JWKS
-								const verified = await verifyJwtWithJWKS(
-									ctx,
+								const verified = await verifyJWT(
 									id_token_hint,
-									jwtPlugin,
+									jwtPlugin.options,
 								);
 								if (verified) {
 									validatedUserId = verified.sub;

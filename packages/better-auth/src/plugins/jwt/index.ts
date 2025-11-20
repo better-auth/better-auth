@@ -13,9 +13,11 @@ import { schema } from "./schema";
 import { getJwtToken, signJWT } from "./sign";
 import type { JwtOptions } from "./types";
 import { createJwk } from "./utils";
+import { verifyJWT as verifyJWTHelper } from "./verify";
 
 export type * from "./types";
 export { createJwk, generateExportedKeyPair } from "./utils";
+export { verifyJWT } from "./verify";
 
 export const jwt = (options?: JwtOptions | undefined) => {
 	// Remote url must be set when using signing function
@@ -229,6 +231,50 @@ export const jwt = (options?: JwtOptions | undefined) => {
 						payload: c.body.payload,
 					});
 					return c.json({ token: jwt });
+				},
+			),
+			verifyJWT: createAuthEndpoint(
+				"/verify-jwt",
+				{
+					method: "POST",
+					metadata: {
+						SERVER_ONLY: true,
+						$Infer: {
+							body: {} as {
+								token: string;
+								issuer?: string;
+							},
+							response: {} as {
+								payload: {
+									sub: string;
+									aud: string;
+									[key: string]: any;
+								} | null;
+							},
+						},
+					},
+					body: z.object({
+						token: z.string(),
+						issuer: z.string().optional(),
+					}),
+				},
+				async (ctx) => {
+					const overrideOptions = ctx.body.issuer
+						? {
+								...options,
+								jwt: {
+									...options?.jwt,
+									issuer: ctx.body.issuer,
+								},
+							}
+						: options;
+
+					const payload = await verifyJWTHelper(
+						ctx.body.token,
+						overrideOptions,
+					);
+
+					return ctx.json({ payload });
 				},
 			),
 		},
