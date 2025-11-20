@@ -2,6 +2,7 @@ import { MongoClient, ObjectId } from "mongodb";
 import { testAdapter } from "../test-adapter";
 import {
 	authFlowTestSuite,
+	joinsTestSuite,
 	normalTestSuite,
 	transactionsTestSuite,
 } from "../tests";
@@ -30,7 +31,9 @@ const { execute } = await testAdapter({
 		normalTestSuite(),
 		authFlowTestSuite(),
 		transactionsTestSuite(),
-		// numberIdTestSuite(), // Mongo doesn't support number ids
+		joinsTestSuite(),
+		// numberIdTestSuite(), // no support
+		// uuidTestSuite() // no support
 	],
 	customIdGenerator: () => new ObjectId().toHexString(),
 });

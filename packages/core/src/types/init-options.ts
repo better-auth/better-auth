@@ -233,15 +233,27 @@ export type BetterAuthAdvancedOptions = {
 				 * Note: If enabled, we will not handle ID generation (including if you use `generateId`), and it would be expected that your database will provide the ID automatically.
 				 *
 				 * @default false
+				 *
+				 * @deprecated Please use `generateId` instead. This will be removed in future
+				 * releases.
 				 */
 				useNumberId?: boolean;
 				/**
 				 * Custom generateId function.
 				 *
 				 * If not provided, random ids will be generated.
-				 * If set to false, the database's auto generated id will be used.
+				 * If set to false, the database's auto generated id
+				 * will be used.
+				 *
+				 * If set to "serial", the database's auto generated
+				 * id will be used.
+				 *
+				 * If set to "uuid", we generate a random UUID for
+				 * the id. If postgres, we use the `gen_random_uuid()
+				 * ` function. If mysql or mssql, we use the `uuid()`
+				 * function.
 				 */
-				generateId?: GenerateIdFn | false;
+				generateId?: GenerateIdFn | false | "serial" | "uuid";
 		  }
 		| undefined;
 	/**
@@ -350,7 +362,8 @@ export type BetterAuthOptions = {
 						 * Whether to execute multiple operations in a transaction.
 						 * If the database doesn't support transactions,
 						 * set this to `false` and operations will be executed sequentially.
-						 * @default true
+						 *
+						 * @default false
 						 */
 						transaction?: boolean;
 				  }
@@ -379,7 +392,8 @@ export type BetterAuthOptions = {
 						 * Whether to execute multiple operations in a transaction.
 						 * If the database doesn't support transactions,
 						 * set this to `false` and operations will be executed sequentially.
-						 * @default true
+						 *
+						 * @default false
 						 */
 						transaction?: boolean;
 				  }
@@ -603,6 +617,7 @@ export type BetterAuthOptions = {
 					 * Send a verification email when the user changes their email.
 					 * @param data the data object
 					 * @param request the request object
+					 * @deprecated Use `sendChangeEmailConfirmation` instead
 					 */
 					sendChangeEmailVerification?: (
 						data: {
@@ -613,6 +628,25 @@ export type BetterAuthOptions = {
 						},
 						request?: Request,
 					) => Promise<void>;
+					/**
+					 * Send a confirmation email to the old email address when the user changes their email.
+					 * @param data the data object
+					 * @param request the request object
+					 */
+					sendChangeEmailConfirmation?: (
+						data: {
+							user: User;
+							newEmail: string;
+							url: string;
+							token: string;
+						},
+						request?: Request,
+					) => Promise<void>;
+					/**
+					 * Update the email without verification if the user is not verified.
+					 * @default false
+					 */
+					updateEmailWithoutVerification?: boolean;
 				};
 				/**
 				 * User deletion configuration
@@ -922,14 +956,7 @@ export type BetterAuthOptions = {
 	/**
 	 * Advanced options
 	 */
-	advanced?:
-		| (BetterAuthAdvancedOptions & {
-				/**
-				 * @deprecated Please use `database.generateId` instead.
-				 */
-				generateId?: never;
-		  })
-		| undefined;
+	advanced?: BetterAuthAdvancedOptions | undefined;
 	logger?: Logger | undefined;
 	/**
 	 * allows you to define custom hooks that can be
@@ -1253,6 +1280,42 @@ export type BetterAuthOptions = {
 				 * @default - "/api/auth/error"
 				 */
 				errorURL?: string;
+				/**
+				 * Configure the default error page provided by Better-Auth
+				 * Start your dev server and go to /api/auth/error to see the error page.
+				 */
+				customizeDefaultErrorPage?: {
+					colors?: {
+						background?: string;
+						foreground?: string;
+						primary?: string;
+						primaryForeground?: string;
+						mutedForeground?: string;
+						border?: string;
+						destructive?: string;
+						titleBorder?: string;
+						titleColor?: string;
+						gridColor?: string;
+						cardBackground?: string;
+						cornerBorder?: string;
+					};
+					size?: {
+						radiusSm?: string;
+						radiusMd?: string;
+						radiusLg?: string;
+						textSm?: string;
+						text2xl?: string;
+						text4xl?: string;
+						text6xl?: string;
+					};
+					font?: {
+						defaultFamily?: string;
+						monoFamily?: string;
+					};
+					disableTitleBorder?: boolean;
+					disableCornerDecorations?: boolean;
+					disableBackgroundGrid?: boolean;
+				};
 		  }
 		| undefined;
 	/**
@@ -1295,4 +1358,18 @@ export type BetterAuthOptions = {
 				debug?: boolean;
 		  }
 		| undefined;
+	/**
+	 * Experimental features
+	 */
+	experimental?: {
+		/**
+		 * Enable experimental joins for your database adapter.
+		 *
+		 * 	Please read the adapter documentation for more information regarding joins before enabling this.
+		 * 	Not all adapters support joins.
+		 *
+		 * @default false
+		 */
+		joins?: boolean;
+	};
 };

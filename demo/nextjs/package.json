@@ -1,6 +1,7 @@
 {
   "name": "@better-auth/nextjs-demo",
   "version": "0.1.0",
+  "type": "module",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -11,6 +12,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@better-auth/passkey": "workspace:*",
     "@better-auth/sso": "workspace:*",
     "@better-auth/stripe": "workspace:*",
     "@hookform/resolvers": "^5.2.1",
@@ -81,7 +83,7 @@
     "tailwind-merge": "^3.3.1",
     "ua-parser-js": "^2.0.4",
     "vaul": "^1.1.2",
-    "zod": "^4.1.5"
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.13",
