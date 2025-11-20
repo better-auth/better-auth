@@ -515,8 +515,9 @@ export const mongodbAdapter = (
 							returnDocument: "after",
 						},
 					);
-					if (!res) return null;
-					return res as any;
+					const doc = (res as any)?.value ?? null;
+					if (!doc) return null;
+					return doc as any;
 				},
 				async updateMany({ model, where, update: values }) {
 					const clause = convertWhereClause({ where, model });
