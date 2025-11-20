@@ -1039,10 +1039,20 @@ export const signInSSO = (options?: SSOOptions) => {
 						message: "Invalid SAML configuration",
 					});
 				}
-				const sp = saml.ServiceProvider({
-					metadata: parsedSamlConfig.spMetadata.metadata,
-					allowCreate: true,
-				});
+
+				const sp = parsedSamlConfig.spMetadata.metadata
+				? saml.ServiceProvider({
+						metadata: parsedSamlConfig.spMetadata.metadata,
+						allowCreate: true,
+					})
+				: saml.ServiceProvider({
+						entityID: parsedSamlConfig.spMetadata?.entityID || parsedSamlConfig.issuer,
+						assertionConsumerService: [{
+							Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+							Location: parsedSamlConfig.callbackUrl,
+						}],
+						allowCreate: true,
+					});
 
 				const idp = saml.IdentityProvider({
 					metadata: parsedSamlConfig.idpMetadata?.metadata,
@@ -1798,6 +1808,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			}),
 			metadata: {
 				isAction: false,
+				allowedMediaTypes: ["application/x-www-form-urlencoded", "application/json"],
 				openapi: {
 					operationId: "handleSAMLAssertionConsumerService",
 					summary: "SAML Assertion Consumer Service",
