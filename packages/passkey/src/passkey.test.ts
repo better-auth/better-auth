@@ -200,6 +200,7 @@ describe("passkey", async () => {
 		const user2Session = await auth.api.getSession({
 			headers: headers2,
 		});
+		expect(user2Session).toBeDefined();
 
 		// Ensure we have two different users
 		expect(user1.id).not.toBe(user2Session?.user.id);
