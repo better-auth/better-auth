@@ -178,7 +178,7 @@ describe("oidc scope consent", async () => {
 				redirectURI2 = res2.data.url;
 			}
 
-			// Should require consent again because scope expanded
+			// Should NOT require consent because scopes are unchanged
 			expect(redirectURI2).not.toContain("consent_code=");
 			expect(redirectURI2).toContain("code=");
 		}
