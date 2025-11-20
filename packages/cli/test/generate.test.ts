@@ -30,7 +30,9 @@ describe("generate", async () => {
 				plugins: [twoFactor(), username()],
 			},
 		});
-		await expect(schema.code).toMatchFileSnapshot("./__snapshots__/schema.prisma");
+		await expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/schema.prisma",
+		);
 	});
 
 	it("should generate prisma schema with number id", async () => {
@@ -209,7 +211,9 @@ describe("generate", async () => {
 				},
 			},
 		});
-		await expect(schema.code).toMatchFileSnapshot("./__snapshots__/auth-schema.txt");
+		await expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/auth-schema.txt",
+		);
 	});
 
 	it("should generate drizzle schema with number id", async () => {
@@ -263,7 +267,9 @@ describe("generate", async () => {
 			},
 			adapter: {} as any,
 		});
-		await expect(schema.code).toMatchFileSnapshot("./__snapshots__/migrations.sql");
+		await expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/migrations.sql",
+		);
 	});
 
 	it("should add plugin to empty plugins array without leading comma", async () => {
