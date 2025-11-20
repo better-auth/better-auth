@@ -146,7 +146,7 @@ describe("passkey", async () => {
 
 	it("should not delete a passkey belonging to another user", async () => {
 		// Create a passkey for user 1
-		const { headers: headers1, user: user1 } = await signInWithTestUser();
+		const { user: user1 } = await signInWithTestUser();
 		const context = await auth.$context;
 		const passkey1 = await context.adapter.create<Omit<Passkey, "id">, Passkey>(
 			{
