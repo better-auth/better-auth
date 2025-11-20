@@ -262,6 +262,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 										value: stateCookieValue,
 										createdAt: new Date(),
 										updatedAt: new Date(),
+										// Align expiration time with `generateState` in oauth2
 										expiresAt: new Date(Date.now() + 10 * 60 * 1000),
 									};
 								}
