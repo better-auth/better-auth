@@ -14,7 +14,7 @@ import {
 
 export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 	createAuthEndpoint(
-		"/oauth2/client",
+		"/server/oauth2/client",
 		{
 			method: "POST",
 			body: z.object({
@@ -219,7 +219,7 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 
 export const getOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 	createAuthEndpoint(
-		"/oauth2/clients/:id",
+		"/server/oauth2/clients/:id",
 		{
 			method: "GET",
 			metadata: {
@@ -256,7 +256,7 @@ export const getOAuthClientPublic = (opts: OAuthOptions<Scope[]>) =>
 
 export const getOAuthClients = (opts: OAuthOptions<Scope[]>) =>
 	createAuthEndpoint(
-		"/oauth2/clients",
+		"/server/oauth2/clients",
 		{
 			method: "GET",
 			query: z.object({
@@ -278,7 +278,7 @@ export const getOAuthClients = (opts: OAuthOptions<Scope[]>) =>
 
 export const updateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 	createAuthEndpoint(
-		"/oauth2/clients/:id",
+		"/server/oauth2/clients/:id",
 		{
 			method: "PATCH",
 			body: z.object({
@@ -333,7 +333,7 @@ export const updateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 
 export const rotateClientSecret = (opts: OAuthOptions<Scope[]>) =>
 	createAuthEndpoint(
-		"/oauth2/clients/:id/rotate-secret",
+		"/server/oauth2/clients/:id/rotate-secret",
 		{
 			method: "POST",
 			metadata: {
@@ -350,7 +350,7 @@ export const rotateClientSecret = (opts: OAuthOptions<Scope[]>) =>
 
 export const deleteOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 	createAuthEndpoint(
-		"/oauth2/clients/:id",
+		"/server/oauth2/clients/:id",
 		{
 			method: "DELETE",
 			metadata: {
