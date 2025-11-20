@@ -61,6 +61,7 @@ describe("Custom Session Plugin Tests", async () => {
 		const session = await auth.api.getSession({ headers });
 		const s = await client.getSession({ fetchOptions: { headers } });
 		expect(s.data?.newData).toEqual({ message: "Hello, World!" });
+		// @ts-expect-error kinda puzzled about this
 		expect(session?.newData).toEqual({ message: "Hello, World!" });
 	});
 

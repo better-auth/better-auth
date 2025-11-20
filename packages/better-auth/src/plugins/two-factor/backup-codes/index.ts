@@ -457,7 +457,6 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-view-backup-codes)
 			 */
 			viewBackupCodes: createAuthEndpoint(
-				"/two-factor/view-backup-codes",
 				{
 					method: "POST",
 					body: z.object({
@@ -465,9 +464,6 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 							description: `The user ID to view all backup codes. Eg: "user-id"`,
 						}),
 					}),
-					metadata: {
-						SERVER_ONLY: true,
-					},
 				},
 				async (ctx) => {
 					const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({

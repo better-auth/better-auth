@@ -26,6 +26,44 @@ const serverPlugin = {
 				};
 			},
 		),
+		testVirtual: createAuthEndpoint(
+			{
+				method: "GET",
+			},
+			async (c) => {
+				return {
+					data: "test",
+				};
+			},
+		),
+		testServerScoped: createAuthEndpoint(
+			"/test-server-scoped",
+			{
+				method: "GET",
+				metadata: {
+					scope: "server",
+				},
+			},
+			async (c) => {
+				return {
+					data: "test",
+				};
+			},
+		),
+		testHTTPScoped: createAuthEndpoint(
+			"/test-http-scoped",
+			{
+				method: "GET",
+				metadata: {
+					scope: "http",
+				},
+			},
+			async (c) => {
+				return {
+					data: "test",
+				};
+			},
+		),
 		testSignOut2: createAuthEndpoint(
 			"/test-2/sign-out",
 			{

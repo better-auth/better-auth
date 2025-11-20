@@ -35,6 +35,32 @@ describe("call", async () => {
 					return ctx.json({ success: ctx.query?.message || "true" });
 				},
 			),
+			testVirtual: createAuthEndpoint(
+				{
+					method: "GET",
+				},
+				async (ctx) => {
+					return "ok";
+				},
+			),
+			testServerScoped: createAuthEndpoint(
+				"/test-server-scoped",
+				{
+					method: "GET",
+				},
+				async (ctx) => {
+					return "ok";
+				},
+			),
+			testHTTPScoped: createAuthEndpoint(
+				"/test-http-scoped",
+				{
+					method: "GET",
+				},
+				async (ctx) => {
+					return "ok";
+				},
+			),
 			testCookies: createAuthEndpoint(
 				"/test/cookies",
 				{
@@ -234,6 +260,11 @@ describe("call", async () => {
 		expect(response).toMatchObject({
 			success: "true",
 		});
+	});
+
+	it("should call server scoped endpoint", async () => {
+		const response = await api.testServerScoped();
+		expect(response).toBe("ok");
 	});
 
 	it("should set cookies", async () => {

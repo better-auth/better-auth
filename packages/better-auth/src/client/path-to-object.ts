@@ -85,6 +85,12 @@ export type InferRoute<
 						isAction: false;
 				  }
 				| {
+						scope: "http";
+				  }
+				| {
+						scope: "server";
+				  }
+				| {
 						SERVER_ONLY: true;
 				  }
 			? {}

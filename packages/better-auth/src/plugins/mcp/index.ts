@@ -16,6 +16,7 @@ import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
 import { parseSetCookieHeader } from "../../cookies";
 import { generateRandomString } from "../../crypto";
+import { HIDE_METADATA } from "../../utils";
 import { getBaseURL } from "../../utils/url";
 import type {
 	Client,
@@ -253,7 +254,7 @@ export const mcp = (options: MCPOptions) => {
 					method: "POST",
 					body: z.record(z.any(), z.any()),
 					metadata: {
-						isAction: false,
+						...HIDE_METADATA,
 						allowedMediaTypes: [
 							"application/x-www-form-urlencoded",
 							"application/json",

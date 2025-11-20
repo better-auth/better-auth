@@ -4,7 +4,7 @@ import {
 } from "@better-auth/core/api";
 import { defineErrorCodes } from "@better-auth/core/utils";
 import type { BetterAuthPlugin, GenericEndpointContext } from "better-auth";
-import { logger } from "better-auth";
+import { HIDE_METADATA, logger } from "better-auth";
 import {
 	APIError,
 	getSessionFromCtx,
@@ -1271,7 +1271,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				{
 					method: "POST",
 					metadata: {
-						isAction: false,
+						...HIDE_METADATA,
 						openapi: {
 							operationId: "handleStripeWebhook",
 						},

@@ -73,7 +73,7 @@ async function generateMDX() {
 		path,
 		functionName,
 		options,
-		isServerOnly: options.metadata?.SERVER_ONLY ?? false,
+		isServerOnly: (!path || options.metadata?.SERVER_ONLY) ?? false,
 	});
 
 	let mdx = `<APIMethod${parseParams(path, options)}>\n\`\`\`ts\n${parseType(

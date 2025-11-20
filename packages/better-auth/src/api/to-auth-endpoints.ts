@@ -38,7 +38,12 @@ type UserInputContext = Partial<
 >;
 
 export function toAuthEndpoints<
-	const E extends Record<string, Omit<AuthEndpoint, "wrap">>,
+	Path extends string,
+	Opts extends EndpointOptions,
+	const E extends Record<
+		string,
+		Omit<AuthEndpoint<Path, Opts, AuthContext>, "wrap">
+	>,
 >(endpoints: E, ctx: AuthContext | Promise<AuthContext>): E {
 	const api: Record<
 		string,

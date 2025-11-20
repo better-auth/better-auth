@@ -139,6 +139,21 @@ describe("run time proxy", async () => {
 });
 
 describe("type", () => {
+	it("should not infer virtual endpoints", () => {
+		const client = createReactClient({
+			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
+		});
+
+		expectTypeOf<typeof client>().not.toHaveProperty("testServerScoped");
+		expectTypeOf<typeof client>().not.toHaveProperty("testHttpScoped");
+		expectTypeOf<typeof client>().not.toMatchObjectType<{ test: any }>();
+	});
 	it("should infer session additional fields", () => {
 		const client = createReactClient({
 			plugins: [testClientPlugin()],
