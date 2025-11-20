@@ -47,9 +47,23 @@ export interface OAuthProxyOptions {
  */
 export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 	const resolveCurrentURL = (ctx: EndpointContext<string, any>) => {
+		// Skip request.url if it's localhost/127.0.0.1 (behind reverse proxy)
+		let requestUrl = ctx.request?.url;
+		if (requestUrl) {
+			try {
+				const url = new URL(requestUrl);
+				if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
+					requestUrl = undefined; // Skip localhost URLs
+				}
+			} catch {
+				// Invalid URL, skip it
+				requestUrl = undefined;
+			}
+		}
+
 		return new URL(
 			opts?.currentURL ||
-				ctx.request?.url ||
+				requestUrl ||
 				getVendorBaseURL() ||
 				ctx.context.baseURL,
 		);
@@ -69,7 +83,20 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 
 		// Use request URL to determine current environment, not baseURL
 		// because baseURL is always the production URL
-		const currentURL = ctx.request?.url || getVendorBaseURL();
+		// Skip request.url if it's localhost/127.0.0.1 (behind reverse proxy)
+		let requestUrl = ctx.request?.url;
+		if (requestUrl) {
+			try {
+				const url = new URL(requestUrl);
+				if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
+					requestUrl = undefined; // Skip localhost URLs
+				}
+			} catch {
+				requestUrl = undefined;
+			}
+		}
+
+		const currentURL = requestUrl || getVendorBaseURL();
 		if (!currentURL) {
 			return false;
 		}
@@ -274,7 +301,11 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 							if (!newLocation) {
 								return;
 							}
-							ctx.setHeader("location", newLocation);
+							// Resolve relative paths to absolute URLs
+							const absoluteLocation = newLocation.startsWith("http")
+								? newLocation
+								: `${productionOrigin}${newLocation.startsWith("/") ? newLocation : "/" + newLocation}`;
+							ctx.setHeader("location", absoluteLocation);
 							return;
 						}
 

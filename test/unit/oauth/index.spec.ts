@@ -2,10 +2,11 @@ import { createAuthMiddleware } from "@better-auth/core/api";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { getOAuthState } from "better-auth/api";
 import { signJWT } from "better-auth/crypto";
+import { oAuthProxy } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
-import { afterAll, beforeAll, expect, test } from "vitest";
+import { afterAll, afterEach, beforeAll, expect, test, vi } from "vitest";
 
 const DEFAULT_SECRET = "better-auth-secret-123456789";
 const mswServer = setupServer();
@@ -42,6 +43,10 @@ beforeAll(async () => {
 });
 
 afterAll(() => mswServer.close());
+
+afterEach(() => {
+	vi.unstubAllEnvs();
+});
 
 test("should login with google successfully", async () => {
 	let latestOauthStore: Record<string, any> | null = null;
@@ -103,5 +108,61 @@ test("should login with google successfully", async () => {
 		errorURL: "http://localhost:3000/api/auth/error",
 		expiresAt: expect.any(Number),
 		invitedBy: "user-123",
+	});
+});
+
+test("should oauth proxy handle baseURL correctly", async () => {
+	vi.stubEnv("BETTER_AUTH_URL", "https://example.com");
+	const { client } = await getTestInstance({
+		baseURL: undefined,
+		plugins: [oAuthProxy()],
+		socialProviders: {
+			google: {
+				clientId: "test",
+				clientSecret: "test",
+			},
+		},
+	});
+
+	const headers = new Headers();
+
+	const signInRes = await client.signIn.social(
+		{
+			provider: "google",
+			callbackURL: "/callback",
+			additionalData: {
+				invitedBy: "user-123",
+			},
+		},
+		{
+			onSuccess(context) {
+				const setCookie = context.response.headers.get("set-cookie");
+				if (setCookie) {
+					headers.set("cookie", setCookie);
+				}
+			},
+		},
+	);
+
+	expect(signInRes.data).toMatchObject({
+		url: expect.stringContaining("google.com"),
+		redirect: true,
+	});
+
+	const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+	await client.$fetch("/callback/google", {
+		query: {
+			state,
+			code: "test-authorization-code",
+		},
+		headers,
+		method: "GET",
+		onError(context) {
+			expect(context.response.status).toBe(302);
+			const location = context.response.headers.get("location");
+			expect(location).toBeDefined();
+			expect(location).toContain("https://example.com");
+		},
 	});
 });
