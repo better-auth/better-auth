@@ -307,6 +307,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				field: string;
 				references: string;
 			};
+
+			relationName?: string;
 		};
 
 		const relations: Relation[] = [];
@@ -317,8 +319,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		for (const [fieldName, field] of foreignFields) {
 			const referencedModel = field.references!.model;
+			const referenceName =
+				field.references!.name || getModelName(referencedModel);
 			relations.push({
-				key: getModelName(referencedModel),
+				key: referenceName,
+				relationName: field.references!.name,
 				model: getModelName(referencedModel),
 				type: "one",
 				reference: {
@@ -353,9 +358,14 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				const model = getModelName(modelName);
 
 				relations.push({
-					key: relationKey,
-					model: model,
+					key: field.references!.name
+						? field.references!.name +
+							relationKey.charAt(0).toUpperCase() +
+							relationKey.slice(1)
+						: relationKey,
+					model: getModelName(modelName),
 					type: isUnique ? "one" : "many",
+					relationName: field.references!.name,
 				});
 			}
 		}
@@ -368,13 +378,16 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		)}, ({ ${hasOne ? "one" : ""}${hasMany ? `${hasOne ? ", " : ""}many` : ""} }) => ({
 				${relations
 					.map(
-						({ key, type, model, reference }) =>
+						({ key, type, model, reference, relationName }) =>
 							` ${key}: ${type}(${model}${
 								!reference
-									? ""
+									? relationName
+										? `, { relationName: "${relationName}" }`
+										: ""
 									: `, {
 								fields: [${reference.field}],
 								references: [${reference.references}],
+								${relationName ? `relationName: "${key}"` : ""}
 							}`
 							})`,
 					)

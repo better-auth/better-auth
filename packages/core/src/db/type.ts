@@ -96,6 +96,8 @@ export type DBFieldAttributeConfig = {
 					| "cascade"
 					| "set null"
 					| "set default";
+
+				name?: string | undefined;
 		  }
 		| undefined;
 	unique?: boolean | undefined;
