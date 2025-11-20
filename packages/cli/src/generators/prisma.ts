@@ -18,6 +18,15 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 	const filePath = file || "./prisma/schema.prisma";
 	const schemaPrismaExist = existsSync(path.join(process.cwd(), filePath));
 
+	const getModelName = initGetModelName({
+		schema: getAuthTables(options),
+		usePlural: adapter.options?.adapterConfig?.usePlural,
+	});
+	const getFieldName = initGetFieldName({
+		schema: getAuthTables(options),
+		usePlural: false,
+	});
+
 	let schemaPrisma = "";
 	if (schemaPrismaExist) {
 		schemaPrisma = await fs.readFile(
@@ -39,7 +48,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				const referencedCustomModel =
 					tables[referencedOriginalModel]?.modelName || referencedOriginalModel;
 				const referencedModelNameCap = capitalizeFirstLetter(
-					referencedCustomModel,
+					getModelName(referencedCustomModel),
 				);
 
 				if (!manyToManyRelations.has(referencedModelNameCap)) {
@@ -47,7 +56,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				}
 
 				const currentCustomModel = tables[table]?.modelName || table;
-				const currentModelNameCap = capitalizeFirstLetter(currentCustomModel);
+				const currentModelNameCap = capitalizeFirstLetter(
+					getModelName(currentCustomModel),
+				);
 
 				manyToManyRelations
 					.get(referencedModelNameCap)
@@ -60,7 +71,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 	for (const table in tables) {
 		const fields = tables[table]?.fields;
 		const customModelName = tables[table]?.modelName || table;
-		const modelName = capitalizeFirstLetter(customModelName);
+		const modelName = capitalizeFirstLetter(getModelName(customModelName));
 		indexedFields.set(modelName, []);
 
 		for (const field in fields) {
@@ -76,7 +87,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 		for (const table in tables) {
 			const originalTableName = table;
 			const customModelName = tables[table]?.modelName || table;
-			const modelName = capitalizeFirstLetter(customModelName);
+			const modelName = capitalizeFirstLetter(getModelName(customModelName));
 			const fields = tables[table]?.fields;
 			function getType({
 				isBigint,
@@ -148,14 +159,6 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					}
 				}
 			}
-			const getModelName = initGetModelName({
-				schema: getAuthTables(options),
-				usePlural: adapter.options?.adapterConfig?.usePlural,
-			});
-			const getFieldName = initGetFieldName({
-				schema: getAuthTables(options),
-				usePlural: false,
-			});
 
 			for (const field in fields) {
 				const attr = fields[field]!;
@@ -353,7 +356,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					const [_fieldKey, fkFieldAttr] = fkField || [];
 					const isUnique = fkFieldAttr?.unique === true;
 
-					const fieldName = isUnique
+					const fieldName = isUnique || adapter.options?.usePlural === true
 						? `${relatedModel.toLowerCase()}`
 						: `${relatedModel.toLowerCase()}s`;
 					const existingField = builder.findByType("field", {
@@ -403,7 +406,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					.model(modelName)
 					.blockAttribute(
 						"map",
-						`${hasChanged ? customModelName : originalTableName}`,
+						`${getModelName(hasChanged ? customModelName : originalTableName)}`,
 					);
 			}
 		}

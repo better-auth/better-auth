@@ -572,3 +572,45 @@ describe("Enum field support in Drizzle schemas", () => {
 		expect(schema.code).not.toContain("enum");
 	});
 });
+
+describe("usePlural schema generation", () => {
+	it("should generate drizzle schema with usePlural option", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: {
+					provider: "pg",
+					schema: {},
+					usePlural: true,
+					adapterConfig: { usePlural: true },
+				},
+			} as any,
+			options: {
+				database: {} as any,
+			},
+		});
+		await expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/auth-schema-drizzle-use-plural.txt",
+		);
+	});
+	it("should generate prisma schema with usePlural option", async () => {
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: {
+				id: "prisma",
+				options: {
+					provider: "postgresql",
+					usePlural: true,
+					adapterConfig: { usePlural: true },
+				},
+			} as any,
+			options: {
+				database: {} as any,
+			},
+		});
+		await expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/schema-prisma-use-plural.prisma",
+		);
+	});
+});

@@ -5,9 +5,11 @@ import { BetterAuthError } from "@better-auth/core/error";
 export const initGetDefaultModelName = ({
 	usePlural,
 	schema,
+	suppressErrorLogs = false,
 }: {
 	usePlural: boolean | undefined;
 	schema: BetterAuthDBSchema;
+	suppressErrorLogs?: boolean | undefined;
 }) => {
 	/**
 	 * This function helps us get the default model name from the schema defined by devs.
@@ -43,9 +45,11 @@ export const initGetDefaultModelName = ({
 		}
 
 		if (!m) {
-			logger.error(`Model "${model}" not found in schema`);
-			logger.error(`Schema:`, schema);
-			logger.error(`Error stack:`, new Error().stack?.replace("Error:", ""));
+			if (!suppressErrorLogs) {
+				logger.error(`Model "${model}" not found in schema`);
+				logger.error(`Schema:`, schema);
+				logger.error(`Error stack:`, new Error().stack?.replace("Error:", ""));
+			}
 			throw new BetterAuthError(`Model "${model}" not found in schema!`);
 		}
 		return m;
