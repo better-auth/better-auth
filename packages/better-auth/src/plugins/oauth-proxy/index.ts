@@ -305,9 +305,13 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 								return;
 							}
 							// Resolve relative paths to absolute URLs
-							const absoluteLocation = newLocation.startsWith("http")
-								? newLocation
-								: `${productionOrigin}${newLocation.startsWith("/") ? newLocation : "/" + newLocation}`;
+							let absoluteLocation: string;
+							if (newLocation.startsWith("http")) {
+								absoluteLocation = newLocation;
+							} else {
+								const path = newLocation.startsWith("/") ? newLocation : `/${newLocation}`;
+								absoluteLocation = `${productionOrigin}${path}`;
+							}
 							ctx.setHeader("location", absoluteLocation);
 							return;
 						}
