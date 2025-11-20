@@ -6,6 +6,7 @@
     "test": "vitest"
   },
   "devDependencies": {
+    "@better-auth/config": "workspace:*",
     "@better-auth/core": "workspace:*",
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:*",

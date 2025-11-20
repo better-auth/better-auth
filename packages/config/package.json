@@ -1,0 +1,24 @@
+{
+  "name": "@better-auth/config",
+  "description": "Shared configuration utilities for better-auth monorepo",
+  "type": "module",
+  "exports": {
+    "./vitest": {
+      "types": "./vitest.d.ts",
+      "import": "./vitest.js",
+      "default": "./vitest.js"
+    }
+  },
+  "private": true,
+  "files": [
+    "vitest.ts",
+    "vitest.d.ts",
+    "README.md"
+  ],
+  "devDependencies": {
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "vitest": "catalog:"
+  }
+}

@@ -1,3 +1,4 @@
-import { defineProject } from "vitest/config";
+import { sharedVitestConfig } from "@better-auth/config/vitest";
+import { defineProject, mergeConfig } from "vitest/config";
 
-export default defineProject({});
+export default defineProject(mergeConfig(sharedVitestConfig, {}));

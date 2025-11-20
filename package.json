@@ -20,6 +20,7 @@
     "typecheck": "tsc --build"
   },
   "devDependencies": {
+    "@better-auth/config": "workspace:*",
     "@biomejs/biome": "2.3.5",
     "@types/bun": "^1.3.1",
     "@types/node": "^24.9.2",

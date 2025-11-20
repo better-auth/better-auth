@@ -51,6 +51,7 @@
   },
   "license": "MIT",
   "devDependencies": {
+    "@better-auth/config": "workspace:*",
     "@better-auth/core": "workspace:*",
     "@better-fetch/fetch": "catalog:",
     "@types/better-sqlite3": "^7.6.13",
@@ -61,7 +62,8 @@
     "expo-linking": "~7.1.7",
     "expo-web-browser": "~14.2.0",
     "react-native": "~0.80.2",
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "vitest": "catalog:"
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",

@@ -106,6 +106,7 @@
     "test": "vitest"
   },
   "devDependencies": {
+    "@better-auth/config": "workspace:*",
     "@better-auth/utils": "0.3.0",
     "@better-fetch/fetch": "catalog:",
     "@types/better-sqlite3": "^7.6.13",
@@ -114,7 +115,8 @@
     "jose": "^6.1.0",
     "kysely": "^0.28.5",
     "nanostores": "^1.0.1",
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "vitest": "catalog:"
   },
   "dependencies": {
     "@standard-schema/spec": "^1.0.0",
