@@ -3,9 +3,9 @@ import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { TTY_COLORS } from "@better-auth/core/env";
 import { afterAll, beforeAll, describe } from "vitest";
 import { getAuthTables } from "../db";
+import { initGetModelName } from "./adapter-factory";
 import type { createTestSuite } from "./create-test-suite";
 import { deepmerge } from "./utils";
-import { initGetModelName } from "./adapter-factory";
 
 export type Logger = {
 	info: (...args: any[]) => void;

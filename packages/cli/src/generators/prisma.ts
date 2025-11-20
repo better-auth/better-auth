@@ -356,9 +356,10 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					const [_fieldKey, fkFieldAttr] = fkField || [];
 					const isUnique = fkFieldAttr?.unique === true;
 
-					const fieldName = isUnique || adapter.options?.usePlural === true
-						? `${relatedModel.toLowerCase()}`
-						: `${relatedModel.toLowerCase()}s`;
+					const fieldName =
+						isUnique || adapter.options?.usePlural === true
+							? `${relatedModel.toLowerCase()}`
+							: `${relatedModel.toLowerCase()}s`;
 					const existingField = builder.findByType("field", {
 						name: fieldName,
 						within: prismaModel?.properties,
