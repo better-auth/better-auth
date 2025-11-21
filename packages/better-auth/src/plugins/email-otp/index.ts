@@ -12,6 +12,7 @@ import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
 import { setCookieCache, setSessionCookie } from "../../cookies";
 import {
+	constantTimeEqual,
 	generateRandomString,
 	symmetricDecrypt,
 	symmetricEncrypt,
@@ -143,27 +144,26 @@ export const emailOTP = (options: EmailOTPOptions) => {
 		otp: string,
 	): Promise<boolean> {
 		if (opts.storeOTP === "encrypted") {
-			return (
-				(await symmetricDecrypt({
-					key: ctx.context.secret,
-					data: storedOtp,
-				})) === otp
-			);
+			const decryptedOtp = await symmetricDecrypt({
+				key: ctx.context.secret,
+				data: storedOtp,
+			});
+			return constantTimeEqual(decryptedOtp, otp);
 		}
 		if (opts.storeOTP === "hashed") {
 			const hashedOtp = await defaultKeyHasher(otp);
-			return hashedOtp === storedOtp;
+			return constantTimeEqual(hashedOtp, storedOtp);
 		}
 		if (typeof opts.storeOTP === "object" && "hash" in opts.storeOTP) {
 			const hashedOtp = await opts.storeOTP.hash(otp);
-			return hashedOtp === storedOtp;
+			return constantTimeEqual(hashedOtp, storedOtp);
 		}
 		if (typeof opts.storeOTP === "object" && "decrypt" in opts.storeOTP) {
 			const decryptedOtp = await opts.storeOTP.decrypt(storedOtp);
-			return decryptedOtp === otp;
+			return constantTimeEqual(decryptedOtp, otp);
 		}
 
-		return otp === storedOtp;
+		return constantTimeEqual(otp, storedOtp);
 	}
 	const endpoints = {
 		/**
@@ -232,22 +232,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					throw ctx.error("BAD_REQUEST", {
 						message: BASE_ERROR_CODES.INVALID_EMAIL,
 					});
-				}
-				if (opts.disableSignUp) {
-					const user = await ctx.context.internalAdapter.findUserByEmail(email);
-					if (!user) {
-						// Return success to prevent user enumeration
-						return ctx.json({
-							success: true,
-						});
-					}
-				} else if (ctx.body.type === "forget-password") {
-					const user = await ctx.context.internalAdapter.findUserByEmail(email);
-					if (!user) {
-						return ctx.json({
-							success: true,
-						});
-					}
 				}
 				let otp =
 					opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
