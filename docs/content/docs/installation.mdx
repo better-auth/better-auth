@@ -68,9 +68,14 @@ export const auth = betterAuth({
 <Step>
 ### Configure Database (optional)
 
-You can optionally configure a database to store user data. (Recommended) 
-
 You can easily configure Better Auth to use SQLite, PostgreSQL, or MySQL, and more!
+
+<Callout>
+    Configuring a database is optional, but recommended.
+    Better-Auth will work in a stateless mode if you don't configure a database.
+
+    The use of plugins will require a database.
+</Callout>
 
 <Tabs items={["sqlite", "postgres", "mysql"]}>
     <Tab value="sqlite">
