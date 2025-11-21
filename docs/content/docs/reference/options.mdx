@@ -323,9 +323,13 @@ export const auth = betterAuth({
 		storeSessionInDatabase: true, // Store session in database when secondary storage is provided (default: `false`)
 		preserveSessionInDatabase: false, // Preserve session records in database when deleted from secondary storage (default: `false`)
 		cookieCache: {
-			enabled: true, // Enable caching session in cookie (default: `false`)	
+			enabled: true, // Enable caching session in cookie (default: `false`)
 			maxAge: 300 // 5 minutes
-		}
+		},
+		deleteSessionOnSignOut: {
+			enabled: false, // Controls whether the session is deleted on sign-out. If false, the session remains in the database but is marked inactive via `isActive`. (default: `true`)
+			timestamp: true // Store the field to determine whether a session is active or not using a timestamp instead of boolean (default: `false`)
+		},
 	},
 })
 ```
@@ -338,6 +342,7 @@ export const auth = betterAuth({
 - `storeSessionInDatabase`: Store session in database when secondary storage is provided (default: `false`)
 - `preserveSessionInDatabase`: Preserve session records in database when deleted from secondary storage (default: `false`)
 - `cookieCache`: Enable caching session in cookie
+- `deleteSessionOnSignOut`: Configure whether sessions are deleted on sign-out or preserved (set `enabled` to `false` to keep history, default: `true`). Requires database migration to add `isActive` or `invalidatedAt` column when preserving sessions.
 
 ## `account`
 

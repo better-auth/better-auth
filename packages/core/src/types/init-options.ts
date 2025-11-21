@@ -845,6 +845,23 @@ export type BetterAuthOptions = {
 				 * @default 1 day (60 * 60 * 24)
 				 */
 				freshAge?: number;
+				/**
+				 * Configuration options to delete session on sign out
+				 */
+				deleteSessionOnSignOut?: {
+					/**
+					 * Enable session deletion from database on sign out.
+					 * If true, the session is deleted from the database.
+					 * If false, the session is marked inactive using `isActive` when `timestamp` is false, or `invalidatedAt` when `timestamp` is true.
+					 * @default true
+					 */
+					enabled?: boolean;
+					/**
+					 * Use a timestamp field `invalidatedAt` instead of a boolean `isActive` to mark inactive sessions.
+					 * @default false
+					 */
+					timestamp?: boolean;
+				};
 		  }
 		| undefined;
 	account?:

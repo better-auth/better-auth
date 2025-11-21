@@ -10,6 +10,7 @@ import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
 	Session,
+	SessionWithSoftDelete,
 	User,
 } from "../types";
 import { safeJSONParse } from "../utils/json";
@@ -616,5 +617,276 @@ describe("internal adapter test", async () => {
 
 		accounts = await internalAdapter.findAccounts(user.id);
 		expect(accounts.length).toBe(0);
+	});
+
+	it("should soft delete sessions using isActive field", async () => {
+		const dialect = new SqliteDialect({
+			database: new Database(":memory:"),
+		});
+
+		const db = new Kysely<any>({
+			dialect,
+		});
+
+		const testOpts = {
+			database: {
+				dialect: dialect,
+				type: "sqlite",
+			},
+			session: {
+				deleteSessionOnSignOut: {
+					enabled: false,
+				},
+			},
+		} satisfies BetterAuthOptions;
+
+		(await getMigrations(testOpts)).runMigrations();
+
+		const testCtx = await init(testOpts);
+		const ctx = {
+			context: testCtx,
+		} as GenericEndpointContext;
+		const internalAdapter = testCtx.internalAdapter;
+
+		const testUser = {
+			id: "test-user-id",
+			name: "Test User",
+			email: "test@example.com",
+			emailVerified: true,
+			image: null,
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		};
+
+		const user = await runWithEndpointContext(ctx, () =>
+			internalAdapter.createUser(testUser),
+		);
+
+		const session = (await runWithEndpointContext(ctx, () =>
+			internalAdapter.createSession(user.id),
+		)) as SessionWithSoftDelete;
+
+		expect(session.isActive).toBeDefined();
+		expect(session.isActive).toBeTruthy();
+
+		const sessionToken = session.token;
+
+		const activeSession = await internalAdapter.findSession(sessionToken);
+
+		expect(activeSession).toBeDefined();
+		expect(activeSession?.session).toBeDefined();
+
+		await runWithEndpointContext(ctx, () =>
+			internalAdapter.deleteSession(sessionToken),
+		);
+
+		const inactiveSession = await internalAdapter.findSession(sessionToken);
+
+		expect(inactiveSession).toBeNull();
+
+		const sessionInDb = await db
+			.selectFrom("session")
+			.selectAll()
+			.where("token", "=", sessionToken)
+			.executeTakeFirst();
+
+		expect(sessionInDb).toBeDefined();
+		expect(sessionInDb!.isActive).toBeFalsy();
+		expect(sessionInDb!.token).toBe(sessionToken);
+	});
+
+	it("should soft delete sessions using invalidatedAt timestamp", async () => {
+		const dialect = new SqliteDialect({
+			database: new Database(":memory:"),
+		});
+
+		const db = new Kysely<any>({
+			dialect,
+		});
+
+		const testOpts = {
+			database: {
+				dialect: dialect,
+				type: "sqlite",
+			},
+			session: {
+				deleteSessionOnSignOut: {
+					enabled: false,
+					timestamp: true,
+				},
+			},
+		} satisfies BetterAuthOptions;
+
+		(await getMigrations(testOpts)).runMigrations();
+
+		const testCtx = await init(testOpts);
+		const ctx = {
+			context: testCtx,
+		} as GenericEndpointContext;
+		const internalAdapter = testCtx.internalAdapter;
+
+		const testUser = {
+			id: "test-user-id",
+			name: "Test User",
+			email: "test@example.com",
+			emailVerified: true,
+			image: null,
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		};
+
+		const user = await runWithEndpointContext(ctx, () =>
+			internalAdapter.createUser(testUser),
+		);
+
+		const session = (await runWithEndpointContext(ctx, () =>
+			internalAdapter.createSession(user.id),
+		)) as SessionWithSoftDelete;
+
+		expect(session.invalidatedAt).toBeDefined();
+		expect(session.invalidatedAt).toBeNull();
+
+		const sessionToken = session.token;
+
+		const validSession = await internalAdapter.findSession(sessionToken);
+
+		expect(validSession?.session).toBeDefined();
+
+		await runWithEndpointContext(ctx, () =>
+			internalAdapter.deleteSession(sessionToken),
+		);
+
+		const invalidatedSession = await internalAdapter.findSession(sessionToken);
+
+		expect(invalidatedSession).toBeNull();
+
+		const sessionInDb = await db
+			.selectFrom("session")
+			.selectAll()
+			.where("token", "=", sessionToken)
+			.executeTakeFirst();
+
+		expect(sessionInDb).toBeDefined();
+		expect(sessionInDb!.invalidatedAt).not.toBeNull();
+		expect(sessionInDb!.token).toBe(sessionToken);
+	});
+
+	it("should exclude inactive sessions from listSessions", async () => {
+		const testOpts = {
+			database: {
+				dialect: new SqliteDialect({ database: new Database(":memory:") }),
+				type: "sqlite",
+			},
+			session: {
+				deleteSessionOnSignOut: {
+					enabled: false,
+				},
+			},
+		} satisfies BetterAuthOptions;
+
+		(await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const ctx = {
+			context: testCtx,
+		} as GenericEndpointContext;
+		const internalAdapter = testCtx.internalAdapter;
+
+		const testUser = {
+			id: "test-user-id",
+			name: "Test User",
+			email: "test@example.com",
+			emailVerified: true,
+			image: null,
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		};
+
+		const user = await runWithEndpointContext(ctx, () =>
+			internalAdapter.createUser(testUser),
+		);
+
+		const session1 = await runWithEndpointContext(ctx, () =>
+			internalAdapter.createSession(user.id),
+		);
+		const session2 = await runWithEndpointContext(ctx, () =>
+			internalAdapter.createSession(user.id),
+		);
+		const session3 = await runWithEndpointContext(ctx, () =>
+			internalAdapter.createSession(user.id),
+		);
+
+		await runWithEndpointContext(ctx, () =>
+			internalAdapter.deleteSession(session2.token),
+		);
+
+		const activeSessions = await internalAdapter.listSessions(user.id);
+
+		expect(activeSessions.length).toBe(2);
+		expect(
+			activeSessions.find((s) => s.token === session1.token),
+		).toBeDefined();
+		expect(
+			activeSessions.find((s) => s.token === session3.token),
+		).toBeDefined();
+		expect(
+			activeSessions.find((s) => s.token === session2.token),
+		).toBeUndefined();
+	});
+
+	it("should soft delete multiple sessions with deleteSessions", async () => {
+		const testOpts = {
+			database: {
+				dialect: new SqliteDialect({ database: new Database(":memory:") }),
+				type: "sqlite",
+			},
+			session: {
+				deleteSessionOnSignOut: {
+					enabled: false,
+					timestamp: true,
+				},
+			},
+		} satisfies BetterAuthOptions;
+
+		(await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const ctx = {
+			context: testCtx,
+		} as GenericEndpointContext;
+		const internalAdapter = testCtx.internalAdapter;
+
+		const user = await runWithEndpointContext(ctx, () =>
+			internalAdapter.createUser({
+				id: "test-user",
+				name: "Test User",
+				email: "test@example.com",
+				emailVerified: true,
+				image: null,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			}),
+		);
+
+		const sessions = await Promise.all([
+			await runWithEndpointContext(ctx, () =>
+				internalAdapter.createSession(user.id),
+			),
+			await runWithEndpointContext(ctx, () =>
+				internalAdapter.createSession(user.id),
+			),
+			await runWithEndpointContext(ctx, () =>
+				internalAdapter.createSession(user.id),
+			),
+		]);
+
+		await runWithEndpointContext(ctx, () =>
+			internalAdapter.deleteSessions(user.id),
+		);
+
+		for (const session of sessions) {
+			const found = await ctx.context.internalAdapter.findSession(
+				session.token,
+			);
+			expect(found).toBeNull();
+		}
 	});
 });

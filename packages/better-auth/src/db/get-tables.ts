@@ -100,6 +100,28 @@ export const getAuthTables = (
 					required: true,
 					index: true,
 				},
+				...(options.session?.deleteSessionOnSignOut?.enabled === false
+					? options.session?.deleteSessionOnSignOut?.timestamp === true
+						? {
+								invalidatedAt: {
+									type: "date",
+									required: false,
+									defaultValue: null,
+									fieldName:
+										(options.session?.fields as any)?.invalidatedAt ||
+										"invalidatedAt",
+								},
+							}
+						: {
+								isActive: {
+									type: "boolean",
+									required: true,
+									defaultValue: true,
+									fieldName:
+										(options.session?.fields as any)?.isActive || "isActive",
+								},
+							}
+					: {}),
 				...session?.fields,
 				...options.session?.additionalFields,
 			},
