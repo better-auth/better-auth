@@ -675,7 +675,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 							},
 							{
 								headers: {
-									"Content-Type": "application/json;charset=UTF-8",
 									"Cache-Control": "no-store",
 									Pragma: "no-cache",
 								},
