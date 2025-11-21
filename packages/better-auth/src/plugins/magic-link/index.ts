@@ -50,11 +50,12 @@ interface MagicLinkopts {
 	 * Custom function to generate a token
 	 */
 	generateToken?: ((email: string) => Promise<string> | string) | undefined;
+
 	/**
 	 * This option allows you to configure how the token is stored in your database.
 	 * Note: This will not affect the token that's sent, it will only affect the token stored in your database.
 	 *
-	 * @default "hashed"
+	 * @default "plain"
 	 */
 	storeToken?:
 		| (
@@ -67,7 +68,7 @@ interface MagicLinkopts {
 
 export const magicLink = (options: MagicLinkopts) => {
 	const opts = {
-		storeToken: "hashed",
+		storeToken: "plain",
 		...options,
 	} satisfies MagicLinkopts;
 
