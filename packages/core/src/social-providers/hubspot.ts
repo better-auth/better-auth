@@ -7,6 +7,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { betterFetch } from "@better-fetch/fetch";
 
 export interface HubspotProfile {
 	app_id: number;
@@ -44,6 +45,9 @@ export interface HubspotOptions extends ProviderOptions<HubspotProfile> {
 }
 
 export const hubspot = (options: HubspotOptions) => {
+	const userInfoEndpoint = "https://api.hubapi.com/oauth/v1/access-tokens/";
+	const tokenEndpoint = "https://api.hubapi.com/oauth/v1/token";
+	const authorizationEndpoint = "https://app.hubspot.com/oauth/authorize";
 	return {
 		id: "hubspot",
 		name: "Hubspot",
@@ -57,7 +61,7 @@ export const hubspot = (options: HubspotOptions) => {
 		}) {
 			if (!options.clientId || !options.clientSecret) {
 				logger.error(
-					"Client Id and Client Secret is required for Hubspot. Make sure to provide them in the options.",
+					"Client Id and Client Secret is required for Hubspot2. Make sure to provide them in the options.",
 				);
 				throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
 			}
@@ -70,7 +74,7 @@ export const hubspot = (options: HubspotOptions) => {
 			return createAuthorizationURL({
 				id: "hubspot",
 				options,
-				authorizationEndpoint: "https://app.hubspot.com/oauth/authorize",
+				authorizationEndpoint,
 				scopes: _scopes,
 				state,
 				codeVerifier,
@@ -83,7 +87,7 @@ export const hubspot = (options: HubspotOptions) => {
 				codeVerifier,
 				redirectURI,
 				options,
-				tokenEndpoint: "https://api.hubapi.com/oauth/v1/access-tokens",
+				tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -93,20 +97,27 @@ export const hubspot = (options: HubspotOptions) => {
 						refreshToken,
 						options: {
 							clientId: options.clientId,
-							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://api.hubapi.com/oauth/v1/access-tokens",
+						tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
 			}
-			if (!token.idToken) {
+			if (!token.accessToken) {
+				logger.error("No accessToken found in token");
 				return null;
 			}
-			const user = decodeJwt(token.idToken) as HubspotProfile;
+			const tokenBaseUrl = new URL(token.accessToken, userInfoEndpoint).toString();
+			const { data: user } = await betterFetch<HubspotProfile>(tokenBaseUrl);
+
+			if (!user) {
+				logger.error("Failed to fetch user info from Hubspot");
+				return null;
+			}
+
 			const userMap = await options.mapProfileToUser?.(user);
 			return {
 				user: {
