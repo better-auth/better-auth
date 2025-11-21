@@ -22,6 +22,7 @@ import { mergeSchema } from "../../db";
 import type { jwt } from "../jwt";
 import { getJwtToken, verifyJWT } from "../jwt";
 import { authorize } from "./authorize";
+import { InvalidClient, InvalidGrant, UnsupportedGrantType } from "./error";
 import type { OAuthApplication } from "./schema";
 import { schema } from "./schema";
 import type {
@@ -527,36 +528,34 @@ export const oidcProvider = (options: OIDCOptions) => {
 					let { client_id, client_secret } = body;
 					const authorization =
 						ctx.request?.headers.get("authorization") || null;
+					// Track if client authenticated via Authorization header (RFC 6749 Section 5.2)
+					let usedAuthorizationHeader = false;
 					if (
 						authorization &&
 						!client_id &&
 						!client_secret &&
 						authorization.startsWith("Basic ")
 					) {
-						try {
-							const encoded = authorization.replace("Basic ", "");
-							const decoded = new TextDecoder().decode(base64.decode(encoded));
-							if (!decoded.includes(":")) {
-								throw new APIError("UNAUTHORIZED", {
-									error_description: "invalid authorization header format",
-									error: "invalid_client",
-								});
-							}
-							const [id, secret] = decoded.split(":");
-							if (!id || !secret) {
-								throw new APIError("UNAUTHORIZED", {
-									error_description: "invalid authorization header format",
-									error: "invalid_client",
-								});
-							}
-							client_id = id;
-							client_secret = secret;
-						} catch (error) {
-							throw new APIError("UNAUTHORIZED", {
-								error_description: "invalid authorization header format",
-								error: "invalid_client",
-							});
+						usedAuthorizationHeader = true;
+						const encoded = authorization.replace("Basic ", "");
+						const decoded = new TextDecoder().decode(base64.decode(encoded));
+						if (!decoded.includes(":")) {
+							throw InvalidClient.respond(
+								ctx,
+								"Invalid authorization header format",
+								true,
+							);
 						}
+						const [id, secret] = decoded.split(":");
+						if (!id || !secret) {
+							throw InvalidClient.respond(
+								ctx,
+								"Invalid authorization header format",
+								true,
+							);
+						}
+						client_id = id;
+						client_secret = secret;
 					}
 
 					const now = Date.now();
@@ -600,23 +599,15 @@ export const oidcProvider = (options: OIDCOptions) => {
 							],
 						});
 						if (!token) {
-							throw new APIError("BAD_REQUEST", {
-								error_description: "invalid refresh token",
-								error: "invalid_grant",
-							});
+							throw new InvalidGrant("Invalid refresh token");
 						}
 						if (token.clientId !== client_id.toString()) {
-							throw new APIError("BAD_REQUEST", {
-								error_description:
-									"The refresh token was issued to a different client",
-								error: "invalid_grant",
-							});
+							throw new InvalidGrant(
+								"The refresh token was issued to a different client",
+							);
 						}
 						if (token.refreshTokenExpiresAt < new Date()) {
-							throw new APIError("BAD_REQUEST", {
-								error_description: "refresh token expired",
-								error: "invalid_grant",
-							});
+							throw new InvalidGrant("Refresh token expired");
 						}
 
 						// Authenticate confidential clients
@@ -625,20 +616,21 @@ export const oidcProvider = (options: OIDCOptions) => {
 							trustedClients,
 						);
 						if (!client) {
-							throw new APIError("UNAUTHORIZED", {
-								error_description: "invalid client_id",
-								error: "invalid_client",
-							});
+							return InvalidClient.respond(
+								ctx,
+								"Client authentication failed",
+								usedAuthorizationHeader,
+							);
 						}
 
 						// For confidential clients, verify client_secret
 						if (client.type !== "public") {
 							if (!client.clientSecret || !client_secret) {
-								throw new APIError("UNAUTHORIZED", {
-									error_description:
-										"client_secret is required for confidential clients",
-									error: "invalid_client",
-								});
+								return InvalidClient.respond(
+									ctx,
+									"Client authentication failed",
+									usedAuthorizationHeader,
+								);
 							}
 							const isValidSecret = await verifyStoredClientSecret(
 								ctx,
@@ -646,10 +638,11 @@ export const oidcProvider = (options: OIDCOptions) => {
 								client_secret.toString(),
 							);
 							if (!isValidSecret) {
-								throw new APIError("UNAUTHORIZED", {
-									error_description: "invalid client_secret",
-									error: "invalid_client",
-								});
+								return InvalidClient.respond(
+									ctx,
+									"Client authentication failed",
+									usedAuthorizationHeader,
+								);
 							}
 						}
 
@@ -710,16 +703,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 							code.toString(),
 						);
 					if (!verificationValue) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "invalid code",
-							error: "invalid_grant",
-						});
+						throw new InvalidGrant("Invalid authorization code");
 					}
 					if (verificationValue.expiresAt < new Date()) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "code expired",
-							error: "invalid_grant",
-						});
+						throw new InvalidGrant("Authorization code expired");
 					}
 
 					await ctx.context.internalAdapter.deleteVerificationValue(
@@ -738,10 +725,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 					if (grant_type !== "authorization_code") {
-						throw new APIError("BAD_REQUEST", {
-							error_description: "grant_type must be 'authorization_code'",
-							error: "unsupported_grant_type",
-						});
+						throw new UnsupportedGrantType(
+							"grant_type must be 'authorization_code'",
+						);
 					}
 
 					if (!redirect_uri) {
@@ -753,34 +739,32 @@ export const oidcProvider = (options: OIDCOptions) => {
 
 					const client = await getClient(client_id.toString(), trustedClients);
 					if (!client) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "Client authentication failed",
-							error: "invalid_client",
-						});
+						throw InvalidClient.respond(
+							ctx,
+							"Client authentication failed",
+							usedAuthorizationHeader,
+						);
 					}
 					if (client.disabled) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "Client authentication failed",
-							error: "invalid_client",
-						});
+						throw InvalidClient.respond(
+							ctx,
+							"Client authentication failed",
+							usedAuthorizationHeader,
+						);
 					}
 
 					const value = JSON.parse(
 						verificationValue.value,
 					) as CodeVerificationValue;
 					if (value.clientId !== client_id.toString()) {
-						throw new APIError("BAD_REQUEST", {
-							error_description:
-								"The authorization code was issued to a different client",
-							error: "invalid_grant",
-						});
+						throw new InvalidGrant(
+							"The authorization code was issued to a different client",
+						);
 					}
 					if (value.redirectURI !== redirect_uri.toString()) {
-						throw new APIError("BAD_REQUEST", {
-							error_description:
-								"The redirect_uri does not match the authorization request",
-							error: "invalid_grant",
-						});
+						throw new InvalidGrant(
+							"The redirect_uri does not match the authorization request",
+						);
 					}
 					if (value.codeChallenge && !code_verifier) {
 						throw new APIError("BAD_REQUEST", {
@@ -800,11 +784,11 @@ export const oidcProvider = (options: OIDCOptions) => {
 						// PKCE validation happens later in the flow, so we skip client_secret validation
 					} else {
 						if (!client.clientSecret || !client_secret) {
-							throw new APIError("UNAUTHORIZED", {
-								error_description:
-									"client_secret is required for confidential clients",
-								error: "invalid_client",
-							});
+							throw InvalidClient.respond(
+								ctx,
+								"Client authentication failed",
+								usedAuthorizationHeader,
+							);
 						}
 						const isValidSecret = await verifyStoredClientSecret(
 							ctx,
@@ -812,10 +796,11 @@ export const oidcProvider = (options: OIDCOptions) => {
 							client_secret.toString(),
 						);
 						if (!isValidSecret) {
-							throw new APIError("UNAUTHORIZED", {
-								error_description: "invalid client_secret",
-								error: "invalid_client",
-							});
+							throw InvalidClient.respond(
+								ctx,
+								"Client authentication failed",
+								usedAuthorizationHeader,
+							);
 						}
 					}
 					const challenge =
@@ -826,10 +811,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 								);
 
 					if (challenge !== value.codeChallenge) {
-						throw new APIError("BAD_REQUEST", {
-							error_description: "PKCE code verification failed",
-							error: "invalid_grant",
-						});
+						throw new InvalidGrant("PKCE code verification failed");
 					}
 
 					const requestedScopes = value.scope;
@@ -856,11 +838,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 						value.userId,
 					);
 					if (!user) {
-						throw new APIError("BAD_REQUEST", {
-							error_description:
-								"The authorization code is invalid or has been revoked",
-							error: "invalid_grant",
-						});
+						throw new InvalidGrant(
+							"The authorization code is invalid or has been revoked",
+						);
 					}
 
 					const profile = {
