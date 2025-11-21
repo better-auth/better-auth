@@ -135,7 +135,9 @@ export class AuthzedSyncClient {
 						operation:
 							rel.operation === "create"
 								? v1.RelationshipUpdate_Operation.CREATE
-								: v1.RelationshipUpdate_Operation.DELETE,
+								: rel.operation === "touch"
+									? v1.RelationshipUpdate_Operation.TOUCH
+									: v1.RelationshipUpdate_Operation.DELETE,
 					}),
 				),
 			});
@@ -143,7 +145,7 @@ export class AuthzedSyncClient {
 		return await this.client.promises.writeRelationships(request);
 	}
 
-	async checkPermission(
+	async can(
 		subjectType: string,
 		subjectId: string,
 		permissionName: string,
@@ -157,10 +159,25 @@ export class AuthzedSyncClient {
 				resource: this.objectToResource(objectId, objectType),
 				permission: permissionName,
 				subject: this.subjectToReference(subjectId, subjectType),
+				consistency: {
+					requirement: {
+						fullyConsistent: true,
+						oneofKind: "fullyConsistent",
+					},
+				},
 			},
 		);
 
 		const response = await this.client.promises.checkPermission(request);
+		console.log(
+			"response",
+			subjectType,
+			subjectId,
+			permissionName,
+			objectType,
+			objectId,
+			response,
+		);
 		return (
 			response.permissionship ===
 			v1.CheckPermissionResponse_Permissionship.HAS_PERMISSION

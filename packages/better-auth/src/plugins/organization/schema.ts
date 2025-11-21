@@ -329,7 +329,7 @@ export type OrganizationSchema<O extends OrganizationOptions> = {
 			"invitation",
 			InvitationDefaultFields
 		>["fields"] & {
-			teamId: {
+			teamIds: {
 				type: "string";
 				required: false;
 				sortable: true;
@@ -411,7 +411,7 @@ export const invitationSchema = z.object({
 	organizationRoles: z.array(z.string()).optional(),
 	teamRoles: z.array(z.string()).optional(),
 	status: invitationStatus,
-	teamId: z.string().nullish(),
+	teamIds: z.string().default("").optional(),
 	inviterId: z.string(),
 	expiresAt: z.date(),
 	createdAt: z.date().default(() => new Date()),
@@ -588,6 +588,6 @@ export type InferInvitation<
 		inviterId: string;
 		expiresAt: Date;
 		createdAt: Date;
-		teamId?: string | undefined;
+		teamIds?: string | undefined;
 	} & InferAdditionalFieldsFromPluginOptions<"invitation", O, isClientSide>
 >;

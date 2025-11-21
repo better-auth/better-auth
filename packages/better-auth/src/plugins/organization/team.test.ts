@@ -106,7 +106,7 @@ describe("team", async (it) => {
 				email: invitedUser.email,
 				organizationRoles: ["member"],
 				teamRoles: ["member"],
-				teamId,
+				teamIds: [teamId],
 			},
 			{
 				headers,
@@ -115,7 +115,7 @@ describe("team", async (it) => {
 
 		expect(res.data).toMatchObject({
 			email: invitedUser.email,
-			teamId,
+			teamIds: [teamId],
 		});
 
 		const invitation = await client.organization.acceptInvitation(
@@ -261,13 +261,7 @@ describe("team", async (it) => {
 
 		const { headers } = await signInWithTestUser();
 		const client = createAuthClient({
-			plugins: [
-				organizationClient({
-					teams: {
-						enabled: true,
-					},
-				}),
-			],
+			plugins: [organizationClient()],
 			baseURL: "http://localhost:3000/api/auth",
 			fetchOptions: {
 				customFetchImpl: async (url, init) => {
@@ -300,9 +294,11 @@ describe("team", async (it) => {
 
 		const res = await client.organization.inviteMember(
 			{
-				teamId: createTeamResponse.data?.id,
+				teamIds: createTeamResponse.data?.id
+					? [createTeamResponse.data?.id]
+					: undefined,
 				email: invitedUser.email,
-				role: "member",
+				organizationRoles: ["member"],
 			},
 			{
 				headers,
@@ -328,9 +324,11 @@ describe("team", async (it) => {
 
 		const res2 = await client.organization.inviteMember(
 			{
-				teamId: createTeamResponse.data?.id,
+				teamIds: createTeamResponse.data?.id
+					? [createTeamResponse.data?.id]
+					: undefined,
 				email: "test2@test.com",
-				role: "member",
+				organizationRoles: ["member"],
 			},
 			{
 				headers,
@@ -458,16 +456,15 @@ describe("mulit team support", async (it) => {
 			headers: admin.headers,
 			body: {
 				email: invitedUser.response.user.email,
-				role: "member",
+				organizationRoles: ["member"],
+				teamRoles: ["member"],
 				organizationId,
-				teamId: [team1Id, team2Id, team3Id],
+				teamIds: [team1Id, team2Id, team3Id],
 			},
 		});
 
 		expect(invitation.id).toBeDefined();
-		expect((invitation as any).teamId).toBe(
-			[team1Id, team2Id, team3Id].join(","),
-		);
+		expect(invitation.teamIds).toEqual([team1Id, team2Id, team3Id]);
 
 		invitationId = invitation.id!;
 	});
@@ -590,9 +587,8 @@ describe("mulit team support", async (it) => {
 			headers: { cookie: invitedUser.headers.getSetCookie()[0]! },
 		});
 
-		expect(teams).toHaveLength(4);
-
 		team4Id = team.id;
+		expect(teams).toHaveLength(4);
 	});
 
 	it("should remove a member from a team", async () => {
@@ -622,14 +618,14 @@ describe("mulit team support", async (it) => {
 			headers: admin.headers,
 			body: {
 				email: "noteam@email.com",
-				role: "member",
+				organizationRoles: ["member"],
 				organizationId,
 			},
 		});
 
 		expect(invitation.id).toBeDefined();
-		expect((invitation as any).teamId).toBeNull();
-		expect((invitation as any).teamId).not.toBe("");
+		expect(invitation.teamIds).toBeNull();
+		expect(invitation.teamIds).not.toBe("");
 	});
 
 	it("should remove a member from the organization and all their teams when calling removeMember", async () => {
@@ -653,7 +649,7 @@ describe("mulit team support", async (it) => {
 			body: {
 				organizationId: organizationId!,
 				userId: newUser.user.id,
-				role: "member",
+				organizationRoles: ["member"],
 			},
 		});
 
@@ -749,7 +745,7 @@ describe("mulit team support", async (it) => {
 			body: {
 				organizationId: organizationId!,
 				userId: newUser.user.id,
-				role: "member",
+				organizationRoles: ["member"],
 			},
 		});
 

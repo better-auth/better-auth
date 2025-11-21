@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../../client";
-import { getTestInstance } from "../../../test-utils/test-instance";
+import { getTestInstance, schemaText } from "../../../test-utils/test-instance";
 import { organizationClient } from "../client";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { organization } from "../organization";
@@ -8,6 +8,12 @@ import { organization } from "../organization";
 describe("get-full-organization", async () => {
 	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance({
 		plugins: [organization()],
+		graph: {
+			enabled: true,
+			authzed: {
+				schema: schemaText,
+			},
+		},
 	});
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
@@ -29,6 +35,11 @@ describe("get-full-organization", async () => {
 			headers,
 		},
 	});
+
+	if (org.error) {
+		throw new Error(org.error.message);
+	}
+
 	const secondOrg = await client.organization.create({
 		name: "test-second",
 		slug: "test-second",
@@ -74,6 +85,7 @@ describe("get-full-organization", async () => {
 				headers,
 			},
 		});
+		console.log(orgBySlug);
 		expect(orgBySlug.data?.name).toBe("test");
 	});
 
@@ -334,21 +346,25 @@ describe("organization hooks", async () => {
 							type: "owner",
 							name: "Owner",
 							description: "Full organization access",
+							relationships: [],
 						},
 						{
 							type: "admin",
 							name: "Admin",
 							description: "Administrative access",
+							relationships: [],
 						},
 						{
 							type: "member",
 							name: "Member",
 							description: "Basic member access",
+							relationships: [],
 						},
 						{
 							type: "changed-role",
 							name: "Changed role",
 							description: "Changed role",
+							relationships: [],
 						},
 					],
 					organizationHooks: {

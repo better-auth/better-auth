@@ -3,6 +3,7 @@ import { getAsyncLocalStorage } from "../async_hooks";
 import type { GenericEndpointContext, GraphAdapter } from "../types/context";
 import { runWithTransaction } from "./transaction";
 import type { DBAdapter } from "../db/adapter";
+import { APIError } from "better-call";
 
 let currentContextAsyncStorage: AsyncLocalStorage<GraphAdapter> | null = null;
 
@@ -14,15 +15,16 @@ const ensureAsyncStorage = async () => {
 	return currentContextAsyncStorage;
 };
 
-export async function getCurrentGraphContext(): Promise<GraphAdapter> {
+export async function getCurrentGraphContext(
+	graphAdapter?: GraphAdapter,
+): Promise<GraphAdapter> {
 	const als = await ensureAsyncStorage();
 	const context = als.getStore();
-	if (!context) {
-		throw new Error(
-			"No graph context found. Please make sure you are calling this function within a `runWithEndpointContext` callback.",
-		);
-	}
-	return context;
+	if (context) return context as GraphAdapter;
+	if (graphAdapter) return graphAdapter;
+	throw new Error(
+		"No graph context found. Please make sure you are calling this function within a `runWithEndpointContext` callback.",
+	);
 }
 
 export async function runWithGraphContext<T>(
@@ -31,7 +33,9 @@ export async function runWithGraphContext<T>(
 ): Promise<T> {
 	const als = await ensureAsyncStorage();
 	const transactionAdapter = adapter.transaction();
+	console.log("running with graph id", transactionAdapter.id);
 	const result = await als.run(transactionAdapter, fn);
+	console.log("committing graph transaction", transactionAdapter.id);
 	await transactionAdapter.commit();
 	return result;
 }
@@ -53,8 +57,35 @@ export function runWithGraphTransaction<R>(
 	graphAdapter: GraphAdapter,
 	fn: () => Promise<R>,
 ): Promise<R> {
-	console.log(dbAdapter, graphAdapter);
+	console.log("running with graph transaction", dbAdapter.id, graphAdapter.id);
 	return runWithTransaction(dbAdapter, async () => {
 		return await runWithGraphContext(graphAdapter, fn);
 	});
+}
+
+export async function authorize(
+	ctx: GenericEndpointContext,
+	subjectType: string,
+	subjectId: string,
+	permissionName: string,
+	objectType: string,
+	objectId: string,
+	message: string,
+) {
+	const graphAdapter = await getCurrentGraphContext(ctx.context.graphAdapter);
+	if (ctx.context.options.graph?.enabled) {
+		if (
+			!(await graphAdapter.check(
+				subjectType,
+				subjectId,
+				permissionName,
+				objectType,
+				objectId,
+			))
+		) {
+			throw new APIError("FORBIDDEN", {
+				message: message,
+			});
+		}
+	}
 }

@@ -13,8 +13,12 @@ import { getAdapter, getMigrations } from "../db";
 import { bearer } from "../plugins";
 import type { Session, User } from "../types";
 import { getBaseURL } from "../utils/url";
-
+import { AuthzedSyncClient } from "../plugins";
+import schemaText from "./graph-schema.test.zed?raw";
+import { initializeGraph } from "../context/graph-context";
 const cleanupSet = new Set<Function>();
+
+export { schemaText };
 
 type CurrentUserContext = {
 	headers: Headers;
@@ -120,6 +124,9 @@ export async function getTestInstance<
 		logger: {
 			level: "debug",
 		},
+		graph: {
+			enabled: true,
+		},
 	} satisfies BetterAuthOptions;
 
 	const auth = betterAuth({
@@ -145,18 +152,19 @@ export async function getTestInstance<
 		});
 	}
 
+	const graph = new AuthzedSyncClient();
+
 	if (testWith !== "mongodb") {
 		const { runMigrations, compileMigrations } = await getMigrations({
 			...auth.options,
 			database: opts.database,
 		});
-		console.log("runMigrations", await compileMigrations());
 		await runMigrations();
-		console.log("runMigrations");
+		// await graph.writeSchema(schemaText);
+		await initializeGraph(graph);
 	}
 
 	await createTestUser();
-	console.log("createTestUser");
 
 	const cleanup = async () => {
 		if (testWith === "mongodb") {
@@ -271,7 +279,7 @@ export async function getTestInstance<
 	async function signInWithUser(email: string, password: string) {
 		const headers = new Headers();
 		//@ts-expect-error
-		const { data } = await client.signIn.email({
+		const { data, error } = await client.signIn.email({
 			email,
 			password,
 			fetchOptions: {
@@ -307,6 +315,7 @@ export async function getTestInstance<
 	return {
 		auth,
 		client,
+		graph,
 		testUser,
 		signInWithTestUser,
 		signInWithUser,

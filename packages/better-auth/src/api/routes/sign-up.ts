@@ -1,6 +1,9 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { runWithGraphTransaction } from "@better-auth/core/context";
+import {
+	getCurrentGraphContext,
+	runWithGraphTransaction,
+} from "@better-auth/core/context";
 import { isDevelopment } from "@better-auth/core/env";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
@@ -303,6 +306,23 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						...args,
 					);
 				}
+
+				const graphAdapter = await getCurrentGraphContext();
+				graphAdapter.addRelationship({
+					subjectType: "user",
+					subjectId: createdUser.id,
+					relationshipType: "has_role",
+					objectType: "platform_role",
+					objectId: "platform_user",
+				});
+
+				graphAdapter.addRelationship({
+					subjectType: "user",
+					subjectId: createdUser.id,
+					relationshipType: "user",
+					objectType: "platform",
+					objectId: "default",
+				});
 
 				if (
 					ctx.context.options.emailAndPassword.autoSignIn === false ||

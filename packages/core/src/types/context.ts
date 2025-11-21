@@ -36,6 +36,7 @@ export type Relationship = {
 };
 
 export interface GraphAdapter {
+	id: string;
 	addRelationship(relationship: Relationship): Promise<void>;
 	deleteRelationship(relationship: Relationship): Promise<void>;
 	check(
@@ -47,6 +48,7 @@ export interface GraphAdapter {
 	): Promise<boolean>;
 	commit: () => Promise<void>;
 	transaction: () => GraphAdapter;
+	migrate: () => Promise<void>;
 }
 
 export interface InternalAdapter<

@@ -17,7 +17,12 @@ import type {
 	TeamMember,
 } from "../schema";
 import type { OrganizationOptions } from "../types";
-import { withTransaction } from "@better-auth/core/context";
+import {
+	withTransaction,
+	authorize,
+	getCurrentGraphContext,
+} from "@better-auth/core/context";
+import { createGraphAdapter } from "../../../context/graph-context";
 
 export const createOrganization = <O extends OrganizationOptions>(
 	options?: O | undefined,
@@ -102,33 +107,49 @@ export const createOrganization = <O extends OrganizationOptions>(
 			if (!session && (ctx.request || ctx.headers)) {
 				throw new APIError("UNAUTHORIZED");
 			}
+
 			let user = session?.user || null;
+
 			if (!user) {
 				if (!ctx.body.userId) {
 					throw new APIError("UNAUTHORIZED");
 				}
 				user = await ctx.context.internalAdapter.findUserById(ctx.body.userId);
 			}
+
 			if (!user) {
 				return ctx.json(null, {
 					status: 401,
 				});
 			}
 			const options = ctx.context.orgOptions;
-			// const graphAdapter = ctx.context.graphAdapter;
-			// const canCreateOrg =
-			// 	typeof options?.allowUserToCreateOrganization === "function"
-			// 		? await options.allowUserToCreateOrganization(user)
-			// 		: options?.allowUserToCreateOrganization === undefined
-			// 			? true
-			// 			: options.allowUserToCreateOrganization;
 
-			// if (!canCreateOrg) {
-			// 	throw new APIError("FORBIDDEN", {
-			// 		message:
-			// 			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_ORGANIZATION,
-			// 	});
+			// if (user.id !== session?.user?.id) {
+			// 	await authorize(
+			// 		ctx,
+			// 		"user",
+			// 		user.id,
+			// 		"create_org",
+			// 		"platform",
+			// 		"default",
+			// 		"You are not allowed to create an organization",
+			// 	);
 			// }
+
+			// const graphAdapter = ctx.context.graphAdapter;
+			const canCreateOrg =
+				typeof options?.allowUserToCreateOrganization === "function"
+					? await options.allowUserToCreateOrganization(user)
+					: options?.allowUserToCreateOrganization === undefined
+						? true
+						: options.allowUserToCreateOrganization;
+
+			if (!canCreateOrg) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_ORGANIZATION,
+				});
+			}
 
 			const adapter = getOrgAdapter<O>(ctx.context, options as O);
 
@@ -202,6 +223,19 @@ export const createOrganization = <O extends OrganizationOptions>(
 				},
 			});
 
+			if (ctx.context.options.graph?.enabled) {
+				const graphAdapter = await getCurrentGraphContext(
+					ctx.context.graphAdapter,
+				);
+				await graphAdapter.addRelationship({
+					subjectType: "organization",
+					subjectId: organization.id,
+					relationshipType: "organization",
+					objectType: "platform",
+					objectId: "default",
+				});
+			}
+
 			// Create built-in organization roles
 			const builtInOrgRoles = options.builtInOrganizationRoles ?? [
 				{
@@ -209,12 +243,14 @@ export const createOrganization = <O extends OrganizationOptions>(
 					name: "Owner",
 					description: "Full organization access",
 					isBuiltIn: true,
+					relationships: ["org_manager"],
 				},
 				{
 					type: "admin",
 					name: "Admin",
 					description: "Administrative access",
 					isBuiltIn: true,
+					relationships: ["org_manager"],
 				},
 				{
 					type: "member",
@@ -224,13 +260,60 @@ export const createOrganization = <O extends OrganizationOptions>(
 				},
 			];
 
-			await Promise.all(
-				builtInOrgRoles.map((role) =>
-					adapter.createOrganizationRole({
+			const orgRoles = await Promise.all(
+				builtInOrgRoles.map(async (role) => {
+					const orgRole = await adapter.createOrganizationRole({
 						organizationId: organization.id,
 						...role,
-					}),
-				),
+					});
+
+					console.log("orgRole", orgRole);
+					console.log(
+						"ctx.context.options.graph?.enabled",
+						ctx.context.options.graph?.enabled,
+					);
+					console.log("ctx.context.graphAdapter", ctx.context.graphAdapter);
+
+					if (ctx.context.options.graph?.enabled) {
+						const graphAdapter = await getCurrentGraphContext(
+							ctx.context.graphAdapter,
+						);
+						await graphAdapter.addRelationship({
+							subjectType: "organization_role",
+							subjectId: orgRole.id,
+							relationshipType: "roles",
+							objectId: organization.id,
+							objectType: "organization",
+						});
+						await graphAdapter.addRelationship({
+							subjectType: "organization",
+							subjectId: organization.id,
+							relationshipType: "built_in_role",
+							objectId: orgRole.id,
+							objectType: "organization_role",
+						});
+						await graphAdapter.addRelationship({
+							subjectType: "organization",
+							subjectId: organization.id,
+							relationshipType: "organization",
+							objectId: orgRole.id,
+							objectType: "organization_role",
+						});
+
+						role.relationships?.forEach((relationship) => {
+							graphAdapter.addRelationship({
+								subjectType: "organization_role",
+								subjectId: orgRole.id,
+								relationshipType: relationship,
+								objectId: organization.id,
+								objectType: "organization",
+								optionalRelation: "member",
+							});
+						});
+					}
+
+					return orgRole;
+				}),
 			);
 
 			let member:
@@ -261,6 +344,28 @@ export const createOrganization = <O extends OrganizationOptions>(
 				}
 			}
 			member = await adapter.createMember(data);
+
+			if (ctx.context.options.graph?.enabled) {
+				const graphAdapter = await getCurrentGraphContext(
+					ctx.context.graphAdapter,
+				);
+
+				roles.forEach((roleType) => {
+					const role = orgRoles.find((r) => r.type === roleType);
+
+					if (!role) {
+						return;
+					}
+
+					graphAdapter.addRelationship({
+						subjectType: "user",
+						subjectId: user.id,
+						relationshipType: "has_role",
+						objectId: role.id,
+						objectType: "organization_role",
+					});
+				});
+			}
 
 			if (options?.organizationHooks?.afterAddMember) {
 				await options?.organizationHooks.afterAddMember({
@@ -520,7 +625,19 @@ export const updateOrganization = <O extends OrganizationOptions>(
 					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
 			}
+
+			await authorize(
+				ctx,
+				"user",
+				session.user.id,
+				"manage",
+				"organization",
+				organizationId,
+				ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_ACCESS_THIS_ORGANIZATION,
+			);
+
 			const adapter = getOrgAdapter<O>(ctx.context, options);
+
 			const member = await adapter.findMemberByOrgId({
 				userId: session.user.id,
 				organizationId: organizationId,
@@ -638,6 +755,7 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 					},
 				});
 			}
+
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const member = await adapter.findMemberByOrgId({
 				userId: session.user.id,
@@ -662,6 +780,17 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 			if (!org) {
 				throw new APIError("BAD_REQUEST");
 			}
+
+			await authorize(
+				ctx,
+				"user",
+				session.user.id,
+				"delete",
+				"organization",
+				organizationId,
+				ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_ORGANIZATION,
+			);
+
 			if (options?.organizationHooks?.beforeDeleteOrganization) {
 				await options.organizationHooks.beforeDeleteOrganization({
 					organization: org,
@@ -745,6 +874,7 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 					status: 200,
 				});
 			}
+
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const organization = await adapter.findFullOrganization({
 				organizationId,
@@ -757,6 +887,7 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
 			}
+
 			const isMember = await adapter.checkMembership({
 				userId: session.user.id,
 				organizationId: organization.id,
@@ -768,6 +899,16 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				});
 			}
+
+			await authorize(
+				ctx,
+				"user",
+				session.user.id,
+				"view",
+				"organization",
+				organization.id,
+				ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_ACCESS_THIS_ORGANIZATION,
+			);
 
 			type OrganizationReturn = O["teams"] extends { enabled: true }
 				? {

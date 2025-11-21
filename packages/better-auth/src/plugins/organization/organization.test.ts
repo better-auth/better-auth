@@ -31,7 +31,7 @@ describe("organization type", () => {
 });
 
 describe("organization", async (it) => {
-	const { auth, signInWithTestUser, signInWithUser, cookieSetter } =
+	const { auth, graph, signInWithTestUser, signInWithUser, cookieSetter } =
 		await getTestInstance({
 			user: {
 				modelName: "users",
@@ -118,6 +118,18 @@ describe("organization", async (it) => {
 		expect((session.data?.session as any).activeOrganizationId).toBe(
 			organizationId,
 		);
+
+		const userId = session.data?.session.userId as string;
+
+		await expect(
+			graph.can("user", userId, "manage", "organization", organizationId),
+		).resolves.toBe(true);
+		await expect(
+			graph.can("user", userId, "view", "organization", organizationId),
+		).resolves.toBe(true);
+		await expect(
+			graph.can("user", userId, "delete", "organization", organizationId),
+		).resolves.toBe(true);
 	});
 	it("should check if organization slug is available", async () => {
 		const { headers } = await signInWithTestUser();
@@ -182,6 +194,18 @@ describe("organization", async (it) => {
 		organization2Id = organization?.id as string;
 		expect(organization?.name).toBe("test2");
 		expect(organization?.members.length).toBe(1);
+
+		const userId = session.data?.session.userId as string;
+
+		await expect(
+			graph.can("user", userId, "manage", "organization", organization2Id),
+		).resolves.toBe(true);
+		await expect(
+			graph.can("user", userId, "view", "organization", organization2Id),
+		).resolves.toBe(true);
+		await expect(
+			graph.can("user", userId, "delete", "organization", organization2Id),
+		).resolves.toBe(true);
 		// expect(organization?.members[0]?.organizationRoles).toContain("owner");
 	});
 	it("should allow listing organizations", async () => {
@@ -328,6 +352,7 @@ describe("organization", async (it) => {
 	it.each([
 		{
 			organizationRoles: ["owner"],
+			permissions: ["manage", "view", "delete"],
 			newUser: {
 				email: "test2@test.com",
 				password: "test123456",
@@ -336,6 +361,7 @@ describe("organization", async (it) => {
 		},
 		{
 			organizationRoles: ["admin"],
+			permissions: ["manage", "view", "delete"],
 			newUser: {
 				email: "test3@test.com",
 				password: "test123456",
@@ -344,6 +370,7 @@ describe("organization", async (it) => {
 		},
 		{
 			organizationRoles: ["member"],
+			permissions: ["view"],
 			newUser: {
 				email: "test4@test.com",
 				password: "test123456",
@@ -352,7 +379,7 @@ describe("organization", async (it) => {
 		},
 	])(
 		"invites user to organization with role",
-		async ({ organizationRoles, newUser }) => {
+		async ({ organizationRoles, newUser, permissions }) => {
 			const { headers } = await signInWithTestUser();
 			const invite = await client.organization.inviteMember({
 				organizationId: organizationId,
@@ -362,6 +389,7 @@ describe("organization", async (it) => {
 					headers,
 				},
 			});
+			console.log("invite", invite);
 			if (!invite.data) throw new Error("Invitation not created");
 			expect(invite.data.email).toBe(newUser.email);
 			expect(invite.data.organizationRoles).toEqual(organizationRoles);
@@ -406,6 +434,14 @@ describe("organization", async (it) => {
 			expect(
 				(invitedUserSession.data?.session as any).activeOrganizationId,
 			).toBe(organizationId);
+
+			const userId = invitedUserSession.data?.session.userId as string;
+
+			for (const permission of permissions) {
+				await expect(
+					graph.can("user", userId, permission, "organization", organizationId),
+				).resolves.toBe(true);
+			}
 		},
 	);
 
@@ -660,6 +696,7 @@ describe("organization", async (it) => {
 				organizationRoles: ["admin"],
 			},
 		});
+		console.log(member, organizationId);
 		const leaveRes = await client.organization.leave(
 			{
 				organizationId,
@@ -668,6 +705,7 @@ describe("organization", async (it) => {
 				headers,
 			},
 		);
+		console.log(leaveRes);
 		expect(leaveRes.data).toMatchObject({
 			userId: res.data?.user.id!,
 		});
@@ -698,6 +736,7 @@ describe("organization", async (it) => {
 				headers: adminHeaders,
 			},
 		});
+		console.log("errprrrr", res);
 		expect(res.error?.status).toBe(403);
 	});
 
@@ -819,7 +858,7 @@ describe("organization", async (it) => {
 	});
 
 	it("should allow deleting organization", async () => {
-		const { headers: adminHeaders } = await signInWithUser(
+		const { headers: adminHeaders, res } = await signInWithUser(
 			adminUser.email,
 			adminUser.password,
 		);
@@ -838,6 +877,7 @@ describe("organization", async (it) => {
 				headers: adminHeaders,
 			},
 		});
+
 		expect(org.error?.status).toBe(403);
 	});
 

@@ -12,6 +12,10 @@ import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import type { InferInvitation, Invitation, Member } from "../schema";
 import type { OrganizationOptions } from "../types";
+import {
+	getCurrentGraphContext,
+	withTransaction,
+} from "@better-auth/core/context";
 
 export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 	const additionalFieldsSchema = toZodSchema({
@@ -50,20 +54,12 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					"Resend the invitation email, if the user is already invited. Eg: true",
 			})
 			.optional(),
-		teamId: z.union([
-			z
-				.string()
-				.meta({
-					description: "The team ID to invite the user to",
-				})
-				.optional(),
-			z
-				.array(z.string())
-				.meta({
-					description: "The team IDs to invite the user to",
-				})
-				.optional(),
-		]),
+		teamIds: z
+			.array(z.string())
+			.meta({
+				description: "The team IDs to invite the user to",
+			})
+			.optional(),
 	});
 
 	return createAuthEndpoint(
@@ -102,16 +98,11 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 						 * the user is already invited
 						 */
 						resend?: boolean | undefined;
-					} & (O extends { teams: { enabled: true } }
-						? {
-								/**
-								 * The team the user is
-								 * being invited to.
-								 */
-								teamId?: (string | string[]) | undefined;
-							}
-						: {}) &
-						InferAdditionalFieldsFromPluginOptions<"invitation", O, false>,
+						/**
+						 * The team IDs to invite the user to
+						 */
+						teamIds?: string[] | undefined;
+					} & InferAdditionalFieldsFromPluginOptions<"invitation", O, false>,
 				},
 				openapi: {
 					operationId: "createOrganizationInvitation",
@@ -166,7 +157,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				},
 			},
 		},
-		async (ctx) => {
+		withTransaction(async (ctx) => {
 			const session = ctx.context.session;
 			const organizationId =
 				ctx.body.organizationId || session.session.activeOrganizationId;
@@ -204,7 +195,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				const orgRolesArray = [...organizationRoles] as string[];
 				const existingRoles = await adapter.getOrganizationRolesByTypes(
 					organizationId,
-					orgRolesArray as any,
+					orgRolesArray,
 				);
 				const existingTypes = new Set<string>(
 					existingRoles.map((r) => r.type as string),
@@ -297,7 +288,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 							user: session.user,
 						},
 						invitation: updatedInvitation as unknown as Invitation,
-					} as any,
+					},
 					ctx.request,
 				);
 
@@ -340,13 +331,10 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			if (
 				typeof ctx.context.orgOptions.teams?.maximumMembersPerTeam !==
 					"undefined" &&
-				"teamId" in ctx.body &&
-				ctx.body.teamId
+				"teamIds" in ctx.body &&
+				ctx.body.teamIds
 			) {
-				const teamIds =
-					typeof ctx.body.teamId === "string"
-						? [ctx.body.teamId as string]
-						: (ctx.body.teamId as string[]);
+				const teamIds = ctx.body.teamIds ?? [];
 
 				for (const teamId of teamIds) {
 					const team = await adapter.findTeamById({
@@ -379,11 +367,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			}
 
 			const teamIds: string[] =
-				"teamId" in ctx.body
-					? typeof ctx.body.teamId === "string"
-						? [ctx.body.teamId as string]
-						: ((ctx.body.teamId as string[]) ?? [])
-					: [];
+				"teamIds" in ctx.body ? (ctx.body.teamIds ?? []) : [];
 
 			// Validate team roles if provided
 			if (teamRoles.length > 0 && teamIds.length > 0) {
@@ -391,7 +375,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				for (const teamId of teamIds) {
 					const existingTeamRoles = await adapter.getTeamRolesByTypes(
 						teamId,
-						teamRolesArray as any,
+						teamRolesArray,
 					);
 					const existingTypes = new Set<string>(
 						existingTeamRoles.map((r) => r.type as string),
@@ -421,8 +405,8 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				teamRoles: teamRoles,
 				email: email,
 				organizationId: organizationId,
-				teamIds,
 				...(additionalFields ? additionalFields : {}),
+				teamIds: teamIds.length > 0 ? teamIds : null,
 			};
 
 			// Run beforeCreateInvitation hook
@@ -432,8 +416,8 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 						invitation: {
 							...invitationData,
 							inviterId: session.user.id,
-							teamId: teamIds.length > 0 ? teamIds[0] : undefined,
-						} as any,
+							teamIds: teamIds,
+						},
 						inviter: session.user,
 						organization,
 					},
@@ -463,7 +447,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 						user: session.user,
 					},
 					invitation,
-				} as any,
+				},
 				ctx.request,
 			);
 
@@ -477,7 +461,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			}
 
 			return ctx.json(invitation);
-		},
+		}),
 	);
 };
 
@@ -519,7 +503,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				},
 			},
 		},
-		async (ctx) => {
+		withTransaction(async (ctx) => {
 			const session = ctx.context.session;
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const invitation = await adapter.findInvitationById(
@@ -606,7 +590,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				// Validate roles still exist (they might have been deleted)
 				const existingRoles = await adapter.getOrganizationRolesByTypes(
 					invitation.organizationId,
-					orgRolesArray as any,
+					orgRolesArray,
 				);
 				const existingTypes = new Set<string>(existingRoles.map((r) => r.type));
 				const validRoles = orgRolesArray.filter((r: string) =>
@@ -618,12 +602,40 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 						invitation.organizationId,
 						validRoles,
 					);
+
+					console.log("validRoles", validRoles);
+					if (ctx.context.options.graph?.enabled) {
+						const graphAdapter = await getCurrentGraphContext(
+							ctx.context.graphAdapter,
+						);
+
+						validRoles.forEach((role) => {
+							const existingRole = existingRoles.find(
+								(type) => type.type === role,
+							);
+
+							if (!existingRole) {
+								return;
+							}
+
+							graphAdapter.addRelationship({
+								subjectType: "user",
+								subjectId: session.user.id,
+								relationshipType: "has_role",
+								objectId: existingRole.id,
+								objectType: "organization_role",
+							});
+						});
+					}
 				}
 			}
 
 			// Handle team invitations
-			if ("teamId" in acceptedI && acceptedI.teamId) {
-				const teamIds = (acceptedI.teamId as string).split(",");
+			if ("teamIds" in acceptedI && acceptedI.teamIds) {
+				const teamIds =
+					typeof acceptedI.teamIds === "string"
+						? acceptedI.teamIds.split(",")
+						: (acceptedI.teamIds ?? []);
 				const onlyOne = teamIds.length === 1;
 				const teamRoles = acceptedI.teamRoles || [];
 
@@ -639,7 +651,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 						// Validate team roles still exist
 						const existingTeamRoles = await adapter.getTeamRolesByTypes(
 							teamId,
-							teamRolesArray as any,
+							teamRolesArray,
 						);
 						const existingTypes = new Set<string>(
 							existingTeamRoles.map((r) => r.type),
@@ -720,7 +732,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				invitation: acceptedI,
 				member,
 			});
-		},
+		}),
 	);
 
 export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
@@ -761,7 +773,7 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 				},
 			},
 		},
-		async (ctx) => {
+		withTransaction(async (ctx) => {
 			const session = ctx.context.session;
 			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 			const invitation = await adapter.findInvitationById(
@@ -829,7 +841,7 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 				invitation: rejectedI,
 				member: null,
 			});
-		},
+		}),
 	);
 
 export const cancelInvitation = <O extends OrganizationOptions>(options: O) =>
@@ -866,7 +878,7 @@ export const cancelInvitation = <O extends OrganizationOptions>(options: O) =>
 				},
 			},
 		},
-		async (ctx) => {
+		withTransaction(async (ctx) => {
 			const session = ctx.context.session;
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const invitation = await adapter.findInvitationById(
@@ -921,7 +933,7 @@ export const cancelInvitation = <O extends OrganizationOptions>(options: O) =>
 			}
 
 			return ctx.json(canceledI);
-		},
+		}),
 	);
 
 export const getInvitation = <O extends OrganizationOptions>(options: O) =>

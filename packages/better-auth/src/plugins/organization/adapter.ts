@@ -358,6 +358,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					...data,
 					isBuiltIn: data.isBuiltIn ?? false,
 				},
+				forceAllowId: true,
 			});
 			return role;
 		},
@@ -1149,7 +1150,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					email,
 					teamRoles: teamRoles || [],
 					organizationId,
-					teamId,
+					teamIds: teamId,
 					inviterId,
 					status: "pending",
 					expiresAt,
@@ -1318,7 +1319,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				organizationRoles?: string[];
 				teamRoles?: string[];
 				organizationId: string;
-				teamIds: string[];
+				teamIds: string[] | null;
 			} & Record<string, any>; // This represents the additionalFields for the invitation
 			user: User;
 		}) => {
@@ -1341,11 +1342,17 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					...invitation,
 					organizationRoles: invitation.organizationRoles || [],
 					teamRoles: invitation.teamRoles || [],
-					teamId: invitation.teamIds.length > 0 ? invitation.teamIds[0] : null,
+					teamIds:
+						invitation.teamIds && invitation.teamIds.length > 0
+							? invitation.teamIds.join(",")
+							: undefined,
 				},
 			});
 
-			return invite;
+			return {
+				...invite,
+				teamIds: invite.teamIds ? invite.teamIds.split(",") : null,
+			};
 		},
 		findInvitationById: async (id: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);

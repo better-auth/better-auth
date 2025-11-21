@@ -8,10 +8,6 @@ import { socialProviders } from "@better-auth/core/social-providers";
 import { createTelemetry } from "@better-auth/telemetry";
 import defu from "defu";
 import type { Entries } from "type-fest";
-import type { GraphAdapter } from "@better-auth/core/context";
-import type { Relationship } from "@better-auth/core/context";
-import { getCurrentAdapter } from "@better-auth/core/context";
-import { AuthzedSyncClient } from "../adapters/authzed-adapter";
 import { checkEndpointConflicts } from "../api";
 import { createCookieGetter, getCookies } from "../cookies";
 import { hashPassword, verifyPassword } from "../crypto/password";
@@ -27,70 +23,7 @@ import {
 	getTrustedOrigins,
 	runPluginInit,
 } from "./helpers";
-
-type RelationshipWriteRequest = Relationship & {
-	operation: "create" | "delete" | "touch";
-};
-
-function createGraphAdapter(
-	adapter: DBAdapter<BetterAuthOptions>,
-	options: BetterAuthOptions,
-): GraphAdapter {
-	let relations: RelationshipWriteRequest[] = [];
-	const authzedClient = new AuthzedSyncClient({
-		token: options.graph?.authzed?.token || "",
-		endpoint: options.graph?.authzed?.endpoint || "http://localhost:50051",
-	});
-	return {
-		addRelationship: async (relationship: Relationship) => {
-			relations.push({
-				...relationship,
-				operation: "create",
-			});
-		},
-		deleteRelationship: async (relationship: Relationship) => {
-			relations.push({
-				...relationship,
-				operation: "delete",
-			});
-		},
-		check: async (
-			subjectType: string,
-			subjectId: string,
-			relationshipType: string,
-			objectType: string,
-			objectId: string,
-		) => {
-			return await authzedClient.checkPermission(
-				subjectType,
-				subjectId,
-				relationshipType,
-				objectType,
-				objectId,
-			);
-		},
-		commit: async () => {
-			const dbAdapter = await getCurrentAdapter(adapter);
-			// await dbAdapter.createMany({
-			// 	model: "relationship",
-			// 	data: relations.map((relation) => ({
-			// 		objectId: relation.objectId,
-			// 		objectType: relation.objectType,
-			// 		relationshipType: relation.relationshipType,
-			// 		subjectId: relation.subjectId,
-			// 		subjectType: relation.subjectType,
-			// 		createdAt: new Date(),
-			// 		updatedAt: new Date(),
-			// 	})),
-			// });
-			await authzedClient.syncRelationshipsBatch(relations);
-			relations = [];
-		},
-		transaction: () => {
-			return createGraphAdapter(adapter, options);
-		},
-	};
-}
+import { createGraphAdapter } from "./graph-context";
 
 export async function createAuthContext(
 	adapter: DBAdapter<BetterAuthOptions>,

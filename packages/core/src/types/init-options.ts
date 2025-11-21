@@ -1382,6 +1382,7 @@ export type BetterAuthOptions = {
 		authzed?: {
 			endpoint?: string;
 			token?: string;
+			schema?: string;
 		};
 	};
 };

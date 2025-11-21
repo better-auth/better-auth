@@ -8,8 +8,9 @@ import { toZodSchema } from "../../../db/to-zod";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import type { InferMember, Member } from "../schema";
+import type { InferMember, InferOrganizationRole, Member } from "../schema";
 import type { OrganizationOptions } from "../types";
+import { getCurrentGraphContext } from "@better-auth/core/context";
 
 export const addMember = <O extends OrganizationOptions>(option: O) => {
 	const additionalFieldsSchema = toZodSchema({
@@ -148,10 +149,11 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 
 			// Validate organization roles exist
 			const organizationRoles = ctx.body.organizationRoles || [];
+			let existingRoles: InferOrganizationRole<O, false>[] = [];
 			if (organizationRoles.length > 0) {
-				const existingRoles = await adapter.getOrganizationRolesByTypes(
+				existingRoles = await adapter.getOrganizationRolesByTypes(
 					orgId,
-					organizationRoles as any,
+					organizationRoles,
 				);
 				const existingTypes = new Set<string>(existingRoles.map((r) => r.type));
 				const missingTypes = (organizationRoles as string[]).filter(
@@ -200,6 +202,27 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 					orgId,
 					organizationRoles,
 				);
+
+				if (ctx.context.options.graph?.enabled) {
+					const graphAdapter = await getCurrentGraphContext(
+						ctx.context.graphAdapter,
+					);
+
+					organizationRoles.forEach((role) => {
+						let existingRole = existingRoles.find((r) => r.type === role);
+						if (!existingRole) {
+							return;
+						}
+
+						graphAdapter.addRelationship({
+							subjectType: "user",
+							subjectId: user.id,
+							relationshipType: "has_role",
+							objectId: existingRole.id,
+							objectType: "organization_role",
+						});
+					});
+				}
 			}
 
 			if (teamId) {
@@ -776,6 +799,7 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 			use: [sessionMiddleware, orgMiddleware],
 		},
 		async (ctx) => {
+			console.log("leaveOrganization", ctx.body);
 			const session = ctx.context.session;
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const member = await adapter.findMemberByOrgId({

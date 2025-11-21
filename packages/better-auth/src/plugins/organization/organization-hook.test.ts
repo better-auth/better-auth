@@ -46,6 +46,8 @@ describe("organization creation in database hooks", async () => {
 			name: "Test Hook User",
 		});
 
+		console.log(result);
+
 		// Verify the user was created
 		expect(result.data).toBeDefined();
 		expect(result.data?.user).toBeDefined();

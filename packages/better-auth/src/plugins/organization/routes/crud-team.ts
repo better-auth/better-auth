@@ -12,7 +12,10 @@ import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { teamSchema } from "../schema";
 import type { MemberTeamRole } from "../schema";
 import type { OrganizationOptions } from "../types";
-import { getCurrentTransactionAdapter } from "@better-auth/core/context";
+import {
+	authorize,
+	getCurrentTransactionAdapter,
+} from "@better-auth/core/context";
 
 export const createTeam = <O extends OrganizationOptions>(options: O) => {
 	const additionalFieldsSchema = toZodSchema({
@@ -148,6 +151,18 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 				throw new APIError("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
+			}
+
+			if (session) {
+				await authorize(
+					ctx,
+					"user",
+					session.user?.id,
+					"create_team",
+					"organization",
+					organizationId,
+					"You are not allowed to create a team in this organization",
+				);
 			}
 
 			let teamData = {

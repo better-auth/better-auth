@@ -25,5 +25,6 @@ export {
 	runWithGraphContext,
 	withTransaction,
 	runWithGraphTransaction,
+	authorize,
 } from "./graph-context";
 export type { GraphAdapter, Relationship } from "../types/context";

@@ -942,11 +942,11 @@ export function organization<O extends OrganizationOptions>(
 						required: false,
 						fieldName: options?.schema?.invitation?.fields?.teamRoles,
 					},
-					teamId: {
+					teamIds: {
 						type: "string",
 						required: false,
 						sortable: true,
-						fieldName: options?.schema?.invitation?.fields?.teamId,
+						fieldName: options?.schema?.invitation?.fields?.teamIds,
 					},
 					status: {
 						type: "string",
