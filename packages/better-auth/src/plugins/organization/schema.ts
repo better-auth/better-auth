@@ -197,6 +197,14 @@ interface SessionDefaultFields {
 		type: "string";
 		required: false;
 	};
+	activeOrganizationSlug: {
+		type: "string";
+		required: false;
+	};
+	activeOrganizationRole: {
+		type: "string";
+		required: false;
+	};
 }
 
 export type OrganizationSchema<O extends OrganizationOptions> =

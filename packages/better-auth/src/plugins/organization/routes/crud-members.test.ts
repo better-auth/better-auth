@@ -268,7 +268,7 @@ describe("updateMemberRole", async () => {
 		expect(updatedMember.data?.role).toBe("admin");
 	});
 
-	it("should not update the member role if the member updating is not a member	", async () => {
+	it("should not update the member role if the member updating is not a member", async () => {
 		const { headers, user } = await signInWithTestUser();
 		const client = createAuthClient({
 			plugins: [organizationClient()],
@@ -428,5 +428,218 @@ describe("activeMemberRole", async () => {
 		});
 
 		expect(activeMember.data?.role).toBe("member");
+	});
+
+	it("should use session role when querying current user's active organization (performance optimization)", async () => {
+		const { headers: testHeaders, user } = await signInWithTestUser();
+
+		// Create a new organization for this test
+		const testOrg = await client.organization.create({
+			name: "test-performance-org",
+			slug: "test-performance-org",
+			fetchOptions: {
+				headers: testHeaders,
+				onSuccess: cookieSetter(testHeaders),
+			},
+		});
+
+		// Set organization as active (this populates session with activeOrganizationRole)
+		// IMPORTANT: Capture cookie from setActive
+		await client.organization.setActive(
+			{
+				organizationId: testOrg.data?.id as string,
+			},
+			{
+				headers: testHeaders,
+				onSuccess: cookieSetter(testHeaders),
+			},
+		);
+
+		// Verify session has activeOrganizationRole set
+		const session = await client.getSession({
+			fetchOptions: {
+				headers: testHeaders,
+			},
+		});
+		expect((session.data?.session as any).activeOrganizationId).toBe(
+			testOrg.data?.id,
+		);
+		expect((session.data?.session as any).activeOrganizationRole).toBe("owner");
+		expect((session.data?.session as any).activeOrganizationSlug).toBe(
+			"test-performance-org",
+		);
+
+		// Call getActiveMemberRole without query params (should use session defaults)
+		// This should return role from session WITHOUT database query
+		const activeMemberRole = await client.organization.getActiveMemberRole({
+			fetchOptions: {
+				headers: testHeaders,
+			},
+		});
+
+		// Should return role from session
+		expect(activeMemberRole.data?.role).toBe("owner");
+		expect(activeMemberRole.error).toBeNull();
+
+		// Verify session is correct before updating role
+		const sessionBeforeUpdate = await client.getSession({
+			fetchOptions: { headers: testHeaders },
+		});
+		expect(
+			(sessionBeforeUpdate.data?.session as any).activeOrganizationId,
+		).toBe(testOrg.data?.id);
+		expect(
+			(sessionBeforeUpdate.data?.session as any).activeOrganizationRole,
+		).toBe("owner");
+
+		// Update the current user's role in the active organization
+		const org = await client.organization.getFullOrganization({
+			query: { organizationId: testOrg.data?.id },
+			fetchOptions: { headers: testHeaders },
+		});
+		if (!org.data) throw new Error("Organization not found");
+
+		const currentUserMember = org.data.members.find(
+			(m) => m.userId === user.id,
+		);
+		if (!currentUserMember) throw new Error("Member not found");
+
+		// Ensure we're updating the current user in the active organization
+		expect(currentUserMember.userId).toBe(user.id);
+		expect(currentUserMember.organizationId).toBe(testOrg.data?.id);
+
+		// Debug: Check session values before update
+		console.log("DEBUG - Before updateMemberRole:");
+		console.log("  currentUserMember.userId:", currentUserMember.userId);
+		console.log("  user.id:", user.id);
+		console.log("  organizationId being passed:", testOrg.data?.id);
+		console.log(
+			"  session.activeOrganizationId:",
+			(sessionBeforeUpdate.data?.session as any).activeOrganizationId,
+		);
+		console.log(
+			"  IDs match?",
+			testOrg.data?.id ===
+				(sessionBeforeUpdate.data?.session as any).activeOrganizationId,
+		);
+
+		// Use the exact organizationId from session to ensure match
+		const activeOrgId = (sessionBeforeUpdate.data?.session as any)
+			.activeOrganizationId;
+		console.log("  Using organizationId from session:", activeOrgId);
+
+		// IMPORTANT: Add another owner first, otherwise we can't change the current user's role
+		// from "owner" to "admin" (would leave org without owner)
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: "second-owner@test.com",
+				password: "password",
+				name: "Second Owner",
+			},
+		});
+		await auth.api.addMember({
+			body: {
+				organizationId: activeOrgId,
+				userId: newUser.user.id,
+				role: "owner",
+			},
+		});
+
+		// Now we can safely change current user's role from "owner" to "admin"
+		const updatedMember = await client.organization.updateMemberRole(
+			{
+				organizationId: activeOrgId, // Use exact value from session
+				memberId: currentUserMember.id,
+				role: "admin",
+			},
+			{
+				headers: testHeaders,
+				onSuccess: cookieSetter(testHeaders),
+			},
+		);
+
+		console.log("DEBUG - After updateMemberRole:");
+		console.log("  updatedMember:", updatedMember);
+		console.log("  updatedMember.data:", updatedMember.data);
+		console.log("  updatedMember.error:", updatedMember.error);
+		console.log("  updatedMember.data?.role:", updatedMember.data?.role);
+		console.log("  Headers cookie:", testHeaders.get("cookie"));
+
+		// Check for errors
+		// if (updatedMember.error) {
+		// 	console.error("ERROR in updateMemberRole:", updatedMember.error);
+		// 	throw new Error(`updateMemberRole failed: ${updatedMember.error.message}`);
+		// }
+
+		// if (!updatedMember.data) {
+		// 	console.error("ERROR: updatedMember.data is null");
+		// 	throw new Error("updateMemberRole returned null data");
+		// }
+
+		// Verify session was updated with new role
+		const updatedSession = await client.getSession({
+			fetchOptions: {
+				headers: testHeaders,
+			},
+		});
+		expect((updatedSession.data?.session as any).activeOrganizationRole).toBe(
+			"admin",
+		);
+
+		// Call getActiveMemberRole again - should return updated role from session
+		const updatedActiveMemberRole =
+			await client.organization.getActiveMemberRole({
+				fetchOptions: {
+					headers: testHeaders,
+				},
+			});
+
+		// Should return updated role from session (not DB)
+		expect(updatedActiveMemberRole.data?.role).toBe("admin");
+	});
+
+	it("should query database when getting role for different user (not using session)", async () => {
+		await client.organization.setActive({
+			organizationId: org.data?.id as string,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		// Query role for a different user (selectedUserId) - should query DB, not session
+		const activeMember = await client.organization.getActiveMemberRole({
+			query: {
+				userId: selectedUserId, // Different user
+				organizationId: org.data?.id as string, // Active org
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		// Should return role from DB query (member), not session (owner)
+		expect(activeMember.data?.role).toBe("member");
+	});
+
+	it("should query database when getting role for different organization (not using session)", async () => {
+		await client.organization.setActive({
+			organizationId: org.data?.id as string,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		// Query role for current user but different organization - should query DB, not session
+		const activeMember = await client.organization.getActiveMemberRole({
+			query: {
+				organizationId: secondOrg.data?.id as string, // Different org (not active)
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		// Should return role from DB query (owner of secondOrg), not session (owner of first org)
+		expect(activeMember.data?.role).toBe("owner");
 	});
 });

@@ -276,17 +276,32 @@ export const magicLink = (options: MagicLinkopts) => {
 							description: "Verify magic link",
 							responses: {
 								200: {
-									description: "Success",
+									description:
+										"Success response: { token, user } OR Error response (mobile): { code }",
 									content: {
 										"application/json": {
 											schema: {
 												type: "object",
 												properties: {
-													session: {
-														$ref: "#/components/schemas/Session",
+													token: {
+														type: "string",
+														description: "Session token (present on success)",
 													},
 													user: {
 														$ref: "#/components/schemas/User",
+														description: "User object (present on success)",
+													},
+													code: {
+														type: "string",
+														description:
+															"Error code (present on error for mobile clients)",
+														enum: [
+															"INVALID_TOKEN",
+															"EXPIRED_TOKEN",
+															"failed_to_create_user",
+															"new_user_signup_disabled",
+															"failed_to_create_session",
+														],
 													},
 												},
 											},
@@ -298,6 +313,9 @@ export const magicLink = (options: MagicLinkopts) => {
 					},
 				},
 				async (ctx) => {
+					const isMobileClient =
+						ctx?.request?.headers?.get("x-better-auth-client") === "mobile";
+
 					const token = ctx.query.token;
 					// If the first argument provides the origin, it will ignore the second argument of `new URL`.
 					// new URL("http://localhost:3001/hello", "http://localhost:3000").toString()
@@ -331,13 +349,25 @@ export const magicLink = (options: MagicLinkopts) => {
 							storedToken,
 						);
 					if (!tokenValue) {
-						throw ctx.redirect(`${errorCallbackURL}?error=INVALID_TOKEN`);
+						if (isMobileClient) {
+							return ctx.json({
+								code: "INVALID_TOKEN",
+							});
+						} else {
+							throw ctx.redirect(`${errorCallbackURL}?error=INVALID_TOKEN`);
+						}
 					}
 					if (tokenValue.expiresAt < new Date()) {
 						await ctx.context.internalAdapter.deleteVerificationValue(
 							tokenValue.id,
 						);
-						throw ctx.redirect(`${errorCallbackURL}?error=EXPIRED_TOKEN`);
+						if (isMobileClient) {
+							return ctx.json({
+								code: "EXPIRED_TOKEN",
+							});
+						} else {
+							throw ctx.redirect(`${errorCallbackURL}?error=EXPIRED_TOKEN`);
+						}
 					}
 					await ctx.context.internalAdapter.deleteVerificationValue(
 						tokenValue.id,
@@ -361,14 +391,26 @@ export const magicLink = (options: MagicLinkopts) => {
 							isNewUser = true;
 							user = newUser;
 							if (!user) {
-								throw ctx.redirect(
-									`${errorCallbackURL}?error=failed_to_create_user`,
-								);
+								if (isMobileClient) {
+									return ctx.json({
+										code: "failed_to_create_user",
+									});
+								} else {
+									throw ctx.redirect(
+										`${errorCallbackURL}?error=failed_to_create_user`,
+									);
+								}
 							}
 						} else {
-							throw ctx.redirect(
-								`${errorCallbackURL}?error=new_user_signup_disabled`,
-							);
+							if (isMobileClient) {
+								return ctx.json({
+									code: "new_user_signup_disabled",
+								});
+							} else {
+								throw ctx.redirect(
+									`${errorCallbackURL}?error=new_user_signup_disabled`,
+								);
+							}
 						}
 					}
 
@@ -383,9 +425,15 @@ export const magicLink = (options: MagicLinkopts) => {
 					);
 
 					if (!session) {
-						throw ctx.redirect(
-							`${errorCallbackURL}?error=failed_to_create_session`,
-						);
+						if (isMobileClient) {
+							return ctx.json({
+								code: "failed_to_create_session",
+							});
+						} else {
+							throw ctx.redirect(
+								`${errorCallbackURL}?error=failed_to_create_session`,
+							);
+						}
 					}
 
 					await setSessionCookie(ctx, {

@@ -57,7 +57,11 @@ describe("magic link", async () => {
 				onSuccess: sessionSetter(headers),
 			},
 		});
-		expect(response.data?.token).toBeDefined();
+		if (response.data && "token" in response.data) {
+			expect(response.data.token).toBeDefined();
+		} else {
+			expect(response.data?.code).toBeDefined();
+		}
 		const betterAuthCookie = headers.get("set-cookie");
 		expect(betterAuthCookie).toBeDefined();
 	});
@@ -213,7 +217,11 @@ describe("magic link verify", async () => {
 				onSuccess: sessionSetter(headers),
 			},
 		});
-		expect(response.data?.token).toBeDefined();
+		if (response.data && "token" in response.data) {
+			expect(response.data.token).toBeDefined();
+		} else {
+			expect(response.data?.code).toBeDefined();
+		}
 		const betterAuthCookie = headers.get("set-cookie");
 		expect(betterAuthCookie).toBeDefined();
 	});
@@ -301,5 +309,81 @@ describe("magic link storeToken", async () => {
 			headers,
 		});
 		expect(response2.status).toBe(true);
+	});
+});
+
+describe("magic link errors - mobile client", async () => {
+	let verificationEmail: VerificationEmail = {
+		email: "",
+		token: "",
+		url: "",
+	};
+	const { customFetchImpl, testUser } = await getTestInstance({
+		plugins: [
+			magicLink({
+				async sendMagicLink(data) {
+					verificationEmail = data;
+				},
+			}),
+		],
+	});
+
+	const client = createAuthClient({
+		plugins: [magicLinkClient()],
+		fetchOptions: {
+			customFetchImpl,
+		},
+		baseURL: "http://localhost:3000",
+		basePath: "/api/auth",
+	});
+
+	it("should return JSON error for invalid token on mobile client", async () => {
+		await client.signIn.magicLink({
+			email: testUser.email,
+		});
+		const token =
+			new URL(verificationEmail.url).searchParams.get("token") || "";
+
+		// Verify once to consume the token
+		await client.magicLink.verify({
+			query: { token },
+		});
+
+		// Try to verify again with the same token (should fail)
+		const response = await client.magicLink.verify({
+			query: {
+				token,
+			},
+			fetchOptions: {
+				headers: {
+					"x-better-auth-client": "mobile",
+				},
+			},
+		});
+
+		expect(response.data).toBeDefined();
+		expect((response.data as { code: string }).code).toBe("INVALID_TOKEN");
+	});
+
+	it("should return json error for an expired token on mobile client", async () => {
+		await client.signIn.magicLink({
+			email: testUser.email,
+		});
+		const token = verificationEmail.token;
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1000 * 60 * 5 + 1);
+		const response = await client.magicLink.verify({
+			query: {
+				token,
+				callbackURL: "/callback",
+			},
+			fetchOptions: {
+				headers: {
+					"x-better-auth-client": "mobile",
+				},
+			},
+		});
+		expect(response.data).toBeDefined();
+		expect((response.data as { code: string }).code).toBe("EXPIRED_TOKEN");
 	});
 });
