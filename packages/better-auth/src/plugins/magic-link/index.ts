@@ -373,7 +373,7 @@ export const magicLink = (options: MagicLinkopts) => {
 					}
 
 					if (!user.emailVerified) {
-						await ctx.context.internalAdapter.updateUser(user.id, {
+						user = await ctx.context.internalAdapter.updateUser(user.id, {
 							emailVerified: true,
 						});
 					}
