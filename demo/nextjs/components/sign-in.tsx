@@ -259,9 +259,7 @@ export default function SignIn() {
 								></path>
 							</svg>
 							<span>Sign in with HubSpot</span>
-							{client.isLastUsedLoginMethod("hubspot") && (
-								<LastUsedIndicator />
-							)}
+							{client.isLastUsedLoginMethod("hubspot") && <LastUsedIndicator />}
 						</Button>
 						<Button
 							variant="outline"
