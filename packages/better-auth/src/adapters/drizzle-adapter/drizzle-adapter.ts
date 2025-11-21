@@ -386,10 +386,13 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 										options.advanced?.database?.defaultFindManyLimit ??
 										100;
 									const isUnique = joinAttr.relation === "one-to-one";
-									includes[`${model}${isUnique ? "" : "s"}`] = isUnique
+									const pluralSuffix = isUnique || config.usePlural ? "" : "s";
+									includes[`${model}${pluralSuffix}`] = isUnique
 										? true
 										: { limit };
-									if (!isUnique) pluralJoinResults.push(`${model}s`);
+									if (!isUnique) {
+										pluralJoinResults.push(`${model}${pluralSuffix}`);
+									}
 								}
 							}
 							let query = db.query[model].findFirst({
@@ -397,11 +400,16 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								with: includes,
 							});
 							const res = await query;
+
 							if (res) {
 								for (const pluralJoinResult of pluralJoinResults) {
-									const singularJoinResultName = pluralJoinResult.slice(0, -1);
-									res[singularJoinResultName] = res[pluralJoinResult];
-									delete res[pluralJoinResult];
+									let singularKey = !config.usePlural
+										? pluralJoinResult.slice(0, -1)
+										: pluralJoinResult;
+									res[singularKey] = res[pluralJoinResult];
+									if (pluralJoinResult !== singularKey) {
+										delete res[pluralJoinResult];
+									}
 								}
 							}
 							return res;
@@ -414,6 +422,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						.where(...clause);
 
 					const res = await query;
+
 					if (!res.length) return null;
 					return res[0];
 				},
@@ -443,10 +452,12 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 										joinAttr.limit ??
 										options.advanced?.database?.defaultFindManyLimit ??
 										100;
-									includes[`${model}${isUnique ? "" : "s"}`] = isUnique
+									let pluralSuffix = isUnique || config.usePlural ? "" : "s";
+									includes[`${model}${pluralSuffix}`] = isUnique
 										? true
 										: { limit };
-									if (!isUnique) pluralJoinResults.push(`${model}s`);
+									if (!isUnique)
+										pluralJoinResults.push(`${model}${pluralSuffix}`);
 								}
 							}
 							let orderBy: SQL<unknown>[] | undefined = undefined;
@@ -468,11 +479,11 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							if (res) {
 								for (const item of res) {
 									for (const pluralJoinResult of pluralJoinResults) {
-										const singularJoinResultName = pluralJoinResult.slice(
-											0,
-											-1,
-										);
-										item[singularJoinResultName] = item[pluralJoinResult];
+										const singularKey = !config.usePlural
+											? pluralJoinResult.slice(0, -1)
+											: pluralJoinResult;
+										if (singularKey === pluralJoinResult) continue;
+										item[singularKey] = item[pluralJoinResult];
 										delete item[pluralJoinResult];
 									}
 								}
@@ -483,11 +494,16 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 
 					let builder = db.select().from(schemaModel);
 
-					const effectiveLimit = limit ?? 100;
-					const effectiveOffset = offset ?? 0;
+					const effectiveLimit = limit;
+					const effectiveOffset = offset;
 
-					builder = builder.limit(effectiveLimit);
-					builder = builder.offset(effectiveOffset);
+					if (typeof effectiveLimit !== "undefined") {
+						builder = builder.limit(effectiveLimit);
+					}
+
+					if (typeof effectiveOffset !== "undefined") {
+						builder = builder.offset(effectiveOffset);
+					}
 
 					if (sortBy?.field) {
 						builder = builder.orderBy(
