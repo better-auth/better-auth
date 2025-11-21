@@ -1,6 +1,6 @@
 import { toNodeHandler as toNode } from "better-call/node";
-import type { Auth } from "../auth";
 import type { IncomingHttpHeaders } from "http";
+import type { Auth } from "../types";
 
 export const toNodeHandler = (
 	auth:

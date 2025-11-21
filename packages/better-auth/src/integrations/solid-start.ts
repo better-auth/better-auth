@@ -13,5 +13,8 @@ export function toSolidStartHandler(
 	return {
 		GET: handler,
 		POST: handler,
+		PATCH: handler,
+		PUT: handler,
+		DELETE: handler,
 	};
 }

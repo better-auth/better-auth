@@ -1,4 +1,4 @@
-import type { AuthContext } from "../init";
+import type { AuthContext } from "@better-auth/core";
 
 export const shimContext = <T extends Record<string, any>>(
 	originalObject: T,
@@ -49,7 +49,6 @@ export const shimEndpoint = (ctx: AuthContext, value: any) => {
 				}
 			}
 		}
-		//@ts-ignore
 		const endpointRes = value({
 			...context,
 			context: {

@@ -1,13 +1,17 @@
+import type { BetterAuthClientPlugin } from "@better-auth/core";
 import type { BetterFetch, BetterFetchOption } from "@better-fetch/fetch";
 import type { Atom, PreinitializedWritableAtom } from "nanostores";
+import { isAtom } from "../utils/is-atom";
 import type { ProxyRequest } from "./path-to-object";
-import type { BetterAuthClientPlugin } from "./types";
 
 function getMethod(
 	path: string,
 	knownPathMethods: Record<string, "POST" | "GET">,
 	args:
-		| { fetchOptions?: BetterFetchOption; query?: Record<string, any> }
+		| {
+				fetchOptions?: BetterFetchOption | undefined;
+				query?: Record<string, any> | undefined;
+		  }
 		| undefined,
 ) {
 	const method = knownPathMethods[path];
@@ -38,7 +42,13 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 ): T {
 	function createProxy(path: string[] = []): any {
 		return new Proxy(function () {}, {
-			get(target, prop: string) {
+			get(_, prop) {
+				if (typeof prop !== "string") {
+					return undefined;
+				}
+				if (prop === "then" || prop === "catch" || prop === "finally") {
+					return undefined;
+				}
 				const fullPath = [...path, prop];
 				let current: any = routes;
 				for (const segment of fullPath) {
@@ -50,6 +60,9 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 					}
 				}
 				if (typeof current === "function") {
+					return current;
+				}
+				if (isAtom(current)) {
 					return current;
 				}
 				return createProxy(fullPath);
@@ -83,21 +96,24 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 					method,
 					async onSuccess(context) {
 						await options?.onSuccess?.(context);
+						if (!atomListeners) return;
 						/**
 						 * We trigger listeners
 						 */
-						const matches = atomListeners?.find((s) => s.matcher(routePath));
-						if (!matches) return;
-						const signal = atoms[matches.signal as any];
-						if (!signal) return;
-						/**
-						 * To avoid race conditions we set the signal in a setTimeout
-						 */
-						const val = signal.get();
-						setTimeout(() => {
-							//@ts-expect-error
-							signal.set(!val);
-						}, 10);
+						const matches = atomListeners.filter((s) => s.matcher(routePath));
+						if (!matches.length) return;
+						for (const match of matches) {
+							const signal = atoms[match.signal as any];
+							if (!signal) return;
+							/**
+							 * To avoid race conditions we set the signal in a setTimeout
+							 */
+							const val = signal.get();
+							setTimeout(() => {
+								//@ts-expect-error
+								signal.set(!val);
+							}, 10);
+						}
 					},
 				});
 			},

@@ -12,11 +12,11 @@ model User {
   id                   String                @id
   name                 String                @db.Text
   email                String
-  emailVerified        Boolean
+  emailVerified        Boolean               @default(false)
   image                String?               @db.Text
-  createdAt            DateTime
-  updatedAt            DateTime
-  twoFactorEnabled     Boolean?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  twoFactorEnabled     Boolean?              @default(false)
   username             String?
   displayUsername      String?               @db.Text
   sessions             Session[]
@@ -34,8 +34,8 @@ model Session {
   id                   String   @id
   expiresAt            DateTime
   token                String
-  createdAt            DateTime
-  updatedAt            DateTime
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
   ipAddress            String?  @db.Text
   userAgent            String?  @db.Text
   userId               String
@@ -43,6 +43,7 @@ model Session {
   activeOrganizationId String?  @db.Text
 
   @@unique([token])
+  @@index([userId(length: 191)])
   @@map("session")
 }
 
@@ -59,20 +60,22 @@ model Account {
   refreshTokenExpiresAt DateTime?
   scope                 String?   @db.Text
   password              String?   @db.Text
-  createdAt             DateTime
-  updatedAt             DateTime
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
+  @@index([userId(length: 191)])
   @@map("account")
 }
 
 model Verification {
-  id         String    @id
-  identifier String    @db.Text
-  value      String    @db.Text
+  id         String   @id
+  identifier String   @db.Text
+  value      String   @db.Text
   expiresAt  DateTime
-  createdAt  DateTime?
-  updatedAt  DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
+  @@index([identifier(length: 191)])
   @@map("verification")
 }
 
@@ -83,13 +86,15 @@ model TwoFactor {
   userId      String
   user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([secret(length: 191)])
+  @@index([userId(length: 191)])
   @@map("twoFactor")
 }
 
 model Workspace {
   id                   String                @id
   name                 String                @db.Text
-  slug                 String?
+  slug                 String
   logo                 String?               @db.Text
   createdAt            DateTime
   metadata             String?               @db.Text
@@ -109,6 +114,8 @@ model Member {
   role           String    @db.Text
   createdAt      DateTime
 
+  @@index([organizationId(length: 191)])
+  @@index([userId(length: 191)])
   @@map("member")
 }
 
@@ -120,8 +127,11 @@ model WorkspaceInvitation {
   role           String?   @db.Text
   status         String    @db.Text
   expiresAt      DateTime
+  createdAt      DateTime  @default(now())
   inviterId      String
   user           User      @relation(fields: [inviterId], references: [id], onDelete: Cascade)
 
+  @@index([organizationId(length: 191)])
+  @@index([email(length: 191)])
   @@map("workspaceInvitation")
 }

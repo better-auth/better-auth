@@ -1,13 +1,13 @@
-import * as z from "zod/v4";
-import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
-import { ERROR_CODES } from "..";
+import type { AuthContext } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import * as z from "zod";
+import { APIError, getSessionFromCtx } from "../../../api";
+import { getDate } from "../../../utils/date";
+import { safeJSONParse } from "../../../utils/json";
+import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
-import { getDate } from "../../../utils/date";
-import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
-import { safeJSONParse } from "../../../utils/json";
-import { API_KEY_TABLE_NAME } from "..";
 export function updateApiKey({
 	opts,
 	schema,
@@ -17,8 +17,8 @@ export function updateApiKey({
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
-		byPassLastCheckTime?: boolean,
-	): Promise<number> | undefined;
+		byPassLastCheckTime?: boolean | undefined,
+	): void;
 }) {
 	return createAuthEndpoint(
 		"/api-key/update",
@@ -143,7 +143,7 @@ export function updateApiKey({
 												type: "number",
 												nullable: true,
 												description:
-													"The interval in which the `remaining` count is refilled by day. Example: 1 // every day",
+													"The interval in milliseconds between refills of the `remaining` count. Example: 3600000 // refill every hour (3600000ms = 1h)",
 											},
 											refillAmount: {
 												type: "number",
@@ -257,10 +257,19 @@ export function updateApiKey({
 			} = ctx.body;
 
 			const session = await getSessionFromCtx(ctx);
-			const authRequired = (ctx.request || ctx.headers) && !ctx.body.userId;
+			const authRequired = ctx.request || ctx.headers;
 			const user =
-				session?.user ?? (authRequired ? null : { id: ctx.body.userId });
+				authRequired && !session
+					? null
+					: session?.user || { id: ctx.body.userId };
+
 			if (!user?.id) {
+				throw new APIError("UNAUTHORIZED", {
+					message: ERROR_CODES.UNAUTHORIZED_SESSION,
+				});
+			}
+
+			if (session && ctx.body.userId && session?.user.id !== ctx.body.userId) {
 				throw new APIError("UNAUTHORIZED", {
 					message: ERROR_CODES.UNAUTHORIZED_SESSION,
 				});
@@ -351,7 +360,7 @@ export function updateApiKey({
 						message: ERROR_CODES.INVALID_METADATA_TYPE,
 					});
 				}
-				//@ts-ignore - we need this to be a string to save into DB.
+				//@ts-expect-error - we need this to be a string to save into DB.
 				newValues.metadata =
 					schema.apikey.fields.metadata.transform.input(metadata);
 			}
@@ -383,7 +392,7 @@ export function updateApiKey({
 			}
 
 			if (permissions !== undefined) {
-				//@ts-ignore - we need this to be a string to save into DB.
+				//@ts-expect-error - we need this to be a string to save into DB.
 				newValues.permissions = JSON.stringify(permissions);
 			}
 
@@ -404,8 +413,6 @@ export function updateApiKey({
 						},
 					],
 					update: {
-						lastRequest: new Date(),
-						remaining: apiKey.remaining === null ? null : apiKey.remaining - 1,
 						...newValues,
 					},
 				});
@@ -430,10 +437,7 @@ export function updateApiKey({
 				permissions: returningApiKey.permissions
 					? safeJSONParse<{
 							[key: string]: string[];
-						}>(
-							//@ts-ignore - from DB, this value is always a string
-							returningApiKey.permissions,
-						)
+						}>(returningApiKey.permissions)
 					: null,
 			});
 		},

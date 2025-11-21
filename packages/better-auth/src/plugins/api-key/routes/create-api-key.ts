@@ -1,13 +1,14 @@
-import * as z from "zod/v4";
-import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
-import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
+import type { AuthContext } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import * as z from "zod";
+import { APIError, getSessionFromCtx } from "../../../api";
 import { getDate } from "../../../utils/date";
-import { apiKeySchema } from "../schema";
-import type { ApiKey } from "../types";
-import type { AuthContext } from "../../../types";
-import type { PredefinedApiKeyOptions } from ".";
 import { safeJSONParse } from "../../../utils/json";
+import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
+import type { apiKeySchema } from "../schema";
+import type { ApiKey } from "../types";
+import type { PredefinedApiKeyOptions } from ".";
 
 export function createApiKey({
 	keyGenerator,
@@ -23,8 +24,8 @@ export function createApiKey({
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
-		byPassLastCheckTime?: boolean,
-	): Promise<number> | undefined;
+		byPassLastCheckTime?: boolean | undefined,
+	): void;
 }) {
 	return createAuthEndpoint(
 		"/api-key/create",
@@ -268,10 +269,19 @@ export function createApiKey({
 			} = ctx.body;
 
 			const session = await getSessionFromCtx(ctx);
-			const authRequired = (ctx.request || ctx.headers) && !ctx.body.userId;
+			const authRequired = ctx.request || ctx.headers;
 			const user =
-				session?.user ?? (authRequired ? null : { id: ctx.body.userId });
+				authRequired && !session
+					? null
+					: session?.user || { id: ctx.body.userId };
+
 			if (!user?.id) {
+				throw new APIError("UNAUTHORIZED", {
+					message: ERROR_CODES.UNAUTHORIZED_SESSION,
+				});
+			}
+
+			if (session && ctx.body.userId && session?.user.id !== ctx.body.userId) {
 				throw new APIError("UNAUTHORIZED", {
 					message: ERROR_CODES.UNAUTHORIZED_SESSION,
 				});
@@ -429,7 +439,7 @@ export function createApiKey({
 						? (opts.rateLimit.enabled ?? true)
 						: rateLimitEnabled,
 				requestCount: 0,
-				//@ts-ignore - we intentionally save the permissions as string on DB.
+				//@ts-expect-error - we intentionally save the permissions as string on DB.
 				permissions: permissionsToApply,
 			};
 
@@ -451,10 +461,7 @@ export function createApiKey({
 				key: key,
 				metadata: metadata ?? null,
 				permissions: apiKey.permissions
-					? safeJSONParse(
-							//@ts-ignore - from DB, this value is always a string
-							apiKey.permissions,
-						)
+					? safeJSONParse(apiKey.permissions)
 					: null,
 			});
 		},

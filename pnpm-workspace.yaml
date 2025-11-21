@@ -1,17 +1,25 @@
 packages:
   - packages/**
   - docs
-  - integration-tests/**
   - demo/*
+  - e2e/**
+  - test
+
+catalog:
+  '@better-fetch/fetch': 1.1.18
+  better-call: 1.0.28
+  tsdown: ^0.16.0
+  typescript: ^5.9.3
+  vitest: 4.0.9
+
 catalogs:
   react18:
-    '@types/react': ^19.1.0
-    '@types/react-dom': ^19.1.0
-    react: 19.1.0
-    react-dom: 19.1.0
-catalog:
-  "better-call": "^1.0.13"
-  "@better-fetch/fetch": "^1.1.18"
-  "unbuild": "^3.5.0"
-  "typescript": "^5.9.2"
-  "vitest": "^3.2.4"
+    '@types/react': ^19.1.12
+    '@types/react-dom': ^19.1.9
+    react: 19.1.1
+    react-dom: 19.1.1
+
+neverBuiltDependencies: []
+
+patchedDependencies:
+  msw: patches/msw.patch

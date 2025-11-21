@@ -1,4 +1,4 @@
-import type { AuthPluginSchema } from "..";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import parseJSON from "../../client/parser";
 
 export const apiKeySchema = ({
@@ -43,15 +43,17 @@ export const apiKeySchema = ({
 					type: "string",
 					required: true,
 					input: false,
+					index: true,
 				},
 				/**
 				 * The user id of the user who created the key.
 				 */
 				userId: {
 					type: "string",
-					references: { model: "user", field: "id" },
+					references: { model: "user", field: "id", onDelete: "cascade" },
 					required: true,
 					input: false,
+					index: true,
 				},
 				/**
 				 * The interval to refill the key in milliseconds.
@@ -193,4 +195,4 @@ export const apiKeySchema = ({
 				},
 			},
 		},
-	}) satisfies AuthPluginSchema;
+	}) satisfies BetterAuthPluginDBSchema;

@@ -1,7 +1,10 @@
+import type {
+	BetterAuthClientPlugin,
+	BetterAuthPlugin,
+} from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { atom, computed } from "nanostores";
-import type { BetterAuthClientPlugin } from "./types";
-import type { BetterAuthPlugin } from "../types/plugins";
-import { createAuthEndpoint } from "../api/call";
+import * as z from "zod";
 import { useAuthQuery } from "./query";
 
 const serverPlugin = {
@@ -11,6 +14,11 @@ const serverPlugin = {
 			"/test",
 			{
 				method: "GET",
+				error: z.object({
+					code: z.number(),
+					message: z.string(),
+					test: z.boolean(),
+				}),
 			},
 			async (c) => {
 				return {

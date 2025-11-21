@@ -1,14 +1,14 @@
-import type { AuthContext } from "../../../types";
+import type { AuthContext } from "@better-auth/core";
+import { API_KEY_TABLE_NAME } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey, ApiKeyOptions } from "../types";
 import { createApiKey } from "./create-api-key";
+import { deleteAllExpiredApiKeysEndpoint } from "./delete-all-expired-api-keys";
 import { deleteApiKey } from "./delete-api-key";
 import { getApiKey } from "./get-api-key";
+import { listApiKeys } from "./list-api-keys";
 import { updateApiKey } from "./update-api-key";
 import { verifyApiKey } from "./verify-api-key";
-import { listApiKeys } from "./list-api-keys";
-import { deleteAllExpiredApiKeysEndpoint } from "./delete-all-expired-api-keys";
-import { API_KEY_TABLE_NAME } from "..";
 
 export type PredefinedApiKeyOptions = ApiKeyOptions &
 	Required<
@@ -25,7 +25,7 @@ export type PredefinedApiKeyOptions = ApiKeyOptions &
 			| "minimumNameLength"
 			| "requireName"
 			| "enableMetadata"
-			| "disableSessionForAPIKeys"
+			| "enableSessionForAPIKeys"
 			| "startingCharactersConfig"
 		>
 	> & {
@@ -37,10 +37,10 @@ export type PredefinedApiKeyOptions = ApiKeyOptions &
 
 let lastChecked: Date | null = null;
 
-export function deleteAllExpiredApiKeys(
+export async function deleteAllExpiredApiKeys(
 	ctx: AuthContext,
 	byPassLastCheckTime = false,
-) {
+): Promise<void> {
 	if (lastChecked && !byPassLastCheckTime) {
 		const now = new Date();
 		const diff = now.getTime() - lastChecked.getTime();
@@ -49,8 +49,8 @@ export function deleteAllExpiredApiKeys(
 		}
 	}
 	lastChecked = new Date();
-	try {
-		return ctx.adapter.deleteMany({
+	await ctx.adapter
+		.deleteMany({
 			model: API_KEY_TABLE_NAME,
 			where: [
 				{
@@ -64,10 +64,10 @@ export function deleteAllExpiredApiKeys(
 					value: null,
 				},
 			],
+		})
+		.catch((error) => {
+			ctx.logger.error(`Failed to delete expired API keys:`, error);
 		});
-	} catch (error) {
-		ctx.logger.error(`Failed to delete expired API keys:`, error);
-	}
 }
 
 export function createApiKeyRoutes({

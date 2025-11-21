@@ -1,10 +1,11 @@
-import { env } from "../utils/env";
-import { BetterAuthError } from "../error";
+import { env } from "@better-auth/core/env";
+import { BetterAuthError } from "@better-auth/core/error";
 
 function checkHasPath(url: string): boolean {
 	try {
 		const parsedUrl = new URL(url);
-		return parsedUrl.pathname !== "/";
+		const pathname = parsedUrl.pathname.replace(/\/+$/, "") || "/";
+		return pathname !== "/";
 	} catch (error) {
 		throw new BetterAuthError(
 			`Invalid base URL: ${url}. Please provide a valid base URL.`,
@@ -12,30 +13,65 @@ function checkHasPath(url: string): boolean {
 	}
 }
 
+function assertHasProtocol(url: string): void {
+	try {
+		const parsedUrl = new URL(url);
+		if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+			throw new BetterAuthError(
+				`Invalid base URL: ${url}. URL must include 'http://' or 'https://'`,
+			);
+		}
+	} catch (error) {
+		if (error instanceof BetterAuthError) {
+			throw error;
+		}
+		throw new BetterAuthError(
+			`Invalid base URL: ${url}. Please provide a valid base URL.`,
+			String(error),
+		);
+	}
+}
+
 function withPath(url: string, path = "/api/auth") {
+	assertHasProtocol(url);
+
 	const hasPath = checkHasPath(url);
 	if (hasPath) {
 		return url;
 	}
+
+	const trimmedUrl = url.replace(/\/+$/, "");
+
+	if (!path || path === "/") {
+		return trimmedUrl;
+	}
+
 	path = path.startsWith("/") ? path : `/${path}`;
-	return `${url.replace(/\/+$/, "")}${path}`;
+	return `${trimmedUrl}${path}`;
 }
 
-export function getBaseURL(url?: string, path?: string, request?: Request) {
+export function getBaseURL(
+	url?: string,
+	path?: string,
+	request?: Request,
+	loadEnv?: boolean,
+) {
 	if (url) {
 		return withPath(url, path);
 	}
 
-	const fromEnv =
-		env.BETTER_AUTH_URL ||
-		env.NEXT_PUBLIC_BETTER_AUTH_URL ||
-		env.PUBLIC_BETTER_AUTH_URL ||
-		env.NUXT_PUBLIC_BETTER_AUTH_URL ||
-		env.NUXT_PUBLIC_AUTH_URL ||
-		(env.BASE_URL !== "/" ? env.BASE_URL : undefined);
+	if (loadEnv !== false) {
+		const fromEnv =
+			env.BETTER_AUTH_URL ||
+			env.NEXT_PUBLIC_BETTER_AUTH_URL ||
+			env.PUBLIC_BETTER_AUTH_URL ||
+			env.NUXT_PUBLIC_BETTER_AUTH_URL ||
+			env.NUXT_PUBLIC_AUTH_URL ||
+			(env.BASE_URL !== "/" ? env.BASE_URL : undefined);
 
-	if (fromEnv) {
-		return withPath(fromEnv, path);
+		if (fromEnv) {
+			return withPath(fromEnv, path);
+		}
 	}
 
 	const fromRequest = request?.headers.get("x-forwarded-host");
@@ -63,7 +99,9 @@ export function getBaseURL(url?: string, path?: string, request?: Request) {
 export function getOrigin(url: string) {
 	try {
 		const parsedUrl = new URL(url);
-		return parsedUrl.origin;
+		// For custom URL schemes (like exp://), the origin property returns the string "null"
+		// instead of null. We need to handle this case and return null so the fallback logic works.
+		return parsedUrl.origin === "null" ? null : parsedUrl.origin;
 	} catch (error) {
 		return null;
 	}
@@ -83,6 +121,6 @@ export function getHost(url: string) {
 		const parsedUrl = new URL(url);
 		return parsedUrl.host;
 	} catch (error) {
-		return url;
+		return null;
 	}
 }

@@ -1,121 +1,24 @@
-import type { ZodSchema } from "zod/v4";
-import type { BetterAuthOptions } from "../types";
-import type { LiteralString } from "../types/helper";
-
-export type FieldType =
-	| "string"
-	| "number"
-	| "boolean"
-	| "date"
-	| `${"string" | "number"}[]`
-	| Array<LiteralString>;
-
-type Primitive =
-	| string
-	| number
-	| boolean
-	| Date
-	| null
-	| undefined
-	| string[]
-	| number[];
-
-export type FieldAttributeConfig<T extends FieldType = FieldType> = {
-	/**
-	 * If the field should be required on a new record.
-	 * @default true
-	 */
-	required?: boolean;
-	/**
-	 * If the value should be returned on a response body.
-	 * @default true
-	 */
-	returned?: boolean;
-	/**
-	 * If a value should be provided when creating a new record.
-	 * @default true
-	 */
-	input?: boolean;
-	/**
-	 * Default value for the field
-	 *
-	 * Note: This will not create a default value on the database level. It will only
-	 * be used when creating a new record.
-	 */
-	defaultValue?: Primitive | (() => Primitive);
-	/**
-	 * transform the value before storing it.
-	 */
-	transform?: {
-		input?: (value: Primitive) => Primitive | Promise<Primitive>;
-		output?: (value: Primitive) => Primitive | Promise<Primitive>;
-	};
-	/**
-	 * Reference to another model.
-	 */
-	references?: {
-		/**
-		 * The model to reference.
-		 */
-		model: string;
-		/**
-		 * The field on the referenced model.
-		 */
-		field: string;
-		/**
-		 * The action to perform when the reference is deleted.
-		 * @default "cascade"
-		 */
-		onDelete?:
-			| "no action"
-			| "restrict"
-			| "cascade"
-			| "set null"
-			| "set default";
-	};
-	unique?: boolean;
-	/**
-	 * If the field should be a bigint on the database instead of integer.
-	 */
-	bigint?: boolean;
-	/**
-	 * A zod schema to validate the value.
-	 */
-	validator?: {
-		input?: ZodSchema;
-		output?: ZodSchema;
-	};
-	/**
-	 * The name of the field on the database.
-	 */
-	fieldName?: string;
-	/**
-	 * If the field should be sortable.
-	 *
-	 * applicable only for `text` type.
-	 * It's useful to mark fields varchar instead of text.
-	 */
-	sortable?: boolean;
-};
-
-export type FieldAttribute<T extends FieldType = FieldType> = {
-	type: T;
-} & FieldAttributeConfig<T>;
+import type { BetterAuthOptions } from "@better-auth/core";
+import type {
+	DBFieldAttribute,
+	DBFieldAttributeConfig,
+	DBFieldType,
+} from "@better-auth/core/db";
 
 export const createFieldAttribute = <
-	T extends FieldType,
-	C extends Omit<FieldAttributeConfig<T>, "type">,
+	T extends DBFieldType,
+	C extends DBFieldAttributeConfig,
 >(
 	type: T,
-	config?: C,
+	config?: C | undefined,
 ) => {
 	return {
 		type,
 		...config,
-	} satisfies FieldAttribute<T>;
+	} satisfies DBFieldAttribute<T>;
 };
 
-export type InferValueType<T extends FieldType> = T extends "string"
+export type InferValueType<T extends DBFieldType> = T extends "string"
 	? string
 	: T extends "number"
 		? number
@@ -123,17 +26,19 @@ export type InferValueType<T extends FieldType> = T extends "string"
 			? boolean
 			: T extends "date"
 				? Date
-				: T extends `${infer T}[]`
-					? T extends "string"
-						? string[]
-						: number[]
-					: T extends Array<any>
-						? T[number]
-						: never;
+				: T extends "json"
+					? Record<string, any>
+					: T extends `${infer U}[]`
+						? U extends "string"
+							? string[]
+							: number[]
+						: T extends Array<any>
+							? T[number]
+							: never;
 
 export type InferFieldsOutput<Field> = Field extends Record<
 	infer Key,
-	FieldAttribute
+	DBFieldAttribute
 >
 	? {
 			[key in Key as Field[key]["required"] extends false
@@ -150,7 +55,7 @@ export type InferFieldsOutput<Field> = Field extends Record<
 
 export type InferFieldsInput<Field> = Field extends Record<
 	infer Key,
-	FieldAttribute
+	DBFieldAttribute
 >
 	? {
 			[key in Key as Field[key]["required"] extends false
@@ -173,7 +78,7 @@ export type InferFieldsInput<Field> = Field extends Record<
  */
 export type InferFieldsInputClient<Field> = Field extends Record<
 	infer Key,
-	FieldAttribute
+	DBFieldAttribute
 >
 	? {
 			[key in Key as Field[key]["required"] extends false
@@ -194,18 +99,18 @@ export type InferFieldsInputClient<Field> = Field extends Record<
 		}
 	: {};
 
-type InferFieldOutput<T extends FieldAttribute> = T["returned"] extends false
+type InferFieldOutput<T extends DBFieldAttribute> = T["returned"] extends false
 	? never
 	: T["required"] extends false
 		? InferValueType<T["type"]> | undefined | null
 		: InferValueType<T["type"]>;
 
 /**
- * Converts a Record<string, FieldAttribute> to an object type
- * with keys and value types inferred from FieldAttribute["type"].
+ * Converts a Record<string, DBFieldAttribute> to an object type
+ * with keys and value types inferred from DBFieldAttribute["type"].
  */
 export type FieldAttributeToObject<
-	Fields extends Record<string, FieldAttribute>,
+	Fields extends Record<string, DBFieldAttribute>,
 > = AddOptionalFields<
 	{
 		[K in keyof Fields]: InferValueType<Fields[K]["type"]>;
@@ -215,7 +120,7 @@ export type FieldAttributeToObject<
 
 type AddOptionalFields<
 	T extends Record<string, any>,
-	Fields extends Record<keyof T, FieldAttribute>,
+	Fields extends Record<keyof T, DBFieldAttribute>,
 > = {
 	// Required fields: required === true
 	[K in keyof T as Fields[K] extends { required: true } ? K : never]: T[K];
@@ -234,16 +139,18 @@ type AddOptionalFields<
 export type InferAdditionalFieldsFromPluginOptions<
 	SchemaName extends string,
 	Options extends {
-		schema?: {
-			[key in SchemaName]?: {
-				additionalFields?: Record<string, FieldAttribute>;
-			};
-		};
+		schema?:
+			| {
+					[key in SchemaName]?: {
+						additionalFields?: Record<string, DBFieldAttribute>;
+					};
+			  }
+			| undefined;
 	},
 	isClientSide extends boolean = true,
 > = Options["schema"] extends {
 	[key in SchemaName]?: {
-		additionalFields: infer Field extends Record<string, FieldAttribute>;
+		additionalFields: infer Field extends Record<string, DBFieldAttribute>;
 	};
 }
 	? isClientSide extends true
@@ -251,14 +158,14 @@ export type InferAdditionalFieldsFromPluginOptions<
 		: FieldAttributeToObject<Field>
 	: {};
 
-type RemoveFieldsWithInputFalse<T extends Record<string, FieldAttribute>> = {
+type RemoveFieldsWithInputFalse<T extends Record<string, DBFieldAttribute>> = {
 	[K in keyof T as T[K]["input"] extends false ? never : K]: T[K];
 };
 
-type InferFieldInput<T extends FieldAttribute> = InferValueType<T["type"]>;
+type InferFieldInput<T extends DBFieldAttribute> = InferValueType<T["type"]>;
 
 export type PluginFieldAttribute = Omit<
-	FieldAttribute,
+	DBFieldAttribute,
 	"transform" | "defaultValue" | "hashValue"
 >;
 
@@ -266,19 +173,21 @@ export type InferFieldsFromPlugins<
 	Options extends BetterAuthOptions,
 	Key extends string,
 	Format extends "output" | "input" = "output",
-> = Options["plugins"] extends Array<infer T>
-	? T extends {
-			schema: {
-				[key in Key]: {
-					fields: infer Field;
+> = Options["plugins"] extends []
+	? {}
+	: Options["plugins"] extends Array<infer T>
+		? T extends {
+				schema: {
+					[key in Key]: {
+						fields: infer Field;
+					};
 				};
-			};
-		}
-		? Format extends "output"
-			? InferFieldsOutput<Field>
-			: InferFieldsInput<Field>
-		: {}
-	: {};
+			}
+			? Format extends "output"
+				? InferFieldsOutput<Field>
+				: InferFieldsInput<Field>
+			: {}
+		: {};
 
 export type InferFieldsFromOptions<
 	Options extends BetterAuthOptions,

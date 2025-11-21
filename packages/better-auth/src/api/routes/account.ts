@@ -1,19 +1,16 @@
-import * as z from "zod/v4";
-import { createAuthEndpoint } from "../call";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import type { OAuth2Tokens } from "@better-auth/core/oauth2";
+import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 import { APIError } from "better-call";
-import {
-	generateState,
-	decryptOAuthToken,
-	setTokenUtil,
-	type OAuth2Tokens,
-} from "../../oauth2";
+import * as z from "zod";
+import { generateState } from "../../oauth2/state";
+import { decryptOAuthToken, setTokenUtil } from "../../oauth2/utils";
 import {
 	freshSessionMiddleware,
 	getSessionFromCtx,
 	sessionMiddleware,
 } from "./session";
-import { BASE_ERROR_CODES } from "../../error/codes";
-import { SocialProviderListEnum } from "../../social-providers";
 
 export const listUserAccounts = createAuthEndpoint(
 	"/list-accounts",
@@ -22,6 +19,7 @@ export const listUserAccounts = createAuthEndpoint(
 		use: [sessionMiddleware],
 		metadata: {
 			openapi: {
+				operationId: "listUserAccounts",
 				description: "List all accounts linked to the user",
 				responses: {
 					"200": {
@@ -36,7 +34,7 @@ export const listUserAccounts = createAuthEndpoint(
 											id: {
 												type: "string",
 											},
-											provider: {
+											providerId: {
 												type: "string",
 											},
 											createdAt: {
@@ -47,25 +45,29 @@ export const listUserAccounts = createAuthEndpoint(
 												type: "string",
 												format: "date-time",
 											},
-										},
-										accountId: {
-											type: "string",
-										},
-										scopes: {
-											type: "array",
-											items: {
+											accountId: {
 												type: "string",
 											},
+											userId: {
+												type: "string",
+											},
+											scopes: {
+												type: "array",
+												items: {
+													type: "string",
+												},
+											},
 										},
+										required: [
+											"id",
+											"providerId",
+											"createdAt",
+											"updatedAt",
+											"accountId",
+											"userId",
+											"scopes",
+										],
 									},
-									required: [
-										"id",
-										"provider",
-										"createdAt",
-										"updatedAt",
-										"accountId",
-										"scopes",
-									],
 								},
 							},
 						},
@@ -82,10 +84,11 @@ export const listUserAccounts = createAuthEndpoint(
 		return c.json(
 			accounts.map((a) => ({
 				id: a.id,
-				provider: a.providerId,
+				providerId: a.providerId,
 				createdAt: a.createdAt,
 				updatedAt: a.updatedAt,
 				accountId: a.accountId,
+				userId: a.userId,
 				scopes: a.scope?.split(",") || [],
 			})),
 		);
@@ -148,11 +151,29 @@ export const linkSocialAccount = createAuthEndpoint(
 						"The URL to redirect to if there is an error during the link process",
 				})
 				.optional(),
+			/**
+			 * Disable automatic redirection to the provider
+			 *
+			 * This is useful if you want to handle the redirection
+			 * yourself like in a popup or a different tab.
+			 */
+			disableRedirect: z
+				.boolean()
+				.meta({
+					description:
+						"Disable automatic redirection to the provider. Useful for handling the redirection yourself",
+				})
+				.optional(),
+			/**
+			 * Any additional data to pass through the oauth flow.
+			 */
+			additionalData: z.record(z.string(), z.any()).optional(),
 		}),
 		use: [sessionMiddleware],
 		metadata: {
 			openapi: {
 				description: "Link a social account to the user",
+				operationId: "linkSocialAccount",
 				responses: {
 					"200": {
 						description: "Success",
@@ -264,9 +285,9 @@ export const linkSocialAccount = createAuthEndpoint(
 
 			if (hasBeenLinked) {
 				return c.json({
-					redirect: false,
 					url: "", // this is for type inference
 					status: true,
+					redirect: false,
 				});
 			}
 
@@ -293,18 +314,15 @@ export const linkSocialAccount = createAuthEndpoint(
 			}
 
 			try {
-				await c.context.internalAdapter.createAccount(
-					{
-						userId: session.user.id,
-						providerId: provider.id,
-						accountId: linkingUserId,
-						accessToken: c.body.idToken.accessToken,
-						idToken: token,
-						refreshToken: c.body.idToken.refreshToken,
-						scope: c.body.idToken.scopes?.join(","),
-					},
-					c,
-				);
+				await c.context.internalAdapter.createAccount({
+					userId: session.user.id,
+					providerId: provider.id,
+					accountId: linkingUserId,
+					accessToken: c.body.idToken.accessToken,
+					idToken: token,
+					refreshToken: c.body.idToken.refreshToken,
+					scope: c.body.idToken.scopes?.join(","),
+				});
 			} catch (e: any) {
 				throw new APIError("EXPECTATION_FAILED", {
 					message: "Account not linked - unable to create account",
@@ -325,17 +343,21 @@ export const linkSocialAccount = createAuthEndpoint(
 			}
 
 			return c.json({
-				redirect: false,
 				url: "", // this is for type inference
 				status: true,
+				redirect: false,
 			});
 		}
 
 		// Handle OAuth flow
-		const state = await generateState(c, {
-			userId: session.user.id,
-			email: session.user.email,
-		});
+		const state = await generateState(
+			c,
+			{
+				userId: session.user.id,
+				email: session.user.email,
+			},
+			c.body.additionalData,
+		);
 
 		const url = await provider.createAuthorizationURL({
 			state: state.state,
@@ -346,7 +368,7 @@ export const linkSocialAccount = createAuthEndpoint(
 
 		return c.json({
 			url: url.toString(),
-			redirect: true,
+			redirect: !c.body.disableRedirect,
 		});
 	},
 );
@@ -525,9 +547,11 @@ export const getAccessToken = createAuthEndpoint(
 				accessTokenExpired &&
 				provider.refreshAccessToken
 			) {
-				newTokens = await provider.refreshAccessToken(
-					account.refreshToken as string,
+				const refreshToken = await decryptOAuthToken(
+					account.refreshToken,
+					ctx.context,
 				);
+				newTokens = await provider.refreshAccessToken(refreshToken);
 				await ctx.context.internalAdapter.updateAccount(account.id, {
 					accessToken: await setTokenUtil(newTokens.accessToken, ctx.context),
 					accessTokenExpiresAt: newTokens.accessTokenExpiresAt,
@@ -536,10 +560,9 @@ export const getAccessToken = createAuthEndpoint(
 				});
 			}
 			const tokens = {
-				accessToken: await decryptOAuthToken(
-					newTokens?.accessToken ?? account.accessToken ?? "",
-					ctx.context,
-				),
+				accessToken:
+					newTokens?.accessToken ??
+					(await decryptOAuthToken(account.accessToken ?? "", ctx.context)),
 				accessTokenExpiresAt:
 					newTokens?.accessTokenExpiresAt ??
 					account.accessTokenExpiresAt ??
@@ -669,7 +692,12 @@ export const refreshToken = createAuthEndpoint(
 				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 				refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
 			});
-			return ctx.json(tokens);
+			return ctx.json({
+				accessToken: tokens.accessToken,
+				refreshToken: tokens.refreshToken,
+				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+				refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+			});
 		} catch (error) {
 			throw new APIError("BAD_REQUEST", {
 				message: "Failed to refresh access token",

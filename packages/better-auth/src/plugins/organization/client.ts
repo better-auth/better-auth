@@ -1,61 +1,90 @@
+import type { BetterAuthClientPlugin } from "@better-auth/core";
+import type { DBFieldAttribute } from "@better-auth/core/db";
 import { atom } from "nanostores";
+import { useAuthQuery } from "../../client";
 import type {
 	InferInvitation,
 	InferMember,
-	Invitation,
+	InferOrganization,
+	InferTeam,
 	Member,
-	Organization,
-	Team,
 } from "../../plugins/organization/schema";
-import type { Prettify } from "../../types/helper";
-import { type AccessControl, type Role } from "../access";
-import type { BetterAuthClientPlugin } from "../../client/types";
-import { organization } from "./organization";
-import { useAuthQuery } from "../../client";
-import { defaultStatements, adminAc, memberAc, ownerAc } from "./access";
-import { hasPermission } from "./has-permission";
-import type { FieldAttribute } from "../../db";
 import type { BetterAuthOptions, BetterAuthPlugin } from "../../types";
+import type { Prettify } from "../../types/helper";
+import type { AccessControl, Role } from "../access";
+import type { defaultStatements } from "./access";
+import { adminAc, defaultRoles, memberAc, ownerAc } from "./access";
+import type { OrganizationPlugin } from "./organization";
+import type { HasPermissionBaseInput } from "./permission";
+import { hasPermissionFn } from "./permission";
 import type { OrganizationOptions } from "./types";
 
+/**
+ * Using the same `hasPermissionFn` function, but without the need for a `ctx` parameter or the `organizationId` parameter.
+ */
+export const clientSideHasPermission = (input: HasPermissionBaseInput) => {
+	const acRoles: {
+		[x: string]: Role<any> | undefined;
+	} = input.options.roles || defaultRoles;
+
+	return hasPermissionFn(input, acRoles);
+};
+
 interface OrganizationClientOptions {
-	ac?: AccessControl;
-	roles?: {
-		[key in string]: Role;
-	};
-	teams?: {
-		enabled: boolean;
-	};
-	schema?: {
-		organization?: {
-			additionalFields?: {
-				[key: string]: FieldAttribute;
-			};
-		};
-		member?: {
-			additionalFields?: {
-				[key: string]: FieldAttribute;
-			};
-		};
-		invitation?: {
-			additionalFields?: {
-				[key: string]: FieldAttribute;
-			};
-		};
-		team?: {
-			additionalFields?: {
-				[key: string]: FieldAttribute;
-			};
-		};
-	};
+	ac?: AccessControl | undefined;
+	roles?:
+		| {
+				[key in string]: Role;
+		  }
+		| undefined;
+	teams?:
+		| {
+				enabled: boolean;
+		  }
+		| undefined;
+	schema?:
+		| {
+				organization?: {
+					additionalFields?: {
+						[key: string]: DBFieldAttribute;
+					};
+				};
+				member?: {
+					additionalFields?: {
+						[key: string]: DBFieldAttribute;
+					};
+				};
+				invitation?: {
+					additionalFields?: {
+						[key: string]: DBFieldAttribute;
+					};
+				};
+				team?: {
+					additionalFields?: {
+						[key: string]: DBFieldAttribute;
+					};
+				};
+				organizationRole?: {
+					additionalFields?: {
+						[key: string]: DBFieldAttribute;
+					};
+				};
+		  }
+		| undefined;
+	dynamicAccessControl?:
+		| {
+				enabled: boolean;
+		  }
+		| undefined;
 }
 
 export const organizationClient = <CO extends OrganizationClientOptions>(
-	options?: CO,
+	options?: CO | undefined,
 ) => {
 	const $listOrg = atom<boolean>(false);
 	const $activeOrgSignal = atom<boolean>(false);
 	const $activeMemberSignal = atom<boolean>(false);
+	const $activeMemberRoleSignal = atom<boolean>(false);
 
 	type DefaultStatements = typeof defaultStatements;
 	type Statements = CO["ac"] extends AccessControl<infer S>
@@ -74,11 +103,11 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 				 * @deprecated Use `permissions` instead
 				 */
 				permission: PermissionType;
-				permissions?: never;
+				permissions?: never | undefined;
 		  }
 		| {
 				permissions: PermissionType;
-				permission?: never;
+				permission?: never | undefined;
 		  };
 
 	const roles = {
@@ -90,43 +119,46 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 
 	type OrganizationReturn = CO["teams"] extends { enabled: true }
 		? {
-				members: InferMember<CO>[];
+				members: InferMember<CO, false>[];
 				invitations: InferInvitation<CO>[];
-				teams: Team[];
-			} & Organization
+				teams: InferTeam<CO, false>[];
+			} & InferOrganization<CO, false>
 		: {
-				members: InferMember<CO>[];
-				invitations: InferInvitation<CO>[];
-			} & Organization;
+				members: InferMember<CO, false>[];
+				invitations: InferInvitation<CO, false>[];
+			} & InferOrganization<CO, false>;
 
 	type Schema = CO["schema"];
 	return {
 		id: "organization",
-		$InferServerPlugin: {} as ReturnType<
-			typeof organization<{
-				ac: CO["ac"] extends AccessControl
-					? CO["ac"]
-					: AccessControl<DefaultStatements>;
-				roles: CO["roles"] extends Record<string, Role>
-					? CO["roles"]
-					: {
-							admin: Role;
-							member: Role;
-							owner: Role;
-						};
-				teams: {
-					enabled: CO["teams"] extends { enabled: true } ? true : false;
-				};
-				schema: Schema;
-			}>
-		>,
-		getActions: ($fetch) => ({
+		$InferServerPlugin: {} as OrganizationPlugin<{
+			ac: CO["ac"] extends AccessControl
+				? CO["ac"]
+				: AccessControl<DefaultStatements>;
+			roles: CO["roles"] extends Record<string, Role>
+				? CO["roles"]
+				: {
+						admin: Role;
+						member: Role;
+						owner: Role;
+					};
+			teams: {
+				enabled: CO["teams"] extends { enabled: true } ? true : false;
+			};
+			schema: Schema;
+			dynamicAccessControl: {
+				enabled: CO["dynamicAccessControl"] extends { enabled: true }
+					? true
+					: false;
+			};
+		}>,
+		getActions: ($fetch, _$store, co) => ({
 			$Infer: {
 				ActiveOrganization: {} as OrganizationReturn,
-				Organization: {} as Organization,
-				Invitation: {} as InferInvitation<CO>,
-				Member: {} as InferMember<CO>,
-				Team: {} as Team,
+				Organization: {} as InferOrganization<CO, false>,
+				Invitation: {} as InferInvitation<CO, false>,
+				Member: {} as InferMember<CO, false>,
+				Team: {} as InferTeam<CO, false>,
 			},
 			organization: {
 				checkRolePermission: <
@@ -138,7 +170,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 						role: R;
 					},
 				) => {
-					const isAuthorized = hasPermission({
+					const isAuthorized = clientSideHasPermission({
 						role: data.role as string,
 						options: {
 							ac: options?.ac,
@@ -151,7 +183,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 			},
 		}),
 		getAtoms: ($fetch) => {
-			const listOrganizations = useAuthQuery<Organization[]>(
+			const listOrganizations = useAuthQuery<InferOrganization<CO, false>[]>(
 				$listOrg,
 				"/organization/list",
 				$fetch,
@@ -161,16 +193,9 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 			);
 			const activeOrganization = useAuthQuery<
 				Prettify<
-					Organization & {
-						members: (Member & {
-							user: {
-								id: string;
-								name: string;
-								email: string;
-								image: string | undefined;
-							};
-						})[];
-						invitations: Invitation[];
+					InferOrganization<CO, false> & {
+						members: InferMember<CO, false>[];
+						invitations: InferInvitation<CO, false>[];
 					}
 				>
 			>(
@@ -191,17 +216,29 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 				},
 			);
 
+			const activeMemberRole = useAuthQuery<{ role: string }>(
+				[$activeMemberRoleSignal],
+				"/organization/get-active-member-role",
+				$fetch,
+				{
+					method: "GET",
+				},
+			);
+
 			return {
 				$listOrg,
 				$activeOrgSignal,
 				$activeMemberSignal,
+				$activeMemberRoleSignal,
 				activeOrganization,
 				listOrganizations,
 				activeMember,
+				activeMemberRole,
 			};
 		},
 		pathMethods: {
 			"/organization/get-full-organization": "GET",
+			"/organization/list-user-teams": "GET",
 		},
 		atomListeners: [
 			{
@@ -232,6 +269,12 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 				},
 				signal: "$activeMemberSignal",
 			},
+			{
+				matcher(path) {
+					return path.includes("/organization/update-member-role");
+				},
+				signal: "$activeMemberRoleSignal",
+			},
 		],
 	} satisfies BetterAuthClientPlugin;
 };
@@ -242,7 +285,7 @@ export const inferOrgAdditionalFields = <
 	},
 	S extends OrganizationOptions["schema"] = undefined,
 >(
-	schema?: S,
+	schema?: S | undefined,
 ) => {
 	type FindById<
 		T extends readonly BetterAuthPlugin[],

@@ -1,12 +1,14 @@
-import {
+import type {
+	BetterFetch,
 	BetterFetchError,
-	type BetterFetch,
-	type BetterFetchOption,
+	BetterFetchOption,
 } from "@better-fetch/fetch";
-import { atom, onMount, type PreinitializedWritableAtom } from "nanostores";
+import type { PreinitializedWritableAtom } from "nanostores";
+import { atom, onMount } from "nanostores";
+import type { SessionQueryParams } from "./types";
 
 // SSR detection
-const isServer = typeof window === "undefined";
+const isServer = () => typeof window === "undefined";
 
 export const useAuthQuery = <T>(
 	initializedAtom:
@@ -15,30 +17,33 @@ export const useAuthQuery = <T>(
 	path: string,
 	$fetch: BetterFetch,
 	options?:
-		| ((value: {
-				data: null | T;
-				error: null | BetterFetchError;
-				isPending: boolean;
-		  }) => BetterFetchOption)
-		| BetterFetchOption,
+		| (
+				| ((value: {
+						data: null | T;
+						error: null | BetterFetchError;
+						isPending: boolean;
+				  }) => BetterFetchOption)
+				| BetterFetchOption
+		  )
+		| undefined,
 ) => {
 	const value = atom<{
 		data: null | T;
 		error: null | BetterFetchError;
 		isPending: boolean;
 		isRefetching: boolean;
-		refetch: () => void;
+		refetch: (queryParams?: { query?: SessionQueryParams } | undefined) => void;
 	}>({
 		data: null,
 		error: null,
 		isPending: true,
 		isRefetching: false,
-		refetch: () => {
-			return fn();
+		refetch: (queryParams?: { query?: SessionQueryParams } | undefined) => {
+			return fn(queryParams);
 		},
 	});
 
-	const fn = () => {
+	const fn = (queryParams?: { query?: SessionQueryParams } | undefined) => {
 		const opts =
 			typeof options === "function"
 				? options({
@@ -48,8 +53,12 @@ export const useAuthQuery = <T>(
 					})
 				: options;
 
-		return $fetch<T>(path, {
+		$fetch<T>(path, {
 			...opts,
+			query: {
+				...opts?.query,
+				...queryParams?.query,
+			},
 			async onSuccess(context) {
 				value.set({
 					data: context.data,
@@ -88,6 +97,14 @@ export const useAuthQuery = <T>(
 				});
 				await opts?.onRequest?.(context);
 			},
+		}).catch((error) => {
+			value.set({
+				error,
+				data: null,
+				isPending: false,
+				isRefetching: false,
+				refetch: value.value.refetch,
+			});
 		});
 	};
 	initializedAtom = Array.isArray(initializedAtom)
@@ -97,7 +114,7 @@ export const useAuthQuery = <T>(
 
 	for (const initAtom of initializedAtom) {
 		initAtom.subscribe(() => {
-			if (isServer) {
+			if (isServer()) {
 				// On server, don't trigger fetch
 				return;
 			}
@@ -105,13 +122,16 @@ export const useAuthQuery = <T>(
 				fn();
 			} else {
 				onMount(value, () => {
-					setTimeout(() => {
-						fn();
+					const timeoutId = setTimeout(() => {
+						if (!isMounted) {
+							fn();
+							isMounted = true;
+						}
 					}, 0);
-					isMounted = true;
 					return () => {
 						value.off();
 						initAtom.off();
+						clearTimeout(timeoutId);
 					};
 				});
 			}

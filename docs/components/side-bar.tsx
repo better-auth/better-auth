@@ -1,12 +1,12 @@
 "use client";
 
-import { AsideLink } from "@/components/ui/aside-link";
-import { cn } from "@/lib/utils";
-import { AnimatePresence, motion, MotionConfig } from "framer-motion";
+import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import { useSearchContext } from "fumadocs-ui/provider";
 import { ChevronDownIcon, Search } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
+import { AsideLink } from "@/components/ui/aside-link";
+import { cn } from "@/lib/utils";
 import { contents, examples } from "./sidebar-content";
 import { Badge } from "./ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "./ui/select";
@@ -35,7 +35,7 @@ export default function ArticleLayout() {
 	const cts = group === "docs" ? contents : examples;
 
 	return (
-		<div className={cn("fixed top-0")}>
+		<div className={cn("fixed start-0 top-0")}>
 			<aside
 				className={cn(
 					"md:transition-all",

@@ -8,7 +8,8 @@ services:
       - "27017:27017"
     volumes:
       - mongodb_data:/data/db
-
+  
+  # drizzle
   postgres:
     image: postgres:latest
     container_name: postgres
@@ -19,8 +20,45 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
 
+  postgres-kysely:
+    image: postgres:latest
+    container_name: postgres-kysely
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: better_auth
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-kysely_data:/var/lib/postgresql
+  
+  postgres-kysely2:
+    image: postgres:latest
+    container_name: postgres-kysely2
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: better_auth
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres-kysely2_data:/var/lib/postgresql
+
+  postgres-prisma:
+    image: postgres:latest
+    container_name: postgres-prisma
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: better_auth
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres-prisma_data:/var/lib/postgresql
+
+  # Drizzle tests
   mysql:
     image: mysql:latest
     container_name: mysql
@@ -33,6 +71,34 @@ services:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+
+
+  mysql-kysely:
+    image: mysql:latest
+    container_name: mysql-kysely
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: better_auth
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql-kysely_data:/var/lib/mysql
+
+  mysql-prisma:
+    image: mysql:latest
+    container_name: mysql-prisma
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: better_auth
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "3308:3306"
+    volumes:
+      - mysql-prisma_data:/var/lib/mysql
+
 
   mssql:
     image: mcr.microsoft.com/mssql/server:latest
@@ -48,5 +114,10 @@ services:
 volumes:
   mongodb_data:
   postgres_data:
+  postgres-kysely_data:
+  postgres-prisma_data:
   mysql_data:
   mssql_data:
+  mysql-kysely_data:
+  mysql-prisma_data: 
+  postgres-kysely2_data:

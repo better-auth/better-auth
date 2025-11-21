@@ -1,16 +1,17 @@
-import * as z from "zod/v4";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-	originCheck,
-} from "../../api";
+} from "@better-auth/core/api";
+import { env } from "@better-auth/core/env";
+import type { CookieOptions, EndpointContext } from "better-call";
+import * as z from "zod";
+import { originCheck } from "../../api";
+import { parseJSON } from "../../client/parser";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
-import type { BetterAuthPlugin } from "../../types";
-import { env } from "../../utils/env";
 import { getOrigin } from "../../utils/url";
-import type { EndpointContext } from "better-call";
 
-function getVenderBaseURL() {
+function getVendorBaseURL() {
 	const vercel = env.VERCEL_URL ? `https://${env.VERCEL_URL}` : undefined;
 	const netlify = env.NETLIFY_URL;
 	const render = env.RENDER_URL;
@@ -21,7 +22,7 @@ function getVenderBaseURL() {
 	return vercel || netlify || render || aws || google || azure;
 }
 
-interface OAuthProxyOptions {
+export interface OAuthProxyOptions {
 	/**
 	 * The current URL of the application.
 	 * The plugin will attempt to infer the current URL from your environment
@@ -30,13 +31,13 @@ interface OAuthProxyOptions {
 	 * or as a fallback, from the `baseURL` in your auth config.
 	 * If the URL is not inferred correctly, you can provide a value here."
 	 */
-	currentURL?: string;
+	currentURL?: string | undefined;
 	/**
 	 * If a request in a production url it won't be proxied.
 	 *
 	 * default to `BETTER_AUTH_URL`
 	 */
-	productionURL?: string;
+	productionURL?: string | undefined;
 }
 
 /**
@@ -44,23 +45,51 @@ interface OAuthProxyOptions {
  * Useful for development and preview deployments where
  * the redirect URL can't be known in advance to add to the OAuth provider.
  */
-export const oAuthProxy = (opts?: OAuthProxyOptions) => {
+export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 	const resolveCurrentURL = (ctx: EndpointContext<string, any>) => {
 		return new URL(
 			opts?.currentURL ||
 				ctx.request?.url ||
-				getVenderBaseURL() ||
+				getVendorBaseURL() ||
 				ctx.context.baseURL,
 		);
 	};
 
+	const checkSkipProxy = (ctx: EndpointContext<string, any>) => {
+		// If skip proxy header is set, we don't need to proxy
+		const skipProxyHeader = ctx.request?.headers.get("x-skip-oauth-proxy");
+		if (skipProxyHeader) {
+			return true;
+		}
+
+		const productionURL = opts?.productionURL || env.BETTER_AUTH_URL;
+		if (!productionURL) {
+			return false;
+		}
+
+		// Use request URL to determine current environment, not baseURL
+		// because baseURL is always the production URL
+		const currentURL = ctx.request?.url || getVendorBaseURL();
+		if (!currentURL) {
+			return false;
+		}
+
+		// Compare origins - if same, we're in production so skip proxy
+		const productionOrigin = getOrigin(productionURL);
+		const currentOrigin = getOrigin(currentURL);
+
+		return productionOrigin === currentOrigin;
+	};
+
 	return {
 		id: "oauth-proxy",
+		options: opts,
 		endpoints: {
 			oAuthProxy: createAuthEndpoint(
 				"/oauth-proxy-callback",
 				{
 					method: "GET",
+					operationId: "oauthProxyCallback",
 					query: z.object({
 						callbackURL: z.string().meta({
 							description: "The URL to redirect to after the proxy",
@@ -72,6 +101,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 					use: [originCheck((ctx) => ctx.query.callbackURL)],
 					metadata: {
 						openapi: {
+							operationId: "oauthProxyCallback",
 							description: "OAuth Proxy Callback",
 							parameters: [
 								{
@@ -113,24 +143,96 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 						ctx.context.logger.error(e);
 						return null;
 					});
-					const error =
-						ctx.context.options.onAPIError?.errorURL ||
-						`${ctx.context.options.baseURL}/api/auth/error`;
 					if (!decryptedCookies) {
+						const error =
+							ctx.context.options.onAPIError?.errorURL ||
+							`${ctx.context.options.baseURL}/api/auth/error`;
+
 						throw ctx.redirect(
 							`${error}?error=OAuthProxy - Invalid cookies or secret`,
 						);
 					}
 
-					const isSecureContext = resolveCurrentURL(ctx).protocol === "https:";
 					const prefix =
 						ctx.context.options.advanced?.cookiePrefix || "better-auth";
-					const cookieToSet = isSecureContext
-						? decryptedCookies
-						: decryptedCookies
-								.replace("Secure;", "")
-								.replace(`__Secure-${prefix}`, prefix);
-					ctx.setHeader("set-cookie", cookieToSet);
+					const securePrefix = `__Secure-${prefix}`;
+					const currentURL = resolveCurrentURL(ctx);
+					const isSecureContext = currentURL.protocol === "https:";
+
+					// Process cookies: normalize for current environment
+					const processedCookies = decryptedCookies
+						.split(/,(?=\s*[^,]+=)/)
+						.map((cookie) => {
+							const parts = cookie.split(";");
+							const [nameValue = "", ...attrs] = parts.map((p) => p.trim());
+							const eqIndex = nameValue.indexOf("=");
+
+							let name = eqIndex > 0 ? nameValue.slice(0, eqIndex) : nameValue;
+							const value = eqIndex > 0 ? nameValue.slice(eqIndex + 1) : "";
+
+							// Remove __Secure- prefix
+							if (!isSecureContext && name.includes(securePrefix)) {
+								name = name.replace(securePrefix, prefix);
+							}
+
+							// Filter out Domain and Secure attributes
+							const filteredAttrs = attrs.filter((attr) => {
+								const lower = attr.toLowerCase();
+								return !lower.startsWith("domain=") && lower !== "secure";
+							});
+
+							// Add Secure for HTTPS contexts
+							if (isSecureContext) {
+								filteredAttrs.push("Secure");
+							}
+
+							// Build options
+							const options: CookieOptions = {};
+							for (const attr of filteredAttrs) {
+								const [attrName, attrValue] = attr.split("=");
+								if (!attrName) continue;
+								switch (attrName.toLowerCase()) {
+									case "path":
+										options.path = attrValue;
+										break;
+									case "expires":
+										if (!attrValue) break;
+										options.expires = new Date(attrValue);
+										break;
+									case "samesite":
+										options.sameSite = attrValue as "lax" | "strict" | "none";
+										break;
+									case "httponly":
+										options.httpOnly = true;
+										break;
+									case "max-age":
+										if (!attrValue) break;
+										options.maxAge = parseInt(attrValue, 10);
+										break;
+									case "prefix":
+										if (!attrValue) break;
+										options.prefix = attrValue as "host" | "secure";
+										break;
+									case "partitioned": {
+										options.partitioned = true;
+										break;
+									}
+								}
+							}
+
+							return {
+								name,
+								value,
+								options,
+							};
+						});
+
+					for (const cookie of processedCookies) {
+						// using `ctx.setHeader` overrides previous Set-Cookie headers
+						// so use ctx.setCookie helper instead
+						// https://github.com/Bekacru/better-call/blob/d27ac20e64b329a4851e97adf864098a9bc2a260/src/context.ts#L217
+						ctx.setCookie(cookie.name, cookie.value, cookie.options);
+					}
 					throw ctx.redirect(ctx.query.callbackURL);
 				},
 			),
@@ -139,7 +241,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 			after: [
 				{
 					matcher(context) {
-						return (
+						return !!(
 							context.path?.startsWith("/callback") ||
 							context.path?.startsWith("/oauth2/callback")
 						);
@@ -147,69 +249,114 @@ export const oAuthProxy = (opts?: OAuthProxyOptions) => {
 					handler: createAuthMiddleware(async (ctx) => {
 						const headers = ctx.context.responseHeaders;
 						const location = headers?.get("location");
-						if (location?.includes("/oauth-proxy-callback?callbackURL")) {
-							if (!location.startsWith("http")) {
-								return;
-							}
-							const locationURL = new URL(location);
-							const origin = locationURL.origin;
-							/**
-							 * We don't want to redirect to the proxy URL if the origin is the same
-							 * as the current URL
-							 */
-							if (origin === getOrigin(ctx.context.baseURL)) {
-								const newLocation = locationURL.searchParams.get("callbackURL");
-								if (!newLocation) {
-									return;
-								}
-								ctx.setHeader("location", newLocation);
-								return;
-							}
 
-							const setCookies = headers?.get("set-cookie");
-
-							if (!setCookies) {
-								return;
-							}
-							const encryptedCookies = await symmetricEncrypt({
-								key: ctx.context.secret,
-								data: setCookies,
-							});
-							const locationWithCookies = `${location}&cookies=${encodeURIComponent(
-								encryptedCookies,
-							)}`;
-							ctx.setHeader("location", locationWithCookies);
+						if (
+							!location?.includes("/oauth-proxy-callback?callbackURL") ||
+							!location.startsWith("http")
+						) {
+							return;
 						}
+
+						const productionURL =
+							opts?.productionURL ||
+							ctx.context.options.baseURL ||
+							ctx.context.baseURL;
+						const productionOrigin = getOrigin(productionURL);
+
+						const locationURL = new URL(location);
+						const locationOrigin = locationURL.origin;
+
+						//
+						// Same origin: unwrap proxy redirect to original destination
+						//
+						if (locationOrigin === productionOrigin) {
+							const newLocation = locationURL.searchParams.get("callbackURL");
+							if (!newLocation) {
+								return;
+							}
+							ctx.setHeader("location", newLocation);
+							return;
+						}
+
+						//
+						// Cross-origin: encrypt and forward cookies through proxy
+						//
+						const setCookies = headers?.get("set-cookie");
+						if (!setCookies) {
+							return;
+						}
+						const encryptedCookies = await symmetricEncrypt({
+							key: ctx.context.secret,
+							data: setCookies,
+						});
+						const locationWithCookies = `${location}&cookies=${encodeURIComponent(
+							encryptedCookies,
+						)}`;
+						ctx.setHeader("location", locationWithCookies);
 					}),
 				},
 			],
 			before: [
 				{
+					matcher() {
+						return true;
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						if (ctx.path !== "/callback/:id") {
+							return;
+						}
+
+						const state = ctx.query?.state || ctx.body?.state;
+						if (!state) {
+							return;
+						}
+
+						const data =
+							await ctx.context.internalAdapter.findVerificationValue(state);
+						if (!data) {
+							return;
+						}
+
+						let parsedState: { callbackURL?: string } | undefined;
+						try {
+							parsedState = parseJSON<{ callbackURL?: string }>(data.value);
+						} catch {
+							parsedState = undefined;
+						}
+						if (!parsedState?.callbackURL?.includes("/oauth-proxy-callback")) {
+							return;
+						}
+
+						ctx.context.oauthConfig.skipStateCookieCheck = true;
+					}),
+				},
+				{
 					matcher(context) {
-						return (
+						return !!(
 							context.path?.startsWith("/sign-in/social") ||
 							context.path?.startsWith("/sign-in/oauth2")
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						// if skip proxy header is set, we don't need to proxy
-						const skipProxy = ctx.request?.headers.get("x-skip-oauth-proxy");
+						if (!ctx.body) {
+							return;
+						}
+
+						const skipProxy = checkSkipProxy(ctx);
 						if (skipProxy) {
 							return;
 						}
-						const url = resolveCurrentURL(ctx);
-						const productionURL = opts?.productionURL || env.BETTER_AUTH_URL;
-						if (productionURL === ctx.context.options.baseURL) {
-							return;
-						}
-						ctx.body.callbackURL = `${url.origin}${
+
+						const currentURL = resolveCurrentURL(ctx);
+						const originalCallbackURL =
+							ctx.body.callbackURL || ctx.context.baseURL;
+						const newCallbackURL = `${currentURL.origin}${
 							ctx.context.options.basePath || "/api/auth"
 						}/oauth-proxy-callback?callbackURL=${encodeURIComponent(
-							ctx.body.callbackURL || ctx.context.baseURL,
+							originalCallbackURL,
 						)}`;
-						return {
-							context: ctx,
-						};
+
+						ctx.body.callbackURL = newCallbackURL;
 					}),
 				},
 			],

@@ -1,7 +1,7 @@
-import { listenKeys } from "nanostores";
-import { useCallback, useRef, useSyncExternalStore } from "react";
 import type { Store, StoreValue } from "nanostores";
+import { listenKeys } from "nanostores";
 import type { DependencyList } from "react";
+import { useCallback, useRef, useSyncExternalStore } from "react";
 
 type StoreKeys<T> = T extends { setKey: (k: infer K, v: any) => unknown }
 	? K
@@ -14,18 +14,18 @@ export interface UseStoreOptions<SomeStore> {
 	 * [store, options.keys]
 	 * ```
 	 */
-	deps?: DependencyList;
+	deps?: DependencyList | undefined;
 
 	/**
 	 * Will re-render components only on specific key changes.
 	 */
-	keys?: StoreKeys<SomeStore>[];
+	keys?: StoreKeys<SomeStore>[] | undefined;
 }
 
 /**
  * Subscribe to store changes and get store's value.
  *
- * Can be user with store builder too.
+ * Can be used with store builder too.
  *
  * ```js
  * import { useStore } from 'nanostores/react'

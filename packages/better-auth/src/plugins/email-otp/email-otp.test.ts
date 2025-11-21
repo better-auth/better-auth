@@ -1,10 +1,10 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { bearer } from "../bearer";
 import { emailOTP } from ".";
 import { emailOTPClient } from "./client";
-import { bearer } from "../bearer";
 import { splitAtLastColon } from "./utils";
-import { createAuthClient } from "../../client";
 
 describe("email-otp", async () => {
 	const otpFn = vi.fn();
@@ -131,6 +131,49 @@ describe("email-otp", async () => {
 		expect(data?.user).toBeDefined();
 	});
 
+	it("should call onPasswordReset callback when resetting password", async () => {
+		const onPasswordResetMock = vi.fn();
+		const { client, testUser } = await getTestInstance(
+			{
+				plugins: [
+					bearer(),
+					emailOTP({
+						async sendVerificationOTP({ email, otp: _otp, type }) {
+							otp = _otp;
+							otpFn(email, _otp, type);
+						},
+						sendVerificationOnSignUp: true,
+					}),
+				],
+				emailAndPassword: {
+					enabled: true,
+					onPasswordReset: onPasswordResetMock,
+				},
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+			},
+		);
+
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "forget-password",
+		});
+
+		await client.emailOtp.resetPassword({
+			email: testUser.email,
+			otp,
+			password: "new-password",
+		});
+
+		expect(onPasswordResetMock).toHaveBeenCalledWith(
+			{ user: expect.objectContaining({ email: testUser.email }) },
+			expect.any(Object),
+		);
+	});
+
 	it("should reset password and create credential account", async () => {
 		const testUser2 = {
 			email: "test-email@domain.com",
@@ -182,7 +225,7 @@ describe("email-otp", async () => {
 			type: "email-verification",
 		});
 		vi.useFakeTimers();
-		await vi.advanceTimersByTimeAsync(1000 * 60 * 5);
+		await vi.advanceTimersByTimeAsync(1000 * 60 * 6);
 		const res = await client.emailOtp.verifyEmail({
 			email: testUser.email,
 			otp,
@@ -301,19 +344,72 @@ describe("email-otp-verify", async () => {
 		},
 	);
 
-	it("should return USER_NOT_FOUND error when disableSignUp and user not registered", async () => {
+	it("should prevent user enumeration when disableSignUp is enabled", async () => {
+		// Should return success for non-existent user to prevent enumeration
 		const response = await client.emailOtp.sendVerificationOtp({
 			email: "non-existent@domain.com",
 			type: "email-verification",
 		});
 
-		expect(response.error?.message).toBe("User not found");
-		// Existing user should still succeed
+		expect(response.data?.success).toBe(true);
+		expect(response.error).toBeFalsy();
+
+		// Existing user should also succeed
 		const successRes = await client.emailOtp.sendVerificationOtp({
 			email: testUser.email,
 			type: "email-verification",
 		});
+		expect(successRes.data?.success).toBe(true);
 		expect(successRes.error).toBeFalsy();
+	});
+
+	it("should not send OTP email for non-existent users when disableSignUp is enabled", async () => {
+		const sendOtpSpy = vi.fn();
+		const { client: testClient, testUser: existingUser } =
+			await getTestInstance(
+				{
+					plugins: [
+						emailOTP({
+							async sendVerificationOTP({ email, otp: _otp, type }) {
+								sendOtpSpy(email, _otp, type);
+							},
+							disableSignUp: true,
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [emailOTPClient()],
+					},
+				},
+			);
+
+		sendOtpSpy.mockClear();
+
+		// Try to send OTP to non-existent user
+		const nonExistentResponse = await testClient.emailOtp.sendVerificationOtp({
+			email: "non-existent-user@example.com",
+			type: "sign-in",
+		});
+
+		// Should return success but not actually call sendVerificationOTP
+		expect(nonExistentResponse.data?.success).toBe(true);
+		expect(sendOtpSpy).not.toHaveBeenCalled();
+
+		// Now try with an existing user - should actually send OTP
+		const existingResponse = await testClient.emailOtp.sendVerificationOtp({
+			email: existingUser.email,
+			type: "sign-in",
+		});
+
+		// Should return success AND call sendVerificationOTP
+		expect(existingResponse.data?.success).toBe(true);
+		expect(sendOtpSpy).toHaveBeenCalledTimes(1);
+		expect(sendOtpSpy).toHaveBeenCalledWith(
+			existingUser.email,
+			expect.any(String),
+			"sign-in",
+		);
 	});
 
 	it("should verify email with last otp", async () => {
@@ -968,5 +1064,47 @@ describe("override default email verification", async () => {
 			},
 		);
 		expect(sendVerificationOTP).toHaveBeenCalled();
+	});
+
+	it("should send email only once when override is enabled", async () => {
+		let callCountForTestEmail = 0;
+		const sendVerificationOTPFn = vi.fn(async (data, request) => {
+			if (data.email === "test-no-duplicate@email.com") {
+				callCountForTestEmail++;
+			}
+		});
+
+		const { client } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			emailVerification: {
+				sendOnSignUp: true,
+			},
+			plugins: [
+				emailOTP({
+					sendVerificationOTP: sendVerificationOTPFn,
+					overrideDefaultEmailVerification: true,
+					sendVerificationOnSignUp: true, // This should be ignored when override is true
+				}),
+			],
+		});
+
+		sendVerificationOTPFn.mockClear();
+
+		await client.signUp.email({
+			email: "test-no-duplicate@email.com",
+			password: "password",
+			name: "Test User",
+		});
+
+		expect(sendVerificationOTPFn).toHaveBeenCalledTimes(1);
+		expect(sendVerificationOTPFn).toHaveBeenCalledWith(
+			expect.objectContaining({
+				email: "test-no-duplicate@email.com",
+				type: "email-verification",
+			}),
+			expect.any(Object),
+		);
 	});
 });

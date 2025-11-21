@@ -56,7 +56,39 @@ Once you've installed the plugin, you can start using the JWT & JWKS plugin to g
 
 ### Retrieve the token
 
-1. Using your session token
+There are multiple ways to retrieve JWT tokens:
+
+1. **Using the client plugin (recommended)**
+
+Add the `jwtClient` plugin to your auth client configuration:
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+import { jwtClient } from "better-auth/client/plugins" // [!code highlight]
+
+export const authClient = createAuthClient({
+  plugins: [
+    jwtClient() // [!code highlight]
+  ]
+})
+```
+
+Then use the client to get JWT tokens:
+
+```ts
+const { data, error } = await authClient.token()
+if (error) {
+  // handle error
+}
+if (data) {
+  const jwtToken = data.token
+  // Use this token for authenticated requests to external services
+}
+```
+
+This is the recommended approach for client applications that need JWT tokens for external API authentication.
+
+2. **Using your session token**
 
 To get the token, call the `/token` endpoint. This will return the following:
   
@@ -66,7 +98,7 @@ To get the token, call the `/token` endpoint. This will return the following:
   }
 ```
 
-Make sure to include the token in the `Authorization` header of your requests and the `bearer` plugin is added in your auth configuration.
+Make sure to include the token in the `Authorization` header of your requests if the `bearer` plugin is added in your auth configuration.
 
 ```ts
 await fetch("/api/auth/token", {
@@ -76,7 +108,7 @@ await fetch("/api/auth/token", {
 })
 ```
 
-2. From `set-auth-jwt` header
+3. **From `set-auth-jwt` header**
 
 When you call `getSession` method, a JWT is returned in the `set-auth-jwt` header, which you can use to send to your services directly.
 
@@ -109,6 +141,21 @@ In case a JWT with a different `kid` is received, it is recommended to fetch the
         }
     ]
   }
+```
+
+### OAuth Provider Mode
+
+If you are making your system oAuth compliant (such as when utilizing the OIDC or MCP plugins), you **MUST** disable the `/token` endpoint (oAuth equivalent `/oauth2/token`) and disable setting the jwt header (oAuth equivalent `/oauth2/userinfo`).
+
+```ts title="auth.ts"
+betterAuth({
+  disabledPaths: [
+    "/token",
+  ],
+  plugins: [jwt({
+    disableSettingJwtHeader: true,
+  })]
+})
 ```
 
 #### Example using jose with remote JWKS
@@ -172,6 +219,93 @@ async function validateToken(token: string) {
 const token = 'your.jwt.token' // this is the token you get from the /api/auth/token endpoint
 const payload = await validateToken(token)
 ```
+
+### Remote JWKS Url
+
+Disables the `/jwks` endpoint and uses this endpoint in any discovery such as OIDC.
+
+Useful if your JWKS are not managed at `/jwks` or if your jwks are signed with a certificate and placed on your CDN.
+
+NOTE: you **MUST** specify which asymmetric algorithm is used for signing.
+
+```ts title="auth.ts"
+jwt({
+  jwks: {
+    remoteUrl: "https://example.com/.well-known/jwks.json",
+    keyPairConfig: {
+      alg: 'ES256',
+    },
+  }
+})
+```
+
+### Custom Signing
+
+This is an advanced feature. Configuration outside of this plugin **MUST** be provided.
+
+Implementers:
+- `remoteUrl` must be defined if using the `sign` function. This shall store all active keys, not just the current one.
+- If using localized approach, ensure server uses the latest private key when rotated. Depending on deployment, the server may need to be restarted.
+- When using remote approach, verify the payload is unchanged after transit. Use integrity validation like CRC32 or SHA256 checks if available.
+
+#### Localized Signing
+
+```ts title="auth.ts"
+jwt({
+  jwks: {
+    remoteUrl: "https://example.com/.well-known/jwks.json",
+    keyPairConfig: {
+      alg: 'EdDSA',
+    },
+  },
+  jwt: {
+    sign: async (jwtPayload: JWTPayload) => {
+      // this is pseudocode
+      return await new SignJWT(jwtPayload)
+        .setProtectedHeader({
+          alg: "EdDSA",
+          kid: process.env.currentKid,
+          typ: "JWT",
+        })
+        .sign(process.env.clientPrivateKey);
+    },
+  },
+})
+```
+
+#### Remote Signing
+
+Useful if you are using a remote Key Management Service such as [Google KMS](https://cloud.google.com/kms/docs/encrypt-decrypt-rsa#kms-encrypt-asymmetric-nodejs), [Amazon KMS](https://docs.aws.amazon.com/kms/latest/APIReference/API_Sign.html), or [Azure Key Vault](https://learn.microsoft.com/en-us/rest/api/keyvault/keys/sign/sign?view=rest-keyvault-keys-7.4&tabs=HTTP).
+
+```ts title="auth.ts"
+jwt({
+  jwks: {
+    remoteUrl: "https://example.com/.well-known/jwks.json",
+    keyPairConfig: {
+      alg: 'ES256',
+    },
+  },
+  jwt: {
+    sign: async (jwtPayload: JWTPayload) => {
+      // this is pseudocode
+      const headers = JSON.stringify({ kid: '123', alg: 'ES256', typ: 'JWT' })
+      const payload = JSON.stringify(jwtPayload)
+      const encodedHeaders = Buffer.from(headers).toString('base64url')
+      const encodedPayload = Buffer.from(payload).toString('base64url')
+      const hash = createHash('sha256')
+      const data = `${encodedHeaders}.${encodedPayload}`
+      hash.update(Buffer.from(data))
+      const digest = hash.digest()
+      const sig = await remoteSign(digest)
+      // integrityCheck(sig)
+      const jwt = `${data}.${sig}`
+      // verifyJwt(jwt)
+      return jwt
+    },
+  },
+})
+```
+
 
 ## Schema
 
@@ -300,6 +434,32 @@ jwt({
     getSubject: (session) => {
       // by default the subject is the user id
       return session.user.email
+    }
+  }
+})
+```
+
+### Custom Adapter
+
+By default, the JWT plugin stores and retrieves JWKS from your database. You can provide a custom adapter to override this behavior, allowing you to store JWKS in alternative locations such as Redis, external services, or in-memory storage.
+
+```ts title="auth.ts"
+jwt({
+  adapter: {
+    getJwks: async (ctx) => {
+      // Custom implementation to get all JWKS
+      // This overrides the default database query
+      return await yourCustomStorage.getAllKeys()
+    },
+    getLatestKey: async (ctx) => {
+      // Custom implementation to get the latest key
+      // This overrides the default database query
+      return await yourCustomStorage.getLatestKey()
+    },
+    createJwk: async (ctx, webKey) => {
+      // Custom implementation to create a new key
+      // This overrides the default database insert
+      return await yourCustomStorage.createKey(webKey)
     }
   }
 })

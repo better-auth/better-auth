@@ -1,7 +1,11 @@
 import { createHash } from "@better-auth/utils/hash";
-import { xchacha20poly1305 } from "@noble/ciphers/chacha";
-import { bytesToHex, hexToBytes, utf8ToBytes } from "@noble/ciphers/utils";
-import { managedNonce } from "@noble/ciphers/webcrypto";
+import { xchacha20poly1305 } from "@noble/ciphers/chacha.js";
+import {
+	bytesToHex,
+	hexToBytes,
+	managedNonce,
+	utf8ToBytes,
+} from "@noble/ciphers/utils.js";
 
 export type SymmetricEncryptOptions = {
 	key: string;
@@ -34,7 +38,6 @@ export const symmetricDecrypt = async ({
 };
 
 export * from "./buffer";
-export * from "./hash";
 export * from "./jwt";
 export * from "./password";
 export * from "./random";

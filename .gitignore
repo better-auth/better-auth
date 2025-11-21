@@ -194,3 +194,8 @@ android/
 .vinxi
 # Turborepo
 .turbo
+
+playwright-report/
+test-results/
+
+state.txt

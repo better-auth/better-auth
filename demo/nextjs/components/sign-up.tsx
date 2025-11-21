@@ -1,5 +1,10 @@
 "use client";
 
+import { Loader2, X } from "lucide-react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -11,13 +16,8 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useState } from "react";
-import Image from "next/image";
-import { Loader2, X } from "lucide-react";
 import { signUp } from "@/lib/auth-client";
-import { toast } from "sonner";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { getCallbackURL } from "@/lib/shared";
 
 export function SignUp() {
 	const [firstName, setFirstName] = useState("");
@@ -28,17 +28,19 @@ export function SignUp() {
 	const [image, setImage] = useState<File | null>(null);
 	const [imagePreview, setImagePreview] = useState<string | null>(null);
 	const router = useRouter();
-	const [loading, setLoading] = useState(false);
+	const params = useSearchParams();
+	const [loading, startTransition] = useTransition();
 
 	const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];
 		if (file) {
 			setImage(file);
-			const reader = new FileReader();
-			reader.onloadend = () => {
-				setImagePreview(reader.result as string);
-			};
-			reader.readAsDataURL(file);
+			setImagePreview((preview) => {
+				if (preview) {
+					URL.revokeObjectURL(preview);
+				}
+				return URL.createObjectURL(file);
+			});
 		}
 	};
 
@@ -118,11 +120,10 @@ export function SignUp() {
 						<div className="flex items-end gap-4">
 							{imagePreview && (
 								<div className="relative w-16 h-16 rounded-sm overflow-hidden">
-									<Image
+									<img
 										src={imagePreview}
 										alt="Profile preview"
-										layout="fill"
-										objectFit="cover"
+										className="object-cover w-full h-full"
 									/>
 								</div>
 							)}
@@ -151,26 +152,23 @@ export function SignUp() {
 						className="w-full"
 						disabled={loading}
 						onClick={async () => {
-							await signUp.email({
-								email,
-								password,
-								name: `${firstName} ${lastName}`,
-								image: image ? await convertImageToBase64(image) : "",
-								callbackURL: "/dashboard",
-								fetchOptions: {
-									onResponse: () => {
-										setLoading(false);
+							startTransition(async () => {
+								await signUp.email({
+									email,
+									password,
+									name: `${firstName} ${lastName}`,
+									image: image ? await convertImageToBase64(image) : "",
+									callbackURL: "/dashboard",
+									fetchOptions: {
+										onError: (ctx) => {
+											toast.error(ctx.error.message);
+										},
+										onSuccess: async () => {
+											toast.success("Successfully signed up");
+											router.push(getCallbackURL(params));
+										},
 									},
-									onRequest: () => {
-										setLoading(true);
-									},
-									onError: (ctx) => {
-										toast.error(ctx.error.message);
-									},
-									onSuccess: async () => {
-										router.push("/dashboard");
-									},
-								},
+								});
 							});
 						}}
 					>
