@@ -1,10 +1,11 @@
 import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
 import { jwtVerify } from "jose";
+import type { AwaitableFunction } from "../types";
 import type { ProviderOptions } from "./index";
 import { getOAuth2Tokens } from "./index";
 
-export function createAuthorizationCodeRequest({
+export async function createAuthorizationCodeRequest({
 	code,
 	codeVerifier,
 	redirectURI,
@@ -17,7 +18,7 @@ export function createAuthorizationCodeRequest({
 }: {
 	code: string;
 	redirectURI: string;
-	options: Partial<ProviderOptions>;
+	options: AwaitableFunction<Partial<ProviderOptions>>;
 	codeVerifier?: string | undefined;
 	deviceId?: string | undefined;
 	authentication?: ("basic" | "post") | undefined;
@@ -31,6 +32,8 @@ export function createAuthorizationCodeRequest({
 		accept: "application/json",
 		...headers,
 	};
+	options = typeof options === "function" ? await options() : options;
+
 	body.set("grant_type", "authorization_code");
 	body.set("code", code);
 	codeVerifier && body.set("code_verifier", codeVerifier);
@@ -90,7 +93,7 @@ export async function validateAuthorizationCode({
 }: {
 	code: string;
 	redirectURI: string;
-	options: Partial<ProviderOptions>;
+	options: AwaitableFunction<Partial<ProviderOptions>>;
 	codeVerifier?: string | undefined;
 	deviceId?: string | undefined;
 	tokenEndpoint: string;
@@ -99,24 +102,24 @@ export async function validateAuthorizationCode({
 	additionalParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
 }) {
-	const { body, headers: requestHeaders } = createAuthorizationCodeRequest({
-		code,
-		codeVerifier,
-		redirectURI,
-		options,
-		authentication,
-		deviceId,
-		headers,
-		additionalParams,
-		resource,
-	});
+	const { body, headers: requestHeaders } =
+		await createAuthorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI,
+			options,
+			authentication,
+			deviceId,
+			headers,
+			additionalParams,
+			resource,
+		});
 
 	const { data, error } = await betterFetch<object>(tokenEndpoint, {
 		method: "POST",
 		body: body,
 		headers: requestHeaders,
 	});
-
 	if (error) {
 		throw error;
 	}

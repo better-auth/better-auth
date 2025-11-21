@@ -23,50 +23,52 @@ let shouldUseUpdatedProfile = false;
 
 beforeAll(async () => {
 	mswServer.listen({ onUnhandledRequest: "bypass" });
+	const serverEndpoint = async () => {
+		const data: GoogleProfile = shouldUseUpdatedProfile
+			? {
+					email: "user@email.com",
+					email_verified: true,
+					name: "Updated User",
+					picture: "https://test.com/picture.png",
+					exp: 1234567890,
+					sub: "1234567890",
+					iat: 1234567890,
+					aud: "test",
+					azp: "test",
+					nbf: 1234567890,
+					iss: "test",
+					locale: "en",
+					jti: "test",
+					given_name: "Updated",
+					family_name: "User",
+				}
+			: {
+					email: "user@email.com",
+					email_verified: true,
+					name: "First Last",
+					picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
+					exp: 1234567890,
+					sub: "1234567890",
+					iat: 1234567890,
+					aud: "test",
+					azp: "test",
+					nbf: 1234567890,
+					iss: "test",
+					locale: "en",
+					jti: "test",
+					given_name: "First",
+					family_name: "Last",
+				};
+		const testIdToken = await signJWT(data, DEFAULT_SECRET);
+		return HttpResponse.json({
+			access_token: "test",
+			refresh_token: "test",
+			id_token: testIdToken,
+		});
+	};
 	mswServer.use(
-		http.post("https://oauth2.googleapis.com/token", async () => {
-			const data: GoogleProfile = shouldUseUpdatedProfile
-				? {
-						email: "user@email.com",
-						email_verified: true,
-						name: "Updated User",
-						picture: "https://test.com/picture.png",
-						exp: 1234567890,
-						sub: "1234567890",
-						iat: 1234567890,
-						aud: "test",
-						azp: "test",
-						nbf: 1234567890,
-						iss: "test",
-						locale: "en",
-						jti: "test",
-						given_name: "Updated",
-						family_name: "User",
-					}
-				: {
-						email: "user@email.com",
-						email_verified: true,
-						name: "First Last",
-						picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
-						exp: 1234567890,
-						sub: "1234567890",
-						iat: 1234567890,
-						aud: "test",
-						azp: "test",
-						nbf: 1234567890,
-						iss: "test",
-						locale: "en",
-						jti: "test",
-						given_name: "First",
-						family_name: "Last",
-					};
-			const testIdToken = await signJWT(data, DEFAULT_SECRET);
-			return HttpResponse.json({
-				access_token: "test",
-				refresh_token: "test",
-				id_token: testIdToken,
-			});
-		}),
+		http.post("https://oauth2.googleapis.com/token", serverEndpoint),
+		http.post("https://appleid.apple.com/auth/token", serverEndpoint),
 		http.post(`http://localhost:${port}/token`, async () => {
 			const data: GoogleProfile = {
 				email: "user@email.com",
@@ -132,10 +134,10 @@ describe("Social Providers", async (c) => {
 						};
 					},
 				},
-				apple: {
+				apple: async () => ({
 					clientId: "test",
 					clientSecret: "test",
-				},
+				}),
 			},
 		},
 		{
@@ -152,7 +154,7 @@ describe("Social Providers", async (c) => {
 	afterAll(async () => {
 		await server.stop().catch(console.error);
 	});
-	server.service.on("beforeRsponse", (tokenResponse, req) => {
+	server.service.on("beforeResponse", (tokenResponse, req) => {
 		tokenResponse.body = {
 			accessToken: "access-token",
 			refreshToken: "refresher-token",
@@ -204,6 +206,7 @@ describe("Social Providers", async (c) => {
 		});
 		return tokens;
 	}
+
 	it("should be able to add social providers", async () => {
 		const signInRes = await client.signIn.social({
 			provider: "google",
@@ -239,6 +242,37 @@ describe("Social Providers", async (c) => {
 				const location = context.response.headers.get("location");
 				expect(location).toBeDefined();
 				expect(location).toContain("/welcome");
+				const cookies = parseSetCookieHeader(
+					context.response.headers.get("set-cookie") || "",
+				);
+				expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
+			},
+		});
+	});
+
+	it("should be able to sign in with async social provider", async () => {
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "apple",
+			callbackURL: "/callback",
+			newUserCallbackURL: "/welcome",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		await client.$fetch("/callback/apple", {
+			query: {
+				state,
+				code: "test",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location");
+				expect(location).toBeDefined();
+				expect(location).toContain("/callback");
 				const cookies = parseSetCookieHeader(
 					context.response.headers.get("set-cookie") || "",
 				);

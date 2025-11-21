@@ -4,6 +4,7 @@ import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 import { APIError } from "better-call";
 import * as z from "zod";
+import { getAwaitableValue } from "../../context/helpers";
 import { generateState } from "../../oauth2/state";
 import { decryptOAuthToken, setTokenUtil } from "../../oauth2/utils";
 import {
@@ -207,10 +208,9 @@ export const linkSocialAccount = createAuthEndpoint(
 	},
 	async (c) => {
 		const session = c.context.session;
-
-		const provider = c.context.socialProviders.find(
-			(p) => p.id === c.body.provider,
-		);
+		const provider = await getAwaitableValue(c.context.socialProviders, {
+			value: c.body.provider,
+		});
 
 		if (!provider) {
 			c.context.logger.error(
@@ -511,9 +511,12 @@ export const getAccessToken = createAuthEndpoint(
 				message: `Either userId or session is required`,
 			});
 		}
-		if (!ctx.context.socialProviders.find((p) => p.id === providerId)) {
+		const provider = await getAwaitableValue(ctx.context.socialProviders, {
+			value: providerId,
+		});
+		if (!provider) {
 			throw new APIError("BAD_REQUEST", {
-				message: `Provider ${providerId} is not supported.`,
+				message: `Provider ${providerId} not found.`,
 			});
 		}
 		const accounts =
@@ -526,14 +529,6 @@ export const getAccessToken = createAuthEndpoint(
 		if (!account) {
 			throw new APIError("BAD_REQUEST", {
 				message: "Account not found",
-			});
-		}
-		const provider = ctx.context.socialProviders.find(
-			(p) => p.id === providerId,
-		);
-		if (!provider) {
-			throw new APIError("BAD_REQUEST", {
-				message: `Provider ${providerId} not found.`,
 			});
 		}
 
@@ -669,9 +664,9 @@ export const refreshToken = createAuthEndpoint(
 				message: "Account not found",
 			});
 		}
-		const provider = ctx.context.socialProviders.find(
-			(p) => p.id === providerId,
-		);
+		const provider = await getAwaitableValue(ctx.context.socialProviders, {
+			value: providerId,
+		});
 		if (!provider) {
 			throw new APIError("BAD_REQUEST", {
 				message: `Provider ${providerId} not found.`,
@@ -777,9 +772,9 @@ export const accountInfo = createAuthEndpoint(
 			});
 		}
 
-		const provider = ctx.context.socialProviders.find(
-			(p) => p.id === account.providerId,
-		);
+		const provider = await getAwaitableValue(ctx.context.socialProviders, {
+			value: account.providerId,
+		});
 
 		if (!provider) {
 			throw new APIError("INTERNAL_SERVER_ERROR", {
