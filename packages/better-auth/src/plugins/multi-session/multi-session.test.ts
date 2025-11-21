@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { parseSetCookieHeader } from "../../cookies";
+import { parseCookies } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { multiSession } from ".";
 import { multiSessionClient } from "./client";
+
+const DEVICE_ID_COOKIE_NAME = "better-auth.device_id";
 
 describe("multi-session", async () => {
 	const { client, testUser, cookieSetter } = await getTestInstance(
@@ -20,204 +22,127 @@ describe("multi-session", async () => {
 		},
 	);
 
-	let headers = new Headers();
+	const headers = new Headers();
 	const testUser2 = {
 		email: "second-email@test.com",
 		password: "password",
 		name: "Name",
 	};
 
-	it("should set multi session when there is set-cookie header", async () => {
+	it("should set device_id cookie on sign in", async () => {
 		await client.signIn.email(
 			{
 				email: testUser.email,
 				password: testUser.password,
 			},
 			{
-				onResponse(context) {
-					const setCookieString = context.response.headers.get("set-cookie");
-					const setCookies = parseSetCookieHeader(setCookieString || "");
-					const sessionToken = setCookies
-						.get("better-auth.session_token")
-						?.value.split(".")[0];
-					const multiSession = setCookies.get(
-						`better-auth.session_token_multi-${sessionToken?.toLowerCase()}`,
-					)?.value;
-					expect(sessionToken).not.toBe(null);
-					expect(multiSession).not.toBe(null);
-					expect(multiSession).toContain(sessionToken);
-					expect(setCookieString).toContain("better-auth.session_token_multi-");
-				},
 				onSuccess: cookieSetter(headers),
 			},
 		);
+		expect(headers.get("cookie")).contains(DEVICE_ID_COOKIE_NAME);
+		expect(headers.get("cookie")).contains("better-auth.session_token");
+	});
+
+	it("should allow second session with same device_id", async () => {
+		const firstDeviceId = parseCookies(headers.get("cookie") || "").get(
+			DEVICE_ID_COOKIE_NAME,
+		);
+		const firstSessionToken = parseCookies(headers.get("cookie") || "").get(
+			"better-auth.session_token",
+		);
 		await client.signUp.email(testUser2, {
+			headers,
 			onSuccess: cookieSetter(headers),
 		});
+		const secondDeviceId = parseCookies(headers.get("cookie") || "").get(
+			DEVICE_ID_COOKIE_NAME,
+		);
+		const secondSessionToken = parseCookies(headers.get("cookie") || "").get(
+			"better-auth.session_token",
+		);
+		expect(secondDeviceId).toBe(firstDeviceId); // Should not change
+		expect(secondSessionToken).not.toBe(firstSessionToken); // Should change
 	});
 
-	it("should get active session", async () => {
-		const session = await client.getSession({
-			fetchOptions: {
-				headers,
-			},
-		});
-		expect(session.data?.user.email).toBe(testUser2.email);
-	});
-
-	let sessionToken = "";
 	it("should list all device sessions", async () => {
 		const res = await client.multiSession.listDeviceSessions({
 			fetchOptions: {
-				headers,
+				headers: new Headers(headers),
 			},
 		});
-		if (res.data) {
-			sessionToken =
-				res.data.find((s) => s.user.email === testUser.email)?.session.token ||
-				"";
-		}
 		expect(res.data).toHaveLength(2);
+		const emails = res.data?.map((s) => s.user.email);
+		expect(emails).toContain(testUser.email);
+		expect(emails).toContain(testUser2.email);
 	});
 
 	it("should set active session", async () => {
-		const res = await client.multiSession.setActive({
-			sessionToken,
+		const res = await client.multiSession.listDeviceSessions({
+			fetchOptions: { headers: new Headers(headers) },
+		});
+		const firstUserSession = res.data?.find(
+			(s) => s.user.email === testUser.email,
+		);
+		expect(firstUserSession).toBeDefined();
+		await client.multiSession.setActive({
+			sessionToken: firstUserSession!.session.token,
 			fetchOptions: {
-				headers,
+				headers: new Headers(headers),
+				onSuccess: cookieSetter(headers),
 			},
 		});
-		expect(res.data?.user.email).toBe(testUser.email);
+		const session = await client.getSession({
+			fetchOptions: { headers: new Headers(headers) },
+		});
+		expect(session.data?.user.email).toBe(testUser.email);
 	});
 
-	it("should revoke a session and set the next active", async () => {
+	it("should enforce maximum sessions limit", async () => {
 		const testUser3 = {
-			email: "my-email@email.com",
+			email: "third@test.com",
 			password: "password",
-			name: "Name",
+			name: "Third",
 		};
-		let token = "";
-		const signUpRes = await client.signUp.email(testUser3, {
-			onSuccess: (ctx) => {
-				const header = ctx.response.headers.get("set-cookie");
-				expect(header).toContain("better-auth.session_token");
-				const cookies = parseSetCookieHeader(header || "");
-				token =
-					cookies.get("better-auth.session_token")?.value.split(".")[0] || "";
-			},
+
+		await client.signUp.email(testUser3, {
+			headers: new Headers(headers),
+			onSuccess: cookieSetter(headers),
 		});
-		await client.multiSession.revoke(
-			{
-				sessionToken: token,
-			},
-			{
-				onSuccess(context) {
-					expect(context.response.headers.get("set-cookie")).toContain(
-						`better-auth.session_token=`,
-					);
-				},
-				headers,
-			},
-		);
+
 		const res = await client.multiSession.listDeviceSessions({
-			fetchOptions: {
-				headers,
-			},
+			fetchOptions: { headers: new Headers(headers) },
 		});
 		expect(res.data).toHaveLength(2);
+		const emails = res.data?.map((s) => s.user.email);
+		expect(emails).toContain(testUser3.email);
+		expect(emails).not.toContain(testUser.email);
+		expect(emails).toContain(testUser2.email);
 	});
 
-	it("should sign-out all sessions", async () => {
-		const newHeaders = new Headers();
-		await client.signOut({
-			fetchOptions: {
-				headers,
-				onSuccess: cookieSetter(newHeaders),
-			},
-		});
+	it("should revoke a session", async () => {
 		const res = await client.multiSession.listDeviceSessions({
-			fetchOptions: {
-				headers,
+			fetchOptions: { headers: new Headers(headers) },
+		});
+		const sessionToRevoke = res.data![0]; // Revoke first available
+
+		await client.multiSession.revoke(
+			{
+				sessionToken: sessionToRevoke?.session.token || "",
 			},
-		});
-		expect(res.data).toHaveLength(0);
-		const res2 = await client.multiSession.listDeviceSessions({
-			fetchOptions: {
-				headers: newHeaders,
+			{
+				headers: new Headers(headers),
+				onSuccess: cookieSetter(headers),
 			},
-		});
-		expect(res2.data).toHaveLength(0);
-	});
-
-	it("should reject forged multi-session cookies on sign-out", async () => {
-		const attackerUser = {
-			email: "attacker@test.com",
-			password: "password",
-			name: "Attacker",
-		};
-		const victimUser = {
-			email: "victim@test.com",
-			password: "password",
-			name: "Victim",
-		};
-
-		const attackerHeaders = new Headers();
-		let attackerSessionToken = "";
-		await client.signUp.email(attackerUser, {
-			onSuccess: cookieSetter(attackerHeaders),
-			onResponse(context) {
-				const header = context.response.headers.get("set-cookie");
-				const cookies = parseSetCookieHeader(header || "");
-				attackerSessionToken =
-					cookies.get("better-auth.session_token")?.value.split(".")[0] || "";
-			},
-		});
-
-		const victimHeaders = new Headers();
-		let victimSessionToken = "";
-		await client.signUp.email(victimUser, {
-			onSuccess: cookieSetter(victimHeaders),
-			onResponse(context) {
-				const header = context.response.headers.get("set-cookie");
-				const cookies = parseSetCookieHeader(header || "");
-				victimSessionToken =
-					cookies.get("better-auth.session_token")?.value.split(".")[0] || "";
-			},
-		});
-
-		const attackerSession = await client.getSession({
-			fetchOptions: { headers: attackerHeaders },
-		});
-		const victimSession = await client.getSession({
-			fetchOptions: { headers: victimHeaders },
-		});
-		expect(attackerSession.data?.user.email).toBe(attackerUser.email);
-		expect(victimSession.data?.user.email).toBe(victimUser.email);
-
-		const forgedCookieName = `better-auth.session_token_multi-${victimSessionToken.toLowerCase()}`;
-		const forgedCookieValue = `${victimSessionToken}.fake-signature`;
-
-		const signOutHeaders = new Headers(attackerHeaders);
-		signOutHeaders.set(
-			"cookie",
-			`${attackerHeaders.get("cookie")}; ${forgedCookieName}=${forgedCookieValue}`,
 		);
 
-		await client.signOut({
-			fetchOptions: {
-				headers: signOutHeaders,
-			},
+		const resAfter = await client.multiSession.listDeviceSessions({
+			fetchOptions: { headers: new Headers(headers) },
 		});
-
-		const victimSessionAfter = await client.getSession({
-			fetchOptions: { headers: victimHeaders },
-		});
-		expect(victimSessionAfter.data?.user.email).toBe(victimUser.email);
-		expect(victimSessionAfter.data?.session.token).toBe(victimSessionToken);
-
-		const attackerSessionAfter = await client.getSession({
-			fetchOptions: { headers: attackerHeaders },
-		});
-		expect(attackerSessionAfter.data).toBeNull();
+		expect(resAfter.data).toHaveLength(1);
+		expect(
+			resAfter.data?.find(
+				(s) => s.session.token === sessionToRevoke?.session.token,
+			),
+		).toBeUndefined();
 	});
 });
