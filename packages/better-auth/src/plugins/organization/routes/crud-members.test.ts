@@ -278,7 +278,7 @@ describe("updateMemberRole", async () => {
 				headers,
 			},
 		);
-		expect(updatedMember.data?.organizationRoles).toBe(["admin"]);
+		expect(updatedMember.data?.organizationRoles).toMatchObject(["admin"]);
 	});
 
 	it("should not update the member role if the member updating is not a member	", async () => {
@@ -420,7 +420,7 @@ describe("activeMemberRole", async () => {
 			},
 		});
 
-		expect(activeMember.data?.organizationRoles).toBe(["owner"]);
+		expect(activeMember.data?.organizationRoles).toMatchObject(["owner"]);
 	});
 
 	it("should return active member role on organization", async () => {
@@ -440,6 +440,6 @@ describe("activeMemberRole", async () => {
 			},
 		});
 
-		expect(activeMember.data?.organizationRoles).toBe(["member"]);
+		expect(activeMember.data?.organizationRoles).toMatchObject(["member"]);
 	});
 });

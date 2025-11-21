@@ -9,8 +9,10 @@ import type { PrettifyDeep } from "../../../types/helper";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import { teamSchema, type MemberTeamRole } from "../schema";
+import { teamSchema } from "../schema";
+import type { MemberTeamRole } from "../schema";
 import type { OrganizationOptions } from "../types";
+import { getCurrentTransactionAdapter } from "@better-auth/core/context";
 
 export const createTeam = <O extends OrganizationOptions>(options: O) => {
 	const additionalFieldsSchema = toZodSchema({
@@ -848,14 +850,14 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 		},
 		async (ctx) => {
 			const session = ctx.context.session;
-			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+			const orgAdapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 			let teamId = ctx.query?.teamId || session?.session.activeTeamId;
 			if (!teamId) {
 				throw new APIError("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.YOU_DO_NOT_HAVE_AN_ACTIVE_TEAM,
 				});
 			}
-			const member = await adapter.findTeamMember({
+			const member = await orgAdapter.findTeamMember({
 				userId: session.user.id,
 				teamId,
 			});
@@ -865,14 +867,16 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 					message: ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_TEAM,
 				});
 			}
-			const members = await adapter.listTeamMembers({
+			const members = await orgAdapter.listTeamMembers({
 				teamId,
 			});
 			// Get team roles for each member
 			const memberIds = members.map((m) => m.id);
 			const teamRoleAssignments =
 				memberIds.length > 0
-					? await adapter.findMany<MemberTeamRole>({
+					? await (
+							await getCurrentTransactionAdapter()
+						).findMany<MemberTeamRole>({
 							model: "memberTeamRole",
 							where: [
 								{

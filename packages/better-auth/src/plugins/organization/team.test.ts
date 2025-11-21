@@ -25,13 +25,7 @@ describe("team", async (it) => {
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [
-			organizationClient({
-				teams: {
-					enabled: true,
-				},
-			}),
-		],
+		plugins: [organizationClient({})],
 		baseURL: "http://localhost:3000/api/auth",
 		fetchOptions: {
 			customFetchImpl: async (url, init) => {
@@ -109,9 +103,10 @@ describe("team", async (it) => {
 
 		const res = await client.organization.inviteMember(
 			{
-				teamId,
 				email: invitedUser.email,
-				role: "member",
+				organizationRoles: ["member"],
+				teamRoles: ["member"],
+				teamId,
 			},
 			{
 				headers,
@@ -120,7 +115,6 @@ describe("team", async (it) => {
 
 		expect(res.data).toMatchObject({
 			email: invitedUser.email,
-			role: "member",
 			teamId,
 		});
 
@@ -134,7 +128,6 @@ describe("team", async (it) => {
 		);
 
 		expect(invitation.data?.member).toMatchObject({
-			role: "member",
 			userId: signUpRes.data?.user.id,
 		});
 	});
