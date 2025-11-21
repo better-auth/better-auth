@@ -271,7 +271,7 @@ export const createTestSuite = <
 						try {
 							defaultModelName = getDefaultModelName(model);
 						} catch {
-							return;
+							continue;
 						}
 						if (!schema[defaultModelName]) continue; // model doesn't exist in the schema anymore, so we skip it
 						try {
