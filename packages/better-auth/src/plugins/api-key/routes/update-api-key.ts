@@ -5,8 +5,8 @@ import { APIError, getSessionFromCtx } from "../../../api";
 import { getDate } from "../../../utils/date";
 import { safeJSONParse } from "../../../utils/json";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
-import type { apiKeySchema } from "../schema";
 import { getApiKeyById, setApiKey } from "../adapter";
+import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 export function updateApiKey({

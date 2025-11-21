@@ -6,9 +6,9 @@ import { safeJSONParse } from "../../../utils/json";
 import { role } from "../../access";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
+import { deleteApiKey, getApiKey, setApiKey } from "../adapter";
 import { isRateLimited } from "../rate-limit";
 import type { apiKeySchema } from "../schema";
-import { deleteApiKey, getApiKey, setApiKey } from "../adapter";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 

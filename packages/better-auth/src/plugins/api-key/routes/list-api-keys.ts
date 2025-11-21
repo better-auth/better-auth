@@ -2,8 +2,8 @@ import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { sessionMiddleware } from "../../../api";
 import { safeJSONParse } from "../../../utils/json";
-import type { apiKeySchema } from "../schema";
 import { listApiKeys as listApiKeysFromStorage } from "../adapter";
+import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 export function listApiKeys({

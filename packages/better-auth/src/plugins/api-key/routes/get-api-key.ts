@@ -4,8 +4,8 @@ import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../../api";
 import { safeJSONParse } from "../../../utils/json";
 import { ERROR_CODES } from "..";
-import type { apiKeySchema } from "../schema";
 import { getApiKeyById } from "../adapter";
+import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 

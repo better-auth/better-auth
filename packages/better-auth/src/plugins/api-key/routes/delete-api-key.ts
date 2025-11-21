@@ -3,11 +3,11 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../../api";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
-import type { apiKeySchema } from "../schema";
 import {
 	deleteApiKey as deleteApiKeyFromStorage,
 	getApiKeyById,
 } from "../adapter";
+import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 export function deleteApiKey({
