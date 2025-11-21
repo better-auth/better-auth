@@ -87,7 +87,7 @@ describe("oauthConsent", async () => {
 	let consent2: OAuthConsent<Scope[]>;
 
 	beforeAll(async () => {
-		const client1 = await auth.api.createOAuthClient({
+		const client1 = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
@@ -98,7 +98,7 @@ describe("oauthConsent", async () => {
 		expect(client1?.client_secret).toBeDefined();
 		oauthClient1 = client1;
 
-		const client2 = await auth.api.createOAuthClient({
+		const client2 = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],

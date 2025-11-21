@@ -1269,10 +1269,12 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					return registerEndpoint(ctx, opts);
 				},
 			),
+			adminCreateOAuthClient: oauthClientEndpoints.adminCreateOAuthClient(opts),
 			createOAuthClient: oauthClientEndpoints.createOAuthClient(opts),
 			getOAuthClient: oauthClientEndpoints.getOAuthClient(opts),
 			getOAuthClientPublic: oauthClientEndpoints.getOAuthClientPublic(opts),
 			getOAuthClients: oauthClientEndpoints.getOAuthClients(opts),
+			adminUpdateOAuthClient: oauthClientEndpoints.adminUpdateOAuthClient(opts),
 			updateOAuthClient: oauthClientEndpoints.updateOAuthClient(opts),
 			rotateClientSecret: oauthClientEndpoints.rotateClientSecret(opts),
 			deleteOAuthClient: oauthClientEndpoints.deleteOAuthClient(opts),

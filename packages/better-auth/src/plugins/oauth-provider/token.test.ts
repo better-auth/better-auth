@@ -62,7 +62,7 @@ describe("oauth token - authorization_code", async () => {
 
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
-		const response = await auth.api.createOAuthClient({
+		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
@@ -407,7 +407,7 @@ describe("oauth token - refresh_token", async () => {
 
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
-		const response = await authorizationServer.api.createOAuthClient({
+		const response = await authorizationServer.api.adminCreateOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
@@ -949,7 +949,7 @@ describe("oauth token - client_credentials", async () => {
 
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
-		const response = await auth.api.createOAuthClient({
+		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
@@ -1151,7 +1151,7 @@ describe("oauth token - config", async () => {
 			},
 		});
 
-		const registeredClient = await auth.api.createOAuthClient({
+		const registeredClient = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
