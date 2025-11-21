@@ -558,6 +558,15 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 								[opts.phoneNumberVerified]: true,
 							},
 						);
+
+						await options?.callbackOnVerification?.(
+							{
+								phoneNumber: ctx.body.phoneNumber,
+								user,
+							},
+							ctx.request,
+						);
+
 						return ctx.json({
 							status: true,
 							token: session.session.token,
