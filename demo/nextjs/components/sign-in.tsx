@@ -241,6 +241,32 @@ export default function SignIn() {
 							variant="outline"
 							className={cn("w-full gap-2 flex items-center relative")}
 							onClick={async () => {
+								await signIn.social({
+									provider: "hubspot",
+									callbackURL: "/dashboard",
+								});
+							}}
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="1em"
+								height="1em"
+								viewBox="0 0 24 24"
+							>
+								<path
+									fill="#FF7A59"
+									d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12s12-5.373 12-12S18.627 0 12 0zm5.568 8.16c-.169 0-.342.027-.515.075v-.075h-2.332c-1.035 0-1.875.84-1.875 1.875v2.832c0 .414-.336.75-.75.75h-.75v1.125h.75c.414 0 .75.336.75.75v.75h1.125v-.75c0-.414.336-.75.75-.75h3.75c.414 0 .75-.336.75-.75v-3.75c0-.414-.336-.75-.75-.75h-1.5zm-10.443.375H4.693c-.621 0-1.125.504-1.125 1.125v5.25c0 .621.504 1.125 1.125 1.125h2.432c.621 0 1.125-.504 1.125-1.125v-5.25c0-.621-.504-1.125-1.125-1.125zm4.875 0h-2.25c-.414 0-.75.336-.75.75v6.75c0 .414.336.75.75.75h2.25c.414 0 .75-.336.75-.75v-6.75c0-.414-.336-.75-.75-.75z"
+								></path>
+							</svg>
+							<span>Sign in with HubSpot</span>
+							{client.isLastUsedLoginMethod("hubspot") && (
+								<LastUsedIndicator />
+							)}
+						</Button>
+						<Button
+							variant="outline"
+							className={cn("w-full gap-2 flex items-center relative")}
+							onClick={async () => {
 								await signIn.passkey({
 									fetchOptions: {
 										onSuccess() {

@@ -138,6 +138,11 @@ export const auth = betterAuth({
 			clientId: process.env.PAYPAL_CLIENT_ID || "",
 			clientSecret: process.env.PAYPAL_CLIENT_SECRET || "",
 		},
+		hubspot: {
+			clientId: process.env.HUBSPOT_CLIENT_ID || "",
+			clientSecret: process.env.HUBSPOT_CLIENT_SECRET || "",
+			scope: ["crm.objects.contacts.read", "crm.objects.contacts.write"],
+		},
 	},
 	plugins: [
 		organization({

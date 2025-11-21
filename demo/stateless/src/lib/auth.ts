@@ -16,5 +16,9 @@ export const auth = betterAuth({
 			clientId: process.env.GITHUB_CLIENT_ID as string,
 			clientSecret: process.env.GITHUB_CLIENT_SECRET as string,
 		},
+		hubspot: {
+			clientId: process.env.HUBSPOT_CLIENT_ID as string,
+			clientSecret: process.env.HUBSPOT_CLIENT_SECRET as string,
+		},
 	},
 });

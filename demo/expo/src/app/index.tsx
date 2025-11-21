@@ -62,6 +62,19 @@ export default function Index() {
 					<Ionicons name="github" size={16} />
 					<Text>Sign In with GitHub</Text>
 				</Button>
+				<Button
+					variant="secondary"
+					className="flex flex-row gap-2 items-center bg-white/50"
+					onPress={() => {
+						authClient.signIn.social({
+							provider: "hubspot",
+							callbackURL: "/dashboard",
+						});
+					}}
+				>
+					<Ionicons name="customerservice" size={16} />
+					<Text>Sign In with HubSpot</Text>
+				</Button>
 			</View>
 			<View className="flex-row gap-2 w-full items-center px-6 my-4">
 				<Separator className="flex-grow w-3/12" />
