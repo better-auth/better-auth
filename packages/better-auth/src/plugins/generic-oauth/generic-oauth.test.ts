@@ -1368,4 +1368,161 @@ describe("oauth2", async () => {
 
 		expect(testAuth).toBeDefined();
 	});
+
+	it("should support custom getToken for non-standard providers", async () => {
+		const mockTokenResponse = {
+			access_token: "custom-access-token",
+			refresh_token: "custom-refresh-token",
+			expires_in: 3600,
+			openid: "custom-openid-123",
+			unionid: "custom-unionid-456",
+			scope: "snsapi_login",
+		};
+
+		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "custom-provider",
+							clientId: "custom-client-id",
+							clientSecret: "custom-client-secret",
+							authorizationUrl: `http://localhost:${port}/authorize`,
+							scopes: ["snsapi_login"],
+							// Custom token exchange that doesn't use standard OAuth flow
+							getToken: async ({ code, redirectURI }) => {
+								// Simulate a non-standard token endpoint (like WeChat)
+								const { data, error } = await betterFetch<
+									typeof mockTokenResponse
+								>(
+									`http://localhost:${port}/custom-token?code=${code}&redirect_uri=${redirectURI}`,
+									{
+										method: "GET",
+									},
+								);
+
+								if (error || !data) {
+									throw new Error("Token fetch failed");
+								}
+
+								return {
+									accessToken: data.access_token,
+									refreshToken: data.refresh_token,
+									accessTokenExpiresAt: new Date(
+										Date.now() + data.expires_in * 1000,
+									),
+									scopes: data.scope.split(","),
+									raw: data,
+								};
+							},
+							getUserInfo: async (tokens) => {
+								// Access custom fields from raw token data
+								const openid = tokens.raw?.openid;
+								const unionid = tokens.raw?.unionid;
+
+								expect(openid).toBe("custom-openid-123");
+								expect(unionid).toBe("custom-unionid-456");
+
+								return {
+									id: unionid || openid,
+									name: "Custom Provider User",
+									email: "custom@test.com",
+									emailVerified: true,
+								};
+							},
+						},
+					],
+				}),
+			],
+		});
+
+		// Mock the custom token endpoint
+		server.service.once("beforeTokenSigning", (_token, req) => {
+			// Override the standard token endpoint behavior
+			const url = new URL(req.url || "", `http://localhost:${port}`);
+			if (url.pathname === "/custom-token") {
+				// Return mock response for custom token endpoint
+			}
+		});
+
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const headers = new Headers();
+		const res = await authClient.signIn.oauth2({
+			providerId: "custom-provider",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
+	});
+
+	it("should preserve raw token data in OAuth2Tokens", async () => {
+		let capturedTokens: any = null;
+
+		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "raw-token-test",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+							getUserInfo: async (tokens) => {
+								capturedTokens = tokens;
+								// Verify raw field exists and contains token data
+								expect(tokens.raw).toBeDefined();
+								expect(tokens.raw?.access_token).toBe(tokens.accessToken);
+
+								return {
+									id: "raw-test-user",
+									name: "Raw Token Test User",
+									email: "raw@test.com",
+									emailVerified: true,
+								};
+							},
+						},
+					],
+				}),
+			],
+		});
+
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const headers = new Headers();
+		const res = await authClient.signIn.oauth2({
+			providerId: "raw-token-test",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const { callbackURL } = await simulateOAuthFlow(
+			res.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+
+		expect(callbackURL).toBe("http://localhost:3000/new_user");
+		expect(capturedTokens).toBeDefined();
+		expect(capturedTokens.raw).toBeDefined();
+	});
 });

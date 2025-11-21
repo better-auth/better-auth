@@ -248,7 +248,10 @@ interface GenericOAuthConfig {
 
 **pkce**: (Optional) If true, enables PKCE (Proof Key for Code Exchange) for enhanced security. Defaults to `false`.
 
+
 **accessType**: (Optional) The access type for the authorization request. Use `"offline"` to request a refresh token.
+
+**getToken**: (Optional) A custom function to exchange authorization code for tokens. If provided, this function will be used instead of the default token exchange logic. This is useful for providers with non-standard token endpoints (e.g., WeChat).
 
 **getUserInfo**: (Optional) A custom function to fetch user info from the provider, given the OAuth tokens. If not provided, a default fetch is used.
 
@@ -271,6 +274,72 @@ interface GenericOAuthConfig {
 **overrideUserInfo**: (Optional) If true, the user's info in your database will be updated with the provider's info every time they sign in. Defaults to `false`.
 
 ## Advanced Usage
+
+### Custom Token Exchange
+
+For providers with non-standard token endpoints (e.g., WeChat), you can provide a custom `getToken` function:
+
+```ts
+import { betterFetch } from "@better-fetch/fetch";
+import type { OAuth2Tokens } from "better-auth";
+
+genericOAuth({
+  config: [
+    {
+      providerId: "wechat",
+      clientId: process.env.WECHAT_APP_ID,
+      clientSecret: process.env.WECHAT_APP_SECRET,
+      authorizationUrl: "https://open.weixin.qq.com/connect/qrconnect",
+      scopes: ["snsapi_login"],
+      // Custom token exchange for WeChat
+      getToken: async ({ code, redirectURI }) => {
+        const { data } = await betterFetch<{
+          access_token: string;
+          expires_in: number;
+          refresh_token: string;
+          openid: string;
+          scope: string;
+          unionid?: string;
+        }>(
+          `https://api.weixin.qq.com/sns/oauth2/access_token?` +
+          `appid=${process.env.WECHAT_APP_ID}&` +
+          `secret=${process.env.WECHAT_APP_SECRET}&` +
+          `code=${code}&` +
+          `grant_type=authorization_code`
+        );
+        
+        return {
+          accessToken: data.access_token,
+          refreshToken: data.refresh_token,
+          accessTokenExpiresAt: new Date(Date.now() + data.expires_in * 1000),
+          scopes: data.scope.split(","),
+          // Preserve WeChat-specific fields in raw
+          raw: data,
+        };
+      },
+      getUserInfo: async (tokens) => {
+        // Access WeChat-specific fields from raw token data
+        const openid = tokens.raw?.openid;
+        const unionid = tokens.raw?.unionid;
+        
+        const { data } = await betterFetch(
+          `https://api.weixin.qq.com/sns/userinfo?` +
+          `access_token=${tokens.accessToken}&` +
+          `openid=${openid}`
+        );
+        
+        return {
+          id: unionid || openid,
+          name: data.nickname,
+          email: null,
+          image: data.headimgurl,
+          emailVerified: false,
+        };
+      },
+    },
+  ],
+});
+```
 
 ### Custom User Info Fetching
 
@@ -318,7 +387,25 @@ genericOAuth({
 })
 ```
 
+### Accessing Raw Token Data
+
+The `OAuth2Tokens` object includes a `raw` field that preserves the original token response from the provider. This is useful for accessing provider-specific fields:
+
+```ts
+getUserInfo: async (tokens) => {
+  // Access provider-specific fields
+  const customField = tokens.raw?.custom_provider_field;
+  
+  // Use in your logic
+  return {
+    id: tokens.raw?.provider_user_id,
+    // ...
+  };
+}
+```
+
 ### Error Handling
 
 The plugin includes built-in error handling for common OAuth issues. Errors are typically redirected to your application's error page with an appropriate error message in the URL parameters. If the callback URL is not provided, the user will be redirected to Better Auth's default error page.
+
 

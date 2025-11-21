@@ -94,6 +94,21 @@ export interface GenericOAuthConfig {
 	 */
 	accessType?: string | undefined;
 	/**
+	 * Custom function to exchange authorization code for tokens.
+	 * If provided, this function will be used instead of the default token exchange logic.
+	 * This is useful for providers with non-standard token endpoints (e.g., WeChat).
+	 * @param data - Authorization code exchange parameters
+	 * @returns A promise that resolves to OAuth2Tokens
+	 */
+	getToken?:
+		| ((data: {
+				code: string;
+				redirectURI: string;
+				codeVerifier?: string | undefined;
+				deviceId?: string | undefined;
+		  }) => Promise<OAuth2Tokens>)
+		| undefined;
+	/**
 	 * Custom function to fetch user info.
 	 * If provided, this function will be used instead of the default user info fetching logic.
 	 * @param tokens - The OAuth tokens received after successful authentication
@@ -307,6 +322,12 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						codeVerifier?: string | undefined;
 						deviceId?: string | undefined;
 					}) {
+						// Use custom getToken if provided
+						if (c.getToken) {
+							return c.getToken(data);
+						}
+
+						// Standard token exchange flow
 						let finalTokenUrl = c.tokenUrl;
 						if (c.discoveryUrl) {
 							const discovery = await betterFetch<{
@@ -668,15 +689,26 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							message: "Provider ID is required",
 						});
 					}
-					const provider = options.config.find(
+					const providerConfig = options.config.find(
 						(p) => p.providerId === providerId,
 					);
 
-					if (!provider) {
+					if (!providerConfig) {
 						throw new APIError("BAD_REQUEST", {
 							message: `No config found for provider ${providerId}`,
 						});
 					}
+
+					// Get the actual provider from socialProviders for validateAuthorizationCode
+					const oauthProvider = ctx.context.socialProviders.find(
+						(p) => p.id === providerId,
+					);
+					if (!oauthProvider) {
+						throw new APIError("BAD_REQUEST", {
+							message: `OAuth provider not found for ${providerId}`,
+						});
+					}
+
 					let tokens: OAuth2Tokens | undefined = undefined;
 					const parsedState = await parseState(ctx);
 
@@ -703,15 +735,15 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						throw ctx.redirect(url);
 					}
 
-					let finalTokenUrl = provider.tokenUrl;
-					let finalUserInfoUrl = provider.userInfoUrl;
-					if (provider.discoveryUrl) {
+					let finalTokenUrl = providerConfig.tokenUrl;
+					let finalUserInfoUrl = providerConfig.userInfoUrl;
+					if (providerConfig.discoveryUrl) {
 						const discovery = await betterFetch<{
 							token_endpoint: string;
 							userinfo_endpoint: string;
-						}>(provider.discoveryUrl, {
+						}>(providerConfig.discoveryUrl, {
 							method: "GET",
-							headers: provider.discoveryHeaders,
+							headers: providerConfig.discoveryHeaders,
 						});
 						if (discovery.data) {
 							finalTokenUrl = discovery.data.token_endpoint;
@@ -719,28 +751,12 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						}
 					}
 					try {
-						if (!finalTokenUrl) {
-							throw new APIError("BAD_REQUEST", {
-								message: "Invalid OAuth configuration.",
-							});
-						}
-						const additionalParams =
-							typeof provider.tokenUrlParams === "function"
-								? provider.tokenUrlParams(ctx)
-								: provider.tokenUrlParams;
-						tokens = await validateAuthorizationCode({
-							headers: provider.authorizationHeaders,
+						// Use the provider's validateAuthorizationCode method
+						// which supports custom getToken if provided
+						tokens = await oauthProvider.validateAuthorizationCode({
 							code,
-							codeVerifier: provider.pkce ? codeVerifier : undefined,
-							redirectURI: `${ctx.context.baseURL}/oauth2/callback/${provider.providerId}`,
-							options: {
-								clientId: provider.clientId,
-								clientSecret: provider.clientSecret,
-								redirectURI: provider.redirectURI,
-							},
-							tokenEndpoint: finalTokenUrl,
-							authentication: provider.authentication,
-							additionalParams,
+							redirectURI: `${ctx.context.baseURL}/oauth2/callback/${providerConfig.providerId}`,
+							codeVerifier: providerConfig.pkce ? codeVerifier : undefined,
 						});
 					} catch (e) {
 						ctx.context.logger.error(
@@ -760,15 +776,15 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					const userInfo: Omit<User, "createdAt" | "updatedAt"> =
 						await (async function handleUserInfo() {
 							const userInfo = (
-								provider.getUserInfo
-									? await provider.getUserInfo(tokens)
+								providerConfig.getUserInfo
+									? await providerConfig.getUserInfo(tokens)
 									: await getUserInfo(tokens, finalUserInfoUrl)
 							) as OAuth2UserInfo | null;
 							if (!userInfo) {
 								throw redirectOnError("user_info_is_missing");
 							}
-							const mapUser = provider.mapProfileToUser
-								? await provider.mapProfileToUser(userInfo)
+							const mapUser = providerConfig.mapProfileToUser
+								? await providerConfig.mapProfileToUser(userInfo)
 								: userInfo;
 							const email = mapUser.email
 								? mapUser.email.toLowerCase()
@@ -802,7 +818,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						const existingAccount =
 							await ctx.context.internalAdapter.findAccountByProviderId(
 								String(userInfo.id),
-								provider.providerId,
+								providerConfig.providerId,
 							);
 						if (existingAccount) {
 							if (existingAccount.userId !== link.userId) {
@@ -828,7 +844,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							const newAccount =
 								await ctx.context.internalAdapter.createAccount({
 									userId: link.userId,
-									providerId: provider.providerId,
+									providerId: providerConfig.providerId,
 									accountId: userInfo.id,
 									accessToken: tokens.accessToken,
 									accessTokenExpiresAt: tokens.accessTokenExpiresAt,
@@ -854,16 +870,16 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					const result = await handleOAuthUserInfo(ctx, {
 						userInfo,
 						account: {
-							providerId: provider.providerId,
+							providerId: providerConfig.providerId,
 							accountId: userInfo.id,
 							...tokens,
 							scope: tokens.scopes?.join(","),
 						},
 						callbackURL: callbackURL,
 						disableSignUp:
-							(provider.disableImplicitSignUp && !requestSignUp) ||
-							provider.disableSignUp,
-						overrideUserInfo: provider.overrideUserInfo,
+							(providerConfig.disableImplicitSignUp && !requestSignUp) ||
+							providerConfig.disableSignUp,
+						overrideUserInfo: providerConfig.overrideUserInfo,
 					});
 
 					if (result.error) {
