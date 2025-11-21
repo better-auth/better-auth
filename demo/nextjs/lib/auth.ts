@@ -52,7 +52,7 @@ if (!dialect) {
 
 export const auth = betterAuth({
 	appName: "Better Auth Demo",
-	// If not explicitly set, the system will check for the environment variable process.env.BETTER_AUTH_URL
+	// If not explicitly set, the system will check the environment variable process.env.BETTER_AUTH_URL
 	// baseURL: process.env.BETTER_AUTH_URL,
 	database: {
 		dialect,
