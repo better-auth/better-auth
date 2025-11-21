@@ -185,7 +185,7 @@ export async function rpInitiatedLogoutEndpoint(
 			if (state) {
 				redirectUri.searchParams.set("state", state);
 			}
-			const { url } = await handleRedirect(ctx, post_logout_redirect_uri);
+			const { url } = await handleRedirect(ctx, redirectUri.toString());
 			return {
 				redirect_uri: url,
 			};
