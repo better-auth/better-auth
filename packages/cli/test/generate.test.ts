@@ -30,7 +30,9 @@ describe("generate", async () => {
 				plugins: [twoFactor(), username()],
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot("./__snapshots__/schema.prisma");
+		await expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/schema.prisma",
+		);
 	});
 
 	it("should generate prisma schema with number id", async () => {
@@ -57,7 +59,7 @@ describe("generate", async () => {
 				},
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot(
+		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/schema-numberid.prisma",
 		);
 	});
@@ -86,7 +88,7 @@ describe("generate", async () => {
 				},
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot(
+		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/schema-uuid.prisma",
 		);
 	});
@@ -110,7 +112,7 @@ describe("generate", async () => {
 				plugins: [twoFactor(), username()],
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot(
+		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/schema-mongodb.prisma",
 		);
 	});
@@ -134,7 +136,7 @@ describe("generate", async () => {
 				plugins: [twoFactor(), username()],
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot(
+		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/schema-mysql.prisma",
 		);
 	});
@@ -171,7 +173,7 @@ describe("generate", async () => {
 				],
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot(
+		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/schema-mysql-custom.prisma",
 		);
 	});
@@ -209,7 +211,9 @@ describe("generate", async () => {
 				},
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot("./__snapshots__/auth-schema.txt");
+		await expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/auth-schema.txt",
+		);
 	});
 
 	it("should generate drizzle schema with number id", async () => {
@@ -250,7 +254,7 @@ describe("generate", async () => {
 				},
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot(
+		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-number-id.txt",
 		);
 	});
@@ -263,7 +267,9 @@ describe("generate", async () => {
 			},
 			adapter: {} as any,
 		});
-		expect(schema.code).toMatchFileSnapshot("./__snapshots__/migrations.sql");
+		await expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/migrations.sql",
+		);
 	});
 
 	it("should add plugin to empty plugins array without leading comma", async () => {
