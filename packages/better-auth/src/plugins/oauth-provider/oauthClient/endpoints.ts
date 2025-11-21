@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { APIError } from "../../../api";
+import { APIError, getSessionFromCtx } from "../../../api";
 import { generateRandomString } from "../../../crypto";
 import type { OAuthClient } from "../../../oauth-2.1/types";
 import type { DatabaseClient } from "../register";
@@ -14,16 +14,39 @@ import type { OAuthOptions, Scope } from "../types";
 import { getClient, storeClientSecret } from "../utils";
 
 export async function getClientEndpoint(
-	ctx: GenericEndpointContext & { params: { id: string } },
+	ctx: GenericEndpointContext & { query: { client_id: string } },
 	opts: OAuthOptions<Scope[]>,
 ) {
-	const client = await getClient(ctx, opts, ctx.params.id);
+	const session = await getSessionFromCtx(ctx);
+	if (!session) throw new APIError("UNAUTHORIZED");
+	if (
+		opts.clientPrivileges &&
+		!(await opts.clientPrivileges({
+			action: "read",
+			session: session.session,
+			user: session.user,
+		}))
+	) {
+		throw new APIError("UNAUTHORIZED");
+	}
+
+	const client = await getClient(ctx, opts, ctx.query.client_id);
 	if (!client) {
 		throw new APIError("NOT_FOUND", {
 			error_description: "client not found",
 			error: "not_found",
 		});
 	}
+
+	if (client.userId) {
+		if (client.userId !== session.user.id) throw new APIError("UNAUTHORIZED");
+	} else if (client.referenceId && opts.clientReference) {
+		if (client.referenceId !== (await opts.clientReference(session)))
+			throw new APIError("UNAUTHORIZED");
+	} else {
+		throw new APIError("UNAUTHORIZED");
+	}
+
 	// Never return @internal client_secret
 	const res = schemaToOAuth(client);
 	res.client_secret = undefined;
@@ -68,13 +91,25 @@ export async function getClientsEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	const { user_id, reference_id } = ctx.query;
+	const session = await getSessionFromCtx(ctx);
+	if (!session) throw new APIError("UNAUTHORIZED");
+	if (
+		opts.clientPrivileges &&
+		!(await opts.clientPrivileges({
+			action: "list",
+			session: session.session,
+			user: session.user,
+		}))
+	) {
+		throw new APIError("UNAUTHORIZED");
+	}
 
-	if (user_id) {
+	const reference_id = await opts.clientReference?.(session);
+	if (reference_id) {
 		const dbClients = await ctx.context.adapter
 			.findMany<DatabaseClient>({
 				model: opts.schema?.oauthClient?.modelName ?? "oauthClient",
-				where: [{ field: "userId", value: user_id }],
+				where: [{ field: "referenceId", value: reference_id }],
 			})
 			.then((res) => {
 				if (!res) return null;
@@ -85,11 +120,11 @@ export async function getClientsEndpoint(
 				});
 			});
 		return dbClients;
-	} else if (reference_id) {
+	} else if (session.user.id) {
 		const dbClients = await ctx.context.adapter
 			.findMany<DatabaseClient>({
 				model: opts.schema?.oauthClient?.modelName ?? "oauthClient",
-				where: [{ field: "referenceId", value: reference_id }],
+				where: [{ field: "userId", value: session.user.id }],
 			})
 			.then((res) => {
 				if (!res) return null;
@@ -108,33 +143,24 @@ export async function getClientsEndpoint(
 }
 
 export async function deleteClientEndpoint(
-	ctx: GenericEndpointContext & { params: { id: string } },
+	ctx: GenericEndpointContext & { body: { client_id: string } },
 	opts: OAuthOptions<Scope[]>,
 ) {
-	const client = await getClient(ctx, opts, ctx.params.id);
-	if (!client) {
-		throw new APIError("NOT_FOUND", {
-			error_description: "client not found",
-			error: "not_found",
-		});
+	const session = await getSessionFromCtx(ctx);
+	if (!session) throw new APIError("UNAUTHORIZED");
+	if (
+		opts.clientPrivileges &&
+		!(await opts.clientPrivileges({
+			action: "delete",
+			session: session.session,
+			user: session.user,
+		}))
+	) {
+		throw new APIError("UNAUTHORIZED");
 	}
 
-	await ctx.context.adapter.delete({
-		model: opts.schema?.oauthClient?.modelName ?? "oauthClient",
-		where: [
-			{
-				field: "clientId",
-				value: ctx.params.id,
-			},
-		],
-	});
-}
-
-export async function updateClientEndpoint(
-	ctx: GenericEndpointContext & { params: { id: string } },
-	opts: OAuthOptions<Scope[]>,
-) {
-	const trustedClient = opts.cachedTrustedClients?.has(ctx.params.id);
+	const clientId = ctx.body.client_id;
+	const trustedClient = opts.cachedTrustedClients?.has(clientId);
 	if (trustedClient) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {
 			error_description: "trusted clients must be updated manually",
@@ -142,7 +168,7 @@ export async function updateClientEndpoint(
 		});
 	}
 
-	const client = await getClient(ctx, opts, ctx.params.id);
+	const client = await getClient(ctx, opts, clientId);
 	if (!client) {
 		throw new APIError("NOT_FOUND", {
 			error_description: "client not found",
@@ -150,7 +176,82 @@ export async function updateClientEndpoint(
 		});
 	}
 
-	const updates = ctx.body as OAuthClient;
+	if (client.userId) {
+		if (client.userId !== session.user.id) throw new APIError("UNAUTHORIZED");
+	} else if (client.referenceId && opts.clientReference) {
+		if (client.referenceId !== (await opts.clientReference(session)))
+			throw new APIError("UNAUTHORIZED");
+	} else {
+		throw new APIError("UNAUTHORIZED");
+	}
+
+	await ctx.context.adapter.delete({
+		model: opts.schema?.oauthClient?.modelName ?? "oauthClient",
+		where: [
+			{
+				field: "clientId",
+				value: ctx.query.client_id,
+			},
+		],
+	});
+}
+
+export async function updateClientEndpoint(
+	ctx: GenericEndpointContext & {
+		body: {
+			client_id: string;
+			update: Omit<Partial<OAuthClient>, "client_id">;
+		};
+	},
+	opts: OAuthOptions<Scope[]>,
+) {
+	const session = await getSessionFromCtx(ctx);
+	if (!session) throw new APIError("UNAUTHORIZED");
+	if (
+		opts.clientPrivileges &&
+		!(await opts.clientPrivileges({
+			action: "update",
+			session: session.session,
+			user: session.user,
+		}))
+	) {
+		throw new APIError("UNAUTHORIZED");
+	}
+
+	const clientId = ctx.body.client_id;
+	const trustedClient = opts.cachedTrustedClients?.has(clientId);
+	if (trustedClient) {
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			error_description: "trusted clients must be updated manually",
+			error: "invalid_client",
+		});
+	}
+
+	const client = await getClient(ctx, opts, clientId);
+	if (!client) {
+		throw new APIError("NOT_FOUND", {
+			error_description: "client not found",
+			error: "not_found",
+		});
+	}
+
+	if (client.userId) {
+		if (client.userId !== session.user.id) throw new APIError("UNAUTHORIZED");
+	} else if (client.referenceId && opts.clientReference) {
+		if (client.referenceId !== (await opts.clientReference(session)))
+			throw new APIError("UNAUTHORIZED");
+	} else {
+		throw new APIError("UNAUTHORIZED");
+	}
+
+	const updates = ctx.body.update as OAuthClient;
+	if (Object.keys(updates).length === 0) {
+		// Never return @internal client_secret
+		const res = schemaToOAuth(client);
+		res.client_secret = undefined;
+		return res;
+	}
+
 	await checkOAuthClient(
 		{
 			...schemaToOAuth(client),
@@ -158,14 +259,13 @@ export async function updateClientEndpoint(
 		},
 		opts,
 	);
-
 	const updatedClient = await ctx.context.adapter
 		.update<DatabaseClient>({
 			model: opts.schema?.oauthClient?.modelName ?? "oauthClient",
 			where: [
 				{
 					field: "clientId",
-					value: ctx.params.id,
+					value: clientId,
 				},
 			],
 			update: schemaToDatabase(oauthToSchema(updates)),
@@ -180,7 +280,6 @@ export async function updateClientEndpoint(
 			error: "invalid_client",
 		});
 	}
-
 	// Never return @internal client_secret
 	const res = schemaToOAuth(updatedClient);
 	res.client_secret = undefined;
@@ -188,10 +287,24 @@ export async function updateClientEndpoint(
 }
 
 export async function rotateClientSecretEndpoint(
-	ctx: GenericEndpointContext & { params: { id: string } },
+	ctx: GenericEndpointContext & { body: { client_id: string } },
 	opts: OAuthOptions<Scope[]>,
 ) {
-	const trustedClient = opts.cachedTrustedClients?.has(ctx.params.id);
+	const session = await getSessionFromCtx(ctx);
+	if (!session) throw new APIError("UNAUTHORIZED");
+	if (
+		opts.clientPrivileges &&
+		!(await opts.clientPrivileges({
+			action: "rotate",
+			session: session.session,
+			user: session.user,
+		}))
+	) {
+		throw new APIError("UNAUTHORIZED");
+	}
+
+	const clientId = ctx.body.client_id;
+	const trustedClient = opts.cachedTrustedClients?.has(clientId);
 	if (trustedClient) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {
 			error_description: "trusted clients must be updated manually",
@@ -199,12 +312,21 @@ export async function rotateClientSecretEndpoint(
 		});
 	}
 
-	const client = await getClient(ctx, opts, ctx.params.id);
+	const client = await getClient(ctx, opts, clientId);
 	if (!client) {
 		throw new APIError("NOT_FOUND", {
 			error_description: "client not found",
 			error: "not_found",
 		});
+	}
+
+	if (client.userId) {
+		if (client.userId !== session.user.id) throw new APIError("UNAUTHORIZED");
+	} else if (client.referenceId && opts.clientReference) {
+		if (client.referenceId !== (await opts.clientReference(session)))
+			throw new APIError("UNAUTHORIZED");
+	} else {
+		throw new APIError("UNAUTHORIZED");
 	}
 
 	if (client.public || !client.clientSecret) {
@@ -225,7 +347,7 @@ export async function rotateClientSecretEndpoint(
 			where: [
 				{
 					field: "clientId",
-					value: ctx.params.id,
+					value: clientId,
 				},
 			],
 			update: schemaToDatabase(

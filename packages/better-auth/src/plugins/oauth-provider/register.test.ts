@@ -111,7 +111,7 @@ describe("oauth register", async () => {
 	it.each(["native", "user-agent-based"] as OAuthClient["type"][])(
 		"should register public '%s' client with minimum requirements via server",
 		async (type) => {
-			const response = await auth.api.createOAuthClient({
+			const response = await auth.api.adminCreateOAuthClient({
 				headers,
 				body: {
 					token_endpoint_auth_method: "none",
@@ -272,7 +272,7 @@ describe("oauth register - organization", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				allowDynamicClientRegistration: true,
-				clientRegistrationReference({ session }) {
+				clientReference({ session }) {
 					return (
 						(session?.activeOrganizationId as string | undefined) ?? undefined
 					);
