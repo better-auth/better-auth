@@ -228,20 +228,41 @@ export const createTestSuite = <
 						adapter: ({ getDefaultModelName }) => {
 							adapter.transaction = undefined as any;
 							return {
-								count: adapter.count,
-								deleteMany: adapter.deleteMany,
-								delete: adapter.delete,
+								count: async (args: any) => {
+									adapter = await helpers.adapter();
+									const res = await adapter.count(args);
+									return res as any;
+								},
+								deleteMany: async (args: any) => {
+									adapter = await helpers.adapter();
+									const res = await adapter.deleteMany(args);
+									return res as any;
+								},
+								delete: async (args: any) => {
+									adapter = await helpers.adapter();
+									const res = await adapter.delete(args);
+									return res as any;
+								},
 								findOne: async (args) => {
-									const res = (await adapter.findOne(args)) as any;
-									return res;
+									adapter = await helpers.adapter();
+									const res = await adapter.findOne(args);
+									return res as any;
 								},
 								findMany: async (args) => {
-									const res = (await adapter.findMany(args)) as any;
-									return res;
+									adapter = await helpers.adapter();
+									const res = await adapter.findMany(args);
+									return res as any;
 								},
-								update: adapter.update as any,
-								updateMany: adapter.updateMany,
-
+								update: async (args: any) => {
+									adapter = await helpers.adapter();
+									const res = await adapter.update(args);
+									return res as any;
+								},
+								updateMany: async (args) => {
+									adapter = await helpers.adapter();
+									const res = await adapter.updateMany(args);
+									return res as any;
+								},
 								createSchema: adapter.createSchema as any,
 								async create({ data, model, select }) {
 									const defaultModelName = getDefaultModelName(model);
