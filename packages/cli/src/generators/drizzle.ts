@@ -342,13 +342,19 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 			for (const [fieldName, field] of foreignKeysPointingHere) {
 				const isUnique = !!field.unique;
-				const relationKey = isUnique
-					? getModelName(modelName)
-					: `${getModelName(modelName)}s`;
+				let relationKey = getModelName(modelName);
+
+				// We have to apply this after checking if they have usePlural because otherwise they will end up seeing:
+				// "sesionss", or "accountss" - double s's.
+				if (!adapter.options?.adapterConfig?.usePlural && !isUnique) {
+					relationKey = `${relationKey}s`;
+				}
+
+				const model = getModelName(modelName);
 
 				relations.push({
 					key: relationKey,
-					model: getModelName(modelName),
+					model: model,
 					type: isUnique ? "one" : "many",
 				});
 			}
