@@ -171,7 +171,7 @@ describe("mcp - server-client flows", async () => {
 
 	beforeAll(async () => {
 		// Register a confidential client
-		const response = await auth.api.createOAuthClient({
+		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],

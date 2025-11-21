@@ -139,7 +139,7 @@ describe("oauth revoke", async () => {
 
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
-		const response = await auth.api.createOAuthClient({
+		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
@@ -382,7 +382,7 @@ describe("oauth revoke - config", async () => {
 			},
 		});
 
-		const registeredClient = await auth.api.createOAuthClient({
+		const registeredClient = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],

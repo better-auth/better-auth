@@ -135,7 +135,7 @@ describe("oauth", async () => {
 		);
 
 		const { headers } = await signInWithTestUser();
-		const response = await authorizationServer.api.createOAuthClient({
+		const response = await authorizationServer.api.adminCreateOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
@@ -440,7 +440,7 @@ describe("oauth - prompt", async () => {
 			},
 		);
 
-		const response = await authorizationServer.api.createOAuthClient({
+		const response = await authorizationServer.api.adminCreateOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
@@ -1197,13 +1197,14 @@ describe("oauth - config", () => {
 				port,
 			});
 
-			const createdClient = await authorizationServer.api.createOAuthClient({
-				headers,
-				body: {
-					redirect_uris: [redirectUri],
-					skip_consent: true,
-				},
-			});
+			const createdClient =
+				await authorizationServer.api.adminCreateOAuthClient({
+					headers,
+					body: {
+						redirect_uris: [redirectUri],
+						skip_consent: true,
+					},
+				});
 			expect(createdClient?.client_id).toBeDefined();
 			expect(createdClient?.user_id).toBeDefined();
 			expect(createdClient?.client_secret).toBeDefined();
@@ -1300,13 +1301,14 @@ describe("oauth - config", () => {
 				port,
 			});
 
-			const createdClient = await authorizationServer.api.createOAuthClient({
-				headers,
-				body: {
-					redirect_uris: [redirectUri],
-					skip_consent: true,
-				},
-			});
+			const createdClient =
+				await authorizationServer.api.adminCreateOAuthClient({
+					headers,
+					body: {
+						redirect_uris: [redirectUri],
+						skip_consent: true,
+					},
+				});
 			expect(createdClient?.client_id).toBeDefined();
 			expect(createdClient?.user_id).toBeDefined();
 			expect(createdClient?.client_secret).toBeDefined();
@@ -1410,14 +1412,15 @@ describe("oauth - config", () => {
 				port,
 			});
 
-			const createdClient = await authorizationServer.api.createOAuthClient({
-				headers,
-				body: {
-					redirect_uris: [redirectUri],
-					token_endpoint_auth_method: publicClient ? "none" : undefined,
-					skip_consent: true,
-				},
-			});
+			const createdClient =
+				await authorizationServer.api.adminCreateOAuthClient({
+					headers,
+					body: {
+						redirect_uris: [redirectUri],
+						token_endpoint_auth_method: publicClient ? "none" : undefined,
+						skip_consent: true,
+					},
+				});
 			expect(createdClient?.client_id).toBeDefined();
 			expect(createdClient?.user_id).toBeDefined();
 			if (publicClient) {

@@ -169,20 +169,31 @@ export interface OAuthOptions<
 	 */
 	clientRegistrationClientSecretExpiration?: number | string | Date;
 	/**
-	 * Reference id to the owner of the oauth client.
+	 * Returns the reference id which owns the oauth clients.
 	 *
 	 * For example, it can be an organization, team, etc.
 	 * When provided, user_id of the client will be undefined
 	 * and the owner is defined under the field `reference_id`.
 	 *
 	 * With the organization plugin: @example ({ session }) => {
-	 * 	return session?.reference_id;
+	 * 	return session?.activeOrganizationId;
 	 * }
 	 */
-	clientRegistrationReference?: (context: {
+	clientReference?: (context: {
 		user?: User & Record<string, unknown>;
 		session?: Session & Record<string, unknown>;
 	}) => Awaitable<string | undefined>;
+	/**
+	 * RBAC on OAuth Clients.
+	 *
+	 * Provides context to help determine if a user can perform
+	 * a specific action.
+	 */
+	clientPrivileges?: (context: {
+		action: "create" | "read" | "update" | "delete" | "list" | "rotate";
+		user?: User & Record<string, unknown>;
+		session?: Session & Record<string, unknown>;
+	}) => Awaitable<boolean | undefined>;
 	/**
 	 * List default scopes when using the token endpoint's
 	 * grant type "client_credentials". This is used

@@ -57,7 +57,7 @@ describe("oauth logout", async () => {
 
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
-		const response = await auth.api.createOAuthClient({
+		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
@@ -170,7 +170,7 @@ describe("oauth logout", async () => {
 			{
 				redirect_uris: [redirectUri],
 				post_logout_redirect_uris: [logoutRedirectUri],
-				// @ts-expect-error only through createOAuthClient
+				// @ts-expect-error only through adminCreateOAuthClient
 				enable_end_session: true,
 			},
 			{
@@ -188,7 +188,7 @@ describe("oauth logout", async () => {
 	});
 
 	it("should fail for clients without enable_end_session access", async () => {
-		const response = await auth.api.createOAuthClient({
+		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
@@ -303,7 +303,7 @@ describe("oauth logout", async () => {
 	});
 
 	it("should pass with redirection", async () => {
-		const response = await auth.api.createOAuthClient({
+		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
@@ -419,7 +419,7 @@ describe("oauth logout - disableJwtPlugin", async () => {
 
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
-		const response = await auth.api.createOAuthClient({
+		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
@@ -574,7 +574,7 @@ describe("oauth logout - disableJwtPlugin", async () => {
 	});
 
 	it("should pass with redirection", async () => {
-		const response = await auth.api.createOAuthClient({
+		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
