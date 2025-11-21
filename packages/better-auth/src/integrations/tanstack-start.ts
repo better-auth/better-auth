@@ -2,9 +2,9 @@ import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { parseSetCookieHeader } from "../cookies";
 
-export const reactStartCookies = () => {
+export const tanstackStartCookies = () => {
 	return {
-		id: "react-start-cookies",
+		id: "tanstack-start-cookies",
 		hooks: {
 			after: [
 				{
@@ -20,7 +20,9 @@ export const reactStartCookies = () => {
 							const setCookies = returned?.get("set-cookie");
 							if (!setCookies) return;
 							const parsed = parseSetCookieHeader(setCookies);
-							const { setCookie } = await import("@tanstack/start-server-core");
+							const { setCookie } = await import(
+								"@tanstack/react-start/server"
+							);
 							parsed.forEach((value, key) => {
 								if (!key) return;
 								const opts = {

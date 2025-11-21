@@ -5,6 +5,7 @@ import {
 	MssqlDialect,
 	MysqlDialect,
 	PostgresDialect,
+	type SqliteDatabase,
 	SqliteDialect,
 } from "kysely";
 import type { KyselyDatabaseType } from "./types";
@@ -88,7 +89,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 
 	if ("aggregate" in db && !("createSession" in db)) {
 		dialect = new SqliteDialect({
-			database: db,
+			database: db as SqliteDatabase,
 		});
 	}
 
