@@ -233,6 +233,14 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						message: BASE_ERROR_CODES.INVALID_EMAIL,
 					});
 				}
+				if (ctx.body.type === "forget-password") {
+					const user = await ctx.context.internalAdapter.findUserByEmail(email);
+					if (!user) {
+						return ctx.json({
+							success: true,
+						});
+					}
+				}
 				let otp =
 					opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
 					defaultOTPGenerator(opts);
@@ -257,7 +265,14 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							expiresAt: getDate(opts.expiresIn, "sec"),
 						});
 					});
-				await options.sendVerificationOTP(
+				const user = await ctx.context.internalAdapter.findUserByEmail(email);
+				if (!user) {
+					//remove verification value
+					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+						`${ctx.body.type}-otp-${email}`,
+					);
+				}
+				void options.sendVerificationOTP(
 					{
 						email,
 						otp,
@@ -672,6 +687,11 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					);
 					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					if (!user) {
+						/**
+						 * Safe to leak the existence of a user
+						 * given the user has already the OTP from
+						 * the email
+						 */
 						throw new APIError("BAD_REQUEST", {
 							message: BASE_ERROR_CODES.USER_NOT_FOUND,
 						});
@@ -849,6 +869,11 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					if (!user) {
 						if (opts.disableSignUp) {
+							/**
+							 * Safe to leak the existence of a user
+							 * given the user has already the OTP from
+							 * the email
+							 */
 							throw new APIError("BAD_REQUEST", {
 								message: BASE_ERROR_CODES.USER_NOT_FOUND,
 							});
@@ -958,12 +983,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 				async (ctx) => {
 					const email = ctx.body.email;
-					const user = await ctx.context.internalAdapter.findUserByEmail(email);
-					if (!user) {
-						throw new APIError("BAD_REQUEST", {
-							message: BASE_ERROR_CODES.USER_NOT_FOUND,
-						});
-					}
 					const otp =
 						opts.generateOTP({ email, type: "forget-password" }, ctx) ||
 						defaultOTPGenerator(opts);
@@ -973,14 +992,37 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						identifier: `forget-password-otp-${email}`,
 						expiresAt: getDate(opts.expiresIn, "sec"),
 					});
-					await options.sendVerificationOTP(
+					const user = await ctx.context.internalAdapter.findUserByEmail(
+						email,
 						{
-							email,
-							otp,
-							type: "forget-password",
+							includeAccounts: true,
 						},
-						ctx,
 					);
+					if (!user) {
+						//remove verification value
+						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+							`forget-password-otp-${email}`,
+						);
+						/**
+						 * We don't want to leak the
+						 * existence of a user
+						 */
+						return ctx.json({
+							success: true,
+						});
+					}
+					await options
+						.sendVerificationOTP(
+							{
+								email,
+								otp,
+								type: "forget-password",
+							},
+							ctx,
+						)
+						.catch((e) => {
+							ctx.context.logger.error("Failed to send OTP", e);
+						});
 					return ctx.json({
 						success: true,
 					});
@@ -1042,17 +1084,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 				async (ctx) => {
 					const email = ctx.body.email;
-					const user = await ctx.context.internalAdapter.findUserByEmail(
-						email,
-						{
-							includeAccounts: true,
-						},
-					);
-					if (!user) {
-						throw new APIError("BAD_REQUEST", {
-							message: BASE_ERROR_CODES.USER_NOT_FOUND,
-						});
-					}
 					const verificationValue =
 						await ctx.context.internalAdapter.findVerificationValue(
 							`forget-password-otp-${email}`,
@@ -1097,6 +1128,17 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					await ctx.context.internalAdapter.deleteVerificationValue(
 						verificationValue.id,
 					);
+					const user = await ctx.context.internalAdapter.findUserByEmail(
+						email,
+						{
+							includeAccounts: true,
+						},
+					);
+					if (!user) {
+						throw new APIError("BAD_REQUEST", {
+							message: BASE_ERROR_CODES.USER_NOT_FOUND,
+						});
+					}
 					const passwordHash = await ctx.context.password.hash(
 						ctx.body.password,
 					);
