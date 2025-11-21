@@ -25,6 +25,8 @@ export interface OIDCConfigClientSecret {
 
 export interface OIDCConfigClientAssertions {
 	clientPrivateKey: string;
+	clientPrivateKeyAlg?: string;
+	clientPrivateKeyType?: "jwk" | "pkcs8";
 }
 
 type Either<A, B> = Omit<A, keyof B> | Omit<B, keyof A>;

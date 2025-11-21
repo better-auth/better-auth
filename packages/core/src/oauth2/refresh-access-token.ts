@@ -1,19 +1,22 @@
 import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
+import { importJWK, importPKCS8, SignJWT } from "jose";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
 
-export function createRefreshAccessTokenRequest({
+export async function createRefreshAccessTokenRequest({
 	refreshToken,
 	options,
-	authentication,
+	authentication = "post",
 	extraParams,
 	resource,
+	tokenEndpoint,
 }: {
 	refreshToken: string;
 	options: Partial<ProviderOptions>;
-	authentication?: ("basic" | "post") | undefined;
+	authentication?: ("basic" | "post" | "pk") | undefined;
 	extraParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
+	tokenEndpoint?: string | undefined;
 }) {
 	const body = new URLSearchParams();
 	const headers: Record<string, any> = {
@@ -37,7 +40,7 @@ export function createRefreshAccessTokenRequest({
 			headers["authorization"] =
 				"Basic " + base64.encode(`:${options.clientSecret ?? ""}`);
 		}
-	} else {
+	} else if (authentication === "post") {
 		const primaryClientId = Array.isArray(options.clientId)
 			? options.clientId[0]
 			: options.clientId;
@@ -45,6 +48,53 @@ export function createRefreshAccessTokenRequest({
 		if (options.clientSecret) {
 			body.set("client_secret", options.clientSecret);
 		}
+	} else {
+		const {
+					clientPrivateKey,
+					clientPrivateKeyAlg = "RS256",
+					clientPrivateKeyType = "jwk",
+				} = options;
+		
+				let privateKey: CryptoKey | Uint8Array;
+				switch (clientPrivateKeyType) {
+					case "jwk":
+						privateKey = await importJWK(
+							JSON.parse(clientPrivateKey || "{}"),
+							clientPrivateKeyAlg,
+						);
+						break;
+					case "pkcs8":
+						privateKey = await importPKCS8(
+							clientPrivateKey || "",
+							clientPrivateKeyAlg,
+						);
+						break;
+					default:
+						throw new Error("Unsupported client private key type");
+				}
+		
+				const primaryClientId = Array.isArray(options.clientId)
+					? options.clientId[0]
+					: options.clientId;
+		
+				const clientAssertion = await new SignJWT()
+					.setProtectedHeader({
+						alg: clientPrivateKeyAlg,
+					})
+					.setIssuer(primaryClientId)
+					.setSubject(primaryClientId)
+					.setAudience(tokenEndpoint ?? "")
+					.setIssuedAt()
+					.setExpirationTime("5m")
+					.setJti(crypto.randomUUID())
+					.sign(privateKey);
+		
+				body.set("client_id", primaryClientId);
+				body.set(
+					"client_assertion_type",
+					"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+				);
+				body.set("client_assertion", clientAssertion);
 	}
 
 	if (resource) {
@@ -83,11 +133,12 @@ export async function refreshAccessToken({
 	/** @deprecated always "refresh_token" */
 	grantType?: string | undefined;
 }): Promise<OAuth2Tokens> {
-	const { body, headers } = createRefreshAccessTokenRequest({
+	const { body, headers } = await createRefreshAccessTokenRequest({
 		refreshToken,
 		options,
 		authentication,
 		extraParams,
+		tokenEndpoint,
 	});
 
 	const { data, error } = await betterFetch<{

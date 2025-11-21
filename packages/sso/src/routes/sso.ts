@@ -154,6 +154,12 @@ export const registerSSOProvider = (options?: SSOOptions) => {
 						clientPrivateKey: z.string({}).optional().meta({
 							description: "The client private key",
 						}),
+						clientPrivateKeyAlg: z.string({}).optional().meta({
+							description: "The client private key algorithm",
+						}),
+						clientPrivateKeyType: z.enum(["jwk", "pkcs8"]).optional().meta({
+							description: "The client private key type",
+						}),
 						authorizationEndpoint: z
 							.string({})
 							.meta({
@@ -959,6 +965,14 @@ export const signInSSO = (options?: SSOOptions) => {
 							"clientPrivateKey" in provider.oidcConfig
 								? provider.oidcConfig.clientPrivateKey
 								: undefined,
+						clientPrivateKeyAlg:
+							"clientPrivateKeyAlg" in provider.oidcConfig
+								? provider.oidcConfig.clientPrivateKeyAlg
+								: undefined,
+						clientPrivateKeyType:
+							"clientPrivateKeyType" in provider.oidcConfig
+								? provider.oidcConfig.clientPrivateKeyType
+								: undefined,
 					},
 					redirectURI,
 					state: state.state,
@@ -1131,7 +1145,8 @@ export const callbackSSO = (options?: SSOOptions) => {
 				userinfo_endpoint: string;
 				token_endpoint_auth_method:
 					| "client_secret_basic"
-					| "client_secret_post";
+					| "client_secret_post"
+					| "private_key_jwt";
 			}>(config.discoveryEndpoint);
 
 			if (discovery.data) {
@@ -1163,14 +1178,22 @@ export const callbackSSO = (options?: SSOOptions) => {
 						"clientSecret" in config ? config.clientSecret : undefined,
 					clientPrivateKey:
 						"clientPrivateKey" in config ? config.clientPrivateKey : undefined,
+						clientPrivateKeyAlg:
+							"clientPrivateKeyAlg" in config
+								? config.clientPrivateKeyAlg
+								: undefined,
+						clientPrivateKeyType:
+							"clientPrivateKeyType" in config
+								? config.clientPrivateKeyType
+								: undefined,
 				},
 				tokenEndpoint: config.tokenEndpoint,
 				authentication:
-					config.tokenEndpointAuthentication === "client_secret_post"
-						? "post":
+					config.tokenEndpointAuthentication === "private_key_jwt"
+						? "pk":
 					config.tokenEndpointAuthentication === "client_secret_basic"
 						? "basic"
-						: "pk",
+						: "post",
 			}).catch((e) => {
 				console.error("errr", e)
 				if (e instanceof BetterFetchError) {
