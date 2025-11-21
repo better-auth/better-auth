@@ -16,6 +16,8 @@ import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
 import { schema } from "./schema";
 import type { PhoneNumberOptions, UserWithPhoneNumber } from "./types";
 
+export type { PhoneNumberOptions, UserWithPhoneNumber };
+
 function generateOTP(size: number) {
 	return generateRandomString(size, "0-9");
 }
