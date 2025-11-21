@@ -178,6 +178,10 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 							originalCallbackURL,
 						)}`;
 
+						if (!ctx.body) {
+							return;
+						}
+
 						ctx.body.callbackURL = newCallbackURL;
 					}),
 				},
