@@ -1120,12 +1120,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					await ctx.context.internalAdapter.deleteVerificationValue(
 						verificationValue.id,
 					);
-					const user = await ctx.context.internalAdapter.findUserByEmail(
-						email,
-						{
-							includeAccounts: true,
-						},
-					);
+					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
 							message: BASE_ERROR_CODES.USER_NOT_FOUND,
