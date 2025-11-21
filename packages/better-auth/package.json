@@ -489,6 +489,7 @@
     }
   },
   "devDependencies": {
+    "@better-auth/config": "workspace:*",
     "@lynx-js/react": "^0.114.0",
     "@prisma/client": "^5.22.0",
     "@sveltejs/kit": "^2.37.1",
@@ -525,6 +526,7 @@
     "tsdown": "catalog:",
     "type-fest": "^5.2.0",
     "typescript": "catalog:",
+    "vitest": "catalog:",
     "vue": "^3.5.18"
   },
   "files": [

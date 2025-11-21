@@ -34,6 +34,7 @@
   "exports": "./dist/index.mjs",
   "bin": "./dist/index.mjs",
   "devDependencies": {
+    "@better-auth/config": "workspace:*",
     "@better-auth/passkey": "workspace:*",
     "@types/better-sqlite3": "^7.6.13",
     "@types/prompts": "^2.4.9",
@@ -41,7 +42,8 @@
     "tsdown": "catalog:",
     "tsx": "^4.20.6",
     "type-fest": "^5.2.0",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "dependencies": {
     "@babel/core": "^7.28.4",

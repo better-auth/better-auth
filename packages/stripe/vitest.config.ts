@@ -1,8 +1,11 @@
-import { defineProject } from "vitest/config";
+import { sharedVitestConfig } from "@better-auth/config/vitest";
+import { defineProject, mergeConfig } from "vitest/config";
 
-export default defineProject({
-	test: {
-		clearMocks: true,
-		globals: true,
-	},
-});
+export default defineProject(
+	mergeConfig(sharedVitestConfig, {
+		test: {
+			clearMocks: true,
+			globals: true,
+		},
+	}),
+);

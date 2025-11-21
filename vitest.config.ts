@@ -1,13 +1,10 @@
-import { defineConfig } from "vitest/config";
+import { sharedVitestConfig } from "@better-auth/config/vitest";
+import { defineConfig, mergeConfig } from "vitest/config";
 
-export default defineConfig({
-	test: {
-		projects: ["./packages/*", "./test"],
-	},
-	ssr: {
-		resolve: {
-			// we resolve from source files for unit testing
-			conditions: ["dev-source"],
+export default defineConfig(
+	mergeConfig(sharedVitestConfig, {
+		test: {
+			projects: ["./packages/*", "./test"],
 		},
-	},
-});
+	}),
+);

@@ -64,6 +64,7 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@better-auth/config": "workspace:*",
     "@types/body-parser": "^1.19.6",
     "@types/express": "^5.0.5",
     "better-auth": "workspace:*",
@@ -71,7 +72,8 @@
     "body-parser": "^2.2.0",
     "express": "^5.1.0",
     "oauth2-mock-server": "^7.2.1",
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "vitest": "catalog:"
   },
   "peerDependencies": {
     "better-auth": "workspace:*"

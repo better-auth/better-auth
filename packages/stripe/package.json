@@ -59,10 +59,12 @@
     "stripe": "^18 || ^19"
   },
   "devDependencies": {
+    "@better-auth/config": "workspace:*",
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
     "better-call": "catalog:",
     "stripe": "^19.1.0",
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "vitest": "catalog:"
   }
 }
