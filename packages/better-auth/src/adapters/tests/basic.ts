@@ -856,6 +856,13 @@ export const getNormalTestSuiteTests = (
 				oneToOneTable: oneToOne,
 			});
 		},
+		"findMany - should find many models": async () => {
+			const users = (await insertRandom("user", 3)).map((x) => x[0]);
+			const result = await adapter.findMany<User>({
+				model: "user",
+			});
+			expect(sortModels(result)).toEqual(sortModels(users));
+		},
 		"findMany - should find many models with date fields": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
 			const youngestUser = users.sort(
@@ -872,13 +879,6 @@ export const getNormalTestSuiteTests = (
 					users.filter((user) => user.createdAt < youngestUser.createdAt),
 				),
 			);
-		},
-		"findMany - should find many models": async () => {
-			const users = (await insertRandom("user", 3)).map((x) => x[0]);
-			const result = await adapter.findMany<User>({
-				model: "user",
-			});
-			expect(sortModels(result)).toEqual(sortModels(users));
 		},
 		"findMany - should find many models with join": async () => {
 			type ExpectedResult = User & { session: Session[]; account: Account[] };

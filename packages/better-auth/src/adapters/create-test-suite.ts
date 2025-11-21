@@ -6,7 +6,10 @@ import { betterAuth } from "../auth";
 import { getAuthTables } from "../db/get-tables";
 import type { Account, Session, User, Verification } from "../types";
 import { generateId } from "../utils";
-import { createAdapterFactory } from "./adapter-factory";
+import {
+	createAdapterFactory,
+	initGetDefaultModelName,
+} from "./adapter-factory";
 import type { Logger } from "./test-adapter";
 import { deepmerge } from "./utils";
 
@@ -299,7 +302,18 @@ export const createTestSuite = <
 				for (const model of Object.keys(createdRows)) {
 					for (const row of createdRows[model]!) {
 						const schema = getAuthTables(helpers.getBetterAuthOptions());
-						if (!schema[model]) continue; // model doesn't exist in the schema anymore, so we skip it
+						const getDefaultModelName = initGetDefaultModelName({
+							usePlural: adapter.options?.adapterConfig?.usePlural,
+							schema: schema,
+						});
+						let defaultModelName: string;
+						try {
+							defaultModelName = getDefaultModelName(model);
+						} catch (error) {
+							// if fail, likely means it was removed from the schema
+							continue;
+						}
+						if (!schema[defaultModelName]) continue; // model doesn't exist in the schema anymore, so we skip it
 						try {
 							await adapter.delete({
 								model,
