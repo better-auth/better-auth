@@ -28,7 +28,7 @@ npm install better-auth@1.4
 ### Stateless Auth
 
 The long awaited stateless auth is here! Omit the `database` option in your auth config
-to enable stateless session management without any database. 
+to enable stateless session management without any database.
 
 [👉 Read more about stateless auth](/docs/concepts/session-management#stateless-session-management)
 
@@ -44,6 +44,27 @@ export const auth = betterAuth({
         },
     },
 });
+```
+
+You can optionally store account info after the OAuth flow in a cookie.
+
+```ts
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    account: {
+        storeAccountCookie: true,
+    },
+});
+```
+
+Which allows you to use endpoints such as `getAccessToken` to get the access token for your stateless auth setup!
+
+```ts
+const { accessToken } = await authClient.getAccessToken({
+  providerId: "google", // or any other provider id
+  accountId: "accountId", // optional, if you want to get the access token for a specific account
+})
 ```
 
 ---
