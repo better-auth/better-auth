@@ -3,6 +3,7 @@ import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
 import * as z from "zod";
 import { getSessionFromCtx, sessionMiddleware } from "../../../api";
+import { setSessionCookie } from "../../../cookies";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db/to-zod";
 import type { LiteralString } from "../../../types/helper";
@@ -390,12 +391,26 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				organizationId: organizationId,
 				userId: toBeRemovedMember.userId,
 			});
+
+			// Clear session if removed user is the current user making the request
+			// Note: When a user is removed by another user, their sessions will be invalidated
+			// on the next request when endpoints check membership (e.g., getFullOrganization,
+			// setActiveOrganization). This avoids the performance cost of bulk session updates.
 			if (
 				session.user.id === toBeRemovedMember.userId &&
 				session.session.activeOrganizationId ===
 					toBeRemovedMember.organizationId
 			) {
-				await adapter.setActiveOrganization(session.session.token, null, ctx);
+				// Current user is removing themselves - update session and cookie
+				const updatedSession = await adapter.setActiveOrganization(
+					session.session.token,
+					null,
+					ctx,
+				);
+				await setSessionCookie(ctx, {
+					session: updatedSession,
+					user: session.user,
+				});
 			}
 
 			// Run afterRemoveMember hook
@@ -683,7 +698,25 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 					organization,
 				});
 			}
-
+			if (
+				toBeUpdatedMember.userId === session.user.id &&
+				organizationId === session.session.activeOrganizationId
+			) {
+				const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+				const updateSession = await adapter.setActiveOrganization(
+					session.session.token,
+					organizationId,
+					ctx,
+					{
+						organizationSlug: session.session.activeOrganizationSlug,
+						organizationRole: updatedMember.role,
+					},
+				);
+				await setSessionCookie(ctx, {
+					session: updateSession,
+					user: session.user,
+				});
+			}
 			return ctx.json(updatedMember);
 		},
 	);
@@ -810,7 +843,15 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 				userId: session.user.id,
 			});
 			if (session.session.activeOrganizationId === ctx.body.organizationId) {
-				await adapter.setActiveOrganization(session.session.token, null, ctx);
+				const updatedSession = await adapter.setActiveOrganization(
+					session.session.token,
+					null,
+					ctx,
+				);
+				await setSessionCookie(ctx, {
+					session: updatedSession,
+					user: session.user,
+				});
 			}
 			return ctx.json(member);
 		},
@@ -961,6 +1002,14 @@ export const getActiveMemberRole = <O extends OrganizationOptions>(
 
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 
+			if (
+				userId === session.user.id &&
+				organizationId === session.session.activeOrganizationId
+			) {
+				return ctx.json({
+					role: session.session.activeOrganizationRole,
+				});
+			}
 			const member = await adapter.findMemberByOrgId({
 				userId,
 				organizationId,
@@ -971,9 +1020,8 @@ export const getActiveMemberRole = <O extends OrganizationOptions>(
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
 				});
 			}
-
 			return ctx.json({
-				role: member?.role,
+				role: member.role,
 			});
 		},
 	);

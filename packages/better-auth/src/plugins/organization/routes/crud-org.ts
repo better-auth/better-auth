@@ -299,11 +299,19 @@ export const createOrganization = <O extends OrganizationOptions>(
 			}
 
 			if (ctx.context.session && !ctx.body.keepCurrentActiveOrganization) {
-				await adapter.setActiveOrganization(
+				const updatedSession = await adapter.setActiveOrganization(
 					ctx.context.session.session.token,
 					organization.id,
 					ctx,
+					{
+						organizationSlug: organization.slug,
+						organizationRole: member.role,
+					},
 				);
+				await setSessionCookie(ctx, {
+					session: updatedSession,
+					user: ctx.context.session.user,
+				});
 			}
 
 			if (
@@ -523,6 +531,27 @@ export const updateOrganization = <O extends OrganizationOptions>(
 					member,
 				});
 			}
+			if (
+				organizationId === session.session.activeOrganizationId &&
+				ctx.body.data.slug &&
+				updatedOrg?.slug
+			) {
+				const adapter = getOrgAdapter<O>(ctx.context, options);
+				const updatedSession = await adapter.setActiveOrganization(
+					session.session.token,
+					organizationId,
+					ctx,
+					{
+						organizationSlug: updatedOrg.slug,
+						organizationRole: member.role,
+					},
+				);
+				await setSessionCookie(ctx, {
+					session: updatedSession,
+					user: session.user,
+				});
+			}
+
 			return ctx.json(updatedOrg);
 		},
 	);
@@ -728,7 +757,15 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 				organizationId: organization.id,
 			});
 			if (!isMember) {
-				await adapter.setActiveOrganization(session.session.token, null, ctx);
+				const updatedSession = await adapter.setActiveOrganization(
+					session.session.token,
+					null,
+					ctx,
+				);
+				await setSessionCookie(ctx, {
+					session: updatedSession,
+					user: session.user,
+				});
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
@@ -861,10 +898,27 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				});
 			}
+			const member = await adapter.findMemberByOrgId({
+				userId: session.user.id,
+				organizationId: organization.id,
+			});
+
+			if (!member) {
+				// This shouldn't happen, but handle it safely
+				await adapter.setActiveOrganization(session.session.token, null, ctx);
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
+				});
+			}
+
 			const updatedSession = await adapter.setActiveOrganization(
 				session.session.token,
 				organization.id,
 				ctx,
+				{
+					organizationSlug: organization.slug,
+					organizationRole: member?.role,
+				},
 			);
 			await setSessionCookie(ctx, {
 				session: updatedSession,
