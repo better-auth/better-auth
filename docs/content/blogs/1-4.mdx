@@ -452,8 +452,21 @@ We recommend going through each breaking change to ensure a smooth upgrade.
 
 
   <Accordion title="Cloudflare Runtime">
-    Breaking change for cloudflare worker, you will be required to add `nodejs_als`, or `nodejs_compat` in the wrangler config.
-    See [cloudflare docs](https://developers.cloudflare.com/workers/configuration/compatibility-flags/#nodejs-compatibility-flag).
+
+    Better Auth uses AsyncLocalStorage for async context tracking.
+    To enable this in Cloudflare Workers, add the `nodejs_compat` flag to your `wrangler.toml`:
+
+    ```toml title="wrangler.toml"
+    compatibility_flags = ["nodejs_compat"]
+    compatibility_date = "2024-09-23"
+    ```
+
+    Alternatively, if you only need AsyncLocalStorage support:
+    ```toml title="wrangler.toml"
+    compatibility_flags = ["nodejs_als"]
+    ```
+
+    In the next major release, we will assume AsyncLocalStorage support by default, so this configuration will be necessary.
   </Accordion>
 
 
