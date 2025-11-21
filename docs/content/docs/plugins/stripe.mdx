@@ -49,9 +49,7 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
         import { stripe } from "@better-auth/stripe"
         import Stripe from "stripe"
 
-        const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-            apiVersion: "2025-11-17.clover", // Latest API version as of Stripe SDK v19
-        })
+        const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!)
 
         export const auth = betterAuth({
             // ... your existing config
