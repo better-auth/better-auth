@@ -62,7 +62,7 @@ type listDeviceSessions = {
 
 ### Set active session
 
-To set the active session, you can call the `setActive` method.
+To set the active session, you can call the `setActiveSession` method.
 
 <APIMethod
   path="/multi-session/set-active"
@@ -81,7 +81,7 @@ type setActiveSession = {
 
 ### Revoke a session
 
-To revoke a session, you can call the `revoke` method.
+To revoke a session, you can call the `revokeDeviceSession` method.
 
 <APIMethod
   path="/multi-session/revoke"
@@ -102,18 +102,45 @@ type revokeDeviceSession = {
 
 When a user logs out, the plugin will revoke all active sessions for the user. You can do this by calling the existing `signOut` method, which handles revoking all sessions automatically.
 
-### Max Sessions
+### Configuration
 
-You can specify the maximum number of sessions a user can have by passing the `maximumSessions` option to the plugin. By default, the plugin allows 5 sessions per device.
+You can configure the plugin by passing options to the `multiSession` function.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
+import { multiSession } from "better-auth/plugins"
 
 export const auth = betterAuth({
     plugins: [
         multiSession({
-            maximumSessions: 3
+            maximumSessions: 3, // Maximum number of sessions per device
+            deviceIdCookieName: "my-app-device-id", // Name of the device ID cookie
+            deviceIdCookieOptions: { // Options for the device ID cookie
+                maxAge: 60 * 60 * 24 * 365, // 1 year
+                sameSite: "lax",
+                secure: true,
+                httpOnly: true
+            }
         })
     ]
 })
 ```
+
+| Option | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `maximumSessions` | `number` | `5` | The maximum number of sessions a user can have per device. |
+| `deviceIdCookieName` | `string` | `better-auth.device_id` | The name of the cookie to store the device id. |
+| `deviceIdCookieOptions` | `CookieOptions` | `{ maxAge: 31536000, secure: true, httpOnly: true, sameSite: "lax", path: "/" }` | The options for the device ID cookie. |
+
+
+## Schema
+
+Table Name: `session`
+
+<DatabaseTable
+    fields={[
+        {
+            name: "deviceId", type: "string", description: "The device ID", isRequired: true, isPrimaryKey: true,
+        },
+    ]}
+/>
