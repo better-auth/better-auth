@@ -4,6 +4,7 @@ import { defineErrorCodes } from "@better-auth/core/utils";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { APIError } from "../../api";
+import { generateRandomString } from "../../crypto/random";
 import { mergeSchema } from "../../db";
 import { getDate } from "../../utils/date";
 import { getIp } from "../../utils/get-request-ip";
@@ -122,14 +123,8 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 	const keyGenerator =
 		opts.customKeyGenerator ||
 		(async (options: { length: number; prefix: string | undefined }) => {
-			const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-			let apiKey = `${options.prefix || ""}`;
-			for (let i = 0; i < options.length; i++) {
-				const randomIndex = Math.floor(Math.random() * characters.length);
-				apiKey += characters[randomIndex];
-			}
-
-			return apiKey;
+			const key = generateRandomString(options.length, "a-z", "A-Z");
+			return `${options.prefix || ""}${key}`;
 		});
 
 	const routes = createApiKeyRoutes({ keyGenerator, opts, schema });
