@@ -390,7 +390,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 									includes[`${model}${pluralSuffix}`] = isUnique
 										? true
 										: { limit };
-									if (!isUnique && config.usePlural) {
+									if (!isUnique) {
 										pluralJoinResults.push(`${model}${pluralSuffix}`);
 									}
 								}
@@ -400,6 +400,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								with: includes,
 							});
 							const res = await query;
+							
 							if (res) {
 								for (const pluralJoinResult of pluralJoinResults) {
 									let singularKey = !config.usePlural
@@ -421,6 +422,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						.where(...clause);
 
 					const res = await query;
+
 					if (!res.length) return null;
 					return res[0];
 				},
