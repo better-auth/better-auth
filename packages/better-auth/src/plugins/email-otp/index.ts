@@ -685,9 +685,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					if (!user) {
 						/**
-						 * Safe to leak the existence of a user
-						 * given the user has already the OTP from
-						 * the email
+						 * safe to leak the existence of a user, given the user has already the OTP from the
+						 * email
 						 */
 						throw new APIError("BAD_REQUEST", {
 							message: BASE_ERROR_CODES.USER_NOT_FOUND,
@@ -866,11 +865,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					if (!user) {
 						if (opts.disableSignUp) {
-							/**
-							 * Safe to leak the existence of a user
-							 * given the user has already the OTP from
-							 * the email
-							 */
 							throw new APIError("BAD_REQUEST", {
 								message: BASE_ERROR_CODES.USER_NOT_FOUND,
 							});
@@ -991,14 +985,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					});
 					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					if (!user) {
-						//remove verification value
 						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 							`forget-password-otp-${email}`,
 						);
-						/**
-						 * We don't want to leak the
-						 * existence of a user
-						 */
 						return ctx.json({
 							success: true,
 						});
