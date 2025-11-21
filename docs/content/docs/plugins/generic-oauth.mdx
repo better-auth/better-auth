@@ -213,43 +213,6 @@ All providers support the same optional fields:
 - `disableSignUp?: boolean` - Disable sign-up entirely
 - `overrideUserInfo?: boolean` - Override user info on sign in
 
-### Multi-Channel Support (LINE)
-
-LINE requires separate OAuth channels for different countries (Japan, Thailand, Taiwan, etc.), each with its own `clientId` and `clientSecret`. To support multiple countries, you can configure multiple LINE providers with different `providerId`s:
-
-```ts title="auth.ts"
-import { genericOAuth, line } from "better-auth/plugins"
-
-export const auth = betterAuth({
-  plugins: [
-    genericOAuth({
-      config: [
-        // Japan channel
-        line({
-          providerId: "line-jp",
-          clientId: process.env.LINE_JP_CLIENT_ID,
-          clientSecret: process.env.LINE_JP_CLIENT_SECRET,
-        }),
-        // Thailand channel
-        line({
-          providerId: "line-th",
-          clientId: process.env.LINE_TH_CLIENT_ID,
-          clientSecret: process.env.LINE_TH_CLIENT_SECRET,
-        }),
-        // Taiwan channel
-        line({
-          providerId: "line-tw",
-          clientId: process.env.LINE_TW_CLIENT_ID,
-          clientSecret: process.env.LINE_TW_CLIENT_SECRET,
-        }),
-      ],
-    }),
-  ],
-})
-```
-
-When users sign in, they'll use the appropriate `providerId` (e.g., `"line-jp"`, `"line-th"`, `"line-tw"`) to identify which channel to use.
-
 ## Configuration
 
 When adding the plugin to your auth config, you can configure multiple OAuth providers. You can either use the pre-configured provider helpers (shown above) or create custom configurations manually.
