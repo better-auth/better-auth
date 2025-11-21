@@ -243,14 +243,15 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 						// Temporarily switch to database mode and inject verification value
 						// This allows the OAuth callback handler to retrieve state data without database
 						const originalAdapter = ctx.context.internalAdapter;
+						const capturedStatePackage = statePackage;
 						ctx.context.oauthConfig.storeStateStrategy = "database";
 						ctx.context.internalAdapter = {
 							...ctx.context.internalAdapter,
 							findVerificationValue: async (identifier: string) => {
-								if (identifier === statePackage.state) {
+								if (identifier === capturedStatePackage.state) {
 									return {
-										id: `oauth-proxy-${statePackage.state}`,
-										identifier: statePackage.state,
+										id: `oauth-proxy-${capturedStatePackage.state}`,
+										identifier: capturedStatePackage.state,
 										value: stateCookieValue,
 										createdAt: new Date(),
 										updatedAt: new Date(),
