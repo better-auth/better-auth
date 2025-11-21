@@ -582,6 +582,14 @@ export const oidcProvider = (options: OIDCOptions) => {
 								error: "invalid_request",
 							});
 						}
+
+						if (!client_id) {
+							throw new APIError("BAD_REQUEST", {
+								error_description: "client_id is required",
+								error: "invalid_client",
+							});
+						}
+
 						const token = await ctx.context.adapter.findOne<OAuthAccessToken>({
 							model: modelName.oauthAccessToken,
 							where: [
@@ -592,23 +600,54 @@ export const oidcProvider = (options: OIDCOptions) => {
 							],
 						});
 						if (!token) {
-							throw new APIError("UNAUTHORIZED", {
+							throw new APIError("BAD_REQUEST", {
 								error_description: "invalid refresh token",
 								error: "invalid_grant",
 							});
 						}
-						if (token.clientId !== client_id?.toString()) {
-							throw new APIError("UNAUTHORIZED", {
+						if (token.clientId !== client_id.toString()) {
+							throw new APIError("BAD_REQUEST", {
 								error_description: "invalid client_id",
 								error: "invalid_client",
 							});
 						}
 						if (token.refreshTokenExpiresAt < new Date()) {
-							throw new APIError("UNAUTHORIZED", {
+							throw new APIError("BAD_REQUEST", {
 								error_description: "refresh token expired",
 								error: "invalid_grant",
 							});
 						}
+
+						// Authenticate confidential clients
+						const client = await getClient(client_id.toString(), trustedClients);
+						if (!client) {
+							throw new APIError("BAD_REQUEST", {
+								error_description: "invalid client_id",
+								error: "invalid_client",
+							});
+						}
+
+						// For confidential clients, verify client_secret
+						if (client.type !== "public") {
+							if (!client.clientSecret || !client_secret) {
+								throw new APIError("UNAUTHORIZED", {
+									error_description: "client_secret is required for confidential clients",
+									error: "invalid_client",
+								});
+							}
+							const isValidSecret = await verifyStoredClientSecret(
+								ctx,
+								client.clientSecret,
+								client_secret.toString(),
+							);
+							if (!isValidSecret) {
+								throw new APIError("UNAUTHORIZED", {
+									error_description: "invalid client_secret",
+									error: "invalid_client",
+								});
+							}
+						}
+
 						const accessToken = generateRandomString(32, "a-z", "A-Z");
 						const newRefreshToken = generateRandomString(32, "a-z", "A-Z");
 
@@ -626,13 +665,22 @@ export const oidcProvider = (options: OIDCOptions) => {
 								updatedAt: new Date(iat * 1000),
 							},
 						});
-						return ctx.json({
-							access_token: accessToken,
-							token_type: "Bearer",
-							expires_in: opts.accessTokenExpiresIn,
-							refresh_token: newRefreshToken,
-							scope: token.scopes,
-						});
+						return ctx.json(
+							{
+								access_token: accessToken,
+								token_type: "Bearer",
+								expires_in: opts.accessTokenExpiresIn,
+								refresh_token: newRefreshToken,
+								scope: token.scopes,
+							},
+							{
+								headers: {
+									"Content-Type": "application/json;charset=UTF-8",
+									"Cache-Control": "no-store",
+									Pragma: "no-cache",
+								},
+							},
+						);
 					}
 
 					if (!code) {
@@ -674,9 +722,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 						verificationValue.id,
 					);
 					if (!client_id) {
-						throw new APIError("UNAUTHORIZED", {
+						throw new APIError("BAD_REQUEST", {
 							error_description: "client_id is required",
-							error: "invalid_client",
+							error: "invalid_request",
 						});
 					}
 					if (!grant_type) {
@@ -702,13 +750,13 @@ export const oidcProvider = (options: OIDCOptions) => {
 					const client = await getClient(client_id.toString(), trustedClients);
 					if (!client) {
 						throw new APIError("UNAUTHORIZED", {
-							error_description: "invalid client_id",
+							error_description: "Client authentication failed",
 							error: "invalid_client",
 						});
 					}
 					if (client.disabled) {
 						throw new APIError("UNAUTHORIZED", {
-							error_description: "client is disabled",
+							error_description: "Client authentication failed",
 							error: "invalid_client",
 						});
 					}
@@ -717,15 +765,15 @@ export const oidcProvider = (options: OIDCOptions) => {
 						verificationValue.value,
 					) as CodeVerificationValue;
 					if (value.clientId !== client_id.toString()) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "invalid client_id",
-							error: "invalid_client",
+						throw new APIError("BAD_REQUEST", {
+							error_description: "The authorization code was issued to a different client",
+							error: "invalid_grant",
 						});
 					}
 					if (value.redirectURI !== redirect_uri.toString()) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "invalid redirect_uri",
-							error: "invalid_client",
+						throw new APIError("BAD_REQUEST", {
+							error_description: "The redirect_uri does not match the authorization request",
+							error: "invalid_grant",
 						});
 					}
 					if (value.codeChallenge && !code_verifier) {
@@ -772,9 +820,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 								);
 
 					if (challenge !== value.codeChallenge) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "code verification failed",
-							error: "invalid_request",
+						throw new APIError("BAD_REQUEST", {
+							error_description: "PKCE code verification failed",
+							error: "invalid_grant",
 						});
 					}
 
@@ -802,8 +850,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 						value.userId,
 					);
 					if (!user) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "user not found",
+						throw new APIError("BAD_REQUEST", {
+							error_description: "The authorization code is invalid or has been revoked",
 							error: "invalid_grant",
 						});
 					}
@@ -919,6 +967,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						},
 						{
 							headers: {
+								"Content-Type": "application/json;charset=UTF-8",
 								"Cache-Control": "no-store",
 								Pragma: "no-cache",
 							},
