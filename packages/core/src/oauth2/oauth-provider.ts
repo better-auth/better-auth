@@ -11,9 +11,8 @@ export interface OAuth2Tokens {
 	/**
 	 * Raw token response from the provider.
 	 * Preserves provider-specific fields that are not part of the standard OAuth2 token response.
-	 * For example, WeChat's openid and unionid.
 	 */
-	raw?: Record<string, any> | undefined;
+	raw?: Record<string, unknown> | undefined;
 }
 
 export type OAuth2UserInfo = {
