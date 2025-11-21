@@ -408,8 +408,8 @@ importers:
         specifier: ^2.0.7
         version: 2.0.7(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       stripe:
-        specifier: ^19.1.0
-        version: 19.1.0(@types/node@24.9.2)
+        specifier: ^20.0.0
+        version: 20.0.0(@types/node@24.9.2)
       tailwind-merge:
         specifier: ^3.3.1
         version: 3.3.1
@@ -889,8 +889,8 @@ importers:
         specifier: workspace:*
         version: link:../../../../../packages/better-auth
       stripe:
-        specifier: ^18.5.0
-        version: 18.5.0(@types/node@24.9.2)
+        specifier: ^20.0.0
+        version: 20.0.0(@types/node@24.9.2)
 
   e2e/smoke/test/fixtures/tsconfig-exact-optional-property-types:
     dependencies:
@@ -1381,8 +1381,8 @@ importers:
         specifier: 'catalog:'
         version: 1.0.28
       stripe:
-        specifier: ^19.1.0
-        version: 19.1.0(@types/node@24.9.2)
+        specifier: ^20.0.0
+        version: 20.0.0(@types/node@24.9.2)
       tsdown:
         specifier: 'catalog:'
         version: 0.16.5(ms@2.1.3)(synckit@0.11.11)(typescript@5.9.3)
@@ -12217,17 +12217,8 @@ packages:
   strip-literal@3.0.0:
     resolution: {integrity: sha512-TcccoMhJOM3OebGhSBEmp3UZ2SfDMZUEBdRA/9ynfLi8yYajyWX3JiXArcJt4Umh4vISpspkQIY8ZZoCqjbviA==}
 
-  stripe@18.5.0:
-    resolution: {integrity: sha512-Hp+wFiEQtCB0LlNgcFh5uVyKznpDjzyUZ+CNVEf+I3fhlYvh7rZruIg+jOwzJRCpy0ZTPMjlzm7J2/M2N6d+DA==}
-    engines: {node: '>=12.*'}
-    peerDependencies:
-      '@types/node': '>=12.x.x'
-    peerDependenciesMeta:
-      '@types/node':
-        optional: true
-
-  stripe@19.1.0:
-    resolution: {integrity: sha512-FjgIiE98dMMTNssfdjMvFdD4eZyEzdWAOwPYqzhPRNZeg9ggFWlPXmX1iJKD5pPIwZBaPlC3SayQQkwsPo6/YQ==}
+  stripe@20.0.0:
+    resolution: {integrity: sha512-EaZeWpbJOCcDytdjKSwdrL5BxzbDGNueiCfHjHXlPdBQvLqoxl6AAivC35SPzTmVXJb5duXQlXFGS45H0+e6Gg==}
     engines: {node: '>=16'}
     peerDependencies:
       '@types/node': '>=16'
@@ -26885,13 +26876,7 @@ snapshots:
     dependencies:
       js-tokens: 9.0.1
 
-  stripe@18.5.0(@types/node@24.9.2):
-    dependencies:
-      qs: 6.14.0
-    optionalDependencies:
-      '@types/node': 24.9.2
-
-  stripe@19.1.0(@types/node@24.9.2):
+  stripe@20.0.0(@types/node@24.9.2):
     dependencies:
       qs: 6.14.0
     optionalDependencies:
