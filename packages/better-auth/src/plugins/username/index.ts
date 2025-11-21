@@ -314,6 +314,8 @@ export const username = (options?: UsernameOptions | undefined) => {
 						],
 					});
 					if (!account) {
+						// Hash password to prevent timing attacks from revealing valid usernames
+						await ctx.context.password.hash(ctx.body.password);
 						throw new APIError("UNAUTHORIZED", {
 							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						});
@@ -487,6 +489,22 @@ export const username = (options?: UsernameOptions | undefined) => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
+						if (ctx.body.username && !ctx.body.displayUsername) {
+							ctx.body.displayUsername = ctx.body.username;
+						}
+						if (ctx.body.displayUsername && !ctx.body.username) {
+							ctx.body.username = ctx.body.displayUsername;
+						}
+					}),
+				},
+				{
+					matcher(context) {
+						return (
+							context.path === "/sign-up/email" ||
+							context.path === "/update-user"
+						);
+					},
+					handler: createAuthMiddleware(async (ctx) => {
 						const username =
 							typeof ctx.body.username === "string" &&
 							options?.validationOrder?.username === "post-normalization"
@@ -560,22 +578,6 @@ export const username = (options?: UsernameOptions | undefined) => {
 									});
 								}
 							}
-						}
-					}),
-				},
-				{
-					matcher(context) {
-						return (
-							context.path === "/sign-up/email" ||
-							context.path === "/update-user"
-						);
-					},
-					handler: createAuthMiddleware(async (ctx) => {
-						if (ctx.body.username && !ctx.body.displayUsername) {
-							ctx.body.displayUsername = ctx.body.username;
-						}
-						if (ctx.body.displayUsername && !ctx.body.username) {
-							ctx.body.username = ctx.body.displayUsername;
 						}
 					}),
 				},
