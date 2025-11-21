@@ -5,6 +5,7 @@ import { APIError } from "better-call";
 import * as z from "zod";
 import { setSessionCookie } from "../../../cookies";
 import {
+	constantTimeEqual,
 	generateRandomString,
 	symmetricDecrypt,
 	symmetricEncrypt,
@@ -312,7 +313,11 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 					message: TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE,
 				});
 			}
-			if (decryptedOtp === ctx.body.code) {
+			const isCodeValid = constantTimeEqual(
+				new TextEncoder().encode(decryptedOtp),
+				new TextEncoder().encode(ctx.body.code),
+			);
+			if (isCodeValid) {
 				if (!session.user.twoFactorEnabled) {
 					if (!session.session) {
 						throw new APIError("BAD_REQUEST", {
