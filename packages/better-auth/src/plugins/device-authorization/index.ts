@@ -554,17 +554,6 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 						deviceCodeRecord.status === "approved" &&
 						deviceCodeRecord.userId
 					) {
-						// Delete the device code after successful authorization
-						await ctx.context.adapter.delete({
-							model: "deviceCode",
-							where: [
-								{
-									field: "id",
-									value: deviceCodeRecord.id,
-								},
-							],
-						});
-
 						const user = await ctx.context.internalAdapter.findUserById(
 							deviceCodeRecord.userId,
 						);
@@ -610,6 +599,17 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 								),
 							);
 						}
+
+						// Delete the device code after successful authorization
+						await ctx.context.adapter.delete({
+							model: "deviceCode",
+							where: [
+								{
+									field: "id",
+									value: deviceCodeRecord.id,
+								},
+							],
+						});
 
 						// Return OAuth 2.0 compliant token response
 						return ctx.json(
@@ -780,6 +780,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					}
 
 					const { userCode } = ctx.body;
+					const cleanUserCode = userCode.replace(/-/g, "");
 
 					const deviceCodeRecord =
 						await ctx.context.adapter.findOne<DeviceCode>({
@@ -787,7 +788,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 							where: [
 								{
 									field: "userCode",
-									value: userCode,
+									value: cleanUserCode,
 								},
 							],
 						});
