@@ -10,7 +10,7 @@ import { parseJSON } from "../../client/parser";
 import { parseSetCookieHeader } from "../../cookies";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { getOrigin } from "../../utils/url";
-import type { OAuthConfigSnapshot, OAuthProxyStatePackage } from "./types";
+import type { AuthContextWithSnapshot, OAuthProxyStatePackage } from "./types";
 import { checkSkipProxy, resolveCurrentURL } from "./utils";
 
 export interface OAuthProxyOptions {
@@ -31,15 +31,7 @@ export interface OAuthProxyOptions {
 	productionURL?: string | undefined;
 }
 
-/**
- * A proxy plugin, that allows you to proxy OAuth requests.
- * Useful for development and preview deployments where
- * the redirect URL can't be known in advance to add to the OAuth provider.
- */
 export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
-	/** Stores original OAuth config for restoration after request processing */
-	const snapshotMap = new WeakMap<object, OAuthConfigSnapshot>();
-
 	return {
 		id: "oauth-proxy",
 		options: opts,
@@ -241,12 +233,12 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 						}
 
 						// Snapshot original configuration for restoration in after hook
-						snapshotMap.set(ctx, {
+						(ctx.context as AuthContextWithSnapshot)._oauthProxySnapshot = {
 							storeStateStrategy: ctx.context.oauthConfig.storeStateStrategy,
 							skipStateCookieCheck:
 								ctx.context.oauthConfig.skipStateCookieCheck,
 							internalAdapter: ctx.context.internalAdapter,
-						});
+						};
 
 						// Temporarily switch to database mode and inject verification value
 						// This allows the OAuth callback handler to retrieve state data without database
@@ -290,17 +282,15 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 						if (ctx.path !== "/callback/:id") {
 							return;
 						}
-
-						//
-						// Stateless mode: already handled by previous hook
-						//
 						if (ctx.context.oauthConfig.storeStateStrategy === "cookie") {
 							return;
 						}
 
-						//
-						// Database mode: use existing verification value logic
-						//
+						// Skip if OAuth proxy stateless flow already handled by previous hook
+						if ((ctx.context as AuthContextWithSnapshot)._oauthProxySnapshot) {
+							return;
+						}
+
 						const state = ctx.query?.state || ctx.body?.state;
 						if (!state) {
 							return;
@@ -321,15 +311,14 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 							return;
 						}
 
-						// Create snapshot and modify config (will be restored in after hook)
-						if (!snapshotMap.has(ctx)) {
-							snapshotMap.set(ctx, {
-								storeStateStrategy: ctx.context.oauthConfig.storeStateStrategy,
-								skipStateCookieCheck:
-									ctx.context.oauthConfig.skipStateCookieCheck,
-								internalAdapter: ctx.context.internalAdapter,
-							});
-						}
+						// Snapshot original configuration for restoration in after hook
+						(ctx.context as AuthContextWithSnapshot)._oauthProxySnapshot = {
+							storeStateStrategy: ctx.context.oauthConfig.storeStateStrategy,
+							skipStateCookieCheck:
+								ctx.context.oauthConfig.skipStateCookieCheck,
+							internalAdapter: ctx.context.internalAdapter,
+						};
+
 						ctx.context.oauthConfig.skipStateCookieCheck = true;
 					}),
 				},
@@ -486,7 +475,8 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const snapshot = snapshotMap.get(ctx);
+						const contextWithSnapshot = ctx.context as AuthContextWithSnapshot;
+						const snapshot = contextWithSnapshot._oauthProxySnapshot;
 						if (snapshot) {
 							ctx.context.oauthConfig.storeStateStrategy =
 								snapshot.storeStateStrategy;
@@ -494,7 +484,8 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 								snapshot.skipStateCookieCheck;
 							ctx.context.internalAdapter = snapshot.internalAdapter;
 
-							snapshotMap.delete(ctx);
+							// Clear the temporary extended context value
+							contextWithSnapshot._oauthProxySnapshot = undefined;
 						}
 					}),
 				},
