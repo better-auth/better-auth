@@ -78,6 +78,7 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 			);
 		}
 		if (ctx.path.includes("siwe")) return "siwe";
+		if (ctx.path.includes("/passkey/verify-authentication")) return "passkey";
 		return null;
 	};
 
