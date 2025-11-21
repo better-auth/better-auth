@@ -230,7 +230,12 @@ export const callbackOAuth = createAuthEndpoint(
 			);
 			return await redirectOnError("email_not_found");
 		}
-
+		const accountData = {
+			providerId: provider.id,
+			accountId: String(userInfo.id),
+			...tokens,
+			scope: tokens.scopes?.join(","),
+		};
 		const result = await handleOAuthUserInfo(c, {
 			userInfo: {
 				...userInfo,
@@ -238,12 +243,7 @@ export const callbackOAuth = createAuthEndpoint(
 				email: userInfo.email,
 				name: userInfo.name || userInfo.email,
 			},
-			account: {
-				providerId: provider.id,
-				accountId: String(userInfo.id),
-				...tokens,
-				scope: tokens.scopes?.join(","),
-			},
+			account: accountData,
 			callbackURL,
 			disableSignUp:
 				(provider.disableImplicitSignUp && !requestSignUp) ||
@@ -259,6 +259,7 @@ export const callbackOAuth = createAuthEndpoint(
 			session,
 			user,
 		});
+
 		let toRedirectTo: string;
 		try {
 			const url = result.isRegister ? newUserURL || callbackURL : callbackURL;

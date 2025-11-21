@@ -341,13 +341,13 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			) {
 				if (!schema) {
 					throw new BetterAuthError(
-						"Drizzle adapter failed to initialize. Schema not found. Please provide a schema object in the adapter options object.",
+						"Drizzle adapter failed to initialize. Drizzle Schema not found. Please provide a schema object in the adapter options object.",
 					);
 				}
 				for (const key in values) {
 					if (!schema[key]) {
 						throw new BetterAuthError(
-							`The field "${key}" does not exist in the "${model}" schema. Please update your drizzle schema or re-generate using "npx @better-auth/cli generate".`,
+							`The field "${key}" does not exist in the "${model}" Drizzle schema. Please update your drizzle schema or re-generate using "npx @better-auth/cli generate".`,
 						);
 					}
 				}
@@ -368,7 +368,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					if (options.experimental?.joins) {
 						if (!db.query || !db.query[model]) {
 							logger.error(
-								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your schema to include relations or re-generate using "npx auth generate".`,
+								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your Drizzle schema to include relations or re-generate using "npx auth generate".`,
 							);
 							logger.info("Falling back to regular query");
 						} else {
@@ -434,7 +434,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					if (options.experimental?.joins) {
 						if (!db.query[model]) {
 							logger.error(
-								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your schema to include relations or re-generate using "npx auth generate".`,
+								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your Drizzle schema to include relations or re-generate using "npx auth generate".`,
 							);
 							logger.info("Falling back to regular query");
 						} else {
