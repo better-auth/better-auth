@@ -93,7 +93,9 @@ describe("oidc scope consent", async () => {
 		const cookie = signInRes.headers.get("set-cookie");
 
 		// 2. Register a client
-		let clientReg;
+		let clientReg: Awaited<
+			ReturnType<typeof auth.api.registerOAuthApplication>
+		>;
 		try {
 			clientReg = await auth.api.registerOAuthApplication({
 				body: {
