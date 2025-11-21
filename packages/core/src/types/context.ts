@@ -105,15 +105,15 @@ export interface InternalAdapter<
 	): Promise<Account>;
 
 	// Record<string, any> is to take into account additional fields or plugin-added fields
-	updateUser(
+	updateUser<T extends Record<string, any>>(
 		userId: string,
 		data: Partial<User> & Record<string, any>,
-	): Promise<User & Record<string, any>>;
+	): Promise<User & T>;
 
-	updateUserByEmail(
+	updateUserByEmail<T extends Record<string, any>>(
 		email: string,
 		data: Partial<User & Record<string, any>>,
-	): Promise<User & Record<string, any>>;
+	): Promise<User & T>;
 
 	updatePassword(userId: string, password: string): Promise<void>;
 
