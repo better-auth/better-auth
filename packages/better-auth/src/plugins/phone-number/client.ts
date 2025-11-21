@@ -9,7 +9,9 @@ export const phoneNumberClient = () => {
 			{
 				matcher(path) {
 					return (
-						path === "/phone-number/update" || path === "/phone-number/verify"
+						path === "/phone-number/update" ||
+						path === "/phone-number/verify" ||
+						path === "/sign-in/phone-number"
 					);
 				},
 				signal: "$sessionSignal",

@@ -81,7 +81,7 @@ export const siwe = (options: SIWEPluginOptions) =>
 								.max(2147483647)
 								.optional()
 								.default(1),
-							email: z.string().email().optional(),
+							email: z.email().optional(),
 						})
 						.refine((data) => options.anonymous !== false || !!data.email, {
 							message: "Email is required when the anonymous plugin option is disabled.",

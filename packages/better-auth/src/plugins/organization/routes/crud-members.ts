@@ -11,7 +11,11 @@ import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
 import { parseRoles } from "../organization";
-import type { InferOrganizationRolesFromOption, Member } from "../schema";
+import type {
+	InferMember,
+	InferOrganizationRolesFromOption,
+	Member,
+} from "../schema";
 import type { OrganizationOptions } from "../types";
 
 export const addMember = <O extends OrganizationOptions>(option: O) => {
@@ -64,6 +68,10 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 						? { teamId?: string | undefined }
 						: {}) &
 						InferAdditionalFieldsFromPluginOptions<"member", O>,
+				},
+				openapi: {
+					operationId: "addOrganizationMember",
+					description: "Add a member to an organization",
 				},
 			},
 		},
@@ -158,7 +166,7 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 			let memberData = {
 				organizationId: orgId,
 				userId: user.id,
-				role: parseRoles(ctx.body.role as string | string[]),
+				role: parseRoles(ctx.body.role),
 				createdAt: new Date(),
 				...(additionalFields ? additionalFields : {}),
 			};
@@ -288,16 +296,19 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				});
 			}
-			let toBeRemovedMember: Member | null = null;
+			let toBeRemovedMember: InferMember<O, false> | null = null;
 			if (ctx.body.memberIdOrEmail.includes("@")) {
 				toBeRemovedMember = await adapter.findMemberByEmail({
 					email: ctx.body.memberIdOrEmail,
 					organizationId: organizationId,
 				});
 			} else {
-				toBeRemovedMember = await adapter.findMemberById(
-					ctx.body.memberIdOrEmail,
-				);
+				const result = await adapter.findMemberById(ctx.body.memberIdOrEmail);
+				if (!result) toBeRemovedMember = null;
+				else {
+					const { user: _user, ...member } = result;
+					toBeRemovedMember = member as unknown as InferMember<O, false>;
+				}
 			}
 			if (!toBeRemovedMember) {
 				throw new APIError("BAD_REQUEST", {
@@ -317,7 +328,7 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				const { members } = await adapter.listMembers({
 					organizationId: organizationId,
 				});
-				const owners = members.filter((member: Member) => {
+				const owners = members.filter((member) => {
 					const roles = member.role.split(",");
 					return roles.includes(creatorRole);
 				});
@@ -377,8 +388,11 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 					organization,
 				});
 			}
-
-			await adapter.deleteMember(toBeRemovedMember.id);
+			await adapter.deleteMember({
+				memberId: toBeRemovedMember.id,
+				organizationId: organizationId,
+				userId: toBeRemovedMember.userId,
+			});
 			if (
 				session.user.id === toBeRemovedMember.userId &&
 				session.session.activeOrganizationId ===
@@ -441,6 +455,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 					},
 				},
 				openapi: {
+					operationId: "updateOrganizationMemberRole",
 					description: "Update the role of a member in an organization",
 					responses: {
 						"200": {
@@ -496,9 +511,9 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 
 			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 			const roleToSet: string[] = Array.isArray(ctx.body.role)
-				? (ctx.body.role as string[])
+				? ctx.body.role
 				: ctx.body.role
-					? [ctx.body.role as string]
+					? [ctx.body.role]
 					: [];
 
 			const member = await adapter.findMemberByOrgId({
@@ -792,7 +807,11 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 					});
 				}
 			}
-			await adapter.deleteMember(member.id);
+			await adapter.deleteMember({
+				memberId: member.id,
+				organizationId: ctx.body.organizationId,
+				userId: session.user.id,
+			});
 			if (session.session.activeOrganizationId === ctx.body.organizationId) {
 				await adapter.setActiveOrganization(session.session.token, null, ctx);
 			}

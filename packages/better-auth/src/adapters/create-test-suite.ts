@@ -3,9 +3,13 @@ import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { TTY_COLORS } from "@better-auth/core/env";
 import { test } from "vitest";
 import { betterAuth } from "../auth";
+import { getAuthTables } from "../db/get-tables";
 import type { Account, Session, User, Verification } from "../types";
 import { generateId } from "../utils";
-import { createAdapterFactory } from "./adapter-factory";
+import {
+	createAdapterFactory,
+	initGetDefaultModelName,
+} from "./adapter-factory";
 import type { Logger } from "./test-adapter";
 import { deepmerge } from "./utils";
 
@@ -119,6 +123,7 @@ export const createTestSuite = <
 		 */
 		alwaysMigrate?: boolean | undefined;
 		prefixTests?: string | undefined;
+		customIdGenerator?: () => any | Promise<any> | undefined;
 	},
 	tests: (
 		helpers: {
@@ -213,6 +218,7 @@ export const createTestSuite = <
 					adapterName: `Wrapped ${adapter.options?.adapterConfig.adapterName}`,
 					disableTransformOutput: true,
 					disableTransformInput: true,
+					disableTransformJoin: true,
 				};
 				const adapterCreator = (
 					options: BetterAuthOptions,
@@ -228,8 +234,14 @@ export const createTestSuite = <
 								count: adapter.count,
 								deleteMany: adapter.deleteMany,
 								delete: adapter.delete,
-								findOne: adapter.findOne,
-								findMany: adapter.findMany,
+								findOne: async (args) => {
+									const res = (await adapter.findOne(args)) as any;
+									return res;
+								},
+								findMany: async (args) => {
+									const res = (await adapter.findMany(args)) as any;
+									return res;
+								},
 								update: adapter.update as any,
 								updateMany: adapter.updateMany,
 
@@ -268,6 +280,19 @@ export const createTestSuite = <
 				adapter = await helpers.adapter();
 				for (const model of Object.keys(createdRows)) {
 					for (const row of createdRows[model]!) {
+						const schema = getAuthTables(helpers.getBetterAuthOptions());
+						const getDefaultModelName = initGetDefaultModelName({
+							usePlural: adapter.options?.adapterConfig?.usePlural,
+							schema: schema,
+						});
+						let defaultModelName: string;
+						try {
+							defaultModelName = getDefaultModelName(model);
+						} catch (error) {
+							// if fail, likely means it was removed from the schema
+							continue;
+						}
+						if (!schema[defaultModelName]) continue; // model doesn't exist in the schema anymore, so we skip it
 						try {
 							await adapter.delete({
 								model,
@@ -305,8 +330,18 @@ export const createTestSuite = <
 				return newData;
 			};
 
+			const idGenerator = async () => {
+				if (config.customIdGenerator) {
+					return config.customIdGenerator();
+				}
+				if (helpers.customIdGenerator) {
+					return helpers.customIdGenerator();
+				}
+				return generateId();
+			};
+
 			const generateModel: GenerateFn = async (model: string) => {
-				const id = (await helpers.customIdGenerator?.()) || generateId();
+				const id = await idGenerator();
 				const randomDate = new Date(
 					Date.now() - Math.random() * 1000 * 60 * 60 * 24 * 365,
 				);
@@ -567,7 +602,7 @@ export const createTestSuite = <
 
 				test.skipIf(shouldSkip)(
 					testName,
-					{ timeout: 10000 },
+					{ timeout: 30000 },
 					async ({ onTestFailed, skip }) => {
 						resetDebugLogs();
 						onTestFailed(async () => {

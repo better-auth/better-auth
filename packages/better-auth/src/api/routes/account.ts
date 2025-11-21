@@ -19,6 +19,7 @@ export const listUserAccounts = createAuthEndpoint(
 		use: [sessionMiddleware],
 		metadata: {
 			openapi: {
+				operationId: "listUserAccounts",
 				description: "List all accounts linked to the user",
 				responses: {
 					"200": {
@@ -172,6 +173,7 @@ export const linkSocialAccount = createAuthEndpoint(
 		metadata: {
 			openapi: {
 				description: "Link a social account to the user",
+				operationId: "linkSocialAccount",
 				responses: {
 					"200": {
 						description: "Success",
@@ -690,7 +692,12 @@ export const refreshToken = createAuthEndpoint(
 				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 				refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
 			});
-			return ctx.json(tokens);
+			return ctx.json({
+				accessToken: tokens.accessToken,
+				refreshToken: tokens.refreshToken,
+				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+				refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+			});
 		} catch (error) {
 			throw new APIError("BAD_REQUEST", {
 				message: "Failed to refresh access token",

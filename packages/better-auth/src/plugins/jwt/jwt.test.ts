@@ -1,10 +1,11 @@
-import { createLocalJWKSet, type JSONWebKeySet, jwtVerify } from "jose";
+import type { JSONWebKeySet } from "jose";
+import { createLocalJWKSet, jwtVerify } from "jose";
 import { describe, expect, it } from "vitest";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { jwt } from ".";
 import { jwtClient } from "./client";
-import type { JWKOptions, JwtOptions } from "./types";
+import type { JWKOptions, Jwk, JwtOptions } from "./types";
 import { generateExportedKeyPair } from "./utils";
 
 describe("jwt", async () => {
@@ -699,5 +700,43 @@ describe("jwt - remote url", async () => {
 			},
 		});
 		expect(jwtHeader).toBeTruthy();
+	});
+});
+
+describe("jwt - custom adapter", async () => {
+	it("should use custom adapter", async () => {
+		const storage: Jwk[] = [];
+		const { auth } = await getTestInstance({
+			plugins: [
+				jwt({
+					adapter: {
+						getJwks: async () => {
+							return storage;
+						},
+						getLatestKey: async () => {
+							return storage[0] ?? null;
+						},
+						createJwk: async (data) => {
+							const key = {
+								...data,
+								id: crypto.randomUUID(),
+								createdAt: new Date(),
+							};
+							storage.push(key);
+							return key;
+						},
+					},
+				}),
+			],
+		});
+		const token = await auth.api.signJWT({
+			body: {
+				payload: {
+					sub: "123",
+				},
+			},
+		});
+		expect(token?.token).toBeDefined();
+		expect(storage.length).toBe(1);
 	});
 });

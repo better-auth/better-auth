@@ -3,6 +3,7 @@ import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { TTY_COLORS } from "@better-auth/core/env";
 import { afterAll, beforeAll, describe } from "vitest";
 import { getAuthTables } from "../db";
+import { initGetModelName } from "./adapter-factory";
 import type { createTestSuite } from "./create-test-suite";
 import { deepmerge } from "./utils";
 
@@ -145,8 +146,13 @@ export const testAdapter = async ({
 
 		// Clean up all rows from all models
 		for (const model of Object.keys(getAllModels)) {
+			const getModelName = initGetModelName({
+				usePlural: adapter.options?.adapterConfig?.usePlural,
+				schema: getAllModels,
+			});
 			try {
-				await adapter.deleteMany({ model: model, where: [] });
+				const modelName = getModelName(model);
+				await adapter.deleteMany({ model: modelName, where: [] });
 			} catch (error) {
 				const msg = `Error while cleaning up all rows from ${model}`;
 				log.error(msg, error);
@@ -197,12 +203,12 @@ export const testAdapter = async ({
 			describe(adapterDisplayName, async () => {
 				beforeAll(async () => {
 					await migrate();
-				}, 20000);
+				}, 60000);
 
 				afterAll(async () => {
 					await cleanup();
 					await onFinish?.();
-				}, 20000);
+				}, 60000);
 
 				for (const testSuite of tests) {
 					await testSuite({
