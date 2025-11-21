@@ -217,12 +217,16 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 										options.partitioned = true;
 										break;
 									}
+									case "secure": {
+										options.secure = true;
+										break;
+									}
 								}
 							}
 
 							return {
 								name,
-								value,
+								value: decodeURIComponent(value),
 								options,
 							};
 						});
