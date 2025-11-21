@@ -256,7 +256,7 @@ export const auth = betterAuth({
   - `otp`: The OTP to send.
   - `type`: The type of OTP to send. Can be "sign-in", "email-verification", or "forget-password".
 
-  <Callout>
+  <Callout type="warn">
   It is recommended to not await the email sending to avoid timing attacks. On serverless platforms, use `waitUntil` or similar to ensure the email is sent.
   </Callout>
 
