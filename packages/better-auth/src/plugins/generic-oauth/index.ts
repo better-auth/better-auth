@@ -96,7 +96,7 @@ export interface GenericOAuthConfig {
 	/**
 	 * Custom function to exchange authorization code for tokens.
 	 * If provided, this function will be used instead of the default token exchange logic.
-	 * This is useful for providers with non-standard token endpoints (e.g., WeChat).
+	 * This is useful for providers with non-standard token endpoints.
 	 * @param data - Authorization code exchange parameters
 	 * @returns A promise that resolves to OAuth2Tokens
 	 */
