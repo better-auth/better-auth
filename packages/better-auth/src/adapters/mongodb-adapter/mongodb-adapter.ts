@@ -513,6 +513,7 @@ export const mongodbAdapter = (
 						{
 							session,
 							returnDocument: "after",
+							includeResultMetadata: true,
 						},
 					);
 					const doc = (res as any)?.value ?? null;
