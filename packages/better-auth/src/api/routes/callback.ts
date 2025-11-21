@@ -5,6 +5,7 @@ import { setSessionCookie } from "../../cookies";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
 import { setTokenUtil } from "../../oauth2/utils";
+import { oauthQuery } from "../../plugins/oauth-provider/utils";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { safeJSONParse } from "../../utils/json";
 
@@ -76,6 +77,7 @@ export const callbackOAuth = createAuthEndpoint(
 			const url = `${defaultErrorURL}${sep}state=state_not_found`;
 			throw c.redirect(url);
 		}
+		const parsedState = await parseState(c);
 
 		const {
 			codeVerifier,
@@ -83,8 +85,13 @@ export const callbackOAuth = createAuthEndpoint(
 			link,
 			errorURL,
 			newUserURL,
+			query,
 			requestSignUp,
-		} = await parseState(c);
+		} = parsedState;
+		if (query)
+			oauthQuery.set({
+				query: new URLSearchParams(query),
+			});
 
 		function redirectOnError(error: string, description?: string | undefined) {
 			const baseURL = errorURL ?? defaultErrorURL;
