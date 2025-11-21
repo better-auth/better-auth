@@ -364,6 +364,7 @@ describe("oauth logout", async () => {
 				query: {
 					id_token_hint: tokens.data?.id_token!,
 					post_logout_redirect_uri: logoutRedirectUri,
+					state: "123",
 				},
 			},
 			{
@@ -372,7 +373,8 @@ describe("oauth logout", async () => {
 				},
 			},
 		);
-		expect(logoutRedirectRes).toBe(logoutRedirectUri);
+		expect(logoutRedirectRes).toContain(logoutRedirectUri);
+		expect(logoutRedirectRes).toContain("state=123");
 		expect(logoutRes.error?.status).toBe(302);
 	});
 });
