@@ -1,4 +1,5 @@
 import type {
+	AuthContext,
 	BetterAuthPlugin,
 	GenericEndpointContext,
 } from "@better-auth/core";
@@ -24,6 +25,8 @@ import { setSessionCookie } from "../../cookies";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState, parseState } from "../../oauth2/state";
 import type { User } from "../../types";
+
+export * from "./providers";
 
 /**
  * Configuration interface for generic OAuth providers.
@@ -161,6 +164,28 @@ export interface GenericOAuthConfig {
 	overrideUserInfo?: boolean | undefined;
 }
 
+/**
+ * Base type for OAuth provider options.
+ * Extracts common fields from GenericOAuthConfig and makes clientSecret required.
+ */
+export type BaseOAuthProviderOptions = Omit<
+	Pick<
+		GenericOAuthConfig,
+		| "clientId"
+		| "clientSecret"
+		| "scopes"
+		| "redirectURI"
+		| "pkce"
+		| "disableImplicitSignUp"
+		| "disableSignUp"
+		| "overrideUserInfo"
+	>,
+	"clientSecret"
+> & {
+	/** OAuth client secret (required for provider options) */
+	clientSecret: string;
+};
+
 interface GenericOAuthOptions {
 	/**
 	 * Array of OAuth provider configurations.
@@ -209,8 +234,7 @@ async function getUserInfo(
 		},
 	});
 	return {
-		// @ts-expect-error sub is optional in the type
-		id: userInfo.data?.sub,
+		id: userInfo.data?.sub ?? "",
 		emailVerified: userInfo.data?.email_verified ?? false,
 		email: userInfo.data?.email,
 		image: userInfo.data?.picture,
@@ -229,13 +253,20 @@ const ERROR_CODES = defineErrorCodes({
 export const genericOAuth = (options: GenericOAuthOptions) => {
 	return {
 		id: "generic-oauth",
-		init: (ctx) => {
+		init: (ctx: AuthContext) => {
 			const genericProviders = options.config.map((c) => {
 				let finalUserInfoUrl = c.userInfoUrl;
 				return {
 					id: c.providerId,
 					name: c.providerId,
-					async createAuthorizationURL(data) {
+					async createAuthorizationURL(data: {
+						state: string;
+						codeVerifier: string;
+						scopes?: string[] | undefined;
+						redirectURI: string;
+						display?: string | undefined;
+						loginHint?: string | undefined;
+					}) {
 						let finalAuthUrl = c.authorizationUrl;
 						if (!finalAuthUrl && c.discoveryUrl) {
 							const discovery = await betterFetch<{
@@ -270,7 +301,12 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							redirectURI: `${ctx.baseURL}/oauth2/callback/${c.providerId}`,
 						});
 					},
-					async validateAuthorizationCode(data) {
+					async validateAuthorizationCode(data: {
+						code: string;
+						redirectURI: string;
+						codeVerifier?: string | undefined;
+						deviceId?: string | undefined;
+					}) {
 						let finalTokenUrl = c.tokenUrl;
 						if (c.discoveryUrl) {
 							const discovery = await betterFetch<{
@@ -334,7 +370,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							tokenEndpoint: finalTokenUrl,
 						});
 					},
-					async getUserInfo(tokens) {
+					async getUserInfo(tokens: OAuth2Tokens) {
 						const userInfo = c.getUserInfo
 							? await c.getUserInfo(tokens)
 							: await getUserInfo(tokens, finalUserInfoUrl);
@@ -461,7 +497,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						},
 					},
 				},
-				async (ctx) => {
+				async (ctx: GenericEndpointContext) => {
 					const { providerId } = ctx.body;
 					const config = options.config.find(
 						(c) => c.providerId === providerId,
@@ -589,6 +625,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					}),
 					metadata: {
 						client: false,
+						allowedMediaTypes: [
+							"application/x-www-form-urlencoded",
+							"application/json",
+						],
 						openapi: {
 							description: "OAuth2 callback",
 							responses: {
@@ -611,7 +651,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						},
 					},
 				},
-				async (ctx) => {
+				async (ctx: GenericEndpointContext) => {
 					const defaultErrorURL =
 						ctx.context.options.onAPIError?.errorURL ||
 						`${ctx.context.baseURL}/error`;
@@ -622,13 +662,19 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							}&error_description=${ctx.query.error_description}`,
 						);
 					}
+					const providerId = ctx.params?.providerId;
+					if (!providerId) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Provider ID is required",
+						});
+					}
 					const provider = options.config.find(
-						(p) => p.providerId === ctx.params.providerId,
+						(p) => p.providerId === providerId,
 					);
 
 					if (!provider) {
 						throw new APIError("BAD_REQUEST", {
-							message: `No config found for provider ${ctx.params.providerId}`,
+							message: `No config found for provider ${providerId}`,
 						});
 					}
 					let tokens: OAuth2Tokens | undefined = undefined;
@@ -925,8 +971,13 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						},
 					},
 				},
-				async (c) => {
+				async (c: GenericEndpointContext) => {
 					const session = c.context.session;
+					if (!session) {
+						throw new APIError("UNAUTHORIZED", {
+							message: "Session is required",
+						});
+					}
 					const provider = options.config.find(
 						(p) => p.providerId === c.body.providerId,
 					);
