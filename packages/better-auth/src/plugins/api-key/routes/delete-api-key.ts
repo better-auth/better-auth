@@ -7,7 +7,7 @@ import type { apiKeySchema } from "../schema";
 import {
 	deleteApiKey as deleteApiKeyFromStorage,
 	getApiKeyById,
-} from "../secondary-storage";
+} from "../adapter";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 export function deleteApiKey({
