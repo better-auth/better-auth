@@ -586,7 +586,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						if (!client_id) {
 							throw new APIError("BAD_REQUEST", {
 								error_description: "client_id is required",
-								error: "invalid_client",
+								error: "invalid_request",
 							});
 						}
 
@@ -607,8 +607,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 						}
 						if (token.clientId !== client_id.toString()) {
 							throw new APIError("BAD_REQUEST", {
-								error_description: "invalid client_id",
-								error: "invalid_client",
+								error_description:
+									"The refresh token was issued to a different client",
+								error: "invalid_grant",
 							});
 						}
 						if (token.refreshTokenExpiresAt < new Date()) {
@@ -624,7 +625,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							trustedClients,
 						);
 						if (!client) {
-							throw new APIError("BAD_REQUEST", {
+							throw new APIError("UNAUTHORIZED", {
 								error_description: "invalid client_id",
 								error: "invalid_client",
 							});
