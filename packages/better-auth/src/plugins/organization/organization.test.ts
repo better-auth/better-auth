@@ -1957,6 +1957,12 @@ describe("Additional Fields", async () => {
 		} | null>();
 	});
 
+	it("should throw error if no header is present", async () => {
+		await expect(auth.api.listOrganizations()).rejects.toThrowError(
+			"Headers is required",
+		);
+	});
+
 	it("list user organizations", async () => {
 		const orgs = await auth.api.listOrganizations({
 			headers,
