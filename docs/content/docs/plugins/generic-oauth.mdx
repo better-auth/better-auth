@@ -384,7 +384,7 @@ genericOAuth({
 
 ### Accessing Raw Token Data
 
-The `OAuth2Tokens` object includes a `raw` field that preserves the original token response from the provider. This is useful for accessing provider-specific fields:
+The `tokens` parameter includes a `raw` field that preserves the original token response from the provider. This is useful for accessing provider-specific fields:
 
 ```ts
 getUserInfo: async (tokens) => {
