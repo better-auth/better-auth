@@ -19,6 +19,23 @@ export type ClientAtomListener = {
 	signal: "$sessionSignal" | Omit<string, "$sessionSignal">;
 };
 
+/**
+ * Better-Fetch options but with additional options for the auth-client.
+ */
+export type ClientFetchOption<
+	Body = any,
+	Query extends Record<string, any> = any,
+	Params extends Record<string, any> | Array<string> | undefined = any,
+	Res = any,
+> = BetterFetchOption<Body, Query, Params, Res> & {
+	/**
+	 * Certain endpoints, upon successful response, will trigger atom signals and thus rerendering all hooks related to that atom.
+	 *
+	 * This option is useful when you want to skip hook rerenders.
+	 */
+	disableSignal?: boolean | undefined;
+};
+
 export interface RevalidateOptions {
 	/**
 	 * A time interval (in seconds) after which the session will be re-fetched.
@@ -50,7 +67,7 @@ export interface RevalidateOptions {
 }
 
 export interface BetterAuthClientOptions {
-	fetchOptions?: BetterFetchOption | undefined;
+	fetchOptions?: ClientFetchOption | undefined;
 	plugins?: BetterAuthClientPlugin[] | undefined;
 	baseURL?: string | undefined;
 	basePath?: string | undefined;
