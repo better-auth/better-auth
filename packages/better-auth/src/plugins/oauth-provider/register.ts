@@ -159,8 +159,8 @@ export async function createOAuthClientEndpoint(
 
 	// Create the client with the existing schema
 	const iat = Math.floor(Date.now() / 1000);
-	const referenceId = opts.clientRegistrationReference
-		? await opts.clientRegistrationReference({
+	const referenceId = opts.clientReference
+		? await opts.clientReference({
 				user: session?.user,
 				session: session?.session,
 			})
