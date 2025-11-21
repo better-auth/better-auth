@@ -325,7 +325,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 						data: JSON.stringify(validate.updated),
 					});
 
-					await ctx.context.adapter.updateMany({
+					const updated = await ctx.context.adapter.updateMany({
 						model: twoFactorTable,
 						update: {
 							backupCodes: updatedBackupCodes,
@@ -335,8 +335,17 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 								field: "userId",
 								value: user.id,
 							},
+							{
+								field: "backupCodes",
+								value: twoFactor.backupCodes,
+							},
 						],
 					});
+					if (!updated) {
+						throw new APIError("CONFLICT", {
+							message: "Failed to verify backup code. Please try again.",
+						});
+					}
 
 					if (!ctx.body.disableSession) {
 						return valid(ctx);
