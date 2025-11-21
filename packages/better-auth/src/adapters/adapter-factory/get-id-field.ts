@@ -62,12 +62,6 @@ export const initGetIdField = ({
 						defaultValue() {
 							if (disableIdGeneration) return undefined;
 							let generateId = options.advanced?.database?.generateId;
-							if (options.advanced?.generateId !== undefined) {
-								logger.warn(
-									"Your Better Auth config includes advanced.generateId which is deprecated. Please use advanced.database.generateId instead. This will be removed in future releases.",
-								);
-								generateId = options.advanced?.generateId;
-							}
 							if (generateId === false || useNumberId) return undefined;
 							if (typeof generateId === "function") {
 								return generateId({

@@ -4,12 +4,13 @@ import type {
 	DBAdapterDebugLogOption,
 	Where,
 } from "@better-auth/core/db/adapter";
-import { ClientSession, type Db, type MongoClient, ObjectId } from "mongodb";
-import {
-	type AdapterFactoryCustomizeAdapterCreator,
-	type AdapterFactoryOptions,
-	createAdapterFactory,
+import type { ClientSession, Db, MongoClient } from "mongodb";
+import { ObjectId } from "mongodb";
+import type {
+	AdapterFactoryCustomizeAdapterCreator,
+	AdapterFactoryOptions,
 } from "../adapter-factory";
+import { createAdapterFactory } from "../adapter-factory";
 
 export interface MongoDBAdapterConfig {
 	/**
@@ -46,8 +47,7 @@ export const mongodbAdapter = (
 	let lazyOptions: BetterAuthOptions | null;
 
 	const getCustomIdGenerator = (options: BetterAuthOptions) => {
-		const generator =
-			options.advanced?.database?.generateId || options.advanced?.generateId;
+		const generator = options.advanced?.database?.generateId;
 		if (typeof generator === "function") {
 			return generator;
 		}
@@ -625,7 +625,7 @@ export const mongodbAdapter = (
 							const oid = new ObjectId(data);
 							return oid;
 						} catch (error) {
-							return new ObjectId();
+							return data;
 						}
 					}
 					if (
