@@ -132,16 +132,18 @@ Better Auth provides pre-configured helper functions for popular OAuth providers
 ### Supported Providers
 
 - **Auth0** - `auth0(options)`
+- **HubSpot** - `hubspot(options)`
 - **Keycloak** - `keycloak(options)`
-- **Okta** - `okta(options)`
+- **LINE** - `line(options)`
 - **Microsoft Entra ID (Azure AD)** - `microsoftEntraId(options)`
+- **Okta** - `okta(options)`
 - **Slack** - `slack(options)`
 
 ### Example: Using Pre-configured Providers
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { genericOAuth, auth0, keycloak, okta, microsoftEntraId, slack } from "better-auth/plugins"
+import { genericOAuth, auth0, hubspot, keycloak, line, microsoftEntraId, okta, slack } from "better-auth/plugins"
 
 export const auth = betterAuth({
   plugins: [
@@ -152,20 +154,36 @@ export const auth = betterAuth({
           clientSecret: process.env.AUTH0_CLIENT_SECRET,
           domain: process.env.AUTH0_DOMAIN,
         }),
+        hubspot({
+          clientId: process.env.HUBSPOT_CLIENT_ID,
+          clientSecret: process.env.HUBSPOT_CLIENT_SECRET,
+          scopes: ["oauth", "contacts"],
+        }),
         keycloak({
           clientId: process.env.KEYCLOAK_CLIENT_ID,
           clientSecret: process.env.KEYCLOAK_CLIENT_SECRET,
           issuer: process.env.KEYCLOAK_ISSUER,
         }),
-        okta({
-          clientId: process.env.OKTA_CLIENT_ID,
-          clientSecret: process.env.OKTA_CLIENT_SECRET,
-          issuer: process.env.OKTA_ISSUER,
+        // LINE supports multiple channels (countries) - use different providerIds
+        line({
+          providerId: "line-jp",
+          clientId: process.env.LINE_JP_CLIENT_ID,
+          clientSecret: process.env.LINE_JP_CLIENT_SECRET,
+        }),
+        line({
+          providerId: "line-th",
+          clientId: process.env.LINE_TH_CLIENT_ID,
+          clientSecret: process.env.LINE_TH_CLIENT_SECRET,
         }),
         microsoftEntraId({
           clientId: process.env.MS_APP_ID,
           clientSecret: process.env.MS_CLIENT_SECRET,
           tenantId: process.env.MS_TENANT_ID,
+        }),
+        okta({
+          clientId: process.env.OKTA_CLIENT_ID,
+          clientSecret: process.env.OKTA_CLIENT_SECRET,
+          issuer: process.env.OKTA_ISSUER,
         }),
         slack({
           clientId: process.env.SLACK_CLIENT_ID,
@@ -180,9 +198,11 @@ export const auth = betterAuth({
 Each provider helper accepts common OAuth options (extending `BaseOAuthProviderOptions`) plus provider-specific fields:
 
 - **Auth0**: Requires `domain` (e.g., `dev-xxx.eu.auth0.com`)
+- **HubSpot**: No additional required fields. Optional `scopes` (defaults to `["oauth"]`)
 - **Keycloak**: Requires `issuer` (e.g., `https://my-domain/realms/MyRealm`)
-- **Okta**: Requires `issuer` (e.g., `https://dev-xxxxx.okta.com/oauth2/default`)
+- **LINE**: Optional `providerId` (defaults to `"line"`). LINE requires separate channels for different countries (Japan, Thailand, Taiwan, etc.), so you can call `line()` multiple times with different `providerId`s and credentials to support multiple countries
 - **Microsoft Entra ID**: Requires `tenantId` (can be a GUID, `"common"`, `"organizations"`, or `"consumers"`)
+- **Okta**: Requires `issuer` (e.g., `https://dev-xxxxx.okta.com/oauth2/default`)
 - **Slack**: No additional required fields
 
 All providers support the same optional fields:
