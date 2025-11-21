@@ -187,6 +187,7 @@ export async function authorize(
 	const hasAlreadyConsented = await ctx.context.adapter
 		.findOne<{
 			consentGiven: boolean;
+			scopes: string;
 		}>({
 			model: "oauthConsent",
 			where: [
@@ -200,7 +201,16 @@ export async function authorize(
 				},
 			],
 		})
-		.then((res) => !!res?.consentGiven);
+		.then((res) => {
+			if (!res?.consentGiven) {
+				return false;
+			}
+			const consentedScopes = res.scopes ? res.scopes.split(" ") : [];
+			const hasConsented = requestScope.every((scope) =>
+				consentedScopes.includes(scope),
+			);
+			return hasConsented;
+		});
 
 	const promptSet = parsePrompt(query.prompt ?? "");
 
