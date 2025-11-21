@@ -1,4 +1,4 @@
-import { decodeJwt } from "jose";
+import { betterFetch } from "@better-fetch/fetch";
 import { logger } from "../env";
 import { BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
@@ -7,7 +7,6 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
-import { betterFetch } from "@better-fetch/fetch";
 
 export interface HubspotProfile {
 	app_id: number;
@@ -110,7 +109,10 @@ export const hubspot = (options: HubspotOptions) => {
 				logger.error("No accessToken found in token");
 				return null;
 			}
-			const tokenBaseUrl = new URL(token.accessToken, userInfoEndpoint).toString();
+			const tokenBaseUrl = new URL(
+				token.accessToken,
+				userInfoEndpoint,
+			).toString();
 			const { data: user } = await betterFetch<HubspotProfile>(tokenBaseUrl);
 
 			if (!user) {
