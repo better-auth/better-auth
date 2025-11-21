@@ -303,9 +303,12 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 					organizationId: organizationId,
 				});
 			} else {
-				toBeRemovedMember = await adapter.findMemberById(
-					ctx.body.memberIdOrEmail,
-				);
+				const result = await adapter.findMemberById(ctx.body.memberIdOrEmail);
+				if (!result) toBeRemovedMember = null;
+				else {
+					const { user: _user, ...member } = result;
+					toBeRemovedMember = member as unknown as InferMember<O, false>;
+				}
 			}
 			if (!toBeRemovedMember) {
 				throw new APIError("BAD_REQUEST", {

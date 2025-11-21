@@ -541,10 +541,11 @@ describe("organization", async (it) => {
 			},
 		});
 		if (!org.data) throw new Error("Organization not found");
-		expect(org.data.members[3]!.role).toBe("member");
+		const memberUser = org.data.members.find((x: any) => x.role === "member");
+		if (!memberUser) throw new Error("Member not found");
 		const member = await client.organization.updateMemberRole({
 			organizationId: org.data!.id,
-			memberId: org.data!.members[3]!.id,
+			memberId: memberUser!.id,
 			role: "admin",
 			fetchOptions: {
 				headers,
@@ -566,7 +567,7 @@ describe("organization", async (it) => {
 		const c = await client.organization.updateMemberRole({
 			organizationId: org.data!.id,
 			role: ["member", "admin"],
-			memberId: org.data!.members[1]!.id,
+			memberId: org.data!.members.find((m) => m.role === "member")!.id,
 			fetchOptions: {
 				headers,
 			},
@@ -585,10 +586,10 @@ describe("organization", async (it) => {
 			},
 		});
 
-		const activeMember = org?.data?.members.find((m) => m.userId === user.id);
-
-		expect(activeMember?.role).toBe("owner");
-
+		const activeMember = org?.data?.members.find(
+			(m) => m.userId === user.id && m.role === "owner",
+		);
+		if (!activeMember) throw new Error("Active member not found");
 		const c1 = await client.organization.updateMemberRole({
 			organizationId: org.data?.id as string,
 			role: ["owner", "admin"],
@@ -610,6 +611,15 @@ describe("organization", async (it) => {
 		});
 
 		expect(c2.data?.role).toBe("owner");
+
+		await client.organization.updateMemberRole({
+			organizationId: org.data?.id as string,
+			role: ["admin"],
+			memberId: activeMember!.id as string,
+			fetchOptions: {
+				headers,
+			},
+		});
 	});
 
 	const adminUser = {
@@ -735,13 +745,15 @@ describe("organization", async (it) => {
 		});
 
 		if (!org.data) throw new Error("Organization not found");
+		const owner = org.data?.members.find((m) => m.role === "owner")!;
 		const removedOwner = await client.organization.removeMember({
 			organizationId: org.data.id,
-			memberIdOrEmail: org.data?.members.find((m) => m.role === "owner")!.id,
+			memberIdOrEmail: owner.id,
 			fetchOptions: {
 				headers,
 			},
 		});
+
 		expect(removedOwner.error?.status).toBe(400);
 
 		const res = await client.organization.updateMemberRole({
