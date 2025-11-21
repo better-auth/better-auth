@@ -47,13 +47,14 @@ export default function RegisterOAuthClient() {
 				client_name: name,
 				redirect_uris: [redirectUri],
 				logo_uri: logo ? await convertImageToBase64(logo) : undefined,
+				grant_types: ["authorization_code", "refresh_token"],
 			});
 
 			if (res.data) {
 				// Registration successful - show credentials
 				setCredentials({
 					clientId: res.data.client_id,
-					clientSecret: res.data.client_secret,
+					clientSecret: res.data.client_secret!,
 				});
 			} else if (res.error) {
 				setError(res.error.message || "Registration failed");

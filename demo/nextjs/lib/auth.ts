@@ -187,6 +187,7 @@ export const auth = betterAuth({
 		oneTap(),
 		oidcProvider({
 			loginPage: "/sign-in",
+			consentPage: "/oauth/authorize",
 		}),
 		customSession(async (session) => {
 			return {
