@@ -405,6 +405,30 @@ We recommend going through each breaking change to ensure a smooth upgrade.
   </Accordion>
 
 
+    <Accordion title="Tanstack Start">
+
+        The Better-Auth offered `reactStartCookies` plugin is now moved to `tanstackStartCookies` plugin.
+
+        ```diff
+        - import { reactStartCookies } from "better-auth/react-start";
+        + import { tanstackStartCookies } from "better-auth/tanstack-start";
+
+        export const auth = betterAuth({
+        -    plugins: [reactStartCookies()],
+        +    plugins: [tanstackStartCookies()],
+        });
+        ```
+    </Accordion>
+
+    <Accordion title="Expo">
+        With the new pooling features for `useSession` on Expo, you're required to install `expo-network`:
+
+        ```package-install
+        npx expo install expo-network
+        ```
+    </Accordion>
+
+
 
   <Accordion title="Cloudflare Runtime">
     Breaking change for cloudflare worker, you will be required to add `nodejs_als`, or `nodejs_compat` in the wrangler config.
@@ -422,11 +446,10 @@ We recommend going through each breaking change to ensure a smooth upgrade.
 - Cookie chunking now supported; no more cookie size exceeding errors
 - Better-Auth is now 100% ESM.
 - Session refetch via polling & on browser refocus.
-- UUID as primary ID type support.
 - Better-Auth CLI supports Cloudflare Workers virtual module imports.
 - Common OAuth flow errors are now [documented](/docs/errors).
 - Last-Login-Method plugin now supports tracking SIWE.
-- Several new social providers
+- Several new social providers.
 - And many more features & security improvements!
 
 ---
