@@ -463,7 +463,8 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 							encryptedCookies,
 						)}`;
 
-						throw ctx.redirect(locationWithCookies);
+						ctx.setHeader("location", locationWithCookies);
+						return;
 					}),
 				},
 				{
