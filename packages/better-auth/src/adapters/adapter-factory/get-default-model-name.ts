@@ -42,7 +42,9 @@ export const initGetDefaultModelName = ({
 		}
 
 		if (!m) {
-			throw new BetterAuthError(`Model "${model}" not found in schema`);
+			throw new BetterAuthError(
+				`Model "${model}" not found in schema: ${new Error().stack?.replace("Error:", "")}`,
+			);
 		}
 		return m;
 	};
