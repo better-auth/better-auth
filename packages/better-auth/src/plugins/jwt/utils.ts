@@ -160,6 +160,13 @@ export async function createJwk(
 				)
 			: stringifiedPrivateWebKey,
 		createdAt: new Date(),
+		...(options?.jwks?.rotationInterval
+			? {
+					expiresAt: new Date(
+						Date.now() + options.jwks.rotationInterval * 1000,
+					),
+				}
+			: {}),
 	};
 
 	const adapter = getJwksAdapter(ctx.context.adapter, options);
