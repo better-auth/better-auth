@@ -54,15 +54,11 @@ export async function signJWT(
 
 	const adapter = getJwksAdapter(ctx.context.adapter, options);
 	let key = await adapter.getLatestKey(ctx);
-	if (!key) {
+	if (!key || (key.expiresAt && key.expiresAt < new Date())) {
 		key = await createJwk(ctx, options);
 	}
 	const privateKeyEncryptionEnabled =
 		!options?.jwks?.disablePrivateKeyEncryption;
-
-	if (key === undefined) {
-		key = await createJwk(ctx, options);
-	}
 
 	let privateWebKey = privateKeyEncryptionEnabled
 		? await symmetricDecrypt({

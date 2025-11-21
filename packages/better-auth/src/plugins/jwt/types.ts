@@ -30,6 +30,18 @@ export interface JwtOptions {
 				 * @default false
 				 */
 				disablePrivateKeyEncryption?: boolean;
+				/**
+				 * The key rotation interval in seconds.
+				 *
+				 * @default undefined (disabled)
+				 */
+				rotationInterval?: number;
+				/**
+				 * The grace period in seconds.
+				 *
+				 * @default 2592000 (30 days)
+				 */
+				gracePeriod?: number;
 		  }
 		| undefined;
 
@@ -131,18 +143,6 @@ export interface JwtOptions {
 			ctx: GenericEndpointContext,
 		) => Promise<Jwk[] | null | undefined>;
 		/**
-		 * A custom function to get the latest key from the database or
-		 * other source
-		 *
-		 * This will override the default getLatestKey from the database
-		 *
-		 * @param ctx - The context of the request
-		 * @returns The latest key
-		 */
-		getLatestKey?: (
-			ctx: GenericEndpointContext,
-		) => Promise<Jwk | null | undefined>;
-		/**
 		 * A custom function to create a new key in the database or
 		 * other source
 		 *
@@ -194,6 +194,7 @@ export interface Jwk {
 	publicKey: string;
 	privateKey: string;
 	createdAt: Date;
+	expiresAt?: Date;
 	alg?: JWSAlgorithms | undefined;
 	crv?: ("Ed25519" | "P-256" | "P-521") | undefined;
 }
