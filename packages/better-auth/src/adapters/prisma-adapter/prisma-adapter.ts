@@ -150,7 +150,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						const [_foreignKey, foreignKeyAttributes] = foreignKeys[0] as any;
 						// Only check if field is explicitly marked as unique
 						const isUnique = foreignKeyAttributes?.unique === true;
-						return isUnique ? key : `${key}s`;
+						return isUnique || config.usePlural === true ? key : `${key}s`;
 					}
 
 					// Check backwards: does the base model have FKs to the joined model?
@@ -267,11 +267,9 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 
 					// transform join keys to use Prisma expected field names
 					let map = new Map<string, string>();
-					if (join) {
-						for (const [joinModel, value] of Object.entries(join)) {
-							const key = getJoinKeyName(model, joinModel, schema);
-							map.set(key, getModelName(joinModel));
-						}
+					for (const joinModel of Object.keys(join ?? {})) {
+						const key = getJoinKeyName(model, joinModel, schema);
+						map.set(key, getModelName(joinModel));
 					}
 
 					const selects = convertSelect(select, model, join);
