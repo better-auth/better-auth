@@ -50,23 +50,10 @@ if (!dialect) {
 	throw new Error("No dialect found");
 }
 
-const baseURL: string | undefined =
-	process.env.VERCEL === "1"
-		? process.env.BETTER_AUTH_URL
-			? process.env.BETTER_AUTH_URL
-			: `https://${process.env.VERCEL_URL}`
-		: undefined;
-
-const cookieDomain: string | undefined =
-	process.env.VERCEL === "1"
-		? process.env.BETTER_AUTH_URL
-			? new URL(process.env.BETTER_AUTH_URL).hostname
-			: `.${process.env.VERCEL_URL}`
-		: undefined;
-
 export const auth = betterAuth({
 	appName: "Better Auth Demo",
-	baseURL,
+	// If not explicitly set, the system will check for the environment variable process.env.BETTER_AUTH_URL
+	// baseURL: process.env.BETTER_AUTH_URL,
 	database: {
 		dialect,
 		type: "sqlite",
@@ -181,7 +168,9 @@ export const auth = betterAuth({
 			adminUserIds: ["EXD5zjob2SD6CBWcEQ6OpLRHcyoUbnaB"],
 		}),
 		multiSession(),
-		oAuthProxy(),
+		oAuthProxy({
+			productionURL: "https://demo.better-auth.com",
+		}),
 		nextCookies(),
 		oneTap(),
 		customSession(async (session) => {
@@ -350,11 +339,10 @@ export const auth = betterAuth({
 		}),
 		lastLoginMethod(),
 	],
-	trustedOrigins: ["exp://", "https://appleid.apple.com"],
-	advanced: {
-		crossSubDomainCookies: {
-			enabled: process.env.NODE_ENV === "production",
-			domain: cookieDomain,
-		},
-	},
+	trustedOrigins: [
+		"https://*.better-auth.com",
+		"https://better-auth-demo-*-better-auth.vercel.app",
+		"exp://",
+		"https://appleid.apple.com",
+	],
 });
