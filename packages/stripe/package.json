@@ -56,13 +56,13 @@
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
-    "stripe": "^18 || ^19"
+    "stripe": "^18 || ^19 || ^20"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
     "better-call": "catalog:",
-    "stripe": "^19.1.0",
+    "stripe": "^20.0.0",
     "tsdown": "catalog:"
   }
 }

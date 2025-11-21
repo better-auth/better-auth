@@ -79,7 +79,7 @@
     "resend": "^6.0.2",
     "server-only": "^0.0.1",
     "sonner": "^2.0.7",
-    "stripe": "^19.1.0",
+    "stripe": "^20.0.0",
     "tailwind-merge": "^3.3.1",
     "ua-parser-js": "^2.0.4",
     "vaul": "^1.1.2",
