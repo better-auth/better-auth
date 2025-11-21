@@ -4,11 +4,9 @@ import { BetterAuthError } from "@better-auth/core/error";
 export const initGetDefaultModelName = ({
 	usePlural,
 	schema,
-	suppressErrorLogs = false,
 }: {
 	usePlural: boolean | undefined;
 	schema: BetterAuthDBSchema;
-	suppressErrorLogs?: boolean | undefined;
 }) => {
 	/**
 	 * This function helps us get the default model name from the schema defined by devs.
