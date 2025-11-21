@@ -3,12 +3,15 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import type { APIData } from "@/app/api/user/route";
-import { signOut, useSession } from "@/lib/auth-client";
+import { authClient, signOut, useSession } from "@/lib/auth-client";
 
 export default function Dashboard() {
 	const router = useRouter();
 	const { data: session, isPending } = useSession();
 	const [serverData, setServerData] = useState<APIData | null | string>(null);
+	const [accountData, setAccountData] = useState<Record<string, any> | null>(
+		null,
+	);
 	const [isPendingServer, startTransition] = useTransition();
 
 	useEffect(() => {
@@ -30,6 +33,19 @@ export default function Dashboard() {
 				setServerData(data);
 			} catch (error) {
 				setServerData("Failed to fetch server data");
+			}
+		});
+	};
+
+	const testAccountData = () => {
+		startTransition(async () => {
+			const { data, error } = await authClient.accountInfo();
+			if (data) {
+				setAccountData(data.user);
+			}
+			if (error) {
+				console.error(error);
+				alert(error.message);
 			}
 		});
 	};
@@ -109,6 +125,31 @@ export default function Dashboard() {
 						<div className="bg-muted/40 rounded-lg p-4 overflow-x-auto border-l-2 border-primary">
 							<pre className="text-xs text-muted-foreground">
 								<code>{JSON.stringify(serverData, null, 2)}</code>
+							</pre>
+						</div>
+					)}
+				</div>
+
+				<div className="flex flex-col gap-4 p-6 border bg-card rounded-lg">
+					<div className="flex items-center justify-between">
+						<h2 className="text-lg font-semibold text-card-foreground">
+							Account Information
+						</h2>
+						<button
+							onClick={testAccountData}
+							disabled={isPendingServer}
+							className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors text-sm font-medium disabled:opacity-50"
+						>
+							{isPendingServer ? "Fetching..." : "Fetch Account Info"}
+						</button>
+					</div>
+					<p className="text-sm text-muted-foreground">
+						Click the button to fetch account information from the provider.
+					</p>
+					{accountData && (
+						<div className="bg-muted/40 rounded-lg p-4 overflow-x-auto border-l-2 border-primary">
+							<pre className="text-xs text-muted-foreground">
+								<code>{JSON.stringify(accountData, null, 2)}</code>
 							</pre>
 						</div>
 					)}

@@ -254,7 +254,7 @@ export const auth = betterAuth({
 });
 ```
 
-To manually enable stateless mode, you need to configure `cookieCache` and `oauthConfig` with the following options:
+To manually enable stateless mode, you need to configure `cookieCache` and `account` with the following options:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -268,11 +268,10 @@ export const auth = betterAuth({
             refreshCache: true, // Enable stateless refresh
         },
     },
-    advanced: {
-        oauthConfig: {
-            storeStateStrategy: "cookie",
-        },
-    },
+    account: {
+        storeStateStrategy: "cookie",
+        storeAccountCookie: true, // Store account data after OAuth flow in a cookie (useful for database-less flows)
+    }
 });
 ```
 

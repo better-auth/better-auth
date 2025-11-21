@@ -550,10 +550,8 @@ describe("base context creation", () => {
 
 		it("should allow cookie storeStateStrategy", async () => {
 			const res = await initBase({
-				advanced: {
-					oauthConfig: {
-						storeStateStrategy: "cookie",
-					},
+				account: {
+					storeStateStrategy: "cookie",
 				},
 			});
 			expect(res.oauthConfig.storeStateStrategy).toBe("cookie");
@@ -561,10 +559,8 @@ describe("base context creation", () => {
 
 		it("should respect skipStateCookieCheck setting", async () => {
 			const res = await initBase({
-				advanced: {
-					oauthConfig: {
-						skipStateCookieCheck: true,
-					},
+				account: {
+					skipStateCookieCheck: true,
 				},
 			});
 			expect(res.oauthConfig.skipStateCookieCheck).toBe(true);
@@ -1438,10 +1434,8 @@ describe("base context creation", () => {
 						enabled: false,
 					},
 				},
-				advanced: {
-					oauthConfig: {
-						storeStateStrategy: "database",
-					},
+				account: {
+					storeStateStrategy: "database",
 				},
 			});
 			expect(ctx.options.session?.cookieCache?.enabled).toBe(false);
