@@ -53,8 +53,7 @@ export const auth = betterAuth({
 Better-Auth now supports joins, improving over 50 endpoints by 2 to 3x in latency.
 
 To enable, simply set the `joins` flag to `true` under `experimental` in your auth config.
-Then, if you use Prisma, Drizzle, or Kysely with `PostgreSQL` / `MySQL` / `MSSQL` / `SQLite`,
-re-run migrations or schema generation to get the updated schema which supports joins. 
+Then, re-run migrations or schema generation to get the updated schema which supports joins!
 
 [👉 Read more about database joins](/docs/concepts/database#experimental-joins)
 
@@ -81,10 +80,10 @@ import { authClient } from "@/lib/auth-client";
 
 await authClient.signIn.social({
     provider: "google",
-    additionalData: {
-        referralCode: "ABC123",
-        source: "landing-page",
-    },
+    additionalData: { // [!code highlight]
+        referralCode: "ABC123", // [!code highlight]
+        source: "landing-page", // [!code highlight]
+    }, // [!code highlight]
 });
 
 ```
@@ -97,12 +96,356 @@ SCIM makes managing identities in multi-domain scenarios easier to support via a
 [👉 Read more about SCIM provisioning](/docs/concepts/scim)
 
 ```ts
+import { scim } from "@better-auth/scim";
 import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-    scim: true,
+    plugins: [scim()]
 });
 ```
+---
+
+### Secondary Storage Support for API Keys
+
+The API-Key plugin now supports secondary storage for faster key lookups!
+
+
+[👉 Read more about secondary storage for API keys](/docs/plugins/api-key#secondary-storage)
+
+```ts
+import { apiKey } from "@better-auth/api-key";
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    secondaryStorage: {
+        //...
+    },
+    plugins: [apiKey({ storage: "secondary-storage" })], // [!code highlight]
+});
+```
+
+<Accordions type="single">
+  <Accordion title="How To Migrate?">
+    1. Start with `fallbackToDatabase` enabled and `storage` set to `"secondary-storage"`:
+
+    ```ts
+    import { apiKey } from "@better-auth/api-key";
+    import { betterAuth } from "better-auth";
+
+    export const auth = betterAuth({
+        secondaryStorage: {
+            //...
+        },
+        plugins: [apiKey({ storage: "secondary-storage", fallbackToDatabase: true })],
+    });
+    ```
+
+    This allows existing keys in the database to be accessible while new keys are stored in the secondary storage.
+
+    2. **Migrate existing keys** (optional): For faster initial cache population, you can write a migration script
+    to copy all keys from the database to the secondary storage. However, this is optional since the cache will warm up automatically as keys are accessed.
+
+    3. **Disable fallback**: Once all keys are migrated or when you're confident the cache is sufficiently populated:
+
+    ```ts
+    import { apiKey } from "@better-auth/api-key";
+    import { betterAuth } from "better-auth";
+
+    export const auth = betterAuth({
+        plugins: [
+            apiKey({
+                storage: "secondary-storage",
+                fallbackToDatabase: false // omit, false or undefined // [!code highlight]
+            })
+        ],
+    });
+    ```
+
+  </Accordion>
+</Accordions>
+
+
+---
+
+### Error Page Improvements
+
+We've revamped our error page to look much better and more informative!
+You can also customize the stylings of our default error page or simply provide your own path to a custom error page.
+
+[👉 Read more about error page improvements](/docs/reference/options#onapierror)
+
+<img src="/images/blogs/1-4_error.png" alt="Error Page" height={1000} />
+
+---
+
+### SSO Domain Verification
+
+Domain verification allows your application to automatically trust a new SSO provider
+by automatically validating ownership via the associated domain:
+
+👉 [Read more about domain verification](/docs/plugins/sso#domain-verification)
+
+```ts
+import { sso } from "@better-auth/sso";
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    plugins: [sso({ domainVerification: { enabled: true } })],
+});
+```
+
+---
+
+### Database Index Support
+
+The Better-Auth CLI now supports indexing your database out of the box, which greatly improves the performance of your application.
+
+```bash
+npx @better-auth/cli generate
+
+npx @better-auth/cli migrate
+```
+
+---
+
+### Bundle Size Optimizations
+
+If you're using custom adapters (like Prisma, Drizzle, or MongoDB),
+you can reduce your bundle size by using `better-auth/minimal` instead of better-auth.
+This version excludes Kysely, which is only needed when using direct database connections.
+
+[👉 Read more about bundle size optimizations](/docs/guides/optimizing-for-performance#bundle-size-optimization)
+
+```ts
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { betterAuth } from "better-auth/minimal"; // [!code highlight]
+import { db } from "./database";
+
+export const auth = betterAuth({
+    database: drizzleAdapter(db, { provider: "pg" }),
+});
+```
+
+---
+
+### UUID Support
+
+We now support having UUIDs as the primary ID field type out of the box.
+
+[👉 Read more about UUID support](/docs/concepts/database#uuids)
+
+```ts
+import { betterAuth } from "better-auth";
+import { db } from "./database";
+
+export const auth = betterAuth({
+    database: db,
+    advanced: {
+        database: { generateId: "uuid" }, // [!code highlight]
+    },
+});
+```
+
+---
+
+### Improved Email Change Flow
+
+For added security, you can now require users to confirm the change via their **current** email before
+the verification email is sent to the new address. 
+
+[👉 Read more about improved email change flow](/docs/concepts/users-accounts#confirming-with-current-email)
+
+```ts
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    user: {
+        changeEmail: {
+            enabled: true,
+            sendChangeEmailConfirmation: async ({ user, newEmail, url, token }, request) => {
+                await sendEmail({
+                    to: user.email, // Sent to the CURRENT email
+                    subject: 'Approve email change',
+                    text: `Click the link to approve the change to ${newEmail}: ${url}`
+                })
+            }
+        }
+    }
+});
+```
+
+---
+
+### Pre-Configured Social Providers for OAuth
+
+OAuth providers not yet supported natively will be available as pre-configured options for the generic OAuth plugin,
+with plans to eventually support all providers that Auth.js does.
+
+```ts
+import { betterAuth } from "better-auth";
+import { genericOAuth } from "better-auth/plugins";
+import { keycloak } from "better-auth/plugins/generic-oauth";
+
+export const auth = betterAuth({
+    plugins: [genericOAuth({
+        config: [
+            keycloak({
+                clientId: process.env.KEYCLOAK_CLIENT_ID,
+                clientSecret: process.env.KEYCLOAK_CLIENT_SECRET,
+                issuer: process.env.KEYCLOAK_ISSUER,
+            })
+        ]
+    })
+    ]
+});
+```
+
+---
+
+## ⚠️ Breaking Changes
+
+We recommend going through each breaking change to ensure a smooth upgrade.
+
+<Accordions type="single">
+  <Accordion title="Existing Auth Flows">
+
+    Minor auth flow changes to make everything smoother, faster, and more reliable.
+
+    <Accordions type="multiple">
+      <Accordion title="Change-Email Flow">
+        We've removed `sendChangeEmailVerification` from the `changeEmail` flow to use `emailVerification.sendVerificationEmail` instead.
+      </Accordion>
+      <Accordion title="Forgot Password Flow">
+        `authClient.forgotPassword` is now `authClient.requestPasswordReset`.
+      </Accordion>
+      <Accordion title="Account Info Endpoint">
+        The `accountInfo` endpoint has changed from `POST /account-info` to `GET /account-info`.
+        
+        This means any auth.api calls must change from:
+
+        ```ts
+        auth.api.accountInfo({
+            body: {
+                // ...
+            }
+        });
+        ```
+
+        to:
+
+        ```ts
+        auth.api.accountInfo({
+            query: {
+                // ...
+            }
+        });
+        ```
+      </Accordion>
+    </Accordions>
+  </Accordion>
+
+  <Accordion title="Plugin Options Changes">
+
+  Multiple plugin options that accept `request` as an argument for callback functions have now replaced request with `ctx` instead.
+  Passkey plugin is now moved to it's own package, and API Key mock-sessions are now disabled by default.
+
+  
+    <Accordions type="multiple">
+      <Accordion title="Passkey Plugin">
+        The passkey plugin is now moved to it's own package.
+        Install it today:
+
+        ```package-install
+        npm install @better-auth/passkey
+        ```
+      </Accordion>
+
+      <Accordion title="Email OTP Plugin">
+        Plugin options for `sendVerificationOTP` and `generateOTP` now use `ctx` instead of `request` in it's callback function.
+        You can still access request via `ctx.request`.
+      </Accordion>
+
+      <Accordion title="Magic Link Plugin">
+        Plugin options for `sendMagicLink` now uses `ctx` instead of `request` for one of it's callback options.
+        You can still access request via `ctx.request`.
+      </Accordion>
+
+      <Accordion title="Phone Number Plugin">
+        Plugin options for `sendOTP`, `sendPasswordResetOTP` & `callbackOnVerification` have now replaced request
+        with `ctx` in one of it's callback options. You can still access request via `ctx.request`.
+      </Accordion>
+
+      <Accordion title="Organization Plugin">
+        Plugin options for `teams.defaultTeam.customCreateDefaultTeam` & `teams.maximumTeams` have now replaced request with `ctx`
+        for one of it's callback options. You can still access request via `ctx.request`.
+      </Accordion>
+
+      <Accordion title="OIDC Plugin">
+        The field `redirectURLs` have been updated to `redirectUrls`, this requires database migration.
+      </Accordion>
+
+      <Accordion title="API Key Plugin">
+        Mock-sessions by api-keys are now disabled by default, and should be enabled through the auth-config first.
+      </Accordion>
+    </Accordions>
+  </Accordion>
+
+    <Accordion title="Auth Config Changes">
+
+    Database configuration options changes.
+
+    <Accordions type="multiple">
+      <Accordion title="`advanced.generateId` removed">
+        The long-deprecated `advanced.generateId` has been removed. Please use `advanced.database.generateId` instead.
+      </Accordion>
+      <Accordion title="`advanced.database.useNumberId` moved">
+        `advanced.database.useNumberId` has been moved to `advanced.database.generateId: "serial"` instead.
+      </Accordion>
+    </Accordions>
+  </Accordion>
+
+
+
+  <Accordion title="Cloudflare Runtime">
+    Breaking change for cloudflare worker, you will be required to add `nodejs_als`, or `nodejs_compat` in the wrangler config.
+    See [cloudflare docs](https://developers.cloudflare.com/workers/configuration/compatibility-flags/#nodejs-compatibility-flag).
+  </Accordion>
+
+
+  
+</Accordions>
+
+---
+
+## ✨ More Features
+
+- Cookie chunking now supported; no more cookie size exceeding errors
+- Better-Auth is now 100% ESM.
+- Session refetch via polling & on browser refocus.
+- UUID as primary ID type support.
+- Better-Auth CLI supports Cloudflare Workers virtual module imports.
+- Common OAuth flow errors are now [documented](/docs/errors).
+- Last-Login-Method plugin now supports tracking SIWE.
+- Several new social providers
+- And many more features & security improvements!
+
+---
+
+## 🐛 Bug fixes & Improvements
+
+This release includes over 250+ bug fixes addressing issues across all areas:
+
+- **Adapter Fixes**: Improved query handling, better type transformations, UUID column types, and resolved issues with nullable foreign keys.
+- **Session Management**: Fixed session refresh triggers, improved cookie handling, and better cache management.
+- **OAuth**: Fixed state management, improved callback handling, and resolved cross-origin issues.
+- **Organization**: Fixed member deletion, team management, permission checks, and inference issues.
+- **Two-Factor**: Improved TOTP error messages, fixed backup code encryption, and better device trust handling.
+- **Email OTP:** Prevented duplicate verification emails and improved session signal triggers.
+- **SSO**: Fixed SAML callback handling, improved OIDC scope fallback, and better consent enforcement.
+- **API-Keys**: Fixed usage tracking and improved request validation.
+- **Phone Number**: Prevent unauthorized phone number updates and improved verification flow.
+- And many more!
+
 ---
 
 A lot of refinements to make everything smoother, faster, and more reliable.
