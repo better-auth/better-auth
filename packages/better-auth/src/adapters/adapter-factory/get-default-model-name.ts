@@ -1,5 +1,4 @@
 import type { BetterAuthDBSchema } from "@better-auth/core/db";
-import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 
 export const initGetDefaultModelName = ({
@@ -45,12 +44,7 @@ export const initGetDefaultModelName = ({
 		}
 
 		if (!m) {
-			if (!suppressErrorLogs) {
-				logger.error(`Model "${model}" not found in schema`);
-				logger.error(`Schema:`, schema);
-				logger.error(`Error stack:`, new Error().stack?.replace("Error:", ""));
-			}
-			throw new BetterAuthError(`Model "${model}" not found in schema!`);
+			throw new BetterAuthError(`Model "${model}" not found in schema`);
 		}
 		return m;
 	};

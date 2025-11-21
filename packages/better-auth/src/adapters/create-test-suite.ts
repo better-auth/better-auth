@@ -284,7 +284,6 @@ export const createTestSuite = <
 						const getDefaultModelName = initGetDefaultModelName({
 							usePlural: adapter.options?.adapterConfig?.usePlural,
 							schema: schema,
-							suppressErrorLogs: true,
 						});
 						let defaultModelName: string;
 						try {
