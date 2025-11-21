@@ -1620,7 +1620,11 @@ export const oidcProvider = (options: OIDCOptions) => {
 								);
 								if (verified) {
 									validatedUserId = verified.sub;
-									validatedClientId = verified.aud;
+									validatedClientId = verified.aud
+										? typeof verified.aud === "string"
+											? verified.aud
+											: verified.aud[0]!
+										: null;
 								}
 							} else {
 								// For HS256 tokens, we need the client_id to verify
