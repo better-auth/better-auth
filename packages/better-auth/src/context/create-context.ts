@@ -90,10 +90,9 @@ export async function createAuthContext(
 					refreshCache: true,
 				},
 			},
-			advanced: {
-				oauthConfig: {
-					storeStateStrategy: "cookie" as const,
-				},
+			account: {
+				storeStateStrategy: "cookie" as const,
+				storeAccountCookie: true,
 			},
 		});
 	}
@@ -169,10 +168,8 @@ export async function createAuthContext(
 		socialProviders: providers,
 		options,
 		oauthConfig: {
-			storeStateStrategy:
-				options.advanced?.oauthConfig?.storeStateStrategy || "database",
-			skipStateCookieCheck:
-				!!options.advanced?.oauthConfig?.skipStateCookieCheck,
+			storeStateStrategy: options.account?.storeStateStrategy || "database",
+			skipStateCookieCheck: !!options.account?.skipStateCookieCheck,
 		},
 		tables,
 		trustedOrigins: getTrustedOrigins(options),

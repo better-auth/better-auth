@@ -19,19 +19,12 @@ export const getJwksAdapter = (
 			});
 		},
 		getLatestKey: async (ctx: GenericEndpointContext) => {
-			if (options?.adapter?.getLatestKey) {
-				return await options.adapter.getLatestKey(ctx);
+			if (options?.adapter?.getJwks) {
+				const keys = await options.adapter.getJwks(ctx);
+				return keys?.sort(
+					(a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+				)[0];
 			}
-			const key = await adapter.findMany<Jwk>({
-				model: "jwks",
-				sortBy: {
-					field: "createdAt",
-					direction: "desc",
-				},
-				limit: 1,
-			});
-
-			return key[0];
 		},
 		createJwk: async (ctx: GenericEndpointContext, webKey: Omit<Jwk, "id">) => {
 			if (options?.adapter?.createJwk) {
