@@ -23,7 +23,10 @@ import { defaultKeyHasher, splitAtLastColon } from "./utils";
 
 export interface EmailOTPOptions {
 	/**
-	 * Function to send email verification
+	 * Function to send email verification.
+	 *
+	 * It is recommended to not await the email sending to avoid timing attacks.
+	 * On serverless platforms, use `waitUntil` or similar to ensure the email is sent.
 	 */
 	sendVerificationOTP: (
 		data: {
@@ -986,12 +989,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						identifier: `forget-password-otp-${email}`,
 						expiresAt: getDate(opts.expiresIn, "sec"),
 					});
-					const user = await ctx.context.internalAdapter.findUserByEmail(
-						email,
-						{
-							includeAccounts: true,
-						},
-					);
+					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					if (!user) {
 						//remove verification value
 						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
