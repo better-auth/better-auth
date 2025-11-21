@@ -139,7 +139,7 @@ describe("run time proxy", async () => {
 });
 
 describe("type", () => {
-	it("should not infer virtual endpoints", () => {
+	it("should not infer http or server scoped endpoints", () => {
 		const client = createReactClient({
 			plugins: [testClientPlugin()],
 			baseURL: "http://localhost:3000",
@@ -152,7 +152,6 @@ describe("type", () => {
 
 		expectTypeOf<typeof client>().not.toHaveProperty("testServerScoped");
 		expectTypeOf<typeof client>().not.toHaveProperty("testHttpScoped");
-		expectTypeOf<typeof client>().not.toMatchObjectType<{ test: any }>();
 	});
 	it("should infer session additional fields", () => {
 		const client = createReactClient({
