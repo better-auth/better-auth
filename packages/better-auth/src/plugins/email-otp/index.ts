@@ -233,14 +233,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						message: BASE_ERROR_CODES.INVALID_EMAIL,
 					});
 				}
-				if (ctx.body.type === "forget-password") {
-					const user = await ctx.context.internalAdapter.findUserByEmail(email);
-					if (!user) {
-						return ctx.json({
-							success: true,
-						});
-					}
-				}
 				let otp =
 					opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
 					defaultOTPGenerator(opts);
@@ -267,12 +259,14 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					});
 				const user = await ctx.context.internalAdapter.findUserByEmail(email);
 				if (!user) {
-					//remove verification value
 					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 						`${ctx.body.type}-otp-${email}`,
 					);
+					return ctx.json({
+						success: true,
+					});
 				}
-				void options.sendVerificationOTP(
+				await options.sendVerificationOTP(
 					{
 						email,
 						otp,
