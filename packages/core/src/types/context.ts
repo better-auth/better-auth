@@ -104,16 +104,16 @@ export interface InternalAdapter<
 		account: Omit<Account, "id" | "createdAt" | "updatedAt"> & Partial<Account>,
 	): Promise<Account>;
 
-	// fixme: any type
+	// Record<string, any> is to take into account additional fields or plugin-added fields
 	updateUser(
 		userId: string,
 		data: Partial<User> & Record<string, any>,
-	): Promise<any>;
+	): Promise<User & Record<string, any>>;
 
 	updateUserByEmail(
 		email: string,
 		data: Partial<User & Record<string, any>>,
-	): Promise<User>;
+	): Promise<User & Record<string, any>>;
 
 	updatePassword(userId: string, password: string): Promise<void>;
 
