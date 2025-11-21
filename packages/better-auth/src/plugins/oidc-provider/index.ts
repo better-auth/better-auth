@@ -619,7 +619,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 						}
 
 						// Authenticate confidential clients
-						const client = await getClient(client_id.toString(), trustedClients);
+						const client = await getClient(
+							client_id.toString(),
+							trustedClients,
+						);
 						if (!client) {
 							throw new APIError("BAD_REQUEST", {
 								error_description: "invalid client_id",
@@ -631,7 +634,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 						if (client.type !== "public") {
 							if (!client.clientSecret || !client_secret) {
 								throw new APIError("UNAUTHORIZED", {
-									error_description: "client_secret is required for confidential clients",
+									error_description:
+										"client_secret is required for confidential clients",
 									error: "invalid_client",
 								});
 							}
@@ -765,13 +769,15 @@ export const oidcProvider = (options: OIDCOptions) => {
 					) as CodeVerificationValue;
 					if (value.clientId !== client_id.toString()) {
 						throw new APIError("BAD_REQUEST", {
-							error_description: "The authorization code was issued to a different client",
+							error_description:
+								"The authorization code was issued to a different client",
 							error: "invalid_grant",
 						});
 					}
 					if (value.redirectURI !== redirect_uri.toString()) {
 						throw new APIError("BAD_REQUEST", {
-							error_description: "The redirect_uri does not match the authorization request",
+							error_description:
+								"The redirect_uri does not match the authorization request",
 							error: "invalid_grant",
 						});
 					}
@@ -850,7 +856,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 					);
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
-							error_description: "The authorization code is invalid or has been revoked",
+							error_description:
+								"The authorization code is invalid or has been revoked",
 							error: "invalid_grant",
 						});
 					}
