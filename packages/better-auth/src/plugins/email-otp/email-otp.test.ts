@@ -111,20 +111,18 @@ describe("email-otp", async () => {
 		);
 	});
 
-	it("should send forget password otp", async () => {
+	it("should reset password", async () => {
 		await client.emailOtp.sendVerificationOtp({
 			email: testUser.email,
 			type: "forget-password",
 		});
-	});
-
-	it("should reset password", async () => {
-		await client.emailOtp.resetPassword({
+		const res = await client.emailOtp.resetPassword({
 			email: testUser.email,
 			otp,
 			password: "changed-password",
 		});
-		const { data } = await client.signIn.email({
+
+		const { data, error } = await client.signIn.email({
 			email: testUser.email,
 			password: "changed-password",
 		});
