@@ -19,12 +19,17 @@ import { defineErrorCodes } from "@better-auth/core/utils";
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
 import { decodeJwt } from "jose";
-import * as z from "zod";
-import { sessionMiddleware } from "../../api";
+import * as z from "zod/v4";
+import { createAuthEndpoint, sessionMiddleware } from "../../api";
 import { setSessionCookie } from "../../cookies";
+import { mergeSchema } from "../../db";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState, parseState } from "../../oauth2/state";
-import type { User } from "../../types";
+import type { BetterAuthPlugin, User } from "../../types";
+import { getClientIdAndSecret } from "./get-client-id-and-secret";
+import { oauthRegistrationSchema } from "./schema";
+
+export * from "./types";
 
 export * from "./providers";
 
@@ -267,6 +272,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						display?: string | undefined;
 						loginHint?: string | undefined;
 					}) {
+            const { clientId, clientSecret } = await getClientIdAndSecret(
+							c,
+							ctx,
+						);
 						let finalAuthUrl = c.authorizationUrl;
 						if (!finalAuthUrl && c.discoveryUrl) {
 							const discovery = await betterFetch<{
@@ -290,8 +299,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						return createAuthorizationURL({
 							id: c.providerId,
 							options: {
-								clientId: c.clientId,
-								clientSecret: c.clientSecret,
+								clientId: clientId,
+								clientSecret: clientSecret,
 								redirectURI: c.redirectURI,
 							},
 							authorizationEndpoint: finalAuthUrl,
@@ -326,14 +335,18 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								message: "Invalid OAuth configuration. Token URL not found.",
 							});
 						}
+						const { clientId, clientSecret } = await getClientIdAndSecret(
+							c,
+							ctx,
+						);
 						return validateAuthorizationCode({
 							headers: c.authorizationHeaders,
 							code: data.code,
 							codeVerifier: data.codeVerifier,
 							redirectURI: data.redirectURI,
 							options: {
-								clientId: c.clientId,
-								clientSecret: c.clientSecret,
+								clientId: clientId,
+								clientSecret: clientSecret,
 								redirectURI: c.redirectURI,
 							},
 							tokenEndpoint: finalTokenUrl,
@@ -360,11 +373,15 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								message: "Invalid OAuth configuration. Token URL not found.",
 							});
 						}
+						const { clientId, clientSecret } = await getClientIdAndSecret(
+							c,
+							ctx,
+						);
 						return refreshAccessToken({
 							refreshToken,
 							options: {
-								clientId: c.clientId,
-								clientSecret: c.clientSecret,
+								clientId: clientId,
+								clientSecret: clientSecret,
 							},
 							authentication: c.authentication,
 							tokenEndpoint: finalTokenUrl,
@@ -511,8 +528,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						discoveryUrl,
 						authorizationUrl,
 						tokenUrl,
-						clientId,
-						clientSecret,
 						scopes,
 						redirectURI,
 						responseType,
@@ -523,6 +538,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						responseMode,
 						authentication,
 					} = config;
+					const { clientId, clientSecret } = await getClientIdAndSecret(
+						config,
+						ctx.context,
+					);
 					let finalAuthUrl = authorizationUrl;
 					let finalTokenUrl = tokenUrl;
 					if (discoveryUrl) {
@@ -724,18 +743,25 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								message: "Invalid OAuth configuration.",
 							});
 						}
+
+						const { clientId, clientSecret } = await getClientIdAndSecret(
+							provider,
+							ctx.context,
+						);
+
 						const additionalParams =
 							typeof provider.tokenUrlParams === "function"
 								? provider.tokenUrlParams(ctx)
 								: provider.tokenUrlParams;
+
 						tokens = await validateAuthorizationCode({
 							headers: provider.authorizationHeaders,
 							code,
 							codeVerifier: provider.pkce ? codeVerifier : undefined,
 							redirectURI: `${ctx.context.baseURL}/oauth2/callback/${provider.providerId}`,
 							options: {
-								clientId: provider.clientId,
-								clientSecret: provider.clientSecret,
+								clientId: clientId,
+								clientSecret: clientSecret,
 								redirectURI: provider.redirectURI,
 							},
 							tokenEndpoint: finalTokenUrl,
@@ -988,8 +1014,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					}
 					const {
 						providerId,
-						clientId,
-						clientSecret,
 						redirectURI,
 						authorizationUrl,
 						discoveryUrl,
@@ -1039,6 +1063,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						undefined,
 					);
 
+					const { clientId, clientSecret } = await getClientIdAndSecret(
+						provider,
+						c.context,
+					);
+
 					const additionalParams =
 						typeof authorizationUrlParams === "function"
 							? authorizationUrlParams(c)
@@ -1073,5 +1102,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 			),
 		},
 		$ERROR_CODES: ERROR_CODES,
+		schema: mergeSchema(oauthRegistrationSchema, options.schema),
 	} satisfies BetterAuthPlugin;
 };

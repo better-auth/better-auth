@@ -1,11 +1,14 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import { betterFetch } from "@better-fetch/fetch";
+import { toNodeHandler } from "better-call/node";
+import { listen } from "listhen";
 import { OAuth2Server } from "oauth2-mock-server";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { oidcProvider } from "../oidc-provider";
 import { genericOAuth } from ".";
 import { genericOAuthClient } from "./client";
 import { auth0 } from "./providers/auth0";
@@ -544,6 +547,73 @@ describe("oauth2", async () => {
 			},
 		});
 		expect(nullSession.data).toBeNull();
+	});
+
+	it("should successfully use dynamic registration", async () => {
+		const { auth: authorizationServer } = await getTestInstance({
+			plugins: [
+				oidcProvider({
+					loginPage: "/sign-in",
+					consentPage: "/consent",
+					requirePKCE: true,
+					allowDynamicClientRegistration: true,
+				}),
+			],
+		});
+		const server = await listen(toNodeHandler(authorizationServer.handler), {
+			port: 0,
+		});
+		const port = server.address?.port || 3001;
+		const origin = `http://localhost:${port}`;
+		const url = `${origin}/api/auth/oauth2/register`;
+		const { auth, db } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							dynamicRegistration: {
+								registrationEndpoint: url,
+								clientName: "test",
+							},
+							authorizationUrl: `${origin}/api/auth/oauth2/authorize`,
+							tokenUrl: `${origin}/api/auth/oauth2/token`,
+							userInfoUrl: `${origin}/api/auth/oauth2/userinfo`,
+							providerId: "test",
+						},
+					],
+				}),
+			],
+		});
+
+		const pre_registrations = await db.findMany<{
+			providerId: string;
+			clientId: string;
+			clientSecret: string;
+		}>({
+			model: "oauthRegistration",
+		});
+		expect(pre_registrations.length).toEqual(0);
+		const signInRes = await auth.api.signInSocial({
+			body: {
+				provider: "test",
+			},
+		});
+		const registrations = await db.findMany<{
+			providerId: string;
+			clientId: string;
+			clientSecret: string;
+		}>({
+			model: "oauthRegistration",
+		});
+		expect(registrations.length).toEqual(1);
+		if (!registrations[0]) return;
+		expect(registrations[0].clientId).toBeDefined();
+		expect(registrations[0].clientSecret).toBeDefined();
+		expect(registrations[0].providerId).toEqual("test");
+		expect(signInRes.url).toContain(`${origin}/api/auth/oauth2/authorize`);
+		expect(signInRes.redirect).toEqual(true);
+
+		await server.close();
 	});
 
 	it("should handle numeric account IDs correctly and prevent duplicate accounts", async () => {
