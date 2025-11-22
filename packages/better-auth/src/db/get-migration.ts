@@ -2,6 +2,7 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBFieldAttribute, DBFieldType } from "@better-auth/core/db";
 import { createLogger } from "@better-auth/core/env";
 import type {
+	AlterTableBuilder,
 	AlterTableColumnAlteringBuilder,
 	CreateIndexBuilder,
 	CreateTableBuilder,
@@ -263,6 +264,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 
 	const migrations: (
 		| AlterTableColumnAlteringBuilder
+		| ReturnType<AlterTableBuilder["addIndex"]>
 		| CreateTableBuilder<string, string>
 		| CreateIndexBuilder
 	)[] = [];
@@ -400,8 +402,10 @@ export async function getMigrations(config: BetterAuthOptions) {
 				let builder = db.schema.alterTable(table.table);
 
 				if (field.index) {
-					//@ts-expect-error
-					builder = builder.addIndex(`${table.table}_${fieldName}_idx`);
+					const index = db.schema
+						.alterTable(table.table)
+						.addIndex(`${table.table}_${fieldName}_idx`);
+					migrations.push(index);
 				}
 
 				let built = builder.addColumn(fieldName, type, (col) => {
