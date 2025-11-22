@@ -23,6 +23,8 @@ export function getOAuth2Tokens(data: Record<string, any>): OAuth2Tokens {
 				: data.scope
 			: [],
 		idToken: data.id_token,
+		// Preserve the raw token response for provider-specific fields
+		raw: data,
 	};
 }
 
