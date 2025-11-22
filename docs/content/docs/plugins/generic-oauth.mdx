@@ -307,7 +307,7 @@ genericOAuth({
           accessToken: data.access_token,
           refreshToken: data.refresh_token,
           accessTokenExpiresAt: new Date(Date.now() + data.expires_in * 1000),
-          scopes: data.scope.split(" "),
+          scopes: data.scope?.split(" ") ?? [],
           // Preserve provider-specific fields in raw
           raw: data,
         };
