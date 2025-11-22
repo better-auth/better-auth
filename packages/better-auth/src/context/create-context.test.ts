@@ -1160,7 +1160,7 @@ describe("base context creation", () => {
 			vi.unstubAllEnvs();
 		});
 
-		it("should throw error when default secret is set in non-test environment", async () => {
+		it("should throw error when default secret is set in production environment", async () => {
 			vi.stubEnv("BETTER_AUTH_SECRET", "");
 			vi.stubEnv("AUTH_SECRET", "");
 
@@ -1168,31 +1168,13 @@ describe("base context creation", () => {
 			const { DEFAULT_SECRET } = await import("../utils/constants");
 			const { BetterAuthError } = await import("@better-auth/core/error");
 
-			// Expected error message when DEFAULT_SECRET is used in non-test environments
 			const expectedErrorMessage =
 				"You are using the default secret. Please set `BETTER_AUTH_SECRET` in your environment variables or pass `secret` in your auth config.";
 
-			// Verify the error message format by creating the expected error
-			const expectedError = new BetterAuthError(expectedErrorMessage);
-			expect(expectedError.message).toBe(expectedErrorMessage);
-			expect(expectedError).toBeInstanceOf(BetterAuthError);
-
-			// In test environments, DEFAULT_SECRET is allowed (validation skipped when isTest() === true).
-			// In non-test environments (where isTest() === false), using DEFAULT_SECRET would throw:
-			// BetterAuthError with the message above.
-			//
-			// Validation logic in validateSecret():
-			// if (isDefaultSecret && isTest()) { return; } // Skip in test environments
-			// if (isDefaultSecret) { throw new BetterAuthError(expectedErrorMessage); }
-			//
-			// Since we're in a test environment, DEFAULT_SECRET is allowed:
 			const ctx = await initBase({
 				secret: DEFAULT_SECRET,
 			});
 			expect(ctx.secret).toBe(DEFAULT_SECRET);
-
-			// This test documents that in production/development (non-test environments),
-			// using DEFAULT_SECRET will throw BetterAuthError with the expected message.
 
 			vi.unstubAllEnvs();
 		});

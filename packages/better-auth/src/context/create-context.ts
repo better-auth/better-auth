@@ -38,17 +38,19 @@ function estimateEntropy(str: string): number {
  * Validates that the secret meets minimum security requirements.
  * Throws BetterAuthError if the secret is invalid.
  * Skips validation for DEFAULT_SECRET in test environments only.
+ * Only throws for DEFAULT_SECRET in production environment.
  */
 function validateSecret(
 	secret: string,
 	logger: ReturnType<typeof createLogger>,
-	isDefaultSecret: boolean,
 ): void {
+	const isDefaultSecret = secret === DEFAULT_SECRET;
+
 	if (isDefaultSecret && isTest()) {
 		return;
 	}
 
-	if (isDefaultSecret) {
+	if (isDefaultSecret && isProduction) {
 		throw new BetterAuthError(
 			"You are using the default secret. Please set `BETTER_AUTH_SECRET` in your environment variables or pass `secret` in your auth config.",
 		);
@@ -107,8 +109,7 @@ export async function createAuthContext(
 		env.AUTH_SECRET ||
 		DEFAULT_SECRET;
 
-	const isDefaultSecret = secret === DEFAULT_SECRET;
-	validateSecret(secret, logger, isDefaultSecret);
+	validateSecret(secret, logger);
 
 	options = {
 		...options,
