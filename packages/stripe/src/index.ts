@@ -1,9 +1,9 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import { defineErrorCodes } from "@better-auth/core/utils";
-import type { BetterAuthPlugin, GenericEndpointContext } from "better-auth";
+import type { Session, User } from "@better-auth/core/db";
 import { logger } from "better-auth";
 import {
 	APIError,
@@ -15,6 +15,7 @@ import { defu } from "defu";
 import type Stripe from "stripe";
 import type { Stripe as StripeType } from "stripe";
 import * as z from "zod/v4";
+import { STRIPE_ERROR_CODES } from "./error-codes";
 import {
 	onCheckoutSessionCompleted,
 	onSubscriptionDeleted,
@@ -23,47 +24,23 @@ import {
 import { getSchema } from "./schema";
 import type {
 	InputSubscription,
+	OrganizationWithStripe,
 	StripeOptions,
 	StripePlan,
 	Subscription,
 	SubscriptionOptions,
+	WithActiveOrganizationId,
+	WithStripeCustomerId,
 } from "./types";
-import { getPlanByName, getPlanByPriceInfo, getPlans } from "./utils";
-
-const STRIPE_ERROR_CODES = defineErrorCodes({
-	SUBSCRIPTION_NOT_FOUND: "Subscription not found",
-	SUBSCRIPTION_PLAN_NOT_FOUND: "Subscription plan not found",
-	ALREADY_SUBSCRIBED_PLAN: "You're already subscribed to this plan",
-	UNABLE_TO_CREATE_CUSTOMER: "Unable to create customer",
-	FAILED_TO_FETCH_PLANS: "Failed to fetch plans",
-	EMAIL_VERIFICATION_REQUIRED:
-		"Email verification is required before you can subscribe to a plan",
-	SUBSCRIPTION_NOT_ACTIVE: "Subscription is not active",
-	SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION:
-		"Subscription is not scheduled for cancellation",
-});
-
-const getUrl = (ctx: GenericEndpointContext, url: string) => {
-	if (/^[a-zA-Z][a-zA-Z0-9+\-.]*:/.test(url)) {
-		return url;
-	}
-	return `${ctx.context.options.baseURL}${
-		url.startsWith("/") ? url : `/${url}`
-	}`;
-};
-
-async function resolvePriceIdFromLookupKey(
-	stripeClient: Stripe,
-	lookupKey: string,
-): Promise<string | undefined> {
-	if (!lookupKey) return undefined;
-	const prices = await stripeClient.prices.list({
-		lookup_keys: [lookupKey],
-		active: true,
-		limit: 1,
-	});
-	return prices.data[0]?.id;
-}
+import {
+	getOrganizationPlugin,
+	getPlanByName,
+	getPlanByPriceInfo,
+	getPlans,
+	getReferenceId,
+	getUrl,
+	resolvePriceIdFromLookupKey,
+} from "./utils";
 
 export const stripe = <O extends StripeOptions>(options: O) => {
 	const client = options.stripeClient;
@@ -80,7 +57,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 		createAuthMiddleware(async (ctx) => {
 			const session = ctx.context.session;
 			if (!session) {
-				throw new APIError("UNAUTHORIZED");
+				throw new APIError("UNAUTHORIZED", {
+					message: STRIPE_ERROR_CODES.UNAUTHORIZED,
+				});
 			}
 			const referenceId =
 				ctx.body?.referenceId || ctx.query?.referenceId || session.user.id;
@@ -93,8 +72,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					`Passing referenceId into a subscription action isn't allowed if subscription.authorizeReference isn't defined in your stripe plugin config.`,
 				);
 				throw new APIError("BAD_REQUEST", {
-					message:
-						"Reference id is not allowed. Read server logs for more details.",
+					message: STRIPE_ERROR_CODES.REFERENCE_ID_NOT_ALLOWED,
 				});
 			}
 			/**
@@ -117,7 +95,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					: true;
 			if (!isAuthorized) {
 				throw new APIError("UNAUTHORIZED", {
-					message: "Unauthorized",
+					message: STRIPE_ERROR_CODES.UNAUTHORIZED,
 				});
 			}
 		});
@@ -252,7 +230,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				],
 			},
 			async (ctx) => {
-				const { user, session } = ctx.context.session;
+				const ctxSession = ctx.context.session as {
+					session: Session & WithActiveOrganizationId;
+					user: User & WithStripeCustomerId;
+				};
+				const { user, session } = ctxSession;
 				if (
 					!user.emailVerified &&
 					subscriptionOptions.requireEmailVerification
@@ -261,7 +243,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						message: STRIPE_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED,
 					});
 				}
-				const referenceId = ctx.body.referenceId || user.id;
+				const referenceId = getReferenceId(ctx.body.referenceId, ctxSession);
 				const plan = await getPlanByName(options, ctx.body.plan);
 				if (!plan) {
 					throw new APIError("BAD_REQUEST", {
@@ -300,6 +282,147 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				let customerId =
 					subscriptionToUpdate?.stripeCustomerId || user.stripeCustomerId;
 
+				/**
+				 * If enableOrganizationCustomer is enabled and referenceId is not userId,
+				 * try to get organization customer
+				 */
+				if (options.enableOrganizationCustomer && referenceId !== user.id) {
+					try {
+						const organization =
+							await ctx.context.adapter.findOne<OrganizationWithStripe>({
+								model: "organization",
+								where: [
+									{
+										field: "id",
+										value: referenceId,
+									},
+								],
+							});
+
+						if (organization) {
+							if (organization.stripeCustomerId) {
+								customerId = organization.stripeCustomerId;
+							} else {
+								let stripeCustomer: Stripe.Customer | null = null;
+								try {
+									stripeCustomer = await client.customers.create({
+										name: organization.name,
+										email: user.email,
+										metadata: {
+											organizationId: organization.id,
+											organizationName: organization.name,
+											adminUserId: organization.stripeAdminUserId || user.id,
+										},
+									});
+
+									// Check one more time before updating
+									const currentOrg =
+										await ctx.context.adapter.findOne<OrganizationWithStripe>({
+											model: "organization",
+											where: [
+												{
+													field: "id",
+													value: organization.id,
+												},
+											],
+										});
+
+									if (currentOrg?.stripeCustomerId) {
+										customerId = currentOrg.stripeCustomerId;
+										ctx.context.logger.info(
+											`organization already has customer ${currentOrg.stripeCustomerId}, deleting duplicate ${stripeCustomer.id}`,
+										);
+										await client.customers
+											.del(stripeCustomer.id)
+											.catch((e) =>
+												ctx.context.logger.error(
+													`Failed to delete duplicate Stripe customer: ${e.message}`,
+												),
+											);
+									} else {
+										const updateResult = await ctx.context.adapter.update({
+											model: "organization",
+											update: {
+												stripeCustomerId: stripeCustomer.id,
+												stripeAdminUserId:
+													organization.stripeAdminUserId || user.id,
+											},
+											where: [
+												{
+													field: "id",
+													value: organization.id,
+												},
+											],
+										});
+
+										if (!updateResult) {
+											ctx.context.logger.error(
+												`Failed to update organization ${organization.id} with stripeCustomerId`,
+											);
+											throw new APIError("BAD_REQUEST", {
+												message:
+													STRIPE_ERROR_CODES.FAILED_TO_UPDATE_ORGANIZATION_CUSTOMER,
+											});
+										}
+
+										await options.onOrganizationCustomerCreate?.(
+											{
+												stripeCustomer,
+												organization: {
+													...organization,
+													stripeCustomerId: stripeCustomer.id,
+													stripeAdminUserId:
+														organization.stripeAdminUserId || user.id,
+												},
+												adminUser: user,
+											},
+											ctx,
+										);
+
+										customerId = stripeCustomer.id;
+										ctx.context.logger.info(
+											`Created Stripe customer ${stripeCustomer.id} for organization ${organization.id}`,
+										);
+									}
+								} catch (error: any) {
+									// Rollback: Delete Stripe customer if we created one
+									if (stripeCustomer) {
+										await client.customers
+											.del(stripeCustomer.id)
+											.catch((e) =>
+												ctx.context.logger.error(
+													`Rollback failed - could not delete Stripe customer: ${e.message}`,
+												),
+											);
+									}
+
+									// Always throw APIError to prevent fallback
+									if (error instanceof APIError) {
+										throw error;
+									}
+
+									// Wrap other errors
+									throw new APIError("BAD_REQUEST", {
+										message:
+											STRIPE_ERROR_CODES.FAILED_TO_CREATE_ORGANIZATION_CUSTOMER,
+									});
+								}
+							}
+						}
+					} catch (e: any) {
+						// APIError should be thrown immediately (no fallback)
+						if (e instanceof APIError) {
+							throw e;
+						}
+						ctx.context.logger.error(
+							`Failed to get/create organization customer: ${e.message}`,
+						);
+					}
+				}
+
+				/**
+				 * If still no customerId, try to get or create user customer
+				 */
 				if (!customerId) {
 					try {
 						// Try to find existing Stripe customer by email
@@ -456,7 +579,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 					if (!priceIdToUse) {
 						throw ctx.error("BAD_REQUEST", {
-							message: "Price ID not found for the selected plan",
+							message: STRIPE_ERROR_CODES.PRICE_ID_NOT_FOUND,
 						});
 					}
 
@@ -535,7 +658,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 				if (!subscription) {
 					ctx.context.logger.error("Subscription ID not found");
-					throw new APIError("INTERNAL_SERVER_ERROR");
+					throw new APIError("BAD_REQUEST", {
+						message: STRIPE_ERROR_CODES.SUBSCRIPTION_ID_NOT_FOUND,
+					});
 				}
 
 				const params = await subscriptionOptions.getCheckoutSessionParams?.(
@@ -580,20 +705,24 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						);
 					}
 				}
+				// Check if this is an organization subscription
+				const isOrganizationSubscription =
+					options.enableOrganizationCustomer && referenceId !== user.id;
+
+				// Prepare customer data
+				const customerData = customerId
+					? {
+							customer: customerId,
+							customer_update: isOrganizationSubscription
+								? ({ address: "auto" } as const) // managed by organization name
+								: ({ name: "auto", address: "auto" } as const),
+						}
+					: { customer_email: user.email };
+
 				const checkoutSession = await client.checkout.sessions
 					.create(
 						{
-							...(customerId
-								? {
-										customer: customerId,
-										customer_update: {
-											name: "auto",
-											address: "auto",
-										},
-									}
-								: {
-										customer_email: session.user.email,
-									}),
+							...customerData,
 							success_url: getUrl(
 								ctx,
 								`${
@@ -770,8 +899,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				],
 			},
 			async (ctx) => {
-				const referenceId =
-					ctx.body?.referenceId || ctx.context.session.user.id;
+				const ctxSession = ctx.context.session as {
+					session: Session & WithActiveOrganizationId;
+					user: User & WithStripeCustomerId;
+				};
+				const referenceId = getReferenceId(ctx.body?.referenceId, ctxSession);
 				const subscription = ctx.body.subscriptionId
 					? await ctx.context.adapter.findOne<Subscription>({
 							model: "subscription",
@@ -911,8 +1043,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				use: [sessionMiddleware, referenceMiddleware("restore-subscription")],
 			},
 			async (ctx) => {
-				const referenceId =
-					ctx.body?.referenceId || ctx.context.session.user.id;
+				const ctxSession = ctx.context.session as {
+					session: Session & WithActiveOrganizationId;
+					user: User & WithStripeCustomerId;
+				};
+				const referenceId = getReferenceId(ctx.body?.referenceId, ctxSession);
 
 				const subscription = ctx.body.subscriptionId
 					? await ctx.context.adapter.findOne<Subscription>({
@@ -1044,12 +1179,17 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				use: [sessionMiddleware, referenceMiddleware("list-subscription")],
 			},
 			async (ctx) => {
+				const ctxSession = ctx.context.session as {
+					session: Session & WithActiveOrganizationId;
+					user: User & WithStripeCustomerId;
+				};
+				const referenceId = getReferenceId(ctx.query?.referenceId, ctxSession);
 				const subscriptions = await ctx.context.adapter.findMany<Subscription>({
 					model: "subscription",
 					where: [
 						{
 							field: "referenceId",
-							value: ctx.query?.referenceId || ctx.context.session.user.id,
+							value: referenceId,
 						},
 					],
 				});
@@ -1209,11 +1349,39 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				],
 			},
 			async (ctx) => {
-				const { user } = ctx.context.session;
-				const referenceId = ctx.body.referenceId || user.id;
+				const ctxSession = ctx.context.session as {
+					session: Session & WithActiveOrganizationId;
+					user: User & WithStripeCustomerId;
+				};
+				const { user } = ctxSession;
+				const referenceId = getReferenceId(ctx.body.referenceId, ctxSession);
 
 				let customerId = user.stripeCustomerId;
 
+				// If enableOrganizationCustomer is enabled and referenceId is not user.id, try to get organization customer
+				if (options.enableOrganizationCustomer && referenceId !== user.id) {
+					try {
+						const organization =
+							await ctx.context.adapter.findOne<OrganizationWithStripe>({
+								model: "organization",
+								where: [
+									{
+										field: "id",
+										value: referenceId,
+									},
+								],
+							});
+						if (organization?.stripeCustomerId) {
+							customerId = organization.stripeCustomerId;
+						}
+					} catch (e: any) {
+						ctx.context.logger.error(
+							`Failed to get organization customer: ${e.message}`,
+						);
+					}
+				}
+
+				// Fallback to subscription customer if still no customerId
 				if (!customerId) {
 					const subscription = await ctx.context.adapter
 						.findMany<Subscription>({
@@ -1236,7 +1404,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 				if (!customerId) {
 					throw new APIError("BAD_REQUEST", {
-						message: "No Stripe customer found for this user",
+						message: STRIPE_ERROR_CODES.CUSTOMER_ID_NOT_FOUND,
 					});
 				}
 
@@ -1277,23 +1445,31 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						},
 					},
 					cloneRequest: true,
-					//don't parse the body
+					// don't parse the body
 					disableBody: true,
 				},
 				async (ctx) => {
 					if (!ctx.request?.body) {
-						throw new APIError("INTERNAL_SERVER_ERROR");
+						throw new APIError("BAD_REQUEST", {
+							message: STRIPE_ERROR_CODES.REQUEST_BODY_NOT_FOUND,
+						});
 					}
 					const buf = await ctx.request.text();
 					const sig = ctx.request.headers.get("stripe-signature") as string;
+					if (!sig) {
+						throw new APIError("BAD_REQUEST", {
+							message: STRIPE_ERROR_CODES.STRIPE_SIGNATURE_NOT_FOUND,
+						});
+					}
 					const webhookSecret = options.stripeWebhookSecret;
+					if (!webhookSecret) {
+						throw new APIError("BAD_REQUEST", {
+							message: STRIPE_ERROR_CODES.STRIPE_WEBHOOK_SECRET_NOT_FOUND,
+						});
+					}
+
 					let event: Stripe.Event;
 					try {
-						if (!sig || !webhookSecret) {
-							throw new APIError("BAD_REQUEST", {
-								message: "Stripe webhook secret not found",
-							});
-						}
 						// Support both Stripe v18 (constructEvent) and v19+ (constructEventAsync)
 						if (typeof client.webhooks.constructEventAsync === "function") {
 							// Stripe v19+ - use async method
@@ -1309,12 +1485,12 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					} catch (err: any) {
 						ctx.context.logger.error(`${err.message}`);
 						throw new APIError("BAD_REQUEST", {
-							message: `Webhook Error: ${err.message}`,
+							message: STRIPE_ERROR_CODES.STRIPE_WEBHOOK_ERROR,
 						});
 					}
 					if (!event) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Failed to construct event",
+							message: STRIPE_ERROR_CODES.STRIPE_WEBHOOK_EVENT_NOT_FOUND,
 						});
 					}
 					try {
@@ -1340,7 +1516,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							`Stripe webhook failed. Error: ${e.message}`,
 						);
 						throw new APIError("BAD_REQUEST", {
-							message: "Webhook error: See server logs for more information.",
+							message: STRIPE_ERROR_CODES.STRIPE_WEBHOOK_ERROR,
 						});
 					}
 					return ctx.json({ success: true });
@@ -1354,133 +1530,344 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				? typeof subscriptionEndpoints
 				: {}),
 		},
+
 		init(ctx) {
+			if (options.enableOrganizationCustomer && ctx.options?.plugins) {
+				const orgPlugin = getOrganizationPlugin(ctx.options.plugins);
+				if (!orgPlugin) {
+					logger.error(`Organization plugin not found`);
+					return;
+				}
+
+				const existingHooks = orgPlugin.options.organizationHooks || {};
+
+				const afterCreateStripeOrg = async (data: {
+					organization: OrganizationWithStripe;
+					user: User;
+				}) => {
+					const { organization, user } = data;
+					if (organization.stripeCustomerId) return;
+
+					try {
+						const stripeCustomer = await client.customers.create({
+							name: organization.name,
+							email: user.email,
+							metadata: {
+								organizationId: organization.id,
+								organizationName: organization.name,
+								adminUserId: user.id,
+							},
+						});
+
+						await ctx.adapter.update({
+							model: "organization",
+							update: {
+								stripeCustomerId: stripeCustomer.id,
+								stripeAdminUserId: user.id,
+							},
+							where: [{ field: "id", value: organization.id }],
+						});
+					} catch (e: any) {
+						logger.error(
+							`[Stripe Sync] Failed to create Stripe customer: ${e.message}`,
+						);
+						// Don't throw
+						// Allow organization creation to succeed even if Stripe fails -> user customer
+					}
+				};
+
+				const afterUpdateStripeOrg = async (data: {
+					organization: OrganizationWithStripe | null;
+					user: User;
+				}) => {
+					const { organization } = data;
+
+					logger.info(
+						`[Stripe Sync] afterUpdateStripeOrg called - orgId: ${organization?.id}, stripeCustomerId: ${organization?.stripeCustomerId}`,
+					);
+
+					if (!organization?.stripeCustomerId) {
+						logger.warn(
+							`[Stripe Sync] Skipping - no stripeCustomerId for org: ${organization?.id}`,
+						);
+						return;
+					}
+
+					try {
+						const stripeCustomer = await client.customers.retrieve(
+							organization.stripeCustomerId,
+						);
+
+						if (!stripeCustomer.deleted) {
+							logger.info(
+								`[Stripe Sync] Retrieved customer ${organization.stripeCustomerId}`,
+							);
+
+							// Check if this update is coming from a recent Stripe webhook sync
+							const lastSynced = stripeCustomer.metadata?.lastSyncedAt;
+							if (lastSynced) {
+								const lastSyncTime = new Date(lastSynced).getTime();
+								const now = Date.now();
+								const timeDiff = now - lastSyncTime;
+								logger.info(
+									`[Stripe Sync] lastSyncedAt: ${lastSynced}, timeDiff: ${timeDiff}ms`,
+								);
+								if (timeDiff < 2000) {
+									logger.debug(
+										`[Stripe Sync] Skipping - recently synced (${timeDiff}ms ago)`,
+									);
+									return;
+								}
+							}
+
+							const stripeName = stripeCustomer.deleted
+								? null
+								: (stripeCustomer as any).name;
+							const needsUpdate =
+								organization.name !== stripeName ||
+								organization.name !== stripeCustomer.metadata?.organizationName;
+
+							logger.info(
+								`[Stripe Sync] needsUpdate: ${needsUpdate}, orgName: "${organization.name}", stripeName: "${stripeName}", metadataOrgName: "${stripeCustomer.metadata?.organizationName}"`,
+							);
+
+							if (needsUpdate) {
+								await client.customers.update(organization.stripeCustomerId, {
+									name: organization.name,
+									metadata: {
+										...stripeCustomer.metadata,
+										organizationName: organization.name,
+										lastSyncedAt: new Date().toISOString(),
+									},
+								});
+								logger.info(
+									`[Stripe Sync] Successfully updated customer ${organization.stripeCustomerId} with name: "${organization.name}"`,
+								);
+							} else {
+								logger.info(`[Stripe Sync] No update needed - names match`);
+							}
+						} else {
+							logger.warn(
+								`[Stripe Sync] Customer ${organization.stripeCustomerId} was deleted`,
+							);
+						}
+					} catch (e: any) {
+						logger.error(
+							`[Stripe Sync] Failed to update Stripe customer: ${e.message}`,
+						);
+					}
+				};
+
+				const beforeDeleteStripeOrg = async (data: {
+					organization: OrganizationWithStripe;
+					user: User;
+				}) => {
+					const { organization } = data;
+					if (!organization.stripeCustomerId) return;
+
+					try {
+						const stripeSubscriptions = await client.subscriptions.list({
+							customer: organization.stripeCustomerId,
+							status: "all",
+							limit: 100,
+						});
+
+						const activeSubscriptions = stripeSubscriptions.data.filter(
+							(sub) =>
+								sub.status === "active" ||
+								sub.status === "trialing" ||
+								sub.status === "past_due" ||
+								sub.status === "unpaid" ||
+								sub.status === "paused",
+						);
+
+						if (activeSubscriptions.length > 0) {
+							throw new APIError("BAD_REQUEST", {
+								message:
+									STRIPE_ERROR_CODES.ORGANIZATION_HAS_ACTIVE_SUBSCRIPTION,
+							});
+						}
+					} catch (error: any) {
+						logger.error(
+							`[Stripe Sync] Error checking subscriptions: ${error.message}`,
+						);
+						throw error;
+					}
+				};
+
+				const afterDeleteStripeOrg = async (data: {
+					organization: OrganizationWithStripe;
+					user: User;
+				}) => {
+					const { organization } = data;
+					if (!organization.stripeCustomerId) return;
+
+					try {
+						await client.customers.del(organization.stripeCustomerId);
+					} catch (e: any) {
+						logger.error(
+							`[Stripe Sync] Failed to delete Stripe customer: ${e.message}`,
+						);
+					}
+				};
+
+				orgPlugin.options.organizationHooks = {
+					afterCreateOrganization: existingHooks.afterCreateOrganization
+						? async (data) => {
+								await existingHooks.afterCreateOrganization!(data);
+								await afterCreateStripeOrg(data);
+							}
+						: async (data) => {
+								await afterCreateStripeOrg(data);
+							},
+					afterUpdateOrganization: existingHooks.afterUpdateOrganization
+						? async (data) => {
+								await existingHooks.afterUpdateOrganization!(data);
+								await afterUpdateStripeOrg(data);
+							}
+						: async (data) => {
+								await afterUpdateStripeOrg(data);
+							},
+					beforeDeleteOrganization: existingHooks.beforeDeleteOrganization
+						? async (data) => {
+								await existingHooks.beforeDeleteOrganization!(data);
+								await beforeDeleteStripeOrg(data);
+							}
+						: beforeDeleteStripeOrg,
+					afterDeleteOrganization: existingHooks.afterDeleteOrganization
+						? async (data) => {
+								await existingHooks.afterDeleteOrganization!(data);
+								await afterDeleteStripeOrg(data);
+							}
+						: afterDeleteStripeOrg,
+				};
+			}
+
 			return {
 				options: {
 					databaseHooks: {
 						user: {
-							create: {
-								async after(user, ctx) {
-									if (!ctx || !options.createCustomerOnSignUp) return;
+							// Only register create hook when createCustomerOnSignUp is enabled
+							...(options.createCustomerOnSignUp
+								? {
+										create: {
+											async after(user: User & WithStripeCustomerId, ctx) {
+												if (!ctx || user.stripeCustomerId) {
+													return;
+												}
 
-									try {
-										const userWithStripe = user as typeof user & {
-											stripeCustomerId?: string;
-										};
+												try {
+													// Check if customer already exists in Stripe by email
+													const existingCustomers = await client.customers.list(
+														{
+															email: user.email,
+															limit: 1,
+														},
+													);
 
-										// Skip if user already has a Stripe customer ID
-										if (userWithStripe.stripeCustomerId) return;
+													let stripeCustomer = existingCustomers.data[0];
 
-										// Check if customer already exists in Stripe by email
-										const existingCustomers = await client.customers.list({
-											email: user.email,
-											limit: 1,
-										});
+													// If customer exists, link it to prevent duplicate creation
+													if (stripeCustomer) {
+														await ctx.context.internalAdapter.updateUser(
+															user.id,
+															{
+																stripeCustomerId: stripeCustomer.id,
+															},
+														);
+														await options.onCustomerCreate?.(
+															{
+																stripeCustomer,
+																user: {
+																	...user,
+																	stripeCustomerId: stripeCustomer.id,
+																},
+															},
+															ctx,
+														);
+														ctx.context.logger.info(
+															`Linked existing Stripe customer ${stripeCustomer.id} to user ${user.id}`,
+														);
+														return;
+													}
 
-										let stripeCustomer = existingCustomers.data[0];
+													// Create new Stripe customer
+													let extraCreateParams: Partial<Stripe.CustomerCreateParams> =
+														{};
+													if (options.getCustomerCreateParams) {
+														extraCreateParams =
+															await options.getCustomerCreateParams(user, ctx);
+													}
 
-										// If customer exists, link it to prevent duplicate creation
-										if (stripeCustomer) {
-											await ctx.context.internalAdapter.updateUser(user.id, {
-												stripeCustomerId: stripeCustomer.id,
-											});
-											await options.onCustomerCreate?.(
-												{
-													stripeCustomer,
-													user: {
-														...user,
-														stripeCustomerId: stripeCustomer.id,
-													},
-												},
-												ctx,
-											);
-											ctx.context.logger.info(
-												`Linked existing Stripe customer ${stripeCustomer.id} to user ${user.id}`,
-											);
-											return;
-										}
-
-										// Create new Stripe customer
-										let extraCreateParams: Partial<Stripe.CustomerCreateParams> =
-											{};
-										if (options.getCustomerCreateParams) {
-											extraCreateParams = await options.getCustomerCreateParams(
-												user,
-												ctx,
-											);
-										}
-
-										const params: Stripe.CustomerCreateParams = defu(
-											{
-												email: user.email,
-												name: user.name,
-												metadata: {
-													userId: user.id,
-												},
+													const params: Stripe.CustomerCreateParams = defu(
+														{
+															email: user.email,
+															name: user.name,
+															metadata: {
+																userId: user.id,
+															},
+														},
+														extraCreateParams,
+													);
+													stripeCustomer =
+														await client.customers.create(params);
+													await ctx.context.internalAdapter.updateUser(
+														user.id,
+														{
+															stripeCustomerId: stripeCustomer.id,
+														},
+													);
+													await options.onCustomerCreate?.(
+														{
+															stripeCustomer,
+															user: {
+																...user,
+																stripeCustomerId: stripeCustomer.id,
+															},
+														},
+														ctx,
+													);
+													ctx.context.logger.info(
+														`Created new Stripe customer ${stripeCustomer.id} for user ${user.id}`,
+													);
+												} catch (e: any) {
+													ctx.context.logger.error(
+														`Failed to create or link Stripe customer: ${e.message}`,
+														e,
+													);
+												}
 											},
-											extraCreateParams,
-										);
-										stripeCustomer = await client.customers.create(params);
-										await ctx.context.internalAdapter.updateUser(user.id, {
-											stripeCustomerId: stripeCustomer.id,
-										});
-										await options.onCustomerCreate?.(
-											{
-												stripeCustomer,
-												user: {
-													...user,
-													stripeCustomerId: stripeCustomer.id,
-												},
-											},
-											ctx,
-										);
-										ctx.context.logger.info(
-											`Created new Stripe customer ${stripeCustomer.id} for user ${user.id}`,
-										);
-									} catch (e: any) {
-										ctx.context.logger.error(
-											`Failed to create or link Stripe customer: ${e.message}`,
-											e,
-										);
+										},
 									}
-								},
-							},
+								: {}),
+							// Always register update hook to sync email changes
 							update: {
-								async after(user, ctx) {
-									if (!ctx) return;
+								async after(user: User & WithStripeCustomerId, ctx) {
+									if (
+										!ctx ||
+										!user.stripeCustomerId // Only proceed if user has a Stripe customer ID
+									) {
+										return;
+									}
 
 									try {
-										// Cast user to include stripeCustomerId (added by the stripe plugin schema)
-										const userWithStripe = user as typeof user & {
-											stripeCustomerId?: string;
-										};
-
-										// Only proceed if user has a Stripe customer ID
-										if (!userWithStripe.stripeCustomerId) return;
-
-										// Get the user from the database to check if email actually changed
-										// The 'user' parameter here is the freshly updated user
-										// We need to check if the Stripe customer's email matches
 										const stripeCustomer = await client.customers.retrieve(
-											userWithStripe.stripeCustomerId,
+											user.stripeCustomerId,
 										);
 
 										// Check if customer was deleted
 										if (stripeCustomer.deleted) {
 											ctx.context.logger.warn(
-												`Stripe customer ${userWithStripe.stripeCustomerId} was deleted, cannot update email`,
+												`Stripe customer ${user.stripeCustomerId} was deleted, cannot update email`,
 											);
 											return;
 										}
 
 										// If Stripe customer email doesn't match the user's current email, update it
 										if (stripeCustomer.email !== user.email) {
-											await client.customers.update(
-												userWithStripe.stripeCustomerId,
-												{
-													email: user.email,
-												},
-											);
+											await client.customers.update(user.stripeCustomerId, {
+												email: user.email,
+											});
 											ctx.context.logger.info(
 												`Updated Stripe customer email from ${stripeCustomer.email} to ${user.email}`,
 											);
@@ -1509,4 +1896,4 @@ export type StripePlugin<O extends StripeOptions> = ReturnType<
 	typeof stripe<O>
 >;
 
-export type { Subscription, StripePlan };
+export type { OrganizationWithStripe, Subscription, StripePlan };

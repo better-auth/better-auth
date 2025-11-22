@@ -15,6 +15,7 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
 - Support for trial periods and subscription upgrades
 - **Automatic trial abuse prevention** - Users can only get one trial per account across all plans
 - Flexible reference system to associate subscriptions with users or organizations
+- Separate Stripe customers for organizations with automatic lifecycle management
 - Team subscription support with seats management
 
 ## Installation
@@ -683,6 +684,27 @@ Table Name: `subscription`
   ]}
 />
 
+### Organization
+
+Table Name: `organization` (only when `enableOrganizationCustomer` is true)
+
+<DatabaseTable
+  fields={[
+    { 
+      name: "stripeCustomerId", 
+      type: "string", 
+      description: "The Stripe customer ID for the organization",
+      isOptional: true
+    },
+    { 
+      name: "stripeAdminUserId", 
+      type: "string", 
+      description: "The user ID whose email will receive Stripe billing notifications for the organization",
+      isOptional: true
+    },
+  ]}
+/>
+
 ### Customizing the Schema
 
 To change the schema table names or fields, you can pass a `schema` option to the Stripe plugin:
@@ -711,7 +733,11 @@ stripe({
 
 **createCustomerOnSignUp**: `boolean` - Whether to automatically create a Stripe customer when a user signs up. Default: `false`.
 
+**enableOrganizationCustomer**: `boolean` - Whether to enable separate Stripe customers for organizations. When enabled, organizations will have their own Stripe customer IDs and the plugin automatically manages the customer lifecycle (creation, updates, deletion). Requires the organization plugin. Default: `false`.
+
 **onCustomerCreate**: `(data: { stripeCustomer: Stripe.Customer, user: User }, ctx: GenericEndpointContext) => Promise<void>` - A function called after a customer is created.
+
+**onOrganizationCustomerCreate**: `(data: { stripeCustomer: Stripe.Customer, organization: Organization, adminUser: User }, ctx: GenericEndpointContext) => Promise<void>` - A function called after an organization customer is created. Only available when `enableOrganizationCustomer` is true.
 
 **getCustomerCreateParams**: `(user: User, ctx: GenericEndpointContext) => Promise<{}>` - A function to customize the Stripe customer creation parameters.
 
@@ -755,7 +781,77 @@ Each plan can have the following properties:
 
 ### Using with Organizations
 
-The Stripe plugin works well with the organization plugin. You can associate subscriptions with organizations instead of individual users:
+The Stripe plugin integrates seamlessly with the organization plugin, offering two approaches for managing organization billing:
+
+#### Approach 1: Organization Customers (Recommended)
+
+When you enable `enableOrganizationCustomer`, each organization gets its own Stripe customer with automatic lifecycle management:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { organization } from "better-auth/plugins"
+import { stripe } from "@better-auth/stripe"
+
+export const auth = betterAuth({
+    // ... your existing config
+    plugins: [
+        organization(),
+        stripe({
+            stripeClient,
+            stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
+            enableOrganizationCustomer: true,
+            onOrganizationCustomerCreate: async ({ stripeCustomer, organization, adminUser }) => {
+                console.log(`Stripe customer ${stripeCustomer.id} created for org ${organization.id}`);
+            }
+        })
+    ]
+})
+```
+
+**What happens automatically:**
+- When a subscription is first created for an organization (if the organization doesn't have a Stripe customer yet), a Stripe customer is automatically created using the current user (the user creating the subscription is stored as `stripeAdminUserId`)
+- When the organization name is updated, the Stripe customer name is synced
+- When an organization is deleted, the associated Stripe customer is also deleted (only if there are no active subscriptions)
+- The organization's `stripeCustomerId` and `stripeAdminUserId` are stored in the database
+
+**Key differences from user customers:**
+- Organization customers use the organization name instead of the user's name
+- Subscriptions are tied to the organization, not individual users
+
+```ts title="client.ts"
+// Create a subscription using organization customer
+//
+// If referenceId is not provided:
+// It automatically uses the activeOrganizationId from session
+await client.subscription.upgrade({
+    plan: "team",
+    seats: 10,
+    successUrl: "/org/billing/success",
+    cancelUrl: "/org/billing"
+});
+
+// You can also explicitly specify the organization ID
+const { data: activeOrg } = client.useActiveOrganization();
+await client.subscription.upgrade({
+    plan: "team",
+    referenceId: activeOrg.id, // Explicitly use this organization
+    seats: 10,
+    successUrl: "/org/billing/success",
+    cancelUrl: "/org/billing"
+});
+
+// Access billing portal for organization
+//
+// referenceId is also optional here:
+// It automatically uses the activeOrganizationId from session
+await client.subscription.billingPortal({
+    returnUrl: "/org/settings"
+});
+```
+
+#### Approach 2: Reference ID Only (Legacy)
+
+Without `enableOrganizationCustomer`, you can still use organizations as reference IDs, but all subscriptions use the user's Stripe customer:
 
 ```ts title="client.ts"
 // Get the active organization
@@ -764,13 +860,14 @@ const { data: activeOrg } = client.useActiveOrganization();
 // Create a subscription for the organization
 await client.subscription.upgrade({
     plan: "team",
-    referenceId: activeOrg.id,
+    referenceId: activeOrg.id, // Just a reference, uses user's Stripe customer
     seats: 10,
-    annual: true, // upgrade to an annual plan (optional)
     successUrl: "/org/billing/success",
     cancelUrl: "/org/billing"
 });
 ```
+
+#### Authorization
 
 Make sure to implement the `authorizeReference` function to verify that the user has permission to manage subscriptions for the organization:
 

@@ -65,6 +65,21 @@ export const user = {
 	},
 } satisfies BetterAuthPluginDBSchema;
 
+export const organization = {
+	organization: {
+		fields: {
+			stripeCustomerId: {
+				type: "string",
+				required: false,
+			},
+			stripeAdminUserId: {
+				type: "string",
+				required: false,
+			},
+		},
+	},
+} satisfies BetterAuthPluginDBSchema;
+
 export const getSchema = (options: StripeOptions) => {
 	let baseSchema = {};
 
@@ -76,6 +91,13 @@ export const getSchema = (options: StripeOptions) => {
 	} else {
 		baseSchema = {
 			...user,
+		};
+	}
+
+	if (options.enableOrganizationCustomer) {
+		baseSchema = {
+			...baseSchema,
+			...organization,
 		};
 	}
 

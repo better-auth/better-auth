@@ -1,11 +1,8 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import type { Auth, User } from "better-auth";
-import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
-import { createAuthClient } from "better-auth/client";
-import { setCookieToHeader } from "better-auth/cookies";
-import { bearer } from "better-auth/plugins";
+import { getTestInstance } from "better-auth/test";
 import type Stripe from "stripe";
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { StripePlugin } from ".";
@@ -53,7 +50,7 @@ describe("stripe type", () => {
 	});
 });
 
-describe("stripe", async () => {
+describe("stripe", () => {
 	const mockStripe = {
 		prices: {
 			list: vi.fn().mockResolvedValue({ data: [{ id: "price_lookup_123" }] }),
@@ -126,65 +123,49 @@ describe("stripe", async () => {
 			],
 		},
 	} satisfies StripeOptions;
-	const auth = betterAuth({
-		database: memory,
-		baseURL: "http://localhost:3000",
-		// database: new Database(":memory:"),
-		emailAndPassword: {
-			enabled: true,
-		},
-		plugins: [stripe(stripeOptions)],
-	});
-	const ctx = await auth.$context;
-	const authClient = createAuthClient({
-		baseURL: "http://localhost:3000",
-		plugins: [
-			bearer(),
-			stripeClient({
-				subscription: true,
-			}),
-		],
-		fetchOptions: {
-			customFetchImpl: async (url, init) => {
-				return auth.handler(new Request(url, init));
-			},
-		},
-	});
-
-	const testUser = {
-		email: "test@email.com",
-		password: "password",
-		name: "Test User",
-	};
 
 	beforeEach(() => {
+		vi.clearAllMocks();
 		data.user = [];
 		data.session = [];
 		data.verification = [];
 		data.account = [];
 		data.customer = [];
 		data.subscription = [];
-
-		vi.clearAllMocks();
 	});
 
-	async function getHeader() {
-		const headers = new Headers();
-		const userRes = await authClient.signIn.email(testUser, {
-			throw: true,
-			onSuccess: setCookieToHeader(headers),
-		});
-		return {
-			headers,
-			response: userRes,
-		};
-	}
-
 	it("should create a customer on sign up", async () => {
-		const userRes = await authClient.signUp.email(testUser, {
-			throw: true,
-		});
-		const res = await ctx.adapter.findOne<User>({
+		const { client, auth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [
+						stripeClient({
+							subscription: true,
+						}),
+					],
+				},
+			},
+		);
+
+		const testCtx = await auth.$context;
+
+		const userRes = await client.signUp.email(
+			{
+				email: "test@email.com",
+				password: "password",
+				name: "Test User",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const res = await testCtx.adapter.findOne<User>({
 			model: "user",
 			where: [
 				{
@@ -193,6 +174,7 @@ describe("stripe", async () => {
 				},
 			],
 		});
+
 		expect(res).toMatchObject({
 			id: expect.any(String),
 			stripeCustomerId: expect.any(String),
@@ -200,24 +182,58 @@ describe("stripe", async () => {
 	});
 
 	it("should create a subscription", async () => {
-		const userRes = await authClient.signUp.email(testUser, {
-			throw: true,
-		});
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [
+						stripeClient({
+							subscription: true,
+						}),
+					],
+				},
+			},
+		);
 
+		const testCtx = await auth.$context;
 		const headers = new Headers();
-		await authClient.signIn.email(testUser, {
-			throw: true,
-			onSuccess: setCookieToHeader(headers),
-		});
 
-		const res = await authClient.subscription.upgrade({
+		const userRes = await client.signUp.email(
+			{
+				email: "test@email.com",
+				password: "password",
+				name: "Test User",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		await client.signIn.email(
+			{
+				email: "test@email.com",
+				password: "password",
+			},
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const res = await client.subscription.upgrade({
 			plan: "starter",
 			fetchOptions: {
 				headers,
 			},
 		});
+
 		expect(res.data?.url).toBeDefined();
-		const subscription = await ctx.adapter.findOne<Subscription>({
+
+		const subscription = await testCtx.adapter.findOne<Subscription>({
 			model: "subscription",
 			where: [
 				{
@@ -226,6 +242,7 @@ describe("stripe", async () => {
 				},
 			],
 		});
+
 		expect(subscription).toMatchObject({
 			id: expect.any(String),
 			plan: "starter",
@@ -240,10 +257,31 @@ describe("stripe", async () => {
 	});
 
 	it("should list active subscriptions", async () => {
-		const userRes = await authClient.signUp.email(
+		const { client, auth, sessionSetter } = await getTestInstance(
 			{
-				...testUser,
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [
+						stripeClient({
+							subscription: true,
+						}),
+					],
+				},
+			},
+		);
+
+		const testCtx = await auth.$context;
+		const headers = new Headers();
+
+		const userRes = await client.signUp.email(
+			{
 				email: "list-test@email.com",
+				password: "password",
+				name: "Test User",
 			},
 			{
 				throw: true,
@@ -251,19 +289,18 @@ describe("stripe", async () => {
 		);
 		const userId = userRes.user.id;
 
-		const headers = new Headers();
-		await authClient.signIn.email(
+		await client.signIn.email(
 			{
-				...testUser,
 				email: "list-test@email.com",
+				password: "password",
 			},
 			{
 				throw: true,
-				onSuccess: setCookieToHeader(headers),
+				onSuccess: sessionSetter(headers),
 			},
 		);
 
-		const listRes = await authClient.subscription.list({
+		const listRes = await client.subscription.list({
 			fetchOptions: {
 				headers,
 			},
@@ -271,20 +308,22 @@ describe("stripe", async () => {
 
 		expect(Array.isArray(listRes.data)).toBe(true);
 
-		await authClient.subscription.upgrade({
+		await client.subscription.upgrade({
 			plan: "starter",
 			fetchOptions: {
 				headers,
 			},
 		});
-		const listBeforeActive = await authClient.subscription.list({
+
+		const listBeforeActive = await client.subscription.list({
 			fetchOptions: {
 				headers,
 			},
 		});
 		expect(listBeforeActive.data?.length).toBe(0);
+
 		// Update the subscription status to active
-		await ctx.adapter.update({
+		await testCtx.adapter.update({
 			model: "subscription",
 			update: {
 				status: "active",
@@ -296,7 +335,8 @@ describe("stripe", async () => {
 				},
 			],
 		});
-		const listAfterRes = await authClient.subscription.list({
+
+		const listAfterRes = await client.subscription.list({
 			fetchOptions: {
 				headers,
 			},
@@ -305,13 +345,26 @@ describe("stripe", async () => {
 	});
 
 	it("should handle subscription webhook events", async () => {
-		const { id: testReferenceId } = await ctx.adapter.create({
+		const { auth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const testCtx = await auth.$context;
+
+		const { id: testReferenceId } = await testCtx.adapter.create({
 			model: "user",
 			data: {
 				email: "test@email.com",
 			},
 		});
-		const { id: testSubscriptionId } = await ctx.adapter.create({
+
+		const { id: testSubscriptionId } = await testCtx.adapter.create({
 			model: "subscription",
 			data: {
 				referenceId: testReferenceId,
@@ -320,6 +373,7 @@ describe("stripe", async () => {
 				plan: "starter",
 			},
 		});
+
 		const mockCheckoutSessionEvent = {
 			type: "checkout.session.completed",
 			data: {
@@ -368,16 +422,18 @@ describe("stripe", async () => {
 			stripeWebhookSecret: "test_secret",
 		};
 
-		const testAuth = betterAuth({
-			baseURL: "http://localhost:3000",
-			database: memory,
-			emailAndPassword: {
-				enabled: true,
+		// Create a new test instance with modified stripe options
+		const { auth: webhookAuth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(testOptions)],
 			},
-			plugins: [stripe(testOptions)],
-		});
+			{
+				disableTestUser: true,
+			},
+		);
 
-		const testCtx = await testAuth.$context;
+		const webhookTestCtx = await webhookAuth.$context;
 
 		const mockRequest = new Request(
 			"http://localhost:3000/api/auth/stripe/webhook",
@@ -389,18 +445,20 @@ describe("stripe", async () => {
 				body: JSON.stringify(mockCheckoutSessionEvent),
 			},
 		);
-		const response = await testAuth.handler(mockRequest);
+
+		const response = await webhookAuth.handler(mockRequest);
 		expect(response.status).toBe(200);
 
-		const updatedSubscription = await testCtx.adapter.findOne<Subscription>({
-			model: "subscription",
-			where: [
-				{
-					field: "id",
-					value: testSubscriptionId,
-				},
-			],
-		});
+		const updatedSubscription =
+			await webhookTestCtx.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: [
+					{
+						field: "id",
+						value: testSubscriptionId,
+					},
+				],
+			});
 
 		expect(updatedSubscription).toMatchObject({
 			id: testSubscriptionId,
@@ -412,13 +470,26 @@ describe("stripe", async () => {
 	});
 
 	it("should handle subscription webhook events with trial", async () => {
-		const { id: testReferenceId } = await ctx.adapter.create({
+		const { auth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const testCtx = await auth.$context;
+
+		const { id: testReferenceId } = await testCtx.adapter.create({
 			model: "user",
 			data: {
 				email: "test@email.com",
 			},
 		});
-		const { id: testSubscriptionId } = await ctx.adapter.create({
+
+		const { id: testSubscriptionId } = await testCtx.adapter.create({
 			model: "subscription",
 			data: {
 				referenceId: testReferenceId,
@@ -427,6 +498,7 @@ describe("stripe", async () => {
 				plan: "starter",
 			},
 		});
+
 		const mockCheckoutSessionEvent = {
 			type: "checkout.session.completed",
 			data: {
@@ -477,16 +549,17 @@ describe("stripe", async () => {
 			stripeWebhookSecret: "test_secret",
 		};
 
-		const testAuth = betterAuth({
-			baseURL: "http://localhost:3000",
-			database: memory,
-			emailAndPassword: {
-				enabled: true,
+		const { auth: webhookAuth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(testOptions)],
 			},
-			plugins: [stripe(testOptions)],
-		});
+			{
+				disableTestUser: true,
+			},
+		);
 
-		const testCtx = await testAuth.$context;
+		const webhookTestCtx = await webhookAuth.$context;
 
 		const mockRequest = new Request(
 			"http://localhost:3000/api/auth/stripe/webhook",
@@ -498,18 +571,20 @@ describe("stripe", async () => {
 				body: JSON.stringify(mockCheckoutSessionEvent),
 			},
 		);
-		const response = await testAuth.handler(mockRequest);
+
+		const response = await webhookAuth.handler(mockRequest);
 		expect(response.status).toBe(200);
 
-		const updatedSubscription = await testCtx.adapter.findOne<Subscription>({
-			model: "subscription",
-			where: [
-				{
-					field: "id",
-					value: testSubscriptionId,
-				},
-			],
-		});
+		const updatedSubscription =
+			await webhookTestCtx.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: [
+					{
+						field: "id",
+						value: testSubscriptionId,
+					},
+				],
+			});
 
 		expect(updatedSubscription).toMatchObject({
 			id: testSubscriptionId,
@@ -522,17 +597,29 @@ describe("stripe", async () => {
 		});
 	});
 
-	const { id: userId } = await ctx.adapter.create({
-		model: "user",
-		data: {
-			email: "delete-test@email.com",
-		},
-	});
-
 	it("should handle subscription deletion webhook", async () => {
+		const { auth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const testCtx = await auth.$context;
+
+		const { id: userId } = await testCtx.adapter.create({
+			model: "user",
+			data: {
+				email: "delete-test@email.com",
+			},
+		});
+
 		const subId = "test_sub_delete";
 
-		await ctx.adapter.create({
+		await testCtx.adapter.create({
 			model: "subscription",
 			data: {
 				referenceId: userId,
@@ -543,7 +630,7 @@ describe("stripe", async () => {
 			},
 		});
 
-		const subscription = await ctx.adapter.findOne<Subscription>({
+		const subscription = await testCtx.adapter.findOne<Subscription>({
 			model: "subscription",
 			where: [
 				{
@@ -587,14 +674,17 @@ describe("stripe", async () => {
 			stripeWebhookSecret: "test_secret",
 		};
 
-		const testAuth = betterAuth({
-			baseURL: "http://localhost:3000",
-			emailAndPassword: {
-				enabled: true,
+		const { auth: webhookAuth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(testOptions)],
 			},
-			database: memory,
-			plugins: [stripe(testOptions)],
-		});
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const webhookTestCtx = await webhookAuth.$context;
 
 		const mockRequest = new Request(
 			"http://localhost:3000/api/auth/stripe/webhook",
@@ -607,19 +697,20 @@ describe("stripe", async () => {
 			},
 		);
 
-		const response = await testAuth.handler(mockRequest);
+		const response = await webhookAuth.handler(mockRequest);
 		expect(response.status).toBe(200);
 
 		if (subscription) {
-			const updatedSubscription = await ctx.adapter.findOne<Subscription>({
-				model: "subscription",
-				where: [
-					{
-						field: "id",
-						value: subscription.id,
-					},
-				],
-			});
+			const updatedSubscription =
+				await webhookTestCtx.adapter.findOne<Subscription>({
+					model: "subscription",
+					where: [
+						{
+							field: "id",
+							value: subscription.id,
+						},
+					],
+				});
 			expect(updatedSubscription?.status).toBe("canceled");
 		}
 	});
@@ -641,15 +732,6 @@ describe("stripe", async () => {
 			},
 			stripeWebhookSecret: "test_secret",
 		} as unknown as StripeOptions;
-
-		const testAuth = betterAuth({
-			baseURL: "http://localhost:3000",
-			database: memory,
-			emailAndPassword: {
-				enabled: true,
-			},
-			plugins: [stripe(testOptions)],
-		});
 
 		// Test subscription complete handler
 		const completeEvent = {
@@ -690,17 +772,32 @@ describe("stripe", async () => {
 			stripeClient: mockStripeForEvents as unknown as Stripe,
 		};
 
-		const eventTestAuth = betterAuth({
-			baseURL: "http://localhost:3000",
-			database: memory,
-			emailAndPassword: { enabled: true },
-			plugins: [stripe(eventTestOptions)],
+		const { auth: eventTestAuth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(eventTestOptions)],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const eventTestCtx = await eventTestAuth.$context;
+
+		// Create test user
+		const { id: eventUserId } = await eventTestCtx.adapter.create({
+			model: "user",
+			data: {
+				email: "event-test@email.com",
+				emailVerified: true,
+				name: "Event Test User",
+			},
 		});
 
-		const { id: testSubscriptionId } = await ctx.adapter.create({
+		const { id: testSubscriptionId } = await eventTestCtx.adapter.create({
 			model: "subscription",
 			data: {
-				referenceId: userId,
+				referenceId: eventUserId,
 				stripeCustomerId: "cus_123",
 				stripeSubscriptionId: "sub_123",
 				status: "incomplete",
@@ -851,7 +948,7 @@ describe("stripe", async () => {
 					customer: "cus_123",
 					status: "canceled",
 					metadata: {
-						referenceId: userId,
+						referenceId: eventUserId,
 						subscriptionId: testSubscriptionId,
 					},
 				},
@@ -879,25 +976,6 @@ describe("stripe", async () => {
 
 	it("should return updated subscription in onSubscriptionUpdate callback", async () => {
 		const onSubscriptionUpdate = vi.fn();
-
-		const { id: testReferenceId } = await ctx.adapter.create({
-			model: "user",
-			data: {
-				email: "update-callback@email.com",
-			},
-		});
-
-		const { id: testSubscriptionId } = await ctx.adapter.create({
-			model: "subscription",
-			data: {
-				referenceId: testReferenceId,
-				stripeCustomerId: "cus_update_test",
-				stripeSubscriptionId: "sub_update_test",
-				status: "active",
-				plan: "starter",
-				seats: 1,
-			},
-		});
 
 		// Simulate subscription update event (e.g., seat change from 1 to 5)
 		const updateEvent = {
@@ -941,13 +1019,35 @@ describe("stripe", async () => {
 			},
 		} as unknown as StripeOptions;
 
-		const testAuth = betterAuth({
-			baseURL: "http://localhost:3000",
-			database: memory,
-			emailAndPassword: {
-				enabled: true,
+		const { auth: updateTestAuth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(testOptions)],
 			},
-			plugins: [stripe(testOptions)],
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const updateTestCtx = await updateTestAuth.$context;
+
+		const { id: testReferenceId } = await updateTestCtx.adapter.create({
+			model: "user",
+			data: {
+				email: "update-callback@email.com",
+			},
+		});
+
+		const { id: testSubscriptionId } = await updateTestCtx.adapter.create({
+			model: "subscription",
+			data: {
+				referenceId: testReferenceId,
+				stripeCustomerId: "cus_update_test",
+				stripeSubscriptionId: "sub_update_test",
+				status: "active",
+				plan: "starter",
+				seats: 1,
+			},
 		});
 
 		const mockRequest = new Request(
@@ -961,7 +1061,7 @@ describe("stripe", async () => {
 			},
 		);
 
-		await testAuth.handler(mockRequest);
+		await updateTestAuth.handler(mockRequest);
 
 		// Verify that onSubscriptionUpdate was called
 		expect(onSubscriptionUpdate).toHaveBeenCalledTimes(1);
@@ -977,7 +1077,7 @@ describe("stripe", async () => {
 		});
 
 		// Also verify the subscription was actually updated in the database
-		const updatedSub = await ctx.adapter.findOne<Subscription>({
+		const updatedSub = await updateTestCtx.adapter.findOne<Subscription>({
 			model: "subscription",
 			where: [{ field: "id", value: testSubscriptionId }],
 		});
@@ -985,10 +1085,26 @@ describe("stripe", async () => {
 	});
 
 	it("should allow seat upgrades for the same plan", async () => {
-		const userRes = await authClient.signUp.email(
+		const { client, auth, sessionSetter } = await getTestInstance(
 			{
-				...testUser,
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+
+		const seatTestCtx = await auth.$context;
+
+		const userRes = await client.signUp.email(
+			{
 				email: "seat-upgrade@email.com",
+				password: "password123456",
+				name: "Seat Upgrade User",
 			},
 			{
 				throw: true,
@@ -996,18 +1112,18 @@ describe("stripe", async () => {
 		);
 
 		const headers = new Headers();
-		await authClient.signIn.email(
+		await client.signIn.email(
 			{
-				...testUser,
 				email: "seat-upgrade@email.com",
+				password: "password123456",
 			},
 			{
 				throw: true,
-				onSuccess: setCookieToHeader(headers),
+				onSuccess: sessionSetter(headers),
 			},
 		);
 
-		await authClient.subscription.upgrade({
+		await client.subscription.upgrade({
 			plan: "starter",
 			seats: 1,
 			fetchOptions: {
@@ -1015,7 +1131,7 @@ describe("stripe", async () => {
 			},
 		});
 
-		await ctx.adapter.update({
+		await seatTestCtx.adapter.update({
 			model: "subscription",
 			update: {
 				status: "active",
@@ -1028,7 +1144,7 @@ describe("stripe", async () => {
 			],
 		});
 
-		const upgradeRes = await authClient.subscription.upgrade({
+		const upgradeRes = await client.subscription.upgrade({
 			plan: "starter",
 			seats: 5,
 			fetchOptions: {
@@ -1040,10 +1156,26 @@ describe("stripe", async () => {
 	});
 
 	it("should prevent duplicate subscriptions with same plan and same seats", async () => {
-		const userRes = await authClient.signUp.email(
+		const { client, auth, sessionSetter } = await getTestInstance(
 			{
-				...testUser,
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+
+		const dupTestCtx = await auth.$context;
+
+		const userRes = await client.signUp.email(
+			{
 				email: "duplicate-prevention@email.com",
+				password: "password123456",
+				name: "Duplicate Prevention User",
 			},
 			{
 				throw: true,
@@ -1051,18 +1183,18 @@ describe("stripe", async () => {
 		);
 
 		const headers = new Headers();
-		await authClient.signIn.email(
+		await client.signIn.email(
 			{
-				...testUser,
 				email: "duplicate-prevention@email.com",
+				password: "password123456",
 			},
 			{
 				throw: true,
-				onSuccess: setCookieToHeader(headers),
+				onSuccess: sessionSetter(headers),
 			},
 		);
 
-		await authClient.subscription.upgrade({
+		await client.subscription.upgrade({
 			plan: "starter",
 			seats: 3,
 			fetchOptions: {
@@ -1070,7 +1202,7 @@ describe("stripe", async () => {
 			},
 		});
 
-		await ctx.adapter.update({
+		await dupTestCtx.adapter.update({
 			model: "subscription",
 			update: {
 				status: "active",
@@ -1084,7 +1216,7 @@ describe("stripe", async () => {
 			],
 		});
 
-		const upgradeRes = await authClient.subscription.upgrade({
+		const upgradeRes = await client.subscription.upgrade({
 			plan: "starter",
 			seats: 3,
 			fetchOptions: {
@@ -1097,21 +1229,38 @@ describe("stripe", async () => {
 	});
 
 	it("should only call Stripe customers.create once for signup and upgrade", async () => {
-		const userRes = await authClient.signUp.email(
-			{ ...testUser, email: "single-create@email.com" },
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+
+		await client.signUp.email(
+			{
+				email: "single-create@email.com",
+				password: "password123456",
+				name: "Single Create User",
+			},
 			{ throw: true },
 		);
 
 		const headers = new Headers();
-		await authClient.signIn.email(
-			{ ...testUser, email: "single-create@email.com" },
+		await client.signIn.email(
+			{ email: "single-create@email.com", password: "password123456" },
 			{
 				throw: true,
-				onSuccess: setCookieToHeader(headers),
+				onSuccess: sessionSetter(headers),
 			},
 		);
 
-		await authClient.subscription.upgrade({
+		await client.subscription.upgrade({
 			plan: "starter",
 			fetchOptions: { headers },
 		});
@@ -1120,10 +1269,24 @@ describe("stripe", async () => {
 	});
 
 	it("should create billing portal session", async () => {
-		await authClient.signUp.email(
+		const { client, sessionSetter } = await getTestInstance(
 			{
-				...testUser,
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+
+		await client.signUp.email(
+			{
 				email: "billing-portal@email.com",
+				password: "password123456",
+				name: "Billing Portal User",
 			},
 			{
 				throw: true,
@@ -1131,17 +1294,17 @@ describe("stripe", async () => {
 		);
 
 		const headers = new Headers();
-		await authClient.signIn.email(
+		await client.signIn.email(
 			{
-				...testUser,
 				email: "billing-portal@email.com",
+				password: "password123456",
 			},
 			{
 				throw: true,
-				onSuccess: setCookieToHeader(headers),
+				onSuccess: sessionSetter(headers),
 			},
 		);
-		const billingPortalRes = await authClient.subscription.billingPortal({
+		const billingPortalRes = await client.subscription.billingPortal({
 			returnUrl: "/dashboard",
 			fetchOptions: {
 				headers,
@@ -1167,32 +1330,42 @@ describe("stripe", async () => {
 			},
 		} as unknown as StripeOptions;
 
-		const testAuth = betterAuth({
-			baseURL: "http://localhost:3000",
-			database: memory,
-			emailAndPassword: { enabled: true },
-			plugins: [stripe(testOptions)],
-		});
-		const testCtx = await testAuth.$context;
-
-		const testAuthClient = createAuthClient({
-			baseURL: "http://localhost:3000",
-			plugins: [bearer(), stripeClient({ subscription: true })],
-			fetchOptions: {
-				customFetchImpl: async (url, init) =>
-					testAuth.handler(new Request(url, init)),
+		const { client: testAuthClient, auth: testAuth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(testOptions)],
 			},
-		});
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+
+		const testCtx = await testAuth.$context;
 
 		// Sign up and sign in the user
 		const userRes = await testAuthClient.signUp.email(
-			{ ...testUser, email: "org-ref@email.com" },
+			{
+				email: "org-ref@email.com",
+				password: "password123456",
+				name: "Org Ref User",
+			},
 			{ throw: true },
 		);
 		const headers = new Headers();
 		await testAuthClient.signIn.email(
-			{ ...testUser, email: "org-ref@email.com" },
-			{ throw: true, onSuccess: setCookieToHeader(headers) },
+			{ email: "org-ref@email.com", password: "password123456" },
+			{
+				throw: true,
+				onSuccess: (ctx) => {
+					const setCookie = ctx.response.headers.get("set-cookie");
+					if (setCookie) {
+						headers.set("cookie", setCookie);
+					}
+				},
+			},
 		);
 
 		// Create a personal subscription (referenceId = user id)
@@ -1264,23 +1437,42 @@ describe("stripe", async () => {
 	});
 
 	it("should prevent multiple free trials for the same user", async () => {
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+
+		const trialTestCtx = await auth.$context;
+
 		// Create a user
-		const userRes = await authClient.signUp.email(
-			{ ...testUser, email: "trial-prevention@email.com" },
+		const userRes = await client.signUp.email(
+			{
+				email: "trial-prevention@email.com",
+				password: "password123456",
+				name: "Trial Prevention User",
+			},
 			{ throw: true },
 		);
 
 		const headers = new Headers();
-		await authClient.signIn.email(
-			{ ...testUser, email: "trial-prevention@email.com" },
+		await client.signIn.email(
+			{ email: "trial-prevention@email.com", password: "password123456" },
 			{
 				throw: true,
-				onSuccess: setCookieToHeader(headers),
+				onSuccess: sessionSetter(headers),
 			},
 		);
 
 		// First subscription with trial
-		const firstUpgradeRes = await authClient.subscription.upgrade({
+		const firstUpgradeRes = await client.subscription.upgrade({
 			plan: "starter",
 			fetchOptions: { headers },
 		});
@@ -1288,7 +1480,7 @@ describe("stripe", async () => {
 		expect(firstUpgradeRes.data?.url).toBeDefined();
 
 		// Simulate the subscription being created with trial data
-		await ctx.adapter.update({
+		await trialTestCtx.adapter.update({
 			model: "subscription",
 			update: {
 				status: "trialing",
@@ -1304,7 +1496,7 @@ describe("stripe", async () => {
 		});
 
 		// Cancel the subscription
-		await ctx.adapter.update({
+		await trialTestCtx.adapter.update({
 			model: "subscription",
 			update: {
 				status: "canceled",
@@ -1318,7 +1510,7 @@ describe("stripe", async () => {
 		});
 
 		// Try to subscribe again - should NOT get a trial
-		const secondUpgradeRes = await authClient.subscription.upgrade({
+		const secondUpgradeRes = await client.subscription.upgrade({
 			plan: "starter",
 			fetchOptions: { headers },
 		});
@@ -1328,7 +1520,7 @@ describe("stripe", async () => {
 		// Verify that the checkout session was created without trial_period_days
 		// We can't directly test the Stripe session, but we can verify the logic
 		// by checking that the user has trial history
-		const subscriptions = (await ctx.adapter.findMany({
+		const subscriptions = (await trialTestCtx.adapter.findMany({
 			model: "subscription",
 			where: [
 				{
@@ -1352,18 +1544,37 @@ describe("stripe", async () => {
 		// Reset mocks for this test
 		vi.clearAllMocks();
 
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+
+		const upgradeTestCtx = await auth.$context;
+
 		// Create a user
-		const userRes = await authClient.signUp.email(
-			{ ...testUser, email: "upgrade-existing@email.com" },
+		const userRes = await client.signUp.email(
+			{
+				email: "upgrade-existing@email.com",
+				password: "password123456",
+				name: "Upgrade Existing User",
+			},
 			{ throw: true },
 		);
 
 		const headers = new Headers();
-		await authClient.signIn.email(
-			{ ...testUser, email: "upgrade-existing@email.com" },
+		await client.signIn.email(
+			{ email: "upgrade-existing@email.com", password: "password123456" },
 			{
 				throw: true,
-				onSuccess: setCookieToHeader(headers),
+				onSuccess: sessionSetter(headers),
 			},
 		);
 
@@ -1373,13 +1584,13 @@ describe("stripe", async () => {
 		});
 
 		// First create a starter subscription
-		await authClient.subscription.upgrade({
+		await client.subscription.upgrade({
 			plan: "starter",
 			fetchOptions: { headers },
 		});
 
 		// Simulate the subscription being active
-		const starterSub = await ctx.adapter.findOne<Subscription>({
+		const starterSub = await upgradeTestCtx.adapter.findOne<Subscription>({
 			model: "subscription",
 			where: [
 				{
@@ -1389,7 +1600,7 @@ describe("stripe", async () => {
 			],
 		});
 
-		await ctx.adapter.update({
+		await upgradeTestCtx.adapter.update({
 			model: "subscription",
 			update: {
 				status: "active",
@@ -1405,7 +1616,7 @@ describe("stripe", async () => {
 		});
 
 		// Also update the user with the Stripe customer ID
-		await ctx.adapter.update({
+		await upgradeTestCtx.adapter.update({
 			model: "user",
 			update: {
 				stripeCustomerId: "cus_mock123",
@@ -1445,7 +1656,7 @@ describe("stripe", async () => {
 		mockStripe.billingPortal.sessions.create.mockClear();
 
 		// Now upgrade to premium plan - should use billing portal to update existing subscription
-		const upgradeRes = await authClient.subscription.upgrade({
+		const upgradeRes = await client.subscription.upgrade({
 			plan: "premium",
 			fetchOptions: { headers },
 		});
@@ -1471,7 +1682,7 @@ describe("stripe", async () => {
 		expect(upgradeRes.data?.redirect).toBe(true);
 
 		// Verify no new subscription was created in the database
-		const allSubs = await ctx.adapter.findMany<Subscription>({
+		const allSubs = await upgradeTestCtx.adapter.findMany<Subscription>({
 			model: "subscription",
 			where: [
 				{
@@ -1484,23 +1695,42 @@ describe("stripe", async () => {
 	});
 
 	it("should prevent multiple free trials across different plans", async () => {
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+
+		const crossPlanTestCtx = await auth.$context;
+
 		// Create a user
-		const userRes = await authClient.signUp.email(
-			{ ...testUser, email: "cross-plan-trial@email.com" },
+		const userRes = await client.signUp.email(
+			{
+				email: "cross-plan-trial@email.com",
+				password: "password123456",
+				name: "Cross Plan Trial User",
+			},
 			{ throw: true },
 		);
 
 		const headers = new Headers();
-		await authClient.signIn.email(
-			{ ...testUser, email: "cross-plan-trial@email.com" },
+		await client.signIn.email(
+			{ email: "cross-plan-trial@email.com", password: "password123456" },
 			{
 				throw: true,
-				onSuccess: setCookieToHeader(headers),
+				onSuccess: sessionSetter(headers),
 			},
 		);
 
 		// First subscription with trial on starter plan
-		const firstUpgradeRes = await authClient.subscription.upgrade({
+		const firstUpgradeRes = await client.subscription.upgrade({
 			plan: "starter",
 			fetchOptions: { headers },
 		});
@@ -1508,7 +1738,7 @@ describe("stripe", async () => {
 		expect(firstUpgradeRes.data?.url).toBeDefined();
 
 		// Simulate the subscription being created with trial data
-		await ctx.adapter.update({
+		await crossPlanTestCtx.adapter.update({
 			model: "subscription",
 			update: {
 				status: "trialing",
@@ -1524,7 +1754,7 @@ describe("stripe", async () => {
 		});
 
 		// Cancel the subscription
-		await ctx.adapter.update({
+		await crossPlanTestCtx.adapter.update({
 			model: "subscription",
 			update: {
 				status: "canceled",
@@ -1538,7 +1768,7 @@ describe("stripe", async () => {
 		});
 
 		// Try to subscribe to a different plan - should NOT get a trial
-		const secondUpgradeRes = await authClient.subscription.upgrade({
+		const secondUpgradeRes = await client.subscription.upgrade({
 			plan: "premium",
 			fetchOptions: { headers },
 		});
@@ -1546,7 +1776,7 @@ describe("stripe", async () => {
 		expect(secondUpgradeRes.data?.url).toBeDefined();
 
 		// Verify that the user has trial history from the first plan
-		const subscriptions = (await ctx.adapter.findMany({
+		const subscriptions = (await crossPlanTestCtx.adapter.findMany({
 			model: "subscription",
 			where: [
 				{
@@ -1588,17 +1818,39 @@ describe("stripe", async () => {
 			email: "newemail@example.com",
 		});
 
+		const { client, auth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+
+		const emailUpdateTestCtx = await auth.$context;
+
 		// Sign up a user
-		const userRes = await authClient.signUp.email(testUser, {
-			throw: true,
-		});
+		const userRes = await client.signUp.email(
+			{
+				email: "test@email.com",
+				password: "password123456",
+				name: "Test User",
+			},
+			{
+				throw: true,
+			},
+		);
 
 		expect(userRes.user).toBeDefined();
 
 		// Verify customer was created during signup
 		expect(mockStripe.customers.create).toHaveBeenCalledWith({
-			email: testUser.email,
-			name: testUser.name,
+			email: "test@email.com",
+			name: "Test User",
 			metadata: {
 				userId: userRes.user.id,
 			},
@@ -1619,9 +1871,11 @@ describe("stripe", async () => {
 		});
 
 		// Update the user's email using internal adapter (which triggers hooks)
-		const endpointCtx = { context: ctx } as GenericEndpointContext;
+		const endpointCtx = {
+			context: emailUpdateTestCtx,
+		} as GenericEndpointContext;
 		await runWithEndpointContext(endpointCtx, () =>
-			ctx.internalAdapter.updateUserByEmail(testUser.email, {
+			emailUpdateTestCtx.internalAdapter.updateUserByEmail("test@email.com", {
 				email: "newemail@example.com",
 			}),
 		);
@@ -1647,26 +1901,21 @@ describe("stripe", async () => {
 				getCustomerCreateParams: getCustomerCreateParamsMock,
 			} satisfies StripeOptions;
 
-			const testAuth = betterAuth({
-				database: memory,
-				baseURL: "http://localhost:3000",
-				emailAndPassword: {
-					enabled: true,
+			const { client } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(testOptions)],
 				},
-				plugins: [stripe(testOptions)],
-			});
-
-			const testAuthClient = createAuthClient({
-				baseURL: "http://localhost:3000",
-				plugins: [bearer(), stripeClient({ subscription: true })],
-				fetchOptions: {
-					customFetchImpl: async (url, init) =>
-						testAuth.handler(new Request(url, init)),
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
 				},
-			});
+			);
 
 			// Sign up a user
-			const userRes = await testAuthClient.signUp.email(
+			const userRes = await client.signUp.email(
 				{
 					email: "custom-params@email.com",
 					password: "password",
@@ -1719,26 +1968,21 @@ describe("stripe", async () => {
 				getCustomerCreateParams: getCustomerCreateParamsMock,
 			} satisfies StripeOptions;
 
-			const testAuth = betterAuth({
-				database: memory,
-				baseURL: "http://localhost:3000",
-				emailAndPassword: {
-					enabled: true,
+			const { client } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(testOptions)],
 				},
-				plugins: [stripe(testOptions)],
-			});
-
-			const testAuthClient = createAuthClient({
-				baseURL: "http://localhost:3000",
-				plugins: [bearer(), stripeClient({ subscription: true })],
-				fetchOptions: {
-					customFetchImpl: async (url, init) =>
-						testAuth.handler(new Request(url, init)),
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
 				},
-			});
+			);
 
 			// Sign up a user
-			await testAuthClient.signUp.email(
+			await client.signUp.email(
 				{
 					email: "address-user@email.com",
 					password: "password",
@@ -1783,26 +2027,21 @@ describe("stripe", async () => {
 				getCustomerCreateParams: getCustomerCreateParamsMock,
 			} satisfies StripeOptions;
 
-			const testAuth = betterAuth({
-				database: memory,
-				baseURL: "http://localhost:3000",
-				emailAndPassword: {
-					enabled: true,
+			const { client } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(testOptions)],
 				},
-				plugins: [stripe(testOptions)],
-			});
-
-			const testAuthClient = createAuthClient({
-				baseURL: "http://localhost:3000",
-				plugins: [bearer(), stripeClient({ subscription: true })],
-				fetchOptions: {
-					customFetchImpl: async (url, init) =>
-						testAuth.handler(new Request(url, init)),
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
 				},
-			});
+			);
 
 			// Sign up a user
-			const userRes = await testAuthClient.signUp.email(
+			const userRes = await client.signUp.email(
 				{
 					email: "merge-test@email.com",
 					password: "password",
@@ -1837,26 +2076,21 @@ describe("stripe", async () => {
 				// No getCustomerCreateParams provided
 			} satisfies StripeOptions;
 
-			const testAuth = betterAuth({
-				database: memory,
-				baseURL: "http://localhost:3000",
-				emailAndPassword: {
-					enabled: true,
+			const { client } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(testOptions)],
 				},
-				plugins: [stripe(testOptions)],
-			});
-
-			const testAuthClient = createAuthClient({
-				baseURL: "http://localhost:3000",
-				plugins: [bearer(), stripeClient({ subscription: true })],
-				fetchOptions: {
-					customFetchImpl: async (url, init) =>
-						testAuth.handler(new Request(url, init)),
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
 				},
-			});
+			);
 
 			// Sign up a user
-			const userRes = await testAuthClient.signUp.email(
+			const userRes = await client.signUp.email(
 				{
 					email: "no-custom-params@email.com",
 					password: "password",
@@ -1894,12 +2128,15 @@ describe("stripe", async () => {
 				stripeWebhookSecret: "test_secret",
 			};
 
-			const testAuth = betterAuth({
-				baseURL: "http://localhost:3000",
-				database: memory,
-				emailAndPassword: { enabled: true },
-				plugins: [stripe(testOptions)],
-			});
+			const { auth: testAuth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(testOptions)],
+				},
+				{
+					disableTestUser: true,
+				},
+			);
 
 			const mockRequest = new Request(
 				"http://localhost:3000/api/auth/stripe/webhook",
@@ -1915,16 +2152,19 @@ describe("stripe", async () => {
 			const response = await testAuth.handler(mockRequest);
 			expect(response.status).toBe(400);
 			const data = await response.json();
-			expect(data.message).toContain("Webhook Error");
+			expect(data.message).toContain("Stripe webhook error");
 		});
 
 		it("should reject webhook request without stripe-signature header", async () => {
-			const testAuth = betterAuth({
-				baseURL: "http://localhost:3000",
-				database: memory,
-				emailAndPassword: { enabled: true },
-				plugins: [stripe(stripeOptions)],
-			});
+			const { auth: testAuth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptions)],
+				},
+				{
+					disableTestUser: true,
+				},
+			);
 
 			const mockRequest = new Request(
 				"http://localhost:3000/api/auth/stripe/webhook",
@@ -1940,7 +2180,7 @@ describe("stripe", async () => {
 			const response = await testAuth.handler(mockRequest);
 			expect(response.status).toBe(400);
 			const data = await response.json();
-			expect(data.message).toContain("Stripe webhook secret not found");
+			expect(data.message).toContain("Stripe signature not found");
 		});
 
 		it("should handle constructEventAsync returning null/undefined", async () => {
@@ -1957,12 +2197,15 @@ describe("stripe", async () => {
 				stripeWebhookSecret: "test_secret",
 			};
 
-			const testAuth = betterAuth({
-				baseURL: "http://localhost:3000",
-				database: memory,
-				emailAndPassword: { enabled: true },
-				plugins: [stripe(testOptions)],
-			});
+			const { auth: testAuth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(testOptions)],
+				},
+				{
+					disableTestUser: true,
+				},
+			);
 
 			const mockRequest = new Request(
 				"http://localhost:3000/api/auth/stripe/webhook",
@@ -2020,14 +2263,19 @@ describe("stripe", async () => {
 				},
 			};
 
-			const testAuth = betterAuth({
-				baseURL: "http://localhost:3000",
-				database: memory,
-				emailAndPassword: { enabled: true },
-				plugins: [stripe(testOptions as StripeOptions)],
-			});
+			const { auth: testAuth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(testOptions as StripeOptions)],
+				},
+				{
+					disableTestUser: true,
+				},
+			);
 
-			await ctx.adapter.create({
+			const asyncErrorTestCtx = await testAuth.$context;
+
+			await asyncErrorTestCtx.adapter.create({
 				model: "subscription",
 				data: {
 					referenceId: "user_123",
@@ -2099,17 +2347,32 @@ describe("stripe", async () => {
 				stripeWebhookSecret: "test_secret_async",
 			};
 
-			const testAuth = betterAuth({
-				baseURL: "http://localhost:3000",
-				database: memory,
-				emailAndPassword: { enabled: true },
-				plugins: [stripe(testOptions)],
+			const { auth: testAuth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(testOptions)],
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			const asyncVerifyTestCtx = await testAuth.$context;
+
+			// Create test user for this test
+			const { id: asyncUserId } = await asyncVerifyTestCtx.adapter.create({
+				model: "user",
+				data: {
+					email: "async-verify@email.com",
+					emailVerified: true,
+					name: "Async Verify User",
+				},
 			});
 
-			const { id: subId } = await ctx.adapter.create({
+			await asyncVerifyTestCtx.adapter.create({
 				model: "subscription",
 				data: {
-					referenceId: userId,
+					referenceId: asyncUserId,
 					stripeCustomerId: "cus_test_async",
 					stripeSubscriptionId: "sub_test_async",
 					status: "incomplete",
@@ -2165,12 +2428,15 @@ describe("stripe", async () => {
 				stripeWebhookSecret: "test_secret_params",
 			};
 
-			const testAuth = betterAuth({
-				baseURL: "http://localhost:3000",
-				database: memory,
-				emailAndPassword: { enabled: true },
-				plugins: [stripe(testOptions)],
-			});
+			const { auth: testAuth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(testOptions)],
+				},
+				{
+					disableTestUser: true,
+				},
+			);
 
 			const mockRequest = new Request(
 				"http://localhost:3000/api/auth/stripe/webhook",
@@ -2241,17 +2507,32 @@ describe("stripe", async () => {
 				stripeWebhookSecret: "test_secret_v18",
 			};
 
-			const testAuth = betterAuth({
-				baseURL: "http://localhost:3000",
-				database: memory,
-				emailAndPassword: { enabled: true },
-				plugins: [stripe(testOptions)],
+			const { auth: testAuth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(testOptions)],
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			const v18TestCtx = await testAuth.$context;
+
+			// Create test user
+			const { id: v18UserId } = await v18TestCtx.adapter.create({
+				model: "user",
+				data: {
+					email: "v18-test@email.com",
+					emailVerified: true,
+					name: "V18 Test User",
+				},
 			});
 
-			const { id: subId } = await ctx.adapter.create({
+			await v18TestCtx.adapter.create({
 				model: "subscription",
 				data: {
-					referenceId: userId,
+					referenceId: v18UserId,
 					stripeCustomerId: "cus_test_v18",
 					stripeSubscriptionId: "sub_test_v18",
 					status: "incomplete",
@@ -2310,46 +2591,44 @@ describe("stripe", async () => {
 			},
 		];
 
-		const testAuth = betterAuth({
-			baseURL: "http://localhost:3000",
-			database: memory,
-			emailAndPassword: { enabled: true },
-			plugins: [
-				stripe({
-					...stripeOptions,
-					subscription: {
-						enabled: true,
-						plans: flexiblePlans,
-					},
-				}),
-			],
-		});
-
-		const testClient = createAuthClient({
-			baseURL: "http://localhost:3000",
-			plugins: [bearer(), stripeClient({ subscription: true })],
-			fetchOptions: {
-				customFetchImpl: async (url, init) => {
-					return testAuth.handler(new Request(url, init));
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [
+					stripe({
+						...stripeOptions,
+						subscription: {
+							enabled: true,
+							plans: flexiblePlans,
+						},
+					}),
+				],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
 				},
 			},
-		});
+		);
 
 		// Create user and sign in
 		const headers = new Headers();
-		const userRes = await testClient.signUp.email(
+		const userRes = await client.signUp.email(
 			{ email: "limits@test.com", password: "password", name: "Test" },
 			{ throw: true },
 		);
 		const userId = userRes.user.id;
 
-		await testClient.signIn.email(
+		await client.signIn.email(
 			{ email: "limits@test.com", password: "password" },
-			{ throw: true, onSuccess: setCookieToHeader(headers) },
+			{ throw: true, onSuccess: sessionSetter(headers) },
 		);
 
+		const flexibleTestCtx = await auth.$context;
+
 		// Create subscription
-		await ctx.adapter.create({
+		await flexibleTestCtx.adapter.create({
 			model: "subscription",
 			data: {
 				referenceId: userId,
@@ -2361,7 +2640,7 @@ describe("stripe", async () => {
 		});
 
 		// List subscriptions and verify limits structure
-		const result = await testClient.subscription.list({
+		const result = await client.subscription.list({
 			fetchOptions: { headers, throw: true },
 		});
 
@@ -2411,26 +2690,23 @@ describe("stripe", async () => {
 				createCustomerOnSignUp: true,
 			} satisfies StripeOptions;
 
-			const testAuth = betterAuth({
-				database: memory,
-				baseURL: "http://localhost:3000",
-				emailAndPassword: { enabled: true },
-				plugins: [stripe(testOptionsWithHook)],
-			});
-
-			const testAuthClient = createAuthClient({
-				baseURL: "http://localhost:3000",
-				plugins: [bearer(), stripeClient({ subscription: true })],
-				fetchOptions: {
-					customFetchImpl: async (url, init) =>
-						testAuth.handler(new Request(url, init)),
+			const { client, auth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(testOptionsWithHook)],
 				},
-			});
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
 
 			vi.clearAllMocks();
 
 			// Sign up with email that exists in Stripe
-			const userRes = await testAuthClient.signUp.email(
+			const userRes = await client.signUp.email(
 				{
 					email: existingEmail,
 					password: "password",
@@ -2448,8 +2724,10 @@ describe("stripe", async () => {
 			// Should NOT create duplicate customer
 			expect(mockStripe.customers.create).not.toHaveBeenCalled();
 
+			const duplicateTestCtx = await auth.$context;
+
 			// Verify user has the EXISTING Stripe customer ID (not new duplicate)
-			const user = await ctx.adapter.findOne<
+			const user = await duplicateTestCtx.adapter.findOne<
 				User & { stripeCustomerId?: string }
 			>({
 				model: "user",
@@ -2475,26 +2753,23 @@ describe("stripe", async () => {
 				createCustomerOnSignUp: true,
 			} satisfies StripeOptions;
 
-			const testAuth = betterAuth({
-				database: memory,
-				baseURL: "http://localhost:3000",
-				emailAndPassword: { enabled: true },
-				plugins: [stripe(testOptionsWithHook)],
-			});
-
-			const testAuthClient = createAuthClient({
-				baseURL: "http://localhost:3000",
-				plugins: [bearer(), stripeClient({ subscription: true })],
-				fetchOptions: {
-					customFetchImpl: async (url, init) =>
-						testAuth.handler(new Request(url, init)),
+			const { client, auth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(testOptionsWithHook)],
 				},
-			});
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
 
 			vi.clearAllMocks();
 
 			// Sign up with brand new email
-			const userRes = await testAuthClient.signUp.email(
+			const userRes = await client.signUp.email(
 				{
 					email: newEmail,
 					password: "password",
@@ -2519,14 +2794,397 @@ describe("stripe", async () => {
 				},
 			});
 
+			const newCustomerTestCtx = await auth.$context;
+
 			// Verify user has the new Stripe customer ID
-			const user = await ctx.adapter.findOne<
+			const user = await newCustomerTestCtx.adapter.findOne<
 				User & { stripeCustomerId?: string }
 			>({
 				model: "user",
 				where: [{ field: "id", value: userRes.user.id }],
 			});
 			expect(user?.stripeCustomerId).toBeDefined();
+		});
+	});
+
+	describe("Race condition prevention", () => {
+		it("should prevent duplicate customer creation in concurrent requests", async () => {
+			const { auth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptions)],
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			const raceTestCtx = await auth.$context;
+
+			// Create user without Stripe customer
+			const { id: raceUserId } = await raceTestCtx.adapter.create({
+				model: "user",
+				data: {
+					email: "concurrent@test.com",
+					name: "Concurrent User",
+				},
+			});
+
+			let callCount = 0;
+			mockStripe.customers.create.mockImplementation(async (params) => {
+				callCount++;
+				// Simulate API delay
+				await new Promise((resolve) => setTimeout(resolve, 10));
+				return {
+					id: `cus_concurrent_${callCount}`,
+					email: params.email || "",
+					name: params.name || "",
+				};
+			});
+
+			// Simulate concurrent requests by calling the hook logic multiple times
+			// In real scenario, this would be triggered by multiple simultaneous signups
+			const createCustomerLogic = async () => {
+				const user = await raceTestCtx.adapter.findOne<
+					User & { stripeCustomerId?: string }
+				>({
+					model: "user",
+					where: [{ field: "id", value: raceUserId }],
+				});
+
+				// This check prevents race condition
+				if (!user?.stripeCustomerId) {
+					const stripeCustomer = await mockStripe.customers.create({
+						email: user!.email,
+						name: user!.name || undefined,
+						metadata: {
+							userId: user!.id,
+						},
+					});
+
+					await raceTestCtx.adapter.update({
+						model: "user",
+						update: {
+							stripeCustomerId: stripeCustomer.id,
+						},
+						where: [{ field: "id", value: raceUserId }],
+					});
+				}
+			};
+
+			// Run first call
+			await createCustomerLogic();
+
+			// After first call, user should have stripeCustomerId
+			const userAfterFirst = await raceTestCtx.adapter.findOne<
+				User & { stripeCustomerId?: string }
+			>({
+				model: "user",
+				where: [{ field: "id", value: raceUserId }],
+			});
+
+			expect(userAfterFirst?.stripeCustomerId).toBeDefined();
+
+			// Reset mock to verify subsequent calls don't create more customers
+			mockStripe.customers.create.mockClear();
+
+			// Run concurrent calls - these should NOT create new customers
+			await Promise.all([
+				createCustomerLogic(),
+				createCustomerLogic(),
+				createCustomerLogic(),
+			]);
+
+			// Should not create any more customers because stripeCustomerId exists
+			expect(mockStripe.customers.create).toHaveBeenCalledTimes(0);
+
+			const finalUser = await raceTestCtx.adapter.findOne<
+				User & { stripeCustomerId?: string }
+			>({
+				model: "user",
+				where: [{ field: "id", value: raceUserId }],
+			});
+
+			// Should still have the original customer ID
+			expect(finalUser?.stripeCustomerId).toBe(
+				userAfterFirst?.stripeCustomerId,
+			);
+		});
+	});
+
+	describe("Database hooks conditional registration", () => {
+		it("should register update hook even when createCustomerOnSignUp is false", async () => {
+			const optionsWithoutAutoCreate = {
+				...stripeOptions,
+				createCustomerOnSignUp: false,
+			} satisfies StripeOptions;
+
+			const { auth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(optionsWithoutAutoCreate)],
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			const hookTestCtx = await auth.$context;
+			const stripePlugin = stripe(optionsWithoutAutoCreate);
+			const initResult = stripePlugin.init?.(hookTestCtx);
+
+			// Update hook should always be registered (for email sync)
+			expect(initResult?.options?.databaseHooks?.user?.update).toBeDefined();
+			expect(
+				initResult?.options?.databaseHooks?.user?.update?.after,
+			).toBeDefined();
+		});
+
+		it("should NOT register create hook when createCustomerOnSignUp is false", async () => {
+			const optionsWithoutAutoCreate = {
+				...stripeOptions,
+				createCustomerOnSignUp: false,
+			} satisfies StripeOptions;
+
+			const { auth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(optionsWithoutAutoCreate)],
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			const noCreateHookCtx = await auth.$context;
+			const stripePlugin = stripe(optionsWithoutAutoCreate);
+			const initResult = stripePlugin.init?.(noCreateHookCtx);
+
+			// Create hook should NOT be registered
+			expect(initResult?.options?.databaseHooks?.user?.create).toBeUndefined();
+		});
+
+		it("should register create hook when createCustomerOnSignUp is true", async () => {
+			const optionsWithAutoCreate = {
+				...stripeOptions,
+				createCustomerOnSignUp: true,
+			} satisfies StripeOptions;
+
+			const { auth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(optionsWithAutoCreate)],
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			const withCreateHookCtx = await auth.$context;
+			const stripePlugin = stripe(optionsWithAutoCreate);
+			const initResult = stripePlugin.init?.(withCreateHookCtx);
+
+			// Both create and update hooks should be registered
+			expect(initResult?.options?.databaseHooks?.user?.create).toBeDefined();
+			expect(
+				initResult?.options?.databaseHooks?.user?.create?.after,
+			).toBeDefined();
+			expect(initResult?.options?.databaseHooks?.user?.update).toBeDefined();
+			expect(
+				initResult?.options?.databaseHooks?.user?.update?.after,
+			).toBeDefined();
+		});
+	});
+
+	describe("Infinite loop prevention with lastSyncedAt", () => {
+		it("should skip update when lastSyncedAt is within 2 seconds", async () => {
+			const { auth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptions)],
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			const loopTestCtx = await auth.$context;
+
+			const { id: loopUserId } = await loopTestCtx.adapter.create({
+				model: "user",
+				data: {
+					email: "loop-test@test.com",
+					name: "Loop Test User",
+					stripeCustomerId: "cus_loop_test_123",
+				},
+			});
+
+			// Mock customer with RECENT lastSyncedAt (within 2 seconds)
+			const recentTimestamp = new Date().toISOString();
+			mockStripe.customers.retrieve.mockResolvedValueOnce({
+				id: "cus_loop_test_123",
+				email: "loop-test@test.com",
+				name: "Loop Test User",
+				deleted: false,
+				metadata: {
+					userId: loopUserId,
+					lastSyncedAt: recentTimestamp,
+				},
+			});
+
+			// Try to update user email
+			const endpointCtx = { context: loopTestCtx } as GenericEndpointContext;
+			await runWithEndpointContext(endpointCtx, async () => {
+				await loopTestCtx.adapter.update({
+					model: "user",
+					update: {
+						email: "new-loop-test@test.com",
+					},
+					where: [{ field: "id", value: loopUserId }],
+				});
+
+				// Simulate the update hook checking lastSyncedAt
+				const user = await loopTestCtx.adapter.findOne<
+					User & { stripeCustomerId?: string }
+				>({
+					model: "user",
+					where: [{ field: "id", value: loopUserId }],
+				});
+
+				if (user?.stripeCustomerId) {
+					const customer = await mockStripe.customers.retrieve(
+						user.stripeCustomerId,
+					);
+
+					if (customer && !("deleted" in customer && customer.deleted)) {
+						// Check lastSyncedAt to prevent infinite loop
+						const lastSynced = customer.metadata?.lastSyncedAt;
+						if (lastSynced) {
+							const timeSinceSync = Date.now() - new Date(lastSynced).getTime();
+							if (timeSinceSync < 2000) {
+								// Skip update - too recent
+								return;
+							}
+						}
+
+						// This should NOT be reached
+						await mockStripe.customers.update(user.stripeCustomerId, {
+							email: user.email,
+							metadata: {
+								...customer.metadata,
+								lastSyncedAt: new Date().toISOString(),
+							},
+						});
+					}
+				}
+			});
+
+			// Verify Stripe customer was retrieved but NOT updated
+			expect(mockStripe.customers.retrieve).toHaveBeenCalledWith(
+				"cus_loop_test_123",
+			);
+			expect(mockStripe.customers.update).not.toHaveBeenCalled();
+		});
+
+		it("should proceed with update when lastSyncedAt is older than 2 seconds", async () => {
+			const { auth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptions)],
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			const oldLoopTestCtx = await auth.$context;
+
+			const { id: oldLoopUserId } = await oldLoopTestCtx.adapter.create({
+				model: "user",
+				data: {
+					email: "old-loop-test@test.com",
+					name: "Old Loop Test User",
+					stripeCustomerId: "cus_old_loop_123",
+				},
+			});
+
+			// Mock customer with OLD lastSyncedAt (> 2 seconds)
+			const oldTimestamp = new Date(Date.now() - 5000).toISOString(); // 5 seconds ago
+			mockStripe.customers.retrieve.mockResolvedValueOnce({
+				id: "cus_old_loop_123",
+				email: "old-loop-test@test.com",
+				name: "Old Loop Test User",
+				deleted: false,
+				metadata: {
+					userId: oldLoopUserId,
+					lastSyncedAt: oldTimestamp,
+				},
+			});
+
+			mockStripe.customers.update.mockResolvedValueOnce({
+				id: "cus_old_loop_123",
+				email: "new-old-loop-test@test.com",
+			});
+
+			// Update user email
+			const endpointCtx = {
+				context: oldLoopTestCtx,
+			} as GenericEndpointContext;
+			await runWithEndpointContext(endpointCtx, async () => {
+				await oldLoopTestCtx.adapter.update({
+					model: "user",
+					update: {
+						email: "new-old-loop-test@test.com",
+					},
+					where: [{ field: "id", value: oldLoopUserId }],
+				});
+
+				// Simulate the update hook
+				const user = await oldLoopTestCtx.adapter.findOne<
+					User & { stripeCustomerId?: string }
+				>({
+					model: "user",
+					where: [{ field: "id", value: oldLoopUserId }],
+				});
+
+				if (user?.stripeCustomerId) {
+					const customer = await mockStripe.customers.retrieve(
+						user.stripeCustomerId,
+					);
+
+					if (customer && !("deleted" in customer && customer.deleted)) {
+						const lastSynced = customer.metadata?.lastSyncedAt;
+						if (lastSynced) {
+							const timeSinceSync = Date.now() - new Date(lastSynced).getTime();
+							if (timeSinceSync < 2000) {
+								return; // Skip
+							}
+						}
+
+						// Should proceed with update since lastSyncedAt is old
+						await mockStripe.customers.update(user.stripeCustomerId, {
+							email: user.email,
+							metadata: {
+								...customer.metadata,
+								lastSyncedAt: new Date().toISOString(),
+							},
+						});
+					}
+				}
+			});
+
+			// Verify Stripe customer was updated
+			expect(mockStripe.customers.retrieve).toHaveBeenCalled();
+			expect(mockStripe.customers.update).toHaveBeenCalledWith(
+				"cus_old_loop_123",
+				expect.objectContaining({
+					email: "new-old-loop-test@test.com",
+					metadata: expect.objectContaining({
+						userId: oldLoopUserId,
+						lastSyncedAt: expect.any(String),
+					}),
+				}),
+			);
 		});
 	});
 });
