@@ -414,4 +414,82 @@ describe("account", async () => {
 			expect(remainingGoogleAccounts.length).toBe(1);
 		});
 	});
+
+	it("should store account data cookie after oauth flow and retrieve it through getAccessToken", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			account: {
+				storeAccountCookie: true,
+			},
+		});
+
+		const ctx = await auth.$context;
+		const accountDataCookieName = ctx.authCookies.accountData.name;
+
+		const headers = new Headers();
+		email = "oauth-test@test.com";
+
+		// Start OAuth sign-in flow
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+
+		const state =
+			signInRes.data && "url" in signInRes.data && signInRes.data.url
+				? new URL(signInRes.data.url).searchParams.get("state") || ""
+				: "";
+
+		// Complete OAuth callback
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location");
+				expect(location).toBeDefined();
+				expect(location).toContain("/callback");
+
+				// Verify account data cookie is set
+				const cookies = parseSetCookieHeader(
+					context.response.headers.get("set-cookie") || "",
+				);
+				const accountDataCookie = cookies.get(accountDataCookieName);
+				expect(accountDataCookie).toBeDefined();
+				expect(accountDataCookie?.value).toBeDefined();
+
+				// Set all cookies including account data cookie
+				cookieSetter(headers)({ response: context.response });
+			},
+		});
+		const accessTokenRes = await client.getAccessToken(
+			{
+				providerId: "google",
+			},
+			{
+				headers,
+			},
+		);
+
+		expect(accessTokenRes.data).toBeDefined();
+		expect(accessTokenRes.data?.accessToken).toBe("test");
+	});
 });

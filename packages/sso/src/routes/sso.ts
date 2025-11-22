@@ -1,5 +1,5 @@
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
-import type { Account, Session, User } from "better-auth";
+import type { Account, Session, User, Verification } from "better-auth";
 import {
 	createAuthorizationURL,
 	generateState,
@@ -13,6 +13,7 @@ import {
 	sessionMiddleware,
 } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
+import { generateRandomString } from "better-auth/crypto";
 import { handleOAuthUserInfo } from "better-auth/oauth2";
 import { decodeJwt } from "jose";
 import * as saml from "samlify";
@@ -21,6 +22,7 @@ import type { IdentityProvider } from "samlify/types/src/entity-idp";
 import type { FlowResult } from "samlify/types/src/flow";
 import * as z from "zod/v4";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
+import { validateEmailDomain } from "../utils";
 
 /**
  * Safely parses a value that might be a JSON string or already a parsed object
@@ -126,7 +128,7 @@ export const spMetadata = () => {
 	);
 };
 
-export const registerSSOProvider = (options?: SSOOptions) => {
+export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 	return createAuthEndpoint(
 		"/sso/register",
 		{
@@ -358,6 +360,16 @@ export const registerSSOProvider = (options?: SSOOptions) => {
 												description:
 													"The domain of the provider, used for email matching",
 											},
+											domainVerified: {
+												type: "boolean",
+												description:
+													"A boolean indicating whether the domain has been verified or not",
+											},
+											domainVerificationToken: {
+												type: "string",
+												description:
+													"Domain verification token. It can be used to prove ownership over the SSO domain",
+											},
 											oidcConfig: {
 												type: "object",
 												properties: {
@@ -586,12 +598,13 @@ export const registerSSOProvider = (options?: SSOOptions) => {
 
 			const provider = await ctx.context.adapter.create<
 				Record<string, any>,
-				SSOProvider
+				SSOProvider<O>
 			>({
 				model: "ssoProvider",
 				data: {
 					issuer: body.issuer,
 					domain: body.domain,
+					domainVerified: false,
 					oidcConfig: body.oidcConfig
 						? JSON.stringify({
 								issuer: body.issuer,
@@ -640,6 +653,34 @@ export const registerSSOProvider = (options?: SSOOptions) => {
 				},
 			});
 
+			let domainVerificationToken: string | undefined;
+			let domainVerified: boolean | undefined;
+
+			if (options?.domainVerification?.enabled) {
+				domainVerified = false;
+				domainVerificationToken = generateRandomString(24);
+
+				await ctx.context.adapter.create<Verification>({
+					model: "verification",
+					data: {
+						identifier: options.domainVerification?.tokenPrefix
+							? `${options.domainVerification?.tokenPrefix}-${provider.providerId}`
+							: `better-auth-token-${provider.providerId}`,
+						createdAt: new Date(),
+						updatedAt: new Date(),
+						value: domainVerificationToken,
+						expiresAt: new Date(Date.now() + 3600 * 24 * 7 * 1000), // 1 week
+					},
+				});
+			}
+
+			type SSOProviderReturn = O["domainVerification"] extends { enabled: true }
+				? {
+						domainVerified: boolean;
+						domainVerificationToken: string;
+					} & SSOProvider<O>
+				: SSOProvider<O>;
+
 			return ctx.json({
 				...provider,
 				oidcConfig: JSON.parse(
@@ -649,7 +690,11 @@ export const registerSSOProvider = (options?: SSOOptions) => {
 					provider.samlConfig as unknown as string,
 				) as SAMLConfig,
 				redirectURI: `${ctx.context.baseURL}/sso/callback/${provider.providerId}`,
-			});
+				...(options?.domainVerification?.enabled ? { domainVerified } : {}),
+				...(options?.domainVerification?.enabled
+					? { domainVerificationToken }
+					: {}),
+			} as unknown as SSOProviderReturn);
 		},
 	);
 };
@@ -840,7 +885,7 @@ export const signInSSO = (options?: SSOOptions) => {
 						return res.id;
 					});
 			}
-			let provider: SSOProvider | null = null;
+			let provider: SSOProvider<SSOOptions> | null = null;
 			if (options?.defaultSSO?.length) {
 				// Find matching default SSO provider by providerId
 				const matchingDefault = providerId
@@ -862,7 +907,10 @@ export const signInSSO = (options?: SSOOptions) => {
 						oidcConfig: matchingDefault.oidcConfig,
 						samlConfig: matchingDefault.samlConfig,
 						domain: matchingDefault.domain,
-					};
+						...(options.domainVerification?.enabled
+							? { domainVerified: true }
+							: {}),
+					} as SSOProvider<SSOOptions>;
 				}
 			}
 			if (!providerId && !orgId && !domain) {
@@ -873,7 +921,7 @@ export const signInSSO = (options?: SSOOptions) => {
 			// Try to find provider in database
 			if (!provider) {
 				provider = await ctx.context.adapter
-					.findOne<SSOProvider>({
+					.findOne<SSOProvider<SSOOptions>>({
 						model: "ssoProvider",
 						where: [
 							{
@@ -925,7 +973,32 @@ export const signInSSO = (options?: SSOOptions) => {
 				}
 			}
 
+			if (
+				options?.domainVerification?.enabled &&
+				!("domainVerified" in provider && provider.domainVerified)
+			) {
+				throw new APIError("UNAUTHORIZED", {
+					message: "Provider domain has not been verified",
+				});
+			}
+
 			if (provider.oidcConfig && body.providerType !== "saml") {
+				let finalAuthUrl = provider.oidcConfig.authorizationEndpoint;
+				if (!finalAuthUrl && provider.oidcConfig.discoveryEndpoint) {
+					const discovery = await betterFetch<{
+						authorization_endpoint: string;
+					}>(provider.oidcConfig.discoveryEndpoint, {
+						method: "GET",
+					});
+					if (discovery.data) {
+						finalAuthUrl = discovery.data.authorization_endpoint;
+					}
+				}
+				if (!finalAuthUrl) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Invalid OIDC configuration. Authorization URL not found.",
+					});
+				}
 				const state = await generateState(ctx, undefined, false);
 				const redirectURI = `${ctx.context.baseURL}/sso/callback/${provider.providerId}`;
 				const authorizationURL = await createAuthorizationURL({
@@ -947,7 +1020,7 @@ export const signInSSO = (options?: SSOOptions) => {
 							"offline_access",
 						],
 					loginHint: ctx.body.loginHint || email,
-					authorizationEndpoint: provider.oidcConfig.authorizationEndpoint!,
+					authorizationEndpoint: finalAuthUrl,
 				});
 				return ctx.json({
 					url: authorizationURL.toString(),
@@ -966,8 +1039,35 @@ export const signInSSO = (options?: SSOOptions) => {
 						message: "Invalid SAML configuration",
 					});
 				}
+
+				let metadata = parsedSamlConfig.spMetadata.metadata;
+
+				if (!metadata) {
+					metadata =
+						saml
+							.SPMetadata({
+								entityID:
+									parsedSamlConfig.spMetadata?.entityID ||
+									parsedSamlConfig.issuer,
+								assertionConsumerService: [
+									{
+										Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+										Location:
+											parsedSamlConfig.callbackUrl ||
+											`${ctx.context.baseURL}/sso/saml2/sp/acs/${provider.providerId}`,
+									},
+								],
+								wantMessageSigned:
+									parsedSamlConfig.wantAssertionsSigned || false,
+								nameIDFormat: parsedSamlConfig.identifierFormat
+									? [parsedSamlConfig.identifierFormat]
+									: undefined,
+							})
+							.getMetadata() || "";
+				}
+
 				const sp = saml.ServiceProvider({
-					metadata: parsedSamlConfig.spMetadata.metadata,
+					metadata: metadata,
 					allowCreate: true,
 				});
 
@@ -1012,6 +1112,10 @@ export const callbackSSO = (options?: SSOOptions) => {
 				error: z.string().optional(),
 				error_description: z.string().optional(),
 			}),
+			allowedMediaTypes: [
+				"application/x-www-form-urlencoded",
+				"application/json",
+			],
 			metadata: {
 				isAction: false,
 				openapi: {
@@ -1044,7 +1148,7 @@ export const callbackSSO = (options?: SSOOptions) => {
 					}?error=${error}&error_description=${error_description}`,
 				);
 			}
-			let provider: SSOProvider | null = null;
+			let provider: SSOProvider<SSOOptions> | null = null;
 			if (options?.defaultSSO?.length) {
 				const matchingDefault = options.defaultSSO.find(
 					(defaultProvider) =>
@@ -1055,7 +1159,10 @@ export const callbackSSO = (options?: SSOOptions) => {
 						...matchingDefault,
 						issuer: matchingDefault.oidcConfig?.issuer || "",
 						userId: "default",
-					};
+						...(options.domainVerification?.enabled
+							? { domainVerified: true }
+							: {}),
+					} as SSOProvider<SSOOptions>;
 				}
 			}
 			if (!provider) {
@@ -1079,7 +1186,7 @@ export const callbackSSO = (options?: SSOOptions) => {
 							...res,
 							oidcConfig:
 								safeJsonParse<OIDCConfig>(res.oidcConfig) || undefined,
-						} as SSOProvider;
+						} as SSOProvider<SSOOptions>;
 					});
 			}
 			if (!provider) {
@@ -1088,6 +1195,15 @@ export const callbackSSO = (options?: SSOOptions) => {
 						errorURL || callbackURL
 					}/error?error=invalid_provider&error_description=provider not found`,
 				);
+			}
+
+			if (
+				options?.domainVerification?.enabled &&
+				!("domainVerified" in provider && provider.domainVerified)
+			) {
+				throw new APIError("UNAUTHORIZED", {
+					message: "Provider domain has not been verified",
+				});
 			}
 
 			let config = provider.oidcConfig;
@@ -1363,6 +1479,10 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			}),
 			metadata: {
 				isAction: false,
+				allowedMediaTypes: [
+					"application/x-www-form-urlencoded",
+					"application/json",
+				],
 				openapi: {
 					operationId: "handleSAMLCallback",
 					summary: "Callback URL for SAML provider",
@@ -1385,7 +1505,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 		async (ctx) => {
 			const { SAMLResponse, RelayState } = ctx.body;
 			const { providerId } = ctx.params;
-			let provider: SSOProvider | null = null;
+			let provider: SSOProvider<SSOOptions> | null = null;
 			if (options?.defaultSSO?.length) {
 				const matchingDefault = options.defaultSSO.find(
 					(defaultProvider) => defaultProvider.providerId === providerId,
@@ -1395,12 +1515,15 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 						...matchingDefault,
 						userId: "default",
 						issuer: matchingDefault.samlConfig?.issuer || "",
-					};
+						...(options.domainVerification?.enabled
+							? { domainVerified: true }
+							: {}),
+					} as SSOProvider<SSOOptions>;
 				}
 			}
 			if (!provider) {
 				provider = await ctx.context.adapter
-					.findOne<SSOProvider>({
+					.findOne<SSOProvider<SSOOptions>>({
 						model: "ssoProvider",
 						where: [{ field: "providerId", value: providerId }],
 					})
@@ -1420,6 +1543,15 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			if (!provider) {
 				throw new APIError("NOT_FOUND", {
 					message: "No provider found for the given providerId",
+				});
+			}
+
+			if (
+				options?.domainVerification?.enabled &&
+				!("domainVerified" in provider && provider.domainVerified)
+			) {
+				throw new APIError("UNAUTHORIZED", {
+					message: "Provider domain has not been verified",
 				});
 			}
 
@@ -1697,6 +1829,10 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			}),
 			metadata: {
 				isAction: false,
+				allowedMediaTypes: [
+					"application/x-www-form-urlencoded",
+					"application/json",
+				],
 				openapi: {
 					operationId: "handleSAMLAssertionConsumerService",
 					summary: "SAML Assertion Consumer Service",
@@ -1716,7 +1852,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			const { providerId } = ctx.params;
 
 			// If defaultSSO is configured, use it as the provider
-			let provider: SSOProvider | null = null;
+			let provider: SSOProvider<SSOOptions> | null = null;
 
 			if (options?.defaultSSO?.length) {
 				// For ACS endpoint, we can use the first default provider or try to match by providerId
@@ -1733,11 +1869,14 @@ export const acsEndpoint = (options?: SSOOptions) => {
 						userId: "default",
 						samlConfig: matchingDefault.samlConfig,
 						domain: matchingDefault.domain,
+						...(options.domainVerification?.enabled
+							? { domainVerified: true }
+							: {}),
 					};
 				}
 			} else {
 				provider = await ctx.context.adapter
-					.findOne<SSOProvider>({
+					.findOne<SSOProvider<SSOOptions>>({
 						model: "ssoProvider",
 						where: [
 							{
@@ -1762,6 +1901,15 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			if (!provider?.samlConfig) {
 				throw new APIError("NOT_FOUND", {
 					message: "No SAML provider found",
+				});
+			}
+
+			if (
+				options?.domainVerification?.enabled &&
+				!("domainVerified" in provider && provider.domainVerified)
+			) {
+				throw new APIError("UNAUTHORIZED", {
+					message: "Provider domain has not been verified",
 				});
 			}
 
@@ -1938,7 +2086,10 @@ export const acsEndpoint = (options?: SSOOptions) => {
 					const isTrustedProvider =
 						ctx.context.options.account?.accountLinking?.trustedProviders?.includes(
 							provider.providerId,
-						);
+						) ||
+						("domainVerified" in provider &&
+							provider.domainVerified &&
+							validateEmailDomain(userInfo.email, provider.domain));
 					if (!isTrustedProvider) {
 						throw ctx.redirect(
 							`${parsedSamlConfig.callbackUrl}?error=account_not_found`,

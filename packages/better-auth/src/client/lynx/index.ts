@@ -94,7 +94,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 				error: BetterFetchError | null;
 				refetch: (
 					queryParams?: { query?: SessionQueryParams } | undefined,
-				) => void;
+				) => Promise<void>;
 			};
 			$Infer: {
 				Session: NonNullable<Session>;
