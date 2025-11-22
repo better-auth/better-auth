@@ -897,6 +897,14 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 					description:
 						"The user Id which represents the user to be added as a member.",
 				}),
+
+				organizationId: z
+					.string()
+					.meta({
+						description:
+							"The organization ID which the team falls under. If not provided, it will default to the user's active organization.",
+					})
+					.optional(),
 			}),
 			metadata: {
 				openapi: {
@@ -944,7 +952,10 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 			const session = ctx.context.session;
 			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 
-			if (!session.session.activeOrganizationId) {
+			const organizationId =
+				ctx.body.organizationId ?? session.session.activeOrganizationId;
+
+			if (!organizationId) {
 				throw new APIError("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				});
@@ -952,7 +963,7 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 
 			const currentMember = await adapter.findMemberByOrgId({
 				userId: session.user.id,
-				organizationId: session.session.activeOrganizationId,
+				organizationId: organizationId,
 			});
 
 			if (!currentMember) {
@@ -969,7 +980,7 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 					permissions: {
 						member: ["update"],
 					},
-					organizationId: session.session.activeOrganizationId,
+					organizationId: organizationId,
 				},
 				ctx,
 			);
@@ -983,7 +994,7 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 
 			const toBeAddedMember = await adapter.findMemberByOrgId({
 				userId: ctx.body.userId,
-				organizationId: session.session.activeOrganizationId,
+				organizationId: organizationId,
 			});
 
 			if (!toBeAddedMember) {
@@ -995,7 +1006,7 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 
 			const team = await adapter.findTeamById({
 				teamId: ctx.body.teamId,
-				organizationId: session.session.activeOrganizationId,
+				organizationId: organizationId,
 			});
 
 			if (!team) {
@@ -1004,9 +1015,7 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
-			const organization = await adapter.findOrganizationById(
-				session.session.activeOrganizationId,
-			);
+			const organization = await adapter.findOrganizationById(organizationId);
 			if (!organization) {
 				throw new APIError("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
@@ -1070,6 +1079,14 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 				userId: z.coerce.string().meta({
 					description: "The user which should be removed from the team.",
 				}),
+
+				organizationId: z
+					.string()
+					.meta({
+						description:
+							"The organization ID which the team falls under. If not provided, it will default to the user's active organization.",
+					})
+					.optional(),
 			}),
 			metadata: {
 				openapi: {
@@ -1103,7 +1120,10 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 			const session = ctx.context.session;
 			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 
-			if (!session.session.activeOrganizationId) {
+			const organizationId =
+				ctx.body.organizationId ?? session.session.activeOrganizationId;
+
+			if (!organizationId) {
 				throw new APIError("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				});
@@ -1111,7 +1131,7 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 
 			const currentMember = await adapter.findMemberByOrgId({
 				userId: session.user.id,
-				organizationId: session.session.activeOrganizationId,
+				organizationId: organizationId,
 			});
 
 			if (!currentMember) {
@@ -1128,7 +1148,7 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 					permissions: {
 						member: ["delete"],
 					},
-					organizationId: session.session.activeOrganizationId,
+					organizationId: organizationId,
 				},
 				ctx,
 			);
@@ -1142,7 +1162,7 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 
 			const toBeAddedMember = await adapter.findMemberByOrgId({
 				userId: ctx.body.userId,
-				organizationId: session.session.activeOrganizationId,
+				organizationId: organizationId,
 			});
 
 			if (!toBeAddedMember) {
@@ -1154,7 +1174,7 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 
 			const team = await adapter.findTeamById({
 				teamId: ctx.body.teamId,
-				organizationId: session.session.activeOrganizationId,
+				organizationId: organizationId,
 			});
 
 			if (!team) {
@@ -1163,9 +1183,7 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
-			const organization = await adapter.findOrganizationById(
-				session.session.activeOrganizationId,
-			);
+			const organization = await adapter.findOrganizationById(organizationId);
 			if (!organization) {
 				throw new APIError("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
