@@ -18,9 +18,9 @@ import type {
 } from "../schema";
 import type { OrganizationOptions } from "../types";
 import {
-	withTransaction,
 	authorize,
 	getCurrentGraphContext,
+	runWithGraphTransaction,
 } from "@better-auth/core/context";
 import { createGraphAdapter } from "../../../context/graph-context";
 
@@ -118,9 +118,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 			}
 
 			if (!user) {
-				return ctx.json(null, {
-					status: 401,
-				});
+				throw new APIError("UNAUTHORIZED");
 			}
 			const options = ctx.context.orgOptions;
 

@@ -40,8 +40,8 @@ export async function runWithGraphContext<T>(
 	return result;
 }
 
-export function withTransaction<T extends GenericEndpointContext>(
-	endpoint: (ctx: T) => Promise<any>,
+export function withTransaction<T extends GenericEndpointContext, R = any>(
+	endpoint: (ctx: T) => Promise<R>,
 ) {
 	return async (ctx: T) => {
 		return await runWithTransaction(ctx.context.adapter, async () => {
@@ -63,8 +63,8 @@ export function runWithGraphTransaction<R>(
 	});
 }
 
-export async function authorize(
-	ctx: GenericEndpointContext,
+export async function authorize<T extends GenericEndpointContext>(
+	ctx: T,
 	subjectType: string,
 	subjectId: string,
 	permissionName: string,

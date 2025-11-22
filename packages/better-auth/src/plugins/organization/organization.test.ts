@@ -1409,25 +1409,21 @@ describe("owner can update roles", async () => {
 						type: "owner",
 						name: "Owner",
 						description: "Full organization access",
-						isBuiltIn: true,
 					},
 					{
 						type: "admin",
 						name: "Admin",
 						description: "Administrative access",
-						isBuiltIn: true,
 					},
 					{
 						type: "member",
 						name: "Member",
 						description: "Basic member access",
-						isBuiltIn: true,
 					},
 					{
 						type: "custom",
 						name: "Custom",
 						description: "Custom role",
-						isBuiltIn: false,
 					},
 				],
 			}),
@@ -1796,8 +1792,8 @@ describe("Additional Fields", async () => {
 			  }
 			| undefined
 		)[];
-	} | null;
-	let org: NonNullable<ExpectedResult>;
+	};
+	let org: ExpectedResult;
 	it("create organization", async () => {
 		try {
 			const orgRes = await auth.api.createOrganization({
@@ -1811,7 +1807,7 @@ describe("Additional Fields", async () => {
 			});
 
 			type Result = PrettifyDeep<typeof orgRes>;
-			expectTypeOf<Result>().toEqualTypeOf<ExpectedResult>({} as any);
+			expectTypeOf<Result>().toEqualTypeOf<ExpectedResult>();
 			expect(orgRes).not.toBeNull();
 			if (!orgRes) throw new Error("Organization is null");
 			org = orgRes;
@@ -1912,26 +1908,25 @@ describe("Additional Fields", async () => {
 			headers,
 		});
 		type Result = PrettifyDeep<typeof res>;
-		type Members = NonNullable<Result>["members"];
 		type Team = NonNullable<Result>["teams"][number];
-		expectTypeOf<Members>().toEqualTypeOf<
-			{
-				id: string;
-				organizationId: string;
-				role: "member" | "admin" | "owner";
-				createdAt: Date;
-				userId: string;
-				teamId?: string | undefined;
-				user: {
+		expectTypeOf(res?.members).toEqualTypeOf<
+			| {
 					id: string;
-					email: string;
-					name: string;
-					image?: string;
-				};
-				memberRequiredField: string;
-				memberOptionalField?: string | undefined;
-				memberHiddenField?: string | undefined;
-			}[]
+					organizationId: string;
+					organizationRoles: string[];
+					createdAt: Date;
+					userId: string;
+					user: {
+						id: string;
+						email: string;
+						name: string;
+						image?: string | undefined;
+					};
+					memberRequiredField: string;
+					memberOptionalField?: string | undefined;
+					memberHiddenField?: string | undefined;
+			  }[]
+			| undefined
 		>();
 		expectTypeOf<Team>().toEqualTypeOf<{
 			id: string;
@@ -1985,12 +1980,11 @@ describe("Additional Fields", async () => {
 			organizationRoles: string[];
 			createdAt: Date;
 			userId: string;
-			teamId?: string | undefined;
 			user: {
 				id: string;
 				email: string;
 				name: string;
-				image?: string;
+				image?: string | undefined;
 			};
 			memberRequiredField: string;
 			memberOptionalField?: string | undefined;
@@ -2006,7 +2000,7 @@ describe("Additional Fields", async () => {
 			inviterId: string;
 			expiresAt: Date;
 			createdAt: Date;
-			teamId?: string | undefined;
+			teamIds?: string[] | undefined;
 			invitationRequiredField: string;
 			invitationOptionalField?: string | undefined;
 			invitationHiddenField?: string | undefined;
@@ -2023,21 +2017,21 @@ describe("Additional Fields", async () => {
 		}[];
 
 		type O = typeof orgOptions;
-		type Members = PrettifyDeep<InferMember<O, false>>[];
-		type Invitations = PrettifyDeep<InferInvitation<O, false>>[];
-		type Teams = PrettifyDeep<InferTeam<O, false>>[];
+		type Members = InferMember<O, false>[];
+		type Invitations = InferInvitation<O, false>[];
+		type Teams = InferTeam<O, false>[];
 
 		expectTypeOf<Members>().toEqualTypeOf<ExpectedMembers>();
 		expectTypeOf<Invitations>().toEqualTypeOf<ExpectedInvitations>();
 		expectTypeOf<Teams>().toEqualTypeOf<ExpectedTeams>();
 
-		expectTypeOf<NonNullable<Result>>().toEqualTypeOf<{
+		expectTypeOf<Exclude<Result, null>>().toEqualTypeOf<{
 			id: string;
-			metadata?: any;
+			metadata: any;
 			createdAt: Date;
 			name: string;
 			slug: string;
-			logo?: string | null | undefined;
+			logo: string | null | undefined;
 			someRequiredField: string;
 			someOptionalField?: string | undefined;
 			someHiddenField?: string | undefined;

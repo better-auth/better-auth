@@ -51,7 +51,7 @@ export interface OrganizationOptions {
 				type: string;
 				name: string;
 				description: string;
-				relationships: string[];
+				relationships?: string[];
 		  }[]
 		| undefined;
 	/**

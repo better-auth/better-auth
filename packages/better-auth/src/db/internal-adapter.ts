@@ -6,9 +6,7 @@ import type {
 import {
 	getCurrentAdapter,
 	getCurrentAuthContext,
-	runWithGraphContext,
 	runWithGraphTransaction,
-	runWithTransaction,
 } from "@better-auth/core/context";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import type { InternalLogger } from "@better-auth/core/env";
