@@ -980,9 +980,6 @@ importers:
       '@tanstack/react-start':
         specifier: ^1.131.3
         version: 1.131.27(@libsql/client@0.15.14)(@tanstack/react-router@1.131.27(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(@vitejs/plugin-react@5.0.1(vite@7.2.2(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1)))(better-sqlite3@12.4.1)(drizzle-orm@0.41.0(@cloudflare/workers-types@4.20250903.0)(@libsql/client@0.15.14)(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.5)(better-sqlite3@12.4.1)(bun-types@1.3.1(@types/react@19.2.2))(kysely@0.28.5)(mysql2@3.14.4)(pg@8.16.3)(postgres@3.4.7)(prisma@5.22.0))(mysql2@3.14.4)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(rolldown@1.0.0-beta.50)(vite-plugin-solid@2.11.8(solid-js@1.9.9)(vite@7.2.2(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1)))(vite@7.2.2(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1))
-      '@tanstack/start-server-core':
-        specifier: ^1.131.36
-        version: 1.131.36
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
@@ -5932,10 +5929,6 @@ packages:
     resolution: {integrity: sha512-NEBNxZ/LIBIh6kvQntr6bKq57tDe55zecyTtjAmzPkYFsMy1LXEpRm5H3BPiteBMRApAjuaq+bS1qA664hLH6Q==}
     engines: {node: '>=12'}
 
-  '@tanstack/router-core@1.131.36':
-    resolution: {integrity: sha512-faGrKwrJBjJDxbcyeaOXgQcyccmzIGkwk+tnFeJuMTnH5OMfArykYnTZ9BxIrlOY2Mori9DXmYKMlig6mVqmGA==}
-    engines: {node: '>=12'}
-
   '@tanstack/router-generator@1.131.27':
     resolution: {integrity: sha512-PXBIVl45q2bBq9g0DDXLBGeKjO9eExcZd2JotLjLdIJ0I/wdxPQOBJHLPZfnmbf3vispToedRvG3b1YDWjL48g==}
     engines: {node: '>=12'}
@@ -5977,10 +5970,6 @@ packages:
     resolution: {integrity: sha512-mS3nYiBbwtHIqrxP3ba9+17+4iAcAlgIPdr/ucyblU7y6QUbDA3JRZkF+1vXYy8A/t+h/QeA4SkxvmjjPPwEpw==}
     engines: {node: '>=12'}
 
-  '@tanstack/start-client-core@1.131.36':
-    resolution: {integrity: sha512-9n12FHyxn+1YtDqSLmQxq+adUkjKrlHBg9vbLFVerH1+XpXXXsbGvLIOMPhH9muf7YxCmuA6CRLfcXqUCdjzeg==}
-    engines: {node: '>=12'}
-
   '@tanstack/start-plugin-core@1.131.27':
     resolution: {integrity: sha512-b3tXyXPIJtX8nw5tNjMx7yb1XrGUOH+LmnZvckbcWqg2G0NCnYxdU3J+PknjSYjt/Pbvy3MwKldrFOr6mqUtQQ==}
     engines: {node: '>=12'}
@@ -5989,10 +5978,6 @@ packages:
 
   '@tanstack/start-server-core@1.131.27':
     resolution: {integrity: sha512-ImPru1ozUSywM8X4c7iEcZmHUEEdGgRSBnv1glCk6rJpIEwmTJ6htOzgm7b2ukCKFBs8ULoWSvMfDaRug4/rlA==}
-    engines: {node: '>=12'}
-
-  '@tanstack/start-server-core@1.131.36':
-    resolution: {integrity: sha512-qHejodoiPWZ4Jt3USIC/UwKLj5YKWaZGPAAr8xpgega80gO+AdokNmQOf6cXvbNVYcqaB2e1lBhlgX5UPoh+5g==}
     engines: {node: '>=12'}
 
   '@tanstack/start-server-functions-client@1.131.27':
@@ -6009,10 +5994,6 @@ packages:
 
   '@tanstack/start-storage-context@1.131.27':
     resolution: {integrity: sha512-SqheDZDBFeasl/1AtBWI6MCygi9+t5rnDeXPmWKvxaXQmbc3zjvDSgYZIxbUInFswcTHRq6V3NvntTBQh9JZ4Q==}
-    engines: {node: '>=12'}
-
-  '@tanstack/start-storage-context@1.131.36':
-    resolution: {integrity: sha512-ZzZQ9hZ1AUZhMSKgK3AWdrF44knvOmhBlZclL0xe8gM6kkLUHpp8/LWngAuPVBmdU9BQ528z3g4vLX8Wvea0KA==}
     engines: {node: '>=12'}
 
   '@tanstack/store@0.7.4':
@@ -18865,16 +18846,6 @@ snapshots:
       tiny-invariant: 1.3.3
       tiny-warning: 1.0.3
 
-  '@tanstack/router-core@1.131.36':
-    dependencies:
-      '@tanstack/history': 1.131.2
-      '@tanstack/store': 0.7.4
-      cookie-es: 1.2.2
-      seroval: 1.3.2
-      seroval-plugins: 1.3.2(seroval@1.3.2)
-      tiny-invariant: 1.3.3
-      tiny-warning: 1.0.3
-
   '@tanstack/router-generator@1.131.27':
     dependencies:
       '@tanstack/router-core': 1.131.27
@@ -18962,14 +18933,6 @@ snapshots:
       tiny-invariant: 1.3.3
       tiny-warning: 1.0.3
 
-  '@tanstack/start-client-core@1.131.36':
-    dependencies:
-      '@tanstack/router-core': 1.131.36
-      '@tanstack/start-storage-context': 1.131.36
-      cookie-es: 1.2.2
-      tiny-invariant: 1.3.3
-      tiny-warning: 1.0.3
-
   '@tanstack/start-plugin-core@1.131.27(@libsql/client@0.15.14)(@tanstack/react-router@1.131.27(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(better-sqlite3@12.4.1)(drizzle-orm@0.41.0(@cloudflare/workers-types@4.20250903.0)(@libsql/client@0.15.14)(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.5)(better-sqlite3@12.4.1)(bun-types@1.3.1(@types/react@19.2.2))(kysely@0.28.5)(mysql2@3.14.4)(pg@8.16.3)(postgres@3.4.7)(prisma@5.22.0))(mysql2@3.14.4)(rolldown@1.0.0-beta.50)(vite-plugin-solid@2.11.8(solid-js@1.9.9)(vite@7.2.2(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1)))(vite@7.2.2(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1))':
     dependencies:
       '@babel/code-frame': 7.26.2
@@ -19037,18 +19000,6 @@ snapshots:
       tiny-warning: 1.0.3
       unctx: 2.4.1
 
-  '@tanstack/start-server-core@1.131.36':
-    dependencies:
-      '@tanstack/history': 1.131.2
-      '@tanstack/router-core': 1.131.36
-      '@tanstack/start-client-core': 1.131.36
-      '@tanstack/start-storage-context': 1.131.36
-      h3: 1.13.0
-      isbot: 5.1.30
-      tiny-invariant: 1.3.3
-      tiny-warning: 1.0.3
-      unctx: 2.4.1
-
   '@tanstack/start-server-functions-client@1.131.27(vite@7.2.2(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1))':
     dependencies:
       '@tanstack/server-functions-plugin': 1.131.2(vite@7.2.2(@types/node@24.9.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.1)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1))
@@ -19073,10 +19024,6 @@ snapshots:
   '@tanstack/start-storage-context@1.131.27':
     dependencies:
       '@tanstack/router-core': 1.131.27
-
-  '@tanstack/start-storage-context@1.131.36':
-    dependencies:
-      '@tanstack/router-core': 1.131.36
 
   '@tanstack/store@0.7.4': {}
 
