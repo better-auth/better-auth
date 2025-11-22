@@ -29,7 +29,6 @@ import { oidcProvider } from "../oidc-provider";
 import { schema } from "../oidc-provider/schema";
 import { parsePrompt } from "../oidc-provider/utils/prompt";
 import { authorizeMCPOAuth } from "./authorize";
-import { HIDE_METADATA } from "../../utils";
 
 interface MCPOptions {
 	loginPage: string;

@@ -49,7 +49,11 @@ export function createAuthEndpoint<
 	handler: EndpointHandler<Path, Options, R>,
 ): StrictEndpoint<Path, Options, R>;
 
-export function createAuthEndpoint<Path extends string, Options extends EndpointOptions, R>(
+export function createAuthEndpoint<
+	Path extends string,
+	Options extends EndpointOptions,
+	R,
+>(
 	options: Options,
 	handler: EndpointHandler<Path, Options, R>,
 ): StrictEndpoint<Path, Options, R>;

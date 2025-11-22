@@ -2,9 +2,9 @@ import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "../../api";
 import type { LiteralString } from "../../types/helper";
+import { HIDE_METADATA } from "../../utils";
 import { generator } from "./generator";
 import { logo } from "./logo";
-import { HIDE_METADATA } from "../../utils";
 
 export type { FieldSchema, OpenAPIModelSchema, Path } from "./generator";
 

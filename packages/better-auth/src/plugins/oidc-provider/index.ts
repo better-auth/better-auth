@@ -19,6 +19,7 @@ import {
 	symmetricEncrypt,
 } from "../../crypto";
 import { mergeSchema } from "../../db";
+import { HIDE_METADATA } from "../../utils";
 import type { jwt } from "../jwt";
 import { getJwtToken, verifyJWT } from "../jwt";
 import { authorize } from "./authorize";
@@ -33,7 +34,6 @@ import type {
 } from "./types";
 import { defaultClientSecretHasher } from "./utils";
 import { parsePrompt } from "./utils/prompt";
-import { HIDE_METADATA } from "../../utils";
 
 const getJwtPlugin = (ctx: GenericEndpointContext) => {
 	return ctx.context.options.plugins?.find(
