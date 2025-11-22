@@ -17,5 +17,6 @@ export type {
 	BetterAuthClientOptions,
 	BetterAuthClientPlugin,
 	ClientAtomListener,
+	ClientFetchOption,
 	ClientStore,
 } from "./plugin-client";
