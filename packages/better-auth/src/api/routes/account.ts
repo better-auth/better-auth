@@ -158,9 +158,6 @@ export const linkSocialAccount = createAuthEndpoint(
 						"Disable automatic redirection to the provider. Useful for handling the redirection yourself",
 				})
 				.optional(),
-			/**
-			 * The login hint to use for the authorization code request
-			 */
 			loginHint: z
 				.string()
 				.meta({
