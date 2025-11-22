@@ -9,7 +9,7 @@ import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { defaultKeyHasher } from "./utils";
 
-interface MagicLinkopts {
+export interface MagicLinkOptions {
 	/**
 	 * Time in seconds until the magic link expires.
 	 * @default (60 * 5) // 5 minutes
@@ -66,11 +66,11 @@ interface MagicLinkopts {
 		| undefined;
 }
 
-export const magicLink = (options: MagicLinkopts) => {
+export const magicLink = (options: MagicLinkOptions) => {
 	const opts = {
 		storeToken: "plain",
 		...options,
-	} satisfies MagicLinkopts;
+	} satisfies MagicLinkOptions;
 
 	async function storeToken(ctx: GenericEndpointContext, token: string) {
 		if (opts.storeToken === "hashed") {
@@ -373,7 +373,7 @@ export const magicLink = (options: MagicLinkopts) => {
 					}
 
 					if (!user.emailVerified) {
-						await ctx.context.internalAdapter.updateUser(user.id, {
+						user = await ctx.context.internalAdapter.updateUser(user.id, {
 							emailVerified: true,
 						});
 					}
