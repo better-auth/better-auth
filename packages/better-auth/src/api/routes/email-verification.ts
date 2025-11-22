@@ -388,26 +388,8 @@ export const verifyEmail = createAuthEndpoint(
 				parsed.email,
 				{
 					email: parsed.updateTo,
-					emailVerified: false,
+					emailVerified: true,
 				},
-			);
-
-			const newToken = await createEmailVerificationToken(
-				ctx.context.secret,
-				parsed.updateTo,
-			);
-
-			//send verification email to the new email
-			const updateCallbackURL = ctx.query.callbackURL
-				? encodeURIComponent(ctx.query.callbackURL)
-				: encodeURIComponent("/");
-			await ctx.context.options.emailVerification?.sendVerificationEmail?.(
-				{
-					user: updatedUser,
-					url: `${ctx.context.baseURL}/verify-email?token=${newToken}&callbackURL=${updateCallbackURL}`,
-					token: newToken,
-				},
-				ctx.request,
 			);
 
 			await setSessionCookie(ctx, {
@@ -415,7 +397,7 @@ export const verifyEmail = createAuthEndpoint(
 				user: {
 					...session.user,
 					email: parsed.updateTo,
-					emailVerified: false,
+					emailVerified: true,
 				},
 			});
 
