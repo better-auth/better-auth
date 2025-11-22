@@ -193,6 +193,7 @@ export type BetterAuthAdvancedOptions = {
 	 * - "session_token"
 	 * - "session_data"
 	 * - "dont_remember"
+	 * - "account_data"
 	 *
 	 * plugins can also add additional cookies
 	 */
@@ -254,29 +255,6 @@ export type BetterAuthAdvancedOptions = {
 				 * function.
 				 */
 				generateId?: GenerateIdFn | false | "serial" | "uuid";
-		  }
-		| undefined;
-	/**
-	 * OAuth configuration
-	 */
-	oauthConfig?:
-		| {
-				/**
-				 * Skip state cookie check
-				 *
-				 * ⚠︎ this has security implications and should only be enabled if you know what you are doing.
-				 * @default false
-				 */
-				skipStateCookieCheck?: boolean;
-				/**
-				 * Strategy for storing OAuth state
-				 *
-				 * - "cookie": Store state in an encrypted cookie (stateless)
-				 * - "database": Store state in the database
-				 *
-				 * @default "cookie"
-				 */
-				storeStateStrategy?: "database" | "cookie";
 		  }
 		| undefined;
 };
@@ -617,6 +595,7 @@ export type BetterAuthOptions = {
 					 * Send a verification email when the user changes their email.
 					 * @param data the data object
 					 * @param request the request object
+					 * @deprecated Use `sendChangeEmailConfirmation` instead
 					 */
 					sendChangeEmailVerification?: (
 						data: {
@@ -627,6 +606,25 @@ export type BetterAuthOptions = {
 						},
 						request?: Request,
 					) => Promise<void>;
+					/**
+					 * Send a confirmation email to the old email address when the user changes their email.
+					 * @param data the data object
+					 * @param request the request object
+					 */
+					sendChangeEmailConfirmation?: (
+						data: {
+							user: User;
+							newEmail: string;
+							url: string;
+							token: string;
+						},
+						request?: Request,
+					) => Promise<void>;
+					/**
+					 * Update the email without verification if the user is not verified.
+					 * @default false
+					 */
+					updateEmailWithoutVerification?: boolean;
 				};
 				/**
 				 * User deletion configuration
@@ -901,6 +899,32 @@ export type BetterAuthOptions = {
 				 * @default false
 				 */
 				encryptOAuthTokens?: boolean;
+				/**
+				 * Skip state cookie check
+				 *
+				 * ⚠︎ this has security implications and should only be enabled if you know what you are doing.
+				 * @default false
+				 */
+				skipStateCookieCheck?: boolean;
+				/**
+				 * Strategy for storing OAuth state
+				 *
+				 * - "cookie": Store state in an encrypted cookie (stateless)
+				 * - "database": Store state in the database
+				 *
+				 * @default "cookie"
+				 */
+				storeStateStrategy?: "database" | "cookie";
+				/**
+				 * Store account data after oauth flow on a cookie
+				 *
+				 * This is useful for database-less flow
+				 *
+				 * @default false
+				 *
+				 * @note This is automatically set to true if you haven't passed a database
+				 */
+				storeAccountCookie?: boolean;
 		  }
 		| undefined;
 	/**
@@ -936,14 +960,7 @@ export type BetterAuthOptions = {
 	/**
 	 * Advanced options
 	 */
-	advanced?:
-		| (BetterAuthAdvancedOptions & {
-				/**
-				 * @deprecated Please use `database.generateId` instead.
-				 */
-				generateId?: never;
-		  })
-		| undefined;
+	advanced?: BetterAuthAdvancedOptions | undefined;
 	logger?: Logger | undefined;
 	/**
 	 * allows you to define custom hooks that can be

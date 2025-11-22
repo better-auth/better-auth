@@ -47,8 +47,7 @@ export const mongodbAdapter = (
 	let lazyOptions: BetterAuthOptions | null;
 
 	const getCustomIdGenerator = (options: BetterAuthOptions) => {
-		const generator =
-			options.advanced?.database?.generateId || options.advanced?.generateId;
+		const generator = options.advanced?.database?.generateId;
 		if (typeof generator === "function") {
 			return generator;
 		}
@@ -514,10 +513,12 @@ export const mongodbAdapter = (
 						{
 							session,
 							returnDocument: "after",
+							includeResultMetadata: true,
 						},
 					);
-					if (!res) return null;
-					return res as any;
+					const doc = (res as any)?.value ?? null;
+					if (!doc) return null;
+					return doc as any;
 				},
 				async updateMany({ model, where, update: values }) {
 					const clause = convertWhereClause({ where, model });
