@@ -70,6 +70,7 @@ export const twoFactor = (options?: TwoFactorOptions | undefined) => {
 						password: z.string().meta({
 							description: "User password",
 						}),
+						twoFactorMethod: z.enum(["otp", "totp"]).default("totp"), // Default means it doesn't break any exsisting implementations
 						issuer: z
 							.string()
 							.meta({
@@ -91,18 +92,37 @@ export const twoFactor = (options?: TwoFactorOptions | undefined) => {
 											schema: {
 												type: "object",
 												properties: {
-													totpURI: {
-														type: "string",
-														description: "TOTP URI",
-													},
-													backupCodes: {
-														type: "array",
-														items: {
-															type: "string",
+													result: {
+														oneOf: [
+														{
+															type: "object",
+															properties: {
+															totpURI: {
+																type: "string",
+																description: "TOTP URI used to generate a QR code for authenticator apps (only returned when 'totp' is set as the twoFactorMethod)",
+															},
+															backupCodes: {
+																type: "array",
+																items: { type: "string" },
+																description: "List of single-use backup codes (only returned when 'totp' is set as the twoFactorMethod)",
+															},
+															},
+															required: ["totpURI", "backupCodes"],
 														},
-														description: "Backup codes",
+														{
+															type: "object",
+															properties: {
+															twoFactor: {
+																type: "boolean",
+																enum: [true],
+																description: "Indicates that 2FA was already enabled, so no setup data is returned (only returned when 'otp' is set as the twoFactorMethod)",
+															},
+															},
+															required: ["twoFactor"],
+														},
+														],
 													},
-												},
+													}
 											},
 										},
 									},
@@ -113,7 +133,7 @@ export const twoFactor = (options?: TwoFactorOptions | undefined) => {
 				},
 				async (ctx) => {
 					const user = ctx.context.session.user as UserWithTwoFactor;
-					const { password, issuer } = ctx.body;
+					const { password, issuer, twoFactorMethod } = ctx.body;
 					const isPasswordValid = await validatePassword(ctx, {
 						password,
 						userId: user.id,
@@ -132,7 +152,7 @@ export const twoFactor = (options?: TwoFactorOptions | undefined) => {
 						ctx.context.secret,
 						backupCodeOptions,
 					);
-					if (options?.skipVerificationOnEnable) {
+					if (options?.skipVerificationOnEnable || twoFactorMethod === "otp") {
 						const updatedUser = await ctx.context.internalAdapter.updateUser(
 							user.id,
 							{
@@ -156,6 +176,11 @@ export const twoFactor = (options?: TwoFactorOptions | undefined) => {
 						await ctx.context.internalAdapter.deleteSession(
 							ctx.context.session.session.token,
 						);
+
+						// there is no point creating totp stuff if we don't need to
+						if (twoFactorMethod === "otp") {
+							return ctx.json({ twoFactor: true });
+						}
 					}
 					//delete existing two factor
 					await ctx.context.adapter.deleteMany({
@@ -180,7 +205,7 @@ export const twoFactor = (options?: TwoFactorOptions | undefined) => {
 						digits: options?.totpOptions?.digits || 6,
 						period: options?.totpOptions?.period,
 					}).url(issuer || options?.issuer || ctx.context.appName, user.email);
-					return ctx.json({ totpURI, backupCodes: backupCodes.backupCodes });
+					return ctx.json({ totpURI, backupCodes: backupCodes.backupCodes });			
 				},
 			),
 			/**
