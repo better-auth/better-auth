@@ -1125,6 +1125,20 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: BASE_ERROR_CODES.USER_NOT_FOUND,
 						});
 					}
+					const minPasswordLength =
+						ctx.context.password.config.minPasswordLength;
+					if (ctx.body.password.length < minPasswordLength) {
+						throw new APIError("BAD_REQUEST", {
+							message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
+						});
+					}
+					const maxPasswordLength =
+						ctx.context.password.config.maxPasswordLength;
+					if (ctx.body.password.length > maxPasswordLength) {
+						throw new APIError("BAD_REQUEST", {
+							message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
+						});
+					}
 					const passwordHash = await ctx.context.password.hash(
 						ctx.body.password,
 					);
@@ -1160,6 +1174,11 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						});
 					}
 
+					if (
+						ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset
+					) {
+						await ctx.context.internalAdapter.deleteSessions(user.user.id);
+					}
 					return ctx.json({
 						success: true,
 					});
