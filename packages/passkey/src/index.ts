@@ -28,6 +28,8 @@ import { schema } from "./schema";
 import type { Passkey, PasskeyOptions, WebAuthnChallengeValue } from "./types";
 import { getRpID } from "./utils";
 
+export * from "./error-codes";
+
 export const passkey = (options?: PasskeyOptions | undefined) => {
 	const opts = {
 		origin: null,
