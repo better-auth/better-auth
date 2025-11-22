@@ -1,0 +1,8 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "references": [
+    {
+      "path": "../better-auth/tsconfig.json"
+    }
+  ]
+}
