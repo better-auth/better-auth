@@ -1509,4 +1509,4 @@ export type StripePlugin<O extends StripeOptions> = ReturnType<
 	typeof stripe<O>
 >;
 
-export type { Subscription, StripePlan };
+export type { Subscription, SubscriptionOptions, StripePlan };
