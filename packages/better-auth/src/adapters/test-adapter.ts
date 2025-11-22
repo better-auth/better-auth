@@ -49,12 +49,9 @@ export const testAdapter = async ({
 	/**
 	 * Any potential better-auth options overrides.
 	 */
-	overrideBetterAuthOptions?: <
-		Passed extends BetterAuthOptions,
-		Returned extends BetterAuthOptions,
-	>(
-		betterAuthOptions: Passed,
-	) => Returned;
+	overrideBetterAuthOptions?: (
+		betterAuthOptions: BetterAuthOptions,
+	) => BetterAuthOptions;
 	/**
 	 * By default we will cleanup all tables automatically,
 	 * but if you have additional cleanup logic, you can pass it here.
