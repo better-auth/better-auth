@@ -832,17 +832,56 @@ The plugin automatically creates the following SAML endpoints:
 The plugin requires additional fields in the `ssoProvider` table to store the provider's configuration.
 
 <DatabaseTable
+    modelName="ssoProvider"
     fields={[
         {
-            name: "id", type: "string", description: "A database identifier", isRequired: true, isPrimaryKey: true,
+            fieldName: "id",
+            type: "string",
+            description: "A database identifier",
         },
-        { name: "issuer", type: "string", description: "The issuer identifier", isRequired: true },
-        { name: "domain", type: "string", description: "The domain of the provider", isRequired: true },
-        { name: "oidcConfig", type: "string", description: "The OIDC configuration (JSON string)", isRequired: false },
-        { name: "samlConfig", type: "string", description: "The SAML configuration (JSON string)", isRequired: false },
-        { name: "userId", type: "string", description: "The user ID", isRequired: true, references: { model: "user", field: "id" } },
-        { name: "providerId", type: "string", description: "The provider ID. Used to identify a provider and to generate a redirect URL.", isRequired: true, isUnique: true },
-        { name: "organizationId", type: "string", description: "The organization Id. If provider is linked to an organization.", isRequired: false }
+        {
+            fieldName: "issuer",
+            type: "string",
+            description: "The issuer identifier",
+        },
+        {
+            fieldName: "domain",
+            type: "string",
+            description: "The domain of the provider",
+        },
+        {
+            fieldName: "oidcConfig",
+            type: "string",
+            description: "The OIDC configuration (JSON string)",
+            required: false,
+        },
+        {
+            fieldName: "samlConfig",
+            type: "string",
+            description: "The SAML configuration (JSON string)",
+            required: false,
+        },
+        {
+            fieldName: "userId",
+            type: "string",
+            description: "The ID of the user",
+            references: {
+                model: "user",
+                field: "id"
+            }
+        },
+        {
+            fieldName: "providerId",
+            type: "string",
+            description: "The provider ID. Used to identify a provider and to generate a redirect URL.",
+            unique: true,
+        },
+        {
+            fieldName: "organizationId",
+            type: "string",
+            description: "The organization Id. If provider is linked to an organization.",
+            required: false,
+        },
     ]}
 />
 
@@ -851,6 +890,7 @@ The plugin requires additional fields in the `ssoProvider` table to store the pr
 The `ssoProvider` schema is extended as follows:
 
 <DatabaseTable
+    modelName="ssoProvider"
     fields={[
         { name: "domainVerified", type: "boolean", description: "A flag indicating whether the provider domain has been verified.", isRequired: false },
     ]}
