@@ -1504,6 +1504,189 @@ describe("resend invitation should reuse existing", async () => {
 	});
 });
 
+describe("public invitations", async () => {
+	const { auth, signInWithTestUser, signInWithUser, cookieSetter } =
+		await getTestInstance({
+			plugins: [organization()],
+		});
+
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
+	const { headers } = await signInWithTestUser();
+	const org = await client.organization.create(
+		{
+			name: "test-public",
+			slug: "test-public",
+		},
+		{
+			headers,
+		},
+	);
+
+	let invitationId: string;
+
+	it("should create public invitation without restrictions", async () => {
+		const invite = await client.organization.inviteMember({
+			organizationId: org.data?.id as string,
+			role: "member",
+			fetchOptions: {
+				headers,
+			},
+		});
+		invitationId = invite.data?.id as string;
+
+		expect(invite.data?.email).toBeNull();
+		expect(invite.data?.status).toBe("pending");
+	});
+
+	it("should allow multiple users to accept public invitation", async () => {
+		const user1 = {
+			email: "user1@example.com",
+			password: "password123",
+			name: "User 1",
+		};
+		await client.signUp.email(user1);
+		const { headers: headers1 } = await signInWithUser(
+			user1.email,
+			user1.password,
+		);
+		const accept1 = await client.organization.acceptInvitation({
+			invitationId,
+			fetchOptions: {
+				headers: headers1,
+			},
+		});
+
+		expect(accept1.data?.invitation.status).toBe("pending");
+
+		const user2 = {
+			email: "user2@example.com",
+			password: "password123",
+			name: "User 2",
+		};
+		await client.signUp.email(user2);
+		const { headers: headers2 } = await signInWithUser(
+			user2.email,
+			user2.password,
+		);
+		const accept2 = await client.organization.acceptInvitation({
+			invitationId,
+			fetchOptions: {
+				headers: headers2,
+			},
+		});
+
+		expect(accept2.data?.invitation.status).toBe("pending");
+
+		const orgDetails = await client.organization.getFullOrganization({
+			query: {
+				organizationId: org.data?.id,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		const memberEmails = orgDetails.data?.members.map((m) => m.user?.email);
+
+		expect(memberEmails).toContain(user1.email);
+		expect(memberEmails).toContain(user2.email);
+	});
+
+	it("should not allow rejecting public invitations", async () => {
+		const user = {
+			email: "rejecter@example.com",
+			password: "password123",
+			name: "Rejecter",
+		};
+		await client.signUp.email(user);
+		const { headers: userHeaders } = await signInWithUser(
+			user.email,
+			user.password,
+		);
+
+		const reject = await client.organization.rejectInvitation({
+			invitationId,
+			fetchOptions: {
+				headers: userHeaders,
+			},
+		});
+		expect(reject.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.PUBLIC_INVITATIONS_CANNOT_BE_REJECTED,
+		);
+	});
+
+	it("should reject user with non-matching domain", async () => {
+		const invite = await client.organization.inviteMember({
+			organizationId: org.data?.id as string,
+			role: "member",
+			domainWhitelist: "example.com",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const user = {
+			email: "user@otherdomain.com",
+			password: "password123",
+			name: "Other Domain User",
+		};
+		await client.signUp.email(user);
+		const { headers: userHeaders } = await signInWithUser(
+			user.email,
+			user.password,
+		);
+
+		const accept = await client.organization.acceptInvitation({
+			invitationId: invite.data?.id as string,
+			fetchOptions: {
+				headers: userHeaders,
+			},
+		});
+		expect(accept.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.EMAIL_DOMAIN_NOT_ALLOWED,
+		);
+	});
+
+	it("should allow canceling public invitations", async () => {
+		const invite = await client.organization.inviteMember({
+			organizationId: org.data?.id as string,
+			role: "member",
+			domainWhitelist: "cancel-test.com",
+			fetchOptions: {
+				headers,
+			},
+		});
+		const inviteId = invite.data?.id as string;
+
+		const cancel = await client.organization.cancelInvitation({
+			invitationId: inviteId,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(cancel.data?.id).toBe(inviteId);
+
+		const invitations = await client.organization.listInvitations({
+			query: {
+				organizationId: org.data?.id,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		const canceledInvite = invitations.data?.find((i) => i.id === inviteId);
+		expect(canceledInvite?.status).toBe("canceled");
+	});
+});
+
 describe("owner can update roles", async () => {
 	const statement = {
 		custom: ["custom"],
@@ -2115,10 +2298,11 @@ describe("Additional Fields", async () => {
 		type ExpectedInvitations = {
 			id: string;
 			organizationId: string;
-			email: string;
+			email?: string | undefined;
 			role: "member" | "admin" | "owner";
 			status: InvitationStatus;
 			inviterId: string;
+			domainWhitelist?: string | undefined;
 			expiresAt: Date;
 			createdAt: Date;
 			teamId?: string | undefined;
@@ -2314,10 +2498,11 @@ describe("Additional Fields", async () => {
 	let invitation: {
 		id: string;
 		organizationId: string;
-		email: string;
+		email?: string | undefined;
 		role: "member" | "admin" | "owner";
 		status: InvitationStatus;
 		inviterId: string;
+		domainWhitelist?: string | undefined;
 		expiresAt: Date;
 		teamId?: string | undefined;
 		invitationRequiredField: string;
@@ -2407,10 +2592,11 @@ describe("Additional Fields", async () => {
 		type ExpectedResult = {
 			id: string;
 			organizationId: string;
-			email: string;
+			email?: string | undefined;
 			role: "member" | "admin" | "owner";
 			status: InvitationStatus;
 			inviterId: string;
+			domainWhitelist?: string | undefined;
 			createdAt: Date;
 			expiresAt: Date;
 			teamId?: string | undefined;
@@ -2441,10 +2627,11 @@ describe("Additional Fields", async () => {
 			invitation: {
 				id: string;
 				organizationId: string;
-				email: string;
+				email?: string | undefined;
 				role: "member" | "admin" | "owner";
 				status: InvitationStatus;
 				inviterId: string;
+				domainWhitelist?: string | undefined;
 				createdAt: Date;
 				expiresAt: Date;
 				teamId?: string | undefined;
@@ -2488,7 +2675,7 @@ describe("Additional Fields", async () => {
 		expectTypeOf<ResultInvitation>().toEqualTypeOf<{
 			id: string;
 			organizationId: string;
-			email: string;
+			email?: string | undefined;
 			role: "member" | "admin" | "owner";
 			status: InvitationStatus;
 			createdAt: Date;
@@ -2498,6 +2685,7 @@ describe("Additional Fields", async () => {
 			invitationOptionalField?: string | undefined;
 			invitationHiddenField?: string | undefined;
 			teamId?: string | undefined;
+			domainWhitelist?: string | undefined;
 		}>();
 		expect(invitation.invitationRequiredField).toBe("hey");
 		expect(invitation.invitationOptionalField).toBe("hey2");

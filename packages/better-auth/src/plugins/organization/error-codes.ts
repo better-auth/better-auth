@@ -88,4 +88,8 @@ export const ORGANIZATION_ERROR_CODES = defineErrorCodes({
 	INVALID_RESOURCE: "The provided permission includes an invalid resource",
 	ROLE_NAME_IS_ALREADY_TAKEN: "That role name is already taken",
 	CANNOT_DELETE_A_PRE_DEFINED_ROLE: "Cannot delete a pre-defined role",
+	EMAIL_DOMAIN_NOT_ALLOWED:
+		"Your email domain is not allowed to accept this invitation",
+	PUBLIC_INVITATIONS_CANNOT_BE_REJECTED:
+		"Public invitations cannot be rejected",
 });
