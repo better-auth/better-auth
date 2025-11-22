@@ -1303,6 +1303,28 @@ importers:
         specifier: 'catalog:'
         version: 0.16.5(ms@2.1.3)(synckit@0.11.11)(typescript@5.9.3)
 
+  packages/scim:
+    dependencies:
+      '@better-auth/utils':
+        specifier: 0.3.0
+        version: 0.3.0
+      better-auth:
+        specifier: workspace:*
+        version: link:../better-auth
+      better-call:
+        specifier: 'catalog:'
+        version: 1.0.28
+      zod:
+        specifier: ^4.1.5
+        version: 4.1.12
+    devDependencies:
+      '@better-auth/sso':
+        specifier: workspace:*
+        version: link:../sso
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.16.5(ms@2.1.3)(synckit@0.11.11)(typescript@5.9.3)
+
   packages/sso:
     dependencies:
       '@better-fetch/fetch':
