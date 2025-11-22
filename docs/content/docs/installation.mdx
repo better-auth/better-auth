@@ -75,6 +75,10 @@ export const auth = betterAuth({
 Better Auth requires a database to store user data.
 You can easily configure Better Auth to use SQLite, PostgreSQL, or MySQL, and more!
 
+<Callout>
+    You can also configure Better Auth to work in a stateless mode if you don't configure a database. See [Stateless Session Management](/docs/concepts/session-management#stateless-session-management) for more information. Note that most plugins will require a database.
+</Callout>
+
 <Tabs items={["sqlite", "postgres", "mysql"]}>
     <Tab value="sqlite">
     ```ts title="auth.ts"
