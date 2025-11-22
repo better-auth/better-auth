@@ -172,7 +172,8 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 				);
 				if (existingTeam) {
 					throw new APIError("BAD_REQUEST", {
-						message: "A team with this slug already exists in this organization",
+						message:
+							"A team with this slug already exists in this organization",
 					});
 				}
 			}
@@ -512,14 +513,20 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			const { name, slug, organizationId: __, ...additionalFields } = ctx.body.data;
+			const {
+				name,
+				slug,
+				organizationId: __,
+				...additionalFields
+			} = ctx.body.data;
 
 			// Check if slug is being updated and validate uniqueness
 			if (slug && slug !== team.slug) {
 				const existingTeam = await adapter.findTeamBySlug(slug, organizationId);
 				if (existingTeam && existingTeam.id !== team.id) {
 					throw new APIError("BAD_REQUEST", {
-						message: "A team with this slug already exists in this organization",
+						message:
+							"A team with this slug already exists in this organization",
 					});
 				}
 			}
