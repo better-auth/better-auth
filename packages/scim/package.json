@@ -1,31 +1,24 @@
 {
-  "name": "@better-auth/stripe",
-  "author": "Bereket Engida",
+  "name": "@better-auth/scim",
+  "author": "Jonathan Samines",
   "version": "1.4.0-beta.27",
   "type": "module",
-  "main": "dist/index.mjs",
+  "main": "dist/index.js",
   "license": "MIT",
-  "homepage": "https://www.better-auth.com/docs/plugins/stripe",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/better-auth/better-auth",
-    "directory": "packages/stripe"
-  },
   "keywords": [
-    "stripe",
     "auth",
-    "stripe"
+    "scim"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "module": "dist/index.mjs",
-  "description": "Stripe plugin for Better Auth",
+  "description": "SCIM plugin for Better Auth",
   "scripts": {
     "test": "vitest",
     "build": "tsdown",
     "dev": "tsdown --watch",
     "typecheck": "tsc --project tsconfig.json"
-  },
-  "publishConfig": {
-    "access": "public"
   },
   "exports": {
     ".": {
@@ -50,19 +43,15 @@
     }
   },
   "dependencies": {
-    "defu": "^6.1.4",
-    "zod": "^4.1.12"
-  },
-  "peerDependencies": {
-    "@better-auth/core": "workspace:*",
-    "better-auth": "workspace:*",
-    "stripe": "^18 || ^19 || ^20"
+    "better-call": "catalog:",
+    "@better-auth/utils": "0.3.0",
+    "zod": "^4.1.5"
   },
   "devDependencies": {
-    "@better-auth/core": "workspace:*",
-    "better-auth": "workspace:*",
-    "better-call": "catalog:",
-    "stripe": "^20.0.0",
+    "@better-auth/sso": "workspace:*",
     "tsdown": "catalog:"
+  },
+  "peerDependencies": {
+    "better-auth": "workspace:*"
   }
 }
