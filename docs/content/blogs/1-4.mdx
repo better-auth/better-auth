@@ -7,7 +7,7 @@ author:
   avatar: "/avatars/beka.jpg"
   twitter: "iambereket"
 image: "/release-og/1-4.png"
-tags: ["1.4", "stateless sessions", "SCIM", "database indexing", "database join", "SSO domain verification", "uuid"]
+tags: ["1.4", "stateless sessions", "SCIM", "database indexing", "database join", "SSO domain verification", "uuid", "device authorization"]
 ---
 
 ## Better Auth 1.4 Release
@@ -352,169 +352,160 @@ export const auth = betterAuth({
 
 ---
 
+### Device Authorization Plugin
+
+Full support for the OAuth 2.0 Device Authorization Grant (RFC 8628), allowing users to sign in on input-constrained devices like Smart TVs and gaming consoles.
+
+[👉 Read more about Device Authorization](/docs/plugins/device-authorization)
+
+```ts
+import { betterAuth } from "better-auth";
+import { deviceAuthorization } from "better-auth/plugins";
+
+export const auth = betterAuth({
+    plugins: [
+        deviceAuthorization()
+    ]
+});
+```
+
+---
+
+### Cookie-based Account Storage
+
+You can now store user account data in a signed cookie, which is perfect for stateless applications or when you want to defer database persistence.
+
+```ts
+export const auth = betterAuth({
+    account: {
+        storeAccountCookie: true
+    } 
+});
+```
+
+---
+
 
 ## ⚠️ Breaking Changes
 
 We recommend going through each breaking change to ensure a smooth upgrade.
 
-<Accordions type="single">
-  <Accordion title="Existing Auth Flows">
+### Existing Auth Flows
 
-    Minor auth flow changes to make everything smoother, faster, and more reliable.
+Minor auth flow changes to make everything smoother, faster, and more reliable.
 
-    <Accordions type="multiple">
-      <Accordion title="Change-Email Flow">
-        We've removed `sendChangeEmailVerification` from the `changeEmail` flow to use `emailVerification.sendVerificationEmail` instead.
-      </Accordion>
-      <Accordion title="Forgot Password Flow">
-        `authClient.forgotPassword` is now `authClient.requestPasswordReset`.
-      </Accordion>
-      <Accordion title="Account Info Endpoint">
-        The `accountInfo` endpoint has changed from `POST /account-info` to `GET /account-info`.
-        
-        This means any auth.api calls must change from:
+- **Change-Email Flow**: We've removed `sendChangeEmailVerification` from the `changeEmail` flow to use `emailVerification.sendVerificationEmail` instead.
+- **Forgot Password Flow**: `authClient.forgotPassword` is now `authClient.requestPasswordReset`.
+- **Account Info Endpoint**: The `accountInfo` endpoint has changed from `POST /account-info` to `GET /account-info`.
 
-        ```ts
-        auth.api.accountInfo({
-            body: {
-                // ...
-            }
-        });
-        ```
+  This means any auth.api calls must change from:
 
-        to:
+  ```ts
+  auth.api.accountInfo({
+      body: {
+          // ...
+      }
+  });
+  ```
 
-        ```ts
-        auth.api.accountInfo({
-            query: {
-                // ...
-            }
-        });
-        ```
-      </Accordion>
-    </Accordions>
-  </Accordion>
+  to:
 
-  <Accordion title="Plugin Options Changes">
+  ```ts
+  auth.api.accountInfo({
+      query: {
+          // ...
+      }
+  });
+  ```
 
-  Multiple plugin options that accept `request` as an argument for callback functions have now replaced request with `ctx` instead.
-  Passkey plugin is now moved to it's own package, and API Key mock-sessions are now disabled by default.
+### Plugin Options Changes
 
+Multiple plugin options that accept `request` as an argument for callback functions have now replaced request with `ctx` instead. Passkey plugin is now moved to its own package, and API Key mock-sessions are now disabled by default.
+
+- **Passkey Plugin**: The passkey plugin is now moved to its own package.
   
-    <Accordions type="multiple">
-      <Accordion title="Passkey Plugin">
-        The passkey plugin is now moved to it's own package.
-        Install it today:
+  Install it today:
 
-        ```package-install
-        npm install @better-auth/passkey
-        ```
-      </Accordion>
+  ```package-install
+  npm install @better-auth/passkey
+  ```
 
-      <Accordion title="Email OTP Plugin">
-        Plugin options for `sendVerificationOTP` and `generateOTP` now use `ctx` instead of `request` in it's callback function.
-        You can still access request via `ctx.request`.
-      </Accordion>
+- **Email OTP Plugin**: Plugin options for `sendVerificationOTP` and `generateOTP` now use `ctx` instead of `request` in its callback function. You can still access request via `ctx.request`.
 
-      <Accordion title="Magic Link Plugin">
-        Plugin options for `sendMagicLink` now uses `ctx` instead of `request` for one of it's callback options.
-        You can still access request via `ctx.request`.
-      </Accordion>
+- **Magic Link Plugin**: Plugin options for `sendMagicLink` now uses `ctx` instead of `request` for one of its callback options. You can still access request via `ctx.request`.
 
-      <Accordion title="Phone Number Plugin">
-        Plugin options for `sendOTP`, `sendPasswordResetOTP` & `callbackOnVerification` have now replaced request
-        with `ctx` in one of it's callback options. You can still access request via `ctx.request`.
-      </Accordion>
+- **Phone Number Plugin**: Plugin options for `sendOTP`, `sendPasswordResetOTP` & `callbackOnVerification` have now replaced request with `ctx` in one of its callback options. You can still access request via `ctx.request`.
 
-      <Accordion title="Organization Plugin">
-        Plugin options for `teams.defaultTeam.customCreateDefaultTeam` & `teams.maximumTeams` have now replaced request with `ctx`
-        for one of it's callback options. You can still access request via `ctx.request`.
-      </Accordion>
+- **Organization Plugin**: Plugin options for `teams.defaultTeam.customCreateDefaultTeam` & `teams.maximumTeams` have now replaced request with `ctx` for one of its callback options. You can still access request via `ctx.request`.
 
-      <Accordion title="OIDC Plugin">
-        The field `redirectURLs` have been updated to `redirectUrls`, this requires database migration.
-      </Accordion>
+- **OIDC Plugin**: The field `redirectURLs` have been updated to `redirectUrls`, this requires database migration.
 
-      <Accordion title="API Key Plugin">
-        Mock-sessions by api-keys are now disabled by default, and should be enabled through the auth-config first.
-      </Accordion>
-    </Accordions>
-  </Accordion>
+- **API Key Plugin**: Mock-sessions by api-keys are now disabled by default, and should be enabled through the auth-config first.
 
-    <Accordion title="Auth Config Changes">
+### Auth Config Changes
 
-    Database configuration options changes.
+Database configuration options changes.
 
-    <Accordions type="multiple">
-      <Accordion title="`advanced.generateId` removed">
-        The long-deprecated `advanced.generateId` has been removed. Please use `advanced.database.generateId` instead.
-      </Accordion>
-      <Accordion title="`advanced.database.useNumberId` moved">
-        `advanced.database.useNumberId` has been moved to `advanced.database.generateId: "serial"` instead.
-      </Accordion>
-    </Accordions>
-  </Accordion>
+- **`advanced.generateId` removed**: The long-deprecated `advanced.generateId` has been removed. Please use `advanced.database.generateId` instead.
+- **`advanced.database.useNumberId` moved**: `advanced.database.useNumberId` has been moved to `advanced.database.generateId: "serial"` instead.
 
-
-    <Accordion title="Tanstack Start">
+### Tanstack Start
 
         The Better-Auth offered `reactStartCookies` plugin is now moved to `tanstackStartCookies` plugin.
 
-        ```diff
-        - import { reactStartCookies } from "better-auth/react-start";
-        + import { tanstackStartCookies } from "better-auth/tanstack-start";
+```diff
+- import { reactStartCookies } from "better-auth/react-start";
++ import { tanstackStartCookies } from "better-auth/tanstack-start";
 
-        export const auth = betterAuth({
-        -    plugins: [reactStartCookies()],
-        +    plugins: [tanstackStartCookies()],
-        });
-        ```
-    </Accordion>
+export const auth = betterAuth({
+-    plugins: [reactStartCookies()],
++    plugins: [tanstackStartCookies()],
+});
+```
 
-    <Accordion title="Expo">
-        With the new pooling features for `useSession` on Expo, you're required to install `expo-network`:
+### Expo
 
-        ```package-install
-        npx expo install expo-network
-        ```
-    </Accordion>
+With the new pooling features for `useSession` on Expo, you're required to install `expo-network`:
 
+```package-install
+npx expo install expo-network
+```
 
+### Cloudflare Runtime
 
-  <Accordion title="Cloudflare Runtime">
+Better Auth uses AsyncLocalStorage for async context tracking.
+To enable this in Cloudflare Workers, add the `nodejs_compat` flag to your `wrangler.toml`:
 
-    Better Auth uses AsyncLocalStorage for async context tracking.
-    To enable this in Cloudflare Workers, add the `nodejs_compat` flag to your `wrangler.toml`:
+```toml title="wrangler.toml"
+compatibility_flags = ["nodejs_compat"]
+compatibility_date = "2024-09-23"
+```
 
-    ```toml title="wrangler.toml"
-    compatibility_flags = ["nodejs_compat"]
-    compatibility_date = "2024-09-23"
-    ```
+Alternatively, if you only need AsyncLocalStorage support:
+```toml title="wrangler.toml"
+compatibility_flags = ["nodejs_als"]
+```
 
-    Alternatively, if you only need AsyncLocalStorage support:
-    ```toml title="wrangler.toml"
-    compatibility_flags = ["nodejs_als"]
-    ```
-
-    In the next major release, we will assume AsyncLocalStorage support by default, so this configuration will be necessary.
-  </Accordion>
-
-
-  
-</Accordions>
+In the next major release, we will assume AsyncLocalStorage support by default, so this configuration will be necessary.
 
 ---
 
 ## ✨ More Features
 
-- Cookie chunking now supported; no more cookie size exceeding errors
-- Better-Auth is now 100% ESM.
-- Session refetch via polling & on browser refocus.
-- Better-Auth CLI supports Cloudflare Workers virtual module imports.
-- Common OAuth flow errors are now [documented](/docs/errors).
-- Last-Login-Method plugin now supports tracking SIWE & Passkey.
-- Several new social providers.
-- And many more features & security improvements!
+- **Cookie Chunking**: No more cookie size exceeding errors.
+- **MongoDB String IDs**: Support for using String IDs instead of ObjectIDs in MongoDB.
+- **JWE Cookie Cache**: Session store cookie cache now uses JWE by default for enhanced security.
+- **OIDC RP-Initiated Logout**: Trigger logout at the OIDC provider.
+- **Server-side IP Detection**: Automatic client IP detection utility.
+- **Custom OTP Verification**: Allow custom logic for OTP verification in the Phone Number plugin.
+- **Client `disableSignal`**: Option to disable default abort signal behavior in the client.
+- **`AuthClient` Type Helper**: New type helper for better client-side type inference.
+- **New Providers**: Polar and Paybin OAuth providers added.
+- **ESM Only**: Better-Auth is now 100% ESM.
+- **Session Refetching**: Support for polling & on-window-focus refetching.
+- **Cloudflare Workers**: CLI support for virtual module imports.
+- **Error Documentation**: Common OAuth flow errors are now [documented](/docs/errors).
+- **Last-Login-Method**: Support for tracking SIWE & Passkey.
 
 ---
 
