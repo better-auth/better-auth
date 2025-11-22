@@ -1144,7 +1144,7 @@ describe("base context creation", () => {
 			vi.stubEnv("AUTH_SECRET", "");
 
 			const { DEFAULT_SECRET } = await import("../utils/constants");
-			
+
 			const ctx = await initBase({
 				secret: DEFAULT_SECRET,
 			});
@@ -1226,7 +1226,7 @@ describe("base context creation", () => {
 			const ctx = await initBase({
 				secret: "",
 			});
-		
+
 			expect(ctx.secret).toBe(DEFAULT_SECRET);
 
 			vi.unstubAllEnvs();
