@@ -31,10 +31,12 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 		"/get-session",
 		{
 			method: "GET",
+			operationId: "getSession",
 			query: getSessionQuerySchema,
 			requireHeaders: true,
 			metadata: {
 				openapi: {
+					operationId: "getSession",
 					description: "Get the current session",
 					responses: {
 						"200": {
@@ -467,6 +469,7 @@ export const getSessionFromCtx = async <
 		asResponse: false,
 		headers: ctx.headers!,
 		returnHeaders: false,
+		returnStatus: false,
 		query: {
 			...config,
 			...ctx.query,
@@ -541,8 +544,9 @@ export const freshSessionMiddleware = createAuthMiddleware(async (ctx) => {
 		};
 	}
 	const freshAge = ctx.context.sessionConfig.freshAge;
-	const lastUpdated =
-		session.session.updatedAt?.valueOf() || session.session.createdAt.valueOf();
+	const lastUpdated = new Date(
+		session.session.updatedAt || session.session.createdAt,
+	).getTime();
 	const now = Date.now();
 	const isFresh = now - lastUpdated < freshAge * 1000;
 	if (!isFresh) {
@@ -562,10 +566,12 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 		"/list-sessions",
 		{
 			method: "GET",
+			operationId: "listUserSessions",
 			use: [sessionMiddleware],
 			requireHeaders: true,
 			metadata: {
 				openapi: {
+					operationId: "listUserSessions",
 					description: "List all active sessions for the user",
 					responses: {
 						"200": {
@@ -661,25 +667,20 @@ export const revokeSession = createAuthEndpoint(
 	},
 	async (ctx) => {
 		const token = ctx.body.token;
-		const findSession = await ctx.context.internalAdapter.findSession(token);
-		if (!findSession) {
-			throw new APIError("BAD_REQUEST", {
-				message: "Session not found",
-			});
-		}
-		if (findSession.session.userId !== ctx.context.session.user.id) {
-			throw new APIError("UNAUTHORIZED");
-		}
-		try {
-			await ctx.context.internalAdapter.deleteSession(token);
-		} catch (error) {
-			ctx.context.logger.error(
-				error && typeof error === "object" && "name" in error
-					? (error.name as string)
-					: "",
-				error,
-			);
-			throw new APIError("INTERNAL_SERVER_ERROR");
+		const session = await ctx.context.internalAdapter.findSession(token);
+
+		if (session?.session.userId === ctx.context.session.user.id) {
+			try {
+				await ctx.context.internalAdapter.deleteSession(token);
+			} catch (error) {
+				ctx.context.logger.error(
+					error && typeof error === "object" && "name" in error
+						? (error.name as string)
+						: "",
+					error,
+				);
+				throw new APIError("INTERNAL_SERVER_ERROR");
+			}
 		}
 		return ctx.json({
 			status: true,

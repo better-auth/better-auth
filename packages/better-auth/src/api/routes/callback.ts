@@ -21,9 +21,16 @@ export const callbackOAuth = createAuthEndpoint(
 	"/callback/:id",
 	{
 		method: ["GET", "POST"],
+		operationId: "handleOAuthCallback",
 		body: schema.optional(),
 		query: schema.optional(),
-		metadata: HIDE_METADATA,
+		metadata: {
+			...HIDE_METADATA,
+			allowedMediaTypes: [
+				"application/x-www-form-urlencoded",
+				"application/json",
+			],
+		},
 	},
 	async (c) => {
 		let queryOrBody: z.infer<typeof schema>;
@@ -214,7 +221,12 @@ export const callbackOAuth = createAuthEndpoint(
 			);
 			return redirectOnError("email_not_found");
 		}
-
+		const accountData = {
+			providerId: provider.id,
+			accountId: String(userInfo.id),
+			...tokens,
+			scope: tokens.scopes?.join(","),
+		};
 		const result = await handleOAuthUserInfo(c, {
 			userInfo: {
 				...userInfo,
@@ -222,12 +234,7 @@ export const callbackOAuth = createAuthEndpoint(
 				email: userInfo.email,
 				name: userInfo.name || userInfo.email,
 			},
-			account: {
-				providerId: provider.id,
-				accountId: String(userInfo.id),
-				...tokens,
-				scope: tokens.scopes?.join(","),
-			},
+			account: accountData,
 			callbackURL,
 			disableSignUp:
 				(provider.disableImplicitSignUp && !requestSignUp) ||
@@ -243,6 +250,7 @@ export const callbackOAuth = createAuthEndpoint(
 			session,
 			user,
 		});
+
 		let toRedirectTo: string;
 		try {
 			const url = result.isRegister ? newUserURL || callbackURL : callbackURL;

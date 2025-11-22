@@ -3,10 +3,8 @@ import { APIError } from "better-call";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../../api";
 import { setSessionCookie } from "../../../cookies";
-import {
-	type InferAdditionalFieldsFromPluginOptions,
-	toZodSchema,
-} from "../../../db";
+import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
+import { toZodSchema } from "../../../db";
 import type { PrettifyDeep } from "../../../types/helper";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
@@ -148,7 +146,7 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 								organizationId,
 								session,
 							},
-							ctx.request,
+							ctx,
 						)
 					: ctx.context.orgOptions.teams?.maximumTeams;
 

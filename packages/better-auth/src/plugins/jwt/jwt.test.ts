@@ -1,4 +1,5 @@
-import { createLocalJWKSet, type JSONWebKeySet, jwtVerify } from "jose";
+import type { JSONWebKeySet } from "jose";
+import { createLocalJWKSet, jwtVerify } from "jose";
 import { describe, expect, it } from "vitest";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -362,6 +363,12 @@ describe.each([
 		const jwks = await auth.api.getJwks();
 		const localJwks = createLocalJWKSet(jwks);
 		const decoded = await jwtVerify(jwt?.token!, localJwks);
+
+		// Verify the kid from the JWT exists in the JWKS
+		const kidFromJwt = decoded.protectedHeader.kid;
+		const keyExists = jwks.keys.some((key) => key.kid === kidFromJwt);
+		expect(keyExists).toBe(true);
+
 		expect(decoded).toMatchObject({
 			payload: {
 				iss: "https://example.com",
@@ -373,7 +380,7 @@ describe.each([
 			},
 			protectedHeader: {
 				alg: keyPairConfig.alg,
-				kid: jwks.keys[0]!.kid,
+				kid: expect.any(String),
 			},
 		});
 	});
@@ -711,9 +718,6 @@ describe("jwt - custom adapter", async () => {
 					adapter: {
 						getJwks: async () => {
 							return storage;
-						},
-						getLatestKey: async () => {
-							return storage[0] ?? null;
 						},
 						createJwk: async (data) => {
 							const key = {

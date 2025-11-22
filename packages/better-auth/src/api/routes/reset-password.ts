@@ -35,6 +35,7 @@ export const requestPasswordReset = createAuthEndpoint(
 	"/request-password-reset",
 	{
 		method: "POST",
+		operationId: "forgetPassword",
 		body: z.object({
 			/**
 			 * The email address of the user to send a password reset email to.
@@ -59,6 +60,7 @@ export const requestPasswordReset = createAuthEndpoint(
 		}),
 		metadata: {
 			openapi: {
+				operationId: "forgetPassword",
 				description: "Send a password reset email to the user",
 				responses: {
 					"200": {
@@ -98,6 +100,14 @@ export const requestPasswordReset = createAuthEndpoint(
 			includeAccounts: true,
 		});
 		if (!user) {
+			/**
+			 * We simulate the verification token generation and the database lookup
+			 * to mitigate timing attacks.
+			 */
+			generateId(24);
+			await ctx.context.internalAdapter.findVerificationValue(
+				"dummy-verification-token",
+			);
 			ctx.context.logger.error("Reset Password: User not found", { email });
 			return ctx.json({
 				status: true,
@@ -119,14 +129,22 @@ export const requestPasswordReset = createAuthEndpoint(
 		});
 		const callbackURL = redirectTo ? encodeURIComponent(redirectTo) : "";
 		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${callbackURL}`;
-		await ctx.context.options.emailAndPassword.sendResetPassword(
-			{
-				user: user.user,
-				url,
-				token: verificationToken,
-			},
-			ctx.request,
-		);
+		/**
+		 * We send the email in the background to prevent timing attacks.
+		 * This is to ensure that the response time is consistent regardless of whether the email was sent or not.
+		 */
+		void ctx.context.options.emailAndPassword
+			.sendResetPassword(
+				{
+					user: user.user,
+					url,
+					token: verificationToken,
+				},
+				ctx.request,
+			)
+			.catch((e) => {
+				ctx.context.logger.error("Failed to send reset password email", e);
+			});
 		return ctx.json({
 			status: true,
 			message:
@@ -139,6 +157,7 @@ export const requestPasswordResetCallback = createAuthEndpoint(
 	"/reset-password/:token",
 	{
 		method: "GET",
+		operationId: "forgetPasswordCallback",
 		query: z.object({
 			callbackURL: z.string().meta({
 				description: "The URL to redirect the user to reset their password",
@@ -147,7 +166,28 @@ export const requestPasswordResetCallback = createAuthEndpoint(
 		use: [originCheck((ctx) => ctx.query.callbackURL)],
 		metadata: {
 			openapi: {
+				operationId: "resetPasswordCallback",
 				description: "Redirects the user to the callback URL with the token",
+				parameters: [
+					{
+						name: "token",
+						in: "path",
+						required: true,
+						description: "The token to reset the password",
+						schema: {
+							type: "string",
+						},
+					},
+					{
+						name: "callbackURL",
+						in: "query",
+						required: true,
+						description: "The URL to redirect the user to reset their password",
+						schema: {
+							type: "string",
+						},
+					},
+				],
 				responses: {
 					"200": {
 						description: "Success",
@@ -194,6 +234,7 @@ export const resetPassword = createAuthEndpoint(
 	"/reset-password",
 	{
 		method: "POST",
+		operationId: "resetPassword",
 		query: z
 			.object({
 				token: z.string().optional(),
@@ -212,6 +253,7 @@ export const resetPassword = createAuthEndpoint(
 		}),
 		metadata: {
 			openapi: {
+				operationId: "resetPassword",
 				description: "Reset the password for a user",
 				responses: {
 					"200": {
