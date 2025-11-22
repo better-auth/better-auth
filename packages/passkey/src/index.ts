@@ -252,7 +252,7 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 			generatePasskeyAuthenticationOptions: createAuthEndpoint(
 				"/passkey/generate-authenticate-options",
 				{
-					method: "POST",
+					method: "GET",
 					metadata: {
 						openapi: {
 							operationId: "passkeyGenerateAuthenticateOptions",
