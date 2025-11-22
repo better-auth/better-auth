@@ -349,7 +349,7 @@ describe("team", async (it) => {
 });
 
 describe("mulit team support", async (it) => {
-	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance(
+	const { auth, signInWithTestUser } = await getTestInstance(
 		{
 			plugins: [
 				organization({
@@ -864,7 +864,7 @@ describe("mulit team support", async (it) => {
 });
 
 describe("team slug", async (it) => {
-	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance({
+	const { auth, signInWithTestUser } = await getTestInstance({
 		user: {
 			modelName: "users",
 		},

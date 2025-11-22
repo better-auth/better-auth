@@ -172,8 +172,7 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 				);
 				if (existingTeam) {
 					throw new APIError("BAD_REQUEST", {
-						message:
-							"A team with this slug already exists in this organization",
+						message: ORGANIZATION_ERROR_CODES.TEAM_SLUG_ALREADY_TAKEN,
 					});
 				}
 			}
@@ -525,8 +524,7 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 				const existingTeam = await adapter.findTeamBySlug(slug, organizationId);
 				if (existingTeam && existingTeam.id !== team.id) {
 					throw new APIError("BAD_REQUEST", {
-						message:
-							"A team with this slug already exists in this organization",
+						message: ORGANIZATION_ERROR_CODES.TEAM_SLUG_ALREADY_TAKEN,
 					});
 				}
 			}
