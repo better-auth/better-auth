@@ -1616,6 +1616,14 @@ type listOrgRoles = {
      * The organization ID which the roles are under to list. Defaults to the user's active organization. 
      */
     organizationId?: string = "organization-id"
+    /**
+     * The number of roles to return.
+     */
+    limit?: number = 100
+    /**
+     * The offset to start from.
+     */
+    offset?: number = 0
 }
 ```
 </APIMethod>
@@ -1875,6 +1883,14 @@ type listOrganizationTeams = {
     * The organization ID which the teams are under to list. Defaults to the user's active organization. 
     */
     organizationId?: string = "organization-id"
+    /**
+     * The number of teams to return.
+     */
+    limit?: number = 100
+    /**
+     * The offset to start from.
+     */
+    offset?: number = 0
 }
 ```
 </APIMethod>
@@ -1975,6 +1991,14 @@ type listTeamMembers = {
      * The team whose members we should return. If this is not provided the members of the current active team get returned.
      */
     teamId?: string = "team-id"
+    /**
+     * The number of team members to return.
+     */
+    limit?: number = 100
+    /**
+     * The offset to start from.
+     */
+    offset?: number = 0
 }
 ```
 </APIMethod>
