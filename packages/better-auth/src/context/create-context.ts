@@ -8,7 +8,7 @@ import { socialProviders } from "@better-auth/core/social-providers";
 import { createTelemetry } from "@better-auth/telemetry";
 import defu from "defu";
 import type { Entries } from "type-fest";
-import { checkEndpointConflicts } from "../api";
+import { APIError, checkEndpointConflicts } from "../api";
 import { createCookieGetter, getCookies } from "../cookies";
 import { hashPassword, verifyPassword } from "../crypto/password";
 import { getAuthTables } from "../db/get-tables";
@@ -211,6 +211,38 @@ export async function createAuthContext(
 				: isTest()
 					? true
 					: false,
+		handleErrorRedirect: async (
+			{ error, error_description },
+			redirectOptions,
+		) => {
+			let baseURL: string;
+
+			if (redirectOptions?.overrideErrorURL) {
+				baseURL = redirectOptions.overrideErrorURL;
+			} else {
+				const errorURLConfig = options.onAPIError?.errorURL;
+				if (typeof errorURLConfig === "function") {
+					baseURL = await errorURLConfig({ error, error_description });
+				} else {
+					const defaultPath =
+						redirectOptions?.defaultErrorPath || "/api/auth/error";
+					baseURL = errorURLConfig || `${options.baseURL}${defaultPath}`;
+				}
+			}
+
+			const params = new URLSearchParams();
+			params.set("error", error);
+			if (error_description) {
+				params.set("error_description", error_description);
+			}
+
+			const sep = baseURL.includes("?") ? "&" : "?";
+			const finalURL = `${baseURL}${sep}${params.toString()}`;
+
+			const headers = new Headers();
+			headers.set("Location", finalURL);
+			throw new APIError("FOUND", undefined, headers);
+		},
 	};
 
 	const initOrPromise = runPluginInit(ctx);

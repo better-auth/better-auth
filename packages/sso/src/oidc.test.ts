@@ -392,7 +392,7 @@ describe("SSO disable implicit sign in", async () => {
 		);
 		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
 		expect(callbackURL).toContain(
-			"/api/auth/error/error?error=signup disabled",
+			"http://localhost:3000/api/auth/error?error=signup+disabled",
 		);
 	});
 

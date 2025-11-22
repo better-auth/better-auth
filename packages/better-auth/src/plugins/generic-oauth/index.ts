@@ -652,15 +652,11 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					},
 				},
 				async (ctx: GenericEndpointContext) => {
-					const defaultErrorURL =
-						ctx.context.options.onAPIError?.errorURL ||
-						`${ctx.context.baseURL}/error`;
 					if (ctx.query.error || !ctx.query.code) {
-						throw ctx.redirect(
-							`${defaultErrorURL}?error=${
-								ctx.query.error || "oAuth_code_missing"
-							}&error_description=${ctx.query.error_description}`,
-						);
+						throw await ctx.context.handleErrorRedirect({
+							error: (ctx.query.error || "oAuth_code_missing") as string,
+							error_description: ctx.query.error_description,
+						});
 					}
 					const providerId = ctx.params?.providerId;
 					if (!providerId) {
@@ -689,18 +685,15 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						link,
 					} = parsedState;
 					const code = ctx.query.code;
-
-					function redirectOnError(error: string) {
-						const defaultErrorURL =
-							ctx.context.options.onAPIError?.errorURL ||
-							`${ctx.context.baseURL}/error`;
-						let url = errorURL || defaultErrorURL;
-						if (url.includes("?")) {
-							url = `${url}&error=${error}`;
-						} else {
-							url = `${url}?error=${error}`;
-						}
-						throw ctx.redirect(url);
+					async function redirectOnError(
+						error: string,
+						error_description?: string,
+					) {
+						// 'errorURL' from parseState takes priority
+						throw await ctx.context.handleErrorRedirect(
+							{ error, error_description },
+							{ overrideErrorURL: errorURL },
+						);
 					}
 
 					let finalTokenUrl = provider.tokenUrl;
@@ -749,7 +742,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								: "",
 							e,
 						);
-						throw redirectOnError("oauth_code_verification_failed");
+						await redirectOnError("oauth_code_verification_failed");
 					}
 
 					if (!tokens) {
@@ -765,7 +758,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 									: await getUserInfo(tokens, finalUserInfoUrl)
 							) as OAuth2UserInfo | null;
 							if (!userInfo) {
-								throw redirectOnError("user_info_is_missing");
+								await redirectOnError("user_info_is_missing");
+								return null as never;
 							}
 							const mapUser = provider.mapProfileToUser
 								? await provider.mapProfileToUser(userInfo)
@@ -775,13 +769,15 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								: userInfo.email?.toLowerCase();
 							if (!email) {
 								ctx.context.logger.error("Unable to get user info", userInfo);
-								throw redirectOnError("email_is_missing");
+								await redirectOnError("email_is_missing");
+								return null as never;
 							}
 							const id = mapUser.id ? String(mapUser.id) : String(userInfo.id);
 							const name = mapUser.name ? mapUser.name : userInfo.name;
 							if (!name) {
 								ctx.context.logger.error("Unable to get user info", userInfo);
-								throw redirectOnError("name_is_missing");
+								await redirectOnError("name_is_missing");
+								return null as never;
 							}
 							return {
 								...userInfo,
@@ -797,7 +793,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								?.allowDifferentEmails !== true &&
 							link.email !== userInfo.email
 						) {
-							return redirectOnError("email_doesn't_match");
+							return await redirectOnError("email_doesn't_match");
 						}
 						const existingAccount =
 							await ctx.context.internalAdapter.findAccountByProviderId(
@@ -806,7 +802,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							);
 						if (existingAccount) {
 							if (existingAccount.userId !== link.userId) {
-								return redirectOnError(
+								return await redirectOnError(
 									"account_already_linked_to_different_user",
 								);
 							}
@@ -838,7 +834,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 									idToken: tokens.idToken,
 								});
 							if (!newAccount) {
-								return redirectOnError("unable_to_link_account");
+								return await redirectOnError("unable_to_link_account");
 							}
 						}
 						let toRedirectTo: string;
@@ -867,7 +863,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					});
 
 					if (result.error) {
-						return redirectOnError(result.error.split(" ").join("_"));
+						return await redirectOnError(result.error.split(" ").join("_"));
 					}
 					const { session, user } = result.data!;
 					await setSessionCookie(ctx, {

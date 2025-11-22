@@ -148,7 +148,10 @@ export function getTelemetryAuthConfig(
 			max: options.rateLimit?.max,
 		},
 		onAPIError: {
-			errorURL: options.onAPIError?.errorURL,
+			errorURL:
+				typeof options.onAPIError?.errorURL === "function"
+					? "function"
+					: !!options.onAPIError?.errorURL,
 			onError: !!options.onAPIError?.onError,
 			throw: options.onAPIError?.throw,
 		},
