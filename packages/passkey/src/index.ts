@@ -503,6 +503,20 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 							credential,
 							credentialType,
 						} = registrationInfo;
+
+						// Delete the challenge as it's no longer needed
+						await ctx.context.internalAdapter.deleteVerificationValue(data.id);
+						// Clear the WebAuthn challenge cookie:
+						await ctx.setSignedCookie(
+							webAuthnCookie.name,
+							"",
+							ctx.context.secret,
+							{
+								...webAuthnCookie.attributes,
+								maxAge: 0,
+							},
+						);
+
 						const pubKey = base64.encode(credential.publicKey);
 						const newPasskey: Omit<Passkey, "id"> = {
 							name: ctx.body.name,
@@ -641,6 +655,18 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 							throw new APIError("UNAUTHORIZED", {
 								message: PASSKEY_ERROR_CODES.AUTHENTICATION_FAILED,
 							});
+						// Delete the challenge as it's no longer needed
+						await ctx.context.internalAdapter.deleteVerificationValue(data.id);
+						// Clear the WebAuthn challenge cookie:
+						await ctx.setSignedCookie(
+							webAuthnCookie.name,
+							"",
+							ctx.context.secret,
+							{
+								...webAuthnCookie.attributes,
+								maxAge: 0,
+							},
+						);
 
 						await ctx.context.adapter.update<Passkey>({
 							model: "passkey",
@@ -654,6 +680,7 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 								counter: verification.authenticationInfo.newCounter,
 							},
 						});
+
 						const s = await ctx.context.internalAdapter.createSession(
 							passkey.userId,
 						);
@@ -670,6 +697,7 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 								message: "User not found",
 							});
 						}
+
 						await setSessionCookie(ctx, {
 							session: s,
 							user,

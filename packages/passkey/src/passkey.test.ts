@@ -1,6 +1,7 @@
 import { createAuthClient } from "better-auth/client";
 import { getTestInstance } from "better-auth/test";
 import { describe, expect, it } from "vitest";
+import { parseSetCookieHeader } from "../../better-auth/src/cookies/cookie-utils";
 import type { Passkey } from ".";
 import { passkey } from ".";
 import { passkeyClient } from "./client";
@@ -120,5 +121,93 @@ describe("passkey", async () => {
 			},
 		});
 		expect(deleteResult).toBe(null);
+	});
+
+	it("deletes challenge after successful registration and authentication", async () => {
+		const { headers } = await signInWithTestUser();
+
+		// client that uses same test fetch impl so onResponse sees Set-Cookie
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: { headers, customFetchImpl },
+		});
+
+		// Generate registration options and capture Set-Cookie
+		let setCookieHeader = "";
+		await client.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			headers,
+			onResponse(ctx) {
+				setCookieHeader = ctx.response.headers.get("set-cookie") || "";
+			},
+		});
+
+		expect(setCookieHeader).toContain("better-auth-passkey");
+		const cookies = parseSetCookieHeader(setCookieHeader);
+		const challengeId = cookies.get("better-auth-passkey")?.value;
+		expect(challengeId).toBeDefined();
+
+		const ctx = await auth.$context;
+		const found = await ctx.internalAdapter.findVerificationValue(challengeId!);
+		expect(found).not.toBeNull();
+
+		// Now call verify-registration (we mock verification so body may be empty)
+		let verifySetCookie = "";
+		await client.$fetch("/passkey/verify-registration", {
+			method: "POST",
+			headers: new Headers(headers),
+			body: { response: {} },
+			onResponse(resCtx) {
+				verifySetCookie = resCtx.response.headers.get("set-cookie") || "";
+			},
+		});
+
+		// DB row should be removed
+		const after = await ctx.internalAdapter.findVerificationValue(challengeId!);
+		expect(after).toBeNull();
+
+		// Server should send a Set-Cookie clearing the challenge cookie
+		expect(verifySetCookie).toContain("better-auth-passkey");
+		expect(verifySetCookie.toLowerCase()).satisfy(
+			(h: string) => h.includes("max-age=0") || h.includes("expires="),
+		);
+
+		// Authentication flow: generate, capture cookie, then verify endpoint
+		let authSetCookie = "";
+		await client.$fetch("/passkey/generate-authenticate-options", {
+			method: "POST",
+			headers,
+			onResponse(ctx2) {
+				authSetCookie = ctx2.response.headers.get("set-cookie") || "";
+			},
+		});
+
+		const authCookies = parseSetCookieHeader(authSetCookie);
+		const authChallengeId = authCookies.get("better-auth-passkey")?.value;
+		expect(authChallengeId).toBeDefined();
+
+		const foundAuth = await ctx.internalAdapter.findVerificationValue(
+			authChallengeId!,
+		);
+		expect(foundAuth).not.toBeNull();
+
+		// call verify-authentication
+		let authVerifySetCookie = "";
+		await client.$fetch("/passkey/verify-authentication", {
+			method: "POST",
+			headers: new Headers(headers),
+			body: { response: {} },
+			onResponse(ctx3) {
+				authVerifySetCookie = ctx3.response.headers.get("set-cookie") || "";
+			},
+		});
+
+		const afterAuth = await ctx.internalAdapter.findVerificationValue(
+			authChallengeId!,
+		);
+		expect(afterAuth).toBeNull();
+
+		// session cookie should be set by the verify-authentication response
+		expect(authVerifySetCookie).toContain("better-auth.session_token");
 	});
 });
