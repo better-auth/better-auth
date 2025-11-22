@@ -1,4 +1,4 @@
-import { Metadata } from "next";
+import type { Metadata } from "next";
 
 export const metadata: Metadata = {
 	title: "Blog - Better Auth",
@@ -11,17 +11,7 @@ interface BlogLayoutProps {
 
 export default function BlogLayout({ children }: BlogLayoutProps) {
 	return (
-		<div
-			className="relative flex min-h-screen flex-col"
-			style={{
-				scrollbarWidth: "none",
-				scrollbarColor: "transparent transparent",
-				//@ts-expect-error
-				"&::-webkit-scrollbar": {
-					display: "none",
-				},
-			}}
-		>
+		<div className="relative flex min-h-screen flex-col no-scrollbar">
 			<main className="flex-1">{children}</main>
 		</div>
 	);

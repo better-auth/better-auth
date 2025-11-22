@@ -1,0 +1,51 @@
+---
+title: State mismatch
+description: The state parameter in the request doesn't match the state parameter in the cookie.
+---
+
+## What is it?
+
+When an OAuth flow begins, a unique `state` value is generated and stored in a cookie.
+After the user returns from the OAuth provider, this `state` is compared with the one provided in the callback.
+If they don't match, the request is rejected to prevent unauthorized access.
+
+This check exists to prevent CSRF (Cross-Site Request Forgery) and replay attacks during the OAuth flow -
+basically, to make sure the callback that hits your `/api/auth/callback` endpoint really belongs to the
+same browser session that started it.
+
+
+## Common Causes
+
+* The cookie wasn't set or readable during callback (common with `.vercel.app` preview domains or cross-domain issues).
+* The cookie domain/path doesn't match between your app and callback route.
+* The browser blocked third-party cookies (especially on Safari / iOS).
+* You started the OAuth flow in one tab but finished it in another (different cookie context).
+* The preview vs production domain mismatch (e.g., `preview.myapp.com` vs `myapp.com`).
+
+## How to resolve
+### Use a constant domain
+
+* The best fix is to use a constant domain for your app and callback route.
+* Avoid `.vercel.app` subdomains - browsers treat them as public suffixes, so cookies can't be shared across subdomains.
+
+### Verify cookie configurations
+
+* It's possible that you've configured custom cookie attributes in your auth config that can cause this issue.
+* Check that cookies are not blocked by browser settings or privacy modes.
+* Ensure you're starting and ending the OAuth flow in the same browser session.
+
+### Skip state cookie check
+
+If you know what you are doing, you can skip the state cookie check by
+setting the `account.skipStateCookieCheck` option to `true` in your auth config.
+
+<Callout type="warn">
+  Please note that this is a security risk and should only be enabled if you know what you are doing.
+</Callout>
+
+### Production Debug
+
+Head to your production site, and use your browser's DevTools → Application → Cookies to confirm:
+
+* The state cookie is being set before redirect.
+* It still exists when the OAuth provider redirects back.

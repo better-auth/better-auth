@@ -19,29 +19,29 @@ export type TOTPOptions = {
 	/**
 	 * Issuer
 	 */
-	issuer?: string;
+	issuer?: string | undefined;
 	/**
 	 * How many digits the otp to be
 	 *
 	 * @default 6
 	 */
-	digits?: 6 | 8;
+	digits?: (6 | 8) | undefined;
 	/**
 	 * Period for otp in seconds.
 	 * @default 30
 	 */
-	period?: number;
+	period?: number | undefined;
 	/**
 	 * Backup codes configuration
 	 */
-	backupCodes?: BackupCodeOptions;
+	backupCodes?: BackupCodeOptions | undefined;
 	/**
 	 * Disable totp
 	 */
-	disable?: boolean;
+	disable?: boolean | undefined;
 };
 
-export const totp2fa = (options?: TOTPOptions) => {
+export const totp2fa = (options?: TOTPOptions | undefined) => {
 	const opts = {
 		...options,
 		digits: options?.digits || 6,
@@ -298,10 +298,7 @@ export const totp2fa = (options?: TOTPOptions) => {
 			 * **server:**
 			 * `auth.api.generateTOTP`
 			 *
-			 * **client:**
-			 * `authClient.totp.generate`
-			 *
-			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/totp#api-method-totp-generate)
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#totp)
 			 */
 			generateTOTP: generateTOTP,
 			/**
@@ -317,9 +314,24 @@ export const totp2fa = (options?: TOTPOptions) => {
 			 * **client:**
 			 * `authClient.twoFactor.getTotpUri`
 			 *
-			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/two-factor#api-method-two-factor-get-totp-uri)
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#getting-totp-uri)
 			 */
 			getTOTPURI: getTOTPURI,
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/two-factor/verify-totp`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.verifyTOTP`
+			 *
+			 * **client:**
+			 * `authClient.twoFactor.verifyTotp`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#verifying-totp)
+			 */
 			verifyTOTP,
 		},
 	} satisfies TwoFactorProvider;

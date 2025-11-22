@@ -15,6 +15,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 		"/sign-up/email",
 		{
 			method: "POST",
+			operationId: "signUpWithEmailAndPassword",
 			body: z.record(z.string(), z.any()),
 			metadata: {
 				$Infer: {
@@ -22,12 +23,13 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						name: string;
 						email: string;
 						password: string;
-						image?: string;
-						callbackURL?: string;
-						rememberMe?: boolean;
+						image?: string | undefined;
+						callbackURL?: string | undefined;
+						rememberMe?: boolean | undefined;
 					} & AdditionalUserFieldsInput<O>,
 				},
 				openapi: {
+					operationId: "signUpWithEmailAndPassword",
 					description: "Sign up a user using email and password",
 					requestBody: {
 						content: {
@@ -164,8 +166,8 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				}
 				const body = ctx.body as any as User & {
 					password: string;
-					callbackURL?: string;
-					rememberMe?: boolean;
+					callbackURL?: string | undefined;
+					rememberMe?: boolean | undefined;
 				} & {
 					[key: string]: any;
 				};

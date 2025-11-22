@@ -1,6 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-call";
 import * as z from "zod";
+import { setOAuthState } from "../api/middlewares/oauth";
 import {
 	generateRandomString,
 	symmetricDecrypt,
@@ -9,10 +10,13 @@ import {
 
 export async function generateState(
 	c: GenericEndpointContext,
-	link?: {
-		email: string;
-		userId: string;
-	},
+	link:
+		| {
+				email: string;
+				userId: string;
+		  }
+		| undefined,
+	additionalData: Record<string, any> | false | undefined,
 ) {
 	const callbackURL = c.body?.callbackURL || c.context.options.baseURL;
 	if (!callbackURL) {
@@ -27,6 +31,7 @@ export async function generateState(
 		c.context.oauthConfig?.storeStateStrategy || "cookie";
 
 	const stateData = {
+		...(additionalData ? additionalData : {}),
 		callbackURL,
 		codeVerifier,
 		errorURL: c.body?.errorCallbackURL,
@@ -39,6 +44,8 @@ export async function generateState(
 		requestSignUp: c.body?.requestSignUp,
 	};
 
+	await setOAuthState(stateData);
+
 	if (storeStateStrategy === "cookie") {
 		// Store state data in an encrypted cookie
 		const encryptedData = await symmetricEncrypt({
@@ -50,7 +57,7 @@ export async function generateState(
 			maxAge: 10 * 60 * 1000, // 10 minutes
 		});
 
-		await c.setCookie(stateCookie.name, encryptedData, stateCookie.attributes);
+		c.setCookie(stateCookie.name, encryptedData, stateCookie.attributes);
 
 		return {
 			state,
@@ -95,7 +102,7 @@ export async function parseState(c: GenericEndpointContext) {
 	const storeStateStrategy =
 		c.context.oauthConfig.storeStateStrategy || "cookie";
 
-	const stateDataSchema = z.object({
+	const stateDataSchema = z.looseObject({
 		callbackURL: z.string(),
 		codeVerifier: z.string(),
 		errorURL: z.string().optional(),
@@ -115,7 +122,7 @@ export async function parseState(c: GenericEndpointContext) {
 	if (storeStateStrategy === "cookie") {
 		// Retrieve state data from encrypted cookie
 		const stateCookie = c.context.createAuthCookie("oauth_state");
-		const encryptedData = await c.getCookie(stateCookie.name);
+		const encryptedData = c.getCookie(stateCookie.name);
 
 		if (!encryptedData) {
 			c.context.logger.error("State Mismatch. OAuth state cookie not found", {
@@ -197,6 +204,10 @@ export async function parseState(c: GenericEndpointContext) {
 		const errorURL =
 			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
 		throw c.redirect(`${errorURL}?error=please_restart_the_process`);
+	}
+
+	if (parsedData) {
+		await setOAuthState(parsedData);
 	}
 
 	return parsedData;

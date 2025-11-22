@@ -9,7 +9,7 @@ import type {
 	Verification,
 } from "../db";
 import type { DBAdapter, Where } from "../db/adapter";
-import { createLogger } from "../env";
+import type { createLogger } from "../env";
 import type { OAuthProvider } from "../oauth2";
 import type { BetterAuthCookies } from "./cookie";
 import type { LiteralUnion } from "./helper";
@@ -48,21 +48,21 @@ export interface InternalAdapter<
 	listSessions(userId: string): Promise<Session[]>;
 
 	listUsers(
-		limit?: number,
-		offset?: number,
-		sortBy?: { field: string; direction: "asc" | "desc" },
-		where?: Where[],
+		limit?: number | undefined,
+		offset?: number | undefined,
+		sortBy?: { field: string; direction: "asc" | "desc" } | undefined,
+		where?: Where[] | undefined,
 	): Promise<User[]>;
 
-	countTotalUsers(where?: Where[]): Promise<number>;
+	countTotalUsers(where?: Where[] | undefined): Promise<number>;
 
 	deleteUser(userId: string): Promise<void>;
 
 	createSession(
 		userId: string,
-		dontRememberMe?: boolean,
-		override?: Partial<Session> & Record<string, any>,
-		overrideAll?: boolean,
+		dontRememberMe?: boolean | undefined,
+		override?: (Partial<Session> & Record<string, any>) | undefined,
+		overrideAll?: boolean | undefined,
 	): Promise<Session>;
 
 	findSession(token: string): Promise<{
@@ -95,7 +95,7 @@ export interface InternalAdapter<
 
 	findUserByEmail(
 		email: string,
-		options?: { includeAccounts: boolean },
+		options?: { includeAccounts: boolean } | undefined,
 	): Promise<{ user: User; accounts: Account[] } | null>;
 
 	findUserById(userId: string): Promise<User | null>;
@@ -104,16 +104,16 @@ export interface InternalAdapter<
 		account: Omit<Account, "id" | "createdAt" | "updatedAt"> & Partial<Account>,
 	): Promise<Account>;
 
-	// fixme: any type
-	updateUser(
+	// Record<string, any> is to take into account additional fields or plugin-added fields
+	updateUser<T extends Record<string, any>>(
 		userId: string,
 		data: Partial<User> & Record<string, any>,
-	): Promise<any>;
+	): Promise<User & T>;
 
-	updateUserByEmail(
+	updateUserByEmail<T extends Record<string, any>>(
 		email: string,
 		data: Partial<User & Record<string, any>>,
-	): Promise<User>;
+	): Promise<User & T>;
 
 	updatePassword(userId: string, password: string): Promise<void>;
 
@@ -149,7 +149,7 @@ export interface InternalAdapter<
 
 type CreateCookieGetterFn = (
 	cookieName: string,
-	overrideAttributes?: Partial<CookieOptions>,
+	overrideAttributes?: Partial<CookieOptions> | undefined,
 ) => {
 	name: string;
 	attributes: CookieOptions;
@@ -170,7 +170,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			/**
 			 * This is dangerous and should only be used in dev or staging environments.
 			 */
-			skipStateCookieCheck?: boolean;
+			skipStateCookieCheck?: boolean | undefined;
 			/**
 			 * Strategy for storing OAuth state
 			 *
@@ -218,11 +218,16 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			updateAge: number;
 			expiresIn: number;
 			freshAge: number;
-			cookieFreshCache: number | false;
+			cookieRefreshCache:
+				| false
+				| {
+						enabled: true;
+						updateAge: number;
+				  };
 		};
 		generateId: (options: {
 			model: LiteralUnion<DBPreservedModels, string>;
-			size?: number;
+			size?: number | undefined;
 		}) => string | false;
 		secondaryStorage: SecondaryStorage | undefined;
 		password: {
@@ -238,7 +243,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 		runMigrations: () => Promise<void>;
 		publishTelemetry: (event: {
 			type: string;
-			anonymousId?: string;
+			anonymousId?: string | undefined;
 			payload: Record<string, any>;
 		}) => Promise<void>;
 		/**

@@ -1,3 +1,4 @@
+export type { StandardSchemaV1 } from "@standard-schema/spec";
 export type {
 	AuthContext,
 	GenericEndpointContext,
@@ -16,5 +17,6 @@ export type {
 	BetterAuthClientOptions,
 	BetterAuthClientPlugin,
 	ClientAtomListener,
+	ClientFetchOption,
 	ClientStore,
 } from "./plugin-client";

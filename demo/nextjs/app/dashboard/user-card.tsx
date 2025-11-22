@@ -1,6 +1,6 @@
 "use client";
 
-import { Subscription } from "@better-auth/stripe";
+import type { Subscription } from "@better-auth/stripe";
 import { MobileIcon } from "@radix-ui/react-icons";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -58,7 +58,7 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { client, signOut, useSession } from "@/lib/auth-client";
-import { Session } from "@/lib/auth-types";
+import type { Session } from "@/lib/auth-types";
 import { Component } from "./change-plan";
 
 export default function UserCard(props: {
@@ -212,7 +212,7 @@ export default function UserCard(props: {
 											session.userAgent}
 										, {new UAParser(session.userAgent || "").getBrowser().name}
 										<button
-											className="text-red-500 opacity-80  cursor-pointer text-xs border-muted-foreground border-red-600  underline "
+											className="text-red-500 opacity-80  cursor-pointer text-xs border-muted-foreground border-red-600  underline"
 											onClick={async () => {
 												setIsTerminating(session.id);
 												const res = await client.revokeSession({

@@ -3,11 +3,8 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { defineErrorCodes } from "@better-auth/core/utils";
-import {
-	type BetterAuthPlugin,
-	type GenericEndpointContext,
-	logger,
-} from "better-auth";
+import type { BetterAuthPlugin, GenericEndpointContext } from "better-auth";
+import { logger } from "better-auth";
 import {
 	APIError,
 	getSessionFromCtx,
@@ -15,7 +12,8 @@ import {
 	sessionMiddleware,
 } from "better-auth/api";
 import { defu } from "defu";
-import Stripe, { type Stripe as StripeType } from "stripe";
+import type Stripe from "stripe";
+import type { Stripe as StripeType } from "stripe";
 import * as z from "zod/v4";
 import {
 	onCheckoutSessionCompleted,
@@ -46,7 +44,7 @@ const STRIPE_ERROR_CODES = defineErrorCodes({
 });
 
 const getUrl = (ctx: GenericEndpointContext, url: string) => {
-	if (url.startsWith("http")) {
+	if (/^[a-zA-Z][a-zA-Z0-9+\-.]*:/.test(url)) {
 		return url;
 	}
 	return `${ctx.context.options.baseURL}${
@@ -87,7 +85,10 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			const referenceId =
 				ctx.body?.referenceId || ctx.query?.referenceId || session.user.id;
 
-			if (ctx.body?.referenceId && !subscriptionOptions.authorizeReference) {
+			if (
+				referenceId !== session.user.id &&
+				!subscriptionOptions.authorizeReference
+			) {
 				logger.error(
 					`Passing referenceId into a subscription action isn't allowed if subscription.authorizeReference isn't defined in your stripe plugin config.`,
 				);
@@ -237,6 +238,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						})
 						.default(false),
 				}),
+				metadata: {
+					openapi: {
+						operationId: "upgradeSubscription",
+					},
+				},
 				use: [
 					sessionMiddleware,
 					originCheck((c) => {
@@ -540,7 +546,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						subscription,
 					},
 					ctx.request,
-					//@ts-expect-error
 					ctx,
 				);
 
@@ -636,6 +641,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			{
 				method: "GET",
 				query: z.record(z.string(), z.any()).optional(),
+				metadata: {
+					openapi: {
+						operationId: "cancelSubscriptionCallback",
+					},
+				},
 				use: [originCheck((ctx) => ctx.query.callbackURL)],
 			},
 			async (ctx) => {
@@ -745,9 +755,14 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						.optional(),
 					returnUrl: z.string().meta({
 						description:
-							'URL to take customers to when they click on the billing portal’s link to return to your website. Eg: "https://example.com/dashboard"',
+							'URL to take customers to when they click on the billing portal\'s link to return to your website. Eg: "/account"',
 					}),
 				}),
+				metadata: {
+					openapi: {
+						operationId: "cancelSubscription",
+					},
+				},
 				use: [
 					sessionMiddleware,
 					originCheck((ctx) => ctx.body.returnUrl),
@@ -843,7 +858,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							 * this is a rare case and should not happen
 							 */
 							if (!subscription.cancelAtPeriodEnd) {
-								await ctx.context.adapter.update({
+								await ctx.context.adapter.updateMany({
 									model: "subscription",
 									update: {
 										cancelAtPeriodEnd: true,
@@ -888,6 +903,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						})
 						.optional(),
 				}),
+				metadata: {
+					openapi: {
+						operationId: "restoreSubscription",
+					},
+				},
 				use: [sessionMiddleware, referenceMiddleware("restore-subscription")],
 			},
 			async (ctx) => {
@@ -1016,6 +1036,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							.optional(),
 					}),
 				),
+				metadata: {
+					openapi: {
+						operationId: "listActiveSubscriptions",
+					},
+				},
 				use: [sessionMiddleware, referenceMiddleware("list-subscription")],
 			},
 			async (ctx) => {
@@ -1057,6 +1082,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			{
 				method: "GET",
 				query: z.record(z.string(), z.any()).optional(),
+				metadata: {
+					openapi: {
+						operationId: "handleSubscriptionSuccess",
+					},
+				},
 				use: [originCheck((ctx) => ctx.query.callbackURL)],
 			},
 			async (ctx) => {
@@ -1167,6 +1197,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					referenceId: z.string().optional(),
 					returnUrl: z.string().default("/"),
 				}),
+				metadata: {
+					openapi: {
+						operationId: "createBillingPortal",
+					},
+				},
 				use: [
 					sessionMiddleware,
 					originCheck((ctx) => ctx.body.returnUrl),
@@ -1237,6 +1272,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					method: "POST",
 					metadata: {
 						isAction: false,
+						openapi: {
+							operationId: "handleStripeWebhook",
+						},
 					},
 					cloneRequest: true,
 					//don't parse the body
@@ -1323,7 +1361,46 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						user: {
 							create: {
 								async after(user, ctx) {
-									if (ctx && options.createCustomerOnSignUp) {
+									if (!ctx || !options.createCustomerOnSignUp) return;
+
+									try {
+										const userWithStripe = user as typeof user & {
+											stripeCustomerId?: string;
+										};
+
+										// Skip if user already has a Stripe customer ID
+										if (userWithStripe.stripeCustomerId) return;
+
+										// Check if customer already exists in Stripe by email
+										const existingCustomers = await client.customers.list({
+											email: user.email,
+											limit: 1,
+										});
+
+										let stripeCustomer = existingCustomers.data[0];
+
+										// If customer exists, link it to prevent duplicate creation
+										if (stripeCustomer) {
+											await ctx.context.internalAdapter.updateUser(user.id, {
+												stripeCustomerId: stripeCustomer.id,
+											});
+											await options.onCustomerCreate?.(
+												{
+													stripeCustomer,
+													user: {
+														...user,
+														stripeCustomerId: stripeCustomer.id,
+													},
+												},
+												ctx,
+											);
+											ctx.context.logger.info(
+												`Linked existing Stripe customer ${stripeCustomer.id} to user ${user.id}`,
+											);
+											return;
+										}
+
+										// Create new Stripe customer
 										let extraCreateParams: Partial<Stripe.CustomerCreateParams> =
 											{};
 										if (options.getCustomerCreateParams) {
@@ -1343,8 +1420,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 											},
 											extraCreateParams,
 										);
-										const stripeCustomer =
-											await client.customers.create(params);
+										stripeCustomer = await client.customers.create(params);
 										await ctx.context.internalAdapter.updateUser(user.id, {
 											stripeCustomerId: stripeCustomer.id,
 										});
@@ -1357,6 +1433,14 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 												},
 											},
 											ctx,
+										);
+										ctx.context.logger.info(
+											`Created new Stripe customer ${stripeCustomer.id} for user ${user.id}`,
+										);
+									} catch (e: any) {
+										ctx.context.logger.error(
+											`Failed to create or link Stripe customer: ${e.message}`,
+											e,
 										);
 									}
 								},

@@ -106,7 +106,7 @@ describe("mcp", async () => {
 		publicClient = {
 			clientId: (createdClient.data as any).client_id,
 			clientSecret: "", // Public clients don't have secrets, but our type expects a string
-			redirectURLs: (createdClient.data as any).redirect_uris,
+			redirectUrls: (createdClient.data as any).redirect_uris,
 			metadata: {},
 			icon: (createdClient.data as any).logo_uri || "",
 			type: "public",
@@ -152,7 +152,7 @@ describe("mcp", async () => {
 		confidentialClient = {
 			clientId: (createdClient.data as any).client_id,
 			clientSecret: (createdClient.data as any).client_secret,
-			redirectURLs: (createdClient.data as any).redirect_uris,
+			redirectUrls: (createdClient.data as any).redirect_uris,
 			metadata: {},
 			icon: (createdClient.data as any).logo_uri || "",
 			type: "web",
@@ -243,7 +243,7 @@ describe("mcp", async () => {
 				grant_type: "authorization_code",
 				client_id: publicClient.clientId,
 				code: authCode,
-				redirect_uri: publicClient.redirectURLs[0],
+				redirect_uri: publicClient.redirectUrls[0],
 				// Missing code_verifier for public client
 			},
 		});
@@ -435,7 +435,7 @@ describe("mcp", async () => {
 		const userinfoClient = {
 			clientId: (createdClient.data as any).client_id,
 			clientSecret: (createdClient.data as any).client_secret,
-			redirectURLs: (createdClient.data as any).redirect_uris,
+			redirectUrls: (createdClient.data as any).redirect_uris,
 		};
 
 		// Set up OAuth flow

@@ -1,13 +1,11 @@
 import type { Store, StoreValue } from "nanostores";
+import type { DeepReadonly, ShallowRef, UnwrapNestedRefs } from "vue";
 import {
-	type DeepReadonly,
 	getCurrentInstance,
 	getCurrentScope,
 	onScopeDispose,
 	readonly,
-	type ShallowRef,
 	shallowRef,
-	type UnwrapNestedRefs,
 } from "vue";
 
 export function registerStore(store: Store) {
@@ -29,7 +27,7 @@ export function useStore<
 		state.value = value;
 	});
 
-	getCurrentScope() && onScopeDispose(unsubscribe);
+	if (getCurrentScope()) onScopeDispose(unsubscribe);
 
 	if (process.env.NODE_ENV !== "production") {
 		registerStore(store);

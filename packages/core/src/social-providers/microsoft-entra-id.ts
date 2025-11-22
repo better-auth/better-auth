@@ -81,6 +81,8 @@ export interface MicrosoftEntraIDProfile extends Record<string, any> {
 	verified_primary_email: string[];
 	/** User's verified secondary email addresses */
 	verified_secondary_email: string[];
+	/** Whether the user's email is verified (optional claim, must be configured in app registration) */
+	email_verified?: boolean | undefined;
 	/** VNET specifier information */
 	vnet: string;
 	/** Client Capabilities */
@@ -118,21 +120,23 @@ export interface MicrosoftOptions
 	 * The tenant ID of the Microsoft account
 	 * @default "common"
 	 */
-	tenantId?: string;
+	tenantId?: string | undefined;
 	/**
 	 * The authentication authority URL. Use the default "https://login.microsoftonline.com" for standard Entra ID or "https://<tenant-id>.ciamlogin.com" for CIAM scenarios.
 	 * @default "https://login.microsoftonline.com"
 	 */
-	authority?: string;
+	authority?: string | undefined;
 	/**
 	 * The size of the profile photo
 	 * @default 48
 	 */
-	profilePhotoSize?: 48 | 64 | 96 | 120 | 240 | 360 | 432 | 504 | 648;
+	profilePhotoSize?:
+		| (48 | 64 | 96 | 120 | 240 | 360 | 432 | 504 | 648)
+		| undefined;
 	/**
 	 * Disable profile photo
 	 */
-	disableProfilePhoto?: boolean;
+	disableProfilePhoto?: boolean | undefined;
 }
 
 export const microsoft = (options: MicrosoftOptions) => {
@@ -147,8 +151,8 @@ export const microsoft = (options: MicrosoftOptions) => {
 			const scopes = options.disableDefaultScope
 				? []
 				: ["openid", "profile", "email", "User.Read", "offline_access"];
-			options.scope && scopes.push(...options.scope);
-			data.scopes && scopes.push(...data.scopes);
+			if (options.scope) scopes.push(...options.scope);
+			if (data.scopes) scopes.push(...data.scopes);
 			return createAuthorizationURL({
 				id: "microsoft",
 				options,
@@ -206,13 +210,25 @@ export const microsoft = (options: MicrosoftOptions) => {
 				},
 			);
 			const userMap = await options.mapProfileToUser?.(user);
+			// Microsoft Entra ID does NOT include email_verified claim by default.
+			// It must be configured as an optional claim in the app registration.
+			// We default to false when not provided for security consistency.
+			// We can also check verified_primary_email/verified_secondary_email arrays as fallback.
+			const emailVerified =
+				user.email_verified !== undefined
+					? user.email_verified
+					: user.email &&
+							(user.verified_primary_email?.includes(user.email) ||
+								user.verified_secondary_email?.includes(user.email))
+						? true
+						: false;
 			return {
 				user: {
 					id: user.sub,
 					name: user.name,
 					email: user.email,
 					image: user.picture,
-					emailVerified: true,
+					emailVerified,
 					...userMap,
 				},
 				data: user,
@@ -224,7 +240,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 					const scopes = options.disableDefaultScope
 						? []
 						: ["openid", "profile", "email", "User.Read", "offline_access"];
-					options.scope && scopes.push(...options.scope);
+					if (options.scope) scopes.push(...options.scope);
 
 					return refreshAccessToken({
 						refreshToken,

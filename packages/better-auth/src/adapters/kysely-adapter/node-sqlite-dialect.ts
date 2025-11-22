@@ -3,25 +3,27 @@
  */
 
 import type { DatabaseSync } from "node:sqlite";
+import type {
+	DatabaseConnection,
+	DatabaseIntrospector,
+	DatabaseMetadata,
+	DatabaseMetadataOptions,
+	Dialect,
+	DialectAdapter,
+	DialectAdapterBase,
+	Driver,
+	Kysely,
+	QueryCompiler,
+	QueryResult,
+	SchemaMetadata,
+	TableMetadata,
+} from "kysely";
 import {
 	CompiledQuery,
-	type DatabaseConnection,
-	type DatabaseIntrospector,
-	type DatabaseMetadata,
-	type DatabaseMetadataOptions,
 	DEFAULT_MIGRATION_LOCK_TABLE,
 	DEFAULT_MIGRATION_TABLE,
 	DefaultQueryCompiler,
-	type Dialect,
-	type DialectAdapter,
-	DialectAdapterBase,
-	type Driver,
-	Kysely,
-	type QueryCompiler,
-	type QueryResult,
-	type SchemaMetadata,
 	sql,
-	type TableMetadata,
 } from "kysely";
 
 export class NodeSqliteAdapter implements DialectAdapterBase {
@@ -65,7 +67,9 @@ export interface NodeSqliteDialectConfig {
 	/**
 	 * Called once when the first query is executed.
 	 */
-	onCreateConnection?: (connection: DatabaseConnection) => Promise<void>;
+	onCreateConnection?:
+		| ((connection: DatabaseConnection) => Promise<void>)
+		| undefined;
 }
 
 export class NodeSqliteDriver implements Driver {
@@ -202,7 +206,7 @@ export class NodeSqliteIntrospector implements DatabaseIntrospector {
 	}
 
 	async getMetadata(
-		options?: DatabaseMetadataOptions,
+		options?: DatabaseMetadataOptions | undefined,
 	): Promise<DatabaseMetadata> {
 		return {
 			tables: await this.getTables(options),
