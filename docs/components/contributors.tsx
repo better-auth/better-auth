@@ -22,7 +22,9 @@ export function Contributors({ usernames }: ContributorsProps) {
 								src={`https://github.com/${username}.png`}
 								alt={`@${username}`}
 							/>
-							<AvatarFallback>{username.charAt(0).toUpperCase()}</AvatarFallback>
+							<AvatarFallback>
+								{username.charAt(0).toUpperCase()}
+							</AvatarFallback>
 						</Avatar>
 					</a>
 				))}
@@ -30,4 +32,3 @@ export function Contributors({ usernames }: ContributorsProps) {
 		</div>
 	);
 }
-
