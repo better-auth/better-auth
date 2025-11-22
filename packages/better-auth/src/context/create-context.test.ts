@@ -1143,18 +1143,12 @@ describe("base context creation", () => {
 			vi.stubEnv("BETTER_AUTH_SECRET", "");
 			vi.stubEnv("AUTH_SECRET", "");
 
-			// Import DEFAULT_SECRET to use it explicitly
 			const { DEFAULT_SECRET } = await import("../utils/constants");
-
-			// In test environments, DEFAULT_SECRET is allowed (validation is skipped).
-			// In non-test environments (where isTest() returns false), using DEFAULT_SECRET
-			// would throw: "You are using the default secret. Please set `BETTER_AUTH_SECRET`
-			// in your environment variables or pass `secret` in your auth config."
+			
 			const ctx = await initBase({
 				secret: DEFAULT_SECRET,
 			});
 
-			// Verify DEFAULT_SECRET is recognized and used in test environment
 			expect(ctx.secret).toBe(DEFAULT_SECRET);
 
 			vi.unstubAllEnvs();
@@ -1163,19 +1157,48 @@ describe("base context creation", () => {
 		it("should throw error when default secret is set in production environment", async () => {
 			vi.stubEnv("BETTER_AUTH_SECRET", "");
 			vi.stubEnv("AUTH_SECRET", "");
+			const originalNodeEnv = process.env.NODE_ENV;
 
-			// Import DEFAULT_SECRET and BetterAuthError to verify error
 			const { DEFAULT_SECRET } = await import("../utils/constants");
-			const { BetterAuthError } = await import("@better-auth/core/error");
 
 			const expectedErrorMessage =
 				"You are using the default secret. Please set `BETTER_AUTH_SECRET` in your environment variables or pass `secret` in your auth config.";
 
-			const ctx = await initBase({
-				secret: DEFAULT_SECRET,
+			vi.doMock("@better-auth/core/env", async () => {
+				const actual = await vi.importActual("@better-auth/core/env");
+				return {
+					...actual,
+					isProduction: true,
+					isTest: () => false,
+				};
 			});
-			expect(ctx.secret).toBe(DEFAULT_SECRET);
 
+			vi.resetModules();
+
+			const { createAuthContext } = await import("../context/create-context");
+			const { getAdapter } = await import("../db/adapter-kysely");
+
+			const initBaseProduction = async (
+				options: Partial<BetterAuthOptions> = {},
+			) => {
+				const opts: BetterAuthOptions = {
+					baseURL: "http://localhost:3000",
+					...options,
+				};
+				const adapter = await getAdapter(opts);
+				const getDatabaseType = () => "memory";
+				return createAuthContext(adapter, opts, getDatabaseType);
+			};
+
+			await expect(
+				initBaseProduction({
+					secret: DEFAULT_SECRET,
+				}),
+			).rejects.toThrow(expectedErrorMessage);
+
+			vi.doUnmock("@better-auth/core/env");
+			vi.resetModules();
+			process.env.NODE_ENV = originalNodeEnv;
 			vi.unstubAllEnvs();
 		});
 
@@ -1198,16 +1221,12 @@ describe("base context creation", () => {
 			vi.stubEnv("BETTER_AUTH_SECRET", "");
 			vi.stubEnv("AUTH_SECRET", "");
 
-			// Import DEFAULT_SECRET to verify fallback
 			const { DEFAULT_SECRET } = await import("../utils/constants");
 
-			// Empty string is falsy, so it falls back to DEFAULT_SECRET
-			// In test environments, DEFAULT_SECRET is allowed
 			const ctx = await initBase({
 				secret: "",
 			});
-
-			// Verify it falls back to DEFAULT_SECRET
+		
 			expect(ctx.secret).toBe(DEFAULT_SECRET);
 
 			vi.unstubAllEnvs();
