@@ -31,19 +31,15 @@ class WindowFocusManager implements FocusManager {
 			return () => {};
 		}
 
-		const onFocus = () => this.setFocused(true);
-
 		const visibilityHandler = () => {
 			if (document.visibilityState === "visible") {
 				this.setFocused(true);
 			}
 		};
 
-		window.addEventListener("focus", onFocus, false);
 		document.addEventListener("visibilitychange", visibilityHandler, false);
 
 		return () => {
-			window.removeEventListener("focus", onFocus, false);
 			document.removeEventListener(
 				"visibilitychange",
 				visibilityHandler,
