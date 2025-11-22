@@ -862,3 +862,213 @@ describe("mulit team support", async (it) => {
 		expect(stillTeam2Member).toBeUndefined();
 	});
 });
+
+describe("team slug", async (it) => {
+	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance({
+		user: {
+			modelName: "users",
+		},
+		plugins: [
+			organization({
+				async sendInvitationEmail() {},
+				teams: {
+					enabled: true,
+				},
+			}),
+		],
+		logger: {
+			level: "error",
+		},
+	});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [
+			organizationClient({
+				teams: {
+					enabled: true,
+				},
+			}),
+		],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
+	let organizationId: string;
+	let teamId: string;
+
+	it("should create an organization", async () => {
+		const createOrganizationResponse = await client.organization.create({
+			name: "Test Organization",
+			slug: "test-org-slug",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		organizationId = createOrganizationResponse.data?.id as string;
+		expect(createOrganizationResponse.data?.name).toBe("Test Organization");
+		expect(createOrganizationResponse.data?.slug).toBe("test-org-slug");
+	});
+
+	it("should create a team with slug", async () => {
+		const createTeamResponse = await client.organization.createTeam(
+			{
+				name: "Engineering Team",
+				slug: "engineering",
+				organizationId,
+			},
+			{
+				headers,
+			},
+		);
+
+		teamId = createTeamResponse.data?.id as string;
+		expect(createTeamResponse.data?.name).toBe("Engineering Team");
+		expect(createTeamResponse.data?.slug).toBe("engineering");
+		expect(createTeamResponse.data?.organizationId).toBe(organizationId);
+	});
+
+	it("should fail to create team with duplicate slug in same organization", async () => {
+		const createTeamResponse = await client.organization.createTeam(
+			{
+				name: "Engineering Team 2",
+				slug: "engineering",
+				organizationId,
+			},
+			{
+				headers,
+			},
+		);
+
+		expect(createTeamResponse.error).toBeDefined();
+		expect(createTeamResponse.error?.message).toContain(
+			"A team with this slug already exists",
+		);
+	});
+
+	it("should check if team slug is available", async () => {
+		const checkResponse = await auth.api.checkTeamSlug({
+			body: {
+				slug: "available-slug",
+				organizationId,
+			},
+			headers,
+		});
+
+		expect(checkResponse.status).toBe(true);
+	});
+
+	it("should check if team slug is taken", async () => {
+		try {
+			await auth.api.checkTeamSlug({
+				body: {
+					slug: "engineering",
+					organizationId,
+				},
+				headers,
+			});
+			expect(true).toBe(false); // Should not reach here
+		} catch (error: any) {
+			expect(error.message).toContain("Slug is taken");
+		}
+	});
+
+	it("should update team slug", async () => {
+		const updateResponse = await client.organization.updateTeam(
+			{
+				teamId,
+				data: {
+					slug: "engineering-team",
+				},
+			},
+			{
+				headers,
+			},
+		);
+
+		expect(updateResponse.data?.slug).toBe("engineering-team");
+	});
+
+	it("should fail to update team slug to duplicate", async () => {
+		// First create another team
+		const createTeamResponse = await client.organization.createTeam(
+			{
+				name: "Design Team",
+				slug: "design",
+				organizationId,
+			},
+			{
+				headers,
+			},
+		);
+
+		const designTeamId = createTeamResponse.data?.id as string;
+		expect(createTeamResponse.data?.slug).toBe("design");
+
+		// Try to update it to the engineering team slug
+		const updateResponse = await client.organization.updateTeam(
+			{
+				teamId: designTeamId,
+				data: {
+					slug: "engineering-team",
+				},
+			},
+			{
+				headers,
+			},
+		);
+
+		expect(updateResponse.error).toBeDefined();
+		expect(updateResponse.error?.message).toContain(
+			"A team with this slug already exists",
+		);
+	});
+
+	it("should create team without slug (optional)", async () => {
+		const createTeamResponse = await client.organization.createTeam(
+			{
+				name: "Marketing Team",
+				organizationId,
+			},
+			{
+				headers,
+			},
+		);
+
+		expect(createTeamResponse.data?.name).toBe("Marketing Team");
+		expect(createTeamResponse.data?.slug).toBeFalsy();
+	});
+
+	it("should allow same slug in different organizations", async () => {
+		// Create a second organization
+		const createOrgResponse = await client.organization.create({
+			name: "Second Organization",
+			slug: "second-org",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const secondOrgId = createOrgResponse.data?.id as string;
+
+		// Create a team with the same slug in the second organization
+		const createTeamResponse = await client.organization.createTeam(
+			{
+				name: "Engineering Team",
+				slug: "engineering-team",
+				organizationId: secondOrgId,
+			},
+			{
+				headers,
+			},
+		);
+
+		expect(createTeamResponse.data?.slug).toBe("engineering-team");
+		expect(createTeamResponse.data?.organizationId).toBe(secondOrgId);
+	});
+});

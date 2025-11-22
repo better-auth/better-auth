@@ -22,6 +22,12 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 		name: z.string().meta({
 			description: 'The name of the team. Eg: "my-team"',
 		}),
+		slug: z
+			.string()
+			.meta({
+				description: 'The team slug. Eg: "engineering"',
+			})
+			.optional(),
 		organizationId: z
 			.string()
 			.meta({
@@ -157,7 +163,21 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 						ORGANIZATION_ERROR_CODES.YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS,
 				});
 			}
-			const { name, organizationId: _, ...additionalFields } = ctx.body;
+
+			// Check if slug is provided and validate uniqueness
+			if (ctx.body.slug) {
+				const existingTeam = await adapter.findTeamBySlug(
+					ctx.body.slug,
+					organizationId,
+				);
+				if (existingTeam) {
+					throw new APIError("BAD_REQUEST", {
+						message: "A team with this slug already exists in this organization",
+					});
+				}
+			}
+
+			const { name, slug, organizationId: _, ...additionalFields } = ctx.body;
 
 			const organization = await adapter.findOrganizationById(organizationId);
 			if (!organization) {
@@ -168,6 +188,7 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 
 			let teamData = {
 				name,
+				slug,
 				organizationId,
 				createdAt: new Date(),
 				updatedAt: new Date(),
@@ -179,6 +200,7 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 				const response = await options?.organizationHooks.beforeCreateTeam({
 					team: {
 						name,
+						slug,
 						organizationId,
 						...additionalFields,
 					},
@@ -490,7 +512,17 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			const { name, organizationId: __, ...additionalFields } = ctx.body.data;
+			const { name, slug, organizationId: __, ...additionalFields } = ctx.body.data;
+
+			// Check if slug is being updated and validate uniqueness
+			if (slug && slug !== team.slug) {
+				const existingTeam = await adapter.findTeamBySlug(slug, organizationId);
+				if (existingTeam && existingTeam.id !== team.id) {
+					throw new APIError("BAD_REQUEST", {
+						message: "A team with this slug already exists in this organization",
+					});
+				}
+			}
 
 			const organization = await adapter.findOrganizationById(organizationId);
 			if (!organization) {
@@ -501,6 +533,7 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 
 			const updates = {
 				name,
+				slug,
 				...additionalFields,
 			};
 
@@ -1218,5 +1251,70 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 			}
 
 			return ctx.json({ message: "Team member removed successfully." });
+		},
+	);
+
+export const checkTeamSlug = <O extends OrganizationOptions>(options: O) =>
+	createAuthEndpoint(
+		"/organization/check-team-slug",
+		{
+			method: "POST",
+			body: z.object({
+				slug: z.string().meta({
+					description: 'The team slug to check. Eg: "engineering"',
+				}),
+				organizationId: z
+					.string()
+					.meta({
+						description:
+							"The organization ID to check the slug within. Defaults to the active organization.",
+					})
+					.optional(),
+			}),
+			use: [orgMiddleware, orgSessionMiddleware],
+			metadata: {
+				openapi: {
+					description: "Check if a team slug is available",
+					responses: {
+						"200": {
+							description: "Slug is available",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											status: {
+												type: "boolean",
+												description: "Whether the slug is available",
+											},
+										},
+										required: ["status"],
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const session = ctx.context.session;
+			const organizationId =
+				ctx.body.organizationId || session.session.activeOrganizationId;
+			if (!organizationId) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+				});
+			}
+			const adapter = getOrgAdapter<O>(ctx.context, options);
+			const team = await adapter.findTeamBySlug(ctx.body.slug, organizationId);
+			if (!team) {
+				return ctx.json({
+					status: true,
+				});
+			}
+			throw new APIError("BAD_REQUEST", {
+				message: "Slug is taken",
+			});
 		},
 	);

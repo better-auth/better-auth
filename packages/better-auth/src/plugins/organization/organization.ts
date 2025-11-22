@@ -13,58 +13,59 @@ import { orgSessionMiddleware } from "./call";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { hasPermission } from "./has-permission";
 import {
-	createOrgRole,
-	deleteOrgRole,
-	getOrgRole,
-	listOrgRoles,
-	updateOrgRole,
+    createOrgRole,
+    deleteOrgRole,
+    getOrgRole,
+    listOrgRoles,
+    updateOrgRole,
 } from "./routes/crud-access-control";
 import {
-	acceptInvitation,
-	cancelInvitation,
-	createInvitation,
-	getInvitation,
-	listInvitations,
-	listUserInvitations,
-	rejectInvitation,
+    acceptInvitation,
+    cancelInvitation,
+    createInvitation,
+    getInvitation,
+    listInvitations,
+    listUserInvitations,
+    rejectInvitation,
 } from "./routes/crud-invites";
 import {
-	addMember,
-	getActiveMember,
-	getActiveMemberRole,
-	leaveOrganization,
-	listMembers,
-	removeMember,
-	updateMemberRole,
+    addMember,
+    getActiveMember,
+    getActiveMemberRole,
+    leaveOrganization,
+    listMembers,
+    removeMember,
+    updateMemberRole,
 } from "./routes/crud-members";
 import {
-	checkOrganizationSlug,
-	createOrganization,
-	deleteOrganization,
-	getFullOrganization,
-	listOrganizations,
-	setActiveOrganization,
-	updateOrganization,
+    checkOrganizationSlug,
+    createOrganization,
+    deleteOrganization,
+    getFullOrganization,
+    listOrganizations,
+    setActiveOrganization,
+    updateOrganization,
 } from "./routes/crud-org";
 import {
-	addTeamMember,
-	createTeam,
-	listOrganizationTeams,
-	listTeamMembers,
-	listUserTeams,
-	removeTeam,
-	removeTeamMember,
-	setActiveTeam,
-	updateTeam,
+    addTeamMember,
+    checkTeamSlug,
+    createTeam,
+    listOrganizationTeams,
+    listTeamMembers,
+    listUserTeams,
+    removeTeam,
+    removeTeamMember,
+    setActiveTeam,
+    updateTeam,
 } from "./routes/crud-team";
 import type {
-	InferInvitation,
-	InferMember,
-	InferOrganization,
-	InferTeam,
-	OrganizationSchema,
-	Team,
-	TeamMember,
+    InferInvitation,
+    InferMember,
+    InferOrganization,
+    InferTeam,
+    OrganizationSchema,
+    Team,
+    TeamMember,
 } from "./schema";
 import type { OrganizationOptions } from "./types";
 
@@ -90,6 +91,7 @@ export type TeamEndpoints<O extends OrganizationOptions> = {
 	listTeamMembers: ReturnType<typeof listTeamMembers<O>>;
 	addTeamMember: ReturnType<typeof addTeamMember<O>>;
 	removeTeamMember: ReturnType<typeof removeTeamMember<O>>;
+	checkTeamSlug: ReturnType<typeof checkTeamSlug<O>>;
 };
 
 export type OrganizationEndpoints<O extends OrganizationOptions> = {
@@ -886,6 +888,22 @@ export function organization<O extends OrganizationOptions>(
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-remove-team-member)
 		 */
 		removeTeamMember: removeTeamMember(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/check-team-slug`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.checkTeamSlug`
+		 *
+		 * **client:**
+		 * `authClient.organization.checkTeamSlug`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-check-team-slug)
+		 */
+		checkTeamSlug: checkTeamSlug(options as O),
 	};
 	if (teamSupport) {
 		endpoints = {
@@ -922,6 +940,12 @@ export function organization<O extends OrganizationOptions>(
 							type: "string",
 							required: true,
 							fieldName: options?.schema?.team?.fields?.name,
+						},
+						slug: {
+							type: "string",
+							required: false,
+							sortable: true,
+							fieldName: options?.schema?.team?.fields?.slug,
 						},
 						organizationId: {
 							type: "string",
