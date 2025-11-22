@@ -71,6 +71,7 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 		enableMetadata: options?.enableMetadata ?? false,
 		disableKeyHashing: options?.disableKeyHashing ?? false,
 		requireName: options?.requireName ?? false,
+		storage: options?.storage ?? "database",
 		rateLimit: {
 			enabled:
 				options?.rateLimit?.enabled === undefined
@@ -92,6 +93,8 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 				options?.startingCharactersConfig?.charactersLength ?? 6,
 		},
 		enableSessionForAPIKeys: options?.enableSessionForAPIKeys ?? false,
+		fallbackToDatabase: options?.fallbackToDatabase ?? false,
+		customStorage: options?.customStorage,
 	} satisfies ApiKeyOptions;
 
 	const schema = mergeSchema(
