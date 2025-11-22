@@ -540,6 +540,25 @@ export function AISearchTrigger() {
 		}
 	}, [open]);
 
+	useEffect(() => {
+		const params = new URLSearchParams(window.location.search);
+		const aiQuery = params.get("askai");
+
+		if (aiQuery) {
+			setOpen(true);
+			// Send the message to AI
+			void chat.sendMessage({ text: decodeURIComponent(aiQuery) });
+
+			// Clean up the URL by removing the askai parameter
+			const newParams = new URLSearchParams(window.location.search);
+			newParams.delete("askai");
+			const newUrl = newParams.toString()
+				? `${window.location.pathname}?${newParams.toString()}`
+				: window.location.pathname;
+			window.history.replaceState({}, "", newUrl);
+		}
+	}, []);
+
 	return (
 		<Context value={useMemo(() => ({ chat, open, setOpen }), [chat, open])}>
 			<RemoveScroll enabled={open}>
