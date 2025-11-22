@@ -1,7 +1,7 @@
 {
   "name": "@better-auth/scim",
   "author": "Jonathan Samines",
-  "version": "1.4.0-beta.27",
+  "version": "1.4.0",
   "type": "module",
   "main": "dist/index.js",
   "license": "MIT",
