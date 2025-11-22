@@ -699,19 +699,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						});
 					}
 
-					// Get the actual provider from socialProviders for validateAuthorizationCode
-					const oauthProvider = ctx.context.socialProviders.find(
-						(p) => p.id === providerId,
-					);
-					if (!oauthProvider) {
-						throw new APIError("BAD_REQUEST", {
-							message: `OAuth provider not found for ${providerId}`,
-						});
-					}
-
 					let tokens: OAuth2Tokens | undefined = undefined;
 					const parsedState = await parseState(ctx);
-
 					const {
 						callbackURL,
 						codeVerifier,
@@ -751,13 +740,39 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						}
 					}
 					try {
-						// Use the provider's validateAuthorizationCode method
-						// which supports custom getToken if provided
-						tokens = await oauthProvider.validateAuthorizationCode({
-							code,
-							redirectURI: `${ctx.context.baseURL}/oauth2/callback/${providerConfig.providerId}`,
-							codeVerifier: providerConfig.pkce ? codeVerifier : undefined,
-						});
+						// Use custom getToken if provided
+						if (providerConfig.getToken) {
+							tokens = await providerConfig.getToken({
+								code,
+								redirectURI: `${ctx.context.baseURL}/oauth2/callback/${providerConfig.providerId}`,
+								codeVerifier: providerConfig.pkce ? codeVerifier : undefined,
+							});
+						} else {
+							// Standard token exchange with tokenUrlParams support
+							if (!finalTokenUrl) {
+								throw new APIError("BAD_REQUEST", {
+									message: "Invalid OAuth configuration.",
+								});
+							}
+							const additionalParams =
+								typeof providerConfig.tokenUrlParams === "function"
+									? providerConfig.tokenUrlParams(ctx)
+									: providerConfig.tokenUrlParams;
+							tokens = await validateAuthorizationCode({
+								headers: providerConfig.authorizationHeaders,
+								code,
+								codeVerifier: providerConfig.pkce ? codeVerifier : undefined,
+								redirectURI: `${ctx.context.baseURL}/oauth2/callback/${providerConfig.providerId}`,
+								options: {
+									clientId: providerConfig.clientId,
+									clientSecret: providerConfig.clientSecret,
+									redirectURI: providerConfig.redirectURI,
+								},
+								tokenEndpoint: finalTokenUrl,
+								authentication: providerConfig.authentication,
+								additionalParams,
+							});
+						}
 					} catch (e) {
 						ctx.context.logger.error(
 							e && typeof e === "object" && "name" in e
@@ -767,7 +782,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						);
 						throw redirectOnError("oauth_code_verification_failed");
 					}
-
 					if (!tokens) {
 						throw new APIError("BAD_REQUEST", {
 							message: "Invalid OAuth configuration.",
