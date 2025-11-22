@@ -3,7 +3,7 @@ import type { Account, BetterAuthPlugin, DBAdapter, User } from "better-auth";
 import { APIError, sessionMiddleware } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import type { Member } from "better-auth/plugins";
-import { createAuthEndpoint } from "better-auth/plugins";
+import { createAuthEndpoint, HIDE_METADATA } from "better-auth/plugins";
 import * as z from "zod";
 import { getAccountId, getUserFullName, getUserPrimaryEmail } from "./mappings";
 import { authMiddlewareFactory } from "./middlewares";
@@ -240,7 +240,7 @@ export const scim = (options?: SCIMOptions) => {
 					method: "POST",
 					body: APIUserSchema,
 					metadata: {
-						isAction: false,
+						...HIDE_METADATA,
 						openapi: {
 							summary: "Create SCIM user.",
 							description:
@@ -369,7 +369,7 @@ export const scim = (options?: SCIMOptions) => {
 					method: "PUT",
 					body: APIUserSchema,
 					metadata: {
-						isAction: false,
+						...HIDE_METADATA,
 						openapi: {
 							summary: "Update SCIM user.",
 							description:
@@ -451,7 +451,7 @@ export const scim = (options?: SCIMOptions) => {
 						})
 						.optional(),
 					metadata: {
-						isAction: false,
+						...HIDE_METADATA,
 						openapi: {
 							summary: "List SCIM users",
 							description:
@@ -538,7 +538,7 @@ export const scim = (options?: SCIMOptions) => {
 				{
 					method: "GET",
 					metadata: {
-						isAction: false,
+						...HIDE_METADATA,
 						openapi: {
 							summary: "Get SCIM user details",
 							description:
@@ -603,7 +603,7 @@ export const scim = (options?: SCIMOptions) => {
 						),
 					}),
 					metadata: {
-						isAction: false,
+						...HIDE_METADATA,
 						openapi: {
 							summary: "Patch SCIM user",
 							description: "Updates fields on a SCIM user record",
@@ -672,7 +672,7 @@ export const scim = (options?: SCIMOptions) => {
 				{
 					method: "DELETE",
 					metadata: {
-						isAction: false,
+						...HIDE_METADATA,
 						openapi: {
 							summary: "Delete SCIM user",
 							description:
@@ -715,7 +715,7 @@ export const scim = (options?: SCIMOptions) => {
 				{
 					method: "GET",
 					metadata: {
-						isAction: false,
+						...HIDE_METADATA,
 						openapi: {
 							summary: "SCIM Service Provider Configuration",
 							description:
@@ -766,7 +766,7 @@ export const scim = (options?: SCIMOptions) => {
 				{
 					method: "GET",
 					metadata: {
-						isAction: false,
+						...HIDE_METADATA,
 						openapi: {
 							summary: "SCIM Service Provider Configuration Schemas",
 							description:
@@ -814,7 +814,7 @@ export const scim = (options?: SCIMOptions) => {
 				{
 					method: "GET",
 					metadata: {
-						isAction: false,
+						...HIDE_METADATA,
 						openapi: {
 							summary: "SCIM a Service Provider Configuration Schema",
 							description:
@@ -861,7 +861,7 @@ export const scim = (options?: SCIMOptions) => {
 				{
 					method: "GET",
 					metadata: {
-						isAction: false,
+						...HIDE_METADATA,
 						openapi: {
 							summary: "SCIM Service Provider Supported Resource Types",
 							description:
@@ -917,7 +917,7 @@ export const scim = (options?: SCIMOptions) => {
 				{
 					method: "GET",
 					metadata: {
-						isAction: false,
+						...HIDE_METADATA,
 						openapi: {
 							summary: "SCIM Service Provider Supported Resource Type",
 							description:

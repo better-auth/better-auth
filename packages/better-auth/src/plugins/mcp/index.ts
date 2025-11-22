@@ -29,6 +29,7 @@ import { oidcProvider } from "../oidc-provider";
 import { schema } from "../oidc-provider/schema";
 import { parsePrompt } from "../oidc-provider/utils/prompt";
 import { authorizeMCPOAuth } from "./authorize";
+import { HIDE_METADATA } from "../../utils";
 
 interface MCPOptions {
 	loginPage: string;
@@ -254,7 +255,7 @@ export const mcp = (options: MCPOptions) => {
 					method: "POST",
 					body: z.record(z.any(), z.any()),
 					metadata: {
-						isAction: false,
+						...HIDE_METADATA,
 						allowedMediaTypes: [
 							"application/x-www-form-urlencoded",
 							"application/json",

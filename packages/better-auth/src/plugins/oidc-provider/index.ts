@@ -33,6 +33,7 @@ import type {
 } from "./types";
 import { defaultClientSecretHasher } from "./utils";
 import { parsePrompt } from "./utils/prompt";
+import { HIDE_METADATA } from "../../utils";
 
 const getJwtPlugin = (ctx: GenericEndpointContext) => {
 	return ctx.context.options.plugins?.find(
@@ -299,9 +300,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				{
 					method: "GET",
 					operationId: "getOpenIdConfig",
-					metadata: {
-						isAction: false,
-					},
+					metadata: HIDE_METADATA,
 				},
 				async (ctx) => {
 					const metadata = getMetadata(ctx, options);
@@ -500,7 +499,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					operationId: "oauth2Token",
 					body: z.record(z.any(), z.any()),
 					metadata: {
-						isAction: false,
+						...HIDE_METADATA,
 						allowedMediaTypes: [
 							"application/x-www-form-urlencoded",
 							"application/json",
@@ -933,7 +932,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					operationId: "oauth2Userinfo",
 					use: [sessionMiddleware],
 					metadata: {
-						isAction: false,
+						...HIDE_METADATA,
 						openapi: {
 							description: "Get OAuth2 user information",
 							responses: {
@@ -1529,7 +1528,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						})
 						.optional(),
 					metadata: {
-						isAction: false,
+						...HIDE_METADATA,
 						openapi: {
 							description:
 								"RP-Initiated Logout endpoint. Logs out the end-user and optionally redirects to a post-logout URI.",

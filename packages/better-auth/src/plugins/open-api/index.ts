@@ -4,6 +4,7 @@ import { APIError } from "../../api";
 import type { LiteralString } from "../../types/helper";
 import { generator } from "./generator";
 import { logo } from "./logo";
+import { HIDE_METADATA } from "../../utils";
 
 export type { FieldSchema, OpenAPIModelSchema, Path } from "./generator";
 
@@ -109,9 +110,7 @@ export const openAPI = <O extends OpenAPIOptions>(options?: O | undefined) => {
 				path,
 				{
 					method: "GET",
-					metadata: {
-						isAction: false,
-					},
+					...HIDE_METADATA,
 				},
 				async (ctx) => {
 					if (options?.disableDefaultReference) {

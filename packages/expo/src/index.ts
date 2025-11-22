@@ -3,6 +3,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import { HIDE_METADATA } from "better-auth";
 import { APIError } from "better-call";
 import * as z from "zod";
 
@@ -92,9 +93,7 @@ export const expo = (options?: ExpoOptions | undefined) => {
 					query: z.object({
 						authorizationURL: z.string(),
 					}),
-					metadata: {
-						isAction: false,
-					},
+					metadata: HIDE_METADATA,
 				},
 				async (ctx) => {
 					const { authorizationURL } = ctx.query;
