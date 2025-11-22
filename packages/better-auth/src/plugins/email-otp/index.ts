@@ -262,13 +262,18 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					});
 				const user = await ctx.context.internalAdapter.findUserByEmail(email);
 				if (!user) {
-					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-						`${ctx.body.type}-otp-${email}`,
-					);
-					return ctx.json({
-						success: true,
-					});
+					if (ctx.body.type === "sign-in" && !opts.disableSignUp) {
+						// allow
+					} else {
+						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+							`${ctx.body.type}-otp-${email}`,
+						);
+						return ctx.json({
+							success: true,
+						});
+					}
 				}
+
 				await options.sendVerificationOTP(
 					{
 						email,
@@ -1109,7 +1114,12 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					await ctx.context.internalAdapter.deleteVerificationValue(
 						verificationValue.id,
 					);
-					const user = await ctx.context.internalAdapter.findUserByEmail(email);
+					const user = await ctx.context.internalAdapter.findUserByEmail(
+						email,
+						{
+							includeAccounts: true,
+						},
+					);
 					if (!user) {
 						throw new APIError("BAD_REQUEST", {
 							message: BASE_ERROR_CODES.USER_NOT_FOUND,
@@ -1118,7 +1128,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					const passwordHash = await ctx.context.password.hash(
 						ctx.body.password,
 					);
-					const account = user.accounts.find(
+					let account = user.accounts?.find(
 						(account) => account.providerId === "credential",
 					);
 					if (!account) {
