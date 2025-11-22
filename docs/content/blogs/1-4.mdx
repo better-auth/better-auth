@@ -13,7 +13,7 @@ tags: ["1.4", "stateless sessions", "SCIM", "database indexing", "database join"
 ## Better Auth 1.4 Release
 
 We're excited to announce the release of Better Auth 1.4.
-This release includes several new features, performance improvements and several bug fixes.
+This release includes several new features, performance and security improvements.
 
 To upgrade, run:
 
@@ -27,8 +27,7 @@ npm install better-auth@1.4
 
 ### Stateless Auth
 
-The long awaited stateless auth is here! Omit the `database` option in your auth config
-to enable stateless session management without any database.
+You can now enable stateless session management without any database by omitting the `database` option in your auth config. 
 
 [👉 Read more about stateless auth](/docs/concepts/session-management#stateless-session-management)
 
@@ -46,49 +45,36 @@ export const auth = betterAuth({
 });
 ```
 
-You can optionally store account info after the OAuth flow in a cookie.
+It also supports getting `accessToken`, `accountInfo` and `refreshToken` endpoints without any database.
 
 ```ts
-import { betterAuth } from "better-auth";
+import { authClient } from "@/lib/auth-client";
 
-export const auth = betterAuth({
-    account: {
-        storeAccountCookie: true,
-    },
-});
-```
+const accessToken = await authClient.getAccessToken();
 
-Which allows you to use endpoints such as `getAccessToken` to get the access token for your stateless auth setup!
-
-```ts
-const { accessToken } = await authClient.getAccessToken({
-  providerId: "google", // or any other provider id
-  accountId: "accountId", // optional, if you want to get the access token for a specific account
-})
+// get account info
+const accountInfo = await authClient.accountInfo();
 ```
 
 ---
 
-### Database Joins
 
-Better-Auth now supports joins, improving over 50 endpoints by 2 to 3x in latency.
+### SCIM Provisioning
 
-To enable, simply set the `joins` flag to `true` under `experimental` in your auth config.
-Then, re-run migrations or schema generation to get the updated schema which supports joins!
+SCIM makes managing identities in multi-domain scenarios easier to support via a standardized protocol.
 
-[👉 Read more about database joins](/docs/concepts/database#experimental-joins)
+[👉 Read more about SCIM provisioning](/docs/concepts/scim)
 
 ```ts
+import { scim } from "@better-auth/scim";
 import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-    experimental: {
-        joins: true,
-    },
+    plugins: [scim()]
 });
 ```
-
 ---
+
 
 ### Custom State for OAuth Flows
 
@@ -106,24 +92,49 @@ await authClient.signIn.social({
         source: "landing-page", // [!code highlight]
     }, // [!code highlight]
 });
+```
 
+Access additional data in any hook, middleware, or endpoints
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { getOAuthState, createAuthMiddleware } from "better-auth/api";
+
+const auth = betterAuth({
+    hooks: {
+      before: createAuthMiddleware(async (ctx) => {
+        const additionalData = await getOAuthState<{ referralCode: string, source: string }>();
+        console.log(additionalData);
+      })
+    }
+});
 ```
 ---
 
-### SCIM Provisioning
 
-SCIM makes managing identities in multi-domain scenarios easier to support via a standardized protocol.
+### Database Joins Improvements (experimental)
 
-[👉 Read more about SCIM provisioning](/docs/concepts/scim)
+Better-Auth now supports database joins, improving over 50 endpoints by 2 to 3x in latency. This is achieved by using database joins under the hood.
+
+To enable, simply set the `joins` flag to `true` under `experimental` in your auth config.
+Then, re-run migrations or schema generation to get the updated schema which supports joins!
+
+[👉 Read more about database joins](/docs/concepts/database#experimental-joins)
 
 ```ts
-import { scim } from "@better-auth/scim";
 import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-    plugins: [scim()]
+    experimental: {
+        joins: true,
+    },
 });
 ```
+
+<Callout type="info">
+  Although joins are experimental, they are supported by all adapters and will be enabled by default in the next release.
+</Callout>
+
 ---
 
 ### Secondary Storage Support for API Keys
@@ -188,7 +199,7 @@ export const auth = betterAuth({
 
 ---
 
-### Error Page Improvements
+### New Default Error Page
 
 We've revamped our error page to look much better and more informative!
 You can also customize the stylings of our default error page or simply provide your own path to a custom error page.
@@ -217,7 +228,7 @@ export const auth = betterAuth({
 
 ---
 
-### Database Index Support
+### CLI Database Index Support
 
 The Better-Auth CLI now supports indexing your database out of the box, which greatly improves the performance of your application.
 
@@ -225,6 +236,48 @@ The Better-Auth CLI now supports indexing your database out of the box, which gr
 npx @better-auth/cli generate
 
 npx @better-auth/cli migrate
+```
+
+---
+
+### JWT Key Rotation Support
+
+The JWT plugin now supports key rotation, allowing you to rotate your JWT keys without downtime.
+
+```ts
+import { jwt } from "@better-auth/jwt";
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    plugins: [
+      jwt({ keyRotation: { enabled: true } })
+    ],
+});
+```
+
+
+### Improved Generic OAuth Plugin
+
+OAuth providers not yet supported natively will be available as pre-configured options for the generic OAuth plugin,
+with plans to eventually support all providers that Auth.js does.
+
+```ts
+import { betterAuth } from "better-auth";
+import { genericOAuth } from "better-auth/plugins";
+import { keycloak } from "better-auth/plugins/generic-oauth";
+
+export const auth = betterAuth({
+    plugins: [genericOAuth({
+        config: [
+            keycloak({
+                clientId: process.env.KEYCLOAK_CLIENT_ID,
+                clientSecret: process.env.KEYCLOAK_CLIENT_SECRET,
+                issuer: process.env.KEYCLOAK_ISSUER,
+            })
+        ]
+    })
+    ]
+});
 ```
 
 ---
@@ -297,52 +350,6 @@ export const auth = betterAuth({
 
 ---
 
-### Pre-Configured Social Providers for OAuth
-
-OAuth providers not yet supported natively will be available as pre-configured options for the generic OAuth plugin,
-with plans to eventually support all providers that Auth.js does.
-
-```ts
-import { betterAuth } from "better-auth";
-import { genericOAuth } from "better-auth/plugins";
-import { keycloak } from "better-auth/plugins/generic-oauth";
-
-export const auth = betterAuth({
-    plugins: [genericOAuth({
-        config: [
-            keycloak({
-                clientId: process.env.KEYCLOAK_CLIENT_ID,
-                clientSecret: process.env.KEYCLOAK_CLIENT_SECRET,
-                issuer: process.env.KEYCLOAK_ISSUER,
-            })
-        ]
-    })
-    ]
-});
-```
-
----
-
-### JWT Rotation
-
-The JWT plugin now supports token rotation, allowing you to rotate your JWKS keys periodically with a grace period.
-
-[👉 Read more about JWT rotation](/docs/plugins/jwt#key-rotation)
-
-```ts title="auth.ts"
-export const auth = betterAuth({
-    plugins: [
-        jwt({
-            jwks: {
-                rotationInterval: 60 * 60 * 24 * 30, // 30 days // [!code highlight]
-                gracePeriod: 60 * 60 * 24 * 30 // 30 days // [!code highlight]
-            }
-        }),
-    ],
-});
-```
-
----
 
 ## ⚠️ Breaking Changes
 
