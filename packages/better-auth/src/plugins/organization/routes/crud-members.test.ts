@@ -73,6 +73,19 @@ describe("listMembers", async () => {
 		expect(members.data?.total).toBe(11);
 	});
 
+	it("should return all members by organization slug", async () => {
+		const members = await client.organization.listMembers({
+			fetchOptions: {
+				headers,
+			},
+			query: {
+				organizationSlug: "test-second",
+			},
+		});
+		expect(members.data?.members.length).toBe(1);
+		expect(members.data?.total).toBe(1);
+	});
+
 	it("should limit the number of members", async () => {
 		const members = await client.organization.listMembers({
 			fetchOptions: {
