@@ -272,10 +272,6 @@ export const twoFactor = (options?: TwoFactorOptions | undefined) => {
 						session: newSession,
 						user: updatedUser,
 					});
-					//remove current session
-					await ctx.context.internalAdapter.deleteSession(
-						ctx.context.session.session.token,
-					);
 					return ctx.json({ status: true });
 				},
 			),
