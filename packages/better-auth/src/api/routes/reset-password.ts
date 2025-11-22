@@ -35,7 +35,6 @@ export const requestPasswordReset = createAuthEndpoint(
 	"/request-password-reset",
 	{
 		method: "POST",
-		operationId: "forgetPassword",
 		body: z.object({
 			/**
 			 * The email address of the user to send a password reset email to.
@@ -60,7 +59,7 @@ export const requestPasswordReset = createAuthEndpoint(
 		}),
 		metadata: {
 			openapi: {
-				operationId: "forgetPassword",
+				operationId: "requestPasswordReset",
 				description: "Send a password reset email to the user",
 				responses: {
 					"200": {
