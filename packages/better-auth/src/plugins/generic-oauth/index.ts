@@ -15,7 +15,6 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "@better-auth/core/oauth2";
-import { defineErrorCodes } from "@better-auth/core/utils";
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
 import { decodeJwt } from "jose";
@@ -25,6 +24,7 @@ import { setSessionCookie } from "../../cookies";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState, parseState } from "../../oauth2/state";
 import type { User } from "../../types";
+import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
 
 export * from "./providers";
 
@@ -258,10 +258,6 @@ async function getUserInfo(
 	};
 }
 
-const ERROR_CODES = defineErrorCodes({
-	INVALID_OAUTH_CONFIGURATION: "Invalid OAuth configuration",
-});
-
 /**
  * A generic OAuth plugin that can be used to add OAuth support to any provider
  */
@@ -299,7 +295,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						}
 						if (!finalAuthUrl) {
 							throw new APIError("BAD_REQUEST", {
-								message: ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
+								message: GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
 							});
 						}
 						return createAuthorizationURL({
@@ -344,7 +340,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						}
 						if (!finalTokenUrl) {
 							throw new APIError("BAD_REQUEST", {
-								message: "Invalid OAuth configuration. Token URL not found.",
+								message: GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
 							});
 						}
 						return validateAuthorizationCode({
@@ -378,7 +374,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						}
 						if (!finalTokenUrl) {
 							throw new APIError("BAD_REQUEST", {
-								message: "Invalid OAuth configuration. Token URL not found.",
+								message: GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
 							});
 						}
 						return refreshAccessToken({
@@ -525,7 +521,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					);
 					if (!config) {
 						throw new APIError("BAD_REQUEST", {
-							message: `No config found for provider ${providerId}`,
+							message: `${GENERIC_OAUTH_ERROR_CODES.PROVIDER_CONFIG_NOT_FOUND} ${providerId}`,
 						});
 					}
 					const {
@@ -566,7 +562,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					}
 					if (!finalAuthUrl || !finalTokenUrl) {
 						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
+							message: GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
 						});
 					}
 					if (authorizationUrlParams) {
@@ -686,7 +682,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					const providerId = ctx.params?.providerId;
 					if (!providerId) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Provider ID is required",
+							message: GENERIC_OAUTH_ERROR_CODES.PROVIDER_ID_REQUIRED,
 						});
 					}
 					const providerConfig = options.config.find(
@@ -695,7 +691,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 
 					if (!providerConfig) {
 						throw new APIError("BAD_REQUEST", {
-							message: `No config found for provider ${providerId}`,
+							message: `${GENERIC_OAUTH_ERROR_CODES.PROVIDER_CONFIG_NOT_FOUND} ${providerId}`,
 						});
 					}
 
@@ -751,7 +747,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							// Standard token exchange with tokenUrlParams support
 							if (!finalTokenUrl) {
 								throw new APIError("BAD_REQUEST", {
-									message: "Invalid OAuth configuration.",
+									message: GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIG,
 								});
 							}
 							const additionalParams =
@@ -784,7 +780,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					}
 					if (!tokens) {
 						throw new APIError("BAD_REQUEST", {
-							message: "Invalid OAuth configuration.",
+							message: GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIG,
 						});
 					}
 					const userInfo: Omit<User, "createdAt" | "updatedAt"> =
@@ -1005,7 +1001,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					const session = c.context.session;
 					if (!session) {
 						throw new APIError("UNAUTHORIZED", {
-							message: "Session is required",
+							message: GENERIC_OAUTH_ERROR_CODES.SESSION_REQUIRED,
 						});
 					}
 					const provider = options.config.find(
@@ -1034,7 +1030,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 					if (!finalAuthUrl) {
 						if (!discoveryUrl) {
 							throw new APIError("BAD_REQUEST", {
-								message: ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
+								message: GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
 							});
 						}
 						const discovery = await betterFetch<{
@@ -1056,7 +1052,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 
 					if (!finalAuthUrl) {
 						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
+							message: GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
 						});
 					}
 
@@ -1102,6 +1098,6 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 				},
 			),
 		},
-		$ERROR_CODES: ERROR_CODES,
+		$ERROR_CODES: GENERIC_OAUTH_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
