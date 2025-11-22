@@ -131,6 +131,17 @@ type listUsers = {
    */
   searchOperator?: "contains" | "starts_with" | "ends_with" = "contains"
   /**
+   * The fields to search in when `searchField` is not provided.  
+   * Example: ["email", "name"]
+   */
+  searchInFields?: string[] = ["email"]
+  /**
+   * How to combine multiple fields from `searchInFields`.  
+   * - OR: match any field (default)  
+   * - AND: match all fields  
+   */
+  searchMode?: "OR" | "AND" = "OR"
+  /**
    * The number of users to return. Defaults to 100.
    */
   limit?: string | number = 100
