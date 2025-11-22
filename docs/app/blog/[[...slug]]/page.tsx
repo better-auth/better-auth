@@ -9,6 +9,7 @@ import { ArrowLeftIcon, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Features } from "@/components/blocks/features";
+import { Contributors } from "@/components/contributors";
 import { ForkButton } from "@/components/fork-button";
 import { GenerateSecret } from "@/components/generate-secret";
 import DatabaseTable from "@/components/mdx/database-tables";
@@ -180,6 +181,7 @@ export default async function Page({
 							DatabaseTable,
 							Accordion,
 							Accordions,
+							Contributors,
 							Callout: ({
 								children,
 								type,
