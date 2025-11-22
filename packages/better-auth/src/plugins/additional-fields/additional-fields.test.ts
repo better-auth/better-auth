@@ -223,7 +223,7 @@ describe("additionalFields", async () => {
 
 describe("runtime", async () => {
 	it("should apply default value function on runtime", async () => {
-		const { auth, customFetchImpl } = await getTestInstance({
+		const { auth } = await getTestInstance({
 			user: {
 				additionalFields: {
 					newField: {
