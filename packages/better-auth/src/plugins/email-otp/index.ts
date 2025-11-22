@@ -317,7 +317,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 		endpoints: {
 			...endpoints,
 			createVerificationOTP: createAuthEndpoint(
-				"/email-otp/create-verification-otp",
 				{
 					method: "POST",
 					body: z.object({
@@ -330,7 +329,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						}),
 					}),
 					metadata: {
-						SERVER_ONLY: true,
 						openapi: {
 							operationId: "createEmailVerificationOTP",
 							description: "Create a verification OTP for an email",
@@ -376,7 +374,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/email-otp#api-method-email-otp-get-verification-otp)
 			 */
 			getVerificationOTP: createAuthEndpoint(
-				"/email-otp/get-verification-otp",
 				{
 					method: "GET",
 					query: z.object({
@@ -389,7 +386,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						}),
 					}),
 					metadata: {
-						SERVER_ONLY: true,
 						openapi: {
 							operationId: "getEmailVerificationOTP",
 							description: "Get a verification OTP for an email",

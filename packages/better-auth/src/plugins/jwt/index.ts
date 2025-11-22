@@ -231,11 +231,9 @@ export const jwt = (options?: JwtOptions | undefined) => {
 				},
 			),
 			signJWT: createAuthEndpoint(
-				"/sign-jwt",
 				{
 					method: "POST",
 					metadata: {
-						SERVER_ONLY: true,
 						$Infer: {
 							body: {} as {
 								payload: JWTPayload;
@@ -260,11 +258,9 @@ export const jwt = (options?: JwtOptions | undefined) => {
 				},
 			),
 			verifyJWT: createAuthEndpoint(
-				"/verify-jwt",
 				{
 					method: "POST",
 					metadata: {
-						SERVER_ONLY: true,
 						$Infer: {
 							body: {} as {
 								token: string;
