@@ -645,6 +645,86 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 		},
 	);
 };
+
+export const getOrganization = <O extends OrganizationOptions>(options: O) =>
+	createAuthEndpoint(
+		"/organization/get",
+		{
+			method: "GET",
+			query: z
+				.union([
+					z.object({
+						organizationId: z.string(),
+					}),
+					z.object({
+						organizationSlug: z.string(),
+					}),
+				])
+				.optional(),
+			requireHeaders: true,
+			use: [orgMiddleware, orgSessionMiddleware],
+			metadata: {
+				openapi: {
+					description:
+						"Get basic organization details without members, invitations, or teams. Requires membership.",
+					responses: {
+						"200": {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										$ref: "#/components/schemas/Organization",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const session = ctx.context.session;
+			const query = ctx.query ?? {
+				organizationId: session.session.activeOrganizationId,
+			};
+
+			const adapter = getOrgAdapter<O>(ctx.context, options);
+
+			let organization: InferOrganization<O> | null = null;
+			if ("organizationId" in query && query.organizationId) {
+				organization = await adapter.findOrganizationById(query.organizationId);
+			} else if ("organizationSlug" in query && query.organizationSlug) {
+				organization = await adapter.findOrganizationBySlug(
+					query.organizationSlug,
+				);
+			} else {
+				throw new APIError("FORBIDDEN", {
+					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+				});
+			}
+
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+
+			const member = await adapter.checkMembership({
+				userId: session.user.id,
+				organizationId: organization.id,
+			});
+
+			if (!member) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+				});
+			}
+
+			return ctx.json(organization);
+		},
+	);
+
 export const getFullOrganization = <O extends OrganizationOptions>(
 	options: O,
 ) =>
