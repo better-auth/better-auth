@@ -48,7 +48,7 @@ const { execute } = await testAdapter({
 		authFlowTestSuite(),
 		numberIdTestSuite(),
 		joinsTestSuite(),
-		uuidTestSuite({}),
+		uuidTestSuite(),
 	],
 	async onFinish() {
 		database.close();

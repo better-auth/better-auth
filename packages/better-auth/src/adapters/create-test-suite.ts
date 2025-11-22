@@ -80,24 +80,6 @@ export type InsertRandomFn = <
 			>
 >;
 
-export const createTestSuite2 = <
-	Tests extends Record<
-		string,
-		(context: {
-			/**
-			 * Mark tests as skipped. All execution after this call will be skipped.
-			 * This function throws an error, so make sure you are not catching it accidentally.
-			 * @see {@link https://vitest.dev/guide/test-context#skip}
-			 */
-			readonly skip: {
-				(note?: string | undefined): never;
-				(condition: boolean, note?: string | undefined): void;
-			};
-		}) => Promise<void>
-	>,
-	AdditionalOptions extends Record<string, any> = {},
->() => {};
-
 export const createTestSuite = <
 	Tests extends Record<
 		string,
@@ -282,14 +264,13 @@ export const createTestSuite = <
 					for (const row of createdRows[model]!) {
 						const schema = getAuthTables(helpers.getBetterAuthOptions());
 						const getDefaultModelName = initGetDefaultModelName({
-							usePlural: adapter.options?.adapterConfig?.usePlural,
-							schema: schema,
+							schema,
+							usePlural: adapter.options?.adapterConfig.usePlural,
 						});
 						let defaultModelName: string;
 						try {
 							defaultModelName = getDefaultModelName(model);
-						} catch (error) {
-							// if fail, likely means it was removed from the schema
+						} catch {
 							continue;
 						}
 						if (!schema[defaultModelName]) continue; // model doesn't exist in the schema anymore, so we skip it
