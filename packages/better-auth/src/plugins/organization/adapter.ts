@@ -218,7 +218,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			organizationId: string;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const [{ user, ...member }, roleAssignments] = await Promise.all([
+			const [memberWithUser, roleAssignments] = await Promise.all([
 				adapter.findOne<InferMember<O, false> & { user: User }>({
 					model: "member",
 					where: [
@@ -246,9 +246,11 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					],
 				}),
 			]);
-			if (!user || !member) {
+			if (!memberWithUser) {
 				return null;
 			}
+
+			const { user, ...member } = memberWithUser;
 			// Filter roles for this specific member
 			const memberRoles = roleAssignments
 				.filter((ra) => ra.memberId === member.id)
@@ -266,7 +268,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		findMemberById: async (memberId: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const [{ user, ...member }, roleAssignments] = await Promise.all([
+			const [memberWithUser, roleAssignments] = await Promise.all([
 				adapter.findOne<InferMember<O, false> & { user: User }>({
 					model: "member",
 					where: [
@@ -285,9 +287,10 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				}),
 			]);
 
-			if (!member) {
+			if (!memberWithUser) {
 				return null;
 			}
+			const { user, ...member } = memberWithUser;
 			if (!user) {
 				return null;
 			}

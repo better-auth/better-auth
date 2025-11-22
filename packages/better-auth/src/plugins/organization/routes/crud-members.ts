@@ -1033,7 +1033,7 @@ export const getActiveMemberRole = <O extends OrganizationOptions>(
 			}
 			if (!ctx.query?.userId) {
 				return ctx.json({
-					role: isMember.role,
+					organizationRoles: isMember.organizationRoles,
 				});
 			}
 			const userIdToGetRole = ctx.query?.userId;

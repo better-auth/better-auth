@@ -20,7 +20,7 @@ import type { OrganizationOptions } from "../types";
 import {
 	authorize,
 	getCurrentGraphContext,
-	runWithGraphTransaction,
+	withTransaction,
 } from "@better-auth/core/context";
 import { createGraphAdapter } from "../../../context/graph-context";
 
