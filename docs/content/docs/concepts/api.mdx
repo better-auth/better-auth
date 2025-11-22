@@ -77,7 +77,7 @@ const { headers, response } = await auth.api.signUpEmail({
 The `headers` will be a `Headers` object, which you can use to get the cookies or the headers.
 
 ```ts
-const cookies = headers.get("set-cookie");
+const cookies = headers.getSetCookie();
 const headers = headers.get("x-custom-header");
 ```
 
