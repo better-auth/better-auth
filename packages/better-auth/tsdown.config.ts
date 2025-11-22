@@ -5,6 +5,7 @@ export default defineConfig({
 	format: ["esm"],
 	entry: [
 		"./src/index.ts",
+		"./src/auth/minimal.ts",
 		"./src/social-providers/index.ts",
 		"./src/client/index.ts",
 		"./src/client/plugins/index.ts",
@@ -31,7 +32,7 @@ export default defineConfig({
 		"./src/integrations/svelte-kit.ts",
 		"./src/integrations/solid-start.ts",
 		"./src/integrations/next-js.ts",
-		"./src/integrations/react-start.ts",
+		"./src/integrations/tanstack-start.ts",
 		"./src/integrations/node.ts",
 		"./src/plugins/admin/index.ts",
 		"./src/plugins/admin/access/index.ts",
