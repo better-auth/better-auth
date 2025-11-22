@@ -250,11 +250,13 @@ import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
     plugins: [
-      jwt({ keyRotation: { enabled: true } })
+      jwt({ 
+        jwks: { rotationInterval: 60 * 60 * 24 * 30, gracePeriod: 60 * 60 * 24 * 30 } // [!code highlight]
+      })
     ],
 });
 ```
-
+👉 [Read more about JWT key rotation](/docs/plugins/jwt#key-rotation)
 
 ### Improved Generic OAuth Plugin
 
