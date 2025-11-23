@@ -96,7 +96,7 @@ export async function getTestInstance<
 				clientSecret: "test",
 			},
 		},
-		secret: "better-auth.secret",
+		secret: "better-auth-secret-that-is-long-enough-for-validation-test",
 		database:
 			testWith === "postgres"
 				? { db: await getPostgres(), type: "postgres" }
