@@ -350,7 +350,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					},
 				},
 				async (ctx) => {
-					const email = ctx.body.email;
+					const email = ctx.body.email.toLowerCase();
 					const otp =
 						opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
 						defaultOTPGenerator(opts);
@@ -419,7 +419,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					},
 				},
 				async (ctx) => {
-					const email = ctx.query.email;
+					const email = ctx.query.email.toLowerCase();
 					const verificationValue =
 						await ctx.context.internalAdapter.findVerificationValue(
 							`${ctx.query.type}-otp-${email}`,
@@ -825,7 +825,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					},
 				},
 				async (ctx) => {
-					const email = ctx.body.email;
+					const email = ctx.body.email.toLowerCase();
 					const verificationValue =
 						await ctx.context.internalAdapter.findVerificationValue(
 							`sign-in-otp-${email}`,
