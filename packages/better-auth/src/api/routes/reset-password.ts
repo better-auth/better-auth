@@ -340,7 +340,7 @@ export const resetPassword = createAuthEndpoint(
 		}
 		if (ctx.context.options.emailAndPassword?.autoSignInOnResetPassword) {
 			const currentSession = await getSessionFromCtx(ctx);
-			if (!currentSession) {
+			if (!currentSession || currentSession.user.id !== userId) {
 				const user = await ctx.context.internalAdapter.findUserById(userId);
 				if (!user) {
 					throw new APIError("INTERNAL_SERVER_ERROR", {
