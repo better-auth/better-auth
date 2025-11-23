@@ -284,7 +284,7 @@ describe("stripe", async () => {
 		});
 		expect(listBeforeActive.data?.length).toBe(0);
 		// Update the subscription status to active
-		await ctx.adapter.update({
+		await ctx.adapter.updateMany({
 			model: "subscription",
 			update: {
 				status: "active",
@@ -543,7 +543,7 @@ describe("stripe", async () => {
 			},
 		});
 
-		const subscription = await ctx.adapter.findOne<Subscription>({
+		const subscriptions = await ctx.adapter.findMany<Subscription>({
 			model: "subscription",
 			where: [
 				{
@@ -551,8 +551,10 @@ describe("stripe", async () => {
 					value: userId,
 				},
 			],
+			limit: 1,
 		});
-
+		if (!subscriptions.length) return;
+		const subscription = subscriptions[0]!;
 		const mockDeleteEvent = {
 			type: "customer.subscription.deleted",
 			data: {
@@ -1015,7 +1017,7 @@ describe("stripe", async () => {
 			},
 		});
 
-		await ctx.adapter.update({
+		await ctx.adapter.updateMany({
 			model: "subscription",
 			update: {
 				status: "active",
@@ -1070,7 +1072,7 @@ describe("stripe", async () => {
 			},
 		});
 
-		await ctx.adapter.update({
+		await ctx.adapter.updateMany({
 			model: "subscription",
 			update: {
 				status: "active",
@@ -1201,10 +1203,12 @@ describe("stripe", async () => {
 			fetchOptions: { headers },
 		});
 
-		const personalSub = await testCtx.adapter.findOne<Subscription>({
+		const personalSubs = await testCtx.adapter.findMany<Subscription>({
 			model: "subscription",
 			where: [{ field: "referenceId", value: userRes.user.id }],
+			limit: 1,
 		});
+		const personalSub = personalSubs[0]!;
 		expect(personalSub).toBeTruthy();
 
 		await testCtx.adapter.update({
@@ -1379,7 +1383,7 @@ describe("stripe", async () => {
 		});
 
 		// Simulate the subscription being active
-		const starterSub = await ctx.adapter.findOne<Subscription>({
+		const starterSubs = await ctx.adapter.findMany<Subscription>({
 			model: "subscription",
 			where: [
 				{
@@ -1387,7 +1391,9 @@ describe("stripe", async () => {
 					value: userRes.user.id,
 				},
 			],
+			limit: 1,
 		});
+		const starterSub = starterSubs[0]!;
 
 		await ctx.adapter.update({
 			model: "subscription",
@@ -2036,6 +2042,7 @@ describe("stripe", async () => {
 					plan: "starter",
 					id: "sub_123",
 				},
+				forceAllowId: true,
 			});
 
 			const mockRequest = new Request(

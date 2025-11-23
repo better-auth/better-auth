@@ -854,18 +854,20 @@ export const createInternalAdapter = (
 			return accounts;
 		},
 		findAccount: async (accountId: string) => {
-			const account = await (await getCurrentAdapter(adapter)).findOne<Account>(
-				{
-					model: "account",
-					where: [
-						{
-							field: "accountId",
-							value: accountId,
-						},
-					],
-				},
-			);
-			return account;
+			const accounts = await (
+				await getCurrentAdapter(adapter)
+			).findMany<Account>({
+				model: "account",
+				where: [
+					{
+						field: "accountId",
+						value: accountId,
+					},
+				],
+				limit: 1,
+			});
+			if (!accounts.length) return null;
+			return accounts[0]!;
 		},
 		findAccountByProviderId: async (accountId: string, providerId: string) => {
 			const account = await (await getCurrentAdapter(adapter)).findOne<Account>(
@@ -968,7 +970,7 @@ export const createInternalAdapter = (
 			});
 		},
 		deleteVerificationByIdentifier: async (identifier: string) => {
-			await (await getCurrentAdapter(adapter)).delete<Verification>({
+			await (await getCurrentAdapter(adapter)).deleteMany({
 				model: "verification",
 				where: [
 					{

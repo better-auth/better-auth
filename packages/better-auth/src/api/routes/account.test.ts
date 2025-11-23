@@ -312,7 +312,7 @@ describe("account", async () => {
 		const { runWithUser } = await signInWithTestUser();
 		await runWithUser(async () => {
 			const previousAccounts = await client.listAccounts();
-			await ctx.adapter.delete({
+			await ctx.adapter.deleteMany({
 				model: "account",
 				where: [
 					{

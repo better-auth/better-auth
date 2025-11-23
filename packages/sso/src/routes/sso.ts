@@ -921,7 +921,7 @@ export const signInSSO = (options?: SSOOptions) => {
 			// Try to find provider in database
 			if (!provider) {
 				provider = await ctx.context.adapter
-					.findOne<SSOProvider<SSOOptions>>({
+					.findMany<SSOProvider<SSOOptions>>({
 						model: "ssoProvider",
 						where: [
 							{
@@ -934,10 +934,11 @@ export const signInSSO = (options?: SSOOptions) => {
 							},
 						],
 					})
-					.then((res) => {
-						if (!res) {
+					.then((res_) => {
+						if (!res_.length) {
 							return null;
 						}
+						const res = res_[0]!;
 						return {
 							...res,
 							oidcConfig: res.oidcConfig

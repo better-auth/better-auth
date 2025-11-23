@@ -44,6 +44,7 @@ export const apiKeySchema = ({
 					required: true,
 					input: false,
 					index: true,
+					unique: true,
 				},
 				/**
 				 * The user id of the user who created the key.

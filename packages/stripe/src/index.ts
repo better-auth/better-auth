@@ -285,10 +285,13 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							],
 						})
 					: referenceId
-						? await ctx.context.adapter.findOne<Subscription>({
-								model: "subscription",
-								where: [{ field: "referenceId", value: referenceId }],
-							})
+						? await ctx.context.adapter
+								.findMany<Subscription>({
+									model: "subscription",
+									where: [{ field: "referenceId", value: referenceId }],
+									limit: 1,
+								})
+								.then((subs) => subs[0])
 						: null;
 
 				if (ctx.body.subscriptionId && !subscriptionToUpdate) {

@@ -199,8 +199,8 @@ export const verifyDomain = (options: SSOOptions) => {
 				});
 			}
 
-			const activeVerification =
-				await ctx.context.adapter.findOne<Verification>({
+			const activeVerifications =
+				await ctx.context.adapter.findMany<Verification>({
 					model: "verification",
 					where: [
 						{
@@ -211,7 +211,11 @@ export const verifyDomain = (options: SSOOptions) => {
 						},
 						{ field: "expiresAt", value: new Date(), operator: "gt" },
 					],
+					limit: 1,
 				});
+
+			if (!activeVerifications.length) return null;
+			const activeVerification = activeVerifications[0]!;
 
 			if (!activeVerification) {
 				throw new APIError("NOT_FOUND", {

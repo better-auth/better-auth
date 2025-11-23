@@ -33,6 +33,7 @@ export const schema = {
 					field: "id",
 				},
 				index: true,
+				unique: true,
 			},
 		},
 	},

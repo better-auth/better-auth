@@ -72,7 +72,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			organizationId: string;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const user = await adapter.findOne<User>({
+			const users = await adapter.findMany<User>({
 				model: "user",
 				where: [
 					{
@@ -80,10 +80,12 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 						value: data.email.toLowerCase(),
 					},
 				],
+				limit: 1,
 			});
-			if (!user) {
+			if (!users.length) {
 				return null;
 			}
+			const user = users[0]!;
 			const member = await adapter.findOne<InferMember<O, false>>({
 				model: "member",
 				where: [
@@ -196,8 +198,8 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			organizationId: string;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const result = await adapter.findOne<
-				InferMember<O, false> & { user: User }
+			const results = await adapter.findMany<
+				InferMember<O, false> & { user: User | null }
 			>({
 				model: "member",
 				where: [
@@ -213,7 +215,10 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				join: {
 					user: true,
 				},
+				limit: 1,
 			});
+			if (!results.length) return null;
+			const result = results[0];
 			if (!result || !result.user) return null;
 			const { user, ...member } = result;
 
@@ -440,7 +445,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			organizationId: string;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const member = await adapter.findOne<InferMember<O, false>>({
+			const member = await adapter.findMany<InferMember<O, false>>({
 				model: "member",
 				where: [
 					{
@@ -452,8 +457,10 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 						value: organizationId,
 					},
 				],
+				limit: 1,
 			});
-			return member;
+			if (!member.length) return null;
+			return member[0]!;
 		},
 		/**
 		 * @requires db
@@ -802,7 +809,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			userId: string;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const member = await adapter.findOne<TeamMember>({
+			const members = await adapter.findMany<TeamMember>({
 				model: "teamMember",
 				where: [
 					{
@@ -814,9 +821,10 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 						value: data.userId,
 					},
 				],
+				limit: 1,
 			});
 
-			if (member) return member;
+			if (members.length) return members[0]!;
 
 			return await adapter.create<Omit<TeamMember, "id">, TeamMember>({
 				model: "teamMember",
