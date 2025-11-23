@@ -18,6 +18,7 @@ import { linkedin } from "./linkedin";
 import { microsoft } from "./microsoft-entra-id";
 import { naver } from "./naver";
 import { notion } from "./notion";
+import { patreon } from "./patreon";
 import { paybin } from "./paybin";
 import { paypal } from "./paypal";
 import { polar } from "./polar";
@@ -31,7 +32,6 @@ import { twitch } from "./twitch";
 import { twitter } from "./twitter";
 import { vk } from "./vk";
 import { zoom } from "./zoom";
-import {patreon} from "./patreon";
 
 export const socialProviders = {
 	apple,
