@@ -99,5 +99,6 @@ export const patreon = (options: PatreonOptions) => {
 				data: profile,
 			};
 		},
+		options,
 	} satisfies OAuthProvider<PatreonProfile>;
 };
