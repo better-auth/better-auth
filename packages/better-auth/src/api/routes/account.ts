@@ -55,6 +55,7 @@ export const listUserAccounts = createAuthEndpoint(
 											},
 											idToken: {
 												type: "string",
+												nullable: true,
 											},
 											scopes: {
 												type: "array",
