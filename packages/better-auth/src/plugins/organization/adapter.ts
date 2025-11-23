@@ -86,7 +86,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				return null;
 			}
 			const user = users[0]!;
-			const member = await adapter.findOne<InferMember<O, false>>({
+			const members = await adapter.findMany<InferMember<O, false>>({
 				model: "member",
 				where: [
 					{
@@ -98,10 +98,12 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 						value: user.id,
 					},
 				],
+				limit: 1
 			});
-			if (!member) {
+			if (!members.length) {
 				return null;
 			}
+			const member = members[0]!;
 			return {
 				...member,
 				user: {
@@ -787,7 +789,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 
 		findTeamMember: async (data: { teamId: string; userId: string }) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const member = await adapter.findOne<TeamMember>({
+			const members = await adapter.findMany<TeamMember>({
 				model: "teamMember",
 				where: [
 					{
@@ -799,7 +801,10 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 						value: data.userId,
 					},
 				],
+				limit: 1,
 			});
+			if(!members.length) return null;
+			const member = members[0]!;
 
 			return member;
 		},
