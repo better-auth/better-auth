@@ -112,6 +112,7 @@ describe("oidc provider", async () => {
 			token_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
+				"private_key_jwt",
 				"none",
 			],
 			userinfo_endpoint: expect.stringContaining("/api/auth/oauth2/userinfo"),

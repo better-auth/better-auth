@@ -101,7 +101,7 @@ type registerOAuthApplication = {
     /**
      * The authentication method for the token endpoint. 
      */
-    token_endpoint_auth_method?: "none" | "client_secret_basic" | "client_secret_post" = "client_secret_basic"
+    token_endpoint_auth_method?: "none" | "client_secret_basic" | "client_secret_post" | "private_key_jwt" = "client_secret_basic"
     /**
      * The grant types supported by the application. 
      */
@@ -415,6 +415,149 @@ const auth = betterAuth({
 
 This will allow clients to register using the `/register` endpoint to be publicly available.
 
+### Client Authentication Methods
+
+The OIDC Provider supports multiple client authentication methods for the token endpoint, following OAuth 2.0 and OpenID Connect standards.
+
+#### Client Secret (Default)
+
+The traditional authentication method using a shared secret between the client and server.
+
+**client_secret_post**: Client sends credentials in the request body:
+
+```ts
+const response = await fetch('https://your-domain.com/api/auth/oauth2/token', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  body: new URLSearchParams({
+    grant_type: 'authorization_code',
+    code: authorizationCode,
+    redirect_uri: 'https://client.example.com/callback',
+    client_id: 'your-client-id',
+    client_secret: 'your-client-secret',
+  }),
+});
+```
+
+**client_secret_basic**: Client sends credentials via HTTP Basic Auth:
+
+```ts
+const credentials = btoa(`${clientId}:${clientSecret}`);
+
+const response = await fetch('https://your-domain.com/api/auth/oauth2/token', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/x-www-form-urlencoded',
+    'Authorization': `Basic ${credentials}`,
+  },
+  body: new URLSearchParams({
+    grant_type: 'authorization_code',
+    code: authorizationCode,
+    redirect_uri: 'https://client.example.com/callback',
+  }),
+});
+```
+
+#### Private Key JWT
+
+For enhanced security, clients can authenticate using `private_key_jwt` as defined in [RFC 7521](https://datatracker.ietf.org/doc/html/rfc7521) and [RFC 7523](https://datatracker.ietf.org/doc/html/rfc7523).
+
+With this method, the client signs a JWT assertion using its private key, and the server verifies it using the client's public key. This eliminates the need to transmit secrets and provides stronger security through asymmetric cryptography.
+
+**Setup:**
+
+First, generate a key pair and register your client with its public key:
+
+```ts
+import { generateKeyPair, exportJWK } from 'jose';
+
+// Generate RSA key pair
+const keyPair = await generateKeyPair('RS256');
+const publicKey = await exportJWK(keyPair.publicKey);
+
+// Register client with JWKS
+const client = await db.create({
+  model: 'oauthApplication',
+  data: {
+    clientId: 'example-app',
+    name: 'Example App',
+    type: 'web',
+    redirectUrls: 'https://example.com/callback',
+    jwks: JSON.stringify({
+      keys: [{
+        ...publicKey,
+        kid: 'key-1',
+        alg: 'RS256',
+        use: 'sig',
+      }]
+    }),
+    tokenEndpointAuthMethod: 'private_key_jwt',
+  },
+});
+```
+
+**Usage:**
+
+Create and sign a client assertion JWT when requesting tokens:
+
+```ts
+import { SignJWT } from 'jose';
+
+const clientAssertion = await new SignJWT({
+  iss: 'example-app',           // Your client_id
+  sub: 'example-app',           // Your client_id
+  aud: 'https://your-domain.com/api/auth/oauth2/token',
+  jti: crypto.randomUUID(),       // Unique identifier (prevents replay)
+  iat: Math.floor(Date.now() / 1000),
+})
+  .setProtectedHeader({ alg: 'RS256', kid: 'key-1' })
+  .setExpirationTime('5m')        // Must be short-lived
+  .sign(keyPair.privateKey);
+
+const response = await fetch('https://your-domain.com/api/auth/oauth2/token', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  body: new URLSearchParams({
+    grant_type: 'authorization_code',
+    code: authorizationCode,
+    redirect_uri: 'https://example.com/callback',
+    client_id: 'example-app',
+    client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+    client_assertion: clientAssertion,
+  }),
+});
+```
+
+**Supported Algorithms:**
+- RSA: RS256, RS384, RS512
+- ECDSA: ES256, ES384, ES512
+- EdDSA: Ed25519
+
+**Security Features:**
+- **No shared secrets**: Private key never leaves the client
+- **Replay protection**: Each JWT must have a unique `jti` (JWT ID)
+- **Time-limited**: JWTs should expire within minutes (recommended: 5 minutes)
+- **Signature verification**: Server validates using client's public key
+
+<Callout type="info">
+The `private_key_jwt` method is recommended for scenarios requiring enhanced security.
+</Callout>
+
+#### Public Clients (PKCE)
+
+Public clients (SPAs, mobile apps, CLI tools) use PKCE instead of client secrets:
+
+```ts
+// Set token_endpoint_auth_method to "none"
+const client = await client.oauth2.register({
+  client_name: "My Mobile App",
+  redirect_uris: ["myapp://callback"],
+  token_endpoint_auth_method: "none", // Public client
+});
+```
+
+Public clients must use PKCE (Proof Key for Code Exchange) for secure authentication without client secrets.
+
 ## Schema
 
 The OIDC Provider plugin adds the following tables to the database:
@@ -472,6 +615,24 @@ Table Name: `oauthApplication`
       type: "boolean", 
       description: "Indicates if the client is disabled",
       isRequired: true
+    },
+    { 
+      name: "jwks", 
+      type: "string", 
+      description: "JSON Web Key Set for private_key_jwt authentication. Stores the client's public keys.",
+      isOptional: true
+    },
+    { 
+      name: "jwksUri", 
+      type: "string", 
+      description: "JWKS endpoint URL for fetching client's public keys dynamically.",
+      isOptional: true
+    },
+    { 
+      name: "tokenEndpointAuthMethod", 
+      type: "string", 
+      description: "Token endpoint authentication method: 'client_secret_post', 'client_secret_basic', 'private_key_jwt', or 'none'.",
+      isOptional: true
     },
     { 
       name: "userId", 

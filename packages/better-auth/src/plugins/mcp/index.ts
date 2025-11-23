@@ -26,6 +26,7 @@ import type {
 } from "../oidc-provider";
 import { oidcProvider } from "../oidc-provider";
 import { schema } from "../oidc-provider/schema";
+import { verifyClientAssertion } from "../oidc-provider/utils";
 import { parsePrompt } from "../oidc-provider/utils/prompt";
 import { authorizeMCPOAuth } from "./authorize";
 
@@ -68,7 +69,17 @@ export const getMCPProviderMetadata = (
 		token_endpoint_auth_methods_supported: [
 			"client_secret_basic",
 			"client_secret_post",
+			"private_key_jwt",
 			"none",
+		],
+		token_endpoint_auth_signing_alg_values_supported: [
+			"RS256",
+			"RS384",
+			"RS512",
+			"ES256",
+			"ES384",
+			"ES512",
+			"EdDSA",
 		],
 		code_challenge_methods_supported: ["S256"],
 		claims_supported: [
@@ -287,6 +298,7 @@ export const mcp = (options: MCPOptions) => {
 						});
 					}
 					let { client_id, client_secret } = body;
+					const { client_assertion, client_assertion_type } = body;
 					const authorization =
 						ctx.request?.headers.get("authorization") || null;
 					if (
@@ -320,6 +332,37 @@ export const mcp = (options: MCPOptions) => {
 							});
 						}
 					}
+
+					let authenticatedViaAssertion = false;
+					if (
+						client_assertion_type ===
+						"urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+					) {
+						if (!client_assertion) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description:
+									"client_assertion is required when using jwt-bearer",
+								error: "invalid_client",
+							});
+						}
+
+						if (!client_id) {
+							const parts = client_assertion.toString().split(".");
+							if (parts.length !== 3) {
+								throw new APIError("UNAUTHORIZED", {
+									error_description: "invalid jwt format",
+									error: "invalid_client",
+								});
+							}
+							const payload = JSON.parse(
+								new TextDecoder().decode(base64.decode(parts[1])),
+							);
+							client_id = payload.iss || payload.sub;
+						}
+
+						authenticatedViaAssertion = true;
+					}
+
 					const {
 						grant_type,
 						code,
@@ -484,9 +527,7 @@ export const mcp = (options: MCPOptions) => {
 							error: "invalid_client",
 						});
 					}
-					// For public clients (type: 'public'), validate PKCE instead of client_secret
 					if (client.type === "public") {
-						// Public clients must use PKCE
 						if (!code_verifier) {
 							throw new APIError("BAD_REQUEST", {
 								error_description:
@@ -494,23 +535,31 @@ export const mcp = (options: MCPOptions) => {
 								error: "invalid_request",
 							});
 						}
-						// PKCE validation happens later in the flow, so we skip client_secret validation
 					} else {
-						// For confidential clients, validate client_secret
-						if (!client_secret) {
-							throw new APIError("UNAUTHORIZED", {
-								error_description:
-									"client_secret is required for confidential clients",
-								error: "invalid_client",
+						if (authenticatedViaAssertion) {
+							await verifyClientAssertion({
+								clientAssertion: client_assertion.toString(),
+								clientId: client_id.toString(),
+								client,
+								tokenEndpoint: `${ctx.context.baseURL}/mcp/token`,
+								ctx,
 							});
-						}
-						const isValidSecret =
-							client.clientSecret === client_secret.toString();
-						if (!isValidSecret) {
-							throw new APIError("UNAUTHORIZED", {
-								error_description: "invalid client_secret",
-								error: "invalid_client",
-							});
+						} else {
+							if (!client_secret) {
+								throw new APIError("UNAUTHORIZED", {
+									error_description:
+										"client_secret is required for confidential clients",
+									error: "invalid_client",
+								});
+							}
+							const isValidSecret =
+								client.clientSecret === client_secret.toString();
+							if (!isValidSecret) {
+								throw new APIError("UNAUTHORIZED", {
+									error_description: "invalid client_secret",
+									error: "invalid_client",
+								});
+							}
 						}
 					}
 					const value = JSON.parse(
@@ -666,7 +715,12 @@ export const mcp = (options: MCPOptions) => {
 					body: z.object({
 						redirect_uris: z.array(z.string()),
 						token_endpoint_auth_method: z
-							.enum(["none", "client_secret_basic", "client_secret_post"])
+							.enum([
+								"none",
+								"client_secret_basic",
+								"client_secret_post",
+								"private_key_jwt",
+							])
 							.default("client_secret_basic")
 							.optional(),
 						grant_types: z
