@@ -9,7 +9,7 @@
     "@better-auth/core": "workspace:*",
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:*",
-    "msw": "^2.12.1",
+    "msw": "^2.12.2",
     "openid-client": "^6.8.1",
     "vitest": "catalog:"
   }
