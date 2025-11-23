@@ -24,8 +24,8 @@ import { setSessionCookie } from "../../cookies";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState, parseState } from "../../oauth2/state";
 import type { User } from "../../types";
-import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
 import { HIDE_METADATA } from "../../utils";
+import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
 
 export * from "./providers";
 

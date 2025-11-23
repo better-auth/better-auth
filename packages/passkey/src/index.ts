@@ -12,7 +12,7 @@ import {
 	verifyAuthenticationResponse,
 	verifyRegistrationResponse,
 } from "@simplewebauthn/server";
-import { generateId, HIDE_METADATA } from "better-auth";
+import { generateId } from "better-auth";
 import {
 	freshSessionMiddleware,
 	getSessionFromCtx,
