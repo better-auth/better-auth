@@ -377,7 +377,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		deleteOrganization: async (organizationId: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			await adapter.delete({
+			await adapter.deleteMany({
 				model: "member",
 				where: [
 					{
@@ -386,7 +386,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					},
 				],
 			});
-			await adapter.delete({
+			await adapter.deleteMany({
 				model: "invitation",
 				where: [
 					{
