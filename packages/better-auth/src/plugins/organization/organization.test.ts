@@ -1,6 +1,6 @@
 import type { Prettify } from "better-call";
 import { APIError } from "better-call";
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { memoryAdapter } from "../../adapters/memory-adapter";
 import type {
 	BetterFetchError,
@@ -18,6 +18,7 @@ import { adminAc, defaultStatements, memberAc, ownerAc } from "./access";
 import { inferOrgAdditionalFields, organizationClient } from "./client";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { organization } from "./organization";
+import { hasPermissionFn } from "./permission";
 import type {
 	InferInvitation,
 	InferMember,
@@ -804,6 +805,18 @@ describe("organization", async (it) => {
 		expect(hasMultiplePermissions.data?.success).toBe(true);
 	});
 
+	it("should warns and return false for unknown role by default", async () => {
+		const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const input = {
+			role: "moderator",
+			options: {},
+			permissions: { member: ["update"] },
+		};
+		const acRoles = { admin: /* role obj */ undefined };
+		expect(hasPermissionFn(input, acRoles)).toBe(false);
+		expect(spy).toHaveBeenCalled();
+		spy.mockRestore();
+	});
 	it("should return BAD_REQUEST when non-member tries to delete organization", async () => {
 		// Create an organization first
 		const testOrg = await client.organization.create({
