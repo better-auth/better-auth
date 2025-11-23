@@ -96,11 +96,9 @@ export interface OAuthProvider<
 
 export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	/**
-	 * The client ID of your application.
-	 *
-	 * This is usually a string but can be any type depending on the provider.
+	 * The client ID of your application
 	 */
-	clientId?: unknown | undefined;
+	clientId: string;
 	/**
 	 * The client secret of your application
 	 */
