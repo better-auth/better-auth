@@ -36,8 +36,8 @@ export const patreon = (options: PatreonOptions) => {
 		name: "Patreon",
 		createAuthorizationURL({ state, scopes, redirectURI, codeVerifier }) {
 			const _scopes = options.disableDefaultScope ? [] : ["identity[email]"];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 
 			return createAuthorizationURL({
 				id: "patreon",
