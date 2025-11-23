@@ -1038,7 +1038,7 @@ export function organization<O extends OrganizationOptions>(
 					},
 					slug: {
 						type: "string",
-						required: true,
+						required: false,
 						unique: true,
 						sortable: true,
 						fieldName: options?.schema?.organization?.fields?.slug,

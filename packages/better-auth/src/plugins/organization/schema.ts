@@ -102,7 +102,7 @@ interface OrganizationDefaultFields {
 	};
 	slug: {
 		type: "string";
-		required: true;
+		required: false;
 		unique: true;
 		sortable: true;
 	};
@@ -288,7 +288,7 @@ export const invitationStatus = z
 export const organizationSchema = z.object({
 	id: z.string().default(generateId),
 	name: z.string(),
-	slug: z.string(),
+	slug: z.string().optional(),
 	logo: z.string().nullish().optional(),
 	metadata: z
 		.record(z.string(), z.unknown())
