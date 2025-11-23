@@ -8,6 +8,11 @@ export interface OAuth2Tokens {
 	refreshTokenExpiresAt?: Date | undefined;
 	scopes?: string[] | undefined;
 	idToken?: string | undefined;
+	/**
+	 * Raw token response from the provider.
+	 * Preserves provider-specific fields that are not part of the standard OAuth2 token response.
+	 */
+	raw?: Record<string, unknown> | undefined;
 }
 
 export type OAuth2UserInfo = {
