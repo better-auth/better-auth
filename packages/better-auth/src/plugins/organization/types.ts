@@ -113,6 +113,28 @@ export interface OrganizationOptions {
 			) => Promise<Team & Record<string, any>>;
 		};
 		/**
+		 * Team-specific roles configuration
+		 */
+		teamRoles?: {
+			/**
+			 * Default roles for team members
+			 * Similar to organization roles but scoped to teams
+			 */
+			roles?: {
+				[key: string]: Role<any>;
+			};
+			/**
+			 * The default role assigned to team members
+			 * @default "member"
+			 */
+			defaultRole?: string;
+			/**
+			 * The role assigned to team creators
+			 * @default "admin"
+			 */
+			creatorRole?: string;
+		};
+		/**
 		 * Maximum number of teams an organization can have.
 		 *
 		 * You can pass a number or a function that returns a number
