@@ -1660,6 +1660,659 @@ describe("Create Adapter Helper", async () => {
 	});
 });
 
+describe("uniqueWhereRequirement", async () => {
+	describe("Success cases - findOne", () => {
+		test("Should succeed with id field and eq operator", async () => {
+			const adapter = await createTestAdapter({
+				adapter(args_0) {
+					return {
+						async findOne({ model, where }) {
+							return {
+								id: "test-id",
+								email: "test@test.com",
+								emailVerified: false,
+								createdAt: new Date(),
+								updatedAt: new Date(),
+								name: "test-name",
+							} as any;
+						},
+					};
+				},
+			});
+
+			const res = await adapter.findOne<User>({
+				model: "user",
+				where: [{ field: "id", value: "test-id", operator: "eq" }],
+			});
+
+			expect(res).toBeDefined();
+			expect(res?.id).toBe("test-id");
+		});
+
+		test("Should succeed with email field (unique) and eq operator", async () => {
+			const adapter = await createTestAdapter({
+				adapter(args_0) {
+					return {
+						async findOne({ model, where }) {
+							return {
+								id: "test-id",
+								email: "test@test.com",
+								emailVerified: false,
+								createdAt: new Date(),
+								updatedAt: new Date(),
+								name: "test-name",
+							} as any;
+						},
+					};
+				},
+			});
+
+			const res = await adapter.findOne<User>({
+				model: "user",
+				where: [{ field: "email", value: "test@test.com", operator: "eq" }],
+			});
+
+			expect(res).toBeDefined();
+			expect(res?.email).toBe("test@test.com");
+		});
+
+		test("Should succeed with id field and ne operator", async () => {
+			const adapter = await createTestAdapter({
+				adapter(args_0) {
+					return {
+						async findOne({ model, where }) {
+							return {
+								id: "test-id",
+								email: "test@test.com",
+								emailVerified: false,
+								createdAt: new Date(),
+								updatedAt: new Date(),
+								name: "test-name",
+							} as any;
+						},
+					};
+				},
+			});
+
+			const res = await adapter.findOne({
+				model: "user",
+				where: [{ field: "id", value: "other-id", operator: "ne" }],
+			});
+
+			expect(res).toBeDefined();
+		});
+
+		test("Should succeed with multiple where clauses if one has unique field with eq operator", async () => {
+			const adapter = await createTestAdapter({
+				adapter(args_0) {
+					return {
+						async findOne({ model, where }) {
+							return {
+								id: "test-id",
+								email: "test@test.com",
+								emailVerified: false,
+								createdAt: new Date(),
+								updatedAt: new Date(),
+								name: "test-name",
+							} as any;
+						},
+					};
+				},
+			});
+
+			const res = await adapter.findOne({
+				model: "user",
+				where: [
+					{ field: "name", value: "test-name", operator: "eq" },
+					{ field: "id", value: "test-id", operator: "eq" },
+				],
+			});
+
+			expect(res).toBeDefined();
+		});
+	});
+
+	describe("Success cases - update", () => {
+		test("Should succeed with id field and eq operator", async () => {
+			const adapter = await createTestAdapter({
+				adapter(args_0) {
+					return {
+						async create({ data }) {
+							return { ...data.data, id: "test-id2" };
+						},
+						async update({ model, where, update }) {
+							return {
+								id: "test-id",
+								email: "test@test.com",
+								emailVerified: false,
+								createdAt: new Date(),
+								updatedAt: new Date(),
+								name: "updated-name",
+							} as any;
+						},
+					};
+				},
+			});
+
+			const user = await adapter.create({
+				model: "user",
+				data: { name: "test-name" },
+			});
+
+			const res = await adapter.update<User>({
+				model: "user",
+				where: [{ field: "id", value: user.id, operator: "eq" }],
+				update: { name: "updated-name" },
+			});
+
+			expect(res).toBeDefined();
+			expect(res?.name).toBe("updated-name");
+		});
+
+		test("Should succeed with email field (unique) and eq operator", async () => {
+			const adapter = await createTestAdapter({
+				adapter(args_0) {
+					return {
+						async create({ data }) {
+							return data.data;
+						},
+						async update({ model, where, update }) {
+							return {
+								id: "test-id",
+								email: "test@test.com",
+								emailVerified: false,
+								createdAt: new Date(),
+								updatedAt: new Date(),
+								name: "updated-name",
+							} as any;
+						},
+					};
+				},
+			});
+
+			await adapter.create({
+				model: "user",
+				data: { email: "test@test.com", name: "test-name" },
+			});
+
+			const res = await adapter.update<User>({
+				model: "user",
+				where: [{ field: "email", value: "test@test.com", operator: "eq" }],
+				update: { name: "updated-name" },
+			});
+
+			expect(res).toBeDefined();
+			expect(res?.name).toBe("updated-name");
+		});
+	});
+
+	describe("Success cases - delete", () => {
+		test("Should succeed with id field and eq operator", async () => {
+			const adapter = await createTestAdapter({
+				adapter(args_0) {
+					return {
+						async create({ data }) {
+							return { ...data.data, id: "test-id2" };
+						},
+						async delete({ model, where }) {
+							return;
+						},
+					};
+				},
+			});
+
+			const user = await adapter.create({
+				model: "user",
+				data: { name: "test-name" },
+			});
+
+			await expect(
+				adapter.delete({
+					model: "user",
+					where: [{ field: "id", value: user.id, operator: "eq" }],
+				}),
+			).resolves.not.toThrow();
+		});
+
+		test("Should succeed with email field (unique) and eq operator", async () => {
+			const adapter = await createTestAdapter({
+				adapter(args_0) {
+					return {
+						async create({ data }) {
+							return data.data;
+						},
+						async delete({ model, where }) {
+							return;
+						},
+					};
+				},
+			});
+
+			await adapter.create({
+				model: "user",
+				data: { email: "test@test.com", name: "test-name" },
+			});
+
+			await expect(
+				adapter.delete({
+					model: "user",
+					where: [{ field: "email", value: "test@test.com", operator: "eq" }],
+				}),
+			).resolves.not.toThrow();
+		});
+	});
+
+	describe("Failure cases - findOne", () => {
+		test("Should throw error when where clause has no equality operator", async () => {
+			const adapter = await createTestAdapter({
+				adapter(args_0) {
+					return {
+						async findOne({ model, where }) {
+							return null;
+						},
+					};
+				},
+			});
+
+			await expect(
+				adapter.findOne({
+					model: "user",
+					where: [{ field: "id", value: "test-id", operator: "gt" }],
+				}),
+			).rejects.toThrow("must contain an equality operator");
+		});
+
+		test("Should throw error when where clause has equality operator but no unique field", async () => {
+			const adapter = await createTestAdapter({
+				adapter(args_0) {
+					return {
+						async findOne({ model, where }) {
+							return null;
+						},
+					};
+				},
+			});
+
+			await expect(
+				adapter.findOne({
+					model: "user",
+					where: [{ field: "name", value: "test-name", operator: "eq" }],
+				}),
+			).rejects.toThrow("must contain a unique field");
+		});
+
+		test("Should throw error when where clause has multiple non-unique fields with eq operator", async () => {
+			const adapter = await createTestAdapter({
+				adapter(args_0) {
+					return {
+						async findOne({ model, where }) {
+							return null;
+						},
+					};
+				},
+			});
+
+			await expect(
+				adapter.findOne({
+					model: "user",
+					where: [
+						{ field: "name", value: "test-name", operator: "eq" },
+						{ field: "emailVerified", value: false, operator: "eq" },
+					],
+				}),
+			).rejects.toThrow("must contain a unique field");
+		});
+
+		test("Should throw error when where clause has unique field but with non-equality operator", async () => {
+			const adapter = await createTestAdapter({
+				adapter(args_0) {
+					return {
+						async findOne({ model, where }) {
+							return null;
+						},
+					};
+				},
+			});
+
+			await expect(
+				adapter.findOne({
+					model: "user",
+					where: [{ field: "id", value: "test-id", operator: "gt" }],
+				}),
+			).rejects.toThrow("must contain an equality operator");
+		});
+	});
+
+	describe("Failure cases - update", () => {
+		test("Should throw error when where clause has no equality operator", async () => {
+			const adapter = await createTestAdapter({
+				adapter(args_0) {
+					return {
+						async create({ data }) {
+							return data.data;
+						},
+						async update({ model, where, update }) {
+							return null;
+						},
+					};
+				},
+			});
+
+			await adapter.create({
+				model: "user",
+				data: { name: "test-name" },
+			});
+
+			await expect(
+				adapter.update({
+					model: "user",
+					where: [{ field: "id", value: "test-id", operator: "gt" }],
+					update: { name: "updated-name" },
+				}),
+			).rejects.toThrow("must contain an equality operator");
+		});
+
+		test("Should throw error when where clause has equality operator but no unique field", async () => {
+			const adapter = await createTestAdapter({
+				adapter(args_0) {
+					return {
+						async create({ data }) {
+							return data.data;
+						},
+						async update({ model, where, update }) {
+							return null;
+						},
+					};
+				},
+			});
+
+			await adapter.create({
+				model: "user",
+				data: { name: "test-name" },
+			});
+
+			await expect(
+				adapter.update({
+					model: "user",
+					where: [{ field: "name", value: "test-name", operator: "eq" }],
+					update: { name: "updated-name" },
+				}),
+			).rejects.toThrow("must contain a unique field");
+		});
+
+		test("Should throw error when where clause has multiple non-unique fields with eq operator", async () => {
+			const adapter = await createTestAdapter({
+				adapter(args_0) {
+					return {
+						async create({ data }) {
+							return data.data;
+						},
+						async update({ model, where, update }) {
+							return null;
+						},
+					};
+				},
+			});
+
+			await adapter.create({
+				model: "user",
+				data: { name: "test-name" },
+			});
+
+			await expect(
+				adapter.update({
+					model: "user",
+					where: [
+						{ field: "name", value: "test-name", operator: "eq" },
+						{ field: "emailVerified", value: false, operator: "eq" },
+					],
+					update: { name: "updated-name" },
+				}),
+			).rejects.toThrow("must contain a unique field");
+		});
+	});
+
+	describe("Failure cases - delete", () => {
+		test("Should throw error when where clause has no equality operator", async () => {
+			const adapter = await createTestAdapter({
+				adapter(args_0) {
+					return {
+						async create({ data }) {
+							return data.data;
+						},
+						async delete({ model, where }) {
+							return;
+						},
+					};
+				},
+			});
+
+			await adapter.create({
+				model: "user",
+				data: { name: "test-name" },
+			});
+
+			await expect(
+				adapter.delete({
+					model: "user",
+					where: [{ field: "id", value: "test-id", operator: "gt" }],
+				}),
+			).rejects.toThrow("must contain an equality operator");
+		});
+
+		test("Should throw error when where clause has equality operator but no unique field", async () => {
+			const adapter = await createTestAdapter({
+				adapter(args_0) {
+					return {
+						async create({ data }) {
+							return data.data;
+						},
+						async delete({ model, where }) {
+							return;
+						},
+					};
+				},
+			});
+
+			await adapter.create({
+				model: "user",
+				data: { name: "test-name" },
+			});
+
+			await expect(
+				adapter.delete({
+					model: "user",
+					where: [{ field: "name", value: "test-name", operator: "eq" }],
+				}),
+			).rejects.toThrow("must contain a unique field");
+		});
+
+		test("Should throw error when where clause has multiple non-unique fields with eq operator", async () => {
+			const adapter = await createTestAdapter({
+				adapter(args_0) {
+					return {
+						async create({ data }) {
+							return data.data;
+						},
+						async delete({ model, where }) {
+							return;
+						},
+					};
+				},
+			});
+
+			await adapter.create({
+				model: "user",
+				data: { name: "test-name" },
+			});
+
+			await expect(
+				adapter.delete({
+					model: "user",
+					where: [
+						{ field: "name", value: "test-name", operator: "eq" },
+						{ field: "emailVerified", value: false, operator: "eq" },
+					],
+				}),
+			).rejects.toThrow("must contain a unique field");
+		});
+	});
+
+	describe("Edge cases", () => {
+		test("Should handle default operator (eq) when operator is not specified", async () => {
+			const adapter = await createTestAdapter({
+				adapter(args_0) {
+					return {
+						async findOne({ model, where }) {
+							return {
+								id: "test-id",
+								email: "test@test.com",
+								emailVerified: false,
+								createdAt: new Date(),
+								updatedAt: new Date(),
+								name: "test-name",
+							} as any;
+						},
+					};
+				},
+			});
+
+			const res = await adapter.findOne<User>({
+				model: "user",
+				where: [{ field: "id", value: "test-id" }], // operator defaults to "eq"
+			});
+
+			expect(res).toBeDefined();
+			expect(res?.id).toBe("test-id");
+		});
+
+		test("Should handle ne operator with unique field", async () => {
+			const adapter = await createTestAdapter({
+				adapter(args_0) {
+					return {
+						async findOne({ model, where }) {
+							return {
+								id: "test-id",
+								email: "test@test.com",
+								emailVerified: false,
+								createdAt: new Date(),
+								updatedAt: new Date(),
+								name: "test-name",
+							} as any;
+						},
+					};
+				},
+			});
+
+			const res = await adapter.findOne({
+				model: "user",
+				where: [{ field: "email", value: "other@test.com", operator: "ne" }],
+			});
+
+			expect(res).toBeDefined();
+		});
+
+		test("Should work with custom unique fields from plugins", async () => {
+			const adapter = await createTestAdapter({
+				config: {
+					debugLogs: {},
+				},
+				options: {
+					plugins: [
+						{
+							id: "test-plugin",
+							schema: {
+								customModel: {
+									fields: {
+										uniqueField: {
+											type: "string",
+											unique: true,
+											required: true,
+										},
+										nonUniqueField: {
+											type: "string",
+											required: true,
+										},
+									},
+								},
+							},
+						},
+					],
+				},
+				adapter(args_0) {
+					return {
+						async findOne({ model, where }) {
+							return {
+								id: "test-id",
+								uniqueField: "unique-value",
+								nonUniqueField: "value",
+							} as any;
+						},
+					};
+				},
+			});
+
+			const res = await adapter.findOne<{
+				id: string;
+				uniqueField: string;
+				nonUniqueField: string;
+			}>({
+				model: "customModel",
+				where: [
+					{ field: "uniqueField", value: "unique-value", operator: "eq" },
+				],
+			});
+
+			expect(res).toBeDefined();
+			expect(res?.uniqueField).toBe("unique-value");
+		});
+
+		test("Should fail with custom model when using non-unique field", async () => {
+			const adapter = await createTestAdapter({
+				config: {
+					debugLogs: {},
+				},
+				options: {
+					plugins: [
+						{
+							id: "test-plugin",
+							schema: {
+								customModel: {
+									fields: {
+										uniqueField: {
+											type: "string",
+											unique: true,
+											required: true,
+										},
+										nonUniqueField: {
+											type: "string",
+											required: true,
+										},
+									},
+								},
+							},
+						},
+					],
+				},
+				adapter(args_0) {
+					return {
+						async findOne({ model, where }) {
+							return null;
+						},
+					};
+				},
+			});
+
+			await expect(
+				adapter.findOne({
+					model: "customModel",
+					where: [{ field: "nonUniqueField", value: "value", operator: "eq" }],
+				}),
+			).rejects.toThrow("must contain a unique field");
+		});
+	});
+});
+
 describe("Fallback JoinOption System", async () => {
 	describe("supportsJoin: false (Fallback mode)", () => {
 		test("findOne: Should handle forward joins (joined model has FK to base model) by making separate queries", async () => {

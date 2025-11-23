@@ -738,6 +738,55 @@ export const createAdapterFactory =
 			return result;
 		};
 
+		/**
+		 * Throws an error if the where clause does not contain a unique field.
+		 * Only used for single record queries. `update`, `findOne`, `delete`.
+		 */
+		const uniqueWhereRequirement = ({
+			model: _model,
+			where,
+		}: {
+			model: string;
+			where: Where[];
+		}) => {
+			const model = getDefaultModelName(_model);
+			const exactOps: Where["operator"][] = ["eq", "ne"];
+
+			const errStack = new Error().stack?.replace("Error:", "");
+
+			if (!where.some((x) => exactOps.includes(x.operator ?? "eq"))) {
+				throw new BetterAuthError(
+					`The where clause for model "${model}" must contain an equality operator (eg: ${exactOps.map((x) => `"${x}"`).join(", ")}) for single record queries.${errStack}`,
+				);
+			}
+
+			const exactWhere = where.filter((x) =>
+				exactOps.includes(x.operator ?? "eq"),
+			);
+			const modelAttributes = schema[model];
+			if (!modelAttributes) {
+				throw new BetterAuthError(
+					`Model "${model}" not found in schema.${errStack}`,
+				);
+			}
+
+			const uniqueFieldsFromSchema = Object.entries(modelAttributes.fields)
+				.filter(([_, fieldAttributes]) => fieldAttributes.unique)
+				.map(([field]) => field);
+
+			const uniqueFields = [...uniqueFieldsFromSchema, "id"];
+
+			const hasUniqueField = uniqueFields.some((field) =>
+				exactWhere.some((x) => x.field === field),
+			);
+
+			if (!hasUniqueField) {
+				throw new BetterAuthError(
+					`The where clause for model "${model}" must contain a unique field (eg: ${uniqueFields.map((x) => `"${x}"`).join(", ")}) for single record queries.${errStack}`,
+				);
+			}
+		};
+
 		const adapterInstance = customAdapter({
 			options,
 			schema,
@@ -865,6 +914,10 @@ export const createAdapterFactory =
 				let thisTransactionId = transactionId;
 				unsafeModel = getDefaultModelName(unsafeModel);
 				const model = getModelName(unsafeModel);
+				uniqueWhereRequirement({
+					model: unsafeModel,
+					where: unsafeWhere,
+				});
 				const where = transformWhereClause({
 					model: unsafeModel,
 					where: unsafeWhere,
@@ -979,12 +1032,16 @@ export const createAdapterFactory =
 			}) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
+				unsafeModel = getDefaultModelName(unsafeModel);
 				const model = getModelName(unsafeModel);
+				uniqueWhereRequirement({
+					model: unsafeModel,
+					where: unsafeWhere,
+				});
 				const where = transformWhereClause({
 					model: unsafeModel,
 					where: unsafeWhere,
 				});
-				unsafeModel = getDefaultModelName(unsafeModel);
 				let join: JoinConfig | undefined;
 				let passJoinToAdapter = true;
 				if (!config.disableTransformJoin) {
@@ -1052,6 +1109,7 @@ export const createAdapterFactory =
 			}) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
+				unsafeModel = getDefaultModelName(unsafeModel);
 				const limit =
 					unsafeLimit ??
 					options.advanced?.database?.defaultFindManyLimit ??
@@ -1061,7 +1119,6 @@ export const createAdapterFactory =
 					model: unsafeModel,
 					where: unsafeWhere,
 				});
-				unsafeModel = getDefaultModelName(unsafeModel);
 				let join: JoinConfig | undefined;
 				let passJoinToAdapter = true;
 				if (!config.disableTransformJoin) {
@@ -1129,12 +1186,16 @@ export const createAdapterFactory =
 			}) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
+				unsafeModel = getDefaultModelName(unsafeModel);
 				const model = getModelName(unsafeModel);
+				uniqueWhereRequirement({
+					model: unsafeModel,
+					where: unsafeWhere,
+				});
 				const where = transformWhereClause({
 					model: unsafeModel,
 					where: unsafeWhere,
 				});
-				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
 					{ method: "delete" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 2)}`,
