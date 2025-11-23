@@ -31,7 +31,7 @@ export const linear = (options: LinearOptions) => {
 	return {
 		id: "linear",
 		name: "Linear",
-		createAuthorizationURL({ state, scopes, loginHint, redirectURI }) {
+		createAuthorizationURL({ state, scopes, loginHint, redirectURI, codeVerifier }) {
 			const _scopes = options.disableDefaultScope ? [] : ["read"];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
@@ -43,14 +43,17 @@ export const linear = (options: LinearOptions) => {
 				state,
 				redirectURI,
 				loginHint,
+				scopeJoiner: ",",
+				codeVerifier,
 			});
 		},
-		validateAuthorizationCode: async ({ code, redirectURI }) => {
+		validateAuthorizationCode: async ({ code, redirectURI, codeVerifier }) => {
 			return validateAuthorizationCode({
 				code,
 				redirectURI,
 				options,
 				tokenEndpoint,
+				codeVerifier,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
