@@ -10,45 +10,56 @@ interface CookieAttributes {
 	[key: string]: any;
 }
 
+/**
+ * Robust parser for multiple Set-Cookie headers
+ * Supports comma inside Expires attribute
+ * RFC 6265-compliant
+ */
 export function parseSetCookieHeader(
 	setCookie: string,
 ): Map<string, CookieAttributes> {
 	const cookies = new Map<string, CookieAttributes>();
-	const cookieArray = setCookie.split(", ");
 
-	cookieArray.forEach((cookieString) => {
-		const parts = cookieString.split(";").map((part) => part.trim());
-		const [nameValue, ...attributes] = parts;
-		const [name, ...valueParts] = (nameValue || "").split("=");
+	// Split different cookies using regex that does NOT split inside date strings
+	const cookieParts = setCookie.match(
+		/(?:[^,]*?Expires=[^,]+(?:, [A-Za-z]{3} [0-9]{2} [0-9]{4})?[^,;]*|[^,]+?)(?:(?=, [^;]+=)|$)/g,
+	);
+
+	if (!cookieParts) return cookies;
+
+	cookieParts.forEach((cookieString) => {
+		const segments = cookieString.split(";").map((part) => part.trim());
+		const [nameValue, ...attributes] = segments;
+
+		if (!nameValue) return;
+
+		const [name, ...valueParts] = nameValue.split("=");
+		if (!name) return;
 
 		const value = valueParts.join("=");
 
-		if (!name || value === undefined) {
-			return;
-		}
-
 		const attrObj: CookieAttributes = { value };
 
-		attributes.forEach((attribute) => {
-			const [attrName, ...attrValueParts] = attribute!.split("=");
-			const attrValue = attrValueParts.join("=");
+		attributes.forEach((attr) => {
+			const [rawName, ...rawValueParts] = attr.split("=");
+			if (!rawName) return;
+			const name = rawName.trim().toLowerCase();
+			const rawValue = rawValueParts.join("=");
 
-			const normalizedAttrName = attrName!.trim().toLowerCase();
-
-			switch (normalizedAttrName) {
+			switch (name) {
+				case "expires":
+					attrObj.expires = rawValue ? new Date(rawValue.trim()) : undefined;
+					break;
 				case "max-age":
-					attrObj["max-age"] = attrValue
-						? parseInt(attrValue.trim(), 10)
+					attrObj["max-age"] = rawValue
+						? parseInt(rawValue.trim(), 10)
 						: undefined;
 					break;
-				case "expires":
-					attrObj.expires = attrValue ? new Date(attrValue.trim()) : undefined;
-					break;
 				case "domain":
-					attrObj.domain = attrValue ? attrValue.trim() : undefined;
+					attrObj.domain = rawValue ? rawValue.trim() : undefined;
 					break;
 				case "path":
-					attrObj.path = attrValue ? attrValue.trim() : undefined;
+					attrObj.path = rawValue ? rawValue.trim() : undefined;
 					break;
 				case "secure":
 					attrObj.secure = true;
@@ -57,13 +68,12 @@ export function parseSetCookieHeader(
 					attrObj.httponly = true;
 					break;
 				case "samesite":
-					attrObj.samesite = attrValue
-						? (attrValue.trim().toLowerCase() as "strict" | "lax" | "none")
+					attrObj.samesite = rawValue
+						? (rawValue.trim().toLowerCase() as "strict" | "lax" | "none")
 						: undefined;
 					break;
 				default:
-					// Handle any other attributes
-					attrObj[normalizedAttrName] = attrValue ? attrValue.trim() : true;
+					attrObj[name] = rawValue ? rawValue.trim() : true;
 					break;
 			}
 		});
@@ -77,31 +87,30 @@ export function parseSetCookieHeader(
 export function setCookieToHeader(headers: Headers) {
 	return (context: { response: Response }) => {
 		const setCookieHeader = context.response.headers.get("set-cookie");
-		if (!setCookieHeader) {
-			return;
-		}
+		if (!setCookieHeader) return;
 
 		const cookieMap = new Map<string, string>();
 
-		const existingCookiesHeader = headers.get("cookie") || "";
-		existingCookiesHeader.split(";").forEach((cookie) => {
-			const [name, ...rest] = cookie!.trim().split("=");
-			if (name && rest.length > 0) {
-				cookieMap.set(name, rest.join("="));
+		// Keep existing cookies
+		const existingCookies = headers.get("cookie") || "";
+		existingCookies.split(";").forEach((cookieStr) => {
+			const [name, ...valueParts] = cookieStr.trim().split("=");
+			if (name && valueParts.length > 0) {
+				cookieMap.set(name, valueParts.join("="));
 			}
 		});
 
-		const setCookieHeaders = setCookieHeader.split(",");
-		setCookieHeaders.forEach((header) => {
-			const cookies = parseSetCookieHeader(header);
-			cookies.forEach((value, name) => {
-				cookieMap.set(name, value.value);
-			});
+		// Apply new cookies
+		const parsed = parseSetCookieHeader(setCookieHeader);
+		parsed.forEach((cookie, name) => {
+			cookieMap.set(name, cookie.value);
 		});
 
+		// Rebuild cookie header
 		const updatedCookies = Array.from(cookieMap.entries())
 			.map(([name, value]) => `${name}=${value}`)
 			.join("; ");
+
 		headers.set("cookie", updatedCookies);
 	};
 }
