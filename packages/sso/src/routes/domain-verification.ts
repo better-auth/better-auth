@@ -214,15 +214,13 @@ export const verifyDomain = (options: SSOOptions) => {
 					limit: 1,
 				});
 
-			if (!activeVerifications.length) return null;
-			const activeVerification = activeVerifications[0]!;
-
-			if (!activeVerification) {
+			if (!activeVerifications.length) {
 				throw new APIError("NOT_FOUND", {
 					message: "No pending domain verification exists",
 					code: "NO_PENDING_VERIFICATION",
 				});
 			}
+			const activeVerification = activeVerifications[0]!;
 
 			let records: string[] = [];
 			let dns: typeof import("node:dns/promises");
