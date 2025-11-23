@@ -1716,32 +1716,6 @@ describe("uniqueWhereRequirement", async () => {
 			expect(res?.email).toBe("test@test.com");
 		});
 
-		test("Should succeed with id field and ne operator", async () => {
-			const adapter = await createTestAdapter({
-				adapter(args_0) {
-					return {
-						async findOne({ model, where }) {
-							return {
-								id: "test-id",
-								email: "test@test.com",
-								emailVerified: false,
-								createdAt: new Date(),
-								updatedAt: new Date(),
-								name: "test-name",
-							} as any;
-						},
-					};
-				},
-			});
-
-			const res = await adapter.findOne({
-				model: "user",
-				where: [{ field: "id", value: "other-id", operator: "ne" }],
-			});
-
-			expect(res).toBeDefined();
-		});
-
 		test("Should succeed with multiple where clauses if one has unique field with eq operator", async () => {
 			const adapter = await createTestAdapter({
 				adapter(args_0) {
@@ -2184,32 +2158,6 @@ describe("uniqueWhereRequirement", async () => {
 
 			expect(res).toBeDefined();
 			expect(res?.id).toBe("test-id");
-		});
-
-		test("Should handle ne operator with unique field", async () => {
-			const adapter = await createTestAdapter({
-				adapter(args_0) {
-					return {
-						async findOne({ model, where }) {
-							return {
-								id: "test-id",
-								email: "test@test.com",
-								emailVerified: false,
-								createdAt: new Date(),
-								updatedAt: new Date(),
-								name: "test-name",
-							} as any;
-						},
-					};
-				},
-			});
-
-			const res = await adapter.findOne({
-				model: "user",
-				where: [{ field: "email", value: "other@test.com", operator: "ne" }],
-			});
-
-			expect(res).toBeDefined();
 		});
 
 		test("Should work with custom unique fields from plugins", async () => {

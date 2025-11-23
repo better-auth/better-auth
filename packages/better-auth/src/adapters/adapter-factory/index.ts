@@ -750,19 +750,16 @@ export const createAdapterFactory =
 			where: Where[];
 		}) => {
 			const model = getDefaultModelName(_model);
-			const exactOps: Where["operator"][] = ["eq", "ne"];
 
 			const errStack = new Error().stack?.replace("Error:", "");
 
-			if (!where.some((x) => exactOps.includes(x.operator ?? "eq"))) {
+			if (!where.some((x) => "eq" === (x.operator ?? "eq"))) {
 				throw new BetterAuthError(
-					`The where clause for model "${model}" must contain an equality operator (eg: ${exactOps.map((x) => `"${x}"`).join(", ")}) for single record queries.${errStack}`,
+					`The where clause for model "${model}" must contain an equality operator ("eq") for single record queries.${errStack}`,
 				);
 			}
 
-			const exactWhere = where.filter((x) =>
-				exactOps.includes(x.operator ?? "eq"),
-			);
+			const exactWhere = where.filter((x) => "eq" === (x.operator ?? "eq"));
 			const modelAttributes = schema[model];
 			if (!modelAttributes) {
 				throw new BetterAuthError(
