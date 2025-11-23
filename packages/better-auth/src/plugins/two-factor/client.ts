@@ -1,5 +1,5 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
-import type { twoFactor as twoFa } from "../../plugins/two-factor";
+import type { twoFactor as twoFa } from ".";
 
 export const twoFactorClient = (
 	options?:
