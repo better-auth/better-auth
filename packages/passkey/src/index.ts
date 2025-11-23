@@ -12,7 +12,7 @@ import {
 	verifyAuthenticationResponse,
 	verifyRegistrationResponse,
 } from "@simplewebauthn/server";
-import { generateId } from "better-auth";
+import { generateId, HIDE_METADATA } from "better-auth";
 import {
 	freshSessionMiddleware,
 	getSessionFromCtx,
@@ -60,7 +60,6 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 						})
 						.optional(),
 					metadata: {
-						client: false,
 						openapi: {
 							operationId: "generatePasskeyRegistrationOptions",
 							description: "Generate registration options for a new passkey",

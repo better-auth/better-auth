@@ -28,6 +28,7 @@ import { oidcProvider } from "../oidc-provider";
 import { schema } from "../oidc-provider/schema";
 import { parsePrompt } from "../oidc-provider/utils/prompt";
 import { authorizeMCPOAuth } from "./authorize";
+import { HIDE_METADATA } from "../../utils";
 
 interface MCPOptions {
 	loginPage: string;
@@ -191,7 +192,7 @@ export const mcp = (options: MCPOptions) => {
 				{
 					method: "GET",
 					metadata: {
-						client: false,
+						...HIDE_METADATA,
 					},
 				},
 				async (c) => {
@@ -209,7 +210,7 @@ export const mcp = (options: MCPOptions) => {
 				{
 					method: "GET",
 					metadata: {
-						client: false,
+						...HIDE_METADATA,
 					},
 				},
 				async (c) => {

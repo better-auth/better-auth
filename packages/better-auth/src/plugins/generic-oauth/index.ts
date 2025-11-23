@@ -25,6 +25,7 @@ import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState, parseState } from "../../oauth2/state";
 import type { User } from "../../types";
 import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
+import { HIDE_METADATA } from "../../utils";
 
 export * from "./providers";
 
@@ -641,7 +642,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							.optional(),
 					}),
 					metadata: {
-						client: false,
+						...HIDE_METADATA,
 						allowedMediaTypes: [
 							"application/x-www-form-urlencoded",
 							"application/json",
