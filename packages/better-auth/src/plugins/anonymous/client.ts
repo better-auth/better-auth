@@ -16,3 +16,5 @@ export const anonymousClient = () => {
 		],
 	} satisfies BetterAuthClientPlugin;
 };
+
+export type * from "./types";
