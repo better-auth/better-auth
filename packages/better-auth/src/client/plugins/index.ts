@@ -1,4 +1,5 @@
 //#region Necessary re-exports
+export type * from "../../plugins/two-factor";
 export type * from "../../types/helper";
 //#endregion
 
