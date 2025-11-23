@@ -301,13 +301,13 @@ export const getNormalTestSuiteTests = (
 			expect(resultTwo[0]?.testField).toBeNull();
 			expect(resultTwo[0]?.cbDefaultValueField).toBeNull();
 		},
-		"findOne - should find a model using a reference field": async () => {
+		"findMany - should find a model using a reference field": async () => {
 			const [user, session] = await insertRandom("session");
-			const result = await adapter.findOne<User>({
+			const result = await adapter.findMany<User>({
 				model: "session",
 				where: [{ field: "userId", value: user.id }],
 			});
-			expect(result).toEqual(session);
+			expect(result[0]).toEqual(session);
 		},
 		"findOne - should not throw on record not found": async () => {
 			const options = getBetterAuthOptions();
@@ -384,7 +384,7 @@ export const getNormalTestSuiteTests = (
 				account: accounts.sort((a, b) => a.id.localeCompare(b.id)),
 			});
 		},
-		"findOne - should find a model with modified field name": async () => {
+		"findMany - should find a model with modified field name": async () => {
 			await modifyBetterAuthOptions(
 				{
 					user: {
@@ -396,13 +396,13 @@ export const getNormalTestSuiteTests = (
 				true,
 			);
 			const [user] = await insertRandom("user");
-			const result = await adapter.findOne<User>({
+			const result = await adapter.findMany<User>({
 				model: "user",
 				where: [{ field: "email", value: user.email }],
 			});
-			expect(result).toEqual(user);
-			expect(result?.email).toEqual(user.email);
-			expect(true).toEqual(true);
+			expect(result.length).toBe(1);
+			expect(result[0]).toEqual(user);
+			expect(result[0]?.email).toEqual(user.email);
 		},
 		"findOne - should find a model with modified model name": async () => {
 			await modifyBetterAuthOptions(
@@ -435,6 +435,7 @@ export const getNormalTestSuiteTests = (
 								input: false,
 								required: true,
 								defaultValue: "default-value",
+								unique: true,
 							},
 						},
 					},
@@ -589,15 +590,15 @@ export const getNormalTestSuiteTests = (
 			expect(result?.account).toHaveLength(1);
 			expect(result?.account[0]).toEqual(account);
 		},
-		"findOne - should find model with date field": async () => {
+		"findMany - should find model with date field": async () => {
 			const [user] = await insertRandom("user");
-			const result = await adapter.findOne<User>({
+			const result = await adapter.findMany<User>({
 				model: "user",
 				where: [{ field: "createdAt", value: user.createdAt, operator: "eq" }],
 			});
-			expect(result).toEqual(user);
-			expect(result?.createdAt).toBeInstanceOf(Date);
-			expect(result?.createdAt).toEqual(user.createdAt);
+			expect(result[0]).toEqual(user);
+			expect(result[0]?.createdAt).toBeInstanceOf(Date);
+			expect(result[0]?.createdAt).toEqual(user.createdAt);
 		},
 		"findOne - should perform backwards joins": async () => {
 			const user = await adapter.create<User>({
@@ -773,7 +774,7 @@ export const getNormalTestSuiteTests = (
 				});
 				expect(result).toBeNull();
 			},
-		"findOne - should join a model with modified field name": async () => {
+		"findMany - should join a model with modified field name": async () => {
 			await modifyBetterAuthOptions(
 				{
 					user: {
@@ -820,14 +821,14 @@ export const getNormalTestSuiteTests = (
 				},
 			});
 
-			const result = await adapter.findOne<
+			const result = await adapter.findMany<
 				User & { oneToOneTable: OneToOneTable }
 			>({
 				model: "user",
 				where: [{ field: "email", value: user.email }],
 				join: { oneToOneTable: true },
 			});
-			expect(result).toEqual({
+			expect(result[0]).toEqual({
 				...user,
 				oneToOneTable: oneToOne,
 			});
