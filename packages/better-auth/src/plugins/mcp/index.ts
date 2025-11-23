@@ -16,6 +16,7 @@ import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
 import { parseSetCookieHeader } from "../../cookies";
 import { generateRandomString } from "../../crypto";
+import { HIDE_METADATA } from "../../utils";
 import { getBaseURL } from "../../utils/url";
 import type {
 	Client,
@@ -191,7 +192,7 @@ export const mcp = (options: MCPOptions) => {
 				{
 					method: "GET",
 					metadata: {
-						client: false,
+						...HIDE_METADATA,
 					},
 				},
 				async (c) => {
@@ -209,7 +210,7 @@ export const mcp = (options: MCPOptions) => {
 				{
 					method: "GET",
 					metadata: {
-						client: false,
+						...HIDE_METADATA,
 					},
 				},
 				async (c) => {
