@@ -136,6 +136,42 @@ type signInEmailOTP = {
 If the user is not registered, they'll be automatically registered. If you want to prevent this, you can pass `disableSignUp` as `true` in the [options](#options).
 </Callout>
 
+### Sign In with Username OTP
+
+To sign in with username and OTP, use the `sendUsernameSignInOtp()` method to send a sign-in OTP to the email address associated with the user's username.
+
+<APIMethod path="/email-otp/send-username-sign-in-otp" method="POST">
+```ts
+type sendUsernameSignInOtp = {
+    /**
+     * Username of the account to send the OTP to.
+     */
+    username: string = "username"
+}
+```
+</APIMethod>
+
+Once the user provides the OTP, you can sign in the user using the `signIn.usernameOtp()` method.
+
+<APIMethod path="/sign-in/username-otp" method="POST">
+```ts
+type signInUsernameOTP = {
+    /**
+     * Username of the account to sign in.
+     */
+    username: string = "username"
+    /**
+     * OTP sent to the email associated with the username. 
+     */
+    otp: string = "123456"
+}
+```
+</APIMethod>
+
+<Callout>
+The username plugin must be enabled for these endpoints to work. The OTP will be sent to the email address associated with the username.
+</Callout>
+
 ### Verify Email with OTP
 
 To verify the user's email address with OTP, use the `sendVerificationOtp()` method to send an "email-verification" OTP to the user's email address.
