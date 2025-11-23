@@ -2052,6 +2052,7 @@ describe("Additional Fields", async () => {
 		expectTypeOf<Team>().toEqualTypeOf<{
 			id: string;
 			name: string;
+			slug?: string | undefined;
 			organizationId: string;
 			createdAt: Date;
 			updatedAt?: Date | undefined;
@@ -2129,6 +2130,7 @@ describe("Additional Fields", async () => {
 		type ExpectedTeams = {
 			id: string;
 			name: string;
+			slug?: string | undefined;
 			organizationId: string;
 			createdAt: Date;
 			updatedAt?: Date | undefined;
