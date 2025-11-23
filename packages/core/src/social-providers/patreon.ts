@@ -1,10 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
-import {
-	createAuthorizationURL,
-	type OAuthProvider,
-	type ProviderOptions,
-	validateAuthorizationCode,
-} from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
 
 export interface PatreonProfile {
 	/**
