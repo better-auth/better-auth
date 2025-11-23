@@ -135,6 +135,7 @@ type createApiKey = {
     rateLimitEnabled?: boolean = true
     /**
      * Permissions of the Api Key.
+     * @serverOnly
      */
     permissions?: Record<string, string[]>
 }
