@@ -566,7 +566,6 @@ export const listOrganizationTeams = <O extends OrganizationOptions>(
 						.optional(),
 				}),
 			),
-			requireHeaders: true,
 			metadata: {
 				openapi: {
 					description: "List all teams in an organization",
@@ -622,6 +621,7 @@ export const listOrganizationTeams = <O extends OrganizationOptions>(
 					},
 				},
 			},
+			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 		},
 		async (ctx) => {
@@ -664,6 +664,7 @@ export const setActiveTeam = <O extends OrganizationOptions>(options: O) =>
 					.nullable()
 					.optional(),
 			}),
+			requireHeaders: true,
 			use: [orgSessionMiddleware, orgMiddleware],
 			metadata: {
 				openapi: {
@@ -785,6 +786,7 @@ export const listUserTeams = <O extends OrganizationOptions>(options: O) =>
 					},
 				},
 			},
+			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 		},
 		async (ctx) => {
@@ -855,6 +857,7 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 					},
 				},
 			},
+			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 		},
 		async (ctx) => {
@@ -938,6 +941,7 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 					},
 				},
 			},
+			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 		},
 		async (ctx) => {
@@ -1097,6 +1101,7 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 					},
 				},
 			},
+			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 		},
 		async (ctx) => {
