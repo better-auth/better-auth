@@ -2,6 +2,7 @@ import * as z from "zod";
 import { coreSchema } from "./shared";
 
 export const userSchema = coreSchema.extend({
+	id: z.string(),
 	email: z.string().transform((val) => val.toLowerCase()),
 	emailVerified: z.boolean().default(false),
 	name: z.string(),
