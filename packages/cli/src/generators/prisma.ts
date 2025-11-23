@@ -381,7 +381,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 							(v) =>
 								v.type === "attribute" &&
 								v.name === "index" &&
-								JSON.stringify(v).includes(fieldName),
+								JSON.stringify(v.args[0]?.value).includes(fieldName),
 						);
 						if (indexExist) {
 							continue;
