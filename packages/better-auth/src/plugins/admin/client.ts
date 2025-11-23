@@ -92,5 +92,4 @@ export const adminClient = <O extends AdminClientOptions>(
 	} satisfies BetterAuthClientPlugin;
 };
 
-export type * from "./access";
 export type * from "./types";

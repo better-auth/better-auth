@@ -201,7 +201,7 @@ export type BaseOAuthProviderOptions = Omit<
 	clientSecret: string;
 };
 
-interface GenericOAuthOptions {
+export interface GenericOAuthOptions {
 	/**
 	 * Array of OAuth provider configurations.
 	 */

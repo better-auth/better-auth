@@ -8,4 +8,9 @@ export const genericOAuthClient = () => {
 	} satisfies BetterAuthClientPlugin;
 };
 
+export type {
+	BaseOAuthProviderOptions,
+	GenericOAuthConfig,
+	GenericOAuthOptions,
+} from "./index";
 export type * from "./providers";
