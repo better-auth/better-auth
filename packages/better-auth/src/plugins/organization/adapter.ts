@@ -98,7 +98,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 						value: user.id,
 					},
 				],
-				limit: 1
+				limit: 1,
 			});
 			if (!members.length) {
 				return null;
@@ -803,7 +803,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				],
 				limit: 1,
 			});
-			if(!members.length) return null;
+			if (!members.length) return null;
 			const member = members[0]!;
 
 			return member;

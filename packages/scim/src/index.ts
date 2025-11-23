@@ -169,7 +169,7 @@ export const scim = (options?: SCIMOptions) => {
 									value: organizationId,
 								},
 							],
-							limit: 1
+							limit: 1,
 						});
 
 						if (!members.length) {
@@ -180,16 +180,17 @@ export const scim = (options?: SCIMOptions) => {
 						member = members[0]!;
 					}
 
-					const scimProviders = await ctx.context.adapter.findMany<SCIMProvider>({
-						model: "scimProvider",
-						where: [
-							{ field: "providerId", value: providerId },
-							...(organizationId
-								? [{ field: "organizationId", value: organizationId }]
-								: []),
-						],
-						limit: 1,
-					});
+					const scimProviders =
+						await ctx.context.adapter.findMany<SCIMProvider>({
+							model: "scimProvider",
+							where: [
+								{ field: "providerId", value: providerId },
+								...(organizationId
+									? [{ field: "organizationId", value: organizationId }]
+									: []),
+							],
+							limit: 1,
+						});
 
 					if (scimProviders.length) {
 						const scimProvider = scimProviders[0]!;
@@ -275,7 +276,7 @@ export const scim = (options?: SCIMOptions) => {
 							{ field: "accountId", value: accountId },
 							{ field: "providerId", value: providerId },
 						],
-						limit: 1
+						limit: 1,
 					});
 
 					if (existingAccounts.length) {
