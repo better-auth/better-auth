@@ -376,6 +376,17 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 			const indexedFieldsForModel = indexedFields.get(modelName);
 			if (indexedFieldsForModel && indexedFieldsForModel.length > 0) {
 				for (const fieldName of indexedFieldsForModel) {
+					if (prismaModel) {
+						const indexExist = prismaModel.properties.some(
+							(v) =>
+								v.type === "attribute" &&
+								v.name === "index" &&
+								JSON.stringify(v.args[0]?.value).includes(fieldName),
+						);
+						if (indexExist) {
+							continue;
+						}
+					}
 					const field = Object.entries(fields!).find(
 						([key, attr]) => (attr.fieldName || key) === fieldName,
 					)?.[1];
