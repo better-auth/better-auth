@@ -138,7 +138,7 @@ export const jwt = (options?: JwtOptions | undefined) => {
 
 			
 			if (!options?.jwks?.disableAutomaticRotation) {
-				await rotateJwk(ctx, options);
+				await rotateJwk(ctx, options); // Trigger rotation if needed
 			}
 
 			let keySets = await adapter.getAllKeys(ctx);
@@ -331,14 +331,11 @@ export const jwt = (options?: JwtOptions | undefined) => {
 					.optional(),
 			},
 		async (ctx) => {
-			const key = await rotateJwk(ctx, options, ctx.body);
-			
-			// Key was just created if it's less than 10 seconds old
-			const rotated = Date.now() - key.createdAt.getTime() < 10000;
+			const result = await rotateJwk(ctx, options, ctx.body);
 			
 			return ctx.json({
-				rotated,
-				keyId: key.id,
+				rotated: result.rotated,
+				keyId: result.key.id,
 			});
 		},
 		),

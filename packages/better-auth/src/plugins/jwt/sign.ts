@@ -56,10 +56,11 @@ export async function signJWT(
 	if (options?.jwks?.disableAutomaticRotation) {
 		const adapter = getJwksAdapter(ctx.context.adapter, options);
 		key = await adapter.getLatestKey(ctx);
-		
 	} else {
-		key = await rotateJwk(ctx, options);
+		const result = await rotateJwk(ctx, options);
+		key = result.key;
 	}
+	
 	if (!key) {
 		throw new BetterAuthError(
 			"No signing key found. Automatic rotation is disabled. Please create a key manually using the /rotate-jwk endpoint or rotateJwk() function.",

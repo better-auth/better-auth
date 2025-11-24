@@ -185,7 +185,7 @@ export async function createJwk(
  * @param ctx - The endpoint context
  * @param options - JWT plugin options
  * @param config - Rotation configuration
- * @returns The current valid key (either existing or newly created)
+ * @returns Object containing the current key and whether rotation occurred
  */
 export async function rotateJwk(
 	ctx: GenericEndpointContext,
@@ -204,22 +204,39 @@ export async function rotateJwk(
 		 */
 		force?: boolean;
 	},
-): Promise<Jwk> {
+): Promise<{ key: Jwk; rotated: boolean }> {
 	const adapter = getJwksAdapter(ctx.context.adapter, options);
 	const latestKey = await adapter.getLatestKey(ctx);
 
 	const ROTATION_COOLDOWN = config?.cooldown ?? 5 * 60 * 1000; // 5 minutes default
 	const now = Date.now();
+		
+	let shouldRotate = false;
 	
-	const shouldRotate = config?.force || 
-		!latestKey || 
-		(latestKey.expiresAt && 
-		 latestKey.expiresAt < new Date() && 
-		 latestKey.createdAt.getTime() < now - ROTATION_COOLDOWN);
-
-	if (shouldRotate) {
-		return await createJwk(ctx, options);
+	if (config?.force) {
+		shouldRotate = true;
+	} else if (!latestKey) {
+		shouldRotate = true;
+	} else if (latestKey.expiresAt && latestKey.expiresAt < new Date()) {
+		const wasCreatedAfterExpiration = latestKey.createdAt.getTime() > latestKey.expiresAt.getTime();
+		
+		if (wasCreatedAfterExpiration) {
+			const keyAge = now - latestKey.createdAt.getTime();
+			shouldRotate = keyAge >= ROTATION_COOLDOWN;
+		} else {
+			shouldRotate = true;
+		}
 	}
 
-	return latestKey;
+	if (shouldRotate) {
+		const key = await createJwk(ctx, options);
+		return { key, rotated: true };
+	}
+
+	if (!latestKey) {
+		const key = await createJwk(ctx, options);
+		return { key, rotated: true };
+	}
+
+	return { key: latestKey, rotated: false };
 }
