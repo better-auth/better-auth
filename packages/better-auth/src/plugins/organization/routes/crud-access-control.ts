@@ -437,8 +437,8 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 					message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
 				});
 			}
-			const existingRoleInDB =
-				await ctx.context.adapter.findOne<OrganizationRole>({
+			const existingRoleInDBs =
+				await ctx.context.adapter.findMany<OrganizationRole>({
 					model: "organizationRole",
 					where: [
 						{
@@ -449,8 +449,9 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 						},
 						condition,
 					],
+					limit: 1,
 				});
-			if (!existingRoleInDB) {
+			if (!existingRoleInDBs.length) {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The role name/id does not exist in the database.`,
 					{
@@ -464,6 +465,7 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 					message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
 				});
 			}
+			const existingRoleInDB = existingRoleInDBs[0]!;
 
 			existingRoleInDB.permission = JSON.parse(
 				existingRoleInDB.permission as never as string,
@@ -659,7 +661,7 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			const member = await ctx.context.adapter.findOne<Member>({
+			const members = await ctx.context.adapter.findMany<Member>({
 				model: "member",
 				where: [
 					{
@@ -675,7 +677,9 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 						connector: "AND",
 					},
 				],
+				limit: 1,
 			});
+			const member = members[0];
 			if (!member) {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The user is not a member of the organization to read a role.`,
@@ -858,7 +862,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			const member = await ctx.context.adapter.findOne<Member>({
+			const members = await ctx.context.adapter.findMany<Member>({
 				model: "member",
 				where: [
 					{
@@ -874,7 +878,9 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 						connector: "AND",
 					},
 				],
+				limit: 1,
 			});
+			const member = members[0];
 			if (!member) {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The user is not a member of the organization to update a role.`,
