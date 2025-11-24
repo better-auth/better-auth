@@ -157,7 +157,207 @@ The plugin operates as an OAuth 2.1 server with OIDC compatable endpoints and JW
 
 ### OAuth Clients
 
-In OAuth there
+In OAuth there are two types of clients:
+- **Public Clients**: Cannot store a client secret such as native mobile clients and user-agent clients (like AI)
+- **Confidential Clients**: Can store a client secret such as web clients
+
+#### Get Client
+
+To obtain client information owned by a specific user or organization use the following endpoint:
+
+<APIMethod path="/oauth2/get-client" method="GET">
+```ts
+type getOAuthClient = {
+  /**
+   * The OAuth client's client_id
+   */
+  client_id: boolean,
+}
+```
+</APIMethod>
+
+#### Get Public Client
+
+To obtain public client fields to display on login flow pages such as consent, use the following endpoint. Note: the user must be signed in to use this endpoint.:
+
+<APIMethod path="/oauth2/public-client" method="GET">
+```ts
+type getOAuthClientPublic = {
+  /**
+   * The OAuth client's client_id
+   */
+  client_id: boolean,
+}
+```
+</APIMethod>
+
+#### List Clients
+
+To obtain a list of clients owned by a specific user or organization, use the following endpoint:
+
+<APIMethod path="/oauth2/get-clients" method="GET">
+```ts
+type getOAuthClients = {}
+```
+</APIMethod>
+
+#### Create Client
+
+To create an oauth client tied to a specific user or organization, use the `/oauth2/create-client` endpoint (eg. `createOAuthClient`). The parameters are equivalent to the registration endpoint described by [RFC7591](https://datatracker.ietf.org/doc/html/rfc7591).
+
+The following fields on the database are considered restricted and should only be editable by admin users.
+- `client_secret_expires_at`: The expiration time for a secret of a confidential client
+- `skip_consent`: Allows the ability to skip user consent flow. Useful for trusted clients.
+- `enable_end_session`: Allows a user to logout of a session from the client via their `id_token` at the `/oauth2/end-session` endpoint. Used in OIDC-setups and specified trusted clients.
+
+In some cases, you may wish to create logic to create oauth clients with restricted fields through custom APIs, company admin portals, or server initialization, you may use the following server-only endpoint:
+
+```ts
+await auth.api.adminCreateOAuthClient({
+  headers,
+  body: {
+    redirect_uris: [redirectUri],
+    client_secret_expires_at: 0, // [!code highlight]
+    skip_consent: true, // [!code highlight]
+    enable_end_session: true, // [!code highlight]
+  }
+});
+```
+
+#### Update Client
+
+To update an oauth client tied to a specific user or organization, use the `/oauth2/update-client` endpoint (eg. `updateOAuthClient`). The parameters are equivalent to the registration endpoint described by [RFC7591](https://datatracker.ietf.org/doc/html/rfc7591).
+
+<APIMethod path="/oauth2/update-client" method="POST">
+```ts
+type updateOAuthClient = {
+  /**
+   * The OAuth client's client_id
+   */
+  client_id: boolean,
+  /**
+   * The fields to update
+   */
+  update: OAuthClient,
+}
+```
+</APIMethod>
+
+Restrictions on this endpoint:
+- You are unable to switch between confidential and public clients. The client type must be determined at creation.
+- You cannot update the client secret. To rotate the `client_secret` use the rotate client secret endpoint.
+
+In some cases, you may wish to create logic to update oauth clients with restricted fields through custom APIs, company admin portals, or server initialization, you may use the following server-only endpoint. The fields are described in the create section.:
+
+```ts
+await auth.api.adminUpdateOAuthClient({
+  headers,
+  body: {
+    redirect_uris: [redirectUri],
+    client_secret_expires_at: 0, // [!code highlight]
+    skip_consent: true, // [!code highlight]
+    enable_end_session: true, // [!code highlight]
+  }
+});
+```
+
+#### Rotate Client Secret
+
+<Callout type="warn">
+The current implementation rotates the client secret immediately and the previous secret is invalidated immediately.
+</Callout>
+
+To rotate a client secret, you must use the following endpoint:
+
+<APIMethod path="/oauth2/client/rotate-secret" method="POST">
+```ts
+type rotateClientSecret = {
+  /**
+   * The OAuth client's client_id
+   */
+  client_id: boolean,
+}
+```
+</APIMethod>
+
+#### Delete Client
+
+To delete a user or organization's client, use the following endpoint:
+
+<APIMethod path="/oauth2/delete-client" method="POST">
+```ts
+type deleteOAuthClient = {
+  /**
+   * The OAuth client's client_id
+   */
+  client_id: boolean,
+}
+```
+</APIMethod>
+
+
+### OAuth Consent
+
+Consent is required on all non-trusted clients, specifically those without `skip_consent`. The following endpoints allow users or `reference_id` manage their given consents.
+
+#### Get Consent
+
+To obtain details of a specific consent, use the following endpoint:
+
+<APIMethod path="/oauth2/get-consent" method="GET">
+```ts
+type getOAuthConsent = {
+  /**
+   * The consent id
+   */
+  id: string,
+}
+```
+</APIMethod>
+
+#### List Consent
+
+To obtain a list of user consents, use the following endpoint:
+
+<APIMethod path="/oauth2/get-consents" method="GET">
+```ts
+type getOAuthConsents = {}
+```
+</APIMethod>
+
+#### Update Consent
+
+To update a specific consent, use the following endpoint:
+
+<APIMethod path="/oauth2/update-consent" method="POST">
+```ts
+type updateOAuthClient = {
+  /**
+   * The consent id
+   */
+  id: string,
+  /**
+   * The values to update
+   */
+  update: OAuthConsent,
+}
+```
+</APIMethod>
+
+#### Delete Consent
+
+Revokes a user's consent for a specific client.
+
+<APIMethod path="/oauth2/delete-consent" method="POST">
+```ts
+type deleteOAuthConsent = {
+  /**
+   * The consent id
+   */
+  id: string,
+}
+```
+</APIMethod>
 
 
 ### Dynamic Registeration Endpoint
@@ -330,7 +530,7 @@ This endpoint allows specified trusted clients to logout remotely.
 To allow rp-initiated logout, a trusted client must specifically be created to perform session logout.
 
 ```ts
-await auth.api.createOAuthClient({
+await auth.api.adminCreateOAuthClient({
   headers,
   body: {
     redirect_uris: [redirectUri],
