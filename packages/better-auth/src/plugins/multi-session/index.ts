@@ -354,59 +354,40 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						const cookieHeader = ctx.headers?.get("cookie");
 						if (!cookieHeader) return;
 						const cookies = Object.fromEntries(parseCookies(cookieHeader));
-<<<<<<< Updated upstream
-						const multiSessionKeys = Object.keys(cookies).filter((key) =>
-							isMultiSessionCookie(key),
-						);
-						const verifiedTokens = (
-							await Promise.all(
-								multiSessionKeys.map(async (key) => {
-									const verifiedToken = await ctx.getSignedCookie(
-										key,
-										ctx.context.secret,
-									);
-									if (verifiedToken) {
-										ctx.setCookie(
-											key.toLowerCase().replace("__secure-", "__Secure-"),
-											"",
-											{
-												...ctx.context.authCookies.sessionToken.options,
-												maxAge: 0,
-											},
-										);
-										return verifiedToken;
-									}
-									return null;
-								}),
-							)
-						).filter((v): v is string => v !== null);
-						if (verifiedTokens.length > 0) {
-							await ctx.context.internalAdapter.deleteSessions(verifiedTokens);
-						}
-=======
-						const ids = Object.keys(cookies)
-							.map((key) => {
-								if (isMultiSessionCookie(key)) {
-									// clear cookie using exact name and a normalized Secure prefix variant to be safe
-									const normalized = key.replace(/^__secure-/i, "__Secure-");
+
+						// Verify signed multi-session cookies, clear them, and collect verified tokens
+						const verifiedTokens: string[] = [];
+						for (const key of Object.keys(cookies)) {
+							if (!isMultiSessionCookie(key)) continue;
+							try {
+								const verifiedToken = await ctx.getSignedCookie(
+									key,
+									ctx.context.secret,
+								);
+								if (verifiedToken) {
+									// Clear the cookie using exact name and same options
 									ctx.setCookie(key, "", {
 										...ctx.context.authCookies.sessionToken.options,
 										maxAge: 0,
 									});
+									// Also clear a normalized __Secure- variant if it differs
+									const normalized = key.replace(/^__secure-/i, "__Secure-");
 									if (normalized !== key) {
 										ctx.setCookie(normalized, "", {
 											...ctx.context.authCookies.sessionToken.options,
 											maxAge: 0,
 										});
 									}
-									const token = cookies[key]!.split(".")[0]!;
-									return token;
+									verifiedTokens.push(verifiedToken);
 								}
-								return null;
-							})
-							.filter((v): v is string => v !== null);
-						await ctx.context.internalAdapter.deleteSessions(ids);
->>>>>>> Stashed changes
+							} catch {
+								// ignore errors and continue
+							}
+						}
+
+						if (verifiedTokens.length > 0) {
+							await ctx.context.internalAdapter.deleteSessions(verifiedTokens);
+						}
 					}),
 				},
 			],
