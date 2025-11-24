@@ -1,0 +1,27 @@
+{
+	"$schema": "https://unpkg.com/knip@5/schema-jsonc.json",
+	"ignoreExportsUsedInFile": {
+		"interface": true,
+		"type": true
+	},
+	"ignoreIssues": {
+		"**": ["exports", "types", "duplicates"]
+	},
+	"tags": ["-lintignore"],
+	"workspaces": {
+		"packages/*": {
+			"entry": ["src/index.ts"],
+			"project": ["src/**/*.ts!"]
+		}
+	},
+	"vitest": {
+		"project": [
+			"**/test/**/*.ts",
+			"**/tests/**/*.ts",
+			"**/*test*.ts",
+			"**/*.prisma"
+		],
+		"entry": ["**/*.test.ts", "**/*.spec.ts"]
+	},
+	"ignoreWorkspaces": ["demo/**", "docs/**", "e2e/**"]
+}
