@@ -757,7 +757,7 @@ describe("jwt - custom jwksPath", async () => {
 		});
 
 		const client = createAuthClient({
-			plugins: [jwtClient()],
+			plugins: [jwtClient({ jwks: { jwksPath: "/.well-known/jwks.json" } })],
 			baseURL: "http://localhost:3000/api/auth",
 			fetchOptions: {
 				customFetchImpl: async (url, init) => {
@@ -766,7 +766,7 @@ describe("jwt - custom jwksPath", async () => {
 			},
 		});
 
-		const jwks = await client.$fetch<JSONWebKeySet>("/.well-known/jwks.json");
+		const jwks = await client.jwks();
 		expect(jwks.error).toBeNull();
 		expect(jwks.data?.keys).toBeDefined();
 		expect(jwks.data?.keys.length).toBeGreaterThan(0);

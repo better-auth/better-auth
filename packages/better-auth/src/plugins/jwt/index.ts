@@ -37,6 +37,17 @@ export const jwt = (options?: JwtOptions | undefined) => {
 	}
 
 	const jwksPath = options?.jwks?.jwksPath ?? "/jwks";
+	if (
+		typeof jwksPath !== "string" ||
+		jwksPath.length === 0 ||
+		!jwksPath.startsWith("/") ||
+		jwksPath.includes("..")
+	) {
+		throw new BetterAuthError(
+			"jwks_config",
+			"jwksPath must be a non-empty string starting with '/' and not contain '..'",
+		);
+	}
 
 	return {
 		id: "jwt",
