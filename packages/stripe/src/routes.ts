@@ -37,6 +37,99 @@ const STRIPE_ERROR_CODES = defineErrorCodes({
 		"Subscription is not scheduled for cancellation",
 });
 
+const upgradeSubscriptionBodySchema = z.object({
+	/**
+	 * The name of the plan to subscribe
+	 */
+	plan: z.string().meta({
+		description: 'The name of the plan to upgrade to. Eg: "pro"',
+	}),
+	/**
+	 * If annual plan should be applied.
+	 */
+	annual: z
+		.boolean()
+		.meta({
+			description: "Whether to upgrade to an annual plan. Eg: true",
+		})
+		.optional(),
+	/**
+	 * Reference id of the subscription to upgrade
+	 * This is used to identify the subscription to upgrade
+	 * If not provided, the user's id will be used
+	 */
+	referenceId: z
+		.string()
+		.meta({
+			description: 'Reference id of the subscription to upgrade. Eg: "123"',
+		})
+		.optional(),
+	/**
+	 * This is to allow a specific subscription to be upgrade.
+	 * If subscription id is provided, and subscription isn't found,
+	 * it'll throw an error.
+	 */
+	subscriptionId: z
+		.string()
+		.meta({
+			description: 'The id of the subscription to upgrade. Eg: "sub_123"',
+		})
+		.optional(),
+	/**
+	 * Any additional data you want to store in your database
+	 * subscriptions
+	 */
+	metadata: z.record(z.string(), z.any()).optional(),
+	/**
+	 * If a subscription
+	 */
+	seats: z
+		.number()
+		.meta({
+			description: "Number of seats to upgrade to (if applicable). Eg: 1",
+		})
+		.optional(),
+	/**
+	 * Success URL to redirect back after successful subscription
+	 */
+	successUrl: z
+		.string()
+		.meta({
+			description:
+				'Callback URL to redirect back after successful subscription. Eg: "https://example.com/success"',
+		})
+		.default("/"),
+	/**
+	 * Cancel URL
+	 */
+	cancelUrl: z
+		.string()
+		.meta({
+			description:
+				'If set, checkout shows a back button and customers will be directed here if they cancel payment. Eg: "https://example.com/pricing"',
+		})
+		.default("/"),
+	/**
+	 * Return URL
+	 */
+	returnUrl: z
+		.string()
+		.meta({
+			description:
+				'URL to take customers to when they click on the billing portal’s link to return to your website. Eg: "https://example.com/dashboard"',
+		})
+		.optional(),
+	/**
+	 * Disable Redirect
+	 */
+	disableRedirect: z
+		.boolean()
+		.meta({
+			description: "Disable redirect after successful subscription. Eg: true",
+		})
+		.default(false),
+});
+
 /**
  * ### Endpoint
  *
@@ -60,100 +153,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 		"/subscription/upgrade",
 		{
 			method: "POST",
-			body: z.object({
-				/**
-				 * The name of the plan to subscribe
-				 */
-				plan: z.string().meta({
-					description: 'The name of the plan to upgrade to. Eg: "pro"',
-				}),
-				/**
-				 * If annual plan should be applied.
-				 */
-				annual: z
-					.boolean()
-					.meta({
-						description: "Whether to upgrade to an annual plan. Eg: true",
-					})
-					.optional(),
-				/**
-				 * Reference id of the subscription to upgrade
-				 * This is used to identify the subscription to upgrade
-				 * If not provided, the user's id will be used
-				 */
-				referenceId: z
-					.string()
-					.meta({
-						description:
-							'Reference id of the subscription to upgrade. Eg: "123"',
-					})
-					.optional(),
-				/**
-				 * This is to allow a specific subscription to be upgrade.
-				 * If subscription id is provided, and subscription isn't found,
-				 * it'll throw an error.
-				 */
-				subscriptionId: z
-					.string()
-					.meta({
-						description: 'The id of the subscription to upgrade. Eg: "sub_123"',
-					})
-					.optional(),
-				/**
-				 * Any additional data you want to store in your database
-				 * subscriptions
-				 */
-				metadata: z.record(z.string(), z.any()).optional(),
-				/**
-				 * If a subscription
-				 */
-				seats: z
-					.number()
-					.meta({
-						description: "Number of seats to upgrade to (if applicable). Eg: 1",
-					})
-					.optional(),
-				/**
-				 * Success URL to redirect back after successful subscription
-				 */
-				successUrl: z
-					.string()
-					.meta({
-						description:
-							'Callback URL to redirect back after successful subscription. Eg: "https://example.com/success"',
-					})
-					.default("/"),
-				/**
-				 * Cancel URL
-				 */
-				cancelUrl: z
-					.string()
-					.meta({
-						description:
-							'If set, checkout shows a back button and customers will be directed here if they cancel payment. Eg: "https://example.com/pricing"',
-					})
-					.default("/"),
-				/**
-				 * Return URL
-				 */
-				returnUrl: z
-					.string()
-					.meta({
-						description:
-							'URL to take customers to when they click on the billing portal’s link to return to your website. Eg: "https://example.com/dashboard"',
-					})
-					.optional(),
-				/**
-				 * Disable Redirect
-				 */
-				disableRedirect: z
-					.boolean()
-					.meta({
-						description:
-							"Disable redirect after successful subscription. Eg: true",
-					})
-					.default(false),
-			}),
+			body: upgradeSubscriptionBodySchema,
 			metadata: {
 				openapi: {
 					operationId: "upgradeSubscription",
@@ -551,6 +551,10 @@ export const upgradeSubscription = (options: StripeOptions) => {
 	);
 };
 
+const cancelSubscriptionCallbackQuerySchema = z
+	.record(z.string(), z.any())
+	.optional();
+
 export const cancelSubscriptionCallback = (options: StripeOptions) => {
 	const client = options.stripeClient;
 	const subscriptionOptions = options.subscription as SubscriptionOptions;
@@ -558,7 +562,7 @@ export const cancelSubscriptionCallback = (options: StripeOptions) => {
 		"/subscription/cancel/callback",
 		{
 			method: "GET",
-			query: z.record(z.string(), z.any()).optional(),
+			query: cancelSubscriptionCallbackQuerySchema,
 			metadata: {
 				openapi: {
 					operationId: "cancelSubscriptionCallback",
@@ -638,6 +642,25 @@ export const cancelSubscriptionCallback = (options: StripeOptions) => {
 	);
 };
 
+const cancelSubscriptionBodySchema = z.object({
+	referenceId: z
+		.string()
+		.meta({
+			description: "Reference id of the subscription to cancel. Eg: '123'",
+		})
+		.optional(),
+	subscriptionId: z
+		.string()
+		.meta({
+			description: "The id of the subscription to cancel. Eg: 'sub_123'",
+		})
+		.optional(),
+	returnUrl: z.string().meta({
+		description:
+			'URL to take customers to when they click on the billing portal\'s link to return to your website. Eg: "/account"',
+	}),
+});
+
 /**
  * ### Endpoint
  *
@@ -660,25 +683,7 @@ export const cancelSubscription = (options: StripeOptions) => {
 		"/subscription/cancel",
 		{
 			method: "POST",
-			body: z.object({
-				referenceId: z
-					.string()
-					.meta({
-						description:
-							"Reference id of the subscription to cancel. Eg: '123'",
-					})
-					.optional(),
-				subscriptionId: z
-					.string()
-					.meta({
-						description: "The id of the subscription to cancel. Eg: 'sub_123'",
-					})
-					.optional(),
-				returnUrl: z.string().meta({
-					description:
-						'URL to take customers to when they click on the billing portal\'s link to return to your website. Eg: "/account"',
-				}),
-			}),
+			body: cancelSubscriptionBodySchema,
 			metadata: {
 				openapi: {
 					operationId: "cancelSubscription",
@@ -805,6 +810,21 @@ export const cancelSubscription = (options: StripeOptions) => {
 	);
 };
 
+const restoreSubscriptionBodySchema = z.object({
+	referenceId: z
+		.string()
+		.meta({
+			description: "Reference id of the subscription to restore. Eg: '123'",
+		})
+		.optional(),
+	subscriptionId: z
+		.string()
+		.meta({
+			description: "The id of the subscription to restore. Eg: 'sub_123'",
+		})
+		.optional(),
+});
+
 export const restoreSubscription = (options: StripeOptions) => {
 	const client = options.stripeClient;
 	const subscriptionOptions = options.subscription as SubscriptionOptions;
@@ -812,21 +832,7 @@ export const restoreSubscription = (options: StripeOptions) => {
 		"/subscription/restore",
 		{
 			method: "POST",
-			body: z.object({
-				referenceId: z
-					.string()
-					.meta({
-						description:
-							"Reference id of the subscription to restore. Eg: '123'",
-					})
-					.optional(),
-				subscriptionId: z
-					.string()
-					.meta({
-						description: "The id of the subscription to restore. Eg: 'sub_123'",
-					})
-					.optional(),
-			}),
+			body: restoreSubscriptionBodySchema,
 			metadata: {
 				openapi: {
 					operationId: "restoreSubscription",
@@ -934,6 +940,16 @@ export const restoreSubscription = (options: StripeOptions) => {
 	);
 };
 
+const listActiveSubscriptionsQuerySchema = z.optional(
+	z.object({
+		referenceId: z
+			.string()
+			.meta({
+				description: "Reference id of the subscription to list. Eg: '123'",
+			})
+			.optional(),
+	}),
+);
 /**
  * ### Endpoint
  *
@@ -955,17 +971,7 @@ export const listActiveSubscriptions = (options: StripeOptions) => {
 		"/subscription/list",
 		{
 			method: "GET",
-			query: z.optional(
-				z.object({
-					referenceId: z
-						.string()
-						.meta({
-							description:
-								"Reference id of the subscription to list. Eg: '123'",
-						})
-						.optional(),
-				}),
-			),
+			query: listActiveSubscriptionsQuerySchema,
 			metadata: {
 				openapi: {
 					operationId: "listActiveSubscriptions",
@@ -1012,13 +1018,15 @@ export const listActiveSubscriptions = (options: StripeOptions) => {
 	);
 };
 
+const subscriptionSuccessQuerySchema = z.record(z.string(), z.any()).optional();
+
 export const subscriptionSuccess = (options: StripeOptions) => {
 	const client = options.stripeClient;
 	return createAuthEndpoint(
 		"/subscription/success",
 		{
 			method: "GET",
-			query: z.record(z.string(), z.any()).optional(),
+			query: subscriptionSuccessQuerySchema,
 			metadata: {
 				openapi: {
 					operationId: "handleSubscriptionSuccess",
@@ -1121,6 +1129,16 @@ export const subscriptionSuccess = (options: StripeOptions) => {
 	);
 };
 
+const createBillingPortalBodySchema = z.object({
+	locale: z
+		.custom<StripeType.Checkout.Session.Locale>((localization) => {
+			return typeof localization === "string";
+		})
+		.optional(),
+	referenceId: z.string().optional(),
+	returnUrl: z.string().default("/"),
+});
+
 export const createBillingPortal = (options: StripeOptions) => {
 	const client = options.stripeClient;
 	const subscriptionOptions = options.subscription as SubscriptionOptions;
@@ -1128,15 +1146,7 @@ export const createBillingPortal = (options: StripeOptions) => {
 		"/subscription/billing-portal",
 		{
 			method: "POST",
-			body: z.object({
-				locale: z
-					.custom<StripeType.Checkout.Session.Locale>((localization) => {
-						return typeof localization === "string";
-					})
-					.optional(),
-				referenceId: z.string().optional(),
-				returnUrl: z.string().default("/"),
-			}),
+			body: createBillingPortalBodySchema,
 			metadata: {
 				openapi: {
 					operationId: "createBillingPortal",
