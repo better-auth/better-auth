@@ -182,6 +182,17 @@ export function createAuthSystem(options: {
 			organization({
 				teams: { enabled: true },
 				schema: {},
+				sendInvitationEmail(data, request) {
+					const url = new URL(
+						`/auth/accept-invitation?invitationId=${data.invitation.id}`,
+						request?.url,
+					).href;
+					return sendEmail({
+						to: data.invitation.email,
+						subject: "You are invited to join an organization",
+						text: `Click the link to accept the invitation: ${url}`,
+					});
+				},
 				organizationHooks: {
 					beforeCreateOrganization: async (data) => {
 						const graphAdapter = await getCurrentGraphContext();
@@ -361,7 +372,7 @@ export function createAuthSystem(options: {
 			schema: tables,
 			usePlural: false,
 			transaction: true,
-			debugLogs: true,
+			// debugLogs: true,
 		}),
 		experimental: {
 			joins: true,
