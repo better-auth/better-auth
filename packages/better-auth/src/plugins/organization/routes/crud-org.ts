@@ -774,6 +774,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 					.optional(),
 			}),
 			use: [orgSessionMiddleware, orgMiddleware],
+			requireHeaders: true,
 			metadata: {
 				openapi: {
 					operationId: "setActiveOrganization",
@@ -891,6 +892,7 @@ export const listOrganizations = <O extends OrganizationOptions>(options: O) =>
 		{
 			method: "GET",
 			use: [orgMiddleware, orgSessionMiddleware],
+			requireHeaders: true,
 			metadata: {
 				openapi: {
 					description: "List all organizations",
