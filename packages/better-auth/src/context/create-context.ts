@@ -169,7 +169,7 @@ export async function createAuthContext(
 		socialProviders: providers,
 		options,
 		oauthConfig: {
-			storeStateStrategy: options.account?.storeStateStrategy || "database",
+			storeStateStrategy: options.account?.storeStateStrategy || "cookie",
 			skipStateCookieCheck: !!options.account?.skipStateCookieCheck,
 		},
 		tables,
