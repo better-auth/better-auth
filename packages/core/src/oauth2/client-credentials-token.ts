@@ -1,5 +1,6 @@
 import { base64Url } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
+import type { JWK } from "jose";
 import { importJWK, importPKCS8, SignJWT } from "jose";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
 
@@ -50,24 +51,27 @@ export async function createClientCredentialsTokenRequest({
 	} else {
 		const {
 			clientPrivateKey,
+			clientPrivateKeyId,
 			clientPrivateKeyAlg = "RS256",
 			clientPrivateKeyType = "jwk",
 		} = options;
 
 		let privateKey: CryptoKey | Uint8Array;
+		let keyId: string | undefined = clientPrivateKeyId;
 		switch (clientPrivateKeyType) {
-			case "jwk":
-				privateKey = await importJWK(
-					JSON.parse(clientPrivateKey || "{}"),
-					clientPrivateKeyAlg,
-				);
+			case "jwk": {
+				const jwk: JWK = JSON.parse(clientPrivateKey || "{}");
+				keyId ??= jwk.kid;
+				privateKey = await importJWK(jwk, clientPrivateKeyAlg);
 				break;
-			case "pkcs8":
+			}
+			case "pkcs8": {
 				privateKey = await importPKCS8(
 					clientPrivateKey || "",
 					clientPrivateKeyAlg,
 				);
 				break;
+			}
 			default:
 				throw new Error("Unsupported client private key type");
 		}
@@ -77,7 +81,7 @@ export async function createClientCredentialsTokenRequest({
 			: options.clientId;
 
 		const clientAssertion = await new SignJWT()
-			.setProtectedHeader({ alg: clientPrivateKeyAlg })
+			.setProtectedHeader({ alg: clientPrivateKeyAlg, kid: keyId })
 			.setIssuer(primaryClientId)
 			.setSubject(primaryClientId)
 			.setAudience(tokenEndpoint ?? "")

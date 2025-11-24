@@ -107,6 +107,12 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 */
 	clientPrivateKey?: string | undefined;
 	/**
+	 * Specify the Id of the file to be used in the provider
+	 * Some providers, like okta, enforces the use of a key Id
+	 * when multiple keys are registered. 
+	 */
+	clientPrivateKeyId?: string | undefined;
+	/**
 	 * The format of the client private key.
 	 * @default "jwk"
 	 */

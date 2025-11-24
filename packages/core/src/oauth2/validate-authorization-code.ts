@@ -1,6 +1,7 @@
 import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
-import { importJWK, importPKCS8, jwtVerify, SignJWT } from "jose";
+import type { JWK } from "jose";
+import { importJWK, importPKCS8, jwtVerify, SignJWT, } from "jose";
 import type { ProviderOptions } from "./index";
 import { getOAuth2Tokens } from "./index";
 
@@ -69,17 +70,18 @@ export async function createAuthorizationCodeRequest({
 	} else {
 		const {
 			clientPrivateKey,
+			clientPrivateKeyId,
 			clientPrivateKeyAlg = "RS256",
 			clientPrivateKeyType = "jwk",
 		} = options;
 
 		let privateKey: CryptoKey | Uint8Array;
+		let keyId: string | undefined = clientPrivateKeyId;
 		switch (clientPrivateKeyType) {
 			case "jwk":
-				privateKey = await importJWK(
-					JSON.parse(clientPrivateKey || "{}"),
-					clientPrivateKeyAlg,
-				);
+				const jwk: JWK = JSON.parse(clientPrivateKey || "{}");
+								keyId ??= jwk.kid;
+								privateKey = await importJWK(jwk, clientPrivateKeyAlg);
 				break;
 			case "pkcs8":
 				privateKey = await importPKCS8(
@@ -98,6 +100,7 @@ export async function createAuthorizationCodeRequest({
 		const clientAssertion = await new SignJWT()
 			.setProtectedHeader({
 				alg: clientPrivateKeyAlg,
+				kid: keyId
 			})
 			.setIssuer(primaryClientId)
 			.setSubject(primaryClientId)

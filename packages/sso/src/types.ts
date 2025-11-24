@@ -25,6 +25,7 @@ export interface OIDCConfigClientSecret {
 
 export interface OIDCConfigClientAssertions {
 	clientPrivateKey: string;
+	clientPrivateKeyId?: string;
 	clientPrivateKeyAlg?: string;
 	clientPrivateKeyType?: "jwk" | "pkcs8";
 }

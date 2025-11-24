@@ -156,6 +156,9 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 						clientPrivateKey: z.string({}).optional().meta({
 							description: "The client private key",
 						}),
+						clientPrivateKeyId: z.string({}).optional().meta({
+							description: "The client private key identifier",
+						}),
 						clientPrivateKeyAlg: z.string({}).optional().meta({
 							description: "The client private key algorithm",
 						}),
@@ -181,7 +184,11 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 							})
 							.optional(),
 						tokenEndpointAuthentication: z
-							.enum(["client_secret_post", "client_secret_basic", "private_key_jwt"])
+							.enum([
+								"client_secret_post",
+								"client_secret_basic",
+								"private_key_jwt",
+							])
 							.optional(),
 						jwksEndpoint: z
 							.string({})
@@ -432,7 +439,11 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 													},
 													tokenEndpointAuthentication: {
 														type: "string",
-														enum: ["client_secret_post", "client_secret_basic", "private_key_jwt"],
+														enum: [
+															"client_secret_post",
+															"client_secret_basic",
+															"private_key_jwt",
+														],
 														nullable: true,
 														description:
 															"Authentication method for the token endpoint",
@@ -1022,6 +1033,10 @@ export const signInSSO = (options?: SSOOptions) => {
 							"clientPrivateKey" in provider.oidcConfig
 								? provider.oidcConfig.clientPrivateKey
 								: undefined,
+						clientPrivateKeyId:
+							"clientPrivateKeyId" in provider.oidcConfig
+								? provider.oidcConfig.clientPrivateKeyId
+								: undefined,
 						clientPrivateKeyAlg:
 							"clientPrivateKeyAlg" in provider.oidcConfig
 								? provider.oidcConfig.clientPrivateKeyAlg
@@ -1278,24 +1293,28 @@ export const callbackSSO = (options?: SSOOptions) => {
 						"clientSecret" in config ? config.clientSecret : undefined,
 					clientPrivateKey:
 						"clientPrivateKey" in config ? config.clientPrivateKey : undefined,
-						clientPrivateKeyAlg:
-							"clientPrivateKeyAlg" in config
-								? config.clientPrivateKeyAlg
-								: undefined,
-						clientPrivateKeyType:
-							"clientPrivateKeyType" in config
-								? config.clientPrivateKeyType
-								: undefined,
+					clientPrivateKeyId:
+						"clientPrivateKeyId" in config
+							? config.clientPrivateKeyId
+							: undefined,
+					clientPrivateKeyAlg:
+						"clientPrivateKeyAlg" in config
+							? config.clientPrivateKeyAlg
+							: undefined,
+					clientPrivateKeyType:
+						"clientPrivateKeyType" in config
+							? config.clientPrivateKeyType
+							: undefined,
 				},
 				tokenEndpoint: config.tokenEndpoint,
 				authentication:
 					config.tokenEndpointAuthentication === "private_key_jwt"
-						? "pk":
-					config.tokenEndpointAuthentication === "client_secret_basic"
-						? "basic"
-						: "post",
+						? "pk"
+						: config.tokenEndpointAuthentication === "client_secret_basic"
+							? "basic"
+							: "post",
 			}).catch((e) => {
-				console.error("errr", e)
+				console.error("errr", e);
 				if (e instanceof BetterFetchError) {
 					throw ctx.redirect(
 						`${
