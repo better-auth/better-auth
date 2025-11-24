@@ -110,7 +110,7 @@ export const openAPI = <O extends OpenAPIOptions>(options?: O | undefined) => {
 				path,
 				{
 					method: "GET",
-					...HIDE_METADATA,
+					metadata: HIDE_METADATA,
 				},
 				async (ctx) => {
 					if (options?.disableDefaultReference) {
