@@ -30,20 +30,20 @@ import { getResourceURL } from "./utils";
 const supportedSCIMSchemas = [SCIMUserResourceSchema];
 const supportedSCIMResourceTypes = [SCIMUserResourceType];
 
+const generateSCIMTokenBodySchema = z.object({
+	providerId: z.string().meta({ description: "Unique provider identifier" }),
+	organizationId: z
+		.string()
+		.optional()
+		.meta({ description: "Optional organization id" }),
+});
+
 export const generateSCIMToken = (opts: SCIMOptions) =>
 	createAuthEndpoint(
 		"/scim/generate-token",
 		{
 			method: "POST",
-			body: z.object({
-				providerId: z
-					.string()
-					.meta({ description: "Unique provider identifier" }),
-				organizationId: z
-					.string()
-					.optional()
-					.meta({ description: "Optional organization id" }),
-			}),
+			body: generateSCIMTokenBodySchema,
 			metadata: {
 				openapi: {
 					summary: "Generates a new SCIM token for the given provider",
@@ -380,16 +380,18 @@ export const updateSCIMUser = (authMiddleware: AuthMiddleware) =>
 		},
 	);
 
+const listSCIMUsersQuerySchema = z
+	.object({
+		filter: z.string().optional(),
+	})
+	.optional();
+
 export const listSCIMUsers = (authMiddleware: AuthMiddleware) =>
 	createAuthEndpoint(
 		"/scim/v2/Users",
 		{
 			method: "GET",
-			query: z
-				.object({
-					filter: z.string().optional(),
-				})
-				.optional(),
+			query: listSCIMUsersQuerySchema,
 			metadata: {
 				isAction: false,
 				openapi: {
@@ -517,28 +519,30 @@ export const getSCIMUser = (authMiddleware: AuthMiddleware) =>
 		},
 	);
 
+const patchSCIMUserBodySchema = z.object({
+	schemas: z
+		.array(z.string())
+		.refine(
+			(s) => s.includes("urn:ietf:params:scim:api:messages:2.0:PatchOp"),
+			{
+				message: "Invalid schemas for PatchOp",
+			},
+		),
+	Operations: z.array(
+		z.object({
+			op: z.enum(["replace", "add", "remove"]).default("replace"),
+			path: z.string().optional(),
+			value: z.any(),
+		}),
+	),
+});
+
 export const patchSCIMUser = (authMiddleware: AuthMiddleware) =>
 	createAuthEndpoint(
 		"/scim/v2/Users/:userId",
 		{
 			method: "PATCH",
-			body: z.object({
-				schemas: z
-					.array(z.string())
-					.refine(
-						(s) => s.includes("urn:ietf:params:scim:api:messages:2.0:PatchOp"),
-						{
-							message: "Invalid schemas for PatchOp",
-						},
-					),
-				Operations: z.array(
-					z.object({
-						op: z.enum(["replace", "add", "remove"]).default("replace"),
-						path: z.string().optional(),
-						value: z.any(),
-					}),
-				),
-			}),
+			body: patchSCIMUserBodySchema,
 			metadata: {
 				isAction: false,
 				openapi: {
