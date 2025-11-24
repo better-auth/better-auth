@@ -906,7 +906,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 						});
 					}
 					const deviceCodeRecord = deviceCodeRecords[0]!;
-					
+
 					if (deviceCodeRecord.expiresAt < new Date()) {
 						throw new APIError("BAD_REQUEST", {
 							error: "expired_token",
