@@ -19,3 +19,5 @@ export const phoneNumberClient = () => {
 		],
 	} satisfies BetterAuthClientPlugin;
 };
+
+export type * from "./types";

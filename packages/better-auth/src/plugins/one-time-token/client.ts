@@ -7,3 +7,5 @@ export const oneTimeTokenClient = () => {
 		$InferServerPlugin: {} as ReturnType<typeof oneTimeToken>,
 	} satisfies BetterAuthClientPlugin;
 };
+
+export type { OneTimeTokenOptions } from "./index";

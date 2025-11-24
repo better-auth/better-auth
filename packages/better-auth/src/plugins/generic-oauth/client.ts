@@ -7,3 +7,10 @@ export const genericOAuthClient = () => {
 		$InferServerPlugin: {} as ReturnType<typeof genericOAuth>,
 	} satisfies BetterAuthClientPlugin;
 };
+
+export type {
+	BaseOAuthProviderOptions,
+	GenericOAuthConfig,
+	GenericOAuthOptions,
+} from "./index";
+export type * from "./providers";

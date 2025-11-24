@@ -13,7 +13,7 @@ import {
 	setSessionCookie,
 } from "../../cookies";
 
-interface MultiSessionConfig {
+export interface MultiSessionConfig {
 	/**
 	 * The maximum number of sessions a user can have
 	 * at a time

@@ -7,3 +7,5 @@ export const jwtClient = () => {
 		$InferServerPlugin: {} as ReturnType<typeof jwt>,
 	} satisfies BetterAuthClientPlugin;
 };
+
+export type * from "./types";

@@ -14,3 +14,5 @@ export const apiKeyClient = () => {
 };
 
 export type ApiKeyClientPlugin = ReturnType<typeof apiKeyClient>;
+
+export type * from "./types";
