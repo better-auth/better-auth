@@ -1,11 +1,6 @@
 name: Publish Any Commit
 on: [pull_request]
 
-permissions:
-  pull-requests: write
-  contents: read
-  id-token: write
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -41,4 +36,4 @@ jobs:
           TURBO_CACHE: remote:rw
         run: pnpm build
           
-      - run: pnpm dlx pkg-pr-new publish --pnpm --provenance ./packages/*
+      - run: pnpm dlx pkg-pr-new publish --pnpm ./packages/*
