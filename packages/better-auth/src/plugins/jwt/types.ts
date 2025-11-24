@@ -44,7 +44,7 @@ export interface JwtOptions {
 				gracePeriod?: number;
 				/**
 				 * The path of the endpoint exposing the JWKS.
-				 * 
+				 *
 				 * @default /jwks
 				 */
 				jwksPath?: string;
