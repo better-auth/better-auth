@@ -31,6 +31,13 @@ type RequiredPassKeyOptions = WithRequired<PasskeyOptions, "advanced"> & {
 	advanced: Required<PasskeyOptions["advanced"]>;
 };
 
+const generatePasskeyQuerySchema = z
+	.object({
+		authenticatorAttachment: z.enum(["platform", "cross-platform"]).optional(),
+		name: z.string().optional(),
+	})
+	.optional();
+
 export const generatePasskeyRegistrationOptions = (
 	opts: RequiredPassKeyOptions,
 	{
@@ -43,14 +50,7 @@ export const generatePasskeyRegistrationOptions = (
 		{
 			method: "GET",
 			use: [freshSessionMiddleware],
-			query: z
-				.object({
-					authenticatorAttachment: z
-						.enum(["platform", "cross-platform"])
-						.optional(),
-					name: z.string().optional(),
-				})
-				.optional(),
+			query: generatePasskeyQuerySchema,
 			metadata: {
 				openapi: {
 					operationId: "generatePasskeyRegistrationOptions",
@@ -392,20 +392,22 @@ export const generatePasskeyAuthenticationOptions = (
 		},
 	);
 
+const verifyPasskeyRegistrationBodySchema = z.object({
+	response: z.any(),
+	name: z
+		.string()
+		.meta({
+			description: "Name of the passkey",
+		})
+		.optional(),
+});
+
 export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 	createAuthEndpoint(
 		"/passkey/verify-registration",
 		{
 			method: "POST",
-			body: z.object({
-				response: z.any(),
-				name: z
-					.string()
-					.meta({
-						description: "Name of the passkey",
-					})
-					.optional(),
-			}),
+			body: verifyPasskeyRegistrationBodySchema,
 			use: [freshSessionMiddleware],
 			metadata: {
 				openapi: {
@@ -524,14 +526,16 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 		},
 	);
 
+const verifyPasskeyAuthenticationBodySchema = z.object({
+	response: z.record(z.any(), z.any()),
+});
+
 export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 	createAuthEndpoint(
 		"/passkey/verify-authentication",
 		{
 			method: "POST",
-			body: z.object({
-				response: z.record(z.any(), z.any()),
-			}),
+			body: verifyPasskeyAuthenticationBodySchema,
 			metadata: {
 				openapi: {
 					operationId: "passkeyVerifyAuthentication",
@@ -741,6 +745,12 @@ export const listPasskeys = createAuthEndpoint(
 	},
 );
 
+const deletePasskeyBodySchema = z.object({
+	id: z.string().meta({
+		description: 'The ID of the passkey to delete. Eg: "some-passkey-id"',
+	}),
+});
+
 /**
  * ### Endpoint
  *
@@ -760,11 +770,7 @@ export const deletePasskey = createAuthEndpoint(
 	"/passkey/delete-passkey",
 	{
 		method: "POST",
-		body: z.object({
-			id: z.string().meta({
-				description: 'The ID of the passkey to delete. Eg: "some-passkey-id"',
-			}),
-		}),
+		body: deletePasskeyBodySchema,
 		use: [sessionMiddleware],
 		metadata: {
 			openapi: {
@@ -812,6 +818,15 @@ export const deletePasskey = createAuthEndpoint(
 	},
 );
 
+const updatePassKeyBodySchema = z.object({
+	id: z.string().meta({
+		description: `The ID of the passkey which will be updated. Eg: \"passkey-id\"`,
+	}),
+	name: z.string().meta({
+		description: `The new name which the passkey will be updated to. Eg: \"my-new-passkey-name\"`,
+	}),
+});
+
 /**
  * ### Endpoint
  *
@@ -831,14 +846,7 @@ export const updatePasskey = createAuthEndpoint(
 	"/passkey/update-passkey",
 	{
 		method: "POST",
-		body: z.object({
-			id: z.string().meta({
-				description: `The ID of the passkey which will be updated. Eg: \"passkey-id\"`,
-			}),
-			name: z.string().meta({
-				description: `The new name which the passkey will be updated to. Eg: \"my-new-passkey-name\"`,
-			}),
-		}),
+		body: updatePassKeyBodySchema,
 		use: [sessionMiddleware],
 		metadata: {
 			openapi: {
