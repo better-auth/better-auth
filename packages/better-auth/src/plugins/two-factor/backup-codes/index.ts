@@ -293,16 +293,18 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 				async (ctx) => {
 					const { session, valid } = await verifyTwoFactor(ctx);
 					const user = session.user as UserWithTwoFactor;
-					const twoFactors = await ctx.context.adapter.findMany<TwoFactorTable>({
-						model: twoFactorTable,
-						where: [
-							{
-								field: "userId",
-								value: user.id,
-							},
-						],
-						limit: 1,
-					});
+					const twoFactors = await ctx.context.adapter.findMany<TwoFactorTable>(
+						{
+							model: twoFactorTable,
+							where: [
+								{
+									field: "userId",
+									value: user.id,
+								},
+							],
+							limit: 1,
+						},
+					);
 					if (!twoFactors.length) {
 						throw new APIError("BAD_REQUEST", {
 							message: TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
