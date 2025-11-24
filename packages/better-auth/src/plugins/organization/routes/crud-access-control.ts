@@ -1029,7 +1029,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					? { permission: JSON.stringify(updateData.permission) }
 					: {}),
 			};
-			await ctx.context.adapter.update<OrganizationRole>({
+			await ctx.context.adapter.updateMany({
 				model: "organizationRole",
 				where: [
 					{
