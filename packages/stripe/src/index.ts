@@ -246,7 +246,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				use: [
 					sessionMiddleware,
 					originCheck((c) => {
-						return [c.body.successURL as string, c.body.cancelURL as string];
+						return [c.body.successUrl as string, c.body.cancelUrl as string];
 					}),
 					referenceMiddleware("upgrade-subscription"),
 				],
