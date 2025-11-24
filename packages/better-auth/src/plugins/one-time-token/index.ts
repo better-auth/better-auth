@@ -9,7 +9,7 @@ import { generateRandomString } from "../../crypto";
 import type { Session, User } from "../../types";
 import { defaultKeyHasher } from "..";
 
-interface OneTimeTokenOptions {
+export interface OneTimeTokenOptions {
 	/**
 	 * Expires in minutes
 	 *
