@@ -190,6 +190,7 @@ export interface OAuthOptions<
 	 * a specific action.
 	 */
 	clientPrivileges?: (context: {
+		headers: Headers;
 		action: "create" | "read" | "update" | "delete" | "list" | "rotate";
 		user?: User & Record<string, unknown>;
 		session?: Session & Record<string, unknown>;
