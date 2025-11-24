@@ -103,6 +103,7 @@ export async function handleOAuthUserInfo(
 						accessTokenExpiresAt: account.accessTokenExpiresAt,
 						refreshTokenExpiresAt: account.refreshTokenExpiresAt,
 						scope: account.scope,
+						providerId: account.providerId,
 					}).filter(([_, value]) => value !== undefined),
 				);
 				if (c.context.options.account?.storeAccountCookie) {
