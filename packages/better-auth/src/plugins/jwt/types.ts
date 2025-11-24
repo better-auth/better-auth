@@ -36,13 +36,27 @@ export interface JwtOptions {
 				 * @default undefined (disabled)
 				 */
 				rotationInterval?: number;
-				/**
-				 * The grace period in seconds.
-				 *
-				 * @default 2592000 (30 days)
-				 */
-				gracePeriod?: number;
-		  }
+			/**
+			 * The grace period in seconds.
+			 *
+			 * @default 2592000 (30 days)
+			 */
+			gracePeriod?: number;
+			/**
+			 * Disable automatic/lazy key rotation.
+			 * 
+			 * When enabled, keys will NOT rotate automatically during:
+			 * - JWT signing operations
+			 * - JWKS endpoint requests
+			 * 
+			 * Use this if you want to manage rotation manually via:
+			 * - Scheduled tasks/cron jobs
+			 * - Direct calls to `rotateJwk()`
+			 *
+			 * @default false
+			 */
+			disableAutomaticRotation?: boolean;
+	  }
 		| undefined;
 
 	jwt?:
