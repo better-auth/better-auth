@@ -47,6 +47,9 @@ describe("call", async () => {
 				"/test-server-scoped",
 				{
 					method: "GET",
+					metadata: {
+						scope: "server",
+					},
 				},
 				async (ctx) => {
 					return "ok";
@@ -56,6 +59,9 @@ describe("call", async () => {
 				"/test-http-scoped",
 				{
 					method: "GET",
+					metadata: {
+						scope: "http",
+					},
 				},
 				async (ctx) => {
 					return "ok";
