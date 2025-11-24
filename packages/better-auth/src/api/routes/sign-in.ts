@@ -307,6 +307,10 @@ export const signInSocial = createAuthEndpoint(
 			loginHint: c.body.loginHint,
 		});
 
+		if (!c.body.disableRedirect) {
+			c.setHeader("Location", url.toString());
+		}
+
 		return c.json({
 			url: url.toString(),
 			redirect: !c.body.disableRedirect,
@@ -512,6 +516,9 @@ export const signInEmail = createAuthEndpoint(
 			},
 			ctx.body.rememberMe === false,
 		);
+		if (ctx.body.callbackURL) {
+			ctx.setHeader("Location", ctx.body.callbackURL);
+		}
 		return ctx.json({
 			redirect: !!ctx.body.callbackURL,
 			token: session.token,
