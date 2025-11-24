@@ -156,10 +156,12 @@ describe("account", async () => {
 
 	it("should encrypt access token and refresh token", async () => {
 		const { runWithUser: runWithClient2 } = await signInWithTestUser();
-		const account = await ctx.adapter.findOne<Account>({
+		const accounts = await ctx.adapter.findMany<Account>({
 			model: "account",
 			where: [{ field: "providerId", value: "google" }],
+			limit: 1,
 		});
+		const account = accounts[0]!;
 		expect(account).toBeTruthy();
 		expect(account?.accessToken).not.toBe("test");
 		await runWithClient2(async () => {

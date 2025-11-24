@@ -139,7 +139,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 
 			// Get the user's role associated with the organization.
 			// This also serves as a check to ensure the org id is valid.
-			const member = await ctx.context.adapter.findOne<Member>({
+			const members = await ctx.context.adapter.findMany<Member>({
 				model: "member",
 				where: [
 					{
@@ -155,8 +155,9 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 						connector: "AND",
 					},
 				],
+				limit: 1,
 			});
-			if (!member) {
+			if (!members.length) {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The user is not a member of the organization to create a role.`,
 					{
@@ -169,6 +170,8 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
 				});
 			}
+
+			const member = members[0]!;
 
 			const canCreateRole = await hasPermission(
 				{
@@ -330,7 +333,7 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 
 			// Get the user's role associated with the organization.
 			// This also serves as a check to ensure the org id is valid.
-			const member = await ctx.context.adapter.findOne<Member>({
+			const members = await ctx.context.adapter.findMany<Member>({
 				model: "member",
 				where: [
 					{
@@ -346,8 +349,9 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 						connector: "AND",
 					},
 				],
+				limit: 1,
 			});
-			if (!member) {
+			if (!members.length) {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The user is not a member of the organization to delete a role.`,
 					{
@@ -360,6 +364,7 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
 				});
 			}
+			const member = members[0]!;
 
 			const canDeleteRole = await hasPermission(
 				{
@@ -517,7 +522,7 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			const member = await ctx.context.adapter.findOne<Member>({
+			const members = await ctx.context.adapter.findMany<Member>({
 				model: "member",
 				where: [
 					{
@@ -533,8 +538,9 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 						connector: "AND",
 					},
 				],
+				limit: 1,
 			});
-			if (!member) {
+			if (!members.length) {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The user is not a member of the organization to list roles.`,
 					{
@@ -547,6 +553,7 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
 				});
 			}
+			const member = members[0]!;
 
 			const canListRoles = await hasPermission(
 				{

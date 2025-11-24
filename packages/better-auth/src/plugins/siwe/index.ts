@@ -186,15 +186,16 @@ export const siwe = (options: SIWEPluginOptions) =>
 							});
 						} else {
 							// No exact match found, check if this address exists on any other chain
-							const anyWalletAddress: WalletAddress | null =
-								await ctx.context.adapter.findOne({
+							const anyWalletAddresses: WalletAddress[] | null =
+								await ctx.context.adapter.findMany({
 									model: "walletAddress",
 									where: [
 										{ field: "address", operator: "eq", value: walletAddress },
 									],
+									limit: 1,
 								});
 
-							if (anyWalletAddress) {
+							if (anyWalletAddresses.length) {
 								// Same address exists on different chain, get that user
 								user = await ctx.context.adapter.findOne({
 									model: "user",
@@ -202,7 +203,7 @@ export const siwe = (options: SIWEPluginOptions) =>
 										{
 											field: "id",
 											operator: "eq",
-											value: anyWalletAddress.userId,
+											value: anyWalletAddresses[0]!.userId,
 										},
 									],
 								});

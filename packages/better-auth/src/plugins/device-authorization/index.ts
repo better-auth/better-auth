@@ -886,8 +886,8 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					const { userCode } = ctx.body;
 					const cleanUserCode = userCode.replace(/-/g, "");
 
-					const deviceCodeRecord =
-						await ctx.context.adapter.findOne<DeviceCode>({
+					const deviceCodeRecords =
+						await ctx.context.adapter.findMany<DeviceCode>({
 							model: "deviceCode",
 							where: [
 								{
@@ -895,16 +895,18 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 									value: cleanUserCode,
 								},
 							],
+							limit: 1,
 						});
 
-					if (!deviceCodeRecord) {
+					if (!deviceCodeRecords.length) {
 						throw new APIError("BAD_REQUEST", {
 							error: "invalid_request",
 							error_description:
 								DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE,
 						});
 					}
-
+					const deviceCodeRecord = deviceCodeRecords[0]!;
+					
 					if (deviceCodeRecord.expiresAt < new Date()) {
 						throw new APIError("BAD_REQUEST", {
 							error: "expired_token",
