@@ -60,7 +60,6 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 						})
 						.optional(),
 					metadata: {
-						client: false,
 						openapi: {
 							operationId: "generatePasskeyRegistrationOptions",
 							description: "Generate registration options for a new passkey",
