@@ -55,4 +55,5 @@ export async function generatePrismaSchema(
 		})
 		.join("\n");
 	await fs.writeFile(fileName, code || "", "utf-8");
+	return code
 }

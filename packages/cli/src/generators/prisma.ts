@@ -264,17 +264,26 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 							`default("${JSON.stringify(attr.defaultValue).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}")`,
 						);
 					}
+
 					if (field === "createdAt") {
-						fieldBuilder.attribute("default(now())");
+						if (!attr.unique) {
+							fieldBuilder.attribute("default(now())");
+						}
 					} else if (
 						typeof attr.defaultValue === "string" &&
 						provider !== "mysql"
 					) {
+						if (attr.unique) {
+							throw new Error("Default value is not allowed for unique fields");
+						}
 						fieldBuilder.attribute(`default("${attr.defaultValue}")`);
 					} else if (
 						typeof attr.defaultValue === "boolean" ||
 						typeof attr.defaultValue === "number"
 					) {
+						if (attr.unique) {
+							throw new Error("Default value is not allowed for unique fields");
+						}
 						fieldBuilder.attribute(`default(${attr.defaultValue})`);
 					} else if (typeof attr.defaultValue === "function") {
 						// we are intentionally not adding the default value here
