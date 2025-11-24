@@ -36,7 +36,12 @@ export function parseSetCookieHeader(
 		}
 
 		// Split on comma + space only when not inside Expires value
-		if (!inExpires && ch === "," && i + 1 < setCookie.length && setCookie[i + 1] === " ") {
+		if (
+			!inExpires &&
+			ch === "," &&
+			i + 1 < setCookie.length &&
+			setCookie[i + 1] === " "
+		) {
 			parts.push(current.trim());
 			current = "";
 			i++; // skip the following space
@@ -80,7 +85,9 @@ export function parseSetCookieHeader(
 
 			switch (attrName) {
 				case "expires":
-					attrObj.expires = rawAttrValue ? new Date(rawAttrValue.trim()) : undefined;
+					attrObj.expires = rawAttrValue
+						? new Date(rawAttrValue.trim())
+						: undefined;
 					break;
 				case "max-age":
 					attrObj["max-age"] = rawAttrValue

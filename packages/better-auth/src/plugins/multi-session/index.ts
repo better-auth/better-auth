@@ -302,11 +302,17 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						if (setCookies.get(cookieName) || cookies.get(cookieName)) return;
 
 						// Count current multi-session cookies properly by combining existing request cookies and cookies already being set in this response
-						const existingMultiFromRequest = Object.keys(Object.fromEntries(cookies)).filter(
-							isMultiSessionCookie,
-						);
-						const existingMultiFromResponse = Array.from(setCookies.keys()).filter(isMultiSessionCookie);
-						const currentMultiSessions = existingMultiFromRequest.length + existingMultiFromResponse.length;
+						const existingMultiFromRequest = Object.keys(
+							Object.fromEntries(cookies),
+						).filter(isMultiSessionCookie);
+
+						const existingMultiFromResponse = Array.from(
+							setCookies.keys(),
+						).filter(isMultiSessionCookie);
+
+						const currentMultiSessions =
+							existingMultiFromRequest.length +
+							existingMultiFromResponse.length;
 
 						if (currentMultiSessions >= opts.maximumSessions) {
 							return;
@@ -318,9 +324,14 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						if (ctx.context.newSession && ctx.context.newSession.user) {
 							for (const mName of existingMultiFromRequest) {
 								try {
-									const existingToken = await ctx.getSignedCookie(mName, ctx.context.secret);
+									const existingToken = await ctx.getSignedCookie(
+										mName,
+										ctx.context.secret,
+									);
 									if (!existingToken) continue;
-									const session = await ctx.context.internalAdapter.findSession(existingToken);
+									const session = await ctx.context.internalAdapter.findSession(
+										existingToken,
+									);
 									if (!session) continue;
 									if (session.user.id === ctx.context.newSession.user.id) {
 										// Clear the old cookie using the same options so the browser removes it.
