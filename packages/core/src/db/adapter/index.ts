@@ -283,6 +283,12 @@ export interface DBAdapterFactoryConfig<
 	 * @default false
 	 */
 	disableTransformJoin?: boolean | undefined;
+	/**
+	 * Whether to disable the transform where.
+	 * Do not use this option unless you know what you are doing.
+	 * @default false
+	 */
+	disableTransformWhere?: boolean | undefined;
 }
 
 export type Where = {
