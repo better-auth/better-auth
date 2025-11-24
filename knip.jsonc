@@ -11,7 +11,65 @@
 	"workspaces": {
 		"packages/*": {
 			"entry": ["src/index.ts"],
-			"project": ["src/**/*.ts!"]
+			"project": [
+				"src/**/*.ts!",
+				"!src/adapters/**/test/.tmp",
+				"!src/adapters/**/test/auth.ts"
+			]
+		},
+		"packages/better-auth": {
+			"project": [
+				"src/**/*.ts!",
+				"!src/adapters/**/test/.tmp",
+				"!src/adapters/**/test/auth.ts"
+			],
+			"ignoreDependencies": [
+				// implicit adapter dependencies
+				"drizzle-kit",
+				"drizzle-orm",
+				"mongodb",
+
+				// implicit test-instance dependencies
+				"vitest",
+				"pg",
+				"better-sqlite3",
+				"mysql2",
+
+				// implicit integrations dependencies
+				"@lynx-js/react",
+				"@sveltejs/kit",
+				"@tanstack/react-start",
+				"@tanstack/start-server-core",
+				"next",
+				"react",
+				"react-dom",
+				"solid-js",
+				"svelte",
+				"vue"
+			]
+		},
+		"packages/cli": {
+			"ignoreDependencies": [
+				// implicit adapter dependencies
+				"better-sqlite3",
+				"@prisma/client",
+				"@types/pg",
+				"drizzle-orm",
+				"pg",
+				"prisma"
+			]
+		},
+		"packages/expo": {
+			"ignoreDependencies": [
+				// loading of optional peers
+				"expo-constants",
+				"expo-network",
+				"expo-linking",
+				"expo-web-browser",
+
+				// implicit dependencies
+				"react-native"
+			]
 		}
 	},
 	"vitest": {
