@@ -27,6 +27,7 @@ possiblePaths = [
 	...possiblePaths.map((it) => `server/${it}`),
 	...possiblePaths.map((it) => `lib/${it}`),
 	...possiblePaths.map((it) => `utils/${it}`),
+	...possiblePaths.map((it) => `auth/${it}`),
 ];
 possiblePaths = [
 	...possiblePaths,
