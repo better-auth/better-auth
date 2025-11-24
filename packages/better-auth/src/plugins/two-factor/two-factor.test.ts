@@ -63,7 +63,7 @@ describe("two factor", async () => {
 				},
 			],
 		});
-		const twoFactor = await db.findOne<TwoFactorTable>({
+		const twoFactors = await db.findMany<TwoFactorTable>({
 			model: "twoFactor",
 			where: [
 				{
@@ -71,7 +71,9 @@ describe("two factor", async () => {
 					value: session.data?.user.id as string,
 				},
 			],
+			limit: 1,
 		});
+		const twoFactor = twoFactors[0]!;
 		expect(dbUser?.twoFactorEnabled).toBe(false);
 		expect(twoFactor?.secret).toBeDefined();
 		expect(twoFactor?.backupCodes).toBeDefined();
@@ -108,7 +110,7 @@ describe("two factor", async () => {
 	});
 
 	it("should enable twoFactor", async () => {
-		const twoFactor = await db.findOne<TwoFactorTable>({
+		const twoFactors = await db.findMany<TwoFactorTable>({
 			model: "twoFactor",
 			where: [
 				{
@@ -117,10 +119,10 @@ describe("two factor", async () => {
 				},
 			],
 		});
-		if (!twoFactor) {
+		if (!twoFactors.length) {
 			throw new Error("No two factor");
 		}
-
+		const twoFactor = twoFactors[0]!;
 		const decrypted = await symmetricDecrypt({
 			key: DEFAULT_SECRET,
 			data: twoFactor.secret,

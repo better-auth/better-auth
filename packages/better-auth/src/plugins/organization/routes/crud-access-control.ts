@@ -471,7 +471,7 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				existingRoleInDB.permission as never as string,
 			);
 
-			await ctx.context.adapter.delete({
+			await ctx.context.adapter.deleteMany({
 				model: "organizationRole",
 				where: [
 					{
@@ -744,7 +744,7 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 					message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
 				});
 			}
-			let role = await ctx.context.adapter.findOne<OrganizationRole>({
+			let roles = await ctx.context.adapter.findMany<OrganizationRole>({
 				model: "organizationRole",
 				where: [
 					{
@@ -755,8 +755,9 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 					},
 					condition,
 				],
+				limit: 1,
 			});
-			if (!role) {
+			if (!roles.length) {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The role name/id does not exist in the database.`,
 					{
@@ -770,7 +771,7 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 					message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
 				});
 			}
-
+			const role = roles[0]!;
 			role.permission = JSON.parse(role.permission as never as string);
 
 			return ctx.json(role as OrganizationRole & ReturnAdditionalFields);
@@ -941,7 +942,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
 				});
 			}
-			let role = await ctx.context.adapter.findOne<OrganizationRole>({
+			let roles = await ctx.context.adapter.findMany<OrganizationRole>({
 				model: "organizationRole",
 				where: [
 					{
@@ -952,8 +953,9 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					},
 					condition,
 				],
+				limit: 1,
 			});
-			if (!role) {
+			if (!roles.length) {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The role name/id does not exist in the database.`,
 					{
@@ -967,6 +969,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
 				});
 			}
+			const role = roles[0]!;
 			role.permission = role.permission
 				? JSON.parse(role.permission as never as string)
 				: undefined;

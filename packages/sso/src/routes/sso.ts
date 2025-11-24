@@ -1423,14 +1423,15 @@ export const callbackSSO = (options?: SSOOptions) => {
 					(plugin) => plugin.id === "organization",
 				);
 				if (isOrgPluginEnabled) {
-					const isAlreadyMember = await ctx.context.adapter.findOne({
+					const isAlreadyMember = await ctx.context.adapter.findMany({
 						model: "member",
 						where: [
 							{ field: "organizationId", value: provider.organizationId },
 							{ field: "userId", value: user.id },
 						],
+						limit: 1,
 					});
-					if (!isAlreadyMember) {
+					if (!isAlreadyMember.length) {
 						const role = options?.organizationProvisioning?.getRole
 							? await options.organizationProvisioning.getRole({
 									user,
