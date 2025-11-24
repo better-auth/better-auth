@@ -1216,12 +1216,6 @@ importers:
       drizzle-orm:
         specifier: ^0.33.0
         version: 0.33.0(@cloudflare/workers-types@4.20250903.0)(@libsql/client@0.15.14)(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.5)(@types/react@19.2.2)(better-sqlite3@12.4.1)(bun-types@1.3.3)(kysely@0.28.5)(mysql2@3.14.4)(pg@8.16.3)(postgres@3.4.7)(prisma@5.22.0)(react@19.2.0)
-      get-tsconfig:
-        specifier: ^4.10.1
-        version: 4.13.0
-      jiti:
-        specifier: ^2.6.0
-        version: 2.6.1
       open:
         specifier: ^10.2.0
         version: 10.2.0
@@ -1240,9 +1234,6 @@ importers:
       semver:
         specifier: ^7.7.2
         version: 7.7.3
-      tinyexec:
-        specifier: ^0.3.2
-        version: 0.3.2
       yocto-spinner:
         specifier: ^0.2.3
         version: 0.2.3
@@ -1262,6 +1253,9 @@ importers:
       '@types/semver':
         specifier: ^7.7.1
         version: 7.7.1
+      jiti:
+        specifier: ^2.6.0
+        version: 2.6.1
       tsdown:
         specifier: 'catalog:'
         version: 0.16.6(oxc-resolver@11.14.0)(synckit@0.11.11)(typescript@5.9.3)
@@ -18506,9 +18500,7 @@ snapshots:
       metro-runtime: 0.83.3
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
     optional: true
 
   '@react-native/normalize-colors@0.74.89': {}
