@@ -72,7 +72,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			organizationId: string;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const users = await adapter.findMany<User>({
+			const user = await adapter.findOne<User>({
 				model: "user",
 				where: [
 					{
@@ -80,12 +80,10 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 						value: data.email.toLowerCase(),
 					},
 				],
-				limit: 1,
 			});
-			if (!users.length) {
+			if (!user) {
 				return null;
 			}
-			const user = users[0]!;
 			const members = await adapter.findMany<InferMember<O, false>>({
 				model: "member",
 				where: [
