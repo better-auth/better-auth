@@ -70,7 +70,7 @@
     "better-call": "catalog:",
     "body-parser": "^2.2.0",
     "express": "^5.1.0",
-    "oauth2-mock-server": "^7.2.1",
+    "oauth2-mock-server": "^8.2.0",
     "tsdown": "catalog:"
   },
   "peerDependencies": {
