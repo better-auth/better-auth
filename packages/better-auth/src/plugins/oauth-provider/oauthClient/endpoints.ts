@@ -19,9 +19,11 @@ export async function getClientEndpoint(
 ) {
 	const session = await getSessionFromCtx(ctx);
 	if (!session) throw new APIError("UNAUTHORIZED");
+	if (!ctx.request) throw new APIError("BAD_REQUEST");
 	if (
 		opts.clientPrivileges &&
 		!(await opts.clientPrivileges({
+			headers: ctx.request.headers,
 			action: "read",
 			session: session.session,
 			user: session.user,
@@ -93,9 +95,11 @@ export async function getClientsEndpoint(
 ) {
 	const session = await getSessionFromCtx(ctx);
 	if (!session) throw new APIError("UNAUTHORIZED");
+	if (!ctx.request) throw new APIError("BAD_REQUEST");
 	if (
 		opts.clientPrivileges &&
 		!(await opts.clientPrivileges({
+			headers: ctx.request.headers,
 			action: "list",
 			session: session.session,
 			user: session.user,
@@ -148,9 +152,11 @@ export async function deleteClientEndpoint(
 ) {
 	const session = await getSessionFromCtx(ctx);
 	if (!session) throw new APIError("UNAUTHORIZED");
+	if (!ctx.request) throw new APIError("BAD_REQUEST");
 	if (
 		opts.clientPrivileges &&
 		!(await opts.clientPrivileges({
+			headers: ctx.request.headers,
 			action: "delete",
 			session: session.session,
 			user: session.user,
@@ -207,9 +213,11 @@ export async function updateClientEndpoint(
 ) {
 	const session = await getSessionFromCtx(ctx);
 	if (!session) throw new APIError("UNAUTHORIZED");
+	if (!ctx.request) throw new APIError("BAD_REQUEST");
 	if (
 		opts.clientPrivileges &&
 		!(await opts.clientPrivileges({
+			headers: ctx.request.headers,
 			action: "update",
 			session: session.session,
 			user: session.user,
@@ -292,9 +300,11 @@ export async function rotateClientSecretEndpoint(
 ) {
 	const session = await getSessionFromCtx(ctx);
 	if (!session) throw new APIError("UNAUTHORIZED");
+	if (!ctx.request) throw new APIError("BAD_REQUEST");
 	if (
 		opts.clientPrivileges &&
 		!(await opts.clientPrivileges({
+			headers: ctx.request.headers,
 			action: "rotate",
 			session: session.session,
 			user: session.user,
