@@ -379,6 +379,15 @@ export interface CodeVerificationValue {
 	nonce?: string | undefined;
 }
 
+export interface ClientAssertionPayload {
+	iss: string;
+	sub: string;
+	aud: string;
+	jti: string;
+	exp: number;
+	iat: number;
+}
+
 export interface OAuthAccessToken {
 	/**
 	 * The access token
@@ -510,16 +519,19 @@ export interface OIDCMetadata {
 	/**
 	 * Supported token endpoint authentication methods.
 	 *
-	 * only `client_secret_basic` and `client_secret_post` are supported.
-	 *
 	 * @default
-	 * ["client_secret_basic", "client_secret_post"]
+	 * ["client_secret_basic", "client_secret_post", "private_key_jwt", "none"]
 	 */
 	token_endpoint_auth_methods_supported: [
 		"client_secret_basic",
 		"client_secret_post",
+		"private_key_jwt",
 		"none",
 	];
+	/**
+	 * Supported token endpoint authentication signing algorithms.
+	 */
+	token_endpoint_auth_signing_alg_values_supported?: string[];
 	/**
 	 * Supported claims.
 	 *
