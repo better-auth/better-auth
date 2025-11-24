@@ -127,13 +127,18 @@ type signInEmailOTP = {
     /**
      * OTP sent to the email. 
      */
-    otp: string = "123456"
+    otp: string = "123456",
+    /**
+     * Name of the user (signup only)
+    */
+    name?: string = "user name",
 }
 ```
 </APIMethod>
 
 <Callout>
 If the user is not registered, they'll be automatically registered. If you want to prevent this, you can pass `disableSignUp` as `true` in the [options](#options).
+Properties identified with *signup only* will only affect the automatic signup behavior. It is also possible to pass more properties through [additional fields](/docs/concepts/typescript#additional-fields).
 </Callout>
 
 ### Verify Email with OTP
