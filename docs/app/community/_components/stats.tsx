@@ -1,5 +1,5 @@
 "use client";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { kFormatter } from "@/lib/utils";
@@ -12,41 +12,33 @@ export default function Stats({
 }) {
 	return (
 		<div className="relative">
-			<div className="md:mx-auto w-full">
-				<div>
-					<div className="flex py-2 pb-0 dark:[box-shadow:0_-20px_80px_-20px_#dfbf9f1f_inset] flex-col items-center justify-between">
-						<div className="flex items-end w-full gap-2  text-gray-400">
-							<Link
-								className="w-full"
-								href="https://better-merch.dev"
-								rel="noopener noreferrer"
-								target="_blank"
-							>
-								<Button
-									variant="outline"
-									className="group duration-500 cursor-pointer text-gray-400 flex items-center gap-2 text-md hover:bg-transparent border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0 border-t-[1px] border-t-input py-5 w-full hover:text-black dark:hover:text-white h-12"
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="1em"
-										height="1em"
-										viewBox="0 0 16 16"
-									>
-										<path
-											fill="#ffffff"
-											d="M8 3a1 1 0 0 0-.943.667a.5.5 0 0 1-.942-.334a2 2 0 1 1 3.22 2.157l-.041.037c-.22.197-.419.374-.57.566c-.16.198-.223.359-.223.503c0 .219.12.42.313.524L14.16 10a1.596 1.596 0 0 1-.757 3H2.595a1.595 1.595 0 0 1-.755-3l4.423-2.38a.5.5 0 0 1 .474.88l-4.424 2.38A.595.595 0 0 0 2.595 12h10.81a.596.596 0 0 0 .282-1.12L8.34 8a1.6 1.6 0 0 1-.84-1.404c0-.462.212-.839.44-1.126c.208-.261.468-.493.674-.677l.054-.048A1 1 0 0 0 8 3"
-										/>
-									</svg>
-									<span className="uppercase font-mono group-hover:text-black duration-300 dark:group-hover:text-white">
-										Shop Our Merch
-									</span>
-									<ArrowUpRight className="w-5 h-5 opacity-20 ml-2 group-hover:opacity-300 duration-300 text-black group-hover:duration-700 dark:text-white" />
-								</Button>
-							</Link>
-						</div>
-					</div>
-				</div>
+			<Link
+				href="https://better-merch.dev"
+				target="_blank"
+				rel="noopener noreferrer"
+				className="border-t py-3 flex items-center gap-2 justify-center group hover:bg-stone-50 dark:hover:bg-stone-950 transition-colors duration-300 cursor-pointer text-stone-600 dark:text-white/80"
+			>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					width="1.2em"
+					height="1.2em"
+					viewBox="0 0 24 24"
+				>
+					<path
+						fill="none"
+						stroke="#ffffff"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M9 8a3 3 0 1 0 6 0M3 16.8V7.2c0-1.12 0-1.68.218-2.108c.192-.377.497-.682.874-.874C4.52 4 5.08 4 6.2 4h11.6c1.12 0 1.68 0 2.107.218c.377.192.683.497.875.874c.218.427.218.987.218 2.105v9.607c0 1.118 0 1.677-.218 2.104a2 2 0 0 1-.875.874c-.427.218-.986.218-2.104.218H6.197c-1.118 0-1.678 0-2.105-.218a2 2 0 0 1-.874-.874C3 18.48 3 17.92 3 16.8"
+					/>
+				</svg>
+				<p>Shop our collection from Better Merch</p>
 
+				<ChevronRight className="w-4 h-4 text-stone-600 dark:text-white/80 transition-transform duration-300 group-hover:translate-x-0.75" />
+			</Link>
+
+			<div className="md:mx-auto w-full">
 				<div className="border border-b-0 rounded-none overflow-hidden border-l-0 border-r-0">
 					<div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-input">
 						<div className="flex pt-5 dark:[box-shadow:0_-20px_80px_-20px_#dfbf9f1f_inset] flex-col items-center justify-between">
@@ -103,6 +95,46 @@ export default function Stats({
 										<path
 											fill="currentColor"
 											d="M25.418 12v.03c0 .543-.156 1.05-.425 1.479l.007-.012a2.77 2.77 0 0 1-1.112 1.021l-.016.007c.108.403.17.865.17 1.343v.018v-.001a6.33 6.33 0 0 1-1.518 4.08l.007-.009a10.2 10.2 0 0 1-4.052 2.936l-.069.024c-1.635.686-3.535 1.085-5.529 1.085L12.728 24h.008l-.146.001c-1.991 0-3.888-.399-5.617-1.121l.096.036a10.26 10.26 0 0 1-4.101-2.944l-.013-.016a6.3 6.3 0 0 1-1.51-4.069v-.007q.002-.707.161-1.366l-.008.04a2.86 2.86 0 0 1-1.156-1.029l-.007-.011a2.8 2.8 0 0 1-.44-1.512c0-.777.314-1.481.823-1.991a2.7 2.7 0 0 1 1.952-.83h.05h-.003h.039c.799 0 1.519.343 2.019.889l.002.002a13.14 13.14 0 0 1 7.296-2.298h.008l1.646-7.39a.48.48 0 0 1 .211-.296l.002-.001a.46.46 0 0 1 .372-.071l-.003-.001l5.234 1.149c.174-.353.435-.639.757-.838l.009-.005c.319-.2.707-.319 1.123-.319c.585 0 1.116.235 1.501.617c.385.369.624.888.624 1.463v.036v-.002v.03c0 .578-.239 1.1-.624 1.472l-.001.001a2.1 2.1 0 0 1-1.504.624a2.12 2.12 0 0 1-1.497-.617a2.03 2.03 0 0 1-.617-1.461v-.038v.002l-4.738-1.05l-1.475 6.694c2.747.02 5.293.865 7.407 2.3l-.047-.03a2.8 2.8 0 0 1 2.031-.865c.78 0 1.486.317 1.997.83c.509.496.825 1.189.825 1.955v.039V12zM5.929 14.822v.032c0 .576.236 1.097.617 1.471a2.02 2.02 0 0 0 1.463.624h.036h-.002a2.13 2.13 0 0 0 2.128-2.128v-.034c0-.575-.239-1.094-.624-1.462l-.001-.001a2.06 2.06 0 0 0-1.471-.617h-.034h.002a2.13 2.13 0 0 0-2.114 2.113v.001zm11.489 5.036a.513.513 0 0 0 0-.738a.48.48 0 0 0-.341-.142h-.014h.001h-.008a.53.53 0 0 0-.361.142a3.54 3.54 0 0 1-1.694.876l-.023.004a9.26 9.26 0 0 1-4.604-.014l.064.014a3.55 3.55 0 0 1-1.721-.882l.002.002a.53.53 0 0 0-.361-.142h-.019a.48.48 0 0 0-.341.142a.47.47 0 0 0-.16.352v.014c0 .146.061.278.16.372a4.2 4.2 0 0 0 1.65.957l.03.008a8 8 0 0 0 1.695.414l.043.005q.666.064 1.29.064t1.29-.064a8.4 8.4 0 0 0 1.796-.437l-.058.019a4.2 4.2 0 0 0 1.685-.966l-.002.002zm-.042-2.908h.034c.575 0 1.094-.239 1.462-.624l.001-.001c.381-.374.617-.895.617-1.471v-.034v.002a2.13 2.13 0 0 0-2.113-2.114h-.033c-.576 0-1.097.236-1.471.617a2.02 2.02 0 0 0-.624 1.463v.036v-.002a2.13 2.13 0 0 0 2.128 2.128z"
+										/>
+									</svg>
+								</div>
+								<span className="text-xl uppercase tracking-tighter font-bold font-mono bg-gradient-to-b dark:from-stone-200 dark:via-stone-400 dark:to-stone-700 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(255,255,255,0.1)] from-stone-800 via-stone-600 to-stone-400">
+									Reddit
+								</span>
+							</div>
+							<div className="flex items-end w-full gap-2 mt-4 text-gray-400">
+								<Link
+									className="w-full"
+									href="https://reddit.com/r/better_auth"
+									rel="noopener noreferrer"
+									target="_blank"
+								>
+									<Button
+										variant="outline"
+										className="group duration-500 cursor-pointer text-gray-400 flex items-center gap-2 text-md hover:bg-transparent border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0  border-t-[1px] border-t-input py-7 w-full hover:text-black dark:hover:text-white"
+									>
+										<span className="uppercase font-mono group-hover:text-black duration-300 dark:group-hover:text-white">
+											Join Subreddit
+										</span>
+										<ArrowUpRight className="w-6 h-6 opacity-20 ml-2 group-hover:opacity-300 duration-300 text-black group-hover:duration-700 dark:text-white" />
+									</Button>
+								</Link>
+							</div>
+						</div>
+
+						<div className="flex pt-5 dark:[box-shadow:0_-20px_80px_-20px_#dfbf9f1f_inset] flex-col items-center justify-between">
+							<div className="relative flex flex-col p-3">
+								<div className="flex dark:[border:1px_solid_rgba(255,255,255,.1)] dark:[box-shadow:0_-20px_80px_-20px_#8686f01f_inset] border rounded-full items-center justify-center p-1 w-[4.0em] h-[4.0em] mx-auto mb-4">
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="4em"
+										height="4em"
+										viewBox="0 0 19 19"
+										className="my-2 mx-auto pl-2 pt-1"
+									>
+										<path
+											fill="currentColor"
+											d="M9.294 6.928L14.357 1h-1.2L8.762 6.147L5.25 1H1.2l5.31 7.784L1.2 15h1.2l4.642-5.436L10.751 15h4.05zM7.651 8.852l-.538-.775L2.832 1.91h1.843l3.454 4.977l.538.775l4.491 6.47h-1.843z"
 										/>
 									</svg>
 								</div>
