@@ -1032,9 +1032,6 @@ importers:
       '@noble/hashes':
         specifier: ^2.0.0
         version: 2.0.0
-      '@standard-schema/spec':
-        specifier: ^1.0.0
-        version: 1.0.0
       better-call:
         specifier: 'catalog:'
         version: 1.1.0
@@ -1075,24 +1072,12 @@ importers:
       '@types/bun':
         specifier: ^1.3.3
         version: 1.3.3
-      '@types/keccak':
-        specifier: ^3.0.5
-        version: 3.0.5
       '@types/pg':
         specifier: ^8.15.5
         version: 8.15.5
-      '@types/prompts':
-        specifier: ^2.4.9
-        version: 2.4.9
-      '@types/react':
-        specifier: catalog:react19
-        version: 19.2.2
       better-sqlite3:
         specifier: ^12.2.0
         version: 12.4.1
-      concurrently:
-        specifier: ^9.2.1
-        version: 9.2.1
       deepmerge:
         specifier: ^4.3.1
         version: 4.3.1
@@ -1105,9 +1090,6 @@ importers:
       happy-dom:
         specifier: ^20.0.10
         version: 20.0.10
-      hono:
-        specifier: ^4.9.7
-        version: 4.10.2
       listhen:
         specifier: ^1.9.0
         version: 1.9.0
@@ -1141,9 +1123,6 @@ importers:
       react-dom:
         specifier: catalog:react19
         version: 19.2.0(react@19.2.0)
-      react-native:
-        specifier: ~0.80.2
-        version: 0.80.2(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.3))(@types/react@19.2.2)(react@19.2.0)
       solid-js:
         specifier: ^1.9.8
         version: 1.9.9
@@ -6656,9 +6635,6 @@ packages:
   '@types/jsrsasign@10.5.15':
     resolution: {integrity: sha512-3stUTaSRtN09PPzVWR6aySD9gNnuymz+WviNHoTb85dKu+BjaV4uBbWWGykBBJkfwPtcNZVfTn2lbX00U+yhpQ==}
 
-  '@types/keccak@3.0.5':
-    resolution: {integrity: sha512-Mvu4StIJ9KyfPXDVRv3h0fWNBAjHPBQZ8EPcxhqA8FG6pLzxtytVXU5owB6J2/8xZ+ZspWTXJEUjAHt0pk0I1Q==}
-
   '@types/mdast@4.0.4':
     resolution: {integrity: sha512-kGaNbPh1k7AFzgpud/gMdvIm5xuECykRR+JnWKQno9TAXVa6WIVCGTPvYGekIDL4uwCZQSYbUxNBSb1aUo79oA==}
 
@@ -7734,11 +7710,6 @@ packages:
 
   concat-map@0.0.1:
     resolution: {integrity: sha512-/Srv4dswyQNBfohGpz9o6Yb3Gz3SrUDqBH5rTuhGR7ahtlbYKnVxw2bCFMRljaA7EXHaXZ8wsHdodFvbkhKmqg==}
-
-  concurrently@9.2.1:
-    resolution: {integrity: sha512-fsfrO0MxV64Znoy8/l1vVIjjHa29SZyyqPgQBwhiDcaW8wJc2W3XWVOGx4M3oJBnv/zdUZIIp1gDeS98GzP8Ng==}
-    engines: {node: '>=18'}
-    hasBin: true
 
   confbox@0.1.8:
     resolution: {integrity: sha512-RMtmw0iFkeR4YV+fUOSucriAQNb9g8zFR52MWCtl+cCZOFRNL6zeB395vPzFhEjjn4fMxXudmELnl/KF/WrK6w==}
@@ -12422,9 +12393,6 @@ packages:
 
   run-parallel@1.2.0:
     resolution: {integrity: sha512-5l4VyZR86LZ/lDxZTR6jqL8AFE2S0IFLMP26AbjsLVADxHdhB/c0GUsH+y39UfCi3dzz8OlQuPmnaJOMoDHQBA==}
-
-  rxjs@7.8.2:
-    resolution: {integrity: sha512-dhKf903U/PQZY6boNNtAGdWbG85WAbjT/1xYoZIC7FAY0yWapOBQVsVrDl58W86//e1VpMNBtRV4MaXfdMySFA==}
 
   sade@1.8.1:
     resolution: {integrity: sha512-xal3CZX1Xlo/k4ApwCFrHVACi9fBqJ7V+mwhBsuf/1IOKbBy098Fex+Wa/5QMubw09pSZ/u8EY8PWgevJsXp1A==}
@@ -19765,10 +19733,6 @@ snapshots:
 
   '@types/jsrsasign@10.5.15': {}
 
-  '@types/keccak@3.0.5':
-    dependencies:
-      '@types/node': 24.9.2
-
   '@types/mdast@4.0.4':
     dependencies:
       '@types/unist': 3.0.3
@@ -21083,15 +21047,6 @@ snapshots:
   compute-scroll-into-view@3.1.1: {}
 
   concat-map@0.0.1: {}
-
-  concurrently@9.2.1:
-    dependencies:
-      chalk: 4.1.2
-      rxjs: 7.8.2
-      shell-quote: 1.8.3
-      supports-color: 8.1.1
-      tree-kill: 1.2.2
-      yargs: 17.7.2
 
   confbox@0.1.8: {}
 
@@ -26872,10 +26827,6 @@ snapshots:
   run-parallel@1.2.0:
     dependencies:
       queue-microtask: 1.2.3
-
-  rxjs@7.8.2:
-    dependencies:
-      tslib: 2.8.1
 
   sade@1.8.1:
     dependencies:
