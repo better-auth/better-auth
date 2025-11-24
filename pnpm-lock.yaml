@@ -21,6 +21,19 @@ catalogs:
     vitest:
       specifier: 4.0.13
       version: 4.0.13
+  react19:
+    '@types/react':
+      specifier: ^19.2.0
+      version: 19.2.2
+    '@types/react-dom':
+      specifier: ^19.2.0
+      version: 19.2.2
+    react:
+      specifier: ^19.2.0
+      version: 19.2.0
+    react-dom:
+      specifier: ^19.2.0
+      version: 19.2.0
 
 patchedDependencies:
   msw:
@@ -152,10 +165,10 @@ importers:
         specifier: ^8.13.1
         version: 8.16.3
       react:
-        specifier: ^19.1.0
+        specifier: catalog:react19
         version: 19.2.0
       react-dom:
-        specifier: ^19.1.0
+        specifier: catalog:react19
         version: 19.2.0(react@19.2.0)
       react-native:
         specifier: ~0.81.5
@@ -204,7 +217,7 @@ importers:
         specifier: ^7.20.5
         version: 7.20.5
       '@types/react':
-        specifier: ^19.1.17
+        specifier: catalog:react19
         version: 19.2.2
 
   demo/nextjs:
@@ -381,13 +394,13 @@ importers:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       react:
-        specifier: 19.2.0
+        specifier: catalog:react19
         version: 19.2.0
       react-day-picker:
         specifier: 9.9.0
         version: 9.9.0(react@19.2.0)
       react-dom:
-        specifier: 19.2.0
+        specifier: catalog:react19
         version: 19.2.0(react@19.2.0)
       react-hook-form:
         specifier: ^7.62.0
@@ -433,10 +446,10 @@ importers:
         specifier: ^1.9.0
         version: 1.9.0
       '@types/react':
-        specifier: ^19.1.10
+        specifier: catalog:react19
         version: 19.2.2
       '@types/react-dom':
-        specifier: ^19.2.2
+        specifier: catalog:react19
         version: 19.2.2(@types/react@19.2.2)
       '@types/ua-parser-js':
         specifier: ^0.7.39
@@ -487,10 +500,10 @@ importers:
         specifier: ^2.10.3
         version: 2.17.0
       react:
-        specifier: 19.2.0
+        specifier: catalog:react19
         version: 19.2.0
       react-dom:
-        specifier: 19.2.0
+        specifier: catalog:react19
         version: 19.2.0(react@19.2.0)
       sonner:
         specifier: ^2.0.7
@@ -506,10 +519,10 @@ importers:
         specifier: ^4.1.13
         version: 4.1.17(vite@7.2.4(@types/node@24.10.1)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1))
       '@types/react':
-        specifier: ^19.1.10
+        specifier: catalog:react19
         version: 19.2.2
       '@types/react-dom':
-        specifier: ^19.2.2
+        specifier: catalog:react19
         version: 19.2.2(@types/react@19.2.2)
       '@vitejs/plugin-react-swc':
         specifier: ^4.0.0
@@ -533,20 +546,20 @@ importers:
         specifier: 16.0.1
         version: 16.0.1(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(sass@1.90.0)
       react:
-        specifier: 19.2.0
+        specifier: catalog:react19
         version: 19.2.0
       react-dom:
-        specifier: 19.2.0
+        specifier: catalog:react19
         version: 19.2.0(react@19.2.0)
     devDependencies:
       '@tailwindcss/postcss':
         specifier: ^4.1.13
         version: 4.1.13
       '@types/react':
-        specifier: ^19.2.2
+        specifier: catalog:react19
         version: 19.2.2
       '@types/react-dom':
-        specifier: ^19.2.2
+        specifier: catalog:react19
         version: 19.2.2(@types/react@19.2.2)
       postcss:
         specifier: ^8.5.6
@@ -756,13 +769,13 @@ importers:
         specifier: ^2.4.1
         version: 2.4.1(react@19.2.0)
       react:
-        specifier: 19.2.0
+        specifier: catalog:react19
         version: 19.2.0
       react-day-picker:
         specifier: 9.9.0
         version: 9.9.0(react@19.2.0)
       react-dom:
-        specifier: 19.2.0
+        specifier: catalog:react19
         version: 19.2.0(react@19.2.0)
       react-hook-form:
         specifier: ^7.62.0
@@ -832,10 +845,10 @@ importers:
         specifier: ^2.0.13
         version: 2.0.13
       '@types/react':
-        specifier: ^19.2.2
+        specifier: catalog:react19
         version: 19.2.2
       '@types/react-dom':
-        specifier: ^19.2.1
+        specifier: catalog:react19
         version: 19.2.2(@types/react@19.2.2)
       mini-svg-data-uri:
         specifier: ^1.4.4
@@ -1072,7 +1085,7 @@ importers:
         specifier: ^2.4.9
         version: 2.4.9
       '@types/react':
-        specifier: ^19.2.2
+        specifier: catalog:react19
         version: 19.2.2
       better-sqlite3:
         specifier: ^12.2.0
@@ -1123,10 +1136,10 @@ importers:
         specifier: ^5.22.0
         version: 5.22.0
       react:
-        specifier: ^19.2.0
+        specifier: catalog:react19
         version: 19.2.0
       react-dom:
-        specifier: ^19.2.0
+        specifier: catalog:react19
         version: 19.2.0(react@19.2.0)
       react-native:
         specifier: ~0.80.2
