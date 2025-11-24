@@ -43,7 +43,6 @@ const { execute } = await testAdapter({
 			migrationCount,
 			dialect,
 		);
-		console.log(code);
 		await pushPrismaSchema(dialect);
 		destroyPrismaClient({ migrationCount: migrationCount - 1, dialect });
 	},
