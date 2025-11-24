@@ -779,7 +779,6 @@ export const createAdapterFactory =
 			);
 
 			if (!hasUniqueField) {
-				console.log(where);
 				throw new BetterAuthError(
 					`The where clause for model "${model}" must contain a unique field (eg: ${uniqueFields.map((x) => `"${x}"`).join(", ")}) for single record queries.${errStack}`,
 				);

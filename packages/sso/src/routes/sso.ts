@@ -557,7 +557,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				});
 			}
 			if (ctx.body.organizationId) {
-				const organization = await ctx.context.adapter.findOne({
+				const organization = await ctx.context.adapter.findMany({
 					model: "member",
 					where: [
 						{
@@ -569,8 +569,9 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 							value: ctx.body.organizationId,
 						},
 					],
+					limit: 1,
 				});
-				if (!organization) {
+				if (!organization.length) {
 					throw new APIError("BAD_REQUEST", {
 						message: "You are not a member of the organization",
 					});

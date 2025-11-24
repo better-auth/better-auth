@@ -409,15 +409,18 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 				if (activeSubscription && customerId) {
 					// Find the corresponding database subscription for this Stripe subscription
-					let dbSubscription = await ctx.context.adapter.findOne<Subscription>({
-						model: "subscription",
-						where: [
-							{
-								field: "stripeSubscriptionId",
-								value: activeSubscription.id,
-							},
-						],
-					});
+					const dbSubscriptions =
+						await ctx.context.adapter.findMany<Subscription>({
+							model: "subscription",
+							where: [
+								{
+									field: "stripeSubscriptionId",
+									value: activeSubscription.id,
+								},
+							],
+							limit: 1,
+						});
+					let dbSubscription = dbSubscriptions[0];
 
 					// If no database record exists for this Stripe subscription, update the existing one
 					if (!dbSubscription && activeOrTrialingSubscription) {

@@ -1195,24 +1195,27 @@ async function checkIfRoleNameIsTakenByRoleInDB({
 	organizationId: string;
 	role: string;
 }) {
-	const existingRoleInDB = await ctx.context.adapter.findOne<OrganizationRole>({
-		model: "organizationRole",
-		where: [
-			{
-				field: "organizationId",
-				value: organizationId,
-				operator: "eq",
-				connector: "AND",
-			},
-			{
-				field: "role",
-				value: role,
-				operator: "eq",
-				connector: "AND",
-			},
-		],
-	});
-	if (existingRoleInDB) {
+	const existingRoleInDB = await ctx.context.adapter.findMany<OrganizationRole>(
+		{
+			model: "organizationRole",
+			where: [
+				{
+					field: "organizationId",
+					value: organizationId,
+					operator: "eq",
+					connector: "AND",
+				},
+				{
+					field: "role",
+					value: role,
+					operator: "eq",
+					connector: "AND",
+				},
+			],
+			limit: 1,
+		},
+	);
+	if (existingRoleInDB.length > 0) {
 		ctx.context.logger.error(
 			`[Dynamic Access Control] The role name "${role}" is already taken by a role in the database.`,
 			{

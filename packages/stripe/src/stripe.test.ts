@@ -217,7 +217,7 @@ describe("stripe", async () => {
 			},
 		});
 		expect(res.data?.url).toBeDefined();
-		const subscription = await ctx.adapter.findOne<Subscription>({
+		const subscription = await ctx.adapter.findMany<Subscription>({
 			model: "subscription",
 			where: [
 				{
@@ -225,8 +225,9 @@ describe("stripe", async () => {
 					value: userRes.user.id,
 				},
 			],
+			limit: 1,
 		});
-		expect(subscription).toMatchObject({
+		expect(subscription[0]).toMatchObject({
 			id: expect.any(String),
 			plan: "starter",
 			referenceId: userRes.user.id,
@@ -1250,11 +1251,12 @@ describe("stripe", async () => {
 		expect(mockStripe.billingPortal.sessions.create).not.toHaveBeenCalled();
 		expect(upgradeRes.data?.url).toBeDefined();
 
-		const orgSub = await testCtx.adapter.findOne<Subscription>({
+		const orgSub = await testCtx.adapter.findMany<Subscription>({
 			model: "subscription",
 			where: [{ field: "referenceId", value: orgId }],
+			limit: 1,
 		});
-		expect(orgSub).toMatchObject({
+		expect(orgSub[0]).toMatchObject({
 			referenceId: orgId,
 			status: "incomplete",
 			plan: "starter",
@@ -1292,7 +1294,7 @@ describe("stripe", async () => {
 		expect(firstUpgradeRes.data?.url).toBeDefined();
 
 		// Simulate the subscription being created with trial data
-		await ctx.adapter.update({
+		await ctx.adapter.updateMany({
 			model: "subscription",
 			update: {
 				status: "trialing",
@@ -1308,7 +1310,7 @@ describe("stripe", async () => {
 		});
 
 		// Cancel the subscription
-		await ctx.adapter.update({
+		await ctx.adapter.updateMany({
 			model: "subscription",
 			update: {
 				status: "canceled",
@@ -1514,7 +1516,7 @@ describe("stripe", async () => {
 		expect(firstUpgradeRes.data?.url).toBeDefined();
 
 		// Simulate the subscription being created with trial data
-		await ctx.adapter.update({
+		await ctx.adapter.updateMany({
 			model: "subscription",
 			update: {
 				status: "trialing",
@@ -1530,7 +1532,7 @@ describe("stripe", async () => {
 		});
 
 		// Cancel the subscription
-		await ctx.adapter.update({
+		await ctx.adapter.updateMany({
 			model: "subscription",
 			update: {
 				status: "canceled",

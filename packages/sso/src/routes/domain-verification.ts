@@ -81,8 +81,8 @@ export const requestDomainVerification = (options: SSOOptions) => {
 				});
 			}
 
-			const activeVerification =
-				await ctx.context.adapter.findOne<Verification>({
+			const activeVerifications =
+				await ctx.context.adapter.findMany<Verification>({
 					model: "verification",
 					where: [
 						{
@@ -93,11 +93,14 @@ export const requestDomainVerification = (options: SSOOptions) => {
 						},
 						{ field: "expiresAt", value: new Date(), operator: "gt" },
 					],
+					limit: 1,
 				});
 
-			if (activeVerification) {
+			if (activeVerifications.length > 0) {
 				ctx.setStatus(201);
-				return ctx.json({ domainVerificationToken: activeVerification.value });
+				return ctx.json({
+					domainVerificationToken: activeVerifications[0]!.value,
+				});
 			}
 
 			const domainVerificationToken = generateRandomString(24);

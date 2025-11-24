@@ -222,7 +222,7 @@ export async function onSubscriptionDeleted(
 	try {
 		const subscriptionDeleted = event.data.object as Stripe.Subscription;
 		const subscriptionId = subscriptionDeleted.id;
-		const subscription = await ctx.context.adapter.findOne<Subscription>({
+		const subscriptions = await ctx.context.adapter.findMany<Subscription>({
 			model: "subscription",
 			where: [
 				{
@@ -230,7 +230,9 @@ export async function onSubscriptionDeleted(
 					value: subscriptionId,
 				},
 			],
+			limit: 1,
 		});
+		const subscription = subscriptions[0];
 		if (subscription) {
 			await ctx.context.adapter.update({
 				model: "subscription",
