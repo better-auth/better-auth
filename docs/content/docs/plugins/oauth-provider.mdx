@@ -696,7 +696,18 @@ _Cons_:
 ## Configuration
 
 
-### Login Screen
+### Redirect Screens
+
+During the OAuth flow, users are likely redirected between pages. For example, a user may start on a login screen then redirect to a consent screen before returning to the application. The following outlines possible login flows and configurations needed to provide each flow.
+
+To process each redirect step in the login flow, we verify the signed query provided in the initial `/oauth2/authorize` redirect. All parameters sent to the authorize endpoint (including any custom ones), are signed and verified.
+
+If your sign-in pages include any custom query parameters, you may append them to the end of the signed query (ie after the `sig` field).
+
+If you utilize the Client Plugin `oauthProviderClient`, then the `oauth_query` parameter is automatically sent to every endpoint that requires it. If you have custom sign-in endpoints, you would need to manually add the window's signed query in the request body `oauth_query`. This should only include the signed query parameters.
+
+
+#### Login Screen
 
 When a user is redirected to the OIDC provider for authentication, if they are not already logged in, they will be redirected to the login page. You can customize the login page by providing a `loginPage` option during initialization.
 
@@ -713,7 +724,7 @@ export const auth = betterAuth({
 You don't need to handle anything from your side; when a new session is created, the plugin will handle continuing the authorization flow.
 
 
-### Consent Screen
+#### Consent Screen
 
 When a user is redirected to the OIDC provider for authentication, they may be prompted to authorize the application to access their data.
 
@@ -740,25 +751,27 @@ const res = await client.oauth2.consent({
 ```
 
 
-### Select Account Screen
+#### Select Account Screen
 
 When a user is redirected to the select account page during authentication, they may be prompted to select an account before consenting. To enable account selection, you must add the following configuration to your settings.
 
-The following example uses the multi-session plugin and automatically redirects to the select-account page if more than one session is logged in
+The following example uses the multi-session plugin and automatically redirects to the select-account page if more than one session is logged in:
 
 ```ts title="auth.ts"
 oauthProvider({
-  selectAccountPage: "/select-account", // [!code highlight]
-  selectedAccount: async ({ headers }) => { // [!code highlight]
-		const allSessions = await auth.api.listDeviceSessions({
-			headers,
-		})
-		return allSessions?.length >= 1;
-  },
+  selectAccount: {
+    page: "/select-account", // [!code highlight]
+    shouldRedirect: async ({ headers }) => { // [!code highlight]
+      const allSessions = await auth.api.listDeviceSessions({
+        headers,
+      })
+      return allSessions?.length >= 1;
+    },
+  }
 })
 ```
 
-The plugin will redirect the user to the `selectAccountPage`. This page should prompt for account selection and upon completion of selection, should call `oauth2Continue`. Note the `oauth_login_prompt` is automatically stored in a signed cookie.
+The plugin will redirect the user to the `selectAccount.page`. This page should prompt for account selection and upon completion of selection, should call `oauth2Continue`.
 
 ```ts title="select-account.ts"
 await authClient.multiSession.setActive({
@@ -769,7 +782,7 @@ await client.oauth2.oauth2Continue({
 });
 ```
 
-### Post Login Screen
+#### Post Login Screen
 
 If a requested scope requires an organization. You would need to provide all of the following options to tie the `reference_id` (ie organization id, team id) to the login flow. This step occurs post login and prior to consent.
 
@@ -805,7 +818,7 @@ oauthProvider({
 })
 ```
 
-The plugin will redirect the user to the `postLoginPage`. This page should prompt for account selection and upon completion of selection, should call `oauth2Continue`. Note the `oauth_login_prompt` is automatically stored in a signed cookie.
+The plugin will redirect the user to the `postLoginPage`. This page should prompt for account selection and upon completion of selection, should call `oauth2Continue`.
 
 ```ts title="select-organization.ts"
 await authClient.organization.setActive({
@@ -834,28 +847,6 @@ const auth = betterAuth({
         "internal-dashboard",
         "mobile-app",
       ],
-      trustedClients: [
-        {
-          clientId: "internal-dashboard",
-          clientSecret: "secure-secret-here",
-          name: "Internal Dashboard",
-          type: "web",
-          redirectUris: ["https://dashboard.company.com/auth/callback"],
-          disabled: false,
-          skipConsent: true, // Skip consent for this trusted client
-          metadata: { internal: true },
-        },
-        {
-          clientId: "mobile-app",
-          clientSecret: "mobile-secret", 
-          name: "Company Mobile App",
-          type: "native",
-          redirectUris: ["com.company.app://auth"],
-          disabled: false,
-          skipConsent: false, // Still require consent if needed
-          metadata: {},
-        },
-      ]
   })]
 })
 ```
@@ -1009,13 +1000,32 @@ OAuth Clients are tied to either a user or `reference_id` at registration and is
 
 ```ts title="auth.ts"
 oauthProvider({
-  clientRegistrationReference: ({ session }) => {
+  clientReference: ({ session }) => {
     return (session?.activeOrganizationId as string | undefined) ?? undefined;
   },
 })
 ```
 
 To set user-specific permissions and roles on tokens see [Claims](#claims).
+
+
+### Client CRUD Privileges
+
+To determine whether a logged in has the ability to perform specific action in client creation, you can utilize the `clientPrivileges` configuration setting. By default, CRUD actions are allowed for users with matching `userId` or through `clientReference`.
+
+The following is a basic example that allows all OAuth Client CRUD actions for organization owners assuming ordinary users cannot create clients:
+
+```ts title="auth.ts"
+oauthProvider({
+  clientPrivileges: ({ action, headers, session }) => {
+    if (!session?.activeOrganizationId) return false;
+    const { data: member } = await auth.api.getActiveMember({
+      headers,
+    });
+    return member.role === 'owner';
+  },
+})
+```
 
 
 ### Storage
@@ -1028,7 +1038,7 @@ By default all secrets are `hashed` by default on the database. This helps prote
 
 ### Refresh Token Customization
 
-You can choose to format your session tokens in a different string format using the `storeRefreshToken`.
+You can choose to format your session tokens in a different string format using the `formatRefreshToken`.
 
 These functions allow you to add additional functionality on the refresh token itself such as refresh token encryption.
 
@@ -1036,7 +1046,7 @@ Example with change in refresh token format with backwards compatablity with ori
 
 ```ts title="auth.ts"
 oauthProvider({
-  storeRefreshToken: {
+  formatRefreshToken: {
     encrypt: (token, sessionId) => {
       const res = sessionId ? `1.${token}.${sessionId}` : token;
       return res;
@@ -1066,7 +1076,7 @@ const enc = "A256GCM"
 
 const auth = betterAuth({
   plugins: [oauthProvider({
-    storeRefreshToken: {
+    formatRefreshToken: {
       encrypt: (token, sessionId) {
         const value = JSON.stringify({
           sessionId,
@@ -1200,16 +1210,15 @@ If you are using "openid" and confidential MCP clients, you cannot disable the J
   </Step>
 
   <Step>
-  If you use `allowUnauthenticatedClientRegistration`, you must ensure that your API Server is a confidential client itself.
+  If you use `allowUnauthenticatedClientRegistration`, you must ensure that your API Server is a confidential client itself:
 
   ```ts
-  const client = await auth.api.createOAuthClient({
+  await auth.api.createOAuthClient({
     headers,
     body: {
       redirect_uris: [redirectUri],
     }
   });
-  console.log(client); // You may add this to `trustedClients`
   ```
 
   These values should be used in the verify options `remoteVerify.clientId` and `remoteVerify.clientSecret`. Additionally, `remoteVerify.introspectUrl` would be something like `${BASE_URL}/${AUTH_PATH}/oauth2/introspect`.
