@@ -42,6 +42,12 @@ export interface JwtOptions {
 				 * @default 2592000 (30 days)
 				 */
 				gracePeriod?: number;
+				/**
+				 * The path of the endpoint exposing the JWKS.
+				 * 
+				 * @default /jwks
+				 */
+				jwksPath?: string;
 		  }
 		| undefined;
 

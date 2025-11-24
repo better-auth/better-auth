@@ -36,12 +36,14 @@ export const jwt = (options?: JwtOptions | undefined) => {
 		);
 	}
 
+	const jwksPath = options?.jwks?.jwksPath ?? "/jwks";
+
 	return {
 		id: "jwt",
 		options,
 		endpoints: {
 			getJwks: createAuthEndpoint(
-				"/jwks",
+				jwksPath,
 				{
 					method: "GET",
 					metadata: {

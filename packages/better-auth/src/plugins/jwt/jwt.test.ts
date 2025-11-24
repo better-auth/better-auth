@@ -743,3 +743,36 @@ describe("jwt - custom adapter", async () => {
 		expect(storage.length).toBe(1);
 	});
 });
+
+describe("jwt - custom jwksPath", async () => {
+	it("should use custom jwksPath when specified", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				jwt({
+					jwks: {
+						jwksPath: "/.well-known/jwks.json",
+					},
+				}),
+			],
+		});
+
+		const client = createAuthClient({
+			plugins: [jwtClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return auth.handler(new Request(url, init));
+				},
+			},
+		});
+
+		const jwks = await client.$fetch<JSONWebKeySet>("/.well-known/jwks.json");
+		expect(jwks.error).toBeNull();
+		expect(jwks.data?.keys).toBeDefined();
+		expect(jwks.data?.keys.length).toBeGreaterThan(0);
+
+		// Verify old /jwks endpoint is not found
+		const oldJwks = await client.$fetch<JSONWebKeySet>("/jwks");
+		expect(oldJwks.error?.status).toBe(404);
+	});
+});
