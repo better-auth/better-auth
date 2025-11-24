@@ -1,8 +1,13 @@
 {
   "name": "@better-auth/telemetry",
-  "version": "1.4.2-beta.1",
+  "version": "1.4.2-beta.4",
   "description": "Telemetry package for Better Auth",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/better-auth/better-auth",
+    "directory": "packages/telemetry"
+  },
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
   "exports": {
