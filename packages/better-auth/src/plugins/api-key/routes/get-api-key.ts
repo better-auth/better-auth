@@ -9,6 +9,12 @@ import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 
+const getApiKeyQuerySchema = z.object({
+	id: z.string().meta({
+		description: "The id of the Api Key",
+	}),
+});
+
 export function getApiKey({
 	opts,
 	schema,
@@ -25,11 +31,7 @@ export function getApiKey({
 		"/api-key/get",
 		{
 			method: "GET",
-			query: z.object({
-				id: z.string().meta({
-					description: "The id of the Api Key",
-				}),
-			}),
+			query: getApiKeyQuerySchema,
 			use: [sessionMiddleware],
 			metadata: {
 				openapi: {
