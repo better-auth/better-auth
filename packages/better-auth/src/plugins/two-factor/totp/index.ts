@@ -145,7 +145,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				});
 			}
 			const user = ctx.context.session.user as UserWithTwoFactor;
-			const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
+			const twoFactors = await ctx.context.adapter.findMany<TwoFactorTable>({
 				model: twoFactorTable,
 				where: [
 					{
@@ -153,12 +153,14 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 						value: user.id,
 					},
 				],
+				limit: 1,
 			});
-			if (!twoFactor) {
+			if (!twoFactors.length) {
 				throw new APIError("BAD_REQUEST", {
 					message: TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
 				});
 			}
+			const twoFactor = twoFactors[0]!;
 			const secret = await symmetricDecrypt({
 				key: ctx.context.secret,
 				data: twoFactor.secret,
@@ -230,7 +232,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 			}
 			const { session, valid, invalid } = await verifyTwoFactor(ctx);
 			const user = session.user as UserWithTwoFactor;
-			const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
+			const twoFactors = await ctx.context.adapter.findMany<TwoFactorTable>({
 				model: twoFactorTable,
 				where: [
 					{
@@ -238,13 +240,14 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 						value: user.id,
 					},
 				],
+				limit: 1,
 			});
-
-			if (!twoFactor) {
+			if (!twoFactors.length) {
 				throw new APIError("BAD_REQUEST", {
 					message: TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
 				});
 			}
+			const twoFactor = twoFactors[0]!;
 			const decrypted = await symmetricDecrypt({
 				key: ctx.context.secret,
 				data: twoFactor.secret,
