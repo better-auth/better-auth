@@ -1044,6 +1044,9 @@ importers:
       kysely:
         specifier: ^0.28.5
         version: 0.28.5
+      ms:
+        specifier: 4.0.0-nightly.202508271359
+        version: 4.0.0-nightly.202508271359
       nanostores:
         specifier: ^1.0.1
         version: 1.0.1
@@ -1096,9 +1099,6 @@ importers:
       mongodb:
         specifier: ^6.18.0
         version: 6.18.0
-      ms:
-        specifier: 4.0.0-nightly.202508271359
-        version: 4.0.0-nightly.202508271359
       msw:
         specifier: ^2.12.1
         version: 2.12.2(patch_hash=c49705980e5ab7228e551c9f65094fd631bf5405f65f28ca99f0f4fa2252c459)(@types/node@24.10.1)(typescript@5.9.3)
