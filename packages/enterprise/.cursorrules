@@ -1,0 +1,235 @@
+# Cursor Rules for Enterprise Service
+
+## Project Context
+
+This is an enterprise SaaS platform service built with:
+
+- **Runtime**: Bun
+- **Framework**: Elysia
+- **ORM**: Drizzle ORM
+- **Database**: PostgreSQL (via PGLite for development)
+- **Testing**: Bun's built-in test runner
+
+## Code Style & Patterns
+
+### TypeScript
+
+- Use strict TypeScript with explicit types
+- Prefer interfaces for object shapes
+- Use type inference where it improves readability
+- Export types alongside implementations
+
+### Error Handling
+
+- **Always** use custom error classes via `createErrorClasses` from `src/utils/errors.ts`
+- Create error classes for each module following the pattern:
+  ```typescript
+  export const ModuleErrors = createErrorClasses({
+    NotFound: { message: "...", code: "...", status: 404 },
+    CreateFailed: { message: "...", code: "...", status: 500 },
+  })
+  ```
+- Register errors with Elysia using `.error(ModuleErrors)`
+- Handle errors in `.onError()` hook
+- Always throw custom errors, never use `status()` directly
+
+### Testing
+
+- **Always** write tests for new features using Bun's test runner
+- Test files should be named `*.test.ts` in the same directory as the source
+- Use `describe` blocks to organize tests
+- Test both success and error cases
+- Clean up test data using `beforeEach`/`afterEach`
+- Follow the testing patterns in existing test files
+
+### Database
+
+- Use Drizzle ORM for all database operations
+- Follow schema patterns in `src/database/domains/`
+- Use transactions for multi-step operations
+- Always handle database errors and convert to custom errors
+
+### API Design
+
+- Follow RESTful conventions
+- Use appropriate HTTP status codes
+- Include validation schemas for all inputs
+- Document response types in the route definition
+- Use Elysia's type system for request/response validation
+
+### File Organization
+
+- Modules go in `src/modules/` with their own directory
+- Each module should export:
+  - Error classes (using `createErrorClasses`)
+  - Model namespace (TypeBox schemas and types)
+  - Business logic class (abstract class with static methods)
+  - Elysia route handler
+- Utilities go in `src/utils/`
+- Database schemas go in `src/database/domains/`
+
+## When Adding New Features
+
+1. **Create the module structure**:
+
+   - Create directory in `src/modules/`
+   - Create `index.ts` with error classes, models, business logic, and routes
+
+2. **Define error classes**:
+
+   ```typescript
+   export const FeatureErrors = createErrorClasses({
+     NotFound: { message: "...", code: "...", status: 404 },
+     // ... other errors
+   })
+   ```
+
+3. **Create TypeBox schemas**:
+
+   ```typescript
+   export namespace FeatureModel {
+     export const createBody = t.Omit(_createSchema, [
+       "id",
+       "createdAt",
+       "updatedAt",
+     ])
+     export type createBody = typeof createBody.static
+     // ... other schemas
+   }
+   ```
+
+4. **Implement business logic**:
+
+   ```typescript
+   export abstract class Feature {
+     static async create(data: FeatureModel.createBody) {
+       // Implementation with proper error handling
+     }
+   }
+   ```
+
+5. **Create Elysia routes**:
+
+   ```typescript
+   export const feature = new Elysia({ prefix: "/feature" })
+     .error(FeatureErrors)
+     .onError(({ code, error }) => {
+       if (error instanceof CustomError) {
+         return error.toResponse()
+       }
+       // Handle other errors
+     })
+     .post(
+       "/",
+       async ({ body }) => {
+         return await Feature.create(body)
+       },
+       {
+         body: FeatureModel.createBody,
+         response: {
+           201: FeatureModel.response,
+           500: FeatureModel.errorResponse,
+         },
+       }
+     )
+   ```
+
+6. **Write tests**:
+   - Create `index.test.ts` in the same directory
+   - Test all methods and error cases
+   - Clean up test data
+
+## Code Generation Guidelines
+
+When generating code:
+
+- Follow existing patterns exactly
+- Include proper error handling
+- Add TypeScript types
+- Include validation schemas
+- Write tests alongside the code
+- Use meaningful variable names
+- Add JSDoc comments for public APIs
+
+## Common Patterns
+
+### Creating a New Module
+
+1. Create error classes
+2. Create TypeBox schemas
+3. Implement business logic class
+4. Create Elysia routes with error handling
+5. Write comprehensive tests
+
+### Error Handling Pattern
+
+```typescript
+try {
+  // Operation
+} catch (error) {
+  if (error instanceof CustomError) {
+    throw error // Re-throw custom errors
+  }
+  throw new ModuleErrors.OperationFailed() // Convert to custom error
+}
+```
+
+### Database Query Pattern
+
+```typescript
+const [result] = await db
+  .select()
+  .from(tables.tableName)
+  .where(eq(tables.tableName.id, id))
+  .limit(1)
+
+if (!result) {
+  throw new ModuleErrors.NotFound()
+}
+```
+
+## Testing Requirements
+
+- Every new feature must have tests
+- Tests should cover:
+  - Happy path scenarios
+  - Error cases
+  - Edge cases
+  - Boundary conditions
+- Use `describe` blocks for organization
+- Clean up test data properly
+
+## Documentation
+
+- Add JSDoc comments for public APIs
+- Update CONTRIBUTING.md if adding new patterns
+- Keep README.md updated with setup instructions
+
+## Import Order
+
+1. External dependencies (drizzle, elysia, etc.)
+2. Internal utilities (errors, database, etc.)
+3. Local imports (relative paths)
+
+Example:
+
+```typescript
+import { eq } from "drizzle-orm"
+import Elysia from "elysia"
+
+import { db, tables } from "../../database"
+import { createErrorClasses } from "../../utils/errors"
+```
+
+## Never
+
+- Don't use `status()` directly - use custom errors
+- Don't skip error handling
+- Don't skip tests
+- Don't commit without running tests
+- Don't use `any` type without good reason
+- Don't ignore TypeScript errors
+
+
+
+

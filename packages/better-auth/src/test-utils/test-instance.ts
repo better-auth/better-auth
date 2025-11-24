@@ -14,9 +14,15 @@ import { bearer } from "../plugins";
 import type { Session, User } from "../types";
 import { getBaseURL } from "../utils/url";
 import { AuthzedSyncClient } from "../plugins";
-import schemaText from "./graph-schema.test.zed?raw";
+
 import { initializeGraph } from "../context/graph-context";
+import { readFileSync } from "node:fs";
 const cleanupSet = new Set<Function>();
+
+const schemaText = readFileSync(
+	new URL("./graph-schema.test.zed", import.meta.url),
+	"utf-8",
+);
 
 export { schemaText };
 

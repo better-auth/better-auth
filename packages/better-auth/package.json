@@ -438,9 +438,6 @@
   },
   "dependencies": {
     "@authzed/authzed-node": "^1.6.1",
-    "@better-auth/core": "workspace:*",
-    "@better-auth/telemetry": "workspace:*",
-    "@better-auth/utils": "0.3.0",
     "@better-fetch/fetch": "latest",
     "@noble/ciphers": "^2.0.0",
     "@noble/hashes": "^2.0.0",
@@ -469,7 +466,11 @@
     }
   },
   "devDependencies": {
+    "@better-auth/core": "workspace:*",
+    "@better-auth/telemetry": "workspace:*",
+    "@better-auth/utils": "0.3.0",
     "@lynx-js/react": "^0.114.0",
+    "@schoolai/spicedb-zed-schema-parser": "^0.2.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/bun": "^1.3.3",
     "@types/keccak": "^3.0.5",

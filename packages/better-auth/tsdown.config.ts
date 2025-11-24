@@ -115,6 +115,11 @@ export default defineConfig({
 		"siwe",
 		"@lynx-js/react",
 	],
+	noExternal: [
+		"@better-auth/core",
+		"@better-auth/telemetry",
+		"@better-auth/utils",
+	],
 	treeshake: true,
 	clean: true,
 });

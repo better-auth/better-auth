@@ -1,0 +1,95 @@
+{
+  "name": "@rio.js/enterprise",
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "srvx --import=jiti/register --port 3001",
+    "dev:bun": "bun run --watch src/server.ts --port 3001",
+    "build": "tsdown",
+    "typecheck": "tsc --project tsconfig.json",
+    "test": "vitest",
+    "migrate": "./migrate.sh"
+  },
+  "dependencies": {
+    "@authzed/authzed-node": "^1.6.1",
+    "@elysiajs/cors": "^1.4.0",
+    "@elysiajs/jwt": "^1.4.0",
+    "@elysiajs/openapi": "^1.4.11",
+    "better-call": "^1.0.26",
+    "cuid": "^3.0.0",
+    "dotenv": "^17.2.3",
+    "drizzle-orm": "^0.44.7",
+    "elysia": "latest",
+    "jiti": "^2.6.1",
+    "nanostores": "^1.0.1",
+    "pg": "^8.16.3",
+    "resend": "^6.4.2",
+    "zod": "^4.1.12",
+    "zod-to-json-schema": "^3.25.0"
+  },
+  "devDependencies": {
+    "@better-auth/cli": "workspace:*",
+    "@better-auth/core": "workspace:*",
+    "@better-auth/sso": "workspace:*",
+    "better-auth": "workspace:*",
+    "@types/pg": "^8.15.6",
+    "bun-types": "latest",
+    "drizzle-kit": "^0.31.6",
+    "srvx": "^0.9.6",
+    "tsdown": "latest"
+  },
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "exports": {
+    ".": {
+      "dev-source": "./src/index.ts",
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    },
+    "./db": {
+      "dev-source": "./src/db/index.ts",
+      "types": "./dist/db.d.mts",
+      "default": "./dist/db.mjs"
+    },
+    "./client": {
+      "dev-source": "./src/client.ts",
+      "types": "./dist/client.d.mts",
+      "default": "./dist/client.mjs"
+    },
+    "./server": {
+      "dev-source": "./src/server.ts",
+      "types": "./dist/server.d.mts",
+      "default": "./dist/server.mjs"
+    },
+    "./better-auth": {
+      "dev-source": "./src/better-auth.ts",
+      "types": "./dist/better-auth.d.mts",
+      "default": "./dist/better-auth.mjs"
+    },
+    "./plugins": {
+      "dev-source": "./src/plugins.ts",
+      "types": "./dist/plugins.d.mts",
+      "default": "./dist/plugins.mjs"
+    },
+    "./react": {
+      "dev-source": "./src/react.ts",
+      "types": "./dist/react.d.mts",
+      "default": "./dist/react.mjs"
+    },
+    "./social-providers": {
+      "dev-source": "./src/social-providers.ts",
+      "types": "./dist/social-providers.d.mts",
+      "default": "./dist/social-providers.mjs"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      ".": [
+        "dist/index.d.mts"
+      ],
+      "db": [
+        "dist/db/index.d.mts"
+      ]
+    }
+  }
+}

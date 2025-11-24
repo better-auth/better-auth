@@ -1,7 +1,11 @@
 //#region Re-exports necessaries from core module
 export type { StandardSchemaV1 } from "@better-auth/core";
 export * from "@better-auth/core";
-export { getCurrentAdapter } from "@better-auth/core/context";
+export {
+	getCurrentAdapter,
+	getCurrentTransactionAdapter,
+	getCurrentGraphContext,
+} from "@better-auth/core/context";
 export * from "@better-auth/core/db";
 export * from "@better-auth/core/env";
 export * from "@better-auth/core/error";
@@ -28,3 +32,4 @@ export type * from "zod/v4";
 // @ts-expect-error
 export type * from "zod/v4/core";
 export { APIError } from "./api";
+export { initializeGraph } from "./context/graph-context";

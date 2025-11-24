@@ -51,6 +51,7 @@ import type {
 	TeamMember,
 } from "./schema";
 import type { OrganizationOptions } from "./types";
+import { createHasPermission } from "./has-permission";
 
 export type TeamEndpoints<O extends OrganizationOptions> = {
 	createTeam: ReturnType<typeof createTeam<O>>;
@@ -86,6 +87,7 @@ export type OrganizationEndpoints<O extends OrganizationOptions> = {
 	listUserInvitations: ReturnType<typeof listUserInvitations<O>>;
 	listMembers: ReturnType<typeof listMembers<O>>;
 	getActiveMemberRole: ReturnType<typeof getActiveMemberRole<O>>;
+	hasPermission: ReturnType<typeof hasPermission<O>>;
 };
 
 export type OrganizationPlugin<O extends OrganizationOptions> = {
@@ -591,6 +593,22 @@ export function organization<O extends OrganizationOptions>(
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-remove-team-member)
 		 */
 		removeTeamMember: removeTeamMember(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/has-permission`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.hasPermission`
+		 *
+		 * **client:**
+		 * `authClient.organization.hasPermission`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-has-permission)
+		 */
+		hasPermission: createHasPermission(options as O),
 	};
 	endpoints = {
 		...endpoints,

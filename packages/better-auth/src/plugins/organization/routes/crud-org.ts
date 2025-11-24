@@ -609,7 +609,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				},
 			},
 		},
-		async (ctx) => {
+		withTransaction(async (ctx) => {
 			const session = await ctx.context.getSession(ctx);
 			if (!session) {
 				throw new APIError("UNAUTHORIZED", {
@@ -665,7 +665,10 @@ export const updateOrganization = <O extends OrganizationOptions>(
 			if (options?.organizationHooks?.beforeUpdateOrganization) {
 				const response =
 					await options.organizationHooks.beforeUpdateOrganization({
-						organization: ctx.body.data,
+						organization: {
+							id: organizationId,
+							...ctx.body.data,
+						},
 						user: session.user,
 						member,
 					});
@@ -688,7 +691,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				});
 			}
 			return ctx.json(updatedOrg);
-		},
+		}),
 	);
 };
 
