@@ -1,5 +1,8 @@
-import type { BetterAuthClientPlugin, ClientStore } from "@better-auth/core";
-import type { BetterFetchOption } from "@better-fetch/fetch";
+import type {
+	BetterAuthClientPlugin,
+	ClientFetchOption,
+	ClientStore,
+} from "@better-auth/core";
 import Constants from "expo-constants";
 import * as Linking from "expo-linking";
 import { Platform } from "react-native";
@@ -397,7 +400,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					if (isWeb) {
 						return {
 							url,
-							options: options as BetterFetchOption,
+							options: options as ClientFetchOption,
 						};
 					}
 					options = options || {};
@@ -446,7 +449,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					}
 					return {
 						url,
-						options: options as BetterFetchOption,
+						options: options as ClientFetchOption,
 					};
 				},
 			},
