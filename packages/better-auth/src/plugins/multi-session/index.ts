@@ -329,9 +329,10 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 										ctx.context.secret,
 									);
 									if (!existingToken) continue;
-									const session = await ctx.context.internalAdapter.findSession(
-										existingToken,
-									);
+									const session =
+										await ctx.context.internalAdapter.findSession(
+											existingToken,
+										);
 									if (!session) continue;
 									if (session.user.id === ctx.context.newSession.user.id) {
 										// Clear the old cookie using the same options so the browser removes it.
