@@ -10,6 +10,27 @@ import type { DeviceCode } from "./schema";
 
 const defaultCharset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
+const deviceCodeBodySchema = z.object({
+	client_id: z.string().meta({
+		description: "The client ID of the application",
+	}),
+	scope: z
+		.string()
+		.meta({
+			description: "Space-separated list of scopes",
+		})
+		.optional(),
+});
+
+const deviceCodeErrorSchema = z.object({
+	error: z.enum(["invalid_request", "invalid_client"]).meta({
+		description: "Error code",
+	}),
+	error_description: z.string().meta({
+		description: "Detailed error description",
+	}),
+});
+
 export const deviceCode = (opts: DeviceAuthorizationOptions) => {
 	const generateDeviceCode = async () => {
 		if (opts.generateDeviceCode) {
@@ -28,25 +49,8 @@ export const deviceCode = (opts: DeviceAuthorizationOptions) => {
 		"/device/code",
 		{
 			method: "POST",
-			body: z.object({
-				client_id: z.string().meta({
-					description: "The client ID of the application",
-				}),
-				scope: z
-					.string()
-					.meta({
-						description: "Space-separated list of scopes",
-					})
-					.optional(),
-			}),
-			error: z.object({
-				error: z.enum(["invalid_request", "invalid_client"]).meta({
-					description: "Error code",
-				}),
-				error_description: z.string().meta({
-					description: "Detailed error description",
-				}),
-			}),
+			body: deviceCodeBodySchema,
+			error: deviceCodeErrorSchema,
 			metadata: {
 				openapi: {
 					description: `Request a device and user code
@@ -175,41 +179,43 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 	);
 };
 
+const deviceTokenBodySchema = z.object({
+	grant_type: z.literal("urn:ietf:params:oauth:grant-type:device_code").meta({
+		description: "The grant type for device flow",
+	}),
+	device_code: z.string().meta({
+		description: "The device verification code",
+	}),
+	client_id: z.string().meta({
+		description: "The client ID of the application",
+	}),
+});
+
+const deviceTokenErrorSchema = z.object({
+	error: z
+		.enum([
+			"authorization_pending",
+			"slow_down",
+			"expired_token",
+			"access_denied",
+			"invalid_request",
+			"invalid_grant",
+		])
+		.meta({
+			description: "Error code",
+		}),
+	error_description: z.string().meta({
+		description: "Detailed error description",
+	}),
+});
+
 export const deviceToken = (opts: DeviceAuthorizationOptions) =>
 	createAuthEndpoint(
 		"/device/token",
 		{
 			method: "POST",
-			body: z.object({
-				grant_type: z
-					.literal("urn:ietf:params:oauth:grant-type:device_code")
-					.meta({
-						description: "The grant type for device flow",
-					}),
-				device_code: z.string().meta({
-					description: "The device verification code",
-				}),
-				client_id: z.string().meta({
-					description: "The client ID of the application",
-				}),
-			}),
-			error: z.object({
-				error: z
-					.enum([
-						"authorization_pending",
-						"slow_down",
-						"expired_token",
-						"access_denied",
-						"invalid_request",
-						"invalid_grant",
-					])
-					.meta({
-						description: "Error code",
-					}),
-				error_description: z.string().meta({
-					description: "Detailed error description",
-				}),
-			}),
+			body: deviceTokenBodySchema,
+			error: deviceTokenErrorSchema,
 			metadata: {
 				openapi: {
 					description: `Exchange device code for access token
@@ -663,6 +669,7 @@ export const deviceApprove = createAuthEndpoint(
 		});
 	},
 );
+
 export const deviceDeny = createAuthEndpoint(
 	"/device/deny",
 	{
