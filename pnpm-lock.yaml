@@ -1284,15 +1284,9 @@ importers:
       '@better-fetch/fetch':
         specifier: 'catalog:'
         version: 1.1.18
-      '@types/better-sqlite3':
-        specifier: ^7.6.13
-        version: 7.6.13
       better-call:
         specifier: 'catalog:'
         version: 1.1.0
-      better-sqlite3:
-        specifier: ^12.4.1
-        version: 12.4.1
       jose:
         specifier: ^6.1.0
         version: 6.1.0
