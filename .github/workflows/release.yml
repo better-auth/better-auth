@@ -65,6 +65,7 @@ jobs:
           echo "Using npm tag: $NPM_TAG"
 
       - name: Publish to npm
-        run: pnpm -r publish --access public --no-git-checks --provenance --tag ${{ steps.determine_npm_tag.outputs.npm_tag }}
+        run: pnpm -r publish --access public --no-git-checks --tag ${{ steps.determine_npm_tag.outputs.npm_tag }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: true
