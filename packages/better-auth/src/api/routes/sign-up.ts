@@ -88,7 +88,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 												enum: [false],
 											},
 											url: {
-												type: "null",
+												type: "string",
 												nullable: true,
 											},
 											token: {
