@@ -127,6 +127,8 @@
     "@better-auth/utils": "0.3.0",
     "@better-fetch/fetch": "catalog:",
     "better-call": "catalog:",
-    "jose": "^6.1.0"
+    "jose": "^6.1.0",
+    "kysely": "^0.28.5",
+    "nanostores": "^1.0.1"
   }
 }

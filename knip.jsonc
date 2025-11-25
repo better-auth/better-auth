@@ -45,6 +45,13 @@
 				"vue"
 			]
 		},
+		"packages/core": {
+			"ignoreDependencies": [
+				// type-only dependencies
+				"kysely!",
+				"nanostores!"
+			]
+		},
 		"packages/cli": {
 			"ignoreDependencies": [
 				// implicit adapter dependencies
@@ -72,6 +79,12 @@
 			"ignoreDependencies": [
 				// implicit dependencies
 				"stripe"
+			]
+		},
+		"packages/sso": {
+			"ignoreDependencies": [
+				// type-only dependencies
+				"better-call"
 			]
 		}
 	},
