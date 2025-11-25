@@ -5,11 +5,18 @@ import type {
 } from "@better-auth/core";
 import type { InternalLogger } from "@better-auth/core/env";
 import { logger } from "@better-auth/core/env";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { Endpoint, Middleware } from "better-call";
 import { APIError, createRouter } from "better-call";
 import type { UnionToIntersection } from "../types/helper";
 import { originCheckMiddleware } from "./middlewares";
 import { onRequestRateLimit } from "./rate-limiter";
+import {
+	convertFormRequestToJson,
+	isFormAllowedEndpoint,
+	isFormContentType,
+	isJsonContentType,
+} from "./utils/parse-form-body";
 import {
 	accountInfo,
 	callbackOAuth,
@@ -263,7 +270,10 @@ export const router = <Option extends BetterAuthOptions>(
 			},
 			...middlewares,
 		],
-		allowedMediaTypes: ["application/json"],
+		allowedMediaTypes: [
+			"application/json",
+			"application/x-www-form-urlencoded",
+		],
 		async onRequest(req) {
 			//handle disabled paths
 			const disabledPaths = ctx.options.disabledPaths || [];
@@ -271,6 +281,39 @@ export const router = <Option extends BetterAuthOptions>(
 			if (disabledPaths.includes(path)) {
 				return new Response("Not Found", { status: 404 });
 			}
+
+			// Handle form-based authentication for specific endpoints
+			if (req.method === "POST") {
+				const contentType = req.headers.get("content-type") ?? "";
+				const isForm = isFormContentType(contentType);
+				const isAllowedEndpoint = isFormAllowedEndpoint(path);
+
+				if (isForm) {
+					if (!isAllowedEndpoint) {
+						throw new APIError("BAD_REQUEST", {
+							message: BASE_ERROR_CODES.UNSUPPORTED_CONTENT_TYPE,
+						});
+					}
+					try {
+						req = await convertFormRequestToJson(req);
+					} catch (error) {
+						if (error instanceof APIError) {
+							throw error;
+						}
+						throw new APIError("BAD_REQUEST", {
+							message: "Failed to parse form data",
+							details: error,
+						});
+					}
+				}
+				
+				if (!isForm && !isJsonContentType(contentType)) {
+					throw new APIError("BAD_REQUEST", {
+						message: BASE_ERROR_CODES.UNSUPPORTED_CONTENT_TYPE,
+					});
+				}
+			}
+
 			for (const plugin of ctx.options.plugins || []) {
 				if (plugin.onRequest) {
 					const response = await plugin.onRequest(req, ctx);

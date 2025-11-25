@@ -28,4 +28,5 @@ export const BASE_ERROR_CODES = defineErrorCodes({
 	ACCOUNT_NOT_FOUND: "Account not found",
 	USER_ALREADY_HAS_PASSWORD:
 		"User already has a password. Provide that to delete the account.",
+	UNSUPPORTED_CONTENT_TYPE: "Unsupported content type",
 });

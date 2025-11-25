@@ -1,4 +1,6 @@
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { afterEach, describe, expect, vi } from "vitest";
+import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 
 describe("sign-up with custom fields", async (it) => {
@@ -143,5 +145,152 @@ describe("sign-up with custom fields", async (it) => {
 				},
 			}),
 		).rejects.toThrow("role is not allowed to be set");
+	});
+});
+
+describe("sign-up form-based authentication", async (it) => {
+	const { auth, customFetchImpl } = await getTestInstance({
+		emailAndPassword: {
+			enabled: true,
+		},
+	});
+
+	it("should work with standard HTML form POST (simulating <form method='POST' action='/sign-up/email'>)", async () => {
+		const email = `test-form-${Date.now()}@example.com`;
+		// Simulate a standard HTML form submission
+		const formData = new URLSearchParams({
+			email,
+			password: "password123",
+			name: "Form Test User",
+		});
+
+		const response = await customFetchImpl(
+			"http://localhost:3000/api/auth/sign-up/email",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+					Origin: "http://localhost:3000",
+					Referer: "http://localhost:3000/signup",
+				},
+				body: formData.toString(),
+			},
+		);
+
+		expect(response.status).toBe(200);
+		const data = await response.json();
+		expect(data.user).toBeDefined();
+		expect(data.user.email).toBe(email);
+		expect(data.user.name).toBe("Form Test User");
+		expect(data.token).toBeDefined();
+
+		// Verify session cookie is set
+		const setCookie = response.headers.get("set-cookie");
+		expect(setCookie).toBeTruthy();
+		expect(setCookie).toContain("better-auth.session_token");
+	});
+
+	it("should set session cookie with correct attributes (SameSite=Lax, HttpOnly)", async () => {
+		const email = `test-cookie-${Date.now()}@example.com`;
+		const formData = new URLSearchParams({
+			email,
+			password: "password123",
+			name: "Cookie Test User",
+		});
+
+		const response = await customFetchImpl(
+			"http://localhost:3000/api/auth/sign-up/email",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+					Origin: "http://localhost:3000",
+				},
+				body: formData.toString(),
+			},
+		);
+
+		expect(response.status).toBe(200);
+		const setCookie = response.headers.get("set-cookie");
+		expect(setCookie).toBeTruthy();
+
+		// Parse the cookie to verify attributes
+		const { parseSetCookieHeader } = await import("../../cookies");
+		const cookies = parseSetCookieHeader(setCookie || "");
+		const sessionCookie = cookies.get("better-auth.session_token");
+
+		expect(sessionCookie).toBeDefined();
+		expect(sessionCookie?.value).toBeTruthy();
+
+		// Verify cookie attributes
+		expect(sessionCookie?.samesite).toBe("lax");
+		expect(sessionCookie?.httponly).toBe(true);
+		expect(sessionCookie?.path).toBe("/");
+	});
+
+	it("should return same error codes for form sign-up as JSON sign-up", async () => {
+		const email = `test-duplicate-form-${Date.now()}@example.com`;
+
+		// First, create a user with JSON
+		await customFetchImpl("http://localhost:3000/api/auth/sign-up/email", {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Origin: "http://localhost:3000",
+			},
+			body: JSON.stringify({
+				email,
+				password: "password123",
+				name: "First User",
+			}),
+		});
+
+		// Try to sign up again with form (should fail)
+		const formData = new URLSearchParams({
+			email,
+			password: "password123",
+			name: "Second User",
+		});
+
+		const formResponse = await customFetchImpl(
+			"http://localhost:3000/api/auth/sign-up/email",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+					Origin: "http://localhost:3000",
+				},
+				body: formData.toString(),
+			},
+		);
+
+		expect(formResponse.status).toBe(422);
+		const formError = await formResponse.json();
+
+		// Try to sign up again with JSON (should match)
+		const jsonResponse = await customFetchImpl(
+			"http://localhost:3000/api/auth/sign-up/email",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Origin: "http://localhost:3000",
+				},
+				body: JSON.stringify({
+					email,
+					password: "password123",
+					name: "Third User",
+				}),
+			},
+		);
+
+		expect(jsonResponse.status).toBe(422);
+		const jsonError = await jsonResponse.json();
+
+		// Errors should match
+		expect(formError.message).toBe(jsonError.message);
+		expect(formError.message).toBe(
+			BASE_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
+		);
 	});
 });

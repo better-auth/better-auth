@@ -108,6 +108,172 @@ describe("sign-in", async (it) => {
 
 		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
 	});
+
+	describe("Form-based Authentication", async (it) => {
+		const { auth, testUser, customFetchImpl } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+		});
+
+		it("should work with standard HTML form POST (simulating <form method='POST' action='/sign-in/email'>)", async () => {
+			// Simulate a standard HTML form submission
+			const formData = new URLSearchParams({
+				email: testUser.email,
+				password: testUser.password,
+			});
+
+			const response = await customFetchImpl(
+				"http://localhost:3000/api/auth/sign-in/email",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+						Origin: "http://localhost:3000",
+						Referer: "http://localhost:3000/login",
+					},
+					body: formData.toString(),
+				},
+			);
+
+			expect(response.status).toBe(200);
+			const data = await response.json();
+			expect(data.user).toBeDefined();
+			expect(data.user.email).toBe(testUser.email);
+			expect(data.token).toBeDefined();
+
+			// Verify session cookie is set
+			const setCookie = response.headers.get("set-cookie");
+			expect(setCookie).toBeTruthy();
+			expect(setCookie).toContain("better-auth.session_token");
+		});
+
+		it("should set session cookie with correct attributes (SameSite=Lax, HttpOnly, Secure in prod)", async () => {
+			const formData = new URLSearchParams({
+				email: testUser.email,
+				password: testUser.password,
+			});
+
+			const response = await customFetchImpl(
+				"http://localhost:3000/api/auth/sign-in/email",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+						Origin: "http://localhost:3000",
+					},
+					body: formData.toString(),
+				},
+			);
+
+			expect(response.status).toBe(200);
+			const setCookie = response.headers.get("set-cookie");
+			expect(setCookie).toBeTruthy();
+
+			// Parse the cookie to verify attributes
+			const cookies = parseSetCookieHeader(setCookie || "");
+			const sessionCookie = cookies.get("better-auth.session_token");
+
+			expect(sessionCookie).toBeDefined();
+			expect(sessionCookie?.value).toBeTruthy();
+
+			// Verify cookie attributes
+			expect(sessionCookie?.samesite).toBe("lax");
+			expect(sessionCookie?.httponly).toBe(true);
+			expect(sessionCookie?.path).toBe("/");
+			// Secure might be false in test (http://localhost) but true in production
+		});
+
+		it("should return same error codes for form sign-in as JSON sign-in", async () => {
+			// Test invalid email with form
+			const formData = new URLSearchParams({
+				email: "invalid-email",
+				password: "password123",
+			});
+
+			const formResponse = await customFetchImpl(
+				"http://localhost:3000/api/auth/sign-in/email",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+						Origin: "http://localhost:3000",
+					},
+					body: formData.toString(),
+				},
+			);
+
+			expect(formResponse.status).toBe(400);
+			const formError = await formResponse.json();
+
+			// Test invalid email with JSON (should match)
+			const jsonResponse = await customFetchImpl(
+				"http://localhost:3000/api/auth/sign-in/email",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						Origin: "http://localhost:3000",
+					},
+					body: JSON.stringify({
+						email: "invalid-email",
+						password: "password123",
+					}),
+				},
+			);
+
+			expect(jsonResponse.status).toBe(400);
+			const jsonError = await jsonResponse.json();
+
+			// Errors should match
+			expect(formError.message).toBe(jsonError.message);
+			expect(formError.message).toBe(BASE_ERROR_CODES.INVALID_EMAIL);
+		});
+
+		it("should not set session cookie on form sign-in error (same as JSON)", async () => {
+			const formData = new URLSearchParams({
+				email: testUser.email,
+				password: "wrong-password",
+			});
+
+			const formResponse = await customFetchImpl(
+				"http://localhost:3000/api/auth/sign-in/email",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+						Origin: "http://localhost:3000",
+					},
+					body: formData.toString(),
+				},
+			);
+
+			expect(formResponse.status).toBe(401);
+			// No session cookie should be set on error
+			const setCookie = formResponse.headers.get("set-cookie");
+			expect(setCookie).toBeNull();
+
+			// JSON should behave the same
+			const jsonResponse = await customFetchImpl(
+				"http://localhost:3000/api/auth/sign-in/email",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						Origin: "http://localhost:3000",
+					},
+					body: JSON.stringify({
+						email: testUser.email,
+						password: "wrong-password",
+					}),
+				},
+			);
+
+			expect(jsonResponse.status).toBe(401);
+			const jsonSetCookie = jsonResponse.headers.get("set-cookie");
+			expect(jsonSetCookie).toBeNull();
+		});
+	});
 });
 
 describe("url checks", async (it) => {
