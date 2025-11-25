@@ -234,8 +234,7 @@ async function validateOrigin(
 		? ctx.context.trustedOrigins
 		: [
 				...ctx.context.trustedOrigins,
-				...((await ctx.context.options.trustedOrigins?.(ctx.request)) ||
-					[]),
+				...((await ctx.context.options.trustedOrigins?.(ctx.request)) || []),
 			];
 	const matchesPattern = (url: string, pattern: string): boolean => {
 		if (url.startsWith("/")) {
