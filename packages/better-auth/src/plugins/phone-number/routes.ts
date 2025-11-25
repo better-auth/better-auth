@@ -19,6 +19,21 @@ export type RequiredPhoneNumberOptions = PhoneNumberOptions & {
 	createdAt: string;
 };
 
+const signInPhoneNumberBodySchema = z.object({
+	phoneNumber: z.string().meta({
+		description: 'Phone number to sign in. Eg: "+1234567890"',
+	}),
+	password: z.string().meta({
+		description: "Password to use for sign in.",
+	}),
+	rememberMe: z
+		.boolean()
+		.meta({
+			description: "Remember the session. Eg: true",
+		})
+		.optional(),
+});
+
 /**
  * ### Endpoint
  *
@@ -39,20 +54,7 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 		"/sign-in/phone-number",
 		{
 			method: "POST",
-			body: z.object({
-				phoneNumber: z.string().meta({
-					description: 'Phone number to sign in. Eg: "+1234567890"',
-				}),
-				password: z.string().meta({
-					description: "Password to use for sign in.",
-				}),
-				rememberMe: z
-					.boolean()
-					.meta({
-						description: "Remember the session. Eg: true",
-					})
-					.optional(),
-			}),
+			body: signInPhoneNumberBodySchema,
 			metadata: {
 				openapi: {
 					summary: "Sign in with phone number",
@@ -197,6 +199,13 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			});
 		},
 	);
+
+const sendPhoneNumberOTPBodySchema = z.object({
+	phoneNumber: z.string().meta({
+		description: 'Phone number to send OTP. Eg: "+1234567890"',
+	}),
+});
+
 /**
  * ### Endpoint
  *
@@ -217,11 +226,7 @@ export const sendPhoneNumberOTP = (opts: RequiredPhoneNumberOptions) =>
 		"/phone-number/send-otp",
 		{
 			method: "POST",
-			body: z.object({
-				phoneNumber: z.string().meta({
-					description: 'Phone number to send OTP. Eg: "+1234567890"',
-				}),
-			}),
+			body: sendPhoneNumberOTPBodySchema,
 			metadata: {
 				openapi: {
 					summary: "Send OTP to phone number",
@@ -282,6 +287,43 @@ export const sendPhoneNumberOTP = (opts: RequiredPhoneNumberOptions) =>
 		},
 	);
 
+const verifyPhoneNumberBodySchema = z.object({
+	/**
+	 * Phone number
+	 */
+	phoneNumber: z.string().meta({
+		description: 'Phone number to verify. Eg: "+1234567890"',
+	}),
+	/**
+	 * OTP code
+	 */
+	code: z.string().meta({
+		description: 'OTP code. Eg: "123456"',
+	}),
+	/**
+	 * Disable session creation after verification
+	 * @default false
+	 */
+	disableSession: z
+		.boolean()
+		.meta({
+			description: "Disable session creation after verification. Eg: false",
+		})
+		.optional(),
+	/**
+	 * This checks if there is a session already
+	 * and updates the phone number with the provided
+	 * phone number
+	 */
+	updatePhoneNumber: z
+		.boolean()
+		.meta({
+			description:
+				"Check if there is a session and update the phone number. Eg: true",
+		})
+		.optional(),
+});
+
 /**
  * ### Endpoint
  *
@@ -302,43 +344,7 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 		"/phone-number/verify",
 		{
 			method: "POST",
-			body: z.object({
-				/**
-				 * Phone number
-				 */
-				phoneNumber: z.string().meta({
-					description: 'Phone number to verify. Eg: "+1234567890"',
-				}),
-				/**
-				 * OTP code
-				 */
-				code: z.string().meta({
-					description: 'OTP code. Eg: "123456"',
-				}),
-				/**
-				 * Disable session creation after verification
-				 * @default false
-				 */
-				disableSession: z
-					.boolean()
-					.meta({
-						description:
-							"Disable session creation after verification. Eg: false",
-					})
-					.optional(),
-				/**
-				 * This checks if there is a session already
-				 * and updates the phone number with the provided
-				 * phone number
-				 */
-				updatePhoneNumber: z
-					.boolean()
-					.meta({
-						description:
-							"Check if there is a session and update the phone number. Eg: true",
-					})
-					.optional(),
-			}),
+			body: verifyPhoneNumberBodySchema,
 			metadata: {
 				openapi: {
 					summary: "Verify phone number",
@@ -642,6 +648,10 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 		},
 	);
 
+const requestPasswordResetPhoneNumberBodySchema = z.object({
+	phoneNumber: z.string(),
+});
+
 export const requestPasswordResetPhoneNumber = (
 	opts: RequiredPhoneNumberOptions,
 ) =>
@@ -649,9 +659,7 @@ export const requestPasswordResetPhoneNumber = (
 		"/phone-number/request-password-reset",
 		{
 			method: "POST",
-			body: z.object({
-				phoneNumber: z.string(),
-			}),
+			body: requestPasswordResetPhoneNumberBodySchema,
 			metadata: {
 				openapi: {
 					description: "Request OTP for password reset via phone number",
@@ -713,24 +721,25 @@ export const requestPasswordResetPhoneNumber = (
 		},
 	);
 
+const resetPasswordPhoneNumberBodySchema = z.object({
+	otp: z.string().meta({
+		description: 'The one time password to reset the password. Eg: "123456"',
+	}),
+	phoneNumber: z.string().meta({
+		description:
+			'The phone number to the account which intends to reset the password for. Eg: "+1234567890"',
+	}),
+	newPassword: z.string().meta({
+		description: `The new password. Eg: "new-and-secure-password"`,
+	}),
+});
+
 export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 	createAuthEndpoint(
 		"/phone-number/reset-password",
 		{
 			method: "POST",
-			body: z.object({
-				otp: z.string().meta({
-					description:
-						'The one time password to reset the password. Eg: "123456"',
-				}),
-				phoneNumber: z.string().meta({
-					description:
-						'The phone number to the account which intends to reset the password for. Eg: "+1234567890"',
-				}),
-				newPassword: z.string().meta({
-					description: `The new password. Eg: "new-and-secure-password"`,
-				}),
-			}),
+			body: resetPasswordPhoneNumberBodySchema,
 			metadata: {
 				openapi: {
 					description: "Reset password using phone number OTP",
