@@ -70,6 +70,12 @@
 				// implicit dependencies
 				"react-native"
 			]
+		},
+		"packages/stripe": {
+			"ignoreDependencies": [
+				// implicit dependencies
+				"stripe"
+			]
 		}
 	},
 	"vitest": {
