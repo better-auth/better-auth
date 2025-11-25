@@ -42,11 +42,11 @@ async function checkPasswordCompromise(
 		const found = lines.some(
 			(line) => line.split(":")[0]!.toUpperCase() === suffix.toUpperCase(),
 		);
-		let errMsg =
-			typeof customMessage === "string"
-				? customMessage
-				: await extractCustomMessage(customMessage);
 		if (found) {
+			let errMsg =
+				typeof customMessage === "string"
+					? customMessage
+					: await extractCustomMessage(customMessage);
 			throw new APIError("BAD_REQUEST", {
 				message: errMsg,
 				code: "PASSWORD_COMPROMISED",
