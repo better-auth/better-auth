@@ -66,6 +66,62 @@ export interface MagicLinkOptions {
 		| undefined;
 }
 
+const signInMagicLinkBodySchema = z.object({
+	email: z.email().meta({
+		description: "Email address to send the magic link",
+	}),
+	name: z
+		.string()
+		.meta({
+			description:
+				'User display name. Only used if the user is registering for the first time. Eg: "my-name"',
+		})
+		.optional(),
+	callbackURL: z
+		.string()
+		.meta({
+			description: "URL to redirect after magic link verification",
+		})
+		.optional(),
+	newUserCallbackURL: z
+		.string()
+		.meta({
+			description:
+				"URL to redirect after new user signup. Only used if the user is registering for the first time.",
+		})
+		.optional(),
+	errorCallbackURL: z
+		.string()
+		.meta({
+			description: "URL to redirect after error.",
+		})
+		.optional(),
+});
+const magicLinkVerifyQuerySchema = z.object({
+	token: z.string().meta({
+		description: "Verification token",
+	}),
+	callbackURL: z
+		.string()
+		.meta({
+			description:
+				'URL to redirect after magic link verification, if not provided the user will be redirected to the root URL. Eg: "/dashboard"',
+		})
+		.optional(),
+	errorCallbackURL: z
+		.string()
+		.meta({
+			description: "URL to redirect after error.",
+		})
+		.optional(),
+	newUserCallbackURL: z
+		.string()
+		.meta({
+			description:
+				"URL to redirect after new user signup. Only used if the user is registering for the first time.",
+		})
+		.optional(),
+});
 export const magicLink = (options: MagicLinkOptions) => {
 	const opts = {
 		storeToken: "plain",
@@ -109,37 +165,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 				{
 					method: "POST",
 					requireHeaders: true,
-					body: z.object({
-						email: z.email().meta({
-							description: "Email address to send the magic link",
-						}),
-						name: z
-							.string()
-							.meta({
-								description:
-									'User display name. Only used if the user is registering for the first time. Eg: "my-name"',
-							})
-							.optional(),
-						callbackURL: z
-							.string()
-							.meta({
-								description: "URL to redirect after magic link verification",
-							})
-							.optional(),
-						newUserCallbackURL: z
-							.string()
-							.meta({
-								description:
-									"URL to redirect after new user signup. Only used if the user is registering for the first time.",
-							})
-							.optional(),
-						errorCallbackURL: z
-							.string()
-							.meta({
-								description: "URL to redirect after error.",
-							})
-							.optional(),
-					}),
+					body: signInMagicLinkBodySchema,
 					metadata: {
 						openapi: {
 							operationId: "signInWithMagicLink",
@@ -227,31 +253,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 				"/magic-link/verify",
 				{
 					method: "GET",
-					query: z.object({
-						token: z.string().meta({
-							description: "Verification token",
-						}),
-						callbackURL: z
-							.string()
-							.meta({
-								description:
-									'URL to redirect after magic link verification, if not provided the user will be redirected to the root URL. Eg: "/dashboard"',
-							})
-							.optional(),
-						errorCallbackURL: z
-							.string()
-							.meta({
-								description: "URL to redirect after error.",
-							})
-							.optional(),
-						newUserCallbackURL: z
-							.string()
-							.meta({
-								description:
-									"URL to redirect after new user signup. Only used if the user is registering for the first time.",
-							})
-							.optional(),
-					}),
+					query: magicLinkVerifyQuerySchema,
 					use: [
 						originCheck((ctx) => {
 							return ctx.query.callbackURL

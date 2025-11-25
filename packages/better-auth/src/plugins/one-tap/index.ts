@@ -22,6 +22,13 @@ interface OneTapOptions {
 	clientId?: string | undefined;
 }
 
+const oneTapCallbackBodySchema = z.object({
+	idToken: z.string().meta({
+		description:
+			"Google ID token, which the client obtains from the One Tap API",
+	}),
+});
+
 export const oneTap = (options?: OneTapOptions | undefined) =>
 	({
 		id: "one-tap",
@@ -30,12 +37,7 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 				"/one-tap/callback",
 				{
 					method: "POST",
-					body: z.object({
-						idToken: z.string().meta({
-							description:
-								"Google ID token, which the client obtains from the One Tap API",
-						}),
-					}),
+					body: oneTapCallbackBodySchema,
 					metadata: {
 						openapi: {
 							summary: "One tap callback",

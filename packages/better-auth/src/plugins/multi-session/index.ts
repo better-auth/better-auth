@@ -25,6 +25,19 @@ export interface MultiSessionConfig {
 const ERROR_CODES = defineErrorCodes({
 	INVALID_SESSION_TOKEN: "Invalid session token",
 });
+
+const setActiveSessionBodySchema = z.object({
+	sessionToken: z.string().meta({
+		description: "The session token to set as active",
+	}),
+});
+
+const revokeDeviceSessionBodySchema = z.object({
+	sessionToken: z.string().meta({
+		description: "The session token to revoke",
+	}),
+});
+
 export const multiSession = (options?: MultiSessionConfig | undefined) => {
 	const opts = {
 		maximumSessions: 5,
@@ -111,11 +124,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 				"/multi-session/set-active",
 				{
 					method: "POST",
-					body: z.object({
-						sessionToken: z.string().meta({
-							description: "The session token to set as active",
-						}),
-					}),
+					body: setActiveSessionBodySchema,
 					requireHeaders: true,
 					use: [sessionMiddleware],
 					metadata: {
@@ -189,11 +198,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 				"/multi-session/revoke",
 				{
 					method: "POST",
-					body: z.object({
-						sessionToken: z.string().meta({
-							description: "The session token to revoke",
-						}),
-					}),
+					body: revokeDeviceSessionBodySchema,
 					requireHeaders: true,
 					use: [sessionMiddleware],
 					metadata: {
