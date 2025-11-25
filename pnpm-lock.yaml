@@ -1078,6 +1078,9 @@ importers:
       '@types/pg':
         specifier: ^8.15.5
         version: 8.15.5
+      '@types/react':
+        specifier: catalog:react19
+        version: 19.2.2
       better-sqlite3:
         specifier: ^12.2.0
         version: 12.4.1
@@ -18459,7 +18462,9 @@ snapshots:
       metro-runtime: 0.83.3
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
     optional: true
 
   '@react-native/normalize-colors@0.74.89': {}
