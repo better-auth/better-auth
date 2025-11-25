@@ -128,7 +128,6 @@ async function validateJwtAccessToken(
 		const customClaims = await opts.customAccessTokenClaims({
 			user,
 			scopes: ((jwtPayload.scopes as string | undefined) ?? "")?.split(" "),
-			resource: ctx.body.resource,
 			referenceId: client?.referenceId,
 			metadata: client?.metadata ? JSON.parse(client.metadata) : undefined,
 		});
@@ -245,7 +244,6 @@ async function validateOpaqueAccessToken(
 		? await opts.customAccessTokenClaims({
 				user,
 				scopes: accessToken.scopes,
-				resource: ctx.body.resource,
 				referenceId: client?.referenceId,
 				metadata: client?.metadata ? JSON.parse(client.metadata) : undefined,
 			})

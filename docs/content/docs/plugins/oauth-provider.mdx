@@ -209,6 +209,7 @@ The following fields on the database are considered restricted and should only b
 - `client_secret_expires_at`: The expiration time for a secret of a confidential client
 - `skip_consent`: Allows the ability to skip user consent flow. Useful for trusted clients.
 - `enable_end_session`: Allows a user to logout of a session from the client via their `id_token` at the `/oauth2/end-session` endpoint. Used in OIDC-setups and specified trusted clients.
+- `metadata`: Additional private metadata to attach to the client.
 
 In some cases, you may wish to create logic to create oauth clients with restricted fields through custom APIs, company admin portals, or server initialization, you may use the following server-only endpoint:
 
@@ -505,7 +506,7 @@ type oauth2Continue = {
 
 This endpoint provides details of the provided token. If the token is additionally tied to a session, the endpoint will ensure the session is `active`.
 
-In addition, the introspect endpoint also accepts a `resource` parameter which can provide custom claims specific to that resource.
+To provide resource specific claims via `customAccessTokenClaims`, store the allowed resources that a confidential client can use in its `resources` field.
 
 
 ### Revoke Endpoint
@@ -650,8 +651,7 @@ Accepting _opaque access tokens in addition to JWT tokens_ is possible, but come
 
 **Drawbacks**:
 - **DOS**: If the client is external (ie external APIs, MCP agents), opaque `access_token` verifications can overload your authorization server.
-- **Performance**: Each token requires a network call to the introspection endpoint.
-- **Audience limitation**: The authorization server can only issue tokens with a single audience.
+- **Performance**: Every received opaque `access_token` requires a network call to the introspection endpoint.
 - **Secret required**: Introspection typically requires a `client_secret`, which public clients cannot safely provide.
   - NOTE: Introspection bearer token and Private Key JWT methods are not yet implemented.
 

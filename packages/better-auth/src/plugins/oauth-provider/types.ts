@@ -433,7 +433,7 @@ export interface OAuthOptions<
 		user?: (User & Record<string, unknown>) | null;
 		/** Scopes granted for this token */
 		scopes: Scopes;
-		/** The resource requesting. */
+		/** The resource requesting. Provided by the token endpoint. */
 		resource?: string;
 		/** oAuthClient metadata */
 		metadata?: Record<string, any>;

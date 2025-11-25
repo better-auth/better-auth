@@ -49,7 +49,6 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					.default(["code"])
 					.optional(),
 				type: z.enum(["web", "native", "user-agent-based"]).optional(),
-				metadata: z.record(z.string(), z.unknown()).optional(),
 				// SERVER_ONLY applicable fields
 				client_secret_expires_at: z
 					.union([z.string(), z.number()])
@@ -57,6 +56,7 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					.default(0),
 				skip_consent: z.boolean().optional(),
 				enable_end_session: z.boolean().optional(),
+				metadata: z.record(z.string(), z.unknown()).optional(),
 			}),
 			metadata: {
 				SERVER_ONLY: true,
@@ -255,7 +255,6 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					.default(["code"])
 					.optional(),
 				type: z.enum(["web", "native", "user-agent-based"]).optional(),
-				metadata: z.record(z.string(), z.unknown()).optional(),
 			}),
 			metadata: {
 				openapi: {
@@ -505,13 +504,13 @@ export const adminUpdateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 						.optional(),
 					response_types: z.array(z.enum(["code"])).optional(),
 					type: z.enum(["web", "native", "user-agent-based"]).optional(),
-					metadata: z.record(z.string(), z.unknown()).optional(),
 					// SERVER_ONLY applicable fields
 					client_secret_expires_at: z
 						.union([z.string(), z.number()])
 						.optional(),
 					skip_consent: z.boolean().optional(),
 					enable_end_session: z.boolean().optional(),
+					metadata: z.record(z.string(), z.unknown()).optional(),
 				}),
 			}),
 			metadata: {
@@ -559,7 +558,6 @@ export const updateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 						.optional(),
 					response_types: z.array(z.enum(["code"])).optional(),
 					type: z.enum(["web", "native", "user-agent-based"]).optional(),
-					metadata: z.record(z.string(), z.unknown()).optional(),
 				}),
 			}),
 			metadata: {

@@ -120,7 +120,6 @@ describe("oauth introspect", async () => {
 
 	async function getTokens(
 		overrides?: Partial<Parameters<typeof createAuthUrl>[0]>,
-		resource?: string,
 		authorizeHeaders?: Headers,
 	) {
 		const { url: authUrl, codeVerifier } = await createAuthUrl(overrides);
@@ -135,7 +134,6 @@ describe("oauth introspect", async () => {
 		return await validateAuthCode({
 			code: url.searchParams.get("code")!,
 			codeVerifier,
-			resource,
 		});
 	}
 
@@ -173,7 +171,7 @@ describe("oauth introspect", async () => {
 	});
 
 	it("should pass with token_type_hint access_token and sent jwt access_token", async () => {
-		const tokens = await getTokens(undefined, validAudience);
+		const tokens = await getTokens();
 		const introspection = await client.oauth2.introspect(
 			{
 				client_id: oauthClient?.client_id,
@@ -198,7 +196,6 @@ describe("oauth introspect", async () => {
 			iat: expect.any(Number),
 			sid: expect.any(String),
 		});
-		expect(introspection.data?.aud).toContain(validAudience);
 	});
 
 	it("should pass with token_type_hint access_token and sent opaque access_token", async () => {
@@ -296,7 +293,7 @@ describe("oauth introspect", async () => {
 	});
 
 	it("should pass without token_type_hint and sent jwt access_token", async () => {
-		const tokens = await getTokens(undefined, validAudience);
+		const tokens = await getTokens();
 		const introspection = await client.oauth2.introspect(
 			{
 				client_id: oauthClient?.client_id,
@@ -378,7 +375,7 @@ describe("oauth introspect", async () => {
 
 	it("should pass opaque access_token introspection with logged out user", async () => {
 		const { headers: testHeaders } = await signInWithTestUser();
-		const tokens = await getTokens(undefined, undefined, testHeaders);
+		const tokens = await getTokens(undefined, testHeaders);
 		const signOut = await auth.api.signOut({
 			headers: testHeaders,
 		});
@@ -412,7 +409,7 @@ describe("oauth introspect", async () => {
 
 	it("should pass jwt access_token introspection with logged out user", async () => {
 		const { headers: testHeaders } = await signInWithTestUser();
-		const tokens = await getTokens(undefined, validAudience, testHeaders);
+		const tokens = await getTokens(undefined, testHeaders);
 		const signOut = await auth.api.signOut({
 			headers: testHeaders,
 		});
@@ -441,13 +438,12 @@ describe("oauth introspect", async () => {
 			exp: expect.any(Number),
 			iat: expect.any(Number),
 		});
-		expect(introspection.data?.aud).toContain(validAudience);
 		expect(introspection.data?.sid).toBeUndefined();
 	});
 
 	it("should pass refresh_token introspection with logged out user", async () => {
 		const { headers: testHeaders } = await signInWithTestUser();
-		const tokens = await getTokens(undefined, undefined, testHeaders);
+		const tokens = await getTokens(undefined, testHeaders);
 		const signOut = await auth.api.signOut({
 			headers: testHeaders,
 		});
