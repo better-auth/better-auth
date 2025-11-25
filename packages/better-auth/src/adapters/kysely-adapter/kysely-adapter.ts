@@ -405,9 +405,9 @@ export const kyselyAdapter = (
 								`${joinModel} as join_${joinModelName}`,
 								(join: any) =>
 									join.onRef(
-										`join_${joinModelName}.${joinAttr.on.field}`,
+										`join_${joinModelName}.${joinAttr.on.references}`,
 										"=",
-										`primary.${joinAttr.on.references}`,
+										`primary.${joinAttr.on.field}`,
 									),
 							);
 						}
@@ -492,9 +492,9 @@ export const kyselyAdapter = (
 								`${joinModel} as join_${joinModelName}`,
 								(join: any) =>
 									join.onRef(
-										`join_${joinModelName}.${joinAttr.on.field}`,
+										`join_${joinModelName}.${joinAttr.on.references}`,
 										"=",
-										`primary.${joinAttr.on.references}`,
+										`primary.${joinAttr.on.field}`,
 									),
 							);
 						}
