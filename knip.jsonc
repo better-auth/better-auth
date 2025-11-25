@@ -11,15 +11,12 @@
 	"workspaces": {
 		"packages/*": {
 			"entry": ["src/index.ts"],
-			"project": [
-				"src/**/*.ts!",
-				"!src/adapters/**/test/.tmp",
-				"!src/adapters/**/test/auth.ts"
-			]
+			"project": ["src/**/*.ts!"]
 		},
 		"packages/better-auth": {
 			"project": [
 				"src/**/*.ts!",
+				"!src/adapters/**/test/*.prisma",
 				"!src/adapters/**/test/.tmp",
 				"!src/adapters/**/test/auth.ts"
 			],
