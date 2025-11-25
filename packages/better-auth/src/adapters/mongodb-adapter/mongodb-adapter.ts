@@ -288,7 +288,7 @@ export const mongodbAdapter = (
 								model,
 							});
 							const foreignField = getFieldName({
-								field: joinConfig.on.field,
+								field: joinConfig.on.references,
 								model: joinedModel,
 							});
 
@@ -406,7 +406,7 @@ export const mongodbAdapter = (
 							// Only unwind if the foreign field has a unique constraint (one-to-one relationship)
 							const foreignFieldAttribute = getFieldAttributes({
 								model: joinedModel,
-								field: joinConfig.on.field,
+								field: joinConfig.on.references,
 							});
 							const isUnique = foreignFieldAttribute?.unique === true;
 
