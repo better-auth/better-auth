@@ -1,5 +1,5 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
-import type { twoFactor as twoFa } from "../../plugins/two-factor";
+import type { twoFactor as twoFa } from ".";
 
 export const twoFactorClient = (
 	options?:
@@ -44,3 +44,8 @@ export const twoFactorClient = (
 		],
 	} satisfies BetterAuthClientPlugin;
 };
+
+export type * from "./backup-codes";
+export type * from "./otp";
+export type * from "./totp";
+export type * from "./types";
