@@ -44,9 +44,47 @@
         "myapp",
         "Neue",
 
+        // other languages
+        "usuario",
+        "registrado",
+
+        // names
+        "Bereket",
+        "Oskar",
+        "Gmerek",
+        "Lluis",
+        "Agusti",
+
         // intentional misspelling
         "dont",
+        "INSUFICCIENT",
+        "reauthentication",
+        "Favourite",
+
+        // custom acronyms
+        "SCIMAPI",
+        "MCPO",
+        "tocnav",
+        "atrule",
         "tsxify",
+        "uidx",
+        "containerenv",
+        "adfs",
+
+        // formats
+        "MMDD",
+        "ABCDEFGHJKLMNPQRSTUVWXYZ23456789",
+
+        // terminal support
+        "eterm",
+        "cygwin",
+        "dtterm",
+        "jfbterm",
+        "konsole",
+        "kterm",
+        "mlterm",
+	    "rxvt",
+        "gitea",
 
         // auth related words
 
@@ -68,9 +106,13 @@
         "rpid",
         "oauthbearertoken",
         "SPSSODescriptor",
+        "ztdid",
+        "vnet",
+        "ctry",
+        "acrs",
+        "edov",
 
         // tech terminology
-
         "hrtl",
         "arrowleft",
         "pressable",
@@ -97,6 +139,7 @@
         "onprem",
         "encryptor",
         "decryptor",
+        "keccak",
         
         // third-party libraries
         
@@ -134,6 +177,7 @@
         "giget",
         "segoe",
         "conar",
+        "nuxtzzle",
 
         // companies
         "creem",
@@ -157,7 +201,9 @@
         "instantdb",
         "faceit",
         "xata",
-        "chonkie"
+        "chonkie",
+        "dsari",
+        "paypalv"
     ],
     "ignorePaths": [
         "patches",
