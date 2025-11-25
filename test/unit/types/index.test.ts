@@ -2,7 +2,7 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import type { Auth, InferUser } from "better-auth";
 import { expectTypeOf, test } from "vitest";
 
-test("infer user type should correctly", async () => {
+test("infer user type correctly", async () => {
 	const config = {
 		user: {
 			additionalFields: {
