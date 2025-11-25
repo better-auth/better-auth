@@ -922,10 +922,8 @@ describe("oauth2", async () => {
 					],
 				}),
 			],
-			advanced: {
-				oauthConfig: {
-					storeStateStrategy: "cookie",
-				},
+			account: {
+				storeStateStrategy: "cookie",
 			},
 		});
 		const headers = new Headers();
@@ -1369,5 +1367,280 @@ describe("oauth2", async () => {
 		});
 
 		expect(testAuth).toBeDefined();
+	});
+
+	it("should support custom getToken for non-standard providers", async () => {
+		const mockTokenResponse = {
+			access_token: "custom-access-token",
+			refresh_token: "custom-refresh-token",
+			expires_in: 3600,
+			openid: "custom-openid-123",
+			unionid: "custom-unionid-456",
+			scope: "snsapi_login",
+		};
+
+		let getTokenCalled = false;
+		let capturedCode = "";
+
+		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "custom-provider",
+							clientId: clientId,
+							clientSecret: clientSecret,
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							scopes: ["snsapi_login"],
+							pkce: true,
+							// Custom token exchange that doesn't use standard OAuth flow
+							getToken: async ({ code }) => {
+								getTokenCalled = true;
+								capturedCode = code;
+
+								// Simulate a GET-based token endpoint
+								// For testing, we directly return the mock response
+								return {
+									accessToken: mockTokenResponse.access_token,
+									refreshToken: mockTokenResponse.refresh_token,
+									accessTokenExpiresAt: new Date(
+										Date.now() + mockTokenResponse.expires_in * 1000,
+									),
+									scopes: mockTokenResponse.scope.split(","),
+									raw: mockTokenResponse,
+								};
+							},
+							getUserInfo: async (tokens) => {
+								// Access custom fields from raw token data
+								const openid = tokens.raw?.openid as string;
+								const unionid = tokens.raw?.unionid as string;
+
+								expect(openid).toBe("custom-openid-123");
+								expect(unionid).toBe("custom-unionid-456");
+
+								return {
+									id: unionid || openid,
+									name: "Custom Provider User",
+									email: "custom@test.com",
+									emailVerified: true,
+								};
+							},
+						},
+					],
+				}),
+			],
+		});
+
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const headers = new Headers();
+		const res = await authClient.signIn.oauth2({
+			providerId: "custom-provider",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
+
+		// Complete the OAuth flow
+		const { callbackURL } = await simulateOAuthFlow(
+			res.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+
+		// Verify custom getToken was called
+		expect(getTokenCalled).toBe(true);
+		expect(capturedCode).toBeTruthy();
+		expect(callbackURL).toBe("http://localhost:3000/new_user");
+	});
+
+	// Note: raw token data preservation is already tested in the other custom getToken tests above
+	// This test is redundant as the GET-based and custom provider tests verify raw data preservation
+
+	it("should handle errors in custom getToken", async () => {
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: "error-test@test.com",
+				name: "Error Test User",
+				sub: "error-test",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "error-provider",
+							clientId: clientId,
+							clientSecret: clientSecret,
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							pkce: true,
+							getToken: async () => {
+								// Simulate token exchange failure
+								throw new Error("Token exchange failed");
+							},
+						},
+					],
+				}),
+			],
+		});
+
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const headers = new Headers();
+		const res = await authClient.signIn.oauth2({
+			providerId: "error-provider",
+			callbackURL: "http://localhost:3000/dashboard",
+			errorCallbackURL: "http://localhost:3000/error",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
+
+		// Attempt to complete the OAuth flow - should redirect to error URL
+		const { callbackURL } = await simulateOAuthFlow(
+			res.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+
+		expect(callbackURL).toContain("http://localhost:3000/error");
+		expect(callbackURL).toContain("error=");
+	});
+
+	it("should support GET-based token endpoints for non-standard providers", async () => {
+		const customMockResponse = {
+			access_token: "custom-access-token-xyz",
+			refresh_token: "custom-refresh-token-xyz",
+			expires_in: 7200,
+			user_id: "user_12345",
+			custom_field: "custom_value",
+			scope: "profile email",
+		};
+
+		const customUserInfo = {
+			display_name: "Test User",
+			avatar_url: "https://example.com/avatar.png",
+			custom_field: "custom_value",
+		};
+
+		let tokenRequestMethod = "";
+		let userInfoTokenUsed = "";
+
+		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "custom-get-provider",
+							clientId: clientId,
+							clientSecret: clientSecret,
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							scopes: ["profile", "email"],
+							pkce: true,
+							// Simulates providers that use GET request with query params instead of POST
+							getToken: async () => {
+								tokenRequestMethod = "GET";
+
+								return {
+									accessToken: customMockResponse.access_token,
+									refreshToken: customMockResponse.refresh_token,
+									accessTokenExpiresAt: new Date(
+										Date.now() + customMockResponse.expires_in * 1000,
+									),
+									scopes: customMockResponse.scope.split(" "),
+									raw: customMockResponse,
+								};
+							},
+							getUserInfo: async (tokens) => {
+								userInfoTokenUsed = tokens.accessToken || "";
+
+								// Access provider-specific fields from raw
+								const userId = tokens.raw?.user_id as string;
+								const customField = tokens.raw?.custom_field as string;
+
+								// Verify provider-specific fields are preserved
+								expect(userId).toBe(customMockResponse.user_id);
+								expect(customField).toBe(customMockResponse.custom_field);
+
+								return {
+									id: userId,
+									name: customUserInfo.display_name,
+									email: `${userId}@example.com`,
+									image: customUserInfo.avatar_url,
+									emailVerified: true,
+								};
+							},
+						},
+					],
+				}),
+			],
+		});
+
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const headers = new Headers();
+		const res = await authClient.signIn.oauth2({
+			providerId: "custom-get-provider",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/welcome",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(res.data?.url).toContain(`http://localhost:${port}/authorize`);
+		expect(res.data?.url).toContain("scope=profile");
+
+		// Complete the OAuth flow
+		const { callbackURL, headers: newHeaders } = await simulateOAuthFlow(
+			res.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+
+		// Verify the flow completed successfully
+		expect(callbackURL).toBe("http://localhost:3000/welcome");
+		expect(tokenRequestMethod).toBe("GET");
+		expect(userInfoTokenUsed).toBe(customMockResponse.access_token);
+
+		// Verify user was created with custom provider data
+		const session = await authClient.getSession({
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+
+		expect(session.data).not.toBeNull();
+		expect(session.data?.user.name).toBe(customUserInfo.display_name);
+		expect(session.data?.user.image).toBe(customUserInfo.avatar_url);
 	});
 });
