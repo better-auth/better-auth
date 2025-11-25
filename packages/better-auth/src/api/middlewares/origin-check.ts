@@ -287,6 +287,7 @@ export async function validateLoginCsrf(
 	const hasMetadata = site || mode || dest;
 
 	if (hasMetadata) {
+		// Block cross-site navigation requests (classic CSRF attack pattern)
 		if (site === "cross-site" && mode === "navigate") {
 			ctx.context.logger.error(
 				"Blocked cross-site navigation login attempt (CSRF protection)",
@@ -301,10 +302,8 @@ export async function validateLoginCsrf(
 			});
 		}
 
-		//validate origin
 		return validateOrigin(ctx, true);
 	}
 
-	//fallback to origin validation
-	return validateOrigin(ctx);
+	return;
 }
