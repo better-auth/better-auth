@@ -16,14 +16,16 @@ export function isFormAllowedEndpoint(path: string): boolean {
  * Check if the content type is a form type
  */
 export function isFormContentType(contentType: string): boolean {
-	return contentType.startsWith("application/x-www-form-urlencoded");
+	return contentType
+		.toLowerCase()
+		.startsWith("application/x-www-form-urlencoded");
 }
 
 /**
  * Check if the content type is JSON
  */
 export function isJsonContentType(contentType: string): boolean {
-	return contentType.startsWith("application/json");
+	return contentType.toLowerCase().startsWith("application/json");
 }
 
 /**
@@ -34,7 +36,9 @@ export async function parseFormBody(
 ): Promise<Record<string, string>> {
 	const contentType = request.headers.get("content-type") ?? "";
 
-	if (contentType.startsWith("application/x-www-form-urlencoded")) {
+	if (
+		contentType.toLowerCase().startsWith("application/x-www-form-urlencoded")
+	) {
 		const text = await request.text();
 		const params = new URLSearchParams(text);
 		const body: Record<string, string> = {};

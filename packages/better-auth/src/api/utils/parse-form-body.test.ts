@@ -110,7 +110,7 @@ describe("parseFormBody - Unit Tests", () => {
 	});
 });
 
-describe("Form-based Authentication", async (it) => {
+describe("Form-based Authentication", async () => {
 	const { auth, testUser, customFetchImpl } = await getTestInstance({
 		trustedOrigins: ["http://localhost:3000", "https://trusted.com"],
 		emailAndPassword: {
@@ -122,7 +122,7 @@ describe("Form-based Authentication", async (it) => {
 		},
 	});
 
-	describe("Form Parsing - Sign In", async (it) => {
+	describe("Form Parsing - Sign In", async () => {
 		it("should parse form data for /sign-in/email", async () => {
 			const formData = new URLSearchParams({
 				email: testUser.email,
@@ -175,7 +175,7 @@ describe("Form-based Authentication", async (it) => {
 		});
 	});
 
-	describe("Form Parsing - Sign Up", async (it) => {
+	describe("Form Parsing - Sign Up", async () => {
 		it("should parse form data for /sign-up/email", async () => {
 			const email = `test-${Date.now()}@example.com`;
 			const formData = new URLSearchParams({
@@ -230,7 +230,7 @@ describe("Form-based Authentication", async (it) => {
 		});
 	});
 
-	describe("JSON Parsing Still Works", async (it) => {
+	describe("JSON Parsing Still Works", async () => {
 		it("should still accept JSON for /sign-in/email", async () => {
 			const response = await customFetchImpl(
 				"http://localhost:3000/api/auth/sign-in/email",
@@ -277,7 +277,7 @@ describe("Form-based Authentication", async (it) => {
 		});
 	});
 
-	describe("Form Rejection on Non-Auth Endpoints", async (it) => {
+	describe("Form Rejection on Non-Auth Endpoints", async () => {
 		it("should reject form submission on /update-user", async () => {
 			const formData = new URLSearchParams({
 				name: "New Name",
@@ -377,7 +377,7 @@ describe("Form-based Authentication", async (it) => {
 		});
 	});
 
-	describe("CSRF / Origin Validation", async (it) => {
+	describe("CSRF / Origin Validation", async () => {
 		it("should reject when Origin header is an untrusted domain", async () => {
 			const formData = new URLSearchParams({
 				email: testUser.email,
@@ -556,7 +556,7 @@ describe("Form-based Authentication", async (it) => {
 		});
 	});
 
-	describe("Error Handling", async (it) => {
+	describe("Error Handling", async () => {
 		it("should handle malformed form data gracefully", async () => {
 			const response = await customFetchImpl(
 				"http://localhost:3000/api/auth/sign-in/email",
@@ -599,7 +599,7 @@ describe("Form-based Authentication", async (it) => {
 		});
 	});
 
-	describe("Integration Tests - End-to-End Form Submission", async (it) => {
+	describe("Integration Tests - End-to-End Form Submission", async () => {
 		it("should work with standard HTML form POST (simulating <form method='POST' action='/sign-in/email'>)", async () => {
 			// Simulate a standard HTML form submission
 			const formData = new URLSearchParams({
@@ -705,7 +705,7 @@ describe("Form-based Authentication", async (it) => {
 		});
 	});
 
-	describe("Integration Tests - Error Response Consistency", async (it) => {
+	describe("Integration Tests - Error Response Consistency", async () => {
 		it("should return same error codes for form sign-in as JSON sign-in (invalid email)", async () => {
 			// Test with form
 			const formData = new URLSearchParams({
