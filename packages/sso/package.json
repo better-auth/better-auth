@@ -68,7 +68,7 @@
     "@types/express": "^5.0.5",
     "better-auth": "workspace:*",
     "better-call": "catalog:",
-    "body-parser": "^2.2.0",
+    "body-parser": "^2.2.1",
     "express": "^5.1.0",
     "oauth2-mock-server": "^8.2.0",
     "tsdown": "catalog:"
