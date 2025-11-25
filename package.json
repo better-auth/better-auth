@@ -9,7 +9,7 @@
     "clean": "turbo --filter \"./packages/*\" clean && rm -rf node_modules",
     "format": "biome format . --write",
     "lint": "biome check .",
-    "lint:dependencies": "knip",
+    "lint:dependencies": "knip --strict",
     "lint:fix": "biome check . --fix --unsafe",
     "release": "turbo --filter \"./packages/*\" build && bumpp && pnpm -r publish --access public --no-git-checks",
     "release:no-build": "bumpp && pnpm -r publish --access public --no-git-checks --tag next",
