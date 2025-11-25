@@ -105,7 +105,7 @@ const signInUsernameBodySchema = z.object({
 		.optional(),
 });
 
-const isUserNameAvailableBodySchema = z.object({
+const isUsernameAvailableBodySchema = z.object({
 	username: z.string().meta({
 		description: "The username to check",
 	}),
@@ -416,7 +416,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 				"/is-username-available",
 				{
 					method: "POST",
-					body: isUserNameAvailableBodySchema,
+					body: isUsernameAvailableBodySchema,
 				},
 				async (ctx) => {
 					const username = ctx.body.username;
