@@ -291,7 +291,9 @@ export async function validateLoginCsrf(
 	const mode = headers.get("Sec-Fetch-Mode");
 	const dest = headers.get("Sec-Fetch-Dest");
 
-	const hasMetadata = site || mode || dest;
+	const hasMetadata = Boolean(
+		(site && site.trim()) || (mode && mode.trim()) || (dest && dest.trim()),
+	);
 
 	if (hasMetadata) {
 		// Block cross-site navigation requests (classic CSRF attack pattern)
