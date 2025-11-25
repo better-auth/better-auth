@@ -339,13 +339,13 @@ export type JoinConfig = {
 		 */
 		on: {
 			/**
-			 * Column name from the main table
+			 * The field name from the main table.
 			 */
-			from: string;
+			field: string;
 			/**
-			 * Column name from the joined table
+			 * The referencing field on the joined table.
 			 */
-			to: string;
+			references: string;
 		};
 		/**
 		 * Limit the number of rows to return.

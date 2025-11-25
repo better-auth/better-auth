@@ -284,11 +284,11 @@ export const mongodbAdapter = (
 					if (join) {
 						for (const [joinedModel, joinConfig] of Object.entries(join)) {
 							const localField = getFieldName({
-								field: joinConfig.on.from,
+								field: joinConfig.on.field,
 								model,
 							});
 							const foreignField = getFieldName({
-								field: joinConfig.on.to,
+								field: joinConfig.on.field,
 								model: joinedModel,
 							});
 
@@ -300,7 +300,7 @@ export const mongodbAdapter = (
 							const joinedModelSchema =
 								schema[getDefaultModelName(joinedModel)];
 							const foreignFieldAttribute =
-								joinedModelSchema?.fields[joinConfig.on.to];
+								joinedModelSchema?.fields[joinConfig.on.references];
 							const isUnique = foreignFieldAttribute?.unique === true;
 
 							// For unique relationships, limit is ignored (as per JoinConfig type)
@@ -391,11 +391,11 @@ export const mongodbAdapter = (
 					if (join) {
 						for (const [joinedModel, joinConfig] of Object.entries(join)) {
 							const localField = getFieldName({
-								field: joinConfig.on.from,
+								field: joinConfig.on.field,
 								model,
 							});
 							const foreignField = getFieldName({
-								field: joinConfig.on.to,
+								field: joinConfig.on.references,
 								model: joinedModel,
 							});
 
@@ -406,7 +406,7 @@ export const mongodbAdapter = (
 							// Only unwind if the foreign field has a unique constraint (one-to-one relationship)
 							const foreignFieldAttribute = getFieldAttributes({
 								model: joinedModel,
-								field: joinConfig.on.to,
+								field: joinConfig.on.field,
 							});
 							const isUnique = foreignFieldAttribute?.unique === true;
 

@@ -661,8 +661,8 @@ export const createAdapterFactory =
 
 				transformedJoin[getModelName(model)] = {
 					on: {
-						from,
-						to,
+						field: from,
+						references: to,
 					},
 					limit,
 					relation: isUnique ? "one-to-one" : "one-to-many",
@@ -687,10 +687,10 @@ export const createAdapterFactory =
 		}) => {
 			if (!baseData) return baseData;
 			const modelName = getModelName(joinModel);
-			const field = joinConfig.on.to;
+			const field = joinConfig.on.field;
 			const value =
 				baseData[
-					getDefaultFieldName({ field: joinConfig.on.from, model: baseModel })
+					getDefaultFieldName({ field: joinConfig.on.field, model: baseModel })
 				];
 
 			if (value === null || value === undefined) {
