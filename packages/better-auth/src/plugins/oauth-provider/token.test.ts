@@ -1200,40 +1200,40 @@ describe("oauth token - config", async () => {
 			testScopes: ["read:profile"],
 			result: 7200, // m2m expiresIn 2hr
 		},
-	])(
-		"scopeExpirations - access token expiration $testScopes",
-		async ({ testScopes, result }) => {
-			const { client, oauthClient } = await createTestInstance({
-				oauthProviderConfig: {
-					m2mAccessTokenExpiresIn: 7200,
-					scopeExpirations: {
-						"read:payments": "30m",
-						"write:payments": "5m",
-					},
+	])("scopeExpirations - access token expiration $testScopes", async ({
+		testScopes,
+		result,
+	}) => {
+		const { client, oauthClient } = await createTestInstance({
+			oauthProviderConfig: {
+				m2mAccessTokenExpiresIn: 7200,
+				scopeExpirations: {
+					"read:payments": "30m",
+					"write:payments": "5m",
 				},
-			});
-			// Client credentials
-			const tokens = await client.oauth2.token(
-				{
-					resource: validAudience,
-					grant_type: "client_credentials",
-					client_id: oauthClient?.client_id,
-					client_secret: oauthClient?.client_secret,
-					scope: testScopes.join(" "),
+			},
+		});
+		// Client credentials
+		const tokens = await client.oauth2.token(
+			{
+				resource: validAudience,
+				grant_type: "client_credentials",
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				scope: testScopes.join(" "),
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
 				},
-				{
-					headers: {
-						accept: "application/json",
-						"content-type": "application/x-www-form-urlencoded",
-					},
-				},
-			);
-			expect(tokens.data?.expires_in).toBe(result); // 5m lowest
-			// NOTE: verification is done in other tests (we only care about the exp fields in this test)
-			const accessToken = decodeJwt(tokens.data?.access_token ?? "");
-			expect((accessToken.exp ?? 0) - (accessToken.iat ?? 0)).toBe(result); // 5m lowest
-		},
-	);
+			},
+		);
+		expect(tokens.data?.expires_in).toBe(result); // 5m lowest
+		// NOTE: verification is done in other tests (we only care about the exp fields in this test)
+		const accessToken = decodeJwt(tokens.data?.access_token ?? "");
+		expect((accessToken.exp ?? 0) - (accessToken.iat ?? 0)).toBe(result); // 5m lowest
+	});
 
 	// Authorization Code and Refresh Token grants
 	it.each([
@@ -1249,88 +1249,88 @@ describe("oauth token - config", async () => {
 			testScopes: ["profile", "offline_access"],
 			result: 7200, // accessTokenExpiresIn 2hr
 		},
-	])(
-		"scopeExpirations - access token expiration $testScopes",
-		async ({ testScopes, result }) => {
-			const { client, oauthClient } = await createTestInstance({
-				oauthProviderConfig: {
-					accessTokenExpiresIn: 7200,
-					scopeExpirations: {
-						"read:payments": "30m",
-						"write:payments": "5m",
-					},
+	])("scopeExpirations - access token expiration $testScopes", async ({
+		testScopes,
+		result,
+	}) => {
+		const { client, oauthClient } = await createTestInstance({
+			oauthProviderConfig: {
+				accessTokenExpiresIn: 7200,
+				scopeExpirations: {
+					"read:payments": "30m",
+					"write:payments": "5m",
 				},
-			});
-			const { url: authUrl, codeVerifier } = await createAuthUrl(
-				{
-					clientId: oauthClient?.client_id!,
-					clientSecret: oauthClient?.client_secret,
-				},
-				{
-					scopes: testScopes,
-				},
-			);
-			let callbackRedirectUrl = "";
-			await client.$fetch(authUrl.toString(), {
-				onError(context) {
-					callbackRedirectUrl = context.response.headers.get("Location") || "";
-				},
-			});
-			expect(callbackRedirectUrl).toContain(redirectUri);
-			expect(callbackRedirectUrl).toContain(`code=`);
-			expect(callbackRedirectUrl).toContain(`state=123`);
-			const url = new URL(callbackRedirectUrl);
+			},
+		});
+		const { url: authUrl, codeVerifier } = await createAuthUrl(
+			{
+				clientId: oauthClient?.client_id!,
+				clientSecret: oauthClient?.client_secret,
+			},
+			{
+				scopes: testScopes,
+			},
+		);
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).toContain(redirectUri);
+		expect(callbackRedirectUrl).toContain(`code=`);
+		expect(callbackRedirectUrl).toContain(`state=123`);
+		const url = new URL(callbackRedirectUrl);
 
-			// Authorization code
-			const tokens = await client.oauth2.token(
-				{
-					code: url.searchParams.get("code")!,
-					code_verifier: codeVerifier,
-					grant_type: "authorization_code",
-					resource: validAudience,
-					client_id: oauthClient?.client_id,
-					client_secret: oauthClient?.client_secret,
-					redirect_uri: redirectUri,
+		// Authorization code
+		const tokens = await client.oauth2.token(
+			{
+				code: url.searchParams.get("code")!,
+				code_verifier: codeVerifier,
+				grant_type: "authorization_code",
+				resource: validAudience,
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				redirect_uri: redirectUri,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
 				},
-				{
-					headers: {
-						accept: "application/json",
-						"content-type": "application/x-www-form-urlencoded",
-					},
-				},
-			);
-			expect(tokens.data?.expires_in).toBe(result); // 5m lowest
-			// NOTE: verification is done in other tests (we only care about the exp fields in this test)
-			const accessToken = decodeJwt(tokens.data?.access_token ?? "");
-			expect((accessToken.exp ?? 0) - (accessToken.iat ?? 0)).toBe(result); // 5m lowest
+			},
+		);
+		expect(tokens.data?.expires_in).toBe(result); // 5m lowest
+		// NOTE: verification is done in other tests (we only care about the exp fields in this test)
+		const accessToken = decodeJwt(tokens.data?.access_token ?? "");
+		expect((accessToken.exp ?? 0) - (accessToken.iat ?? 0)).toBe(result); // 5m lowest
 
-			// Refresh token
-			const refreshedTokens = await client.oauth2.token(
-				{
-					resource: validAudience,
-					// @ts-expect-error refresh token is sent
-					refresh_token: tokens.data?.refresh_token,
-					grant_type: "refresh_token",
-					client_id: oauthClient?.client_id,
-					client_secret: oauthClient?.client_secret,
+		// Refresh token
+		const refreshedTokens = await client.oauth2.token(
+			{
+				resource: validAudience,
+				// @ts-expect-error refresh token is sent
+				refresh_token: tokens.data?.refresh_token,
+				grant_type: "refresh_token",
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
 				},
-				{
-					headers: {
-						accept: "application/json",
-						"content-type": "application/x-www-form-urlencoded",
-					},
-				},
-			);
-			expect(refreshedTokens.data?.expires_in).toBe(result); // 5m lowest
-			// NOTE: verification is done in other tests (we only care about the exp fields in this test)
-			const refreshedAccessToken = decodeJwt(
-				refreshedTokens.data?.access_token ?? "",
-			);
-			expect(
-				(refreshedAccessToken.exp ?? 0) - (refreshedAccessToken.iat ?? 0),
-			).toBe(result); // 5m lowest
-		},
-	);
+			},
+		);
+		expect(refreshedTokens.data?.expires_in).toBe(result); // 5m lowest
+		// NOTE: verification is done in other tests (we only care about the exp fields in this test)
+		const refreshedAccessToken = decodeJwt(
+			refreshedTokens.data?.access_token ?? "",
+		);
+		expect(
+			(refreshedAccessToken.exp ?? 0) - (refreshedAccessToken.iat ?? 0),
+		).toBe(result); // 5m lowest
+	});
 
 	it("opaqueAccessTokenPrefix - client_credentials", async () => {
 		const prefix = "hello_";
