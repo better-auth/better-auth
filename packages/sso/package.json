@@ -66,6 +66,7 @@
   "devDependencies": {
     "@types/body-parser": "^1.19.6",
     "@types/express": "^5.0.5",
+    "better-call": "catalog:",
     "better-auth": "workspace:*",
     "body-parser": "^2.2.0",
     "express": "^5.1.0",
