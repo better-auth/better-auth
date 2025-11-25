@@ -48,41 +48,39 @@ describe("mcp", async () => {
 			resource: [apiServerBaseUrl, `${apiServerBaseUrl}/resource1`],
 			expected: `Bearer resource_metadata="${apiServerBaseUrl}/.well-known/oauth-protected-resource", Bearer resource_metadata="${apiServerBaseUrl}/.well-known/oauth-protected-resource/resource1"`,
 		},
-	])(
-		"should provide the correct metadata using resource: $resource",
-		async ({ resource, expected }) => {
-			try {
-				await apiClient.verifyAccessToken("bad_access_token", {
-					verifyOptions: {
-						issuer: authServerUrl,
-						audience: resource,
-					},
-					jwksUrl: `${authServerUrl}/api/auth/jwks`,
-				});
-				expect.unreachable();
-			} catch (error) {
-				const err = error as APIError;
-				expect(err?.statusCode).toBe(401);
-				expect(new Headers(err.headers)?.get("WWW-Authenticate")).toBe(
-					expected,
-				);
-			}
+	])("should provide the correct metadata using resource: $resource", async ({
+		resource,
+		expected,
+	}) => {
+		try {
+			await apiClient.verifyAccessToken("bad_access_token", {
+				verifyOptions: {
+					issuer: authServerUrl,
+					audience: resource,
+				},
+				jwksUrl: `${authServerUrl}/api/auth/jwks`,
+			});
+			expect.unreachable();
+		} catch (error) {
+			const err = error as APIError;
+			expect(err?.statusCode).toBe(401);
+			expect(new Headers(err.headers)?.get("WWW-Authenticate")).toBe(expected);
+		}
 
-			const response = await mcpHandler(
-				{
-					verifyOptions: {
-						issuer: authServerUrl,
-						audience: resource,
-					},
+		const response = await mcpHandler(
+			{
+				verifyOptions: {
+					issuer: authServerUrl,
+					audience: resource,
 				},
-				async () => {
-					return new Response("unused");
-				},
-			)(new Request(`${authServerUrl}/mcp`));
-			expect(response?.status).toBe(401);
-			expect(response?.headers.get("WWW-Authenticate")).toBe(expected);
-		},
-	);
+			},
+			async () => {
+				return new Response("unused");
+			},
+		)(new Request(`${authServerUrl}/mcp`));
+		expect(response?.status).toBe(401);
+		expect(response?.headers.get("WWW-Authenticate")).toBe(expected);
+	});
 });
 
 describe("mcp - server-client flows", async () => {

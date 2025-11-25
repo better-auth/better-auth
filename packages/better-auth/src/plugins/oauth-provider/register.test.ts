@@ -96,33 +96,33 @@ describe("oauth register", async () => {
 		expect(response.error?.status).toBe(400);
 	});
 
-	it.each(["native", "user-agent-based"] as OAuthClient["type"][])(
-		"should fail with type '%s' check for confidential client request",
-		async (type) => {
-			const response = await serverClient.oauth2.register({
-				token_endpoint_auth_method: "client_secret_post",
-				type,
-				redirect_uris: [redirectUri],
-			});
-			expect(response.error?.status).toBe(400);
-		},
-	);
+	it.each([
+		"native",
+		"user-agent-based",
+	] as OAuthClient["type"][])("should fail with type '%s' check for confidential client request", async (type) => {
+		const response = await serverClient.oauth2.register({
+			token_endpoint_auth_method: "client_secret_post",
+			type,
+			redirect_uris: [redirectUri],
+		});
+		expect(response.error?.status).toBe(400);
+	});
 
-	it.each(["native", "user-agent-based"] as OAuthClient["type"][])(
-		"should register public '%s' client with minimum requirements via server",
-		async (type) => {
-			const response = await auth.api.adminCreateOAuthClient({
-				headers,
-				body: {
-					token_endpoint_auth_method: "none",
-					redirect_uris: [redirectUri],
-				},
-			});
-			expect(response?.client_id).toBeDefined();
-			expect(response?.user_id).toBeDefined();
-			expect(response?.client_secret).toBeUndefined();
-		},
-	);
+	it.each([
+		"native",
+		"user-agent-based",
+	] as OAuthClient["type"][])("should register public '%s' client with minimum requirements via server", async (type) => {
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "none",
+				redirect_uris: [redirectUri],
+			},
+		});
+		expect(response?.client_id).toBeDefined();
+		expect(response?.user_id).toBeDefined();
+		expect(response?.client_secret).toBeUndefined();
+	});
 
 	it("should register confidential client and check that certain fields are overwritten", async () => {
 		const applicationRequest: OAuthClient = {
