@@ -375,6 +375,69 @@ describe("Form-based Authentication", async () => {
 				);
 			}
 		});
+
+		it("should reject form submission on /callback/:id (OAuth callback)", async () => {
+			const formData = new URLSearchParams({
+				code: "test-code",
+				state: "test-state",
+			});
+
+			try {
+				const response = await customFetchImpl(
+					"http://localhost:3000/api/auth/callback/google",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+							Origin: "http://localhost:3000",
+						},
+						body: formData.toString(),
+					},
+				);
+
+				// Form submissions should be rejected with 400 (content type error)
+				expect(response.status).toBe(400);
+				const data = await response.json();
+				expect(data.message).toBe(BASE_ERROR_CODES.UNSUPPORTED_CONTENT_TYPE);
+			} catch (error: any) {
+				// If error is thrown directly, it should be an APIError with BAD_REQUEST status
+				expect(error.status).toBe("BAD_REQUEST");
+				expect(error.body?.message).toBe(
+					BASE_ERROR_CODES.UNSUPPORTED_CONTENT_TYPE,
+				);
+			}
+		});
+
+		it("should reject form submission on other OAuth2 endpoints (not /oauth2/token)", async () => {
+			const formData = new URLSearchParams({
+				client_id: "test-client",
+			});
+
+			try {
+				const response = await customFetchImpl(
+					"http://localhost:3000/api/auth/oauth2/register",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+							Origin: "http://localhost:3000",
+						},
+						body: formData.toString(),
+					},
+				);
+
+				// Form submissions should be rejected with 400 (content type error)
+				expect(response.status).toBe(400);
+				const data = await response.json();
+				expect(data.message).toBe(BASE_ERROR_CODES.UNSUPPORTED_CONTENT_TYPE);
+			} catch (error: any) {
+				// If error is thrown directly, it should be an APIError with BAD_REQUEST status
+				expect(error.status).toBe("BAD_REQUEST");
+				expect(error.body?.message).toBe(
+					BASE_ERROR_CODES.UNSUPPORTED_CONTENT_TYPE,
+				);
+			}
+		});
 	});
 
 	describe("CSRF / Origin Validation", async () => {

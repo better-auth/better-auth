@@ -1,15 +1,32 @@
 import { APIError } from "better-call";
 
 /**
- * Allowed endpoints that support form-based authentication
+ * Allowed endpoints that support form-based authentication and need conversion to JSON
  */
-const FORM_ALLOWED_ENDPOINTS = ["/sign-in/email", "/sign-up/email"] as const;
+const FORM_CONVERT_ENDPOINTS = ["/sign-in/email", "/sign-up/email"] as const;
+
+/**
+ * OAuth2/OIDC endpoints that handle form data directly (no conversion needed)
+ */
+const OAUTH2_FORM_ENDPOINTS = ["/oauth2/token"] as const;
 
 /**
  * Check if an endpoint allows form-based content types
  */
 export function isFormAllowedEndpoint(path: string): boolean {
-	return FORM_ALLOWED_ENDPOINTS.some((endpoint) => path === endpoint);
+	// OAuth2 token endpoint handles form data directly, no conversion needed
+	if (OAUTH2_FORM_ENDPOINTS.some((endpoint) => path === endpoint)) {
+		return true;
+	}
+	// Email/password endpoints accept form data and convert to JSON
+	return FORM_CONVERT_ENDPOINTS.some((endpoint) => path === endpoint);
+}
+
+/**
+ * Check if an endpoint needs form data conversion to JSON
+ */
+export function needsFormConversion(path: string): boolean {
+	return FORM_CONVERT_ENDPOINTS.some((endpoint) => path === endpoint);
 }
 
 /**

@@ -48,6 +48,7 @@ import {
 	isFormAllowedEndpoint,
 	isFormContentType,
 	isJsonContentType,
+	needsFormConversion,
 } from "./utils/parse-form-body";
 
 export function checkEndpointConflicts(
@@ -287,6 +288,7 @@ export const router = <Option extends BetterAuthOptions>(
 				const contentType = req.headers.get("content-type") ?? "";
 				const isForm = isFormContentType(contentType);
 				const isAllowedEndpoint = isFormAllowedEndpoint(path);
+				const needsConversion = needsFormConversion(path);
 
 				if (isForm) {
 					if (!isAllowedEndpoint) {
@@ -294,16 +296,20 @@ export const router = <Option extends BetterAuthOptions>(
 							message: BASE_ERROR_CODES.UNSUPPORTED_CONTENT_TYPE,
 						});
 					}
-					try {
-						req = await convertFormRequestToJson(req);
-					} catch (error) {
-						if (error instanceof APIError) {
-							throw error;
+					// Only convert form data to JSON for email/password endpoints
+					// OAuth2/OIDC endpoints handle form data directly
+					if (needsConversion) {
+						try {
+							req = await convertFormRequestToJson(req);
+						} catch (error) {
+							if (error instanceof APIError) {
+								throw error;
+							}
+							throw new APIError("BAD_REQUEST", {
+								message: "Failed to parse form data",
+								details: error,
+							});
 						}
-						throw new APIError("BAD_REQUEST", {
-							message: "Failed to parse form data",
-							details: error,
-						});
 					}
 				}
 
