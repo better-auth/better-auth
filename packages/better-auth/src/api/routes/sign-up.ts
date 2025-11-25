@@ -143,7 +143,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 												],
 											},
 										},
-										required: ["user"], // token is optional
+										required: ["redirect", "user"], // token is optional
 									},
 								},
 							},
@@ -181,6 +181,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				const body = ctx.body as any as User & {
 					password: string;
 					callbackURL?: string | undefined;
+					redirectTo?: string | undefined;
 					rememberMe?: boolean | undefined;
 				} & {
 					[key: string]: any;
