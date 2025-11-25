@@ -1,13 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
-import type { BetterAuthOptions } from "@better-auth/core";
-import merge from "deepmerge";
 import { Kysely, sql } from "kysely";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { getMigrations } from "../../../db/get-migration";
-import { runAdapterTest } from "../../test";
-import fs from "fs/promises";
-import { kyselyAdapter } from "../kysely-adapter";
-import { NodeSqliteDialect } from "../node-sqlite-dialect";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
@@ -17,6 +11,8 @@ import {
 	transactionsTestSuite,
 	uuidTestSuite,
 } from "../../tests";
+import { kyselyAdapter } from "../kysely-adapter";
+import { NodeSqliteDialect } from "../node-sqlite-dialect";
 
 const nodeVersion = process.version;
 const nodeSqliteSupported = +nodeVersion.split(".")[0]!.slice(1) >= 22;
