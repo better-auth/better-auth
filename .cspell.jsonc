@@ -3,26 +3,50 @@
     "useGitignore": true,
     "ignoreRandomStrings": true,
     "allowCompoundWords": true,
-
     "ignoreRegExpList": [
         // ignore contributors usernames in markdown files
         "usernames\\s*=\\s*\\{[^}]*\\}",
 
-        // ignore any of the following property values
+        // ignore any account related property value
         "name:\\s*\"[^\"]*\"",
         "description:\\s*\"[^\"]*\"",
         "avatar:\\s*\"[^\"]*\"",
         "twitter:\\s*\"[^\"]*\"",
+        "image:\\s*\"[^\"]*\"",
 
-        // markdown links to @handles or github accounts
+        // ignore any secret-like property value
+        "privateKeyPass:\\s*\"[^\"]*\"",
+        "encPrivateKeyPass:\\s*\"[^\"]*\"",
+        "\"x\":\\s*\"[^\"]*\"",
+
+        // markdown links to x.com or github accounts
         "\\[@[^\\]]+\\]\\([^\\)]+\\)",
-        "\\[[^\\]]+\\]\\(https://github\\.com/\\w+\\)"
+        "\\[[^\\]]+\\]\\(https://github\\.com/\\w+\\)",
+        "\\[[^\\]]+\\]\\(https://x\\.com/\\w+\\)",
+
+        // ignore anything that looks like an npm scope or account handle
+        "@[a-zA-Z0-9-_]+",
+
+        // match any string starting with price_ (stripe related)
+        "price_[a-zA-Z0-9-_]+",
+
+        // match any url-encoded string
+        "%[0-9A-Fa-f]{2}(?:%[0-9A-Fa-f]{2})*"
     ],
     "words": [
         // common words
 
         "cooldown",
         "askai",
+        "merch",
+        "prefs",
+        "uncompromised",
+        "myapp",
+        "Neue",
+
+        // intentional misspelling
+        "dont",
+        "tsxify",
 
         // auth related words
 
@@ -33,6 +57,17 @@
         "scim",
         "aaguid",
         "unionid",
+        "appleid",
+        "ciam",
+        "nameid",
+        "otpauth",
+        "algs",
+        "xchacha",
+        "caip",
+        "samlp",
+        "rpid",
+        "oauthbearertoken",
+        "SPSSODescriptor",
 
         // tech terminology
 
@@ -42,19 +77,34 @@
         "yocto",
         "numberid",
         "dbgenerated",
+        "dflt",
         "undim",
+        "timestamptz",
+        "nvarchar",
         "sslmode",
         "base64urlnopad",
         "remoteip",
         "noreferrer",
         "noopener",
         "pcre",
-
+        "llms",
+        "svgjs",
+        "devrel",
+        "rdbms",
+        "unstub",
+        "xlink",
+        "oklch",
+        "onprem",
+        "encryptor",
+        "decryptor",
+        
         // third-party libraries
-
+        
+        "afplay",
         "shiki",
         "samlify",
         "libsql",
+        "sqld",
         "nativewind",
         "nanostores",
         "fumadocs",
@@ -79,6 +129,11 @@
         "zenstack",
         "cnpm",
         "jsrsasign",
+        "kjur",
+        "vinxi",
+        "giget",
+        "segoe",
+        "conar",
 
         // companies
         "creem",
@@ -92,16 +147,23 @@
         "orama",
         "hubspot",
         "kakao",
+        "kakaotalk",
         "paybin",
         "supabase",
         "kaltura",
         "mistral",
-        "surrealdb"
+        "surrealdb",
+        "attio",
+        "instantdb",
+        "faceit",
+        "xata",
+        "chonkie"
     ],
     "ignorePaths": [
         "patches",
         "pnpm-workspace.yaml",
         "pnpm-lock.yaml",
+        "e2e/smoke/test/fixtures/cloudflare/worker-configuration.d.ts",
         "*.config.js",
         "*.config.ts",
         "*.json"
