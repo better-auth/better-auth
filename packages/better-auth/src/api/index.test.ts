@@ -58,7 +58,7 @@ describe("getEndpoints", () => {
 	});
 });
 
-describe("router onRequest - Form Parsing", async (it) => {
+describe("router onRequest - Form Parsing", async () => {
 	const { auth, testUser } = await getTestInstance({
 		emailAndPassword: {
 			enabled: true,
