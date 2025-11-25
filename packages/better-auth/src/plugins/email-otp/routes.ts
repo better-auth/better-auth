@@ -25,6 +25,15 @@ export const ERROR_CODES = defineErrorCodes({
 	TOO_MANY_ATTEMPTS: "Too many attempts",
 });
 
+const sendVerificationOTPBodySchema = z.object({
+	email: z.string({}).meta({
+		description: "Email address to send the OTP",
+	}),
+	type: z.enum(types).meta({
+		description: "Type of the OTP",
+	}),
+});
+
 /**
  * ### Endpoint
  *
@@ -45,14 +54,7 @@ export const sendVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 		"/email-otp/send-verification-otp",
 		{
 			method: "POST",
-			body: z.object({
-				email: z.string({}).meta({
-					description: "Email address to send the OTP",
-				}),
-				type: z.enum(types).meta({
-					description: "Type of the OTP",
-				}),
-			}),
+			body: sendVerificationOTPBodySchema,
 			metadata: {
 				openapi: {
 					operationId: "sendEmailVerificationOTP",
@@ -143,20 +145,22 @@ export const sendVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 		},
 	);
 
+const createVerificationOTPBodySchema = z.object({
+	email: z.string({}).meta({
+		description: "Email address to send the OTP",
+	}),
+	type: z.enum(types).meta({
+		required: true,
+		description: "Type of the OTP",
+	}),
+});
+
 export const createVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 	createAuthEndpoint(
 		"/email-otp/create-verification-otp",
 		{
 			method: "POST",
-			body: z.object({
-				email: z.string({}).meta({
-					description: "Email address to send the OTP",
-				}),
-				type: z.enum(types).meta({
-					required: true,
-					description: "Type of the OTP",
-				}),
-			}),
+			body: createVerificationOTPBodySchema,
 			metadata: {
 				SERVER_ONLY: true,
 				openapi: {
@@ -192,6 +196,16 @@ export const createVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 		},
 	);
 
+const getVerificationOTPBodySchema = z.object({
+	email: z.string({}).meta({
+		description: "Email address the OTP was sent to",
+	}),
+	type: z.enum(types).meta({
+		required: true,
+		description: "Type of the OTP",
+	}),
+});
+
 /**
  * ### Endpoint
  *
@@ -209,15 +223,7 @@ export const getVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 		"/email-otp/get-verification-otp",
 		{
 			method: "GET",
-			query: z.object({
-				email: z.string({}).meta({
-					description: "Email address the OTP was sent to",
-				}),
-				type: z.enum(types).meta({
-					required: true,
-					description: "Type of the OTP",
-				}),
-			}),
+			query: getVerificationOTPBodySchema,
 			metadata: {
 				SERVER_ONLY: true,
 				openapi: {
@@ -286,6 +292,20 @@ export const getVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 		},
 	);
 
+const checkVerificationOTPBodySchema = z.object({
+	email: z.string().meta({
+		description: "Email address the OTP was sent to",
+	}),
+	type: z.enum(types).meta({
+		required: true,
+		description: "Type of the OTP",
+	}),
+	otp: z.string().meta({
+		required: true,
+		description: "OTP to verify",
+	}),
+});
+
 /**
  * ### Endpoint
  *
@@ -303,19 +323,7 @@ export const checkVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 		"/email-otp/check-verification-otp",
 		{
 			method: "POST",
-			body: z.object({
-				email: z.string().meta({
-					description: "Email address the OTP was sent to",
-				}),
-				type: z.enum(types).meta({
-					required: true,
-					description: "Type of the OTP",
-				}),
-				otp: z.string().meta({
-					required: true,
-					description: "OTP to verify",
-				}),
-			}),
+			body: checkVerificationOTPBodySchema,
 			metadata: {
 				openapi: {
 					operationId: "verifyEmailWithOTP",
@@ -400,6 +408,16 @@ export const checkVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 		},
 	);
 
+const verifyEmailOTPBodySchema = z.object({
+	email: z.string({}).meta({
+		description: "Email address to verify",
+	}),
+	otp: z.string().meta({
+		required: true,
+		description: "OTP to verify",
+	}),
+});
+
 /**
  * ### Endpoint
  *
@@ -420,15 +438,7 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 		"/email-otp/verify-email",
 		{
 			method: "POST",
-			body: z.object({
-				email: z.string({}).meta({
-					description: "Email address to verify",
-				}),
-				otp: z.string().meta({
-					required: true,
-					description: "OTP to verify",
-				}),
-			}),
+			body: verifyEmailOTPBodySchema,
 			metadata: {
 				openapi: {
 					description: "Verify email with OTP",
@@ -592,6 +602,16 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 		},
 	);
 
+const signInEmailOTPBodySchema = z.object({
+	email: z.string({}).meta({
+		description: "Email address to sign in",
+	}),
+	otp: z.string().meta({
+		required: true,
+		description: "OTP sent to the email",
+	}),
+});
+
 /**
  * ### Endpoint
  *
@@ -612,15 +632,7 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 		"/sign-in/email-otp",
 		{
 			method: "POST",
-			body: z.object({
-				email: z.string({}).meta({
-					description: "Email address to sign in",
-				}),
-				otp: z.string().meta({
-					required: true,
-					description: "OTP sent to the email",
-				}),
-			}),
+			body: signInEmailOTPBodySchema,
 			metadata: {
 				openapi: {
 					operationId: "signInWithEmailOTP",
@@ -753,6 +765,12 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 		},
 	);
 
+const forgetPasswordEmailOTPBodySchema = z.object({
+	email: z.string().meta({
+		description: "Email address to send the OTP",
+	}),
+});
+
 /**
  * ### Endpoint
  *
@@ -773,11 +791,7 @@ export const forgetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 		"/forget-password/email-otp",
 		{
 			method: "POST",
-			body: z.object({
-				email: z.string().meta({
-					description: "Email address to send the OTP",
-				}),
-			}),
+			body: forgetPasswordEmailOTPBodySchema,
 			metadata: {
 				openapi: {
 					operationId: "forgetPasswordWithEmailOTP",
@@ -842,6 +856,18 @@ export const forgetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 		},
 	);
 
+const resetPasswordEmailOTPBodySchema = z.object({
+	email: z.string().meta({
+		description: "Email address to reset the password",
+	}),
+	otp: z.string().meta({
+		description: "OTP sent to the email",
+	}),
+	password: z.string().meta({
+		description: "New password",
+	}),
+});
+
 /**
  * ### Endpoint
  *
@@ -862,17 +888,7 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 		"/email-otp/reset-password",
 		{
 			method: "POST",
-			body: z.object({
-				email: z.string().meta({
-					description: "Email address to reset the password",
-				}),
-				otp: z.string().meta({
-					description: "OTP sent to the email",
-				}),
-				password: z.string().meta({
-					description: "New password",
-				}),
-			}),
+			body: resetPasswordEmailOTPBodySchema,
 			metadata: {
 				openapi: {
 					operationId: "resetPasswordWithEmailOTP",
