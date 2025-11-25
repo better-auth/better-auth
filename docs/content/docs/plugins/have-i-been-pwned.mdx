@@ -37,7 +37,14 @@ You can customize the error message:
 ```ts
 haveIBeenPwned({
     customPasswordCompromisedMessage: "Please choose a more secure password."
+     // Or provide an async function for dynamic or localized messages
+  customPasswordCompromisedMessage: async () => {
+    const locale = await getLocale();
+    const t = await getMessages({ locale });
+    return t("Your password has been compromised. Please choose a new password.");
+  }
 })
+
 ```
 ## Security Notes
 

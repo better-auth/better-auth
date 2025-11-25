@@ -1,5 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { getCurrentAuthContext } from "@better-auth/core/context";
+import { logger } from "@better-auth/core/env";
 import { defineErrorCodes } from "@better-auth/core/utils";
 import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
@@ -12,7 +13,7 @@ const ERROR_CODES = defineErrorCodes({
 
 async function checkPasswordCompromise(
 	password: string,
-	customMessage?: string | undefined,
+	customMessage?: string | (() => Promise<string>) | undefined,
 ) {
 	if (!password) return;
 
@@ -41,10 +42,13 @@ async function checkPasswordCompromise(
 		const found = lines.some(
 			(line) => line.split(":")[0]!.toUpperCase() === suffix.toUpperCase(),
 		);
-
+		let errMsg =
+			typeof customMessage === "string"
+				? customMessage
+				: await extractCustomMessage(customMessage);
 		if (found) {
 			throw new APIError("BAD_REQUEST", {
-				message: customMessage || ERROR_CODES.PASSWORD_COMPROMISED,
+				message: errMsg,
 				code: "PASSWORD_COMPROMISED",
 			});
 		}
@@ -57,7 +61,10 @@ async function checkPasswordCompromise(
 }
 
 export interface HaveIBeenPwnedOptions {
-	customPasswordCompromisedMessage?: string | undefined;
+	customPasswordCompromisedMessage?:
+		| string
+		| (() => Promise<string>)
+		| undefined;
 	/**
 	 * Paths to check for password
 	 *
@@ -97,4 +104,18 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
 		},
 		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
+};
+
+export const extractCustomMessage = async (
+	customMessage: (() => Promise<string>) | undefined,
+) => {
+	try {
+		if (!customMessage) {
+			return ERROR_CODES.PASSWORD_COMPROMISED;
+		}
+		return await customMessage();
+	} catch (error) {
+		logger.error("Failed to extract custom message:", error);
+		return ERROR_CODES.PASSWORD_COMPROMISED;
+	}
 };
