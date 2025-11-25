@@ -97,6 +97,38 @@ describe("email-otp", async () => {
 		expect(newUser.data?.token).toBeDefined();
 	});
 
+	it("should sign-up with uppercase email", async () => {
+		const testUser2 = {
+			email: "TEST-EMAIL@DOMAIN.COM",
+		};
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser2.email,
+			type: "sign-in",
+		});
+
+		const verifiedUser = await client.signIn.emailOtp({
+			email: testUser2.email,
+			otp,
+		});
+		expect(verifiedUser.data?.token).toBeDefined();
+	});
+
+	it("should sign-up with varying case email", async () => {
+		const testUser2 = {
+			email: "test-email@domain.com",
+		};
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser2.email,
+			type: "sign-in",
+		});
+
+		const verifiedUser = await client.signIn.emailOtp({
+			email: testUser2.email.toUpperCase(),
+			otp,
+		});
+		expect(verifiedUser.data?.token).toBeDefined();
+	});
+
 	it("should send verification otp on sign-up", async () => {
 		const testUser2 = {
 			email: "test8@email.com",
@@ -111,20 +143,18 @@ describe("email-otp", async () => {
 		);
 	});
 
-	it("should send forget password otp", async () => {
+	it("should reset password", async () => {
 		await client.emailOtp.sendVerificationOtp({
 			email: testUser.email,
 			type: "forget-password",
 		});
-	});
-
-	it("should reset password", async () => {
-		await client.emailOtp.resetPassword({
+		const res = await client.emailOtp.resetPassword({
 			email: testUser.email,
 			otp,
 			password: "changed-password",
 		});
-		const { data } = await client.signIn.email({
+
+		const { data, error } = await client.signIn.email({
 			email: testUser.email,
 			password: "changed-password",
 		});
