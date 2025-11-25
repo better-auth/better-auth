@@ -246,7 +246,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				use: [
 					sessionMiddleware,
 					originCheck((c) => {
-						return [c.body.successURL as string, c.body.cancelURL as string];
+						return [c.body.successUrl as string, c.body.cancelUrl as string];
 					}),
 					referenceMiddleware("upgrade-subscription"),
 				],
@@ -858,7 +858,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							 * this is a rare case and should not happen
 							 */
 							if (!subscription.cancelAtPeriodEnd) {
-								await ctx.context.adapter.update({
+								await ctx.context.adapter.updateMany({
 									model: "subscription",
 									update: {
 										cancelAtPeriodEnd: true,
@@ -1509,4 +1509,4 @@ export type StripePlugin<O extends StripeOptions> = ReturnType<
 	typeof stripe<O>
 >;
 
-export type { Subscription, StripePlan };
+export type { Subscription, SubscriptionOptions, StripePlan };

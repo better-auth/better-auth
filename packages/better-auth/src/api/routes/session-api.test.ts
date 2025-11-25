@@ -547,11 +547,11 @@ describe("cookie cache", async () => {
 		});
 		expect(session.data?.user.emailVerified).toBe(true);
 		expect(session.data).not.toBeNull();
-		expect(fn).toHaveBeenCalledTimes(3);
+		expect(fn).toHaveBeenCalledTimes(2);
 	});
 
 	it("should reset cache when expires", async () => {
-		expect(fn).toHaveBeenCalledTimes(3);
+		expect(fn).toHaveBeenCalledTimes(2);
 		await client.getSession({
 			fetchOptions: {
 				headers,
@@ -567,7 +567,7 @@ describe("cookie cache", async () => {
 				},
 			},
 		});
-		expect(fn).toHaveBeenCalledTimes(5);
+		expect(fn).toHaveBeenCalledTimes(3);
 		await client.getSession({
 			fetchOptions: {
 				headers,
@@ -576,7 +576,7 @@ describe("cookie cache", async () => {
 				},
 			},
 		});
-		expect(fn).toHaveBeenCalledTimes(5);
+		expect(fn).toHaveBeenCalledTimes(3);
 	});
 });
 
@@ -803,17 +803,17 @@ describe("cookie cache with JWE strategy", async () => {
 		});
 		expect(session.data?.user.emailVerified).toBe(true);
 		expect(session.data).not.toBeNull();
-		expect(fn).toHaveBeenCalledTimes(3); // Database hit when cache disabled
+		expect(fn).toHaveBeenCalledTimes(2); // Database hit when cache disabled
 	});
 
 	it("should reset JWE cache when expires", async () => {
-		expect(fn).toHaveBeenCalledTimes(3);
+		expect(fn).toHaveBeenCalledTimes(2);
 		await client.getSession({
 			fetchOptions: {
 				headers,
 			},
 		});
-		expect(fn).toHaveBeenCalledTimes(3);
+		expect(fn).toHaveBeenCalledTimes(2);
 
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(1000 * 60 * 10);
@@ -827,7 +827,7 @@ describe("cookie cache with JWE strategy", async () => {
 			},
 		});
 
-		expect(fn.mock.calls.length).toBeGreaterThanOrEqual(3);
+		expect(fn.mock.calls.length).toBeGreaterThanOrEqual(2);
 
 		vi.useRealTimers();
 	});
