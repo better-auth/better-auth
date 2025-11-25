@@ -211,7 +211,7 @@ describe.runIf(nodeSqliteSupported)("node-sqlite-dialect", async () => {
 					debugLogs: { isRunningAdapterTests: true },
 				});
 			},
-			prefixTests: "sqlite",
+			prefixTests: "node-sqlite",
 			async runMigrations(betterAuthOptions) {
 				database.close();
 				database = new DatabaseSync(":memory:");
