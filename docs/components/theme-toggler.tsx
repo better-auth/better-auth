@@ -24,12 +24,12 @@ export function ThemeToggle(props: ComponentProps<typeof Button>) {
 					aria-label="Toggle Theme"
 					{...props}
 					className={cn(
-						"flex ring-0 shrink-0 md:w-[3.56rem] md:h-14 md:border-l md:text-muted-foreground max-md:-mr-1.5 max-md:hover:bg-transparent",
+						"flex ring-0 shrink-0 navbar:w-[3.56rem] navbar:h-14 navbar:border-l navbar:text-muted-foreground max-navbar:-mr-1.5 max-navbar:hover:bg-transparent",
 						props.className,
 					)}
 				>
-					<Sun className="size-4 fill-current dark:hidden md:size-5" />
-					<Moon className="absolute fill-current size-4 hidden dark:block md:size-5" />
+					<Sun className="size-4 fill-current dark:hidden navbar:size-5" />
+					<Moon className="absolute fill-current size-4 hidden dark:block navbar:size-5" />
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent className="rounded-none" align="end">
