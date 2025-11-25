@@ -10,6 +10,7 @@
     "format": "biome format . --write",
     "lint": "biome check .",
     "lint:fix": "biome check . --fix --unsafe",
+    "lint:spell": "cspell .",
     "lint:packages": "turbo --filter \"./packages/*\" lint:package",
     "release": "turbo --filter \"./packages/*\" build && bumpp && pnpm -r publish --access public --no-git-checks",
     "release:no-build": "bumpp && pnpm -r publish --access public --no-git-checks --tag next",
