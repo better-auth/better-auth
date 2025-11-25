@@ -270,6 +270,7 @@ export async function validateLoginCsrf(
 ): Promise<void> {
 	const hasSession = hasBetterAuthSessionCookie(ctx);
 
+	// If Better Auth session cookie exists, use standard origin validation
 	if (hasSession) {
 		return validateOrigin(ctx);
 	}
@@ -280,6 +281,12 @@ export async function validateLoginCsrf(
 	}
 
 	const headers = req.headers;
+	const hasAnyCookies = headers.has("cookie");
+
+	if (hasAnyCookies) {
+		return validateOrigin(ctx);
+	}
+
 	const site = headers.get("Sec-Fetch-Site");
 	const mode = headers.get("Sec-Fetch-Mode");
 	const dest = headers.get("Sec-Fetch-Dest");
@@ -305,5 +312,6 @@ export async function validateLoginCsrf(
 		return validateOrigin(ctx, true);
 	}
 
+	// No cookies, no Fetch Metadata → fallback to old behavior (no validation)
 	return;
 }
