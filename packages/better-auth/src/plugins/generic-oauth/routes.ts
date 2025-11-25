@@ -19,6 +19,54 @@ import { HIDE_METADATA } from "../../utils";
 import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
 import type { GenericOAuthOptions } from "./types";
 
+const signInWithOAuth2BodySchema = z.object({
+	providerId: z.string().meta({
+		description: "The provider ID for the OAuth provider",
+	}),
+	callbackURL: z
+		.string()
+		.meta({
+			description: "The URL to redirect to after sign in",
+		})
+		.optional(),
+	errorCallbackURL: z
+		.string()
+		.meta({
+			description: "The URL to redirect to if an error occurs",
+		})
+		.optional(),
+	newUserCallbackURL: z
+		.string()
+		.meta({
+			description:
+				'The URL to redirect to after login if the user is new. Eg: "/welcome"',
+		})
+		.optional(),
+	disableRedirect: z
+		.boolean()
+		.meta({
+			description: "Disable redirect",
+		})
+		.optional(),
+	scopes: z
+		.array(z.string())
+		.meta({
+			description: "Scopes to be passed to the provider authorization request.",
+		})
+		.optional(),
+	requestSignUp: z
+		.boolean()
+		.meta({
+			description:
+				"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider. Eg: false",
+		})
+		.optional(),
+	/**
+	 * Any additional data to pass through the oauth flow.
+	 */
+	additionalData: z.record(z.string(), z.any()).optional(),
+});
+
 /**
  * ### Endpoint
  *
@@ -39,54 +87,7 @@ export const signInWithOAuth2 = (options: GenericOAuthOptions) =>
 		"/sign-in/oauth2",
 		{
 			method: "POST",
-			body: z.object({
-				providerId: z.string().meta({
-					description: "The provider ID for the OAuth provider",
-				}),
-				callbackURL: z
-					.string()
-					.meta({
-						description: "The URL to redirect to after sign in",
-					})
-					.optional(),
-				errorCallbackURL: z
-					.string()
-					.meta({
-						description: "The URL to redirect to if an error occurs",
-					})
-					.optional(),
-				newUserCallbackURL: z
-					.string()
-					.meta({
-						description:
-							'The URL to redirect to after login if the user is new. Eg: "/welcome"',
-					})
-					.optional(),
-				disableRedirect: z
-					.boolean()
-					.meta({
-						description: "Disable redirect",
-					})
-					.optional(),
-				scopes: z
-					.array(z.string())
-					.meta({
-						description:
-							"Scopes to be passed to the provider authorization request.",
-					})
-					.optional(),
-				requestSignUp: z
-					.boolean()
-					.meta({
-						description:
-							"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider. Eg: false",
-					})
-					.optional(),
-				/**
-				 * Any additional data to pass through the oauth flow.
-				 */
-				additionalData: z.record(z.string(), z.any()).optional(),
-			}),
+			body: signInWithOAuth2BodySchema,
 			metadata: {
 				openapi: {
 					description: "Sign in with OAuth2",
@@ -208,37 +209,39 @@ export const signInWithOAuth2 = (options: GenericOAuthOptions) =>
 		},
 	);
 
+const OAuth2CallbackQuerySchema = z.object({
+	code: z
+		.string()
+		.meta({
+			description: "The OAuth2 code",
+		})
+		.optional(),
+	error: z
+		.string()
+		.meta({
+			description: "The error message, if any",
+		})
+		.optional(),
+	error_description: z
+		.string()
+		.meta({
+			description: "The error description, if any",
+		})
+		.optional(),
+	state: z
+		.string()
+		.meta({
+			description: "The state parameter from the OAuth2 request",
+		})
+		.optional(),
+});
+
 export const oAuth2Callback = (options: GenericOAuthOptions) =>
 	createAuthEndpoint(
 		"/oauth2/callback/:providerId",
 		{
 			method: "GET",
-			query: z.object({
-				code: z
-					.string()
-					.meta({
-						description: "The OAuth2 code",
-					})
-					.optional(),
-				error: z
-					.string()
-					.meta({
-						description: "The error message, if any",
-					})
-					.optional(),
-				error_description: z
-					.string()
-					.meta({
-						description: "The error description, if any",
-					})
-					.optional(),
-				state: z
-					.string()
-					.meta({
-						description: "The state parameter from the OAuth2 request",
-					})
-					.optional(),
-			}),
+			query: OAuth2CallbackQuerySchema,
 			metadata: {
 				...HIDE_METADATA,
 				allowedMediaTypes: [
@@ -507,6 +510,34 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 		},
 	);
 
+const OAuth2LinkAccountBodySchema = z.object({
+	providerId: z.string(),
+	/**
+	 * Callback URL to redirect to after the user has signed in.
+	 */
+	callbackURL: z.string(),
+	/**
+	 * Additional scopes to request when linking the account.
+	 * This is useful for requesting additional permissions when
+	 * linking a social account compared to the initial authentication.
+	 */
+	scopes: z
+		.array(z.string())
+		.meta({
+			description: "Additional scopes to request when linking the account",
+		})
+		.optional(),
+	/**
+	 * The URL to redirect to if there is an error during the link process.
+	 */
+	errorCallbackURL: z
+		.string()
+		.meta({
+			description:
+				"The URL to redirect to if there is an error during the link process",
+		})
+		.optional(),
+});
 /**
  * ### Endpoint
  *
@@ -527,35 +558,7 @@ export const oAuth2LinkAccount = (options: GenericOAuthOptions) =>
 		"/oauth2/link",
 		{
 			method: "POST",
-			body: z.object({
-				providerId: z.string(),
-				/**
-				 * Callback URL to redirect to after the user has signed in.
-				 */
-				callbackURL: z.string(),
-				/**
-				 * Additional scopes to request when linking the account.
-				 * This is useful for requesting additional permissions when
-				 * linking a social account compared to the initial authentication.
-				 */
-				scopes: z
-					.array(z.string())
-					.meta({
-						description:
-							"Additional scopes to request when linking the account",
-					})
-					.optional(),
-				/**
-				 * The URL to redirect to if there is an error during the link process.
-				 */
-				errorCallbackURL: z
-					.string()
-					.meta({
-						description:
-							"The URL to redirect to if there is an error during the link process",
-					})
-					.optional(),
-			}),
+			body: OAuth2LinkAccountBodySchema,
 			use: [sessionMiddleware],
 			metadata: {
 				openapi: {
