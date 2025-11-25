@@ -10,6 +10,7 @@
   },
   "scripts": {
     "test": "vitest",
+    "lint:package": "publint run --strict",
     "build": "tsdown",
     "dev": "tsdown --watch",
     "typecheck": "tsc --project tsconfig.json"
