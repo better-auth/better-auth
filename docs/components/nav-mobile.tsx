@@ -77,7 +77,7 @@ export const NavbarMobile = () => {
 	return (
 		<div
 			className={cn(
-				"fixed top-[50px] inset-x-0 transform-gpu z-[100] bg-background grid grid-rows-[0fr] duration-300 transition-all",
+				"fixed top-[50px] inset-x-0 transform-gpu z-[100] bg-background grid grid-rows-[0fr] duration-300 transition-all navbar:hidden",
 				isOpen &&
 					"shadow-lg border-b border-[rgba(255,255,255,.1)] grid-rows-[1fr]",
 			)}
