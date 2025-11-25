@@ -260,11 +260,11 @@ export type BetterAuthAdvancedOptions = {
 	/**
 	 * Trusted proxy headers
 	 *
-	 * - `x-forwarded-for`
+
 	 * - `x-forwarded-host`
 	 * - `x-forwarded-proto`
 	 *
-	 * If set and no BASE_URL is provided, we will use the headers to infer the
+	 * If set to `true` and no `baseURL` option is provided, we will use the headers to infer the
 	 * base URL.
 	 *
 	 * ⚠︎ This may expose your application to security vulnerabilities if not
