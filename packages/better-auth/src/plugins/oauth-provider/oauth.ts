@@ -697,7 +697,6 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						token_type_hint: z
 							.enum(["access_token", "refresh_token"])
 							.optional(),
-						resource: z.string().optional(),
 					}),
 					metadata: {
 						allowedMediaTypes: ["application/x-www-form-urlencoded"],
