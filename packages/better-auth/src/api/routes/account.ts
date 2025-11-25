@@ -603,6 +603,15 @@ export const getAccessToken = createAuthEndpoint(
 					newTokens?.accessTokenExpiresAt ??
 					account.accessTokenExpiresAt ??
 					undefined,
+				refreshToken:
+					newTokens?.refreshToken ??
+					(account.refreshToken
+						? await decryptOAuthToken(account.refreshToken, ctx.context)
+						: undefined),
+				refreshTokenExpiresAt:
+					newTokens?.refreshTokenExpiresAt ??
+					account.refreshTokenExpiresAt ??
+					undefined,
 				scopes: account.scope?.split(",") ?? [],
 				idToken: newTokens?.idToken ?? account.idToken ?? undefined,
 			};
