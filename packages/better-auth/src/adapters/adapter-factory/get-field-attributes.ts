@@ -53,7 +53,9 @@ export const initGetFieldAttributes = ({
 		fields.id = idField({ customModelName: defaultModelName });
 		const fieldAttributes = fields[defaultFieldName];
 		if (!fieldAttributes) {
-			throw new BetterAuthError(`Field ${field} not found in model ${model}`);
+			throw new BetterAuthError(
+				`Field ${field} not found in model ${model} ${new Error().stack?.replace("error:", "")}`,
+			);
 		}
 		return fieldAttributes;
 	};

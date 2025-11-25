@@ -687,7 +687,7 @@ export const createAdapterFactory =
 		}) => {
 			if (!baseData) return baseData;
 			const modelName = getModelName(joinModel);
-			const field = joinConfig.on.field;
+			const field = joinConfig.on.references;
 			const value =
 				baseData[
 					getDefaultFieldName({ field: joinConfig.on.field, model: baseModel })

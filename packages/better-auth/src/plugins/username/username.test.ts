@@ -21,6 +21,7 @@ describe("username", async (it) => {
 
 	it("should sign up with username", async () => {
 		const headers = new Headers();
+
 		await client.signUp.email(
 			{
 				email: "new-email@gamil.com",
