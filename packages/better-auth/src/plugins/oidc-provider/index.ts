@@ -1062,7 +1062,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 				{
 					method: "GET",
 					operationId: "oauth2Userinfo",
-					use: [sessionMiddleware],
 					metadata: {
 						isAction: false,
 						openapi: {
