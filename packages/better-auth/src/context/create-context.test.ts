@@ -135,7 +135,7 @@ describe("base context creation", () => {
 		expect(ctx.options.emailAndPassword?.enabled).toBe(false);
 	});
 
-	it("should properly pass modfied context from one plugin to another", async () => {
+	it("should properly pass modified context from one plugin to another", async () => {
 		const mockProvider = {
 			id: "test-oauth-provider",
 			name: "Test OAuth Provider",
