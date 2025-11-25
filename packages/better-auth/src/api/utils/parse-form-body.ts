@@ -35,17 +35,22 @@ export async function parseFormBody(
 	const contentType = request.headers.get("content-type") ?? "";
 
 	if (contentType.startsWith("application/x-www-form-urlencoded")) {
-		// For application/x-www-form-urlencoded, we need to read as text
-		// and parse with URLSearchParams (not formData, which is for multipart/form-data)
 		const text = await request.text();
 		const params = new URLSearchParams(text);
 		const body: Record<string, string> = {};
-		
+		const seenKeys = new Set<string>();
+
 		for (const [key, value] of params.entries()) {
-			// URLSearchParams always returns strings
+			// Detect duplicate keys - this is likely malicious or an error
+			if (seenKeys.has(key)) {
+				throw new APIError("BAD_REQUEST", {
+					message: `Duplicate form field: "${key}". Each field must appear only once.`,
+				});
+			}
+			seenKeys.add(key);
 			body[key] = value;
 		}
-		
+
 		return body;
 	}
 
@@ -65,11 +70,9 @@ export async function convertFormRequestToJson(
 	const formBody = await parseFormBody(clonedRequest);
 	const jsonBody = JSON.stringify(formBody);
 
-	// Create a new request with JSON content type
 	const newHeaders = new Headers(request.headers);
 	newHeaders.set("content-type", "application/json");
 
-	// Verify the JSON is valid before creating the Request
 	try {
 		JSON.parse(jsonBody);
 	} catch (e) {
@@ -94,4 +97,3 @@ export async function convertFormRequestToJson(
 		keepalive: request.keepalive,
 	});
 }
-

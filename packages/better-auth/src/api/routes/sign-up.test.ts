@@ -1,6 +1,5 @@
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { afterEach, describe, expect, vi } from "vitest";
-import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 
 describe("sign-up with custom fields", async (it) => {

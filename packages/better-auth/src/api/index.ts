@@ -12,12 +12,6 @@ import type { UnionToIntersection } from "../types/helper";
 import { originCheckMiddleware } from "./middlewares";
 import { onRequestRateLimit } from "./rate-limiter";
 import {
-	convertFormRequestToJson,
-	isFormAllowedEndpoint,
-	isFormContentType,
-	isJsonContentType,
-} from "./utils/parse-form-body";
-import {
 	accountInfo,
 	callbackOAuth,
 	changeEmail,
@@ -49,6 +43,12 @@ import {
 	verifyEmail,
 } from "./routes";
 import { toAuthEndpoints } from "./to-auth-endpoints";
+import {
+	convertFormRequestToJson,
+	isFormAllowedEndpoint,
+	isFormContentType,
+	isJsonContentType,
+} from "./utils/parse-form-body";
 
 export function checkEndpointConflicts(
 	options: BetterAuthOptions,
@@ -306,7 +306,7 @@ export const router = <Option extends BetterAuthOptions>(
 						});
 					}
 				}
-				
+
 				if (!isForm && !isJsonContentType(contentType)) {
 					throw new APIError("BAD_REQUEST", {
 						message: BASE_ERROR_CODES.UNSUPPORTED_CONTENT_TYPE,

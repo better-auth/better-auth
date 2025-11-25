@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import {
+	convertFormRequestToJson,
 	isFormContentType,
 	parseFormBody,
-	convertFormRequestToJson,
 } from "./parse-form-body";
 
 describe("parseFormBody - Unit Tests", () => {
@@ -38,6 +38,24 @@ describe("parseFormBody - Unit Tests", () => {
 		expect(result.password).toBe("secret");
 		expect(typeof result.email).toBe("string");
 		expect(typeof result.password).toBe("string");
+	});
+
+	it("should reject duplicate keys in form data", async () => {
+		// URLSearchParams allows duplicate keys, but we should reject them
+		// as they're likely malicious or errors in authentication forms
+		const body = "email=first@test.com&email=second@test.com&password=secret";
+
+		const req = new Request("http://localhost/test", {
+			method: "POST",
+			headers: {
+				"content-type": "application/x-www-form-urlencoded",
+			},
+			body,
+		});
+
+		await expect(parseFormBody(req)).rejects.toThrow(
+			'Duplicate form field: "email"',
+		);
 	});
 
 	it("should leave all fields as strings", async () => {
@@ -155,7 +173,6 @@ describe("Form-based Authentication", async (it) => {
 			const data = await response.json();
 			expect(data.user).toBeDefined();
 		});
-
 	});
 
 	describe("Form Parsing - Sign Up", async (it) => {
@@ -288,7 +305,9 @@ describe("Form-based Authentication", async (it) => {
 			} catch (error: any) {
 				// If error is thrown directly, it should be an APIError with BAD_REQUEST status
 				expect(error.status).toBe("BAD_REQUEST");
-				expect(error.body?.message).toBe(BASE_ERROR_CODES.UNSUPPORTED_CONTENT_TYPE);
+				expect(error.body?.message).toBe(
+					BASE_ERROR_CODES.UNSUPPORTED_CONTENT_TYPE,
+				);
 			}
 		});
 
@@ -319,7 +338,9 @@ describe("Form-based Authentication", async (it) => {
 			} catch (error: any) {
 				// If error is thrown directly, it should be an APIError with BAD_REQUEST status
 				expect(error.status).toBe("BAD_REQUEST");
-				expect(error.body?.message).toBe(BASE_ERROR_CODES.UNSUPPORTED_CONTENT_TYPE);
+				expect(error.body?.message).toBe(
+					BASE_ERROR_CODES.UNSUPPORTED_CONTENT_TYPE,
+				);
 			}
 		});
 
@@ -349,7 +370,9 @@ describe("Form-based Authentication", async (it) => {
 			} catch (error: any) {
 				// If error is thrown directly, it should be an APIError with BAD_REQUEST status
 				expect(error.status).toBe("BAD_REQUEST");
-				expect(error.body?.message).toBe(BASE_ERROR_CODES.UNSUPPORTED_CONTENT_TYPE);
+				expect(error.body?.message).toBe(
+					BASE_ERROR_CODES.UNSUPPORTED_CONTENT_TYPE,
+				);
 			}
 		});
 	});
@@ -896,4 +919,3 @@ describe("Form-based Authentication", async (it) => {
 		});
 	});
 });
-

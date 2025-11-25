@@ -3,11 +3,11 @@ import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
 } from "@better-auth/core";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { describe, expect, it, vi } from "vitest";
-import { getEndpoints, router } from "./index";
 import { getTestInstance } from "../test-utils/test-instance";
+import { getEndpoints, router } from "./index";
 
 describe("getEndpoints", () => {
 	it("should await promise-based context before passing to middleware", async () => {
@@ -71,14 +71,17 @@ describe("router onRequest - Form Parsing", async (it) => {
 			password: testUser.password,
 		});
 
-		const request = new Request("http://localhost:3000/api/auth/sign-in/email", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/x-www-form-urlencoded",
-				Origin: "http://localhost:3000",
+		const request = new Request(
+			"http://localhost:3000/api/auth/sign-in/email",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+					Origin: "http://localhost:3000",
+				},
+				body: formData.toString(),
 			},
-			body: formData.toString(),
-		});
+		);
 
 		const { handler } = router(await auth.$context, auth.options);
 		const response = await handler(request);
@@ -98,14 +101,17 @@ describe("router onRequest - Form Parsing", async (it) => {
 			name: "Test User",
 		});
 
-		const request = new Request("http://localhost:3000/api/auth/sign-up/email", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/x-www-form-urlencoded",
-				Origin: "http://localhost:3000",
+		const request = new Request(
+			"http://localhost:3000/api/auth/sign-up/email",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+					Origin: "http://localhost:3000",
+				},
+				body: formData.toString(),
 			},
-			body: formData.toString(),
-		});
+		);
 
 		const { handler } = router(await auth.$context, auth.options);
 		const response = await handler(request);
@@ -119,17 +125,14 @@ describe("router onRequest - Form Parsing", async (it) => {
 			name: "New Name",
 		});
 
-		const request = new Request(
-			"http://localhost:3000/api/auth/update-user",
-			{
-				method: "POST",
-				headers: {
-					"Content-Type": "application/x-www-form-urlencoded",
-					Origin: "http://localhost:3000",
-				},
-				body: formData.toString(),
+		const request = new Request("http://localhost:3000/api/auth/update-user", {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/x-www-form-urlencoded",
+				Origin: "http://localhost:3000",
 			},
-		);
+			body: formData.toString(),
+		});
 
 		const { handler } = router(await auth.$context, auth.options);
 		let response: Response;
@@ -157,14 +160,17 @@ describe("router onRequest - Form Parsing", async (it) => {
 	});
 
 	it("should reject non-JSON, non-form content types on POST", async () => {
-		const request = new Request("http://localhost:3000/api/auth/sign-in/email", {
-			method: "POST",
-			headers: {
-				"Content-Type": "text/xml",
-				Origin: "http://localhost:3000",
+		const request = new Request(
+			"http://localhost:3000/api/auth/sign-in/email",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "text/xml",
+					Origin: "http://localhost:3000",
+				},
+				body: "<xml>data</xml>",
 			},
-			body: "<xml>data</xml>",
-		});
+		);
 
 		const { handler } = router(await auth.$context, auth.options);
 		let response: Response;
@@ -198,14 +204,17 @@ describe("router onRequest - Form Parsing", async (it) => {
 			},
 		});
 
-		const request = new Request("http://localhost:3000/api/auth/sign-in/email", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				Origin: "http://localhost:3000",
+		const request = new Request(
+			"http://localhost:3000/api/auth/sign-in/email",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Origin: "http://localhost:3000",
+				},
+				body: JSON.stringify({ email: "test@test.com", password: "pass" }),
 			},
-			body: JSON.stringify({ email: "test@test.com", password: "pass" }),
-		});
+		);
 
 		const { handler } = router(
 			await authWithDisabled.$context,
