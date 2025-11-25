@@ -30,7 +30,7 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	if (isEmailAuthEndpoint) {
 		await validateLoginCsrf(ctx);
 	} else {
-		validateOrigin(ctx);
+		await validateOrigin(ctx);
 	}
 
 	const callbackURL = body?.callbackURL || query?.callbackURL;
@@ -204,10 +204,10 @@ function hasBetterAuthSessionCookie(ctx: GenericEndpointContext): boolean {
  * @param ctx - The endpoint context
  * @param forceValidate - If true, always validate origin regardless of cookies/skip flags
  */
-function validateOrigin(
+async function validateOrigin(
 	ctx: GenericEndpointContext,
 	forceValidate = false,
-): void {
+): Promise<void> {
 	const headers = ctx.request?.headers;
 	if (!headers || !ctx.request) {
 		return;
@@ -227,7 +227,16 @@ function validateOrigin(
 		throw new APIError("FORBIDDEN", { message: "Missing or null Origin" });
 	}
 
-	const trustedOrigins = ctx.context.trustedOrigins;
+	// Handle dynamic trusted origins (function-based) or static (array-based)
+	const trustedOrigins: string[] = Array.isArray(
+		ctx.context.options.trustedOrigins,
+	)
+		? ctx.context.trustedOrigins
+		: [
+				...ctx.context.trustedOrigins,
+				...((await ctx.context.options.trustedOrigins?.(ctx.request)) ||
+					[]),
+			];
 	const matchesPattern = (url: string, pattern: string): boolean => {
 		if (url.startsWith("/")) {
 			return false;
@@ -272,7 +281,7 @@ export async function validateLoginCsrf(
 
 	// If Better Auth session cookie exists, use standard origin validation
 	if (hasSession) {
-		return validateOrigin(ctx);
+		return await validateOrigin(ctx);
 	}
 
 	const req = ctx.request;
@@ -284,7 +293,7 @@ export async function validateLoginCsrf(
 	const hasAnyCookies = headers.has("cookie");
 
 	if (hasAnyCookies) {
-		return validateOrigin(ctx);
+		return await validateOrigin(ctx);
 	}
 
 	const site = headers.get("Sec-Fetch-Site");
@@ -311,7 +320,7 @@ export async function validateLoginCsrf(
 			});
 		}
 
-		return validateOrigin(ctx, true);
+		return await validateOrigin(ctx, true);
 	}
 
 	// No cookies, no Fetch Metadata → fallback to old behavior (no validation)
