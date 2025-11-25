@@ -307,7 +307,9 @@ export const router = <Option extends BetterAuthOptions>(
 					}
 				}
 
-				if (!isForm && !isJsonContentType(contentType)) {
+				// Only validate content type if it's explicitly set and not JSON or form
+				// Allow empty content-type
+				if (contentType && !isForm && !isJsonContentType(contentType)) {
 					throw new APIError("BAD_REQUEST", {
 						message: BASE_ERROR_CODES.UNSUPPORTED_CONTENT_TYPE,
 					});
