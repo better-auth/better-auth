@@ -22,7 +22,16 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	}
 	const request = ctx.request;
 	const { body, query, context } = ctx;
-	await validateLoginCsrf(ctx);
+
+	// Only apply Fetch Metadata CSRF protection to email sign-in and sign-up endpoints
+	const isEmailAuthEndpoint =
+		ctx.path === "/sign-in/email" || ctx.path === "/sign-up/email";
+
+	if (isEmailAuthEndpoint) {
+		await validateLoginCsrf(ctx);
+	} else {
+		validateOrigin(ctx);
+	}
 
 	const callbackURL = body?.callbackURL || query?.callbackURL;
 	const redirectURL = body?.redirectTo;
