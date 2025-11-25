@@ -33,7 +33,7 @@ export const Route = createFileRoute('/api/auth/$')({
 ### Usage tips
 
 - We recommend using the client SDK or `authClient` to handle authentication, rather than server actions with `auth.api`.
-- When you call functions that need to set cookies (like `signInEmail` or `signUpEmail`), you'll need to handle cookie setting for TanStack Start. Better Auth provides a `reactStartCookies` plugin to automatically handle this for you.
+- When you call functions that need to set cookies (like `signInEmail` or `signUpEmail`), you'll need to handle cookie setting for TanStack Start. Better Auth provides a `tanstackStartCookies` plugin to automatically handle this for you.
 
 ```ts title="src/lib/auth.ts"
 import { betterAuth } from "better-auth";
