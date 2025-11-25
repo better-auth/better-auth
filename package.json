@@ -30,5 +30,8 @@
     "turbo": "^2.6.1",
     "typescript": "catalog:",
     "vitest": "catalog:"
+  },
+  "dependencies": {
+    "cspell": "^9.3.2"
   }
 }

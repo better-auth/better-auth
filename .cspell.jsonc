@@ -1,0 +1,109 @@
+{
+	"$schema": "https://raw.githubusercontent.com/streetsidesoftware/cspell/main/cspell.schema.json",
+    "useGitignore": true,
+    "ignoreRandomStrings": true,
+    "allowCompoundWords": true,
+
+    "ignoreRegExpList": [
+        // ignore contributors usernames in markdown files
+        "usernames\\s*=\\s*\\{[^}]*\\}",
+
+        // ignore any of the following property values
+        "name:\\s*\"[^\"]*\"",
+        "description:\\s*\"[^\"]*\"",
+        "avatar:\\s*\"[^\"]*\"",
+        "twitter:\\s*\"[^\"]*\"",
+
+        // markdown links to @handles or github accounts
+        "\\[@[^\\]]+\\]\\([^\\)]+\\)",
+        "\\[[^\\]]+\\]\\(https://github\\.com/\\w+\\)"
+    ],
+    "words": [
+        // common words
+
+        "cooldown",
+        "askai",
+
+        // auth related words
+
+        "totp",
+        "pkce",
+        "unban",
+        "siwe",
+        "scim",
+        "aaguid",
+        "unionid",
+
+        // tech terminology
+
+        "hrtl",
+        "arrowleft",
+        "pressable",
+        "yocto",
+        "numberid",
+        "dbgenerated",
+        "undim",
+        "sslmode",
+        "base64urlnopad",
+        "remoteip",
+        "noreferrer",
+        "noopener",
+        "pcre",
+
+        // third-party libraries
+
+        "shiki",
+        "samlify",
+        "libsql",
+        "nativewind",
+        "nanostores",
+        "fumadocs",
+        "kysely",
+        "haveibeenpwned",
+        "elysia",
+        "elysiajs",
+        "xclip",
+        "qwik",
+        "waku",
+        "defu",
+        "solidjs",
+        "vaul",
+        "embla",
+        "cmdk",
+        "nums",
+        "wouter",
+        "viem",
+        "vitest",
+        "jsxs",
+        "ronin",
+        "zenstack",
+        "cnpm",
+        "jsrsasign",
+
+        // companies
+        "creem",
+        "incommon",
+        "dyno",
+        "koyeb",
+        "hcaptcha",
+        "qonto",
+        "inkeep",
+        "turso",
+        "orama",
+        "hubspot",
+        "kakao",
+        "paybin",
+        "supabase",
+        "kaltura",
+        "mistral",
+        "surrealdb"
+    ],
+    "ignorePaths": [
+        "patches",
+        "pnpm-workspace.yaml",
+        "pnpm-lock.yaml",
+        "*.config.js",
+        "*.config.ts",
+        "*.json"
+    ]
+}
