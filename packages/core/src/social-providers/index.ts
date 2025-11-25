@@ -18,7 +18,6 @@ import { linkedin } from "./linkedin";
 import { microsoft } from "./microsoft-entra-id";
 import { naver } from "./naver";
 import { notion } from "./notion";
-import { patreon } from "./patreon";
 import { paybin } from "./paybin";
 import { paypal } from "./paypal";
 import { polar } from "./polar";
@@ -66,7 +65,6 @@ export const socialProviders = {
 	paybin,
 	paypal,
 	polar,
-	patreon,
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
@@ -109,7 +107,6 @@ export * from "./linkedin";
 export * from "./microsoft-entra-id";
 export * from "./naver";
 export * from "./notion";
-export * from "./patreon";
 export * from "./paybin";
 export * from "./paypal";
 export * from "./polar";
