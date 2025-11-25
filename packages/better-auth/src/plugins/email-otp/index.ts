@@ -30,6 +30,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 		...options,
 	} satisfies EmailOTPOptions;
 
+	const sendVerificationOTPAction = sendVerificationOTP(opts);
+
 	return {
 		id: "email-otp",
 		init(ctx) {
@@ -40,7 +42,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				options: {
 					emailVerification: {
 						async sendVerificationEmail(data, request) {
-							await sendVerificationOTP({
+							await sendVerificationOTPAction({
 								//@ts-expect-error - we need to pass the context
 								context: ctx,
 								request: request,
@@ -56,7 +58,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 			};
 		},
 		endpoints: {
-			sendVerificationOTP: sendVerificationOTP(opts),
+			sendVerificationOTP: sendVerificationOTPAction,
 			createVerificationOTP: createVerificationOTP(opts),
 			getVerificationOTP: getVerificationOTP(opts),
 			checkVerificationOTP: checkVerificationOTP(opts),
