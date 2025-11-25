@@ -16,6 +16,8 @@ import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
 import { schema } from "./schema";
 import type { PhoneNumberOptions, UserWithPhoneNumber } from "./types";
 
+export type { PhoneNumberOptions, UserWithPhoneNumber };
+
 function generateOTP(size: number) {
 	return generateRandomString(size, "0-9");
 }
@@ -551,13 +553,14 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 								message: PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_EXIST,
 							});
 						}
-						let user = await ctx.context.internalAdapter.updateUser(
-							session.user.id,
-							{
-								[opts.phoneNumber]: ctx.body.phoneNumber,
-								[opts.phoneNumberVerified]: true,
-							},
-						);
+						let user =
+							await ctx.context.internalAdapter.updateUser<UserWithPhoneNumber>(
+								session.user.id,
+								{
+									[opts.phoneNumber]: ctx.body.phoneNumber,
+									[opts.phoneNumberVerified]: true,
+								},
+							);
 						return ctx.json({
 							status: true,
 							token: session.session.token,
@@ -608,9 +611,13 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 							}
 						}
 					} else {
-						user = await ctx.context.internalAdapter.updateUser(user.id, {
-							[opts.phoneNumberVerified]: true,
-						});
+						user =
+							await ctx.context.internalAdapter.updateUser<UserWithPhoneNumber>(
+								user.id,
+								{
+									[opts.phoneNumberVerified]: true,
+								},
+							);
 					}
 					if (!user) {
 						throw new APIError("INTERNAL_SERVER_ERROR", {
