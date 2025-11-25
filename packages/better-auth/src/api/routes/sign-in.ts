@@ -380,7 +380,7 @@ export const signInEmail = createAuthEndpoint(
 											description: "Session token",
 										},
 										url: {
-											type: "null",
+											type: "string",
 											nullable: true,
 										},
 										user: {
