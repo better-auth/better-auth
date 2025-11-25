@@ -34,17 +34,11 @@ When a user attempts to create an account or update their password with a compro
 
 You can customize the error message:
 
+// Option 1: Static string message
 ```ts
 haveIBeenPwned({
-    customPasswordCompromisedMessage: "Please choose a more secure password."
-     // Or provide an async function for dynamic or localized messages
-  customPasswordCompromisedMessage: async () => {
-    const locale = await getLocale();
-    const t = await getMessages({ locale });
-    return t("Your password has been compromised. Please choose a new password.");
-  }
+  customPasswordCompromisedMessage: "Please choose a more secure password."
 })
-
 ```
 ## Security Notes
 
