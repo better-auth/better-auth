@@ -37,7 +37,7 @@ describe("oauthConsent", async () => {
 							method: "POST",
 							body: z.object({
 								clientId: z.string(),
-								scopes: z.z.string(),
+								scopes: z.string(),
 								userId: z.string().optional(),
 								referenceId: z.string().optional(),
 							}),
