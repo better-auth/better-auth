@@ -1042,6 +1042,7 @@ export function organization<O extends OrganizationOptions>(
 						unique: true,
 						sortable: true,
 						fieldName: options?.schema?.organization?.fields?.slug,
+						index: true,
 					},
 					logo: {
 						type: "string",
