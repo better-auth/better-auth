@@ -105,6 +105,15 @@ export async function handleOAuthUserInfo(
 						scope: account.scope,
 					}).filter(([_, value]) => value !== undefined),
 				);
+				if (c.context.options.account?.storeAccountCookie) {
+					const accountDataCookie = c.context.authCookies.accountData;
+					await c.setSignedCookie(
+						accountDataCookie.name,
+						JSON.stringify(updateData),
+						c.context.secret,
+						accountDataCookie.options,
+					);
+				}
 
 				if (Object.keys(updateData).length > 0) {
 					await c.context.internalAdapter.updateAccount(
@@ -127,7 +136,7 @@ export async function handleOAuthUserInfo(
 		if (overrideUserInfo) {
 			const { id: _, ...restUserInfo } = userInfo;
 			// update user info from the provider if overrideUserInfo is true
-			await c.context.internalAdapter.updateUser(dbUser.user.id, {
+			user = await c.context.internalAdapter.updateUser(dbUser.user.id, {
 				...restUserInfo,
 				email: userInfo.email.toLowerCase(),
 				emailVerified:
@@ -146,24 +155,34 @@ export async function handleOAuthUserInfo(
 		}
 		try {
 			const { id: _, ...restUserInfo } = userInfo;
-			user = await c.context.internalAdapter
-				.createOAuthUser(
+			const accountData = {
+				accessToken: await setTokenUtil(account.accessToken, c.context),
+				refreshToken: await setTokenUtil(account.refreshToken, c.context),
+				idToken: account.idToken,
+				accessTokenExpiresAt: account.accessTokenExpiresAt,
+				refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+				scope: account.scope,
+				providerId: account.providerId,
+				accountId: userInfo.id.toString(),
+			};
+			const { user: createdUser, account: createdAccount } =
+				await c.context.internalAdapter.createOAuthUser(
 					{
 						...restUserInfo,
 						email: userInfo.email.toLowerCase(),
 					},
-					{
-						accessToken: await setTokenUtil(account.accessToken, c.context),
-						refreshToken: await setTokenUtil(account.refreshToken, c.context),
-						idToken: account.idToken,
-						accessTokenExpiresAt: account.accessTokenExpiresAt,
-						refreshTokenExpiresAt: account.refreshTokenExpiresAt,
-						scope: account.scope,
-						providerId: account.providerId,
-						accountId: userInfo.id.toString(),
-					},
-				)
-				.then((res) => res?.user);
+					accountData,
+				);
+			user = createdUser;
+			if (c.context.options.account?.storeAccountCookie) {
+				const accountDataCookie = c.context.authCookies.accountData;
+				await c.setSignedCookie(
+					accountDataCookie.name,
+					JSON.stringify(createdAccount),
+					c.context.secret,
+					accountDataCookie.options,
+				);
+			}
 			if (
 				!userInfo.emailVerified &&
 				user &&
@@ -217,6 +236,7 @@ export async function handleOAuthUserInfo(
 			isRegister: false,
 		};
 	}
+
 	return {
 		data: {
 			session,

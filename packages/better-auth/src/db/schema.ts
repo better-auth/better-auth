@@ -123,6 +123,10 @@ export function parseInputData<T extends Record<string, any>>(
 		}
 
 		if (fields[key]!.defaultValue !== undefined && action === "create") {
+			if (typeof fields[key]!.defaultValue === "function") {
+				parsedData[key] = fields[key]!.defaultValue();
+				continue;
+			}
 			parsedData[key] = fields[key]!.defaultValue;
 			continue;
 		}

@@ -93,8 +93,13 @@ export function getWithHooks(
 				if (result === false) {
 					return null;
 				}
-				const isObject = typeof result === "object";
-				actualData = isObject ? (result as any).data : result;
+				const isObject = typeof result === "object" && "data" in result;
+				if (isObject) {
+					actualData = {
+						...actualData,
+						...result.data,
+					};
+				}
 			}
 		}
 
@@ -143,8 +148,13 @@ export function getWithHooks(
 				if (result === false) {
 					return null;
 				}
-				const isObject = typeof result === "object";
-				actualData = isObject ? (result as any).data : result;
+				const isObject = typeof result === "object" && "data" in result;
+				if (isObject) {
+					actualData = {
+						...actualData,
+						...result.data,
+					};
+				}
 			}
 		}
 

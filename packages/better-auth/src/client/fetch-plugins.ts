@@ -1,4 +1,4 @@
-import { type BetterFetchPlugin } from "@better-fetch/fetch";
+import type { BetterFetchPlugin } from "@better-fetch/fetch";
 
 export const redirectPlugin = {
 	id: "redirect",

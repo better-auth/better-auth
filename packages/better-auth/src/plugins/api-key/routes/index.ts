@@ -27,6 +27,8 @@ export type PredefinedApiKeyOptions = ApiKeyOptions &
 			| "enableMetadata"
 			| "enableSessionForAPIKeys"
 			| "startingCharactersConfig"
+			| "storage"
+			| "fallbackToDatabase"
 		>
 	> & {
 		keyExpiration: Required<ApiKeyOptions["keyExpiration"]>;

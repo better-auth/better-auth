@@ -95,3 +95,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 			>;
 		};
 }
+
+export type AuthClient<Option extends BetterAuthClientOptions> = ReturnType<
+	typeof createAuthClient<Option>
+>;

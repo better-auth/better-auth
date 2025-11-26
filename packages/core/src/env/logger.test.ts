@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { type LogLevel, shouldPublishLog } from "./logger";
+import type { LogLevel } from "./logger";
+import { shouldPublishLog } from "./logger";
 
 describe("shouldPublishLog", () => {
 	const testCases: {

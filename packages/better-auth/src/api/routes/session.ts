@@ -20,6 +20,7 @@ import {
 } from "../../cookies";
 import { getSessionQuerySchema } from "../../cookies/session-store";
 import { symmetricDecodeJWT, verifyJWT } from "../../crypto";
+import { parseSessionOutput, parseUserOutput } from "../../db";
 import type { InferSession, InferUser, Session, User } from "../../types";
 import type { Prettify } from "../../types/helper";
 import { getDate } from "../../utils/date";
@@ -30,10 +31,12 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 		"/get-session",
 		{
 			method: "GET",
+			operationId: "getSession",
 			query: getSessionQuerySchema,
 			requireHeaders: true,
 			metadata: {
 				openapi: {
+					operationId: "getSession",
 					description: "Get the current session",
 					responses: {
 						"200": {
@@ -269,20 +272,57 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								// Set the refreshed cookie cache
 								await setCookieCache(ctx, refreshedSession, false);
 
-								ctx.context.session = refreshedSession;
+								// Parse session and user to ensure additionalFields are included
+								// Rehydrate date fields from JSON strings before parsing
+								const parsedRefreshedSession = parseSessionOutput(
+									ctx.context.options,
+									{
+										...refreshedSession.session,
+										expiresAt: new Date(refreshedSession.session.expiresAt),
+										createdAt: new Date(refreshedSession.session.createdAt),
+										updatedAt: new Date(refreshedSession.session.updatedAt),
+									},
+								);
+								const parsedRefreshedUser = parseUserOutput(
+									ctx.context.options,
+									{
+										...refreshedSession.user,
+										createdAt: new Date(refreshedSession.user.createdAt),
+										updatedAt: new Date(refreshedSession.user.updatedAt),
+									},
+								);
+								ctx.context.session = {
+									session: parsedRefreshedSession,
+									user: parsedRefreshedUser,
+								};
 								return ctx.json({
-									session: refreshedSession.session,
-									user: refreshedSession.user,
+									session: parsedRefreshedSession,
+									user: parsedRefreshedUser,
 								} as {
 									session: InferSession<Option>;
 									user: InferUser<Option>;
 								});
 							}
 
-							ctx.context.session = session;
+							// Parse session and user to ensure additionalFields are included
+							const parsedSession = parseSessionOutput(ctx.context.options, {
+								...session.session,
+								expiresAt: new Date(session.session.expiresAt),
+								createdAt: new Date(session.session.createdAt),
+								updatedAt: new Date(session.session.updatedAt),
+							});
+							const parsedUser = parseUserOutput(ctx.context.options, {
+								...session.user,
+								createdAt: new Date(session.user.createdAt),
+								updatedAt: new Date(session.user.updatedAt),
+							});
+							ctx.context.session = {
+								session: parsedSession,
+								user: parsedUser,
+							};
 							return ctx.json({
-								session: session.session,
-								user: session.user,
+								session: parsedSession,
+								user: parsedUser,
 							} as {
 								session: InferSession<Option>;
 								user: InferUser<Option>;
@@ -311,9 +351,15 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				 * or if the session refresh is disabled
 				 */
 				if (dontRememberMe || ctx.query?.disableRefresh) {
+					// Parse session and user to ensure additionalFields are included
+					const parsedSession = parseSessionOutput(
+						ctx.context.options,
+						session.session,
+					);
+					const parsedUser = parseUserOutput(ctx.context.options, session.user);
 					return ctx.json({
-						session: session.session,
-						user: session.user,
+						session: parsedSession,
+						user: parsedUser,
 					} as {
 						session: InferSession<Option>;
 						user: InferUser<Option>;
@@ -369,9 +415,15 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						},
 					);
 
+					// Parse session and user to ensure additionalFields are included
+					const parsedUpdatedSession = parseSessionOutput(
+						ctx.context.options,
+						updatedSession,
+					);
+					const parsedUser = parseUserOutput(ctx.context.options, session.user);
 					return ctx.json({
-						session: updatedSession,
-						user: session.user,
+						session: parsedUpdatedSession,
+						user: parsedUser,
 					} as unknown as {
 						session: InferSession<Option>;
 						user: InferUser<Option>;
@@ -417,6 +469,7 @@ export const getSessionFromCtx = async <
 		asResponse: false,
 		headers: ctx.headers!,
 		returnHeaders: false,
+		returnStatus: false,
 		query: {
 			...config,
 			...ctx.query,
@@ -491,8 +544,9 @@ export const freshSessionMiddleware = createAuthMiddleware(async (ctx) => {
 		};
 	}
 	const freshAge = ctx.context.sessionConfig.freshAge;
-	const lastUpdated =
-		session.session.updatedAt?.valueOf() || session.session.createdAt.valueOf();
+	const lastUpdated = new Date(
+		session.session.updatedAt || session.session.createdAt,
+	).getTime();
 	const now = Date.now();
 	const isFresh = now - lastUpdated < freshAge * 1000;
 	if (!isFresh) {
@@ -512,10 +566,12 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 		"/list-sessions",
 		{
 			method: "GET",
+			operationId: "listUserSessions",
 			use: [sessionMiddleware],
 			requireHeaders: true,
 			metadata: {
 				openapi: {
+					operationId: "listUserSessions",
 					description: "List all active sessions for the user",
 					responses: {
 						"200": {
@@ -611,25 +667,20 @@ export const revokeSession = createAuthEndpoint(
 	},
 	async (ctx) => {
 		const token = ctx.body.token;
-		const findSession = await ctx.context.internalAdapter.findSession(token);
-		if (!findSession) {
-			throw new APIError("BAD_REQUEST", {
-				message: "Session not found",
-			});
-		}
-		if (findSession.session.userId !== ctx.context.session.user.id) {
-			throw new APIError("UNAUTHORIZED");
-		}
-		try {
-			await ctx.context.internalAdapter.deleteSession(token);
-		} catch (error) {
-			ctx.context.logger.error(
-				error && typeof error === "object" && "name" in error
-					? (error.name as string)
-					: "",
-				error,
-			);
-			throw new APIError("INTERNAL_SERVER_ERROR");
+		const session = await ctx.context.internalAdapter.findSession(token);
+
+		if (session?.session.userId === ctx.context.session.user.id) {
+			try {
+				await ctx.context.internalAdapter.deleteSession(token);
+			} catch (error) {
+				ctx.context.logger.error(
+					error && typeof error === "object" && "name" in error
+						? (error.name as string)
+						: "",
+					error,
+				);
+				throw new APIError("INTERNAL_SERVER_ERROR");
+			}
 		}
 		return ctx.json({
 			status: true,

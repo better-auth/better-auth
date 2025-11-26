@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import * as z from "zod";
 import { getEndpoints, router } from "./api";
 import { createAuthClient } from "./client";
-import { init } from "./init";
+import { init } from "./context/init";
 import { bearer } from "./plugins";
 
 describe("call", async () => {
@@ -179,11 +179,19 @@ describe("call", async () => {
 			],
 		},
 	} satisfies BetterAuthPlugin;
+	let latestOauthStore: Record<string, any> | undefined = {};
 	const options = {
 		baseURL: "http://localhost:3000",
 		plugins: [testPlugin, testPlugin2, bearer()],
 		emailAndPassword: {
 			enabled: true,
+		},
+		socialProviders: {
+			google: {
+				clientId: "test-client-id",
+				clientSecret: "test-client-secret",
+				enabled: true,
+			},
 		},
 		hooks: {
 			before: createAuthMiddleware(async (ctx) => {

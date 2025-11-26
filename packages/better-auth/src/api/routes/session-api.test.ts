@@ -1,7 +1,8 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
-import { type MemoryDB, memoryAdapter } from "../../adapters/memory-adapter";
+import type { MemoryDB } from "../../adapters/memory-adapter";
+import { memoryAdapter } from "../../adapters/memory-adapter";
 import { parseCookies, parseSetCookieHeader } from "../../cookies";
 import { signJWT, verifyJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -546,11 +547,11 @@ describe("cookie cache", async () => {
 		});
 		expect(session.data?.user.emailVerified).toBe(true);
 		expect(session.data).not.toBeNull();
-		expect(fn).toHaveBeenCalledTimes(3);
+		expect(fn).toHaveBeenCalledTimes(2);
 	});
 
 	it("should reset cache when expires", async () => {
-		expect(fn).toHaveBeenCalledTimes(3);
+		expect(fn).toHaveBeenCalledTimes(2);
 		await client.getSession({
 			fetchOptions: {
 				headers,
@@ -566,7 +567,7 @@ describe("cookie cache", async () => {
 				},
 			},
 		});
-		expect(fn).toHaveBeenCalledTimes(5);
+		expect(fn).toHaveBeenCalledTimes(3);
 		await client.getSession({
 			fetchOptions: {
 				headers,
@@ -575,7 +576,7 @@ describe("cookie cache", async () => {
 				},
 			},
 		});
-		expect(fn).toHaveBeenCalledTimes(5);
+		expect(fn).toHaveBeenCalledTimes(3);
 	});
 });
 
@@ -802,17 +803,17 @@ describe("cookie cache with JWE strategy", async () => {
 		});
 		expect(session.data?.user.emailVerified).toBe(true);
 		expect(session.data).not.toBeNull();
-		expect(fn).toHaveBeenCalledTimes(3); // Database hit when cache disabled
+		expect(fn).toHaveBeenCalledTimes(2); // Database hit when cache disabled
 	});
 
 	it("should reset JWE cache when expires", async () => {
-		expect(fn).toHaveBeenCalledTimes(3);
+		expect(fn).toHaveBeenCalledTimes(2);
 		await client.getSession({
 			fetchOptions: {
 				headers,
 			},
 		});
-		expect(fn).toHaveBeenCalledTimes(3);
+		expect(fn).toHaveBeenCalledTimes(2);
 
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(1000 * 60 * 10);
@@ -826,7 +827,7 @@ describe("cookie cache with JWE strategy", async () => {
 			},
 		});
 
-		expect(fn.mock.calls.length).toBeGreaterThanOrEqual(3);
+		expect(fn.mock.calls.length).toBeGreaterThanOrEqual(2);
 
 		vi.useRealTimers();
 	});
@@ -1341,5 +1342,75 @@ describe("cookie cache versioning", async () => {
 		});
 		expect(session.data).not.toBeNull();
 		expect(session.data?.user.email).toBe(testUser.email);
+	});
+
+	it("should include additionalFields when retrieving from cookie cache", async () => {
+		const { client, testUser, cookieSetter, auth } = await getTestInstance({
+			session: {
+				additionalFields: {
+					role: {
+						type: "string",
+						defaultValue: "user",
+						returned: true, // Should be included
+					},
+					preferences: {
+						type: "json",
+						defaultValue: "{}",
+						returned: true,
+					},
+				},
+				cookieCache: {
+					enabled: true,
+					strategy: "compact",
+				},
+			},
+		});
+
+		const ctx = await auth.$context;
+		const fn = vi.spyOn(ctx.adapter, "findOne");
+
+		const headers = new Headers();
+
+		// Sign in
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		// First call - should hit database
+		const firstCall = fn.mock.calls.length;
+		const session1 = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(session1.data).toBeTruthy();
+		expect(session1.data?.session).toHaveProperty("role"); // ? Should have additionalFields
+		expect(session1.data?.session).toHaveProperty("preferences"); // ? Should have additionalFields
+
+		// Second call - should use cookie cache (no DB call)
+		const session2 = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		// Verify cache was used (no additional DB calls)
+		expect(fn.mock.calls.length).toBe(firstCall);
+
+		// ? THIS IS THE KEY TEST - additionalFields should be present from cache
+		expect(session2.data?.session).toHaveProperty("role");
+		expect(session2.data?.session).toHaveProperty("preferences");
+
+		// Verify values match
+		const s1 = session1.data?.session as Record<string, any>;
+		const s2 = session2.data?.session as Record<string, any>;
+		expect(s2.role).toBe(s1.role);
 	});
 });

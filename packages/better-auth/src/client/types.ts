@@ -1,13 +1,11 @@
 import type {
 	BetterAuthClientOptions,
 	BetterAuthClientPlugin,
-	BetterAuthPlugin,
 	ClientAtomListener,
 	ClientStore,
 } from "@better-auth/core";
-import type { Auth } from "../auth";
 import type { InferFieldsInputClient, InferFieldsOutput } from "../db";
-import type { Session, User } from "../types";
+import type { Auth, Session, User } from "../types";
 import type { StripEmptyObjects, UnionToIntersection } from "../types/helper";
 import type { InferRoutes } from "./path-to-object";
 export type {
@@ -80,8 +78,10 @@ export type InferErrorCodes<O extends BetterAuthClientOptions> =
 	O["plugins"] extends Array<infer Plugin>
 		? UnionToIntersection<
 				Plugin extends BetterAuthClientPlugin
-					? Plugin["$InferServerPlugin"] extends BetterAuthPlugin
-						? Plugin["$InferServerPlugin"]["$ERROR_CODES"]
+					? Plugin["$InferServerPlugin"] extends { $ERROR_CODES: infer E }
+						? E extends Record<string, string>
+							? E
+							: {}
 						: {}
 					: {}
 			>

@@ -59,11 +59,18 @@ export default function Hero() {
 							</div>
 
 							<div className="relative flex items-center gap-2 w-full sm:w-[90%] border border-white/10">
-								<GradientBG className="w-full flex items-center justify-between">
-									<div className="w-full flex items-center gap-2">
-										<p className="relative inline tracking-tight opacity-90 text-sm dark:text-white font-mono text-black">
-											npm install{" "}
-											<span className="relative dark:text-fuchsia-200 text-fuchsia-900">
+								<GradientBG className="w-full flex items-center justify-between gap-2">
+									<div className="w-full flex flex-col min-[350px]:flex-row min-[350px]:items-center gap-0.5 min-[350px]:gap-2 min-w-0">
+										<p className="text-xs sm:text-sm font-mono select-none tracking-tighter space-x-1 shrink-0">
+											<span>
+												<span className="text-sky-500">git:</span>
+												<span className="text-red-400">(main)</span>
+											</span>
+											<span className="italic text-amber-600">x</span>
+										</p>
+										<p className="relative inline tracking-tight opacity-90 md:text-sm text-xs dark:text-white font-mono text-black">
+											npm i{" "}
+											<span className="relative dark:text-fuchsia-300 text-fuchsia-800">
 												better-auth
 												<span className="absolute h-2 bg-gradient-to-tr from-white via-stone-200 to-stone-300 blur-3xl w-full top-0 left-2"></span>
 											</span>
@@ -154,15 +161,18 @@ const tabs: { name: "auth.ts" | "client.ts"; code: string }[] = [
         enabled: true,
     },
 	plugins: [
-	  organization(),
-      twoFactor(),
+		organization(),
+    	twoFactor(),
 	]
 })`,
 	},
 	{
 		name: "client.ts",
 		code: `const client = createAuthClient({
-    plugins: [passkeyClient()]
+    plugins: [
+		organizationClient(),
+		twoFactorClient(),
+	]
 });`,
 	},
 ];

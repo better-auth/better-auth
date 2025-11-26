@@ -3,7 +3,7 @@ import type {
 	ClientAtomListener,
 } from "@better-auth/core";
 import { createFetch } from "@better-fetch/fetch";
-import { type WritableAtom } from "nanostores";
+import type { WritableAtom } from "nanostores";
 import { getBaseURL } from "../utils/url";
 import { redirectPlugin, userAgentPlugin } from "./fetch-plugins";
 import { parseJSON } from "./parser";
@@ -50,9 +50,10 @@ export const getClientConfig = (
 		...restOfFetchOptions,
 		plugins: [
 			lifeCyclePlugin,
-			userAgentPlugin,
 			...(restOfFetchOptions.plugins || []),
-			...(options?.disableDefaultFetchPlugins ? [] : [redirectPlugin]),
+			...(options?.disableDefaultFetchPlugins
+				? []
+				: [userAgentPlugin, redirectPlugin]),
 			...pluginsFetchPlugins,
 		],
 	});
@@ -73,14 +74,18 @@ export const getClientConfig = (
 		{
 			signal: "$sessionSignal",
 			matcher(path) {
-				return (
+				const matchesCommonPaths =
 					path === "/sign-out" ||
 					path === "/update-user" ||
-					path.startsWith("/sign-in") ||
-					path.startsWith("/sign-up") ||
+					path === "/sign-up/email" ||
+					path === "/sign-in/email" ||
 					path === "/delete-user" ||
-					path === "/verify-email"
-				);
+					path === "/verify-email" ||
+					path === "/revoke-sessions" ||
+					path === "/revoke-session" ||
+					path === "/change-email";
+
+				return matchesCommonPaths;
 			},
 		},
 	];

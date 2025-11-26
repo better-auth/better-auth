@@ -17,7 +17,7 @@ import { DEFAULT_SECRET } from "../../utils/constants";
 import { createAccessControl } from "../access";
 import { admin } from "./admin";
 import { adminClient } from "./client";
-import { type UserWithRole } from "./types";
+import type { UserWithRole } from "./types";
 
 let testIdToken: string;
 let handlers: ReturnType<typeof http.post>[];
@@ -335,6 +335,54 @@ describe("Admin plugin", async () => {
 				headers: adminHeaders,
 			},
 		});
+	});
+
+	it("should filter users by id with ne operator", async () => {
+		const allUsers = await client.admin.listUsers({
+			query: {},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		const firstUserId = allUsers.data?.users[0]!.id;
+
+		const res = await client.admin.listUsers({
+			query: {
+				filterValue: firstUserId,
+				filterField: "id",
+				filterOperator: "ne",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+
+		expect(res.data?.users.length).toBe(allUsers.data!.total - 1);
+		expect(res.data?.users.every((u) => u.id !== firstUserId)).toBe(true);
+	});
+
+	it("should filter users by _id with ne operator", async () => {
+		const allUsers = await client.admin.listUsers({
+			query: {},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		const firstUserId = allUsers.data?.users[0]!.id;
+
+		const res = await client.admin.listUsers({
+			query: {
+				filterValue: firstUserId,
+				filterField: "_id",
+				filterOperator: "ne",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+
+		expect(res.data?.users.length).toBe(allUsers.data!.total - 1);
+		expect(res.data?.users.every((u) => u.id !== firstUserId)).toBe(true);
 	});
 
 	it("should allow to combine search and filter", async () => {

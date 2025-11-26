@@ -94,7 +94,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 				error: BetterFetchError | null;
 				refetch: (
 					queryParams?: { query?: SessionQueryParams } | undefined,
-				) => void;
+				) => Promise<void>;
 			};
 			$Infer: {
 				Session: NonNullable<Session>;
@@ -110,3 +110,5 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 export { useStore };
 export type * from "@better-fetch/fetch";
 export type * from "nanostores";
+export type * from "../../types/helper";
+export type { UnionToIntersection } from "../../types/helper";

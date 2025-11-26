@@ -7,3 +7,7 @@ export const oidcClient = () => {
 		$InferServerPlugin: {} as ReturnType<typeof oidcProvider>,
 	} satisfies BetterAuthClientPlugin;
 };
+
+export type OidcClientPlugin = ReturnType<typeof oidcClient>;
+
+export type * from "./types";

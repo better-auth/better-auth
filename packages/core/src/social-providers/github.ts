@@ -61,7 +61,13 @@ export const github = (options: GithubOptions) => {
 	return {
 		id: "github",
 		name: "GitHub",
-		createAuthorizationURL({ state, scopes, loginHint, redirectURI }) {
+		createAuthorizationURL({
+			state,
+			scopes,
+			loginHint,
+			codeVerifier,
+			redirectURI,
+		}) {
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["read:user", "user:email"];
@@ -73,14 +79,16 @@ export const github = (options: GithubOptions) => {
 				authorizationEndpoint: "https://github.com/login/oauth/authorize",
 				scopes: _scopes,
 				state,
+				codeVerifier,
 				redirectURI,
 				loginHint,
 				prompt: options.prompt,
 			});
 		},
-		validateAuthorizationCode: async ({ code, redirectURI }) => {
+		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return validateAuthorizationCode({
 				code,
+				codeVerifier,
 				redirectURI,
 				options,
 				tokenEndpoint,

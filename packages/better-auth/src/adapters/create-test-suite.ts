@@ -3,9 +3,13 @@ import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { TTY_COLORS } from "@better-auth/core/env";
 import { test } from "vitest";
 import { betterAuth } from "../auth";
+import { getAuthTables } from "../db/get-tables";
 import type { Account, Session, User, Verification } from "../types";
 import { generateId } from "../utils";
-import { createAdapterFactory } from "./adapter-factory";
+import {
+	createAdapterFactory,
+	initGetDefaultModelName,
+} from "./adapter-factory";
 import type { Logger } from "./test-adapter";
 import { deepmerge } from "./utils";
 
@@ -101,6 +105,7 @@ export const createTestSuite = <
 		 */
 		alwaysMigrate?: boolean | undefined;
 		prefixTests?: string | undefined;
+		customIdGenerator?: () => any | Promise<any> | undefined;
 	},
 	tests: (
 		helpers: {
@@ -133,7 +138,21 @@ export const createTestSuite = <
 			})[];
 			getAuth: () => Promise<ReturnType<typeof betterAuth>>;
 			tryCatch<T, E = Error>(promise: Promise<T>): Promise<Result<T, E>>;
-			customIdGenerator?: (() => string | Promise<string>) | undefined;
+			customIdGenerator?: () => any | Promise<any> | undefined;
+			transformIdOutput?: (id: any) => string | undefined;
+			/**
+			 * Some adapters may change the ID type, this function allows you to pass the entire model
+			 * data and it will return the correct better-auth-expected transformed data.
+			 *
+			 * Eg:
+			 * MongoDB uses ObjectId for IDs, but it's possible the user can disable that option in the adapter config.
+			 * Because of this, the expected data would be a string.
+			 * These sorts of conversions will cause issues with the test when you use the `generate` function.
+			 * This is because the `generate` function will return the raw data expected to be saved in DB, not the excpected BA output.
+			 */
+			transformGeneratedModel: (
+				data: Record<string, any>,
+			) => Record<string, any>;
 		},
 		additionalOptions?: AdditionalOptions | undefined,
 	) => Tests,
@@ -159,7 +178,8 @@ export const createTestSuite = <
 			runMigrations: () => Promise<void>;
 			prefixTests?: string | undefined;
 			onTestFinish: () => Promise<void>;
-			customIdGenerator?: (() => string | Promise<string>) | undefined;
+			customIdGenerator?: () => any | Promise<any> | undefined;
+			transformIdOutput?: (id: any) => string | undefined;
 		}) => {
 			const createdRows: Record<string, any[]> = {};
 
@@ -180,6 +200,7 @@ export const createTestSuite = <
 					adapterName: `Wrapped ${adapter.options?.adapterConfig.adapterName}`,
 					disableTransformOutput: true,
 					disableTransformInput: true,
+					disableTransformJoin: true,
 				};
 				const adapterCreator = (
 					options: BetterAuthOptions,
@@ -192,14 +213,41 @@ export const createTestSuite = <
 						adapter: ({ getDefaultModelName }) => {
 							adapter.transaction = undefined as any;
 							return {
-								count: adapter.count,
-								deleteMany: adapter.deleteMany,
-								delete: adapter.delete,
-								findOne: adapter.findOne,
-								findMany: adapter.findMany,
-								update: adapter.update as any,
-								updateMany: adapter.updateMany,
-
+								count: async (args: any) => {
+									adapter = await helpers.adapter();
+									const res = await adapter.count(args);
+									return res as any;
+								},
+								deleteMany: async (args: any) => {
+									adapter = await helpers.adapter();
+									const res = await adapter.deleteMany(args);
+									return res as any;
+								},
+								delete: async (args: any) => {
+									adapter = await helpers.adapter();
+									const res = await adapter.delete(args);
+									return res as any;
+								},
+								findOne: async (args) => {
+									adapter = await helpers.adapter();
+									const res = await adapter.findOne(args);
+									return res as any;
+								},
+								findMany: async (args) => {
+									adapter = await helpers.adapter();
+									const res = await adapter.findMany(args);
+									return res as any;
+								},
+								update: async (args: any) => {
+									adapter = await helpers.adapter();
+									const res = await adapter.update(args);
+									return res as any;
+								},
+								updateMany: async (args) => {
+									adapter = await helpers.adapter();
+									const res = await adapter.updateMany(args);
+									return res as any;
+								},
 								createSchema: adapter.createSchema as any,
 								async create({ data, model, select }) {
 									const defaultModelName = getDefaultModelName(model);
@@ -235,6 +283,18 @@ export const createTestSuite = <
 				adapter = await helpers.adapter();
 				for (const model of Object.keys(createdRows)) {
 					for (const row of createdRows[model]!) {
+						const schema = getAuthTables(helpers.getBetterAuthOptions());
+						const getDefaultModelName = initGetDefaultModelName({
+							schema,
+							usePlural: adapter.options?.adapterConfig.usePlural,
+						});
+						let defaultModelName: string;
+						try {
+							defaultModelName = getDefaultModelName(model);
+						} catch {
+							continue;
+						}
+						if (!schema[defaultModelName]) continue; // model doesn't exist in the schema anymore, so we skip it
 						try {
 							await adapter.delete({
 								model,
@@ -264,8 +324,26 @@ export const createTestSuite = <
 				}
 			};
 
+			const transformGeneratedModel = (data: Record<string, any>) => {
+				let newData = { ...data };
+				if (helpers.transformIdOutput) {
+					newData.id = helpers.transformIdOutput(newData.id);
+				}
+				return newData;
+			};
+
+			const idGenerator = async () => {
+				if (config.customIdGenerator) {
+					return config.customIdGenerator();
+				}
+				if (helpers.customIdGenerator) {
+					return helpers.customIdGenerator();
+				}
+				return generateId();
+			};
+
 			const generateModel: GenerateFn = async (model: string) => {
-				const id = (await helpers.customIdGenerator?.()) || generateId();
+				const id = await idGenerator();
 				const randomDate = new Date(
 					Date.now() - Math.random() * 1000 * 60 * 60 * 24 * 365,
 				);
@@ -274,9 +352,10 @@ export const createTestSuite = <
 						id,
 						createdAt: randomDate,
 						updatedAt: new Date(),
-						email: `user-${id}@email.com`.toLowerCase(),
+						email:
+							`user-${helpers.transformIdOutput?.(id) ?? id}@email.com`.toLowerCase(),
 						emailVerified: true,
-						name: `user-${id}`,
+						name: `user-${helpers.transformIdOutput?.(id) ?? id}`,
 						image: null,
 					};
 					return user as any;
@@ -464,6 +543,8 @@ export const createTestSuite = <
 					sortModels,
 					tryCatch,
 					customIdGenerator: helpers.customIdGenerator,
+					transformGeneratedModel,
+					transformIdOutput: helpers.transformIdOutput,
 				},
 				additionalOptions as AdditionalOptions,
 			);
@@ -523,7 +604,7 @@ export const createTestSuite = <
 
 				test.skipIf(shouldSkip)(
 					testName,
-					{ timeout: 10000 },
+					{ timeout: 30000 },
 					async ({ onTestFailed, skip }) => {
 						resetDebugLogs();
 						onTestFailed(async () => {

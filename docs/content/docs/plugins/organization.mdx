@@ -866,7 +866,7 @@ type createInvitation = {
      */
     email: string = "example@gmail.com"
     /**
-     * The role(s) to assign to the user. It can be `admin`, `member`, or `guest`.  
+     * The role(s) to assign to the user. It can be `admin`, `member`, `owner`
      */
     role: string | string[] = "member"
     /**
@@ -2041,14 +2041,14 @@ The teams feature supports several configuration options:
     enabled: true,
     maximumTeams: 10 // Fixed number
     // OR
-    maximumTeams: async ({ organizationId, session }, request) => {
+    maximumTeams: async ({ organizationId, session }, ctx) => {
       // Dynamic limit based on organization plan
       const plan = await getPlan(organizationId)
       return plan === 'pro' ? 20 : 5
     },
     maximumMembersPerTeam: 10 // Fixed number
     // OR
-    maximumMembersPerTeam: async ({ teamId, session, organizationId }, request) => {
+    maximumMembersPerTeam: async ({ teamId, session, organizationId }, ctx) => {
       // Dynamic limit based on team plan
       const plan = await getPlan(organizationId, teamId)
       return plan === 'pro' ? 50 : 10

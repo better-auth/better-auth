@@ -1,3 +1,4 @@
+import { passkey } from "@better-auth/passkey";
 import { sso } from "@better-auth/sso";
 import { stripe } from "@better-auth/stripe";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
@@ -16,7 +17,6 @@ import {
 	organization,
 	twoFactor,
 } from "better-auth/plugins";
-import { passkey } from "better-auth/plugins/passkey";
 import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
 import { Stripe } from "stripe";
@@ -50,27 +50,10 @@ if (!dialect) {
 	throw new Error("No dialect found");
 }
 
-const baseURL: string | undefined =
-	process.env.VERCEL === "1"
-		? process.env.VERCEL_ENV === "production"
-			? process.env.BETTER_AUTH_URL
-			: process.env.VERCEL_ENV === "preview"
-				? `https://${process.env.VERCEL_URL}`
-				: undefined
-		: undefined;
-
-const cookieDomain: string | undefined =
-	process.env.VERCEL === "1"
-		? process.env.VERCEL_ENV === "production"
-			? ".better-auth.com"
-			: process.env.VERCEL_ENV === "preview"
-				? `.${process.env.VERCEL_URL}`
-				: undefined
-		: undefined;
-
 export const auth = betterAuth({
 	appName: "Better Auth Demo",
-	baseURL,
+	// If not explicitly set, the system will check the environment variable process.env.BETTER_AUTH_URL
+	// baseURL: process.env.BETTER_AUTH_URL,
 	database: {
 		dialect,
 		type: "sqlite",
@@ -106,6 +89,10 @@ export const auth = betterAuth({
 		},
 	},
 	socialProviders: {
+		apple: {
+			clientId: process.env.APPLE_CLIENT_ID || "",
+			clientSecret: process.env.APPLE_CLIENT_SECRET || "",
+		},
 		facebook: {
 			clientId: process.env.FACEBOOK_CLIENT_ID || "",
 			clientSecret: process.env.FACEBOOK_CLIENT_SECRET || "",
@@ -181,7 +168,9 @@ export const auth = betterAuth({
 			adminUserIds: ["EXD5zjob2SD6CBWcEQ6OpLRHcyoUbnaB"],
 		}),
 		multiSession(),
-		oAuthProxy(),
+		oAuthProxy({
+			productionURL: "https://demo.better-auth.com",
+		}),
 		nextCookies(),
 		oneTap(),
 		customSession(async (session) => {
@@ -350,11 +339,10 @@ export const auth = betterAuth({
 		}),
 		lastLoginMethod(),
 	],
-	trustedOrigins: ["exp://"],
-	advanced: {
-		crossSubDomainCookies: {
-			enabled: process.env.NODE_ENV === "production",
-			domain: cookieDomain,
-		},
-	},
+	trustedOrigins: [
+		"https://*.better-auth.com",
+		"https://better-auth-demo-*-better-auth.vercel.app",
+		"exp://",
+		"https://appleid.apple.com",
+	],
 });

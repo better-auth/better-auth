@@ -1,4 +1,5 @@
 import type { JWTPayload } from "jose";
+import type { GenericEndpointContext } from "../..";
 import type { InferOptionSchema, Session, User } from "../../types";
 import type { Awaitable } from "../../types/helper";
 import type { schema } from "./schema";
@@ -13,7 +14,6 @@ export interface JwtOptions {
 				 * if your jwks are signed with a certificate and placed on your CDN.
 				 */
 				remoteUrl?: string;
-
 				/**
 				 * Key pair configuration
 				 * @description A subset of the options available for the generateKeyPair function
@@ -23,7 +23,6 @@ export interface JwtOptions {
 				 * @default { alg: 'EdDSA', crv: 'Ed25519' }
 				 */
 				keyPairConfig?: JWKOptions;
-
 				/**
 				 * Disable private key encryption
 				 * @description Disable the encryption of the private key in the database
@@ -31,6 +30,27 @@ export interface JwtOptions {
 				 * @default false
 				 */
 				disablePrivateKeyEncryption?: boolean;
+				/**
+				 * The key rotation interval in seconds.
+				 *
+				 * @default undefined (disabled)
+				 */
+				rotationInterval?: number;
+				/**
+				 * The grace period in seconds.
+				 *
+				 * @default 2592000 (30 days)
+				 */
+				gracePeriod?: number;
+				/**
+				 * The path of the endpoint exposing the JWKS.
+				 * When set, this replaces the default /jwks endpoint.
+				 * The old endpoint will return 404.
+				 *
+				 * @default /jwks
+				 * @example "/.well-known/jwks.json"
+				 */
+				jwksPath?: string;
 		  }
 		| undefined;
 
@@ -107,11 +127,44 @@ export interface JwtOptions {
 	 * @default false
 	 */
 	disableSettingJwtHeader?: boolean | undefined;
-
 	/**
 	 * Custom schema for the admin plugin
 	 */
 	schema?: InferOptionSchema<typeof schema> | undefined;
+	/**
+	 * Custom adapter for the jwt plugin
+	 *
+	 * This will override the default adapter
+	 *
+	 * @default adapter from the database
+	 */
+	adapter?: {
+		/**
+		 * A custom function to get the JWKS from the database or
+		 * other source
+		 *
+		 * This will override the default getJwks from the database
+		 *
+		 * @param ctx - The context of the request
+		 * @returns The JWKS
+		 */
+		getJwks?: (
+			ctx: GenericEndpointContext,
+		) => Promise<Jwk[] | null | undefined>;
+		/**
+		 * A custom function to create a new key in the database or
+		 * other source
+		 *
+		 * This will override the default createJwk from the database
+		 *
+		 * @param data - The key to create
+		 * @returns The created key
+		 */
+		createJwk?: (
+			data: Omit<Jwk, "id">,
+			ctx: GenericEndpointContext,
+		) => Promise<Jwk>;
+	};
 }
 
 /**
@@ -150,6 +203,7 @@ export interface Jwk {
 	publicKey: string;
 	privateKey: string;
 	createdAt: Date;
+	expiresAt?: Date;
 	alg?: JWSAlgorithms | undefined;
 	crv?: ("Ed25519" | "P-256" | "P-521") | undefined;
 }

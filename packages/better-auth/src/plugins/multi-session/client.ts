@@ -15,3 +15,5 @@ export const multiSessionClient = () => {
 		],
 	} satisfies BetterAuthClientPlugin;
 };
+
+export type { MultiSessionConfig } from "./index";

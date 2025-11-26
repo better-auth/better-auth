@@ -35,10 +35,14 @@ export default async function Page({
 	params: Promise<{ slug?: string[] }>;
 }) {
 	const { slug } = await params;
-	const page = source.getPage(slug);
+	let page = source.getPage(slug);
 
 	if (!page) {
-		notFound();
+		if (slug?.[0] === "errors") {
+			page = source.getPage(["errors", "unknown"])!;
+		} else {
+			return notFound();
+		}
 	}
 
 	const MDX = page.data.body;
@@ -75,7 +79,7 @@ export default async function Page({
 							return (
 								<CodeBlockTabs
 									{...props}
-									className="p-0 border-0 rounded-lg bg-fd-secondary"
+									className="p-0 rounded-lg border-0 bg-fd-secondary"
 								>
 									<div {...props}>{props.children}</div>
 								</CodeBlockTabs>
@@ -173,8 +177,14 @@ export async function generateMetadata({
 	params: Promise<{ slug?: string[] }>;
 }) {
 	const { slug } = await params;
-	const page = source.getPage(slug);
-	if (page == null) notFound();
+	let page = source.getPage(slug);
+	if (page == null) {
+		if (slug?.[0] === "errors") {
+			page = source.getPage(["errors", "unknown"])!;
+		} else {
+			return notFound();
+		}
+	}
 	const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL;
 	const url = new URL(`${baseUrl}/api/og`);
 	const { title, description } = page.data;

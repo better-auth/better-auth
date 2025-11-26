@@ -3,11 +3,8 @@ import * as z from "zod";
 import { APIError } from "../../api";
 import type { Role } from "../access";
 import { defaultRoles } from "./access";
-import {
-	cacheAllRoles,
-	type HasPermissionBaseInput,
-	hasPermissionFn,
-} from "./permission";
+import type { HasPermissionBaseInput } from "./permission";
+import { cacheAllRoles, hasPermissionFn } from "./permission";
 import type { OrganizationRole } from "./schema";
 
 export const hasPermission = async (

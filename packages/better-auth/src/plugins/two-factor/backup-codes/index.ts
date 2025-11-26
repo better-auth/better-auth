@@ -325,7 +325,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 						data: JSON.stringify(validate.updated),
 					});
 
-					await ctx.context.adapter.updateMany({
+					const updated = await ctx.context.adapter.updateMany({
 						model: twoFactorTable,
 						update: {
 							backupCodes: updatedBackupCodes,
@@ -335,8 +335,17 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 								field: "userId",
 								value: user.id,
 							},
+							{
+								field: "backupCodes",
+								value: twoFactor.backupCodes,
+							},
 						],
 					});
+					if (!updated) {
+						throw new APIError("CONFLICT", {
+							message: "Failed to verify backup code. Please try again.",
+						});
+					}
 
 					if (!ctx.body.disableSession) {
 						return valid(ctx);
@@ -447,22 +456,19 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 			/**
 			 * ### Endpoint
 			 *
-			 * GET `/two-factor/view-backup-codes`
+			 * POST `/two-factor/view-backup-codes`
 			 *
 			 * ### API Methods
 			 *
 			 * **server:**
 			 * `auth.api.viewBackupCodes`
 			 *
-			 * **client:**
-			 * `authClient.twoFactor.viewBackupCodes`
-			 *
 			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-view-backup-codes)
 			 */
 			viewBackupCodes: createAuthEndpoint(
 				"/two-factor/view-backup-codes",
 				{
-					method: "GET",
+					method: "POST",
 					body: z.object({
 						userId: z.coerce.string().meta({
 							description: `The user ID to view all backup codes. Eg: "user-id"`,

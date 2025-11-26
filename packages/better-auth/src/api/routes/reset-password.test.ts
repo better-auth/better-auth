@@ -260,6 +260,61 @@ describe("forget password", async (it) => {
 		expect(url).not.toContain(queryParams);
 		expect(url).toContain(`callbackURL=${encodeURIComponent(redirectTo)}`);
 	});
+
+	it("should not reveal user existence on success", async () => {
+		const { client, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				async sendResetPassword() {
+					await mockSendEmail();
+				},
+			},
+		});
+		const res = await client.requestPasswordReset({
+			email: testUser.email,
+			redirectTo: "http://localhost:3000",
+		});
+		expect(res.data?.message).toBe(
+			"If this email exists in our system, check your email for the reset link",
+		);
+	});
+
+	it("should not reveal user existence on failure", async () => {
+		const { client } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				async sendResetPassword() {
+					await mockSendEmail();
+				},
+			},
+		});
+		const res = await client.requestPasswordReset({
+			email: "non-existent-user@email.com",
+			redirectTo: "http://localhost:3000",
+		});
+		expect(res.data?.message).toBe(
+			"If this email exists in our system, check your email for the reset link",
+		);
+	});
+
+	it("should not reveal failure of email sending", async () => {
+		const { client, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				async sendResetPassword() {
+					throw new Error("Failed to send email");
+				},
+			},
+		});
+		const res = await client.requestPasswordReset({
+			email: testUser.email,
+			redirectTo: "http://localhost:3000",
+		});
+		expect(res.data?.status).toBe(true);
+		expect(res.data?.message).toBe(
+			"If this email exists in our system, check your email for the reset link",
+		);
+	});
 });
 
 describe("revoke sessions on password reset", async (it) => {

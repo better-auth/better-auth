@@ -24,7 +24,10 @@ type ScalarTheme =
 const getHTML = (
 	apiReference: Record<string, any>,
 	theme?: ScalarTheme | undefined,
-) => `<!doctype html>
+	nonce?: string | undefined,
+) => {
+	const nonceAttr = nonce ? `nonce="${nonce}"` : "";
+	return `<!doctype html>
 <html>
   <head>
     <title>Scalar API Reference</title>
@@ -39,7 +42,7 @@ const getHTML = (
       type="application/json">
     ${JSON.stringify(apiReference)}
     </script>
-	 <script>
+	 <script ${nonceAttr}>
       var configuration = {
 	  	favicon: "data:image/svg+xml;utf8,${encodeURIComponent(logo)}",
 	   	theme: "${theme || "default"}",
@@ -52,9 +55,10 @@ const getHTML = (
       document.getElementById('api-reference').dataset.configuration =
         JSON.stringify(configuration)
     </script>
-	  <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+	  <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference" ${nonceAttr}></script>
   </body>
 </html>`;
+};
 
 export interface OpenAPIOptions {
 	/**
@@ -78,6 +82,12 @@ export interface OpenAPIOptions {
 	 * @default "default"
 	 */
 	theme?: ScalarTheme | undefined;
+	/**
+	 * A 'nonce' string to be attached to inline scripts
+	 * for Content Security Policy (CSP) compliance.
+	 * @default undefined
+	 */
+	nonce?: string | undefined;
 }
 
 export const openAPI = <O extends OpenAPIOptions>(options?: O | undefined) => {
@@ -108,7 +118,7 @@ export const openAPI = <O extends OpenAPIOptions>(options?: O | undefined) => {
 						throw new APIError("NOT_FOUND");
 					}
 					const schema = await generator(ctx.context, ctx.context.options);
-					return new Response(getHTML(schema, options?.theme), {
+					return new Response(getHTML(schema, options?.theme, options?.nonce), {
 						headers: {
 							"Content-Type": "text/html",
 						},

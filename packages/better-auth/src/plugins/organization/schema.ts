@@ -207,6 +207,14 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 					"organizationRole",
 					OrganizationRoleDefaultFields
 				>;
+			} & {
+				session: {
+					fields: InferSchema<
+						O["schema"] extends BetterAuthPluginDBSchema ? O["schema"] : {},
+						"session",
+						SessionDefaultFields
+					>["fields"];
+				};
 			}
 		: {} & (O["teams"] extends { enabled: true }
 				? {
@@ -272,7 +280,7 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 					};
 				};
 
-export const role = z.string();
+export const roleSchema = z.string();
 export const invitationStatus = z
 	.enum(["pending", "accepted", "rejected", "canceled"])
 	.default("pending");
@@ -293,7 +301,7 @@ export const memberSchema = z.object({
 	id: z.string().default(generateId),
 	organizationId: z.string(),
 	userId: z.coerce.string(),
-	role,
+	role: roleSchema,
 	createdAt: z.date().default(() => new Date()),
 });
 
@@ -301,7 +309,7 @@ export const invitationSchema = z.object({
 	id: z.string().default(generateId),
 	organizationId: z.string(),
 	email: z.string(),
-	role,
+	role: roleSchema,
 	status: invitationStatus,
 	teamId: z.string().nullish(),
 	inviterId: z.string(),
@@ -361,38 +369,50 @@ export type InferOrganizationZodRolesFromOption<
 
 export type InferOrganizationRolesFromOption<
 	O extends OrganizationOptions | undefined,
-> = O extends { roles: any } ? keyof O["roles"] : "admin" | "member" | "owner";
+> = O extends { roles: any }
+	? keyof O["roles"] extends infer K extends string
+		? K
+		: "admin" | "member" | "owner"
+	: "admin" | "member" | "owner";
 
 export type InvitationStatus = "pending" | "accepted" | "rejected" | "canceled";
 
-export type InferMember<O extends OrganizationOptions> = O["teams"] extends {
-	enabled: true;
-}
-	? {
-			id: string;
-			organizationId: string;
-			role: InferOrganizationRolesFromOption<O>;
-			createdAt: Date;
-			userId: string;
-			teamId?: string | undefined;
-			user: {
-				email: string;
-				name: string;
-				image?: string | undefined;
-			};
-		}
-	: {
-			id: string;
-			organizationId: string;
-			role: InferOrganizationRolesFromOption<O>;
-			createdAt: Date;
-			userId: string;
-			user: {
-				email: string;
-				name: string;
-				image?: string | undefined;
-			};
-		};
+export type InferMember<
+	O extends OrganizationOptions,
+	isClientSide extends boolean = true,
+> = Prettify<
+	(O["teams"] extends {
+		enabled: true;
+	}
+		? {
+				id: string;
+				organizationId: string;
+				role: InferOrganizationRolesFromOption<O>;
+				createdAt: Date;
+				userId: string;
+				teamId?: string | undefined;
+				user: {
+					id: string;
+					email: string;
+					name: string;
+					image?: string | undefined;
+				};
+			}
+		: {
+				id: string;
+				organizationId: string;
+				role: InferOrganizationRolesFromOption<O>;
+				createdAt: Date;
+				userId: string;
+				user: {
+					id: string;
+					email: string;
+					name: string;
+					image?: string | undefined;
+				};
+			}) &
+		InferAdditionalFieldsFromPluginOptions<"member", O, isClientSide>
+>;
 
 export type InferOrganization<
 	O extends OrganizationOptions,
@@ -402,11 +422,17 @@ export type InferOrganization<
 		InferAdditionalFieldsFromPluginOptions<"organization", O, isClientSide>
 >;
 
-export type InferTeam<O extends OrganizationOptions> = Prettify<
-	Team & InferAdditionalFieldsFromPluginOptions<"team", O>
+export type InferTeam<
+	O extends OrganizationOptions,
+	isClientSide extends boolean = true,
+> = Prettify<
+	Team & InferAdditionalFieldsFromPluginOptions<"team", O, isClientSide>
 >;
 
-export type InferInvitation<O extends OrganizationOptions> =
+export type InferInvitation<
+	O extends OrganizationOptions,
+	isClientSide extends boolean = true,
+> = Prettify<
 	(O["teams"] extends {
 		enabled: true;
 	}
@@ -431,4 +457,5 @@ export type InferInvitation<O extends OrganizationOptions> =
 				expiresAt: Date;
 				createdAt: Date;
 			}) &
-		InferAdditionalFieldsFromPluginOptions<"invitation", O, false>;
+		InferAdditionalFieldsFromPluginOptions<"invitation", O, isClientSide>
+>;

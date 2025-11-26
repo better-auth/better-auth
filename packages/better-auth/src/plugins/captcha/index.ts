@@ -1,4 +1,5 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
+import { getIp } from "../../utils/get-request-ip";
 import { middlewareResponse } from "../../utils/middleware-response";
 import { defaultEndpoints, Providers, siteVerifyMap } from "./constants";
 import { EXTERNAL_ERROR_CODES, INTERNAL_ERROR_CODES } from "./error-codes";
@@ -22,8 +23,7 @@ export const captcha = (options: CaptchaOptions) =>
 				}
 
 				const captchaResponse = request.headers.get("x-captcha-response");
-				const remoteUserIP =
-					request.headers.get("x-captcha-user-remote-ip") ?? undefined;
+				const remoteUserIP = getIp(request, ctx.options) ?? undefined;
 
 				if (!captchaResponse) {
 					return middlewareResponse({
