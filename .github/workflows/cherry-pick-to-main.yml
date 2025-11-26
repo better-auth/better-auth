@@ -6,7 +6,7 @@ on:
     - cron: '*/5 * * * *'
   workflow_dispatch:
   pull_request:
-    types: [opened]
+    types: [opened, reopened]
     branches:
       - canary
 
