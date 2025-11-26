@@ -1053,9 +1053,6 @@ importers:
       '@tanstack/react-start':
         specifier: ^1.131.3
         version: 1.139.3(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.2.4(@types/node@24.10.1)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1))
-      '@tanstack/start-server-core':
-        specifier: ^1.131.3
-        version: 1.139.3
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
@@ -23263,7 +23260,6 @@ snapshots:
   js-yaml@4.1.1:
     dependencies:
       argparse: 2.0.1
-    optional: true
 
   jsc-safe-url@0.2.4: {}
 
@@ -28306,7 +28302,7 @@ snapshots:
       '@oozcitak/dom': 2.0.1
       '@oozcitak/infra': 2.0.1
       '@oozcitak/util': 9.0.4
-      js-yaml: 4.1.0
+      js-yaml: 4.1.1
 
   xmlbuilder@11.0.1: {}
 
