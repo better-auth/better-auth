@@ -51,6 +51,7 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 										image: {
 											type: "string",
 											description: "The image of the user",
+											nullable: true,
 										},
 									},
 								},
