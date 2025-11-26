@@ -177,11 +177,6 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 				});
 			}
 			const { session, key } = await verifyTwoFactor(ctx);
-			if (!session.user.twoFactorEnabled) {
-				throw new APIError("BAD_REQUEST", {
-					message: TWO_FACTOR_ERROR_CODES.OTP_NOT_ENABLED,
-				});
-			}
 			const code = generateRandomString(opts.digits, "0-9");
 			const hashedCode = await storeOTP(ctx, code);
 			await ctx.context.internalAdapter.createVerificationValue({
