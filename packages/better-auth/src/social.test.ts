@@ -962,7 +962,7 @@ describe("Vercel Provider", async () => {
 
 					// Verify PKCE is present
 					const codeVerifier = params.get("code_verifier");
-					expect(codeVerifier).toBeDefined();
+					expect(codeVerifier).not.toBeNull();
 					expect(codeVerifier).not.toBe("");
 
 					const profile: VercelProfile = {
@@ -1036,7 +1036,7 @@ describe("Vercel Provider", async () => {
 
 		// Verify PKCE parameters are present
 		const authUrl = new URL(signInRes.data!.url!);
-		expect(authUrl.searchParams.get("code_challenge")).toBeDefined();
+		expect(authUrl.searchParams.get("code_challenge")).not.toBeNull();
 		expect(authUrl.searchParams.get("code_challenge_method")).toBe("S256");
 	});
 
@@ -1211,7 +1211,7 @@ describe("Vercel Provider", async () => {
 	});
 
 	it("should support mapProfileToUser", async () => {
-		const { client, cookieSetter, auth } = await getTestInstance(
+		const { client, cookieSetter } = await getTestInstance(
 			{
 				user: {
 					additionalFields: {
@@ -1262,7 +1262,7 @@ describe("Vercel Provider", async () => {
 		});
 
 		expect(session.data?.user).toHaveProperty("vercelUserId");
-		// The test uses the mocked userinfo which returns vercel_user_456 at this point
+		// The test uses the mocked userinfo which returns vercel_user_123 at this point
 		expect((session.data?.user as any).vercelUserId).toBeDefined();
 	});
 
