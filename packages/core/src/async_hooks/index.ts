@@ -16,6 +16,8 @@ const AsyncLocalStoragePromise: Promise<typeof AsyncLocalStorage> = import(
 		if ("AsyncLocalStorage" in globalThis) {
 			return (globalThis as any).AsyncLocalStorage;
 		}
+		const errorStack = err.stack;
+		console.warn(errorStack);
 		console.warn(
 			"[better-auth] Warning: AsyncLocalStorage is not available in this environment. Some features may not work as expected.",
 		);
