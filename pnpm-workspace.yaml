@@ -6,6 +6,8 @@ packages:
   - test
 
 catalog:
+  zod: ^4.1.12
+  '@better-auth/utils': 0.3.0
   '@better-fetch/fetch': 1.1.18
   better-call: 1.1.0
   tsdown: ^0.16.6
