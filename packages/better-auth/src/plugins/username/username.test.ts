@@ -160,7 +160,7 @@ describe("username", async (it) => {
 			name: "new-name",
 		});
 		expect(res.error?.status).toBe(400);
-		expect(res.error?.code).toBe("USERNAME_IS_TOO_SHORT");
+		expect(res.error?.code).toBe("USERNAME_TOO_SHORT");
 	});
 
 	it("should fail on empty username", async () => {
@@ -207,7 +207,7 @@ describe("username", async (it) => {
 			username: "abc",
 		});
 		expect(res.error?.status).toBe(422);
-		expect(res.error?.code).toBe("USERNAME_IS_TOO_SHORT");
+		expect(res.error?.code).toBe("USERNAME_TOO_SHORT");
 	});
 
 	it("should reject too long username in isUsernameAvailable", async () => {

@@ -3,10 +3,8 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import type { Where } from "@better-auth/core/db/adapter";
 import * as z from "zod";
 import { APIError } from "../../../api";
-import {
-	type InferAdditionalFieldsFromPluginOptions,
-	toZodSchema,
-} from "../../../db";
+import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
+import { toZodSchema } from "../../../db";
 import type { User } from "../../../types";
 import type { AccessControl } from "../../access";
 import { orgSessionMiddleware } from "../call";
@@ -494,6 +492,7 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 		"/organization/list-roles",
 		{
 			method: "GET",
+			requireHeaders: true,
 			use: [orgSessionMiddleware],
 			query: z
 				.object({
@@ -605,6 +604,7 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 		"/organization/get-role",
 		{
 			method: "GET",
+			requireHeaders: true,
 			use: [orgSessionMiddleware],
 			query: z
 				.object({
@@ -823,6 +823,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					},
 				},
 			},
+			requireHeaders: true,
 			use: [orgSessionMiddleware],
 		},
 		async (ctx) => {

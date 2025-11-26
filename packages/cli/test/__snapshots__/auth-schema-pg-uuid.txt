@@ -1,0 +1,137 @@
+import { relations, sql } from "drizzle-orm";
+import {
+  pgTable,
+  text,
+  timestamp,
+  boolean,
+  uuid,
+  index,
+} from "drizzle-orm/pg-core";
+
+export const custom_user = pgTable("custom_user", {
+  id: uuid("id")
+    .default(sql`pg_catalog.gen_random_uuid()`)
+    .primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  emailVerified: boolean("email_verified").default(false).notNull(),
+  image: text("image"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .notNull(),
+  twoFactorEnabled: boolean("two_factor_enabled").default(false),
+  username: text("username").unique(),
+  displayUsername: text("display_username"),
+});
+
+export const custom_session = pgTable(
+  "custom_session",
+  {
+    id: uuid("id")
+      .default(sql`pg_catalog.gen_random_uuid()`)
+      .primaryKey(),
+    expiresAt: timestamp("expires_at").notNull(),
+    token: text("token").notNull().unique(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => custom_user.id, { onDelete: "cascade" }),
+  },
+  (table) => [index("custom_session_userId_idx").on(table.userId)],
+);
+
+export const custom_account = pgTable(
+  "custom_account",
+  {
+    id: uuid("id")
+      .default(sql`pg_catalog.gen_random_uuid()`)
+      .primaryKey(),
+    accountId: text("account_id").notNull(),
+    providerId: text("provider_id").notNull(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => custom_user.id, { onDelete: "cascade" }),
+    accessToken: text("access_token"),
+    refreshToken: text("refresh_token"),
+    idToken: text("id_token"),
+    accessTokenExpiresAt: timestamp("access_token_expires_at"),
+    refreshTokenExpiresAt: timestamp("refresh_token_expires_at"),
+    scope: text("scope"),
+    password: text("password"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [index("custom_account_userId_idx").on(table.userId)],
+);
+
+export const custom_verification = pgTable(
+  "custom_verification",
+  {
+    id: uuid("id")
+      .default(sql`pg_catalog.gen_random_uuid()`)
+      .primaryKey(),
+    identifier: text("identifier").notNull(),
+    value: text("value").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [index("custom_verification_identifier_idx").on(table.identifier)],
+);
+
+export const twoFactor = pgTable(
+  "two_factor",
+  {
+    id: uuid("id")
+      .default(sql`pg_catalog.gen_random_uuid()`)
+      .primaryKey(),
+    secret: text("secret").notNull(),
+    backupCodes: text("backup_codes").notNull(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => custom_user.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    index("twoFactor_secret_idx").on(table.secret),
+    index("twoFactor_userId_idx").on(table.userId),
+  ],
+);
+
+export const custom_userRelations = relations(custom_user, ({ many }) => ({
+  custom_sessions: many(custom_session),
+  custom_accounts: many(custom_account),
+  twoFactors: many(twoFactor),
+}));
+
+export const custom_sessionRelations = relations(custom_session, ({ one }) => ({
+  custom_user: one(custom_user, {
+    fields: [custom_session.userId],
+    references: [custom_user.id],
+  }),
+}));
+
+export const custom_accountRelations = relations(custom_account, ({ one }) => ({
+  custom_user: one(custom_user, {
+    fields: [custom_account.userId],
+    references: [custom_user.id],
+  }),
+}));
+
+export const twoFactorRelations = relations(twoFactor, ({ one }) => ({
+  custom_user: one(custom_user, {
+    fields: [twoFactor.userId],
+    references: [custom_user.id],
+  }),
+}));

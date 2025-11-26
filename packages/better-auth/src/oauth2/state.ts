@@ -102,22 +102,20 @@ export async function parseState(c: GenericEndpointContext) {
 	const storeStateStrategy =
 		c.context.oauthConfig.storeStateStrategy || "cookie";
 
-	const stateDataSchema = z
-		.object({
-			callbackURL: z.string(),
-			codeVerifier: z.string(),
-			errorURL: z.string().optional(),
-			newUserURL: z.string().optional(),
-			expiresAt: z.number(),
-			link: z
-				.object({
-					email: z.string(),
-					userId: z.coerce.string(),
-				})
-				.optional(),
-			requestSignUp: z.boolean().optional(),
-		})
-		.passthrough();
+	const stateDataSchema = z.looseObject({
+		callbackURL: z.string(),
+		codeVerifier: z.string(),
+		errorURL: z.string().optional(),
+		newUserURL: z.string().optional(),
+		expiresAt: z.number(),
+		link: z
+			.object({
+				email: z.string(),
+				userId: z.coerce.string(),
+			})
+			.optional(),
+		requestSignUp: z.boolean().optional(),
+	});
 
 	let parsedData: z.infer<typeof stateDataSchema>;
 

@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/cli",
-  "version": "1.4.0-beta.18",
+  "version": "1.4.2-beta.5",
   "type": "module",
   "description": "The CLI for Better Auth",
   "module": "dist/index.mjs",
@@ -14,6 +14,7 @@
   "scripts": {
     "build": "tsdown",
     "start": "node ./dist/index.mjs",
+    "lint:package": "publint run --strict",
     "dev": "tsx ./src/index.ts",
     "test": "vitest",
     "typecheck": "tsc --project tsconfig.json"
@@ -53,6 +54,7 @@
     "@prisma/client": "^5.22.0",
     "@types/pg": "^8.15.5",
     "better-auth": "workspace:*",
+    "@better-auth/core": "workspace:*",
     "better-sqlite3": "^12.2.0",
     "c12": "^3.2.0",
     "chalk": "^5.6.2",
@@ -69,7 +71,7 @@
     "semver": "^7.7.2",
     "tinyexec": "^0.3.2",
     "yocto-spinner": "^0.2.3",
-    "zod": "^4.1.5"
+    "zod": "^4.1.12"
   },
   "files": [
     "dist"
