@@ -367,6 +367,11 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					});
 				},
 				async updateMany({ model, where, update }) {
+					if (!db[model]) {
+						throw new BetterAuthError(
+							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
+						);
+					}
 					const whereClause = convertWhereClause(model, where);
 					const result = await db[model]!.updateMany({
 						where: whereClause,
@@ -375,6 +380,11 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					return result ? (result.count as number) : 0;
 				},
 				async delete({ model, where }) {
+					if (!db[model]) {
+						throw new BetterAuthError(
+							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
+						);
+					}
 					const whereClause = convertWhereClause(model, where);
 					try {
 						await db[model]!.delete({
