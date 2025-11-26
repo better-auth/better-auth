@@ -15,21 +15,23 @@ export const metadata: Metadata = {
 
 interface AuthorizePageProps {
 	searchParams: Promise<{
-		redirect_uri: string;
+		redirect_uri?: string;
 		scope: string;
-		cancel_uri: string;
+		cancel_uri?: string;
 		client_id: string;
+		consent_code?: string;
 	}>;
 }
 
 export default async function AuthorizePage({
 	searchParams,
 }: AuthorizePageProps) {
-	const { redirect_uri, scope, client_id, cancel_uri } = await searchParams;
+	const { redirect_uri, scope, client_id, cancel_uri, consent_code } =
+		await searchParams;
 	const session = await auth.api.getSession({
 		headers: await headers(),
 	});
-	// @ts-expect-error
+
 	const clientDetails = await auth.api.getOAuthClient({
 		params: {
 			id: client_id,
@@ -104,7 +106,7 @@ export default async function AuthorizePage({
 								)}
 							</div>
 						</CardContent>
-						<ConsentBtns />
+						<ConsentBtns consentCode={consent_code} />
 					</Card>
 				</div>
 			</div>

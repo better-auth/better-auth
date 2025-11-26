@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { CardFooter } from "@/components/ui/card";
 import { client } from "@/lib/auth-client";
 
-export function ConsentBtns() {
+export function ConsentBtns({ consentCode }: { consentCode?: string }) {
 	const [loading, setLoading] = useState(false);
 	return (
 		<CardFooter className="flex items-center gap-2">
@@ -16,6 +16,7 @@ export function ConsentBtns() {
 					setLoading(true);
 					const res = await client.oauth2.consent({
 						accept: true,
+						consent_code: consentCode,
 					});
 					setLoading(false);
 					if (res.data?.redirectURI) {
@@ -32,6 +33,7 @@ export function ConsentBtns() {
 				onClick={async () => {
 					const res = await client.oauth2.consent({
 						accept: false,
+						consent_code: consentCode,
 					});
 					if (res.data?.redirectURI) {
 						window.location.href = res.data.redirectURI;
