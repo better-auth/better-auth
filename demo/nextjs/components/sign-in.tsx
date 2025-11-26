@@ -189,6 +189,28 @@ export default function SignIn() {
 						</Button>
 						<Button
 							variant="outline"
+							className={cn("w-full gap-2 flex relative")}
+							onClick={async () => {
+								await signIn.social({
+									provider: "vercel",
+									callbackURL: "/dashboard",
+								});
+							}}
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="1em"
+								height="1em"
+								viewBox="0 0 256 222"
+								className="dark:fill-white fill-black"
+							>
+								<path d="m128 0l128 221.705H0z" />
+							</svg>
+							<span>Sign in with Vercel</span>
+							{client.isLastUsedLoginMethod("vercel") && <LastUsedIndicator />}
+						</Button>
+						<Button
+							variant="outline"
 							className={cn("w-full gap-2 flex items-center relative")}
 							onClick={async () => {
 								await signIn.social({

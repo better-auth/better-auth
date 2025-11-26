@@ -55,6 +55,7 @@ export function getBaseURL(
 	path?: string,
 	request?: Request,
 	loadEnv?: boolean,
+	trustedProxyHeaders?: boolean | undefined,
 ) {
 	if (url) {
 		return withPath(url, path);
@@ -76,7 +77,7 @@ export function getBaseURL(
 
 	const fromRequest = request?.headers.get("x-forwarded-host");
 	const fromRequestProto = request?.headers.get("x-forwarded-proto");
-	if (fromRequest && fromRequestProto) {
+	if (fromRequest && fromRequestProto && trustedProxyHeaders) {
 		return withPath(`${fromRequestProto}://${fromRequest}`, path);
 	}
 
