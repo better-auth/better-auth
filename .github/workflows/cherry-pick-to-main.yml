@@ -34,7 +34,7 @@ jobs:
             console.log(`✅ Added merge-to-main label to PR #${context.payload.pull_request.number}`);
   cherry-pick:
     runs-on: ubuntu-latest
-    if: github.repository == 'better-auth/better-auth'
+    if: github.repository == 'better-auth/better-auth' && github.event_name != 'pull_request'
 
     permissions:
       contents: write
