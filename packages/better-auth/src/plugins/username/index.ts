@@ -392,7 +392,11 @@ export const username = (options?: UsernameOptions | undefined) => {
 						{ session, user },
 						ctx.body.rememberMe === false,
 					);
+					const callbackURL = ctx?.body?.callbackURL
+						? ctx.body.callbackURL
+						: "/";
 					return ctx.json({
+						url: callbackURL,
 						token: session.token,
 						user: {
 							id: user.id,

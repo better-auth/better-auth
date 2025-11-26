@@ -53,6 +53,48 @@ describe("username", async (it) => {
 		);
 		expect(res.data?.token).toBeDefined();
 	});
+	it("should return provided callbackURL in response", async () => {
+		// sign up a fresh user
+		await client.signUp.email({
+			email: "cb-test@example.com",
+			username: "cb_test_user",
+			password: "cb-password",
+			name: "CB Test",
+		});
+
+		const callback = "/dashboard?source=cli";
+		const res = await client.signIn.username({
+			username: "cb_test_user",
+			password: "cb-password",
+			callbackURL: callback,
+		});
+		expect(res.error).toBeNull();
+		expect(res.data).toBeDefined();
+		// support both encoded and raw responses by decoding before compare
+		expect(decodeURIComponent(res.data!.url)).toBe(callback);
+		expect(res.data?.token).toBeDefined();
+	});
+
+	it("should return default callbackURL in response", async () => {
+		// sign up a fresh user
+		await client.signUp.email({
+			email: "cb-test@example.com",
+			username: "cb_test_user",
+			password: "cb-password",
+			name: "CB Test",
+		});
+
+		const callback = "/dashboard?source=cli";
+		const res = await client.signIn.username({
+			username: "cb_test_user",
+			password: "cb-password",
+		});
+		expect(res.error).toBeNull();
+		expect(res.data).toBeDefined();
+		// support both encoded and raw responses by decoding before compare
+		expect(decodeURIComponent(res.data!.url)).toBe("/");
+		expect(res.data?.token).toBeDefined();
+	});
 	it("should update username", async () => {
 		const res = await client.updateUser({
 			username: "new_username_2.1",
