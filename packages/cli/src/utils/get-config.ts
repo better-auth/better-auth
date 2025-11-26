@@ -19,6 +19,12 @@ let possiblePaths = [
 	"auth.jsx",
 	"auth.server.js",
 	"auth.server.ts",
+	"auth/index.ts",
+	"auth/index.tsx",
+	"auth/index.js",
+	"auth/index.jsx",
+	"auth/index.server.js",
+	"auth/index.server.ts",
 ];
 
 possiblePaths = [
