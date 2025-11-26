@@ -1,7 +1,6 @@
 import type {
 	BetterAuthClientOptions,
 	BetterAuthClientPlugin,
-	BetterAuthPlugin,
 	ClientAtomListener,
 	ClientStore,
 } from "@better-auth/core";
@@ -79,8 +78,10 @@ export type InferErrorCodes<O extends BetterAuthClientOptions> =
 	O["plugins"] extends Array<infer Plugin>
 		? UnionToIntersection<
 				Plugin extends BetterAuthClientPlugin
-					? Plugin["$InferServerPlugin"] extends BetterAuthPlugin
-						? Plugin["$InferServerPlugin"]["$ERROR_CODES"]
+					? Plugin["$InferServerPlugin"] extends { $ERROR_CODES: infer E }
+						? E extends Record<string, string>
+							? E
+							: {}
 						: {}
 					: {}
 			>
