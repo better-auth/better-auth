@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/core",
-  "version": "1.4.2-beta.4",
+  "version": "1.4.2-beta.5",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "repository": {
@@ -107,6 +107,7 @@
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
+    "lint:package": "publint run --strict",
     "typecheck": "tsc --project tsconfig.json",
     "test": "vitest"
   },
