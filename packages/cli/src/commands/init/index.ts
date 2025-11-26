@@ -1,4 +1,5 @@
 import path from "node:path";
+import fs from "node:fs/promises";
 import {
 	cancel,
 	confirm,
@@ -7,13 +8,15 @@ import {
 	spinner,
 	log,
 	outro,
+	multiselect,
+	select,
 } from "@clack/prompts";
 import { Command } from "commander";
 import z from "zod";
 import {
 	type PluginsConfig,
-	pluginsConfig,
-} from "./configs/plugins-index.config";
+	tempPluginsConfig,
+} from "./configs/temp-plugins.config";
 import {
 	type GetArgumentsOptions,
 	generateAuthConfigCode,
@@ -26,9 +29,18 @@ import {
 } from "./utility/get-package-manager";
 import { installDependency } from "./utility/install-dependency";
 import { hasDependency } from "./utility/get-package-json";
-import { createEnvFile, getEnvFiles, hasEnvVar } from "./utility/env";
+import {
+	createEnvFile,
+	getEnvFiles,
+	getMissingEnvVars,
+	updateEnvFiles,
+} from "./utility/env";
 import { generateSecretHash } from "../secret";
 import chalk from "chalk";
+import { databasesConfig } from "./configs/databases.config";
+import type { Plugin } from "./configs/temp-plugins.config";
+import { tryCatch } from "./utility/utilts";
+import { getConfig } from "../../utils/get-config";
 
 // Goals:
 // 1. init `auth.ts` file
@@ -98,27 +110,151 @@ export async function initAction(opts: any) {
 					'BETTER_AUTH_URL="http://localhost:3000"',
 				]);
 			}
-		} else {
-			const shouldAddEnvVariables = await confirm({
-				message: `Add required environment variables to .env files? ${chalk.gray(`(BETTER_AUTH_SECRET, BETTER_AUTH_URL)`)}`,
+			return;
+		}
+		const missingEnvVars = await getMissingEnvVars(envFiles, [
+			"BETTER_AUTH_SECRET",
+			"BETTER_AUTH_URL",
+		]);
+
+		if (!missingEnvVars.length) {
+			const info =
+				"Skipping ENV file creation, required env variables are already present.";
+			return log.info(info);
+		}
+
+		// If only one file is missing env variables, just show confirmation prompt
+		if (missingEnvVars.length === 1) {
+			const { file, var: missingVars } = missingEnvVars[0]!;
+			const confirmed = await confirm({
+				message: `Add required environment variables to ${chalk.bold(file)}? (${missingVars.map((v) => chalk.cyan(v)).join(", ")})`,
 			});
-			if (isCancel(shouldAddEnvVariables)) {
+			if (isCancel(confirmed)) {
 				cancel("✋ Operation cancelled.");
 				process.exit(0);
 			}
-			if (shouldAddEnvVariables) {
+			if (confirmed) {
+				let envs = missingVars.map((v) => {
+					if (v === "BETTER_AUTH_SECRET") {
+						return `BETTER_AUTH_SECRET="${generateSecretHash()}"`;
+					}
+					if (v === "BETTER_AUTH_URL") {
+						return 'BETTER_AUTH_URL="http://localhost:3000"';
+					}
+					return `${v}=${v}`;
+				});
+				await updateEnvFiles([file], envs);
 			}
+			return;
+		}
+		const filesToUpdate = await multiselect({
+			message: `Add required environment variables to the following files?`,
+			options: missingEnvVars.map((x) => ({
+				value: x.file,
+				label: `${chalk.bold(x.file)}: ${x.var.map((v) => chalk.cyan(v)).join(", ")}`,
+			})),
+		});
+
+		if (isCancel(filesToUpdate)) {
+			cancel("✋ Operation cancelled.");
+			process.exit(0);
+		}
+		if (filesToUpdate) {
+			for (const file of filesToUpdate) {
+				let envs = missingEnvVars
+					.find((x) => x.file === file)!
+					.var.map((v) => {
+						if (v === "BETTER_AUTH_SECRET") {
+							return `BETTER_AUTH_SECRET="${generateSecretHash()}"`;
+						}
+						if (v === "BETTER_AUTH_URL") {
+							return 'BETTER_AUTH_URL="http://localhost:3000"';
+						}
+						return `${v}=${v}`;
+					});
+				await updateEnvFiles([file], envs);
+			}
+			return;
 		}
 	})();
 
-	const authConfigCode = await generateAuthConfigCode({
-		plugins: [],
-		database: "prisma-sqlite",
-		appName: "My App",
-		baseURL: "https://my-app.com",
-		getArguments: getArgumentsPrompt(options),
-	});
-	// console.log(authConfigCode);
+	const hasAuthConfigAlready = await (async () => {
+		try {
+			const alreadyHasAuthConfig = await getConfig({ cwd });
+			return alreadyHasAuthConfig;
+		} catch (error) {
+			return false;
+		}
+	})();
+
+	const database = await (async () => {
+		if (hasAuthConfigAlready) return null;
+		const confirmed = await confirm({
+			message: `Would you like to configure a database?`,
+		});
+		if (isCancel(confirmed)) {
+			cancel("✋ Operation cancelled.");
+			process.exit(0);
+		}
+		if (!confirmed) return null;
+		const db = await select({
+			message: `Select the database you want to use:`,
+			options: databasesConfig.map((database) => ({
+				value: database.adapter,
+				label: database.adapter,
+			})),
+		});
+		if (isCancel(db)) {
+			cancel("✋ Operation cancelled.");
+			process.exit(0);
+		}
+		return db;
+	})();
+
+	const plugins = await (async (): Promise<Plugin[]> => {
+		// For now we do not want to allow configurations of plugins.
+		// Possibily in the future we can support this.
+		const skip = true;
+		if (skip) return [];
+
+		if (hasAuthConfigAlready) return [];
+
+		const selectedPlugins = await multiselect({
+			message: `Select the plugins you want to use:`,
+			options: Object.values(tempPluginsConfig).map((plugin) => ({
+				value: plugin.displayName as string,
+				label: plugin.displayName as string,
+			})),
+		});
+		if (isCancel(selectedPlugins)) {
+			cancel("✋ Operation cancelled.");
+			process.exit(0);
+		}
+		return selectedPlugins as Plugin[];
+	})();
+
+	await (async () => {
+		const authConfigCode = await generateAuthConfigCode({
+			plugins,
+			database,
+			baseURL: "http://localhost:3000",
+			getArguments: getArgumentsPrompt(options),
+		});
+
+		const { data: allFiles, error } = await tryCatch(fs.readdir(cwd, "utf-8"));
+		if (error) {
+			log.error(`Failed to read directory: ${error.message}`);
+			process.exit(1);
+		}
+		let authConfigPath = path.join(cwd, "lib", "auth.ts");
+
+		if (allFiles.some((node) => node === "src")) {
+			authConfigPath = path.join(cwd, "src", "lib", "auth.ts");
+		}
+		await tryCatch(fs.mkdir(path.dirname(authConfigPath), { recursive: true }));
+		await tryCatch(fs.writeFile(authConfigPath, authConfigCode, "utf-8"));
+		console.log(authConfigPath);
+	})();
 
 	outro(`🚀 Better Auth CLI successfully initialized!`);
 }
@@ -179,7 +315,9 @@ const processArguments = (
 
 let pluginArgumentOptionsSchema: Record<string, z.ZodType<any>> = {};
 
-for (const plugin of Object.values(pluginsConfig as never as PluginsConfig)) {
+for (const plugin of Object.values(
+	tempPluginsConfig as never as PluginsConfig,
+)) {
 	if (plugin.auth.arguments) {
 		processArguments(plugin.auth.arguments, plugin.displayName);
 	}

@@ -1,14 +1,14 @@
 import {
 	type Plugin,
 	type PluginConfig,
-	pluginsConfig,
-} from "../configs/plugins-index.config";
+	tempPluginsConfig,
+} from "../configs/temp-plugins.config";
 import type { GetArgumentsFn, GetArgumentsOptions } from "../generate-auth";
 import { formatCode } from "./format";
 
 export const getPluginConfigs = (plugins: Plugin[]) => {
 	return plugins.map((plugin) => {
-		const pluginConfig = pluginsConfig[plugin];
+		const pluginConfig = tempPluginsConfig[plugin];
 		if (!pluginConfig) {
 			throw new Error(`Plugin ${plugin} not found`);
 		}

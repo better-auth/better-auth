@@ -3,7 +3,8 @@ import {
 	databasesConfig,
 } from "../configs/databases.config";
 
-export const getDatabaseCode = (adapter: DatabaseAdapter) => {
+export const getDatabaseCode = (adapter: DatabaseAdapter | null) => {
+	if (!adapter) return null;
 	const database = databasesConfig.find(
 		(database) => database.adapter === adapter,
 	)!;

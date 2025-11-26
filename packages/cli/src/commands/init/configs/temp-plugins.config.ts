@@ -1,9 +1,11 @@
-import * as z from "zod/v4";
-import type { GetArgumentsOptions } from "../generate-auth";
-import { createImport, type ImportGroup } from "../utility/imports";
-import type { pluginsConfig } from "./plugins-index.config";
+// This is a temporary plugin config file until we support actually using the plugin config files.
 
-export type Plugin = keyof typeof pluginsConfig;
+import type { ImportGroup } from "../utility/imports";
+import type { GetArgumentsOptions } from "../generate-auth";
+import { createImport } from "../utility/imports";
+import * as z from "zod/v4";
+
+export type Plugin = keyof typeof tempPluginsConfig;
 
 export type PluginConfig = {
 	displayName: string;
@@ -23,9 +25,7 @@ export type PluginsConfig = {
 	[key in Plugin]: PluginConfig;
 };
 
-export { pluginsConfig } from "./plugins-index.config";
-
-export const pluginsConfig2 = {
+export const tempPluginsConfig = {
 	twoFactor: {
 		displayName: "Two Factor",
 		auth: {

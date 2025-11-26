@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pluginsConfig } from "../configs/plugins.config";
+import { pluginsConfig } from "../configs/temp-plugins.config";
 import { generateInnerAuthConfigCode } from "./auth-config";
 import { getDatabaseCode } from "./database";
 import { formatCode } from "./format";

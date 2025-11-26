@@ -1,16 +1,13 @@
 import type { ZodSchema } from "zod";
 import type { DatabaseAdapter } from "./configs/databases.config";
-import type { Plugin } from "./configs/plugins-index.config";
+import { tempPluginsConfig, type Plugin } from "./configs/temp-plugins.config";
 import {
 	formatCode,
 	generateInnerAuthConfigCode,
 	getDatabaseCode,
 } from "./utility";
-import {
-	createImport,
-	getImportString,
-	type ImportGroup,
-} from "./utility/imports";
+import type { ImportGroup } from "./utility/imports";
+import { createImport, getImportString } from "./utility/imports";
 import { getPluginConfigs } from "./utility/plugin";
 
 export type GetArgumentsOptions = {
@@ -101,7 +98,7 @@ export type GetArgumentsFn = (
 
 export type GenerateAuthFileOptions = {
 	plugins: Plugin[];
-	database: DatabaseAdapter;
+	database: DatabaseAdapter | null;
 	appName?: string;
 	baseURL?: string;
 	/**
@@ -130,7 +127,7 @@ export const generateAuthConfigCode = async ({
 		...Object.values(plugins)
 			.map(({ auth }) => auth.imports)
 			.flat(),
-		...database.imports,
+		...(database?.imports ?? []),
 	];
 
 	const authConfigCode = await generateInnerAuthConfigCode({
@@ -144,7 +141,7 @@ export const generateAuthConfigCode = async ({
 	const segmentedCode = {
 		imports: await getImportString(imports),
 		exports: "",
-		preAuthConfig: database.preCode ?? "",
+		preAuthConfig: database?.preCode ?? "",
 		authConfig: authConfigCode,
 		postAuthConfig: "",
 	};

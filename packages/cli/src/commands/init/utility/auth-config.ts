@@ -4,7 +4,7 @@ import type { GetArgumentsFn } from "../generate-auth";
 import { getAuthPluginsCode } from "./plugin";
 
 type GenerateAuthConfigStringOptions = {
-	database: DatabasesConfig;
+	database?: DatabasesConfig | null;
 	plugins?: PluginConfig[];
 	appName?: string;
 	baseURL?: string;
@@ -56,6 +56,7 @@ const getBaseURLCode = (baseURL?: string) => {
 	return JSON.stringify(url.toString());
 };
 
-const getDatabaseCode = (database: DatabasesConfig) => {
+const getDatabaseCode = (database?: DatabasesConfig | null) => {
+	if (!database) return undefined
 	return database.code({});
 };

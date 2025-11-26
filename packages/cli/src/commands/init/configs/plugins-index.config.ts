@@ -1,5 +1,5 @@
 import type { GetArgumentsOptions } from "../generate-auth";
-import { type ImportGroup } from "../utility/imports";
+import type { ImportGroup } from "../utility/imports";
 
 export type Plugin = keyof typeof pluginsConfig;
 
