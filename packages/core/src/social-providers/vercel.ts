@@ -1,6 +1,7 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
+import { BetterAuthError } from "../error";
 
 export interface VercelProfile {
 	sub: string;
@@ -20,6 +21,10 @@ export const vercel = (options: VercelOptions) => {
 		id: "vercel",
 		name: "Vercel",
 		createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
+			if (!codeVerifier) {
+				throw new BetterAuthError("codeVerifier is required for Vercel");
+			}
+
 			let _scopes: string[] | undefined = undefined;
 			if (options.scope !== undefined || scopes !== undefined) {
 				_scopes = [];
