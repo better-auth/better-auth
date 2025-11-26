@@ -12,7 +12,7 @@
   "homepage": "https://www.better-auth.com/docs/concepts/cli",
   "main": "./dist/index.mjs",
   "scripts": {
-    "build": "pnpm generate:plugin-config && tsdown",
+    "build": "tsdown",
     "start": "node ./dist/index.mjs",
     "dev": "tsx ./src/index.ts",
     "test": "vitest",
