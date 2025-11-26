@@ -85,7 +85,7 @@ export const auth = betterAuth({
 ```
 
 <Callout>
-The request path is automatically appended to the returned value.
+The request path is automatically appended to the returned value. If the function returns an empty value or throws an error, the IP address will be used as fallback.
 </Callout>
 
 ### Rate Limit Window
