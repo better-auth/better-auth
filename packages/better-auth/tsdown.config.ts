@@ -87,6 +87,7 @@ export default defineConfig({
 		"tinyspy",
 		"next/dist/compiled/@edge-runtime/cookies",
 		"@tanstack/react-start",
+		"@tanstack/start-server-core",
 		"bson",
 		"mongodb-connection-string-url",
 		"@mongodb-js/saslprep",
