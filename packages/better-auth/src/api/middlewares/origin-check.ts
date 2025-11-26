@@ -23,15 +23,7 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	const request = ctx.request;
 	const { body, query, context } = ctx;
 
-	// Only apply Fetch Metadata CSRF protection to email sign-in and sign-up endpoints
-	const isEmailAuthEndpoint =
-		ctx.path === "/sign-in/email" || ctx.path === "/sign-up/email";
-
-	if (isEmailAuthEndpoint) {
-		await validateLoginCsrf(ctx);
-	} else {
-		await validateOrigin(ctx);
-	}
+	await validateOrigin(ctx);
 
 	const callbackURL = body?.callbackURL || query?.callbackURL;
 	const redirectURL = body?.redirectTo;
@@ -270,12 +262,23 @@ async function validateOrigin(
 }
 
 /**
+ * Middleware for CSRF protection using Fetch Metadata headers.
+ * This prevents cross-site navigation login attacks while supporting progressive enhancement.
+ */
+export const formCsrfMiddleware = createAuthMiddleware(async (ctx) => {
+	const request = ctx.request;
+	if (!request) {
+		return;
+	}
+
+	await validateFormCsrf(ctx);
+});
+
+/**
  * Validates CSRF protection for first-login scenarios using Fetch Metadata headers.
  * This prevents cross-site form submission attacks while supporting progressive enhancement.
  */
-export async function validateLoginCsrf(
-	ctx: GenericEndpointContext,
-): Promise<void> {
+async function validateFormCsrf(ctx: GenericEndpointContext): Promise<void> {
 	const hasSession = hasBetterAuthSessionCookie(ctx);
 
 	// If Better Auth session cookie exists, use standard origin validation

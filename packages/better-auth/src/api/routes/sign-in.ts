@@ -9,6 +9,7 @@ import { parseUserOutput } from "../../db/schema";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import type { InferUser } from "../../types";
 import { generateState } from "../../utils";
+import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
 
 const socialSignInBodySchema = z.object({
@@ -333,6 +334,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 		{
 			method: "POST",
 			operationId: "signInEmail",
+			use: [formCsrfMiddleware],
 			body: z.object({
 				/**
 				 * Email of the user
