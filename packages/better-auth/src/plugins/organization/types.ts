@@ -1,4 +1,4 @@
-import type { AuthContext } from "@better-auth/core";
+import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
 import type { Session, User } from "../../types";
 import type { AccessControl, Role } from "../access";
@@ -129,7 +129,7 @@ export interface OrganizationOptions {
 			 */
 			customCreateDefaultTeam?: (
 				organization: Organization & Record<string, any>,
-				request?: Request,
+				ctx?: GenericEndpointContext,
 			) => Promise<Team & Record<string, any>>;
 		};
 		/**
@@ -150,7 +150,7 @@ export interface OrganizationOptions {
 							session: Session;
 						} | null;
 					},
-					request?: Request,
+					ctx?: GenericEndpointContext,
 			  ) => number | Promise<number>)
 			| number;
 

@@ -6,13 +6,14 @@ import {
 import type { Account, User } from "@better-auth/core/db";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
-import { z } from "zod";
+import * as z from "zod";
 import { createEmailVerificationToken } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { mergeSchema } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
 import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
-import { getSchema, type UsernameSchema } from "./schema";
+import type { UsernameSchema } from "./schema";
+import { getSchema } from "./schema";
 
 export { USERNAME_ERROR_CODES } from "./error-codes";
 
@@ -263,6 +264,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 							username,
 						});
 						throw new APIError("UNPROCESSABLE_ENTITY", {
+							code: "USERNAME_TOO_SHORT",
 							message: ERROR_CODES.USERNAME_TOO_SHORT,
 						});
 					}
@@ -439,6 +441,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 
 					if (username.length < minUsernameLength) {
 						throw new APIError("UNPROCESSABLE_ENTITY", {
+							code: "USERNAME_TOO_SHORT",
 							message: ERROR_CODES.USERNAME_TOO_SHORT,
 						});
 					}
@@ -505,6 +508,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 							const maxUsernameLength = options?.maxUsernameLength || 30;
 							if (username.length < minUsernameLength) {
 								throw new APIError("BAD_REQUEST", {
+									code: "USERNAME_TOO_SHORT",
 									message: ERROR_CODES.USERNAME_TOO_SHORT,
 								});
 							}

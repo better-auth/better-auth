@@ -3,13 +3,13 @@ import type {
 	GenericEndpointContext,
 } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { z } from "zod";
+import * as z from "zod";
 import { sessionMiddleware } from "../../api";
 import { generateRandomString } from "../../crypto";
 import type { Session, User } from "../../types";
 import { defaultKeyHasher } from "..";
 
-interface OneTimeTokenOptions {
+export interface OneTimeTokenOptions {
 	/**
 	 * Expires in minutes
 	 *

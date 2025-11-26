@@ -1,5 +1,5 @@
 {
-  "$schema": "https://turborepo.org/schema.json",
+  "$schema": "./node_modules/turbo/schema.json",
   "globalDependencies": [
     "package.json",
     "tsconfig.json",
@@ -22,20 +22,17 @@
     },
     "//#format": {},
     "lint": {},
-    "knip": {
-      "cache": true
+    "lint:package": {
+      "dependsOn": ["build"]
     },
     "test": {
-      "dependsOn": ["build"],
-      "cache": false
+      "dependsOn": ["build"]
     },
     "e2e:smoke": {
-      "dependsOn": ["build"],
-      "cache": false
+      "dependsOn": ["build"]
     },
     "e2e:integration": {
-      "dependsOn": ["build"],
-      "cache": false
+      "dependsOn": ["build"]
     },
     "deploy": {
       "cache": false

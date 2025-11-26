@@ -1,5 +1,7 @@
-import type { BetterAuthClientPlugin } from "@better-auth/core";
-import type { BetterFetchOption } from "@better-fetch/fetch";
+import type {
+	BetterAuthClientPlugin,
+	ClientFetchOption,
+} from "@better-auth/core";
 
 declare global {
 	interface Window {
@@ -100,7 +102,7 @@ export interface GoogleOneTapOptions {
 
 export interface GoogleOneTapActionOptions
 	extends Omit<GoogleOneTapOptions, "clientId" | "promptOptions"> {
-	fetchOptions?: BetterFetchOption | undefined;
+	fetchOptions?: ClientFetchOption | undefined;
 	/**
 	 * Callback URL.
 	 */
@@ -120,7 +122,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 		getActions: ($fetch, _) => ({
 			oneTap: async (
 				opts?: GoogleOneTapActionOptions | undefined,
-				fetchOptions?: BetterFetchOption | undefined,
+				fetchOptions?: ClientFetchOption | undefined,
 			) => {
 				if (isRequestInProgress) {
 					console.warn(

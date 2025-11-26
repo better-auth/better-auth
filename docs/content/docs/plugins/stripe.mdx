@@ -38,7 +38,7 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
         Next, install the Stripe SDK on your server:
 
         ```package-install
-        stripe@^19.1.0
+        stripe@^20.0.0
         ```
     </Step>
     <Step>
@@ -50,7 +50,7 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
         import Stripe from "stripe"
 
         const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-            apiVersion: "2025-09-30.clover", // Latest API version as of Stripe SDK v19
+            apiVersion: "2025-11-17.clover", // Latest API version as of Stripe SDK v20.0.0
         })
 
         export const auth = betterAuth({
@@ -741,7 +741,7 @@ Each plan can have the following properties:
 
 **annualDiscountLookupKey**: `string` - The Stripe price lookup key for annual billing. Alternative to `annualDiscountPriceId`.
 
-**limits**: `Record<string, number>` - Limits associated with the plan (e.g., `{ projects: 10, storage: 5 }`).
+**limits**: `Record<string, unknown>` - Limits associated with the plan (e.g., `{ projects: 10, storage: 5 }`). Useful when you want to define plan-specific metadata.
 
 **group**: `string` - A group name for the plan, useful for categorizing plans.
 

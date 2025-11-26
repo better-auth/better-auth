@@ -720,7 +720,7 @@ describe("signin", async () => {
 	});
 
 	it("should allow additional data in oauth state", async () => {
-		let additionalData: Record<string, any> | undefined;
+		let additionalData: Record<string, any> | null = null;
 		const headers = new Headers();
 		let state = "";
 		const { client, cookieSetter } = await getTestInstance(
@@ -737,7 +737,7 @@ describe("signin", async () => {
 				hooks: {
 					after: createAuthMiddleware(async (ctx) => {
 						if (ctx.path === "/callback/:id") {
-							additionalData = await getOAuthState<{ invitedBy?: string }>();
+							additionalData = await getOAuthState();
 						}
 					}),
 				},
@@ -783,7 +783,7 @@ describe("signin", async () => {
 	});
 
 	it("should not allow overriding oauth code verifier, expiresAt, callbackURL, errorURL, newUserURL, link, requestSignUp", async () => {
-		let additionalData: Record<string, any> = {};
+		let additionalData: Record<string, any> | null = null;
 		const headers = new Headers();
 		let state = "";
 		const { client, cookieSetter } = await getTestInstance(
@@ -800,7 +800,7 @@ describe("signin", async () => {
 				hooks: {
 					after: createAuthMiddleware(async (ctx) => {
 						if (ctx.path === "/callback/:id") {
-							additionalData = await getOAuthState<{ invitedBy?: string }>();
+							additionalData = await getOAuthState();
 						}
 					}),
 				},
@@ -846,16 +846,16 @@ describe("signin", async () => {
 				cookieSetter(headers)(c as any);
 			},
 		});
-		expect(additionalData.codeVerifier).not.toBe("test-code-verifier");
-		expect(additionalData.callbackURL).not.toBe("test-callback-url");
-		expect(additionalData.errorURL).not.toBe("test-error-url");
-		expect(additionalData.newUserURL).not.toBe("test-new-user-url");
-		expect(additionalData.link).not.toBe({
+		expect(additionalData!.codeVerifier).not.toBe("test-code-verifier");
+		expect(additionalData!.callbackURL).not.toBe("test-callback-url");
+		expect(additionalData!.errorURL).not.toBe("test-error-url");
+		expect(additionalData!.newUserURL).not.toBe("test-new-user-url");
+		expect(additionalData!.link).not.toBe({
 			email: "test-email",
 			userId: "test-user-id",
 		});
-		expect(additionalData.requestSignUp).not.toBe(true);
-		expect(additionalData.expiresAt).not.toBe(expiresAt);
+		expect(additionalData!.requestSignUp).not.toBe(true);
+		expect(additionalData!.expiresAt).not.toBe(expiresAt);
 	});
 });
 

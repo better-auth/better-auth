@@ -1,13 +1,10 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "better-call";
-import { z } from "zod";
+import * as z from "zod";
 import { getSessionFromCtx, requestOnlySessionMiddleware } from "../../../api";
 import { setSessionCookie } from "../../../cookies";
-import {
-	type InferAdditionalFieldsFromPluginOptions,
-	toZodSchema,
-} from "../../../db";
-import type { PrettifyDeep } from "../../../types/helper";
+import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
+import { toZodSchema } from "../../../db";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
@@ -265,7 +262,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 				const defaultTeam =
 					(await options.teams.defaultTeam?.customCreateDefaultTeam?.(
 						organization,
-						ctx.request,
+						ctx,
 					)) || (await adapter.createTeam(teamData));
 
 				teamMember = await adapter.findOrCreateTeamMember({
@@ -683,6 +680,7 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
 				openapi: {
+					operationId: "getOrganization",
 					description: "Get the full organization",
 					responses: {
 						"200": {
@@ -737,21 +735,16 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 				});
 			}
 
-			type Members = PrettifyDeep<InferMember<O, false>>[];
-			type Invitations = PrettifyDeep<InferInvitation<O, false>>[];
-			type Teams = PrettifyDeep<InferTeam<O, false>>[];
-			type Organization = PrettifyDeep<InferOrganization<O, false>>;
-
 			type OrganizationReturn = O["teams"] extends { enabled: true }
 				? {
-						members: Members;
-						invitations: Invitations;
-						teams: Teams;
-					} & Organization
+						members: InferMember<O, false>[];
+						invitations: InferInvitation<O, false>[];
+						teams: InferTeam<O, false>[];
+					} & InferOrganization<O, false>
 				: {
-						members: Members;
-						invitations: Invitations;
-					} & Organization;
+						members: InferMember<O, false>[];
+						invitations: InferInvitation<O, false>[];
+					} & InferOrganization<O, false>;
 			return ctx.json(organization as unknown as OrganizationReturn);
 		},
 	);
@@ -781,8 +774,10 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 					.optional(),
 			}),
 			use: [orgSessionMiddleware, orgMiddleware],
+			requireHeaders: true,
 			metadata: {
 				openapi: {
+					operationId: "setActiveOrganization",
 					description: "Set the active organization",
 					responses: {
 						"200": {
@@ -897,6 +892,7 @@ export const listOrganizations = <O extends OrganizationOptions>(options: O) =>
 		{
 			method: "GET",
 			use: [orgMiddleware, orgSessionMiddleware],
+			requireHeaders: true,
 			metadata: {
 				openapi: {
 					description: "List all organizations",
