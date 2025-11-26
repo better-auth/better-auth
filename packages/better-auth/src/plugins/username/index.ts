@@ -188,7 +188,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 							})
 							.optional(),
 					}),
-					use: [originCheck((ctx) => ctx.query.callbackURL)],
+					use: [originCheck((ctx) => ctx.body?.callbackURL)],
 					metadata: {
 						openapi: {
 							summary: "Sign in with username",
