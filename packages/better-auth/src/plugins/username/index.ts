@@ -208,6 +208,14 @@ export const username = (options?: UsernameOptions | undefined) => {
 													user: {
 														$ref: "#/components/schemas/User",
 													},
+													redirect: {
+														type: "boolean",
+														description: "Whether to redirect the user",
+													},
+													url: {
+														type: "string",
+														description: "The URL to redirect to",
+													},
 												},
 												required: ["token", "user"],
 											},
