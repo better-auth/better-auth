@@ -1,5 +1,13 @@
 import path from "node:path";
-import { intro } from "@clack/prompts";
+import {
+	cancel,
+	confirm,
+	intro,
+	isCancel,
+	spinner,
+	log,
+	outro,
+} from "@clack/prompts";
 import { Command } from "commander";
 import z from "zod";
 import {
@@ -11,6 +19,16 @@ import {
 	generateAuthConfigCode,
 } from "./generate-auth";
 import { getArgumentsPrompt, getFlagVariable } from "./utility/prompt";
+import {
+	getPackageManager,
+	getPkgManagerStr,
+	PACKAGE_MANAGERS,
+} from "./utility/get-package-manager";
+import { installDependency } from "./utility/install-dependency";
+import { hasDependency } from "./utility/get-package-json";
+import { createEnvFile, getEnvFiles, hasEnvVar } from "./utility/env";
+import { generateSecretHash } from "../secret";
+import chalk from "chalk";
 
 // Goals:
 // 1. init `auth.ts` file
@@ -21,8 +39,77 @@ import { getArgumentsPrompt, getFlagVariable } from "./utility/prompt";
 
 export async function initAction(opts: any) {
 	const options = initActionOptionsSchema.parse(opts);
+	const cwd = options.cwd;
 
 	intro("👋 Better Auth CLI");
+
+	// Get package manager information
+	const { pm, pmString } = await (async () => {
+		if (options.packageManager) {
+			const [pm, version] = [options.packageManager, null];
+			const pmString = getPkgManagerStr({ packageManager: pm, version });
+			return { pm, pmString };
+		}
+
+		const { pm, version } = await getPackageManager(cwd);
+		const pmString = getPkgManagerStr({ packageManager: pm, version });
+		return { pm, pmString };
+	})();
+
+	// Install Better-Auth
+	await (async () => {
+		const hasBetterAuth = await hasDependency(cwd, "better-auth");
+		if (hasBetterAuth) {
+			const info = "Better-Auth is already installed. Skipping installation.";
+			return log.info(info);
+		}
+
+		const shouldInstallBetterAuth = await confirm({
+			message: `Would you like to install Better-Auth using ${chalk.bold(pmString)}?`,
+		});
+
+		if (isCancel(shouldInstallBetterAuth)) {
+			cancel("✋ Operation cancelled.");
+			process.exit(0);
+		}
+
+		if (shouldInstallBetterAuth) {
+			const s = spinner();
+			s.start(`Installing Better-Auth...`);
+			await installDependency("better-auth", { cwd, pm });
+			s.stop(`Better-Auth installed successfully!`);
+		}
+	})();
+
+	// Handle ENV files
+	await (async () => {
+		const envFiles = await getEnvFiles(cwd);
+		if (envFiles.length === 0) {
+			const shouldCreateEnv = await confirm({
+				message: `Would you like to create a .env file with the necessary environment variables?`,
+			});
+			if (isCancel(shouldCreateEnv)) {
+				cancel("✋ Operation cancelled.");
+				process.exit(0);
+			}
+			if (shouldCreateEnv) {
+				await createEnvFile(cwd, [
+					`BETTER_AUTH_SECRET="${generateSecretHash()}"`,
+					'BETTER_AUTH_URL="http://localhost:3000"',
+				]);
+			}
+		} else {
+			const shouldAddEnvVariables = await confirm({
+				message: `Add required environment variables to .env files? ${chalk.gray(`(BETTER_AUTH_SECRET, BETTER_AUTH_URL)`)}`,
+			});
+			if (isCancel(shouldAddEnvVariables)) {
+				cancel("✋ Operation cancelled.");
+				process.exit(0);
+			}
+			if (shouldAddEnvVariables) {
+			}
+		}
+	})();
 
 	const authConfigCode = await generateAuthConfigCode({
 		plugins: [],
@@ -31,7 +118,9 @@ export async function initAction(opts: any) {
 		baseURL: "https://my-app.com",
 		getArguments: getArgumentsPrompt(options),
 	});
-	console.log(authConfigCode);
+	// console.log(authConfigCode);
+
+	outro(`🚀 Better Auth CLI successfully initialized!`);
 }
 
 let initBuilder = new Command("init")
@@ -39,8 +128,11 @@ let initBuilder = new Command("init")
 	.option(
 		"--config <config>",
 		"The path to the auth configuration file. defaults to the first `auth.ts` file found.",
+	)
+	.option(
+		"--package-manager <package-manager>",
+		"The package manager to use. defaults to the package manager found in the current working directory.",
 	);
-
 /**
  * Track used flags to ensure uniqueness
  */
@@ -102,6 +194,7 @@ export const init = initBuilder.action(initAction);
 export const initActionOptionsSchema = z.object({
 	cwd: z.string().transform((val) => path.resolve(val)),
 	config: z.string().optional(),
+	packageManager: z.enum(PACKAGE_MANAGERS).optional(),
 	...pluginArgumentOptionsSchema,
 });
 
