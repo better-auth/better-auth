@@ -686,7 +686,8 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 												type: "object",
 											},
 											member: {
-												type: "null",
+												type: "object",
+												nullable: true,
 											},
 										},
 									},
