@@ -23,6 +23,7 @@ jobs:
       - name: Add merge-to-main label
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.PAT_TOKEN }}
           script: |
             await github.rest.issues.addLabels({
               owner: context.repo.owner,
