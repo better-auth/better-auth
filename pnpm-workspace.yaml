@@ -10,9 +10,12 @@ catalog:
   better-call: 1.1.0
   tsdown: ^0.16.6
   typescript: ^5.9.3
-  vitest: 4.0.13
 
 catalogs:
+  vitest:
+    vitest: ^4.0.14
+    '@vitest/coverage-v8': ^4.0.14
+
   react18:
     '@types/react': ^19.1.12
     '@types/react-dom': ^19.1.9
