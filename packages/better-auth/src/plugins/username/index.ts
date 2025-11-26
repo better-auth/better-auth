@@ -393,6 +393,8 @@ export const username = (options?: UsernameOptions | undefined) => {
 						ctx.body.rememberMe === false,
 					);
 					return ctx.json({
+						redirect: !!ctx.body.callbackURL,
+						url: ctx.body.callbackURL,
 						token: session.token,
 						user: {
 							id: user.id,

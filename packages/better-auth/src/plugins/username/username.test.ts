@@ -294,6 +294,36 @@ describe("username", async (it) => {
 		expect(res2.data?.user.username).toBe("custom_user");
 		expect(res2.data?.user.displayUsername).toBe("Custom_User");
 	});
+
+	it("should return callbackURL in response", async () => {
+		await client.signUp.email({
+			email: "callback-test@email.com",
+			username: "callback_user",
+			password: "password123",
+			name: "Callback User",
+		});
+		const res = await client.signIn.username({
+			username: "callback_user",
+			password: "password123",
+			callbackURL: "/dashboard",
+		});
+		expect(res.data?.url).toBe("/dashboard");
+		expect(res.data?.redirect).toBe(true);
+	});
+	it("should not return redirect fields when callbackURL is not provided", async () => {
+		await client.signUp.email({
+			email: "no-callback@email.com",
+			username: "no_callback_user",
+			password: "password123",
+			name: "No Callback User",
+		});
+		const res = await client.signIn.username({
+			username: "no_callback_user",
+			password: "password123",
+		});
+		expect(res.data?.redirect).toBe(false);
+		expect(res.data?.url).toBeUndefined();
+	});
 });
 
 describe("username custom normalization", async (it) => {
