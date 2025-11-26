@@ -78,15 +78,15 @@ describe("username", async (it) => {
 	it("should return default callbackURL in response", async () => {
 		// sign up a fresh user
 		await client.signUp.email({
-			email: "cb-test@example.com",
-			username: "cb_test_user",
+			email: "cb-test1@example.com",
+			username: "cb_test_user_1",
 			password: "cb-password",
 			name: "CB Test",
 		});
 
 		const callback = "/dashboard?source=cli";
 		const res = await client.signIn.username({
-			username: "cb_test_user",
+			username: "cb_test_user_1",
 			password: "cb-password",
 		});
 		expect(res.error).toBeNull();

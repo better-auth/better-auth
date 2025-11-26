@@ -7,7 +7,7 @@ import type { Account, User } from "@better-auth/core/db";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
 import * as z from "zod";
-import { createEmailVerificationToken } from "../../api";
+import { createEmailVerificationToken, originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { mergeSchema } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
@@ -188,6 +188,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 							})
 							.optional(),
 					}),
+					use: [originCheck((ctx) => ctx.query.callbackURL)],
 					metadata: {
 						openapi: {
 							summary: "Sign in with username",
