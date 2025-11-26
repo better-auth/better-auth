@@ -18,7 +18,7 @@
     "test": "turbo test --continue --filter=./packages/* --filter=./test",
     "coverage": "turbo coverage --filter=./packages/* --filter=./test -- --testTimeout=15000 --coverage.reporter=json && pnpm coverage:collect && pnpm coverage:merge && pnpm coverage:report",
     "coverage:merge": "nyc merge coverage/raw coverage/merged/merged-coverage.json",
-    "coverage:collect": "rm -rf coverage && mkdir -p coverage/raw && for f in $(find packages -name coverage-final.json); do pkg=$(basename \"$(dirname \"$(dirname \"$f\")\")\"); cp \"$f\" \"./coverage/raw/$pkg-coverage-final.json\"; done",
+    "coverage:collect": "rm -rf coverage && mkdir -p coverage/raw && for f in $(find packages test -name coverage-final.json); do pkg=$(basename \"$(dirname \"$(dirname \"$f\")\")\"); cp \"$f\" \"./coverage/raw/$pkg-coverage-final.json\"; done",
     "coverage:report": "nyc --temp-dir=./coverage/raw report --reporter=lcov",
     "coverage:open": "open coverage/lcov-report/index.html",
     "e2e:smoke": "turbo e2e:smoke --filter=./e2e/*",
