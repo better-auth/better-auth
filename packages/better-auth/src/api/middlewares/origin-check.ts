@@ -279,13 +279,6 @@ export const formCsrfMiddleware = createAuthMiddleware(async (ctx) => {
  * This prevents cross-site form submission attacks while supporting progressive enhancement.
  */
 async function validateFormCsrf(ctx: GenericEndpointContext): Promise<void> {
-	const hasSession = hasBetterAuthSessionCookie(ctx);
-
-	// If Better Auth session cookie exists, use standard origin validation
-	if (hasSession) {
-		return await validateOrigin(ctx);
-	}
-
 	const req = ctx.request;
 	if (!req) {
 		return;
