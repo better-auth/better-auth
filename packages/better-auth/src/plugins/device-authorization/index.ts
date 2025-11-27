@@ -168,20 +168,20 @@ const buildVerificationUris = (
 /**
  * @internal
  */
- const parseFormData = (input: any) => {
-   let body = input;
-   if (!body) {
-     throw new APIError("BAD_REQUEST", {
-       error_description: "request body not found",
-       error: "invalid_request",
-     });
-  }
-  if (body instanceof FormData) {
-     body = Object.fromEntries(body.entries());
-  }
+const parseFormData = (input: any) => {
+	let body = input;
+	if (!body) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "request body not found",
+			error: "invalid_request",
+		});
+	}
+	if (body instanceof FormData) {
+		body = Object.fromEntries(body.entries());
+	}
 
-  return body;
-}
+	return body;
+};
 
 export const deviceAuthorization = (
 	options: Partial<DeviceAuthorizationOptions> = {},
@@ -221,9 +221,9 @@ export const deviceAuthorization = (
 					metadata: {
 						$Infer: {
 							body: {} as {
-  							/**
-  							 * The client ID of the application
-  							 */
+								/**
+								 * The client ID of the application
+								 */
 								client_id: string;
 								/**
 								 * Space-separated list of scopes
@@ -305,7 +305,7 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					},
 				},
 				async (ctx) => {
-          const body = parseFormData(ctx.body);
+					const body = parseFormData(ctx.body);
 					if (!body.client_id) {
 						throw new APIError("BAD_REQUEST", {
 							error_description: "client_id is required",
@@ -394,9 +394,9 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					metadata: {
 						$Infer: {
 							body: {} as {
-  							/**
-  							 * The grant type for device flow
-  							 */
+								/**
+								 * The grant type for device flow
+								 */
 								grant_type: string;
 								/**
 								 * The device verification code
@@ -813,9 +813,9 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					metadata: {
 						$Infer: {
 							body: {} as {
-  							/**
-  							 * The user code to approve
-  							 */
+								/**
+								 * The user code to approve
+								 */
 								userCode: string;
 							},
 						},
@@ -935,9 +935,9 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					metadata: {
 						$Infer: {
 							body: {} as {
-  							/**
-  							 * The user code to deny
-  							 */
+								/**
+								 * The user code to deny
+								 */
 								userCode: string;
 							},
 						},
