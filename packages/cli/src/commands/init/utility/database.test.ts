@@ -81,7 +81,7 @@ describe("init CLI - database generation", () => {
 
 	describe("kysely", () => {
 		it("should generate the right kysely-sqlite database code", async () => {
-			const database = getDatabaseCode("kysely-sqlite");
+			const database = getDatabaseCode("sqlite");
 			const expectedCode = (
 				await formatCode(`const database = { dialect, type: 'sqlite' }`)
 			).replace("const database = ", "");
@@ -98,7 +98,7 @@ describe("init CLI - database generation", () => {
 		});
 
 		it("should generate the right kysely-mysql database code", async () => {
-			const database = getDatabaseCode("kysely-mysql");
+			const database = getDatabaseCode("mysql");
 			const expectedCode = (
 				await formatCode(`const database = { dialect, type: 'mysql' }`)
 			).replace("const database = ", "");
@@ -121,7 +121,7 @@ describe("init CLI - database generation", () => {
 		});
 
 		it("should generate the right kysely-postgresql database code", async () => {
-			const database = getDatabaseCode("kysely-postgresql");
+			const database = getDatabaseCode("postgresql");
 			const expectedCode = (
 				await formatCode(`const database = { dialect, type: 'postgresql' }`)
 			).replace("const database = ", "");
@@ -140,7 +140,7 @@ describe("init CLI - database generation", () => {
 		});
 
 		it("should generate the right kysely-mssql database code", async () => {
-			const database = getDatabaseCode("kysely-mssql");
+			const database = getDatabaseCode("mssql");
 			const expectedCode = (
 				await formatCode(`const database = { dialect, type: 'mssql' }`)
 			).replace("const database = ", "");
