@@ -289,7 +289,7 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				async (ctx) => {
 					let body: Record<string, any> | undefined = ctx.body;
 					if (!body) {
-						throw ctx.error("BAD_REQUEST", {
+						throw new APIError("BAD_REQUEST", {
 							error_description: "request body not found",
 							error: "invalid_request",
 						});
@@ -454,7 +454,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				async (ctx) => {
 					let body: Record<string, any> | undefined = ctx.body;
 					if (!body) {
-						throw ctx.error("BAD_REQUEST", {
+						throw new APIError("BAD_REQUEST", {
 							error_description: "request body not found",
 							error: "invalid_request",
 						});
@@ -487,7 +487,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 						throw new APIError("BAD_REQUEST", {
 							error_description:
 								"grant_type must match 'urn:ietf:params:oauth:grant-type:device_code'",
-							error: "unsupported_grant_type",
+							error: "invalid_grant",
 						});
 					}
 					const { device_code, client_id } = body;
@@ -813,6 +813,10 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					}),
 					requireHeaders: true,
 					metadata: {
+						allowedMediaTypes: [
+							"application/x-www-form-urlencoded",
+							"application/json",
+						],
 						openapi: {
 							description: "Approve device authorization",
 							responses: {
@@ -846,7 +850,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					}
 					let body: Record<string, any> | undefined = ctx.body;
 					if (!body) {
-						throw ctx.error("BAD_REQUEST", {
+						throw new APIError("BAD_REQUEST", {
 							error_description: "request body not found",
 							error: "invalid_request",
 						});
@@ -967,7 +971,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				async (ctx) => {
 					let body: Record<string, any> | undefined = ctx.body;
 					if (!body) {
-						throw ctx.error("BAD_REQUEST", {
+						throw new APIError("BAD_REQUEST", {
 							error_description: "request body not found",
 							error: "invalid_request",
 						});
