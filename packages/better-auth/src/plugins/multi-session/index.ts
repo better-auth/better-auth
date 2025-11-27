@@ -72,7 +72,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 										await ctx.getSignedCookie(key, ctx.context.secret),
 								),
 						)
-					).filter((v) => v !== null);
+					).filter((v): v is string => v !== false);
 
 					if (!sessionTokens.length) return ctx.json([]);
 					const sessions =

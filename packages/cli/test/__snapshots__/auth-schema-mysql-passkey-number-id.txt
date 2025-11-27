@@ -15,7 +15,9 @@ export const custom_user = mysqlTable("custom_user", {
   email: varchar("email", { length: 255 }).notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
   image: text("image"),
-  createdAt: datetime("created_at", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+  createdAt: datetime("created_at", { fsp: 3 })
+    .default(sql`CURRENT_TIMESTAMP(3)`)
+    .notNull(),
   updatedAt: datetime("updated_at", { fsp: 3 })
     .default(sql`CURRENT_TIMESTAMP(3)`)
     .$onUpdate(() => /* @__PURE__ */ new Date())
@@ -28,7 +30,9 @@ export const custom_session = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     expiresAt: datetime("expires_at", { fsp: 3 }).notNull(),
     token: varchar("token", { length: 255 }).notNull().unique(),
-    createdAt: datetime("created_at", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    createdAt: datetime("created_at", { fsp: 3 })
+      .default(sql`CURRENT_TIMESTAMP(3)`)
+      .notNull(),
     updatedAt: datetime("updated_at", { fsp: 3 })
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
@@ -57,7 +61,9 @@ export const custom_account = mysqlTable(
     refreshTokenExpiresAt: datetime("refresh_token_expires_at", { fsp: 3 }),
     scope: text("scope"),
     password: text("password"),
-    createdAt: datetime("created_at", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    createdAt: datetime("created_at", { fsp: 3 })
+      .default(sql`CURRENT_TIMESTAMP(3)`)
+      .notNull(),
     updatedAt: datetime("updated_at", { fsp: 3 })
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
@@ -72,7 +78,9 @@ export const custom_verification = mysqlTable(
     identifier: varchar("identifier", { length: 255 }).notNull(),
     value: text("value").notNull(),
     expiresAt: datetime("expires_at", { fsp: 3 }).notNull(),
-    createdAt: datetime("created_at", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    createdAt: datetime("created_at", { fsp: 3 })
+      .default(sql`CURRENT_TIMESTAMP(3)`)
+      .notNull(),
     updatedAt: datetime("updated_at", { fsp: 3 })
       .default(sql`CURRENT_TIMESTAMP(3)`)
       .$onUpdate(() => /* @__PURE__ */ new Date())

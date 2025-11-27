@@ -408,10 +408,11 @@ export const oidcProvider = (options: OIDCOptions) => {
 
 					if (!consentCode) {
 						// Check for cookie-based consent flow
-						consentCode = await ctx.getSignedCookie(
+						const cookieValue = await ctx.getSignedCookie(
 							"oidc_consent_prompt",
 							ctx.context.secret,
 						);
+						consentCode = cookieValue || null;
 					}
 
 					if (!consentCode) {
