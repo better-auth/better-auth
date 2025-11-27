@@ -788,7 +788,7 @@ export const createInternalAdapter = (
 			userId: string,
 			data: Partial<User> & Record<string, any>,
 		) => {
-			const user = await updateWithHooks<User>(
+			const user = await updateWithHooks<User & Record<string, any>>(
 				data,
 				[
 					{
