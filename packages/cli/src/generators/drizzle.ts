@@ -136,7 +136,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				date: {
 					sqlite: `integer('${name}', { mode: 'timestamp_ms' })`,
 					pg: `timestamp('${name}')`,
-					mysql: `timestamp('${name}', { fsp: 3 })`,
+					mysql: `datetime('${name}', { fsp: 3 })`,
 				},
 				"number[]": {
 					sqlite: `integer('${name}').array()`,
@@ -242,6 +242,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 									) {
 										if (databaseType === "sqlite") {
 											type += `.default(sql\`(cast(unixepoch('subsecond') * 1000 as integer))\`)`;
+										} else if (databaseType === "mysql") {
+											type += `.default(sql\`CURRENT_TIMESTAMP(3)\`)`;
 										} else {
 											type += `.defaultNow()`;
 										}
@@ -437,7 +439,13 @@ function generateImport({
 	coreImports.push(
 		hasBigint ? (databaseType !== "sqlite" ? "bigint" : "") : "",
 	);
-	coreImports.push(databaseType !== "sqlite" ? "timestamp, boolean" : "");
+	coreImports.push(
+		databaseType === "mysql"
+			? "datetime, boolean"
+			: databaseType !== "sqlite"
+				? "timestamp, boolean"
+				: "",
+	);
 	if (databaseType === "mysql") {
 		// Only include int for MySQL if actually needed
 		const hasNonBigintNumber = Object.values(tables).some((table) =>
@@ -503,9 +511,9 @@ function generateImport({
 		// sqlite uses text for JSON, so there's no need to handle this case
 	}
 
-	// Add sql import for SQLite timestamps with defaultNow
-	const hasSQLiteTimestamp =
-		databaseType === "sqlite" &&
+	// Add sql import for SQLite and MySQL timestamps with defaultNow
+	const hasTimestampWithDefault =
+		(databaseType === "sqlite" || databaseType === "mysql") &&
 		Object.values(tables).some((table) =>
 			Object.values(table.fields).some(
 				(field) =>
@@ -516,7 +524,7 @@ function generateImport({
 			),
 		);
 
-	if (hasSQLiteTimestamp) {
+	if (hasTimestampWithDefault) {
 		rootImports.push("sql");
 	}
 
