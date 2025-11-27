@@ -1205,15 +1205,46 @@ describe("base context creation", () => {
 		it("should throw error when secret is too short", async () => {
 			vi.stubEnv("BETTER_AUTH_SECRET", "");
 			vi.stubEnv("AUTH_SECRET", "");
+			const originalNodeEnv = process.env.NODE_ENV;
+
+			const expectedErrorMessage =
+				"Invalid BETTER_AUTH_SECRET: must be at least 32 characters long for adequate security. Generate one with `npx @better-auth/cli secret` or `openssl rand -base64 32`.";
+
+			vi.doMock("@better-auth/core/env", async () => {
+				const actual = await vi.importActual("@better-auth/core/env");
+				return {
+					...actual,
+					isProduction: false,
+					isTest: () => false,
+				};
+			});
+
+			vi.resetModules();
+
+			const { createAuthContext } = await import("../context/create-context");
+			const { getAdapter } = await import("../db/adapter-kysely");
+
+			const initBaseNonTest = async (
+				options: Partial<BetterAuthOptions> = {},
+			) => {
+				const opts: BetterAuthOptions = {
+					baseURL: "http://localhost:3000",
+					...options,
+				};
+				const adapter = await getAdapter(opts);
+				const getDatabaseType = () => "memory";
+				return createAuthContext(adapter, opts, getDatabaseType);
+			};
 
 			await expect(
-				initBase({
+				initBaseNonTest({
 					secret: "short",
 				}),
-			).rejects.toThrow(
-				"Invalid BETTER_AUTH_SECRET: must be at least 32 characters long for adequate security. Generate one with `npx @better-auth/cli secret` or `openssl rand -base64 32`.",
-			);
+			).rejects.toThrow(expectedErrorMessage);
 
+			vi.doUnmock("@better-auth/core/env");
+			vi.resetModules();
+			process.env.NODE_ENV = originalNodeEnv;
 			vi.unstubAllEnvs();
 		});
 

@@ -46,7 +46,7 @@ function validateSecret(
 ): void {
 	const isDefaultSecret = secret === DEFAULT_SECRET;
 
-	if (isDefaultSecret && isTest()) {
+	if (isTest()) {
 		return;
 	}
 
