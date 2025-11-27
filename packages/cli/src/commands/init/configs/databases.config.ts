@@ -26,6 +26,7 @@ export type DatabasesConfig = {
 	 */
 	preCode?: string;
 	code: (attributes: { additionalOptions?: Record<string, any> }) => string;
+	dependencies: string[];
 };
 
 const prismaCode = ({
@@ -112,6 +113,7 @@ export const databasesConfig = [
 		code: ({ additionalOptions }) => {
 			return prismaCode({ provider: "sqlite", additionalOptions });
 		},
+		dependencies: ["@prisma/client", "prisma"],
 	},
 	{
 		adapter: "prisma-mysql",
@@ -131,6 +133,7 @@ export const databasesConfig = [
 		code: ({ additionalOptions }) => {
 			return prismaCode({ provider: "mysql", additionalOptions });
 		},
+		dependencies: ["@prisma/client", "prisma"],
 	},
 	{
 		adapter: "prisma-postgresql",
@@ -150,6 +153,7 @@ export const databasesConfig = [
 		code: ({ additionalOptions }) => {
 			return prismaCode({ provider: "postgresql", additionalOptions });
 		},
+		dependencies: ["@prisma/client", "prisma"],
 	},
 	// Drizzle
 	{
@@ -174,6 +178,7 @@ export const databasesConfig = [
 		code({ additionalOptions }) {
 			return drizzleCode({ provider: "sqlite", additionalOptions });
 		},
+		dependencies: ["drizzle-orm", "better-sqlite3"]
 	},
 	{
 		adapter: "drizzle-postgresql",
@@ -197,6 +202,7 @@ export const databasesConfig = [
 		code({ additionalOptions }) {
 			return drizzleCode({ provider: "postgresql", additionalOptions });
 		},
+		dependencies: ["drizzle-orm", "pg"]
 	},
 	{
 		adapter: "drizzle-mysql",
@@ -220,6 +226,7 @@ export const databasesConfig = [
 		code({ additionalOptions }) {
 			return drizzleCode({ provider: "mysql", additionalOptions });
 		},
+		dependencies: ["drizzle-orm", "mysql2/promise"]
 	},
 	// Kysely
 	{
@@ -235,6 +242,7 @@ export const databasesConfig = [
 		code({ additionalOptions }) {
 			return kyselyCode({ provider: "sqlite", additionalOptions });
 		},
+		dependencies: ["better-sqlite3"]
 	},
 	{
 		adapter: "mysql",
@@ -249,6 +257,7 @@ export const databasesConfig = [
 		code({ additionalOptions }) {
 			return kyselyCode({ provider: "mysql", additionalOptions });
 		},
+		dependencies: ["mysql2/promise"]
 	},
 	{
 		adapter: "postgresql",
@@ -263,6 +272,7 @@ export const databasesConfig = [
 		code({ additionalOptions }) {
 			return kyselyCode({ provider: "postgresql", additionalOptions });
 		},
+		dependencies: ["pg"]
 	},
 	{
 		adapter: "mssql",
@@ -317,6 +327,7 @@ export const databasesConfig = [
 		code({ additionalOptions }) {
 			return kyselyCode({ provider: "mssql", additionalOptions });
 		},
+		dependencies: ["kysely", "tedious", "tarn"]
 	},
 	// MongoDB
 	{
@@ -337,5 +348,6 @@ export const databasesConfig = [
 		code({ additionalOptions }) {
 			return mongodbCode({ additionalOptions });
 		},
+		dependencies: ["mongodb"]
 	},
 ] satisfies DatabasesConfig[];

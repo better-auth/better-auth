@@ -6,10 +6,12 @@ import {
 	generateInnerAuthConfigCode,
 	getDatabaseCode,
 } from "./utility";
-import type { Framework } from "./utility/framework";
 import type { ImportGroup } from "./utility/imports";
 import { createImport, getImportString } from "./utility/imports";
 import { getPluginConfigs } from "./utility/plugin";
+import chalk from "chalk";
+import type { Framework } from "./configs/frameworks.config";
+import { spinner } from "@clack/prompts";
 
 export type GetArgumentsOptions = {
 	/**
@@ -108,6 +110,7 @@ export type GenerateAuthFileOptions = {
 	 * For example, certain plugins may require additional arguments to be passed to the plugin options.
 	 */
 	getArguments: GetArgumentsFn;
+	installDependency: (dependencies: string | string[]) => Promise<void>;
 };
 
 export const generateAuthConfigCode = async ({
@@ -116,6 +119,7 @@ export const generateAuthConfigCode = async ({
 	appName,
 	baseURL,
 	getArguments,
+	installDependency,
 }: GenerateAuthFileOptions) => {
 	const database = getDatabaseCode(databaseConfig);
 	const plugins = getPluginConfigs(pluginsConfig);
@@ -147,6 +151,29 @@ export const generateAuthConfigCode = async ({
 		authConfig: authConfigCode,
 		postAuthConfig: "",
 	};
+
+	if (database) {
+		const confirmed: boolean = await getArguments({
+			flag: "install-database-dependencies",
+			question:
+				"Would you like to install the following dependencies: " +
+				database.dependencies.map((x) => chalk.cyanBright(x)).join(", "),
+			description: "The database dependencies to install.",
+			argument: {
+				index: 0,
+				isProperty: false,
+			},
+			isRequired: true,
+			isConformation: true,
+		});
+
+		if (confirmed) {
+			const s = spinner();
+			s.start(`Installing database dependencies...`);
+			await installDependency(database.dependencies);
+			s.stop(`Database dependencies installed successfully!`);
+		}
+	}
 
 	const code: string[] = [
 		segmentedCode.imports,

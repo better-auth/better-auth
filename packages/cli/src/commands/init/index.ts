@@ -14,7 +14,7 @@ import {
 import chalk from "chalk";
 import { Command } from "commander";
 import z from "zod";
-import { getConfig } from "../../utils/get-config";
+import { possibleAuthConfigPaths } from "../../utils/get-config";
 import { generateSecretHash } from "../secret";
 import { databasesConfig } from "./configs/databases.config";
 import type { Plugin, PluginsConfig } from "./configs/temp-plugins.config";
@@ -28,8 +28,7 @@ import {
 	getMissingEnvVars,
 	updateEnvFiles,
 } from "./utility/env";
-import type { Framework } from "./utility/framework";
-import { autoDetectFramework, FRAMEWORKS } from "./utility/framework";
+import { autoDetectFramework } from "./utility/framework";
 import { hasDependency } from "./utility/get-package-json";
 import {
 	getPackageManager,
@@ -39,6 +38,8 @@ import {
 import { installDependency } from "./utility/install-dependency";
 import { getArgumentsPrompt, getFlagVariable } from "./utility/prompt";
 import { tryCatch } from "./utility/utilts";
+import { FRAMEWORKS } from "./configs/frameworks.config";
+import type { Framework } from "./configs/frameworks.config";
 
 // Goals:
 // 1. init `auth.ts` file
@@ -213,14 +214,12 @@ export async function initAction(opts: any) {
 
 	// Check if `auth.ts` is already defined or not.
 	const hasAuthConfigAlready = await (async () => {
-		const { data, error } = await tryCatch(
-			getConfig({
-				cwd,
-				shouldThrowOnError: true,
-			}),
-		);
-		if (error) return true;
-		return data !== null;
+		for (const _path of possibleAuthConfigPaths) {
+			const fullPath = path.join(cwd, _path);
+			const { error } = await tryCatch(fs.access(fullPath, fs.constants.F_OK));
+			if (!error) return true;
+		}
+		return false;
 	})();
 
 	// Select the database to use.
@@ -283,6 +282,7 @@ export async function initAction(opts: any) {
 			framework,
 			baseURL: "http://localhost:3000",
 			getArguments: getArgumentsPrompt(options),
+			installDependency: (d) => installDependency(d, { cwd, pm }),
 		});
 
 		const { data: allFiles, error } = await tryCatch(fs.readdir(cwd, "utf-8"));
@@ -301,15 +301,14 @@ export async function initAction(opts: any) {
 
 	// Generate the `auth-client.ts` file.
 	await (async () => {
-		if (hasAuthConfigAlready) {
-			return;
-		}
+		if (hasAuthConfigAlready) return;
 		const authClientCode = await generateAuthClientConfigCode({
 			plugins,
 			database,
 			framework,
 			baseURL: "http://localhost:3000",
 			getArguments: getArgumentsPrompt(options),
+			installDependency: (d) => installDependency(d, { cwd, pm }),
 		});
 
 		const { data: allFiles, error } = await tryCatch(fs.readdir(cwd, "utf-8"));
@@ -324,6 +323,40 @@ export async function initAction(opts: any) {
 		}
 		await tryCatch(fs.mkdir(path.dirname(authConfigPath), { recursive: true }));
 		await tryCatch(fs.writeFile(authConfigPath, authClientCode, "utf-8"));
+	})();
+
+	// Generate the route handler file.
+	await (async () => {
+		if (!framework.routeHandler) return;
+		const { routeHandler } = framework;
+
+		const fullPath = path.resolve(cwd, routeHandler.path);
+		const access = fs.access(fullPath, fs.constants.F_OK);
+		const { error } = await tryCatch(access);
+
+		if (!error) {
+			const info = "Route handler file already exists. Skipping...";
+			return log.info(chalk.gray(info));
+		}
+
+		const mkdir = fs.mkdir(path.dirname(fullPath), { recursive: true });
+		const { error: mkdirError } = await tryCatch(mkdir);
+		if (mkdirError) {
+			const error = `Failed to create directory at ${path.dirname(fullPath)}: ${mkdirError.message}`;
+			log.error(error);
+			process.exit(1);
+		}
+		const { error: writeFileError } = await tryCatch(
+			fs.writeFile(fullPath, routeHandler.code, "utf-8"),
+		);
+		if (writeFileError) {
+			const error = `Failed to write file at ${fullPath}: ${writeFileError.message}`;
+			log.error(error);
+			process.exit(1);
+		}
+
+		const info = "Route handler file created!";
+		return log.success(info);
 	})();
 
 	outro(`Better Auth successfully initialized! 🚀`);
