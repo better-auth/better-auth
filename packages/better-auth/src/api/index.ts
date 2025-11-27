@@ -339,6 +339,7 @@ export const router = <Option extends BetterAuthOptions>(
 						return;
 					}
 				}
+				console.log("hi");
 
 				if (e instanceof APIError) {
 					if (e.status === "INTERNAL_SERVER_ERROR") {
