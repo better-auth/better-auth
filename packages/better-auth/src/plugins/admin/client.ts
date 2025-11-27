@@ -6,13 +6,7 @@ import type { admin } from "./admin";
 import { hasPermission } from "./has-permission";
 
 interface AdminClientOptions {
-	/**
-	 * Access control for the admin plugin. This should be inferred from the server plugin.
-	 */
 	ac?: AccessControl | undefined;
-	/**
-	 * Custom roles for the admin plugin. This should be inferred from the server plugin.
-	 */
 	roles?:
 		| {
 				[key in string]: Role;
