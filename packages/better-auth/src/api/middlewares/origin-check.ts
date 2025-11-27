@@ -155,43 +155,6 @@ export const originCheck = (
 	});
 
 /**
- * Checks if a Better Auth session cookie exists in the request (cookie presence only, not validation).
- */
-function hasBetterAuthSessionCookie(ctx: GenericEndpointContext): boolean {
-	const headers = ctx.request?.headers;
-	if (!headers) {
-		return false;
-	}
-	const cookies = headers.get("cookie");
-	if (!cookies) {
-		return false;
-	}
-	const cookieName = ctx.context.authCookies.sessionToken.name;
-	const parsedCookie = parseCookies(cookies);
-
-	if (parsedCookie.has(cookieName)) {
-		return true;
-	}
-
-	const securePrefix = "__Secure-";
-	if (cookieName.startsWith(securePrefix)) {
-		const nameWithoutSecure = cookieName.slice(securePrefix.length);
-		if (parsedCookie.has(nameWithoutSecure)) {
-			return true;
-		}
-	}
-
-	if (!cookieName.startsWith(securePrefix)) {
-		const secureCookieName = `${securePrefix}${cookieName}`;
-		if (parsedCookie.has(secureCookieName)) {
-			return true;
-		}
-	}
-
-	return false;
-}
-
-/**
  * Validates origin header against trusted origins.
  * @param ctx - The endpoint context
  * @param forceValidate - If true, always validate origin regardless of cookies/skip flags
