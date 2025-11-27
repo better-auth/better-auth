@@ -357,7 +357,7 @@ export async function initAction(opts: any) {
 	console.log(chalk.dim(chalk.bold(`Next Steps:`)));
 	const step1 = `1. Set up your database with nessesary enviroment variables.`;
 	console.log(chalk.dim(step1));
-	const step2 = `2. Run the ${chalk.greenBright("npx @better-auth/cli migrate")} to apply the schema to your database.`;
+	const step2 = `2. Run the ${chalk.greenBright("npx auth migrate")} to apply the schema to your database.`;
 	console.log(chalk.dim(step2));
 	const step3 = `3. Happy hacking!`;
 	console.log(chalk.dim(step3));
