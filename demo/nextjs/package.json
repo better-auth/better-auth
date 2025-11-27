@@ -9,7 +9,9 @@
     "typecheck": "tsc --noEmit",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "link": "npx vercel link --project better-auth-demo",
+    "deploy": "npx vercel --prod"
   },
   "dependencies": {
     "@better-auth/passkey": "workspace:*",

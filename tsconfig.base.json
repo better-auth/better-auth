@@ -15,7 +15,7 @@
     "composite": true,
     "declaration": true,
     "emitDeclarationOnly": true,
-    "types": ["node", "bun"],
+    "types": ["node"],
     // Put the .d.ts files output and cache file (tsbuildinfo) in a directory
     // that will be ignored by other tools.
     "outDir": "${configDir}/node_modules/.cache/ts/out",

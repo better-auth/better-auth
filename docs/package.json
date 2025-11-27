@@ -9,7 +9,9 @@
     "start": "next start",
     "postinstall": "fumadocs-mdx",
     "scripts:endpoint-to-doc": "bun ./scripts/endpoint-to-doc/index.ts",
-    "scripts:sync-orama": "node ./scripts/sync-orama.ts"
+    "scripts:sync-orama": "node ./scripts/sync-orama.ts",
+    "link": "npx vercel link --project better-auth-docs",
+    "deploy": "npx vercel --prod"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^1.0.20",
