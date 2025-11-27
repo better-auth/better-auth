@@ -6,10 +6,10 @@ import {
 	generateInnerAuthConfigCode,
 	getDatabaseCode,
 } from "./utility";
+import type { Framework } from "./utility/framework";
 import type { ImportGroup } from "./utility/imports";
 import { createImport, getImportString } from "./utility/imports";
 import { getPluginConfigs } from "./utility/plugin";
-import type { Framework } from "./utility/framework";
 
 export type GetArgumentsOptions = {
 	/**

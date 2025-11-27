@@ -1,9 +1,9 @@
+import type { GenerateAuthFileOptions } from "./generate-auth";
 import { formatCode } from "./utility";
+import { generateInnerAuthClientConfigCode } from "./utility/auth-client-config";
 import type { ImportGroup } from "./utility/imports";
 import { createImport, getImportString } from "./utility/imports";
 import { getPluginConfigs } from "./utility/plugin";
-import type { GenerateAuthFileOptions } from "./generate-auth";
-import { generateInnerAuthClientConfigCode } from "./utility/auth-client-config";
 
 export const generateAuthClientConfigCode = async ({
 	plugins: pluginsConfig,

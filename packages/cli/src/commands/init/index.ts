@@ -21,12 +21,15 @@ import type { Plugin, PluginsConfig } from "./configs/temp-plugins.config";
 import { tempPluginsConfig } from "./configs/temp-plugins.config";
 import type { GetArgumentsOptions } from "./generate-auth";
 import { generateAuthConfigCode } from "./generate-auth";
+import { generateAuthClientConfigCode } from "./generate-auth-client";
 import {
 	createEnvFile,
 	getEnvFiles,
 	getMissingEnvVars,
 	updateEnvFiles,
 } from "./utility/env";
+import type { Framework } from "./utility/framework";
+import { autoDetectFramework, FRAMEWORKS } from "./utility/framework";
 import { hasDependency } from "./utility/get-package-json";
 import {
 	getPackageManager,
@@ -36,9 +39,6 @@ import {
 import { installDependency } from "./utility/install-dependency";
 import { getArgumentsPrompt, getFlagVariable } from "./utility/prompt";
 import { tryCatch } from "./utility/utilts";
-import type { Framework } from "./utility/framework";
-import { autoDetectFramework, FRAMEWORKS } from "./utility/framework";
-import { generateAuthClientConfigCode } from "./generate-auth-client";
 
 // Goals:
 // 1. init `auth.ts` file
