@@ -350,7 +350,9 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 						});
 					}
 
-					return parseUserOutput(ctx.context.options, user) as InferUser<typeof ctx.context.options>;
+					return parseUserOutput(ctx.context.options, user) as InferUser<
+						typeof ctx.context.options
+					>;
 				},
 			),
 			/**

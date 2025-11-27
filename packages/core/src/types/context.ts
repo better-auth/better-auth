@@ -98,7 +98,7 @@ export interface InternalAdapter<
 		options?: { includeAccounts: boolean } | undefined,
 	): Promise<{ user: User; accounts: Account[] } | null>;
 
-	findUserById(userId: string): Promise<User & Record<string, any> | null>;
+	findUserById(userId: string): Promise<(User & Record<string, any>) | null>;
 
 	linkAccount(
 		account: Omit<Account, "id" | "createdAt" | "updatedAt"> & Partial<Account>,
