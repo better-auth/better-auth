@@ -8,7 +8,7 @@ export const crossSubdomainCookies = (): BetterAuthPlugin => {
 			before: [
 				{
 					matcher: () => true,
-					handler: createAuthMiddleware(async (ctx: any) => {
+					handler: createAuthMiddleware(async (ctx) => {
 						// Middleware to handle cross-subdomain cookie access
 						const options = ctx.context.options.advanced?.crossSubDomainCookies;
 						if (!options?.enabled || !ctx.request) {
@@ -27,10 +27,16 @@ export const crossSubdomainCookies = (): BetterAuthPlugin => {
 							if (baseURL) {
 								try {
 									const baseDomain = new URL(baseURL).hostname;
-									const requestDomain = origin ? new URL(origin).hostname : referer ? new URL(referer).hostname : null;
+									const requestOrigin = origin || (referer ? new URL(referer).origin : null);
+									const requestDomain = requestOrigin ? new URL(requestOrigin).hostname : null;
 
-									if (requestDomain && requestDomain.includes(baseDomain)) {
-										ctx.setHeader("Access-Control-Allow-Origin", origin || "*");
+									// Proper subdomain validation - exact match or proper subdomain
+									const requestHost = requestDomain?.split(':')[0]; // Remove port if present
+									const baseHost = baseDomain?.split(':')[0];
+									const isSubdomain = requestHost === baseHost || (requestHost && baseHost && requestHost.endsWith(`.${baseHost}`));
+
+									if (isSubdomain && requestOrigin) {
+										ctx.setHeader("Access-Control-Allow-Origin", requestOrigin);
 										ctx.setHeader("Access-Control-Allow-Credentials", "true");
 										ctx.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
 										ctx.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
