@@ -755,7 +755,7 @@ export const createInternalAdapter = (
 			};
 		},
 		findUserById: async (userId: string) => {
-			const user = await (await getCurrentAdapter(adapter)).findOne<User>({
+			const user = await (await getCurrentAdapter(adapter)).findOne<User & Record<string, any>>({
 				model: "user",
 				where: [
 					{
