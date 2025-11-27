@@ -9,8 +9,8 @@ catalog:
   zod: ^4.1.12
   '@better-auth/utils': 0.3.0
   '@better-fetch/fetch': 1.1.18
-  better-call: 1.1.1
-  tsdown: ^0.16.6
+  better-call: 1.1.2
+  tsdown: ^0.16.0
   typescript: ^5.9.3
   vitest: 4.0.13
 
