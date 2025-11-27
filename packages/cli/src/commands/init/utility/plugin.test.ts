@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as z from "zod/v4";
-import {
-	type PluginConfig,
-	pluginsConfig,
-} from "../configs/plugins-index.config";
+import type { PluginConfig } from "../configs/plugins-index.config";
+import { pluginsConfig } from "../configs/plugins-index.config";
 import type { GetArgumentsFn } from "../generate-auth";
 import { formatCode } from "./format";
 import { getAuthPluginsCode } from "./plugin";

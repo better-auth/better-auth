@@ -57,6 +57,6 @@ const getBaseURLCode = (baseURL?: string) => {
 };
 
 const getDatabaseCode = (database?: DatabasesConfig | null) => {
-	if (!database) return undefined
+	if (!database) return undefined;
 	return database.code({});
 };

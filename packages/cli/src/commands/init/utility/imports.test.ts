@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-	createImport,
-	getImportString,
-	groupImports,
-	type ImportGroup,
-} from "./imports";
+import type { ImportGroup } from "./imports";
+import { createImport, getImportString, groupImports } from "./imports";
 
 describe("Init CLI - imports utility", () => {
 	it("should create an import object", () => {

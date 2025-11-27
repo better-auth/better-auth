@@ -1,8 +1,5 @@
-import {
-	type Plugin,
-	type PluginConfig,
-	tempPluginsConfig,
-} from "../configs/temp-plugins.config";
+import type { Plugin, PluginConfig } from "../configs/temp-plugins.config";
+import { tempPluginsConfig } from "../configs/temp-plugins.config";
 import type { GetArgumentsFn, GetArgumentsOptions } from "../generate-auth";
 import { formatCode } from "./format";
 

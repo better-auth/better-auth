@@ -1,6 +1,6 @@
 import type { ZodSchema } from "zod";
 import type { DatabaseAdapter } from "./configs/databases.config";
-import { tempPluginsConfig, type Plugin } from "./configs/temp-plugins.config";
+import type { Plugin } from "./configs/temp-plugins.config";
 import {
 	formatCode,
 	generateInnerAuthConfigCode,

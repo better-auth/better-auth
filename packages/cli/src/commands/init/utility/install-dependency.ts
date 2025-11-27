@@ -1,5 +1,6 @@
 import { exec } from "child_process";
-import { getPackageManager, type PackageManager } from "./get-package-manager";
+import type { PackageManager } from "./get-package-manager";
+import { getPackageManager } from "./get-package-manager";
 
 export const installDependency = async (
 	dependency: string,

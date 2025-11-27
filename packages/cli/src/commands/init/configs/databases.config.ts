@@ -1,4 +1,5 @@
-import { createImport, type ImportGroup } from "../utility";
+import type { ImportGroup } from "../utility";
+import { createImport } from "../utility";
 
 export type DatabaseAdapter =
 	// prisma

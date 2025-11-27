@@ -1,46 +1,41 @@
-import path from "node:path";
 import fs from "node:fs/promises";
+import path from "node:path";
 import {
 	cancel,
 	confirm,
 	intro,
 	isCancel,
-	spinner,
 	log,
-	outro,
 	multiselect,
+	outro,
 	select,
+	spinner,
 } from "@clack/prompts";
+import chalk from "chalk";
 import { Command } from "commander";
 import z from "zod";
-import {
-	type PluginsConfig,
-	tempPluginsConfig,
-} from "./configs/temp-plugins.config";
-import {
-	type GetArgumentsOptions,
-	generateAuthConfigCode,
-} from "./generate-auth";
-import { getArgumentsPrompt, getFlagVariable } from "./utility/prompt";
-import {
-	getPackageManager,
-	getPkgManagerStr,
-	PACKAGE_MANAGERS,
-} from "./utility/get-package-manager";
-import { installDependency } from "./utility/install-dependency";
-import { hasDependency } from "./utility/get-package-json";
+import { getConfig } from "../../utils/get-config";
+import { generateSecretHash } from "../secret";
+import { databasesConfig } from "./configs/databases.config";
+import type { Plugin, PluginsConfig } from "./configs/temp-plugins.config";
+import { tempPluginsConfig } from "./configs/temp-plugins.config";
+import type { GetArgumentsOptions } from "./generate-auth";
+import { generateAuthConfigCode } from "./generate-auth";
 import {
 	createEnvFile,
 	getEnvFiles,
 	getMissingEnvVars,
 	updateEnvFiles,
 } from "./utility/env";
-import { generateSecretHash } from "../secret";
-import chalk from "chalk";
-import { databasesConfig } from "./configs/databases.config";
-import type { Plugin } from "./configs/temp-plugins.config";
+import { hasDependency } from "./utility/get-package-json";
+import {
+	getPackageManager,
+	getPkgManagerStr,
+	PACKAGE_MANAGERS,
+} from "./utility/get-package-manager";
+import { installDependency } from "./utility/install-dependency";
+import { getArgumentsPrompt, getFlagVariable } from "./utility/prompt";
 import { tryCatch } from "./utility/utilts";
-import { getConfig } from "../../utils/get-config";
 
 // Goals:
 // 1. init `auth.ts` file

@@ -1,6 +1,7 @@
-import path from "node:path";
 import fs from "node:fs/promises";
-import { tryCatch, type Result } from "./utilts";
+import path from "node:path";
+import type { Result } from "./utilts";
+import { tryCatch } from "./utilts";
 
 export const getPackageJson = async (
 	cwd: string,
