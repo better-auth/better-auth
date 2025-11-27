@@ -719,8 +719,8 @@ export const contents: Content[] = [
 						viewBox="-2 -2 24 24"
 						xmlns="http://www.w3.org/2000/svg"
 						preserveAspectRatio="xMinYMin"
-						width="1.4em"
-						height="1.4em"
+						width="1.2em"
+						height="1.2em"
 					>
 						<g id="SVGRepo_bgCarrier" strokeWidth="0"></g>
 						<g
