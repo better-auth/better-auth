@@ -119,7 +119,11 @@ export function toAuthEndpoints<
 							return {
 								response: e,
 								status: e.statusCode,
-								headers: e.headers ? new Headers(e.headers) : null,
+								headers: e.headers
+									? e.headers instanceof Headers
+										? e.headers
+										: new Headers(e.headers)
+									: null,
 							};
 						}
 						throw e;
@@ -257,7 +261,11 @@ async function runAfterHooks(
 					}
 					return {
 						response: e,
-						headers: e.headers ? new Headers(e.headers) : null,
+						headers: e.headers
+							? e.headers instanceof Headers
+								? e.headers
+								: new Headers(e.headers)
+							: null,
 					};
 				}
 				throw e;
