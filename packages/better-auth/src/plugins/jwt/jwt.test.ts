@@ -211,7 +211,10 @@ describe("jwt", async () => {
 					plugins: [jwtClient()],
 					baseURL: "http://localhost:3000/api/auth",
 					fetchOptions: {
-						customFetchImpl: async (url: string | URL | Request, init?: RequestInit) => {
+						customFetchImpl: async (
+							url: string | URL | Request,
+							init?: RequestInit,
+						) => {
 							return auth.handler(new Request(url, init));
 						},
 					},
@@ -380,7 +383,10 @@ describe.each([
 			plugins: [jwtClient()],
 			baseURL: "http://localhost:3000/api/auth",
 			fetchOptions: {
-				customFetchImpl: async (url: string | URL | Request, init?: RequestInit) => {
+				customFetchImpl: async (
+					url: string | URL | Request,
+					init?: RequestInit,
+				) => {
 					return auth.handler(new Request(url, init));
 				},
 			},
@@ -462,7 +468,10 @@ describe("jwt - remote url", async () => {
 			plugins: [jwtClient()],
 			baseURL: "http://localhost:3000/api/auth",
 			fetchOptions: {
-				customFetchImpl: async (url: string | URL | Request, init?: RequestInit) => {
+				customFetchImpl: async (
+					url: string | URL | Request,
+					init?: RequestInit,
+				) => {
 					return auth.handler(new Request(url, init));
 				},
 			},
@@ -512,7 +521,10 @@ describe("jwt - remote url", async () => {
 			plugins: [jwtClient()],
 			baseURL: "http://localhost:3000/api/auth",
 			fetchOptions: {
-				customFetchImpl: async (url: string | URL | Request, init?: RequestInit) => {
+				customFetchImpl: async (
+					url: string | URL | Request,
+					init?: RequestInit,
+				) => {
 					return auth.handler(new Request(url, init));
 				},
 			},
@@ -561,7 +573,10 @@ describe("jwt - remote url", async () => {
 			plugins: [jwtClient()],
 			baseURL: "http://localhost:3000/api/auth",
 			fetchOptions: {
-				customFetchImpl: async (url: string | URL | Request, init?: RequestInit) => {
+				customFetchImpl: async (
+					url: string | URL | Request,
+					init?: RequestInit,
+				) => {
 					return auth.handler(new Request(url, init));
 				},
 			},
@@ -667,7 +682,10 @@ describe("jwt - remote url", async () => {
 			plugins: [jwtClient()],
 			baseURL: "http://localhost:3000/api/auth",
 			fetchOptions: {
-				customFetchImpl: async (url: string | URL | Request, init?: RequestInit) => {
+				customFetchImpl: async (
+					url: string | URL | Request,
+					init?: RequestInit,
+				) => {
 					return auth.handler(new Request(url, init));
 				},
 			},

@@ -27,19 +27,32 @@ export const crossSubdomainCookies = (): BetterAuthPlugin => {
 							if (baseURL) {
 								try {
 									const baseDomain = new URL(baseURL).hostname;
-									const requestOrigin = origin || (referer ? new URL(referer).origin : null);
-									const requestDomain = requestOrigin ? new URL(requestOrigin).hostname : null;
+									const requestOrigin =
+										origin || (referer ? new URL(referer).origin : null);
+									const requestDomain = requestOrigin
+										? new URL(requestOrigin).hostname
+										: null;
 
 									// Proper subdomain validation - exact match or proper subdomain
-									const requestHost = requestDomain?.split(':')[0]; // Remove port if present
-									const baseHost = baseDomain?.split(':')[0];
-									const isSubdomain = requestHost === baseHost || (requestHost && baseHost && requestHost.endsWith(`.${baseHost}`));
+									const requestHost = requestDomain?.split(":")[0]; // Remove port if present
+									const baseHost = baseDomain?.split(":")[0];
+									const isSubdomain =
+										requestHost === baseHost ||
+										(requestHost &&
+											baseHost &&
+											requestHost.endsWith(`.${baseHost}`));
 
 									if (isSubdomain && requestOrigin) {
 										ctx.setHeader("Access-Control-Allow-Origin", requestOrigin);
 										ctx.setHeader("Access-Control-Allow-Credentials", "true");
-										ctx.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-										ctx.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+										ctx.setHeader(
+											"Access-Control-Allow-Methods",
+											"GET, POST, PUT, DELETE, OPTIONS",
+										);
+										ctx.setHeader(
+											"Access-Control-Allow-Headers",
+											"Content-Type, Authorization",
+										);
 									}
 								} catch (error) {
 									// Invalid URL, skip CORS headers
