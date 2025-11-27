@@ -37,7 +37,7 @@ export const generateAuthClientConfigCode = async ({
 		imports: await getImportString(imports),
 		exports: "",
 		preAuthConfig: "",
-		authConfig: authClientCode,
+		authConfig: authClientCode ? `{${authClientCode}}` : "",
 		postAuthConfig: "",
 	};
 
@@ -46,9 +46,9 @@ export const generateAuthClientConfigCode = async ({
 		``,
 		segmentedCode.preAuthConfig,
 		``,
-		`export const authClient = createAuthClient({`,
+		`export const authClient = createAuthClient(`,
 		segmentedCode.authConfig,
-		`});`,
+		`);`,
 		``,
 		segmentedCode.postAuthConfig,
 		``,

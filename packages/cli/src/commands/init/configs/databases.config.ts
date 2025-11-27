@@ -11,10 +11,10 @@ export type DatabaseAdapter =
 	| "drizzle-mysql"
 	| "drizzle-postgresql"
 	// kysely
-	| "kysely-sqlite"
-	| "kysely-mysql"
-	| "kysely-postgresql"
-	| "kysely-mssql"
+	| "sqlite"
+	| "mysql"
+	| "postgresql"
+	| "mssql"
 	// mongodb
 	| "mongodb";
 
@@ -223,13 +223,8 @@ export const databasesConfig = [
 	},
 	// Kysely
 	{
-		adapter: "kysely-sqlite",
+		adapter: "sqlite",
 		imports: [
-			{
-				path: "better-auth/adapters/kysely",
-				imports: [createImport({ name: "kyselyAdapter" })],
-				isNamedImport: false,
-			},
 			{
 				path: "better-sqlite3",
 				imports: createImport({ name: "Database" }),
@@ -242,13 +237,8 @@ export const databasesConfig = [
 		},
 	},
 	{
-		adapter: "kysely-mysql",
+		adapter: "mysql",
 		imports: [
-			{
-				path: "better-auth/adapters/kysely",
-				imports: [createImport({ name: "kyselyAdapter" })],
-				isNamedImport: false,
-			},
 			{
 				path: "mysql2/promise",
 				imports: [createImport({ name: "createPool" })],
@@ -261,13 +251,8 @@ export const databasesConfig = [
 		},
 	},
 	{
-		adapter: "kysely-postgresql",
+		adapter: "postgresql",
 		imports: [
-			{
-				path: "better-auth/adapters/kysely",
-				imports: [createImport({ name: "kyselyAdapter" })],
-				isNamedImport: false,
-			},
 			{
 				path: "pg",
 				imports: [createImport({ name: "Pool" })],
@@ -280,13 +265,8 @@ export const databasesConfig = [
 		},
 	},
 	{
-		adapter: "kysely-mssql",
+		adapter: "mssql",
 		imports: [
-			{
-				path: "better-auth/adapters/kysely",
-				imports: [createImport({ name: "kyselyAdapter" })],
-				isNamedImport: false,
-			},
 			{
 				path: "kysely",
 				imports: [createImport({ name: "MssqlDialect" })],
