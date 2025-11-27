@@ -9,6 +9,7 @@ import { defu } from "defu";
 import { createInternalAdapter } from "../db/internal-adapter";
 import { isPromise } from "../utils/is-promise";
 import { getBaseURL } from "../utils/url";
+import { crossSubdomainCookies } from "../plugins/cross-subdomain";
 
 export async function runPluginInit(ctx: AuthContext) {
 	let options = ctx.options;
@@ -56,7 +57,7 @@ export async function runPluginInit(ctx: AuthContext) {
 export function getInternalPlugins(options: BetterAuthOptions) {
 	const plugins: BetterAuthPlugin[] = [];
 	if (options.advanced?.crossSubDomainCookies?.enabled) {
-		// TODO: add internal plugin
+		plugins.push(crossSubdomainCookies());
 	}
 	return plugins;
 }

@@ -1062,6 +1062,9 @@ importers:
       '@types/keccak':
         specifier: ^3.0.5
         version: 3.0.5
+      '@types/node':
+        specifier: ^24.10.1
+        version: 24.10.1
       '@types/pg':
         specifier: ^8.15.5
         version: 8.15.5
@@ -1146,6 +1149,9 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.0.13(@opentelemetry/api@1.9.0)(@types/debug@4.1.12)(@types/node@24.10.1)(happy-dom@20.0.10)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.2)(msw@2.12.2(patch_hash=c49705980e5ab7228e551c9f65094fd631bf5405f65f28ca99f0f4fa2252c459)(@types/node@24.10.1)(typescript@5.9.3))(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1)
       vue:
         specifier: ^3.5.18
         version: 3.5.19(typescript@5.9.3)
@@ -19509,7 +19515,7 @@ snapshots:
   '@types/body-parser@1.19.6':
     dependencies:
       '@types/connect': 3.4.38
-      '@types/node': 24.9.2
+      '@types/node': 24.10.1
 
   '@types/braces@3.0.5': {}
 
@@ -19526,7 +19532,7 @@ snapshots:
 
   '@types/connect@3.4.38':
     dependencies:
-      '@types/node': 24.9.2
+      '@types/node': 24.10.1
 
   '@types/cookie@0.6.0': {}
 
@@ -19605,7 +19611,7 @@ snapshots:
 
   '@types/keccak@3.0.5':
     dependencies:
-      '@types/node': 24.9.2
+      '@types/node': 24.10.1
 
   '@types/mdast@4.0.4':
     dependencies:
@@ -19667,7 +19673,7 @@ snapshots:
 
   '@types/readable-stream@4.0.20':
     dependencies:
-      '@types/node': 24.9.2
+      '@types/node': 24.10.1
 
   '@types/resolve@1.20.2': {}
 
@@ -27385,7 +27391,7 @@ snapshots:
       '@azure/identity': 4.11.1
       '@azure/keyvault-keys': 4.9.0
       '@js-joda/core': 5.6.5
-      '@types/node': 24.9.2
+      '@types/node': 24.10.1
       bl: 6.1.0
       iconv-lite: 0.6.3
       js-md4: 0.3.2
