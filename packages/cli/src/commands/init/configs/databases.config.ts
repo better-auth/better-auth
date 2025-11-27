@@ -318,11 +318,11 @@ export const databasesConfig = [
                         },
                         server: 'localhost',
                         }),
+						TYPES: {
+								...Tedious.TYPES,
+								DateTime: Tedious.TYPES.DateTime2,
+							},
                     },
-                    TYPES: {
-                            ...Tedious.TYPES,
-                            DateTime: Tedious.TYPES.DateTime2,
-                        },
                     })`,
 		code({ additionalOptions }) {
 			return kyselyCode({ provider: "mssql", additionalOptions });
