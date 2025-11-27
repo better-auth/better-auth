@@ -18,20 +18,12 @@ export interface PasskeyOptions {
 	 * local dev
 	 *
 	 * @default "localhost"
-	 *
-	 * @cli
-	 * @question What is a unique identifier for your website? 'localhost' is okay for local dev
-	 * @type string
 	 */
 	rpID?: string | undefined;
 	/**
 	 * Human-readable title for your website
 	 *
 	 * @default "Better Auth"
-	 *
-	 * @cli
-	 * @question What is a human-readable title for your website?
-	 * @type string
 	 */
 	rpName?: string | undefined;
 	/**
@@ -43,17 +35,12 @@ export interface PasskeyOptions {
 	 * pass this value.
 	 *
 	 * @description The URL at which registrations and authentications should occur.
-	 * @cli
-	 * @question What is the origin URL at which your better-auth server is hosted?
-	 * @type string
 	 */
 	origin?: (string | string[] | null) | undefined;
 
 	/**
 	 * Allow customization of the authenticatorSelection options
 	 * during passkey registration.
-	 *
-	 * @cli
 	 */
 	authenticatorSelection?: AuthenticatorSelectionCriteria | undefined;
 

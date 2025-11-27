@@ -23,28 +23,17 @@ export interface GoogleOneTapOptions {
 	/**
 	 * Google client ID
 	 *
-	 * @cli required
-	 * @question What is the Google Client ID?
-	 * @type string
-	 * @cli example
-	 * @example process.env.GOOGLE_ONE_TAP_CLIENT_ID
 	 */
 	clientId: string;
 	/**
 	 * Auto select the account if the user is already signed in
 	 *
-	 * @cli
-	 * @question Would you like to auto select the account if the user is already signed in?
-	 * @type boolean
 	 * @default false
 	 */
 	autoSelect?: boolean | undefined;
 	/**
 	 * Cancel the flow when the user taps outside the prompt
 	 *
-	 * @cli
-	 * @question Would you like to cancel the flow when the user taps outside the prompt?
-	 * @type boolean
 	 * @default true
 	 */
 	cancelOnTapOutside?: boolean | undefined;
@@ -55,18 +44,12 @@ export interface GoogleOneTapOptions {
 	 * redirect: Redirect the user to the Google One Tap flow
 	 *
 	 * @default "popup"
-	 * @cli
-	 * @question What is the UX mode for the Google One Tap flow?
-	 * @type enum popup redirect
 	 */
 	uxMode?: ("popup" | "redirect") | undefined;
 	/**
 	 * The context to use for the Google One Tap flow. See https://developers.google.com/identity/gsi/web/reference/js-reference
 	 *
 	 * @default "signin"
-	 * @cli
-	 * @question What is the context for the Google One Tap flow?
-	 * @type enum signin signup use
 	 */
 	context?: ("signin" | "signup" | "use") | undefined;
 	/**
@@ -76,23 +59,16 @@ export interface GoogleOneTapOptions {
 	/**
 	 * Configuration options for the prompt and exponential backoff behavior.
 	 *
-	 * @cli
 	 */
 	promptOptions?:
 		| {
 				/**
 				 * Base delay (in milliseconds) for exponential backoff.
-				 * @cli
-				 * @question What is the base delay for the Google One Tap flow?
-				 * @type number
 				 * @default 1000
 				 */
 				baseDelay?: number;
 				/**
 				 * Maximum number of prompt attempts before calling onPromptNotification.
-				 * @cli
-				 * @question What is the maximum number of prompt attempts before calling onPromptNotification?
-				 * @type number
 				 * @default 5
 				 */
 				maxAttempts?: number;

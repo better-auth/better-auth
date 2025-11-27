@@ -9,31 +9,24 @@ import type { TOTPOptions } from "./totp";
 export interface TwoFactorOptions {
 	/**
 	 * The issuer is the name of your application. It's used to generate TOTP codes. It'll be displayed in the authenticator apps.
-	 * @cli
 	 * @default "My App"
-	 * @type string
 	 */
 	issuer?: string | undefined;
 	/**
 	 * The options for the TOTP authentication.
-	 * @cli
 	 */
 	totpOptions?: Omit<TOTPOptions, "issuer"> | undefined;
 	/**
 	 * The options for the OTP authentication.
-	 * @cli
 	 */
 	otpOptions?: OTPOptions | undefined;
 	/**
 	 * The options for the backup code authentication.
-	 * @cli
 	 */
 	backupCodeOptions?: BackupCodeOptions | undefined;
 	/**
 	 * Skip verification on enabling two factor authentication.
-	 * @cli
 	 * @default false
-	 * @type boolean
 	 */
 	skipVerificationOnEnable?: boolean | undefined;
 	/**

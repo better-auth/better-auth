@@ -16,18 +16,12 @@ import { verifyTwoFactor } from "../verify-two-factor";
 export interface BackupCodeOptions {
 	/**
 	 * The amount of backup codes to generate
-	 * @cli
 	 * @default 10
-	 * @type number
-	 * @question What is the amount of backup codes to generate?
 	 */
 	amount?: number | undefined;
 	/**
 	 * The length of the backup codes
-	 * @cli
 	 * @default 10
-	 * @type number
-	 * @question What is the length of the backup codes?
 	 */
 	length?: number | undefined;
 	/**
@@ -36,10 +30,6 @@ export interface BackupCodeOptions {
 	customBackupCodesGenerate?: (() => string[]) | undefined;
 	/**
 	 * How to store the backup codes in the database, whether encrypted or plain.
-	 *
-	 * @cli select plain:Plain encrypted:Encrypted
-	 * @type string
-	 * @question How to store the backup codes in the database, whether encrypted or plain?
 	 */
 	storeBackupCodes?:
 		| (

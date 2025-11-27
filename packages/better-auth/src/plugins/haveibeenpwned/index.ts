@@ -59,9 +59,6 @@ async function checkPasswordCompromise(
 export interface HaveIBeenPwnedOptions {
 	/**
 	 * Custom message to display when a password is compromised.
-	 * @cli optional
-	 * @type string
-	 * @question What is the custom message for compromised passwords?
 	 */
 	customPasswordCompromisedMessage?: string | undefined;
 	/**

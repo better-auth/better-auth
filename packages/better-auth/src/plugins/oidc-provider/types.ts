@@ -6,17 +6,11 @@ export interface OIDCOptions {
 	 * The amount of time in seconds that the access token is valid for. By default it is 3600 seconds (1 hour) - Recommended by the OIDC spec
 	 *
 	 * @default 3600
-	 * @cli optional
-	 * @type number
-	 * @question What is the amount of time in seconds that the access token is valid for?
 	 */
 	accessTokenExpiresIn?: number | undefined;
 	/**
 	 * Allow dynamic client registration.
 	 *
-	 * @cli optional
-	 * @type boolean
-	 * @question Would you like to allow dynamic client registration?
 	 */
 	allowDynamicClientRegistration?: boolean | undefined;
 	/**
@@ -27,18 +21,12 @@ export interface OIDCOptions {
 	 * The amount of time in seconds that the refresh token is valid for. By default it is 604800 seconds (7 days) - Recommended by the OIDC spec
 	 *
 	 * @default 604800
-	 * @cli optional
-	 * @type number
-	 * @question What is the amount of time in seconds that the refresh token is valid for?
 	 */
 	refreshTokenExpiresIn?: number | undefined;
 	/**
 	 * The amount of time in seconds that the authorization code is valid for. By default it is 600 seconds (10 minutes) - Recommended by the OIDC spec
 	 *
 	 * @default 600
-	 * @cli optional
-	 * @type number
-	 * @question What is the amount of time in seconds that the authorization code is valid for?
 	 */
 	codeExpiresIn?: number | undefined;
 	/**
@@ -46,18 +34,12 @@ export interface OIDCOptions {
 	 *
 	 * @see https://openid.net/specs/openid-connect-core-1_0.html#ScopeClaims
 	 * @default ["openid", "profile", "email", "offline_access"]
-	 * @cli optional
-	 * @type string[]
-	 * @question What are the scopes that the client is allowed to request?
 	 */
 	scopes?: string[] | undefined;
 	/**
 	 * The default scope to use if the client does not provide one.
 	 *
 	 * @default "openid"
-	 * @cli optional
-	 * @type string
-	 * @question What is the default scope to use if the client does not provide one?
 	 */
 	defaultScope?: string | undefined;
 	/**
@@ -79,9 +61,6 @@ export interface OIDCOptions {
 	 * with the authorization code.
 	 *
 	 * @example "/oauth/authorize"
-	 * @cli optional
-	 * @type string
-	 * @question What is the URL to the consent page?
 	 */
 	consentPage?: string | undefined;
 	/**
@@ -103,11 +82,6 @@ export interface OIDCOptions {
 	 * The URL to the login page. This is used if the client requests the `login`
 	 * prompt.
 	 *
-	 * @cli required
-	 * @cli example
-	 * @example /login
-	 * @question What is the URL to the login page?
-	 * @type string
 	 */
 	loginPage: string;
 	/**
@@ -117,18 +91,12 @@ export interface OIDCOptions {
 	 * case if you want to disable this you can use this options.
 	 *
 	 * @default true
-	 * @cli optional
-	 * @type boolean
-	 * @question Would you like to require PKCE (proof key code exchange)?
 	 */
 	requirePKCE?: boolean | undefined;
 	/**
 	 * Allow plain to be used as a code challenge method.
 	 *
 	 * @default true
-	 * @cli optional
-	 * @type boolean
-	 * @question Would you like to allow plain to be used as a code challenge method?
 	 */
 	allowPlainCodeChallengeMethod?: boolean | undefined;
 	/**
@@ -172,9 +140,6 @@ export interface OIDCOptions {
 	 * - { encrypt: (clientSecret: string) => Promise<string>, decrypt: (clientSecret: string) => Promise<string> } - A function that encrypts and decrypts the client secret.
 	 *
 	 * @default "plain"
-	 * @cli optional
-	 * @type enum hashed plain encrypted
-	 * @question What is the method to store the client secret?
 	 */
 	storeClientSecret?:
 		| (
@@ -192,9 +157,6 @@ export interface OIDCOptions {
 	 * Whether to use the JWT plugin to sign the ID token.
 	 *
 	 * @default false
-	 * @cli optional
-	 * @type boolean
-	 * @question Would you like to use the JWT plugin to sign the ID token?
 	 */
 	useJWTPlugin?: boolean | undefined;
 	/**

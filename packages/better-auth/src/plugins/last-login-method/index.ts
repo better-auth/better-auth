@@ -11,17 +11,11 @@ export interface LastLoginMethodOptions {
 	/**
 	 * Name of the cookie to store the last login method
 	 * @default "better-auth.last_used_login_method"
-	 * @cli optional
-	 * @question What is the cookie name for last login method?
-	 * @type string
 	 */
 	cookieName?: string | undefined;
 	/**
 	 * Cookie expiration time in seconds. By default it's 2592000 seconds (30 days)
 	 * @default 2592000
-	 * @cli optional
-	 * @type number
-	 * @question What is the max age in seconds before the cookie expires?
 	 */
 	maxAge?: number | undefined;
 	/**
@@ -35,9 +29,6 @@ export interface LastLoginMethodOptions {
 	/**
 	 * Store the last login method in the database. This will create a new field in the user table.
 	 * @default false
-	 * @cli optional
-	 * @type boolean
-	 * @question Should the last login method be stored in the database?
 	 */
 	storeInDatabase?: boolean | undefined;
 	/**

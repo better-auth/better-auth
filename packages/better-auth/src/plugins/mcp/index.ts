@@ -33,12 +33,6 @@ import { authorizeMCPOAuth } from "./authorize";
 interface MCPOptions {
 	/**
 	 * The login page URL
-	 *
-	 * @cli required
-	 * @cli example
-	 * @type string
-	 * @question What is the login page URL?
-	 * @example /login
 	 */
 	loginPage: string;
 	/**

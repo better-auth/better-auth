@@ -18,36 +18,22 @@ import type {
 export interface SIWEPluginOptions {
 	/**
 	 * The domain name of your application (required for SIWE message generation)
-	 * @cli required
-	 * @cli example
-	 * @type string
-	 * @question What is the domain name of your application?
 	 * @example https://example.com
 	 */
 	domain: string;
 	/**
 	 * The email domain name for creating user accounts when not using anonymous mode. Defaults to base URL.
-	 * @cli optional
-	 * @type string
-	 * @question What is the email domain name for creating user accounts when not using anonymous mode?
 	 * @example example.com
 	 */
 	emailDomainName?: string | undefined;
 	/**
 	 * Whether to allow anonymous sign-ins without requiring an email. Default is true
 	 *
-	 * @cli optional
-	 * @type boolean
-	 * @question Would you like to allow anonymous sign-ins without requiring an email?
 	 * @default true
 	 */
 	anonymous?: boolean | undefined;
 	/**
 	 * Function to generate a unique nonce for each sign-in attempt.
-	 * @cli required
-	 * @cli example
-	 * @type function
-	 * @question What is the function to generate a unique nonce for each sign-in attempt?
 	 * @example async () => {
 	 *   return "your-secure-random-nonce";
 	 * }
@@ -55,10 +41,6 @@ export interface SIWEPluginOptions {
 	getNonce: () => Promise<string>;
 	/**
 	 * Function to verify the signed SIWE message.
-	 * @cli required
-	 * @cli example
-	 * @type function
-	 * @question What is the function to verify the signed SIWE message?
 	 * @example async (args) => {
 	 *   return true;
 	 * }
@@ -66,9 +48,6 @@ export interface SIWEPluginOptions {
 	verifyMessage: (args: SIWEVerifyMessageArgs) => Promise<boolean>;
 	/**
 	 * Function to lookup ENS names and avatars for Ethereum addresses.
-	 * @cli optional
-	 * @type function
-	 * @question What is the function to lookup ENS names and avatars for Ethereum addresses?
 	 * @example async (args) => {
 	 *   return {
 	 *     name: "user.eth",

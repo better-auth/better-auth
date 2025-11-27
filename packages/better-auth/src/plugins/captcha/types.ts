@@ -32,20 +32,3 @@ export type CaptchaOptions =
 	| CloudflareTurnstileOptions
 	| HCaptchaOptions
 	| CaptchaFoxOptions;
-
-// DO NOT REMOVE:
-// This type exists for the init CLI script to infer plugin argument options more easily.
-type SimpleCaptchaOptionsForInitCLI = {
-	/**
-	 * The captcha provider you wish to use.
-	 * @cli required
-	 * @prompt
-	 * @question Which CAPTCHA provider do you want to use?
-	 * @type enum google-recaptcha cloudflare-turnstile hcaptcha captchafox
-	 */
-	provider:
-		| "google-recaptcha"
-		| "cloudflare-turnstile"
-		| "hcaptcha"
-		| "captchafox";
-};

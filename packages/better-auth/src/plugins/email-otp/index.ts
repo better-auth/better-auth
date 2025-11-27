@@ -28,13 +28,6 @@ export interface EmailOTPOptions {
 	 * It is recommended to not await the email sending to avoid timing attacks.
 	 * On serverless platforms, use `waitUntil` or similar to ensure the email is sent.
 	 *
-	 * @cli example
-	 * @cli required
-	 * @type function
-	 * @example ```ts
-	 * async ({ email, otp, type }, request) => {
-	 *  // Send email with OTP
-	 * }
 	 */
 	sendVerificationOTP: (
 		data: {
@@ -48,18 +41,12 @@ export interface EmailOTPOptions {
 	 * Length of the OTP
 	 *
 	 * @default 6
-	 * @cli
-	 * @question What is the length of the OTP?
-	 * @type number
 	 */
 	otpLength?: number | undefined;
 	/**
 	 * Expiry time of the OTP in seconds default is 5 minutes
 	 *
 	 * @default 300
-	 * @cli
-	 * @question What is the expiry time of the OTP in seconds?
-	 * @type number
 	 */
 	expiresIn?: number | undefined;
 	/**
@@ -76,9 +63,6 @@ export interface EmailOTPOptions {
 	 * Send email verification on sign-up
 	 *
 	 * @default false
-	 * @cli
-	 * @question Would you like to send the OTP on sign-up?
-	 * @type boolean
 	 */
 	sendVerificationOnSignUp?: boolean | undefined;
 	/**
@@ -86,17 +70,11 @@ export interface EmailOTPOptions {
 	 * automatic sign-up when the user is not registered.
 	 *
 	 * @default false
-	 * @cli
-	 * @question Would you like to disable sign-up?
-	 * @type boolean
 	 */
 	disableSignUp?: boolean | undefined;
 	/**
 	 * Allowed attempts for the OTP code
 	 *
-	 * @cli
-	 * @question What is the allowed attempts for the OTP code?
-	 * @type number
 	 * @default 3
 	 */
 	allowedAttempts?: number | undefined;
@@ -105,9 +83,6 @@ export interface EmailOTPOptions {
 	 * Note: This will not affect the OTP sent to the user, it will only affect the OTP stored in your database
 	 *
 	 * @default "plain"
-	 * @cli
-	 * @question How would you like to store the OTP code?
-	 * @type enum plain encrypted hashed
 	 */
 	storeOTP?:
 		| (
@@ -125,9 +100,6 @@ export interface EmailOTPOptions {
 	 * Override the default email verification to use email otp instead
 	 *
 	 * @default false
-	 * @cli
-	 * @question Would you like to override the default email verification?
-	 * @type boolean
 	 */
 	overrideDefaultEmailVerification?: boolean | undefined;
 }

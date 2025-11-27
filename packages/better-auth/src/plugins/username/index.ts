@@ -23,17 +23,12 @@ export type UsernameOptions = {
 	 * The minimum length of the username
 	 *
 	 * @default 3
-	 * @cli
-	 * @prompt
-	 * @type number
 	 */
 	minUsernameLength?: number | undefined;
 	/**
 	 * The maximum length of the username
 	 *
 	 * @default 30
-	 * @cli
-	 * @type number
 	 */
 	maxUsernameLength?: number | undefined;
 	/**
@@ -69,8 +64,6 @@ export type UsernameOptions = {
 		| undefined;
 	/**
 	 * The order of validation
-	 *
-	 * @cli
 	 */
 	validationOrder?:
 		| {
@@ -78,16 +71,12 @@ export type UsernameOptions = {
 				 * The order of username validation
 				 *
 				 * @default "pre-normalization"
-				 * @cli select pre-normalization post-normalization
-				 * @question What is the order of username validation?
 				 */
 				username?: "pre-normalization" | "post-normalization";
 				/**
 				 * The order of display username validation
 				 *
 				 * @default "pre-normalization"
-				 * @cli select pre-normalization post-normalization
-				 * @question What is the order of display username validation?
 				 */
 				displayUsername?: "pre-normalization" | "post-normalization";
 		  }

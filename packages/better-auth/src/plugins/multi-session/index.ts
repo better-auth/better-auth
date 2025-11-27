@@ -18,9 +18,6 @@ export interface MultiSessionConfig {
 	 * The maximum number of sessions a user can have
 	 * at a time
 	 * @default 5
-	 * @cli optional
-	 * @question What is the maximum number of sessions a user can have at a time?
-	 * @type number
 	 */
 	maximumSessions?: number | undefined;
 }

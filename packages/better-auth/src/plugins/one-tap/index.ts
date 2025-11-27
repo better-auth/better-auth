@@ -11,9 +11,6 @@ interface OneTapOptions {
 	 * Disable the signup flow
 	 *
 	 * @default false
-	 * @cli
-	 * @question Would you like to disable the signup flow for one-tap?
-	 * @type boolean
 	 */
 	disableSignup?: boolean | undefined;
 	/**
@@ -22,9 +19,6 @@ interface OneTapOptions {
 	 * If a client ID is provided in the social provider configuration,
 	 * it will be used.
 	 *
-	 * @cli
-	 * @question What is the Google Client ID?
-	 * @type string
 	 */
 	clientId?: string | undefined;
 }
