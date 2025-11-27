@@ -36,6 +36,9 @@ import {
 import { installDependency } from "./utility/install-dependency";
 import { getArgumentsPrompt, getFlagVariable } from "./utility/prompt";
 import { tryCatch } from "./utility/utilts";
+import type { Framework } from "./utility/framework";
+import { autoDetectFramework, FRAMEWORKS } from "./utility/framework";
+import { generateAuthClientConfigCode } from "./generate-auth-client";
 
 // Goals:
 // 1. init `auth.ts` file
@@ -67,8 +70,8 @@ export async function initAction(opts: any) {
 	await (async () => {
 		const hasBetterAuth = await hasDependency(cwd, "better-auth");
 		if (hasBetterAuth) {
-			const info = "Better-Auth is already installed. Skipping installation.";
-			return log.info(info);
+			const info = "Better-Auth is already installed. Skipping...";
+			return log.info(chalk.gray(info));
 		}
 
 		const shouldInstallBetterAuth = await confirm({
@@ -88,9 +91,41 @@ export async function initAction(opts: any) {
 		}
 	})();
 
+	// Select the framework to use.
+	const framework: Framework = await (async () => {
+		const detectedFramework = await autoDetectFramework(cwd);
+
+		if (detectedFramework) {
+			const confirmed = await confirm({
+				message: `Is ${chalk.bold(detectedFramework.name)} your project's framework?`,
+			});
+			if (isCancel(confirmed)) {
+				cancel("✋ Operation cancelled.");
+				process.exit(0);
+			}
+			if (confirmed) return detectedFramework;
+		}
+
+		const selectedFramework = await select({
+			message: `Select the framework you are using:`,
+			options: FRAMEWORKS.map((framework) => ({
+				value: framework.id,
+				label: framework.name,
+			})),
+			initialValue: "next",
+		});
+		if (isCancel(selectedFramework)) {
+			cancel("✋ Operation cancelled.");
+			process.exit(0);
+		}
+		return FRAMEWORKS.find((framework) => framework.id === selectedFramework)!;
+	})();
+
 	// Handle ENV files
 	await (async () => {
 		const envFiles = await getEnvFiles(cwd);
+
+		// If no existing ENV files, ask to allow creation of a new one.
 		if (envFiles.length === 0) {
 			const shouldCreateEnv = await confirm({
 				message: `Would you like to create a .env file with the necessary environment variables?`,
@@ -107,15 +142,16 @@ export async function initAction(opts: any) {
 			}
 			return;
 		}
+
+		// Check for missing ENV variables.
 		const missingEnvVars = await getMissingEnvVars(envFiles, [
 			"BETTER_AUTH_SECRET",
 			"BETTER_AUTH_URL",
 		]);
 
 		if (!missingEnvVars.length) {
-			const info =
-				"Skipping ENV file creation, required env variables are already present.";
-			return log.info(info);
+			const info = "ENV requirements met. Skipping...";
+			return log.info(chalk.gray(info));
 		}
 
 		// If only one file is missing env variables, just show confirmation prompt
@@ -142,6 +178,8 @@ export async function initAction(opts: any) {
 			}
 			return;
 		}
+
+		// If multiple files are missing env variables, ask to select the files to update.
 		const filesToUpdate = await multiselect({
 			message: `Add required environment variables to the following files?`,
 			options: missingEnvVars.map((x) => ({
@@ -173,15 +211,19 @@ export async function initAction(opts: any) {
 		}
 	})();
 
+	// Check if `auth.ts` is already defined or not.
 	const hasAuthConfigAlready = await (async () => {
-		try {
-			const alreadyHasAuthConfig = await getConfig({ cwd });
-			return alreadyHasAuthConfig;
-		} catch (error) {
-			return false;
-		}
+		const { data, error } = await tryCatch(
+			getConfig({
+				cwd,
+				shouldThrowOnError: true,
+			}),
+		);
+		if (error) return true;
+		return data !== null;
 	})();
 
+	// Select the database to use.
 	const database = await (async () => {
 		if (hasAuthConfigAlready) return null;
 		const confirmed = await confirm({
@@ -206,6 +248,7 @@ export async function initAction(opts: any) {
 		return db;
 	})();
 
+	// Select the plugins to use. For now this is skipped.
 	const plugins = await (async (): Promise<Plugin[]> => {
 		// For now we do not want to allow configurations of plugins.
 		// Possibily in the future we can support this.
@@ -228,10 +271,16 @@ export async function initAction(opts: any) {
 		return selectedPlugins as Plugin[];
 	})();
 
+	// Generate the `auth.ts` file.
 	await (async () => {
+		if (hasAuthConfigAlready) {
+			const info = "Auth config already exists. Skipping...";
+			return log.info(chalk.gray(info));
+		}
 		const authConfigCode = await generateAuthConfigCode({
 			plugins,
 			database,
+			framework,
 			baseURL: "http://localhost:3000",
 			getArguments: getArgumentsPrompt(options),
 		});
@@ -248,10 +297,36 @@ export async function initAction(opts: any) {
 		}
 		await tryCatch(fs.mkdir(path.dirname(authConfigPath), { recursive: true }));
 		await tryCatch(fs.writeFile(authConfigPath, authConfigCode, "utf-8"));
-		console.log(authConfigPath);
 	})();
 
-	outro(`🚀 Better Auth CLI successfully initialized!`);
+	// Generate the `auth-client.ts` file.
+	await (async () => {
+		if (hasAuthConfigAlready) {
+			return;
+		}
+		const authClientCode = await generateAuthClientConfigCode({
+			plugins,
+			database,
+			framework,
+			baseURL: "http://localhost:3000",
+			getArguments: getArgumentsPrompt(options),
+		});
+
+		const { data: allFiles, error } = await tryCatch(fs.readdir(cwd, "utf-8"));
+		if (error) {
+			log.error(`Failed to read directory: ${error.message}`);
+			process.exit(1);
+		}
+		let authConfigPath = path.join(cwd, "lib", "auth-client.ts");
+
+		if (allFiles.some((node) => node === "src")) {
+			authConfigPath = path.join(cwd, "src", "lib", "auth-client.ts");
+		}
+		await tryCatch(fs.mkdir(path.dirname(authConfigPath), { recursive: true }));
+		await tryCatch(fs.writeFile(authConfigPath, authClientCode, "utf-8"));
+	})();
+
+	outro(`Better Auth successfully initialized! 🚀`);
 }
 
 let initBuilder = new Command("init")

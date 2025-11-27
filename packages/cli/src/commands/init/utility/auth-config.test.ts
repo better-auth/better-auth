@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pluginsConfig } from "../configs/temp-plugins.config";
+import { tempPluginsConfig } from "../configs/temp-plugins.config";
 import { generateInnerAuthConfigCode } from "./auth-config";
 import { getDatabaseCode } from "./database";
 import { formatCode } from "./format";
@@ -61,7 +61,7 @@ describe("Init CLI - auth config generation", () => {
 			database: getDatabaseCode("prisma-sqlite"),
 			appName: "My App \test",
 			baseURL: "https://my-app.com",
-			plugins: [pluginsConfig["username"], pluginsConfig["twoFactor"]],
+			plugins: [tempPluginsConfig["username"], tempPluginsConfig["twoFactor"]],
 			getArguments: async () => undefined,
 		});
 		const formattedAuthConfig = await formatConfigCode(authConfig);

@@ -223,7 +223,7 @@ export const tempPluginsConfig = {
 			],
 			arguments: [
 				{
-					flag: "max-username-length",
+					flag: "username-max-username-length",
 					question: "What is the maximum length of the username?",
 					description: "The maximum length of the username.",
 					isNumber: true,
@@ -235,7 +235,7 @@ export const tempPluginsConfig = {
 					},
 				},
 				{
-					flag: "min-username-length",
+					flag: "username-min-username-length",
 					question: "What is the minimum length of the username?",
 					description: "The minimum length of the username.",
 					isNumber: true,
@@ -247,13 +247,13 @@ export const tempPluginsConfig = {
 					},
 				},
 				{
-					flag: "validation-order",
+					flag: "username-validation-order",
 					description:
 						"The order of validation for username and display username.",
 					skipPrompt: true,
 					isNestedObject: [
 						{
-							flag: "validation-order-username",
+							flag: "username-validation-order-username",
 							question: "When should username validation occur?",
 							description: "The order of username validation.",
 							defaultValue: "pre-normalization",
@@ -271,7 +271,7 @@ export const tempPluginsConfig = {
 							},
 						},
 						{
-							flag: "validation-order-display-username",
+							flag: "username-validation-order-display-username",
 							question: "When should display username validation occur?",
 							description: "The order of display username validation.",
 							defaultValue: "pre-normalization",
@@ -318,6 +318,93 @@ export const tempPluginsConfig = {
 					isNamedImport: false,
 				},
 			],
+			arguments: [
+				{
+					flag: "magic-link-expires-in",
+					description:
+						"Time in seconds until the magic link expires. Default is (60 * 5) 5 minutes",
+					question:
+						"[Magic Link] What is the expiration time for the magic link in seconds?",
+					defaultValue: 300,
+					skipPrompt: true,
+					isNumber: true,
+					argument: {
+						index: 0,
+						isProperty: "expiresIn",
+						schema: z.coerce.number().optional(),
+					},
+				},
+				{
+					flag: "magic-link-send-magic-link",
+					description: "Send magic link implementation.",
+					question: "[Magic Link] What is the send magic link?",
+					defaultValue: `async ({ email, url, token }, request) => {
+	 // Send magic link to the user
+	}`,
+					skipPrompt: true,
+					isRequired: true,
+					argument: {
+						index: 0,
+						isProperty: "sendMagicLink",
+						schema: z.coerce.string(),
+					},
+				},
+				{
+					flag: "magic-link-rate-limit",
+					description:
+						"Rate limit configuration. Default window is 60 seconds and max is 5 requests.",
+					skipPrompt: true,
+					isNestedObject: [
+						{
+							flag: "magic-link-rate-limit-window",
+							description: "Window in seconds. Default is 60 seconds.",
+							question: "[Magic Link] What is the window in seconds?",
+							defaultValue: 60,
+							skipPrompt: true,
+							isNumber: true,
+							argument: {
+								index: 0,
+								isProperty: "window",
+								schema: z.coerce.number().optional(),
+							},
+						},
+						{
+							flag: "magic-link-rate-limit-max",
+							description: "Max requests. Default is 5 requests.",
+							question: "[Magic Link] What is the max requests?",
+							defaultValue: 5,
+							skipPrompt: true,
+							isNumber: true,
+							argument: {
+								index: 0,
+								isProperty: "max",
+								schema: z.coerce.number().optional(),
+							},
+						},
+					],
+					argument: {
+						index: 0,
+						isProperty: "rateLimit",
+					},
+				},
+				{
+					flag: "magic-link-store-token",
+					description:
+						"This option allows you to configure how the token is stored in your database. Note: This will not affect the token that's sent, it will only affect the token stored in your database.",
+					question: "[Magic Link] How would you like to store the token?",
+					defaultValue: "plain",
+					skipPrompt: true,
+					isSelectOptions: [
+						{ value: "plain", label: "Plain" },
+						{ value: "hashed", label: "Hashed" },
+					],
+					argument: {
+						index: 0,
+						isProperty: "storeToken",
+						schema: z.enum(["plain", "hashed"]).optional(),
+					},
+				},
+			],
 		},
 		authClient: {
 			function: "magicLinkClient",
@@ -339,6 +426,124 @@ export const tempPluginsConfig = {
 					path: "better-auth/plugins",
 					imports: [createImport({ name: "emailOTP" })],
 					isNamedImport: false,
+				},
+			],
+			arguments: [
+				{
+					flag: "email-otp-send-verification-otp",
+					description: "Function to send email verification",
+					question: "[Email OTP] What is the send verification o t p?",
+					defaultValue: `async ({ email, otp, type }, request) => {
+ // Send email with OTP
+}`,
+					skipPrompt: true,
+					isRequired: true,
+					argument: {
+						index: 0,
+						isProperty: "sendVerificationOTP",
+						schema: z.coerce.string(),
+					},
+				},
+				{
+					flag: "email-otp-otp-length",
+					description: "Length of the OTP",
+					question: "[Email OTP] What is the length of the OTP?",
+					defaultValue: 6,
+					skipPrompt: true,
+					isNumber: true,
+					argument: {
+						index: 0,
+						isProperty: "otpLength",
+						schema: z.coerce.number().optional(),
+					},
+				},
+				{
+					flag: "email-otp-expires-in",
+					description: "Expiry time of the OTP in seconds default is 5 minutes",
+					question:
+						"[Email OTP] What is the expiry time of the OTP in seconds?",
+					defaultValue: 300,
+					skipPrompt: true,
+					isNumber: true,
+					argument: {
+						index: 0,
+						isProperty: "expiresIn",
+						schema: z.coerce.number().optional(),
+					},
+				},
+				{
+					flag: "email-otp-send-verification-on-sign-up",
+					description: "Send email verification on sign-up",
+					question: "[Email OTP] Would you like to send the OTP on sign-up?",
+					defaultValue: false,
+					skipPrompt: true,
+					isConformation: true,
+					argument: {
+						index: 0,
+						isProperty: "sendVerificationOnSignUp",
+						schema: z.coerce.boolean().optional(),
+					},
+				},
+				{
+					flag: "email-otp-disable-sign-up",
+					description:
+						"A boolean value that determines whether to prevent automatic sign-up when the user is not registered.",
+					question: "[Email OTP] Would you like to disable sign-up?",
+					defaultValue: false,
+					skipPrompt: true,
+					isConformation: true,
+					argument: {
+						index: 0,
+						isProperty: "disableSignUp",
+						schema: z.coerce.boolean().optional(),
+					},
+				},
+				{
+					flag: "email-otp-allowed-attempts",
+					description: "Allowed attempts for the OTP code",
+					question:
+						"[Email OTP] What is the allowed attempts for the OTP code?",
+					defaultValue: 3,
+					skipPrompt: true,
+					isNumber: true,
+					argument: {
+						index: 0,
+						isProperty: "allowedAttempts",
+						schema: z.coerce.number().optional(),
+					},
+				},
+				{
+					flag: "email-otp-store-otp",
+					description:
+						"Store the OTP in your database in a secure way Note: This will not affect the OTP sent to the user, it will only affect the OTP stored in your database",
+					question: "[Email OTP] How would you like to store the OTP code?",
+					defaultValue: "plain",
+					skipPrompt: true,
+					isSelectOptions: [
+						{ value: "plain", label: "Plain" },
+						{ value: "encrypted", label: "Encrypted" },
+						{ value: "hashed", label: "Hashed" },
+					],
+					argument: {
+						index: 0,
+						isProperty: "storeOTP",
+						schema: z.enum(["plain", "encrypted", "hashed"]).optional(),
+					},
+				},
+				{
+					flag: "email-otp-override-default-email-verification",
+					description:
+						"Override the default email verification to use email otp instead",
+					question:
+						"[Email OTP] Would you like to override the default email verification?",
+					defaultValue: false,
+					skipPrompt: true,
+					isConformation: true,
+					argument: {
+						index: 0,
+						isProperty: "overrideDefaultEmailVerification",
+						schema: z.coerce.boolean().optional(),
+					},
 				},
 			],
 		},

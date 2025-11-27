@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import * as z from "zod/v4";
 import type { PluginConfig } from "../configs/plugins-index.config";
-import { pluginsConfig } from "../configs/plugins-index.config";
 import type { GetArgumentsFn } from "../generate-auth";
 import { formatCode } from "./format";
-import { getAuthPluginsCode } from "./plugin";
+import { getAuthPluginsCode, getAuthClientPluginsCode } from "./plugin";
+import { tempPluginsConfig } from "../configs/temp-plugins.config";
 
 const formatPluginCode = async (code: string) => {
 	return (await formatCode(`[${code}]`)).trim().slice(0, -1);
@@ -964,7 +964,7 @@ describe("Init CLI - plugin utility", () => {
 			};
 
 			const result = await getAuthPluginsCode({
-				plugins: [pluginsConfig.username],
+				plugins: [tempPluginsConfig.username],
 				getArguments,
 			});
 
@@ -981,7 +981,7 @@ describe("Init CLI - plugin utility", () => {
 			};
 
 			const result = await getAuthPluginsCode({
-				plugins: [pluginsConfig.twoFactor],
+				plugins: [tempPluginsConfig.twoFactor],
 				getArguments,
 			});
 			const expected = await formatPluginCode("twoFactor()");
@@ -997,9 +997,9 @@ describe("Init CLI - plugin utility", () => {
 
 			const result = await getAuthPluginsCode({
 				plugins: [
-					pluginsConfig.twoFactor,
-					pluginsConfig.magicLink,
-					pluginsConfig.emailOTP,
+					tempPluginsConfig.twoFactor,
+					tempPluginsConfig.magicLink,
+					tempPluginsConfig.emailOTP,
 				],
 				getArguments,
 			});
@@ -2213,6 +2213,764 @@ describe("Init CLI - plugin utility", () => {
 
 			const expected = await formatPluginCode("testPlugin(null)");
 			expect(result).toBe(expected);
+		});
+	});
+
+	describe("getAuthClientPluginsCode", () => {
+		describe("empty or undefined plugins", () => {
+			it("should return undefined when plugins is undefined", async () => {
+				const getArguments: GetArgumentsFn = async ({ flag }) => {};
+				const result = await getAuthClientPluginsCode({
+					plugins: undefined,
+					getArguments,
+				});
+				expect(result).toBeUndefined();
+			});
+
+			it("should return undefined when plugins is empty array", async () => {
+				const getArguments: GetArgumentsFn = async () => undefined;
+				const result = await getAuthClientPluginsCode({
+					plugins: [],
+					getArguments,
+				});
+				expect(result).toBeUndefined();
+			});
+
+			it("should return undefined when all plugins have authClient null", async () => {
+				const getArguments: GetArgumentsFn = async () => undefined;
+				const plugins: PluginConfig[] = [
+					{
+						displayName: "Plugin 1",
+						auth: {
+							function: "plugin1",
+							imports: [],
+						},
+						authClient: null,
+					},
+					{
+						displayName: "Plugin 2",
+						auth: {
+							function: "plugin2",
+							imports: [],
+						},
+						authClient: null,
+					},
+				];
+
+				const result = await getAuthClientPluginsCode({
+					plugins,
+					getArguments,
+				});
+				expect(result).toBeUndefined();
+			});
+		});
+
+		describe("plugins without arguments", () => {
+			it("should generate code for plugin without arguments", async () => {
+				const getArguments: GetArgumentsFn = async () => undefined;
+				const plugin: PluginConfig = {
+					displayName: "Test Plugin",
+					auth: {
+						function: "testPlugin",
+						imports: [],
+					},
+					authClient: {
+						function: "testPluginClient",
+						imports: [],
+					},
+				};
+
+				const result = await getAuthClientPluginsCode({
+					plugins: [plugin],
+					getArguments,
+				});
+
+				const expected = await formatPluginCode("testPluginClient()");
+
+				expect(result).toBe(expected);
+			});
+
+			it("should generate code for multiple plugins without arguments", async () => {
+				const getArguments: GetArgumentsFn = async () => undefined;
+				const plugins: PluginConfig[] = [
+					{
+						displayName: "Plugin 1",
+						auth: {
+							function: "plugin1",
+							imports: [],
+						},
+						authClient: {
+							function: "plugin1Client",
+							imports: [],
+						},
+					},
+					{
+						displayName: "Plugin 2",
+						auth: {
+							function: "plugin2",
+							imports: [],
+						},
+						authClient: {
+							function: "plugin2Client",
+							imports: [],
+						},
+					},
+				];
+
+				const result = await getAuthClientPluginsCode({
+					plugins,
+					getArguments,
+				});
+
+				const expected = await formatPluginCode(
+					"plugin1Client(), plugin2Client()",
+				);
+
+				expect(result).toBe(expected);
+			});
+
+			it("should filter out plugins with authClient null", async () => {
+				const getArguments: GetArgumentsFn = async () => undefined;
+				const plugins: PluginConfig[] = [
+					{
+						displayName: "Plugin 1",
+						auth: {
+							function: "plugin1",
+							imports: [],
+						},
+						authClient: {
+							function: "plugin1Client",
+							imports: [],
+						},
+					},
+					{
+						displayName: "Plugin 2",
+						auth: {
+							function: "plugin2",
+							imports: [],
+						},
+						authClient: null,
+					},
+					{
+						displayName: "Plugin 3",
+						auth: {
+							function: "plugin3",
+							imports: [],
+						},
+						authClient: {
+							function: "plugin3Client",
+							imports: [],
+						},
+					},
+				];
+
+				const result = await getAuthClientPluginsCode({
+					plugins,
+					getArguments,
+				});
+
+				const expected = await formatPluginCode(
+					"plugin1Client(), plugin3Client()",
+				);
+
+				expect(result).toBe(expected);
+			});
+		});
+
+		describe("plugins with single non-property arguments", () => {
+			it("should generate code for plugin with single string argument", async () => {
+				const getArguments: GetArgumentsFn = async (options) => {
+					if (options.flag === "test-arg") return "test-value";
+					if (options.isRequired && options.defaultValue)
+						return options.defaultValue;
+					return;
+				};
+
+				const plugin: PluginConfig = {
+					displayName: "Test Plugin",
+					auth: {
+						function: "testPlugin",
+						imports: [],
+					},
+					authClient: {
+						function: "testPluginClient",
+						imports: [],
+						arguments: [
+							{
+								flag: "test-arg",
+								question: "Test question",
+								description: "Test description",
+								argument: {
+									index: 0,
+									isProperty: false,
+									schema: z.string(),
+								},
+							},
+						],
+					},
+				};
+
+				const result = await getAuthClientPluginsCode({
+					plugins: [plugin],
+					getArguments,
+				});
+
+				const expected = await formatPluginCode(
+					'testPluginClient("test-value")',
+				);
+
+				expect(result).toBe(expected);
+			});
+		});
+
+		describe("plugins with single property arguments", () => {
+			it("should generate code for plugin with single property argument", async () => {
+				const getArguments: GetArgumentsFn = async (options) => {
+					if (options.flag === "test-arg") return "test-value";
+					if (options.isRequired && options.defaultValue)
+						return options.defaultValue;
+					return;
+				};
+
+				const plugin: PluginConfig = {
+					displayName: "Test Plugin",
+					auth: {
+						function: "testPlugin",
+						imports: [],
+					},
+					authClient: {
+						function: "testPluginClient",
+						imports: [],
+						arguments: [
+							{
+								flag: "test-arg",
+								question: "Test question",
+								description: "Test description",
+								argument: {
+									index: 0,
+									isProperty: "testProperty",
+									schema: z.string(),
+								},
+							},
+						],
+					},
+				};
+
+				const result = await getAuthClientPluginsCode({
+					plugins: [plugin],
+					getArguments,
+				});
+
+				const expected = await formatPluginCode(
+					'testPluginClient({"testProperty":"test-value"})',
+				);
+
+				expect(result).toBe(expected);
+			});
+		});
+
+		describe("plugins with multiple property arguments merging", () => {
+			it("should merge multiple properties into single object", async () => {
+				const getArguments: GetArgumentsFn = async (options) => {
+					if (options.flag === "prop1") return "value1";
+					if (options.flag === "prop2") return "value2";
+					if (options.isRequired && options.defaultValue)
+						return options.defaultValue;
+					return;
+				};
+
+				const plugin: PluginConfig = {
+					displayName: "Test Plugin",
+					auth: {
+						function: "testPlugin",
+						imports: [],
+					},
+					authClient: {
+						function: "testPluginClient",
+						imports: [],
+						arguments: [
+							{
+								flag: "prop1",
+								question: "Property 1",
+								description: "Property 1 description",
+								argument: {
+									index: 0,
+									isProperty: "prop1",
+									schema: z.string(),
+								},
+							},
+							{
+								flag: "prop2",
+								question: "Property 2",
+								description: "Property 2 description",
+								argument: {
+									index: 0,
+									isProperty: "prop2",
+									schema: z.string(),
+								},
+							},
+						],
+					},
+				};
+
+				const result = await getAuthClientPluginsCode({
+					plugins: [plugin],
+					getArguments,
+				});
+
+				const expected = await formatPluginCode(
+					'testPluginClient({"prop1":"value1","prop2":"value2"})',
+				);
+
+				expect(result).toBe(expected);
+			});
+		});
+
+		describe("undefined value filtering", () => {
+			it("should remove trailing undefined values", async () => {
+				const getArguments: GetArgumentsFn = async (options) => {
+					if (options.flag === "arg0") return "value0";
+					if (options.isRequired && options.defaultValue)
+						return options.defaultValue;
+					return;
+				};
+
+				const plugin: PluginConfig = {
+					displayName: "Test Plugin",
+					auth: {
+						function: "testPlugin",
+						imports: [],
+					},
+					authClient: {
+						function: "testPluginClient",
+						imports: [],
+						arguments: [
+							{
+								flag: "arg0",
+								question: "Argument 0",
+								description: "Argument 0 description",
+								argument: {
+									index: 0,
+									isProperty: false,
+									schema: z.string().optional(),
+								},
+							},
+							{
+								flag: "arg1",
+								question: "Argument 1",
+								description: "Argument 1 description",
+								argument: {
+									index: 1,
+									isProperty: false,
+									schema: z.string().optional(),
+								},
+							},
+							{
+								flag: "arg2",
+								question: "Argument 2",
+								description: "Argument 2 description",
+								argument: {
+									index: 2,
+									isProperty: false,
+									schema: z.string().optional(),
+								},
+							},
+						],
+					},
+				};
+
+				const result = await getAuthClientPluginsCode({
+					plugins: [plugin],
+					getArguments,
+				});
+
+				const expected = await formatPluginCode('testPluginClient("value0")');
+
+				expect(result).toBe(expected);
+			});
+		});
+
+		describe("schema validation", () => {
+			it("should throw error for invalid schema validation", async () => {
+				const getArguments: GetArgumentsFn = async (options) => {
+					if (options.flag === "test-arg") return "invalid";
+					if (options.isRequired && options.defaultValue)
+						return options.defaultValue;
+					return;
+				};
+
+				const plugin: PluginConfig = {
+					displayName: "Test Plugin",
+					auth: {
+						function: "testPlugin",
+						imports: [],
+					},
+					authClient: {
+						function: "testPluginClient",
+						imports: [],
+						arguments: [
+							{
+								flag: "test-arg",
+								question: "Test question",
+								description: "Test description",
+								argument: {
+									index: 0,
+									isProperty: false,
+									schema: z.number(),
+								},
+							},
+						],
+					},
+				};
+
+				await expect(
+					getAuthClientPluginsCode({
+						plugins: [plugin],
+						getArguments,
+					}),
+				).rejects.toThrow();
+			});
+
+			it("should throw error with descriptive message for invalid schema", async () => {
+				const getArguments: GetArgumentsFn = async (options) => {
+					if (options.flag === "test-arg") return "not-a-number";
+					if (options.isRequired && options.defaultValue)
+						return options.defaultValue;
+					return;
+				};
+
+				const plugin: PluginConfig = {
+					displayName: "Test Plugin",
+					auth: {
+						function: "testPlugin",
+						imports: [],
+					},
+					authClient: {
+						function: "testPluginClient",
+						imports: [],
+						arguments: [
+							{
+								flag: "test-arg",
+								question: "Test question",
+								description: "Test description",
+								argument: {
+									index: 0,
+									isProperty: false,
+									schema: z.number(),
+								},
+							},
+						],
+					},
+				};
+
+				await expect(
+					getAuthClientPluginsCode({
+						plugins: [plugin],
+						getArguments,
+					}),
+				).rejects.toThrow(/Invalid argument for testPluginClient/);
+			});
+		});
+
+		describe("multiple plugins", () => {
+			it("should generate code for multiple plugins with arguments", async () => {
+				const getArguments: GetArgumentsFn = async (options) => {
+					if (options.flag === "plugin1-arg") return "value1";
+					if (options.flag === "plugin2-arg") return "value2";
+					if (options.isRequired && options.defaultValue)
+						return options.defaultValue;
+					return;
+				};
+
+				const plugins: PluginConfig[] = [
+					{
+						displayName: "Plugin 1",
+						auth: {
+							function: "plugin1",
+							imports: [],
+						},
+						authClient: {
+							function: "plugin1Client",
+							imports: [],
+							arguments: [
+								{
+									flag: "plugin1-arg",
+									question: "Plugin 1 arg",
+									description: "Plugin 1 arg description",
+									argument: {
+										index: 0,
+										isProperty: false,
+										schema: z.string(),
+									},
+								},
+							],
+						},
+					},
+					{
+						displayName: "Plugin 2",
+						auth: {
+							function: "plugin2",
+							imports: [],
+						},
+						authClient: {
+							function: "plugin2Client",
+							imports: [],
+							arguments: [
+								{
+									flag: "plugin2-arg",
+									question: "Plugin 2 arg",
+									description: "Plugin 2 arg description",
+									argument: {
+										index: 0,
+										isProperty: false,
+										schema: z.string(),
+									},
+								},
+							],
+						},
+					},
+				];
+
+				const result = await getAuthClientPluginsCode({
+					plugins,
+					getArguments,
+				});
+
+				const expected = await formatPluginCode(
+					'plugin1Client("value1"), plugin2Client("value2")',
+				);
+
+				expect(result).toBe(expected);
+			});
+
+			it("should handle mix of plugins with and without authClient", async () => {
+				const getArguments: GetArgumentsFn = async (options) => {
+					if (options.flag === "plugin1-arg") return "value1";
+					if (options.isRequired && options.defaultValue)
+						return options.defaultValue;
+					return;
+				};
+
+				const plugins: PluginConfig[] = [
+					{
+						displayName: "Plugin 1",
+						auth: {
+							function: "plugin1",
+							imports: [],
+						},
+						authClient: {
+							function: "plugin1Client",
+							imports: [],
+							arguments: [
+								{
+									flag: "plugin1-arg",
+									question: "Plugin 1 arg",
+									description: "Plugin 1 arg description",
+									argument: {
+										index: 0,
+										isProperty: false,
+										schema: z.string(),
+									},
+								},
+							],
+						},
+					},
+					{
+						displayName: "Plugin 2",
+						auth: {
+							function: "plugin2",
+							imports: [],
+						},
+						authClient: null,
+					},
+					{
+						displayName: "Plugin 3",
+						auth: {
+							function: "plugin3",
+							imports: [],
+						},
+						authClient: {
+							function: "plugin3Client",
+							imports: [],
+						},
+					},
+				];
+
+				const result = await getAuthClientPluginsCode({
+					plugins,
+					getArguments,
+				});
+
+				const expected = await formatPluginCode(
+					'plugin1Client("value1"), plugin3Client()',
+				);
+
+				expect(result).toBe(expected);
+			});
+		});
+
+		describe("nested objects", () => {
+			it("should handle nested object with single property", async () => {
+				const getArguments: GetArgumentsFn = async (options) => {
+					if (options.flag === "digits") return 6;
+					if (options.isRequired && options.defaultValue)
+						return options.defaultValue;
+					return;
+				};
+
+				const plugin: PluginConfig = {
+					displayName: "Test Plugin",
+					auth: {
+						function: "testPlugin",
+						imports: [],
+					},
+					authClient: {
+						function: "testPluginClient",
+						imports: [],
+						arguments: [
+							{
+								flag: "totp",
+								description: "TOTP configuration",
+								skipPrompt: true,
+								isNestedObject: [
+									{
+										flag: "digits",
+										question: "Number of digits",
+										description: "Number of digits for TOTP",
+										defaultValue: 6,
+										skipPrompt: true,
+										argument: {
+											index: 0,
+											isProperty: "digits",
+											schema: z.coerce.number().min(6).max(8).optional(),
+										},
+									},
+								],
+								argument: {
+									index: 0,
+									isProperty: "totp",
+								},
+							},
+						],
+					},
+				};
+
+				const result = await getAuthClientPluginsCode({
+					plugins: [plugin],
+					getArguments,
+				});
+
+				const expected = await formatPluginCode(
+					'testPluginClient({"totp":{"digits":6}})',
+				);
+				expect(result).toBe(expected);
+			});
+		});
+
+		describe("function string handling", () => {
+			it("should output function string as actual function, not string", async () => {
+				const functionString = "async (data) => { return data; }";
+				const getArguments: GetArgumentsFn = async (options) => {
+					if (options.flag === "send-email") return functionString;
+					return undefined;
+				};
+
+				const plugin: PluginConfig = {
+					displayName: "Test Plugin",
+					auth: {
+						function: "testPlugin",
+						imports: [],
+					},
+					authClient: {
+						function: "testPluginClient",
+						imports: [],
+						arguments: [
+							{
+								flag: "send-email",
+								description: "Function to send email",
+								skipPrompt: true,
+								defaultValue: functionString,
+								argument: {
+									index: 0,
+									isProperty: "sendEmail",
+									schema: z.coerce.string(),
+								},
+							},
+						],
+					},
+				};
+
+				const result = await getAuthClientPluginsCode({
+					plugins: [plugin],
+					getArguments,
+				});
+
+				// Function should be output directly, not as a template literal string
+				const expected = await formatPluginCode(
+					`testPluginClient({ sendEmail: ${functionString} })`,
+				);
+				expect(result).toBe(expected);
+			});
+		});
+
+		describe("real-world plugin examples", () => {
+			it("should generate code for twoFactorClient plugin", async () => {
+				const getArguments: GetArgumentsFn = async (options) => {
+					if (options.isRequired && options.defaultValue)
+						return options.defaultValue;
+					return;
+				};
+
+				const result = await getAuthClientPluginsCode({
+					plugins: [tempPluginsConfig.twoFactor],
+					getArguments,
+				});
+
+				expect(result).toContain("twoFactorClient");
+			});
+
+			it("should generate code for multiple real plugins with client versions", async () => {
+				const getArguments: GetArgumentsFn = async (options) => {
+					if (options.isRequired && options.defaultValue)
+						return options.defaultValue;
+					return;
+				};
+
+				const result = await getAuthClientPluginsCode({
+					plugins: [
+						tempPluginsConfig.twoFactor,
+						tempPluginsConfig.username,
+						tempPluginsConfig.magicLink,
+					],
+					getArguments,
+				});
+
+				expect(result).toContain("twoFactorClient");
+				expect(result).toContain("usernameClient");
+				expect(result).toContain("magicLinkClient");
+			});
+
+			it("should filter out plugins without client versions", async () => {
+				const getArguments: GetArgumentsFn = async (options) => {
+					if (options.isRequired && options.defaultValue)
+						return options.defaultValue;
+					return;
+				};
+
+				// captcha has authClient: null
+				const result = await getAuthClientPluginsCode({
+					plugins: [
+						tempPluginsConfig.twoFactor,
+						tempPluginsConfig.captcha,
+						tempPluginsConfig.username,
+					],
+					getArguments,
+				});
+
+				expect(result).toContain("twoFactorClient");
+				expect(result).toContain("usernameClient");
+				expect(result).not.toContain("captcha");
+			});
 		});
 	});
 });

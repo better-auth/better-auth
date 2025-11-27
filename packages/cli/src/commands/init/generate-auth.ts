@@ -9,6 +9,7 @@ import {
 import type { ImportGroup } from "./utility/imports";
 import { createImport, getImportString } from "./utility/imports";
 import { getPluginConfigs } from "./utility/plugin";
+import type { Framework } from "./utility/framework";
 
 export type GetArgumentsOptions = {
 	/**
@@ -99,6 +100,7 @@ export type GetArgumentsFn = (
 export type GenerateAuthFileOptions = {
 	plugins: Plugin[];
 	database: DatabaseAdapter | null;
+	framework: Framework;
 	appName?: string;
 	baseURL?: string;
 	/**
