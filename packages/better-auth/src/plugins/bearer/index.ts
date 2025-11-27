@@ -11,7 +11,6 @@ interface BearerOptions {
 	 * cookies
 	 *
 	 * @default false
-	 * @question Would you like to require signature for bearer tokens?
 	 */
 	requireSignature?: boolean | undefined;
 }

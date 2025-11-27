@@ -15,7 +15,7 @@ export interface SessionWithImpersonatedBy extends Session {
 
 export interface AdminOptions {
 	/**
-	 * The default role for a user.
+	 * The default role for a user
 	 *
 	 * @default "user"
 	 */
@@ -33,22 +33,18 @@ export interface AdminOptions {
 	 * A default ban reason
 	 *
 	 * By default, no reason is provided
-	 *
-	 * @question What is the default ban reason?
 	 */
 	defaultBanReason?: string | undefined;
 	/**
 	 * Number of seconds until the ban expires
 	 *
 	 * By default, the ban never expires
-	 * @question When does the ban expire by default?
 	 */
 	defaultBanExpiresIn?: number | undefined;
 	/**
 	 * Duration of the impersonation session in seconds
 	 *
 	 * By default, the impersonation session lasts 1 hour
-	 * @question How long does the impersonation session last by default?
 	 */
 	impersonationSessionDuration?: number | undefined;
 	/**
@@ -72,16 +68,12 @@ export interface AdminOptions {
 	 * List of user ids that should have admin access
 	 *
 	 * If this is set, the `adminRole` option is ignored
-	 *
-	 * @question What are the user ids that should have hard-coded admin access?
 	 */
 	adminUserIds?: string[] | undefined;
 	/**
 	 * Message to show when a user is banned
 	 *
 	 * By default, the message is "You have been banned from this application"
-	 *
-	 * @question What is the message to show when a user is banned?
 	 */
 	bannedUserMessage?: string | undefined;
 }

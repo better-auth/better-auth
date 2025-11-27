@@ -9,7 +9,6 @@ export interface ApiKeyOptions {
 	/**
 	 * The header name to check for API key
 	 * @default "x-api-key"
-	 * @question What is the header name to check for API key?
 	 */
 	apiKeyHeaders?: (string | string[]) | undefined;
 	/**
@@ -53,7 +52,6 @@ export interface ApiKeyOptions {
 	 * The configuration for storing the starting characters of the API key in the database.
 	 *
 	 * Useful if you want to display the starting characters of an API key in the UI.
-	 *
 	 */
 	startingCharactersConfig?:
 		| {
@@ -61,7 +59,6 @@ export interface ApiKeyOptions {
 				 * Whether to store the starting characters in the database. If false, we will set `start` to `null`.
 				 *
 				 * @default true
-				 * @question Whether to store the starting characters in the database?
 				 */
 				shouldStore?: boolean;
 				/**
@@ -70,7 +67,6 @@ export interface ApiKeyOptions {
 				 * This includes the prefix length.
 				 *
 				 * @default 6
-				 * @question What is the length of the starting characters to store in the database?
 				 */
 				charactersLength?: number;
 		  }
@@ -78,62 +74,52 @@ export interface ApiKeyOptions {
 	/**
 	 * The length of the API key. Longer is better. Default is 64. (Doesn't include the prefix length)
 	 * @default 64
-	 * @question What is the length of the API key?
 	 */
 	defaultKeyLength?: number | undefined;
 	/**
 	 * The prefix of the API key.
 	 *
 	 * Note: We recommend you append an underscore to the prefix to make the prefix more identifiable. (eg `hello_`)
-	 *
-	 * @question What is the prefix of the API key?
 	 */
 	defaultPrefix?: string | undefined;
 	/**
 	 * The maximum length of the prefix.
 	 *
 	 * @default 32
-	 * @question What is the maximum length of the prefix?
 	 */
 	maximumPrefixLength?: number | undefined;
 	/**
 	 * Whether to require a name for the API key.
 	 *
 	 * @default false
-	 * @question Whether to require a name for the API key?
 	 */
 	requireName?: boolean | undefined;
 	/**
 	 * The minimum length of the prefix.
 	 *
 	 * @default 1
-	 * @question What is the minimum length of the prefix?
 	 */
 	minimumPrefixLength?: number | undefined;
 	/**
 	 * The maximum length of the name.
 	 *
 	 * @default 32
-	 * @question What is the maximum length of the name?
 	 */
 	maximumNameLength?: number | undefined;
 	/**
 	 * The minimum length of the name.
 	 *
 	 * @default 1
-	 * @question What is the minimum length of the name?
 	 */
 	minimumNameLength?: number | undefined;
 	/**
 	 * Whether to enable metadata for an API key.
 	 *
 	 * @default false
-	 * @question Whether to enable metadata for an API key?
 	 */
 	enableMetadata?: boolean | undefined;
 	/**
 	 * Customize the key expiration.
-	 *
 	 */
 	keyExpiration?:
 		| {
@@ -143,7 +129,6 @@ export interface ApiKeyOptions {
 				 * If `null`, then there will be no expiration time.
 				 *
 				 * @default null
-				 * @question What is the default expires time in milliseconds?
 				 */
 				defaultExpiresIn?: number | null;
 				/**
@@ -152,28 +137,24 @@ export interface ApiKeyOptions {
 				 * If `true`, the expires time will be based on the default values.
 				 *
 				 * @default false
-				 * @question Whether to disable the expires time passed from the client?
 				 */
 				disableCustomExpiresTime?: boolean;
 				/**
 				 * The minimum expiresIn value allowed to be set from the client. in days.
 				 *
 				 * @default 1
-				 * @question What is the minimum expiresIn value allowed to be set from the client?
 				 */
 				minExpiresIn?: number;
 				/**
 				 * The maximum expiresIn value allowed to be set from the client. in days.
 				 *
 				 * @default 365
-				 * @question What is the maximum expiresIn value allowed to be set from the client?
 				 */
 				maxExpiresIn?: number;
 		  }
 		| undefined;
 	/**
 	 * Default rate limiting options.
-	 *
 	 */
 	rateLimit?:
 		| {
@@ -181,7 +162,6 @@ export interface ApiKeyOptions {
 				 * Whether to enable rate limiting.
 				 *
 				 * @default true
-				 * @question Whether to enable rate limiting?
 				 */
 				enabled?: boolean;
 				/**
@@ -190,7 +170,6 @@ export interface ApiKeyOptions {
 				 * Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset.
 				 *
 				 * @default 1000 * 60 * 60 * 24 // 1 day
-				 * @question What is the duration in milliseconds where each request is counted?
 				 */
 				timeWindow?: number;
 				/**
@@ -199,7 +178,6 @@ export interface ApiKeyOptions {
 				 * Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset.
 				 *
 				 * @default 10 // 10 requests per day
-				 * @question What is the maximum amount of requests allowed within a window?
 				 */
 				maxRequests?: number;
 		  }
