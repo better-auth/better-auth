@@ -178,7 +178,7 @@ export const databasesConfig = [
 		code({ additionalOptions }) {
 			return drizzleCode({ provider: "sqlite", additionalOptions });
 		},
-		dependencies: ["drizzle-orm", "better-sqlite3"]
+		dependencies: ["drizzle-orm", "better-sqlite3"],
 	},
 	{
 		adapter: "drizzle-postgresql",
@@ -202,7 +202,7 @@ export const databasesConfig = [
 		code({ additionalOptions }) {
 			return drizzleCode({ provider: "postgresql", additionalOptions });
 		},
-		dependencies: ["drizzle-orm", "pg"]
+		dependencies: ["drizzle-orm", "pg"],
 	},
 	{
 		adapter: "drizzle-mysql",
@@ -226,7 +226,7 @@ export const databasesConfig = [
 		code({ additionalOptions }) {
 			return drizzleCode({ provider: "mysql", additionalOptions });
 		},
-		dependencies: ["drizzle-orm", "mysql2/promise"]
+		dependencies: ["drizzle-orm", "mysql2/promise"],
 	},
 	// Kysely
 	{
@@ -242,7 +242,7 @@ export const databasesConfig = [
 		code({ additionalOptions }) {
 			return kyselyCode({ provider: "sqlite", additionalOptions });
 		},
-		dependencies: ["better-sqlite3"]
+		dependencies: ["better-sqlite3"],
 	},
 	{
 		adapter: "mysql",
@@ -257,7 +257,7 @@ export const databasesConfig = [
 		code({ additionalOptions }) {
 			return kyselyCode({ provider: "mysql", additionalOptions });
 		},
-		dependencies: ["mysql2/promise"]
+		dependencies: ["mysql2/promise"],
 	},
 	{
 		adapter: "postgresql",
@@ -272,7 +272,7 @@ export const databasesConfig = [
 		code({ additionalOptions }) {
 			return kyselyCode({ provider: "postgresql", additionalOptions });
 		},
-		dependencies: ["pg"]
+		dependencies: ["pg"],
 	},
 	{
 		adapter: "mssql",
@@ -327,7 +327,7 @@ export const databasesConfig = [
 		code({ additionalOptions }) {
 			return kyselyCode({ provider: "mssql", additionalOptions });
 		},
-		dependencies: ["kysely", "tedious", "tarn"]
+		dependencies: ["kysely", "tedious", "tarn"],
 	},
 	// MongoDB
 	{
@@ -348,6 +348,6 @@ export const databasesConfig = [
 		code({ additionalOptions }) {
 			return mongodbCode({ additionalOptions });
 		},
-		dependencies: ["mongodb"]
+		dependencies: ["mongodb"],
 	},
 ] satisfies DatabasesConfig[];

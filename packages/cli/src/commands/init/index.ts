@@ -17,6 +17,8 @@ import z from "zod";
 import { possibleAuthConfigPaths } from "../../utils/get-config";
 import { generateSecretHash } from "../secret";
 import { databasesConfig } from "./configs/databases.config";
+import type { Framework } from "./configs/frameworks.config";
+import { FRAMEWORKS } from "./configs/frameworks.config";
 import type { Plugin, PluginsConfig } from "./configs/temp-plugins.config";
 import { tempPluginsConfig } from "./configs/temp-plugins.config";
 import type { GetArgumentsOptions } from "./generate-auth";
@@ -38,8 +40,6 @@ import {
 import { installDependency } from "./utility/install-dependency";
 import { getArgumentsPrompt, getFlagVariable } from "./utility/prompt";
 import { tryCatch } from "./utility/utilts";
-import { FRAMEWORKS } from "./configs/frameworks.config";
-import type { Framework } from "./configs/frameworks.config";
 
 // Goals:
 // 1. init `auth.ts` file

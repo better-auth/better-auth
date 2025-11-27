@@ -1,5 +1,8 @@
+import { spinner } from "@clack/prompts";
+import chalk from "chalk";
 import type { ZodSchema } from "zod";
 import type { DatabaseAdapter } from "./configs/databases.config";
+import type { Framework } from "./configs/frameworks.config";
 import type { Plugin } from "./configs/temp-plugins.config";
 import {
 	formatCode,
@@ -9,9 +12,6 @@ import {
 import type { ImportGroup } from "./utility/imports";
 import { createImport, getImportString } from "./utility/imports";
 import { getPluginConfigs } from "./utility/plugin";
-import chalk from "chalk";
-import type { Framework } from "./configs/frameworks.config";
-import { spinner } from "@clack/prompts";
 
 export type GetArgumentsOptions = {
 	/**
