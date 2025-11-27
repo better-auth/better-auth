@@ -2,6 +2,7 @@ import * as z from "zod";
 import { coreSchema } from "./shared";
 
 export const sessionSchema = coreSchema.extend({
+	id: z.string(),
 	userId: z.coerce.string(),
 	expiresAt: z.date(),
 	token: z.string(),
