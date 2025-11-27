@@ -50,13 +50,13 @@ const ssoConfig = {
           Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
           Location: "https://trial-1076874.okta.com/app/trial-1076874_samltest_1/exktofb0a62hqLAUL697/sso/saml"
         }],
-        cert: `-----BEGIN CERTIFICATE-----
+      },
+      cert: `-----BEGIN CERTIFICATE-----
 MIIDqjCCApKgAwIBAgIGAZhVGMeUMA0GCSqGSIb3DQEBCwUAMIGVMQswCQYDVQQGEwJVUzETMBEG
 ...
 [Your Okta Certificate]
 ...
------END CERTIFICATE-----`
-      },
+-----END CERTIFICATE-----`,
       
       // SP Metadata
       spMetadata: {
