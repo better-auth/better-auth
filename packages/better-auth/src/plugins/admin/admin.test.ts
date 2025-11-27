@@ -79,6 +79,14 @@ describe("Admin plugin", async () => {
 					bannedUserMessage: "Custom banned user message",
 				}),
 			],
+			user: {
+				additionalFields: {
+					bio: {
+						type: "string",
+						required: false,
+					},
+				},
+			},
 			databaseHooks: {
 				user: {
 					create: {
@@ -154,6 +162,37 @@ describe("Admin plugin", async () => {
 		);
 		expect(res.error?.status).toBe(403);
 		expect(res.error?.code).toBe("YOU_ARE_NOT_ALLOWED_TO_GET_USER");
+	});
+
+	it("should return additional fields when getting user", async () => {
+		// Update existing user with bio field
+		await client.admin.updateUser(
+			{
+				userId: testNonAdminUser.id,
+				data: {
+					bio: "This is my bio",
+				},
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+
+		// Get the user using admin.getUser
+		const res = await client.admin.getUser(
+			{
+				query: {
+					id: testNonAdminUser.id,
+				},
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+
+		// Assert that the additional field is present
+		expect((res.data as any).bio).toBe("This is my bio");
+		expect(res.data?.email).toBe(testNonAdminUser.email);
 	});
 
 	it("should allow admin to create users", async () => {
