@@ -257,6 +257,20 @@ export type BetterAuthAdvancedOptions = {
 				generateId?: GenerateIdFn | false | "serial" | "uuid";
 		  }
 		| undefined;
+	/**
+	 * Trusted proxy headers
+	 *
+
+	 * - `x-forwarded-host`
+	 * - `x-forwarded-proto`
+	 *
+	 * If set to `true` and no `baseURL` option is provided, we will use the headers to infer the
+	 * base URL.
+	 *
+	 * ⚠︎ This may expose your application to security vulnerabilities if not
+	 * used correctly. Please use this with caution.
+	 */
+	trustedProxyHeaders?: boolean | undefined;
 };
 
 export type BetterAuthOptions = {

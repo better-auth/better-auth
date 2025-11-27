@@ -264,13 +264,13 @@ export const createInternalAdapter = (
 			override?: (Partial<Session> & Record<string, any>) | undefined,
 			overrideAll?: boolean | undefined,
 		) => {
-			const ctx = await getCurrentAuthContext();
-			const headers = ctx.headers || ctx.request?.headers;
+			const ctx = await getCurrentAuthContext().catch(() => null);
+			const headers = ctx?.headers || ctx?.request?.headers;
 			const { id: _, ...rest } = override || {};
 			const data: Omit<Session, "id"> = {
 				ipAddress:
-					ctx.request || ctx.headers
-						? getIp(ctx.request || ctx.headers!, ctx.context.options) || ""
+					ctx?.request || ctx?.headers
+						? getIp(ctx?.request || ctx?.headers!, ctx?.context.options) || ""
 						: "",
 				userAgent: headers?.get("user-agent") || "",
 				...rest,

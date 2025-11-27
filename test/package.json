@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "vitest"
+    "test": "vitest",
+    "lint:package": "publint run --strict"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
