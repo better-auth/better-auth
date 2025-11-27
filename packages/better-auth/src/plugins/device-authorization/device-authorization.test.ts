@@ -176,6 +176,7 @@ describe("device authorization flow", async () => {
 			formData.set("scope", "read write");
 
 			const response = await auth.api.deviceCode({
+			  // @ts-expect-error
 				body: formData,
 			});
 
@@ -185,6 +186,31 @@ describe("device authorization flow", async () => {
 	});
 
 	describe("device token polling", () => {
+    it("should support form data", async () => {
+      const { device_code } = await auth.api.deviceCode({
+				body: {
+					client_id: "test-client",
+				},
+			});
+
+      const formData = new FormData();
+      formData.set("grant_type", "urn:ietf:params:oauth:grant-type:device_code");
+      formData.set("device_code", device_code);
+      formData.set("client_id", "test-client");
+
+      await expect(
+        auth.api.deviceToken({
+          // @ts-expect-error
+          body: formData,
+        }),
+      ).rejects.toMatchObject({
+        body: {
+          error: "authorization_pending",
+          error_description: "Authorization pending",
+        },
+      });
+    });
+
 		it("should return authorization_pending when not approved", async () => {
 			const { device_code } = await auth.api.deviceCode({
 				body: {
@@ -412,6 +438,44 @@ describe("device authorization flow", async () => {
 				},
 			});
 		});
+		it("should support form data", async () => {
+  		const { headers } = await signInWithTestUser();
+
+			// Request device code
+			const { user_code } = await auth.api.deviceCode({
+				body: {
+					client_id: "test-client",
+				},
+			});
+
+			// Approve the device
+      const approveFormData = new FormData();
+      approveFormData.set("userCode", user_code);
+			const approveResponse = await auth.api.deviceApprove({
+			  // @ts-expect-error
+				body: approveFormData,
+				headers,
+			});
+			expect("success" in approveResponse && approveResponse.success).toBe(
+				true,
+			);
+
+			const { user_code: denyUserCode } = await auth.api.deviceCode({
+				body: {
+					client_id: "test-client",
+				},
+			});
+
+			// Deny the device
+			const denyFormData = new FormData();
+      denyFormData.set("userCode", denyUserCode);
+			const denyResponse = await auth.api.deviceDeny({
+			  // @ts-expect-error
+				body: denyFormData,
+				headers: new Headers(),
+			});
+			expect("success" in denyResponse && denyResponse.success).toBe(true);
+  	})
 	});
 
 	describe("edge cases", () => {

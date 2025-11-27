@@ -165,6 +165,24 @@ const buildVerificationUris = (
 	};
 };
 
+/**
+ * @internal
+ */
+ const parseFormData = (input: any) => {
+   let body = input;
+   if (!body) {
+     throw new APIError("BAD_REQUEST", {
+       error_description: "request body not found",
+       error: "invalid_request",
+     });
+  }
+  if (body instanceof FormData) {
+     body = Object.fromEntries(body.entries());
+  }
+
+  return body;
+}
+
 export const deviceAuthorization = (
 	options: Partial<DeviceAuthorizationOptions> = {},
 ) => {
@@ -191,19 +209,7 @@ export const deviceAuthorization = (
 				"/device/code",
 				{
 					method: "POST",
-					body: z
-						.object({
-							client_id: z.string().meta({
-								description: "The client ID of the application",
-							}),
-							scope: z
-								.string()
-								.meta({
-									description: "Space-separated list of scopes",
-								})
-								.optional(),
-						})
-						.or(z.instanceof(FormData)),
+					body: z.any(),
 					error: z.object({
 						error: z.enum(["invalid_request", "invalid_client"]).meta({
 							description: "Error code",
@@ -213,6 +219,18 @@ export const deviceAuthorization = (
 						}),
 					}),
 					metadata: {
+						$Infer: {
+							body: {} as {
+  							/**
+  							 * The client ID of the application
+  							 */
+								client_id: string;
+								/**
+								 * Space-separated list of scopes
+								 */
+								scope?: string | undefined;
+							},
+						},
 						allowedMediaTypes: [
 							"application/x-www-form-urlencoded",
 							"application/json",
@@ -287,17 +305,7 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					},
 				},
 				async (ctx) => {
-					let body: Record<string, any> | undefined = ctx.body;
-					if (!body) {
-						throw new APIError("BAD_REQUEST", {
-							error_description: "request body not found",
-							error: "invalid_request",
-						});
-					}
-					if (body instanceof FormData) {
-						body = Object.fromEntries(body.entries());
-					}
-
+          const body = parseFormData(ctx.body);
 					if (!body.client_id) {
 						throw new APIError("BAD_REQUEST", {
 							error_description: "client_id is required",
@@ -365,21 +373,7 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				"/device/token",
 				{
 					method: "POST",
-					body: z
-						.object({
-							grant_type: z
-								.literal("urn:ietf:params:oauth:grant-type:device_code")
-								.meta({
-									description: "The grant type for device flow",
-								}),
-							device_code: z.string().meta({
-								description: "The device verification code",
-							}),
-							client_id: z.string().meta({
-								description: "The client ID of the application",
-							}),
-						})
-						.or(z.instanceof(FormData)),
+					body: z.any(),
 					error: z.object({
 						error: z
 							.enum([
@@ -398,6 +392,26 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 						}),
 					}),
 					metadata: {
+						$Infer: {
+							body: {} as {
+  							/**
+  							 * The grant type for device flow
+  							 */
+								grant_type: string;
+								/**
+								 * The device verification code
+								 */
+								device_code: string;
+								/**
+								 * The client ID of the application
+								 */
+								client_id: string;
+							},
+						},
+						allowedMediaTypes: [
+							"application/x-www-form-urlencoded",
+							"application/json",
+						],
 						openapi: {
 							description: `Exchange device code for access token
 
@@ -452,17 +466,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					},
 				},
 				async (ctx) => {
-					let body: Record<string, any> | undefined = ctx.body;
-					if (!body) {
-						throw new APIError("BAD_REQUEST", {
-							error_description: "request body not found",
-							error: "invalid_request",
-						});
-					}
-					if (body instanceof FormData) {
-						body = Object.fromEntries(body.entries());
-					}
-
+					let body: Record<string, any> = parseFormData(ctx.body);
 					if (!body.client_id) {
 						throw new APIError("BAD_REQUEST", {
 							error_description: "client_id is required",
@@ -790,13 +794,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				"/device/approve",
 				{
 					method: "POST",
-					body: z
-						.object({
-							userCode: z.string().meta({
-								description: "The user code to approve",
-							}),
-						})
-						.or(z.instanceof(FormData)),
+					body: z.any(),
 					error: z.object({
 						error: z
 							.enum([
@@ -813,6 +811,14 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					}),
 					requireHeaders: true,
 					metadata: {
+						$Infer: {
+							body: {} as {
+  							/**
+  							 * The user code to approve
+  							 */
+								userCode: string;
+							},
+						},
 						allowedMediaTypes: [
 							"application/x-www-form-urlencoded",
 							"application/json",
@@ -848,16 +854,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 								DEVICE_AUTHORIZATION_ERROR_CODES.AUTHENTICATION_REQUIRED,
 						});
 					}
-					let body: Record<string, any> | undefined = ctx.body;
-					if (!body) {
-						throw new APIError("BAD_REQUEST", {
-							error_description: "request body not found",
-							error: "invalid_request",
-						});
-					}
-					if (body instanceof FormData) {
-						body = Object.fromEntries(body.entries());
-					}
+					const body = parseFormData(ctx.body);
 					if (!body.userCode) {
 						throw new APIError("BAD_REQUEST", {
 							error_description: "userCode is required",
@@ -926,13 +923,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				"/device/deny",
 				{
 					method: "POST",
-					body: z
-						.object({
-							userCode: z.string().meta({
-								description: "The user code to deny",
-							}),
-						})
-						.or(z.instanceof(FormData)),
+					body: z.any(),
 					error: z.object({
 						error: z.enum(["invalid_request", "expired_token"]).meta({
 							description: "Error code",
@@ -942,6 +933,14 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 						}),
 					}),
 					metadata: {
+						$Infer: {
+							body: {} as {
+  							/**
+  							 * The user code to deny
+  							 */
+								userCode: string;
+							},
+						},
 						allowedMediaTypes: [
 							"application/x-www-form-urlencoded",
 							"application/json",
@@ -969,16 +968,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					},
 				},
 				async (ctx) => {
-					let body: Record<string, any> | undefined = ctx.body;
-					if (!body) {
-						throw new APIError("BAD_REQUEST", {
-							error_description: "request body not found",
-							error: "invalid_request",
-						});
-					}
-					if (body instanceof FormData) {
-						body = Object.fromEntries(body.entries());
-					}
+					const body = parseFormData(ctx.body);
 					if (!body.userCode) {
 						throw new APIError("BAD_REQUEST", {
 							error_description: "userCode is required",
