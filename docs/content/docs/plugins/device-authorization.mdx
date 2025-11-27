@@ -416,6 +416,10 @@ The device flow defines specific error codes:
 
 Here's a complete example for a CLI application based on the actual demo:
 
+<Callout type="warn">
+  To use the access token for authenticated API calls (like `getSession`), ensure you have added the **bearer** plugin to your server configuration.
+</Callout>
+
 ```ts title="cli-auth.ts"
 import { createAuthClient } from "better-auth/client";
 import { deviceAuthorizationClient } from "better-auth/client/plugins";
