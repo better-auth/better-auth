@@ -191,17 +191,19 @@ export const deviceAuthorization = (
 				"/device/code",
 				{
 					method: "POST",
-					body: z.object({
-						client_id: z.string().meta({
-							description: "The client ID of the application",
-						}),
-						scope: z
-							.string()
-							.meta({
-								description: "Space-separated list of scopes",
-							})
-							.optional(),
-					}),
+					body: z
+						.object({
+							client_id: z.string().meta({
+								description: "The client ID of the application",
+							}),
+							scope: z
+								.string()
+								.meta({
+									description: "Space-separated list of scopes",
+								})
+								.optional(),
+						})
+						.or(z.instanceof(FormData)),
 					error: z.object({
 						error: z.enum(["invalid_request", "invalid_client"]).meta({
 							description: "Error code",
@@ -211,6 +213,10 @@ export const deviceAuthorization = (
 						}),
 					}),
 					metadata: {
+						allowedMediaTypes: [
+							"application/x-www-form-urlencoded",
+							"application/json",
+						],
 						openapi: {
 							description: `Request a device and user code
 
@@ -281,8 +287,26 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					},
 				},
 				async (ctx) => {
+					let body: Record<string, any> | undefined = ctx.body;
+					if (!body) {
+						throw ctx.error("BAD_REQUEST", {
+							error_description: "request body not found",
+							error: "invalid_request",
+						});
+					}
+					if (body instanceof FormData) {
+						body = Object.fromEntries(body.entries());
+					}
+
+					if (!body.client_id) {
+						throw new APIError("BAD_REQUEST", {
+							error_description: "client_id is required",
+							error: "invalid_request",
+						});
+					}
+
 					if (opts.validateClient) {
-						const isValid = await opts.validateClient(ctx.body.client_id);
+						const isValid = await opts.validateClient(body.client_id);
 						if (!isValid) {
 							throw new APIError("BAD_REQUEST", {
 								error: "invalid_client",
@@ -292,7 +316,7 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					}
 
 					if (opts.onDeviceAuthRequest) {
-						await opts.onDeviceAuthRequest(ctx.body.client_id, ctx.body.scope);
+						await opts.onDeviceAuthRequest(body.client_id, body.scope);
 					}
 
 					const deviceCode = await generateDeviceCode();
@@ -308,8 +332,8 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 							expiresAt,
 							status: "pending",
 							pollingInterval: ms(opts.interval),
-							clientId: ctx.body.client_id,
-							scope: ctx.body.scope,
+							clientId: body.client_id,
+							scope: body.scope,
 						},
 					});
 
@@ -341,19 +365,21 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				"/device/token",
 				{
 					method: "POST",
-					body: z.object({
-						grant_type: z
-							.literal("urn:ietf:params:oauth:grant-type:device_code")
-							.meta({
-								description: "The grant type for device flow",
+					body: z
+						.object({
+							grant_type: z
+								.literal("urn:ietf:params:oauth:grant-type:device_code")
+								.meta({
+									description: "The grant type for device flow",
+								}),
+							device_code: z.string().meta({
+								description: "The device verification code",
 							}),
-						device_code: z.string().meta({
-							description: "The device verification code",
-						}),
-						client_id: z.string().meta({
-							description: "The client ID of the application",
-						}),
-					}),
+							client_id: z.string().meta({
+								description: "The client ID of the application",
+							}),
+						})
+						.or(z.instanceof(FormData)),
 					error: z.object({
 						error: z
 							.enum([
@@ -426,7 +452,45 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					},
 				},
 				async (ctx) => {
-					const { device_code, client_id } = ctx.body;
+					let body: Record<string, any> | undefined = ctx.body;
+					if (!body) {
+						throw ctx.error("BAD_REQUEST", {
+							error_description: "request body not found",
+							error: "invalid_request",
+						});
+					}
+					if (body instanceof FormData) {
+						body = Object.fromEntries(body.entries());
+					}
+
+					if (!body.client_id) {
+						throw new APIError("BAD_REQUEST", {
+							error_description: "client_id is required",
+							error: "invalid_request",
+						});
+					}
+					if (!body.device_code) {
+						throw new APIError("BAD_REQUEST", {
+							error_description: "device_code is required",
+							error: "invalid_request",
+						});
+					}
+					if (!body.grant_type) {
+						throw new APIError("BAD_REQUEST", {
+							error_description: "grant_type is required",
+							error: "invalid_request",
+						});
+					}
+					if (
+						body.grant_type !== "urn:ietf:params:oauth:grant-type:device_code"
+					) {
+						throw new APIError("BAD_REQUEST", {
+							error_description:
+								"grant_type must match 'urn:ietf:params:oauth:grant-type:device_code'",
+							error: "unsupported_grant_type",
+						});
+					}
+					const { device_code, client_id } = body;
 
 					if (opts.validateClient) {
 						const isValid = await opts.validateClient(client_id);
@@ -726,11 +790,13 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				"/device/approve",
 				{
 					method: "POST",
-					body: z.object({
-						userCode: z.string().meta({
-							description: "The user code to approve",
-						}),
-					}),
+					body: z
+						.object({
+							userCode: z.string().meta({
+								description: "The user code to approve",
+							}),
+						})
+						.or(z.instanceof(FormData)),
 					error: z.object({
 						error: z
 							.enum([
@@ -778,8 +844,23 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 								DEVICE_AUTHORIZATION_ERROR_CODES.AUTHENTICATION_REQUIRED,
 						});
 					}
-
-					const { userCode } = ctx.body;
+					let body: Record<string, any> | undefined = ctx.body;
+					if (!body) {
+						throw ctx.error("BAD_REQUEST", {
+							error_description: "request body not found",
+							error: "invalid_request",
+						});
+					}
+					if (body instanceof FormData) {
+						body = Object.fromEntries(body.entries());
+					}
+					if (!body.userCode) {
+						throw new APIError("BAD_REQUEST", {
+							error_description: "userCode is required",
+							error: "invalid_request",
+						});
+					}
+					const { userCode } = body;
 					const cleanUserCode = userCode.replace(/-/g, "");
 
 					const deviceCodeRecord =
@@ -841,11 +922,13 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				"/device/deny",
 				{
 					method: "POST",
-					body: z.object({
-						userCode: z.string().meta({
-							description: "The user code to deny",
-						}),
-					}),
+					body: z
+						.object({
+							userCode: z.string().meta({
+								description: "The user code to deny",
+							}),
+						})
+						.or(z.instanceof(FormData)),
 					error: z.object({
 						error: z.enum(["invalid_request", "expired_token"]).meta({
 							description: "Error code",
@@ -855,6 +938,10 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 						}),
 					}),
 					metadata: {
+						allowedMediaTypes: [
+							"application/x-www-form-urlencoded",
+							"application/json",
+						],
 						openapi: {
 							description: "Deny device authorization",
 							responses: {
@@ -878,7 +965,23 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					},
 				},
 				async (ctx) => {
-					const { userCode } = ctx.body;
+					let body: Record<string, any> | undefined = ctx.body;
+					if (!body) {
+						throw ctx.error("BAD_REQUEST", {
+							error_description: "request body not found",
+							error: "invalid_request",
+						});
+					}
+					if (body instanceof FormData) {
+						body = Object.fromEntries(body.entries());
+					}
+					if (!body.userCode) {
+						throw new APIError("BAD_REQUEST", {
+							error_description: "userCode is required",
+							error: "invalid_request",
+						});
+					}
+					const { userCode } = body;
 					const cleanUserCode = userCode.replace(/-/g, "");
 
 					const deviceCodeRecord =

@@ -169,6 +169,19 @@ describe("device authorization flow", async () => {
 			expect(response.device_code).toBeDefined();
 			expect(response.user_code).toBeDefined();
 		});
+
+		it("should support form data", async () => {
+			const formData = new FormData();
+			formData.set("client_id", "test-client");
+			formData.set("scope", "read write");
+
+			const response = await auth.api.deviceCode({
+				body: formData,
+			});
+
+			expect(response.device_code).toBeDefined();
+			expect(response.user_code).toBeDefined();
+		});
 	});
 
 	describe("device token polling", () => {
