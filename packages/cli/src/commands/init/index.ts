@@ -41,13 +41,6 @@ import { installDependency } from "./utility/install-dependency";
 import { getArgumentsPrompt, getFlagVariable } from "./utility/prompt";
 import { tryCatch } from "./utility/utilts";
 
-// Goals:
-// 1. init `auth.ts` file
-// 2. init `auth-client.ts` file
-// 3. init or update `env` files
-// 4. init endpoints file (e.g. `route.ts`)
-// 5. install dependencies
-
 export async function initAction(opts: any) {
 	const options = initActionOptionsSchema.parse(opts);
 	const cwd = options.cwd;
@@ -346,9 +339,9 @@ export async function initAction(opts: any) {
 			log.error(error);
 			process.exit(1);
 		}
-		const { error: writeFileError } = await tryCatch(
-			fs.writeFile(fullPath, routeHandler.code, "utf-8"),
-		);
+
+		const writeFile = fs.writeFile(fullPath, routeHandler.code, "utf-8");
+		const { error: writeFileError } = await tryCatch(writeFile);
 		if (writeFileError) {
 			const error = `Failed to write file at ${fullPath}: ${writeFileError.message}`;
 			log.error(error);
@@ -360,8 +353,15 @@ export async function initAction(opts: any) {
 	})();
 
 	outro(`Better Auth successfully initialized! 🚀`);
-}
 
+	console.log(chalk.dim(chalk.bold(`Next Steps:`)));
+	const step1 = `1. Set up your database with nessesary enviroment variables.`;
+	console.log(chalk.dim(step1));
+	const step2 = `2. Run the ${chalk.greenBright("npx @better-auth/cli migrate")} to apply the schema to your database.`;
+	console.log(chalk.dim(step2));
+	const step3 = `3. Happy hacking!`;
+	console.log(chalk.dim(step3));
+}
 let initBuilder = new Command("init")
 	.option("-c, --cwd <cwd>", "The working directory.", process.cwd())
 	.option(
