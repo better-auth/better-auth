@@ -495,7 +495,6 @@ export const contents: Content[] = [
 			{
 				title: "Atlassian",
 				href: "/docs/authentication/atlassian",
-				isNew: true,
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -518,7 +517,6 @@ export const contents: Content[] = [
 			{
 				title: "Cognito",
 				href: "/docs/authentication/cognito",
-				isNew: true,
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -571,7 +569,6 @@ export const contents: Content[] = [
 			{
 				title: "Figma",
 				href: "/docs/authentication/figma",
-				isNew: true,
 				icon: () => (
 					<svg
 						width="1.2em"
@@ -629,7 +626,6 @@ export const contents: Content[] = [
 			{
 				title: "LINE",
 				href: "/docs/authentication/line",
-				isNew: true,
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -663,7 +659,6 @@ export const contents: Content[] = [
 			},
 			{
 				title: "Kakao",
-				isNew: true,
 				href: "/docs/authentication/kakao",
 				icon: (props?: SVGProps<any>) => (
 					<svg
@@ -718,7 +713,6 @@ export const contents: Content[] = [
 			{
 				title: "PayPal",
 				href: "/docs/authentication/paypal",
-				isNew: true,
 				icon: () => (
 					<svg
 						fill="currentColor"
@@ -744,7 +738,6 @@ export const contents: Content[] = [
 			{
 				title: "Salesforce",
 				href: "/docs/authentication/salesforce",
-				isNew: true,
 				icon: () => (
 					<svg
 						viewBox=".5 .5 999 699.242"
@@ -811,7 +804,6 @@ export const contents: Content[] = [
 			{
 				title: "Naver",
 				href: "/docs/authentication/naver",
-				isNew: true,
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -900,7 +892,6 @@ export const contents: Content[] = [
 			{
 				title: "Linear",
 				href: "/docs/authentication/linear",
-				isNew: true,
 				icon: () => (
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -1066,7 +1057,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			},
 			{
 				title: "Polar",
-				isNew: true,
 				href: "/docs/authentication/polar",
 				icon: () => (
 					<svg
@@ -1086,7 +1076,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			},
 			{
 				title: "Paybin",
-				isNew: true,
 				href: "/docs/authentication/paybin",
 				icon: () => (
 					<svg
