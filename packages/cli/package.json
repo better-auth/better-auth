@@ -17,8 +17,7 @@
     "lint:package": "publint run --strict",
     "dev": "tsx ./src/index.ts",
     "test": "vitest",
-    "typecheck": "tsc --project tsconfig.json",
-    "generate:plugin-config": "tsx ./scripts/generate-plugin-config.ts && biome check ./src/commands/init/configs --fix --unsafe"
+    "typecheck": "tsc --project tsconfig.json"
   },
   "publishConfig": {
     "access": "public",
