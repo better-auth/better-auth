@@ -2,7 +2,6 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
-import { parseCookies } from "../../cookies";
 import { getHost, getOrigin, getProtocol } from "../../utils/url";
 import { wildcardMatch } from "../../utils/wildcard";
 
