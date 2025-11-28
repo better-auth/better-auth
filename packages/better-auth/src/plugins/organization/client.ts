@@ -1,5 +1,4 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
-import type { DBFieldAttribute } from "@better-auth/core/db";
 import { atom } from "nanostores";
 import { useAuthQuery } from "../../client";
 import type {
@@ -42,35 +41,7 @@ interface OrganizationClientOptions {
 				enabled: boolean;
 		  }
 		| undefined;
-	schema?:
-		| {
-				organization?: {
-					additionalFields?: {
-						[key: string]: DBFieldAttribute;
-					};
-				};
-				member?: {
-					additionalFields?: {
-						[key: string]: DBFieldAttribute;
-					};
-				};
-				invitation?: {
-					additionalFields?: {
-						[key: string]: DBFieldAttribute;
-					};
-				};
-				team?: {
-					additionalFields?: {
-						[key: string]: DBFieldAttribute;
-					};
-				};
-				organizationRole?: {
-					additionalFields?: {
-						[key: string]: DBFieldAttribute;
-					};
-				};
-		  }
-		| undefined;
+	schema?: OrganizationOptions["schema"];
 	dynamicAccessControl?:
 		| {
 				enabled: boolean;
