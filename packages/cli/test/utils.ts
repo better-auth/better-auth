@@ -12,9 +12,7 @@ const getCliPath = async () => {
 	const binPath =
 		typeof pkgJson.bin === "string"
 			? pkgJson.bin
-			: typeof pkgJson.bin === "object" && pkgJson.bin !== null
-				? Object.values(pkgJson.bin)[0]
-				: "./dist/index.mjs";
+			: (Object.values(pkgJson.bin ?? {})[0] ?? "./dist/index.mjs");
 	return path.join(rootDir, binPath);
 };
 
