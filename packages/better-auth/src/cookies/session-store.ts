@@ -2,6 +2,7 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import type { InternalLogger } from "@better-auth/core/env";
 import type { CookieOptions } from "better-call";
 import * as z from "zod";
+import { symmetricEncodeJWT } from "../crypto";
 
 // Cookie size constants based on browser limits
 const ALLOWED_COOKIE_SIZE = 4096;
@@ -263,6 +264,34 @@ export function getChunkedCookie(
 	}
 
 	return null;
+}
+
+export async function setAccountCookie(c: GenericEndpointContext, accountData: Record<string, any>) {
+  const accountDataCookie = c.context.authCookies.accountData;
+	const options = {
+	  maxAge: 60 * 5,
+	  ...(accountDataCookie.options),
+	}
+  const data = await symmetricEncodeJWT(
+    accountData,
+    c.context.secret,
+    "better-auth-account",
+    options.maxAge,
+  );
+
+  if (data.length > 4093) {
+    const accountStore = createSessionStore(accountDataCookie.name, options, c);
+
+    const cookies = accountStore.chunk(data, options);
+    accountStore.setCookies(cookies);
+  } else {
+    const accountStore = createSessionStore(accountDataCookie.name, options, c);
+    if (accountStore.hasChunks()) {
+      const cleanCookies = accountStore.clean();
+      accountStore.setCookies(cleanCookies);
+    }
+    c.setCookie(accountDataCookie.name, data, options);
+  }
 }
 
 export const getSessionQuerySchema = z.optional(
