@@ -30,6 +30,9 @@
     "prepare": "prisma generate --schema ./src/adapters/prisma-adapter/test/base.prisma",
     "typecheck": "tsc --project tsconfig.json"
   },
+  "files": [
+    "dist"
+  ],
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
   "exports": {
@@ -452,47 +455,10 @@
     "nanostores": "^1.0.1",
     "zod": "^4.1.12"
   },
-  "peerDependenciesOptional": {
-    "@lynx-js/react": "*",
-    "@sveltejs/kit": "^2.0.0",
-    "next": "^14.0.0 || ^15.0.0",
-    "react": "^18.0.0 || ^19.0.0",
-    "react-dom": "^18.0.0 || ^19.0.0",
-    "solid-js": "^1.0.0",
-    "svelte": "^4.0.0 || ^5.0.0",
-    "vue": "^3.0.0"
-  },
-  "peerDependenciesMeta": {
-    "@lynx-js/react": {
-      "optional": true
-    },
-    "@sveltejs/kit": {
-      "optional": true
-    },
-    "next": {
-      "optional": true
-    },
-    "react": {
-      "optional": true
-    },
-    "react-dom": {
-      "optional": true
-    },
-    "solid-js": {
-      "optional": true
-    },
-    "svelte": {
-      "optional": true
-    },
-    "vue": {
-      "optional": true
-    }
-  },
   "devDependencies": {
     "@lynx-js/react": "^0.114.0",
     "@prisma/client": "^5.22.0",
     "@sveltejs/kit": "^2.37.1",
-    "@tanstack/react-start": "^1.139.8",
     "@types/better-sqlite3": "^7.6.13",
     "@types/bun": "^1.3.1",
     "@types/keccak": "^3.0.5",
@@ -526,7 +492,44 @@
     "typescript": "catalog:",
     "vue": "^3.5.18"
   },
-  "files": [
-    "dist"
-  ]
+  "peerDependencies": {
+    "@lynx-js/react": "*",
+    "@sveltejs/kit": "^2.0.0",
+    "@tanstack/react-start": "^1.0.0",
+    "next": "^14.0.0 || ^15.0.0",
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0",
+    "solid-js": "^1.0.0",
+    "svelte": "^4.0.0 || ^5.0.0",
+    "vue": "^3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@lynx-js/react": {
+      "optional": true
+    },
+    "@sveltejs/kit": {
+      "optional": true
+    },
+    "@tanstack/react-start": {
+      "optional": true
+    },
+    "next": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    },
+    "solid-js": {
+      "optional": true
+    },
+    "svelte": {
+      "optional": true
+    },
+    "vue": {
+      "optional": true
+    }
+  }
 }
