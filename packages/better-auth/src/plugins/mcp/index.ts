@@ -93,7 +93,7 @@ export const getMCPProtectedResourceMetadata = (
 	options?: MCPOptions | undefined,
 ) => {
 	const baseURL = ctx.context.baseURL;
-  const origin = new URL(baseURL).origin;
+	const origin = new URL(baseURL).origin;
 
 	return {
 		resource: options?.resource ?? origin,
