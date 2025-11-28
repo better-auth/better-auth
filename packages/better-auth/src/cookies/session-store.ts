@@ -282,7 +282,7 @@ export async function setAccountCookie(
 		options.maxAge,
 	);
 
-	if (data.length > 4093) {
+	if (data.length > ALLOWED_COOKIE_SIZE) {
 		const accountStore = createSessionStore(accountDataCookie.name, options, c);
 
 		const cookies = accountStore.chunk(data, options);

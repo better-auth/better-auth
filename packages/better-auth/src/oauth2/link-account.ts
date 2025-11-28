@@ -170,7 +170,7 @@ export async function handleOAuthUserInfo(
 				);
 			user = createdUser;
 			if (c.context.options.account?.storeAccountCookie) {
-				await setAccountCookie(c, accountData);
+				await setAccountCookie(c, createdAccount);
 			}
 			if (
 				!userInfo.emailVerified &&
