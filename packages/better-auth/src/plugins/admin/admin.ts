@@ -9,7 +9,7 @@ import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { mergeSchema, parseUserOutput } from "../../db/schema";
-import type { InferUser, Session } from "../../types";
+import type { Session, User } from "../../types";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import type { AccessControl } from "../access";
@@ -350,9 +350,8 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 						});
 					}
 
-					return parseUserOutput(ctx.context.options, user) as InferUser<
-						typeof ctx.context.options
-					>;
+					return parseUserOutput(ctx.context.options, user) as User &
+						Record<string, any>;
 				},
 			),
 			/**
