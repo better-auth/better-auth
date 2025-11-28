@@ -96,7 +96,7 @@ export const getMCPProtectedResourceMetadata = (
 
 	return {
 		resource: options?.resource ?? new URL(baseURL).origin,
-		authorization_servers: [baseURL],
+		authorization_servers: [new URL(baseURL).origin],
 		jwks_uri: options?.oidcConfig?.metadata?.jwks_uri ?? `${baseURL}/mcp/jwks`,
 		scopes_supported: options?.oidcConfig?.metadata?.scopes_supported ?? [
 			"openid",
