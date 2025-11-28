@@ -5,6 +5,9 @@ import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 import { APIError } from "better-call";
 import * as z from "zod";
+import { getChunkedCookie } from "../../cookies";
+import { setAccountCookie } from "../../cookies/session-store";
+import { symmetricDecodeJWT } from "../../crypto";
 import { generateState } from "../../oauth2/state";
 import { decryptOAuthToken, setTokenUtil } from "../../oauth2/utils";
 import { safeJSONParse } from "../../utils/json";
@@ -13,9 +16,6 @@ import {
 	getSessionFromCtx,
 	sessionMiddleware,
 } from "./session";
-import { getChunkedCookie } from "../../cookies";
-import { symmetricDecodeJWT } from "../../crypto";
-import { setAccountCookie } from "../../cookies/session-store";
 
 export const listUserAccounts = createAuthEndpoint(
 	"/list-accounts",
@@ -520,16 +520,19 @@ export const getAccessToken = createAuthEndpoint(
 			});
 		}
 		const accountDataCookieName = ctx.context.authCookies.accountData.name;
-    const accountDataCookie = getChunkedCookie(ctx, ctx.context.authCookies.accountData.name);
+		const accountDataCookie = getChunkedCookie(
+			ctx,
+			ctx.context.authCookies.accountData.name,
+		);
 
 		const accountData = accountDataCookie
 			? safeJSONParse<Account>(
-  			await symmetricDecodeJWT(
-  			  accountDataCookie,
-          ctx.context.secret,
-          "better-auth-account"
-  			)
-			)
+					await symmetricDecodeJWT(
+						accountDataCookie,
+						ctx.context.secret,
+						"better-auth-account",
+					),
+				)
 			: null;
 
 		let account: Account | undefined = undefined;
@@ -593,7 +596,7 @@ export const getAccessToken = createAuthEndpoint(
 				const storeAccountCookie =
 					ctx.context.options.account?.storeAccountCookie;
 				if (storeAccountCookie && updatedAccount) {
-          await setAccountCookie(ctx, updatedAccount);
+					await setAccountCookie(ctx, updatedAccount);
 				}
 			}
 			const tokens = {
@@ -714,12 +717,12 @@ export const refreshToken = createAuthEndpoint(
 		let account: Account | undefined = undefined;
 		const accountData = accountDataCookie
 			? safeJSONParse<Account>(
-			  await symmetricDecodeJWT(
-			    accountDataCookie,
-					ctx.context.secret,
-					"better-auth-account",
+					await symmetricDecodeJWT(
+						accountDataCookie,
+						ctx.context.secret,
+						"better-auth-account",
+					),
 				)
-			)
 			: null;
 
 		if (
@@ -792,7 +795,7 @@ export const refreshToken = createAuthEndpoint(
 					scope: tokens.scopes?.join(",") || accountData.scope,
 					idToken: tokens.idToken || accountData.idToken,
 				};
-        await setAccountCookie(ctx, updateData);
+				await setAccountCookie(ctx, updateData);
 			}
 			return ctx.json({
 				accessToken: tokens.accessToken,
@@ -886,15 +889,18 @@ export const accountInfo = createAuthEndpoint(
 			const storeAccountCookie =
 				ctx.context.options.account?.storeAccountCookie;
 			if (storeAccountCookie) {
-				const accountCookie = getChunkedCookie(ctx, ctx.context.authCookies.accountData.name)
+				const accountCookie = getChunkedCookie(
+					ctx,
+					ctx.context.authCookies.accountData.name,
+				);
 				if (accountCookie) {
 					const accountData = safeJSONParse<Account>(
-					await symmetricDecodeJWT(
-					  accountCookie,
-						ctx.context.secret,
-						"better-auth-account",
-					)
-				);
+						await symmetricDecodeJWT(
+							accountCookie,
+							ctx.context.secret,
+							"better-auth-account",
+						),
+					);
 					if (accountData) {
 						account = accountData;
 					}

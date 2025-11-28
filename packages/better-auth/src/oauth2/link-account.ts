@@ -1,9 +1,9 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { isDevelopment, logger } from "@better-auth/core/env";
 import { APIError, createEmailVerificationToken } from "../api";
+import { setAccountCookie } from "../cookies/session-store";
 import type { Account, User } from "../types";
 import { setTokenUtil } from "./utils";
-import { setAccountCookie } from "../cookies/session-store";
 
 export async function handleOAuthUserInfo(
 	c: GenericEndpointContext,
@@ -107,7 +107,7 @@ export async function handleOAuthUserInfo(
 					}).filter(([_, value]) => value !== undefined),
 				);
 				if (c.context.options.account?.storeAccountCookie) {
-          await setAccountCookie(c, updateData);
+					await setAccountCookie(c, updateData);
 				}
 
 				if (Object.keys(updateData).length > 0) {
@@ -170,7 +170,7 @@ export async function handleOAuthUserInfo(
 				);
 			user = createdUser;
 			if (c.context.options.account?.storeAccountCookie) {
-        await setAccountCookie(c, accountData);
+				await setAccountCookie(c, accountData);
 			}
 			if (
 				!userInfo.emailVerified &&
