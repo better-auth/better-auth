@@ -32,7 +32,7 @@ export interface AnonymousOptions {
 		  }) => Promise<void> | void)
 		| undefined;
 	/**
-	 * Disable deleting the anonymous user after linking
+	 * Disable deleting the anonymous user
 	 */
 	disableDeleteAnonymousUser?: boolean | undefined;
 	/**
