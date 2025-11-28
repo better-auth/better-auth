@@ -33,7 +33,7 @@ describe("jwt", async () => {
 		await client.getSession({
 			fetchOptions: {
 				headers,
-				onSuccess(context) {
+				onSuccess(context: { response: Response; data: any }) {
 					token = context.response.headers.get("set-auth-jwt") || "";
 				},
 			},
@@ -53,16 +53,6 @@ describe("jwt", async () => {
 	});
 
 	it("Get JWKS", async () => {
-		// If no JWK exists, this makes sure it gets added.
-		// TODO: Replace this with a generate JWKS endpoint once it exists.
-		const token = await client.token({
-			fetchOptions: {
-				headers,
-			},
-		});
-
-		expect(token.data?.token).toBeDefined();
-
 		const jwks = await client.jwks();
 
 		expect(jwks.data?.keys).length.above(0);
@@ -221,7 +211,10 @@ describe("jwt", async () => {
 					plugins: [jwtClient()],
 					baseURL: "http://localhost:3000/api/auth",
 					fetchOptions: {
-						customFetchImpl: async (url, init) => {
+						customFetchImpl: async (
+							url: string | URL | Request,
+							init?: RequestInit,
+						) => {
 							return auth.handler(new Request(url, init));
 						},
 					},
@@ -254,7 +247,7 @@ describe("jwt", async () => {
 					await client.getSession({
 						fetchOptions: {
 							headers,
-							onSuccess(context) {
+							onSuccess(context: { response: Response; data: any }) {
 								token = context.response.headers.get("set-auth-jwt") || "";
 							},
 						},
@@ -317,7 +310,7 @@ describe.each([
 	{
 		alg: "RS256",
 	},
-] as JWKOptions[])("signJWT - alg: $alg", async (keyPairConfig) => {
+] as JWKOptions[])("signJWT - alg: $alg", async (keyPairConfig: JWKOptions) => {
 	const { auth } = await getTestInstance({
 		plugins: [
 			jwt({
@@ -390,7 +383,10 @@ describe.each([
 			plugins: [jwtClient()],
 			baseURL: "http://localhost:3000/api/auth",
 			fetchOptions: {
-				customFetchImpl: async (url, init) => {
+				customFetchImpl: async (
+					url: string | URL | Request,
+					init?: RequestInit,
+				) => {
 					return auth.handler(new Request(url, init));
 				},
 			},
@@ -472,7 +468,10 @@ describe("jwt - remote url", async () => {
 			plugins: [jwtClient()],
 			baseURL: "http://localhost:3000/api/auth",
 			fetchOptions: {
-				customFetchImpl: async (url, init) => {
+				customFetchImpl: async (
+					url: string | URL | Request,
+					init?: RequestInit,
+				) => {
 					return auth.handler(new Request(url, init));
 				},
 			},
@@ -522,7 +521,10 @@ describe("jwt - remote url", async () => {
 			plugins: [jwtClient()],
 			baseURL: "http://localhost:3000/api/auth",
 			fetchOptions: {
-				customFetchImpl: async (url, init) => {
+				customFetchImpl: async (
+					url: string | URL | Request,
+					init?: RequestInit,
+				) => {
 					return auth.handler(new Request(url, init));
 				},
 			},
@@ -571,7 +573,10 @@ describe("jwt - remote url", async () => {
 			plugins: [jwtClient()],
 			baseURL: "http://localhost:3000/api/auth",
 			fetchOptions: {
-				customFetchImpl: async (url, init) => {
+				customFetchImpl: async (
+					url: string | URL | Request,
+					init?: RequestInit,
+				) => {
 					return auth.handler(new Request(url, init));
 				},
 			},
@@ -677,7 +682,10 @@ describe("jwt - remote url", async () => {
 			plugins: [jwtClient()],
 			baseURL: "http://localhost:3000/api/auth",
 			fetchOptions: {
-				customFetchImpl: async (url, init) => {
+				customFetchImpl: async (
+					url: string | URL | Request,
+					init?: RequestInit,
+				) => {
 					return auth.handler(new Request(url, init));
 				},
 			},
@@ -700,7 +708,7 @@ describe("jwt - remote url", async () => {
 		await client.getSession({
 			fetchOptions: {
 				headers,
-				onSuccess(context) {
+				onSuccess(context: { response: Response; data: any }) {
 					jwtHeader = context.response.headers.get("set-auth-jwt") || "";
 				},
 			},

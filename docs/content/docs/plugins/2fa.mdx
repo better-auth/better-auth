@@ -410,7 +410,6 @@ You can mark a device as trusted by passing `trustDevice` to `verifyTotp` or `ve
 const verify2FA = async (code: string) => {
     const { data, error } = await authClient.twoFactor.verifyTotp({
         code,
-        callbackURL: "/dashboard",
         trustDevice: true // Mark this device as trusted
     })
     if (data) {

@@ -7,6 +7,7 @@ import { env } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import { defu } from "defu";
 import { createInternalAdapter } from "../db/internal-adapter";
+import { crossSubdomainCookies } from "../plugins/cross-subdomain";
 import { isPromise } from "../utils/is-promise";
 import { getBaseURL } from "../utils/url";
 
@@ -56,7 +57,7 @@ export async function runPluginInit(ctx: AuthContext) {
 export function getInternalPlugins(options: BetterAuthOptions) {
 	const plugins: BetterAuthPlugin[] = [];
 	if (options.advanced?.crossSubDomainCookies?.enabled) {
-		// TODO: add internal plugin
+		plugins.push(crossSubdomainCookies());
 	}
 	return plugins;
 }

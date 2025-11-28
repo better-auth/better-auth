@@ -7,7 +7,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "link": "npx vercel link --project better-auth-stateless-demo",
+    "deploy": "npx vercel --prod"
   },
   "dependencies": {
     "better-auth": "workspace:*",
