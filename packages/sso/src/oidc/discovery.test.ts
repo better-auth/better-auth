@@ -292,11 +292,46 @@ describe("OIDC Discovery", () => {
 			expect(selectTokenEndpointAuthMethod(doc)).toBe("client_secret_post");
 		});
 
-		it("should return undefined if no supported method is available", () => {
+		it("should throw unsupported_token_auth_method when only unsupported methods are advertised", () => {
 			const doc = createMockDiscoveryDocument({
 				token_endpoint_auth_methods_supported: ["private_key_jwt"],
 			});
-			expect(selectTokenEndpointAuthMethod(doc)).toBeUndefined();
+
+			try {
+				selectTokenEndpointAuthMethod(doc);
+				expect.fail("Should have thrown");
+			} catch (error) {
+				expect(error).toBeInstanceOf(DiscoveryError);
+				expect((error as DiscoveryError).code).toBe(
+					"unsupported_token_auth_method",
+				);
+				expect((error as DiscoveryError).details?.supported).toEqual([
+					"private_key_jwt",
+				]);
+				expect((error as DiscoveryError).details?.betterAuthSupports).toEqual([
+					"client_secret_basic",
+					"client_secret_post",
+				]);
+			}
+		});
+
+		it("should throw unsupported_token_auth_method for tls_client_auth only", () => {
+			const doc = createMockDiscoveryDocument({
+				token_endpoint_auth_methods_supported: [
+					"tls_client_auth",
+					"private_key_jwt",
+				],
+			});
+
+			try {
+				selectTokenEndpointAuthMethod(doc);
+				expect.fail("Should have thrown");
+			} catch (error) {
+				expect(error).toBeInstanceOf(DiscoveryError);
+				expect((error as DiscoveryError).code).toBe(
+					"unsupported_token_auth_method",
+				);
+			}
 		});
 
 		it("should default to client_secret_basic if not specified in discovery", () => {
@@ -721,6 +756,29 @@ describe("OIDC Discovery", () => {
 			);
 			expect(result.tokenEndpointAuthentication).toBe("client_secret_post");
 			expect(result.scopesSupported).toEqual(["openid", "profile"]);
+		});
+
+		it("should throw unsupported_token_auth_method when IdP only supports methods we don't support", async () => {
+			mockBetterFetch.mockResolvedValueOnce({
+				data: {
+					issuer,
+					authorization_endpoint: `${issuer}/authorize`,
+					token_endpoint: `${issuer}/token`,
+					jwks_uri: `${issuer}/jwks`,
+					token_endpoint_auth_methods_supported: ["private_key_jwt"],
+				},
+				error: null,
+			});
+
+			try {
+				await discoverOIDCConfig({ issuer });
+				expect.fail("Should have thrown");
+			} catch (error) {
+				expect(error).toBeInstanceOf(DiscoveryError);
+				expect((error as DiscoveryError).code).toBe(
+					"unsupported_token_auth_method",
+				);
+			}
 		});
 	});
 });

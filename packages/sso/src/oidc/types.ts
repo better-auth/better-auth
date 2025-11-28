@@ -105,6 +105,8 @@ export type DiscoveryErrorCode =
 	| "issuer_mismatch"
 	/** Discovery document is missing required fields */
 	| "discovery_incomplete"
+	/** IdP only advertises token auth methods that Better Auth doesn't support */
+	| "unsupported_token_auth_method"
 	/** Catch-all for unexpected errors */
 	| "discovery_unexpected_error";
 
