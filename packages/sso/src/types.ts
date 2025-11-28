@@ -19,11 +19,23 @@ export interface SAMLMapping {
 	extraFields?: Record<string, string> | undefined;
 }
 
-export interface OIDCConfig {
+export interface OIDCConfigClientSecret {
+	clientSecret: string;
+}
+
+export interface OIDCConfigClientAssertions {
+	clientPrivateKey: string;
+	clientPrivateKeyId?: string;
+	clientPrivateKeyAlg?: string;
+	clientPrivateKeyType?: "jwk" | "pkcs8";
+}
+
+type Either<A, B> = Omit<A, keyof B> | Omit<B, keyof A>;
+
+export interface OIDCConfigShared  {
 	issuer: string;
 	pkce: boolean;
 	clientId: string;
-	clientSecret: string;
 	authorizationEndpoint?: string | undefined;
 	discoveryEndpoint: string;
 	userInfoEndpoint?: string | undefined;
@@ -31,11 +43,14 @@ export interface OIDCConfig {
 	overrideUserInfo?: boolean | undefined;
 	tokenEndpoint?: string | undefined;
 	tokenEndpointAuthentication?:
-		| ("client_secret_post" | "client_secret_basic")
+		| ("client_secret_post" | "client_secret_basic" | "private_key_jwt")
 		| undefined;
 	jwksEndpoint?: string | undefined;
 	mapping?: OIDCMapping | undefined;
 }
+
+export type OIDCConfig = OIDCConfigShared &
+	Either<OIDCConfigClientSecret, OIDCConfigClientAssertions>;
 
 export interface SAMLConfig {
 	issuer: string;

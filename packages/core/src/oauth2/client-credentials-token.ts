@@ -1,17 +1,21 @@
 import { base64Url } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
+import type { JWK } from "jose";
+import { importJWK, importPKCS8, SignJWT } from "jose";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
 
-export function createClientCredentialsTokenRequest({
+export async function createClientCredentialsTokenRequest({
 	options,
 	scope,
-	authentication,
+	authentication = "post",
 	resource,
+	tokenEndpoint,
 }: {
 	options: ProviderOptions & { clientSecret: string };
 	scope?: string | undefined;
-	authentication?: ("basic" | "post") | undefined;
+	authentication?: ("basic" | "post" | "pk") | undefined;
 	resource?: (string | string[]) | undefined;
+	tokenEndpoint?: string | undefined;
 }) {
 	const body = new URLSearchParams();
 	const headers: Record<string, any> = {
@@ -38,12 +42,60 @@ export function createClientCredentialsTokenRequest({
 			`${primaryClientId}:${options.clientSecret}`,
 		);
 		headers["authorization"] = `Basic ${encodedCredentials}`;
-	} else {
+	} else if (authentication === "post") {
 		const primaryClientId = Array.isArray(options.clientId)
 			? options.clientId[0]
 			: options.clientId;
 		body.set("client_id", primaryClientId);
 		body.set("client_secret", options.clientSecret);
+	} else {
+		const {
+			clientPrivateKey,
+			clientPrivateKeyId,
+			clientPrivateKeyAlg = "RS256",
+			clientPrivateKeyType = "jwk",
+		} = options;
+
+		let privateKey: CryptoKey | Uint8Array;
+		let keyId: string | undefined = clientPrivateKeyId;
+		switch (clientPrivateKeyType) {
+			case "jwk": {
+				const jwk: JWK = JSON.parse(clientPrivateKey || "{}");
+				keyId ??= jwk.kid;
+				privateKey = await importJWK(jwk, clientPrivateKeyAlg);
+				break;
+			}
+			case "pkcs8": {
+				privateKey = await importPKCS8(
+					clientPrivateKey || "",
+					clientPrivateKeyAlg,
+				);
+				break;
+			}
+			default:
+				throw new Error("Unsupported client private key type");
+		}
+
+		const primaryClientId = Array.isArray(options.clientId)
+			? options.clientId[0]
+			: options.clientId;
+
+		const clientAssertion = await new SignJWT()
+			.setProtectedHeader({ alg: clientPrivateKeyAlg, kid: keyId })
+			.setIssuer(primaryClientId)
+			.setSubject(primaryClientId)
+			.setAudience(tokenEndpoint ?? "")
+			.setIssuedAt()
+			.setExpirationTime("5m")
+			.setJti(crypto.randomUUID())
+			.sign(privateKey);
+
+		body.set("client_id", primaryClientId);
+		body.set(
+			"client_assertion_type",
+			"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+		);
+		body.set("client_assertion", clientAssertion);
 	}
 
 	return {
@@ -62,14 +114,15 @@ export async function clientCredentialsToken({
 	options: ProviderOptions & { clientSecret: string };
 	tokenEndpoint: string;
 	scope: string;
-	authentication?: ("basic" | "post") | undefined;
+	authentication?: ("basic" | "post" | "pk") | undefined;
 	resource?: (string | string[]) | undefined;
 }): Promise<OAuth2Tokens> {
-	const { body, headers } = createClientCredentialsTokenRequest({
+	const { body, headers } = await createClientCredentialsTokenRequest({
 		options,
 		scope,
 		authentication,
 		resource,
+		tokenEndpoint,
 	});
 
 	const { data, error } = await betterFetch<{
