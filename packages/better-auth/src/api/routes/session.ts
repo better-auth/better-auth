@@ -22,7 +22,7 @@ import { getSessionQuerySchema } from "../../cookies/session-store";
 import { symmetricDecodeJWT, verifyJWT } from "../../crypto";
 import { parseSessionOutput, parseUserOutput } from "../../db";
 import type { InferSession, InferUser, Session, User } from "../../types";
-import type { Prettify } from "../../types/helper";
+import type { Prettify, PrettifyDeep } from "../../types/helper";
 import { getDate } from "../../utils/date";
 import { safeJSONParse } from "../../utils/json";
 
@@ -446,8 +446,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 	);
 
 export const getSessionFromCtx = async <
-	U extends Record<string, any> = Record<string, any>,
-	S extends Record<string, any> = Record<string, any>,
+	U extends Record<string, any> | undefined = undefined,
+	S extends Record<string, any> | undefined = undefined,
 >(
 	ctx: GenericEndpointContext,
 	config?:
@@ -457,10 +457,14 @@ export const getSessionFromCtx = async <
 		  }
 		| undefined,
 ) => {
+	type ReturnUser = U extends undefined ? User : PrettifyDeep<U & User>;
+	type ReturnSession = S extends undefined
+		? Session
+		: PrettifyDeep<S & Session>;
 	if (ctx.context.session) {
 		return ctx.context.session as {
-			session: S & Session;
-			user: U & User;
+			session: ReturnSession;
+			user: ReturnUser;
 		};
 	}
 
@@ -479,8 +483,8 @@ export const getSessionFromCtx = async <
 	});
 	ctx.context.session = session;
 	return session as {
-		session: S & Session;
-		user: U & User;
+		session: ReturnSession;
+		user: ReturnUser;
 	} | null;
 };
 
