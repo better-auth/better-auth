@@ -93,10 +93,11 @@ export const getMCPProtectedResourceMetadata = (
 	options?: MCPOptions | undefined,
 ) => {
 	const baseURL = ctx.context.baseURL;
+  const origin = new URL(baseURL).origin;
 
 	return {
-		resource: options?.resource ?? new URL(baseURL).origin,
-		authorization_servers: [new URL(baseURL).origin],
+		resource: options?.resource ?? origin,
+		authorization_servers: [origin],
 		jwks_uri: options?.oidcConfig?.metadata?.jwks_uri ?? `${baseURL}/mcp/jwks`,
 		scopes_supported: options?.oidcConfig?.metadata?.scopes_supported ?? [
 			"openid",
