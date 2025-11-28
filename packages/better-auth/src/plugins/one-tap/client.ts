@@ -70,7 +70,7 @@ export interface GoogleOneTapOptions {
 				experimental_fedCM?: boolean | undefined;
 		  }
 		| undefined;
-  nonce?: boolean | undefined;
+	nonce?: boolean | undefined;
 }
 
 export interface GoogleOneTapActionOptions
@@ -88,35 +88,40 @@ export interface GoogleOneTapActionOptions
 }
 
 interface IdentityCredential {
-  readonly configURL: string;
-  readonly isAutoSelected: boolean;
-  token: string;
+	readonly configURL: string;
+	readonly isAutoSelected: boolean;
+	token: string;
 }
 
 let isRequestInProgress: AbortController | null = null;
 
 function isFedCMSupported() {
-  return typeof window !== "undefined" && "IdentityCredential" in window;
+	return typeof window !== "undefined" && "IdentityCredential" in window;
 }
 
 export const oneTapClient = (options: GoogleOneTapOptions) => {
-  return {
+	return {
 		id: "one-tap",
-		fetchPlugins: [{
-		  id: "fedcm-signout-handle",
-			name: "FedCM Sign-Out Handler",
-			hooks: {
-	      async onResponse(ctx) {
-					if (!ctx.request.url.toString().includes("/sign-out")) {
-            return;
-					}
-          if (options.promptOptions?.experimental_fedCM !== true || !isFedCMSupported()) {
-            return;
-          }
-          navigator.credentials.preventSilentAccess();
-				}
-			}
-		}],
+		fetchPlugins: [
+			{
+				id: "fedcm-signout-handle",
+				name: "FedCM Sign-Out Handler",
+				hooks: {
+					async onResponse(ctx) {
+						if (!ctx.request.url.toString().includes("/sign-out")) {
+							return;
+						}
+						if (
+							options.promptOptions?.experimental_fedCM !== true ||
+							!isFedCMSupported()
+						) {
+							return;
+						}
+						navigator.credentials.preventSilentAccess();
+					},
+				},
+			},
+		],
 		getActions: ($fetch, _) => {
 			return {
 				oneTap: async (
@@ -138,59 +143,64 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 					}
 
 					async function callback(idToken: string) {
-  					await $fetch("/one-tap/callback", {
-  						method: "POST",
-  						body: { idToken },
-  						...opts?.fetchOptions,
-  						...fetchOptions,
-  					});
+						await $fetch("/one-tap/callback", {
+							method: "POST",
+							body: { idToken },
+							...opts?.fetchOptions,
+							...fetchOptions,
+						});
 
-  					if ((!opts?.fetchOptions && !fetchOptions) || opts?.callbackURL) {
-  						window.location.href = opts?.callbackURL ?? "/";
-  					}
+						if ((!opts?.fetchOptions && !fetchOptions) || opts?.callbackURL) {
+							window.location.href = opts?.callbackURL ?? "/";
+						}
 					}
 
 					const { autoSelect, cancelOnTapOutside, context } = opts ?? {};
 					const contextValue = context ?? options.context ?? "signin";
 					const clients = {
-            fedCM: async () => {
-              try {
-                const identityCredential = await navigator.credentials.get({
-                  identity: {
-                    context: contextValue,
-                    providers: [
-                      {
-                        configURL: "https://accounts.google.com/gsi/fedcm.json",
-                        clientId: options.clientId,
-                        nonce: opts?.nonce,
-                      },
-                    ]
-                  },
-                  mediation: autoSelect ? "optional" : "required",
-                  signal: isRequestInProgress?.signal,
-                } as any) as IdentityCredential | null;
+						fedCM: async () => {
+							try {
+								const identityCredential = (await navigator.credentials.get({
+									identity: {
+										context: contextValue,
+										providers: [
+											{
+												configURL: "https://accounts.google.com/gsi/fedcm.json",
+												clientId: options.clientId,
+												nonce: opts?.nonce,
+											},
+										],
+									},
+									mediation: autoSelect ? "optional" : "required",
+									signal: isRequestInProgress?.signal,
+								} as any)) as IdentityCredential | null;
 
-                if (!identityCredential?.token) {
-                  // Notify the caller that the prompt resulted in no token.
-                  opts?.onPromptNotification?.(undefined);
-                  return Promise.resolve();
-                }
+								if (!identityCredential?.token) {
+									// Notify the caller that the prompt resulted in no token.
+									opts?.onPromptNotification?.(undefined);
+									return Promise.resolve();
+								}
 
-                try {
-                  await callback(identityCredential.token);
-                  return Promise.resolve();
-                } catch (error) {
-                  console.error("Error during FedCM callback:", error);
-                  return Promise.reject(error);
-                }
-              } catch (error: any) {
-                if (error?.message && error.message.toLowerCase().startsWith("user declined or dismissed prompt")) {
-                  // Notify the caller that the prompt was closed/dismissed.
-                  opts?.onPromptNotification?.(undefined);
-                  return Promise.resolve();
-                }
-                return Promise.reject(error);
-              }
+								try {
+									await callback(identityCredential.token);
+									return Promise.resolve();
+								} catch (error) {
+									console.error("Error during FedCM callback:", error);
+									return Promise.reject(error);
+								}
+							} catch (error: any) {
+								if (
+									error?.message &&
+									error.message
+										.toLowerCase()
+										.startsWith("user declined or dismissed prompt")
+								) {
+									// Notify the caller that the prompt was closed/dismissed.
+									opts?.onPromptNotification?.(undefined);
+									return Promise.resolve();
+								}
+								return Promise.reject(error);
+							}
 						},
 						oneTap: () => {
 							return new Promise<void>((resolve, reject) => {
@@ -203,7 +213,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 									callback: async (response: { credential: string }) => {
 										isResolved = true;
 										try {
-                      await callback(response.credential);
+											await callback(response.credential);
 											resolve();
 										} catch (error) {
 											console.error("Error during One Tap callback:", error);
@@ -260,17 +270,21 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 					};
 
 					if (isRequestInProgress) {
-            isRequestInProgress?.abort();
+						isRequestInProgress?.abort();
 					}
 					isRequestInProgress = new AbortController();
 
 					try {
-            const client = options.promptOptions?.experimental_fedCM === true && isFedCMSupported() ? "fedCM" : "oneTap";
-            if (client === "oneTap") {
-              await loadGoogleScript();
-            }
+						const client =
+							options.promptOptions?.experimental_fedCM === true &&
+							isFedCMSupported()
+								? "fedCM"
+								: "oneTap";
+						if (client === "oneTap") {
+							await loadGoogleScript();
+						}
 
-            await clients[client]();
+						await clients[client]();
 					} catch (error) {
 						console.error("Error during Google One Tap flow:", error);
 						throw error;
