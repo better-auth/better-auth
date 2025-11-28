@@ -3,7 +3,9 @@ import path from "node:path";
 
 export const getEnvFiles = async (cwd: string): Promise<string[]> => {
 	const envFiles = await fs.readdir(cwd, "utf-8");
-	return envFiles.filter((file) => file.endsWith(".env"));
+	return envFiles
+		.filter((file) => file.startsWith(".env"))
+		.map((file) => path.join(cwd, file));
 };
 
 export const updateEnvFiles = async (
@@ -40,17 +42,15 @@ export const getMissingEnvVars = async (
 			.filter((x) => !x?.includes(" "))
 			.filter((x) => !x?.startsWith("#")) as string[];
 
-		if (
-			Array.isArray(envVar) &&
-			!envVar.some((v) => existingVars.includes(v))
-		) {
+		if (Array.isArray(envVar)) {
 			const missingVars = envVar.filter((v) => !existingVars.includes(v));
-			if (!missingVars.length) continue;
-			missingVarInFiles.push({
-				file,
-				var: missingVars,
-			});
-		} else if (typeof envVar === "string" && existingVars.includes(envVar)) {
+			if (missingVars.length > 0) {
+				missingVarInFiles.push({
+					file,
+					var: missingVars,
+				});
+			}
+		} else if (typeof envVar === "string" && !existingVars.includes(envVar)) {
 			missingVarInFiles.push({ file, var: [envVar] });
 		}
 	}

@@ -85,7 +85,7 @@ const mongodbCode = ({
 	let optsString = "";
 	if (additionalOptions) {
 		optsString = ", {";
-		optsString = Object.entries(additionalOptions)
+		optsString += Object.entries(additionalOptions)
 			.map(([key, value]) => `${key}: ${value}`)
 			.join(", ");
 		optsString += "}";
@@ -226,7 +226,7 @@ export const databasesConfig = [
 		code({ additionalOptions }) {
 			return drizzleCode({ provider: "mysql", additionalOptions });
 		},
-		dependencies: ["drizzle-orm", "mysql2/promise"],
+		dependencies: ["drizzle-orm", "mysql2"],
 	},
 	// Kysely
 	{

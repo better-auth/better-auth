@@ -314,8 +314,22 @@ export async function initAction(opts: any) {
 		if (allFiles.some((node) => node === "src")) {
 			authConfigPath = path.join(cwd, "src", "lib", "auth-client.ts");
 		}
-		await tryCatch(fs.mkdir(path.dirname(authConfigPath), { recursive: true }));
-		await tryCatch(fs.writeFile(authConfigPath, authClientCode, "utf-8"));
+		const { error: mkdirError } = await tryCatch(
+			fs.mkdir(path.dirname(authConfigPath), { recursive: true }),
+		);
+		if (mkdirError) {
+			const error = `Failed to create auth client directory at ${path.dirname(authConfigPath)}: ${mkdirError.message}`;
+			log.error(error);
+			process.exit(1);
+		}
+		const { error: writeFileError } = await tryCatch(
+			fs.writeFile(authConfigPath, authClientCode, "utf-8"),
+		);
+		if (writeFileError) {
+			const error = `Failed to write auth client file at ${authConfigPath}: ${writeFileError.message}`;
+			log.error(error);
+			process.exit(1);
+		}
 	})();
 
 	// Generate the route handler file.
