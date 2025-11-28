@@ -311,7 +311,6 @@ export const changePassword = createAuthEndpoint(
 );
 
 export const setPassword = createAuthEndpoint(
-	"/set-password",
 	{
 		method: "POST",
 		body: z.object({
@@ -322,9 +321,6 @@ export const setPassword = createAuthEndpoint(
 				description: "The new password to set is required",
 			}),
 		}),
-		metadata: {
-			SERVER_ONLY: true,
-		},
 		use: [sensitiveSessionMiddleware],
 	},
 	async (ctx) => {

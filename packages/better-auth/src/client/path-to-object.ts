@@ -87,6 +87,12 @@ export type InferRoute<
 				| {
 						SERVER_ONLY: true;
 				  }
+				| {
+						scope: "http";
+				  }
+				| {
+						scope: "server";
+				  }
 			? {}
 			: PathToObject<
 					T["path"],

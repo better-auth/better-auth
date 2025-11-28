@@ -1,5 +1,5 @@
 import { describe, expectTypeOf } from "vitest";
-import { organization, twoFactor } from "../plugins";
+import { createAuthEndpoint, organization, twoFactor } from "../plugins";
 import { getTestInstance } from "../test-utils/test-instance";
 
 describe("general types", async (it) => {
@@ -27,6 +27,48 @@ describe("general types", async (it) => {
 				image?: string | null | undefined;
 			};
 		}>();
+	});
+
+	it("should infer the types of server scoped endpoints", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				{
+					id: "test-plugin",
+					endpoints: {
+						testVirtual: createAuthEndpoint(
+							{
+								method: "GET",
+							},
+							async () => "ok",
+						),
+						testServerScoped: createAuthEndpoint(
+							"/test-server-scoped",
+							{
+								method: "GET",
+								metadata: {
+									scope: "server",
+								},
+							},
+							async () => "ok",
+						),
+						testHTTPScoped: createAuthEndpoint(
+							"/test-http-scoped",
+							{
+								method: "GET",
+								metadata: {
+									scope: "http",
+								},
+							},
+							async () => "ok",
+						),
+					},
+				},
+			],
+		});
+
+		expectTypeOf<typeof auth.api>().toHaveProperty("testServerScoped");
+		expectTypeOf<typeof auth.api>().toHaveProperty("testVirtual");
+		expectTypeOf<typeof auth.api>().not.toHaveProperty("testHttpScoped");
 	});
 
 	it("should infer additional fields from plugins", async () => {

@@ -47,7 +47,6 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 			.optional(),
 	});
 	return createAuthEndpoint(
-		"/organization/add-member",
 		{
 			method: "POST",
 			body: z.object({
@@ -56,7 +55,6 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 			}),
 			use: [orgMiddleware],
 			metadata: {
-				SERVER_ONLY: true,
 				$Infer: {
 					body: {} as {
 						userId: string;
