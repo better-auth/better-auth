@@ -79,7 +79,7 @@ export interface OIDCDiscoveryDocument {
 	/** OPTIONAL. URL of the OP's introspection endpoint. */
 	introspection_endpoint?: string;
 
-	/** OPTIONAL. Boolean value specifying whether the OP supports PKCE. */
+	/** OPTIONAL. JSON array of PKCE code challenge methods supported (e.g., "S256", "plain"). */
 	code_challenge_methods_supported?: string[];
 
 	/** Allow additional fields from the discovery document */
