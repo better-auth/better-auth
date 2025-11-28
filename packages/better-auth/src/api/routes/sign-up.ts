@@ -11,13 +11,15 @@ import { parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput, InferUser, User } from "../../types";
 import { createEmailVerificationToken } from "./email-verification";
 
+const signUpEmailBodySchema = z.record(z.string(), z.any());
+
 export const signUpEmail = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
 		"/sign-up/email",
 		{
 			method: "POST",
 			operationId: "signUpWithEmailAndPassword",
-			body: z.record(z.string(), z.any()),
+			body: signUpEmailBodySchema,
 			metadata: {
 				$Infer: {
 					body: {} as {

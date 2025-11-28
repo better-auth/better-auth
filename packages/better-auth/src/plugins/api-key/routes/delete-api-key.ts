@@ -10,6 +10,13 @@ import {
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
+
+const deleteApiKeyBodySchema = z.object({
+	keyId: z.string().meta({
+		description: "The id of the Api Key",
+	}),
+});
+
 export function deleteApiKey({
 	opts,
 	schema,
@@ -26,11 +33,7 @@ export function deleteApiKey({
 		"/api-key/delete",
 		{
 			method: "POST",
-			body: z.object({
-				keyId: z.string().meta({
-					description: "The id of the Api Key",
-				}),
-			}),
+			body: deleteApiKeyBodySchema,
 			use: [sessionMiddleware],
 			metadata: {
 				openapi: {

@@ -29,6 +29,24 @@ import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
 
 export * from "./error-code";
 
+const enableTwoFactorBodySchema = z.object({
+	password: z.string().meta({
+		description: "User password",
+	}),
+	issuer: z
+		.string()
+		.meta({
+			description: "Custom issuer for the TOTP URI",
+		})
+		.optional(),
+});
+
+const disableTwoFactorBodySchema = z.object({
+	password: z.string().meta({
+		description: "User password",
+	}),
+});
+
 export const twoFactor = (options?: TwoFactorOptions | undefined) => {
 	const opts = {
 		twoFactorTable: "twoFactor",
@@ -66,17 +84,7 @@ export const twoFactor = (options?: TwoFactorOptions | undefined) => {
 				"/two-factor/enable",
 				{
 					method: "POST",
-					body: z.object({
-						password: z.string().meta({
-							description: "User password",
-						}),
-						issuer: z
-							.string()
-							.meta({
-								description: "Custom issuer for the TOTP URI",
-							})
-							.optional(),
-					}),
+					body: enableTwoFactorBodySchema,
 					use: [sessionMiddleware],
 					metadata: {
 						openapi: {
@@ -202,11 +210,7 @@ export const twoFactor = (options?: TwoFactorOptions | undefined) => {
 				"/two-factor/disable",
 				{
 					method: "POST",
-					body: z.object({
-						password: z.string().meta({
-							description: "User password",
-						}),
-					}),
+					body: disableTwoFactorBodySchema,
 					use: [sessionMiddleware],
 					metadata: {
 						openapi: {

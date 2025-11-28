@@ -31,6 +31,15 @@ export interface OAuthProxyOptions {
 	productionURL?: string | undefined;
 }
 
+const oAuthProxyQuerySchema = z.object({
+	callbackURL: z.string().meta({
+		description: "The URL to redirect to after the proxy",
+	}),
+	cookies: z.string().meta({
+		description: "The cookies to set after the proxy",
+	}),
+});
+
 export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 	return {
 		id: "oauth-proxy",
@@ -41,14 +50,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 				{
 					method: "GET",
 					operationId: "oauthProxyCallback",
-					query: z.object({
-						callbackURL: z.string().meta({
-							description: "The URL to redirect to after the proxy",
-						}),
-						cookies: z.string().meta({
-							description: "The cookies to set after the proxy",
-						}),
-					}),
+					query: oAuthProxyQuerySchema,
 					use: [originCheck((ctx) => ctx.query.callbackURL)],
 					metadata: {
 						openapi: {
