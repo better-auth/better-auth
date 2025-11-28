@@ -67,10 +67,15 @@ export interface GoogleOneTapOptions {
 				 * @default 5
 				 */
 				maxAttempts?: number;
+				/**
+				 * Enable experimental FedCM (Federated Credential Management) support.
+				 *
+				 * @see {@link https://developer.chrome.com/docs/identity/fedcm/overview}
+				 */
 				experimental_fedCM?: boolean | undefined;
 		  }
 		| undefined;
-	nonce?: boolean | undefined;
+	nonce?: string | undefined;
 }
 
 export interface GoogleOneTapActionOptions
@@ -167,7 +172,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 											{
 												configURL: "https://accounts.google.com/gsi/fedcm.json",
 												clientId: options.clientId,
-												nonce: opts?.nonce,
+												nonce: opts?.nonce || options?.nonce,
 											},
 										],
 									},
@@ -178,28 +183,23 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 								if (!identityCredential?.token) {
 									// Notify the caller that the prompt resulted in no token.
 									opts?.onPromptNotification?.(undefined);
-									return Promise.resolve();
+									return;
 								}
 
 								try {
 									await callback(identityCredential.token);
-									return Promise.resolve();
+									return;
 								} catch (error) {
 									console.error("Error during FedCM callback:", error);
-									return Promise.reject(error);
+									throw error;
 								}
 							} catch (error: any) {
-								if (
-									error?.message &&
-									error.message
-										.toLowerCase()
-										.startsWith("user declined or dismissed prompt")
-								) {
+								if (error?.code === 19 || error?.code === 20) {
 									// Notify the caller that the prompt was closed/dismissed.
 									opts?.onPromptNotification?.(undefined);
-									return Promise.resolve();
+									return;
 								}
-								return Promise.reject(error);
+								throw error;
 							}
 						},
 						oneTap: () => {
@@ -229,7 +229,6 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 									 * @see {@link https://developers.google.com/identity/gsi/web/guides/overview}
 									 */
 									itp_support: true,
-									use_fedcm_for_prompt: true,
 
 									...options.additionalOptions,
 								});
