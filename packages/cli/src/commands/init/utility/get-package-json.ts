@@ -9,7 +9,8 @@ export const getPackageJson = async (
 	const packageJsonPath = path.join(cwd, "package.json");
 	const { data, error } = await tryCatch(fs.readFile(packageJsonPath, "utf-8"));
 	if (data) {
-		const result = await tryCatch<Record<string, any>>(JSON.parse(data));
+		const parse = async () => JSON.parse(data);
+		const result = await tryCatch<Record<string, any>>(parse());
 		return result;
 	}
 	return { data: null, error: error as Error };

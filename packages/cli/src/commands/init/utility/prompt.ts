@@ -50,18 +50,6 @@ export const getArgumentsPrompt: (
 			return value;
 		}
 
-		// console.log({
-		// 	flag,
-		// 	skipPrompt,
-		// 	isRequired,
-		// 	defaultValue,
-		// 	isMultiselectOptions,
-		// 	isSelectOptions,
-		// 	question,
-		// 	isConformation,
-		// 	isNumber,
-		// });
-
 		if (skipPrompt) {
 			if (isRequired && defaultValue) {
 				return defaultValue;

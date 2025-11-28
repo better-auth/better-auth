@@ -18,7 +18,6 @@ import { verifyTwoFactor } from "../verify-two-factor";
 export type TOTPOptions = {
 	/**
 	 * The issuer is the name of your application. It's used to generate TOTP codes. It'll be displayed in the authenticator apps.
-	 * @default "My App"
 	 */
 	issuer?: string | undefined;
 	/**
