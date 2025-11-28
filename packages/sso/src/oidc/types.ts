@@ -11,11 +11,14 @@
  * Raw OIDC Discovery Document as returned by the IdP's
  * .well-known/openid-configuration endpoint.
  *
- * Required fields per OIDC Discovery spec:
+ * Required fields for Better Auth's OIDC support:
  * - issuer
  * - authorization_endpoint
  * - token_endpoint
- * - jwks_uri (required for our use case - token validation)
+ * - jwks_uri (required for ID token validation)
+ *
+ * These align with the OIDC Discovery spec requirements for providers
+ * that support the authorization code flow and signed ID tokens.
  */
 export interface OIDCDiscoveryDocument {
 	/** REQUIRED. URL using the https scheme that the OP asserts as its Issuer Identifier. */
