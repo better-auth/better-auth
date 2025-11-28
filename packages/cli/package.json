@@ -32,7 +32,9 @@
     "better-auth"
   ],
   "exports": "./dist/index.mjs",
-  "bin": "./dist/index.mjs",
+  "bin": {
+    "better-auth": "./dist/index.mjs"
+  },
   "devDependencies": {
     "@better-auth/passkey": "workspace:*",
     "@types/better-sqlite3": "^7.6.13",
