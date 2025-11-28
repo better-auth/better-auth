@@ -8,7 +8,9 @@ const getCliPath = async () => {
 	const pkgJson: PackageJson = JSON.parse(
 		await fs.readFile(path.join(rootDir, "package.json"), "utf-8"),
 	);
-	return path.join(rootDir, pkgJson.bin as string);
+	const bin = pkgJson.bin;
+	const binPath = typeof bin === "string" ? bin : Object.values(bin ?? {})[0];
+	return path.join(rootDir, binPath as string);
 };
 
 export const cliPath = await getCliPath();
