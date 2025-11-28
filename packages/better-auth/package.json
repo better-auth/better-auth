@@ -511,6 +511,9 @@
     "@sveltejs/kit": {
       "optional": true
     },
+    "@tanstack/react-start": {
+      "optional": true
+    },
     "next": {
       "optional": true
     },
@@ -527,9 +530,6 @@
       "optional": true
     },
     "vue": {
-      "optional": true
-    },
-    "@tanstack/react-start": {
       "optional": true
     }
   }
