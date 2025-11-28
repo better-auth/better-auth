@@ -5,17 +5,15 @@ import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 import { APIError } from "better-call";
 import * as z from "zod";
-import { getChunkedCookie } from "../../cookies";
-import { setAccountCookie } from "../../cookies/session-store";
-import { symmetricDecodeJWT } from "../../crypto";
+import { setAccountCookie, getAccountCookie } from "../../cookies/session-store";
 import { generateState } from "../../oauth2/state";
 import { decryptOAuthToken, setTokenUtil } from "../../oauth2/utils";
-import { safeJSONParse } from "../../utils/json";
 import {
 	freshSessionMiddleware,
 	getSessionFromCtx,
 	sessionMiddleware,
 } from "./session";
+import type { GenericEndpointContext } from "@better-auth/core";
 
 export const listUserAccounts = createAuthEndpoint(
 	"/list-accounts",
@@ -519,22 +517,7 @@ export const getAccessToken = createAuthEndpoint(
 				message: `Provider ${providerId} is not supported.`,
 			});
 		}
-		const accountDataCookieName = ctx.context.authCookies.accountData.name;
-		const accountDataCookie = getChunkedCookie(
-			ctx,
-			ctx.context.authCookies.accountData.name,
-		);
-
-		const accountData = accountDataCookie
-			? safeJSONParse<Account>(
-					await symmetricDecodeJWT(
-						accountDataCookie,
-						ctx.context.secret,
-						"better-auth-account",
-					),
-				)
-			: null;
-
+    const accountData = await getAccountCookie(ctx);
 		let account: Account | undefined = undefined;
 		if (
 			accountData &&
@@ -712,19 +695,8 @@ export const refreshToken = createAuthEndpoint(
 		}
 
 		// Try to read refresh token from cookie first
-		const accountDataCookieName = ctx.context.authCookies.accountData.name;
-		const accountDataCookie = getChunkedCookie(ctx, accountDataCookieName);
 		let account: Account | undefined = undefined;
-		const accountData = accountDataCookie
-			? safeJSONParse<Account>(
-					await symmetricDecodeJWT(
-						accountDataCookie,
-						ctx.context.secret,
-						"better-auth-account",
-					),
-				)
-			: null;
-
+    const accountData = await getAccountCookie(ctx);
 		if (
 			accountData &&
 			(!providerId || providerId === accountData?.providerId)
@@ -886,26 +858,12 @@ export const accountInfo = createAuthEndpoint(
 		const providedAccountId = ctx.query?.accountId;
 		let account: Account | undefined = undefined;
 		if (!providedAccountId) {
-			const storeAccountCookie =
-				ctx.context.options.account?.storeAccountCookie;
-			if (storeAccountCookie) {
-				const accountCookie = getChunkedCookie(
-					ctx,
-					ctx.context.authCookies.accountData.name,
-				);
-				if (accountCookie) {
-					const accountData = safeJSONParse<Account>(
-						await symmetricDecodeJWT(
-							accountCookie,
-							ctx.context.secret,
-							"better-auth-account",
-						),
-					);
-					if (accountData) {
-						account = accountData;
-					}
-				}
-			}
+      if (ctx.context.options.account?.storeAccountCookie) {
+        const accountData = await getAccountCookie(ctx);
+        if (accountData) {
+          account = accountData;
+        }
+      }
 		} else {
 			const accountData =
 				await ctx.context.internalAdapter.findAccount(providedAccountId);
