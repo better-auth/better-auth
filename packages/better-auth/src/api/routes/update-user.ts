@@ -32,7 +32,7 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 				$Infer: {
 					body: {} as Partial<AdditionalUserFieldsInput<O>> & {
 						name?: string | undefined;
-						image?: string | undefined;
+						image?: string | undefined | null;
 					},
 				},
 				openapi: {
@@ -51,6 +51,7 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 										image: {
 											type: "string",
 											description: "The image of the user",
+											nullable: true,
 										},
 									},
 								},

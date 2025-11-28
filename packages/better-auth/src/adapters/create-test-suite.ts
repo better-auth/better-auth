@@ -80,24 +80,6 @@ export type InsertRandomFn = <
 			>
 >;
 
-export const createTestSuite2 = <
-	Tests extends Record<
-		string,
-		(context: {
-			/**
-			 * Mark tests as skipped. All execution after this call will be skipped.
-			 * This function throws an error, so make sure you are not catching it accidentally.
-			 * @see {@link https://vitest.dev/guide/test-context#skip}
-			 */
-			readonly skip: {
-				(note?: string | undefined): never;
-				(condition: boolean, note?: string | undefined): void;
-			};
-		}) => Promise<void>
-	>,
-	AdditionalOptions extends Record<string, any> = {},
->() => {};
-
 export const createTestSuite = <
 	Tests extends Record<
 		string,
@@ -231,20 +213,41 @@ export const createTestSuite = <
 						adapter: ({ getDefaultModelName }) => {
 							adapter.transaction = undefined as any;
 							return {
-								count: adapter.count,
-								deleteMany: adapter.deleteMany,
-								delete: adapter.delete,
+								count: async (args: any) => {
+									adapter = await helpers.adapter();
+									const res = await adapter.count(args);
+									return res as any;
+								},
+								deleteMany: async (args: any) => {
+									adapter = await helpers.adapter();
+									const res = await adapter.deleteMany(args);
+									return res as any;
+								},
+								delete: async (args: any) => {
+									adapter = await helpers.adapter();
+									const res = await adapter.delete(args);
+									return res as any;
+								},
 								findOne: async (args) => {
-									const res = (await adapter.findOne(args)) as any;
-									return res;
+									adapter = await helpers.adapter();
+									const res = await adapter.findOne(args);
+									return res as any;
 								},
 								findMany: async (args) => {
-									const res = (await adapter.findMany(args)) as any;
-									return res;
+									adapter = await helpers.adapter();
+									const res = await adapter.findMany(args);
+									return res as any;
 								},
-								update: adapter.update as any,
-								updateMany: adapter.updateMany,
-
+								update: async (args: any) => {
+									adapter = await helpers.adapter();
+									const res = await adapter.update(args);
+									return res as any;
+								},
+								updateMany: async (args) => {
+									adapter = await helpers.adapter();
+									const res = await adapter.updateMany(args);
+									return res as any;
+								},
 								createSchema: adapter.createSchema as any,
 								async create({ data, model, select }) {
 									const defaultModelName = getDefaultModelName(model);
@@ -282,14 +285,13 @@ export const createTestSuite = <
 					for (const row of createdRows[model]!) {
 						const schema = getAuthTables(helpers.getBetterAuthOptions());
 						const getDefaultModelName = initGetDefaultModelName({
-							usePlural: adapter.options?.adapterConfig?.usePlural,
-							schema: schema,
+							schema,
+							usePlural: adapter.options?.adapterConfig.usePlural,
 						});
 						let defaultModelName: string;
 						try {
 							defaultModelName = getDefaultModelName(model);
-						} catch (error) {
-							// if fail, likely means it was removed from the schema
+						} catch {
 							continue;
 						}
 						if (!schema[defaultModelName]) continue; // model doesn't exist in the schema anymore, so we skip it

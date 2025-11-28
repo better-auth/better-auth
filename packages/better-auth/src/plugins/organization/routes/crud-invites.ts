@@ -78,6 +78,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 		"/organization/invite-member",
 		{
 			method: "POST",
+			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 			body: z.object({
 				...baseSchema.shape,
@@ -471,6 +472,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 					description: "The ID of the invitation to accept",
 				}),
 			}),
+			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
 				openapi: {
@@ -670,6 +672,7 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 					description: "The ID of the invitation to reject",
 				}),
 			}),
+			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
 				openapi: {
@@ -686,7 +689,8 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 												type: "object",
 											},
 											member: {
-												type: "null",
+												type: "object",
+												nullable: true,
 											},
 										},
 									},
@@ -778,6 +782,7 @@ export const cancelInvitation = <O extends OrganizationOptions>(options: O) =>
 					description: "The ID of the invitation to cancel",
 				}),
 			}),
+			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 			openapi: {
 				operationId: "cancelOrganizationInvitation",
@@ -1007,6 +1012,7 @@ export const listInvitations = <O extends OrganizationOptions>(options: O) =>
 		"/organization/list-invitations",
 		{
 			method: "GET",
+			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 			query: z
 				.object({
