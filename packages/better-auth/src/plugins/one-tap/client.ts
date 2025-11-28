@@ -75,7 +75,6 @@ export interface GoogleOneTapOptions {
 				experimental_fedCM?: boolean | undefined;
 		  }
 		| undefined;
-	nonce?: string | undefined;
 }
 
 export interface GoogleOneTapActionOptions
@@ -90,6 +89,7 @@ export interface GoogleOneTapActionOptions
 	 * This lets you render an alternative UI (e.g. a Google Sign-In button) to restart the process.
 	 */
 	onPromptNotification?: ((notification?: any | undefined) => void) | undefined;
+	nonce?: string | undefined;
 }
 
 interface IdentityCredential {
@@ -172,7 +172,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 											{
 												configURL: "https://accounts.google.com/gsi/fedcm.json",
 												clientId: options.clientId,
-												nonce: opts?.nonce || options?.nonce,
+												nonce: opts?.nonce,
 											},
 										],
 									},
@@ -194,7 +194,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 									throw error;
 								}
 							} catch (error: any) {
-								if (error?.code === 19 || error?.code === 20) {
+								if (error?.code && (error.code === 19 || error.code === 20)) {
 									// Notify the caller that the prompt was closed/dismissed.
 									opts?.onPromptNotification?.(undefined);
 									return;
@@ -224,7 +224,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 									cancel_on_tap_outside: cancelOnTapOutside,
 									context: contextValue,
 									ux_mode: opts?.uxMode || "popup",
-									nonce: options.nonce,
+									nonce: opts?.nonce,
 									/**
 									 * @see {@link https://developers.google.com/identity/gsi/web/guides/overview}
 									 */
