@@ -175,10 +175,10 @@ describe("init CLI - database generation", () => {
                             },
                             server: 'localhost',
                         }),
-                    },
-                    TYPES: {
-                        ...Tedious.TYPES,
-                        DateTime: Tedious.TYPES.DateTime2,
+						TYPES: {
+							...Tedious.TYPES,
+							DateTime: Tedious.TYPES.DateTime2,
+						},
                     },
                 });`,
 			);
