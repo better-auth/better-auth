@@ -199,7 +199,7 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						user: { isAnonymous: boolean | null };
 					};
 
-					if(options?.disableDeleteAnonymousUser){
+					if (options?.disableDeleteAnonymousUser) {
 						throw new APIError("BAD_REQUEST", {
 							message: ANONYMOUS_ERROR_CODES.DELETE_ANONYMOUS_USER_DISABLED,
 						});
