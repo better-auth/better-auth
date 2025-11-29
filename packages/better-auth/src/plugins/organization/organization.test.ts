@@ -1869,7 +1869,7 @@ describe("Additional Fields", async () => {
 		expect(org).toBeDefined();
 		expectTypeOf<Params>().toEqualTypeOf<{
 			name: string;
-			slug: string;
+			slug?: string | undefined;
 			logo?: string | undefined;
 			userId?: string | undefined;
 			metadata?: Record<string, any> | undefined;
@@ -1879,7 +1879,7 @@ describe("Additional Fields", async () => {
 		}>();
 		expectTypeOf<Params2>().toEqualTypeOf<{
 			name: string;
-			slug: string;
+			slug?: string | undefined;
 			logo?: string | undefined;
 			userId?: string | undefined;
 			metadata?: Record<string, any> | undefined;
@@ -1892,7 +1892,7 @@ describe("Additional Fields", async () => {
 	type ExpectedResult = {
 		id: string;
 		name: string;
-		slug: string;
+		slug?: string | undefined;
 		createdAt: Date;
 		logo?: string | null | undefined;
 		metadata: any;
@@ -1959,7 +1959,7 @@ describe("Additional Fields", async () => {
 		expectTypeOf<Result>().toEqualTypeOf<{
 			id: string;
 			name: string;
-			slug: string;
+			slug?: string | undefined;
 			createdAt: Date;
 			logo?: string | null | undefined;
 			someRequiredField: string;
@@ -1983,7 +1983,7 @@ describe("Additional Fields", async () => {
 			{
 				id: string;
 				name: string;
-				slug: string;
+				slug?: string | undefined;
 				createdAt: Date;
 				logo?: string | null | undefined;
 				metadata?: any;
@@ -2004,7 +2004,7 @@ describe("Additional Fields", async () => {
 			| {
 					id: string;
 					name: string;
-					slug: string;
+					slug?: string | undefined;
 					createdAt: Date;
 					logo?: string | null | undefined;
 					metadata?: any;
@@ -2071,7 +2071,7 @@ describe("Additional Fields", async () => {
 		expectTypeOf<Data>().toEqualTypeOf<{
 			id: string;
 			name: string;
-			slug: string;
+			slug?: string | undefined;
 			createdAt: Date;
 			logo?: string | null | undefined;
 			metadata?: any;
@@ -2151,7 +2151,7 @@ describe("Additional Fields", async () => {
 			metadata?: any;
 			createdAt: Date;
 			name: string;
-			slug: string;
+			slug?: string | undefined;
 			logo?: string | null | undefined;
 			someRequiredField: string;
 			someOptionalField?: string | undefined;
@@ -2418,7 +2418,7 @@ describe("Additional Fields", async () => {
 			invitationOptionalField?: string | undefined;
 			invitationHiddenField?: string | undefined;
 			organizationName: string;
-			organizationSlug: string;
+			organizationSlug: string | undefined;
 			inviterEmail: string;
 		};
 		expectTypeOf<Result>().toEqualTypeOf<ExpectedResult>();
