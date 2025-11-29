@@ -116,10 +116,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 						if (!ctx.request.url.toString().includes("/sign-out")) {
 							return;
 						}
-						if (
-							options.promptOptions?.fedCM === false ||
-							!isFedCMSupported()
-						) {
+						if (options.promptOptions?.fedCM === false || !isFedCMSupported()) {
 							return;
 						}
 						navigator.credentials.preventSilentAccess();
@@ -275,8 +272,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 
 					try {
 						const client =
-							options.promptOptions?.fedCM === false ||
-							!isFedCMSupported()
+							options.promptOptions?.fedCM === false || !isFedCMSupported()
 								? "oneTap"
 								: "fedCM";
 						if (client === "oneTap") {
