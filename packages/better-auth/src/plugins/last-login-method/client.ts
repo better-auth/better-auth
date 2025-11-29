@@ -9,6 +9,15 @@ export interface LastLoginMethodClientConfig {
 	 * @default "better-auth.last_used_login_method"
 	 */
 	cookieName?: string | undefined;
+	/**
+	 * Custom method to get the last login method
+   * @returns The last login method
+   */
+  customGetMethod?: (() => string | null) | undefined;
+  /**
+   * Custom method to clear the last login method
+   */
+  customClearMethod?: (() => void) | undefined;
 }
 
 function getCookieValue(name: string): string | null {
@@ -34,19 +43,25 @@ export const lastLoginMethodClient = (
 	return {
 		id: "last-login-method-client",
 		getActions() {
+		  const getLastUsedLoginMethod = (): string | null => {
+				return config.customGetMethod ? config.customGetMethod() : getCookieValue(cookieName);
+			}
+
 			return {
 				/**
 				 * Get the last used login method from cookies
 				 * @returns The last used login method or null if not found
 				 */
-				getLastUsedLoginMethod: (): string | null => {
-					return getCookieValue(cookieName);
-				},
+				getLastUsedLoginMethod,
 				/**
 				 * Clear the last used login method cookie
 				 * This sets the cookie with an expiration date in the past
 				 */
 				clearLastUsedLoginMethod: (): void => {
+				  if (config.customClearMethod) {
+            config.customClearMethod();
+            return;
+          }
 					if (typeof document !== "undefined") {
 						document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
 					}
@@ -57,7 +72,7 @@ export const lastLoginMethodClient = (
 				 * @returns True if the method was the last used, false otherwise
 				 */
 				isLastUsedLoginMethod: (method: string): boolean => {
-					const lastMethod = getCookieValue(cookieName);
+					const lastMethod = getLastUsedLoginMethod();
 					return lastMethod === method;
 				},
 			};
