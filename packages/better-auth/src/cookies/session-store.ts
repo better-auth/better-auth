@@ -91,7 +91,7 @@ function joinChunks(chunks: Chunks): string {
  * Split a cookie value into chunks if needed
  */
 function chunkCookie(
-  storeName: string,
+	storeName: string,
 	cookie: Cookie,
 	chunks: Chunks,
 	logger: InternalLogger,
@@ -149,80 +149,84 @@ function getCleanCookies(
  * @see https://github.com/nextauthjs/next-auth/blob/27b2519b84b8eb9cf053775dea29d577d2aa0098/packages/next-auth/src/core/lib/cookie.ts
  */
 const storeFactory =
-  (storeName: string) =>
-  (cookieName: string, cookieOptions: CookieOptions, ctx: GenericEndpointContext) => {
-    const chunks = readExistingChunks(cookieName, ctx);
-	const logger = ctx.context.logger;
+	(storeName: string) =>
+	(
+		cookieName: string,
+		cookieOptions: CookieOptions,
+		ctx: GenericEndpointContext,
+	) => {
+		const chunks = readExistingChunks(cookieName, ctx);
+		const logger = ctx.context.logger;
 
-	return {
-		/**
-		 * Get the full session data by joining all chunks
-		 */
-		getValue(): string {
-			return joinChunks(chunks);
-		},
+		return {
+			/**
+			 * Get the full session data by joining all chunks
+			 */
+			getValue(): string {
+				return joinChunks(chunks);
+			},
 
-		/**
-		 * Check if there are existing chunks
-		 */
-		hasChunks(): boolean {
-			return Object.keys(chunks).length > 0;
-		},
+			/**
+			 * Check if there are existing chunks
+			 */
+			hasChunks(): boolean {
+				return Object.keys(chunks).length > 0;
+			},
 
-		/**
-		 * Chunk a cookie value and return all cookies to set (including cleanup cookies)
-		 */
-		chunk(value: string, options?: Partial<CookieOptions>): Cookie[] {
-			// Start by cleaning all existing chunks
-			const cleanedChunks = getCleanCookies(chunks, cookieOptions);
-			// Clear the chunks object
-			for (const name in chunks) {
-				delete chunks[name];
-			}
-			const cookies: Record<string, Cookie> = cleanedChunks;
+			/**
+			 * Chunk a cookie value and return all cookies to set (including cleanup cookies)
+			 */
+			chunk(value: string, options?: Partial<CookieOptions>): Cookie[] {
+				// Start by cleaning all existing chunks
+				const cleanedChunks = getCleanCookies(chunks, cookieOptions);
+				// Clear the chunks object
+				for (const name in chunks) {
+					delete chunks[name];
+				}
+				const cookies: Record<string, Cookie> = cleanedChunks;
 
-			// Create new chunks
-			const chunked = chunkCookie(
-			  storeName,
-				{
-					name: cookieName,
-					value,
-					options: { ...cookieOptions, ...options },
-				},
-				chunks,
-				logger,
-			);
+				// Create new chunks
+				const chunked = chunkCookie(
+					storeName,
+					{
+						name: cookieName,
+						value,
+						options: { ...cookieOptions, ...options },
+					},
+					chunks,
+					logger,
+				);
 
-			// Update with new chunks
-			for (const chunk of chunked) {
-				cookies[chunk.name] = chunk;
-			}
+				// Update with new chunks
+				for (const chunk of chunked) {
+					cookies[chunk.name] = chunk;
+				}
 
-			return Object.values(cookies);
-		},
+				return Object.values(cookies);
+			},
 
-		/**
-		 * Get cookies to clean up all chunks
-		 */
-		clean(): Cookie[] {
-			const cleanedChunks = getCleanCookies(chunks, cookieOptions);
-			// Clear the chunks object
-			for (const name in chunks) {
-				delete chunks[name];
-			}
-			return Object.values(cleanedChunks);
-		},
+			/**
+			 * Get cookies to clean up all chunks
+			 */
+			clean(): Cookie[] {
+				const cleanedChunks = getCleanCookies(chunks, cookieOptions);
+				// Clear the chunks object
+				for (const name in chunks) {
+					delete chunks[name];
+				}
+				return Object.values(cleanedChunks);
+			},
 
-		/**
-		 * Set all cookies in the context
-		 */
-		setCookies(cookies: Cookie[]): void {
-			for (const cookie of cookies) {
-				ctx.setCookie(cookie.name, cookie.value, cookie.options);
-			}
-		},
+			/**
+			 * Set all cookies in the context
+			 */
+			setCookies(cookies: Cookie[]): void {
+				for (const cookie of cookies) {
+					ctx.setCookie(cookie.name, cookie.value, cookie.options);
+				}
+			},
+		};
 	};
-}
 
 export const createSessionStore = storeFactory("Session");
 export const createAccountStore = storeFactory("Account");
