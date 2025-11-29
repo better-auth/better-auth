@@ -135,9 +135,10 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 								className: "gap-2 mt-2 rounded-full transition-all",
 							}),
 						)}
+						aria-label="Loading... Click to stop"
 						onClick={stop}
 					>
-						<Loader2 className="animate-spin size-4 text-fd-muted-foreground" />
+						<Loader2 className="animate-spin size-4 text-fd-muted-foreground" aria-hidden="true" />
 					</button>
 				) : (
 					<button
@@ -151,7 +152,7 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 						)}
 						disabled={input.length === 0}
 					>
-						<Send className="size-4" />
+						<Send className="size-4" aria-hidden="true" />
 					</button>
 				)}
 			</form>
@@ -202,7 +203,7 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 								className="rounded transition-colors sm:hidden hover:bg-fd-accent/50"
 								aria-label="Show information"
 							>
-								<InfoIcon className="size-3.5" />
+								<InfoIcon className="size-3.5" aria-hidden="true" />
 							</button>
 						</PopoverTrigger>
 						<PopoverContent
@@ -228,7 +229,7 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 							}
 						}}
 					>
-						<Trash2 className="size-3" />
+						<Trash2 className="size-3" aria-hidden="true" />
 						<p>Clear</p>
 					</div>
 				</div>
@@ -597,7 +598,7 @@ export function AISearchTrigger() {
 									)}
 									onClick={() => setOpen(false)}
 								>
-									<X />
+									<X aria-hidden="true" />
 								</button>
 							</div>
 						</div>
@@ -669,7 +670,7 @@ export function AISearchTrigger() {
 							onClick={() => setOpen(true)}
 						>
 							<div className="flex items-center gap-2 flex-1 justify-center mr-2">
-								<Bot className={cn("size-4")} />
+								<Bot className="size-4" aria-hidden="true" />
 								<span>Ask AI</span>
 							</div>
 						</button>

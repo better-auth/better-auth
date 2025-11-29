@@ -87,7 +87,7 @@ export default function Features({ stars }: { stars: string | null }) {
 							)}
 						>
 							<div className="flex items-center gap-2 my-1">
-								<feature.icon className="w-4 h-4" />
+								<feature.icon className="w-4 h-4" aria-hidden="true" />
 								<p className="text-gray-600 dark:text-gray-400">
 									{feature.label}
 								</p>
@@ -120,7 +120,7 @@ export default function Features({ stars }: { stars: string | null }) {
 					<div className="w-full h-full p-16 pt-10 md:px-10 2xl:px-16">
 						<div className="flex flex-col items-center justify-center w-full h-full gap-3">
 							<div className="flex items-center gap-2">
-								<Globe2Icon className="w-4 h-4" />
+								<Globe2Icon className="w-4 h-4" aria-hidden="true" />
 								<p className="text-gray-600 dark:text-gray-400">
 									Own your auth
 								</p>

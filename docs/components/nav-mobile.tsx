@@ -62,8 +62,9 @@ export const NavbarMobileBtn: React.FC = () => {
 				onClick={() => {
 					toggleNavbar();
 				}}
+				aria-label="Toggle Menu"
 			>
-				<Menu className="size-5" />
+				<Menu className="size-5" aria-hidden="true" />
 			</button>
 		</div>
 	);
@@ -129,7 +130,7 @@ export const NavbarMobile = () => {
 								onClick={toggleNavbar}
 							>
 								{isDocs && (
-									<ChevronRight className="ml-0.5 size-4 text-muted-foreground md:hidden" />
+									<ChevronRight className="ml-0.5 size-4 text-muted-foreground md:hidden" aria-hidden="true" />
 								)}
 								{menu.name}
 							</Link>

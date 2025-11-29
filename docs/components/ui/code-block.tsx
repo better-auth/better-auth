@@ -196,12 +196,14 @@ function CopyButton({
 		>
 			<Check
 				className={cn("size-3.5 transition-transform", !checked && "scale-0")}
+				 aria-hidden="true"
 			/>
 			<Copy
 				className={cn(
 					"absolute size-3.5 transition-transform",
 					checked && "scale-0",
 				)}
+				 aria-hidden="true"
 			/>
 		</button>
 	);

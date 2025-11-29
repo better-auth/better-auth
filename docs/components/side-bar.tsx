@@ -50,7 +50,7 @@ export default function ArticleLayout() {
 							setOpenSearch(true);
 						}}
 					>
-						<Search className="size-4 mx-0.5" />
+						<Search className="size-4 mx-0.5" aria-hidden="true" />
 						<p className="text-sm">Search documentation...</p>
 					</button>
 
@@ -75,11 +75,13 @@ export default function ArticleLayout() {
 										{item.isNew && <NewBadge />}
 										<motion.div
 											animate={{ rotate: currentOpen === index ? 180 : 0 }}
+											aria-label="Toggle Collapse"
 										>
 											<ChevronDownIcon
 												className={cn(
 													"h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200",
 												)}
+												aria-hidden="true"
 											/>
 										</motion.div>
 									</button>

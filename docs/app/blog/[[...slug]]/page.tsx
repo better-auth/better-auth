@@ -98,7 +98,7 @@ export default async function Page({
 				</div>
 				<div className="w-full flex items-center gap-2 my-4 mb-8">
 					<div className="flex items-center gap-2 opacity-80">
-						<ArrowLeftIcon className="size-4" />
+						<ArrowLeftIcon className="size-4" aria-hidden="true" />
 						<Link href="/blog" className="">
 							Blogs
 						</Link>
@@ -127,7 +127,7 @@ export default async function Page({
 											{...props}
 										>
 											{children}
-											<ExternalLink className="ms-0.5 inline size-[0.9em] text-fd-muted-foreground" />
+											<ExternalLink className="ms-0.5 inline size-[0.9em] text-fd-muted-foreground" aria-hidden="true" />
 										</a>
 									);
 								}
@@ -154,7 +154,7 @@ export default async function Page({
 											{...props}
 										>
 											{children}
-											<ExternalLink className="ms-0.5 inline size-[0.9em] text-fd-muted-foreground" />
+											<ExternalLink className="ms-0.5 inline size-[0.9em] text-fd-muted-foreground" aria-hidden="true" />
 										</a>
 									);
 								}

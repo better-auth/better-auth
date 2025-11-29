@@ -274,8 +274,9 @@ export const APIMethod = ({
 								variant="ghost"
 								className="opacity-100 transition-all duration-150 ease-in-out scale-90 md:opacity-0"
 								size={"icon"}
+								aria-label="Link to this API method"
 							>
-								<Link className="size-4" />
+								<Link className="size-4" aria-hidden="true" />
 							</Button>
 						</a>
 					</div>

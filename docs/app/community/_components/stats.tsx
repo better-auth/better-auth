@@ -76,7 +76,7 @@ export default function Stats({
 										<span className="uppercase font-mono group-hover:text-black duration-300 dark:group-hover:text-white">
 											Join Our Discord
 										</span>
-										<ArrowUpRight className="w-6 h-6 opacity-20 ml-2 group-hover:opacity-300 duration-300 text-black group-hover:duration-700 dark:text-white" />
+										<ArrowUpRight className="w-6 h-6 opacity-20 ml-2 group-hover:opacity-300 duration-300 text-black group-hover:duration-700 dark:text-white" aria-hidden="true" />
 									</Button>
 								</Link>
 							</div>
@@ -116,7 +116,7 @@ export default function Stats({
 										<span className="uppercase font-mono group-hover:text-black duration-300 dark:group-hover:text-white">
 											Join Subreddit
 										</span>
-										<ArrowUpRight className="w-6 h-6 opacity-20 ml-2 group-hover:opacity-300 duration-300 text-black group-hover:duration-700 dark:text-white" />
+										<ArrowUpRight className="w-6 h-6 opacity-20 ml-2 group-hover:opacity-300 duration-300 text-black group-hover:duration-700 dark:text-white" aria-hidden="true" />
 									</Button>
 								</Link>
 							</div>
@@ -156,7 +156,7 @@ export default function Stats({
 										<span className="uppercase font-mono group-hover:text-black duration-300 dark:group-hover:text-white">
 											Follow on 𝕏
 										</span>
-										<ArrowUpRight className="w-6 h-6 opacity-20 ml-2 group-hover:opacity-300 duration-300 text-black group-hover:duration-700 dark:text-white" />
+										<ArrowUpRight className="w-6 h-6 opacity-20 ml-2 group-hover:opacity-300 duration-300 text-black group-hover:duration-700 dark:text-white" aria-hidden="true" />
 									</Button>
 								</Link>
 							</div>
@@ -202,7 +202,7 @@ export default function Stats({
 										<span className="uppercase font-mono group-hover:text-black duration-300 dark:group-hover:text-white">
 											Downloads
 										</span>
-										<ArrowUpRight className="w-6 h-6 opacity-20 ml-2 group-hover:opacity-300 duration-300 text-black group-hover:duration-700 dark:text-white" />
+										<ArrowUpRight className="w-6 h-6 opacity-20 ml-2 group-hover:opacity-300 duration-300 text-black group-hover:duration-700 dark:text-white" aria-hidden="true" />
 									</Button>
 								</Link>
 							</div>

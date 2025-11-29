@@ -100,7 +100,7 @@ export default function SignIn() {
 					{options.email && (
 						<Button disabled={loading} type="submit" className="w-full" onClick={simulateRequest}>
   						{loading ? (
-  							<Loader2 size={16} className="animate-spin" />
+  							<Loader2 size={16} className="animate-spin" aria-hidden="true" />
   						) : (
   							"Login"
   						)}
@@ -109,7 +109,7 @@ export default function SignIn() {
 
 					{options.passkey && (
 						<Button disabled={loading} variant="secondary" className="gap-2">
-							<Key size={16} />
+							<Key size={16} aria-hidden="true" />
 							Sign-in with Passkey
 						</Button>
 					)}
@@ -294,7 +294,7 @@ export default function SignIn() {
                   );
                  }}>
                   {loading ? (
-                     <Loader2 size={16} className="animate-spin" />
+                     <Loader2 size={16} className="animate-spin" aria-hidden="true" />
                      ):(
                          Sign-in with Magic Link
                    )}
@@ -327,9 +327,9 @@ export default function SignIn() {
               }}
             >
               {loading ? (
-                <Loader2 size={16} className="animate-spin" />
+                <Loader2 size={16} className="animate-spin" aria-hidden="true" />
               ) : (
-                <p> Login </p>
+                <p>Login</p>
               )}
               </Button>`
 							: ""
@@ -354,7 +354,7 @@ export default function SignIn() {
                 )
               }}
             >
-              <Key size={16} />
+              <Key size={16} aria-hidden="true" />
               Sign-in with Passkey
             </Button>`
 							: ""

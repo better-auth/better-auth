@@ -258,9 +258,9 @@ function CodePreview() {
 										onClick={() => copyToClipboard(code)}
 									>
 										{copyState ? (
-											<Check className="h-3 w-3" />
+											<Check className="h-3 w-3" aria-hidden="true" />
 										) : (
-											<Copy className="h-3 w-3" />
+											<Copy className="h-3 w-3" aria-hidden="true" />
 										)}
 										<span className="sr-only">Copy code</span>
 									</Button>

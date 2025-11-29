@@ -58,7 +58,7 @@ export default function DatabaseTable({ fields }: DatabaseTableProps) {
 												variant="secondary"
 												className="mr-1 rounded-sm bg-amber-500"
 											>
-												<Key className="w-3 h-3 mr-1" size={14} />
+												<Key className="w-3 h-3 mr-1" size={14} aria-hidden="true" />
 												PK
 											</Badge>
 										</TooltipTrigger>
@@ -74,7 +74,7 @@ export default function DatabaseTable({ fields }: DatabaseTableProps) {
 												variant="secondary"
 												className="mr-1 rounded-sm bg-blue-500"
 											>
-												<Link className="w-3 h-3 mr-1" size={14} />
+												<Link className="w-3 h-3 mr-1" size={14} aria-hidden="true" />
 												FK
 											</Badge>
 										</TooltipTrigger>

@@ -155,7 +155,7 @@ export function SignUp() {
 						}}
 					>
 						{loading ? (
-							<Loader2 size={16} className="animate-spin" />
+							<Loader2 size={16} className="animate-spin" aria-hidden="true" />
 						) : (
 							"Create an account"
 						)}
@@ -351,7 +351,7 @@ export default function SignUp() {
 						}}
 					>
 						{loading ? (
-							<Loader2 size={16} className="animate-spin" />
+							<Loader2 size={16} className="animate-spin" aria-hidden="true" />
 						) : (
 							"Create an account"
 						)}

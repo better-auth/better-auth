@@ -309,7 +309,7 @@ export function TocPopoverTrigger({
 				props.className,
 			)}
 		>
-			<Text className="size-4 shrink-0" />
+			<Text className="size-4 shrink-0" aria-hidden="true" />
 			{text.toc}
 			<ChevronRight
 				className={cn(
@@ -317,6 +317,7 @@ export function TocPopoverTrigger({
 					!current && "opacity-0",
 					open ? "rotate-90" : "-ms-1.5",
 				)}
+				aria-hidden="true"
 			/>
 			<span
 				className={cn(
