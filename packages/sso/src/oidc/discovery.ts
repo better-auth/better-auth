@@ -105,26 +105,7 @@ export function computeDiscoveryUrl(issuer: string): string {
  * @throws DiscoveryError if URL is invalid
  */
 export function validateDiscoveryUrl(url: string): void {
-	try {
-		const parsed = new URL(url);
-		if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-			throw new DiscoveryError(
-				"discovery_invalid_url",
-				`Discovery URL must use HTTP or HTTPS protocol: ${url}`,
-				{ url, protocol: parsed.protocol },
-			);
-		}
-	} catch (error) {
-		if (error instanceof DiscoveryError) {
-			throw error;
-		}
-		throw new DiscoveryError(
-			"discovery_invalid_url",
-			`Invalid discovery URL: ${url}`,
-			{ url },
-			{ cause: error },
-		);
-	}
+	parseURL("discoveryEndpoint", url); // ignore result
 }
 
 /**
@@ -289,32 +270,108 @@ export function validateDiscoveryDocument(
  * For now, this is an identity function so we can wire discovery into flows incrementally.
  *
  * @param doc - The discovery document
- * @param _issuerBase - The base issuer URL (unused in Phase 1)
+ * @param issuer - The base issuer URL (unused in Phase 1)
  * @returns The normalized discovery document
  */
 export function normalizeDiscoveryUrls(
 	doc: OIDCDiscoveryDocument,
-	_issuerBase: string,
+	issuer: string,
 ): OIDCDiscoveryDocument {
-	// TODO(Phase 2): Implement URL normalization
+	doc.token_endpoint = normalizeUrl(
+		"token_endpoint",
+		doc.token_endpoint,
+		issuer,
+	);
+	doc.authorization_endpoint = normalizeUrl(
+		"authorization_endpoint",
+		doc.authorization_endpoint,
+		issuer,
+	);
+
+	doc.jwks_uri = normalizeUrl("jwks_uri", doc.jwks_uri, issuer);
+
+	if (doc.userinfo_endpoint) {
+		doc.userinfo_endpoint = normalizeUrl(
+			"userinfo_endpoint",
+			doc.userinfo_endpoint,
+			issuer,
+		);
+	}
+
+	if (doc.revocation_endpoint) {
+		doc.revocation_endpoint = normalizeUrl(
+			"revocation_endpoint",
+			doc.revocation_endpoint,
+			issuer,
+		);
+	}
+
 	return doc;
 }
 
 /**
  * Normalize a single URL endpoint.
  *
- * Phase 1: This is a stub that returns the endpoint unchanged.
- *
- * TODO(Phase 2): Implement normalization of relative URLs based on issuer/discovery endpoint.
- * For now, this is an identity function so we can wire discovery into flows incrementally.
- *
+ * @param name - The endpoint name (e.g token_endpoint)
  * @param endpoint - The endpoint URL to normalize
- * @param _issuerBase - The base issuer URL (unused in Phase 1)
+ * @param issuer - The base issuer URL
  * @returns The normalized endpoint URL
  */
-export function normalizeUrl(endpoint: string, _issuerBase: string): string {
-	// TODO(Phase 2): Implement URL normalization
-	return endpoint;
+export function normalizeUrl(
+	name: string,
+	endpoint: string,
+	issuer: string,
+): string {
+	try {
+		return parseURL(name, endpoint).toString();
+	} catch (error) {
+		// In case of error, endpoint maybe a relative url
+		// So we try to resolve it relative to the issuer
+
+		const issuerURL = parseURL(name, issuer);
+		const basePath = issuerURL.pathname.replace(/\/+$/, "");
+		const endpointPath = endpoint.replace(/^\/+/, "");
+
+		return parseURL(
+			name,
+			basePath + "/" + endpointPath,
+			issuerURL.origin,
+		).toString();
+	}
+}
+
+/**
+ * Parses the given URL or throws in case of invalid or unsupported protocols
+ *
+ * @param name the url name
+ * @param endpoint the endpoint url
+ * @param [base] optional base path
+ * @returns
+ */
+export function parseURL(name: string, endpoint: string, base?: string) {
+	let endpointURL: URL | undefined;
+
+	try {
+		endpointURL = new URL(endpoint, base);
+		if (endpointURL.protocol === "http:" || endpointURL.protocol === "https:") {
+			return endpointURL;
+		}
+	} catch (error) {
+		throw new DiscoveryError(
+			"discovery_invalid_url",
+			`The url "${name}" must be valid: ${endpoint}`,
+			{
+				url: endpoint,
+				originalError: error instanceof Error ? error.message : String(error),
+			},
+		);
+	}
+
+	throw new DiscoveryError(
+		"discovery_invalid_url",
+		`The url "${name}" must use the http or https supported protocols: ${endpoint}`,
+		{ url: endpoint, protocol: endpointURL.protocol },
+	);
 }
 
 /**

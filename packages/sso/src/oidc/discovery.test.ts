@@ -94,7 +94,7 @@ describe("OIDC Discovery", () => {
 		it("should reject invalid URL", () => {
 			expect(() => validateDiscoveryUrl("not-a-url")).toThrow(DiscoveryError);
 			expect(() => validateDiscoveryUrl("not-a-url")).toThrow(
-				"Invalid discovery URL",
+				'The url "discoveryEndpoint" must be valid',
 			);
 		});
 
@@ -103,7 +103,7 @@ describe("OIDC Discovery", () => {
 				DiscoveryError,
 			);
 			expect(() => validateDiscoveryUrl("ftp://example.com/config")).toThrow(
-				"must use HTTP or HTTPS",
+				"must use the http or https supported protocols",
 			);
 		});
 
@@ -326,18 +326,118 @@ describe("OIDC Discovery", () => {
 		});
 	});
 
-	describe("normalizeDiscoveryUrls (stub)", () => {
-		it("should return document unchanged in Phase 1", () => {
+	describe("normalizeDiscoveryUrls", () => {
+		it("should return the document unchanged if all urls are already absolute", () => {
 			const doc = createMockDiscoveryDocument();
 			const result = normalizeDiscoveryUrls(doc, "https://idp.example.com");
 			expect(result).toEqual(doc);
 		});
+
+		it("should resolve all required discovery urls relative to the issuer", () => {
+			const expected = createMockDiscoveryDocument({
+				issuer: "https://idp.example.com",
+				authorization_endpoint: "https://idp.example.com/oauth2/authorize",
+				token_endpoint: "https://idp.example.com/oauth2/token",
+				jwks_uri: "https://idp.example.com/.well-known/jwks.json",
+			});
+			const doc = createMockDiscoveryDocument({
+				issuer: "https://idp.example.com",
+				authorization_endpoint: "/oauth2/authorize",
+				token_endpoint: "/oauth2/token",
+				jwks_uri: "/.well-known/jwks.json",
+			});
+			const result = normalizeDiscoveryUrls(doc, "https://idp.example.com");
+			expect(result).toEqual(expected);
+		});
+
+		it("should resolve all discovery urls relative to the issuer", () => {
+			const expected = createMockDiscoveryDocument({
+				issuer: "https://idp.example.com",
+				authorization_endpoint: "https://idp.example.com/oauth2/authorize",
+				token_endpoint: "https://idp.example.com/oauth2/token",
+				jwks_uri: "https://idp.example.com/.well-known/jwks.json",
+				userinfo_endpoint: "https://idp.example.com/userinfo",
+				revocation_endpoint: "https://idp.example.com/revoke",
+			});
+			const doc = createMockDiscoveryDocument({
+				issuer: "https://idp.example.com",
+				authorization_endpoint: "/oauth2/authorize",
+				token_endpoint: "/oauth2/token",
+				jwks_uri: "/.well-known/jwks.json",
+				userinfo_endpoint: "/userinfo",
+				revocation_endpoint: "/revoke",
+			});
+			const result = normalizeDiscoveryUrls(doc, "https://idp.example.com");
+			expect(result).toEqual(expected);
+		});
+
+		it("should reject on invalid discovery urls", () => {
+			const doc = createMockDiscoveryDocument({
+				authorization_endpoint: "/oauth2/authorize",
+			});
+			expect(() => normalizeDiscoveryUrls(doc, "not-url")).toThrowError(
+				'The url "authorization_endpoint" must be valid',
+			);
+		});
 	});
 
-	describe("normalizeUrl (stub)", () => {
-		it("should return endpoint unchanged in Phase 1", () => {
+	describe("normalizeUrl", () => {
+		it("should return endpoint unchanged if already absolute", () => {
 			const endpoint = "https://idp.example.com/oauth2/token";
-			expect(normalizeUrl(endpoint, "https://idp.example.com")).toBe(endpoint);
+			expect(normalizeUrl("url", endpoint, "https://idp.example.com")).toBe(
+				endpoint,
+			);
+		});
+
+		it("should return endpoint as an absolute url", () => {
+			const endpoint = "/oauth2/token";
+			expect(normalizeUrl("url", endpoint, "https://idp.example.com")).toBe(
+				"https://idp.example.com/oauth2/token",
+			);
+		});
+
+		it("should return endpoint as an absolute url preserving the issuer base path", () => {
+			const endpoint = "/oauth2/token";
+			expect(
+				normalizeUrl("url", endpoint, "https://idp.example.com/base"),
+			).toBe("https://idp.example.com/base/oauth2/token");
+		});
+
+		it("should return endpoint as an absolute url preserving the issuer base path", () => {
+			const endpoint = "oauth2/token";
+			expect(
+				normalizeUrl("url", endpoint, "https://idp.example.com/base"),
+			).toBe("https://idp.example.com/base/oauth2/token");
+		});
+
+		it("should return endpoint as an absolute url preserving the issuer base path (trailing slash)", () => {
+			const endpoint = "/oauth2/token";
+			expect(
+				normalizeUrl("url", endpoint, "https://idp.example.com/base/"),
+			).toBe("https://idp.example.com/base/oauth2/token");
+		});
+
+		it("should return endpoint as an absolute url preserving the issuer base path (multiple slashes)", () => {
+			const endpoint = "//oauth2/token";
+			expect(
+				normalizeUrl("url", endpoint, "https://idp.example.com/base//"),
+			).toBe("https://idp.example.com/base/oauth2/token");
+		});
+
+		it("should reject invalid endpoint urls", () => {
+			const endpoint = "oauth2/token";
+			const issuer = "not-a-url";
+			expect(() => normalizeUrl("url", endpoint, issuer)).toThrowError(
+				'The url "url" must be valid',
+			);
+		});
+
+		it("should reject urls with unsupported protocols", () => {
+			const endpoint = "not-a-url";
+			const issuer = "ftp://idp.example.com";
+			expect(() => normalizeUrl("url", endpoint, issuer)).toThrowError(
+				'The url "url" must use the http or https supported protocols',
+			);
 		});
 	});
 
