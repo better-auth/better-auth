@@ -72,7 +72,7 @@ export interface GoogleOneTapOptions {
 				 *
 				 * @see {@link https://developer.chrome.com/docs/identity/fedcm/overview}
 				 */
-				experimental_fedCM?: boolean | undefined;
+				fedCM?: boolean | undefined;
 		  }
 		| undefined;
 }
@@ -117,7 +117,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							return;
 						}
 						if (
-							options.promptOptions?.experimental_fedCM !== true ||
+							options.promptOptions?.fedCM !== true ||
 							!isFedCMSupported()
 						) {
 							return;
@@ -275,7 +275,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 
 					try {
 						const client =
-							options.promptOptions?.experimental_fedCM === true &&
+							options.promptOptions?.fedCM === true &&
 							isFedCMSupported()
 								? "fedCM"
 								: "oneTap";
