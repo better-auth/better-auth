@@ -14,9 +14,13 @@ Then, you can use the Prisma adapter to connect to your database.
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "@/generated/prisma/client";
+import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 
-const prisma = new PrismaClient();
+const adapter = new PrismaBetterSqlite3({
+  url: process.env.DATABASE_URL ?? "file:./dev.db",
+});
+const prisma = new PrismaClient({ adapter });
 
 export const auth = betterAuth({
   database: prismaAdapter(prisma, {
@@ -24,10 +28,6 @@ export const auth = betterAuth({
   }),
 });
 ```
-
-<Callout type="warning">
-  If you have configured a custom output directory in your `schema.prisma` file (e.g., `output = "../src/generated/prisma"`), make sure to import the Prisma client from that location instead of `@prisma/client`. Learn more about custom output directories in the [Prisma documentation](https://www.prisma.io/docs/guides/nextjs#21-install-prisma-orm-and-create-your-first-models).
-</Callout>
 
 ## Schema generation & migration
 
