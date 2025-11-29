@@ -11,13 +11,13 @@ export interface LastLoginMethodClientConfig {
 	cookieName?: string | undefined;
 	/**
 	 * Custom method to get the last login method
-   * @returns The last login method
-   */
-  customGetMethod?: (() => string | null) | undefined;
-  /**
-   * Custom method to clear the last login method
-   */
-  customClearMethod?: (() => void) | undefined;
+	 * @returns The last login method
+	 */
+	customGetMethod?: (() => string | null) | undefined;
+	/**
+	 * Custom method to clear the last login method
+	 */
+	customClearMethod?: (() => void) | undefined;
 }
 
 function getCookieValue(name: string): string | null {
@@ -43,9 +43,11 @@ export const lastLoginMethodClient = (
 	return {
 		id: "last-login-method-client",
 		getActions() {
-		  const getLastUsedLoginMethod = (): string | null => {
-				return config.customGetMethod ? config.customGetMethod() : getCookieValue(cookieName);
-			}
+			const getLastUsedLoginMethod = (): string | null => {
+				return config.customGetMethod
+					? config.customGetMethod()
+					: getCookieValue(cookieName);
+			};
 
 			return {
 				/**
@@ -58,10 +60,10 @@ export const lastLoginMethodClient = (
 				 * This sets the cookie with an expiration date in the past
 				 */
 				clearLastUsedLoginMethod: (): void => {
-				  if (config.customClearMethod) {
-            config.customClearMethod();
-            return;
-          }
+					if (config.customClearMethod) {
+						config.customClearMethod();
+						return;
+					}
 					if (typeof document !== "undefined") {
 						document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
 					}
