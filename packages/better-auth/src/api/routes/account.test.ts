@@ -579,5 +579,5 @@ describe("account", async () => {
 	});
 
 	// We need a way to manipula te the size of the cookie beyond 4KB to test chunking
-  it("should chunk account data cookies when exceeding 4KB");
+	it.todo("should chunk account data cookies when exceeding 4KB");
 });
