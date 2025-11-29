@@ -53,6 +53,11 @@ interface TeamDefaultFields {
 		type: "string";
 		required: true;
 	};
+	slug: {
+		type: "string";
+		required: false;
+		sortable: true;
+	};
 	organizationId: {
 		type: "string";
 		required: true;
@@ -320,6 +325,7 @@ export const invitationSchema = z.object({
 export const teamSchema = z.object({
 	id: z.string().default(generateId),
 	name: z.string().min(1),
+	slug: z.string().optional(),
 	organizationId: z.string(),
 	createdAt: z.date(),
 	updatedAt: z.date().optional(),

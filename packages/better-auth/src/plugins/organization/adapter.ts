@@ -614,6 +614,27 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				...(includeTeamMembers ? { members: teamMember } : {}),
 			} as any;
 		},
+		findTeamBySlug: async (slug: string, organizationId?: string) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const team = await adapter.findOne<InferTeam<O, false>>({
+				model: "team",
+				where: [
+					{
+						field: "slug",
+						value: slug,
+					},
+					...(organizationId
+						? [
+								{
+									field: "organizationId",
+									value: organizationId,
+								},
+							]
+						: []),
+				],
+			});
+			return team;
+		},
 		updateTeam: async (
 			teamId: string,
 			data: {
