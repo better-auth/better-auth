@@ -1,0 +1,64 @@
+---
+title: Telegram
+description: Telegram plugin for Better Auth
+---
+
+The Telegram plugin allows users to authenticate using their Telegram accounts via the [Telegram Login Widget](https://core.telegram.org/widgets/login). This plugin provides a flexible way to configure Telegram login like a social provider even though Telegram does not follow the standard OAuth flow.
+
+## Installation
+
+<Steps>
+    <Step>
+        ### Create your Telegram bot
+        1. Sign in to your Telegram account and search for @BotFather
+        2. Create a new bot
+        3. Note your bot token
+        4. Configure the bot domain by going to `Bot Settings` > `Domain`
+
+        <Callout type="info">
+            - The Telegram Login Widget does not work with localhost bot domain. You need to use a public domain for the bot domain and HTTPS for local testing. You can use [NGROK](https://ngrok.com/) or another similar tool for this.
+        </Callout>
+    </Step>
+    <Step>
+        ### Add the Server Plugin
+
+        Add the Telegram plugin to your auth configuration:
+
+        ```ts title="auth.ts"
+        import { betterAuth } from "better-auth";
+        import { telegram } from "better-auth/plugins";
+
+        export const auth = betterAuth({
+            plugins: [
+                telegram({
+                    botToken: "7592572304:AA...",
+                    mapProfileToUser: (profile: TelegramProfile) => {
+                        return {
+                          firstName: profile.first_name,
+                          lastName: profile.last_name,
+                          email: `telegram-${profile.id}@example.com`,
+                          image: profile.photo_url,
+                        }
+                    }
+                }),
+            ],
+        });
+        ```
+    </Step>
+
+    <Step>
+        ### Add the Client Plugin
+
+        ```ts title="auth-client.ts"
+        import { createAuthClient } from "better-auth/client";
+        import { telegramClient } from "better-auth/client/plugins";
+
+        export const authClient = createAuthClient({
+            plugins: [telegramClient()],
+        });
+        ```
+    </Step>
+
+</Steps>
+
+## Usage
