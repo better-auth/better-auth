@@ -743,6 +743,12 @@ Table: <strong className='underline italic'>Account</strong>
 - Better Auth removes `token_type` and `session_state` fields
 - Better Auth includes `createdAt` and `updatedAt` timestamps
 
+<Callout type="warn">
+**Critical for Credentials Migration:**
+In Auth.js, passwords are often stored directly on the `User` model. In Better Auth, passwords must be stored in the `Account` table.
+If you are migrating users with passwords (including for the Phone Number plugin), you **must** create a record in the `account` table for each user with the `providerId` set specifically to `"credential"`. Without this record, password-based sign-ins will fail.
+</Callout>
+
 Table: <strong className='underline italic'>VerificationToken -> Verification</strong>
 - Better Auth uses `Verification` table instead of `VerificationToken`
 - Better Auth uses a single `id` primary key instead of composite primary key
