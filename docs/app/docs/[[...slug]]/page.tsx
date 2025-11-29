@@ -75,13 +75,13 @@ export default async function Page({
 				<MDX
 					components={{
 						...defaultMdxComponents,
-						CodeBlockTabs: (props) => {
+            CodeBlockTabs: ({ groupId, persist, ...props }) => {
 							return (
 								<CodeBlockTabs
 									{...props}
 									className="p-0 rounded-lg border-0 bg-fd-secondary"
 								>
-									<div {...props}>{props.children}</div>
+									<div {...props} />
 								</CodeBlockTabs>
 							);
 						},
