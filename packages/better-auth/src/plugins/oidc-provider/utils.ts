@@ -13,3 +13,5 @@ export const defaultClientSecretHasher = async (clientSecret: string) => {
 	});
 	return hashed;
 };
+
+export { matchesRedirectURI } from "./utils/redirect-uri";
