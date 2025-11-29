@@ -1,7 +1,7 @@
 "use client";
 
 import { useAtom } from "jotai";
-import { Key } from "lucide-react";
+import { Key, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,9 +18,18 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { socialProviders } from "./social-provider";
 import { optionsAtom } from "./store";
+import { useState } from "react";
 
 export default function SignIn() {
 	const [options] = useAtom(optionsAtom);
+	const [loading, setLoading] = useState(false);
+
+	const simulateRequest = async () => {
+  	setLoading(true);
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    setLoading(false);
+	}
+
 	return (
 		<Card className="z-50 rounded-none max-w-full">
 			<CardHeader>
@@ -89,13 +98,17 @@ export default function SignIn() {
 					)}
 
 					{options.email && (
-						<Button type="submit" className="w-full" onClick={async () => {}}>
-							Login
+						<Button disabled={loading} type="submit" className="w-full" onClick={simulateRequest}>
+  						{loading ? (
+  							<Loader2 size={16} className="animate-spin" />
+  						) : (
+  							"Login"
+  						)}
 						</Button>
 					)}
 
 					{options.passkey && (
-						<Button variant="secondary" className="gap-2">
+						<Button disabled={loading} variant="secondary" className="gap-2">
 							<Key size={16} />
 							Sign-in with Passkey
 						</Button>
@@ -115,6 +128,7 @@ export default function SignIn() {
 								return (
 									<Button
 										key={provider}
+										disabled={loading}
 										variant="outline"
 										className={cn(
 											options.socialProviders.length > 3

@@ -148,7 +148,11 @@ export function SignUp() {
 						type="submit"
 						className="w-full"
 						disabled={loading}
-						onClick={async () => {}}
+						onClick={async () => {
+              setLoading(true);
+						  await new Promise((resolve) => setTimeout(resolve, 1500));
+							setLoading(false)
+						}}
 					>
 						{loading ? (
 							<Loader2 size={16} className="animate-spin" />

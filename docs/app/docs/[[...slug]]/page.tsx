@@ -29,6 +29,8 @@ import { AnimatePresence } from "@/components/ui/fade-in";
 import { source } from "@/lib/source";
 import { absoluteUrl, cn } from "@/lib/utils";
 import { LLMCopyButton, ViewOptions } from "./page.client";
+import type { Metadata } from "next";
+
 export default async function Page({
 	params,
 }: {
@@ -175,7 +177,7 @@ export async function generateMetadata({
 	params,
 }: {
 	params: Promise<{ slug?: string[] }>;
-}) {
+}): Promise<Metadata> {
 	const { slug } = await params;
 	let page = source.getPage(slug);
 	if (page == null) {
