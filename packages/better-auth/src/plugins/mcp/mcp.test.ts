@@ -368,10 +368,11 @@ describe("mcp", async () => {
 		const metadata = await serverClient.$fetch(
 			"/.well-known/oauth-protected-resource",
 		);
+		const origin = new URL(baseURL).origin;
 
 		expect(metadata.data).toMatchObject({
-			resource: baseURL,
-			authorization_servers: [`${baseURL}/api/auth`],
+			resource: origin,
+			authorization_servers: [origin],
 			jwks_uri: `${baseURL}/api/auth/mcp/jwks`,
 			scopes_supported: ["openid", "profile", "email", "offline_access"],
 			bearer_methods_supported: ["header"],
