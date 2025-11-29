@@ -59,7 +59,11 @@ describe("dynamic access control", async (it) => {
 						enabled: true,
 					},
 					schema: {
+						organization: {
+							modelName: "organization",
+						},
 						organizationRole: {
+							modelName: "organizationRole",
 							additionalFields,
 						},
 					},
