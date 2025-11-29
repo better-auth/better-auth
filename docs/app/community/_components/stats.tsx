@@ -57,7 +57,7 @@ export default function Stats({
 										></path>
 									</svg>
 								</div>
-								<span className="text-xl uppercase tracking-tighter font-bold font-mono bg-gradient-to-b dark:from-stone-200 dark:via-stone-400 dark:to-stone-700 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(255,255,255,0.1)] from-stone-800 via-stone-600 to-stone-400">
+								<span className="text-xl uppercase tracking-tighter font-bold font-mono bg-linear-to-b dark:from-stone-200 dark:via-stone-400 dark:to-stone-700 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(255,255,255,0.1)] from-stone-800 via-stone-600 to-stone-400">
 									Discord
 								</span>
 							</div>
@@ -71,7 +71,7 @@ export default function Stats({
 								>
 									<Button
 										variant="outline"
-										className="group duration-500 cursor-pointer text-gray-400 flex items-center gap-2 text-md hover:bg-transparent border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0 border-t-[1px] border-t-input py-7 w-full hover:text-black dark:hover:text-white"
+										className="group duration-500 cursor-pointer text-gray-400 flex items-center gap-2 text-md hover:bg-transparent border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0 border-t-px border-t-input py-7 w-full hover:text-black dark:hover:text-white"
 									>
 										<span className="uppercase font-mono group-hover:text-black duration-300 dark:group-hover:text-white">
 											Join Our Discord
@@ -98,7 +98,7 @@ export default function Stats({
 										/>
 									</svg>
 								</div>
-								<span className="text-xl uppercase tracking-tighter font-bold font-mono bg-gradient-to-b dark:from-stone-200 dark:via-stone-400 dark:to-stone-700 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(255,255,255,0.1)] from-stone-800 via-stone-600 to-stone-400">
+								<span className="text-xl uppercase tracking-tighter font-bold font-mono bg-linear-to-b dark:from-stone-200 dark:via-stone-400 dark:to-stone-700 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(255,255,255,0.1)] from-stone-800 via-stone-600 to-stone-400">
 									Reddit
 								</span>
 							</div>
@@ -111,7 +111,7 @@ export default function Stats({
 								>
 									<Button
 										variant="outline"
-										className="group duration-500 cursor-pointer text-gray-400 flex items-center gap-2 text-md hover:bg-transparent border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0  border-t-[1px] border-t-input py-7 w-full hover:text-black dark:hover:text-white"
+										className="group duration-500 cursor-pointer text-gray-400 flex items-center gap-2 text-md hover:bg-transparent border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0 border-t-px border-t-input py-7 w-full hover:text-black dark:hover:text-white"
 									>
 										<span className="uppercase font-mono group-hover:text-black duration-300 dark:group-hover:text-white">
 											Join Subreddit
@@ -138,7 +138,7 @@ export default function Stats({
 										/>
 									</svg>
 								</div>
-								<span className="text-xl uppercase tracking-tighter font-bold font-mono bg-gradient-to-b dark:from-stone-200 dark:via-stone-400 dark:to-stone-700 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(255,255,255,0.1)] from-stone-800 via-stone-600 to-stone-400">
+								<span className="text-xl uppercase tracking-tighter font-bold font-mono bg-linear-to-b dark:from-stone-200 dark:via-stone-400 dark:to-stone-700 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(255,255,255,0.1)] from-stone-800 via-stone-600 to-stone-400">
 									Twitter
 								</span>
 							</div>
@@ -151,7 +151,7 @@ export default function Stats({
 								>
 									<Button
 										variant="outline"
-										className="group duration-500 cursor-pointer text-gray-400 flex items-center gap-2 text-md hover:bg-transparent border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0  border-t-[1px] border-t-input py-7 w-full hover:text-black dark:hover:text-white"
+										className="group duration-500 cursor-pointer text-gray-400 flex items-center gap-2 text-md hover:bg-transparent border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0 border-t-px border-t-input py-7 w-full hover:text-black dark:hover:text-white"
 									>
 										<span className="uppercase font-mono group-hover:text-black duration-300 dark:group-hover:text-white">
 											Follow on 𝕏
@@ -168,7 +168,7 @@ export default function Stats({
 					<div className="flex md:flex-row flex-col w-full dark:[box-shadow:0_-20px_80px_-20px_#dfbf9f1f_inset]">
 						<div className="w-full text-center border-r pt-5">
 							<div className="relative p-3 ">
-								<span className="text-[70px] tracking-tighter font-bold font-mono bg-gradient-to-b dark:from-stone-200 dark:via-stone-400 dark:to-stone-700 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(255,255,255,0.1)] from-stone-800 via-stone-600 to-stone-400">
+								<span className="text-[70px] tracking-tighter font-bold font-mono bg-linear-to-b dark:from-stone-200 dark:via-stone-400 dark:to-stone-700 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(255,255,255,0.1)] from-stone-800 via-stone-600 to-stone-400">
 									{kFormatter(npmDownloads)}
 								</span>
 							</div>
@@ -181,7 +181,7 @@ export default function Stats({
 								>
 									<Button
 										variant="outline"
-										className="group duration-500 cursor-pointer text-gray-400 flex items-center gap-2 text-md hover:bg-transparent  border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0 border-t-[1px] border-t-input py-7 w-full hover:text-black dark:hover:text-white"
+										className="group duration-500 cursor-pointer text-gray-400 flex items-center gap-2 text-md hover:bg-transparent  border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0 border-t-px border-t-input py-7 w-full hover:text-black dark:hover:text-white"
 									>
 										<svg
 											xmlns="http://www.w3.org/2000/svg"
@@ -210,7 +210,7 @@ export default function Stats({
 
 						<div className="w-full text-center pt-5">
 							<div className="relative p-3">
-								<span className="text-[70px] tracking-tighter font-bold font-mono bg-gradient-to-b dark:from-stone-200 dark:via-stone-400 dark:to-stone-700 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(255,255,255,0.1)] from-stone-800 via-stone-600 to-stone-400">
+								<span className="text-[70px] tracking-tighter font-bold font-mono bg-linear-to-b dark:from-stone-200 dark:via-stone-400 dark:to-stone-700 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(255,255,255,0.1)] from-stone-800 via-stone-600 to-stone-400">
 									{kFormatter(githubStars)}
 								</span>
 							</div>
@@ -223,7 +223,7 @@ export default function Stats({
 								>
 									<Button
 										variant="outline"
-										className="group duration-500 cursor-pointer text-gray-400 flex items-center gap-2 text-md hover:bg-transparent  border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0 border-t-[1px] border-t-input py-7 w-full hover:text-black dark:hover:text-white"
+										className="group duration-500 cursor-pointer text-gray-400 flex items-center gap-2 text-md hover:bg-transparent  border-l-input/50 border-r-input/50 md:border-r-0 md:border-l-0 border-t-px border-t-input py-7 w-full hover:text-black dark:hover:text-white"
 									>
 										<svg
 											xmlns="http://www.w3.org/2000/svg"

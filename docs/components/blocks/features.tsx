@@ -7,7 +7,7 @@ export function Features() {
 				{grid.map((feature, i) => (
 					<div
 						key={feature.title}
-						className="relative bg-gradient-to-b dark:from-neutral-900 from-neutral-100 dark:to-neutral-950 to-white px-6 py-2 overflow-hidden"
+						className="relative bg-linear-to-b dark:from-neutral-900 from-neutral-100 dark:to-neutral-950 to-white px-6 py-2 overflow-hidden"
 					>
 						<Grid size={i * 5 + 10} />
 						<p className="text-base font-bold text-neutral-800 dark:text-white relative z-0">

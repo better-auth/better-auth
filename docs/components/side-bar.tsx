@@ -39,7 +39,7 @@ export default function ArticleLayout() {
 			<aside
 				className={cn(
 					"md:transition-all",
-					"border-r border-lines top-[55px] md:flex hidden md:w-[268px] lg:w-[286px] overflow-y-auto absolute h-[calc(100dvh-55px)] pb-2 flex-col justify-between w-[var(--fd-sidebar-width)]",
+					"border-r border-lines top-[55px] md:flex hidden md:w-[268px] lg:w-[286px] overflow-y-auto absolute h-[calc(100dvh-55px)] pb-2 flex-col justify-between w-(--fd-sidebar-width)",
 				)}
 			>
 				<div>
@@ -97,17 +97,17 @@ export default function ArticleLayout() {
 															<Suspense fallback={<>Loading...</>}>
 																{listItem.group ? (
 																	<div className="flex flex-row items-center gap-2 mx-5 my-1 ">
-																		<p className="text-sm text-transparent bg-gradient-to-tr dark:from-gray-100 dark:to-stone-200 bg-clip-text from-gray-900 to-stone-900">
+																		<p className="text-sm text-transparent bg-linear-to-tr dark:from-gray-100 dark:to-stone-200 bg-clip-text from-gray-900 to-stone-900">
 																			{listItem.title}
 																		</p>
-																		<div className="flex-grow h-px bg-gradient-to-r from-stone-800/90 to-stone-800/60" />
+																		<div className="grow h-px bg-linear-to-r from-stone-800/90 to-stone-800/60" />
 																	</div>
 																) : (
 																	<AsideLink
 																		href={listItem.href}
 																		startWith="/docs"
 																		title={listItem.title}
-																		className="break-words text-nowrap w-[--fd-sidebar-width] [&>div>div]:hover:!bg-fd-muted"
+																		className="wrap-break-words text-nowrap w-[--fd-sidebar-width] [&>div>div]:hover:bg-fd-muted!"
 																		activeClassName="[&>div>div]:!bg-fd-muted"
 																	>
 																		<div className="min-w-4">
@@ -139,8 +139,8 @@ function NewBadge({ isSelected }: { isSelected?: boolean }) {
 		<div className="flex items-center justify-end w-full">
 			<Badge
 				className={cn(
-					" pointer-events-none !no-underline border-dashed !decoration-transparent",
-					isSelected && "!border-solid",
+					" pointer-events-none no-underline! border-dashed decoration-transparent!",
+					isSelected && "border-solid!",
 				)}
 				variant={isSelected ? "default" : "outline"}
 			>

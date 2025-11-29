@@ -19,7 +19,7 @@ export default function PromoCard() {
 	return (
 		<TooltipProvider>
 			<Card
-				className="w-full overflow-hidden bg-gradient-to-br from-purple-500 to-indigo-600 text-white"
+				className="w-full overflow-hidden bg-linear-to-br from-purple-500 to-indigo-600 text-white"
 				onMouseEnter={() => setIsHovered(true)}
 				onMouseLeave={() => setIsHovered(false)}
 			>
@@ -50,7 +50,7 @@ export default function PromoCard() {
 				<CardFooter className="p-6 pt-4">
 					<Button
 						className={`w-full bg-white text-purple-600 hover:bg-white/90 transition-all duration-300 ${
-							isHovered ? "translate-y-[-2px] shadow-lg" : ""
+							isHovered ? "-translate-y-0.5 shadow-lg" : ""
 						}`}
 					>
 						<span className="mr-2">Upgrade Now</span>

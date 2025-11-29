@@ -61,7 +61,7 @@ export const Callout = forwardRef<HTMLDivElement, CalloutProps>(
 						),
 					}[type]}
 				<div className="min-w-0 flex flex-col gap-2 flex-1">
-					{title ? <p className="font-medium !my-0">{title}</p> : null}
+					{title ? <p className="font-medium my-0!">{title}</p> : null}
 					<div className="text-fd-muted-foreground prose-no-margin empty:hidden">
 						{children}
 					</div>

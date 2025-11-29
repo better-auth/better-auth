@@ -118,7 +118,7 @@ export default function SignIn() {
 										variant="outline"
 										className={cn(
 											options.socialProviders.length > 3
-												? "flex-grow"
+												? "grow"
 												: "w-full gap-2",
 										)}
 									>

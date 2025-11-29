@@ -15,14 +15,14 @@ import { Spotlight } from "./spotlight";
 
 export default function Hero() {
 	return (
-		<section className="relative w-full flex md:items-center md:justify-center bg-white/96 dark:bg-black/[0.96] antialiased min-h-[40rem] md:min-h-[50rem] lg:min-h-[40rem]">
+		<section className="relative w-full flex md:items-center md:justify-center bg-white/96 dark:bg-black/96 antialiased min-h-160 md:min-h-200 lg:min-h-160">
 			{/* Spotlight Effect */}
 			<Spotlight />
 
 			{/* Background Grid */}
 			<div className="absolute inset-0 left-5 right-5 lg:left-16 lg:right-14 xl:left-16 xl:right-14">
-				<div className="absolute inset-0 bg-grid text-muted/50 dark:text-white/[0.02]" />
-				<div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-background" />
+				<div className="absolute inset-0 bg-grid text-muted/50 dark:text-white/2" />
+				<div className="absolute inset-0 bg-linear-to-b from-transparent via-transparent to-background" />
 			</div>
 
 			{/* Content */}
@@ -72,7 +72,7 @@ export default function Hero() {
 											npm i{" "}
 											<span className="relative dark:text-fuchsia-300 text-fuchsia-800">
 												better-auth
-												<span className="absolute h-2 bg-gradient-to-tr from-white via-stone-200 to-stone-300 blur-3xl w-full top-0 left-2"></span>
+												<span className="absolute h-2 bg-linear-to-tr from-white via-stone-200 to-stone-300 blur-3xl w-full top-0 left-2"></span>
 											</span>
 										</p>
 									</div>
@@ -139,8 +139,8 @@ export default function Hero() {
 
 					<div className="relative md:block lg:static xl:pl-10">
 						<div className="relative">
-							<div className="from-sky-300 via-sky-300/70 to-blue-300 absolute inset-0 rounded-none bg-gradient-to-tr opacity-5 blur-lg" />
-							<div className="from-stone-300 via-stone-300/70 to-blue-300 absolute inset-0 rounded-none bg-gradient-to-tr opacity-5" />
+							<div className="from-sky-300 via-sky-300/70 to-blue-300 absolute inset-0 rounded-none bg-linear-to-tr opacity-5 blur-lg" />
+							<div className="from-stone-300 via-stone-300/70 to-blue-300 absolute inset-0 rounded-none bg-linear-to-tr opacity-5" />
 							<CodePreview />
 						</div>
 					</div>
@@ -218,7 +218,7 @@ function CodePreview() {
 			<MotionConfig transition={{ duration: 0.5, type: "spring", bounce: 0 }}>
 				<motion.div
 					animate={{ height: height > 0 ? height : undefined }}
-					className="from-stone-100 to-stone-200 dark:to-black/90 dark:via-black dark:from-stone-950/90 relative overflow-hidden rounded-sm bg-gradient-to-tr ring-1 ring-white/10 backdrop-blur-lg"
+					className="from-stone-100 to-stone-200 dark:to-black/90 dark:via-black dark:from-stone-950/90 relative overflow-hidden rounded-sm bg-linear-to-tr ring-1 ring-white/10 backdrop-blur-lg"
 				>
 					<div ref={ref}>
 						<div className="absolute -top-px left-0 right-0 h-px" />

@@ -250,16 +250,16 @@ export function Builder() {
 			<DialogTrigger asChild>
 				<button className="bg-stone-950 no-underline group cursor-pointer relative  p-px text-xs font-semibold leading-6  text-white md:inline-block hidden">
 					<span className="absolute inset-0 overflow-hidden rounded-sm">
-						<span className="absolute inset-0 rounded-sm bg-[image:radial-gradient(75%_100%_at_50%_0%,rgba(56,189,248,0.6)_0%,rgba(56,189,248,0)_75%)] opacity-0 transition-opacity duration-500 group-hover:opacity-100"></span>
+						<span className="absolute inset-0 rounded-sm bg-[radial-gradient(75%_100%_at_50%_0%,rgba(56,189,248,0.6)_0%,rgba(56,189,248,0)_75%)] opacity-0 transition-opacity duration-500 group-hover:opacity-100"></span>
 					</span>
 					<div className="relative flex space-x-2 items-center z-10 rounded-none bg-zinc-950 py-2 px-4 ring-1 ring-white/10 ">
 						<PlusIcon size={14} />
 						<span>Create Sign in Box</span>
 					</div>
-					<span className="absolute -bottom-0 left-[1.125rem] h-px w-[calc(100%-2.25rem)] bg-gradient-to-r from-emerald-400/0 via-stone-800/90 to-emerald-400/0 transition-opacity duration-500 group-hover:opacity-40"></span>
+					<span className="absolute bottom-0 left-4.5 h-px w-[calc(100%-2.25rem)] bg-linear-to-r from-emerald-400/0 via-stone-800/90 to-emerald-400/0 transition-opacity duration-500 group-hover:opacity-40"></span>
 				</button>
 			</DialogTrigger>
-			<DialogContent className="max-w-7xl h-5/6 overflow-clip !rounded-none">
+			<DialogContent className="max-w-7xl h-5/6 overflow-clip rounded-none!">
 				<DialogHeader>
 					<DialogTitle>Create Sign in Box</DialogTitle>
 					<DialogDescription>
@@ -291,10 +291,10 @@ export function Builder() {
 							)}
 						</div>
 					</div>
-					<ScrollArea className="w-[45%] flex-grow no-scrollbar">
+					<ScrollArea className="w-[45%] grow no-scrollbar">
 						<div className="h-[580px]">
 							{currentStep === 0 ? (
-								<Card className="rounded-none flex-grow h-full">
+								<Card className="rounded-none grow h-full">
 									<CardHeader className="flex flex-row justify-between">
 										<CardTitle>Configuration</CardTitle>
 										<div
@@ -531,17 +531,17 @@ export function Builder() {
 											}}
 										>
 											<span className="absolute inset-0 overflow-hidden rounded-sm">
-												<span className="absolute inset-0 rounded-sm bg-[image:radial-gradient(75%_100%_at_50%_0%,rgba(56,189,248,0.6)_0%,rgba(56,189,248,0)_75%)] opacity-0 transition-opacity duration-500 group-hover:opacity-100"></span>
+												<span className="absolute inset-0 rounded-sm bg-[radial-gradient(75%_100%_at_50%_0%,rgba(56,189,248,0.6)_0%,rgba(56,189,248,0)_75%)] opacity-0 transition-opacity duration-500 group-hover:opacity-100"></span>
 											</span>
 											<div className="relative flex space-x-2 items-center z-10 rounded-none bg-zinc-950 py-2 px-4 ring-1 ring-white/10 justify-center">
 												<span>Continue</span>
 											</div>
-											<span className="absolute -bottom-0 left-[1.125rem] h-px w-[calc(100%-2.25rem)] bg-gradient-to-r from-emerald-400/0 via-stone-800/90 to-emerald-400/0 transition-opacity duration-500 group-hover:opacity-40"></span>
+											<span className="absolute bottom-0 left-4.5 h-px w-[calc(100%-2.25rem)] bg-linear-to-r from-emerald-400/0 via-stone-800/90 to-emerald-400/0 transition-opacity duration-500 group-hover:opacity-40"></span>
 										</button>
 									</CardFooter>
 								</Card>
 							) : currentStep === 1 ? (
-								<Card className="rounded-none flex-grow  h-full">
+								<Card className="rounded-none grow  h-full">
 									<CardHeader>
 										<CardTitle>Choose Framework</CardTitle>
 										<p
@@ -562,7 +562,7 @@ export function Builder() {
 													}
 												}}
 												className={cn(
-													"flex flex-col items-center gap-4 border p-6 rounded-md w-5/12 flex-grow h-44 relative",
+													"flex flex-col items-center gap-4 border p-6 rounded-md w-5/12 grow h-44 relative",
 													fm.title !== "Next.js"
 														? "opacity-55"
 														: "hover:ring-1 transition-all ring-border hover:bg-background duration-200 ease-in-out cursor-pointer",

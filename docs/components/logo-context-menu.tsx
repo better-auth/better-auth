@@ -148,7 +148,7 @@ export default function LogoContextMenu({
 								</div>
 								<span>Copy Logo as SVG </span>
 							</button>
-							<hr className="border-border/[60%]" />
+							<hr className="border-border/60" />
 							<button
 								onClick={(e) =>
 									copySvgToClipboard(
@@ -168,7 +168,7 @@ export default function LogoContextMenu({
 								<span>Copy Logo as Wordmark </span>
 							</button>
 
-							<hr className="border-border/[60%]" />
+							<hr className="border-border/60" />
 							<button
 								onClick={(e) =>
 									downloadPng(

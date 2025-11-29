@@ -27,7 +27,6 @@ export function SignUp() {
 	const [image, setImage] = useState<File | null>(null);
 	const [imagePreview, setImagePreview] = useState<string | null>(null);
 	const [options] = useAtom(optionsAtom);
-	const router = useRouter();
 
 	const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];
@@ -171,15 +170,6 @@ export function SignUp() {
 			)}
 		</Card>
 	);
-}
-
-async function convertImageToBase64(file: File): Promise<string> {
-	return new Promise((resolve, reject) => {
-		const reader = new FileReader();
-		reader.onloadend = () => resolve(reader.result as string);
-		reader.onerror = reject;
-		reader.readAsDataURL(file);
-	});
 }
 
 export const signUpString = (options: any) => `"use client";

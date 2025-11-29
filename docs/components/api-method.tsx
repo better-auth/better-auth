@@ -399,7 +399,7 @@ function TypeTable({
 								) : null}
 							</TableCell>
 							<TableCell className="max-w-[500px] overflow-hidden">
-								<div className="w-full break-words h-fit text-wrap">
+								<div className="w-full wrap-break-words h-fit text-wrap">
 									{tsxifyBackticks(prop.description ?? "")}
 								</div>
 							</TableCell>
@@ -841,7 +841,7 @@ function createServerBody({
 
 function Note({ children }: { children: ReactNode }) {
 	return (
-		<div className="flex relative flex-col gap-2 p-3 mb-2 w-full break-words rounded-md border text-md text-wrap border-border bg-fd-secondary/50">
+		<div className="flex relative flex-col gap-2 p-3 mb-2 w-full wrap-break-words rounded-md border text-md text-wrap border-border bg-fd-secondary/50">
 			<span className="-mb-1 w-full text-xs select-none text-muted-foreground">
 				Notes
 			</span>

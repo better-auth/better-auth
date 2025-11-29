@@ -196,7 +196,7 @@ export function StarField({ className }: { className?: string }) {
 			fill="white"
 			aria-hidden="true"
 			className={clsx(
-				"pointer-events-none absolute w-[55.0625rem] max-w-[100vw] origin-top-right rotate-[30deg] overflow-visible opacity-70",
+				"pointer-events-none absolute w-220.25 max-w-[100vw] origin-top-right rotate-30 overflow-visible opacity-70",
 				className,
 			)}
 		>

@@ -304,7 +304,7 @@ export function AIChatModal({ isOpen, onClose }: AIChatModalProps) {
 									)}
 								>
 									{message.role === "assistant" && (
-										<div className="flex-shrink-0">
+										<div className="shrink-0">
 											<div className="w-8 h-8 rounded-full bg-transparent border border-input/70 border-dashed flex items-center justify-center">
 												<Bot className="h-4 w-4 text-primary" />
 											</div>
@@ -343,7 +343,7 @@ export function AIChatModal({ isOpen, onClose }: AIChatModalProps) {
 										)}
 									</div>
 									{message.role === "user" && (
-										<div className="flex-shrink-0">
+										<div className="shrink-0">
 											<div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
 												<User className="h-4 w-4" />
 											</div>
@@ -360,8 +360,8 @@ export function AIChatModal({ isOpen, onClose }: AIChatModalProps) {
 							<div
 								className={cn(
 									"relative flex flex-col border-input rounded-lg transition-all duration-200 w-full text-left",
-									"ring-1 ring-border/20 bg-muted/30 border-input border-1 backdrop-blur-sm",
-									"focus-within:ring-primary/30 focus-within:bg-muted/[35%]",
+									"ring-1 ring-border/20 bg-muted/30 border-input border backdrop-blur-sm",
+									"focus-within:ring-primary/30 focus-within:bg-muted/35",
 								)}
 							>
 								<div className="overflow-y-auto max-h-[200px]">
