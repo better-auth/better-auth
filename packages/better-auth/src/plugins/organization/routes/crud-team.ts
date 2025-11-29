@@ -811,6 +811,14 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 						description:
 							"The team whose members we should return. If this is not provided the members of the current active team get returned.",
 					}),
+					includeUser: z
+						.string()
+						.transform((val) => val === "true")
+						.optional()
+						.meta({
+							description:
+								"Whether to include user details (name, email, image) with team members. Defaults to false.",
+						}),
 				}),
 			),
 			metadata: {
@@ -825,7 +833,8 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 										type: "array",
 										items: {
 											type: "object",
-											description: "The team member",
+											description:
+												"The team member, optionally with user details if includeUser=true",
 											properties: {
 												id: {
 													type: "string",
@@ -845,6 +854,30 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 													format: "date-time",
 													description:
 														"Timestamp when the team member was created",
+												},
+												user: {
+													type: "object",
+													description:
+														"The user details of the team member (only present if includeUser=true)",
+													properties: {
+														id: {
+															type: "string",
+															description: "User ID",
+														},
+														name: {
+															type: "string",
+															description: "User name",
+														},
+														email: {
+															type: "string",
+															description: "User email",
+														},
+														image: {
+															type: "string",
+															description: "User image URL",
+														},
+													},
+													required: ["id", "name", "email"],
 												},
 											},
 											required: ["id", "userId", "teamId", "createdAt"],
@@ -881,6 +914,7 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 			}
 			const members = await adapter.listTeamMembers({
 				teamId,
+				includeUser: ctx.query?.includeUser,
 			});
 			return ctx.json(members);
 		},
