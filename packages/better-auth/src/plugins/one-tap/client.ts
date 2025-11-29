@@ -68,9 +68,10 @@ export interface GoogleOneTapOptions {
 				 */
 				maxAttempts?: number;
 				/**
-				 * Enable experimental FedCM (Federated Credential Management) support.
+				 * Whether to support FedCM (Federated Credential Management) support.
 				 *
 				 * @see {@link https://developer.chrome.com/docs/identity/fedcm/overview}
+				 * @default true
 				 */
 				fedCM?: boolean | undefined;
 		  }
