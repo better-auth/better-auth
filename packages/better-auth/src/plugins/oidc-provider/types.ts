@@ -3,13 +3,14 @@ import type { OAuthApplication, schema } from "./schema";
 
 export interface OIDCOptions {
 	/**
-	 * The amount of time in seconds that the access token is valid for.
+	 * The amount of time in seconds that the access token is valid for. By default it is 3600 seconds (1 hour) - Recommended by the OIDC spec
 	 *
-	 * @default 3600 (1 hour) - Recommended by the OIDC spec
+	 * @default 3600
 	 */
 	accessTokenExpiresIn?: number | undefined;
 	/**
 	 * Allow dynamic client registration.
+	 *
 	 */
 	allowDynamicClientRegistration?: boolean | undefined;
 	/**
@@ -17,25 +18,22 @@ export interface OIDCOptions {
 	 */
 	metadata?: Partial<OIDCMetadata> | undefined;
 	/**
-	 * The amount of time in seconds that the refresh token is valid for.
+	 * The amount of time in seconds that the refresh token is valid for. By default it is 604800 seconds (7 days) - Recommended by the OIDC spec
 	 *
-	 * @default 604800 (7 days) - Recommended by the OIDC spec
+	 * @default 604800
 	 */
 	refreshTokenExpiresIn?: number | undefined;
 	/**
-	 * The amount of time in seconds that the authorization code is valid for.
+	 * The amount of time in seconds that the authorization code is valid for. By default it is 600 seconds (10 minutes) - Recommended by the OIDC spec
 	 *
-	 * @default 600 (10 minutes) - Recommended by the OIDC spec
+	 * @default 600
 	 */
 	codeExpiresIn?: number | undefined;
 	/**
 	 * The scopes that the client is allowed to request.
 	 *
 	 * @see https://openid.net/specs/openid-connect-core-1_0.html#ScopeClaims
-	 * @default
-	 * ```ts
-	 * ["openid", "profile", "email", "offline_access"]
-	 * ```
+	 * @default ["openid", "profile", "email", "offline_access"]
 	 */
 	scopes?: string[] | undefined;
 	/**
@@ -62,10 +60,7 @@ export interface OIDCOptions {
 	 * to complete the authorization. This will return the client to the `redirect_uri`
 	 * with the authorization code.
 	 *
-	 * @example
-	 * ```ts
-	 * consentPage: "/oauth/authorize"
-	 * ```
+	 * @example "/oauth/authorize"
 	 */
 	consentPage?: string | undefined;
 	/**
@@ -86,6 +81,7 @@ export interface OIDCOptions {
 	/**
 	 * The URL to the login page. This is used if the client requests the `login`
 	 * prompt.
+	 *
 	 */
 	loginPage: string;
 	/**

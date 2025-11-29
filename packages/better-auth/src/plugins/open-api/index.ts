@@ -67,7 +67,7 @@ export interface OpenAPIOptions {
 	 * keep in mind that this path will be appended to the base URL `/api/auth` path
 	 * by default, so if you set this to `/reference`, the full path will be `/api/auth/reference`
 	 *
-	 * @default "/reference"
+	 * @default /reference
 	 */
 	path?: LiteralString | undefined;
 	/**
@@ -79,7 +79,7 @@ export interface OpenAPIOptions {
 	/**
 	 * Theme of the OpenAPI reference page.
 	 *
-	 * @default "default"
+	 * @default default
 	 */
 	theme?: ScalarTheme | undefined;
 	/**

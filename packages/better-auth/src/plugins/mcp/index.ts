@@ -31,8 +31,17 @@ import { parsePrompt } from "../oidc-provider/utils/prompt";
 import { authorizeMCPOAuth } from "./authorize";
 
 interface MCPOptions {
+	/**
+	 * The login page URL
+	 */
 	loginPage: string;
+	/**
+	 * The resource that should be returned by the protected resource metadata endpoint
+	 */
 	resource?: string | undefined;
+	/**
+	 * The OIDC configuration options
+	 */
 	oidcConfig?: OIDCOptions | undefined;
 }
 

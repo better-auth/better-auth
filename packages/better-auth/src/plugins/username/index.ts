@@ -35,6 +35,7 @@ export type UsernameOptions = {
 	 * A function to validate the username
 	 *
 	 * By default, the username should only contain alphanumeric characters and underscores
+	 *
 	 */
 	usernameValidator?:
 		| ((username: string) => boolean | Promise<boolean>)
@@ -63,8 +64,6 @@ export type UsernameOptions = {
 		| undefined;
 	/**
 	 * The order of validation
-	 *
-	 * @default { username: "pre-normalization", displayUsername: "pre-normalization" }
 	 */
 	validationOrder?:
 		| {

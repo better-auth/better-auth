@@ -31,17 +31,29 @@ export const clientSideHasPermission = (input: HasPermissionBaseInput) => {
 };
 
 interface OrganizationClientOptions {
+	/**
+	 * Access control for the organization plugin. Inferred from the server plugin.
+	 */
 	ac?: AccessControl | undefined;
+	/**
+	 * Custom roles for the organization plugin. Inferred from the server plugin.
+	 */
 	roles?:
 		| {
 				[key in string]: Role;
 		  }
 		| undefined;
+	/**
+	 * Custom teams for the organization plugin. Inferred from the server plugin.
+	 */
 	teams?:
 		| {
 				enabled: boolean;
 		  }
 		| undefined;
+	/**
+	 * Custom schema for the organization plugin. Inferred from the server plugin.
+	 */
 	schema?:
 		| {
 				organization?: {
@@ -71,6 +83,9 @@ interface OrganizationClientOptions {
 				};
 		  }
 		| undefined;
+	/**
+	 * Custom dynamic access control for the organization plugin. Inferred from the server plugin.
+	 */
 	dynamicAccessControl?:
 		| {
 				enabled: boolean;

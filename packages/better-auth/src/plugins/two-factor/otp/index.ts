@@ -19,13 +19,11 @@ export interface OTPOptions {
 	/**
 	 * How long the opt will be valid for in
 	 * minutes
-	 *
-	 * @default "3 mins"
+	 * @default 3
 	 */
 	period?: number | undefined;
 	/**
 	 * Number of digits for the OTP code
-	 *
 	 * @default 6
 	 */
 	digits?: number | undefined;
@@ -60,6 +58,10 @@ export interface OTPOptions {
 	 * @default 5
 	 */
 	allowedAttempts?: number | undefined;
+	/**
+	 * How do you want to store the OTP code?
+	 * @default "plain"
+	 */
 	storeOTP?:
 		| (
 				| "plain"

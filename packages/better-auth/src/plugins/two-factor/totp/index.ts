@@ -17,12 +17,11 @@ import { verifyTwoFactor } from "../verify-two-factor";
 
 export type TOTPOptions = {
 	/**
-	 * Issuer
+	 * The issuer is the name of your application. It's used to generate TOTP codes. It'll be displayed in the authenticator apps.
 	 */
 	issuer?: string | undefined;
 	/**
 	 * How many digits the otp to be
-	 *
 	 * @default 6
 	 */
 	digits?: (6 | 8) | undefined;
@@ -37,6 +36,7 @@ export type TOTPOptions = {
 	backupCodes?: BackupCodeOptions | undefined;
 	/**
 	 * Disable totp
+	 * @default false
 	 */
 	disable?: boolean | undefined;
 };

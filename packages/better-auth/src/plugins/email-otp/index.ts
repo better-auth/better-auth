@@ -27,6 +27,7 @@ export interface EmailOTPOptions {
 	 *
 	 * It is recommended to not await the email sending to avoid timing attacks.
 	 * On serverless platforms, use `waitUntil` or similar to ensure the email is sent.
+	 *
 	 */
 	sendVerificationOTP: (
 		data: {
@@ -43,9 +44,9 @@ export interface EmailOTPOptions {
 	 */
 	otpLength?: number | undefined;
 	/**
-	 * Expiry time of the OTP in seconds
+	 * Expiry time of the OTP in seconds default is 5 minutes
 	 *
-	 * @default 300 (5 minutes)
+	 * @default 300
 	 */
 	expiresIn?: number | undefined;
 	/**
@@ -61,18 +62,19 @@ export interface EmailOTPOptions {
 	/**
 	 * Send email verification on sign-up
 	 *
-	 * @Default false
+	 * @default false
 	 */
 	sendVerificationOnSignUp?: boolean | undefined;
 	/**
 	 * A boolean value that determines whether to prevent
 	 * automatic sign-up when the user is not registered.
 	 *
-	 * @Default false
+	 * @default false
 	 */
 	disableSignUp?: boolean | undefined;
 	/**
 	 * Allowed attempts for the OTP code
+	 *
 	 * @default 3
 	 */
 	allowedAttempts?: number | undefined;
