@@ -11,8 +11,8 @@
   },
   "dependencies": {
     "better-auth": "workspace:*",
-    "better-sqlite3": "^12.2.0",
-    "kysely": "^0.28.5",
+    "better-sqlite3": "^12.5.0",
+    "kysely": "^0.28.8",
     "kysely-postgres-js": "^3.0.0",
     "postgres": "^3.4.7"
   }
