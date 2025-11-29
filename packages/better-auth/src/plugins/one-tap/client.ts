@@ -117,7 +117,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							return;
 						}
 						if (
-							options.promptOptions?.fedCM !== true ||
+							options.promptOptions?.fedCM === false ||
 							!isFedCMSupported()
 						) {
 							return;
@@ -275,10 +275,10 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 
 					try {
 						const client =
-							options.promptOptions?.fedCM === true &&
-							isFedCMSupported()
-								? "fedCM"
-								: "oneTap";
+							options.promptOptions?.fedCM === false ||
+							!isFedCMSupported()
+								? "oneTap"
+								: "fedCM";
 						if (client === "oneTap") {
 							await loadGoogleScript();
 						}
