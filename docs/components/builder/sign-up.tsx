@@ -3,7 +3,6 @@
 import { useAtom } from "jotai";
 import { Loader2, X } from "lucide-react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { optionsAtom } from "@/components/builder/store";
 import { Button } from "@/components/ui/button";

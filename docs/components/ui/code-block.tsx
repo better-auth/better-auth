@@ -303,8 +303,7 @@ export const CodeBlockOld = forwardRef<HTMLElement, CodeBlockProps>(
 				{...props}
 				className={cn(
 					"not-prose group fd-codeblock relative my-6 overflow-hidden rounded-lg border bg-fd-secondary/50 text-sm",
-					keepBackground &&
-						"bg-(--shiki-light-bg) dark:bg-(--shiki-dark-bg)",
+					keepBackground && "bg-(--shiki-light-bg) dark:bg-(--shiki-dark-bg)",
 					props.className,
 				)}
 			>
