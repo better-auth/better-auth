@@ -492,4 +492,92 @@ describe("account", async () => {
 		expect(accessTokenRes.data).toBeDefined();
 		expect(accessTokenRes.data?.accessToken).toBe("test");
 	});
+
+	it("should NOT chunk account data cookies when exceeding 4KB", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
+			account: {
+				storeAccountCookie: true,
+			},
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+		});
+
+		const headers = new Headers();
+		email = "oauth-test@test.com";
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+
+		const state =
+			signInRes.data && "url" in signInRes.data && signInRes.data.url
+				? new URL(signInRes.data.url).searchParams.get("state") || ""
+				: "";
+
+		// Complete OAuth callback
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			headers,
+			method: "GET",
+			async onError(context) {
+				const setCookie = context.response.headers.get("set-cookie");
+				expect(setCookie).toBeDefined();
+
+				const parsed = parseSetCookieHeader(setCookie!);
+				let hasChunks = false;
+				let hasSingleAccountData = false;
+
+				parsed.forEach((_value, name) => {
+					if (
+						name.includes("account_data.0") ||
+						name.includes("account_data.1")
+					) {
+						hasChunks = true;
+					}
+					if (name.endsWith("account_data")) {
+						hasSingleAccountData = true;
+					}
+				});
+
+				expect(hasChunks).toBe(false);
+				expect(hasSingleAccountData).toBe(true);
+
+				parsed.forEach((value, name) => {
+					headers.append("cookie", `${name}=${value.value}`);
+				});
+			},
+		});
+		const accessTokenRes = await client.getAccessToken(
+			{
+				providerId: "google",
+			},
+			{
+				headers,
+			},
+		);
+
+		expect(accessTokenRes.data).toBeDefined();
+		expect(accessTokenRes.data?.accessToken).toBe("test");
+	});
+
+	// We need a way to manipula te the size of the cookie beyond 4KB to test chunking
+  it("should chunk account data cookies when exceeding 4KB");
 });

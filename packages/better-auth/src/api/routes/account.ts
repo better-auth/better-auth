@@ -5,7 +5,10 @@ import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 import { APIError } from "better-call";
 import * as z from "zod";
-import { setAccountCookie, getAccountCookie } from "../../cookies/session-store";
+import {
+	getAccountCookie,
+	setAccountCookie,
+} from "../../cookies/session-store";
 import { generateState } from "../../oauth2/state";
 import { decryptOAuthToken, setTokenUtil } from "../../oauth2/utils";
 import {
@@ -13,7 +16,6 @@ import {
 	getSessionFromCtx,
 	sessionMiddleware,
 } from "./session";
-import type { GenericEndpointContext } from "@better-auth/core";
 
 export const listUserAccounts = createAuthEndpoint(
 	"/list-accounts",
@@ -517,7 +519,7 @@ export const getAccessToken = createAuthEndpoint(
 				message: `Provider ${providerId} is not supported.`,
 			});
 		}
-    const accountData = await getAccountCookie(ctx);
+		const accountData = await getAccountCookie(ctx);
 		let account: Account | undefined = undefined;
 		if (
 			accountData &&
@@ -696,7 +698,7 @@ export const refreshToken = createAuthEndpoint(
 
 		// Try to read refresh token from cookie first
 		let account: Account | undefined = undefined;
-    const accountData = await getAccountCookie(ctx);
+		const accountData = await getAccountCookie(ctx);
 		if (
 			accountData &&
 			(!providerId || providerId === accountData?.providerId)
@@ -858,12 +860,12 @@ export const accountInfo = createAuthEndpoint(
 		const providedAccountId = ctx.query?.accountId;
 		let account: Account | undefined = undefined;
 		if (!providedAccountId) {
-      if (ctx.context.options.account?.storeAccountCookie) {
-        const accountData = await getAccountCookie(ctx);
-        if (accountData) {
-          account = accountData;
-        }
-      }
+			if (ctx.context.options.account?.storeAccountCookie) {
+				const accountData = await getAccountCookie(ctx);
+				if (accountData) {
+					account = accountData;
+				}
+			}
 		} else {
 			const accountData =
 				await ctx.context.internalAdapter.findAccount(providedAccountId);

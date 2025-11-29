@@ -1,10 +1,9 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import type { Account } from "@better-auth/core/db";
 import type { InternalLogger } from "@better-auth/core/env";
 import type { CookieOptions } from "better-call";
 import * as z from "zod";
-import { symmetricEncodeJWT } from "../crypto";
-import type { Account } from "@better-auth/core/db";
-import { symmetricDecodeJWT } from "../crypto";
+import { symmetricDecodeJWT, symmetricEncodeJWT } from "../crypto";
 import { safeJSONParse } from "../utils/json";
 
 // Cookie size constants based on browser limits
@@ -301,7 +300,7 @@ export async function setAccountCookie(
 }
 
 export async function getAccountCookie(c: GenericEndpointContext) {
-  const accountCookie = getChunkedCookie(
+	const accountCookie = getChunkedCookie(
 		c,
 		c.context.authCookies.accountData.name,
 	);
@@ -318,7 +317,7 @@ export async function getAccountCookie(c: GenericEndpointContext) {
 		}
 	}
 
-  return null;
+	return null;
 }
 
 export const getSessionQuerySchema = z.optional(
