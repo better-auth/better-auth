@@ -196,10 +196,7 @@ describe("matchesRedirectURI", () => {
 
 		it("should handle invalid requested URI gracefully", () => {
 			expect(
-				matchesRedirectURI(
-					"https://*.example.com/callback",
-					"not-a-valid-uri",
-				),
+				matchesRedirectURI("https://*.example.com/callback", "not-a-valid-uri"),
 			).toBe(false);
 		});
 
@@ -261,4 +258,3 @@ describe("matchesRedirectURI", () => {
 		});
 	});
 });
-
