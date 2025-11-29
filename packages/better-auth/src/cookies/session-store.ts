@@ -91,6 +91,7 @@ function joinChunks(chunks: Chunks): string {
  * Split a cookie value into chunks if needed
  */
 function chunkCookie(
+  storeName: string,
 	cookie: Cookie,
 	chunks: Chunks,
 	logger: InternalLogger,
@@ -111,8 +112,8 @@ function chunkCookie(
 		chunks[name] = value;
 	}
 
-	logger.debug("CHUNKING_SESSION_COOKIE", {
-		message: `Session cookie exceeds allowed ${ALLOWED_COOKIE_SIZE} bytes.`,
+	logger.debug(`CHUNKING_${storeName.toUpperCase()}_COOKIE`, {
+		message: `${storeName} cookie exceeds allowed ${ALLOWED_COOKIE_SIZE} bytes.`,
 		emptyCookieSize: ESTIMATED_EMPTY_COOKIE_SIZE,
 		valueSize: cookie.value.length,
 		chunkCount,
@@ -147,12 +148,10 @@ function getCleanCookies(
  * Based on next-auth's SessionStore implementation.
  * @see https://github.com/nextauthjs/next-auth/blob/27b2519b84b8eb9cf053775dea29d577d2aa0098/packages/next-auth/src/core/lib/cookie.ts
  */
-export function createSessionStore(
-	cookieName: string,
-	cookieOptions: CookieOptions,
-	ctx: GenericEndpointContext,
-) {
-	const chunks = readExistingChunks(cookieName, ctx);
+const storeFactory =
+  (storeName: string) =>
+  (cookieName: string, cookieOptions: CookieOptions, ctx: GenericEndpointContext) => {
+    const chunks = readExistingChunks(cookieName, ctx);
 	const logger = ctx.context.logger;
 
 	return {
@@ -184,6 +183,7 @@ export function createSessionStore(
 
 			// Create new chunks
 			const chunked = chunkCookie(
+			  storeName,
 				{
 					name: cookieName,
 					value,
@@ -223,6 +223,9 @@ export function createSessionStore(
 		},
 	};
 }
+
+export const createSessionStore = storeFactory("Session");
+export const createAccountStore = storeFactory("Account");
 
 export function getChunkedCookie(
 	ctx: GenericEndpointContext,
@@ -285,12 +288,12 @@ export async function setAccountCookie(
 	);
 
 	if (data.length > ALLOWED_COOKIE_SIZE) {
-		const accountStore = createSessionStore(accountDataCookie.name, options, c);
+		const accountStore = createAccountStore(accountDataCookie.name, options, c);
 
 		const cookies = accountStore.chunk(data, options);
 		accountStore.setCookies(cookies);
 	} else {
-		const accountStore = createSessionStore(accountDataCookie.name, options, c);
+		const accountStore = createAccountStore(accountDataCookie.name, options, c);
 		if (accountStore.hasChunks()) {
 			const cleanCookies = accountStore.clean();
 			accountStore.setCookies(cleanCookies);
