@@ -75,7 +75,7 @@ export default async function Page({
 				<MDX
 					components={{
 						...defaultMdxComponents,
-            CodeBlockTabs: ({ groupId, persist, ...props }) => {
+						CodeBlockTabs: ({ groupId, persist, ...props }) => {
 							return (
 								<CodeBlockTabs
 									{...props}
