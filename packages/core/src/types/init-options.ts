@@ -106,7 +106,7 @@ export type BetterAuthRateLimitOptions = {
 	/**
 	 * Custom field names for the rate limit table
 	 */
-	fields?: Record<keyof RateLimit, string> | undefined;
+	fields?: Partial<Record<keyof RateLimit, string>> | undefined;
 	/**
 	 * custom storage configuration.
 	 *
