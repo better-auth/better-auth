@@ -306,7 +306,10 @@ export function AIChatModal({ isOpen, onClose }: AIChatModalProps) {
 									{message.role === "assistant" && (
 										<div className="shrink-0">
 											<div className="w-8 h-8 rounded-full bg-transparent border border-input/70 border-dashed flex items-center justify-center">
-												<Bot className="h-4 w-4 text-primary" aria-hidden="true" />
+												<Bot
+													className="h-4 w-4 text-primary"
+													aria-hidden="true"
+												/>
 											</div>
 										</div>
 									)}

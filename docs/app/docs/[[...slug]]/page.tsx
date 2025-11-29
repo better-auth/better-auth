@@ -5,6 +5,7 @@ import { Step, Steps } from "fumadocs-ui/components/steps";
 import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 import { TypeTable } from "fumadocs-ui/components/type-table";
 import defaultMdxComponents from "fumadocs-ui/mdx";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { APIMethod } from "@/components/api-method";
@@ -29,7 +30,6 @@ import { AnimatePresence } from "@/components/ui/fade-in";
 import { source } from "@/lib/source";
 import { absoluteUrl, cn } from "@/lib/utils";
 import { LLMCopyButton, ViewOptions } from "./page.client";
-import type { Metadata } from "next";
 
 export default async function Page({
 	params,

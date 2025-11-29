@@ -24,7 +24,10 @@ export function ResourceCard({
 			)}
 		>
 			<div>
-				<ArrowUpRight className="absolute top-3 right-3 h-4 w-4 group-hover:opacity-100 opacity-80 text-muted-foreground transition-colors group-hover:text-foreground no-underline underline-offset-0" aria-hidden="true" />
+				<ArrowUpRight
+					className="absolute top-3 right-3 h-4 w-4 group-hover:opacity-100 opacity-80 text-muted-foreground transition-colors group-hover:text-foreground no-underline underline-offset-0"
+					aria-hidden="true"
+				/>
 				<div className="p-4 py-0 flex items-start justify-between">
 					<a href={href} target="_blank" rel="noopener noreferrer">
 						<h3 className="font-semibold text-md tracking-tight no-underline">

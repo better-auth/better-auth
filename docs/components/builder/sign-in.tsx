@@ -3,6 +3,7 @@
 import { useAtom } from "jotai";
 import { Key, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -18,17 +19,16 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { socialProviders } from "./social-provider";
 import { optionsAtom } from "./store";
-import { useState } from "react";
 
 export default function SignIn() {
 	const [options] = useAtom(optionsAtom);
 	const [loading, setLoading] = useState(false);
 
 	const simulateRequest = async () => {
-  	setLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    setLoading(false);
-	}
+		setLoading(true);
+		await new Promise((resolve) => setTimeout(resolve, 1500));
+		setLoading(false);
+	};
 
 	return (
 		<Card className="z-50 rounded-none max-w-full">
@@ -98,12 +98,21 @@ export default function SignIn() {
 					)}
 
 					{options.email && (
-						<Button disabled={loading} type="submit" className="w-full" onClick={simulateRequest}>
-  						{loading ? (
-  							<Loader2 size={16} className="animate-spin" aria-hidden="true" />
-  						) : (
-  							"Login"
-  						)}
+						<Button
+							disabled={loading}
+							type="submit"
+							className="w-full"
+							onClick={simulateRequest}
+						>
+							{loading ? (
+								<Loader2
+									size={16}
+									className="animate-spin"
+									aria-hidden="true"
+								/>
+							) : (
+								"Login"
+							)}
 						</Button>
 					)}
 

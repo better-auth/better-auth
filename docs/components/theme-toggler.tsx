@@ -28,8 +28,14 @@ export function ThemeToggle(props: ComponentProps<typeof Button>) {
 						props.className,
 					)}
 				>
-					<Sun className="size-4 fill-current dark:hidden navbar:size-5" aria-hidden="true" />
-					<Moon className="absolute fill-current size-4 hidden dark:block navbar:size-5" aria-hidden="true" />
+					<Sun
+						className="size-4 fill-current dark:hidden navbar:size-5"
+						aria-hidden="true"
+					/>
+					<Moon
+						className="absolute fill-current size-4 hidden dark:block navbar:size-5"
+						aria-hidden="true"
+					/>
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent className="rounded-none" align="end">

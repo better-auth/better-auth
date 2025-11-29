@@ -127,7 +127,10 @@ export default async function Page({
 											{...props}
 										>
 											{children}
-											<ExternalLink className="ms-0.5 inline size-[0.9em] text-fd-muted-foreground" aria-hidden="true" />
+											<ExternalLink
+												className="ms-0.5 inline size-[0.9em] text-fd-muted-foreground"
+												aria-hidden="true"
+											/>
 										</a>
 									);
 								}
@@ -154,7 +157,10 @@ export default async function Page({
 											{...props}
 										>
 											{children}
-											<ExternalLink className="ms-0.5 inline size-[0.9em] text-fd-muted-foreground" aria-hidden="true" />
+											<ExternalLink
+												className="ms-0.5 inline size-[0.9em] text-fd-muted-foreground"
+												aria-hidden="true"
+											/>
 										</a>
 									);
 								}

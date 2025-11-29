@@ -149,9 +149,9 @@ export function SignUp() {
 						className="w-full"
 						disabled={loading}
 						onClick={async () => {
-              setLoading(true);
-						  await new Promise((resolve) => setTimeout(resolve, 1500));
-							setLoading(false)
+							setLoading(true);
+							await new Promise((resolve) => setTimeout(resolve, 1500));
+							setLoading(false);
 						}}
 					>
 						{loading ? (

@@ -309,9 +309,17 @@ export function Builder() {
 											}}
 										>
 											{resolvedTheme === "dark" ? (
-												<Moon onClick={() => setTheme("light")} size={18} aria-hidden="true" />
+												<Moon
+													onClick={() => setTheme("light")}
+													size={18}
+													aria-hidden="true"
+												/>
 											) : (
-												<Sun onClick={() => setTheme("dark")} size={18} aria-hidden="true" />
+												<Sun
+													onClick={() => setTheme("dark")}
+													size={18}
+													aria-hidden="true"
+												/>
 											)}
 										</div>
 									</CardHeader>

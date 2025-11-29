@@ -138,7 +138,10 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 						aria-label="Loading... Click to stop"
 						onClick={stop}
 					>
-						<Loader2 className="animate-spin size-4 text-fd-muted-foreground" aria-hidden="true" />
+						<Loader2
+							className="animate-spin size-4 text-fd-muted-foreground"
+							aria-hidden="true"
+						/>
 					</button>
 				) : (
 					<button

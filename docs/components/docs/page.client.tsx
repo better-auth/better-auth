@@ -184,7 +184,10 @@ export function Footer({ items }: FooterProps) {
 			{previous ? (
 				<Link href={previous.url} className={cn(itemVariants())}>
 					<div className={cn(itemLabel())}>
-						<ChevronLeft className="-ms-1 size-4 shrink-0 rtl:rotate-180" aria-hidden="true" />
+						<ChevronLeft
+							className="-ms-1 size-4 shrink-0 rtl:rotate-180"
+							aria-hidden="true"
+						/>
 						<p>{text.previousPage}</p>
 					</div>
 					<p className="font-medium md:text-[15px]">{previous.name}</p>
@@ -196,7 +199,10 @@ export function Footer({ items }: FooterProps) {
 					className={cn(itemVariants({ className: "col-start-2 text-end" }))}
 				>
 					<div className={cn(itemLabel({ className: "flex-row-reverse" }))}>
-						<ChevronRight className="-me-1 size-4 shrink-0 rtl:rotate-180" aria-hidden="true" />
+						<ChevronRight
+							className="-me-1 size-4 shrink-0 rtl:rotate-180"
+							aria-hidden="true"
+						/>
 						<p>{text.nextPage}</p>
 					</div>
 					<p className="font-medium md:text-[15px]">{next.name}</p>

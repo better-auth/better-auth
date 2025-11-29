@@ -110,9 +110,15 @@ export function MessageFeedback({
 				}
 			>
 				{showSuccessCheckmark === "positive" ? (
-					<Check className="h-3.5 w-3.5 text-green-600 animate-in fade-in duration-200" aria-hidden="true" />
+					<Check
+						className="h-3.5 w-3.5 text-green-600 animate-in fade-in duration-200"
+						aria-hidden="true"
+					/>
 				) : (
-					<ThumbsUp className="h-3.5 w-3.5 transition-all duration-200" aria-hidden="true" />
+					<ThumbsUp
+						className="h-3.5 w-3.5 transition-all duration-200"
+						aria-hidden="true"
+					/>
 				)}
 			</button>
 
@@ -140,9 +146,15 @@ export function MessageFeedback({
 				}
 			>
 				{showSuccessCheckmark === "negative" ? (
-					<Check className="h-3.5 w-3.5 text-green-600 animate-in fade-in duration-200" aria-hidden="true" />
+					<Check
+						className="h-3.5 w-3.5 text-green-600 animate-in fade-in duration-200"
+						aria-hidden="true"
+					/>
 				) : (
-					<ThumbsDown className="h-3.5 w-3.5 transition-all duration-200" aria-hidden="true" />
+					<ThumbsDown
+						className="h-3.5 w-3.5 transition-all duration-200"
+						aria-hidden="true"
+					/>
 				)}
 			</button>
 
