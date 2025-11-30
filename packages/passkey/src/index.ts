@@ -823,8 +823,8 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 						model: "passkey",
 						where: [{ field: "id", value: passkey.id }],
 					});
-					return ctx.json(null, {
-						status: 200,
+					return ctx.json({
+						success: true,
 					});
 				},
 			),
