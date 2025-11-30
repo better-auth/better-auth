@@ -177,11 +177,11 @@ export async function createJwk(
 
 /**
  * Rotates the JWT signing key if needed.
- * 
+ *
  * Rotation occurs when:
  * - No key exists, OR
  * - Latest key is expired AND was created more than the cooldown period ago
- * 
+ *
  * @param ctx - The endpoint context
  * @param options - JWT plugin options
  * @param config - Rotation configuration
@@ -210,22 +210,15 @@ export async function rotateJwk(
 
 	const ROTATION_COOLDOWN = config?.cooldown ?? 5 * 60 * 1000; // 5 minutes default
 	const now = Date.now();
-		
+
 	let shouldRotate = false;
-	
+
 	if (config?.force) {
 		shouldRotate = true;
 	} else if (!latestKey) {
 		shouldRotate = true;
 	} else if (latestKey.expiresAt && latestKey.expiresAt < new Date()) {
-		const wasCreatedAfterExpiration = latestKey.createdAt.getTime() > latestKey.expiresAt.getTime();
-		
-		if (wasCreatedAfterExpiration) {
-			const keyAge = now - latestKey.createdAt.getTime();
-			shouldRotate = keyAge >= ROTATION_COOLDOWN;
-		} else {
-			shouldRotate = true;
-		}
+		shouldRotate = now - latestKey.createdAt.getTime() >= ROTATION_COOLDOWN;
 	}
 
 	if (shouldRotate) {

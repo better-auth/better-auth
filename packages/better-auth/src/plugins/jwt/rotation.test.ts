@@ -35,8 +35,8 @@ describe("jwt rotation", async () => {
 		expect(storage.length).toBe(1);
 		const firstKey = storage[0];
 
-		// Advance time past rotation interval
-		vi.advanceTimersByTime(1100);
+		// Advance time past rotation interval (and cooldown)
+		vi.advanceTimersByTime(5 * 60 * 1000 + 100);
 
 		// Second key creation (should rotate)
 		await auth.api.signJWT({
@@ -83,8 +83,8 @@ describe("jwt rotation", async () => {
 		// Advance time past rotation interval but within grace period
 		vi.advanceTimersByTime(1100);
 
-		// Trigger rotation by signing
-		await auth.api.signJWT({ body: { payload: { sub: "user1" } } });
+		// Trigger rotation (override cooldown to allow rotation)
+		await auth.api.rotateKey({ body: { cooldown: 500 } });
 		expect(storage.length).toBe(2);
 
 		// Check JWKS endpoint
@@ -131,8 +131,8 @@ it("should respect cooldown period and prevent rapid rotation", async () => {
 	await auth.api.signJWT({ body: { payload: { sub: "user1" } } });
 	expect(storage.length).toBe(1);
 
-	// Advance time past rotation interval
-	vi.advanceTimersByTime(1100);
+	// Advance time past rotation interval (and cooldown)
+	vi.advanceTimersByTime(5 * 60 * 1000 + 100);
 
 	// Trigger rotation
 	await auth.api.signJWT({ body: { payload: { sub: "user1" } } });
