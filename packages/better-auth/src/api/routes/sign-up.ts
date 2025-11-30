@@ -4,10 +4,11 @@ import { runWithTransaction } from "@better-auth/core/context";
 import { isDevelopment } from "@better-auth/core/env";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
-import { z } from "zod";
+import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
 import { parseUserInput } from "../../db";
-import type { AdditionalUserFieldsInput, User } from "../../types";
+import { parseUserOutput } from "../../db/schema";
+import type { AdditionalUserFieldsInput, InferUser, User } from "../../types";
 import { createEmailVerificationToken } from "./email-verification";
 
 export const signUpEmail = <O extends BetterAuthOptions>() =>
@@ -15,6 +16,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 		"/sign-up/email",
 		{
 			method: "POST",
+			operationId: "signUpWithEmailAndPassword",
 			body: z.record(z.string(), z.any()),
 			metadata: {
 				$Infer: {
@@ -26,8 +28,13 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						callbackURL?: string | undefined;
 						rememberMe?: boolean | undefined;
 					} & AdditionalUserFieldsInput<O>,
+					returned: {} as {
+						token: string | null;
+						user: InferUser<O>;
+					},
 				},
 				openapi: {
+					operationId: "signUpWithEmailAndPassword",
 					description: "Sign up a user using email and password",
 					requestBody: {
 						content: {
@@ -305,15 +312,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				) {
 					return ctx.json({
 						token: null,
-						user: {
-							id: createdUser.id,
-							email: createdUser.email,
-							name: createdUser.name,
-							image: createdUser.image,
-							emailVerified: createdUser.emailVerified,
-							createdAt: createdUser.createdAt,
-							updatedAt: createdUser.updatedAt,
-						},
+						user: parseUserOutput(
+							ctx.context.options,
+							createdUser,
+						) as InferUser<O>,
 					});
 				}
 
@@ -336,15 +338,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				);
 				return ctx.json({
 					token: session.token,
-					user: {
-						id: createdUser.id,
-						email: createdUser.email,
-						name: createdUser.name,
-						image: createdUser.image,
-						emailVerified: createdUser.emailVerified,
-						createdAt: createdUser.createdAt,
-						updatedAt: createdUser.updatedAt,
-					},
+					user: parseUserOutput(
+						ctx.context.options,
+						createdUser,
+					) as InferUser<O>,
 				});
 			});
 		},

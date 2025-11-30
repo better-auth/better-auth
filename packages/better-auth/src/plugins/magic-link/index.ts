@@ -3,15 +3,13 @@ import type {
 	GenericEndpointContext,
 } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { APIError } from "better-call";
-import { z } from "zod";
+import * as z from "zod";
 import { originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { defaultKeyHasher } from "./utils";
 
-interface MagicLinkopts {
+export interface MagicLinkOptions {
 	/**
 	 * Time in seconds until the magic link expires.
 	 * @default (60 * 5) // 5 minutes
@@ -26,7 +24,7 @@ interface MagicLinkopts {
 			url: string;
 			token: string;
 		},
-		request?: Request | undefined,
+		ctx?: GenericEndpointContext | undefined,
 	) => Promise<void> | void;
 	/**
 	 * Disable sign up if user is not found.
@@ -68,11 +66,11 @@ interface MagicLinkopts {
 		| undefined;
 }
 
-export const magicLink = (options: MagicLinkopts) => {
+export const magicLink = (options: MagicLinkOptions) => {
 	const opts = {
 		storeToken: "plain",
 		...options,
-	} satisfies MagicLinkopts;
+	} satisfies MagicLinkOptions;
 
 	async function storeToken(ctx: GenericEndpointContext, token: string) {
 		if (opts.storeToken === "hashed") {
@@ -112,12 +110,9 @@ export const magicLink = (options: MagicLinkopts) => {
 					method: "POST",
 					requireHeaders: true,
 					body: z.object({
-						email: z
-							.string()
-							.meta({
-								description: "Email address to send the magic link",
-							})
-							.email(),
+						email: z.email().meta({
+							description: "Email address to send the magic link",
+						}),
 						name: z
 							.string()
 							.meta({
@@ -147,6 +142,7 @@ export const magicLink = (options: MagicLinkopts) => {
 					}),
 					metadata: {
 						openapi: {
+							operationId: "signInWithMagicLink",
 							description: "Sign in with magic link",
 							responses: {
 								200: {
@@ -170,17 +166,6 @@ export const magicLink = (options: MagicLinkopts) => {
 				},
 				async (ctx) => {
 					const { email } = ctx.body;
-
-					if (opts.disableSignUp) {
-						const user =
-							await ctx.context.internalAdapter.findUserByEmail(email);
-
-						if (!user) {
-							throw new APIError("BAD_REQUEST", {
-								message: BASE_ERROR_CODES.USER_NOT_FOUND,
-							});
-						}
-					}
 
 					const verificationToken = opts?.generateToken
 						? await opts.generateToken(email)
@@ -216,7 +201,7 @@ export const magicLink = (options: MagicLinkopts) => {
 							url: url.toString(),
 							token: verificationToken,
 						},
-						ctx.request,
+						ctx,
 					);
 					return ctx.json({
 						status: true,
@@ -287,6 +272,7 @@ export const magicLink = (options: MagicLinkopts) => {
 					requireHeaders: true,
 					metadata: {
 						openapi: {
+							operationId: "verifyMagicLink",
 							description: "Verify magic link",
 							responses: {
 								200: {
@@ -387,7 +373,7 @@ export const magicLink = (options: MagicLinkopts) => {
 					}
 
 					if (!user.emailVerified) {
-						await ctx.context.internalAdapter.updateUser(user.id, {
+						user = await ctx.context.internalAdapter.updateUser(user.id, {
 							emailVerified: true,
 						});
 					}

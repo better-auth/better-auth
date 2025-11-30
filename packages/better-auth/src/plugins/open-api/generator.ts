@@ -10,7 +10,7 @@ import type {
 	OpenAPIParameter,
 	OpenAPISchemaType,
 } from "better-call";
-import { z } from "zod";
+import * as z from "zod";
 import { getEndpoints } from "../../api";
 import { getAuthTables } from "../../db";
 
@@ -90,6 +90,7 @@ export type FieldSchema = {
 		| (DBFieldAttributeConfig["defaultValue"] | "Generated at runtime")
 		| undefined;
 	readOnly?: boolean | undefined;
+	format?: string;
 };
 
 export type OpenAPIModelSchema = {
@@ -101,6 +102,7 @@ export type OpenAPIModelSchema = {
 function getFieldSchema(field: DBFieldAttribute) {
 	const schema: FieldSchema = {
 		type: field.type === "date" ? "string" : field.type,
+		...(field.type === "date" && { format: "date-time" }),
 	};
 
 	if (field.defaultValue !== undefined) {
@@ -346,7 +348,13 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 		plugins: [],
 	});
 
-	const tables = getAuthTables(options);
+	const tables = getAuthTables({
+		...options,
+		session: {
+			...options.session,
+			storeSessionInDatabase: true, // Forcing this to true to return the session table schema
+		},
+	});
 	const models = Object.entries(tables).reduce<
 		Record<string, OpenAPIModelSchema>
 	>((acc, [key, value]) => {
@@ -364,10 +372,16 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 			}
 		});
 
+		Object.entries(properties).forEach(([key, prop]) => {
+			const field = value.fields[key];
+			if (field && field.type === "date" && prop.type === "string") {
+				prop.format = "date-time";
+			}
+		});
 		acc[modelName] = {
 			type: "object",
 			properties,
-			...(required.length > 0 ? { required } : {}),
+			required,
 		};
 		return acc;
 	}, {});

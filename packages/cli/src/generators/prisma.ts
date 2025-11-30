@@ -1,6 +1,8 @@
 import { produceSchema } from "@mrleebo/prisma-ast";
 import { capitalizeFirstLetter } from "better-auth";
-import { type FieldType, getAuthTables } from "better-auth/db";
+import { initGetFieldName, initGetModelName } from "better-auth/adapters";
+import type { FieldType } from "better-auth/db";
+import { getAuthTables } from "better-auth/db";
 import { existsSync } from "fs";
 import fs from "fs/promises";
 import path from "path";
@@ -15,6 +17,15 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 	const tables = getAuthTables(options);
 	const filePath = file || "./prisma/schema.prisma";
 	const schemaPrismaExist = existsSync(path.join(process.cwd(), filePath));
+
+	const getModelName = initGetModelName({
+		schema: getAuthTables(options),
+		usePlural: adapter.options?.adapterConfig?.usePlural,
+	});
+	const getFieldName = initGetFieldName({
+		schema: getAuthTables(options),
+		usePlural: false,
+	});
 
 	let schemaPrisma = "";
 	if (schemaPrismaExist) {
@@ -37,7 +48,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				const referencedCustomModel =
 					tables[referencedOriginalModel]?.modelName || referencedOriginalModel;
 				const referencedModelNameCap = capitalizeFirstLetter(
-					referencedCustomModel,
+					getModelName(referencedCustomModel),
 				);
 
 				if (!manyToManyRelations.has(referencedModelNameCap)) {
@@ -45,7 +56,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				}
 
 				const currentCustomModel = tables[table]?.modelName || table;
-				const currentModelNameCap = capitalizeFirstLetter(currentCustomModel);
+				const currentModelNameCap = capitalizeFirstLetter(
+					getModelName(currentCustomModel),
+				);
 
 				manyToManyRelations
 					.get(referencedModelNameCap)
@@ -58,7 +71,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 	for (const table in tables) {
 		const fields = tables[table]?.fields;
 		const customModelName = tables[table]?.modelName || table;
-		const modelName = capitalizeFirstLetter(customModelName);
+		const modelName = capitalizeFirstLetter(getModelName(customModelName));
 		indexedFields.set(modelName, []);
 
 		for (const field in fields) {
@@ -74,7 +87,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 		for (const table in tables) {
 			const originalTableName = table;
 			const customModelName = tables[table]?.modelName || table;
-			const modelName = capitalizeFirstLetter(customModelName);
+			const modelName = capitalizeFirstLetter(getModelName(customModelName));
 			const fields = tables[table]?.fields;
 			function getType({
 				isBigint,
@@ -139,10 +152,8 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 							.model(modelName)
 							.field("id", "String")
 							.attribute("id")
-							.attribute("db.Uuid")
-							.attribute(
-								'default(dbgenerated("pg_catalog.gen_random_uuid()"))',
-							);
+							.attribute('default(dbgenerated("pg_catalog.gen_random_uuid()"))')
+							.attribute("db.Uuid");
 					} else {
 						builder.model(modelName).field("id", "String").attribute("id");
 					}
@@ -282,11 +293,17 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				}
 
 				if (attr.references) {
-					if (useUUIDs && provider === "postgresql") {
-						fieldBuilder.attribute(`db.Uuid`);
+					if (
+						useUUIDs &&
+						provider === "postgresql" &&
+						attr.references?.field === "id"
+					) {
+						builder.model(modelName).field(fieldName).attribute(`db.Uuid`);
 					}
 
-					const referencedOriginalModelName = attr.references.model;
+					const referencedOriginalModelName = getModelName(
+						attr.references.model,
+					);
 					const referencedCustomModelName =
 						tables[referencedOriginalModelName]?.modelName ||
 						referencedOriginalModelName;
@@ -297,7 +314,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						action = "SetDefault";
 					else if (attr.references.onDelete === "restrict") action = "Restrict";
 
-					const relationField = `relation(fields: [${fieldName}], references: [${attr.references.field}], onDelete: ${action})`;
+					const relationField = `relation(fields: [${getFieldName({ model: originalTableName, field: fieldName })}], references: [${getFieldName({ model: attr.references.model, field: attr.references.field })}], onDelete: ${action})`;
 					builder
 						.model(modelName)
 						.field(
@@ -321,13 +338,36 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 			// Add many-to-many fields
 			if (manyToManyRelations.has(modelName)) {
 				for (const relatedModel of manyToManyRelations.get(modelName)) {
-					const fieldName = `${relatedModel.toLowerCase()}s`;
+					// Find the FK field on the related model that points to this model
+					const relatedTableName = Object.keys(tables).find(
+						(key) =>
+							capitalizeFirstLetter(tables[key]?.modelName || key) ===
+							relatedModel,
+					);
+					const relatedFields = relatedTableName
+						? tables[relatedTableName]?.fields
+						: {};
+					const fkField = Object.entries(relatedFields || {}).find(
+						([_fieldName, fieldAttr]: any) =>
+							fieldAttr.references &&
+							getModelName(fieldAttr.references.model) ===
+								getModelName(originalTableName),
+					);
+					const [_fieldKey, fkFieldAttr] = fkField || [];
+					const isUnique = fkFieldAttr?.unique === true;
+
+					const fieldName =
+						isUnique || adapter.options?.usePlural === true
+							? `${relatedModel.toLowerCase()}`
+							: `${relatedModel.toLowerCase()}s`;
 					const existingField = builder.findByType("field", {
 						name: fieldName,
 						within: prismaModel?.properties,
 					});
 					if (!existingField) {
-						builder.model(modelName).field(fieldName, `${relatedModel}[]`);
+						builder
+							.model(modelName)
+							.field(fieldName, `${relatedModel}${isUnique ? "?" : "[]"}`);
 					}
 				}
 			}
@@ -336,6 +376,17 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 			const indexedFieldsForModel = indexedFields.get(modelName);
 			if (indexedFieldsForModel && indexedFieldsForModel.length > 0) {
 				for (const fieldName of indexedFieldsForModel) {
+					if (prismaModel) {
+						const indexExist = prismaModel.properties.some(
+							(v) =>
+								v.type === "attribute" &&
+								v.name === "index" &&
+								JSON.stringify(v.args[0]?.value).includes(fieldName),
+						);
+						if (indexExist) {
+							continue;
+						}
+					}
 					const field = Object.entries(fields!).find(
 						([key, attr]) => (attr.fieldName || key) === fieldName,
 					)?.[1];
@@ -367,7 +418,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					.model(modelName)
 					.blockAttribute(
 						"map",
-						`${hasChanged ? customModelName : originalTableName}`,
+						`${getModelName(hasChanged ? customModelName : originalTableName)}`,
 					);
 			}
 		}

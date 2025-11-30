@@ -3,7 +3,8 @@ import type { IncomingMessage } from "node:http";
 import https from "node:https";
 import path from "node:path";
 import { betterFetch } from "@better-fetch/fetch";
-import { type Auth, betterAuth } from "better-auth";
+import type { Auth } from "better-auth";
+import { betterAuth } from "better-auth";
 import { toNodeHandler } from "better-auth/node";
 import { jwt, oidcProvider } from "better-auth/plugins";
 import * as client from "openid-client";
@@ -52,9 +53,9 @@ describe("oidc provider", async () => {
 				resolve();
 			});
 		});
+		url = `https://localhost:${(server.address() as any).port}`;
 		// @ts-expect-error
 		auth.options.baseURL = url;
-		url = `https://localhost:${(server.address() as any).port}`;
 	});
 
 	afterEach(() => {

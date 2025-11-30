@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import type { PrismaClient } from "@prisma/client";
 
 type PC = InstanceType<typeof PrismaClient>;
@@ -13,7 +14,12 @@ export const getPrismaClient = async (
 	const { PrismaClient } = await import(
 		migrationCount === 0
 			? "@prisma/client"
-			: `./.tmp/prisma-client-${dialect}-${migrationCount}`
+			: fileURLToPath(
+					new URL(
+						`./.tmp/prisma-client-${dialect}-${migrationCount}`,
+						import.meta.url,
+					),
+				)
 	);
 	const db = new PrismaClient();
 	clientMap.set(`${dialect}-${migrationCount}`, db);

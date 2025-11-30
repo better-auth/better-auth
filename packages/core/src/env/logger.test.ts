@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { type LogLevel, shouldPublishLog } from "./logger";
+import type { LogLevel } from "./logger";
+import { shouldPublishLog } from "./logger";
 
 describe("shouldPublishLog", () => {
 	const testCases: {
@@ -7,22 +8,22 @@ describe("shouldPublishLog", () => {
 		logLevel: LogLevel;
 		expected: boolean;
 	}[] = [
-		{ currentLogLevel: "info", logLevel: "info", expected: true },
-		{ currentLogLevel: "info", logLevel: "warn", expected: false },
-		{ currentLogLevel: "info", logLevel: "error", expected: false },
-		{ currentLogLevel: "info", logLevel: "debug", expected: false },
-		{ currentLogLevel: "warn", logLevel: "info", expected: true },
-		{ currentLogLevel: "warn", logLevel: "warn", expected: true },
-		{ currentLogLevel: "warn", logLevel: "error", expected: false },
-		{ currentLogLevel: "warn", logLevel: "debug", expected: false },
-		{ currentLogLevel: "error", logLevel: "info", expected: true },
-		{ currentLogLevel: "error", logLevel: "warn", expected: true },
-		{ currentLogLevel: "error", logLevel: "error", expected: true },
-		{ currentLogLevel: "error", logLevel: "debug", expected: false },
+		{ currentLogLevel: "debug", logLevel: "debug", expected: true },
 		{ currentLogLevel: "debug", logLevel: "info", expected: true },
 		{ currentLogLevel: "debug", logLevel: "warn", expected: true },
 		{ currentLogLevel: "debug", logLevel: "error", expected: true },
-		{ currentLogLevel: "debug", logLevel: "debug", expected: true },
+		{ currentLogLevel: "info", logLevel: "debug", expected: false },
+		{ currentLogLevel: "info", logLevel: "info", expected: true },
+		{ currentLogLevel: "info", logLevel: "warn", expected: true },
+		{ currentLogLevel: "info", logLevel: "error", expected: true },
+		{ currentLogLevel: "warn", logLevel: "debug", expected: false },
+		{ currentLogLevel: "warn", logLevel: "info", expected: false },
+		{ currentLogLevel: "warn", logLevel: "warn", expected: true },
+		{ currentLogLevel: "warn", logLevel: "error", expected: true },
+		{ currentLogLevel: "error", logLevel: "debug", expected: false },
+		{ currentLogLevel: "error", logLevel: "info", expected: false },
+		{ currentLogLevel: "error", logLevel: "warn", expected: false },
+		{ currentLogLevel: "error", logLevel: "error", expected: true },
 	];
 
 	testCases.forEach(({ currentLogLevel, logLevel, expected }) => {

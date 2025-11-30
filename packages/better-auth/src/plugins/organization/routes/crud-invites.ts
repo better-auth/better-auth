@@ -1,26 +1,24 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
-import { z } from "zod";
+import * as z from "zod";
 import { getSessionFromCtx } from "../../../api/routes";
 import { setSessionCookie } from "../../../cookies";
-import {
-	type InferAdditionalFieldsFromPluginOptions,
-	toZodSchema,
-} from "../../../db";
+import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
+import { toZodSchema } from "../../../db";
 import { getDate } from "../../../utils/date";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
 import { parseRoles } from "../organization";
-import {
-	type InferInvitation,
-	type InferOrganizationRolesFromOption,
-	type Invitation,
-	type Member,
+import type {
+	InferInvitation,
+	InferOrganizationRolesFromOption,
+	Invitation,
+	Member,
 } from "../schema";
-import { type OrganizationOptions } from "../types";
+import type { OrganizationOptions } from "../types";
 
 export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 	const additionalFieldsSchema = toZodSchema({
@@ -80,6 +78,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 		"/organization/invite-member",
 		{
 			method: "POST",
+			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 			body: z.object({
 				...baseSchema.shape,
@@ -121,7 +120,8 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 						InferAdditionalFieldsFromPluginOptions<"invitation", O, false>,
 				},
 				openapi: {
-					description: "Invite a user to an organization",
+					operationId: "createOrganizationInvitation",
+					description: "Create an invitation to an organization",
 					responses: {
 						"200": {
 							description: "Success",
@@ -184,7 +184,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			}
 
 			const email = ctx.body.email.toLowerCase();
-			const isValidEmail = z.string().email().safeParse(email);
+			const isValidEmail = z.email().safeParse(email);
 			if (!isValidEmail.success) {
 				throw new APIError("BAD_REQUEST", {
 					message: BASE_ERROR_CODES.INVALID_EMAIL,
@@ -472,6 +472,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 					description: "The ID of the invitation to accept",
 				}),
 			}),
+			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
 				openapi: {
@@ -671,6 +672,7 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 					description: "The ID of the invitation to reject",
 				}),
 			}),
+			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
 				openapi: {
@@ -687,7 +689,8 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 												type: "object",
 											},
 											member: {
-												type: "null",
+												type: "object",
+												nullable: true,
 											},
 										},
 									},
@@ -779,8 +782,10 @@ export const cancelInvitation = <O extends OrganizationOptions>(options: O) =>
 					description: "The ID of the invitation to cancel",
 				}),
 			}),
+			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 			openapi: {
+				operationId: "cancelOrganizationInvitation",
 				description: "Cancel an invitation to an organization",
 				responses: {
 					"200": {
@@ -1007,6 +1012,7 @@ export const listInvitations = <O extends OrganizationOptions>(options: O) =>
 		"/organization/list-invitations",
 		{
 			method: "GET",
+			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 			query: z
 				.object({

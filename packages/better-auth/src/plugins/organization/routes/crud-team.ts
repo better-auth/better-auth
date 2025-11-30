@@ -1,12 +1,10 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "better-call";
-import { z } from "zod";
+import * as z from "zod";
 import { getSessionFromCtx } from "../../../api";
 import { setSessionCookie } from "../../../cookies";
-import {
-	type InferAdditionalFieldsFromPluginOptions,
-	toZodSchema,
-} from "../../../db";
+import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
+import { toZodSchema } from "../../../db";
 import type { PrettifyDeep } from "../../../types/helper";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
@@ -148,7 +146,7 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 								organizationId,
 								session,
 							},
-							ctx.request,
+							ctx,
 						)
 					: ctx.context.orgOptions.teams?.maximumTeams;
 
@@ -568,7 +566,6 @@ export const listOrganizationTeams = <O extends OrganizationOptions>(
 						.optional(),
 				}),
 			),
-			requireHeaders: true,
 			metadata: {
 				openapi: {
 					description: "List all teams in an organization",
@@ -624,6 +621,7 @@ export const listOrganizationTeams = <O extends OrganizationOptions>(
 					},
 				},
 			},
+			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 		},
 		async (ctx) => {
@@ -666,6 +664,7 @@ export const setActiveTeam = <O extends OrganizationOptions>(options: O) =>
 					.nullable()
 					.optional(),
 			}),
+			requireHeaders: true,
 			use: [orgSessionMiddleware, orgMiddleware],
 			metadata: {
 				openapi: {
@@ -787,6 +786,7 @@ export const listUserTeams = <O extends OrganizationOptions>(options: O) =>
 					},
 				},
 			},
+			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 		},
 		async (ctx) => {
@@ -857,6 +857,7 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 					},
 				},
 			},
+			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 		},
 		async (ctx) => {
@@ -940,6 +941,7 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 					},
 				},
 			},
+			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 		},
 		async (ctx) => {
@@ -1099,6 +1101,7 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 					},
 				},
 			},
+			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 		},
 		async (ctx) => {

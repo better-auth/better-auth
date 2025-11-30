@@ -2,9 +2,10 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
-import { z } from "zod";
+import * as z from "zod";
 import { setSessionCookie } from "../../../cookies";
 import {
+	constantTimeEqual,
 	generateRandomString,
 	symmetricDecrypt,
 	symmetricEncrypt,
@@ -50,7 +51,7 @@ export interface OTPOptions {
 				/**
 				 * The request object
 				 */
-				request?: Request,
+				ctx?: GenericEndpointContext,
 		  ) => Promise<void> | void)
 		| undefined;
 	/**
@@ -176,11 +177,6 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 				});
 			}
 			const { session, key } = await verifyTwoFactor(ctx);
-			if (!session.user.twoFactorEnabled) {
-				throw new APIError("BAD_REQUEST", {
-					message: TWO_FACTOR_ERROR_CODES.OTP_NOT_ENABLED,
-				});
-			}
 			const code = generateRandomString(opts.digits, "0-9");
 			const hashedCode = await storeOTP(ctx, code);
 			await ctx.context.internalAdapter.createVerificationValue({
@@ -190,7 +186,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			});
 			await options.sendOTP(
 				{ user: session.user as UserWithTwoFactor, otp: code },
-				ctx.request,
+				ctx,
 			);
 			return ctx.json({ status: true });
 		},
@@ -312,7 +308,11 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 					message: TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE,
 				});
 			}
-			if (decryptedOtp === ctx.body.code) {
+			const isCodeValid = constantTimeEqual(
+				new TextEncoder().encode(decryptedOtp),
+				new TextEncoder().encode(ctx.body.code),
+			);
+			if (isCodeValid) {
 				if (!session.user.twoFactorEnabled) {
 					if (!session.session) {
 						throw new APIError("BAD_REQUEST", {

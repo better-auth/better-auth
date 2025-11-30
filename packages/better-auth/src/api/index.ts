@@ -3,13 +3,10 @@ import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
 } from "@better-auth/core";
-import { type InternalLogger, logger } from "@better-auth/core/env";
-import {
-	APIError,
-	createRouter,
-	type Endpoint,
-	type Middleware,
-} from "better-call";
+import type { InternalLogger } from "@better-auth/core/env";
+import { logger } from "@better-auth/core/env";
+import type { Endpoint, Middleware } from "better-call";
+import { APIError, createRouter } from "better-call";
 import type { UnionToIntersection } from "../types/helper";
 import { originCheckMiddleware } from "./middlewares";
 import { onRequestRateLimit } from "./rate-limiter";
@@ -206,12 +203,12 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 			.flat() || [];
 
 	const baseEndpoints = {
-		signInSocial,
+		signInSocial: signInSocial<Option>(),
 		callbackOAuth,
 		getSession: getSession<Option>(),
 		signOut,
 		signUpEmail: signUpEmail<Option>(),
-		signInEmail,
+		signInEmail: signInEmail<Option>(),
 		resetPassword,
 		verifyEmail,
 		sendVerificationEmail,
@@ -266,6 +263,7 @@ export const router = <Option extends BetterAuthOptions>(
 			},
 			...middlewares,
 		],
+		allowedMediaTypes: ["application/json"],
 		async onRequest(req) {
 			//handle disabled paths
 			const disabledPaths = ctx.options.disabledPaths || [];

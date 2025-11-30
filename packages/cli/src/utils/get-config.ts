@@ -19,12 +19,20 @@ let possiblePaths = [
 	"auth.jsx",
 	"auth.server.js",
 	"auth.server.ts",
+	"auth/index.ts",
+	"auth/index.tsx",
+	"auth/index.js",
+	"auth/index.jsx",
+	"auth/index.server.js",
+	"auth/index.server.ts",
 ];
 
 possiblePaths = [
 	...possiblePaths,
 	...possiblePaths.map((it) => `lib/server/${it}`),
+	...possiblePaths.map((it) => `server/auth/${it}`),
 	...possiblePaths.map((it) => `server/${it}`),
+	...possiblePaths.map((it) => `auth/${it}`),
 	...possiblePaths.map((it) => `lib/${it}`),
 	...possiblePaths.map((it) => `utils/${it}`),
 ];
