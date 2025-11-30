@@ -32,4 +32,5 @@ export {
 	microsoftEntraId,
 } from "./microsoft-entra-id";
 export { type OktaOptions, okta } from "./okta";
+export { type PatreonOptions, patreon } from "./patreon";
 export { type SlackOptions, slack } from "./slack";
