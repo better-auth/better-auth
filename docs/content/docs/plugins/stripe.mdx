@@ -589,97 +589,93 @@ The Stripe plugin adds the following tables to your database:
 
 ### User
 
-Table Name: `user`
-
 <DatabaseTable
-  fields={[
-    { 
-      name: "stripeCustomerId", 
-      type: "string", 
-      description: "The Stripe customer ID",
-      isOptional: true
-    },
-  ]}
+    modelName="user"
+    fields={[
+        { 
+            fieldName: "stripeCustomerId", 
+            type: "string", 
+            description: "The Stripe customer ID",
+            required: false,
+        },
+    ]}
 />
 
 ### Subscription
 
-Table Name: `subscription`
-
 <DatabaseTable
-  fields={[
-    { 
-      name: "id", 
-      type: "string", 
-      description: "Unique identifier for each subscription",
-      isPrimaryKey: true
-    },
-    { 
-      name: "plan", 
-      type: "string", 
-      description: "The name of the subscription plan" 
-    },
-    { 
-      name: "referenceId", 
-      type: "string", 
-      description: "The ID this subscription is associated with (user ID by default). This should NOT be a unique field in your database, as it must allow users to resubscribe after a cancellation.",
-      isUnique: false
-    },
-    { 
-      name: "stripeCustomerId", 
-      type: "string", 
-      description: "The Stripe customer ID",
-      isOptional: true
-    },
-    { 
-      name: "stripeSubscriptionId", 
-      type: "string", 
-      description: "The Stripe subscription ID",
-      isOptional: true
-    },
-    { 
-      name: "status", 
-      type: "string", 
-      description: "The status of the subscription (active, canceled, etc.)",
-      defaultValue: "incomplete"
-    },
-    { 
-      name: "periodStart", 
-      type: "Date", 
-      description: "Start date of the current billing period",
-      isOptional: true
-    },
-    { 
-      name: "periodEnd", 
-      type: "Date", 
-      description: "End date of the current billing period",
-      isOptional: true
-    },
-    { 
-      name: "cancelAtPeriodEnd", 
-      type: "boolean", 
-      description: "Whether the subscription will be canceled at the end of the period",
-      defaultValue: false,
-      isOptional: true
-    },
-    { 
-      name: "seats", 
-      type: "number", 
-      description: "Number of seats for team plans",
-      isOptional: true
-    },
-    { 
-      name: "trialStart", 
-      type: "Date", 
-      description: "Start date of the trial period",
-      isOptional: true
-    },
-    { 
-      name: "trialEnd", 
-      type: "Date", 
-      description: "End date of the trial period",
-      isOptional: true
-    }
+    modelName="subscription"
+    fields={[
+        { 
+            fieldName: "id", 
+            type: "string", 
+            description: "Unique identifier for each subscription",
+        },
+        { 
+          name: "plan", 
+          type: "string", 
+          description: "The name of the subscription plan" 
+        },
+        { 
+          name: "referenceId", 
+          type: "string", 
+          description: "The ID this subscription is associated with (user ID by default). This should NOT be a unique field in your database, as it must allow users to resubscribe after a cancellation.",
+        },
+        { 
+          name: "stripeCustomerId", 
+          type: "string", 
+          description: "The Stripe customer ID",
+          required: false
+        },
+        { 
+          name: "stripeSubscriptionId", 
+          type: "string", 
+          description: "The Stripe subscription ID",
+          required: false
+        },
+        { 
+          name: "status", 
+          type: "string", 
+          description: "The status of the subscription (active, canceled, etc.)",
+          defaultValue: "incomplete"
+        },
+        { 
+          name: "periodStart", 
+          type: "Date", 
+          description: "Start date of the current billing period",
+          required: false
+        },
+        { 
+          name: "periodEnd", 
+          type: "Date", 
+          description: "End date of the current billing period",
+          required: false
+        },
+        { 
+          name: "cancelAtPeriodEnd", 
+          type: "boolean", 
+          description: "Whether the subscription will be canceled at the end of the period",
+          defaultValue: false,
+          isOptional: true
+        },
+        { 
+          name: "seats", 
+          type: "number", 
+          description: "Number of seats for team plans",
+          required: false
+        },
+        { 
+          name: "trialStart", 
+          type: "Date", 
+          description: "Start date of the trial period",
+          required: false
+        },
+        { 
+          name: "trialEnd", 
+          type: "Date", 
+          description: "End date of the trial period",
+          required: false
+        }
   ]}
 />
 

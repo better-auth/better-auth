@@ -437,22 +437,48 @@ twoFactor({
 
 The plugin requires 1 additional fields in the `user` table and 1 additional table to store the two factor authentication data.
 
-Table: `user`
-
 <DatabaseTable
+    mode="alter"
+    modelName="user"
     fields={[
-        { name: "twoFactorEnabled", type: "boolean", description: "Whether two factor authentication is enabled for the user.", isOptional: true },
+        {
+            fieldName: "twoFactorEnabled",
+            type: "boolean",
+            description: "Whether two factor authentication is enabled for the user.",
+            required: false,
+        },
     ]}
 />
 
-Table: `twoFactor`
-
 <DatabaseTable
+    modelName="twoFactor"
     fields={[
-        { name: "id", type: "string", description: "The ID of the two factor authentication.", isPrimaryKey: true },
-        { name: "userId", type: "string", description: "The ID of the user", isForeignKey: true },
-        { name: "secret", type: "string", description: "The secret used to generate the TOTP code.", isOptional: true },
-        { name: "backupCodes", type: "string", description: "The backup codes used to recover access to the account if the user loses access to their phone or email.", isOptional: true },
+        {
+            fieldName: "id",
+            type: "string",
+            description: "The ID of the two factor authentication.",
+        },
+        {
+            fieldName: "userId",
+            type: "string",
+            description: "The ID of the user",
+            references: {
+                model: "user",
+                field: "id",
+            },
+        },
+        {
+            fieldName: "secret",
+            type: "string",
+            description: "The secret used to generate the TOTP code.",
+            required: false,
+        },
+        {
+            fieldName: "backupCodes",
+            type: "string",
+            description: "The backup codes used to recover access to the account if the user loses access to their phone or email.",
+            required: false,
+        },
     ]}
 />
 

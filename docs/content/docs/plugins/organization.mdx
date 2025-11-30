@@ -2051,66 +2051,72 @@ The invited member will be added to the specified team upon accepting the invita
 
 When teams are enabled, new `team` and `teamMember` tables are added to the database.
 
-Table Name: `team`
-
 <DatabaseTable
+  modelName="team"
   fields={[
     {
-      name: "id",
+      fieldName: "id",
       type: "string",
       description: "Unique identifier for each team",
-      isPrimaryKey: true,
     },
     {
-      name: "name",
+      fieldName: "name",
       type: "string",
       description: "The name of the team",
     },
     {
-      name: "organizationId",
+      fieldName: "organizationId",
       type: "string",
       description: "The ID of the organization",
-      isForeignKey: true,
+      references: {
+        model: "organization",
+        field: "id",
+      },
     },
     {
-      name: "createdAt",
-      type: "Date",
+      fieldName: "createdAt",
+      type: "date",
       description: "Timestamp of when the team was created",
     },
     {
-      name: "updatedAt",
-      type: "Date",
-      isOptional: true,
+      fieldName: "updatedAt",
+      type: "date",
+      required: false,
       description: "Timestamp of when the team was created",
     },
   ]}
 />
 
-Table Name: `teamMember`
-
 <DatabaseTable
+  modelName="teamMember"
   fields={[
     {
-      name: "id",
+      fieldName: "id",
       type: "string",
       description: "Unique identifier for each team member",
-      isPrimaryKey: true,
     },
     {
-      name: "teamId",
+      fieldName: "teamId",
       type: "string",
       description: "Unique identifier for each team",
-      isForeignKey: true,
+      references: {
+				model: "team",
+				field: "id",
+			},
     },
     {
-      name: "userId",
+      fieldName: "userId",
       type: "string",
       description: "The ID of the user",
-      isForeignKey: true,
+      references: {
+				model: "user",
+				field: "id",
+			},
     },
     {
-      name: "createdAt",
-      type: "Date",
+      fieldName: "createdAt",
+      type: "date",
+      required: false,
       description: "Timestamp of when the team member was created",
     },
   ]}
@@ -2122,41 +2128,39 @@ The organization plugin adds the following tables to the database:
 
 ### Organization
 
-Table Name: `organization`
-
 <DatabaseTable
+  modelName="organization"
   fields={[
     {
-      name: "id",
+      fieldName: "id",
       type: "string",
       description: "Unique identifier for each organization",
-      isPrimaryKey: true,
     },
     {
-      name: "name",
+      fieldName: "name",
       type: "string",
       description: "The name of the organization",
     },
     {
-      name: "slug",
+      fieldName: "slug",
       type: "string",
       description: "The slug of the organization",
     },
     {
-      name: "logo",
+      fieldName: "logo",
       type: "string",
       description: "The logo of the organization",
-      isOptional: true,
+      required: false,
     },
     {
-      name: "metadata",
+      fieldName: "metadata",
       type: "string",
       description: "Additional metadata for the organization",
-      isOptional: true,
+      required: false,
     },
     {
-      name: "createdAt",
-      type: "Date",
+      fieldName: "createdAt",
+      type: "date",
       description: "Timestamp of when the organization was created",
     },
   ]}
@@ -2164,36 +2168,40 @@ Table Name: `organization`
 
 ### Member
 
-Table Name: `member`
-
 <DatabaseTable
+  modelName="member"
   fields={[
     {
-      name: "id",
+      fieldName: "id",
       type: "string",
       description: "Unique identifier for each member",
-      isPrimaryKey: true,
     },
     {
-      name: "userId",
+      fieldName: "userId",
       type: "string",
       description: "The ID of the user",
-      isForeignKey: true,
+      references: {
+        model: "user",
+        field: "id",
+      },
     },
     {
-      name: "organizationId",
+      fieldName: "organizationId",
       type: "string",
       description: "The ID of the organization",
-      isForeignKey: true,
+      references: {
+        model: "organization",
+        field: "id",
+      },
     },
     {
-      name: "role",
+      fieldName: "role",
       type: "string",
       description: "The role of the user in the organization",
     },
     {
-      name: "createdAt",
-      type: "Date",
+      fieldName: "createdAt",
+      type: "date",
       description: "Timestamp of when the member was added to the organization",
     },
   ]}
@@ -2201,168 +2209,222 @@ Table Name: `member`
 
 ### Invitation
 
-Table Name: `invitation`
-
 <DatabaseTable
+  modelName="invitation"
   fields={[
     {
-      name: "id",
+      fieldName: "id",
       type: "string",
       description: "Unique identifier for each invitation",
-      isPrimaryKey: true,
     },
     {
-      name: "email",
+      fieldName: "email",
       type: "string",
       description: "The email address of the user",
     },
     {
-      name: "inviterId",
+      fieldName: "inviterId",
       type: "string",
       description: "The ID of the inviter",
-      isForeignKey: true,
+      references: {
+        model: "user",
+        field: "id",
+      },
     },
     {
-      name: "organizationId",
+      fieldName: "organizationId",
       type: "string",
       description: "The ID of the organization",
-      isForeignKey: true,
+      references: {
+        model: "organization",
+        field: "id",
+      },
     },
     {
-      name: "role",
+      fieldName: "role",
       type: "string",
       description: "The role of the user in the organization",
+      required: false,
     },
     {
-      name: "status",
+      fieldName: "status",
       type: "string",
       description: "The status of the invitation",
     },
     {
-      name: "createdAt",
-      type: "Date",
+      fieldName: "createdAt",
+      type: "date",
       description: "Timestamp of when the invitation was created"
     },
     {
-      name: "expiresAt",
-      type: "Date",
+      fieldName: "expiresAt",
+      type: "date",
       description: "Timestamp of when the invitation expires",
     },
-  ]}
-/>
-
-If teams are enabled, you need to add the following fields to the invitation table:
-
-<DatabaseTable
-  fields={[
     {
-      name: "teamId",
+      note: "If teams are enabled, you need to add the following fields to the invitation table:",
+    },
+    {
+      fieldName: "teamId",
       type: "string",
       description: "The ID of the team",
-      isOptional: true,
+      required: false,
+      condition: "Teams support",
     },
   ]}
 />
 
 ### Session
 
-Table Name: `session`
-
 You need to add two more fields to the session table to store the active organization ID and the active team ID.
 
 <DatabaseTable
+  modelName="session"
   fields={[
     {
-      name: "activeOrganizationId",
+      fieldName: "activeOrganizationId",
       type: "string",
       description: "The ID of the active organization",
-      isOptional: true,
+      required: false,
     },
     {
-      name: "activeTeamId",
+      note: "If teams are enabled:",
+    },
+    {
+      fieldName: "activeTeamId",
       type: "string",
       description: "The ID of the active team",
-      isOptional: true,
+      required: false,
+      condition: "Teams support",
     },
   ]}
 />
 
 ### Teams (optional)
 
-Table Name: `team`
-
 <DatabaseTable
+  modelName="team"
   fields={[
     {
-      name: "id",
+      fieldName: "id",
       type: "string",
       description: "Unique identifier for each team",
-      isPrimaryKey: true,
     },
     {
-      name: "name",
+      fieldName: "name",
       type: "string",
       description: "The name of the team",
     },
     {
-      name: "organizationId",
+      fieldName: "organizationId",
       type: "string",
       description: "The ID of the organization",
-      isForeignKey: true,
+      references: {
+        model: "organization",
+        field: "id",
+      },
     },
     {
-      name: "createdAt",
-      type: "Date",
+      fieldName: "createdAt",
+      type: "date",
       description: "Timestamp of when the team was created",
     },
     {
-      name: "updatedAt",
-      type: "Date",
-      isOptional: true,
+      fieldName: "updatedAt",
+      type: "date",
+      required: false,
       description: "Timestamp of when the team was created",
     },
   ]}
 />
 
-Table Name: `teamMember`
-
 <DatabaseTable
+  modelName="teamMember"
   fields={[
     {
-      name: "id",
+      fieldName: "id",
       type: "string",
       description: "Unique identifier for each team member",
-      isPrimaryKey: true,
     },
     {
-      name: "teamId",
+      fieldName: "teamId",
       type: "string",
       description: "Unique identifier for each team",
-      isForeignKey: true,
+      references: {
+				model: "team",
+				field: "id",
+			},
     },
     {
-      name: "userId",
+      fieldName: "userId",
       type: "string",
       description: "The ID of the user",
-      isForeignKey: true,
+      references: {
+				model: "user",
+				field: "id",
+			},
     },
     {
-      name: "createdAt",
-      type: "Date",
+      fieldName: "createdAt",
+      type: "date",
+      required: false,
       description: "Timestamp of when the team member was created",
     },
   ]}
 />
 
-Table Name: `invitation`
-
 <DatabaseTable
+  mode="alter"
+  modelName="invitation"
   fields={[
     {
-      name: "teamId",
+      fieldName: "teamId",
       type: "string",
       description: "The ID of the team",
-      isOptional: true,
+      required: false,
+    },
+  ]}
+/>
+
+### Dynamic Access Control (optional)
+
+<DatabaseTable
+  modelName="organizationRole"
+  fields={[
+    {
+      fieldName: "id",
+      type: "string",
+      description: "Unique identifier for the organization role",
+    },
+    {
+      fieldName: "organizationId",
+      type: "string",
+      description: "The ID of the organization",
+      references: {
+        model: "organization",
+        field: "id",
+      },
+    },
+    {
+      fieldName: "role",
+      type: "string",
+      description: "The name of the role",
+    },
+    {
+      fieldName: "permission",
+      type: "string",
+      description: "The permission of the role",
+    },
+    {
+      fieldName: "createdAt",
+      type: "date",
+      description: "Timestamp of when the organization role was created",
+    },
+    {
+      fieldName: "updatedAt",
+      type: "date",
+      required: false,
+      description: "Timestamp of when the organization role was updated",
     },
   ]}
 />
