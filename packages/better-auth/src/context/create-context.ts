@@ -45,7 +45,9 @@ export async function createAuthContext(
 			},
 		});
 	}
-	const plugins = options.plugins || [];
+	const userPlugins = (options.plugins || []).filter(
+		(p) => p?.enabled !== false,
+	);
 	const internalPlugins = getInternalPlugins(options);
 	const logger = createLogger(options.logger);
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
@@ -69,7 +71,7 @@ export async function createAuthContext(
 		secret,
 		baseURL: baseURL ? new URL(baseURL).origin : "",
 		basePath: options.basePath || "/api/auth",
-		plugins: plugins.concat(internalPlugins),
+		plugins: userPlugins.concat(internalPlugins),
 	};
 
 	checkEndpointConflicts(options, logger);
