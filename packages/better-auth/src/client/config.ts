@@ -11,7 +11,7 @@ import { getSessionAtom } from "./session-atom";
 
 const resolvePublicAuthUrl = (basePath?: string) => {
 	if (typeof process === "undefined") return undefined;
-	const path = basePath || "/api/auth";
+	const path = basePath ?? "/api/auth";
 
 	if (process.env.NEXT_PUBLIC_AUTH_URL) return process.env.NEXT_PUBLIC_AUTH_URL;
 
