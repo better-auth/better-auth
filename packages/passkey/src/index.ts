@@ -824,7 +824,7 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 						where: [{ field: "id", value: passkey.id }],
 					});
 					return ctx.json({
-						success: true,
+						status: true,
 					});
 				},
 			),
