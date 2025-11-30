@@ -26,17 +26,13 @@ Create a `.env` file in the root of your project and add the following environme
 
 1. **Secret Key**
 
-Random value used by the library for encryption and generating hashes. **You can generate one using the button below**.
+A secret value used for encryption and hashing. It must be at least 32 characters and generated with high entropy. Click the button below to generate one. You can also use `openssl rand -base64 32` to generate one.
 
 ```txt title=".env"
 BETTER_AUTH_SECRET=
 ```
 
 <GenerateSecret />
-
-<Callout type="warn">
-Your `BETTER_AUTH_SECRET` **must be at least 32 characters long** and generated with **high entropy**. Using a short or weak secret can cause **cryptic runtime errors**, invalid signatures, or weakened security.
-</Callout>
 
 2. **Set Base URL**
 
