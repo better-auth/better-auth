@@ -293,20 +293,24 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 				async (ctx) => {
 					const { session, valid } = await verifyTwoFactor(ctx);
 					const user = session.user as UserWithTwoFactor;
-					const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
-						model: twoFactorTable,
-						where: [
-							{
-								field: "userId",
-								value: user.id,
-							},
-						],
-					});
-					if (!twoFactor) {
+					const twoFactors = await ctx.context.adapter.findMany<TwoFactorTable>(
+						{
+							model: twoFactorTable,
+							where: [
+								{
+									field: "userId",
+									value: user.id,
+								},
+							],
+							limit: 1,
+						},
+					);
+					if (!twoFactors.length) {
 						throw new APIError("BAD_REQUEST", {
 							message: TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
 						});
 					}
+					const twoFactor = twoFactors[0]!;
 					const validate = await verifyBackupCode(
 						{
 							backupCodes: twoFactor.backupCodes,
@@ -479,20 +483,24 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 					},
 				},
 				async (ctx) => {
-					const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
-						model: twoFactorTable,
-						where: [
-							{
-								field: "userId",
-								value: ctx.body.userId,
-							},
-						],
-					});
-					if (!twoFactor) {
+					const twoFactors = await ctx.context.adapter.findMany<TwoFactorTable>(
+						{
+							model: twoFactorTable,
+							where: [
+								{
+									field: "userId",
+									value: ctx.body.userId,
+								},
+							],
+							limit: 1,
+						},
+					);
+					if (!twoFactors.length) {
 						throw new APIError("BAD_REQUEST", {
 							message: TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
 						});
 					}
+					const twoFactor = twoFactors[0]!;
 					const decryptedBackupCodes = await getBackupCodes(
 						twoFactor.backupCodes,
 						ctx.context.secret,

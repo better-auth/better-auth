@@ -37,7 +37,12 @@ const { execute } = await testAdapter({
 		await pgDB.end();
 		const migrationCount = incrementMigrationCount();
 		await generateAuthConfigFile(options);
-		await generatePrismaSchema(options, db, migrationCount, dialect);
+		const code = await generatePrismaSchema(
+			options,
+			db,
+			migrationCount,
+			dialect,
+		);
 		await pushPrismaSchema(dialect);
 		destroyPrismaClient({ migrationCount: migrationCount - 1, dialect });
 	},
@@ -47,7 +52,7 @@ const { execute } = await testAdapter({
 		authFlowTestSuite(),
 		numberIdTestSuite(),
 		joinsTestSuite(),
-		uuidTestSuite({}),
+		uuidTestSuite(),
 	],
 	onFinish: async () => {},
 	prefixTests: "pg",

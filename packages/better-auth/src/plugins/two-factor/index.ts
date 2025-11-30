@@ -251,7 +251,7 @@ export const twoFactor = (options?: TwoFactorOptions | undefined) => {
 							twoFactorEnabled: false,
 						},
 					);
-					await ctx.context.adapter.delete({
+					await ctx.context.adapter.deleteMany({
 						model: opts.twoFactorTable,
 						where: [
 							{

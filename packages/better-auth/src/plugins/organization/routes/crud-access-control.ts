@@ -139,7 +139,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 
 			// Get the user's role associated with the organization.
 			// This also serves as a check to ensure the org id is valid.
-			const member = await ctx.context.adapter.findOne<Member>({
+			const members = await ctx.context.adapter.findMany<Member>({
 				model: "member",
 				where: [
 					{
@@ -155,8 +155,9 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 						connector: "AND",
 					},
 				],
+				limit: 1,
 			});
-			if (!member) {
+			if (!members.length) {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The user is not a member of the organization to create a role.`,
 					{
@@ -169,6 +170,8 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
 				});
 			}
+
+			const member = members[0]!;
 
 			const canCreateRole = await hasPermission(
 				{
@@ -330,7 +333,7 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 
 			// Get the user's role associated with the organization.
 			// This also serves as a check to ensure the org id is valid.
-			const member = await ctx.context.adapter.findOne<Member>({
+			const members = await ctx.context.adapter.findMany<Member>({
 				model: "member",
 				where: [
 					{
@@ -346,8 +349,9 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 						connector: "AND",
 					},
 				],
+				limit: 1,
 			});
-			if (!member) {
+			if (!members.length) {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The user is not a member of the organization to delete a role.`,
 					{
@@ -360,6 +364,7 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
 				});
 			}
+			const member = members[0]!;
 
 			const canDeleteRole = await hasPermission(
 				{
@@ -432,8 +437,8 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 					message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
 				});
 			}
-			const existingRoleInDB =
-				await ctx.context.adapter.findOne<OrganizationRole>({
+			const existingRoleInDBs =
+				await ctx.context.adapter.findMany<OrganizationRole>({
 					model: "organizationRole",
 					where: [
 						{
@@ -444,8 +449,9 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 						},
 						condition,
 					],
+					limit: 1,
 				});
-			if (!existingRoleInDB) {
+			if (!existingRoleInDBs.length) {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The role name/id does not exist in the database.`,
 					{
@@ -459,12 +465,13 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 					message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
 				});
 			}
+			const existingRoleInDB = existingRoleInDBs[0]!;
 
 			existingRoleInDB.permission = JSON.parse(
 				existingRoleInDB.permission as never as string,
 			);
 
-			await ctx.context.adapter.delete({
+			await ctx.context.adapter.deleteMany({
 				model: "organizationRole",
 				where: [
 					{
@@ -517,7 +524,7 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			const member = await ctx.context.adapter.findOne<Member>({
+			const members = await ctx.context.adapter.findMany<Member>({
 				model: "member",
 				where: [
 					{
@@ -533,8 +540,9 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 						connector: "AND",
 					},
 				],
+				limit: 1,
 			});
-			if (!member) {
+			if (!members.length) {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The user is not a member of the organization to list roles.`,
 					{
@@ -547,6 +555,7 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
 				});
 			}
+			const member = members[0]!;
 
 			const canListRoles = await hasPermission(
 				{
@@ -652,7 +661,7 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			const member = await ctx.context.adapter.findOne<Member>({
+			const members = await ctx.context.adapter.findMany<Member>({
 				model: "member",
 				where: [
 					{
@@ -668,7 +677,9 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 						connector: "AND",
 					},
 				],
+				limit: 1,
 			});
+			const member = members[0];
 			if (!member) {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The user is not a member of the organization to read a role.`,
@@ -733,7 +744,7 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 					message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
 				});
 			}
-			let role = await ctx.context.adapter.findOne<OrganizationRole>({
+			let roles = await ctx.context.adapter.findMany<OrganizationRole>({
 				model: "organizationRole",
 				where: [
 					{
@@ -744,8 +755,9 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 					},
 					condition,
 				],
+				limit: 1,
 			});
-			if (!role) {
+			if (!roles.length) {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The role name/id does not exist in the database.`,
 					{
@@ -759,7 +771,7 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 					message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
 				});
 			}
-
+			const role = roles[0]!;
 			role.permission = JSON.parse(role.permission as never as string);
 
 			return ctx.json(role as OrganizationRole & ReturnAdditionalFields);
@@ -851,7 +863,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			const member = await ctx.context.adapter.findOne<Member>({
+			const members = await ctx.context.adapter.findMany<Member>({
 				model: "member",
 				where: [
 					{
@@ -867,7 +879,9 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 						connector: "AND",
 					},
 				],
+				limit: 1,
 			});
+			const member = members[0];
 			if (!member) {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The user is not a member of the organization to update a role.`,
@@ -928,7 +942,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
 				});
 			}
-			let role = await ctx.context.adapter.findOne<OrganizationRole>({
+			let roles = await ctx.context.adapter.findMany<OrganizationRole>({
 				model: "organizationRole",
 				where: [
 					{
@@ -939,8 +953,9 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					},
 					condition,
 				],
+				limit: 1,
 			});
-			if (!role) {
+			if (!roles.length) {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The role name/id does not exist in the database.`,
 					{
@@ -954,6 +969,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
 				});
 			}
+			const role = roles[0]!;
 			role.permission = role.permission
 				? JSON.parse(role.permission as never as string)
 				: undefined;
@@ -1013,7 +1029,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					? { permission: JSON.stringify(updateData.permission) }
 					: {}),
 			};
-			await ctx.context.adapter.update<OrganizationRole>({
+			await ctx.context.adapter.updateMany({
 				model: "organizationRole",
 				where: [
 					{
@@ -1188,24 +1204,27 @@ async function checkIfRoleNameIsTakenByRoleInDB({
 	organizationId: string;
 	role: string;
 }) {
-	const existingRoleInDB = await ctx.context.adapter.findOne<OrganizationRole>({
-		model: "organizationRole",
-		where: [
-			{
-				field: "organizationId",
-				value: organizationId,
-				operator: "eq",
-				connector: "AND",
-			},
-			{
-				field: "role",
-				value: role,
-				operator: "eq",
-				connector: "AND",
-			},
-		],
-	});
-	if (existingRoleInDB) {
+	const existingRoleInDB = await ctx.context.adapter.findMany<OrganizationRole>(
+		{
+			model: "organizationRole",
+			where: [
+				{
+					field: "organizationId",
+					value: organizationId,
+					operator: "eq",
+					connector: "AND",
+				},
+				{
+					field: "role",
+					value: role,
+					operator: "eq",
+					connector: "AND",
+				},
+			],
+			limit: 1,
+		},
+	);
+	if (existingRoleInDB.length > 0) {
 		ctx.context.logger.error(
 			`[Dynamic Access Control] The role name "${role}" is already taken by a role in the database.`,
 			{

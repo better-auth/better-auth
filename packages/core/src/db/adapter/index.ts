@@ -283,6 +283,12 @@ export interface DBAdapterFactoryConfig<
 	 * @default false
 	 */
 	disableTransformJoin?: boolean | undefined;
+	/**
+	 * Whether to disable the transform where.
+	 * Do not use this option unless you know what you are doing.
+	 * @default false
+	 */
+	disableTransformWhere?: boolean | undefined;
 }
 
 export type Where = {
@@ -333,13 +339,13 @@ export type JoinConfig = {
 		 */
 		on: {
 			/**
-			 * Column name from the main table
+			 * The field name from the main table.
 			 */
-			from: string;
+			field: string;
 			/**
-			 * Column name from the joined table
+			 * The referencing field on the joined table.
 			 */
-			to: string;
+			references: string;
 		};
 		/**
 		 * Limit the number of rows to return.

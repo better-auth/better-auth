@@ -39,13 +39,15 @@ const findUserById = async (
 		organizationId,
 	}: { userId: string; providerId: string; organizationId?: string },
 ) => {
-	const account = await adapter.findOne<Account>({
+	const accounts = await adapter.findMany<Account>({
 		model: "account",
 		where: [
 			{ field: "userId", value: userId },
 			{ field: "providerId", value: providerId },
 		],
+		limit: 1,
 	});
+	const account = accounts[0]!;
 
 	// Disallows access to the resource
 	// Account is not associated to the provider
@@ -56,13 +58,15 @@ const findUserById = async (
 
 	let member: Member | null = null;
 	if (organizationId) {
-		member = await adapter.findOne<Member>({
+		const members = await adapter.findMany<Member>({
 			model: "member",
 			where: [
 				{ field: "organizationId", value: organizationId },
 				{ field: "userId", value: userId },
 			],
+			limit: 1,
 		});
+		member = members[0]!;
 	}
 
 	// Disallows access to the resource
@@ -158,7 +162,7 @@ export const scim = (options?: SCIMOptions) => {
 
 					let member: Member | null = null;
 					if (organizationId) {
-						member = await ctx.context.adapter.findOne<Member>({
+						const members = await ctx.context.adapter.findMany<Member>({
 							model: "member",
 							where: [
 								{
@@ -170,26 +174,31 @@ export const scim = (options?: SCIMOptions) => {
 									value: organizationId,
 								},
 							],
+							limit: 1,
 						});
 
-						if (!member) {
+						if (!members.length) {
 							throw new APIError("FORBIDDEN", {
 								message: "You are not a member of the organization",
 							});
 						}
+						member = members[0]!;
 					}
 
-					const scimProvider = await ctx.context.adapter.findOne<SCIMProvider>({
-						model: "scimProvider",
-						where: [
-							{ field: "providerId", value: providerId },
-							...(organizationId
-								? [{ field: "organizationId", value: organizationId }]
-								: []),
-						],
-					});
+					const scimProviders =
+						await ctx.context.adapter.findMany<SCIMProvider>({
+							model: "scimProvider",
+							where: [
+								{ field: "providerId", value: providerId },
+								...(organizationId
+									? [{ field: "organizationId", value: organizationId }]
+									: []),
+							],
+							limit: 1,
+						});
 
-					if (scimProvider) {
+					if (scimProviders.length) {
+						const scimProvider = scimProviders[0]!;
 						await ctx.context.adapter.delete<SCIMProvider>({
 							model: "scimProvider",
 							where: [{ field: "id", value: scimProvider.id }],
@@ -267,15 +276,16 @@ export const scim = (options?: SCIMOptions) => {
 					const providerId = ctx.context.scimProvider.providerId;
 					const accountId = getAccountId(body.userName, body.externalId);
 
-					const existingAccount = await ctx.context.adapter.findOne<Account>({
+					const existingAccounts = await ctx.context.adapter.findMany<Account>({
 						model: "account",
 						where: [
 							{ field: "accountId", value: accountId },
 							{ field: "providerId", value: providerId },
 						],
+						limit: 1,
 					});
 
-					if (existingAccount) {
+					if (existingAccounts.length) {
 						throw new SCIMAPIError("CONFLICT", {
 							detail: "User already exists",
 							scimType: "uniqueness",
@@ -309,13 +319,15 @@ export const scim = (options?: SCIMOptions) => {
 						const organizationId = ctx.context.scimProvider.organizationId;
 
 						if (organizationId) {
-							const isOrgMember = await ctx.context.adapter.findOne({
+							const members = await ctx.context.adapter.findMany<Member>({
 								model: "member",
 								where: [
 									{ field: "organizationId", value: organizationId },
 									{ field: "userId", value: userId },
 								],
+								limit: 1,
 							});
+							const isOrgMember = members[0]!;
 
 							if (!isOrgMember) {
 								return await ctx.context.adapter.create<Member>({

@@ -200,7 +200,7 @@ export async function authorize(
 	// 2. The user has already consented and prompt is not "consent"
 	const skipConsentForTrustedClient = client.skipConsent;
 	const hasAlreadyConsented = await ctx.context.adapter
-		.findOne<{
+		.findMany<{
 			consentGiven: boolean;
 			scopes: string;
 		}>({
@@ -215,8 +215,11 @@ export async function authorize(
 					value: session.user.id,
 				},
 			],
+			limit: 1,
 		})
-		.then((res) => {
+		.then((res_) => {
+			if (!res_.length) return false;
+			const res = res_[0]!;
 			if (!res?.consentGiven) {
 				return false;
 			}

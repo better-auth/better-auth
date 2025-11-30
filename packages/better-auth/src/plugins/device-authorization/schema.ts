@@ -7,6 +7,7 @@ export const schema = {
 			deviceCode: {
 				type: "string",
 				required: true,
+				unique: true,
 			},
 			userCode: {
 				type: "string",

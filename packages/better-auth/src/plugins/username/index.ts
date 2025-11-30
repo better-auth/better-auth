@@ -300,7 +300,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 						});
 					}
 
-					const account = await ctx.context.adapter.findOne<Account>({
+					const accounts = await ctx.context.adapter.findMany<Account>({
 						model: "account",
 						where: [
 							{
@@ -312,12 +312,14 @@ export const username = (options?: UsernameOptions | undefined) => {
 								value: "credential",
 							},
 						],
+						limit: 1,
 					});
-					if (!account) {
+					if (!accounts.length) {
 						throw new APIError("UNAUTHORIZED", {
 							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						});
 					}
+					const account = accounts[0]!;
 					const currentPassword = account?.password;
 					if (!currentPassword) {
 						ctx.context.logger.error("Password not found", {

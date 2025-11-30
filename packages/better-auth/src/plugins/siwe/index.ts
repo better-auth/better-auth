@@ -161,16 +161,18 @@ export const siwe = (options: SIWEPluginOptions) =>
 						let user: User | null = null;
 
 						// Check if there's a wallet address record for this exact address+chainId combination
-						const existingWalletAddress: WalletAddress | null =
-							await ctx.context.adapter.findOne({
+						const existingWalletAddresses: WalletAddress[] | null =
+							await ctx.context.adapter.findMany({
 								model: "walletAddress",
 								where: [
 									{ field: "address", operator: "eq", value: walletAddress },
 									{ field: "chainId", operator: "eq", value: chainId },
 								],
+								limit: 1,
 							});
 
-						if (existingWalletAddress) {
+						if (existingWalletAddresses.length) {
+							const existingWalletAddress = existingWalletAddresses[0]!;
 							// Get the user associated with this wallet address
 							user = await ctx.context.adapter.findOne({
 								model: "user",
@@ -184,15 +186,16 @@ export const siwe = (options: SIWEPluginOptions) =>
 							});
 						} else {
 							// No exact match found, check if this address exists on any other chain
-							const anyWalletAddress: WalletAddress | null =
-								await ctx.context.adapter.findOne({
+							const anyWalletAddresses: WalletAddress[] | null =
+								await ctx.context.adapter.findMany({
 									model: "walletAddress",
 									where: [
 										{ field: "address", operator: "eq", value: walletAddress },
 									],
+									limit: 1,
 								});
 
-							if (anyWalletAddress) {
+							if (anyWalletAddresses.length) {
 								// Same address exists on different chain, get that user
 								user = await ctx.context.adapter.findOne({
 									model: "user",
@@ -200,7 +203,7 @@ export const siwe = (options: SIWEPluginOptions) =>
 										{
 											field: "id",
 											operator: "eq",
-											value: anyWalletAddress.userId,
+											value: anyWalletAddresses[0]!.userId,
 										},
 									],
 								});
@@ -245,7 +248,7 @@ export const siwe = (options: SIWEPluginOptions) =>
 							});
 						} else {
 							// User exists, but check if this specific address/chain combo exists
-							if (!existingWalletAddress) {
+							if (!existingWalletAddresses.length) {
 								// Add this new chainId to existing user's addresses
 								await ctx.context.adapter.create({
 									model: "walletAddress",

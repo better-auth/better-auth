@@ -114,12 +114,14 @@ export async function onSubscriptionUpdated(
 
 		const subscriptionId = subscriptionUpdated.metadata?.subscriptionId;
 		const customerId = subscriptionUpdated.customer?.toString();
-		let subscription = await ctx.context.adapter.findOne<Subscription>({
+		let subscriptions = await ctx.context.adapter.findMany<Subscription>({
 			model: "subscription",
 			where: subscriptionId
 				? [{ field: "id", value: subscriptionId }]
 				: [{ field: "stripeSubscriptionId", value: subscriptionUpdated.id }],
+			limit: 1,
 		});
+		let subscription = subscriptions[0];
 		if (!subscription) {
 			const subs = await ctx.context.adapter.findMany<Subscription>({
 				model: "subscription",
@@ -220,7 +222,7 @@ export async function onSubscriptionDeleted(
 	try {
 		const subscriptionDeleted = event.data.object as Stripe.Subscription;
 		const subscriptionId = subscriptionDeleted.id;
-		const subscription = await ctx.context.adapter.findOne<Subscription>({
+		const subscriptions = await ctx.context.adapter.findMany<Subscription>({
 			model: "subscription",
 			where: [
 				{
@@ -228,7 +230,9 @@ export async function onSubscriptionDeleted(
 					value: subscriptionId,
 				},
 			],
+			limit: 1,
 		});
+		const subscription = subscriptions[0];
 		if (subscription) {
 			await ctx.context.adapter.update({
 				model: "subscription",

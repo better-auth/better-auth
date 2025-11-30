@@ -68,6 +68,7 @@ export const createAdapterFactory =
 			disableTransformInput: cfg.disableTransformInput ?? false,
 			disableTransformOutput: cfg.disableTransformOutput ?? false,
 			disableTransformJoin: cfg.disableTransformJoin ?? false,
+			disableTransformWhere: cfg.disableTransformWhere ?? false,
 		} satisfies AdapterFactoryConfig;
 		const useNumberId =
 			options.advanced?.database?.useNumberId === true ||
@@ -660,8 +661,8 @@ export const createAdapterFactory =
 
 				transformedJoin[getModelName(model)] = {
 					on: {
-						from,
-						to,
+						field: from,
+						references: to,
 					},
 					limit,
 					relation: isUnique ? "one-to-one" : "one-to-many",
@@ -686,10 +687,10 @@ export const createAdapterFactory =
 		}) => {
 			if (!baseData) return baseData;
 			const modelName = getModelName(joinModel);
-			const field = joinConfig.on.to;
+			const field = joinConfig.on.references;
 			const value =
 				baseData[
-					getDefaultFieldName({ field: joinConfig.on.from, model: baseModel })
+					getDefaultFieldName({ field: joinConfig.on.field, model: baseModel })
 				];
 
 			if (value === null || value === undefined) {
@@ -736,6 +737,52 @@ export const createAdapterFactory =
 				throw error;
 			}
 			return result;
+		};
+
+		/**
+		 * Throws an error if the where clause does not contain a unique field.
+		 * Only used for single record queries. `update`, `findOne`, `delete`.
+		 */
+		const uniqueWhereRequirement = ({
+			model: _model,
+			where,
+		}: {
+			model: string;
+			where: Where[];
+		}) => {
+			const model = getDefaultModelName(_model);
+
+			const errStack = new Error().stack?.replace("Error:", "");
+
+			if (!where.some((x) => "eq" === (x.operator ?? "eq"))) {
+				throw new BetterAuthError(
+					`The where clause for model "${model}" must contain an equality operator ("eq") for single record queries.${errStack}`,
+				);
+			}
+
+			const exactWhere = where.filter((x) => "eq" === (x.operator ?? "eq"));
+			const modelAttributes = schema[model];
+			if (!modelAttributes) {
+				throw new BetterAuthError(
+					`Model "${model}" not found in schema.${errStack}`,
+				);
+			}
+
+			const uniqueFieldsFromSchema = Object.entries(modelAttributes.fields)
+				.filter(([_, fieldAttributes]) => fieldAttributes.unique)
+				.map(([field]) => field);
+
+			const uniqueFields = [...uniqueFieldsFromSchema, "id"];
+
+			const hasUniqueField = uniqueFields.some((field) =>
+				exactWhere.some((x) => x.field === field),
+			);
+
+			if (!hasUniqueField) {
+				throw new BetterAuthError(
+					`The where clause for model "${model}" must contain a unique field (eg: ${uniqueFields.map((x) => `"${x}"`).join(", ")}) for single record queries.${errStack}`,
+				);
+			}
 		};
 
 		const adapterInstance = customAdapter({
@@ -865,10 +912,18 @@ export const createAdapterFactory =
 				let thisTransactionId = transactionId;
 				unsafeModel = getDefaultModelName(unsafeModel);
 				const model = getModelName(unsafeModel);
-				const where = transformWhereClause({
+				uniqueWhereRequirement({
 					model: unsafeModel,
 					where: unsafeWhere,
 				});
+				let where: Required<Where>[] | undefined =
+					unsafeWhere as Required<Where>[];
+				if (!config.disableTransformWhere) {
+					where = transformWhereClause({
+						model: unsafeModel,
+						where: unsafeWhere,
+					});
+				}
 				debugLog(
 					{ method: "update" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 4)}`,
@@ -924,12 +979,16 @@ export const createAdapterFactory =
 			}) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
-				const model = getModelName(unsafeModel);
-				const where = transformWhereClause({
-					model: unsafeModel,
-					where: unsafeWhere,
-				});
 				unsafeModel = getDefaultModelName(unsafeModel);
+				const model = getModelName(unsafeModel);
+				let where: Required<Where>[] | undefined =
+					unsafeWhere as Required<Where>[];
+				if (!config.disableTransformWhere) {
+					where = transformWhereClause({
+						model: unsafeModel,
+						where: unsafeWhere,
+					});
+				}
 				debugLog(
 					{ method: "updateMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 4)}`,
@@ -979,12 +1038,20 @@ export const createAdapterFactory =
 			}) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
+				unsafeModel = getDefaultModelName(unsafeModel);
 				const model = getModelName(unsafeModel);
-				const where = transformWhereClause({
+				uniqueWhereRequirement({
 					model: unsafeModel,
 					where: unsafeWhere,
 				});
-				unsafeModel = getDefaultModelName(unsafeModel);
+				let where: Required<Where>[] | undefined =
+					unsafeWhere as Required<Where>[];
+				if (!config.disableTransformWhere) {
+					where = transformWhereClause({
+						model: unsafeModel,
+						where: unsafeWhere,
+					});
+				}
 				let join: JoinConfig | undefined;
 				let passJoinToAdapter = true;
 				if (!config.disableTransformJoin) {
@@ -1052,16 +1119,20 @@ export const createAdapterFactory =
 			}) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
+				unsafeModel = getDefaultModelName(unsafeModel);
 				const limit =
 					unsafeLimit ??
 					options.advanced?.database?.defaultFindManyLimit ??
 					100;
 				const model = getModelName(unsafeModel);
-				const where = transformWhereClause({
-					model: unsafeModel,
-					where: unsafeWhere,
-				});
-				unsafeModel = getDefaultModelName(unsafeModel);
+				let where: Required<Where>[] | undefined =
+					unsafeWhere as Required<Where>[];
+				if (!config.disableTransformWhere) {
+					where = transformWhereClause({
+						model: unsafeModel,
+						where: unsafeWhere,
+					});
+				}
 				let join: JoinConfig | undefined;
 				let passJoinToAdapter = true;
 				if (!config.disableTransformJoin) {
@@ -1129,12 +1200,20 @@ export const createAdapterFactory =
 			}) => {
 				transactionId++;
 				let thisTransactionId = transactionId;
+				unsafeModel = getDefaultModelName(unsafeModel);
 				const model = getModelName(unsafeModel);
-				const where = transformWhereClause({
+				uniqueWhereRequirement({
 					model: unsafeModel,
 					where: unsafeWhere,
 				});
-				unsafeModel = getDefaultModelName(unsafeModel);
+				let where: Required<Where>[] | undefined =
+					unsafeWhere as Required<Where>[];
+				if (!config.disableTransformWhere) {
+					where = transformWhereClause({
+						model: unsafeModel,
+						where: unsafeWhere,
+					});
+				}
 				debugLog(
 					{ method: "delete" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 2)}`,
@@ -1162,10 +1241,14 @@ export const createAdapterFactory =
 				transactionId++;
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
-				const where = transformWhereClause({
-					model: unsafeModel,
-					where: unsafeWhere,
-				});
+				let where: Required<Where>[] | undefined =
+					unsafeWhere as Required<Where>[];
+				if (!config.disableTransformWhere) {
+					where = transformWhereClause({
+						model: unsafeModel,
+						where: unsafeWhere,
+					});
+				}
 				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
 					{ method: "deleteMany" },
@@ -1195,11 +1278,15 @@ export const createAdapterFactory =
 				transactionId++;
 				let thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
-				const where = transformWhereClause({
-					model: unsafeModel,
-					where: unsafeWhere,
-				});
 				unsafeModel = getDefaultModelName(unsafeModel);
+				let where: Required<Where>[] | undefined =
+					unsafeWhere as Required<Where>[];
+				if (!config.disableTransformWhere) {
+					where = transformWhereClause({
+						model: unsafeModel,
+						where: unsafeWhere,
+					});
+				}
 				debugLog(
 					{ method: "count" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 2)}`,

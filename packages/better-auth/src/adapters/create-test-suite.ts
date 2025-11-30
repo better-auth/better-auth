@@ -201,6 +201,7 @@ export const createTestSuite = <
 					disableTransformOutput: true,
 					disableTransformInput: true,
 					disableTransformJoin: true,
+					disableTransformWhere: true,
 				};
 				const adapterCreator = (
 					options: BetterAuthOptions,

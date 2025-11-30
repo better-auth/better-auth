@@ -557,7 +557,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				});
 			}
 			if (ctx.body.organizationId) {
-				const organization = await ctx.context.adapter.findOne({
+				const organization = await ctx.context.adapter.findMany({
 					model: "member",
 					where: [
 						{
@@ -569,8 +569,9 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 							value: ctx.body.organizationId,
 						},
 					],
+					limit: 1,
 				});
-				if (!organization) {
+				if (!organization.length) {
 					throw new APIError("BAD_REQUEST", {
 						message: "You are not a member of the organization",
 					});
@@ -921,7 +922,7 @@ export const signInSSO = (options?: SSOOptions) => {
 			// Try to find provider in database
 			if (!provider) {
 				provider = await ctx.context.adapter
-					.findOne<SSOProvider<SSOOptions>>({
+					.findMany<SSOProvider<SSOOptions>>({
 						model: "ssoProvider",
 						where: [
 							{
@@ -934,10 +935,11 @@ export const signInSSO = (options?: SSOOptions) => {
 							},
 						],
 					})
-					.then((res) => {
-						if (!res) {
+					.then((res_) => {
+						if (!res_.length) {
 							return null;
 						}
+						const res = res_[0]!;
 						return {
 							...res,
 							oidcConfig: res.oidcConfig
@@ -1421,14 +1423,15 @@ export const callbackSSO = (options?: SSOOptions) => {
 					(plugin) => plugin.id === "organization",
 				);
 				if (isOrgPluginEnabled) {
-					const isAlreadyMember = await ctx.context.adapter.findOne({
+					const isAlreadyMember = await ctx.context.adapter.findMany({
 						model: "member",
 						where: [
 							{ field: "organizationId", value: provider.organizationId },
 							{ field: "userId", value: user.id },
 						],
+						limit: 1,
 					});
-					if (!isAlreadyMember) {
+					if (!isAlreadyMember.length) {
 						const role = options?.organizationProvisioning?.getRole
 							? await options.organizationProvisioning.getRole({
 									user,

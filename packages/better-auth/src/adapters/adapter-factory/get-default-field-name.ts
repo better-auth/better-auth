@@ -50,7 +50,9 @@ export const initGetDefaultFieldName = ({
 			}
 		}
 		if (!f) {
-			throw new BetterAuthError(`Field ${field} not found in model ${model}`);
+			throw new BetterAuthError(
+				`Field ${field} not found in model ${model} ${new Error().stack?.replace("error:", "")}`,
+			);
 		}
 		return field;
 	};

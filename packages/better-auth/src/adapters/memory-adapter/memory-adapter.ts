@@ -212,7 +212,8 @@ export const memoryAdapter = (
 
 						const matchingRecords = joinTable.filter(
 							(joinRecord: any) =>
-								joinRecord[joinAttr.on.to] === baseRecord[joinAttr.on.from],
+								joinRecord[joinAttr.on.references] ===
+								baseRecord[joinAttr.on.field],
 						);
 
 						if (joinAttr.relation === "one-to-one") {
