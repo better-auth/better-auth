@@ -33,6 +33,7 @@ import type {
 } from "./types";
 import { defaultClientSecretHasher } from "./utils";
 import { parsePrompt } from "./utils/prompt";
+import { matchesRedirectURI } from "./utils/redirect-uri";
 
 const getJwtPlugin = (ctx: GenericEndpointContext) => {
 	return ctx.context.options.plugins?.find(
@@ -725,7 +726,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 							error: "invalid_client",
 						});
 					}
-					if (value.redirectURI !== redirect_uri.toString()) {
+					// Validate redirect_uri matches the stored one from authorization
+					if (!matchesRedirectURI(value.redirectURI, redirect_uri.toString())) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "invalid redirect_uri",
 							error: "invalid_client",
@@ -1693,7 +1695,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 						}
 
 						const isValidRedirectUri = client.redirectUrls.some(
-							(registeredUri) => post_logout_redirect_uri === registeredUri,
+							(registeredUri) =>
+								matchesRedirectURI(registeredUri, post_logout_redirect_uri),
 						);
 
 						if (!isValidRedirectUri) {
