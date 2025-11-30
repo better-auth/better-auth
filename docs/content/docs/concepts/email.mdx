@@ -30,6 +30,7 @@ export const auth = betterAuth({
     emailVerification: {
         sendVerificationEmail: async ({ user, url, token }, request) => {
             void sendEmail({
+            void sendEmail({
                 to: user.email,
                 subject: 'Verify your email address',
                 text: `Click the link to verify your email: ${url}`
@@ -80,6 +81,7 @@ If you enable require email verification, users must verify their email before t
 export const auth = betterAuth({
   emailVerification: {
     sendVerificationEmail: async ({ user, url }) => {
+      void sendEmail({
       void sendEmail({
         to: user.email,
         subject: "Verify your email address",
@@ -185,6 +187,7 @@ export const auth = betterAuth({
     emailAndPassword: {
         enabled: true,
         sendResetPassword: async ({ user, url, token }, request) => {
+            void sendEmail({
             void sendEmail({
                 to: user.email,
                 subject: 'Reset your password',

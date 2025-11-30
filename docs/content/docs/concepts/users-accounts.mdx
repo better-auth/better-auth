@@ -36,6 +36,7 @@ export const auth = betterAuth({
         // Required to send the verification email
         sendVerificationEmail: async ({ user, url, token }) => {
             void sendEmail({
+            void sendEmail({
                 to: user.email,
             })
         }
@@ -63,6 +64,7 @@ export const auth = betterAuth({
         changeEmail: {
             enabled: true,
             sendChangeEmailConfirmation: async ({ user, newEmail, url, token }, request) => {
+                sendEmail({
                 sendEmail({
                     to: user.email, // Sent to the CURRENT email
                     subject: 'Approve email change',
