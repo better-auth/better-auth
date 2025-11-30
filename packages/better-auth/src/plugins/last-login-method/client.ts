@@ -12,26 +12,58 @@ export interface LastLoginMethodClientConfig {
 	 */
 	cookieName?: string | undefined;
 	/**
-	 * Custom method to get the last login method
-	 * @returns The last login method
+	 * Advanced configuration options
 	 */
-	customGetMethod?: (() => string | null) | undefined;
-	/**
-	 * Custom method to clear the last login method
-	 */
-	customClearMethod?: (() => void) | undefined;
-	/**
-	 * Custom resolve method for retrieving the last login method (on client-side)
-	 * Only applied when `onLastMethodRetrieved` is provided.
-	 */
-	customResolveMethod?:
-		| ((url: string | URL) => Awaitable<string | null>)
-		| undefined;
-	/**
-	 * Callback invoked when the last method is retrieved (on client-side)
-	 */
-	onLastMethodRetrieved?:
-		| ((method: string | null) => Awaitable<void>)
+	advanced?:
+		| {
+				/**
+				 * Custom method to get the last login method
+				 * @returns The last login method
+				 */
+				customGetMethod?: (() => string | null) | undefined;
+				/**
+				 * Custom method to clear the last login method
+				 */
+				customClearMethod?: (() => void) | undefined;
+				/**
+				 * Custom resolve method for retrieving the last login method (on client-side)
+				 * Only applied when `onLastMethodRetrieved` is provided.
+				 */
+				customResolveMethod?:
+					| ((url: string | URL) => Awaitable<string | null>)
+					| undefined;
+				/**
+				 * Callback fired when the last login method is retrieved (on client-side)
+				 *
+				 * Lets you intercept successful sign-in/up responses and extract the last used
+				 * login method manually.
+				 *
+				 * Designed for __environments without cookie support__ (e.g. Expo, React Native),
+				 * allowing you to plug in your own storage layer
+				 *
+				 * @example
+				 * ```ts
+				 * import * as SecureStore from "expo-secure-store";
+				 *
+				 * lastLoginMethodClient({
+				 *  advanced: {
+				 *      async onLastMethodRetrieved(method) {
+				 *        await SecureStore.setItemAsync("last_login_method", method);
+				 *      },
+				 *      customGetMethod() {
+				 *        return SecureStore.getItem("last_login_method");
+				 *      },
+				 *      customClearMethod() {
+				 *        void SecureStore.deleteItemAsync("last_login_method");
+				 *      },
+				 *   },
+				 * });
+				 * ```
+				 */
+				onLastMethodRetrieved?:
+					| ((method: string | null) => Awaitable<void>)
+					| undefined;
+		  }
 		| undefined;
 }
 
@@ -57,7 +89,7 @@ export const lastLoginMethodClient = (
 
 	return {
 		id: "last-login-method-client",
-		fetchPlugins: config.onLastMethodRetrieved
+		fetchPlugins: config.advanced?.onLastMethodRetrieved
 			? [
 					{
 						id: "last-login-method-client-resolver",
@@ -68,10 +100,13 @@ export const lastLoginMethodClient = (
 									ctx.request.url.toString(),
 									"http://localhost",
 								);
-								const lastMethod = config.customResolveMethod
-									? await config.customResolveMethod(pathname)
+								const lastMethod = config.advanced?.customResolveMethod
+									? await config.advanced?.customResolveMethod(pathname)
 									: defaultResolveMethod({ url: pathname });
-								await config.onLastMethodRetrieved!(lastMethod);
+								if (!lastMethod) {
+									return;
+								}
+								await config.advanced?.onLastMethodRetrieved!(lastMethod);
 							},
 						},
 					},
@@ -79,8 +114,8 @@ export const lastLoginMethodClient = (
 			: undefined,
 		getActions() {
 			const getLastUsedLoginMethod = (): string | null => {
-				return config.customGetMethod
-					? config.customGetMethod()
+				return config.advanced?.customGetMethod
+					? config.advanced?.customGetMethod()
 					: getCookieValue(cookieName);
 			};
 
@@ -95,8 +130,8 @@ export const lastLoginMethodClient = (
 				 * This sets the cookie with an expiration date in the past
 				 */
 				clearLastUsedLoginMethod: (): void => {
-					if (config.customClearMethod) {
-						config.customClearMethod();
+					if (config.advanced?.customClearMethod) {
+						config.advanced?.customClearMethod();
 						return;
 					}
 					if (typeof document !== "undefined") {
