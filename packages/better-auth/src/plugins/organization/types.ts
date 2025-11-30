@@ -212,7 +212,7 @@ export interface OrganizationOptions {
 	 * sendInvitationEmail: async (data) => {
 	 * 	const url = `https://yourapp.com/organization/
 	 * accept-invitation?id=${data.id}`;
-	 * 	await sendEmail(data.email, "Invitation to join
+	 * 	 sendEmail(data.email, "Invitation to join
 	 * organization", `Click the link to join the
 	 * organization: ${url}`);
 	 * }
