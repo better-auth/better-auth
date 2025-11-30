@@ -383,6 +383,13 @@ export const expoClient = (opts: ExpoClientOptions) => {
 									},
 								);
 							}
+
+							if (Platform.OS === "android") {
+								try {
+									Browser.dismissAuthSession();
+								} catch (e) {}
+							}
+
 							const proxyURL = `${context.request.baseURL}/expo-authorization-proxy?authorizationURL=${encodeURIComponent(signInURL)}`;
 							const result = await Browser.openAuthSessionAsync(proxyURL, to);
 							if (result.type !== "success") return;

@@ -56,7 +56,16 @@ export interface JwtOptions {
 			 * @default false
 			 */
 			disableAutomaticRotation?: boolean;
-	  }
+			/**
+			 * The path of the endpoint exposing the JWKS.
+			 * When set, this replaces the default /jwks endpoint.
+			 * The old endpoint will return 404.
+			 *
+			 * @default /jwks
+			 * @example "/.well-known/jwks.json"
+			 */
+			jwksPath?: string;
+		  }
 		| undefined;
 
 	jwt?:

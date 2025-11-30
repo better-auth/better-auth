@@ -234,6 +234,7 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 					})
 					.optional(),
 			}),
+			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
 				openapi: {
@@ -439,6 +440,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 					.optional(),
 			}),
 			use: [orgMiddleware, orgSessionMiddleware],
+			requireHeaders: true,
 			metadata: {
 				$Infer: {
 					body: {} as {
@@ -889,6 +891,7 @@ export const listMembers = <O extends OrganizationOptions>(options: O) =>
 						.optional(),
 				})
 				.optional(),
+			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 		},
 		async (ctx) => {
@@ -976,6 +979,7 @@ export const getActiveMemberRole = <O extends OrganizationOptions>(
 						.optional(),
 				})
 				.optional(),
+			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 		},
 		async (ctx) => {
