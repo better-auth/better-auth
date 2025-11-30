@@ -26,6 +26,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						password: string;
 						image?: string | undefined;
 						callbackURL?: string | undefined;
+						redirectTo?: string | undefined;
 						rememberMe?: boolean | undefined;
 					} & AdditionalUserFieldsInput<O>,
 					returned: {} as {
@@ -63,6 +64,11 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 											description:
 												"The URL to use for email verification callback",
 										},
+										redirectTo: {
+											type: "string",
+											description:
+												"The URL to redirect to after successful sign-up",
+										},
 										rememberMe: {
 											type: "boolean",
 											description:
@@ -82,6 +88,14 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 									schema: {
 										type: "object",
 										properties: {
+											redirect: {
+												type: "boolean",
+												enum: [false],
+											},
+											url: {
+												type: "string",
+												nullable: true,
+											},
 											token: {
 												type: "string",
 												nullable: true,
@@ -134,7 +148,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 												],
 											},
 										},
-										required: ["user"], // token is optional
+										required: ["redirect", "user"], // token is optional
 									},
 								},
 							},
@@ -172,6 +186,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				const body = ctx.body as any as User & {
 					password: string;
 					callbackURL?: string | undefined;
+					redirectTo?: string | undefined;
 					rememberMe?: boolean | undefined;
 				} & {
 					[key: string]: any;
@@ -182,6 +197,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					password,
 					image,
 					callbackURL,
+					redirectTo,
 					rememberMe,
 					...rest
 				} = body;
@@ -311,6 +327,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					ctx.context.options.emailAndPassword.requireEmailVerification
 				) {
 					return ctx.json({
+						redirect: false,
 						token: null,
 						user: parseUserOutput(
 							ctx.context.options,
@@ -337,6 +354,8 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					rememberMe === false,
 				);
 				return ctx.json({
+					redirect: !!redirectTo,
+					url: redirectTo,
 					token: session.token,
 					user: parseUserOutput(
 						ctx.context.options,
