@@ -31,15 +31,15 @@ export const TTY_COLORS = {
 	},
 } as const;
 
-export type LogLevel = "info" | "success" | "warn" | "error" | "debug";
+export type LogLevel = "debug" | "info" | "success" | "warn" | "error";
 
-export const levels = ["info", "success", "warn", "error", "debug"] as const;
+export const levels = ["debug", "info", "success", "warn", "error"] as const;
 
 export function shouldPublishLog(
 	currentLogLevel: LogLevel,
 	logLevel: LogLevel,
 ): boolean {
-	return levels.indexOf(logLevel) <= levels.indexOf(currentLogLevel);
+	return levels.indexOf(logLevel) >= levels.indexOf(currentLogLevel);
 }
 
 export interface Logger {
