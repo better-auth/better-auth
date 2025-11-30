@@ -802,18 +802,26 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 					},
 				},
 				async (ctx) => {
-					await ctx.context.adapter.delete<Passkey>({
+					const passkey = await ctx.context.adapter.findOne<Passkey>({
 						model: "passkey",
 						where: [
 							{
 								field: "id",
 								value: ctx.body.id,
 							},
-							{
-								field: "userId",
-								value: ctx.context.session.user.id,
-							},
 						],
+					});
+					if (!passkey) {
+						throw new APIError("NOT_FOUND", {
+							message: PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND,
+						});
+					}
+					if (passkey.userId !== ctx.context.session.user.id) {
+						throw new APIError("UNAUTHORIZED");
+					}
+					await ctx.context.adapter.delete({
+						model: "passkey",
+						where: [{ field: "id", value: passkey.id }],
 					});
 					return ctx.json(null, {
 						status: 200,
