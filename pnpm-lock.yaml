@@ -999,6 +999,22 @@ importers:
         specifier: ^7.2.4
         version: 7.2.4(@types/node@24.10.1)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.1)
 
+  packages/auth-cli:
+    dependencies:
+      '@better-auth/cli':
+        specifier: workspace:*
+        version: link:../cli
+    devDependencies:
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.16.6(publint@0.3.15)(synckit@0.11.11)(typescript@5.9.3)
+      tsx:
+        specifier: ^4.20.6
+        version: 4.20.6
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
   packages/better-auth:
     dependencies:
       '@better-auth/core':
