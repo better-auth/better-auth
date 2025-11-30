@@ -39,7 +39,7 @@ export const expo = (options?: ExpoOptions | undefined) => {
 			if (!expoOrigin) {
 				return;
 			}
-			const req = request.clone();
+			const req = new Request(request);
 			req.headers.set("origin", expoOrigin);
 			return {
 				request: req,
