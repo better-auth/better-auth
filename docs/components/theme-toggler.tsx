@@ -34,7 +34,7 @@ export function ThemeToggle(props: ComponentProps<typeof Button>) {
 							height="1em"
 							viewBox="0 0 24 24"
 							className="size-5"
-              aria-hidden="true"
+							aria-hidden="true"
 						>
 							<g
 								fill="none"
@@ -157,7 +157,7 @@ export function ThemeToggle(props: ComponentProps<typeof Button>) {
 						height="1em"
 						viewBox="0 0 24 24"
 						className="hidden dark:block size-6"
-            aria-hidden="true"
+						aria-hidden="true"
 					>
 						<path
 							fill="currentColor"
