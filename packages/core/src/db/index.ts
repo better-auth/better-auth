@@ -15,12 +15,13 @@ export { coreSchema } from "./schema/shared";
 export { type User, userSchema } from "./schema/user";
 export { type Verification, verificationSchema } from "./schema/verification";
 export type {
+	BaseModelNames,
 	BetterAuthDBSchema,
 	DBFieldAttribute,
 	DBFieldAttributeConfig,
 	DBFieldType,
-	DBPreservedModels,
 	DBPrimitive,
+	ModelNames,
 	SecondaryStorage,
 } from "./type";
 
