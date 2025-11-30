@@ -219,6 +219,87 @@ describe("additionalFields", async () => {
 			session: Session;
 		} | null>;
 	});
+
+	it("should apply default values", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			databaseHooks: {
+				session: {
+					create: {
+						before: async (session) => {
+							return {
+								data: {
+									newField2: "new-field-2",
+								},
+							};
+						},
+					},
+				},
+			},
+			session: {
+				additionalFields: {
+					newField: {
+						type: "string",
+						defaultValue: "default-value",
+					},
+					newField2: {
+						type: "string",
+					},
+				},
+			},
+		});
+
+		const { headers } = await signInWithTestUser();
+		const res = await auth.api.getSession({
+			headers,
+		});
+		expect(res?.session.newField).toBe("default-value");
+	});
+	it("should apply default values with secondary storage", async () => {
+		const store = new Map<string, string>();
+		const { client, auth, signInWithTestUser } = await getTestInstance({
+			secondaryStorage: {
+				set(key, value) {
+					store.set(key, value);
+				},
+				get(key) {
+					return store.get(key) || null;
+				},
+				delete(key) {
+					store.delete(key);
+				},
+			},
+			databaseHooks: {
+				session: {
+					create: {
+						before: async (session) => {
+							return {
+								data: {
+									newField2: "new-field-2",
+								},
+							};
+						},
+					},
+				},
+			},
+			session: {
+				additionalFields: {
+					newField: {
+						type: "string",
+						defaultValue: "default-value",
+					},
+					newField2: {
+						type: "string",
+					},
+				},
+			},
+		});
+
+		const { headers } = await signInWithTestUser();
+		const res = await auth.api.getSession({
+			headers,
+		});
+		expect(res?.session.newField).toBe("default-value");
+	});
 });
 
 describe("runtime", async () => {
