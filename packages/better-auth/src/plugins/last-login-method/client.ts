@@ -1,4 +1,5 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
+import type { Awaitable } from "../../types/helper";
 
 /**
  * Configuration for the client-side last login method plugin
@@ -22,11 +23,15 @@ export interface LastLoginMethodClientConfig {
 	 * Custom resolve method for retrieving the last login method (on client-side)
 	 * Only applied when `onLastMethodRetrieved` is provided.
 	 */
-	customResolveMethod?: ((pathname: string) => Awaitable<string | null>) | undefined;
+	customResolveMethod?:
+		| ((pathname: string) => Awaitable<string | null>)
+		| undefined;
 	/**
 	 * Callback invoked when the last method is retrieved (on client-side)
 	 */
-	onLastMethodRetrieved?: ((method: string | null) => Awaitable<void>) | undefined;
+	onLastMethodRetrieved?:
+		| ((method: string | null) => Awaitable<void>)
+		| undefined;
 }
 
 function getCookieValue(name: string): string | null {
@@ -51,34 +56,42 @@ export const lastLoginMethodClient = (
 
 	return {
 		id: "last-login-method-client",
-		fetchPlugins: config.onLastMethodRetrieved ? [{
-		  id: "last-login-method-client-resolver",
-			name: "Last Login Method Client Resolver",
-			hooks: {
-			  onSuccess: async (ctx) => {
-					const { pathname } = new URL(ctx.request.url.toString(), "http://localhost");
-					const defaultResolveMethod = (url: string) => {
-            const paths = [
-              "/callback/",
-              "/oauth2/callback/",
-              "/sign-in/email",
-              "/sign-up/email",
-           	];
-            if (paths.some(p => url.includes(p))) {
-             	return url.split("/").pop();
-            }
-            if (url.includes("siwe")) return "siwe";
-            if (url.includes("/passkey/verify-authentication")) return "passkey";
-            return null;
-          };
+		fetchPlugins: config.onLastMethodRetrieved
+			? [
+					{
+						id: "last-login-method-client-resolver",
+						name: "Last Login Method Client Resolver",
+						hooks: {
+							onSuccess: async (ctx) => {
+								const { pathname } = new URL(
+									ctx.request.url.toString(),
+									"http://localhost",
+								);
+								const defaultResolveMethod = (url: string) => {
+									const paths = [
+										"/callback/",
+										"/oauth2/callback/",
+										"/sign-in/email",
+										"/sign-up/email",
+									];
+									if (paths.some((p) => url.includes(p))) {
+										return url.split("/").pop();
+									}
+									if (url.includes("siwe")) return "siwe";
+									if (url.includes("/passkey/verify-authentication"))
+										return "passkey";
+									return null;
+								};
 
-					const lastMethod = config.customResolveMethod
-            ? await config.customResolveMethod(pathname)
-            : defaultResolveMethod(pathname);
-					await config.onLastMethodRetrieved(lastMethod);
-				}
-			},
-		}] : undefined,
+								const lastMethod = config.customResolveMethod
+									? await config.customResolveMethod(pathname)
+									: defaultResolveMethod(pathname);
+								await config.onLastMethodRetrieved(lastMethod);
+							},
+						},
+					},
+				]
+			: undefined,
 		getActions() {
 			const getLastUsedLoginMethod = (): string | null => {
 				return config.customGetMethod
