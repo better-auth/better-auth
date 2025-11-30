@@ -1654,8 +1654,14 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 													success: {
 														type: "boolean",
 													},
+													user: {	
+														$ref: "#/components/schemas/User",
+													},
+													session: {	
+														$ref: "#/components/schemas/Session",
+													},
 												},
-												required: ["success"],
+												required: ["success", "user", "session"],
 											},
 										},
 									},
@@ -1709,6 +1715,8 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 					return ctx.json({
 						error: null,
 						success: result,
+						user,
+						session: session.session,
 					});
 				},
 			),
