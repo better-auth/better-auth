@@ -76,7 +76,8 @@ const user = await authClient.signIn.anonymous()
 
 ### Link Account
 
-If a user is already signed in anonymously and tries to `signIn` or `signUp` with another method, their anonymous activities can be linked to the new account.
+If a user is already signed in anonymously and tries to `signIn` or `signUp` with another method,
+their anonymous activities can be linked to the new account.
 
 To do that you first need to provide `onLinkAccount` callback to the plugin.
 
@@ -100,6 +101,27 @@ const user = await authClient.signIn.email({
     email,
 })
 ```
+
+### Delete Anonymous User
+
+To delete an anonymous user, you can call the `/delete-anonymous-user` endpoint.
+
+<APIMethod
+  path="/delete-anonymous-user"
+  method="POST"
+  noResult
+>
+```ts
+type deleteAnonymousUser = {
+}
+```
+</APIMethod>
+
+<Callout type="info">
+**Notes:**
+- The anonymous user is deleted by default when the account is linked to a new authentication method.
+- Setting `disableDeleteAnonymousUser` to `true` will prevent the anonymous user from being able to call the `/delete-anonymous-user` endpoint.
+</Callout>
 
 ## Options
 
@@ -151,7 +173,10 @@ A callback function that is called when an anonymous user links their account to
 
 ### `disableDeleteAnonymousUser`
 
-By default, the anonymous user is deleted when the account is linked to a new authentication method. Set this option to `true` to disable this behavior.
+By default, when an anonymous user links their account to a new authentication method,
+the anonymous user record is automatically deleted.
+If you set this option to `true`, this automatic deletion will be disabled,
+and the `/delete-anonymous-user` endpoint will no longer be accessible to anonymous users.
 
 ### `generateName`
 
