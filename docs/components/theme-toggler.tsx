@@ -23,7 +23,7 @@ export function ThemeToggle(props: ComponentProps<typeof Button>) {
 					aria-label="Toggle Theme"
 					{...props}
 					className={cn(
-						"flex shrink-0 navbar:w-[3.56rem] navbar:h-14 navbar:border-l navbar:text-muted-foreground max-navbar:-mr-1.5 max-navbar:hover:bg-transparent",
+						"flex shrink-0 navbar:w-[3.56rem] navbar:h-14 navbar:border-l navbar:text-muted-foreground max-navbar:-mr-1.5 max-navbar:hover:bg-transparent ",
 						props.className,
 					)}
 				>
@@ -33,6 +33,7 @@ export function ThemeToggle(props: ComponentProps<typeof Button>) {
 							width="1em"
 							height="1em"
 							viewBox="0 0 24 24"
+							className="size-5"
 						>
 							<g
 								fill="none"
@@ -158,7 +159,7 @@ export function ThemeToggle(props: ComponentProps<typeof Button>) {
 					>
 						<path
 							fill="currentColor"
-							d="M9.5 2c-1.82 0-3.53.5-5 1.35c2.99 1.73 5 4.95 5 8.65s-2.01 6.92-5 8.65c1.47.85 3.18 1.35 5 1.35c5.52 0 10-4.48 10-10S15.02 2 9.5 2"
+							d="M11.38 2.019a7.5 7.5 0 1 0 10.6 10.6C21.662 17.854 17.316 22 12.001 22C6.477 22 2 17.523 2 12c0-5.315 4.146-9.661 9.38-9.981"
 						/>
 					</svg>
 				</Button>

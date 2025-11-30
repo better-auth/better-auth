@@ -102,6 +102,7 @@ export type OpenAPIModelSchema = {
 function getFieldSchema(field: DBFieldAttribute) {
 	const schema: FieldSchema = {
 		type: field.type === "date" ? "string" : field.type,
+		...(field.type === "date" && { format: "date-time" }),
 	};
 
 	if (field.defaultValue !== undefined) {
