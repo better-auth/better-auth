@@ -629,6 +629,7 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 						{
 							phoneNumber: ctx.body.phoneNumber,
 							user,
+							code: ctx.body.code,
 						},
 						ctx,
 					);
