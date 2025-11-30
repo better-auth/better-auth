@@ -9,6 +9,32 @@ import { redirectPlugin } from "./fetch-plugins";
 import { parseJSON } from "./parser";
 import { getSessionAtom } from "./session-atom";
 
+const resolvePublicAuthUrl = () => {
+	if (typeof process === "undefined") return undefined;
+
+	if (process.env.NEXT_PUBLIC_AUTH_URL) return process.env.NEXT_PUBLIC_AUTH_URL;
+
+	if (typeof window === "undefined") {
+		if (process.env.NEXTAUTH_URL) {
+			try {
+				return new URL(process.env.NEXTAUTH_URL).origin;
+			} catch {}
+		}
+
+		if (process.env.VERCEL_URL) {
+			try {
+				const protocol = process.env.VERCEL_URL.startsWith("http")
+					? ""
+					: "https://";
+				return new URL(`${protocol}${process.env.VERCEL_URL}`).origin;
+			} catch {
+				// ignore invalid Vercel URL
+			}
+		}
+	}
+	return undefined;
+};
+
 export const getClientConfig = (
 	options?: BetterAuthClientOptions | undefined,
 	loadEnv?: boolean | undefined,
@@ -17,6 +43,7 @@ export const getClientConfig = (
 	const isCredentialsSupported = "credentials" in Request.prototype;
 	const baseURL =
 		getBaseURL(options?.baseURL, options?.basePath, undefined, loadEnv) ??
+		resolvePublicAuthUrl() ??
 		"/api/auth";
 	const pluginsFetchPlugins =
 		options?.plugins
