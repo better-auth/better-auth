@@ -272,10 +272,7 @@ export const createInternalAdapter = (
 			const headers = ctx?.headers || ctx?.request?.headers;
 			const { id: _, ...rest } = override || {};
 			//we're parsing default values for session additional fields
-			const defaultAdditionalFields = parseSessionInput(
-				options,
-				{},
-			);
+			const defaultAdditionalFields = parseSessionInput(options, {});
 			const data: Omit<Session, "id"> = {
 				ipAddress:
 					ctx?.request || ctx?.headers
