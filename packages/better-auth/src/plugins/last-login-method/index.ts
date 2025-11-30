@@ -117,7 +117,8 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const lastUsedLoginMethod =
-							config.customResolveMethod?.(ctx) ?? defaultResolveMethod({ context: ctx });
+							config.customResolveMethod?.(ctx) ??
+							defaultResolveMethod({ context: ctx });
 						if (lastUsedLoginMethod) {
 							const setCookie = ctx.context.responseHeaders?.get("set-cookie");
 							const sessionTokenName =
