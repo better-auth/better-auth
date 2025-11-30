@@ -484,13 +484,13 @@ describe("lastLoginMethod", async () => {
 			},
 		);
 
-		const headers = new Headers()
+		const headers = new Headers();
 		await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
 			fetchOptions: {
-			  onSuccess: cookieSetter(headers),
-			}
+				onSuccess: cookieSetter(headers),
+			},
 		});
 
 		expect(onLastMethodRetrieved).toHaveBeenCalled();
@@ -504,12 +504,12 @@ describe("lastLoginMethod", async () => {
 
 		const oAuthHeaders = new Headers();
 		const signInRes = await client.signIn.social({
-		  provider: "google",
+			provider: "google",
 			callbackURL: "/callback",
 			fetchOptions: {
-			  onSuccess: cookieSetter(oAuthHeaders),
-			}
-		})
+				onSuccess: cookieSetter(oAuthHeaders),
+			},
+		});
 		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
 		await client.$fetch("/callback/google", {
 			query: {
