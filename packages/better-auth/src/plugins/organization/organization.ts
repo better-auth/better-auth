@@ -1118,7 +1118,7 @@ export function organization<O extends OrganizationOptions>(
 					},
 					email: {
 						type: "string",
-						required: true,
+						required: false,
 						sortable: true,
 						fieldName: options?.schema?.invitation?.fields?.email,
 						index: true,
@@ -1165,6 +1165,11 @@ export function organization<O extends OrganizationOptions>(
 						},
 						fieldName: options?.schema?.invitation?.fields?.inviterId,
 						required: true,
+					},
+					domainWhitelist: {
+						type: "string",
+						required: false,
+						fieldName: options?.schema?.invitation?.fields?.domainWhitelist,
 					},
 					...(options?.schema?.invitation?.additionalFields || {}),
 				},

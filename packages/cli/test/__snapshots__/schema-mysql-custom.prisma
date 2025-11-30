@@ -120,16 +120,17 @@ model Member {
 }
 
 model WorkspaceInvitation {
-  id             String    @id
-  organizationId String
-  workspace      Workspace @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  email          String    @db.Text
-  role           String?   @db.Text
-  status         String    @db.Text
-  expiresAt      DateTime
-  createdAt      DateTime  @default(now())
-  inviterId      String
-  user           User      @relation(fields: [inviterId], references: [id], onDelete: Cascade)
+  id              String    @id
+  organizationId  String
+  workspace       Workspace @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email           String?   @db.Text
+  role            String?   @db.Text
+  status          String    @db.Text
+  expiresAt       DateTime
+  createdAt       DateTime  @default(now())
+  inviterId       String
+  user            User      @relation(fields: [inviterId], references: [id], onDelete: Cascade)
+  domainWhitelist String?   @db.Text
 
   @@index([organizationId(length: 191)])
   @@index([email(length: 191)])
