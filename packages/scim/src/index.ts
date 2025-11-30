@@ -29,6 +29,7 @@ import { getResourceURL } from "./utils";
 
 const supportedSCIMSchemas = [SCIMUserResourceSchema];
 const supportedSCIMResourceTypes = [SCIMUserResourceType];
+const supportedMediaTypes = ["application/json", "application/scim+json"];
 
 const findUserById = async (
 	adapter: DBAdapter,
@@ -250,6 +251,7 @@ export const scim = (options?: SCIMOptions) => {
 					body: APIUserSchema,
 					metadata: {
 						isAction: false,
+						allowedMediaTypes: supportedMediaTypes,
 						openapi: {
 							summary: "Create SCIM user.",
 							description:
@@ -382,6 +384,7 @@ export const scim = (options?: SCIMOptions) => {
 					body: APIUserSchema,
 					metadata: {
 						isAction: false,
+						allowedMediaTypes: supportedMediaTypes,
 						openapi: {
 							summary: "Update SCIM user.",
 							description:
@@ -464,6 +467,7 @@ export const scim = (options?: SCIMOptions) => {
 						.optional(),
 					metadata: {
 						isAction: false,
+						allowedMediaTypes: supportedMediaTypes,
 						openapi: {
 							summary: "List SCIM users",
 							description:
@@ -551,6 +555,7 @@ export const scim = (options?: SCIMOptions) => {
 					method: "GET",
 					metadata: {
 						isAction: false,
+						allowedMediaTypes: supportedMediaTypes,
 						openapi: {
 							summary: "Get SCIM user details",
 							description:
@@ -616,6 +621,7 @@ export const scim = (options?: SCIMOptions) => {
 					}),
 					metadata: {
 						isAction: false,
+						allowedMediaTypes: supportedMediaTypes,
 						openapi: {
 							summary: "Patch SCIM user",
 							description: "Updates fields on a SCIM user record",
@@ -685,6 +691,7 @@ export const scim = (options?: SCIMOptions) => {
 					method: "DELETE",
 					metadata: {
 						isAction: false,
+						allowedMediaTypes: supportedMediaTypes,
 						openapi: {
 							summary: "Delete SCIM user",
 							description:
@@ -728,6 +735,7 @@ export const scim = (options?: SCIMOptions) => {
 					method: "GET",
 					metadata: {
 						isAction: false,
+						allowedMediaTypes: supportedMediaTypes,
 						openapi: {
 							summary: "SCIM Service Provider Configuration",
 							description:
@@ -779,6 +787,7 @@ export const scim = (options?: SCIMOptions) => {
 					method: "GET",
 					metadata: {
 						isAction: false,
+						allowedMediaTypes: supportedMediaTypes,
 						openapi: {
 							summary: "SCIM Service Provider Configuration Schemas",
 							description:
@@ -827,6 +836,7 @@ export const scim = (options?: SCIMOptions) => {
 					method: "GET",
 					metadata: {
 						isAction: false,
+						allowedMediaTypes: supportedMediaTypes,
 						openapi: {
 							summary: "SCIM a Service Provider Configuration Schema",
 							description:
@@ -874,6 +884,7 @@ export const scim = (options?: SCIMOptions) => {
 					method: "GET",
 					metadata: {
 						isAction: false,
+						allowedMediaTypes: supportedMediaTypes,
 						openapi: {
 							summary: "SCIM Service Provider Supported Resource Types",
 							description:
@@ -930,6 +941,7 @@ export const scim = (options?: SCIMOptions) => {
 					method: "GET",
 					metadata: {
 						isAction: false,
+						allowedMediaTypes: supportedMediaTypes,
 						openapi: {
 							summary: "SCIM Service Provider Supported Resource Type",
 							description:
