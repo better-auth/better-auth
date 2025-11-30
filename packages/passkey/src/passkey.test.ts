@@ -149,6 +149,6 @@ describe("passkey", async () => {
 				id: passkey.id,
 			},
 		});
-		expect(deleteResult.success).toBe(true);
+		expect(deleteResult.status).toBe(true);
 	});
 });
