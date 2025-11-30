@@ -53,7 +53,7 @@ const drizzleCode = ({
 	provider,
 	additionalOptions,
 }: {
-	provider: "sqlite" | "mysql" | "postgresql";
+	provider: "sqlite" | "mysql" | "pg";
 	additionalOptions?: Record<string, any>;
 }) => {
 	return `drizzleAdapter(db, { provider: "${provider}", schema, ${
@@ -169,16 +169,22 @@ export const databasesConfig = [
 				isNamedImport: false,
 			},
 			{
-				path: "@/db",
-				imports: [createImport({ name: "db" })],
+				path: "drizzle-orm/better-sqlite3",
+				imports: [createImport({ name: "drizzle" })],
 				isNamedImport: false,
 			},
 			{
-				path: "auth-schema.ts",
+				path: "better-sqlite3",
+				imports: createImport({ name: "Database" }),
+				isNamedImport: true,
+			},
+			{
+				path: "./auth-schema",
 				imports: createImport({ name: "*", alias: "schema" }),
 				isNamedImport: true,
 			},
 		],
+		preCode: `const db = drizzle(new Database("database.sqlite"), { schema });`,
 		code({ additionalOptions }) {
 			return drizzleCode({ provider: "sqlite", additionalOptions });
 		},
@@ -193,44 +199,26 @@ export const databasesConfig = [
 				isNamedImport: false,
 			},
 			{
-				path: "@/db",
-				imports: [createImport({ name: "db" })],
+				path: "drizzle-orm/bun-sqlite",
+				imports: [createImport({ name: "drizzle" })],
 				isNamedImport: false,
 			},
 			{
-				path: "auth-schema.ts",
+				path: "bun:sqlite",
+				imports: [createImport({ name: "Database" })],
+				isNamedImport: false,
+			},
+			{
+				path: "./auth-schema",
 				imports: createImport({ name: "*", alias: "schema" }),
 				isNamedImport: true,
 			},
 		],
+		preCode: `const db = drizzle({ client: new Database('sqlite.db'), schema });`,
 		code({ additionalOptions }) {
 			return drizzleCode({ provider: "sqlite", additionalOptions });
 		},
-		dependencies: ["drizzle-orm"],
-	},
-	{
-		adapter: "drizzle-sqlite-node",
-		imports: [
-			{
-				path: "better-auth/adapters/drizzle",
-				imports: [createImport({ name: "drizzleAdapter" })],
-				isNamedImport: false,
-			},
-			{
-				path: "@/db",
-				imports: [createImport({ name: "db" })],
-				isNamedImport: false,
-			},
-			{
-				path: "auth-schema.ts",
-				imports: createImport({ name: "*", alias: "schema" }),
-				isNamedImport: true,
-			},
-		],
-		code({ additionalOptions }) {
-			return drizzleCode({ provider: "sqlite", additionalOptions });
-		},
-		dependencies: ["drizzle-orm"],
+		dependencies: ["drizzle-orm", "bun", '@types/bun'],
 	},
 	{
 		adapter: "drizzle-postgresql",
@@ -241,18 +229,24 @@ export const databasesConfig = [
 				isNamedImport: false,
 			},
 			{
-				path: "@/db",
-				imports: [createImport({ name: "db" })],
+				path: "drizzle-orm/node-postgres",
+				imports: [createImport({ name: "drizzle" })],
 				isNamedImport: false,
 			},
 			{
-				path: "auth-schema.ts",
+				path: "pg",
+				imports: [createImport({ name: "Pool" })],
+				isNamedImport: false,
+			},
+			{
+				path: "./auth-schema",
 				imports: createImport({ name: "*", alias: "schema" }),
 				isNamedImport: true,
 			},
 		],
+		preCode: `const db = drizzle(new Pool({ connectionString: process.env.DATABASE_URL }), { schema });`,
 		code({ additionalOptions }) {
-			return drizzleCode({ provider: "postgresql", additionalOptions });
+			return drizzleCode({ provider: "pg", additionalOptions });
 		},
 		dependencies: ["drizzle-orm", "pg"],
 	},
@@ -265,16 +259,22 @@ export const databasesConfig = [
 				isNamedImport: false,
 			},
 			{
-				path: "@/db",
-				imports: [createImport({ name: "db" })],
+				path: "drizzle-orm/mysql2",
+				imports: [createImport({ name: "drizzle" })],
 				isNamedImport: false,
 			},
 			{
-				path: "auth-schema.ts",
+				path: "mysql2/promise",
+				imports: [createImport({ name: "createPool" })],
+				isNamedImport: false,
+			},
+			{
+				path: "./auth-schema",
 				imports: createImport({ name: "*", alias: "schema" }),
 				isNamedImport: true,
 			},
 		],
+		preCode: `const db = drizzle(createPool(process.env.DATABASE_URL!), { schema, mode: "default" });`,
 		code({ additionalOptions }) {
 			return drizzleCode({ provider: "mysql", additionalOptions });
 		},
@@ -426,7 +426,7 @@ export const databasesConfig = [
 				isNamedImport: false,
 			},
 		],
-		preCode: `const client = new MongoClient(process.env.DATABASE_URL);\nconst db = client.db();`,
+		preCode: `const client = new MongoClient(process.env.DATABASE_URL!);\nconst db = client.db();`,
 		code({ additionalOptions }) {
 			return mongodbCode({ additionalOptions });
 		},

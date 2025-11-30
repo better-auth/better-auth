@@ -54,6 +54,14 @@ export const isKyselyDialect = (adapter: string): boolean => {
 };
 
 /**
+ * Check if an adapter should be returned directly without dialect selection
+ * (Kysely dialects and MongoDB don't have sub-dialects)
+ */
+export const isDirectAdapter = (adapter: string): boolean => {
+	return isKyselyDialect(adapter) || adapter === "mongodb";
+};
+
+/**
  * Format adapter name for display
  */
 const formatAdapterLabel = (adapter: DatabaseAdapter): string => {
@@ -92,8 +100,8 @@ export const getAvailableORMs = (): Array<{ value: string; label: string; adapte
 	for (const db of databasesConfig) {
 		const dbORM = getORMFromAdapter(db.adapter);
 		
-		// If it's a kysely dialect, add it directly
-		if (dbORM === "kysely") {
+		// If it's a kysely dialect or mongodb, add it directly
+		if (dbORM === "kysely" || dbORM === "mongodb") {
 			options.push({
 				value: db.adapter,
 				label: formatAdapterLabel(db.adapter),

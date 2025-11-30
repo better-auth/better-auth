@@ -8,6 +8,7 @@ import {
 	getAvailableORMs,
 	getDialectsForORM,
 	isKyselyDialect,
+	isDirectAdapter,
 } from "./utility/database";
 import type { Framework } from "./configs/frameworks.config";
 import { FRAMEWORKS } from "./configs/frameworks.config";
@@ -40,6 +41,10 @@ import {
 import { HeroRenderer } from "./hero-renderer";
 import prompts from "prompts";
 import yoctoSpinner from "yocto-spinner";
+import {
+	generateDrizzleSchema,
+	generatePrismaSchema,
+} from "@better-auth/cli/generators";
 
 // Helper functions to replace @clack/prompts
 const confirm = async (options: { message: string; initial?: boolean }) => {
@@ -47,7 +52,7 @@ const confirm = async (options: { message: string; initial?: boolean }) => {
 		type: "confirm",
 		name: "value",
 		message: options.message,
-		initial: options.initial ?? false,
+		initial: options.initial ?? true,
 	});
 	return response?.value ?? null;
 };
@@ -119,6 +124,79 @@ const loopHero = async (phases: string[]) => {
 	return renderer;
 };
 
+/**
+ * Extract database provider from database adapter string
+ */
+const getDatabaseProvider = (
+	database: string,
+): "sqlite" | "mysql" | "postgresql" | "pg" | null => {
+	if (database.startsWith("drizzle-")) {
+		if (database.includes("postgresql")) {
+			return "pg";
+		}
+		if (database.includes("mysql")) {
+			return "mysql";
+		}
+		if (database.includes("sqlite")) {
+			return "sqlite";
+		}
+	}
+	if (database.startsWith("prisma-")) {
+		if (database.includes("postgresql")) {
+			return "postgresql";
+		}
+		if (database.includes("mysql")) {
+			return "mysql";
+		}
+		if (database.includes("sqlite")) {
+			return "sqlite";
+		}
+	}
+	return null;
+};
+
+/**
+ * Create a minimal BetterAuthOptions config for schema generation
+ */
+const createMinimalConfig = (plugins: Plugin[], baseURL: string): any => {
+	// Convert plugin keys to actual plugin instances if needed
+	// For now, plugins array is empty, so we'll create a minimal config
+	const pluginInstances = plugins
+		.map((pluginKey) => {
+			const pluginConfig = tempPluginsConfig[pluginKey];
+			if (!pluginConfig) return null;
+			// We need to import the actual plugin, but for schema generation
+			// we only need the schema property from the plugin
+			// Since plugins are currently skipped (return []), this will be empty
+			return null;
+		})
+		.filter(Boolean);
+
+	return {
+		secret: "temp-secret-for-schema-generation",
+		baseURL,
+		plugins: pluginInstances,
+	};
+};
+
+/**
+ * Create a mock adapter object for schema generation
+ */
+const createMockAdapter = (
+	database: string,
+	provider: "sqlite" | "mysql" | "postgresql" | "pg",
+): any => {
+	const isDrizzle = database.startsWith("drizzle-");
+	const isPrisma = database.startsWith("prisma-");
+
+	return {
+		id: isDrizzle ? "drizzle" : isPrisma ? "prisma" : "unknown",
+		options: {
+			provider: provider === "pg" ? "pg" : provider,
+		},
+	};
+};
+
 export async function initAction(opts: any) {
 	const options = initActionOptionsSchema.parse(opts);
 	const cwd = options.cwd;
@@ -171,6 +249,7 @@ export async function initAction(opts: any) {
 			type: "confirm",
 			name: "shouldInstallBetterAuth",
 			message: `Would you like to install Better-Auth using ${chalk.bold(pmString)}?`,
+			initial: true,
 		});
 
 		if (shouldInstallBetterAuth) {
@@ -390,8 +469,8 @@ export async function initAction(opts: any) {
 			process.exit(0);
 		}
 
-		// If a kysely dialect was selected, return it directly
-		if (isKyselyDialect(selectedOption)) {
+		// If a direct adapter (kysely dialect or mongodb) was selected, return it directly
+		if (isDirectAdapter(selectedOption)) {
 			return selectedOption;
 		}
 
@@ -438,6 +517,7 @@ export async function initAction(opts: any) {
 	})();
 
 	// Generate the `auth.ts` file.
+	let authConfigFilePath: string | null = null;
 	await (async () => {
 		if (hasAuthConfigAlready) {
 			return;
@@ -475,6 +555,8 @@ export async function initAction(opts: any) {
 			process.exit(0);
 		}
 
+		authConfigFilePath = filePath;
+
 		const { error: mkdirError } = await tryCatch(
 			fs.mkdir(path.dirname(filePath), { recursive: true }),
 		);
@@ -484,11 +566,157 @@ export async function initAction(opts: any) {
 			process.exit(1);
 		}
 		const { error: writeFileError } = await tryCatch(
-			fs.writeFile(authConfigPath, authConfigCode, "utf-8"),
+			fs.writeFile(filePath, authConfigCode, "utf-8"),
 		);
 		if (writeFileError) {
-			const error = `Failed to write auth file at ${authConfigPath}: ${writeFileError.message}`;
+			const error = `Failed to write auth file at ${filePath}: ${writeFileError.message}`;
 			log.error(error);
+			process.exit(1);
+		}
+	})();
+
+	// Generate database schema
+	await (async () => {
+		if (hasAuthConfigAlready) return;
+		if (!database) return; // Skip if no database selected
+		if (database === "mongodb") return; // Skip for MongoDB
+
+		await nextStep("Database Setup");
+
+		// Determine which generator to use based on database type
+		const isDrizzle = database.startsWith("drizzle-");
+		const isPrisma = database.startsWith("prisma-");
+		const isKysely = isKyselyDialect(database);
+
+		// Skip Kysely migrations (require real database connection)
+		if (isKysely) {
+			return;
+		}
+
+		if (!isDrizzle && !isPrisma) {
+			// Unknown database type, skip
+			return;
+		}
+
+		const provider = getDatabaseProvider(database);
+		if (!provider) {
+			log.error(`Unable to determine database provider for ${database}`);
+			return;
+		}
+
+		const shouldGenerateSchema = await confirm({
+			message: `Would you like us to generate the database schema for you?`,
+			initial: true,
+		});
+
+		if (isCancel(shouldGenerateSchema)) {
+			cancel("✋ Operation cancelled.");
+			process.exit(0);
+		}
+
+		if (!shouldGenerateSchema) {
+			return;
+		}
+
+		const s = yoctoSpinner({
+			text: `Generating database schema...`,
+			color: "white",
+		});
+		s.start();
+
+		try {
+			// Create minimal config for schema generation
+			const config = createMinimalConfig(plugins, "http://localhost:3000");
+
+			// Create mock adapter
+			const adapter = createMockAdapter(database, provider);
+
+			let schemaResult: {
+				code?: string;
+				fileName: string;
+				overwrite?: boolean;
+			};
+
+			let outputPath: string;
+
+			if (isDrizzle) {
+				// For Drizzle, output to auth-schema.ts next to auth config
+				if (!authConfigFilePath) {
+					throw new Error(
+						"Auth config file path is required for Drizzle schema generation",
+					);
+				}
+				// Resolve auth config path relative to cwd
+				const resolvedAuthConfigPath = path.isAbsolute(authConfigFilePath)
+					? authConfigFilePath
+					: path.join(cwd, authConfigFilePath);
+				const authConfigDir = path.dirname(resolvedAuthConfigPath);
+				const schemaFileName = "auth-schema.ts";
+				const fullOutputPath = path.join(authConfigDir, schemaFileName);
+				// Convert to relative path from cwd for the generator
+				outputPath = path.relative(cwd, fullOutputPath);
+
+				schemaResult = await generateDrizzleSchema({
+					adapter,
+					options: config,
+					file: outputPath,
+				});
+			} else if (isPrisma) {
+				// For Prisma, output to prisma/schema.prisma
+				outputPath = "prisma/schema.prisma";
+				schemaResult = await generatePrismaSchema({
+					adapter,
+					options: config,
+					file: outputPath,
+				});
+			} else {
+				throw new Error(`Unsupported database type: ${database}`);
+			}
+
+			if (!schemaResult.code) {
+				s.stop();
+				log.info("Schema is already up to date.");
+				return;
+			}
+
+			// Resolve full output path for file operations
+			const fullOutputPath = path.isAbsolute(outputPath)
+				? outputPath
+				: path.join(cwd, outputPath);
+			const fileExists = await fs
+				.access(fullOutputPath)
+				.then(() => true)
+				.catch(() => false);
+
+			if (fileExists && schemaResult.overwrite) {
+				s.stop();
+				const shouldOverwrite = await confirm({
+					message: `The file ${chalk.yellow(outputPath)} already exists. Do you want to overwrite it?`,
+					initial: false,
+				});
+				if (isCancel(shouldOverwrite) || !shouldOverwrite) {
+					log.info("Schema generation cancelled.");
+					return;
+				}
+				s.start();
+			}
+
+			// Create directory if it doesn't exist
+			const outputDir = path.dirname(fullOutputPath);
+			await fs.mkdir(outputDir, { recursive: true });
+
+			// Write schema file
+			await fs.writeFile(fullOutputPath, schemaResult.code, "utf-8");
+
+			s.success(
+				`Schema generated successfully at ${chalk.yellow(outputPath)}!`,
+			);
+		} catch (error) {
+			s.stop();
+			exitAlternateScreen();
+			log.error(
+				`Failed to generate schema: ${error instanceof Error ? error.message : String(error)}`,
+			);
 			process.exit(1);
 		}
 	})();
@@ -497,6 +725,25 @@ export async function initAction(opts: any) {
 	await (async () => {
 		if (hasAuthConfigAlready) return;
 		await nextStep("Generate Auth Client Configuration");
+
+		console.log(
+			chalk.dim(
+				"Note: If you have a separated client-server project architecture, you may want to skip generating the auth client file here and create it in your client project instead.",
+			),
+		);
+
+		const shouldGenerateAuthClient = await confirm({
+			message: `Would you like to generate the auth client configuration file?`,
+			initial: true,
+		});
+		if (isCancel(shouldGenerateAuthClient)) {
+			cancel("✋ Operation cancelled.");
+			process.exit(0);
+		}
+		if (!shouldGenerateAuthClient) {
+			return;
+		}
+
 		const authClientCode = await generateAuthClientConfigCode({
 			plugins,
 			database,

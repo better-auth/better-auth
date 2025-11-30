@@ -32,7 +32,10 @@
     "typescript",
     "better-auth"
   ],
-  "exports": "./dist/index.mjs",
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./generators": "./dist/generators/index.mjs"
+  },
   "bin": {
     "better-auth": "./dist/index.mjs"
   },

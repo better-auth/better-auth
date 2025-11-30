@@ -51,8 +51,8 @@ describe("init CLI - database generation", () => {
 	});
 
 	describe("drizzle", () => {
-		it("should generate the right drizzle-sqlite database code", async () => {
-			const database = getDatabaseCode("drizzle-sqlite");
+		it("should generate the right drizzle-sqlite-better-sqlite3 database code", async () => {
+			const database = getDatabaseCode("drizzle-sqlite-better-sqlite3");
 			const expectedCode = await formatCode(
 				`drizzleAdapter(db, { provider: 'sqlite', schema })`,
 			);

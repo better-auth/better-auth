@@ -84,7 +84,7 @@ export const getArgumentsPrompt: (
 				type: "confirm",
 				name: "value",
 				message: question ?? description,
-				initial: defaultValue ?? false,
+				initial: defaultValue ?? true,
 			});
 			if (!response) {
 				console.log("✋ Operation cancelled.");

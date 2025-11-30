@@ -7,7 +7,8 @@ export type DatabaseAdapter =
 	| "prisma-mysql"
 	| "prisma-postgresql"
 	// drizzle
-	| "drizzle-sqlite"
+	| "drizzle-sqlite-better-sqlite3"
+	| "drizzle-sqlite-libsql"
 	| "drizzle-mysql"
 	| "drizzle-postgresql"
 	// kysely
@@ -157,7 +158,7 @@ export const databasesConfig = [
 	},
 	// Drizzle
 	{
-		adapter: "drizzle-sqlite",
+		adapter: "drizzle-sqlite-better-sqlite3",
 		imports: [
 			{
 				path: "better-auth/adapters/drizzle",
@@ -179,6 +180,30 @@ export const databasesConfig = [
 			return drizzleCode({ provider: "sqlite", additionalOptions });
 		},
 		dependencies: ["drizzle-orm", "better-sqlite3"],
+	},
+	{
+		adapter: "drizzle-sqlite-libsql",
+		imports: [
+			{
+				path: "better-auth/adapters/drizzle",
+				imports: [createImport({ name: "drizzleAdapter" })],
+				isNamedImport: false,
+			},
+			{
+				path: "@/db",
+				imports: [createImport({ name: "db" })],
+				isNamedImport: false,
+			},
+			{
+				path: "auth-schema.ts",
+				imports: createImport({ name: "*", alias: "schema" }),
+				isNamedImport: true,
+			},
+		],
+		code({ additionalOptions }) {
+			return drizzleCode({ provider: "sqlite", additionalOptions });
+		},
+		dependencies: ["drizzle-orm", "@libsql/client"],
 	},
 	{
 		adapter: "drizzle-postgresql",
