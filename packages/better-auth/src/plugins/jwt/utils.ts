@@ -174,3 +174,62 @@ export async function createJwk(
 
 	return key;
 }
+
+/**
+ * Rotates the JWT signing key if needed.
+ *
+ * Rotation occurs when:
+ * - No key exists, OR
+ * - Latest key is expired AND was created more than the cooldown period ago
+ *
+ * @param ctx - The endpoint context
+ * @param options - JWT plugin options
+ * @param config - Rotation configuration
+ * @returns Object containing the current key and whether rotation occurred
+ */
+export async function rotateJwk(
+	ctx: GenericEndpointContext,
+	options?: JwtOptions | undefined,
+	config?: {
+		/**
+		 * Minimum time in milliseconds between rotations to prevent rapid key creation.
+		 * Protects against race conditions and DoS attacks.
+		 * @default 300000 (5 minutes)
+		 */
+		cooldown?: number;
+		/**
+		 * Force rotation regardless of cooldown period.
+		 * Use with caution as this bypasses security protections.
+		 * @default false
+		 */
+		force?: boolean;
+	},
+): Promise<{ key: Jwk; rotated: boolean }> {
+	const adapter = getJwksAdapter(ctx.context.adapter, options);
+	const latestKey = await adapter.getLatestKey(ctx);
+
+	const ROTATION_COOLDOWN = config?.cooldown ?? 5 * 60 * 1000; // 5 minutes default
+	const now = Date.now();
+
+	let shouldRotate = false;
+
+	if (config?.force) {
+		shouldRotate = true;
+	} else if (!latestKey) {
+		shouldRotate = true;
+	} else if (latestKey.expiresAt && latestKey.expiresAt < new Date()) {
+		shouldRotate = now - latestKey.createdAt.getTime() >= ROTATION_COOLDOWN;
+	}
+
+	if (shouldRotate) {
+		const key = await createJwk(ctx, options);
+		return { key, rotated: true };
+	}
+
+	if (!latestKey) {
+		const key = await createJwk(ctx, options);
+		return { key, rotated: true };
+	}
+
+	return { key: latestKey, rotated: false };
+}

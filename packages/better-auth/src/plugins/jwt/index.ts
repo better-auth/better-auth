@@ -12,11 +12,11 @@ import { getJwksAdapter } from "./adapter";
 import { schema } from "./schema";
 import { getJwtToken, signJWT } from "./sign";
 import type { JwtOptions } from "./types";
-import { createJwk } from "./utils";
+import { rotateJwk } from "./utils";
 import { verifyJWT as verifyJWTHelper } from "./verify";
 
 export type * from "./types";
-export { createJwk, generateExportedKeyPair } from "./utils";
+export { createJwk, generateExportedKeyPair, rotateJwk } from "./utils";
 export { verifyJWT } from "./verify";
 
 export const jwt = (options?: JwtOptions | undefined) => {
@@ -141,38 +141,38 @@ export const jwt = (options?: JwtOptions | undefined) => {
 						},
 					},
 				},
-				async (ctx) => {
-					// Disables endpoint if using remote url strategy
-					if (options?.jwks?.remoteUrl) {
-						throw new APIError("NOT_FOUND");
-					}
+			async (ctx) => {
+				// Disables endpoint if using remote url strategy
+				if (options?.jwks?.remoteUrl) {
+					throw new APIError("NOT_FOUND");
+				}
 
-					const adapter = getJwksAdapter(ctx.context.adapter, options);
+				const adapter = getJwksAdapter(ctx.context.adapter, options);
 
-					let keySets = await adapter.getAllKeys(ctx);
+			
+			if (!options?.jwks?.disableAutomaticRotation) {
+				await rotateJwk(ctx, options); // Trigger rotation if needed
+			}
 
-					if (!keySets || keySets?.length === 0) {
-						await createJwk(ctx, options);
-						keySets = await adapter.getAllKeys(ctx);
-					}
+			let keySets = await adapter.getAllKeys(ctx);
 
-					if (!keySets?.length) {
-						throw new BetterAuthError(
-							"No key sets found. Make sure you have a key in your database.",
-						);
-					}
+			if (!keySets?.length) {
+				throw new BetterAuthError(
+					"No key sets found. Make sure you have a key in your database.",
+				);
+			}
 
-					const now = Date.now();
-					const DEFAULT_GRACE_PERIOD = 60 * 60 * 24 * 30;
-					const gracePeriod =
-						(options?.jwks?.gracePeriod ?? DEFAULT_GRACE_PERIOD) * 1000;
+			const now = Date.now();
+			const DEFAULT_GRACE_PERIOD = 60 * 60 * 24 * 30;
+			const gracePeriod =
+				(options?.jwks?.gracePeriod ?? DEFAULT_GRACE_PERIOD) * 1000;
 
-					const keys = keySets.filter((key) => {
-						if (!key.expiresAt) {
-							return true;
-						}
-						return key.expiresAt.getTime() + gracePeriod > now;
-					});
+			const keys = keySets.filter((key) => {
+				if (!key.expiresAt) {
+					return true;
+				}
+				return key.expiresAt.getTime() + gracePeriod > now;
+			});
 
 					const keyPairConfig = options?.jwks?.keyPairConfig;
 					const defaultCrv = keyPairConfig
@@ -300,11 +300,60 @@ export const jwt = (options?: JwtOptions | undefined) => {
 						overrideOptions,
 					);
 
-					return ctx.json({ payload });
+				return ctx.json({ payload });
+			},
+		),
+		rotateKey: createAuthEndpoint(
+			"/rotate-jwk",
+			{
+				method: "POST",
+				metadata: {
+					SERVER_ONLY: true,
+					openapi: {
+						operationId: "rotateJWK",
+						description: "Manually trigger JWT signing key rotation",
+						responses: {
+							200: {
+								description: "Key rotated successfully",
+								content: {
+									"application/json": {
+										schema: {
+											type: "object",
+											properties: {
+												rotated: {
+													type: "boolean",
+													description: "Whether a new key was created",
+												},
+												keyId: {
+													type: "string",
+													description: "ID of the current active key",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
-			),
+				body: z
+					.object({
+						force: z.boolean().optional(),
+						cooldown: z.number().optional(),
+					})
+					.optional(),
+			},
+		async (ctx) => {
+			const result = await rotateJwk(ctx, options, ctx.body);
+			
+			return ctx.json({
+				rotated: result.rotated,
+				keyId: result.key.id,
+			});
 		},
-		hooks: {
+		),
+	},
+	hooks: {
 			after: [
 				{
 					matcher(context) {
