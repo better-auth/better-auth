@@ -49,6 +49,7 @@ import {
 import {
 	addTeamMember,
 	createTeam,
+	getTeamMember,
 	listOrganizationTeams,
 	listTeamMembers,
 	listUserTeams,
@@ -56,6 +57,7 @@ import {
 	removeTeamMember,
 	setActiveTeam,
 	updateTeam,
+	updateTeamMemberRole,
 } from "./routes/crud-team";
 import type {
 	InferInvitation,
@@ -90,6 +92,7 @@ export type TeamEndpoints<O extends OrganizationOptions> = {
 	listTeamMembers: ReturnType<typeof listTeamMembers<O>>;
 	addTeamMember: ReturnType<typeof addTeamMember<O>>;
 	removeTeamMember: ReturnType<typeof removeTeamMember<O>>;
+	updateTeamMemberRole: ReturnType<typeof updateTeamMemberRole<O>>;
 };
 
 export type OrganizationEndpoints<O extends OrganizationOptions> = {
@@ -150,6 +153,7 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 			body: z
 				.object({
 					organizationId: z.string().optional(),
+					teamId: z.string().optional(),
 				})
 				.and(
 					z.union([
@@ -168,6 +172,7 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 				$Infer: {
 					body: {} as PermissionExclusive & {
 						organizationId?: string | undefined;
+						teamId?: string | undefined;
 					},
 				},
 				openapi: {
@@ -178,6 +183,16 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 								schema: {
 									type: "object",
 									properties: {
+										organizationId: {
+											type: "string",
+											description:
+												"The organization ID to check permissions for",
+										},
+										teamId: {
+											type: "string",
+											description:
+												"The team ID to check permissions for (optional)",
+										},
 										permission: {
 											type: "object",
 											description: "The permission to check",
@@ -227,20 +242,68 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
-			const member = await adapter.findMemberByOrgId({
-				userId: ctx.context.session.user.id,
-				organizationId: activeOrganizationId,
-			});
-			if (!member) {
-				throw new APIError("UNAUTHORIZED", {
-					message:
-						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+
+			// Check if we're verifying team-specific permissions
+			const teamId = ctx.body.teamId;
+			let role = "";
+
+			if (teamId) {
+				// Check team member permissions
+				const teamMember = await adapter.findTeamMember({
+					userId: ctx.context.session.user.id,
+					teamId,
 				});
+
+				if (!teamMember) {
+					// If not a team member, fall back to organization role
+					const member = await adapter.findMemberByOrgId({
+						userId: ctx.context.session.user.id,
+						organizationId: activeOrganizationId,
+					});
+
+					if (!member) {
+						throw new APIError("UNAUTHORIZED", {
+							message:
+								ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+						});
+					}
+					role = member.role;
+				} else {
+					role = teamMember.role;
+				}
+			} else {
+				// Check organization member permissions
+				const member = await adapter.findMemberByOrgId({
+					userId: ctx.context.session.user.id,
+					organizationId: activeOrganizationId,
+				});
+
+				if (!member) {
+					throw new APIError("UNAUTHORIZED", {
+						message:
+							ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+					});
+				}
+				role = member.role;
 			}
+
+			// Merge team roles into options when checking team-specific permissions
+			const optionsForPermissionCheck: OrganizationOptions = options || {};
+			if (
+				teamId &&
+				options?.teams?.enabled &&
+				options?.teams?.teamRoles?.roles
+			) {
+				optionsForPermissionCheck.roles = {
+					...options.roles,
+					...options.teams.teamRoles.roles,
+				};
+			}
+
 			const result = await hasPermission(
 				{
-					role: member.role,
-					options: options || {},
+					role,
+					options: optionsForPermissionCheck,
 					permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
 					organizationId: activeOrganizationId,
 				},
@@ -886,6 +949,38 @@ export function organization<O extends OrganizationOptions>(
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-remove-team-member)
 		 */
 		removeTeamMember: removeTeamMember(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/update-team-member-role`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.updateTeamMemberRole`
+		 *
+		 * **client:**
+		 * `authClient.organization.updateTeamMemberRole`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-update-team-member-role)
+		 */
+		updateTeamMemberRole: updateTeamMemberRole(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/get-team-member`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.getTeamMember`
+		 *
+		 * **client:**
+		 * `authClient.organization.getTeamMember`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-get-team-member)
+		 */
+		getTeamMember: getTeamMember(options as O),
 	};
 	if (teamSupport) {
 		endpoints = {
@@ -969,6 +1064,12 @@ export function organization<O extends OrganizationOptions>(
 							},
 							fieldName: options?.schema?.teamMember?.fields?.userId,
 							index: true,
+						},
+						role: {
+							type: "string",
+							required: true,
+							defaultValue: options?.teams?.teamRoles?.defaultRole || "member",
+							fieldName: options?.schema?.teamMember?.fields?.role,
 						},
 						createdAt: {
 							type: "date",

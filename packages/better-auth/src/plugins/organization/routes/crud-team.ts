@@ -195,6 +195,15 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 
 			const createdTeam = await adapter.createTeam(teamData);
 
+			// Add creator as team admin
+			if (session) {
+				await adapter.findOrCreateTeamMember({
+					teamId: createdTeam.id,
+					userId: session.user.id,
+					role: options?.teams?.teamRoles?.creatorRole || "admin",
+				});
+			}
+
 			// Run afterCreateTeam hook
 			if (options?.organizationHooks?.afterCreateTeam) {
 				await options?.organizationHooks.afterCreateTeam({
@@ -900,6 +909,10 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 					description:
 						"The user Id which represents the user to be added as a member.",
 				}),
+				role: z.string().optional().meta({
+					description:
+						"The role for the team member. Defaults to 'member' or the configured default role.",
+				}),
 			}),
 			metadata: {
 				openapi: {
@@ -1045,6 +1058,7 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 			const teamMember = await adapter.findOrCreateTeamMember({
 				teamId: ctx.body.teamId,
 				userId: ctx.body.userId,
+				role: ctx.body.role,
 			});
 
 			// Run afterAddTeamMember hook
@@ -1223,5 +1237,257 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 			}
 
 			return ctx.json({ message: "Team member removed successfully." });
+		},
+	);
+
+export const updateTeamMemberRole = <O extends OrganizationOptions>(
+	options: O,
+) =>
+	createAuthEndpoint(
+		"/organization/update-team-member-role",
+		{
+			method: "POST",
+			body: z.object({
+				teamId: z.string().meta({
+					description: "The team ID",
+				}),
+				userId: z.coerce.string().meta({
+					description: "The user whose role should be updated",
+				}),
+				role: z.string().meta({
+					description: "The new role for the team member",
+				}),
+			}),
+			use: [orgMiddleware, orgSessionMiddleware],
+			metadata: {
+				openapi: {
+					description: "Update a team member's role",
+					responses: {
+						"200": {
+							description: "Team member role updated successfully",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										description: "The updated team member",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const session = ctx.context.session;
+			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+
+			if (!session.session.activeOrganizationId) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+				});
+			}
+
+			// Prevent users from changing their own role
+			if (session.user.id === ctx.body.userId) {
+				throw new APIError("FORBIDDEN", {
+					message: ORGANIZATION_ERROR_CODES.CANNOT_CHANGE_OWN_TEAM_ROLE,
+				});
+			}
+
+			// Check if user is org admin
+			const orgMember = await adapter.findMemberByOrgId({
+				userId: session.user.id,
+				organizationId: session.session.activeOrganizationId,
+			});
+
+			if (!orgMember) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+				});
+			}
+
+			// Check organization-level permissions
+			const hasOrgPermission = await hasPermission(
+				{
+					role: orgMember.role,
+					options: ctx.context.orgOptions,
+					permissions: {
+						teamMember: ["update"],
+					},
+					organizationId: session.session.activeOrganizationId,
+				},
+				ctx,
+			);
+
+			// Get current user's team membership to check team-level permissions
+			const currentTeamMember = await adapter.findTeamMember({
+				teamId: ctx.body.teamId,
+				userId: session.user.id,
+			});
+
+			// Define which roles are considered team admins.
+			// By default, both "admin" and the configured creatorRole have team admin privileges.
+			const TEAM_ADMIN_ROLES = [
+				"admin",
+				options?.teams?.teamRoles?.creatorRole,
+			].filter(Boolean);
+
+			// Check if user is team admin
+			const isTeamAdmin =
+				currentTeamMember && TEAM_ADMIN_ROLES.includes(currentTeamMember.role);
+
+			if (!hasOrgPermission && !isTeamAdmin) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_TEAM_MEMBER_ROLE,
+				});
+			}
+
+			// Verify team exists and belongs to organization
+			const team = await adapter.findTeamById({
+				teamId: ctx.body.teamId,
+				organizationId: session.session.activeOrganizationId,
+			});
+
+			if (!team) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+				});
+			}
+
+			// Verify the target user is a team member
+			const targetTeamMember = await adapter.findTeamMember({
+				teamId: ctx.body.teamId,
+				userId: ctx.body.userId,
+			});
+
+			if (!targetTeamMember) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_TEAM,
+				});
+			}
+
+			// Update the team member role
+			const updatedTeamMember = await adapter.updateTeamMemberRole({
+				teamId: ctx.body.teamId,
+				userId: ctx.body.userId,
+				role: ctx.body.role,
+			});
+
+			return ctx.json(updatedTeamMember);
+		},
+	);
+
+export const getTeamMember = <O extends OrganizationOptions>(options: O) =>
+	createAuthEndpoint(
+		"/organization/get-team-member",
+		{
+			method: "GET",
+			query: z.object({
+				teamId: z.string().meta({
+					description: "The team ID",
+				}),
+				userId: z.string().optional().meta({
+					description:
+						"The user ID. If not provided, returns current user's team membership",
+				}),
+			}),
+			use: [orgMiddleware, orgSessionMiddleware],
+			metadata: {
+				openapi: {
+					description:
+						"Get a team member with their role. If userId is not provided, returns current user's team membership.",
+					responses: {
+						"200": {
+							description: "Team member retrieved successfully",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										description: "The team member with role information",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const session = ctx.context.session;
+			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+
+			const userId = ctx.query.userId || session.user.id;
+
+			if (!session.session.activeOrganizationId) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+				});
+			}
+
+			// Verify team exists and belongs to organization
+			const team = await adapter.findTeamById({
+				teamId: ctx.query.teamId,
+				organizationId: session.session.activeOrganizationId,
+			});
+
+			if (!team) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+				});
+			}
+
+			// Check if requester is a member of the team or org admin
+			const requesterTeamMember = await adapter.findTeamMember({
+				teamId: ctx.query.teamId,
+				userId: session.user.id,
+			});
+
+			const orgMember = await adapter.findMemberByOrgId({
+				userId: session.user.id,
+				organizationId: session.session.activeOrganizationId,
+			});
+
+			if (!orgMember) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+				});
+			}
+
+			// Check organization-level permissions
+			const hasOrgPermission = await hasPermission(
+				{
+					role: orgMember.role,
+					options: ctx.context.orgOptions,
+					permissions: {
+						teamMember: ["read"],
+					},
+					organizationId: session.session.activeOrganizationId,
+				},
+				ctx,
+			);
+
+			if (!requesterTeamMember && !hasOrgPermission) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_VIEW_TEAM_MEMBER,
+				});
+			}
+
+			const teamMember = await adapter.findTeamMember({
+				teamId: ctx.query.teamId,
+				userId,
+			});
+
+			if (!teamMember) {
+				throw new APIError("NOT_FOUND", {
+					message: ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_TEAM,
+				});
+			}
+
+			return ctx.json(teamMember);
 		},
 	);
