@@ -1,5 +1,6 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
 import type { Awaitable } from "../../types/helper";
+import { defaultResolveMethod } from "./resolve";
 
 /**
  * Configuration for the client-side last login method plugin
@@ -24,7 +25,7 @@ export interface LastLoginMethodClientConfig {
 	 * Only applied when `onLastMethodRetrieved` is provided.
 	 */
 	customResolveMethod?:
-		| ((pathname: string) => Awaitable<string | null>)
+		| ((url: string | URL) => Awaitable<string | null>)
 		| undefined;
 	/**
 	 * Callback invoked when the last method is retrieved (on client-side)
@@ -67,26 +68,10 @@ export const lastLoginMethodClient = (
 									ctx.request.url.toString(),
 									"http://localhost",
 								);
-								const defaultResolveMethod = (url: string) => {
-									const paths = [
-										"/callback/",
-										"/oauth2/callback/",
-										"/sign-in/email",
-										"/sign-up/email",
-									];
-									if (paths.some((p) => url.includes(p))) {
-										return url.split("/").pop();
-									}
-									if (url.includes("siwe")) return "siwe";
-									if (url.includes("/passkey/verify-authentication"))
-										return "passkey";
-									return null;
-								};
-
 								const lastMethod = config.customResolveMethod
 									? await config.customResolveMethod(pathname)
-									: defaultResolveMethod(pathname);
-								await config.onLastMethodRetrieved(lastMethod);
+									: defaultResolveMethod({ url: pathname });
+								await config.onLastMethodRetrieved!(lastMethod);
 							},
 						},
 					},
