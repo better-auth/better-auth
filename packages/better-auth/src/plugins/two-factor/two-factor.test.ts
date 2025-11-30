@@ -505,6 +505,29 @@ describe("two factor", async () => {
 		});
 		expect(signInRes.data?.user).toBeDefined();
 	});
+
+
+	it("should enable 2fa for the otp method", async () => {
+		const res = await client.twoFactor.enable({
+			password: testUser.password,
+			twoFactorMethod: "otp",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(res.data?.twoFactor).toBeDefined();
+		const dbUser = await db.findOne<UserWithTwoFactor>({
+			model: "user",
+			where: [
+				{
+					field: "id",
+					value: session.data?.user.id as string,
+				},
+			],
+		});
+	
+		expect(dbUser?.twoFactorEnabled).toBe(true);
+	});
 });
 
 describe("two factor auth API", async () => {
