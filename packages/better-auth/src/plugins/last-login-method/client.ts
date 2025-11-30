@@ -95,7 +95,7 @@ export const lastLoginMethodClient = (
 						id: "last-login-method-client-resolver",
 						name: "Last Login Method Client Resolver",
 						hooks: {
-							onSuccess: async (ctx) => {
+							onResponse: async (ctx) => {
 								const { pathname } = new URL(
 									ctx.request.url.toString(),
 									"http://localhost",
