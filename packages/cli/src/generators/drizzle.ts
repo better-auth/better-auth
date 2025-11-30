@@ -158,7 +158,15 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					mysql: `json('${name}')`,
 				},
 			} as const;
-			return typeMap[type][databaseType];
+			const dbTypeMap = (
+				typeMap as Record<string, Record<typeof databaseType, string>>
+			)[type as string];
+			if (!dbTypeMap) {
+				throw new Error(
+					`Unsupported field type '${field.type}' for field '${name}'.`,
+				);
+			}
+			return dbTypeMap[databaseType];
 		}
 
 		let id: string = "";
@@ -342,13 +350,19 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 			for (const [fieldName, field] of foreignKeysPointingHere) {
 				const isUnique = !!field.unique;
-				const relationKey = isUnique
-					? getModelName(modelName)
-					: `${getModelName(modelName)}s`;
+				let relationKey = getModelName(modelName);
+
+				// We have to apply this after checking if they have usePlural because otherwise they will end up seeing:
+				// "sesionss", or "accountss" - double s's.
+				if (!adapter.options?.adapterConfig?.usePlural && !isUnique) {
+					relationKey = `${relationKey}s`;
+				}
+
+				const model = getModelName(modelName);
 
 				relations.push({
 					key: relationKey,
-					model: getModelName(modelName),
+					model: model,
 					type: isUnique ? "one" : "many",
 				});
 			}

@@ -2,9 +2,15 @@
  * Compare two buffers in constant time.
  */
 export function constantTimeEqual(
-	a: ArrayBuffer | Uint8Array,
-	b: ArrayBuffer | Uint8Array,
+	a: ArrayBuffer | Uint8Array | string,
+	b: ArrayBuffer | Uint8Array | string,
 ): boolean {
+	if (typeof a === "string") {
+		a = new TextEncoder().encode(a);
+	}
+	if (typeof b === "string") {
+		b = new TextEncoder().encode(b);
+	}
 	const aBuffer = new Uint8Array(a);
 	const bBuffer = new Uint8Array(b);
 	let c = aBuffer.length ^ bBuffer.length;

@@ -931,37 +931,6 @@ export const auth = betterAuth({
 });
 ```
 
-### Invitation Accepted Callback
-
-You can configure Better Auth to execute a callback function when an invitation is accepted. This is useful for logging events, updating analytics, sending notifications, or any other custom logic you need to run when someone joins your organization.
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { organization } from "better-auth/plugins";
-
-export const auth = betterAuth({
-  plugins: [
-    organization({
-      async sendInvitationEmail(data) {
-        // ... your invitation email logic
-      },
-      async onInvitationAccepted(data) {
-        // This callback gets triggered when an invitation is accepted
-      },
-    }),
-  ],
-});
-```
-
-The callback receives the following data:
-
-- `id`: The invitation ID
-- `role`: The role assigned to the user
-- `organization`: The organization the user joined
-- `invitation`: The invitation object
-- `inviter`: The member who sent the invitation (including user details)
-- `acceptedUser`: The user who accepted the invitation
-
 ### Cancel Invitation
 
 If a user has sent out an invitation, you can use this method to cancel it.
@@ -2041,14 +2010,14 @@ The teams feature supports several configuration options:
     enabled: true,
     maximumTeams: 10 // Fixed number
     // OR
-    maximumTeams: async ({ organizationId, session }, request) => {
+    maximumTeams: async ({ organizationId, session }, ctx) => {
       // Dynamic limit based on organization plan
       const plan = await getPlan(organizationId)
       return plan === 'pro' ? 20 : 5
     },
     maximumMembersPerTeam: 10 // Fixed number
     // OR
-    maximumMembersPerTeam: async ({ teamId, session, organizationId }, request) => {
+    maximumMembersPerTeam: async ({ teamId, session, organizationId }, ctx) => {
       // Dynamic limit based on team plan
       const plan = await getPlan(organizationId, teamId)
       return plan === 'pro' ? 50 : 10

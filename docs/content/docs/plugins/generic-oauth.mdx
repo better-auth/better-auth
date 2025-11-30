@@ -125,9 +125,101 @@ type oAuth2LinkAccount = {
 
 The plugin mounts a route to handle the OAuth callback `/oauth2/callback/:providerId`. This means by default `${baseURL}/api/auth/oauth2/callback/:providerId` will be used as the callback URL. Make sure your OAuth provider is configured to use this URL.
 
+## Pre-configured Provider Helpers
+
+Better Auth provides pre-configured helper functions for popular OAuth providers. These helpers handle the provider-specific configuration, including discovery URLs and user info endpoints.
+
+### Supported Providers
+
+- **Auth0** - `auth0(options)`
+- **HubSpot** - `hubspot(options)`
+- **Keycloak** - `keycloak(options)`
+- **LINE** - `line(options)`
+- **Microsoft Entra ID (Azure AD)** - `microsoftEntraId(options)`
+- **Okta** - `okta(options)`
+- **Slack** - `slack(options)`
+
+### Example: Using Pre-configured Providers
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { genericOAuth, auth0, hubspot, keycloak, line, microsoftEntraId, okta, slack } from "better-auth/plugins"
+
+export const auth = betterAuth({
+  plugins: [
+    genericOAuth({
+      config: [
+        auth0({
+          clientId: process.env.AUTH0_CLIENT_ID,
+          clientSecret: process.env.AUTH0_CLIENT_SECRET,
+          domain: process.env.AUTH0_DOMAIN,
+        }),
+        hubspot({
+          clientId: process.env.HUBSPOT_CLIENT_ID,
+          clientSecret: process.env.HUBSPOT_CLIENT_SECRET,
+          scopes: ["oauth", "contacts"],
+        }),
+        keycloak({
+          clientId: process.env.KEYCLOAK_CLIENT_ID,
+          clientSecret: process.env.KEYCLOAK_CLIENT_SECRET,
+          issuer: process.env.KEYCLOAK_ISSUER,
+        }),
+        // LINE supports multiple channels (countries) - use different providerIds
+        line({
+          providerId: "line-jp",
+          clientId: process.env.LINE_JP_CLIENT_ID,
+          clientSecret: process.env.LINE_JP_CLIENT_SECRET,
+        }),
+        line({
+          providerId: "line-th",
+          clientId: process.env.LINE_TH_CLIENT_ID,
+          clientSecret: process.env.LINE_TH_CLIENT_SECRET,
+        }),
+        microsoftEntraId({
+          clientId: process.env.MS_APP_ID,
+          clientSecret: process.env.MS_CLIENT_SECRET,
+          tenantId: process.env.MS_TENANT_ID,
+        }),
+        okta({
+          clientId: process.env.OKTA_CLIENT_ID,
+          clientSecret: process.env.OKTA_CLIENT_SECRET,
+          issuer: process.env.OKTA_ISSUER,
+        }),
+        slack({
+          clientId: process.env.SLACK_CLIENT_ID,
+          clientSecret: process.env.SLACK_CLIENT_SECRET,
+        }),
+      ],
+    }),
+  ],
+})
+```
+
+Each provider helper accepts common OAuth options (extending `BaseOAuthProviderOptions`) plus provider-specific fields:
+
+- **Auth0**: Requires `domain` (e.g., `dev-xxx.eu.auth0.com`)
+- **HubSpot**: No additional required fields. Optional `scopes` (defaults to `["oauth"]`)
+- **Keycloak**: Requires `issuer` (e.g., `https://my-domain/realms/MyRealm`)
+- **LINE**: Optional `providerId` (defaults to `"line"`). LINE requires separate channels for different countries (Japan, Thailand, Taiwan, etc.), so you can call `line()` multiple times with different `providerId`s and credentials to support multiple countries
+- **Microsoft Entra ID**: Requires `tenantId` (can be a GUID, `"common"`, `"organizations"`, or `"consumers"`)
+- **Okta**: Requires `issuer` (e.g., `https://dev-xxxxx.okta.com/oauth2/default`)
+- **Slack**: No additional required fields
+
+All providers support the same optional fields:
+- `scopes?: string[]` - Array of OAuth scopes to request
+- `redirectURI?: string` - Custom redirect URI
+- `pkce?: boolean` - Enable PKCE (defaults to `false`)
+- `disableImplicitSignUp?: boolean` - Disable automatic sign-up for new users
+- `disableSignUp?: boolean` - Disable sign-up entirely
+- `overrideUserInfo?: boolean` - Override user info on sign in
+
 ## Configuration
 
-When adding the plugin to your auth config, you can configure multiple OAuth providers. Each provider configuration object supports the following options:
+When adding the plugin to your auth config, you can configure multiple OAuth providers. You can either use the pre-configured provider helpers (shown above) or create custom configurations manually.
+
+### Manual Configuration
+
+Each provider configuration object supports the following options:
 
 ```ts
 interface GenericOAuthConfig {
@@ -176,7 +268,10 @@ interface GenericOAuthConfig {
 
 **pkce**: (Optional) If true, enables PKCE (Proof Key for Code Exchange) for enhanced security. Defaults to `false`.
 
+
 **accessType**: (Optional) The access type for the authorization request. Use `"offline"` to request a refresh token.
+
+**getToken**: (Optional) A custom function to exchange authorization code for tokens. If provided, this function will be used instead of the default token exchange logic. This is useful for providers with non-standard token endpoints that use GET requests or custom parameters.
 
 **getUserInfo**: (Optional) A custom function to fetch user info from the provider, given the OAuth tokens. If not provided, a default fetch is used.
 
@@ -199,6 +294,67 @@ interface GenericOAuthConfig {
 **overrideUserInfo**: (Optional) If true, the user's info in your database will be updated with the provider's info every time they sign in. Defaults to `false`.
 
 ## Advanced Usage
+
+### Custom Token Exchange
+
+For providers with non-standard token endpoints that use GET requests or custom parameters, you can provide a custom `getToken` function:
+
+```ts
+genericOAuth({
+  config: [
+    {
+      providerId: "custom-provider",
+      clientId: process.env.CUSTOM_CLIENT_ID!,
+      clientSecret: process.env.CUSTOM_CLIENT_SECRET,
+      authorizationUrl: "https://provider.example.com/oauth/authorize",
+      scopes: ["profile", "email"],
+      // Custom token exchange for non-standard endpoints
+      getToken: async ({ code, redirectURI }) => {
+        // Example: GET request instead of POST
+        const response = await fetch(
+          `https://provider.example.com/oauth/token?` +
+          `client_id=${process.env.CUSTOM_CLIENT_ID}&` +
+          `client_secret=${process.env.CUSTOM_CLIENT_SECRET}&` +
+          `code=${code}&` +
+          `redirect_uri=${redirectURI}&` +
+          `grant_type=authorization_code`,
+          { method: "GET" }
+        );
+
+        const data = await response.json();
+
+        return {
+          accessToken: data.access_token,
+          refreshToken: data.refresh_token,
+          accessTokenExpiresAt: new Date(Date.now() + data.expires_in * 1000),
+          scopes: data.scope?.split(" ") ?? [],
+          // Preserve provider-specific fields in raw
+          raw: data,
+        };
+      },
+      getUserInfo: async (tokens) => {
+        // Access provider-specific fields from raw token data
+        const userId = tokens.raw?.user_id as string;
+
+        const response = await fetch(
+          `https://provider.example.com/api/user?` +
+          `access_token=${tokens.accessToken}`
+        );
+
+        const data = await response.json();
+
+        return {
+          id: userId,
+          name: data.display_name,
+          email: data.email,
+          image: data.avatar_url,
+          emailVerified: data.email_verified,
+        };
+      },
+    },
+  ],
+});
+```
 
 ### Custom User Info Fetching
 
@@ -246,7 +402,26 @@ genericOAuth({
 })
 ```
 
+### Accessing Raw Token Data
+
+The `tokens` parameter includes a `raw` field that preserves the original token response from the provider. This is useful for accessing provider-specific fields:
+
+```ts
+getUserInfo: async (tokens) => {
+  // Access provider-specific fields
+  const customField = tokens.raw?.custom_provider_field as string;
+  const userId = tokens.raw?.provider_user_id as string;
+
+  // Use in your logic
+  return {
+    id: userId,
+    // ...
+  };
+}
+```
+
 ### Error Handling
 
 The plugin includes built-in error handling for common OAuth issues. Errors are typically redirected to your application's error page with an appropriate error message in the URL parameters. If the callback URL is not provided, the user will be redirected to Better Auth's default error page.
+
 

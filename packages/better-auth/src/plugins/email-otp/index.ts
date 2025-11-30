@@ -12,6 +12,7 @@ import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
 import { setCookieCache, setSessionCookie } from "../../cookies";
 import {
+	constantTimeEqual,
 	generateRandomString,
 	symmetricDecrypt,
 	symmetricEncrypt,
@@ -22,7 +23,10 @@ import { defaultKeyHasher, splitAtLastColon } from "./utils";
 
 export interface EmailOTPOptions {
 	/**
-	 * Function to send email verification
+	 * Function to send email verification.
+	 *
+	 * It is recommended to not await the email sending to avoid timing attacks.
+	 * On serverless platforms, use `waitUntil` or similar to ensure the email is sent.
 	 */
 	sendVerificationOTP: (
 		data: {
@@ -143,27 +147,26 @@ export const emailOTP = (options: EmailOTPOptions) => {
 		otp: string,
 	): Promise<boolean> {
 		if (opts.storeOTP === "encrypted") {
-			return (
-				(await symmetricDecrypt({
-					key: ctx.context.secret,
-					data: storedOtp,
-				})) === otp
-			);
+			const decryptedOtp = await symmetricDecrypt({
+				key: ctx.context.secret,
+				data: storedOtp,
+			});
+			return constantTimeEqual(decryptedOtp, otp);
 		}
 		if (opts.storeOTP === "hashed") {
 			const hashedOtp = await defaultKeyHasher(otp);
-			return hashedOtp === storedOtp;
+			return constantTimeEqual(hashedOtp, storedOtp);
 		}
 		if (typeof opts.storeOTP === "object" && "hash" in opts.storeOTP) {
 			const hashedOtp = await opts.storeOTP.hash(otp);
-			return hashedOtp === storedOtp;
+			return constantTimeEqual(hashedOtp, storedOtp);
 		}
 		if (typeof opts.storeOTP === "object" && "decrypt" in opts.storeOTP) {
 			const decryptedOtp = await opts.storeOTP.decrypt(storedOtp);
-			return decryptedOtp === otp;
+			return constantTimeEqual(decryptedOtp, otp);
 		}
 
-		return otp === storedOtp;
+		return constantTimeEqual(otp, storedOtp);
 	}
 	const endpoints = {
 		/**
@@ -233,21 +236,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						message: BASE_ERROR_CODES.INVALID_EMAIL,
 					});
 				}
-				if (opts.disableSignUp) {
-					const user = await ctx.context.internalAdapter.findUserByEmail(email);
-					if (!user) {
-						throw new APIError("BAD_REQUEST", {
-							message: BASE_ERROR_CODES.USER_NOT_FOUND,
-						});
-					}
-				} else if (ctx.body.type === "forget-password") {
-					const user = await ctx.context.internalAdapter.findUserByEmail(email);
-					if (!user) {
-						return ctx.json({
-							success: true,
-						});
-					}
-				}
 				let otp =
 					opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
 					defaultOTPGenerator(opts);
@@ -272,6 +260,20 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							expiresAt: getDate(opts.expiresIn, "sec"),
 						});
 					});
+				const user = await ctx.context.internalAdapter.findUserByEmail(email);
+				if (!user) {
+					if (ctx.body.type === "sign-in" && !opts.disableSignUp) {
+						// allow
+					} else {
+						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+							`${ctx.body.type}-otp-${email}`,
+						);
+						return ctx.json({
+							success: true,
+						});
+					}
+				}
+
 				await options.sendVerificationOTP(
 					{
 						email,
@@ -348,7 +350,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					},
 				},
 				async (ctx) => {
-					const email = ctx.body.email;
+					const email = ctx.body.email.toLowerCase();
 					const otp =
 						opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
 						defaultOTPGenerator(opts);
@@ -417,7 +419,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					},
 				},
 				async (ctx) => {
-					const email = ctx.query.email;
+					const email = ctx.query.email.toLowerCase();
 					const verificationValue =
 						await ctx.context.internalAdapter.findVerificationValue(
 							`${ctx.query.type}-otp-${email}`,
@@ -687,6 +689,10 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					);
 					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					if (!user) {
+						/**
+						 * safe to leak the existence of a user, given the user has already the OTP from the
+						 * email
+						 */
 						throw new APIError("BAD_REQUEST", {
 							message: BASE_ERROR_CODES.USER_NOT_FOUND,
 						});
@@ -819,7 +825,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					},
 				},
 				async (ctx) => {
-					const email = ctx.body.email;
+					const email = ctx.body.email.toLowerCase();
 					const verificationValue =
 						await ctx.context.internalAdapter.findVerificationValue(
 							`sign-in-otp-${email}`,
@@ -973,12 +979,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 				async (ctx) => {
 					const email = ctx.body.email;
-					const user = await ctx.context.internalAdapter.findUserByEmail(email);
-					if (!user) {
-						throw new APIError("BAD_REQUEST", {
-							message: BASE_ERROR_CODES.USER_NOT_FOUND,
-						});
-					}
 					const otp =
 						opts.generateOTP({ email, type: "forget-password" }, ctx) ||
 						defaultOTPGenerator(opts);
@@ -988,14 +988,27 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						identifier: `forget-password-otp-${email}`,
 						expiresAt: getDate(opts.expiresIn, "sec"),
 					});
-					await options.sendVerificationOTP(
-						{
-							email,
-							otp,
-							type: "forget-password",
-						},
-						ctx,
-					);
+					const user = await ctx.context.internalAdapter.findUserByEmail(email);
+					if (!user) {
+						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+							`forget-password-otp-${email}`,
+						);
+						return ctx.json({
+							success: true,
+						});
+					}
+					await options
+						.sendVerificationOTP(
+							{
+								email,
+								otp,
+								type: "forget-password",
+							},
+							ctx,
+						)
+						.catch((e) => {
+							ctx.context.logger.error("Failed to send OTP", e);
+						});
 					return ctx.json({
 						success: true,
 					});
@@ -1057,17 +1070,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 				async (ctx) => {
 					const email = ctx.body.email;
-					const user = await ctx.context.internalAdapter.findUserByEmail(
-						email,
-						{
-							includeAccounts: true,
-						},
-					);
-					if (!user) {
-						throw new APIError("BAD_REQUEST", {
-							message: BASE_ERROR_CODES.USER_NOT_FOUND,
-						});
-					}
 					const verificationValue =
 						await ctx.context.internalAdapter.findVerificationValue(
 							`forget-password-otp-${email}`,
@@ -1112,10 +1114,35 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					await ctx.context.internalAdapter.deleteVerificationValue(
 						verificationValue.id,
 					);
+					const user = await ctx.context.internalAdapter.findUserByEmail(
+						email,
+						{
+							includeAccounts: true,
+						},
+					);
+					if (!user) {
+						throw new APIError("BAD_REQUEST", {
+							message: BASE_ERROR_CODES.USER_NOT_FOUND,
+						});
+					}
+					const minPasswordLength =
+						ctx.context.password.config.minPasswordLength;
+					if (ctx.body.password.length < minPasswordLength) {
+						throw new APIError("BAD_REQUEST", {
+							message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
+						});
+					}
+					const maxPasswordLength =
+						ctx.context.password.config.maxPasswordLength;
+					if (ctx.body.password.length > maxPasswordLength) {
+						throw new APIError("BAD_REQUEST", {
+							message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
+						});
+					}
 					const passwordHash = await ctx.context.password.hash(
 						ctx.body.password,
 					);
-					const account = user.accounts.find(
+					let account = user.accounts?.find(
 						(account) => account.providerId === "credential",
 					);
 					if (!account) {
@@ -1147,6 +1174,11 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						});
 					}
 
+					if (
+						ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset
+					) {
+						await ctx.context.internalAdapter.deleteSessions(user.user.id);
+					}
 					return ctx.json({
 						success: true,
 					});

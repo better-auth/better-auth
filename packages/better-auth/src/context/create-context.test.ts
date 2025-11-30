@@ -479,21 +479,6 @@ describe("base context creation", () => {
 	});
 
 	describe("generate ID", () => {
-		it("should use custom advanced.generateId", async () => {
-			const customGenerateId = vi.fn(() => "custom-id");
-			const res = await initBase({
-				advanced: {
-					generateId: customGenerateId as any,
-				},
-			});
-			const id = res.generateId({ model: "user", size: 16 });
-			expect(customGenerateId).toHaveBeenCalledWith({
-				model: "user",
-				size: 16,
-			});
-			expect(id).toBe("custom-id");
-		});
-
 		it("should fallback to advanced.database.generateId", async () => {
 			const databaseGenerateId = vi.fn(() => "db-id");
 			const res = await initBase({
@@ -565,10 +550,8 @@ describe("base context creation", () => {
 
 		it("should allow cookie storeStateStrategy", async () => {
 			const res = await initBase({
-				advanced: {
-					oauthConfig: {
-						storeStateStrategy: "cookie",
-					},
+				account: {
+					storeStateStrategy: "cookie",
 				},
 			});
 			expect(res.oauthConfig.storeStateStrategy).toBe("cookie");
@@ -576,10 +559,8 @@ describe("base context creation", () => {
 
 		it("should respect skipStateCookieCheck setting", async () => {
 			const res = await initBase({
-				advanced: {
-					oauthConfig: {
-						skipStateCookieCheck: true,
-					},
+				account: {
+					skipStateCookieCheck: true,
 				},
 			});
 			expect(res.oauthConfig.skipStateCookieCheck).toBe(true);
@@ -958,7 +939,9 @@ describe("base context creation", () => {
 			const customGenerateId = vi.fn(() => "custom-id");
 			const ctx = await initBase({
 				advanced: {
-					generateId: customGenerateId as any,
+					database: {
+						generateId: customGenerateId as any,
+					},
 				},
 			});
 			expect(ctx.internalAdapter).toBeDefined();
@@ -1451,10 +1434,8 @@ describe("base context creation", () => {
 						enabled: false,
 					},
 				},
-				advanced: {
-					oauthConfig: {
-						storeStateStrategy: "database",
-					},
+				account: {
+					storeStateStrategy: "database",
 				},
 			});
 			expect(ctx.options.session?.cookieCache?.enabled).toBe(false);

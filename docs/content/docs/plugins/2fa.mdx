@@ -276,7 +276,7 @@ export const auth = betterAuth({
     plugins: [
         twoFactor({
           	otpOptions: {
-				async sendOTP({ user, otp }, request) {
+				async sendOTP({ user, otp }, ctx) {
                     // send otp to user
 				},
 			},
@@ -410,8 +410,7 @@ You can mark a device as trusted by passing `trustDevice` to `verifyTotp` or `ve
 const verify2FA = async (code: string) => {
     const { data, error } = await authClient.twoFactor.verifyTotp({
         code,
-        callbackURL: "/dashboard",
-        trustDevice: true // Mark this device as trusted
+        trustDevice: true, // Mark this device as trusted
     })
     if (data) {
         // 2FA verified and device trusted
