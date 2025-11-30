@@ -507,7 +507,7 @@ subscription: {
 
 The plugin automatically handles common webhook events:
 
-- `checkout.session.completed`: Updates subscription status after checkout
+- `checkout.session.completed`: Updates subscription status after checkout. Also handles subscriptions created via payment links by matching the checkout email with existing users.
 - `customer.subscription.updated`: Updates subscription details when changed
 - `customer.subscription.deleted`: Marks subscription as canceled
 
@@ -529,6 +529,20 @@ stripe({
     }
 })
 ```
+
+#### Payment Links
+
+The plugin supports subscriptions created through [Stripe Payment Links](https://docs.stripe.com/payment-links). When a user completes checkout via a payment link, the plugin automatically:
+
+1. Matches the checkout email with a user in your database. If `requireEmailVerification` is enabled, only verified users are matched
+2. Links the Stripe customer to the user account
+3. Creates the subscription record
+
+<Callout type="warn">
+Users must already have an account in your system. The plugin matches subscriptions to existing users by email.
+</Callout>
+
+Create a payment link in your Stripe dashboard pointing to one of your configured subscription prices. When users complete checkout through the payment link, their subscription will be automatically created and linked to their account.
 
 ### Subscription Lifecycle Hooks
 
@@ -723,7 +737,7 @@ stripe({
 
 **plans**: `Plan[] | (() => Promise<Plan[]>)` - An array of subscription plans or a function that returns plans. Required if subscriptions are enabled.
 
-**requireEmailVerification**: `boolean` - Whether to require email verification before allowing subscription upgrades. Default: `false`.
+**requireEmailVerification**: `boolean` - Whether to require email verification before allowing subscription upgrades and payment link subscriptions. Default: `false`.
 
 **authorizeReference**: `(data: { user: User, session: Session, referenceId: string, action: "upgrade-subscription" | "list-subscription" | "cancel-subscription" | "restore-subscription"}, ctx: GenericEndpointContext) => Promise<boolean>` - A function to authorize reference IDs.
 
