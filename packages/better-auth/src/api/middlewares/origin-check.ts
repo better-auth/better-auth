@@ -1,12 +1,13 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
 import { getHost, getOrigin, getProtocol } from "../../utils/url";
 import { wildcardMatch } from "../../utils/wildcard";
 
 /**
- * A middleware to validate callbackURL and origin against
- * trustedOrigins.
+ * A middleware to validate callbackURL and origin against trustedOrigins.
+ * Also handles CSRF protection using Fetch Metadata for first-login scenarios.
  */
 export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	// Skip origin check for GET, OPTIONS, HEAD requests - we don't mutate state here.
@@ -18,10 +19,11 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	) {
 		return;
 	}
-	const headers = ctx.request?.headers;
 	const request = ctx.request;
 	const { body, query, context } = ctx;
-	const originHeader = headers?.get("origin") || headers?.get("referer") || "";
+
+	await validateOrigin(ctx);
+
 	const callbackURL = body?.callbackURL || query?.callbackURL;
 	const redirectURL = body?.redirectTo;
 	const errorCallbackURL = body?.errorCallbackURL;
@@ -33,7 +35,6 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 				...context.trustedOrigins,
 				...((await context.options.trustedOrigins?.(request)) || []),
 			];
-	const useCookies = headers?.has("cookie");
 
 	const matchesPattern = (url: string, pattern: string): boolean => {
 		if (url.startsWith("/")) {
@@ -56,6 +57,7 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 			? pattern === getOrigin(url)
 			: url.startsWith(pattern);
 	};
+
 	const validateURL = (url: string | undefined, label: string) => {
 		if (!url) {
 			return;
@@ -76,16 +78,7 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 			throw new APIError("FORBIDDEN", { message: `Invalid ${label}` });
 		}
 	};
-	if (
-		useCookies &&
-		!ctx.context.skipCSRFCheck &&
-		!ctx.context.skipOriginCheck
-	) {
-		if (!originHeader || originHeader === "null") {
-			throw new APIError("FORBIDDEN", { message: "Missing or null Origin" });
-		}
-		validateURL(originHeader, "origin");
-	}
+
 	callbackURL && validateURL(callbackURL, "callbackURL");
 	redirectURL && validateURL(redirectURL, "redirectURL");
 	errorCallbackURL && validateURL(errorCallbackURL, "errorCallbackURL");
@@ -159,3 +152,134 @@ export const originCheck = (
 			validateURL(url, "callbackURL");
 		}
 	});
+
+/**
+ * Validates origin header against trusted origins.
+ * @param ctx - The endpoint context
+ * @param forceValidate - If true, always validate origin regardless of cookies/skip flags
+ */
+async function validateOrigin(
+	ctx: GenericEndpointContext,
+	forceValidate = false,
+): Promise<void> {
+	const headers = ctx.request?.headers;
+	if (!headers || !ctx.request) {
+		return;
+	}
+	const originHeader = headers.get("origin") || headers.get("referer") || "";
+	const useCookies = headers.has("cookie");
+
+	const shouldValidate =
+		forceValidate ||
+		(useCookies && !ctx.context.skipCSRFCheck && !ctx.context.skipOriginCheck);
+
+	if (!shouldValidate) {
+		return;
+	}
+
+	if (!originHeader || originHeader === "null") {
+		throw new APIError("FORBIDDEN", { message: "Missing or null Origin" });
+	}
+
+	// Handle dynamic trusted origins (function-based) or static (array-based)
+	const trustedOrigins: string[] = Array.isArray(
+		ctx.context.options.trustedOrigins,
+	)
+		? ctx.context.trustedOrigins
+		: [
+				...ctx.context.trustedOrigins,
+				...((await ctx.context.options.trustedOrigins?.(ctx.request)) || []),
+			];
+	const matchesPattern = (url: string, pattern: string): boolean => {
+		if (url.startsWith("/")) {
+			return false;
+		}
+		if (pattern.includes("*")) {
+			if (pattern.includes("://")) {
+				return wildcardMatch(pattern)(getOrigin(url) || url);
+			}
+			const host = getHost(url);
+			if (!host) {
+				return false;
+			}
+			return wildcardMatch(pattern)(host);
+		}
+		const protocol = getProtocol(url);
+		return protocol === "http:" || protocol === "https:" || !protocol
+			? pattern === getOrigin(url)
+			: url.startsWith(pattern);
+	};
+
+	const isTrustedOrigin = trustedOrigins.some((origin) =>
+		matchesPattern(originHeader, origin),
+	);
+	if (!isTrustedOrigin) {
+		ctx.context.logger.error(`Invalid origin: ${originHeader}`);
+		ctx.context.logger.info(
+			`If it's a valid URL, please add ${originHeader} to trustedOrigins in your auth config\n`,
+			`Current list of trustedOrigins: ${trustedOrigins}`,
+		);
+		throw new APIError("FORBIDDEN", { message: "Invalid origin" });
+	}
+}
+
+/**
+ * Middleware for CSRF protection using Fetch Metadata headers.
+ * This prevents cross-site navigation login attacks while supporting progressive enhancement.
+ */
+export const formCsrfMiddleware = createAuthMiddleware(async (ctx) => {
+	const request = ctx.request;
+	if (!request) {
+		return;
+	}
+
+	await validateFormCsrf(ctx);
+});
+
+/**
+ * Validates CSRF protection for first-login scenarios using Fetch Metadata headers.
+ * This prevents cross-site form submission attacks while supporting progressive enhancement.
+ */
+async function validateFormCsrf(ctx: GenericEndpointContext): Promise<void> {
+	const req = ctx.request;
+	if (!req) {
+		return;
+	}
+
+	const headers = req.headers;
+	const hasAnyCookies = headers.has("cookie");
+
+	if (hasAnyCookies) {
+		return await validateOrigin(ctx);
+	}
+
+	const site = headers.get("Sec-Fetch-Site");
+	const mode = headers.get("Sec-Fetch-Mode");
+	const dest = headers.get("Sec-Fetch-Dest");
+
+	const hasMetadata = Boolean(
+		(site && site.trim()) || (mode && mode.trim()) || (dest && dest.trim()),
+	);
+
+	if (hasMetadata) {
+		// Block cross-site navigation requests (classic CSRF attack pattern)
+		if (site === "cross-site" && mode === "navigate") {
+			ctx.context.logger.error(
+				"Blocked cross-site navigation login attempt (CSRF protection)",
+				{
+					secFetchSite: site,
+					secFetchMode: mode,
+					secFetchDest: dest,
+				},
+			);
+			throw new APIError("FORBIDDEN", {
+				message: BASE_ERROR_CODES.CROSS_SITE_NAVIGATION_LOGIN_BLOCKED,
+			});
+		}
+
+		return await validateOrigin(ctx, true);
+	}
+
+	// No cookies, no Fetch Metadata → fallback to old behavior (no validation)
+	return;
+}
