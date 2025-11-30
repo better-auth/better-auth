@@ -46,8 +46,10 @@ export default defineConfig({
 		"./src/plugins/jwt/index.ts",
 		"./src/plugins/magic-link/index.ts",
 		"./src/plugins/multi-session/index.ts",
+		"./src/plugins/oauth-provider/index.ts",
 		"./src/plugins/one-tap/index.ts",
 		"./src/plugins/open-api/index.ts",
+		"./src/plugins/oauth-provider/index.ts",
 		"./src/plugins/oidc-provider/index.ts",
 		"./src/plugins/oauth-proxy/index.ts",
 		"./src/plugins/organization/index.ts",
@@ -58,6 +60,7 @@ export default defineConfig({
 		"./src/plugins/haveibeenpwned/index.ts",
 		"./src/plugins/one-time-token/index.ts",
 		"./src/plugins/siwe/index.ts",
+		"./src/server/plugins/index.ts",
 		"./src/test-utils/index.ts",
 	],
 	external: [
