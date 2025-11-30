@@ -24,6 +24,7 @@ import { setSessionCookie } from "../../cookies";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState, parseState } from "../../oauth2/state";
 import type { User } from "../../types";
+import { HIDE_METADATA } from "../../utils";
 import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
 
 export * from "./providers";
@@ -201,7 +202,7 @@ export type BaseOAuthProviderOptions = Omit<
 	clientSecret: string;
 };
 
-interface GenericOAuthOptions {
+export interface GenericOAuthOptions {
 	/**
 	 * Array of OAuth provider configurations.
 	 */
@@ -641,7 +642,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							.optional(),
 					}),
 					metadata: {
-						client: false,
+						...HIDE_METADATA,
 						allowedMediaTypes: [
 							"application/x-www-form-urlencoded",
 							"application/json",

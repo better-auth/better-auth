@@ -125,6 +125,10 @@ export const auth = betterAuth({
 			clientId: process.env.PAYPAL_CLIENT_ID || "",
 			clientSecret: process.env.PAYPAL_CLIENT_SECRET || "",
 		},
+		vercel: {
+			clientId: process.env.VERCEL_CLIENT_ID || "",
+			clientSecret: process.env.VERCEL_CLIENT_SECRET || "",
+		},
 	},
 	plugins: [
 		organization({
