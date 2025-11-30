@@ -765,6 +765,7 @@ export const createInternalAdapter = (
 			};
 		},
 		findUserById: async (userId: string) => {
+			if (!userId) return null;
 			const user = await (await getCurrentAdapter(adapter)).findOne<User>({
 				model: "user",
 				where: [
