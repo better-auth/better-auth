@@ -9,15 +9,16 @@ import { redirectPlugin } from "./fetch-plugins";
 import { parseJSON } from "./parser";
 import { getSessionAtom } from "./session-atom";
 
-const resolvePublicAuthUrl = () => {
+const resolvePublicAuthUrl = (basePath?: string) => {
 	if (typeof process === "undefined") return undefined;
+	const path = basePath || "/api/auth";
 
 	if (process.env.NEXT_PUBLIC_AUTH_URL) return process.env.NEXT_PUBLIC_AUTH_URL;
 
 	if (typeof window === "undefined") {
 		if (process.env.NEXTAUTH_URL) {
 			try {
-				return new URL(process.env.NEXTAUTH_URL).origin;
+				return process.env.NEXTAUTH_URL;
 			} catch {}
 		}
 
@@ -26,7 +27,8 @@ const resolvePublicAuthUrl = () => {
 				const protocol = process.env.VERCEL_URL.startsWith("http")
 					? ""
 					: "https://";
-				return new URL(`${protocol}${process.env.VERCEL_URL}`).origin;
+				const url = new URL(`${protocol}${process.env.VERCEL_URL}`);
+				return `${url.origin}${path}`;
 			} catch {
 				// ignore invalid Vercel URL
 			}
@@ -43,7 +45,7 @@ export const getClientConfig = (
 	const isCredentialsSupported = "credentials" in Request.prototype;
 	const baseURL =
 		getBaseURL(options?.baseURL, options?.basePath, undefined, loadEnv) ??
-		resolvePublicAuthUrl() ??
+		resolvePublicAuthUrl(options?.basePath) ??
 		"/api/auth";
 	const pluginsFetchPlugins =
 		options?.plugins
