@@ -31,9 +31,9 @@ export function defaultResolveMethod({
 			return path.split("/").pop() ?? null;
 		}
 	} else if (paths.includes(path)) {
-		return (
-			context.params?.id || context.params?.providerId || path.split("/").pop()
-		);
+		const result =
+			context.params?.id || context.params?.providerId || path.split("/").pop();
+		return result ?? null;
 	}
 	if (path.includes("siwe")) return "siwe";
 	if (path.includes("/passkey/verify-authentication")) {
