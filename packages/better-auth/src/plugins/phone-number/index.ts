@@ -848,6 +848,23 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 						user.id,
 						hashedPassword,
 					);
+					const accounts = await ctx.context.internalAdapter.findAccounts(
+						user.id,
+					);
+					const account = accounts.find((ac) => ac.providerId === "credential");
+					if (!account) {
+						await ctx.context.internalAdapter.linkAccount({
+							userId: user.id,
+							providerId: "credential",
+							accountId: user.id,
+							password: hashedPassword,
+						});
+					} else {
+						await ctx.context.internalAdapter.updatePassword(
+							user.id,
+							hashedPassword,
+						);
+					}
 					await ctx.context.internalAdapter.deleteVerificationValue(
 						verification.id,
 					);
