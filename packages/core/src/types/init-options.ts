@@ -597,6 +597,10 @@ export type BetterAuthOptions = {
 					[key: string]: DBFieldAttribute;
 				};
 				/**
+				 * Map relation names. Key is the default name, value is the custom name.
+				 */
+				relations?: Record<string, string>;
+				/**
 				 * Changing email configuration
 				 */
 				changeEmail?: {
@@ -729,6 +733,10 @@ export type BetterAuthOptions = {
 					[key: string]: DBFieldAttribute;
 				};
 				/**
+				 * Map relation names. Key is the default name, value is the custom name.
+				 */
+				relations?: Record<string, string>;
+				/**
 				 * By default if secondary storage is provided
 				 * the session is stored in the secondary storage.
 				 *
@@ -855,6 +863,10 @@ export type BetterAuthOptions = {
 				additionalFields?: {
 					[key: string]: DBFieldAttribute;
 				};
+				/**
+				 * Map relation names. Key is the default name, value is the custom name.
+				 */
+				relations?: Record<string, string>;
 				/**
 				 * When enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)
 				 * will be updated on sign in with the latest data from the provider.
