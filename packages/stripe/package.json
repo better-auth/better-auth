@@ -52,7 +52,7 @@
   },
   "dependencies": {
     "defu": "^6.1.4",
-    "zod": "^4.1.12"
+    "zod": "catalog:"
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",

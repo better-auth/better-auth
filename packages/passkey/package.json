@@ -45,11 +45,11 @@
   "dependencies": {
     "@simplewebauthn/browser": "^13.1.2",
     "@simplewebauthn/server": "^13.1.2",
-    "zod": "^4.1.12"
+    "zod": "catalog:"
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
-    "@better-auth/utils": "0.3.0",
+    "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:*",
     "better-call": "catalog:",

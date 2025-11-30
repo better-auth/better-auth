@@ -62,7 +62,7 @@
     "fast-xml-parser": "^5.2.5",
     "jose": "^6.1.0",
     "samlify": "^2.10.1",
-    "zod": "^4.1.12"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/body-parser": "^1.19.6",

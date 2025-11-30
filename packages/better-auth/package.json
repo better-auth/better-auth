@@ -444,7 +444,7 @@
   "dependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/telemetry": "workspace:*",
-    "@better-auth/utils": "0.3.0",
+    "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
     "@noble/ciphers": "^2.0.0",
     "@noble/hashes": "^2.0.0",
@@ -454,7 +454,7 @@
     "jose": "^6.1.0",
     "kysely": "^0.28.5",
     "nanostores": "^1.0.1",
-    "zod": "^4.1.12"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@lynx-js/react": "^0.114.0",
