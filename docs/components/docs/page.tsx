@@ -185,7 +185,7 @@ export function DocsPage({
 				<Toc>
 					{tocOptions.header}
 					<h3 className="inline-flex items-center gap-1.5 text-sm text-fd-muted-foreground">
-						<Text className="size-4" />
+						<Text className="size-4" aria-hidden="true" />
 						<I18nLabel label="toc" />
 					</h3>
 					<TOCScrollArea>
@@ -225,7 +225,7 @@ function EditOnGitHub({
 				props.className,
 			)}
 		>
-			<Edit className="size-3.5" />
+			<Edit className="size-3.5" aria-hidden="true" />
 			<I18nLabel label="editOnGithub" />
 		</a>
 	);

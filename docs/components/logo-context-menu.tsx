@@ -143,12 +143,17 @@ export default function LogoContextMenu({
 								<div className="flex items-center">
 									<span className="text-gray-400 dark:text-zinc-400/30">[</span>
 
-									<Code className="h-[13.8px] w-[13.8px] mx-[3px]" />
+									<Code
+										className="h-[13.8px] w-[13.8px] mx-[3px]"
+										aria-hidden="true"
+									/>
+									<span className="sr-only">{"<>"}</span>
+
 									<span className="text-gray-400 dark:text-zinc-400/30">]</span>
 								</div>
 								<span>Copy Logo as SVG </span>
 							</button>
-							<hr className="border-border/[60%]" />
+							<hr className="border-border/60" />
 							<button
 								onClick={(e) =>
 									copySvgToClipboard(
@@ -162,13 +167,18 @@ export default function LogoContextMenu({
 								<div className="flex items-center">
 									<span className="text-gray-400 dark:text-zinc-400/30">[</span>
 
-									<Type className="h-[13.8px] w-[13.8px] mx-[3px]" />
+									<Type
+										className="h-[13.8px] w-[13.8px] mx-[3px]"
+										aria-hidden="true"
+									/>
+									<span className="sr-only">T</span>
+
 									<span className="text-gray-400 dark:text-zinc-400/30">]</span>
 								</div>
 								<span>Copy Logo as Wordmark </span>
 							</button>
 
-							<hr className="border-border/[60%]" />
+							<hr className="border-border/60" />
 							<button
 								onClick={(e) =>
 									downloadPng(
@@ -182,7 +192,10 @@ export default function LogoContextMenu({
 								<div className="flex items-center">
 									<span className="text-gray-400 dark:text-zinc-400/30">[</span>
 
-									<Image className="h-[13.8px] w-[13.8px] mx-[3px]" />
+									<Image
+										className="h-[13.8px] w-[13.8px] mx-[3px]"
+										aria-hidden="true"
+									/>
 									<span className="text-gray-400 dark:text-zinc-400/30">]</span>
 								</div>
 								<span>Download Logo PNG</span>

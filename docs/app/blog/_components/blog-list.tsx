@@ -14,7 +14,7 @@ export async function BlogPage() {
 	});
 	return (
 		<div className="md:grid md:grid-cols-2 items-start">
-			<div className="bg-gradient-to-tr hidden md:block overflow-hidden px-12 py-24 md:py-0 -mt-[100px] md:h-dvh relative md:sticky top-0 from-transparent dark:via-stone-950/5 via-stone-100/30 to-stone-200/20 dark:to-transparent/10">
+			<div className="bg-linear-to-tr hidden md:block overflow-hidden px-12 py-24 md:py-0 -mt-[100px] md:h-dvh relative md:sticky top-0 from-transparent dark:via-stone-950/5 via-stone-100/30 to-stone-200/20 dark:to-transparent/10">
 				<StarField className="top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2" />
 				<Glow />
 

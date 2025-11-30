@@ -70,7 +70,7 @@ const testimonials = [
 		profession: "Creator of ElysiaJS",
 		link: "https://x.com/saltyAom/status/1916919136565051491",
 		description: `Strategies to win at Auth:
-1. Copy Better Auth - 
+1. Copy Better Auth -
 2. Go back to 1`,
 		avatar: "/people-say/saltyatom.jpg",
 		image: "",
@@ -206,7 +206,7 @@ const TestimonialItem = ({
 						animationDuration: `${animeSeconds}s`,
 					}}
 					className={cn(
-						"scroller flex flex-nowrap w-max min-w-full duration-[1000s] hover:[animation-play-state:paused] overflow-hidden relative gap-5 justify-around shrink-0",
+						"scroller flex flex-nowrap w-max min-w-full duration-[1000s] hover:paused overflow-hidden relative gap-5 justify-around shrink-0",
 						reverse ? "animate-hrtl-scroll-reverse" : "animate-hrtl-scroll",
 					)}
 				>
@@ -232,12 +232,12 @@ const TestimonialItem = ({
 											<h5 className="text-base font-medium md:text-md">
 												{testimonial.name}
 											</h5>
-											<p className="text-sm md:text-base text-black/30 mt-[-4px] text-text-tertiary dark:text-white/50 dark:text-dark-text-tertiary">
+											<p className="text-sm md:text-base text-black/30 -mt-1 text-text-tertiary dark:text-white/50 dark:text-dark-text-tertiary">
 												{testimonial.profession}
 											</p>
 										</div>
 									</div>
-									<div className="w-[1px] bg-black/20 dark:bg-white/20" />
+									<div className="w-px bg-black/20 dark:bg-white/20" />
 									<div className="flex items-center justify-center max-w-full mx-auto">
 										<Link href={testimonial.link} target="_blank">
 											{testimonial.social}

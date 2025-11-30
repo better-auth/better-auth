@@ -72,9 +72,9 @@ export function CodeEditor({ code, language }: CodeEditorProps) {
 					aria-label="Copy code"
 				>
 					{isCopied ? (
-						<Check className="h-4 w-4" />
+						<Check className="h-4 w-4" aria-hidden="true" />
 					) : (
-						<Copy className="h-4 w-4" />
+						<Copy className="h-4 w-4" aria-hidden="true" />
 					)}
 				</Button>
 			</div>
