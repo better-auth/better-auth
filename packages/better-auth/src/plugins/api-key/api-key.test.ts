@@ -799,7 +799,7 @@ describe("api-key", async () => {
 		expect(result.error?.body.message).toEqual(ERROR_CODES.METADATA_DISABLED);
 	});
 
-	it("should have the first 6 chracaters of the key as the start property", async () => {
+	it("should have the first 6 characters of the key as the start property", async () => {
 		const { data: apiKey } = await client.apiKey.create(
 			{},
 			{ headers: headers },

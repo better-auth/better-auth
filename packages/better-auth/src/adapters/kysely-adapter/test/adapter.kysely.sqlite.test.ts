@@ -34,7 +34,7 @@ const { execute } = await testAdapter({
 		try {
 			await fs.unlink(dbPath);
 		} catch {
-			console.log("db doesnt exist");
+			console.log("db doesn't exist");
 		}
 		database = new Database(dbPath);
 		kyselyDB = new Kysely({ dialect: new SqliteDialect({ database }) });

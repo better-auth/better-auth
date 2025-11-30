@@ -54,6 +54,7 @@ describe("Password hashing and verification", () => {
 	});
 
 	it("should handle Unicode characters", async () => {
+		/* cspell:disable-next-line */
 		const password = "пароль123!";
 		const hash = await hashPassword(password);
 		const isValid = await verifyPassword({ hash, password });

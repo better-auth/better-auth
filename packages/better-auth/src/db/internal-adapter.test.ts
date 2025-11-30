@@ -218,7 +218,7 @@ describe("internal adapter test", async () => {
 		const sampleUser = {
 			name: "sample",
 			email: "sample@sampling.com",
-			password: "sampliiiiiing",
+			password: "some-sample-password",
 		};
 		const hookUserCreateAfter = vi.fn();
 

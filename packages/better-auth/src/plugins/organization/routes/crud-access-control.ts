@@ -1116,7 +1116,7 @@ async function checkIfMemberHasPermission({
 		});
 	if (missingPermissions.length > 0) {
 		ctx.context.logger.error(
-			`[Dynamic Access Control] The user is missing permissions nessesary to ${action} a role with those set of permissions.\n`,
+			`[Dynamic Access Control] The user is missing permissions necessary to ${action} a role with those set of permissions.\n`,
 			{
 				userId: user.id,
 				organizationId,

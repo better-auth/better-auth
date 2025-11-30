@@ -109,12 +109,12 @@ export const mongodbAdapter = (
 									return v;
 								}
 								throw new Error(
-									"Invalid id value, recieved: " + JSON.stringify(v),
+									"Invalid id value, received: " + JSON.stringify(v),
 								);
 							});
 						}
 						throw new Error(
-							"Invalid id value, recieved: " + JSON.stringify(value),
+							"Invalid id value, received: " + JSON.stringify(value),
 						);
 					}
 					try {
