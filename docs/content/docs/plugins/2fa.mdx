@@ -149,6 +149,24 @@ const authClient = createAuthClient({
 });
 ```
 
+Using the `twoFactorPage` config:
+
+```ts title="sign-in.ts"
+import { createAuthClient } from "better-auth/client";
+import { twoFactorClient } from "better-auth/client/plugins";
+
+const authClient = createAuthClient({
+    plugins: [
+        twoFactorClient({
+            twoFactorPage: "/two-factor", // the page to redirect if a user needs to verify their 2nd factor
+        }),
+    ],
+});
+```
+
+<Callout type="warn">
+Using the `twoFactorPage` option will cause a full page reload when redirecting users to the two-factor authentication page. If you want to avoid page reloads, consider using the `onTwoFactorRedirect` callback instead to handle the redirect programmatically within your application.
+</Callout>
 
 
 
