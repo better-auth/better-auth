@@ -1122,10 +1122,11 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 						});
 					}
 
+					const adminRoles = (Array.isArray(opts.adminRoles) ? opts.adminRoles : [opts.adminRoles]);
 					const targetUserRole = targetUser.role || opts.defaultRole;
 					if (
 						opts.allowImpersonatingAdmins !== true &&
-						(opts.adminRoles.includes(targetUserRole) ||
+						(adminRoles.includes(targetUserRole) ||
 							opts.adminUserIds?.includes(targetUser.id))
 					) {
 						throw new APIError("FORBIDDEN", {
