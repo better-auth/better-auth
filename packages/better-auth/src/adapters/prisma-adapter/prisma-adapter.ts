@@ -240,7 +240,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 				};
 
 				// Special handling for delete actions: extract id to root level
-				if (action === "delete" || action === "deleteMany") {
+				if (action === "delete") {
 					const idCondition = where.find((w) => w.field === "id");
 					if (idCondition) {
 						const idFieldName = getFieldName({ model, field: "id" });
