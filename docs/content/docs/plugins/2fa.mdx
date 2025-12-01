@@ -38,19 +38,19 @@ This plugin offers two main methods to do a second factor verification:
         })
         ```
     </Step>
-      <Step>
+    <Step>
         ### Migrate the database
 
         Run the migration or generate the schema to add the necessary fields and tables to the database.
 
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
-            ```bash
+            ```package-install
             npx @better-auth/cli migrate
             ```
             </Tab>
             <Tab value="generate">
-            ```bash
+            ```package-install
             npx @better-auth/cli generate
             ```
             </Tab>
