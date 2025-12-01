@@ -85,6 +85,16 @@ jobs:
                 return false;
               }
 
+              // Skip if PR has already been auto-cherry-picked (prevents duplicates)
+              const hasAutoPickedLabel = pr.labels.some(label =>
+                label.name === 'auto-cherry-picked'
+              );
+
+              if (hasAutoPickedLabel) {
+                console.log(`Skipping PR #${pr.number}: already auto-cherry-picked`);
+                return false;
+              }
+
               return true;
             });
 
@@ -141,24 +151,24 @@ jobs:
             echo "Processing PR #$PR_NUM: $PR_TITLE"
             echo "Merge commit: $MERGE_COMMIT"
 
-            # Check if commit already exists in main
-            if git branch -r --contains "$MERGE_COMMIT" | grep -q "origin/main"; then
-              echo "✓ PR #$PR_NUM already in main"
-              skipped_prs="$skipped_prs $PR_NUM"
-              skipped_count=$((skipped_count + 1))
-              continue
-            fi
-
             # Attempt cherry-pick
             if git cherry-pick -m 1 "$MERGE_COMMIT"; then
               echo "✅ Successfully cherry-picked PR #$PR_NUM"
               success_prs="$success_prs $PR_NUM"
               success_count=$((success_count + 1))
             else
-              echo "❌ Conflict in PR #$PR_NUM"
-              conflict_prs="$conflict_prs $PR_NUM"
-              git cherry-pick --abort
-              conflict_count=$((conflict_count + 1))
+              # Check if it's an empty commit (already applied)
+              if git diff-index --quiet HEAD; then
+                echo "⏭️ PR #$PR_NUM changes already in main (empty commit)"
+                git cherry-pick --abort
+                skipped_prs="$skipped_prs $PR_NUM"
+                skipped_count=$((skipped_count + 1))
+              else
+                echo "❌ Conflict in PR #$PR_NUM"
+                conflict_prs="$conflict_prs $PR_NUM"
+                git cherry-pick --abort
+                conflict_count=$((conflict_count + 1))
+              fi
             fi
           done
 
@@ -184,7 +194,7 @@ jobs:
           echo "conflict_count=$conflict_count" >> $GITHUB_OUTPUT
           echo "skipped_count=$skipped_count" >> $GITHUB_OUTPUT
 
-      - name: Comment on successful PRs
+      - name: Label and comment on successful PRs
         if: always() && steps.cherry-pick.outputs.success_prs != ''
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         with:
@@ -192,7 +202,20 @@ jobs:
             const successPrs = '${{ steps.cherry-pick.outputs.success_prs }}'.trim().split(' ').filter(Boolean);
 
             for (const prNumber of successPrs) {
-              console.log(`Adding success comment to PR #${prNumber}`);
+              console.log(`Processing successful PR #${prNumber}`);
+
+              // Add auto-cherry-picked label to prevent re-processing
+              try {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  labels: ['auto-cherry-picked']
+                });
+                console.log(`✅ Added auto-cherry-picked label to PR #${prNumber}`);
+              } catch (error) {
+                console.log(`⚠️ Could not add label to PR #${prNumber}: ${error.message}`);
+              }
 
               // Check if we've already commented about success
               const comments = await github.rest.issues.listComments({
@@ -206,7 +229,7 @@ jobs:
               );
 
               if (hasSuccessComment) {
-                console.log(`⏭️ Skipping PR #${prNumber} - success comment already exists`);
+                console.log(`⏭️ Skipping comment on PR #${prNumber} - success comment already exists`);
                 continue;
               }
 
@@ -217,6 +240,30 @@ jobs:
                 issue_number: prNumber,
                 body: '✅ Automatically cherry-picked to `main` branch!'
               });
+            }
+
+      - name: Label skipped PRs
+        if: always() && steps.cherry-pick.outputs.skipped_prs != ''
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            const skippedPrs = '${{ steps.cherry-pick.outputs.skipped_prs }}'.trim().split(' ').filter(Boolean);
+
+            for (const prNumber of skippedPrs) {
+              console.log(`Marking skipped PR #${prNumber} as auto-cherry-picked`);
+
+              // Add auto-cherry-picked label to prevent re-processing
+              try {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  labels: ['auto-cherry-picked']
+                });
+                console.log(`✅ Added auto-cherry-picked label to PR #${prNumber}`);
+              } catch (error) {
+                console.log(`⚠️ Could not add label to PR #${prNumber}: ${error.message}`);
+              }
             }
 
       - name: Handle PRs with conflicts
