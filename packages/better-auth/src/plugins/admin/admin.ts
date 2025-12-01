@@ -1124,8 +1124,9 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 
 					const targetUserRole = targetUser.role || opts.defaultRole;
 					if (
-						opts.adminRoles.includes(targetUserRole) ||
-						opts.adminUserIds?.includes(targetUser.id)
+						opts.allowImpersonatingAdmins !== true &&
+						(opts.adminRoles.includes(targetUserRole) ||
+							opts.adminUserIds?.includes(targetUser.id))
 					) {
 						throw new APIError("FORBIDDEN", {
 							message: "You cannot impersonate an admin",
