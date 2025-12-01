@@ -3,7 +3,7 @@ import {
 	getCurrentAdapter,
 	getCurrentAuthContext,
 } from "@better-auth/core/context";
-import type { DBPreservedModels } from "@better-auth/core/db";
+import type { BaseModelNames } from "@better-auth/core/db";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 
 export function getWithHooks(
@@ -14,13 +14,9 @@ export function getWithHooks(
 	},
 ) {
 	const hooks = ctx.hooks;
-	type BaseModels = Extract<
-		DBPreservedModels,
-		"user" | "account" | "session" | "verification"
-	>;
 	async function createWithHooks<T extends Record<string, any>>(
 		data: T,
-		model: BaseModels,
+		model: BaseModelNames,
 		customCreateFn?:
 			| {
 					fn: (data: Record<string, any>) => void | Promise<any>;
@@ -74,7 +70,7 @@ export function getWithHooks(
 	async function updateWithHooks<T extends Record<string, any>>(
 		data: any,
 		where: Where[],
-		model: BaseModels,
+		model: BaseModelNames,
 		customUpdateFn?:
 			| {
 					fn: (data: Record<string, any>) => void | Promise<any>;
@@ -129,7 +125,7 @@ export function getWithHooks(
 	async function updateManyWithHooks<T extends Record<string, any>>(
 		data: any,
 		where: Where[],
-		model: BaseModels,
+		model: BaseModelNames,
 		customUpdateFn?:
 			| {
 					fn: (data: Record<string, any>) => void | Promise<any>;
@@ -184,7 +180,7 @@ export function getWithHooks(
 
 	async function deleteWithHooks<T extends Record<string, any>>(
 		where: Where[],
-		model: BaseModels,
+		model: BaseModelNames,
 		customDeleteFn?:
 			| {
 					fn: (where: Where[]) => void | Promise<any>;
@@ -246,7 +242,7 @@ export function getWithHooks(
 
 	async function deleteManyWithHooks<T extends Record<string, any>>(
 		where: Where[],
-		model: BaseModels,
+		model: BaseModelNames,
 		customDeleteFn?:
 			| {
 					fn: (where: Where[]) => void | Promise<any>;

@@ -29,12 +29,12 @@ export const auth = betterAuth({
 
     <Tabs items={["migrate", "generate"]}>
         <Tab value="migrate">
-        ```bash
+        ```package-install
         npx @better-auth/cli migrate
         ```
         </Tab>
         <Tab value="generate">
-        ```bash
+        ```package-install
         npx @better-auth/cli generate
         ```
         </Tab>
@@ -930,37 +930,6 @@ export const auth = betterAuth({
   ],
 });
 ```
-
-### Invitation Accepted Callback
-
-You can configure Better Auth to execute a callback function when an invitation is accepted. This is useful for logging events, updating analytics, sending notifications, or any other custom logic you need to run when someone joins your organization.
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { organization } from "better-auth/plugins";
-
-export const auth = betterAuth({
-  plugins: [
-    organization({
-      async sendInvitationEmail(data) {
-        // ... your invitation email logic
-      },
-      async onInvitationAccepted(data) {
-        // This callback gets triggered when an invitation is accepted
-      },
-    }),
-  ],
-});
-```
-
-The callback receives the following data:
-
-- `id`: The invitation ID
-- `role`: The role assigned to the user
-- `organization`: The organization the user joined
-- `invitation`: The invitation object
-- `inviter`: The member who sent the invitation (including user details)
-- `acceptedUser`: The user who accepted the invitation
 
 ### Cancel Invitation
 
@@ -2500,7 +2469,7 @@ await client.organization.create({
   slug: "test",
   newField: "123", //this should be allowed
   //@ts-expect-error - this field is not available
-  unavalibleField: "123", //this should be not allowed
+  unavailableField: "123", //this should be not allowed
 });
 ```
 
