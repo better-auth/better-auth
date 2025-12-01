@@ -11,6 +11,7 @@
     "lint": "biome check .",
     "lint:dependencies": "knip --strict",
     "lint:fix": "biome check . --fix --unsafe",
+    "lint:spell": "cspell .",
     "lint:packages": "turbo lint:package --filter=./packages/*",
     "release": "turbo build --filter=./packages/* && bumpp && pnpm -r publish --access public --no-git-checks",
     "release:no-build": "bumpp && pnpm -r publish --access public --no-git-checks --tag next",
@@ -22,6 +23,7 @@
     "typecheck": "tsc --build"
   },
   "devDependencies": {
+    "cspell": "^9.3.2",
     "knip": "^5.70.2",
     "publint": "^0.3.15",
     "@biomejs/biome": "2.3.7",

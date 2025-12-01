@@ -324,7 +324,7 @@ const { execute } = await testAdapter({
 		const { runMigrations, compileMigrations } = await getMigrations(opts);
 		const CI =
 			process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
-		// Helpful for debugging mssql enviroment issues on Github actions
+		// Helpful for debugging mssql environment issues on Github actions
 		if (CI) {
 			console.log(`Compiling MSSQL migrations`);
 			const migrations = await compileMigrations();

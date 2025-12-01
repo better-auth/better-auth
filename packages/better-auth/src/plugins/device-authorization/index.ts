@@ -114,6 +114,7 @@ export type DeviceAuthorizationOptions = z.infer<
 	typeof deviceAuthorizationOptionsSchema
 >;
 
+/* cspell:disable-next-line */
 const defaultCharset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 /**

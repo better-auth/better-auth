@@ -1510,6 +1510,7 @@ describe("Create Adapter Helper", async () => {
 										const fakeResult: Omit<User, "email"> & {
 											email_address: string;
 										} = {
+											/* cspell:disable-next-line */
 											id: "random-id-oudwduwbdouwbdu123b",
 											email_address: "test@test.com",
 											emailVerified: false,

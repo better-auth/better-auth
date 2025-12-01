@@ -854,7 +854,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					.catch(async (e) => {
 						if (e.message.includes("already set to be cancel")) {
 							/**
-							 * incase we missed the event from stripe, we set it manually
+							 * in case we missed the event from stripe, we set it manually
 							 * this is a rare case and should not happen
 							 */
 							if (!subscription.cancelAtPeriodEnd) {

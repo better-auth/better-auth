@@ -61,7 +61,7 @@ export const GenerateAppleJwt = () => {
 		setError(null);
 		startTransition(() => {
 			try {
-				//normalize the private key by replacing \r\n with \n and trimming whitespace just incase lol
+				//normalize the private key by replacing \r\n with \n and trimming whitespace just in-case lol
 				const normalizedKey = data.privateKey.replace(/\r\n/g, "\n").trim();
 
 				//since jose is not working with safari, we are using jsrsasign

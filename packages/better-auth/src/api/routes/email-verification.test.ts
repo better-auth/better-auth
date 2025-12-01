@@ -388,7 +388,7 @@ describe("Email Verification Secondary Storage", async () => {
 		const sampleUser = {
 			name: "sampler",
 			email: "sample@sample.com",
-			password: "samplesssss",
+			password: "sample-password",
 		};
 
 		await client.signUp.email({
@@ -447,7 +447,7 @@ describe("Email Verification Secondary Storage", async () => {
 		const sampleUser = {
 			name: "sampler2",
 			email: "sample2@sample.com",
-			password: "samplesssss",
+			password: "sample-password",
 		};
 
 		await client.signUp.email({

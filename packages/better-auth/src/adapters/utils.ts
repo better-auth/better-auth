@@ -41,7 +41,7 @@ export function deepmerge<T>(target: T, source: Partial<T>): T {
 		const result: Record<string, unknown> = { ...target };
 
 		for (const [key, value] of Object.entries(source)) {
-			if (value === undefined) continue; // skip undefineds
+			if (value === undefined) continue; // skip undefined
 
 			if (key in target) {
 				result[key] = deepmerge(

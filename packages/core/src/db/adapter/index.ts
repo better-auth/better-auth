@@ -350,7 +350,7 @@ export type JoinConfig = {
 		 */
 		limit?: number;
 		/**
-		 * The relation type. Determines the ouput joined model data.
+		 * The relation type. Determines the output joined model data.
 		 *
 		 * `one-to-one` would have a single object in the output.
 		 * `one-to-many` would have an array of objects in the output.
