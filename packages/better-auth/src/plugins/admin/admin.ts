@@ -1122,8 +1122,14 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 						});
 					}
 
-					const adminRoles = (Array.isArray(opts.adminRoles) ? opts.adminRoles : opts.adminRoles.split(",")).map((role) => role.trim());
-					const targetUserRole = (targetUser.role || opts.defaultRole).split(",");
+					const adminRoles = (
+						Array.isArray(opts.adminRoles)
+							? opts.adminRoles
+							: opts.adminRoles.split(",")
+					).map((role) => role.trim());
+					const targetUserRole = (targetUser.role || opts.defaultRole).split(
+						",",
+					);
 					if (
 						opts.allowImpersonatingAdmins !== true &&
 						(targetUserRole.some((role) => adminRoles.includes(role)) ||
