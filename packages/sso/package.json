@@ -70,7 +70,7 @@
     "better-call": "catalog:",
     "better-auth": "workspace:*",
     "body-parser": "^2.2.1",
-    "express": "^5.1.0",
+    "express": "^5.2.0",
     "oauth2-mock-server": "^8.2.0",
     "tsdown": "catalog:"
   },
