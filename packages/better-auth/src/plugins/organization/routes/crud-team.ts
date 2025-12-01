@@ -557,7 +557,7 @@ const listOrganizationTeamsQuerySchema = z.optional(
 		organizationId: z
 			.string()
 			.meta({
-				description: `The organization ID which the teams are under to list. Defaults to the users active organization. Eg: "organziation-id"`,
+				description: `The organization ID which the teams are under to list. Defaults to the users active organization. Eg: "organization-id"`,
 			})
 			.optional(),
 	}),

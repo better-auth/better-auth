@@ -9,7 +9,7 @@ import type { JWKOptions, Jwk, JwtOptions } from "./types";
 import { generateExportedKeyPair } from "./utils";
 
 describe("jwt", async () => {
-	// Testing the default behaviour
+	// Testing the default behavior
 	const { auth, signInWithTestUser } = await getTestInstance({
 		plugins: [jwt()],
 		logger: {
