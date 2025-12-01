@@ -1,7 +1,7 @@
 {
   "name": "@better-auth/sso",
   "author": "Bereket Engida",
-  "version": "1.4.2-beta.4",
+  "version": "1.4.4-beta.1",
   "type": "module",
   "main": "dist/index.mjs",
   "homepage": "https://www.better-auth.com/docs/plugins/sso",
@@ -30,6 +30,7 @@
   "description": "SSO plugin for Better Auth",
   "scripts": {
     "test": "vitest",
+    "lint:package": "publint run --strict",
     "build": "tsdown",
     "dev": "tsdown --watch",
     "typecheck": "tsc --project tsconfig.json"
@@ -68,7 +69,7 @@
     "@types/express": "^5.0.5",
     "better-auth": "workspace:*",
     "better-call": "catalog:",
-    "body-parser": "^2.2.0",
+    "body-parser": "^2.2.1",
     "express": "^5.1.0",
     "oauth2-mock-server": "^8.2.0",
     "tsdown": "catalog:"

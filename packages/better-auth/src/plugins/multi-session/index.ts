@@ -75,7 +75,6 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 					if (!cookieHeader) return ctx.json([]);
 
 					const cookies = Object.fromEntries(parseCookies(cookieHeader));
-
 					const sessionTokens = (
 						await Promise.all(
 							Object.entries(cookies)
@@ -85,7 +84,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 										await ctx.getSignedCookie(key, ctx.context.secret),
 								),
 						)
-					).filter((v) => v !== null);
+					).filter((v) => typeof v === "string");
 
 					if (!sessionTokens.length) return ctx.json([]);
 					const sessions =
@@ -260,7 +259,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 											await ctx.getSignedCookie(key, ctx.context.secret),
 									),
 							)
-						).filter((v): v is string => v !== undefined);
+						).filter((v) => typeof v === "string");
 						const internalAdapter = ctx.context.internalAdapter;
 
 						if (sessionTokens.length > 0) {
@@ -354,7 +353,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 									return null;
 								}),
 							)
-						).filter((v): v is string => v !== null);
+						).filter((v) => typeof v === "string");
 						if (verifiedTokens.length > 0) {
 							await ctx.context.internalAdapter.deleteSessions(verifiedTokens);
 						}

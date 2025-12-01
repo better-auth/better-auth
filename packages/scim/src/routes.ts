@@ -29,6 +29,7 @@ import { getResourceURL } from "./utils";
 
 const supportedSCIMSchemas = [SCIMUserResourceSchema];
 const supportedSCIMResourceTypes = [SCIMUserResourceType];
+const supportedMediaTypes = ["application/json", "application/scim+json"];
 
 const generateSCIMTokenBodySchema = z.object({
 	providerId: z.string().meta({ description: "Unique provider identifier" }),
@@ -179,6 +180,7 @@ export const createSCIMUser = (authMiddleware: AuthMiddleware) =>
 			body: APIUserSchema,
 			metadata: {
 				isAction: false,
+				allowedMediaTypes: supportedMediaTypes,
 				openapi: {
 					summary: "Create SCIM user.",
 					description:
@@ -308,6 +310,7 @@ export const updateSCIMUser = (authMiddleware: AuthMiddleware) =>
 			body: APIUserSchema,
 			metadata: {
 				isAction: false,
+				allowedMediaTypes: supportedMediaTypes,
 				openapi: {
 					summary: "Update SCIM user.",
 					description:
@@ -394,6 +397,7 @@ export const listSCIMUsers = (authMiddleware: AuthMiddleware) =>
 			query: listSCIMUsersQuerySchema,
 			metadata: {
 				isAction: false,
+				allowedMediaTypes: supportedMediaTypes,
 				openapi: {
 					summary: "List SCIM users",
 					description:
@@ -479,6 +483,7 @@ export const getSCIMUser = (authMiddleware: AuthMiddleware) =>
 			method: "GET",
 			metadata: {
 				isAction: false,
+				allowedMediaTypes: supportedMediaTypes,
 				openapi: {
 					summary: "Get SCIM user details",
 					description:
@@ -545,6 +550,7 @@ export const patchSCIMUser = (authMiddleware: AuthMiddleware) =>
 			body: patchSCIMUserBodySchema,
 			metadata: {
 				isAction: false,
+				allowedMediaTypes: supportedMediaTypes,
 				openapi: {
 					summary: "Patch SCIM user",
 					description: "Updates fields on a SCIM user record",
@@ -616,6 +622,7 @@ export const deleteSCIMUser = (authMiddleware: AuthMiddleware) =>
 			method: "DELETE",
 			metadata: {
 				isAction: false,
+				allowedMediaTypes: supportedMediaTypes,
 				openapi: {
 					summary: "Delete SCIM user",
 					description:
@@ -660,6 +667,7 @@ export const getSCIMServiceProviderConfig = createAuthEndpoint(
 		method: "GET",
 		metadata: {
 			isAction: false,
+			allowedMediaTypes: supportedMediaTypes,
 			openapi: {
 				summary: "SCIM Service Provider Configuration",
 				description:
@@ -710,6 +718,7 @@ export const getSCIMSchemas = createAuthEndpoint(
 		method: "GET",
 		metadata: {
 			isAction: false,
+			allowedMediaTypes: supportedMediaTypes,
 			openapi: {
 				summary: "SCIM Service Provider Configuration Schemas",
 				description:
@@ -756,6 +765,7 @@ export const getSCIMSchema = createAuthEndpoint(
 		method: "GET",
 		metadata: {
 			isAction: false,
+			allowedMediaTypes: supportedMediaTypes,
 			openapi: {
 				summary: "SCIM a Service Provider Configuration Schema",
 				description:
@@ -801,6 +811,7 @@ export const getSCIMResourceTypes = createAuthEndpoint(
 		method: "GET",
 		metadata: {
 			isAction: false,
+			allowedMediaTypes: supportedMediaTypes,
 			openapi: {
 				summary: "SCIM Service Provider Supported Resource Types",
 				description:
@@ -855,6 +866,7 @@ export const getSCIMResourceType = createAuthEndpoint(
 		method: "GET",
 		metadata: {
 			isAction: false,
+			allowedMediaTypes: supportedMediaTypes,
 			openapi: {
 				summary: "SCIM Service Provider Supported Resource Type",
 				description:
