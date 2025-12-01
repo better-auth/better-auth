@@ -5,7 +5,6 @@ import { getTestInstance } from "../test-utils/test-instance";
 import { parseSetCookieHeader } from "./cookie-utils";
 
 describe("cookies", async () => {
-	6;
 	const { client, testUser } = await getTestInstance();
 	it("should set cookies with default options", async () => {
 		await client.signIn.email(
