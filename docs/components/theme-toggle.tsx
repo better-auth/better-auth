@@ -47,7 +47,7 @@ export function ThemeToggle(props: ComponentProps<typeof Button>) {
 				<Button
 					variant="ghost"
 					size="icon"
-        aria-label="Open theme menu"
+					aria-label="Open theme menu"
 					{...props}
 					className={cn(
 						"flex shrink-0 navbar:w-[3.56rem] navbar:h-14 navbar:border-l navbar:text-muted-foreground max-navbar:hover:bg-transparent",
@@ -89,6 +89,7 @@ const LightThemeIcon = () => {
 			key="light"
 			initial={{ opacity: 0, scale: 0.8 }}
 			animate={{ opacity: 1, scale: 1 }}
+			exit={{ opacity: 0, scale: 0.8 }}
 			transition={{ duration: 0.3, ease: "easeOut" }}
 			xmlns="http://www.w3.org/2000/svg"
 			width="1em"
@@ -218,6 +219,7 @@ const DarkThemeIcon = () => {
 			key="dark"
 			initial={{ opacity: 0, scale: 0.8 }}
 			animate={{ opacity: 1, scale: 1 }}
+			exit={{ opacity: 0, scale: 0.8 }}
 			transition={{ duration: 0.3, ease: "easeOut" }}
 			xmlns="http://www.w3.org/2000/svg"
 			width="1em"
@@ -239,6 +241,7 @@ const SystemThemeIcon = () => {
 			key="system"
 			initial={{ opacity: 0, scale: 0.8 }}
 			animate={{ opacity: 1, scale: 1 }}
+			exit={{ opacity: 0, scale: 0.8 }}
 			transition={{ duration: 0.3, ease: "easeOut" }}
 		>
 			<MonitorCogIcon strokeWidth="1.5" className="size-5" />
