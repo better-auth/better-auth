@@ -48,6 +48,14 @@
     "typescript": "catalog:",
     "vite": "^7.1.11"
   },
+  "peerDependencies": {
+    "vite": "^6.0.0 || ^7.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
+  },
   "dependencies": {
     "@babel/core": "^7.28.4",
     "@babel/preset-react": "^7.27.1",
