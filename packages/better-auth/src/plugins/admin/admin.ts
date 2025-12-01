@@ -1122,11 +1122,11 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 						});
 					}
 
-					const adminRoles = (Array.isArray(opts.adminRoles) ? opts.adminRoles : [opts.adminRoles]);
-					const targetUserRole = targetUser.role || opts.defaultRole;
+					const adminRoles = (Array.isArray(opts.adminRoles) ? opts.adminRoles : opts.adminRoles.split(",")).map((role) => role.trim());
+					const targetUserRole = (targetUser.role || opts.defaultRole).split(",");
 					if (
 						opts.allowImpersonatingAdmins !== true &&
-						(adminRoles.includes(targetUserRole) ||
+						(targetUserRole.some((role) => adminRoles.includes(role)) ||
 							opts.adminUserIds?.includes(targetUser.id))
 					) {
 						throw new APIError("FORBIDDEN", {
