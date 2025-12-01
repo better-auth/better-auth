@@ -162,7 +162,13 @@ A callback function that is called to generate a name for the anonymous user. Us
 The anonymous plugin requires an additional field in the user table:
 
 <DatabaseTable
+    modelName="user"
     fields={[
-        { name: "isAnonymous", type: "boolean", description: "Indicates whether the user is anonymous.", isOptional: true },
+        {
+            fieldName: "isAnonymous",
+            type: "boolean",
+            description: "Indicates whether the user is anonymous.",
+            required: false,
+        },
     ]}
 />
