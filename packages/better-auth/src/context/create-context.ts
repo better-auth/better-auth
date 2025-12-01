@@ -9,6 +9,7 @@ import { createTelemetry } from "@better-auth/telemetry";
 import defu from "defu";
 import type { Entries } from "type-fest";
 import { checkEndpointConflicts } from "../api";
+import { matchesOriginPattern } from "../auth/trusted-origins";
 import { createCookieGetter, getCookies } from "../cookies";
 import { hashPassword, verifyPassword } from "../crypto/password";
 import { getAuthTables } from "../db/get-tables";
@@ -174,6 +175,11 @@ export async function createAuthContext(
 		},
 		tables,
 		trustedOrigins: getTrustedOrigins(options),
+		isTrustedOrigin(url: string) {
+			return ctx.trustedOrigins.some((origin) =>
+				matchesOriginPattern(url, origin),
+			);
+		},
 		baseURL: baseURL || "",
 		sessionConfig: {
 			updateAge:

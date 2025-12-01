@@ -471,6 +471,66 @@ describe("Origin Check", async (it) => {
 		});
 		expect(resWithUnmatchedIP.error?.status).toBe(403);
 	});
+
+	it("should allow dynamically computed trusted origins", async () => {
+		const { customFetchImpl, testUser } = await getTestInstance({
+			trustedOrigins: async (request) => {
+				return [request.headers.get("origin") ?? ""];
+			},
+			emailAndPassword: {
+				enabled: true,
+				async sendResetPassword(url, user) {},
+			},
+			advanced: {
+				disableCSRFCheck: false,
+				disableOriginCheck: false,
+			},
+		});
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "http://localhost:5000",
+				},
+			},
+		});
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			callbackURL: "http://localhost:5000/callback",
+		});
+		expect(res.data?.user).toBeDefined();
+	});
+
+	it("should not allow dynamically computed trusted origins", async () => {
+		const { customFetchImpl } = await getTestInstance({
+			trustedOrigins: () => {
+				return []; // no additional origins allowed
+			},
+			emailAndPassword: {
+				enabled: true,
+				async sendResetPassword(url, user) {},
+			},
+			advanced: {
+				disableCSRFCheck: false,
+				disableOriginCheck: false,
+			},
+		});
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+		const res = await client.signIn.email({
+			email: "test@test.com",
+			password: "password",
+			callbackURL: "http://malicious.com",
+		});
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.message).toBe("Invalid callbackURL");
+	});
 });
 
 describe("origin check middleware", async (it) => {
