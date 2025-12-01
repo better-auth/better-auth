@@ -815,4 +815,52 @@ describe("Prisma v7 compatibility", () => {
 			fs.rmSync(tmpDir, { recursive: true });
 		}
 	});
+
+	it("should generate schema with prisma-client-js provider for v6", async () => {
+		const originalCwd = process.cwd();
+		const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prisma-v6-schema-"));
+
+		try {
+			// Create package.json with Prisma v6
+			const packageJson = {
+				dependencies: {
+					prisma: "^6.0.0",
+				},
+			};
+			fs.writeFileSync(
+				path.join(tmpDir, "package.json"),
+				JSON.stringify(packageJson),
+			);
+
+			// Change to temp directory
+			process.chdir(tmpDir);
+
+			const schema = await generatePrismaSchema({
+				file: "test.prisma",
+				adapter: prismaAdapter(
+					{},
+					{
+						provider: "postgresql",
+					},
+				)({} as BetterAuthOptions),
+				options: {
+					database: prismaAdapter(
+						{},
+						{
+							provider: "postgresql",
+						},
+					),
+					plugins: [],
+				},
+			});
+
+			// Check that the schema uses prisma-client-js for v6
+			expect(schema.code).toContain('provider = "prisma-client-js"');
+			expect(schema.code).not.toContain('provider = "prisma-client"');
+		} finally {
+			// Restore original directory
+			process.chdir(originalCwd);
+			fs.rmSync(tmpDir, { recursive: true });
+		}
+	});
 });
