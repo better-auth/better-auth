@@ -52,6 +52,12 @@ jobs:
           TURBO_CACHE: remote:rw
         run: pnpm lint
 
+      - name: Lint Dependencies
+        env:
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
+          TURBO_CACHE: remote:rw
+        run: pnpm lint:dependencies
       - name: Lint Packages
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}

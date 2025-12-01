@@ -65,6 +65,7 @@
     "tsdown": "catalog:"
   },
   "peerDependencies": {
+    "better-auth": "workspace:*",
     "@better-auth/core": "workspace:*",
     "expo-constants": ">=17.0.0",
     "expo-linking": ">=7.0.0",

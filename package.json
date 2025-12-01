@@ -9,6 +9,7 @@
     "clean": "turbo clean --filter=./packages/* && rm -rf node_modules",
     "format": "biome format . --write",
     "lint": "biome check .",
+    "lint:dependencies": "knip --strict",
     "lint:fix": "biome check . --fix --unsafe",
     "lint:packages": "turbo lint:package --filter=./packages/*",
     "release": "turbo build --filter=./packages/* && bumpp && pnpm -r publish --access public --no-git-checks",
@@ -21,6 +22,7 @@
     "typecheck": "tsc --build"
   },
   "devDependencies": {
+    "knip": "^5.70.2",
     "publint": "^0.3.15",
     "@biomejs/biome": "2.3.7",
     "@types/bun": "^1.3.3",
