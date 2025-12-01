@@ -912,7 +912,7 @@ export const auth = betterAuth({
 			process.exit(1);
 		}
 		const { error: writeFileError } = await tryCatch(
-			fs.writeFile(authConfigPath, authClientCode, "utf-8"),
+			fs.writeFile(filePath, authClientCode, "utf-8"),
 		);
 		if (writeFileError) {
 			const error = `Failed to write auth client file at ${authConfigPath}: ${writeFileError.message}`;

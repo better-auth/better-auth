@@ -45,8 +45,8 @@ let _possibleClientConfigPaths = [
 	"auth-client/index.server.ts",
 ];
 
-possiblePaths = [
-	...possiblePaths,
+_possibleClientConfigPaths = [
+	..._possibleClientConfigPaths,
 	..._possibleClientConfigPaths.map((it) => `lib/server/${it}`),
 	..._possibleClientConfigPaths.map((it) => `server/auth/${it}`),
 	..._possibleClientConfigPaths.map((it) => `server/${it}`),
@@ -54,7 +54,7 @@ possiblePaths = [
 	..._possibleClientConfigPaths.map((it) => `lib/${it}`),
 	..._possibleClientConfigPaths.map((it) => `utils/${it}`),
 ];
-possiblePaths = [
+_possibleClientConfigPaths = [
 	..._possibleClientConfigPaths,
 	..._possibleClientConfigPaths.map((it) => `src/${it}`),
 	..._possibleClientConfigPaths.map((it) => `app/${it}`),
