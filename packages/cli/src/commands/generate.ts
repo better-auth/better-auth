@@ -1,10 +1,10 @@
+import { existsSync } from "node:fs";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { createTelemetry, getTelemetryAuthConfig, logger } from "better-auth";
 import { getAdapter } from "better-auth/db";
 import chalk from "chalk";
 import { Command } from "commander";
-import { existsSync } from "fs";
-import fs from "fs/promises";
-import path from "path";
 import prompts from "prompts";
 import yoctoSpinner from "yocto-spinner";
 import * as z from "zod/v4";

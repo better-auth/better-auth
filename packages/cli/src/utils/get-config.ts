@@ -1,13 +1,14 @@
 // @ts-expect-error
+
+import fs, { existsSync } from "node:fs";
+import path from "node:path";
 import babelPresetReact from "@babel/preset-react";
 // @ts-expect-error
 import babelPresetTypeScript from "@babel/preset-typescript";
 import type { BetterAuthOptions } from "better-auth";
 import { BetterAuthError, logger } from "better-auth";
 import { loadConfig } from "c12";
-import fs, { existsSync } from "fs";
 import type { JitiOptions } from "jiti";
-import path from "path";
 import { addCloudflareModules } from "./add-cloudflare-modules";
 import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
 import { getTsconfigInfo } from "./get-tsconfig-info";
