@@ -34,6 +34,12 @@ export const getPasskeyActions = (
 			| {
 					autoFill?: boolean;
 					fetchOptions?: ClientFetchOption;
+					/**
+					 * Email address of the user to sign in. When provided, the server
+					 * will look up the user's passkeys and populate allowCredentials,
+					 * preventing the browser from showing all passkeys on the device.
+					 */
+					email?: string;
 			  }
 			| undefined,
 		options?: ClientFetchOption | undefined,
@@ -42,6 +48,11 @@ export const getPasskeyActions = (
 			"/passkey/generate-authenticate-options",
 			{
 				method: "GET",
+				query: opts?.email
+					? {
+							email: opts.email,
+						}
+					: undefined,
 				throw: false,
 			},
 		);
