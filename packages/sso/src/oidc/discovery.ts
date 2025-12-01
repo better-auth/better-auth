@@ -335,13 +335,13 @@ export function selectTokenEndpointAuthMethod(
 		return "client_secret_post";
 	}
 
-	// 5. IdP only advertises methods we don't support (e.g., private_key_jwt)
+	// 5. IdP only advertises methods we don't currently support (e.g., private_key_jwt)
 	// Fail fast with a clear error instead of silently falling back
 	throw new DiscoveryError(
 		"unsupported_token_auth_method",
-		"The IdP only advertises token endpoint authentication methods that Better Auth does not support. " +
+		"The IdP only advertises token endpoint authentication methods that Better Auth does not currently support. " +
 			`Supported by IdP: ${supported.join(", ")}. ` +
-			"Better Auth supports: client_secret_basic, client_secret_post.",
+			"Better Auth currently supports: client_secret_basic, client_secret_post.",
 		{
 			supported,
 			betterAuthSupports: ["client_secret_basic", "client_secret_post"],
