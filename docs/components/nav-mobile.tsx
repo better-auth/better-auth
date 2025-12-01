@@ -57,6 +57,7 @@ export const NavbarMobileBtn: React.FC = () => {
 
 	return (
 		<button
+			aria-label="Toggle navigation menu"
 			className="flex items-center justify-center size-8 navbar:hidden"
 			onClick={() => {
 				toggleNavbar();
