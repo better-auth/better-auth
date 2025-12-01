@@ -370,6 +370,17 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 									},
 								],
 							});
+						} else {
+							// Mitigate timing attacks by performing dummy operations
+							await ctx.context.adapter.findMany<Passkey>({
+								model: "passkey",
+								where: [
+									{
+										field: "userId",
+										value: "non-existent-user-id",
+									},
+								],
+							});
 						}
 					} else if (session) {
 						// If session exists, use session user's passkeys
