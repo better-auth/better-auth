@@ -12,7 +12,7 @@ import type { AuthMiddleware } from "../api";
 import type {
 	Account,
 	DBFieldAttribute,
-	DBPreservedModels,
+	ModelNames,
 	RateLimit,
 	SecondaryStorage,
 	Session,
@@ -33,7 +33,7 @@ type Optional<T> = {
 };
 
 export type GenerateIdFn = (options: {
-	model: LiteralUnion<DBPreservedModels, string>;
+	model: ModelNames;
 	size?: number | undefined;
 }) => string | false;
 
@@ -106,7 +106,7 @@ export type BetterAuthRateLimitOptions = {
 	/**
 	 * Custom field names for the rate limit table
 	 */
-	fields?: Record<keyof RateLimit, string> | undefined;
+	fields?: Partial<Record<keyof RateLimit, string>> | undefined;
 	/**
 	 * custom storage configuration.
 	 *
@@ -257,6 +257,20 @@ export type BetterAuthAdvancedOptions = {
 				generateId?: GenerateIdFn | false | "serial" | "uuid";
 		  }
 		| undefined;
+	/**
+	 * Trusted proxy headers
+	 *
+
+	 * - `x-forwarded-host`
+	 * - `x-forwarded-proto`
+	 *
+	 * If set to `true` and no `baseURL` option is provided, we will use the headers to infer the
+	 * base URL.
+	 *
+	 * ⚠︎ This may expose your application to security vulnerabilities if not
+	 * used correctly. Please use this with caution.
+	 */
+	trustedProxyHeaders?: boolean | undefined;
 };
 
 export type BetterAuthOptions = {

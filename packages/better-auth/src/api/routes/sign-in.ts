@@ -408,7 +408,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 												description: "Session token",
 											},
 											url: {
-												type: "null",
+												type: "string",
 												nullable: true,
 											},
 											user: {
