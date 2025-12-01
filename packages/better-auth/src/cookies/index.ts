@@ -135,7 +135,10 @@ export async function setCookieCache(
 		);
 
 		// Apply field filtering to user data
-		const filteredUser = parseUserOutput(ctx.context.options, session.user);
+		const filteredUser = {
+			...parseUserOutput(ctx.context.options, session.user),
+			id: session.user.id,
+		};
 
 		// Compute version
 		const versionConfig = ctx.context.options.session?.cookieCache?.version;
