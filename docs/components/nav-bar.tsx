@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { MobileSearchIcon } from "@/components/mobile-search-icon";
-import { ThemeToggle } from "@/components/theme-toggler";
+import { ThemeToggle } from "@/components/theme-toggle";
 import DarkPng from "../public/branding/better-auth-logo-dark.png";
 import WhitePng from "../public/branding/better-auth-logo-light.png";
 import { Logo } from "./logo";
