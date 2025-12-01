@@ -65,6 +65,13 @@ jobs:
           TURBO_CACHE: remote:rw
         run: pnpm lint:packages
 
+      - name: Lint Spell
+        env:
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
+          TURBO_CACHE: remote:rw
+        run: pnpm lint:spell
+
   typecheck:
     runs-on: ubuntu-latest
     steps:
