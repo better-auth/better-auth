@@ -20,7 +20,6 @@ import { parseUserOutput } from "../db/schema";
 import type { Session, User } from "../types";
 import { getDate } from "../utils/date";
 import { safeJSONParse } from "../utils/json";
-import { getBaseURL } from "../utils/url";
 import { createSessionStore } from "./session-store";
 
 export function createCookieGetter(options: BetterAuthOptions) {
@@ -342,23 +341,14 @@ export const getSessionCookie = (
 		  }
 		| undefined,
 ) => {
-	if (config?.cookiePrefix) {
-		if (config.cookieName) {
-			config.cookiePrefix = `${config.cookiePrefix}-`;
-		} else {
-			config.cookiePrefix = `${config.cookiePrefix}.`;
-		}
-	}
 	const headers = "headers" in request ? request.headers : request;
-	const req = request instanceof Request ? request : undefined;
-	const url = getBaseURL(req?.url, config?.path, req);
 	const cookies = headers.get("cookie");
 	if (!cookies) {
 		return null;
 	}
-	const { cookieName = "session_token", cookiePrefix = "better-auth." } =
+	const { cookieName = "session_token", cookiePrefix = "better-auth" } =
 		config || {};
-	const name = `${cookiePrefix}${cookieName}`;
+	const name = `${cookiePrefix}.${cookieName}`;
 	const secureCookieName = `__Secure-${name}`;
 	const parsedCookie = parseCookies(cookies);
 	const sessionToken =
