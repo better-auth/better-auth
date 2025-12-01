@@ -83,7 +83,10 @@
 		"price_[a-zA-Z0-9-_]+",
 
 		// match any url-encoded string
-		"%[0-9A-Fa-f]{2}(?:%[0-9A-Fa-f]{2})*"
+		"%[0-9A-Fa-f]{2}(?:%[0-9A-Fa-f]{2})*",
+		
+		// ignore vitest assertions (probably the source of the typo comes from somewhere else)
+		"toBe\\([^\\)]*\\)"
 	],
 	"ignorePaths": [
 		"patches",
