@@ -1,9 +1,9 @@
 {
   "name": "@better-auth/scim",
   "author": "Jonathan Samines",
-  "version": "1.4.2-beta.4",
+  "version": "1.4.4-beta.1",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "dist/index.mjs",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -21,6 +21,7 @@
   "description": "SCIM plugin for Better Auth",
   "scripts": {
     "test": "vitest",
+    "lint:package": "publint run --strict",
     "build": "tsdown",
     "dev": "tsdown --watch",
     "typecheck": "tsc --project tsconfig.json"

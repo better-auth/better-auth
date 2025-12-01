@@ -27,7 +27,7 @@ export async function createAuthorizationURL({
 	authorizationEndpoint: string;
 	state: string;
 	codeVerifier?: string | undefined;
-	scopes: string[];
+	scopes?: string[] | undefined;
 	claims?: string[] | undefined;
 	duration?: string | undefined;
 	prompt?: string | undefined;
@@ -47,7 +47,9 @@ export async function createAuthorizationURL({
 		: options.clientId;
 	url.searchParams.set("client_id", primaryClientId);
 	url.searchParams.set("state", state);
-	url.searchParams.set("scope", scopes.join(scopeJoiner || " "));
+	if (scopes) {
+		url.searchParams.set("scope", scopes.join(scopeJoiner || " "));
+	}
 	url.searchParams.set("redirect_uri", options.redirectURI || redirectURI);
 	duration && url.searchParams.set("duration", duration);
 	display && url.searchParams.set("display", display);
