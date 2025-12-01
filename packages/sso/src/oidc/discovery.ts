@@ -218,6 +218,10 @@ export async function fetchDiscoveryDocument(
  * 1. All required fields are present
  * 2. Issuer matches the configured issuer (case-sensitive, exact match)
  *
+ * Invariant: If this function returns without throwing, the document is safe
+ * to use for hydrating OIDC config (required fields present, issuer matches
+ * configured value, basic structural sanity verified).
+ *
  * @param doc - The discovery document to validate
  * @param configuredIssuer - The expected issuer value
  * @throws DiscoveryError if validation fails
@@ -270,6 +274,9 @@ export function validateDiscoveryDocument(
  * - Normalize URL formats
  * - Apply security transformations
  *
+ * TODO(Phase 2): Implement normalization of relative URLs based on issuer/discovery endpoint.
+ * For now, this is an identity function so we can wire discovery into flows incrementally.
+ *
  * @param doc - The discovery document
  * @param _issuerBase - The base issuer URL (unused in Phase 1)
  * @returns The normalized discovery document
@@ -278,6 +285,7 @@ export function normalizeDiscoveryUrls(
 	doc: OIDCDiscoveryDocument,
 	_issuerBase: string,
 ): OIDCDiscoveryDocument {
+	// TODO(Phase 2): Implement URL normalization
 	return doc;
 }
 
@@ -286,11 +294,15 @@ export function normalizeDiscoveryUrls(
  *
  * Phase 1: This is a stub that returns the endpoint unchanged.
  *
+ * TODO(Phase 2): Implement normalization of relative URLs based on issuer/discovery endpoint.
+ * For now, this is an identity function so we can wire discovery into flows incrementally.
+ *
  * @param endpoint - The endpoint URL to normalize
  * @param _issuerBase - The base issuer URL (unused in Phase 1)
  * @returns The normalized endpoint URL
  */
 export function normalizeUrl(endpoint: string, _issuerBase: string): string {
+	// TODO(Phase 2): Implement URL normalization
 	return endpoint;
 }
 
@@ -303,10 +315,14 @@ export function normalizeUrl(endpoint: string, _issuerBase: string): string {
  * 3. Pick from supported methods (prefer client_secret_basic)
  * 4. Fail fast if IdP only supports methods we don't support
  *
+ * Note: Better Auth currently only supports `client_secret_basic` and `client_secret_post`.
+ * Other methods like `private_key_jwt` or `tls_client_auth` are rejected during discovery
+ * to fail fast rather than producing cryptic errors during token exchange.
+ *
  * @param doc - The discovery document
  * @param existing - Existing authentication method from config
  * @returns The selected authentication method
- * @throws DiscoveryError if IdP only advertises unsupported methods
+ * @throws DiscoveryError with code `unsupported_token_auth_method` if IdP only advertises unsupported methods
  */
 export function selectTokenEndpointAuthMethod(
 	doc: OIDCDiscoveryDocument,
@@ -352,8 +368,13 @@ export function selectTokenEndpointAuthMethod(
 /**
  * Check if a provider configuration needs runtime discovery.
  *
- * Returns true if the provider is missing critical endpoints
- * that we need for the OAuth flow.
+ * Returns true if we need discovery at runtime to complete the token exchange
+ * and validation. Specifically checks for:
+ * - `tokenEndpoint` - required for exchanging authorization code for tokens
+ * - `jwksEndpoint` - required for validating ID token signatures
+ *
+ * Note: `authorizationEndpoint` is handled separately in the sign-in flow,
+ * so it's not checked here.
  *
  * @param config - Partial OIDC config from the provider
  * @returns true if runtime discovery should be performed

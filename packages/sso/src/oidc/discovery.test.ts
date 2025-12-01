@@ -780,5 +780,71 @@ describe("OIDC Discovery", () => {
 				);
 			}
 		});
+
+		it("should fill missing fields from discovery when existing config is partial", async () => {
+			// Scenario: Legacy provider only has jwksEndpoint stored, discovery fills the rest
+			const discoveryDoc = createMockDiscoveryDocument({
+				issuer,
+				authorization_endpoint: `${issuer}/oauth2/authorize`,
+				token_endpoint: `${issuer}/oauth2/token`,
+				jwks_uri: `${issuer}/.well-known/jwks.json`,
+				userinfo_endpoint: `${issuer}/userinfo`,
+			});
+			mockBetterFetch.mockResolvedValueOnce({
+				data: discoveryDoc,
+				error: null,
+			});
+
+			const result = await discoverOIDCConfig({
+				issuer,
+				existingConfig: {
+					// Only jwksEndpoint is set (simulating a legacy/partial config)
+					jwksEndpoint: "https://custom.example.com/jwks",
+				},
+			});
+
+			// Existing value should be preserved
+			expect(result.jwksEndpoint).toBe("https://custom.example.com/jwks");
+
+			// Discovered values should fill the gaps
+			expect(result.issuer).toBe(issuer);
+			expect(result.authorizationEndpoint).toBe(`${issuer}/oauth2/authorize`);
+			expect(result.tokenEndpoint).toBe(`${issuer}/oauth2/token`);
+			expect(result.userInfoEndpoint).toBe(`${issuer}/userinfo`);
+			expect(result.tokenEndpointAuthentication).toBe("client_secret_basic");
+		});
+
+		it("should handle discovery document with extra unknown fields and missing optional fields", async () => {
+			// Scenario: IdP returns extra vendor-specific fields and omits all optional fields
+			mockBetterFetch.mockResolvedValueOnce({
+				data: {
+					// Only required fields
+					issuer,
+					authorization_endpoint: `${issuer}/authorize`,
+					token_endpoint: `${issuer}/token`,
+					jwks_uri: `${issuer}/jwks`,
+					// Extra vendor-specific fields (should be ignored but not cause errors)
+					"x-vendor-feature": true,
+					custom_logout_endpoint: `${issuer}/logout`,
+					experimental_flags: { feature_a: true, feature_b: false },
+				},
+				error: null,
+			});
+
+			const result = await discoverOIDCConfig({ issuer });
+
+			// Should successfully extract required fields
+			expect(result.issuer).toBe(issuer);
+			expect(result.authorizationEndpoint).toBe(`${issuer}/authorize`);
+			expect(result.tokenEndpoint).toBe(`${issuer}/token`);
+			expect(result.jwksEndpoint).toBe(`${issuer}/jwks`);
+
+			// Optional fields should be undefined (not error)
+			expect(result.userInfoEndpoint).toBeUndefined();
+			expect(result.scopesSupported).toBeUndefined();
+
+			// Should default auth method when not specified
+			expect(result.tokenEndpointAuthentication).toBe("client_secret_basic");
+		});
 	});
 });

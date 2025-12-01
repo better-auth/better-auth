@@ -17,8 +17,6 @@
  * - token_endpoint
  * - jwks_uri (required for ID token validation)
  *
- * These align with the OIDC Discovery spec requirements for providers
- * that support the authorization code flow and signed ID tokens.
  */
 export interface OIDCDiscoveryDocument {
 	/** REQUIRED. URL using the https scheme that the OP asserts as its Issuer Identifier. */
@@ -27,10 +25,14 @@ export interface OIDCDiscoveryDocument {
 	/** REQUIRED. URL of the OP's OAuth 2.0 Authorization Endpoint. */
 	authorization_endpoint: string;
 
-	/** REQUIRED (unless only implicit flow is used). URL of the OP's OAuth 2.0 Token Endpoint. */
+	/**
+	 * REQUIRED (spec says "unless only implicit flow is used").
+	 * URL of the OP's OAuth 2.0 Token Endpoint.
+	 * We only support authorization code flow.
+	 */
 	token_endpoint: string;
 
-	/** REQUIRED. URL of the OP's JSON Web Key Set document. */
+	/** REQUIRED. URL of the OP's JSON Web Key Set document for ID token validation. */
 	jwks_uri: string;
 
 	/** RECOMMENDED. URL of the OP's UserInfo Endpoint. */
