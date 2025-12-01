@@ -47,7 +47,7 @@ export function ThemeToggle(props: ComponentProps<typeof Button>) {
 				<Button
 					variant="ghost"
 					size="icon"
-					aria-label="Toggle Theme"
+        aria-label="Open theme menu"
 					{...props}
 					className={cn(
 						"flex shrink-0 navbar:w-[3.56rem] navbar:h-14 navbar:border-l navbar:text-muted-foreground max-navbar:hover:bg-transparent",
