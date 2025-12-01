@@ -10,12 +10,12 @@ import {
 	isKyselyDialect,
 	isDirectAdapter,
 } from "./utility/database";
+import type { DatabaseAdapter } from "./configs/databases.config";
 import type { Framework } from "./configs/frameworks.config";
 import { FRAMEWORKS } from "./configs/frameworks.config";
 import type { Plugin, PluginsConfig } from "./configs/temp-plugins.config";
 import { tempPluginsConfig } from "./configs/temp-plugins.config";
 import type { GetArgumentsOptions } from "./generate-auth";
-import { generateAuthConfigCode } from "./generate-auth";
 import { generateAuthClientConfigCode } from "./generate-auth-client";
 import {
 	createEnvFile,
@@ -45,6 +45,11 @@ import {
 	generateDrizzleSchema,
 	generatePrismaSchema,
 } from "@better-auth/cli/generators";
+import { generateAuthConfigCode } from "./generate-auth";
+import {
+	SOCIAL_PROVIDERS,
+	SOCIAL_PROVIDER_CONFIGS,
+} from "./configs/social-providers.config";
 
 // Helper functions to replace @clack/prompts
 const confirm = async (options: { message: string; initial?: boolean }) => {
@@ -89,6 +94,7 @@ const multiselect = async (options: {
 			title: opt.label,
 			value: opt.value,
 		})),
+		instructions: false,
 	});
 	return response?.value ?? null;
 };
@@ -212,6 +218,7 @@ export async function initAction(opts: any) {
 	let currentStep = 0;
 
 	const nextStep = async (text: string) => {
+		await new Promise((resolve) => setTimeout(resolve, 1000));
 		currentStep++;
 		renderer.clear();
 		console.clear();
@@ -295,6 +302,73 @@ export async function initAction(opts: any) {
 		return FRAMEWORKS.find((framework) => framework.id === selectedFramework)!;
 	})();
 
+	// Prompt for auth config file location
+	let authConfigFilePath: string | null = null;
+	const hasAuthConfigAlready = await (async () => {
+		for (const _path of possibleAuthConfigPaths) {
+			const fullPath = path.join(cwd, _path);
+			const { error } = await tryCatch(fs.access(fullPath, fs.constants.F_OK));
+			if (!error) {
+				authConfigFilePath = fullPath;
+				return true;
+			}
+		}
+		return false;
+	})();
+
+	if (!hasAuthConfigAlready) {
+		await nextStep("Configure Auth File Location");
+
+		const { data: allFiles, error } = await tryCatch(fs.readdir(cwd, "utf-8"));
+		if (error) {
+			log.error(`Failed to read directory: ${error.message}`);
+			process.exit(1);
+		}
+		let defaultAuthConfigPath = path.join(cwd, "lib", "auth.ts");
+
+		if (allFiles.some((node) => node === "src")) {
+			defaultAuthConfigPath = path.join(cwd, "src", "lib", "auth.ts");
+		}
+
+		const { filePath } = await prompts({
+			type: "text",
+			name: "filePath",
+			message: `Where would you like to create the auth config file?`,
+			initial: defaultAuthConfigPath,
+		});
+
+		if (isCancel(filePath)) {
+			cancel("✋ Operation cancelled.");
+			process.exit(0);
+		}
+
+		authConfigFilePath = filePath;
+
+		// Generate minimal boilerplate auth config immediately
+		const boilerplateCode = `import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+	// Configuration will be added here
+});
+`;
+		const { error: mkdirError } = await tryCatch(
+			fs.mkdir(path.dirname(filePath), { recursive: true }),
+		);
+		if (mkdirError) {
+			const error = `Failed to create auth directory at ${path.dirname(filePath)}: ${mkdirError.message}`;
+			log.error(error);
+			process.exit(1);
+		}
+		const { error: writeFileError } = await tryCatch(
+			fs.writeFile(filePath, boilerplateCode, "utf-8"),
+		);
+		if (writeFileError) {
+			const error = `Failed to write auth file at ${filePath}: ${writeFileError.message}`;
+			log.error(error);
+			process.exit(1);
+		}
+	}
+
 	// Handle ENV files
 	await (async () => {
 		const envFiles = await getEnvFiles(cwd);
@@ -340,7 +414,7 @@ export async function initAction(opts: any) {
 			return;
 		}
 
-		// Check for missing ENV variables.
+		// Check for missing ENV variables (basic ones only - social providers handled later)
 		const missingEnvVars = await getMissingEnvVars(envFiles, [
 			"BETTER_AUTH_SECRET",
 			"BETTER_AUTH_URL",
@@ -379,8 +453,7 @@ export async function initAction(opts: any) {
 						envs.push(
 							`BETTER_AUTH_SECRET="${providedSecret || generateSecretHash()}"`,
 						);
-					}
-					if (v === "BETTER_AUTH_URL") {
+					} else if (v === "BETTER_AUTH_URL") {
 						const { providedURL } = await prompts({
 							type: "text",
 							name: "providedURL",
@@ -431,65 +504,151 @@ export async function initAction(opts: any) {
 		}
 	})();
 
-	// Check if `auth.ts` is already defined or not.
-	const hasAuthConfigAlready = await (async () => {
-		for (const _path of possibleAuthConfigPaths) {
-			const fullPath = path.join(cwd, _path);
-			const { error } = await tryCatch(fs.access(fullPath, fs.constants.F_OK));
-			if (!error) return true;
-		}
-		return false;
-	})();
-
 	// Select the database to use.
-	const database = await (async () => {
-		if (hasAuthConfigAlready) return null;
+	let databaseChoice: "yes" | "stateless" | "skip" | null = null;
+	let database: string | null = null;
+	await (async () => {
 		await nextStep("Configure Database");
 
-		const confirmed = await confirm({
+		const dbChoice = await select({
 			message: `Would you like to configure a database?`,
+			options: [
+				{ value: "yes", label: "Yes - Configure a database" },
+				{
+					value: "stateless",
+					label: "Stateless - Skip database (stateless mode)",
+				},
+				{ value: "skip", label: "Skip - Don't setup database now" },
+			],
+		});
+		if (isCancel(dbChoice)) {
+			cancel("✋ Operation cancelled.");
+			process.exit(0);
+		}
+		databaseChoice = (dbChoice as "yes" | "stateless" | "skip") || null;
+
+		if (databaseChoice === "yes") {
+			// First, select the ORM or kysely dialect
+			const availableORMs = getAvailableORMs();
+			const selectedOption = await select({
+				message: `Select the database you want to use:`,
+				options: availableORMs.map((opt) => ({
+					value: opt.adapter || opt.value,
+					label: opt.label,
+				})),
+			});
+			if (isCancel(selectedOption)) {
+				cancel("✋ Operation cancelled.");
+				process.exit(0);
+			}
+
+			// If a direct adapter (kysely dialect or mongodb) was selected, return it directly
+			if (isDirectAdapter(selectedOption)) {
+				return selectedOption;
+			}
+
+			// Otherwise, select the database dialect for the chosen ORM
+			const availableDialects = getDialectsForORM(selectedOption);
+			const selectedDialect = await select({
+				message: `Select the database dialect:`,
+				options: availableDialects.map((d) => ({
+					value: d.adapter,
+					label: d.label,
+				})),
+			});
+			if (isCancel(selectedDialect)) {
+				cancel("✋ Operation cancelled.");
+				process.exit(0);
+			}
+
+			database = selectedDialect;
+		}
+	})();
+
+	// Prompt for email & password authentication (skip if stateless)
+	let emailAndPassword = false;
+	if (databaseChoice && databaseChoice !== "stateless") {
+		await nextStep("Configure Email & Password");
+		const confirmed = await confirm({
+			message: `Would you like to enable email & password authentication?`,
+			initial: true,
 		});
 		if (isCancel(confirmed)) {
 			cancel("✋ Operation cancelled.");
 			process.exit(0);
 		}
-		if (!confirmed) return null;
+		emailAndPassword = confirmed || false;
+	}
 
-		// First, select the ORM or kysely dialect
-		const availableORMs = getAvailableORMs();
-		const selectedOption = await select({
-			message: `Select the database you want to use:`,
-			options: availableORMs.map((opt) => ({
-				value: opt.adapter || opt.value,
-				label: opt.label,
-			})),
+	// Prompt for social providers
+	let selectedSocialProviders: string[] = [];
+	await (async () => {
+		await nextStep("Configure Social Providers");
+		const shouldSetupSocial = await confirm({
+			message: `Would you like to setup social providers?`,
+			initial: true,
 		});
-		if (isCancel(selectedOption)) {
+		if (isCancel(shouldSetupSocial)) {
 			cancel("✋ Operation cancelled.");
 			process.exit(0);
 		}
-
-		// If a direct adapter (kysely dialect or mongodb) was selected, return it directly
-		if (isDirectAdapter(selectedOption)) {
-			return selectedOption;
+		if (shouldSetupSocial) {
+			const providers = await multiselect({
+				message: `Select the social providers you want to enable:`,
+				options: SOCIAL_PROVIDERS.map((provider) => ({
+					value: provider,
+					label: provider.charAt(0).toUpperCase() + provider.slice(1),
+				})),
+			});
+			if (isCancel(providers)) {
+				cancel("✋ Operation cancelled.");
+				process.exit(0);
+			}
+			selectedSocialProviders = providers || [];
 		}
-
-		// Otherwise, select the database dialect for the chosen ORM
-		const availableDialects = getDialectsForORM(selectedOption);
-		const selectedDialect = await select({
-			message: `Select the database dialect:`,
-			options: availableDialects.map((d) => ({
-				value: d.adapter,
-				label: d.label,
-			})),
-		});
-		if (isCancel(selectedDialect)) {
-			cancel("✋ Operation cancelled.");
-			process.exit(0);
-		}
-
-		return selectedDialect;
 	})();
+
+	// Add social provider environment variables
+	if (selectedSocialProviders.length > 0) {
+		await (async () => {
+			const envFiles = await getEnvFiles(cwd);
+			if (envFiles.length === 0) return; // No env files to update
+
+			const socialProviderEnvVars = selectedSocialProviders.flatMap(
+				(provider) => {
+					const config = SOCIAL_PROVIDER_CONFIGS[provider as keyof typeof SOCIAL_PROVIDER_CONFIGS];
+					if (!config) {
+						// Fallback for unknown providers
+						const providerUpper = provider.toUpperCase();
+						return [
+							`${providerUpper}_CLIENT_ID`,
+							`${providerUpper}_CLIENT_SECRET`,
+						];
+					}
+					return config.options.map((opt) => opt.envVar);
+				},
+			);
+
+			const missingSocialEnvVars = await getMissingEnvVars(
+				envFiles,
+				socialProviderEnvVars,
+			);
+
+			if (missingSocialEnvVars.length > 0) {
+				// Add missing social provider env vars to the first env file
+				const firstEnvFile = envFiles[0]!;
+				const envVarsToAdd = missingSocialEnvVars
+					.filter((x) => x.file === firstEnvFile)
+					.flatMap((x) =>
+						x.var.map((v) => `${v}=""`),
+					);
+
+				if (envVarsToAdd.length > 0) {
+					await updateEnvFiles([firstEnvFile], envVarsToAdd);
+				}
+			}
+		})();
+	}
 
 	// Select the plugins to use. For now this is skipped.
 	const plugins = await (async (): Promise<Plugin[]> => {
@@ -516,60 +675,29 @@ export async function initAction(opts: any) {
 		return selectedPlugins as Plugin[];
 	})();
 
-	// Generate the `auth.ts` file.
-	let authConfigFilePath: string | null = null;
+	// Generate the auth config file with all selected options
 	await (async () => {
-		if (hasAuthConfigAlready) {
-			return;
-		}
+		if (!authConfigFilePath) return;
+
 		await nextStep("Generate Auth Configuration");
+
 		const authConfigCode = await generateAuthConfigCode({
 			plugins,
-			database,
+			database: database as DatabaseAdapter | null,
 			framework,
 			baseURL: "http://localhost:3000",
+			emailAndPassword,
+			socialProviders: selectedSocialProviders,
 			getArguments: getArgumentsPrompt(options),
 			installDependency: (d) => installDependency(d, { cwd, pm }),
 		});
 
-		const { data: allFiles, error } = await tryCatch(fs.readdir(cwd, "utf-8"));
-		if (error) {
-			log.error(`Failed to read directory: ${error.message}`);
-			process.exit(1);
-		}
-		let authConfigPath = path.join(cwd, "lib", "auth.ts");
-
-		if (allFiles.some((node) => node === "src")) {
-			authConfigPath = path.join(cwd, "src", "lib", "auth.ts");
-		}
-
-		const { filePath } = await prompts({
-			type: "text",
-			name: "filePath",
-			message: `Enter the path to the auth.ts file:`,
-			initial: authConfigPath,
-		});
-
-		if (isCancel(filePath)) {
-			cancel("✋ Operation cancelled.");
-			process.exit(0);
-		}
-
-		authConfigFilePath = filePath;
-
-		const { error: mkdirError } = await tryCatch(
-			fs.mkdir(path.dirname(filePath), { recursive: true }),
-		);
-		if (mkdirError) {
-			const error = `Failed to create auth directory at ${path.dirname(authConfigPath)}: ${mkdirError.message}`;
-			log.error(error);
-			process.exit(1);
-		}
 		const { error: writeFileError } = await tryCatch(
-			fs.writeFile(filePath, authConfigCode, "utf-8"),
+			fs.writeFile(authConfigFilePath, authConfigCode, "utf-8"),
 		);
 		if (writeFileError) {
-			const error = `Failed to write auth file at ${filePath}: ${writeFileError.message}`;
+			exitAlternateScreen();
+			const error = `Failed to write auth file at ${authConfigFilePath}: ${writeFileError.message}`;
 			log.error(error);
 			process.exit(1);
 		}
@@ -579,14 +707,15 @@ export async function initAction(opts: any) {
 	await (async () => {
 		if (hasAuthConfigAlready) return;
 		if (!database) return; // Skip if no database selected
-		if (database === "mongodb") return; // Skip for MongoDB
+		const dbString = String(database);
+		if (dbString === "mongodb") return; // Skip for MongoDB
 
 		await nextStep("Database Setup");
 
 		// Determine which generator to use based on database type
-		const isDrizzle = database.startsWith("drizzle-");
-		const isPrisma = database.startsWith("prisma-");
-		const isKysely = isKyselyDialect(database);
+		const isDrizzle = dbString.startsWith("drizzle-");
+		const isPrisma = dbString.startsWith("prisma-");
+		const isKysely = isKyselyDialect(dbString);
 
 		// Skip Kysely migrations (require real database connection)
 		if (isKysely) {
@@ -598,7 +727,7 @@ export async function initAction(opts: any) {
 			return;
 		}
 
-		const provider = getDatabaseProvider(database);
+		const provider = getDatabaseProvider(dbString);
 		if (!provider) {
 			log.error(`Unable to determine database provider for ${database}`);
 			return;
@@ -670,7 +799,7 @@ export async function initAction(opts: any) {
 					file: outputPath,
 				});
 			} else {
-				throw new Error(`Unsupported database type: ${database}`);
+				throw new Error(`Unsupported database type: ${dbString}`);
 			}
 
 			if (!schemaResult.code) {
@@ -844,12 +973,78 @@ export async function initAction(opts: any) {
 	renderer.destroy();
 	console.log(`\n${output}\n`);
 	console.log(chalk.dim(chalk.bold(`Next Steps:`)));
-	const step1 = `1. Set up your database with nessesary enviroment variables.`;
-	console.log(chalk.dim(step1));
-	const step2 = `2. Run the ${chalk.greenBright("npx auth migrate")} to apply the schema to your database.`;
-	console.log(chalk.dim(step2));
-	const step3 = `3. Happy hacking!`;
-	console.log(chalk.dim(step3));
+
+	if (databaseChoice === "yes" && database) {
+		const step1 = `1. Set up your database with nessesary enviroment variables.`;
+		console.log(chalk.dim(step1));
+		
+		// Determine migration command based on database type
+		const dbString = String(database);
+		const isDrizzle = dbString.startsWith("drizzle-");
+		const isPrisma = dbString.startsWith("prisma-");
+		const isKysely = isKyselyDialect(dbString);
+		
+		// Only show migration tip for Drizzle, Prisma, or Kysely
+		if (isDrizzle || isPrisma || isKysely) {
+			let step2: string;
+			if (isDrizzle) {
+				step2 = `2. Run ${chalk.greenBright("npx drizzle-kit push")} or ${chalk.greenBright("npx drizzle-kit migrate")} to apply the schema to your database.`;
+			} else if (isPrisma) {
+				step2 = `2. Run ${chalk.greenBright("npx prisma migrate dev")} or ${chalk.greenBright("npx prisma db push")} to apply the schema to your database.`;
+			} else if (isKysely) {
+				step2 = `2. Run ${chalk.greenBright("npx @better-auth/cli migrate")} to apply the schema to your database.`;
+			} else {
+				// This shouldn't happen, but fallback
+				step2 = `2. Run ${chalk.greenBright("npx @better-auth/cli migrate")} to apply the schema to your database.`;
+			}
+			console.log(chalk.dim(step2));
+		}
+	}
+
+	if (selectedSocialProviders.length > 0) {
+		const providerList = selectedSocialProviders
+			.map((provider) => {
+				const config = SOCIAL_PROVIDER_CONFIGS[provider as keyof typeof SOCIAL_PROVIDER_CONFIGS];
+				if (!config) {
+					// Fallback for unknown providers
+					const providerUpper = provider.toUpperCase();
+					return `\n   - ${chalk.cyan(`${providerUpper}_CLIENT_ID`)} and ${chalk.cyan(`${providerUpper}_CLIENT_SECRET`)}`;
+				}
+				const envVars = config.options.map((opt) => chalk.cyan(opt.envVar)).join(" and ");
+				return `\n   - ${envVars}`;
+			})
+			.join("");
+		// Determine step number based on whether migration step was shown
+		const dbString = database ? String(database) : "";
+		const isDrizzle = dbString.startsWith("drizzle-");
+		const isPrisma = dbString.startsWith("prisma-");
+		const isKysely = isKyselyDialect(dbString);
+		const showedMigrationStep = databaseChoice === "yes" && database && (isDrizzle || isPrisma || isKysely);
+		const stepNum = showedMigrationStep ? "3" : "2";
+		const stepSocial = `${stepNum}. Update your environment variables with valid credentials for your selected social providers:${providerList}`;
+		console.log(chalk.dim(stepSocial));
+	}
+
+	// Determine final step number
+	const dbString = database ? String(database) : "";
+	const isDrizzle = dbString.startsWith("drizzle-");
+	const isPrisma = dbString.startsWith("prisma-");
+	const isKysely = isKyselyDialect(dbString);
+	const showedMigrationStep = databaseChoice === "yes" && database && (isDrizzle || isPrisma || isKysely);
+	const stepNumber =
+		selectedSocialProviders.length > 0
+			? showedMigrationStep
+				? "4"
+				: databaseChoice === "yes" && database
+					? "3"
+					: "2"
+			: showedMigrationStep
+				? "3"
+				: databaseChoice === "yes" && database
+					? "2"
+					: "1";
+	const stepFinal = `${stepNumber}. Happy hacking!`;
+	console.log(chalk.dim(stepFinal));
 }
 let initBuilder = new Command("init")
 	.option("-c, --cwd <cwd>", "The working directory.", process.cwd())

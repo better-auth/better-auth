@@ -105,6 +105,8 @@ export type GenerateAuthFileOptions = {
 	framework: Framework;
 	appName?: string;
 	baseURL?: string;
+	emailAndPassword?: boolean;
+	socialProviders?: string[];
 	/**
 	 * A callback function that allows for the retrieval of arguments for the auth config.
 	 * For example, certain plugins may require additional arguments to be passed to the plugin options.
@@ -118,6 +120,8 @@ export const generateAuthConfigCode = async ({
 	database: databaseConfig,
 	appName,
 	baseURL,
+	emailAndPassword,
+	socialProviders,
 	getArguments,
 	installDependency,
 }: GenerateAuthFileOptions) => {
@@ -141,6 +145,8 @@ export const generateAuthConfigCode = async ({
 		database,
 		appName,
 		baseURL,
+		emailAndPassword,
+		socialProviders,
 		getArguments,
 	});
 
