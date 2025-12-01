@@ -172,6 +172,38 @@ describe("email-otp", async () => {
 		expect(response?.user.image).toBe("https://user-profiles.com/users/daniel");
 	});
 
+	it("should sign-up with uppercase email", async () => {
+		const testUser2 = {
+			email: "TEST-EMAIL@DOMAIN.COM",
+		};
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser2.email,
+			type: "sign-in",
+		});
+
+		const verifiedUser = await client.signIn.emailOtp({
+			email: testUser2.email,
+			otp,
+		});
+		expect(verifiedUser.data?.token).toBeDefined();
+	});
+
+	it("should sign-up with varying case email", async () => {
+		const testUser2 = {
+			email: "test-email@domain.com",
+		};
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser2.email,
+			type: "sign-in",
+		});
+
+		const verifiedUser = await client.signIn.emailOtp({
+			email: testUser2.email.toUpperCase(),
+			otp,
+		});
+		expect(verifiedUser.data?.token).toBeDefined();
+	});
+
 	it("should send verification otp on sign-up", async () => {
 		const testUser2 = {
 			email: "test8@email.com",
