@@ -1,18 +1,12 @@
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 import type { LiteralString } from "../types";
 
-export type DBPreservedModels =
-	| "user"
-	| "account"
-	| "session"
-	| "verification"
-	| "rate-limit"
-	| "organization"
-	| "member"
-	| "invitation"
-	| "jwks"
-	| "passkey"
-	| "two-factor";
+export type BaseModelNames = "user" | "account" | "session" | "verification";
+
+export type ModelNames<T extends string = LiteralString> =
+	| BaseModelNames
+	| T
+	| "rate-limit";
 
 export type DBFieldType =
 	| "string"
