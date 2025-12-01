@@ -1112,13 +1112,23 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 						});
 					}
 
-					const targetUser = await ctx.context.internalAdapter.findUserById(
+					const targetUser = (await ctx.context.internalAdapter.findUserById(
 						ctx.body.userId,
-					);
+					)) as UserWithRole | null;
 
 					if (!targetUser) {
 						throw new APIError("NOT_FOUND", {
 							message: "User not found",
+						});
+					}
+
+					const targetUserRole = targetUser.role || opts.defaultRole;
+					if (
+						opts.adminRoles.includes(targetUserRole) ||
+						opts.adminUserIds?.includes(targetUser.id)
+					) {
+						throw new APIError("FORBIDDEN", {
+							message: "You cannot impersonate an admin",
 						});
 					}
 
