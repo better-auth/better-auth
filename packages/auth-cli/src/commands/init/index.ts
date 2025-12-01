@@ -218,7 +218,9 @@ export async function initAction(opts: any) {
 	let currentStep = 0;
 
 	const nextStep = async (text: string) => {
-		await new Promise((resolve) => setTimeout(resolve, 1000));
+		if (currentStep === 0) {
+			await new Promise((resolve) => setTimeout(resolve, 1000));
+		}
 		currentStep++;
 		renderer.clear();
 		console.clear();
@@ -228,7 +230,7 @@ export async function initAction(opts: any) {
 		} else {
 			renderer.reset();
 		}
-		await renderer.typeText(`${currentStep}. ${text}`);
+		await renderer.typeText(`${currentStep}. ${text}`, { skipAnimation: true });
 		renderer.pause();
 		renderer.finalize();
 	};

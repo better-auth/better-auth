@@ -223,21 +223,43 @@ export class HeroRenderer {
 
 	async typeText(
 		text: string,
-		options?: { delay?: number; spaceDelay?: number; variation?: number },
+		options?: {
+			delay?: number;
+			spaceDelay?: number;
+			variation?: number;
+			skipAnimation?: boolean;
+		},
 	): Promise<void> {
 		if (this.state === "paused" || this.state === "stopped") {
 			return;
 		}
-		this.setTips("press enter to skip");
-		this.state = "typing";
-		this.isTypingSession = true;
-		const delay = options?.delay ?? 100;
-		const spaceDelay = options?.spaceDelay ?? 100;
-		// Variation percentage (0-1), defaults to 0.2 (20% variation)
-		const variation = options?.variation ?? 0.2;
 
 		this.subtitle = "";
 		this.subtitleStyle = (text: string) => chalk.dim(text);
+
+		// If skipAnimation is true, just show the full text immediately
+		if (options?.skipAnimation) {
+			this.subtitle = text;
+			const displaySubtitle = this.subtitleStyle
+				? this.subtitleStyle(this.subtitle)
+				: this.subtitle;
+			const displayText = this.cursorVisible
+				? displaySubtitle + this.cursor
+				: displaySubtitle;
+			logUpdate(this.buildOutput(displayText));
+			this.setTips(null);
+			this.state = "idle";
+			return;
+		}
+
+		this.setTips("press enter to skip");
+		this.state = "typing";
+		this.isTypingSession = true;
+		const delay = options?.delay ?? 80;
+		const spaceDelay = options?.spaceDelay ?? 80;
+		// Variation percentage (0-1), defaults to 0.2 (20% variation)
+		const variation = options?.variation ?? 0.2;
+
 		// Reset skip flag for new typing session
 		this.skipToEnd = false;
 
