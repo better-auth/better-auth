@@ -218,7 +218,7 @@ export const databasesConfig = [
 		code({ additionalOptions }) {
 			return drizzleCode({ provider: "sqlite", additionalOptions });
 		},
-		dependencies: ["drizzle-orm", "bun", '@types/bun'],
+		dependencies: ["drizzle-orm", "bun", "@types/bun"],
 	},
 	{
 		adapter: "drizzle-postgresql",

@@ -1,22 +1,41 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import {
+	generateDrizzleSchema,
+	generatePrismaSchema,
+} from "@better-auth/cli/generators";
 import chalk from "chalk";
 import { Command } from "commander";
+import prompts from "prompts";
+import yoctoSpinner from "yocto-spinner";
 import z from "zod";
 import { possibleAuthConfigPaths } from "../../utils/config-paths";
+import { hasDependency } from "../../utils/get-package-json";
 import {
-	getAvailableORMs,
-	getDialectsForORM,
-	isKyselyDialect,
-	isDirectAdapter,
-} from "./utility/database";
+	enterAlternateScreen,
+	exitAlternateScreen,
+	generateSecretHash,
+	tryCatch,
+} from "../../utils/utilts";
 import type { DatabaseAdapter } from "./configs/databases.config";
 import type { Framework } from "./configs/frameworks.config";
 import { FRAMEWORKS } from "./configs/frameworks.config";
+import {
+	SOCIAL_PROVIDER_CONFIGS,
+	SOCIAL_PROVIDERS,
+} from "./configs/social-providers.config";
 import type { Plugin, PluginsConfig } from "./configs/temp-plugins.config";
 import { tempPluginsConfig } from "./configs/temp-plugins.config";
 import type { GetArgumentsOptions } from "./generate-auth";
+import { generateAuthConfigCode } from "./generate-auth";
 import { generateAuthClientConfigCode } from "./generate-auth-client";
+import { HeroRenderer } from "./hero-renderer";
+import {
+	getAvailableORMs,
+	getDialectsForORM,
+	isDirectAdapter,
+	isKyselyDialect,
+} from "./utility/database";
 import {
 	createEnvFile,
 	getEnvFiles,
@@ -24,7 +43,6 @@ import {
 	updateEnvFiles,
 } from "./utility/env";
 import { autoDetectFramework } from "./utility/framework";
-import { hasDependency } from "../../utils/get-package-json";
 import {
 	getPackageManager,
 	getPkgManagerStr,
@@ -32,24 +50,6 @@ import {
 } from "./utility/get-package-manager";
 import { installDependency } from "./utility/install-dependency";
 import { getArgumentsPrompt, getFlagVariable } from "./utility/prompt";
-import {
-	enterAlternateScreen,
-	exitAlternateScreen,
-	tryCatch,
-	generateSecretHash,
-} from "../../utils/utilts";
-import { HeroRenderer } from "./hero-renderer";
-import prompts from "prompts";
-import yoctoSpinner from "yocto-spinner";
-import {
-	generateDrizzleSchema,
-	generatePrismaSchema,
-} from "@better-auth/cli/generators";
-import { generateAuthConfigCode } from "./generate-auth";
-import {
-	SOCIAL_PROVIDERS,
-	SOCIAL_PROVIDER_CONFIGS,
-} from "./configs/social-providers.config";
 
 // Helper functions to replace @clack/prompts
 const confirm = async (options: { message: string; initial?: boolean }) => {
@@ -616,7 +616,10 @@ export const auth = betterAuth({
 
 			const socialProviderEnvVars = selectedSocialProviders.flatMap(
 				(provider) => {
-					const config = SOCIAL_PROVIDER_CONFIGS[provider as keyof typeof SOCIAL_PROVIDER_CONFIGS];
+					const config =
+						SOCIAL_PROVIDER_CONFIGS[
+							provider as keyof typeof SOCIAL_PROVIDER_CONFIGS
+						];
 					if (!config) {
 						// Fallback for unknown providers
 						const providerUpper = provider.toUpperCase();
@@ -639,9 +642,7 @@ export const auth = betterAuth({
 				const firstEnvFile = envFiles[0]!;
 				const envVarsToAdd = missingSocialEnvVars
 					.filter((x) => x.file === firstEnvFile)
-					.flatMap((x) =>
-						x.var.map((v) => `${v}=""`),
-					);
+					.flatMap((x) => x.var.map((v) => `${v}=""`));
 
 				if (envVarsToAdd.length > 0) {
 					await updateEnvFiles([firstEnvFile], envVarsToAdd);
@@ -977,13 +978,13 @@ export const auth = betterAuth({
 	if (databaseChoice === "yes" && database) {
 		const step1 = `1. Set up your database with nessesary enviroment variables.`;
 		console.log(chalk.dim(step1));
-		
+
 		// Determine migration command based on database type
 		const dbString = String(database);
 		const isDrizzle = dbString.startsWith("drizzle-");
 		const isPrisma = dbString.startsWith("prisma-");
 		const isKysely = isKyselyDialect(dbString);
-		
+
 		// Only show migration tip for Drizzle, Prisma, or Kysely
 		if (isDrizzle || isPrisma || isKysely) {
 			let step2: string;
@@ -1004,13 +1005,18 @@ export const auth = betterAuth({
 	if (selectedSocialProviders.length > 0) {
 		const providerList = selectedSocialProviders
 			.map((provider) => {
-				const config = SOCIAL_PROVIDER_CONFIGS[provider as keyof typeof SOCIAL_PROVIDER_CONFIGS];
+				const config =
+					SOCIAL_PROVIDER_CONFIGS[
+						provider as keyof typeof SOCIAL_PROVIDER_CONFIGS
+					];
 				if (!config) {
 					// Fallback for unknown providers
 					const providerUpper = provider.toUpperCase();
 					return `\n   - ${chalk.cyan(`${providerUpper}_CLIENT_ID`)} and ${chalk.cyan(`${providerUpper}_CLIENT_SECRET`)}`;
 				}
-				const envVars = config.options.map((opt) => chalk.cyan(opt.envVar)).join(" and ");
+				const envVars = config.options
+					.map((opt) => chalk.cyan(opt.envVar))
+					.join(" and ");
 				return `\n   - ${envVars}`;
 			})
 			.join("");
@@ -1019,7 +1025,10 @@ export const auth = betterAuth({
 		const isDrizzle = dbString.startsWith("drizzle-");
 		const isPrisma = dbString.startsWith("prisma-");
 		const isKysely = isKyselyDialect(dbString);
-		const showedMigrationStep = databaseChoice === "yes" && database && (isDrizzle || isPrisma || isKysely);
+		const showedMigrationStep =
+			databaseChoice === "yes" &&
+			database &&
+			(isDrizzle || isPrisma || isKysely);
 		const stepNum = showedMigrationStep ? "3" : "2";
 		const stepSocial = `${stepNum}. Update your environment variables with valid credentials for your selected social providers:${providerList}`;
 		console.log(chalk.dim(stepSocial));
@@ -1030,7 +1039,8 @@ export const auth = betterAuth({
 	const isDrizzle = dbString.startsWith("drizzle-");
 	const isPrisma = dbString.startsWith("prisma-");
 	const isKysely = isKyselyDialect(dbString);
-	const showedMigrationStep = databaseChoice === "yes" && database && (isDrizzle || isPrisma || isKysely);
+	const showedMigrationStep =
+		databaseChoice === "yes" && database && (isDrizzle || isPrisma || isKysely);
 	const stepNumber =
 		selectedSocialProviders.length > 0
 			? showedMigrationStep

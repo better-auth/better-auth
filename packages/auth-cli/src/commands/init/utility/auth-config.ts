@@ -1,7 +1,7 @@
 import type { DatabasesConfig } from "../configs/databases.config";
 import type { PluginConfig } from "../configs/plugins-index.config";
-import type { GetArgumentsFn } from "../generate-auth";
 import { SOCIAL_PROVIDER_CONFIGS } from "../configs/social-providers.config";
+import type { GetArgumentsFn } from "../generate-auth";
 import { getAuthPluginsCode } from "./plugin";
 
 type GenerateAuthConfigStringOptions = {
@@ -49,7 +49,10 @@ const getSocialProvidersCode = (providers?: string[]) => {
 	if (!providers || providers.length === 0) return undefined;
 	const providersConfig = providers
 		.map((provider) => {
-			const config = SOCIAL_PROVIDER_CONFIGS[provider as keyof typeof SOCIAL_PROVIDER_CONFIGS];
+			const config =
+				SOCIAL_PROVIDER_CONFIGS[
+					provider as keyof typeof SOCIAL_PROVIDER_CONFIGS
+				];
 			if (!config) {
 				// Fallback for unknown providers
 				const providerUpper = provider.toUpperCase();
@@ -58,14 +61,14 @@ const getSocialProvidersCode = (providers?: string[]) => {
 			clientSecret: process.env.${providerUpper}_CLIENT_SECRET!,
 		}`;
 			}
-			
+
 			// Generate config based on provider-specific options
 			const options = config.options
 				.map((opt) => {
 					return `			${opt.name}: process.env.${opt.envVar}!,`;
 				})
 				.join("\n");
-			
+
 			return `		${provider}: {\n${options}\n		}`;
 		})
 		.join(",\n");

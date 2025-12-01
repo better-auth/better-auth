@@ -93,13 +93,21 @@ const formatAdapterLabel = (adapter: DatabaseAdapter): string => {
  * Get all unique ORMs from the database config
  * Kysely dialects are shown directly instead of grouping under "kysely"
  */
-export const getAvailableORMs = (): Array<{ value: string; label: string; adapter?: DatabaseAdapter }> => {
-	const options: Array<{ value: string; label: string; adapter?: DatabaseAdapter }> = [];
+export const getAvailableORMs = (): Array<{
+	value: string;
+	label: string;
+	adapter?: DatabaseAdapter;
+}> => {
+	const options: Array<{
+		value: string;
+		label: string;
+		adapter?: DatabaseAdapter;
+	}> = [];
 	const seenORMs = new Set<string>();
 
 	for (const db of databasesConfig) {
 		const dbORM = getORMFromAdapter(db.adapter);
-		
+
 		// If it's a kysely dialect or mongodb, add it directly
 		if (dbORM === "kysely" || dbORM === "mongodb") {
 			options.push({
@@ -136,7 +144,7 @@ export const getDialectsForORM = (
 		const dbORM = getORMFromAdapter(db.adapter);
 		if (dbORM === orm) {
 			let label: string;
-			
+
 			if (db.adapter.includes("-")) {
 				const parts = db.adapter.split("-");
 				// Handle drizzle sqlite variants: "drizzle-sqlite-better-sqlite3" -> "SQLite (better-sqlite3)"

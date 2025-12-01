@@ -1,7 +1,7 @@
 import boxen from "boxen";
 import chalk from "chalk";
-import { cliVersion } from "../..";
 import logUpdate from "log-update";
+import { cliVersion } from "../..";
 
 const getHero = (title: string, subtitle?: string) => {
 	const b = `██`;
@@ -303,16 +303,16 @@ export class HeroRenderer {
 	 */
 	finalize(): void {
 		if (this.state === "stopped") return;
-		
+
 		// Get the current output
 		const output = this.buildOutput(this.subtitle);
-		
+
 		// Render it one final time with log-update
 		logUpdate(output);
-		
+
 		// Convert to permanent console output
 		console.log(output);
-		
+
 		// Clear log-update so prompts can render properly below
 		logUpdate.clear();
 	}

@@ -1,4 +1,5 @@
 import chalk from "chalk";
+import yoctoSpinner from "yocto-spinner";
 import type { ZodSchema } from "zod";
 import type { DatabaseAdapter } from "./configs/databases.config";
 import type { Framework } from "./configs/frameworks.config";
@@ -11,7 +12,6 @@ import {
 import type { ImportGroup } from "./utility/imports";
 import { createImport, getImportString } from "./utility/imports";
 import { getPluginConfigs } from "./utility/plugin";
-import yoctoSpinner from "yocto-spinner";
 
 export type GetArgumentsOptions = {
 	/**

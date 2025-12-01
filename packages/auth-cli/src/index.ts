@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
-import { getPackageJson } from "./utils/get-package-json";
 import { init } from "./commands/init";
+import { getPackageJson } from "./utils/get-package-json";
 
 const program = new Command("auth");
 

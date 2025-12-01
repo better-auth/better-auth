@@ -1,6 +1,6 @@
+import { hasDependency } from "../../../utils/get-package-json";
 import type { Framework } from "../configs/frameworks.config";
 import { FRAMEWORKS } from "../configs/frameworks.config";
-import { hasDependency } from "../../../utils/get-package-json";
 
 /**
  * Attempt to auto-detect the web-framework based on information provided in the CWD.

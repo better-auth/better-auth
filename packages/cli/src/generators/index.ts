@@ -7,8 +7,8 @@ import { generatePrismaSchema } from "./prisma";
 
 // Export individual generators for use by other packages
 export { generateDrizzleSchema } from "./drizzle";
-export { generatePrismaSchema } from "./prisma";
 export { generateMigrations } from "./kysely";
+export { generatePrismaSchema } from "./prisma";
 
 export const adapters = {
 	prisma: generatePrismaSchema,

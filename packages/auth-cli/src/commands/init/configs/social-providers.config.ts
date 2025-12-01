@@ -250,4 +250,3 @@ export const SOCIAL_PROVIDER_CONFIGS: Record<SocialProvider, ProviderConfig> = {
 		],
 	},
 };
-
