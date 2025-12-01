@@ -1,11 +1,11 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import type { BetterAuthOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { organization, twoFactor, username } from "better-auth/plugins";
 import Database from "better-sqlite3";
-import * as fs from "fs";
-import * as os from "os";
-import * as path from "path";
 import { describe, expect, it } from "vitest";
 import type { SupportedPlugin } from "../src/commands/init";
 import { generateAuthConfig } from "../src/generators/auth-config";
