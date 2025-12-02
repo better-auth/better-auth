@@ -7,8 +7,8 @@ import type {
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { describe, expect, test } from "vitest";
-import { betterAuth } from "../../../auth";
-import type { User } from "../../../types";
+import { betterAuth } from "../../auth";
+import type { User } from "../../types";
 
 /*
 
