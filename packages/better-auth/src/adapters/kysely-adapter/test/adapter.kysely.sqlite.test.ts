@@ -1,7 +1,7 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import Database from "better-sqlite3";
-import fs from "fs/promises";
 import { Kysely, SqliteDialect } from "kysely";
-import path from "path";
 import { getMigrations } from "../../../db";
 import { testAdapter } from "../../test-adapter";
 import {

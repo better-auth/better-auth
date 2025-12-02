@@ -1,4 +1,4 @@
-import { exec } from "child_process";
+import { exec } from "node:child_process";
 
 function checkCommand(command: string): Promise<boolean> {
 	return new Promise((resolve) => {

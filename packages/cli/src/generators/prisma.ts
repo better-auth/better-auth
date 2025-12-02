@@ -1,11 +1,11 @@
+import { existsSync } from "node:fs";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { produceSchema } from "@mrleebo/prisma-ast";
 import { capitalizeFirstLetter } from "better-auth";
 import { initGetFieldName, initGetModelName } from "better-auth/adapters";
 import type { FieldType } from "better-auth/db";
 import { getAuthTables } from "better-auth/db";
-import { existsSync } from "fs";
-import fs from "fs/promises";
-import path from "path";
 import type { SchemaGenerator } from "./types";
 
 export const generatePrismaSchema: SchemaGenerator = async ({
