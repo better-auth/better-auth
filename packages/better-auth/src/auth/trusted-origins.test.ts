@@ -1,6 +1,6 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { describe, expect, it } from "vitest";
-import z from "zod";
+import * as z from "zod";
 import { getTestInstance } from "../test-utils";
 import type { BetterAuthOptions } from "../types";
 
