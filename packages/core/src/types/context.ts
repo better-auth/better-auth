@@ -168,7 +168,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 		/**
 		 * Verifies whether url is a trusted origin according to the "trustedOrigins" configuration
 		 * @param url The url to verify against the "trustedOrigins" configuration
-		 * @params settings Specify supported pattern matching settings
+		 * @param settings Specify supported pattern matching settings
 		 * @returns {boolean} true if the URL matches the origin pattern, false otherwise.
 		 */
 		isTrustedOrigin: (
