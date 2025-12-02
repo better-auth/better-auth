@@ -4,8 +4,8 @@ import type { JWTPayload } from "jose";
 import { importJWK, SignJWT } from "jose";
 import { symmetricDecrypt } from "../../crypto";
 import { getJwksAdapter } from "./adapter";
-import type { JwtOptions } from "./types";
-import { createJwk, toExpJWT } from "./utils";
+import type { Jwk, JwtOptions } from "./types";
+import { rotateJwk, toExpJWT } from "./utils";
 
 export async function signJWT(
 	ctx: GenericEndpointContext,
@@ -52,11 +52,21 @@ export async function signJWT(
 		return options.jwt.sign(jwtPayload);
 	}
 
-	const adapter = getJwksAdapter(ctx.context.adapter, options);
-	let key = await adapter.getLatestKey(ctx);
-	if (!key || (key.expiresAt && key.expiresAt < new Date())) {
-		key = await createJwk(ctx, options);
+	let key: Jwk | undefined;
+	if (options?.jwks?.disableAutomaticRotation) {
+		const adapter = getJwksAdapter(ctx.context.adapter, options);
+		key = await adapter.getLatestKey(ctx);
+	} else {
+		const result = await rotateJwk(ctx, options);
+		key = result.key;
 	}
+	
+	if (!key) {
+		throw new BetterAuthError(
+			"No signing key found. Automatic rotation is disabled. Please create a key manually using the /rotate-jwk endpoint or rotateJwk() function.",
+		);
+	}
+	
 	const privateKeyEncryptionEnabled =
 		!options?.jwks?.disablePrivateKeyEncryption;
 
