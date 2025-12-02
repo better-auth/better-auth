@@ -300,6 +300,20 @@ export const authClient = createAuthClient({
 - Must match the server-side `cookieName` configuration
 - Default: `"better-auth.last_used_login_method"`
 
+**advanced.customGetMethod**: `() => string | null`
+- Custom method to retrieve the last login method
+- Returns the last login method
+
+**advanced.customClearMethod**: `() => void`
+- Custom method to clear the last login method
+
+**advanced.customResolveMethod**: `(url: string | URL) => Awaitable<string, null>`
+- Custom method for resolving the last login method (on client-side)
+- Only applied when `advanced.onLastMethodRetrieved` is provided
+
+**advanced.onLastMethodRetrieved**: `(url: string | URL) => Awaitable<void>`
+- Callback fired when the last login method is retrieved (on client-side)
+
 ### Default Method Resolution
 
 By default, the plugin tracks these authentication methods:
@@ -331,8 +345,8 @@ When you enable `crossSubDomainCookies` or `crossOriginCookies` in your Better A
 If you have custom OAuth providers or authentication methods, you can use the `customResolveMethod` option:
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth"
-import { lastLoginMethod } from "better-auth/plugins"
+import { betterAuth } from "better-auth";
+import { lastLoginMethod } from "better-auth/plugins";
 
 export const auth = betterAuth({
     plugins: [
@@ -340,25 +354,51 @@ export const auth = betterAuth({
             customResolveMethod: (ctx) => {
                 // Track custom SAML provider
                 if (ctx.path === "/saml/callback") {
-                    return "saml"
+                    return "saml";
                 }
                 
                 // Track magic link authentication
                 if (ctx.path === "/magic-link/verify") {
-                    return "magic-link"
+                    return "magic-link";
                 }
                 
                 // Track phone authentication
                 if (ctx.path === "/sign-in/phone") {
-                    return "phone"
+                    return "phone";
                 }
                 
                 // Return null to use default logic
-                return null
-            }
-        })
-    ]
-})
+                return null;
+            },
+        }),
+    ],
+});
 ```
 
+### Usage with Expo
 
+In non-browser environments like Expo, where there is no cookie storage, you can connect the client plugin to your own storage layer so the last login method can be persisted locally.
+
+```ts
+import { createAuthClient } from "better-auth/react";
+import { lastLoginMethodClient } from "better-auth/client/plugins";
+import * as SecureStore from "expo-secure-store";
+
+export const authClient = createAuthClient({
+  plugins: [
+    lastLoginMethodClient({
+      advanced: {
+        async onLastMethodRetrieved(method) {
+          await SecureStore.setItemAsync("last_login_method", method);
+        },
+        customGetMethod() {
+          return SecureStore.getItem("last_login_method");
+        },
+        customClearMethod() {
+          void SecureStore.deleteItemAsync("last_login_method");
+        },
+      },
+    }),
+  ],
+});
+```
