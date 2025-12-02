@@ -20,21 +20,25 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			operationId: "signUpWithEmailAndPassword",
 			use: [formCsrfMiddleware],
 			body: z.record(z.string(), z.any()),
-			metadata: {
-				$Infer: {
-					body: {} as {
-						name: string;
-						email: string;
-						password: string;
-						image?: string | undefined;
-						callbackURL?: string | undefined;
-						rememberMe?: boolean | undefined;
-					} & AdditionalUserFieldsInput<O>,
-					returned: {} as {
-						token: string | null;
-						user: InferUser<O>;
-					},
+		metadata: {
+			allowedMediaTypes: [
+				"application/x-www-form-urlencoded",
+				"application/json",
+			],
+			$Infer: {
+				body: {} as {
+					name: string;
+					email: string;
+					password: string;
+					image?: string | undefined;
+					callbackURL?: string | undefined;
+					rememberMe?: boolean | undefined;
+				} & AdditionalUserFieldsInput<O>,
+				returned: {} as {
+					token: string | null;
+					user: InferUser<O>;
 				},
+			},
 				openapi: {
 					operationId: "signUpWithEmailAndPassword",
 					description: "Sign up a user using email and password",

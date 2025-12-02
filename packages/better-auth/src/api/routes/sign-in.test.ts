@@ -243,3 +243,88 @@ describe("sign-in CSRF protection", async (it) => {
 		expect(response.status).not.toBe(403);
 	});
 });
+
+describe("sign-in with form data", async (it) => {
+	const { auth, testUser } = await getTestInstance({
+		trustedOrigins: ["http://localhost:3000"],
+		emailAndPassword: {
+			enabled: true,
+		},
+	});
+
+	it("should accept form-urlencoded content type", async () => {
+		const formRequest = new Request(
+			"http://localhost:3000/api/auth/sign-in/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					"Sec-Fetch-Site": "same-origin",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Dest": "document",
+					origin: "http://localhost:3000",
+				},
+				body: new URLSearchParams({
+					email: testUser.email,
+					password: testUser.password,
+				}),
+			},
+		);
+
+		const response = await auth.handler(formRequest);
+		expect(response.status).toBe(200);
+		const data = await response.json();
+		expect(data.token).toBeDefined();
+		expect(data.user.email).toBe(testUser.email);
+	});
+
+	it("should block cross-site form submissions", async () => {
+		const maliciousFormRequest = new Request(
+			"http://localhost:3000/api/auth/sign-in/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					"Sec-Fetch-Site": "cross-site",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Dest": "document",
+					origin: "https://evil.com",
+				},
+				body: new URLSearchParams({
+					email: "attacker@evil.com",
+					password: "password123",
+				}),
+			},
+		);
+
+		const response = await auth.handler(maliciousFormRequest);
+		expect(response.status).toBe(403);
+		const error = await response.json();
+		expect(error.message).toBe(
+			BASE_ERROR_CODES.CROSS_SITE_NAVIGATION_LOGIN_BLOCKED,
+		);
+	});
+
+	it("should allow same-site form submissions from trusted origins", async () => {
+		const formRequest = new Request(
+			"http://localhost:3000/api/auth/sign-in/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					"Sec-Fetch-Site": "same-site",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Dest": "document",
+					origin: "http://localhost:3000",
+				},
+				body: new URLSearchParams({
+					email: testUser.email,
+					password: testUser.password,
+				}),
+			},
+		);
+
+		const response = await auth.handler(formRequest);
+		expect(response.status).toBe(200);
+	});
+});

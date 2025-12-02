@@ -261,3 +261,96 @@ describe("sign-up CSRF protection", async (it) => {
 		expect(response.status).not.toBe(403);
 	});
 });
+
+describe("sign-up with form data", async (it) => {
+	const { auth } = await getTestInstance(
+		{
+			trustedOrigins: ["http://localhost:3000"],
+			emailAndPassword: {
+				enabled: true,
+			},
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+
+	it("should accept form-urlencoded content type", async () => {
+		const formRequest = new Request(
+			"http://localhost:3000/api/auth/sign-up/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					"Sec-Fetch-Site": "same-origin",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Dest": "document",
+					origin: "http://localhost:3000",
+				},
+				body: new URLSearchParams({
+					email: "formuser@example.com",
+					password: "password123",
+					name: "Form User",
+				}),
+			},
+		);
+
+		const response = await auth.handler(formRequest);
+		expect(response.status).toBe(200);
+		const data = await response.json();
+		expect(data.token).toBeDefined();
+		expect(data.user.email).toBe("formuser@example.com");
+	});
+
+	it("should block cross-site form submissions", async () => {
+		const maliciousFormRequest = new Request(
+			"http://localhost:3000/api/auth/sign-up/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					"Sec-Fetch-Site": "cross-site",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Dest": "document",
+					origin: "https://evil.com",
+				},
+				body: new URLSearchParams({
+					email: "victim@example.com",
+					password: "password123",
+					name: "Victim",
+				}),
+			},
+		);
+
+		const response = await auth.handler(maliciousFormRequest);
+		expect(response.status).toBe(403);
+		const error = await response.json();
+		expect(error.message).toBe(
+			BASE_ERROR_CODES.CROSS_SITE_NAVIGATION_LOGIN_BLOCKED,
+		);
+	});
+
+	it("should allow same-site form submissions from trusted origins", async () => {
+		const formRequest = new Request(
+			"http://localhost:3000/api/auth/sign-up/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					"Sec-Fetch-Site": "same-site",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Dest": "document",
+					origin: "http://localhost:3000",
+				},
+				body: new URLSearchParams({
+					email: "samesiteuser@example.com",
+					password: "password123",
+					name: "Same Site User",
+				}),
+			},
+		);
+
+		const response = await auth.handler(formRequest);
+		expect(response.status).toBe(200);
+	});
+});
