@@ -2,6 +2,7 @@ import * as z from "zod";
 import { coreSchema } from "./shared";
 
 export const accountSchema = coreSchema.extend({
+	id: z.string(),
 	providerId: z.string(),
 	accountId: z.string(),
 	userId: z.coerce.string(),
