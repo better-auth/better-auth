@@ -46,6 +46,7 @@ export interface PhoneNumber {
  * https://developers.zoom.us/docs/api/users/#tag/users/GET/users/{userId}
  */
 export interface ZoomProfile extends Record<string, any> {
+	/* cspell:disable-next-line */
 	/** The user's account ID (Example: "q6gBJVO5TzexKYTb_I2rpg") */
 	account_id: string;
 	/** The user's account number (Example: 10009239) */
@@ -66,10 +67,13 @@ export interface ZoomProfile extends Record<string, any> {
 	email: string;
 	/** User's first name (Example: "Jill") */
 	first_name: string;
+	/* cspell:disable-next-line */
 	/** IDs of the web groups that the user belongs to (Example: ["RSMaSp8sTEGK0_oamiA2_w"]) */
 	group_ids: string[];
+	/* cspell:disable-next-line */
 	/** User ID (Example: "zJKyaiAyTNC-MWjiWC18KQ") */
 	id: string;
+	/* cspell:disable-next-line */
 	/** IM IDs of the groups that the user belongs to (Example: ["t-_-d56CSWG-7BF15LLrOw"]) */
 	im_group_ids: string[];
 	/** The user's JID (Example: "jchill@example.com") */
@@ -117,12 +121,13 @@ export interface ZoomProfile extends Record<string, any> {
 	zoom_one_type: number;
 	/** The user's company (Example: "Jill") */
 	company?: string | undefined;
+	/* cspell:disable-next-line */
 	/** Custom attributes that have been assigned to the user (Example: [{ "key": "cbf_cywdkexrtqc73f97gd4w6g", "name": "A1", "value": "1" }]) */
 	custom_attributes?:
 		| { key: string; name: string; value: string }[]
 		| undefined;
-	/** The employee's unique ID. This field only returns when SAML single sign-on (SSO) is enabled.
-	 * The `login_type` value is `101` (SSO) (Example: "HqDyI037Qjili1kNsSIrIg") */
+	/* cspell:disable-next-line */
+	/** The employee's unique ID. This field only returns when SAML single sign-on (SSO) is enabled. The `login_type` value is `101` (SSO) (Example: "HqDyI037Qjili1kNsSIrIg") */
 	employee_unique_id?: string | undefined;
 	/** The manager for the user (Example: "thill@example.com") */
 	manager?: string | undefined;
