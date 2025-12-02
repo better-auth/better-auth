@@ -1,3 +1,5 @@
+import fs, { existsSync } from "node:fs";
+import path from "node:path";
 // @ts-expect-error
 import babelPresetReact from "@babel/preset-react";
 // @ts-expect-error
@@ -5,9 +7,7 @@ import babelPresetTypeScript from "@babel/preset-typescript";
 import type { BetterAuthOptions } from "better-auth";
 import { BetterAuthError, logger } from "better-auth";
 import { loadConfig } from "c12";
-import fs, { existsSync } from "fs";
 import type { JitiOptions } from "jiti";
-import path from "path";
 import { addCloudflareModules } from "./add-cloudflare-modules";
 import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
 import { getTsconfigInfo } from "./get-tsconfig-info";
@@ -19,12 +19,20 @@ let possiblePaths = [
 	"auth.jsx",
 	"auth.server.js",
 	"auth.server.ts",
+	"auth/index.ts",
+	"auth/index.tsx",
+	"auth/index.js",
+	"auth/index.jsx",
+	"auth/index.server.js",
+	"auth/index.server.ts",
 ];
 
 possiblePaths = [
 	...possiblePaths,
 	...possiblePaths.map((it) => `lib/server/${it}`),
+	...possiblePaths.map((it) => `server/auth/${it}`),
 	...possiblePaths.map((it) => `server/${it}`),
+	...possiblePaths.map((it) => `auth/${it}`),
 	...possiblePaths.map((it) => `lib/${it}`),
 	...possiblePaths.map((it) => `utils/${it}`),
 ];

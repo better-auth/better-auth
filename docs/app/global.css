@@ -87,6 +87,7 @@
 }
 
 @theme inline {
+	--breakpoint-navbar: 56rem;
 	--color-background: var(--background);
 	--color-foreground: var(--foreground);
 	--color-card: var(--card);

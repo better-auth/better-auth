@@ -41,7 +41,7 @@ export const getPasskeyActions = (
 		const response = await $fetch<PublicKeyCredentialRequestOptionsJSON>(
 			"/passkey/generate-authenticate-options",
 			{
-				method: "POST",
+				method: "GET",
 				throw: false,
 			},
 		);

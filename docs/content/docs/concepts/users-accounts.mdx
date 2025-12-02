@@ -35,13 +35,18 @@ export const auth = betterAuth({
     emailVerification: {
         // Required to send the verification email
         sendVerificationEmail: async ({ user, url, token }) => {
-            await sendEmail({
+            void sendEmail({
                 to: user.email,
             })
         }
     }
 })
 ```
+
+<Callout type="warn">
+  Avoid awaiting the email sending to prevent 
+  timing attacks. On serverless platforms, use `waitUntil` or similar to ensure the email is sent.
+</Callout>
 
 By default, when a user requests to change their email, a verification email is sent to the **new** email address.
 The email is only updated after the user verifies the new email.
@@ -57,8 +62,8 @@ export const auth = betterAuth({
     user: {
         changeEmail: {
             enabled: true,
-            sendChangeEmailConfirmation: async ({ user, newEmail, url, token }, request) => {
-                await sendEmail({
+            sendChangeEmailConfirmation: async ({ user, newEmail, url, token }, request) => { 
+                void sendEmail({
                     to: user.email, // Sent to the CURRENT email
                     subject: 'Approve email change',
                     text: `Click the link to approve the change to ${newEmail}: ${url}`
