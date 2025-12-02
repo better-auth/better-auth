@@ -19,7 +19,7 @@ export default function PromoCard() {
 	return (
 		<TooltipProvider>
 			<Card
-				className="w-full overflow-hidden bg-gradient-to-br from-purple-500 to-indigo-600 text-white"
+				className="w-full overflow-hidden bg-linear-to-br from-purple-500 to-indigo-600 text-white"
 				onMouseEnter={() => setIsHovered(true)}
 				onMouseLeave={() => setIsHovered(false)}
 			>
@@ -30,7 +30,7 @@ export default function PromoCard() {
 						</Badge>
 						<Tooltip>
 							<TooltipTrigger>
-								<Clock className="h-5 w-5 text-white/80" />
+								<Clock className="h-5 w-5 text-white/80" aria-hidden="true" />
 							</TooltipTrigger>
 							<TooltipContent>
 								<p>Limited time offer</p>
@@ -43,22 +43,23 @@ export default function PromoCard() {
 						content.
 					</p>
 					<div className="relative">
-						<Progress value={67} className="h-2 mb-2" />
+						<Progress value={67} className="h-2 mb-2" aria-hidden="true" />
 						<span className="text-xs text-white/80">67% of slots filled</span>
 					</div>
 				</CardContent>
 				<CardFooter className="p-6 pt-4">
 					<Button
 						className={`w-full bg-white text-purple-600 hover:bg-white/90 transition-all duration-300 ${
-							isHovered ? "translate-y-[-2px] shadow-lg" : ""
+							isHovered ? "-translate-y-0.5 shadow-lg" : ""
 						}`}
 					>
 						<span className="mr-2">Upgrade Now</span>
-						<Sparkles className="h-4 w-4 mr-2" />
+						<Sparkles className="h-4 w-4 mr-2" aria-hidden="true" />
 						<ArrowRight
 							className={`h-4 w-4 transition-transform duration-300 ${
 								isHovered ? "translate-x-1" : ""
 							}`}
+							aria-hidden="true"
 						/>
 					</Button>
 				</CardFooter>

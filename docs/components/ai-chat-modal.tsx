@@ -223,14 +223,14 @@ export function AIChatModal({ isOpen, onClose }: AIChatModalProps) {
 			<DialogContent className="max-w-4xl border-b h-[80vh] flex flex-col">
 				<DialogHeader>
 					<DialogTitle className="flex items-center gap-2">
-						<Bot className="h-5 w-5 text-primary" />
+						<Bot className="h-5 w-5 text-primary" aria-hidden="true" />
 						Ask AI About Better Auth
 					</DialogTitle>
 					<DialogDescription>
 						Ask questions about Better-Auth and get AI-powered answers
 						{apiError && (
 							<div className="flex items-center gap-2 mt-2 text-amber-600 dark:text-amber-400">
-								<AlertCircle className="h-4 w-4" />
+								<AlertCircle className="h-4 w-4" aria-hidden="true" />
 								<span className="text-xs">
 									API Error: Something went wrong. Please try again.
 								</span>
@@ -250,7 +250,7 @@ export function AIChatModal({ isOpen, onClose }: AIChatModalProps) {
 							<div className="flex h-full flex-col items-center justify-center text-center">
 								<div className="mb-6">
 									<div className="w-16 h-16 mx-auto bg-transparent border border-input/70 border-dashed rounded-none flex items-center justify-center mb-4">
-										<Bot className="h-8 w-8 text-primary" />
+										<Bot className="h-8 w-8 text-primary" aria-hidden="true" />
 									</div>
 								</div>
 
@@ -304,9 +304,12 @@ export function AIChatModal({ isOpen, onClose }: AIChatModalProps) {
 									)}
 								>
 									{message.role === "assistant" && (
-										<div className="flex-shrink-0">
+										<div className="shrink-0">
 											<div className="w-8 h-8 rounded-full bg-transparent border border-input/70 border-dashed flex items-center justify-center">
-												<Bot className="h-4 w-4 text-primary" />
+												<Bot
+													className="h-4 w-4 text-primary"
+													aria-hidden="true"
+												/>
 											</div>
 										</div>
 									)}
@@ -343,9 +346,9 @@ export function AIChatModal({ isOpen, onClose }: AIChatModalProps) {
 										)}
 									</div>
 									{message.role === "user" && (
-										<div className="flex-shrink-0">
+										<div className="shrink-0">
 											<div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-												<User className="h-4 w-4" />
+												<User className="h-4 w-4" aria-hidden="true" />
 											</div>
 										</div>
 									)}
@@ -360,8 +363,8 @@ export function AIChatModal({ isOpen, onClose }: AIChatModalProps) {
 							<div
 								className={cn(
 									"relative flex flex-col border-input rounded-lg transition-all duration-200 w-full text-left",
-									"ring-1 ring-border/20 bg-muted/30 border-input border-1 backdrop-blur-sm",
-									"focus-within:ring-primary/30 focus-within:bg-muted/[35%]",
+									"ring-1 ring-border/20 bg-muted/30 border-input border backdrop-blur-sm",
+									"focus-within:ring-primary/30 focus-within:bg-muted/35",
 								)}
 							>
 								<div className="overflow-y-auto max-h-[200px]">
@@ -398,7 +401,7 @@ export function AIChatModal({ isOpen, onClose }: AIChatModalProps) {
 										{isLoading ? (
 											<div className="w-4 h-4 border-2 border-current/30 border-t-current rounded-full animate-spin" />
 										) : (
-											<Send className="h-4 w-4" />
+											<Send className="h-4 w-4" aria-hidden="true" />
 										)}
 									</button>
 								</div>

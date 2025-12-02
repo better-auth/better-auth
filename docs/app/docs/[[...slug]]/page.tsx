@@ -5,6 +5,7 @@ import { Step, Steps } from "fumadocs-ui/components/steps";
 import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 import { TypeTable } from "fumadocs-ui/components/type-table";
 import defaultMdxComponents from "fumadocs-ui/mdx";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { APIMethod } from "@/components/api-method";
@@ -29,6 +30,7 @@ import { AnimatePresence } from "@/components/ui/fade-in";
 import { source } from "@/lib/source";
 import { absoluteUrl, cn } from "@/lib/utils";
 import { LLMCopyButton, ViewOptions } from "./page.client";
+
 export default async function Page({
 	params,
 }: {
@@ -75,13 +77,13 @@ export default async function Page({
 				<MDX
 					components={{
 						...defaultMdxComponents,
-						CodeBlockTabs: (props) => {
+						CodeBlockTabs: ({ groupId, persist, ...props }) => {
 							return (
 								<CodeBlockTabs
 									{...props}
 									className="p-0 rounded-lg border-0 bg-fd-secondary"
 								>
-									<div {...props}>{props.children}</div>
+									<div {...props} />
 								</CodeBlockTabs>
 							);
 						},
@@ -175,7 +177,7 @@ export async function generateMetadata({
 	params,
 }: {
 	params: Promise<{ slug?: string[] }>;
-}) {
+}): Promise<Metadata> {
 	const { slug } = await params;
 	let page = source.getPage(slug);
 	if (page == null) {

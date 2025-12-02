@@ -43,7 +43,7 @@ export function NavbarSidebarTrigger(
 				props.className,
 			)}
 		>
-			{open ? <X /> : <Menu />}
+			{open ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
 		</SidebarTrigger>
 	);
 }

@@ -40,7 +40,7 @@ export const ShipText = () => {
 							key={index}
 							className={`w-8 h-8 ${
 								isActive
-									? "bg-gradient-to-tr from-stone-100 via-white/90 to-zinc-900"
+									? "bg-linear-to-tr from-stone-100 via-white/90 to-zinc-900"
 									: "bg-transparent"
 							}`}
 						/>

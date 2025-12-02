@@ -27,7 +27,7 @@ export function MobileSearchIcon({ className }: MobileSearchIconProps) {
 				className,
 			)}
 		>
-			<Search className="size-4" />
+			<Search className="size-4" aria-hidden="true" />
 		</Button>
 	);
 }

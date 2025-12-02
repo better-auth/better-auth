@@ -75,8 +75,8 @@ function Star({
 	blurId: string;
 	point: Star;
 }) {
-	let groupRef = useRef<React.ElementRef<"g">>(null);
-	let ref = useRef<React.ElementRef<"circle">>(null);
+	let groupRef = useRef<React.ComponentRef<"g">>(null);
+	let ref = useRef<React.ComponentRef<"circle">>(null);
 
 	useEffect(() => {
 		if (!groupRef.current || !ref.current) {
@@ -132,7 +132,7 @@ function Constellation({
 	points: Array<Star>;
 	blurId: string;
 }) {
-	let ref = useRef<React.ElementRef<"path">>(null);
+	let ref = useRef<React.ComponentRef<"path">>(null);
 	let uniquePoints = points.filter(
 		(point, pointIndex) =>
 			points.findIndex((p) => String(p) === String(point)) === pointIndex,
@@ -196,7 +196,7 @@ export function StarField({ className }: { className?: string }) {
 			fill="white"
 			aria-hidden="true"
 			className={clsx(
-				"pointer-events-none absolute w-[55.0625rem] max-w-[100vw] origin-top-right rotate-[30deg] overflow-visible opacity-70",
+				"pointer-events-none absolute w-220.25 max-w-[100vw] origin-top-right rotate-30 overflow-visible opacity-70",
 				className,
 			)}
 		>

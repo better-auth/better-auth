@@ -196,12 +196,14 @@ function CopyButton({
 		>
 			<Check
 				className={cn("size-3.5 transition-transform", !checked && "scale-0")}
+				aria-hidden="true"
 			/>
 			<Copy
 				className={cn(
 					"absolute size-3.5 transition-transform",
 					checked && "scale-0",
 				)}
+				aria-hidden="true"
 			/>
 		</button>
 	);
@@ -303,8 +305,7 @@ export const CodeBlockOld = forwardRef<HTMLElement, CodeBlockProps>(
 				{...props}
 				className={cn(
 					"not-prose group fd-codeblock relative my-6 overflow-hidden rounded-lg border bg-fd-secondary/50 text-sm",
-					keepBackground &&
-						"bg-[var(--shiki-light-bg)] dark:bg-[var(--shiki-dark-bg)]",
+					keepBackground && "bg-(--shiki-light-bg) dark:bg-(--shiki-dark-bg)",
 					props.className,
 				)}
 			>
@@ -334,7 +335,7 @@ export const CodeBlockOld = forwardRef<HTMLElement, CodeBlockProps>(
 				) : (
 					allowCopy && (
 						<CopyButton
-							className="absolute right-2 top-2 z-[2] backdrop-blur-md"
+							className="absolute right-2 top-2 z-2 backdrop-blur-md"
 							onCopy={onCopy}
 						/>
 					)

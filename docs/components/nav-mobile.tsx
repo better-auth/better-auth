@@ -62,8 +62,9 @@ export const NavbarMobileBtn: React.FC = () => {
 				onClick={() => {
 					toggleNavbar();
 				}}
+				aria-label="Toggle Menu"
 			>
-				<Menu className="size-5" />
+				<Menu className="size-5" aria-hidden="true" />
 			</button>
 		</div>
 	);
@@ -77,14 +78,14 @@ export const NavbarMobile = () => {
 	return (
 		<div
 			className={cn(
-				"fixed top-[50px] inset-x-0 transform-gpu z-[100] bg-background grid grid-rows-[0fr] duration-300 transition-all navbar:hidden",
+				"fixed top-[50px] inset-x-0 transform-gpu z-100 bg-background grid grid-rows-[0fr] duration-300 transition-all navbar:hidden",
 				isOpen &&
 					"shadow-lg border-b border-[rgba(255,255,255,.1)] grid-rows-[1fr]",
 			)}
 		>
 			<div
 				className={cn(
-					"px-9 min-h-0 overflow-y-auto max-h-[80vh] divide-y [mask-image:linear-gradient(to_top,transparent,white_40px)] transition-all duration-300",
+					"px-9 min-h-0 overflow-y-auto max-h-[80vh] divide-y mask-[linear-gradient(to_top,transparent,white_40px)] transition-all duration-300",
 					isOpen ? "py-5" : "invisible",
 					isDocs && "px-4",
 				)}
@@ -129,7 +130,10 @@ export const NavbarMobile = () => {
 								onClick={toggleNavbar}
 							>
 								{isDocs && (
-									<ChevronRight className="ml-0.5 size-4 text-muted-foreground md:hidden" />
+									<ChevronRight
+										className="ml-0.5 size-4 text-muted-foreground md:hidden"
+										aria-hidden="true"
+									/>
 								)}
 								{menu.name}
 							</Link>
@@ -170,7 +174,7 @@ function DocsNavBarContent() {
 									>
 										<div className="flex flex-row items-center gap-2">
 											<p className="text-sm text-primary">{child.title}</p>
-											<div className="flex-grow h-px bg-border" />
+											<div className="grow h-px bg-border" />
 										</div>
 									</div>
 								) : (

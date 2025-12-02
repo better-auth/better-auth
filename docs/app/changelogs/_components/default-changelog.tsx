@@ -69,7 +69,7 @@ const ChangelogPage = async () => {
 
 	return (
 		<div className="grid items-start md:grid-cols-2">
-			<div className="bg-gradient-to-tr overflow-hidden px-12 py-24 md:py-0 -mt-[100px] md:h-dvh relative md:sticky top-0 from-transparent dark:via-stone-950/5 via-stone-100/30 to-stone-200/20 dark:to-transparent/10">
+			<div className="bg-linear-to-tr overflow-hidden px-12 py-24 md:py-0 -mt-[100px] md:h-dvh relative md:sticky top-0 from-transparent dark:via-stone-950/5 via-stone-100/30 to-stone-200/20 dark:to-transparent/10">
 				<StarField className="top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
 				<Glow />
 
@@ -115,7 +115,7 @@ const ChangelogPage = async () => {
 				</div>
 			</div>
 			<div className="relative px-4 pb-12 md:px-8 md:py-12">
-				<div className="absolute top-0 left-0 mb-2 w-2 h-full -translate-x-full bg-gradient-to-b from-black/10 dark:from-white/20 from-50% to-50% to-transparent bg-[length:100%_5px] bg-repeat-y"></div>
+				<div className="absolute top-0 left-0 mb-2 w-2 h-full -translate-x-full bg-linear-to-b from-black/10 dark:from-white/20 from-50% to-50% to-transparent bg-size-[100%_5px] bg-repeat-y"></div>
 
 				<div className="relative max-w-2xl">
 					<Markdown
@@ -130,7 +130,7 @@ const ChangelogPage = async () => {
 							h2: (props) => (
 								<h2
 									id={props.children?.toString().split("date=")[0].trim()} // Extract ID dynamically
-									className="text-2xl relative mb-6 font-bold flex-col flex justify-center tracking-tighter before:content-[''] before:block before:h-[65px] before:-mt-[10px]"
+									className="text-2xl relative mb-6 font-bold flex-col flex justify-center tracking-tighter before:content-[''] before:block before:h-[65px] before:-mt-2.5"
 									{...props}
 								>
 									<div className="sticky top-0 left-[-9.9rem] hidden md:block">
@@ -138,7 +138,7 @@ const ChangelogPage = async () => {
 											{props.children?.toString().includes("date=") &&
 												props.children?.toString().split("date=")[1]}
 
-											<div className="w-4 h-[1px] dark:bg-white/60 bg-black" />
+											<div className="w-4 h-px dark:bg-white/60 bg-black" />
 										</time>
 									</div>
 									<Link
@@ -169,7 +169,7 @@ const ChangelogPage = async () => {
 							h3: (props) => (
 								<h3 className="py-1 text-xl tracking-tighter" {...props}>
 									{props.children?.toString()?.trim()}
-									<hr className="h-[1px] my-1 mb-2 bg-input" />
+									<hr className="h-px my-1 mb-2 bg-input" />
 								</h3>
 							),
 							p: (props) => <p className="my-0 ml-10 text-sm" {...props} />,
@@ -221,9 +221,9 @@ export function Glow() {
 	let id = useId();
 
 	return (
-		<div className="overflow-hidden absolute inset-0 bg-gradient-to-tr from-transparent -z-10 dark:via-stone-950/5 via-stone-100/30 to-stone-200/20 dark:to-transparent/10">
+		<div className="overflow-hidden absolute inset-0 bg-linear-to-tr from-transparent -z-10 dark:via-stone-950/5 via-stone-100/30 to-stone-200/20 dark:to-transparent/10">
 			<svg
-				className="absolute -bottom-48 left-[-40%] h-[80rem] w-[180%] lg:-right-40 lg:bottom-auto lg:left-auto lg:top-[-40%] lg:h-[180%] lg:w-[80rem]"
+				className="absolute -bottom-48 left-[-40%] h-320 w-[180%] lg:-right-40 lg:bottom-auto lg:left-auto lg:top-[-40%] lg:h-[180%] lg:w-7xl"
 				aria-hidden="true"
 			>
 				<defs>

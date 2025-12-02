@@ -62,6 +62,7 @@ export function ThemeToggle({
 							key={key}
 							fill="currentColor"
 							className={cn(itemVariants({ active: value === key }))}
+							aria-hidden="true"
 						/>
 					);
 				})}

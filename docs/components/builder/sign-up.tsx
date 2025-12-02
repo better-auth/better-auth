@@ -3,7 +3,6 @@
 import { useAtom } from "jotai";
 import { Loader2, X } from "lucide-react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { optionsAtom } from "@/components/builder/store";
 import { Button } from "@/components/ui/button";
@@ -27,7 +26,6 @@ export function SignUp() {
 	const [image, setImage] = useState<File | null>(null);
 	const [imagePreview, setImagePreview] = useState<string | null>(null);
 	const [options] = useAtom(optionsAtom);
-	const router = useRouter();
 
 	const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];
@@ -150,10 +148,14 @@ export function SignUp() {
 						type="submit"
 						className="w-full"
 						disabled={loading}
-						onClick={async () => {}}
+						onClick={async () => {
+							setLoading(true);
+							await new Promise((resolve) => setTimeout(resolve, 1500));
+							setLoading(false);
+						}}
 					>
 						{loading ? (
-							<Loader2 size={16} className="animate-spin" />
+							<Loader2 size={16} className="animate-spin" aria-hidden="true" />
 						) : (
 							"Create an account"
 						)}
@@ -171,15 +173,6 @@ export function SignUp() {
 			)}
 		</Card>
 	);
-}
-
-async function convertImageToBase64(file: File): Promise<string> {
-	return new Promise((resolve, reject) => {
-		const reader = new FileReader();
-		reader.onloadend = () => resolve(reader.result as string);
-		reader.onerror = reject;
-		reader.readAsDataURL(file);
-	});
 }
 
 export const signUpString = (options: any) => `"use client";
@@ -358,7 +351,7 @@ export default function SignUp() {
 						}}
 					>
 						{loading ? (
-							<Loader2 size={16} className="animate-spin" />
+							<Loader2 size={16} className="animate-spin" aria-hidden="true" />
 						) : (
 							"Create an account"
 						)}

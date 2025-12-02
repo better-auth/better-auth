@@ -56,7 +56,7 @@ export const BoxesCore = ({ className, ...rest }: { className?: string }) => {
 									viewBox="0 0 24 24"
 									strokeWidth="1.5"
 									stroke="currentColor"
-									className="absolute h-6 w-10 -top-[14px] -left-[22px] text-slate-700 stroke-[1px] pointer-events-none"
+									className="absolute h-6 w-10 -top-3.5 -left-[22px] text-slate-700 stroke-[1px] pointer-events-none"
 								>
 									<path
 										strokeLinecap="round"

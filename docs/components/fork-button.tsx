@@ -8,13 +8,13 @@ export function ForkButton({ url }: { url: string }) {
 		<div className="flex items-center gap-2 my-2">
 			<Link href={`https://codesandbox.io/p/github/${url}`} target="_blank">
 				<Button className="gap-2" variant="outline" size="sm">
-					<ExternalLink size={12} />
+					<ExternalLink size={12} aria-hidden="true" />
 					Open in Stackblitz
 				</Button>
 			</Link>
 			<Link href={`https://github.com/${url}`} target="_blank">
 				<Button className="gap-2" variant="secondary" size="sm">
-					<GitHubLogoIcon />
+					<GitHubLogoIcon aria-hidden="true" />
 					View on GitHub
 				</Button>
 			</Link>
