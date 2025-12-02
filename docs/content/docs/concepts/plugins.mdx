@@ -379,7 +379,8 @@ const myPlugin = () => {
                     url: z.string()
                 }),
             }, async (ctx) => {
-                if (!ctx.context.isTrustedOrigin(ctx.query.url)) {
+                // The allowRelativePaths option can be used to either allow or disallow relative paths
+                if (!ctx.context.isTrustedOrigin(ctx.query.url, { allowRelativePaths: false })) {
                     throw new APIError("FORBIDDEN", {
                         message: "origin is not trusted."
                     });
