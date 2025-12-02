@@ -79,6 +79,7 @@ export function mapDiscoveryErrorToAPIError(error: DiscoveryError): APIError {
 			const _exhaustiveCheck: never = error.code;
 			return new APIError("INTERNAL_SERVER_ERROR", {
 				message: `Unexpected discovery error: ${error.message}`,
+				code: "discovery_unexpected_error",
 			});
 		}
 	}
