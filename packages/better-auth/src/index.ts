@@ -20,6 +20,7 @@ export {
 	type TelemetryEvent,
 } from "@better-auth/telemetry";
 // re-export third party types
+// @ts-expect-error
 export type * from "better-call";
 export type { JSONWebKeySet, JWTPayload } from "jose";
 export type * from "zod";

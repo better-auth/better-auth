@@ -1,5 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type {
+	AdapterFactoryCustomizeAdapterCreator,
+	AdapterFactoryOptions,
 	DBAdapter,
 	DBAdapterDebugLogOption,
 	Where,
@@ -25,10 +27,6 @@ import {
 	or,
 	sql,
 } from "drizzle-orm";
-import type {
-	AdapterFactoryCustomizeAdapterCreator,
-	AdapterFactoryOptions,
-} from "../adapter-factory";
 
 export interface DB {
 	[key: string]: any;
