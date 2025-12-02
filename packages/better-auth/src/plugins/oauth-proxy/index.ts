@@ -7,7 +7,7 @@ import type { CookieOptions } from "better-call";
 import * as z from "zod";
 import { originCheck } from "../../api";
 import { parseJSON } from "../../client/parser";
-import { parseSetCookieHeader } from "../../cookies";
+import { parseSetCookieHeader, stripSecureCookiePrefix } from "../../cookies";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { getOrigin } from "../../utils/url";
 import type { AuthContextWithSnapshot, OAuthProxyStatePackage } from "./types";
@@ -131,13 +131,18 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 								options.secure = true;
 							}
 
+							// Remove __Secure- or __Host- prefix for non-HTTPS contexts
+							const cookieName = isSecureContext
+								? name
+								: stripSecureCookiePrefix(name);
+
+							// URI-decoded value because `ctx.setCookie` will URI-encode it again
+							const cookieValue = decodeURIComponent(attrs.value);
+
 							return {
-								name,
+								name: cookieName,
+								value: cookieValue,
 								options,
-								/**
-								 * URI-decoded value because `ctx.setCookie` will URI-encode it again
-								 */
-								value: decodeURIComponent(attrs.value),
 							};
 						},
 					);
@@ -168,8 +173,16 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 						}
 
 						const currentURL = resolveCurrentURL(ctx, opts);
+						const productionURL = opts?.productionURL;
 						const originalCallbackURL =
 							ctx.body?.callbackURL || ctx.context.baseURL;
+
+						// Override baseURL to production so redirect_uri points to production
+						// This ensures OAuth provider callbacks go to the production server
+						if (productionURL) {
+							const productionBaseURL = `${productionURL}${ctx.context.options.basePath || "/api/auth"}`;
+							ctx.context.baseURL = productionBaseURL;
+						}
 
 						// Construct proxy callback URL
 						const newCallbackURL = `${currentURL.origin}${
