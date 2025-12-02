@@ -361,7 +361,7 @@ type deleteOAuthConsent = {
 </APIMethod>
 
 
-### Dynamic Registeration Endpoint
+### Dynamic Registration Endpoint
 
 <Callout type="info">
 This endpoint supports [RFC7591](https://datatracker.ietf.org/doc/html/rfc7591) compliant client registration.
@@ -385,7 +385,7 @@ oauthProvider({
 To enable unauthenticated client registration which allows for dynamically registered public clients, additionally set `allowUnauthenticatedClientRegistration: true` in your auth config.
 
 <Callout type="warn">
-Support for `allowUnauthenticatedClientRegistration` **will be deprecated** when the MCP protocol standardizes unauthenticated dynamic client registration. As of writing, both [Client ID Metadata Documents (CIMD)](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/991) and [`software_statement` and `jwks_uri`](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1032) are under debate.
+Support for `allowUnauthenticatedClientRegistration` **will be deprecated** when the MCP protocol standardizes unauthenticated dynamic client registration. As of writing, both [Client ID Metadata Documents](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/991) and [`software_statement` and `jwks_uri`](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1032) are under debate.
 </Callout>
 
 ```ts title="auth.ts"
@@ -407,7 +407,7 @@ const client = await client.oauth2.register({
 });
 ```
 
-For all endpoint parameters, see [RFC 7591 Registeration](https://datatracker.ietf.org/doc/html/rfc7591#section-2).
+For all endpoint parameters, see [RFC 7591 Registration](https://datatracker.ietf.org/doc/html/rfc7591#section-2).
 
 Note the following parameters are not yet supported:
 - `jwks`
@@ -473,7 +473,7 @@ type oauth2Consent = {
    */
   accept: boolean,
   /**
-   * Space-separated list of accepted scopes. If not provided, the orginally requested scopes are accepted.
+   * Space-separated list of accepted scopes. If not provided, the originally requested scopes are accepted.
    */
   scope?: string,
 }
@@ -928,7 +928,7 @@ Each token type and grant type can independently can set a default expiration.
 - `refreshTokenExpiresIn` defaults 30 days
 - `codeExpiresIn` defaults 10 minutes
 
-Additionally, Access Tokens can set lower expirations based on scopes. This is useful for higher-privelege scopes that require shorter expiration times. The earliest expiration will take precendence. If not specified, the default will take place. Note: values should be lower than the defaults `accessTokenExpiresIn` and `m2mAccessTokenExpiresIn`.
+Additionally, Access Tokens can set lower expirations based on scopes. This is useful for higher-privilege scopes that require shorter expiration times. The earliest expiration will take precedence. If not specified, the default will take place. Note: values should be lower than the defaults `accessTokenExpiresIn` and `m2mAccessTokenExpiresIn`.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -1042,7 +1042,7 @@ You can choose to format your session tokens in a different string format using 
 
 These functions allow you to add additional functionality on the refresh token itself such as refresh token encryption.
 
-Example with change in refresh token format with backwards compatablity with original token-only format:
+Example with change in refresh token format with backwards compatibility with original token-only format:
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -1157,7 +1157,7 @@ const auth = betterAuth({
 
 ### MCP
 
-You can easily make your APIs [MCP-compatabile](https://modelcontextprotocol.io/specification/draft/basic/authorization) simply by adding a resource server which directs users to this OAuth 2.1 authorization server.
+You can easily make your APIs [MCP-compatible](https://modelcontextprotocol.io/specification/draft/basic/authorization) simply by adding a resource server which directs users to this OAuth 2.1 authorization server.
 
 <Callout type="info">
 If you are using "openid" and confidential MCP clients, you cannot disable the JWT plugin since `id_token` verification may not necessarily be supported via a `client_secret`.

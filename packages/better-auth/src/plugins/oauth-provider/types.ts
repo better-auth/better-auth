@@ -89,9 +89,9 @@ export interface OAuthOptions<
 	/**
 	 * Create access token expirations based on scope.
 	 *
-	 * This is useful for higher-privelege scopes that
+	 * This is useful for higher-privilege scopes that
 	 * require shorter expiration times. The earliest
-	 * expiration will take precendence. If not specified,
+	 * expiration will take precedence. If not specified,
 	 * the default will take place.
 	 *
 	 * Note: values should be lower than the defaults
@@ -108,7 +108,7 @@ export interface OAuthOptions<
 	 *
 	 * Support for `allowUnauthenticatedClientRegistration` **will be deprecated**
 	 * when the MCP protocol standardizes unauthenticated dynamic client registration.
-	 * As of writing, both [Client ID Metadata Documents (CIMD)](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/991)
+	 * As of writing, both [Client ID Metadata Documents](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/991)
 	 * and [`software_statement` and `jwks_uri`](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1032) are under debate.
 	 *
 	 * @default false
@@ -832,7 +832,7 @@ export interface OAuthOpaqueAccessToken<
 	 * The user ID the access token is associated with.
 	 *
 	 * Not available in client credentials grant
-	 * wher no user is involved.
+	 * where no user is involved.
 	 */
 	userId?: string;
 	/**
