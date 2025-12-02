@@ -175,9 +175,9 @@ export async function createAuthContext(
 		},
 		tables,
 		trustedOrigins: getTrustedOrigins(options),
-		isTrustedOrigin(url: string) {
+		isTrustedOrigin(url: string, settings?: { allowRelativePaths: boolean }) {
 			return ctx.trustedOrigins.some((origin) =>
-				matchesOriginPattern(url, origin),
+				matchesOriginPattern(url, origin, settings),
 			);
 		},
 		baseURL: baseURL || "",

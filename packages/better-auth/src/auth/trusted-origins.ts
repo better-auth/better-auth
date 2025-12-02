@@ -7,12 +7,25 @@ import { wildcardMatch } from "../utils/wildcard";
  *
  * @param url The url to test
  * @param pattern The origin pattern
+ * @param [settings] Specify supported pattern matching settings
  * @returns {boolean} true if the URL matches the origin pattern, false otherwise.
  */
-export const matchesOriginPattern = (url: string, pattern: string): boolean => {
+export const matchesOriginPattern = (
+	url: string,
+	pattern: string,
+	settings?: { allowRelativePaths: boolean },
+): boolean => {
 	if (url.startsWith("/")) {
+		if (settings?.allowRelativePaths) {
+			return (
+				url.startsWith("/") &&
+				/^\/(?!\/|\\|%2f|%5c)[\w\-.\+/@]*(?:\?[\w\-.\+/=&%@]*)?$/.test(url)
+			);
+		}
+
 		return false;
 	}
+
 	if (pattern.includes("*")) {
 		// For protocol-specific wildcards, match the full origin
 		if (pattern.includes("://")) {

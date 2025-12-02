@@ -29,11 +29,9 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 		if (!url) {
 			return;
 		}
-		const isTrustedOrigin =
-			ctx.context.isTrustedOrigin(url) ||
-			(url?.startsWith("/") &&
-				label !== "origin" &&
-				/^\/(?!\/|\\|%2f|%5c)[\w\-.\+/@]*(?:\?[\w\-.\+/=&%@]*)?$/.test(url));
+		const isTrustedOrigin = ctx.context.isTrustedOrigin(url, {
+			allowRelativePaths: label !== "origin",
+		});
 
 		if (!isTrustedOrigin) {
 			ctx.context.logger.error(`Invalid ${label}: ${url}`);
@@ -72,11 +70,9 @@ export const originCheck = (
 			if (!url) {
 				return;
 			}
-			const isTrustedOrigin =
-				ctx.context.isTrustedOrigin(url) ||
-				(url?.startsWith("/") &&
-					label !== "origin" &&
-					/^\/(?!\/|\\|%2f|%5c)[\w\-.\+/@]*(?:\?[\w\-.\+/=&%@]*)?$/.test(url));
+			const isTrustedOrigin = ctx.context.isTrustedOrigin(url, {
+				allowRelativePaths: label !== "origin",
+			});
 
 			if (!isTrustedOrigin) {
 				ctx.context.logger.error(`Invalid ${label}: ${url}`);
