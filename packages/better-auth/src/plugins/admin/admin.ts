@@ -601,9 +601,12 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 					method: "GET",
 					use: [adminMiddleware],
 					query: z.object({
-						searchValue: z.string().optional().meta({
-							description: 'The value to search for. Eg: "some name"',
-						}),
+						searchValue: z
+							.string()
+							.meta({
+								description: 'The value to search for. Eg: "some name"',
+							})
+							.optional(),
 						searchField: z
 							.enum(["email", "name"])
 							.meta({
@@ -618,20 +621,12 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 									'The operator to use for the search. Can be `contains`, `starts_with` or `ends_with`. Eg: "contains"',
 							})
 							.optional(),
-						limit: z
-							.string()
-							.meta({
-								description: "The number of users to return",
-							})
-							.or(z.number())
-							.optional(),
-						offset: z
-							.string()
-							.meta({
-								description: "The offset to start from",
-							})
-							.or(z.number())
-							.optional(),
+						limit: z.string().regex(/^\d+$/).or(z.number()).default(10).meta({
+							description: "The number of users to return",
+						}),
+						offset: z.string().regex(/^\d+$/).or(z.number()).default(0).meta({
+							description: "The offset to start from",
+						}),
 						sortBy: z
 							.string()
 							.meta({
@@ -652,11 +647,11 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 							.optional(),
 						filterValue: z
 							.string()
+							.or(z.number())
+							.or(z.boolean())
 							.meta({
 								description: "The value to filter by",
 							})
-							.or(z.number())
-							.or(z.boolean())
 							.optional(),
 						filterOperator: z
 							.enum(["eq", "ne", "lt", "lte", "gt", "gte", "contains"])
@@ -718,7 +713,16 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 							message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_USERS,
 						});
 					}
-
+					const offset = Number(ctx.query?.offset),
+						limit = Number(ctx.query?.limit);
+					if (limit <= 0) {
+						return {
+							offset,
+							limit,
+							total: 0,
+							users: [],
+						};
+					}
 					const where: Where[] = [];
 
 					if (ctx.query?.searchValue) {
@@ -738,30 +742,35 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 					}
 
 					try {
-						const users = await ctx.context.internalAdapter.listUsers(
-							Number(ctx.query?.limit) || undefined,
-							Number(ctx.query?.offset) || undefined,
-							ctx.query?.sortBy
-								? {
-										field: ctx.query.sortBy,
-										direction: ctx.query.sortDirection || "asc",
-									}
-								: undefined,
-							where.length ? where : undefined,
-						);
-						const total = await ctx.context.internalAdapter.countTotalUsers(
-							where.length ? where : undefined,
-						);
+						const [users, total] = await Promise.all([
+							ctx.context.internalAdapter.listUsers(
+								limit,
+								offset,
+								ctx.query?.sortBy
+									? {
+											field: ctx.query.sortBy,
+											direction: ctx.query.sortDirection || "asc",
+										}
+									: undefined,
+								where.length ? where : undefined,
+							),
+							ctx.context.internalAdapter.countTotalUsers(
+								where.length ? where : undefined,
+							),
+						]);
+
 						return ctx.json({
-							users: users as UserWithRole[],
+							offset,
+							limit,
 							total: total,
-							limit: Number(ctx.query?.limit) || undefined,
-							offset: Number(ctx.query?.offset) || undefined,
+							users: users as UserWithRole[],
 						});
 					} catch (e) {
 						return ctx.json({
-							users: [],
+							offset,
+							limit,
 							total: 0,
+							users: [],
 						});
 					}
 				},
