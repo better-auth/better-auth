@@ -609,12 +609,13 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 									quantity: ctx.body.seats || 1,
 								},
 							],
-							subscription_data: {
-								...freeTrial,
-							},
 							mode: "subscription",
 							client_reference_id: referenceId,
 							...params?.params,
+							subscription_data: {
+								...freeTrial,
+								...params?.params?.subscription_data,
+							},
 							metadata: {
 								userId: user.id,
 								subscriptionId: subscription.id,
