@@ -791,11 +791,21 @@ async function handleClientCredentialsGrant(
 					}, defaultExp)
 			: defaultExp;
 
+	const customClaims = opts.customAccessTokenClaims
+		? await opts.customAccessTokenClaims({
+				scopes: requestedScopes,
+				resource: ctx.body.resource,
+				referenceId: client.referenceId,
+				metadata: client.metadata ? JSON.parse(client.metadata) : undefined,
+			})
+		: {};
+
 	const accessToken =
 		audience && !opts.disableJwtPlugin
 			? await signJWT(ctx, {
 					options: jwtPluginOptions,
 					payload: {
+						...customClaims,
 						aud: audience,
 						azp: client.clientId,
 						scope: requestedScopes.join(" "),
