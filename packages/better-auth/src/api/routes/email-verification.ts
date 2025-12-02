@@ -631,6 +631,10 @@ export const verifyEmailWithOTP = createAuthEndpoint(
 
 		// Verify OTP
 		if (verificationValue.value !== otp) {
+			// Delete OTP to prevent brute-force attacks
+			await ctx.context.internalAdapter.deleteVerificationValue(
+				verificationValue.id,
+			);
 			throw new APIError("BAD_REQUEST", {
 				message: "Invalid OTP",
 			});
