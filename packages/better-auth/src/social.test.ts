@@ -155,7 +155,7 @@ describe("Social Providers", async (c) => {
 	afterAll(async () => {
 		await server.stop().catch(console.error);
 	});
-	server.service.on("beforeRsponse", (tokenResponse, req) => {
+	server.service.on("beforeResponse", (tokenResponse, req) => {
 		tokenResponse.body = {
 			accessToken: "access-token",
 			refreshToken: "refresher-token",
