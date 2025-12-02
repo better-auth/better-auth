@@ -372,25 +372,25 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 					.default(true)
 					.optional(),
 			}),
-		metadata: {
-			allowedMediaTypes: [
-				"application/x-www-form-urlencoded",
-				"application/json",
-			],
-			$Infer: {
-				body: {} as {
-					email: string;
-					password: string;
-					callbackURL?: string | undefined;
-					rememberMe?: boolean | undefined;
+			metadata: {
+				allowedMediaTypes: [
+					"application/x-www-form-urlencoded",
+					"application/json",
+				],
+				$Infer: {
+					body: {} as {
+						email: string;
+						password: string;
+						callbackURL?: string | undefined;
+						rememberMe?: boolean | undefined;
+					},
+					returned: {} as {
+						redirect: boolean;
+						token: string;
+						url?: string | undefined;
+						user: InferUser<O>;
+					},
 				},
-				returned: {} as {
-					redirect: boolean;
-					token: string;
-					url?: string | undefined;
-					user: InferUser<O>;
-				},
-			},
 				openapi: {
 					operationId: "signInEmail",
 					description: "Sign in with email and password",
