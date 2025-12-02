@@ -8,23 +8,15 @@ async function getConsent(
 	opts: OAuthOptions<Scope[]>,
 	id: string,
 ) {
-	return await ctx.context.adapter
-		.findOne<OAuthConsent<Scope[]>>({
-			model: opts.schema?.oauthConsent?.modelName ?? "oauthConsent",
-			where: [
-				{
-					field: "id",
-					value: id,
-				},
-			],
-		})
-		.then((res) => {
-			if (!res) return undefined;
-			return {
-				...res,
-				scopes: (res.scopes as unknown as string)?.split(" "),
-			} as OAuthConsent<Scope[]>;
-		});
+	return await ctx.context.adapter.findOne<OAuthConsent<Scope[]>>({
+		model: opts.schema?.oauthConsent?.modelName ?? "oauthConsent",
+		where: [
+			{
+				field: "id",
+				value: id,
+			},
+		],
+	});
 }
 
 export async function getConsentEndpoint(
@@ -56,23 +48,15 @@ export async function getConsentsEndpoint(
 	const session = await getSessionFromCtx(ctx);
 	if (!session) throw new APIError("UNAUTHORIZED");
 
-	return await ctx.context.adapter
-		.findMany<OAuthConsent<Scope[]>>({
-			model: opts.schema?.oauthConsent?.modelName ?? "oauthConsent",
-			where: [
-				{
-					field: "userId",
-					value: session.user.id,
-				},
-			],
-		})
-		.then((res) => {
-			if (!res) return undefined;
-			return res.map((v) => ({
-				...v,
-				scopes: (v.scopes as unknown as string)?.split(" "),
-			}));
-		});
+	return await ctx.context.adapter.findMany<OAuthConsent<Scope[]>>({
+		model: opts.schema?.oauthConsent?.modelName ?? "oauthConsent",
+		where: [
+			{
+				field: "userId",
+				value: session.user.id,
+			},
+		],
+	});
 }
 
 export async function deleteConsentEndpoint(
@@ -143,26 +127,17 @@ export async function updateConsentEndpoint(
 	}
 
 	const iat = Math.floor(Date.now() / 1000);
-	return await ctx.context.adapter
-		.update<OAuthConsent<Scope[]>>({
-			model: opts.schema?.oauthConsent?.modelName ?? "oauthConsent",
-			where: [
-				{
-					field: "id",
-					value: id,
-				},
-			],
-			update: {
-				...updates,
-				scopes: scopes?.join(" "),
-				updatedAt: new Date(iat * 1000),
+	return await ctx.context.adapter.update<OAuthConsent<Scope[]>>({
+		model: opts.schema?.oauthConsent?.modelName ?? "oauthConsent",
+		where: [
+			{
+				field: "id",
+				value: id,
 			},
-		})
-		.then((res) => {
-			if (!res) return undefined;
-			return {
-				...res,
-				scopes: (res.scopes as unknown as string)?.split(" "),
-			} as OAuthConsent<Scope[]>;
-		});
+		],
+		update: {
+			...updates,
+			updatedAt: new Date(iat * 1000),
+		},
+	});
 }

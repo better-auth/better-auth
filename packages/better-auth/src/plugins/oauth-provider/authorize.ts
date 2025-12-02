@@ -244,35 +244,27 @@ export async function authorizeEndpoint(
 		session: session.session,
 		scopes: requestedScopes,
 	});
-	const consent = await ctx.context.adapter
-		.findOne<OAuthConsent<Scope[]>>({
-			model: opts.schema?.oauthConsent?.modelName ?? "oauthConsent",
-			where: [
-				{
-					field: "clientId",
-					value: client.clientId,
-				},
-				{
-					field: "userId",
-					value: session.user.id,
-				},
-				...(referenceId
-					? [
-							{
-								field: "referenceId",
-								value: referenceId,
-							},
-						]
-					: []),
-			],
-		})
-		.then((res) => {
-			if (!res) return undefined;
-			return {
-				...res,
-				scopes: (res.scopes as unknown as string)?.split(" "),
-			} as OAuthConsent<Scope[]>;
-		});
+	const consent = await ctx.context.adapter.findOne<OAuthConsent<Scope[]>>({
+		model: opts.schema?.oauthConsent?.modelName ?? "oauthConsent",
+		where: [
+			{
+				field: "clientId",
+				value: client.clientId,
+			},
+			{
+				field: "userId",
+				value: session.user.id,
+			},
+			...(referenceId
+				? [
+						{
+							field: "referenceId",
+							value: referenceId,
+						},
+					]
+				: []),
+		],
+	});
 
 	if (
 		!consent ||

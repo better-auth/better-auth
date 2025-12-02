@@ -168,28 +168,21 @@ async function validateOpaqueAccessToken(
 			});
 		}
 	}
-	const accessToken = await ctx.context.adapter
-		.findOne<OAuthOpaqueAccessToken<Scope[]>>({
-			model: opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
-			where: [
-				{
-					field: "token",
-					value: await getStoredToken(
-						opts.storeTokens,
-						tokenValue,
-						"access_token",
-					),
-				},
-			],
-		})
-		.then((res) => {
-			// TODO: remove join when native arrays supported
-			if (!res) return res;
-			return {
-				...res,
-				scopes: (res.scopes as unknown as string)?.split(" "),
-			} as OAuthOpaqueAccessToken<Scope[]>;
-		});
+	const accessToken = await ctx.context.adapter.findOne<
+		OAuthOpaqueAccessToken<Scope[]>
+	>({
+		model: opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
+		where: [
+			{
+				field: "token",
+				value: await getStoredToken(
+					opts.storeTokens,
+					tokenValue,
+					"access_token",
+				),
+			},
+		],
+	});
 	if (!accessToken) {
 		// Pass through, may be other token type
 		throw new APIError("BAD_REQUEST", {
@@ -279,24 +272,17 @@ async function validateRefreshToken(
 	token: string,
 	clientId: string,
 ) {
-	const refreshToken = await ctx.context.adapter
-		.findOne<OAuthRefreshToken<Scope[]> | null>({
-			model: "oauthRefreshToken",
-			where: [
-				{
-					field: "token",
-					value: await getStoredToken(opts.storeTokens, token, "refresh_token"),
-				},
-			],
-		})
-		.then((res) => {
-			// TODO: remove join when native arrays supported
-			if (!res) return res;
-			return {
-				...res,
-				scopes: (res.scopes as unknown as string)?.split(" "),
-			};
-		});
+	const refreshToken = await ctx.context.adapter.findOne<OAuthRefreshToken<
+		Scope[]
+	> | null>({
+		model: "oauthRefreshToken",
+		where: [
+			{
+				field: "token",
+				value: await getStoredToken(opts.storeTokens, token, "refresh_token"),
+			},
+		],
+	});
 	if (!refreshToken) {
 		// Pass through may be other token type
 		throw new APIError("BAD_REQUEST", {

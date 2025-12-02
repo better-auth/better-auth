@@ -252,7 +252,7 @@ async function createOpaqueAccessToken(
 			sessionId: payload?.sid,
 			userId: user?.id,
 			refreshId,
-			scopes: scopes.join(" "), // TODO: remove join when native arrays supported
+			scopes,
 			createdAt: new Date(iat * 1000),
 			expiresAt: new Date(exp * 1000),
 		},
@@ -299,7 +299,7 @@ async function createRefreshToken(
 			clientId: client.clientId,
 			sessionId,
 			userId: user.id,
-			scopes: scopes.join(" "), // TODO: remove join when native arrays supported
+			scopes,
 			createdAt: new Date(iat * 1000),
 			expiresAt: new Date(exp * 1000),
 		},
@@ -890,28 +890,21 @@ async function handleRefreshTokenGrant(
 	}
 	const decodedRefresh = await decodeRefreshToken(opts, refresh_token);
 
-	const refreshToken = await ctx.context.adapter
-		.findOne<OAuthRefreshToken<Scope[]> & { id: string }>({
-			model: opts.schema?.oauthRefreshToken?.modelName ?? "oauthRefreshToken",
-			where: [
-				{
-					field: "token",
-					value: await getStoredToken(
-						opts.storeTokens,
-						decodedRefresh.token,
-						"refresh_token",
-					),
-				},
-			],
-		})
-		.then((res) => {
-			// TODO: remove when native arrays supported
-			if (!res) return res;
-			return {
-				...res,
-				scopes: (res?.scopes as unknown as string)?.split(" "),
-			} as OAuthRefreshToken<Scope[]> & { id: string };
-		});
+	const refreshToken = await ctx.context.adapter.findOne<
+		OAuthRefreshToken<Scope[]> & { id: string }
+	>({
+		model: opts.schema?.oauthRefreshToken?.modelName ?? "oauthRefreshToken",
+		where: [
+			{
+				field: "token",
+				value: await getStoredToken(
+					opts.storeTokens,
+					decodedRefresh.token,
+					"refresh_token",
+				),
+			},
+		],
+	});
 
 	// Check refresh
 	if (!refreshToken) {

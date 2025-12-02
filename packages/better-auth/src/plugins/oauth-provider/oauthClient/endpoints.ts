@@ -2,15 +2,8 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "../../../api";
 import { generateRandomString } from "../../../crypto";
 import type { OAuthClient } from "../../../oauth-2.1/types";
-import type { DatabaseClient } from "../register";
-import {
-	checkOAuthClient,
-	databaseToSchema,
-	oauthToSchema,
-	schemaToDatabase,
-	schemaToOAuth,
-} from "../register";
-import type { OAuthOptions, Scope } from "../types";
+import { checkOAuthClient, oauthToSchema, schemaToOAuth } from "../register";
+import type { OAuthOptions, SchemaClient, Scope } from "../types";
 import { getClient, storeClientSecret } from "../utils";
 
 export async function getClientEndpoint(
@@ -111,14 +104,14 @@ export async function getClientsEndpoint(
 	const reference_id = await opts.clientReference?.(session);
 	if (reference_id) {
 		const dbClients = await ctx.context.adapter
-			.findMany<DatabaseClient>({
+			.findMany<SchemaClient<Scope[]>>({
 				model: opts.schema?.oauthClient?.modelName ?? "oauthClient",
 				where: [{ field: "referenceId", value: reference_id }],
 			})
 			.then((res) => {
 				if (!res) return null;
 				return res.map((v) => {
-					const res = schemaToOAuth(databaseToSchema(v));
+					const res = schemaToOAuth(v);
 					res.client_secret = undefined;
 					return res;
 				});
@@ -126,14 +119,14 @@ export async function getClientsEndpoint(
 		return dbClients;
 	} else if (session.user.id) {
 		const dbClients = await ctx.context.adapter
-			.findMany<DatabaseClient>({
+			.findMany<SchemaClient<Scope[]>>({
 				model: opts.schema?.oauthClient?.modelName ?? "oauthClient",
 				where: [{ field: "userId", value: session.user.id }],
 			})
 			.then((res) => {
 				if (!res) return null;
 				return res.map((v) => {
-					const res = schemaToOAuth(databaseToSchema(v));
+					const res = schemaToOAuth(v);
 					res.client_secret = undefined;
 					return res;
 				});
@@ -267,8 +260,8 @@ export async function updateClientEndpoint(
 		},
 		opts,
 	);
-	const updatedClient = await ctx.context.adapter
-		.update<DatabaseClient>({
+	const updatedClient = await ctx.context.adapter.update<SchemaClient<Scope[]>>(
+		{
 			model: opts.schema?.oauthClient?.modelName ?? "oauthClient",
 			where: [
 				{
@@ -276,12 +269,9 @@ export async function updateClientEndpoint(
 					value: clientId,
 				},
 			],
-			update: schemaToDatabase(oauthToSchema(updates)),
-		})
-		.then((res) => {
-			if (!res) return null;
-			return databaseToSchema(res);
-		});
+			update: oauthToSchema(updates),
+		},
+	);
 	if (!updatedClient) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {
 			error_description: "unable to update client",
@@ -351,8 +341,8 @@ export async function rotateClientSecretEndpoint(
 	const storedClientSecret = clientSecret
 		? await storeClientSecret(ctx, opts, clientSecret)
 		: undefined;
-	const updatedClient = await ctx.context.adapter
-		.update<DatabaseClient>({
+	const updatedClient = await ctx.context.adapter.update<SchemaClient<Scope[]>>(
+		{
 			model: opts.schema?.oauthClient?.modelName ?? "oauthClient",
 			where: [
 				{
@@ -360,17 +350,12 @@ export async function rotateClientSecretEndpoint(
 					value: clientId,
 				},
 			],
-			update: schemaToDatabase(
-				oauthToSchema({
-					...schemaToOAuth(client),
-					client_secret: storedClientSecret,
-				}),
-			),
-		})
-		.then((res) => {
-			if (!res) return null;
-			return databaseToSchema(res);
-		});
+			update: {
+				...schemaToOAuth(client),
+				clientSecret: storedClientSecret,
+			},
+		},
+	);
 
 	if (!updatedClient) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {

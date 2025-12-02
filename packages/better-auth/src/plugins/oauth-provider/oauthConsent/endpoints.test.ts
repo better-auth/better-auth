@@ -37,7 +37,7 @@ describe("oauthConsent", async () => {
 							method: "POST",
 							body: z.object({
 								clientId: z.string(),
-								scopes: z.string(),
+								scopes: z.array(z.string()),
 								userId: z.string().optional(),
 								referenceId: z.string().optional(),
 							}),
@@ -48,21 +48,14 @@ describe("oauthConsent", async () => {
 						},
 						async (ctx) => {
 							const iat = Math.floor(Date.now() / 1000);
-							return await ctx.context.adapter
-								.create({
-									model: "oauthConsent",
-									data: {
-										createdAt: new Date(iat * 1000),
-										updatedAt: new Date(iat * 1000),
-										...ctx.body,
-									},
-								})
-								.then((res) => {
-									return {
-										...res,
-										scopes: (res.scopes as unknown as string)?.split(" "),
-									} as OAuthConsent<Scope[]>;
-								});
+							return (await ctx.context.adapter.create({
+								model: "oauthConsent",
+								data: {
+									createdAt: new Date(iat * 1000),
+									updatedAt: new Date(iat * 1000),
+									...ctx.body,
+								},
+							})) as OAuthConsent<Scope[]>;
 						},
 					),
 				},
@@ -118,7 +111,7 @@ describe("oauthConsent", async () => {
 			body: {
 				clientId: oauthClient1.client_id,
 				userId: user.id,
-				scopes: oauthClient1Scopes.join(""),
+				scopes: oauthClient1Scopes,
 			},
 		});
 		expect(_consent1?.clientId).toBe(oauthClient1.client_id);
@@ -131,7 +124,7 @@ describe("oauthConsent", async () => {
 			body: {
 				clientId: oauthClient2.client_id,
 				userId: user.id,
-				scopes: oauthClient2Scopes.join(" "),
+				scopes: oauthClient2Scopes,
 			},
 		});
 		expect(_consent2?.clientId).toBe(oauthClient2.client_id);

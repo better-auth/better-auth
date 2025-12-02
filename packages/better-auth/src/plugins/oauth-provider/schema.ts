@@ -278,7 +278,8 @@ export const schema = {
 				required: false,
 			},
 			scopes: {
-				type: "string",
+				type: "string[]",
+				required: true,
 			},
 			createdAt: {
 				type: "date",
