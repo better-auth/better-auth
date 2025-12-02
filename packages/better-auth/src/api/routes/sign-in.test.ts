@@ -137,3 +137,109 @@ describe("url checks", async (it) => {
 		);
 	});
 });
+
+describe("sign-in CSRF protection", async (it) => {
+	const { auth, testUser } = await getTestInstance({
+		trustedOrigins: ["http://localhost:3000"],
+		emailAndPassword: {
+			enabled: true,
+		},
+	});
+
+	it("should block cross-site navigation login attempts (no cookies)", async () => {
+		const maliciousRequest = new Request(
+			"http://localhost:3000/api/auth/sign-in/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"Sec-Fetch-Site": "cross-site",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Dest": "document",
+					origin: "https://evil.com",
+				},
+				body: JSON.stringify({
+					email: "attacker@evil.com",
+					password: "password123",
+				}),
+			},
+		);
+
+		const response = await auth.handler(maliciousRequest);
+		expect(response.status).toBe(403);
+		const error = await response.json();
+		expect(error.message).toBe(
+			BASE_ERROR_CODES.CROSS_SITE_NAVIGATION_LOGIN_BLOCKED,
+		);
+	});
+
+	it("should allow same-origin navigation login attempts", async () => {
+		const legitimateRequest = new Request(
+			"http://localhost:3000/api/auth/sign-in/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"Sec-Fetch-Site": "same-origin",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Dest": "document",
+					origin: "http://localhost:3000",
+				},
+				body: JSON.stringify({
+					email: testUser.email,
+					password: testUser.password,
+				}),
+			},
+		);
+
+		const response = await auth.handler(legitimateRequest);
+		expect(response.status).not.toBe(403);
+	});
+
+	it("should allow fetch/XHR requests (cors mode)", async () => {
+		const fetchRequest = new Request(
+			"http://localhost:3000/api/auth/sign-in/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"Sec-Fetch-Site": "same-origin",
+					"Sec-Fetch-Mode": "cors",
+					"Sec-Fetch-Dest": "empty",
+					origin: "http://localhost:3000",
+				},
+				body: JSON.stringify({
+					email: testUser.email,
+					password: testUser.password,
+				}),
+			},
+		);
+
+		const response = await auth.handler(fetchRequest);
+		expect(response.status).not.toBe(403);
+	});
+
+	it("should use origin validation when cookies exist", async () => {
+		const requestWithCookies = new Request(
+			"http://localhost:3000/api/auth/sign-in/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					cookie: "some_cookie=value",
+					"Sec-Fetch-Site": "cross-site",
+					"Sec-Fetch-Mode": "navigate",
+					origin: "http://localhost:3000",
+				},
+				body: JSON.stringify({
+					email: testUser.email,
+					password: testUser.password,
+				}),
+			},
+		);
+
+		const response = await auth.handler(requestWithCookies);
+		// Should not be blocked by CSRF check since cookies exist - uses origin validation instead
+		expect(response.status).not.toBe(403);
+	});
+});
