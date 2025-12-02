@@ -184,9 +184,9 @@ export const auth = betterAuth({
 
 - `otpLength`: OTP code length (default: `6`)
 
-- `onEmailVerification`: Callback triggered when verification starts
+- `onEmailVerification`: Callback triggered when a user successfully verifies their email (after token/OTP validation, before the database update)
 
-- `afterEmailVerification`: Callback triggered after verification completes
+- `afterEmailVerification`: Callback triggered after email verification completes and the database has been updated
 
 ## `emailAndPassword`
 
