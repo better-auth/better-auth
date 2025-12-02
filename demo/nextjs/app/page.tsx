@@ -38,6 +38,10 @@ const features = [
 		name: "Session Management",
 		link: "https://www.better-auth.com/docs/concepts/session-management",
 	},
+	{
+		name: "OAuth Provider",
+		link: "https://www.better-auth.com/docs/plugins/oauth-provider",
+	},
 ];
 
 export default async function Home() {
