@@ -22,7 +22,7 @@ import { verifyJwsAccessToken } from "./verify";
 
 /**
  * IMPORTANT NOTES:
- * Instropection follows RFC7662
+ * Introspection follows RFC7662
  * https://datatracker.ietf.org/doc/html/rfc7662
  * - APIError: Continue catches (returnable to client)
  * - Error: Should immediately stop catches (internal error)

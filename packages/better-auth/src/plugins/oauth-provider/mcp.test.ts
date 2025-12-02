@@ -1,3 +1,4 @@
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { logger } from "@better-auth/core/env";
 import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
@@ -9,7 +10,6 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import type { OAuthTokens } from "@modelcontextprotocol/sdk/shared/auth.js";
 import type { Implementation } from "@modelcontextprotocol/sdk/types.js";
 import { APIError } from "better-call";
-import type { IncomingMessage, ServerResponse } from "http";
 import type { JWTPayload } from "jose";
 import { decodeJwt } from "jose";
 import type { Listener } from "listhen";
