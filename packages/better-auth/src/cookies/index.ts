@@ -21,6 +21,7 @@ import type { Session, User } from "../types";
 import { getDate } from "../utils/date";
 import { safeJSONParse } from "../utils/json";
 import { getBaseURL } from "../utils/url";
+import { SECURE_COOKIE_PREFIX } from "./cookie-utils";
 import { createSessionStore } from "./session-store";
 
 export function createCookieGetter(options: BetterAuthOptions) {
@@ -32,7 +33,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 					? true
 					: false
 				: isProduction;
-	const secureCookiePrefix = secure ? "__Secure-" : "";
+	const secureCookiePrefix = secure ? SECURE_COOKIE_PREFIX : "";
 	const crossSubdomainEnabled =
 		!!options.advanced?.crossSubDomainCookies?.enabled;
 	const domain = crossSubdomainEnabled
@@ -359,7 +360,7 @@ export const getSessionCookie = (
 	const { cookieName = "session_token", cookiePrefix = "better-auth." } =
 		config || {};
 	const name = `${cookiePrefix}${cookieName}`;
-	const secureCookieName = `__Secure-${name}`;
+	const secureCookieName = `${SECURE_COOKIE_PREFIX}${name}`;
 	const parsedCookie = parseCookies(cookies);
 	const sessionToken =
 		parsedCookie.get(name) || parsedCookie.get(secureCookieName);
@@ -409,10 +410,10 @@ export const getCookieCache = async <
 	const name =
 		config?.isSecure !== undefined
 			? config.isSecure
-				? `__Secure-${cookiePrefix}.${cookieName}`
+				? `${SECURE_COOKIE_PREFIX}${cookiePrefix}.${cookieName}`
 				: `${cookiePrefix}.${cookieName}`
 			: isProduction
-				? `__Secure-${cookiePrefix}.${cookieName}`
+				? `${SECURE_COOKIE_PREFIX}${cookiePrefix}.${cookieName}`
 				: `${cookiePrefix}.${cookieName}`;
 	const parsedCookie = parseCookies(cookies);
 

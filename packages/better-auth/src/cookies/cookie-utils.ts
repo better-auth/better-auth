@@ -10,6 +10,22 @@ interface CookieAttributes {
 	[key: string]: any;
 }
 
+export const SECURE_COOKIE_PREFIX = "__Secure-";
+export const HOST_COOKIE_PREFIX = "__Host-";
+
+/**
+ * Remove __Secure- or __Host- prefix from cookie name.
+ */
+export function stripSecureCookiePrefix(cookieName: string): string {
+	if (cookieName.startsWith(SECURE_COOKIE_PREFIX)) {
+		return cookieName.slice(SECURE_COOKIE_PREFIX.length);
+	}
+	if (cookieName.startsWith(HOST_COOKIE_PREFIX)) {
+		return cookieName.slice(HOST_COOKIE_PREFIX.length);
+	}
+	return cookieName;
+}
+
 export function parseSetCookieHeader(
 	setCookie: string,
 ): Map<string, CookieAttributes> {
