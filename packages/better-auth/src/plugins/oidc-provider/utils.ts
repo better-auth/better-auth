@@ -1,6 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { base64, base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
+import type { JWK } from "jose";
 import { importJWK, jwtVerify } from "jose";
 import { APIError } from "../../api";
 import type { Client } from "./types";
@@ -18,6 +19,66 @@ export const defaultClientSecretHasher = async (clientSecret: string) => {
 	return hashed;
 };
 
+/**
+ * Fetch JWKS from a URI
+ */
+async function fetchJwksFromUri(
+	jwksUri: string,
+	ctx: GenericEndpointContext,
+): Promise<{ keys: unknown[] }> {
+	try {
+		const response = await fetch(jwksUri, {
+			headers: {
+				Accept: "application/json",
+			},
+		});
+		if (!response.ok) {
+			throw new Error(`Failed to fetch JWKS: ${response.status}`);
+		}
+		const jwks = await response.json();
+		if (!jwks.keys || !Array.isArray(jwks.keys)) {
+			throw new Error("Invalid JWKS format: missing keys array");
+		}
+		return jwks;
+	} catch (error) {
+		ctx.context.logger.error("Failed to fetch JWKS from URI", {
+			jwksUri,
+			error,
+		});
+		throw new APIError("UNAUTHORIZED", {
+			error_description: `failed to fetch jwks from uri: ${error instanceof Error ? error.message : "unknown error"}`,
+			error: "invalid_client",
+		});
+	}
+}
+
+/**
+ * Get JWKS keys from client configuration (inline jwks or jwksUri)
+ */
+async function getClientJwksKeys(
+	client: Client,
+	ctx: GenericEndpointContext,
+): Promise<JWK[]> {
+	// First try inline JWKS
+	if (client.jwks) {
+		const jwks = JSON.parse(client.jwks);
+		if (jwks.keys && Array.isArray(jwks.keys) && jwks.keys.length > 0) {
+			return jwks.keys as JWK[];
+		}
+	}
+
+	// Then try JWKS URI
+	if (client.jwksUri) {
+		const jwks = await fetchJwksFromUri(client.jwksUri, ctx);
+		return jwks.keys as JWK[];
+	}
+
+	throw new APIError("UNAUTHORIZED", {
+		error_description: "client jwks not configured (neither jwks nor jwks_uri)",
+		error: "invalid_client",
+	});
+}
+
 export async function verifyClientAssertion(params: {
 	clientAssertion: string;
 	clientId: string;
@@ -27,17 +88,9 @@ export async function verifyClientAssertion(params: {
 }): Promise<{ clientId: string; sub: string }> {
 	const { clientAssertion, clientId, client, tokenEndpoint, ctx } = params;
 
-	if (!client.jwks) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "client jwks not configured",
-			error: "invalid_client",
-		});
-	}
+	const keys = await getClientJwksKeys(client, ctx);
 
-	const jwks = JSON.parse(client.jwks);
-	const keys = jwks.keys;
-
-	if (!keys || !Array.isArray(keys) || keys.length === 0) {
+	if (keys.length === 0) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "no keys found in jwks",
 			error: "invalid_client",
@@ -63,9 +116,9 @@ export async function verifyClientAssertion(params: {
 	}
 	const kid = (header as { kid?: string }).kid;
 
-	let key = keys[0];
+	let key: JWK = keys[0]!;
 	if (kid) {
-		const foundKey = keys.find((k: any) => k.kid === kid);
+		const foundKey = keys.find((k) => k.kid === kid);
 		if (!foundKey) {
 			throw new APIError("UNAUTHORIZED", {
 				error_description: "key with specified kid not found",

@@ -356,9 +356,17 @@ export const mcp = (options: MCPOptions) => {
 									error: "invalid_client",
 								});
 							}
-							const payload = JSON.parse(
-								new TextDecoder().decode(base64.decode(parts[1])),
-							);
+							let payload: { iss?: string; sub?: string };
+							try {
+								payload = JSON.parse(
+									new TextDecoder().decode(base64.decode(parts[1])),
+								);
+							} catch {
+								throw new APIError("UNAUTHORIZED", {
+									error_description: "invalid jwt payload",
+									error: "invalid_client",
+								});
+							}
 							client_id = payload.iss || payload.sub;
 						}
 
