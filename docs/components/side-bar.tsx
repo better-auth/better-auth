@@ -27,16 +27,12 @@ export default function ArticleLayout() {
 	const [group, setGroup] = useState("docs");
 
 	useEffect(() => {
-		const grp = pathname.includes("examples")
-			? "examples"
-			: hasSubdomain("canary")
-				? "docs-canary"
-				: "docs";
+		const grp = pathname.includes("examples") ? "examples" : "docs";
 		setGroup(grp);
 		setCurrentOpen(getDefaultValue());
 	}, [pathname]);
 
-	const cts = group.startsWith("docs") ? contents : examples;
+	const cts = group === "docs" ? contents : examples;
 
 	return (
 		<div className={cn("fixed start-0 top-0")}>
@@ -236,27 +232,6 @@ const tabs = [
 	},
 ];
 
-function hasSubdomain(expected: string) {
-	const parts = window.location.hostname.split(".");
-	if (parts.length < 3) return false;
-
-	return parts[0] === expected;
-}
-
-function changeSubdomain(newSubdomain: string | null) {
-	newSubdomain ??= "";
-	const parts = window.location.hostname.split(".");
-	if (parts.length < 2) {
-		// For dev we don't change anything
-		return "";
-	}
-	const domain = parts.slice(-2).join(".");
-	if (newSubdomain !== "") {
-		newSubdomain += ".";
-	}
-	return `${window.location.protocol}//${newSubdomain}${domain}`;
-}
-
 function SidebarTab({
 	group,
 	setGroup,
@@ -271,12 +246,14 @@ function SidebarTab({
 		<Select
 			value={group}
 			onValueChange={(val) => {
+				if (val === "docs-canary") {
+					window.open("https://canary.better-auth.com");
+					return;
+				}
+
 				setGroup(val);
-				const isCanary = hasSubdomain("canary");
 				if (val === "docs") {
-					router.push(`${isCanary ? changeSubdomain(null) : ""}/docs`);
-				} else if (val === "docs-canary") {
-					router.push(`${!isCanary ? changeSubdomain("canary") : ""}/docs`);
+					router.push("/docs");
 				} else {
 					router.push("/docs/examples");
 				}
