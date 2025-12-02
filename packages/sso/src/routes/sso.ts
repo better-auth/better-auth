@@ -602,6 +602,9 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				});
 			}
 
+			// Run OIDC discovery at registration time to validate issuer and hydrate endpoints.
+			// This may fail fast if the IdP is misconfigured or unreachable.
+			// User-provided values in existingConfig override discovered values.
 			let hydratedOIDCConfig: HydratedOIDCConfig | null = null;
 			if (body.oidcConfig) {
 				try {
