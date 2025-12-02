@@ -60,7 +60,10 @@ function getAllFields(options: BetterAuthOptions, table: string) {
 
 export function parseUserOutput(options: BetterAuthOptions, user: User) {
 	const schema = getAllFields(options, "user");
-	return parseOutputData(user, { fields: schema });
+	return {
+		...parseOutputData(user, { fields: schema }),
+		id: user.id,
+	};
 }
 
 export function parseAccountOutput(
