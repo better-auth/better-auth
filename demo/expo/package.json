@@ -42,8 +42,8 @@
     "nanostores": "^0.11.3",
     "nativewind": "^4.1.23",
     "pg": "^8.13.1",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
+    "react": "catalog:react19",
+    "react-dom": "catalog:react19",
     "react-native": "~0.81.5",
     "react-native-css-interop": "^0.2.1",
     "react-native-gesture-handler": "~2.28.0",
@@ -61,6 +61,6 @@
     "@babel/preset-env": "^7.26.0",
     "@babel/runtime": "^7.26.0",
     "@types/babel__core": "^7.20.5",
-    "@types/react": "^19.1.17"
+    "@types/react": "catalog:react19"
   }
 }

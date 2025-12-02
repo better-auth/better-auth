@@ -953,7 +953,7 @@ export const withMcpAuth = <
 	auth: Auth,
 	handler: (
 		req: Request,
-		sesssion: OAuthAccessToken,
+		session: OAuthAccessToken,
 	) => Response | Promise<Response>,
 ) => {
 	return async (req: Request) => {
