@@ -244,13 +244,14 @@ function hasSubdomain(expected: string) {
 }
 
 function changeSubdomain(newSubdomain: string | null) {
+	newSubdomain ??= "";
 	const parts = window.location.hostname.split(".");
 	if (parts.length < 2) {
-		// For dev we dont change anything
+		// For dev we don't change anything
 		return "";
 	}
 	const domain = parts.slice(-2).join(".");
-	if (newSubdomain !== null) {
+	if (newSubdomain !== "") {
 		newSubdomain += ".";
 	}
 	return `${window.location.protocol}//${newSubdomain}${domain}`;
@@ -273,9 +274,9 @@ function SidebarTab({
 				setGroup(val);
 				const isCanary = hasSubdomain("canary");
 				if (val === "docs") {
-					router.push(`${!isCanary ? changeSubdomain("canary") : ""}/docs`);
-				} else if (val === "docs-canary") {
 					router.push(`${isCanary ? changeSubdomain(null) : ""}/docs`);
+				} else if (val === "docs-canary") {
+					router.push(`${!isCanary ? changeSubdomain("canary") : ""}/docs`);
 				} else {
 					router.push("/docs/examples");
 				}
