@@ -307,11 +307,11 @@ export const authClient = createAuthClient({
 **advanced.customClearMethod**: `() => void`
 - Custom method to clear the last login method
 
-**advanced.customResolveMethod**: `(url: string | URL) => Awaitable<string, null>`
+**advanced.customResolveMethod**: `(url: string | URL) => Awaitable<string | null>`
 - Custom method for resolving the last login method (on client-side)
 - Only applied when `advanced.onLastMethodRetrieved` is provided
 
-**advanced.onLastMethodRetrieved**: `(url: string | URL) => Awaitable<void>`
+**advanced.onLastMethodRetrieved**: `(method: string | null) => Awaitable<void>`
 - Callback fired when the last login method is retrieved (on client-side)
 
 ### Default Method Resolution
