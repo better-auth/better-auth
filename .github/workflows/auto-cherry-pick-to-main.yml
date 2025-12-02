@@ -118,6 +118,7 @@ jobs:
         if: steps.find-commits.outputs.has_prs == 'true'
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          PRS_JSON: ${{ steps.find-commits.outputs.prs_to_process }}
         run: |
           # Fetch all branches
           git fetch origin main
@@ -129,7 +130,7 @@ jobs:
           set +e  # Don't exit on error
 
           echo "Processing PRs for auto cherry-pick..."
-          echo '${{ steps.find-commits.outputs.prs_to_process }}' > prs.json
+          echo "$PRS_JSON" > prs.json
 
           success_prs=""
           conflict_prs=""
