@@ -3,23 +3,27 @@ import { sso } from "@better-auth/sso";
 import { stripe } from "@better-auth/stripe";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
 import { betterAuth } from "better-auth";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import {
 	admin,
 	bearer,
 	customSession,
 	deviceAuthorization,
+	jwt,
 	lastLoginMethod,
 	multiSession,
-	oAuthProxy,
+	oauthProvider,
 	oneTap,
 	openAPI,
 	organization,
 	twoFactor,
 } from "better-auth/plugins";
+import { drizzle } from "drizzle-orm/node-postgres";
 import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
 import { Stripe } from "stripe";
+import * as schema from "../auth-schema";
 import { reactInvitationEmail } from "./email/invitation";
 import { resend } from "./email/resend";
 import { reactResetPasswordEmail } from "./email/reset-password";
@@ -46,18 +50,21 @@ const dialect = (() => {
 	return null;
 })();
 
-if (!dialect) {
-	throw new Error("No dialect found");
-}
+const db = drizzle({
+	connection: {
+		connectionString: process.env.DATABASE_URL,
+		ssl: false,
+	},
+});
 
 export const auth = betterAuth({
 	appName: "Better Auth Demo",
 	// If not explicitly set, the system will check the environment variable process.env.BETTER_AUTH_URL
-	// baseURL: process.env.BETTER_AUTH_URL,
-	database: {
-		dialect,
-		type: "sqlite",
-	},
+	baseURL: process.env.BETTER_AUTH_URL,
+	database: drizzleAdapter(db, {
+		provider: "pg",
+		schema,
+	}),
 	emailVerification: {
 		async sendVerificationEmail({ user, url }) {
 			const res = await resend.emails.send({
@@ -173,9 +180,6 @@ export const auth = betterAuth({
 			adminUserIds: ["EXD5zjob2SD6CBWcEQ6OpLRHcyoUbnaB"],
 		}),
 		multiSession(),
-		oAuthProxy({
-			productionURL: "https://demo.better-auth.com",
-		}),
 		nextCookies(),
 		oneTap(),
 		customSession(async (session) => {
@@ -343,6 +347,19 @@ export const auth = betterAuth({
 			interval: "5s",
 		}),
 		lastLoginMethod(),
+		jwt({
+			jwt: {
+				issuer: process.env.BETTER_AUTH_URL,
+			},
+		}),
+		oauthProvider({
+			loginPage: "/sign-in",
+			consentPage: "/consent",
+			silenceWarnings: {
+				openidConfig: true,
+				oauthAuthServerConfig: true,
+			},
+		}),
 	],
 	trustedOrigins: [
 		"https://*.better-auth.com",

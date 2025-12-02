@@ -6,7 +6,7 @@ import {
 	genericOAuthClient,
 	lastLoginMethodClient,
 	multiSessionClient,
-	oidcClient,
+	oauthProviderClient,
 	oneTapClient,
 	organizationClient,
 	twoFactorClient,
@@ -31,7 +31,7 @@ export const client = createAuthClient({
 				maxAttempts: 1,
 			},
 		}),
-		oidcClient(),
+		oauthProviderClient(),
 		genericOAuthClient(),
 		stripeClient({
 			subscription: true,
