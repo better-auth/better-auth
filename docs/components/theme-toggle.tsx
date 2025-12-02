@@ -1,23 +1,15 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { MonitorCogIcon } from "lucide-react";
 import { useTheme } from "next-themes";
 import type { ComponentProps } from "react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
 const themeMap = {
 	light: "light",
 	dark: "dark",
-	system: "system",
 } as const;
 
 function renderThemeIcon(theme: string | undefined) {
@@ -26,15 +18,13 @@ function renderThemeIcon(theme: string | undefined) {
 			return <LightThemeIcon />;
 		case themeMap.dark:
 			return <DarkThemeIcon />;
-		case themeMap.system:
-			return <SystemThemeIcon />;
 		default:
 			return null;
 	}
 }
 
 export function ThemeToggle(props: ComponentProps<typeof Button>) {
-	const { setTheme, theme } = useTheme();
+	const { setTheme, resolvedTheme } = useTheme();
 	const [mounted, setMounted] = useState(false);
 
 	useEffect(() => {
@@ -42,44 +32,25 @@ export function ThemeToggle(props: ComponentProps<typeof Button>) {
 	}, []);
 
 	return (
-		<DropdownMenu>
-			<DropdownMenuTrigger asChild>
-				<Button
-					variant="ghost"
-					size="icon"
-					aria-label="Open theme menu"
-					{...props}
-					className={cn(
-						"flex shrink-0 navbar:w-[3.56rem] navbar:h-14 navbar:border-l navbar:text-muted-foreground max-navbar:hover:bg-transparent",
-						props.className,
-					)}
-				>
-					<AnimatePresence mode="wait">
-						{mounted && renderThemeIcon(theme)}
-					</AnimatePresence>
-				</Button>
-			</DropdownMenuTrigger>
-			<DropdownMenuContent className="rounded-none" align="end">
-				<DropdownMenuItem
-					className="rounded-none"
-					onClick={() => setTheme(themeMap.light)}
-				>
-					Light
-				</DropdownMenuItem>
-				<DropdownMenuItem
-					className="rounded-none"
-					onClick={() => setTheme(themeMap.dark)}
-				>
-					Dark
-				</DropdownMenuItem>
-				<DropdownMenuItem
-					className="rounded-none"
-					onClick={() => setTheme(themeMap.system)}
-				>
-					System
-				</DropdownMenuItem>
-			</DropdownMenuContent>
-		</DropdownMenu>
+		<Button
+			variant="ghost"
+			size="icon"
+			aria-label="Toggle theme"
+			onClick={() => {
+				setTheme(
+					resolvedTheme === themeMap.dark ? themeMap.light : themeMap.dark,
+				);
+			}}
+			{...props}
+			className={cn(
+				"flex shrink-0 navbar:w-[3.56rem] navbar:h-14 navbar:border-l navbar:text-muted-foreground max-navbar:hover:bg-transparent",
+				props.className,
+			)}
+		>
+			<AnimatePresence mode="wait">
+				{mounted && renderThemeIcon(resolvedTheme)}
+			</AnimatePresence>
+		</Button>
 	);
 }
 
@@ -232,19 +203,5 @@ const DarkThemeIcon = () => {
 				d="M11.38 2.019a7.5 7.5 0 1 0 10.6 10.6C21.662 17.854 17.316 22 12.001 22C6.477 22 2 17.523 2 12c0-5.315 4.146-9.661 9.38-9.981"
 			/>
 		</motion.svg>
-	);
-};
-
-const SystemThemeIcon = () => {
-	return (
-		<motion.div
-			key="system"
-			initial={{ opacity: 0, scale: 0.8 }}
-			animate={{ opacity: 1, scale: 1 }}
-			exit={{ opacity: 0, scale: 0.8 }}
-			transition={{ duration: 0.3, ease: "easeOut" }}
-		>
-			<MonitorCogIcon strokeWidth="1.5" className="size-5" />
-		</motion.div>
 	);
 };
