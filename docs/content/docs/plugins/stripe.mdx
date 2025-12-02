@@ -38,7 +38,7 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
         Next, install the Stripe SDK on your server:
 
         ```package-install
-        stripe@^19.1.0
+        stripe@^20.0.0
         ```
     </Step>
     <Step>
@@ -50,7 +50,7 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
         import Stripe from "stripe"
 
         const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-            apiVersion: "2025-09-30.clover", // Latest API version as of Stripe SDK v19
+            apiVersion: "2025-11-17.clover", // Latest API version as of Stripe SDK v20.0.0
         })
 
         export const auth = betterAuth({
@@ -93,12 +93,12 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
 
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
-            ```bash
+            ```package-install
             npx @better-auth/cli migrate
             ```
             </Tab>
             <Tab value="generate">
-            ```bash
+            ```package-install
             npx @better-auth/cli generate
             ```
             </Tab>

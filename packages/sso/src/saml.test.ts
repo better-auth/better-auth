@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import type { createServer } from "node:http";
 import { betterFetch } from "@better-fetch/fetch";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
@@ -6,14 +8,12 @@ import { setCookieToHeader } from "better-auth/cookies";
 import { bearer } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
 import bodyParser from "body-parser";
-import { randomUUID } from "crypto";
 import type {
 	Application as ExpressApp,
 	Request as ExpressRequest,
 	Response as ExpressResponse,
 } from "express";
 import express from "express";
-import type { createServer } from "http";
 import * as saml from "samlify";
 import {
 	afterAll,

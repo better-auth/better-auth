@@ -1,9 +1,16 @@
 import type { BetterAuthClientOptions } from "@better-auth/core";
 import type { BetterFetch } from "@better-fetch/fetch";
 import type { WritableAtom } from "nanostores";
-import { createBroadcastChannel } from "./broadcast-channel";
+import { getGlobalBroadcastChannel } from "./broadcast-channel";
+import { getGlobalFocusManager } from "./focus-manager";
+import { getGlobalOnlineManager } from "./online-manager";
 
 const now = () => Math.floor(Date.now() / 1000);
+
+/**
+ * Rate limit: don't refetch on focus if a session request was made within this many seconds
+ */
+const FOCUS_REFETCH_RATE_LIMIT_SECONDS = 5;
 
 export interface SessionRefreshOptions {
 	sessionAtom: WritableAtom<any>;
@@ -14,35 +21,31 @@ export interface SessionRefreshOptions {
 
 interface SessionRefreshState {
 	lastSync: number;
+	lastSessionRequest: number;
 	cachedSession: any;
 	pollInterval?: ReturnType<typeof setInterval> | undefined;
 	unsubscribeBroadcast?: (() => void) | undefined;
-	unsubscribeVisibility?: (() => void) | undefined;
+	unsubscribeFocus?: (() => void) | undefined;
 	unsubscribeOnline?: (() => void) | undefined;
-	unsubscribeOffline?: (() => void) | undefined;
 }
 
 export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 	const { sessionAtom, sessionSignal, $fetch, options = {} } = opts;
 
-	const {
-		refetchInterval = 0,
-		refetchOnWindowFocus = true,
-		refetchWhenOffline = false,
-	} = options?.sessionOptions || {};
+	const refetchInterval = options.sessionOptions?.refetchInterval ?? 0;
+	const refetchOnWindowFocus =
+		options.sessionOptions?.refetchOnWindowFocus ?? true;
+	const refetchWhenOffline =
+		options.sessionOptions?.refetchWhenOffline ?? false;
 
 	const state: SessionRefreshState = {
 		lastSync: 0,
+		lastSessionRequest: 0,
 		cachedSession: undefined,
 	};
 
-	let isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
-
-	const broadcast = createBroadcastChannel();
-
 	const shouldRefetch = (): boolean => {
-		if (typeof window === "undefined") return false;
-		return refetchWhenOffline || isOnline;
+		return refetchWhenOffline || getGlobalOnlineManager().isOnline;
 	};
 
 	const triggerRefetch = (
@@ -63,6 +66,7 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 		const currentSession = sessionAtom.get();
 
 		if (event?.event === "poll") {
+			state.lastSessionRequest = now();
 			$fetch("/get-session")
 				.then((res) => {
 					sessionAtom.set({
@@ -77,11 +81,26 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 			return;
 		}
 
+		// Rate limit: don't refetch on focus if a session request was made recently
+		if (event?.event === "visibilitychange") {
+			const timeSinceLastRequest = now() - state.lastSessionRequest;
+			if (
+				timeSinceLastRequest < FOCUS_REFETCH_RATE_LIMIT_SECONDS &&
+				currentSession?.data !== null &&
+				currentSession?.data !== undefined
+			) {
+				return;
+			}
+		}
+
 		if (
 			currentSession?.data === null ||
 			currentSession?.data === undefined ||
 			event?.event === "visibilitychange"
 		) {
+			if (event?.event === "visibilitychange") {
+				state.lastSessionRequest = now();
+			}
 			state.lastSync = now();
 			sessionSignal.set(!sessionSignal.get());
 		}
@@ -90,7 +109,7 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 	const broadcastSessionUpdate = (
 		trigger: "signout" | "getSession" | "updateUser",
 	) => {
-		broadcast.post({
+		getGlobalBroadcastChannel().post({
 			event: "session",
 			data: { trigger },
 			clientId: Math.random().toString(36).substring(7),
@@ -109,59 +128,36 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 	};
 
 	const setupBroadcast = () => {
-		state.unsubscribeBroadcast = broadcast.receive(() => {
+		state.unsubscribeBroadcast = getGlobalBroadcastChannel().subscribe(() => {
 			triggerRefetch({ event: "storage" });
 		});
 	};
 
-	const setupVisibilityChange = () => {
+	const setupFocusRefetch = () => {
 		if (!refetchOnWindowFocus) return;
-		if (typeof document === "undefined") return;
 
-		const visibilityHandler = () => {
-			if (document.visibilityState === "visible") {
-				triggerRefetch({ event: "visibilitychange" });
-			}
-		};
-
-		document.addEventListener("visibilitychange", visibilityHandler, false);
-		state.unsubscribeVisibility = () => {
-			document.removeEventListener(
-				"visibilitychange",
-				visibilityHandler,
-				false,
-			);
-		};
+		state.unsubscribeFocus = getGlobalFocusManager().subscribe(() => {
+			triggerRefetch({ event: "visibilitychange" });
+		});
 	};
 
-	const setupOnlineDetection = () => {
-		if (typeof window === "undefined") return;
-
-		const setOnline = () => {
-			isOnline = true;
-			triggerRefetch({ event: "visibilitychange" });
-		};
-
-		const setOffline = () => {
-			isOnline = false;
-		};
-
-		window.addEventListener("online", setOnline);
-		window.addEventListener("offline", setOffline);
-
-		state.unsubscribeOnline = () =>
-			window.removeEventListener("online", setOnline);
-		state.unsubscribeOffline = () =>
-			window.removeEventListener("offline", setOffline);
+	const setupOnlineRefetch = () => {
+		state.unsubscribeOnline = getGlobalOnlineManager().subscribe((online) => {
+			if (online) {
+				triggerRefetch({ event: "visibilitychange" });
+			}
+		});
 	};
 
 	const init = () => {
-		if (typeof window === "undefined") return;
-
 		setupPolling();
 		setupBroadcast();
-		setupVisibilityChange();
-		setupOnlineDetection();
+		setupFocusRefetch();
+		setupOnlineRefetch();
+
+		getGlobalBroadcastChannel().setup();
+		getGlobalFocusManager().setup();
+		getGlobalOnlineManager().setup();
 	};
 
 	const cleanup = () => {
@@ -173,19 +169,16 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 			state.unsubscribeBroadcast();
 			state.unsubscribeBroadcast = undefined;
 		}
-		if (state.unsubscribeVisibility) {
-			state.unsubscribeVisibility();
-			state.unsubscribeVisibility = undefined;
+		if (state.unsubscribeFocus) {
+			state.unsubscribeFocus();
+			state.unsubscribeFocus = undefined;
 		}
 		if (state.unsubscribeOnline) {
 			state.unsubscribeOnline();
 			state.unsubscribeOnline = undefined;
 		}
-		if (state.unsubscribeOffline) {
-			state.unsubscribeOffline();
-			state.unsubscribeOffline = undefined;
-		}
 		state.lastSync = 0;
+		state.lastSessionRequest = 0;
 		state.cachedSession = undefined;
 	};
 

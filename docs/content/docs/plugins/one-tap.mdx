@@ -115,12 +115,12 @@ await authClient.oneTap({
 - **promptOptions**: Configuration for the prompt behavior and exponential backoff:
 - **baseDelay**: Base delay in milliseconds for retries. Default is 1000.
 - **maxAttempts**: Maximum number of prompt attempts before invoking the onPromptNotification callback. Default is 5.
+- **fedCM**: Whether to enable [Federated Credential Management](https://developer.mozilla.org/en-US/docs/Web/API/FedCM_API) (FedCM) support. Default is true.
 
 ### Server Options
 
 - **disableSignUp**:  Disable the sign-up option, allowing only existing users to sign in. Default is `false`.
 - **ClientId**: Optionally, pass a client ID here if it is not provided in your social provider configuration.
 
-### Authorised JavaScript origins
-Ensure you have configured the Authorised JavaScript origins (e.g., http://localhost:3000, https://example.com) for your Client ID in the Google Cloud Console. This is a required step for the Google One Tap API, and it will not function correctly unless your origins are correctly set.
-
+### Authorized JavaScript origins
+Ensure you have configured the Authorized JavaScript origins (e.g., http://localhost:3000, https://example.com) for your Client ID in the Google Cloud Console. This is a required step for the Google One Tap API, and it will not function correctly unless your origins are correctly set.

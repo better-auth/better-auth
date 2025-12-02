@@ -204,12 +204,12 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 			.flat() || [];
 
 	const baseEndpoints = {
-		signInSocial,
+		signInSocial: signInSocial<Option>(),
 		callbackOAuth,
 		getSession: getSession<Option>(),
 		signOut,
 		signUpEmail: signUpEmail<Option>(),
-		signInEmail,
+		signInEmail: signInEmail<Option>(),
 		resetPassword,
 		verifyEmail,
 		verifyEmailWithOTP,
@@ -265,6 +265,7 @@ export const router = <Option extends BetterAuthOptions>(
 			},
 			...middlewares,
 		],
+		allowedMediaTypes: ["application/json"],
 		async onRequest(req) {
 			//handle disabled paths
 			const disabledPaths = ctx.options.disabledPaths || [];

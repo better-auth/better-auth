@@ -2,7 +2,7 @@ import type { CookieOptions, EndpointContext } from "better-call";
 import type {
 	Account,
 	BetterAuthDBSchema,
-	DBPreservedModels,
+	ModelNames,
 	SecondaryStorage,
 	Session,
 	User,
@@ -12,7 +12,6 @@ import type { DBAdapter, Where } from "../db/adapter";
 import type { createLogger } from "../env";
 import type { OAuthProvider } from "../oauth2";
 import type { BetterAuthCookies } from "./cookie";
-import type { LiteralUnion } from "./helper";
 import type {
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
@@ -104,16 +103,16 @@ export interface InternalAdapter<
 		account: Omit<Account, "id" | "createdAt" | "updatedAt"> & Partial<Account>,
 	): Promise<Account>;
 
-	// fixme: any type
-	updateUser(
+	// Record<string, any> is to take into account additional fields or plugin-added fields
+	updateUser<T extends Record<string, any>>(
 		userId: string,
 		data: Partial<User> & Record<string, any>,
-	): Promise<any>;
+	): Promise<User & T>;
 
-	updateUserByEmail(
+	updateUserByEmail<T extends Record<string, any>>(
 		email: string,
 		data: Partial<User & Record<string, any>>,
-	): Promise<User>;
+	): Promise<User & T>;
 
 	updatePassword(userId: string, password: string): Promise<void>;
 
@@ -226,7 +225,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 				  };
 		};
 		generateId: (options: {
-			model: LiteralUnion<DBPreservedModels, string>;
+			model: ModelNames;
 			size?: number | undefined;
 		}) => string | false;
 		secondaryStorage: SecondaryStorage | undefined;

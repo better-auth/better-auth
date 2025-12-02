@@ -208,7 +208,7 @@ export const createAdapterFactory =
 				}
 
 				// In some endpoints (like signUpEmail) where there isn't proper Zod validation,
-				// we might recieve a date as a string (this is because of the client converting the Date to a string
+				// we might receive a date as a string (this is because of the client converting the Date to a string
 				// when sending to the server). Because of this, we'll convert the string to a Date.
 				if (
 					fieldAttributes &&

@@ -60,7 +60,10 @@ function getAllFields(options: BetterAuthOptions, table: string) {
 
 export function parseUserOutput(options: BetterAuthOptions, user: User) {
 	const schema = getAllFields(options, "user");
-	return parseOutputData(user, { fields: schema });
+	return {
+		...parseOutputData(user, { fields: schema }),
+		id: user.id,
+	};
 }
 
 export function parseAccountOutput(
@@ -123,6 +126,10 @@ export function parseInputData<T extends Record<string, any>>(
 		}
 
 		if (fields[key]!.defaultValue !== undefined && action === "create") {
+			if (typeof fields[key]!.defaultValue === "function") {
+				parsedData[key] = fields[key]!.defaultValue();
+				continue;
+			}
 			parsedData[key] = fields[key]!.defaultValue;
 			continue;
 		}

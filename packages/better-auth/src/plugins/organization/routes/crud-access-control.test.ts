@@ -59,7 +59,11 @@ describe("dynamic access control", async (it) => {
 						enabled: true,
 					},
 					schema: {
+						organization: {
+							modelName: "organization",
+						},
 						organizationRole: {
+							modelName: "organizationRole",
 							additionalFields,
 						},
 					},
@@ -384,7 +388,7 @@ describe("dynamic access control", async (it) => {
 		expect(res).not.toBeNull();
 	});
 
-	it("should not be allowed to delete a role without nessesary permissions", async () => {
+	it("should not be allowed to delete a role without necessary permissions", async () => {
 		const testRole = await authClient.organization.createRole(
 			{
 				role: `test-${crypto.randomUUID()}`,
@@ -460,7 +464,7 @@ describe("dynamic access control", async (it) => {
 		>();
 	});
 
-	it("should not be allowed to list roles without nessesary permissions", async () => {
+	it("should not be allowed to list roles without necessary permissions", async () => {
 		expect(auth.api.listOrgRoles({ headers: normalHeaders })).rejects.toThrow(
 			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE,
 		);
