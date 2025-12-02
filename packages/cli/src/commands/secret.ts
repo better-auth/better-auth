@@ -1,7 +1,7 @@
+import Crypto from "node:crypto";
 import { logger } from "better-auth";
 import chalk from "chalk";
 import { Command } from "commander";
-import Crypto from "crypto";
 
 export const generateSecret = new Command("secret").action(() => {
 	const secret = generateSecretHash();
