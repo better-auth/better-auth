@@ -1486,6 +1486,19 @@ export const oidcProvider = (options: OIDCOptions) => {
 						}
 					}
 
+					// Validate private_key_jwt requires jwks or jwks_uri
+					if (
+						body.token_endpoint_auth_method === "private_key_jwt" &&
+						!body.jwks &&
+						!body.jwks_uri
+					) {
+						throw new APIError("BAD_REQUEST", {
+							error: "invalid_client_metadata",
+							error_description:
+								"When 'private_key_jwt' authentication method is used, either 'jwks' or 'jwks_uri' must be provided",
+						});
+					}
+
 					const clientId =
 						options.generateClientId?.() ||
 						generateRandomString(32, "a-z", "A-Z");

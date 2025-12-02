@@ -904,6 +904,19 @@ export const mcp = (options: MCPOptions) => {
 						}
 					}
 
+					// Validate private_key_jwt requires jwks or jwks_uri
+					if (
+						body.token_endpoint_auth_method === "private_key_jwt" &&
+						!body.jwks &&
+						!body.jwks_uri
+					) {
+						throw new APIError("BAD_REQUEST", {
+							error: "invalid_client_metadata",
+							error_description:
+								"When 'private_key_jwt' authentication method is used, either 'jwks' or 'jwks_uri' must be provided",
+						});
+					}
+
 					const clientId =
 						opts.generateClientId?.() || generateRandomString(32, "a-z", "A-Z");
 					const clientSecret =
@@ -926,6 +939,10 @@ export const mcp = (options: MCPOptions) => {
 							redirectUrls: body.redirect_uris.join(","),
 							type: clientType,
 							authenticationScheme:
+								body.token_endpoint_auth_method || "client_secret_basic",
+							jwks: body.jwks ? JSON.stringify(body.jwks) : undefined,
+							jwksUri: body.jwks_uri,
+							tokenEndpointAuthMethod:
 								body.token_endpoint_auth_method || "client_secret_basic",
 							disabled: false,
 							userId: session?.session.userId,

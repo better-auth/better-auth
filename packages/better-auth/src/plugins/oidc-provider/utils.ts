@@ -26,30 +26,49 @@ async function fetchJwksFromUri(
 	jwksUri: string,
 	ctx: GenericEndpointContext,
 ): Promise<{ keys: unknown[] }> {
+	let response: Response;
 	try {
-		const response = await fetch(jwksUri, {
+		response = await fetch(jwksUri, {
 			headers: {
 				Accept: "application/json",
 			},
 		});
-		if (!response.ok) {
-			throw new Error(`Failed to fetch JWKS: ${response.status}`);
-		}
-		const jwks = await response.json();
-		if (!jwks.keys || !Array.isArray(jwks.keys)) {
-			throw new Error("Invalid JWKS format: missing keys array");
-		}
-		return jwks;
 	} catch (error) {
 		ctx.context.logger.error("Failed to fetch JWKS from URI", {
 			jwksUri,
 			error,
 		});
 		throw new APIError("UNAUTHORIZED", {
-			error_description: `failed to fetch jwks from uri: ${error instanceof Error ? error.message : "unknown error"}`,
+			error_description: `failed to fetch jwks from uri: ${error instanceof Error ? error.message : "network error"}`,
 			error: "invalid_client",
 		});
 	}
+
+	if (!response.ok) {
+		throw new APIError("UNAUTHORIZED", {
+			error_description: `failed to fetch jwks from uri: HTTP ${response.status}`,
+			error: "invalid_client",
+		});
+	}
+
+	let jwks: { keys?: unknown[] };
+	try {
+		jwks = await response.json();
+	} catch {
+		throw new APIError("UNAUTHORIZED", {
+			error_description: "failed to fetch jwks from uri: invalid JSON response",
+			error: "invalid_client",
+		});
+	}
+
+	if (!jwks.keys || !Array.isArray(jwks.keys)) {
+		throw new APIError("UNAUTHORIZED", {
+			error_description: "failed to fetch jwks from uri: missing keys array",
+			error: "invalid_client",
+		});
+	}
+
+	return { keys: jwks.keys };
 }
 
 /**
@@ -61,7 +80,15 @@ async function getClientJwksKeys(
 ): Promise<JWK[]> {
 	// First try inline JWKS
 	if (client.jwks) {
-		const jwks = JSON.parse(client.jwks);
+		let jwks: { keys?: unknown[] };
+		try {
+			jwks = JSON.parse(client.jwks);
+		} catch {
+			throw new APIError("UNAUTHORIZED", {
+				error_description: "invalid jwks format: malformed JSON",
+				error: "invalid_client",
+			});
+		}
 		if (jwks.keys && Array.isArray(jwks.keys) && jwks.keys.length > 0) {
 			return jwks.keys as JWK[];
 		}
@@ -128,7 +155,15 @@ export async function verifyClientAssertion(params: {
 		key = foundKey;
 	}
 
-	const publicKey = await importJWK(key);
+	let publicKey: Awaited<ReturnType<typeof importJWK>>;
+	try {
+		publicKey = await importJWK(key);
+	} catch (err) {
+		throw new APIError("UNAUTHORIZED", {
+			error_description: `failed to import jwk: ${err instanceof Error ? err.message : "invalid key format"}`,
+			error: "invalid_client",
+		});
+	}
 
 	const { payload } = await jwtVerify(clientAssertion, publicKey, {
 		issuer: clientId,
