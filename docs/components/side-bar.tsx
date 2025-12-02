@@ -247,7 +247,11 @@ function SidebarTab({
 			value={group}
 			onValueChange={(val) => {
 				if (val === "docs-canary") {
-					window.open("https://canary.better-auth.com", "_blank", "noreferrer,noopener");
+					window.open(
+						"https://canary.better-auth.com",
+						"_blank",
+						"noreferrer,noopener",
+					);
 					return;
 				}
 
