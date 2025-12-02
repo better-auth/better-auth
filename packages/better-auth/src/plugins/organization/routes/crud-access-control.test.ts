@@ -470,6 +470,61 @@ describe("dynamic access control", async (it) => {
 		);
 	});
 
+	it("should limit the number of roles returned", async () => {
+		// Create additional roles for testing pagination
+		for (let i = 0; i < 5; i++) {
+			await authClient.organization.createRole(
+				{
+					role: `pagination-test-role-${i}-${crypto.randomUUID()}`,
+					permission: {
+						project: ["create"],
+					},
+					additionalFields: {
+						color: "#ffffff",
+					},
+				},
+				{
+					headers,
+				},
+			);
+		}
+
+		const res = await auth.api.listOrgRoles({
+			query: {
+				limit: 3,
+			},
+			headers,
+		});
+		expect(res).not.toBeNull();
+		expect(res.length).toBe(3);
+	});
+
+	it("should offset the roles returned", async () => {
+		const allRoles = await auth.api.listOrgRoles({ headers });
+		const totalRoles = allRoles.length;
+
+		const res = await auth.api.listOrgRoles({
+			query: {
+				offset: 2,
+			},
+			headers,
+		});
+		expect(res).not.toBeNull();
+		expect(res.length).toBe(totalRoles - 2);
+	});
+
+	it("should limit and offset the roles together", async () => {
+		const res = await auth.api.listOrgRoles({
+			query: {
+				limit: 2,
+				offset: 1,
+			},
+			headers,
+		});
+		expect(res).not.toBeNull();
+		expect(res.length).toBe(2);
+	});
+
 	it("should get a role by id", async () => {
 		const testRole = await authClient.organization.createRole(
 			{

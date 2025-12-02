@@ -138,7 +138,7 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 				}
 			}
 
-			const existingTeams = await adapter.listTeams(organizationId);
+			const existingTeams = await adapter.listTeams({ organizationId });
 			const maximum =
 				typeof ctx.context.orgOptions.teams?.maximumTeams === "function"
 					? await ctx.context.orgOptions.teams?.maximumTeams(
@@ -312,7 +312,7 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 			}
 
 			if (!ctx.context.orgOptions.teams?.allowRemovingAllTeams) {
-				const teams = await adapter.listTeams(organizationId);
+				const teams = await adapter.listTeams({ organizationId });
 				if (teams.length <= 1) {
 					throw new APIError("BAD_REQUEST", {
 						message: ORGANIZATION_ERROR_CODES.UNABLE_TO_REMOVE_LAST_TEAM,
@@ -564,6 +564,20 @@ export const listOrganizationTeams = <O extends OrganizationOptions>(
 							description: `The organization ID which the teams are under to list. Defaults to the users active organization. Eg: "organization-id"`,
 						})
 						.optional(),
+					limit: z
+						.string()
+						.meta({
+							description: "The number of teams to return",
+						})
+						.or(z.number())
+						.optional(),
+					offset: z
+						.string()
+						.meta({
+							description: "The offset to start from",
+						})
+						.or(z.number())
+						.optional(),
 				}),
 			),
 			metadata: {
@@ -644,7 +658,11 @@ export const listOrganizationTeams = <O extends OrganizationOptions>(
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_ACCESS_THIS_ORGANIZATION,
 				});
 			}
-			const teams = await adapter.listTeams(organizationId);
+			const teams = await adapter.listTeams({
+				organizationId,
+				limit: ctx.query?.limit ? Number(ctx.query.limit) : undefined,
+				offset: ctx.query?.offset ? Number(ctx.query.offset) : undefined,
+			});
 			return ctx.json(teams);
 		},
 	);
@@ -811,6 +829,20 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 						description:
 							"The team whose members we should return. If this is not provided the members of the current active team get returned.",
 					}),
+					limit: z
+						.string()
+						.meta({
+							description: "The number of team members to return",
+						})
+						.or(z.number())
+						.optional(),
+					offset: z
+						.string()
+						.meta({
+							description: "The offset to start from",
+						})
+						.or(z.number())
+						.optional(),
 				}),
 			),
 			metadata: {
@@ -881,6 +913,8 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 			}
 			const members = await adapter.listTeamMembers({
 				teamId,
+				limit: ctx.query?.limit ? Number(ctx.query.limit) : undefined,
+				offset: ctx.query?.offset ? Number(ctx.query.offset) : undefined,
 			});
 			return ctx.json(members);
 		},
