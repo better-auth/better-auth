@@ -12,8 +12,6 @@ import {
 import type { Auth } from "../../types";
 import type { jwt } from "../jwt";
 import type { oauthProvider } from "../oauth-provider";
-import type { DatabaseClient } from "./register";
-import { databaseToSchema } from "./register";
 import type {
 	OAuthOptions,
 	SchemaClient,
@@ -81,15 +79,10 @@ export async function getClient(
 		return Object.assign({}, trustedClient);
 	}
 
-	const dbClient = await ctx.context.adapter
-		.findOne<DatabaseClient>({
-			model: options.schema?.oauthClient?.modelName ?? "oauthClient",
-			where: [{ field: "clientId", value: clientId }],
-		})
-		.then((res) => {
-			if (!res) return null;
-			return databaseToSchema(res);
-		});
+	const dbClient = await ctx.context.adapter.findOne<SchemaClient<Scope[]>>({
+		model: options.schema?.oauthClient?.modelName ?? "oauthClient",
+		where: [{ field: "clientId", value: clientId }],
+	});
 
 	if (dbClient && options.cachedTrustedClients?.has(clientId)) {
 		cachedTrustedClients.set(clientId, Object.assign({}, dbClient));

@@ -186,14 +186,10 @@ export async function createOAuthClientEndpoint(
 		user_id: referenceId ? undefined : session?.session.userId,
 		reference_id: referenceId,
 	});
-	const client = await ctx.context.adapter
-		.create<DatabaseClient>({
-			model: opts.schema?.oauthClient?.modelName ?? "oauthClient",
-			data: schemaToDatabase(schema),
-		})
-		.then((res) => {
-			return databaseToSchema(res as DatabaseClient);
-		});
+	const client = await ctx.context.adapter.create<SchemaClient<Scope[]>>({
+		model: opts.schema?.oauthClient?.modelName ?? "oauthClient",
+		data: schema,
+	});
 	// Format the response according to RFC7591
 	return ctx.json(
 		schemaToOAuth({
@@ -210,70 +206,6 @@ export async function createOAuthClientEndpoint(
 			},
 		},
 	);
-}
-
-/**
- * Client values as stored on the database.
- * TODO: Easily removable when native `string[]` is used
- *
- * @internal
- */
-export interface DatabaseClient
-	extends Omit<
-		SchemaClient<Scope[]>,
-		| "scopes"
-		| "contacts"
-		| "redirectUris"
-		| "postLogoutRedirectUris"
-		| "grantTypes"
-		| "responseTypes"
-	> {
-	scopes?: string;
-	contacts?: string;
-	redirectUris?: string;
-	postLogoutRedirectUris?: string;
-	grantTypes?: string;
-	responseTypes?: string;
-}
-
-/**
- * Converts values stored on the database to a typed schema client.
- * TODO: Easily removable when native `string[]` is used
- *
- * @internal
- */
-export function databaseToSchema(input: DatabaseClient): SchemaClient<Scope[]> {
-	return {
-		...input,
-		scopes: input?.scopes?.split(" "),
-		contacts: input?.contacts?.split(","),
-		redirectUris: input?.redirectUris?.split(" "),
-		postLogoutRedirectUris: input?.postLogoutRedirectUris?.split(" "),
-		grantTypes: input?.grantTypes?.split(",") as SchemaClient<
-			Scope[]
-		>["grantTypes"],
-		responseTypes: input?.responseTypes?.split(",") as SchemaClient<
-			Scope[]
-		>["responseTypes"],
-	};
-}
-
-/**
- * Converts typed schema client to untyped database type.
- * TODO: Easily removable when native `string[]` is used
- *
- * @internal
- */
-export function schemaToDatabase(input: SchemaClient<Scope[]>): DatabaseClient {
-	return {
-		...input,
-		scopes: input.scopes?.join(" "),
-		contacts: input.contacts?.join(","),
-		redirectUris: input.redirectUris?.join(" "),
-		postLogoutRedirectUris: input.postLogoutRedirectUris?.join(" "),
-		grantTypes: input.grantTypes?.join(","),
-		responseTypes: input.responseTypes?.join(","),
-	};
 }
 
 /**
@@ -439,16 +371,16 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		client_name: name,
 		client_uri: uri,
 		logo_uri: icon,
-		contacts,
+		contacts: contacts ?? undefined,
 		tos_uri: tos,
 		policy_uri: policy,
 		// Jwks (only one can be used)
 		// jwks, // Not Stored
 		// jwks_uri: jwksUri, // Not Stored
 		// User Software Identifiers
-		software_id: softwareId,
-		software_version: softwareVersion,
-		software_statement: softwareStatement,
+		software_id: softwareId ?? undefined,
+		software_version: softwareVersion ?? undefined,
+		software_statement: softwareStatement ?? undefined,
 		// Authentication Metadata
 		redirect_uris: redirectUris,
 		post_logout_redirect_uris: postLogoutRedirectUris,

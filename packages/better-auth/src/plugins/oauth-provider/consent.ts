@@ -50,8 +50,8 @@ export async function consentEndpoint(
 		session: session?.session!,
 		scopes: requestedScopes ?? originalRequestedScopes,
 	});
-	const foundConsent = await ctx.context.adapter
-		.findOne<OAuthConsent<Scope[]>>({
+	const foundConsent = await ctx.context.adapter.findOne<OAuthConsent<Scope[]>>(
+		{
 			model: opts.schema?.oauthConsent?.modelName ?? "oauthConsent",
 			where: [
 				{
@@ -71,14 +71,8 @@ export async function consentEndpoint(
 						]
 					: []),
 			],
-		})
-		.then((res) => {
-			if (!res) return undefined;
-			return {
-				...res,
-				scopes: (res.scopes as unknown as string)?.split(" "),
-			} as OAuthConsent<Scope[]> & { id: string };
-		});
+		},
+	);
 	const iat = Math.floor(Date.now() / 1000);
 	const consent: Omit<OAuthConsent<Scope[]>, "id"> = {
 		clientId: clientId,
@@ -98,7 +92,7 @@ export async function consentEndpoint(
 					},
 				],
 				update: {
-					scopes: consent.scopes.join(" "),
+					scopes: consent.scopes,
 					updatedAt: new Date(iat * 1000),
 				},
 			})
@@ -106,7 +100,7 @@ export async function consentEndpoint(
 				model: opts.schema?.oauthConsent?.modelName ?? "oauthConsent",
 				data: {
 					...consent,
-					scopes: consent.scopes.join(" "),
+					scopes: consent.scopes,
 				},
 			});
 
