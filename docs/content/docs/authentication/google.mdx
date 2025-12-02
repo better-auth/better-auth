@@ -43,6 +43,31 @@ description: Google provider setup and usage.
             },
         })
         ```
+
+        #### Multiple Client IDs for Cross-Platform Apps
+
+        For cross-platform applications where different platforms (iOS, Android, Web) use different Google OAuth client IDs, you can configure multiple client IDs:
+
+        ```ts title="auth.ts"
+        import { betterAuth } from "better-auth"
+
+        export const auth = betterAuth({
+            socialProviders: {
+                google: {
+                    clientId: [ // [!code highlight]
+                        "123-ios.googleusercontent.com",      // iOS app // [!code highlight]
+                        "456-android.googleusercontent.com",  // Android app // [!code highlight]
+                        "789-web.googleusercontent.com"       // Web app // [!code highlight]
+                    ], // [!code highlight]
+                    clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+                },
+            },
+        })
+        ```
+
+        <Callout>
+          When using multiple client IDs, the first client ID in the array will be used for authorization URL creation and token exchange, while all client IDs will be validated during token verification.
+        </Callout>
     </Step>
 
 </Steps>
