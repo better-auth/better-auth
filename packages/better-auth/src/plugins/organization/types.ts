@@ -12,14 +12,20 @@ import type {
 } from "./schema";
 
 export interface OrganizationOptions {
-	/**
-	 * Whether to automatically create a new organization during sign-up.
-	 *
-	 * @default false
-	 */
 	defaultOrganization?:
 		| {
+				/**
+				 * Whether to automatically create a new organization during sign-up.
+				 *
+				 * @default false
+				 */
 				enabled?: boolean | undefined;
+				/**
+				 * Whether to prevent the deletion of the users last remaining organization.
+				 *
+				 * @default true
+				 */
+				preventLastOrgDeletion?: boolean | undefined;
 				customCreateDefaultOrganization?:
 					| ((
 							user: User & Record<string, any>,
