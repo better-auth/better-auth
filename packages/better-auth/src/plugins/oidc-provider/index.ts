@@ -1590,7 +1590,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 									required: false,
 									schema: { type: "string" },
 								},
-							] satisfies OpenAPIParameter[],
+							] as OpenAPIParameter[],
 							responses: {
 								"302": {
 									description:
