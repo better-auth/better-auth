@@ -51,6 +51,31 @@ describe("email-otp", async () => {
 		expect(verifiedUser.data?.status).toBe(true);
 	});
 
+	it("should delete OTP after successful verification with autoSignInAfterVerification", async () => {
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "email-verification",
+		});
+
+		const currentOtp = otp;
+		expect(currentOtp).toBeTruthy();
+
+		// First attempt - should succeed with auto sign-in
+		const firstAttempt = await client.emailOtp.verifyEmail({
+			email: testUser.email,
+			otp: currentOtp,
+		});
+		expect(firstAttempt.data?.status).toBe(true);
+		expect(firstAttempt.data?.token).toBeDefined();
+
+		// Second attempt with same OTP - should fail (OTP should be deleted)
+		const secondAttempt = await client.emailOtp.verifyEmail({
+			email: testUser.email,
+			otp: currentOtp,
+		});
+		expect(secondAttempt.error?.message).toBe("Invalid OTP");
+	});
+
 	it("should sign-in with otp", async () => {
 		const res = await client.emailOtp.sendVerificationOtp({
 			email: testUser.email,
