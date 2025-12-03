@@ -225,7 +225,7 @@ If the Identity Provider is misconfigured or unreachable, registration will fail
 | Error Code | Meaning |
 |------------|---------|
 | `issuer_mismatch` | The IdP's discovery document reports a different `issuer` than the one you configured |
-| `discovery_incomplete` | Required fields (`authorization_endpoint`, `token_endpoint`, `jwks_uri`) are missing |
+| `discovery_incomplete` | Required fields (`issuer`, `authorization_endpoint`, `token_endpoint`, `jwks_uri`) are missing |
 | `discovery_not_found` | The discovery document endpoint returned 404 |
 | `discovery_timeout` | The IdP did not respond within the timeout window (default: 10 seconds) |
 | `discovery_invalid_url` | The discovery URL is malformed or uses an unsupported protocol |
@@ -253,6 +253,7 @@ This is especially common with mock OIDC servers or development IdPs that only a
 #### Summary
 
 - Better Auth automatically performs OIDC discovery at registration time
+- Legacy providers missing required metadata are handled automatically at sign-in time
 - Most endpoint settings in `oidcConfig` become optional
 - Explicit user configuration always overrides discovery
 - Registration fails fast if the IdP is misconfigured
