@@ -619,6 +619,8 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 							tokenEndpointAuthentication:
 								body.oidcConfig.tokenEndpointAuthentication,
 						},
+						// TODO: This is a stub until the trusted origins refactor is merged
+						isTrustedOrigin: () => true,
 					});
 				} catch (error) {
 					if (error instanceof DiscoveryError) {

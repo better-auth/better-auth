@@ -408,8 +408,8 @@ export function parseURL(name: string, endpoint: string, base?: string) {
 			`The url "${name}" must be valid: ${endpoint}`,
 			{
 				url: endpoint,
-				originalError: error instanceof Error ? error.message : String(error),
 			},
+			{ cause: error },
 		);
 	}
 
