@@ -4,7 +4,7 @@ import { TTY_COLORS } from "@better-auth/core/env";
 import { afterAll, beforeAll, describe } from "vitest";
 import { getAuthTables } from "../db";
 import { initGetModelName } from "./adapter-factory";
-import type { createTestSuite } from "./create-test-suite";
+import type { createTestSuite, TestSuiteStats } from "./create-test-suite";
 import { deepmerge } from "./utils";
 
 export type Logger = {
@@ -198,12 +198,96 @@ export const testAdapter = async ({
 	return {
 		execute: () => {
 			describe(adapterDisplayName, async () => {
+				// Collect statistics from all test suites
+				const allSuiteStats: TestSuiteStats[] = [];
+
 				beforeAll(async () => {
 					await migrate();
 				}, 60000);
 
 				afterAll(async () => {
 					await cleanup();
+
+					// Display statistics summary
+					if (allSuiteStats.length > 0) {
+						const totalMigrations = allSuiteStats.reduce(
+							(sum, stats) => sum + stats.migrationCount,
+							0,
+						);
+						const totalMigrationTime = allSuiteStats.reduce(
+							(sum, stats) => sum + stats.totalMigrationTime,
+							0,
+						);
+						const totalTests = allSuiteStats.reduce(
+							(sum, stats) => sum + stats.testCount,
+							0,
+						);
+						const totalDuration = allSuiteStats.reduce(
+							(sum, stats) => sum + stats.suiteDuration,
+							0,
+						);
+
+						const dash = "─";
+						const separator = `${dash.repeat(80)}`;
+
+						console.log(`\n${TTY_COLORS.fg.cyan}${separator}`);
+						console.log(
+							`${TTY_COLORS.fg.cyan}${TTY_COLORS.bright}TEST SUITE STATISTICS SUMMARY${TTY_COLORS.reset}`,
+						);
+						console.log(
+							`${TTY_COLORS.fg.cyan}${separator}${TTY_COLORS.reset}\n`,
+						);
+
+						// Per-suite breakdown
+						for (const stats of allSuiteStats) {
+							const avgMigrationTime =
+								stats.migrationCount > 0
+									? (stats.totalMigrationTime / stats.migrationCount).toFixed(2)
+									: "0.00";
+							console.log(
+								`${TTY_COLORS.fg.magenta}${stats.suiteName}${TTY_COLORS.reset}:`,
+							);
+							console.log(
+								`  Tests: ${TTY_COLORS.fg.green}${stats.testCount}${TTY_COLORS.reset}`,
+							);
+							console.log(
+								`  Migrations: ${TTY_COLORS.fg.yellow}${stats.migrationCount}${TTY_COLORS.reset} (avg: ${avgMigrationTime}ms)`,
+							);
+							console.log(
+								`  Total Migration Time: ${TTY_COLORS.fg.yellow}${stats.totalMigrationTime.toFixed(2)}ms${TTY_COLORS.reset}`,
+							);
+							console.log(
+								`  Suite Duration: ${TTY_COLORS.fg.blue}${stats.suiteDuration.toFixed(2)}ms${TTY_COLORS.reset}`,
+							);
+							console.log("");
+						}
+
+						// Totals
+						const avgMigrationTime =
+							totalMigrations > 0
+								? (totalMigrationTime / totalMigrations).toFixed(2)
+								: "0.00";
+						console.log(`${TTY_COLORS.fg.cyan}${separator}`);
+						console.log(
+							`${TTY_COLORS.fg.cyan}${TTY_COLORS.bright}TOTALS${TTY_COLORS.reset}`,
+						);
+						console.log(
+							`  Total Tests: ${TTY_COLORS.fg.green}${totalTests}${TTY_COLORS.reset}`,
+						);
+						console.log(
+							`  Total Migrations: ${TTY_COLORS.fg.yellow}${totalMigrations}${TTY_COLORS.reset} (avg: ${avgMigrationTime}ms)`,
+						);
+						console.log(
+							`  Total Migration Time: ${TTY_COLORS.fg.yellow}${totalMigrationTime.toFixed(2)}ms${TTY_COLORS.reset}`,
+						);
+						console.log(
+							`  Total Duration: ${TTY_COLORS.fg.blue}${totalDuration.toFixed(2)}ms${TTY_COLORS.reset}`,
+						);
+						console.log(
+							`${TTY_COLORS.fg.cyan}${separator}${TTY_COLORS.reset}\n`,
+						);
+					}
+
 					await onFinish?.();
 				}, 60000);
 
@@ -228,7 +312,10 @@ export const testAdapter = async ({
 						cleanup,
 						prefixTests,
 						runMigrations: migrate,
-						onTestFinish: async () => {},
+						onTestFinish: async (stats: TestSuiteStats) => {
+							console.log(`stats:`, stats);
+							allSuiteStats.push(stats);
+						},
 						customIdGenerator,
 						transformIdOutput,
 					});

@@ -13,6 +13,75 @@ import {
 import type { Logger } from "./test-adapter";
 import { deepmerge } from "./utils";
 
+/**
+ * Test entry type that supports both callback and object formats.
+ * Object format allows specifying migration options that will be applied before the test runs.
+ */
+export type TestEntry =
+	| ((context: {
+			readonly skip: {
+				(note?: string | undefined): never;
+				(condition: boolean, note?: string | undefined): void;
+			};
+	  }) => Promise<void>)
+	| {
+			migrateBetterAuth?: BetterAuthOptions;
+			test: (context: {
+				readonly skip: {
+					(note?: string | undefined): never;
+					(condition: boolean, note?: string | undefined): void;
+				};
+			}) => Promise<void>;
+	  };
+
+/**
+ * Deep equality comparison for BetterAuthOptions.
+ * Handles nested objects, arrays, and primitive values.
+ */
+function deepEqual(a: any, b: any): boolean {
+	if (a === b) return true;
+	if (a == null || b == null) return a === b;
+	if (typeof a !== typeof b) return false;
+
+	if (typeof a === "object") {
+		if (Array.isArray(a) !== Array.isArray(b)) return false;
+
+		if (Array.isArray(a)) {
+			if (a.length !== b.length) return false;
+			for (let i = 0; i < a.length; i++) {
+				if (!deepEqual(a[i], b[i])) return false;
+			}
+			return true;
+		}
+
+		const keysA = Object.keys(a);
+		const keysB = Object.keys(b);
+
+		if (keysA.length !== keysB.length) return false;
+
+		for (const key of keysA) {
+			if (!keysB.includes(key)) return false;
+			if (!deepEqual(a[key], b[key])) return false;
+		}
+
+		return true;
+	}
+
+	return false;
+}
+
+/**
+ * Statistics tracking for test suites.
+ */
+export type TestSuiteStats = {
+	migrationCount: number;
+	totalMigrationTime: number;
+	testCount: number;
+	suiteStartTime: number;
+	suiteDuration: number;
+	suiteName: string;
+};
+
 type GenerateFn = <M extends "user" | "session" | "verification" | "account">(
 	Model: M,
 ) => Promise<
@@ -81,20 +150,7 @@ export type InsertRandomFn = <
 >;
 
 export const createTestSuite = <
-	Tests extends Record<
-		string,
-		(context: {
-			/**
-			 * Mark tests as skipped. All execution after this call will be skipped.
-			 * This function throws an error, so make sure you are not catching it accidentally.
-			 * @see {@link https://vitest.dev/guide/test-context#skip}
-			 */
-			readonly skip: {
-				(note?: string | undefined): never;
-				(condition: boolean, note?: string | undefined): void;
-			};
-		}) => Promise<void>
-	>,
+	Tests extends Record<string, TestEntry>,
 	AdditionalOptions extends Record<string, any> = {},
 >(
 	suiteName: string,
@@ -177,7 +233,7 @@ export const createTestSuite = <
 			cleanup: () => Promise<void>;
 			runMigrations: () => Promise<void>;
 			prefixTests?: string | undefined;
-			onTestFinish: () => Promise<void>;
+			onTestFinish: (stats: TestSuiteStats) => Promise<void>;
 			customIdGenerator?: () => any | Promise<any> | undefined;
 			transformIdOutput?: (id: any) => string | undefined;
 		}) => {
@@ -310,18 +366,57 @@ export const createTestSuite = <
 				}
 			};
 
-			let didMigrateOnOptionsModify = false;
+			// Track current applied BetterAuth options state
+			let currentAppliedOptions: BetterAuthOptions | null = null;
 
-			const resetBetterAuthOptions = async () => {
-				adapter = await helpers.adapter();
-				await helpers.modifyBetterAuthOptions(
-					config.defaultBetterAuthOptions || {},
+			// Statistics tracking
+			const stats: TestSuiteStats = {
+				migrationCount: 0,
+				totalMigrationTime: 0,
+				testCount: 0,
+				suiteStartTime: performance.now(),
+				suiteDuration: 0,
+				suiteName,
+			};
+
+			/**
+			 * Apply BetterAuth options and run migrations if needed.
+			 * Tracks migration statistics.
+			 */
+			const applyOptionsAndMigrate = async (
+				options: BetterAuthOptions | Partial<BetterAuthOptions>,
+				forceMigrate: boolean = false,
+			): Promise<BetterAuthOptions> => {
+				const finalOptions = deepmerge(
+					config?.defaultBetterAuthOptions || {},
+					options || {},
 				);
-				if (didMigrateOnOptionsModify) {
-					didMigrateOnOptionsModify = false;
-					await helpers.runMigrations();
+
+				// Check if options have changed
+				const optionsChanged = !deepEqual(currentAppliedOptions, finalOptions);
+
+				if (optionsChanged || forceMigrate) {
 					adapter = await helpers.adapter();
+					await helpers.modifyBetterAuthOptions(finalOptions);
+
+					if (config.alwaysMigrate || forceMigrate) {
+						const migrationStart = performance.now();
+						await helpers.runMigrations();
+						const migrationTime = performance.now() - migrationStart;
+
+						stats.migrationCount++;
+						stats.totalMigrationTime += migrationTime;
+
+						adapter = await helpers.adapter();
+					}
+
+					currentAppliedOptions = finalOptions;
+				} else {
+					// Options haven't changed, just update the reference
+					currentAppliedOptions = finalOptions;
 				}
+
+				return finalOptions;
 			};
 
 			const transformGeneratedModel = (data: Record<string, any>) => {
@@ -493,14 +588,7 @@ export const createTestSuite = <
 				opts: BetterAuthOptions,
 				shouldRunMigrations: boolean,
 			) => {
-				const res = helpers.modifyBetterAuthOptions(
-					deepmerge(config?.defaultBetterAuthOptions || {}, opts),
-				);
-				if (config.alwaysMigrate || shouldRunMigrations) {
-					didMigrateOnOptionsModify = true;
-					await helpers.runMigrations();
-				}
-				return res;
+				return await applyOptionsAndMigrate(opts, shouldRunMigrations);
 			};
 
 			const additionalOptions = { ...options };
@@ -558,55 +646,129 @@ export const createTestSuite = <
 					await helpers.cleanup();
 				} catch {}
 				if (config.defaultBetterAuthOptions && !allDisabled) {
-					await helpers.modifyBetterAuthOptions(
+					await applyOptionsAndMigrate(
 						config.defaultBetterAuthOptions,
+						config.alwaysMigrate,
 					);
-					if (config.alwaysMigrate) {
-						await helpers.runMigrations();
-					}
 				}
+			});
+
+			/**
+			 * Extract test function and migration options from a test entry.
+			 */
+			const extractTestEntry = (
+				entry: TestEntry,
+			): {
+				testFn: (context: {
+					readonly skip: {
+						(note?: string | undefined): never;
+						(condition: boolean, note?: string | undefined): void;
+					};
+				}) => Promise<void>;
+				migrateBetterAuth?: BetterAuthOptions;
+			} => {
+				if (typeof entry === "function") {
+					return { testFn: entry };
+				}
+				return {
+					testFn: entry.test,
+					migrateBetterAuth: entry.migrateBetterAuth,
+				};
+			};
+
+			// Convert test entries to array with migration info (moved before onFinish for access)
+			const testEntries = Object.entries(fullTests).map(([name, entry]) => {
+				const { testFn, migrateBetterAuth } = extractTestEntry(
+					entry as TestEntry,
+				);
+				return { name, testFn, migrateBetterAuth };
 			});
 
 			const onFinish = async (testName: string) => {
 				await cleanupCreatedRows();
-				await resetBetterAuthOptions();
-				// Check if this is the last test by comparing current test index with total tests
-				const testEntries = Object.entries(fullTests);
+
 				const currentTestIndex = testEntries.findIndex(
-					([name]) =>
-						name === testName.replace(/\[.*?\] /, "").replace(/ ─ /g, " - "),
+					({ name }) => name === testName,
 				);
 				const isLastTest = currentTestIndex === testEntries.length - 1;
 
 				if (isLastTest) {
-					await helpers.onTestFinish();
+					stats.suiteDuration = performance.now() - stats.suiteStartTime;
+					await helpers.onTestFinish(stats);
 				}
 			};
 
-			if (allDisabled) {
-				await resetBetterAuthOptions();
+			// Utility to find the next test entry that is not skipped
+			function findNextNonSkippedTest(startIndex: number) {
+				for (let j = startIndex + 1; j < testEntries.length; j++) {
+					const checkName = testEntries[j]!.name;
+					const isSkipped =
+						(allDisabled && options?.disableTests?.[checkName] !== false) ||
+						(options?.disableTests?.[checkName] ?? false);
+					if (!isSkipped) {
+						return testEntries[j];
+					}
+				}
+				return undefined;
+			}
+			// Utility to find the previous test entry that is not skipped
+			function findPreviousNonSkippedTest(startIndex: number) {
+				for (let j = startIndex - 1; j >= 0; j--) {
+					const checkName = testEntries[j]!.name;
+					const isSkipped =
+						(allDisabled && options?.disableTests?.[checkName] !== false) ||
+						(options?.disableTests?.[checkName] ?? false);
+					if (!isSkipped) {
+						return testEntries[j];
+					}
+				}
 			}
 
-			for (let [testName, testFn] of Object.entries(fullTests)) {
+			for (let i = 0; i < testEntries.length; i++) {
+				const { name: testName, testFn, migrateBetterAuth } = testEntries[i]!;
+				const previousTest = findPreviousNonSkippedTest(i);
+				const previousTestMigrationOptions = previousTest?.migrateBetterAuth;
+
 				let shouldSkip =
 					(allDisabled && options?.disableTests?.[testName] !== false) ||
 					(options?.disableTests?.[testName] ?? false);
-				testName = testName.replace(
+
+				let displayName = testName.replace(
 					" - ",
 					` ${TTY_COLORS.dim}${dash}${TTY_COLORS.undim} `,
 				);
 				if (config.prefixTests) {
-					testName = `${config.prefixTests} ${TTY_COLORS.dim}>${TTY_COLORS.undim} ${testName}`;
+					displayName = `${config.prefixTests} ${TTY_COLORS.dim}>${TTY_COLORS.undim} ${displayName}`;
 				}
 				if (helpers.prefixTests) {
-					testName = `[${TTY_COLORS.dim}${helpers.prefixTests}${TTY_COLORS.undim}] ${testName}`;
+					displayName = `[${TTY_COLORS.dim}${helpers.prefixTests}${TTY_COLORS.undim}] ${displayName}`;
 				}
 
 				test.skipIf(shouldSkip)(
-					testName,
+					displayName,
 					{ timeout: 30000 },
 					async ({ onTestFailed, skip }) => {
 						resetDebugLogs();
+
+						// Apply migration options before test runs
+						await (async () => {
+							if (shouldSkip) return;
+							const thisMigration = deepmerge(
+								config.defaultBetterAuthOptions || {},
+								migrateBetterAuth || {},
+							);
+							if (migrateBetterAuth) {
+								await applyOptionsAndMigrate(thisMigration, true);
+							}
+							// if the last test isnt' the same as this test migrations, then we run migrations again to get up to date!
+							// this can happen if this test doesnt use `migrateBetterAuth` option, but the previous test does.
+							if (!deepEqual(previousTestMigrationOptions, thisMigration)) {
+								await applyOptionsAndMigrate(thisMigration, true);
+							}
+						})();
+
+						stats.testCount++;
+
 						onTestFailed(async () => {
 							printDebugLogs();
 							await onFinish(testName);
