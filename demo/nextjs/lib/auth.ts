@@ -1,3 +1,4 @@
+import { oauthProvider } from "@better-auth/oauth-provider";
 import { passkey } from "@better-auth/passkey";
 import { sso } from "@better-auth/sso";
 import { stripe } from "@better-auth/stripe";
@@ -13,7 +14,6 @@ import {
 	jwt,
 	lastLoginMethod,
 	multiSession,
-	oauthProvider,
 	oneTap,
 	openAPI,
 	organization,

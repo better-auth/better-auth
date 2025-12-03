@@ -1,3 +1,4 @@
+import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import { passkeyClient } from "@better-auth/passkey/client";
 import { stripeClient } from "@better-auth/stripe/client";
 import {
@@ -6,7 +7,6 @@ import {
 	genericOAuthClient,
 	lastLoginMethodClient,
 	multiSessionClient,
-	oauthProviderClient,
 	oneTapClient,
 	organizationClient,
 	twoFactorClient,

@@ -49,7 +49,7 @@ Please report any issues or bugs on [GitHub](https://github.com/better-auth/bett
 
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth";
-    import { oauthProvider, jwt } from "better-auth/plugins";
+    import { oauthProvider, jwt } from "@better-auth/oauth-provider";
 
     const auth = betterAuth({
       disabledPaths: [
@@ -130,7 +130,7 @@ The OAuth Client is the connecting `oauthClient` such a mobile or web applicatio
 
 ```ts title="client.ts"
 import { createAuthClient } from "better-auth/client";
-import { oauthProviderClient } from "better-auth/client/plugins"
+import { oauthProviderClient } from "@better-auth/oauth-provider/client"
 const authClient = createAuthClient({
   plugins: [oauthProviderClient()],
 });
@@ -143,7 +143,7 @@ The Resource Server is a client that operates on your API server to perform acti
 ```ts title="client.ts"
 import { auth } from "@/lib/auth"; // optional
 import { createAuthClient } from "better-auth/client";
-import { oauthProviderResourceClient } from "better-auth/server/plugins"
+import { oauthProviderResourceClient } from "@better-auth/oauth-provider/client"
 const authClient = createAuthClient({
   plugins: [oauthProviderResourceClient(auth)],
 });
@@ -584,7 +584,7 @@ If this path is not at the root and you don't have an openid-configuration alrea
 NOTE: For issuers with paths, OpenId utilizes path appending, thus any path on the issuer should be prepended before `/.well-known/openid-configuration`. If no issuer path is specified, the path should start at the root.
 
 ```ts title="[issuer-path]/.well-known/openid-configuration/route.ts"
-import { oauthProviderOpenIdConfigMetadata } from "better-auth/plugins";
+import { oauthProviderOpenIdConfigMetadata } from "@better-auth/oauth-provider";
 import { auth } from "@/lib/auth";
 
 export const GET = oauthProviderOpenIdConfigMetadata(auth);
@@ -604,7 +604,7 @@ You **must** add the configuration at the issuer path. If an issuer is unset, th
 NOTE: For issuers with paths, OAuth 2.1 Authorization Server utilizes path insertion, thus any path on the issuer should be appended after `/.well-known/oauth-authorization-server`. If no issuer path is specified, the path should start at the root.
 
 ```ts title="/.well-known/oauth-authorization-server/[issuer-path]/route.ts"
-import { oauthProviderAuthServerMetadata } from "better-auth/plugins";
+import { oauthProviderAuthServerMetadata } from "@better-auth/oauth-provider";
 import { auth } from "@/lib/auth";
 
 export const GET = oauthProviderAuthServerMetadata(auth);
@@ -712,12 +712,8 @@ If you utilize the Client Plugin `oauthProviderClient`, then the `oauth_query` p
 When a user is redirected to the OIDC provider for authentication, if they are not already logged in, they will be redirected to the login page. You can customize the login page by providing a `loginPage` option during initialization.
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-
-export const auth = betterAuth({
-  plugins: [oauthProvider({
-    loginPage: "/sign-in" // [!code highlight]
-  })]
+oauthProvider({
+  loginPage: "/sign-in" // [!code highlight]
 })
 ```
 
@@ -731,12 +727,8 @@ When a user is redirected to the OIDC provider for authentication, they may be p
 **Note**: Trusted clients with `skipConsent: true` will bypass the consent screen entirely, providing a seamless experience for first-party applications.
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-
-export const auth = betterAuth({
-  plugins: [oauthProvider({
-    consentPage: "/consent" // [!code highlight]
-  })]
+oauthProvider({
+  consentPage: "/consent" // [!code highlight]
 })
 ```
 
@@ -835,19 +827,13 @@ await client.oauth2.oauth2Continue({
 For first-party applications and internal services, you can cache trusted clients for better performance. Values are cached in memory for all mentioned clients. Additionally, they prevent changes through the CRUD endpoints.
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { oauthProvider } from "better-auth/plugins";
-
-const auth = betterAuth({
-  plugins: [
-    oauthProvider({
-      loginPage: "/sign-in",
-      // List of clientIds of the clients
-      cachedTrustedClients: new Set[
-        "internal-dashboard",
-        "mobile-app",
-      ],
-  })]
+oauthProvider({
+  loginPage: "/sign-in",
+  // List of clientIds of the clients
+  cachedTrustedClients: new Set[
+    "internal-dashboard",
+    "mobile-app",
+  ],
 })
 ```
 
@@ -1139,19 +1125,9 @@ Key Differences:
 - `id_token` for a confidential client is signed by their `client_secret`.
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { oauthProvider } from "better-auth/plugins";
-
-const auth = betterAuth({
-  plugins: [
-    oauthProvider({
-      disableJwtPlugin: true, // [!code highlight]
-      loginPage: "/sign-in",
-      consentPage: "/consent",
-      // ...other options
-    })
-  ],
-});
+oauthProvider({
+  disableJwtPlugin: true, // [!code highlight]
+})
 ```
 
 
@@ -1180,7 +1156,7 @@ If you are using "openid" and confidential MCP clients, you cannot disable the J
     ```ts title="client.ts"
     import { auth } from "@/lib/auth"; // optional
     import { createAuthClient } from "better-auth/client";
-    import { oauthProviderResourceClient } from "better-auth/server/plugins"
+    import { oauthProviderResourceClient } from "@better-auth/oauth-provider/client"
     const authClient = createAuthClient({
       plugins: [oauthProviderResourceClient(auth)],
     });
@@ -1281,7 +1257,7 @@ If you are using "openid" and confidential MCP clients, you cannot disable the J
 
     ```ts title="api/[transport]/route.ts"
     import { createMcpHandler } from "@vercel/mcp-adapter";
-    import { mcpHandler } from "better-auth/plugins";
+    import { mcpHandler } from "@better-auth/oauth-provider";
     import { z } from "zod";
 
     const handler = mcpHandler({
