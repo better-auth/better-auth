@@ -1791,11 +1791,13 @@ describe("keep active organization / keep active team", async () => {
 		},
 		{
 			clientOptions: {
-				plugins: [organizationClient({
-  				teams: {
-    				enabled: true,
-  				}
-				})],
+				plugins: [
+					organizationClient({
+						teams: {
+							enabled: true,
+						},
+					}),
+				],
 			},
 		},
 	);
