@@ -121,10 +121,8 @@ export function validateDiscoveryUrl(url: string): void {
 		throw new DiscoveryError(
 			"discovery_invalid_url",
 			`Invalid discovery URL: ${url}`,
-			{
-				url,
-				originalError: error instanceof Error ? error.message : String(error),
-			},
+			{ url },
+			{ cause: error },
 		);
 	}
 }
@@ -142,71 +140,84 @@ export async function fetchDiscoveryDocument(
 	timeout: number = DEFAULT_DISCOVERY_TIMEOUT,
 ): Promise<OIDCDiscoveryDocument> {
 	try {
-		const controller = new AbortController();
-		const timeoutId = setTimeout(() => controller.abort(), timeout);
-
 		const response = await betterFetch<OIDCDiscoveryDocument>(url, {
 			method: "GET",
-			signal: controller.signal,
+			timeout,
 		});
 
-		clearTimeout(timeoutId);
-
 		if (response.error) {
-			const status = response.error.status;
+			const { status } = response.error;
 
 			if (status === 404) {
 				throw new DiscoveryError(
 					"discovery_not_found",
-					`Discovery endpoint not found: ${url}`,
-					{ status },
+					"Discovery endpoint not found",
+					{
+						url,
+						status,
+					},
+				);
+			}
+
+			if (status === 408) {
+				throw new DiscoveryError(
+					"discovery_timeout",
+					"Discovery request timed out",
+					{
+						url,
+						timeout,
+					},
 				);
 			}
 
 			throw new DiscoveryError(
 				"discovery_unexpected_error",
-				`Discovery request failed with status ${status}: ${response.error.message}`,
-				{ status, message: response.error.message },
+				`Unexpected discovery error: ${response.error.statusText}`,
+				{ url, ...response.error },
 			);
 		}
 
 		if (!response.data) {
 			throw new DiscoveryError(
 				"discovery_invalid_json",
-				"Discovery endpoint returned empty response",
+				"Discovery endpoint returned an empty response",
 				{ url },
 			);
 		}
 
-		return response.data;
+		const data = response.data as OIDCDiscoveryDocument | string;
+		if (typeof data === "string") {
+			throw new DiscoveryError(
+				"discovery_invalid_json",
+				"Discovery endpoint returned invalid JSON",
+				{ url, bodyPreview: data.slice(0, 200) },
+			);
+		}
+
+		return data;
 	} catch (error) {
 		if (error instanceof DiscoveryError) {
 			throw error;
 		}
 
+		// betterFetch throws AbortError on timeout (not returned as response.error)
+		// Check error.name since message varies by runtime
 		if (error instanceof Error && error.name === "AbortError") {
 			throw new DiscoveryError(
 				"discovery_timeout",
-				`Discovery request timed out after ${timeout}ms`,
-				{ url, timeout },
-			);
-		}
-
-		if (error instanceof SyntaxError) {
-			throw new DiscoveryError(
-				"discovery_invalid_json",
-				"Discovery endpoint returned invalid JSON",
-				{ url, originalError: error.message },
+				"Discovery request timed out",
+				{
+					url,
+					timeout,
+				},
 			);
 		}
 
 		throw new DiscoveryError(
 			"discovery_unexpected_error",
 			`Unexpected error during discovery: ${error instanceof Error ? error.message : String(error)}`,
-			{
-				url,
-				originalError: error instanceof Error ? error.message : String(error),
-			},
+			{ url },
+			{ cause: error },
 		);
 	}
 }

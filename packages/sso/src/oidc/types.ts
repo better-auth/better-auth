@@ -124,8 +124,9 @@ export class DiscoveryError extends Error {
 		code: DiscoveryErrorCode,
 		message: string,
 		details?: Record<string, unknown>,
+		options?: { cause?: unknown },
 	) {
-		super(message);
+		super(message, options);
 		this.name = "DiscoveryError";
 		this.code = code;
 		this.details = details;

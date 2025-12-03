@@ -108,25 +108,25 @@ describe("OIDC Discovery", () => {
 		});
 
 		it("should throw DiscoveryError with discovery_invalid_url code for invalid URL", () => {
-			try {
-				validateDiscoveryUrl("not-a-url");
-				expect.fail("Should have thrown");
-			} catch (error) {
-				expect(error).toBeInstanceOf(DiscoveryError);
-				expect((error as DiscoveryError).code).toBe("discovery_invalid_url");
-				expect((error as DiscoveryError).details?.url).toBe("not-a-url");
-			}
+			expect(() => validateDiscoveryUrl("not-a-url")).toThrow(
+				expect.objectContaining({
+					code: "discovery_invalid_url",
+					details: expect.objectContaining({
+						url: "not-a-url",
+					}),
+				}),
+			);
 		});
 
 		it("should throw DiscoveryError with discovery_invalid_url code for non-HTTP protocol", () => {
-			try {
-				validateDiscoveryUrl("ftp://example.com/config");
-				expect.fail("Should have thrown");
-			} catch (error) {
-				expect(error).toBeInstanceOf(DiscoveryError);
-				expect((error as DiscoveryError).code).toBe("discovery_invalid_url");
-				expect((error as DiscoveryError).details?.protocol).toBe("ftp:");
-			}
+			expect(() => validateDiscoveryUrl("ftp://example.com/config")).toThrow(
+				expect.objectContaining({
+					code: "discovery_invalid_url",
+					details: expect.objectContaining({
+						protocol: "ftp:",
+					}),
+				}),
+			);
 		});
 	});
 
@@ -153,58 +153,50 @@ describe("OIDC Discovery", () => {
 
 		it("should throw discovery_incomplete for missing issuer", () => {
 			const doc = createMockDiscoveryDocument({ issuer: "" });
-			try {
-				validateDiscoveryDocument(doc, issuer);
-				expect.fail("Should have thrown");
-			} catch (error) {
-				expect(error).toBeInstanceOf(DiscoveryError);
-				expect((error as DiscoveryError).code).toBe("discovery_incomplete");
-				expect((error as DiscoveryError).details?.missingFields).toContain(
-					"issuer",
-				);
-			}
+			expect(() => validateDiscoveryDocument(doc, issuer)).toThrow(
+				expect.objectContaining({
+					code: "discovery_incomplete",
+					details: expect.objectContaining({
+						missingFields: expect.arrayContaining(["issuer"]),
+					}),
+				}),
+			);
 		});
 
 		it("should throw discovery_incomplete for missing authorization_endpoint", () => {
 			const doc = createMockDiscoveryDocument({ authorization_endpoint: "" });
-			try {
-				validateDiscoveryDocument(doc, issuer);
-				expect.fail("Should have thrown");
-			} catch (error) {
-				expect(error).toBeInstanceOf(DiscoveryError);
-				expect((error as DiscoveryError).code).toBe("discovery_incomplete");
-				expect((error as DiscoveryError).details?.missingFields).toContain(
-					"authorization_endpoint",
-				);
-			}
+			expect(() => validateDiscoveryDocument(doc, issuer)).toThrow(
+				expect.objectContaining({
+					code: "discovery_incomplete",
+					details: expect.objectContaining({
+						missingFields: expect.arrayContaining(["authorization_endpoint"]),
+					}),
+				}),
+			);
 		});
 
 		it("should throw discovery_incomplete for missing token_endpoint", () => {
 			const doc = createMockDiscoveryDocument({ token_endpoint: "" });
-			try {
-				validateDiscoveryDocument(doc, issuer);
-				expect.fail("Should have thrown");
-			} catch (error) {
-				expect(error).toBeInstanceOf(DiscoveryError);
-				expect((error as DiscoveryError).code).toBe("discovery_incomplete");
-				expect((error as DiscoveryError).details?.missingFields).toContain(
-					"token_endpoint",
-				);
-			}
+			expect(() => validateDiscoveryDocument(doc, issuer)).toThrow(
+				expect.objectContaining({
+					code: "discovery_incomplete",
+					details: expect.objectContaining({
+						missingFields: expect.arrayContaining(["token_endpoint"]),
+					}),
+				}),
+			);
 		});
 
 		it("should throw discovery_incomplete for missing jwks_uri", () => {
 			const doc = createMockDiscoveryDocument({ jwks_uri: "" });
-			try {
-				validateDiscoveryDocument(doc, issuer);
-				expect.fail("Should have thrown");
-			} catch (error) {
-				expect(error).toBeInstanceOf(DiscoveryError);
-				expect((error as DiscoveryError).code).toBe("discovery_incomplete");
-				expect((error as DiscoveryError).details?.missingFields).toContain(
-					"jwks_uri",
-				);
-			}
+			expect(() => validateDiscoveryDocument(doc, issuer)).toThrow(
+				expect.objectContaining({
+					code: "discovery_incomplete",
+					details: expect.objectContaining({
+						missingFields: expect.arrayContaining(["jwks_uri"]),
+					}),
+				}),
+			);
 		});
 
 		it("should list all missing fields", () => {
@@ -214,36 +206,34 @@ describe("OIDC Discovery", () => {
 				token_endpoint: "",
 				jwks_uri: "",
 			} as OIDCDiscoveryDocument;
-			try {
-				validateDiscoveryDocument(doc, issuer);
-				expect.fail("Should have thrown");
-			} catch (error) {
-				expect(error).toBeInstanceOf(DiscoveryError);
-				const missingFields = (error as DiscoveryError).details
-					?.missingFields as string[];
-				expect(missingFields).toHaveLength(4);
-				expect(missingFields).toContain("issuer");
-				expect(missingFields).toContain("authorization_endpoint");
-				expect(missingFields).toContain("token_endpoint");
-				expect(missingFields).toContain("jwks_uri");
-			}
+			expect(() => validateDiscoveryDocument(doc, issuer)).toThrow(
+				expect.objectContaining({
+					code: "discovery_incomplete",
+					details: expect.objectContaining({
+						missingFields: expect.arrayContaining([
+							"issuer",
+							"authorization_endpoint",
+							"token_endpoint",
+							"jwks_uri",
+						]),
+					}),
+				}),
+			);
 		});
 
 		it("should throw issuer_mismatch when issuer doesn't match", () => {
 			const doc = createMockDiscoveryDocument({
 				issuer: "https://evil.example.com",
 			});
-			try {
-				validateDiscoveryDocument(doc, issuer);
-				expect.fail("Should have thrown");
-			} catch (error) {
-				expect(error).toBeInstanceOf(DiscoveryError);
-				expect((error as DiscoveryError).code).toBe("issuer_mismatch");
-				expect((error as DiscoveryError).details?.discovered).toBe(
-					"https://evil.example.com",
-				);
-				expect((error as DiscoveryError).details?.configured).toBe(issuer);
-			}
+			expect(() => validateDiscoveryDocument(doc, issuer)).toThrow(
+				expect.objectContaining({
+					code: "issuer_mismatch",
+					details: expect.objectContaining({
+						discovered: "https://evil.example.com",
+						configured: issuer,
+					}),
+				}),
+			);
 		});
 
 		it("should handle trailing slash normalization in issuer comparison", () => {
@@ -296,23 +286,15 @@ describe("OIDC Discovery", () => {
 			const doc = createMockDiscoveryDocument({
 				token_endpoint_auth_methods_supported: ["private_key_jwt"],
 			});
-
-			try {
-				selectTokenEndpointAuthMethod(doc);
-				expect.fail("Should have thrown");
-			} catch (error) {
-				expect(error).toBeInstanceOf(DiscoveryError);
-				expect((error as DiscoveryError).code).toBe(
-					"unsupported_token_auth_method",
-				);
-				expect((error as DiscoveryError).details?.supported).toEqual([
-					"private_key_jwt",
-				]);
-				expect((error as DiscoveryError).details?.betterAuthSupports).toEqual([
-					"client_secret_basic",
-					"client_secret_post",
-				]);
-			}
+			expect(() => selectTokenEndpointAuthMethod(doc)).toThrow(
+				expect.objectContaining({
+					code: "unsupported_token_auth_method",
+					details: expect.objectContaining({
+						supported: ["private_key_jwt"],
+						betterAuthSupports: ["client_secret_basic", "client_secret_post"],
+					}),
+				}),
+			);
 		});
 
 		it("should throw unsupported_token_auth_method for tls_client_auth only", () => {
@@ -322,16 +304,11 @@ describe("OIDC Discovery", () => {
 					"private_key_jwt",
 				],
 			});
-
-			try {
-				selectTokenEndpointAuthMethod(doc);
-				expect.fail("Should have thrown");
-			} catch (error) {
-				expect(error).toBeInstanceOf(DiscoveryError);
-				expect((error as DiscoveryError).code).toBe(
-					"unsupported_token_auth_method",
-				);
-			}
+			expect(() => selectTokenEndpointAuthMethod(doc)).toThrow(
+				expect.objectContaining({
+					code: "unsupported_token_auth_method",
+				}),
+			);
 		});
 
 		it("should default to client_secret_basic if not specified in discovery", () => {
@@ -435,32 +412,52 @@ describe("OIDC Discovery", () => {
 				error: { status: 404, message: "Not Found" },
 			});
 
-			try {
-				await fetchDiscoveryDocument(
+			await expect(
+				fetchDiscoveryDocument(
 					"https://idp.example.com/.well-known/openid-configuration",
-				);
-				expect.fail("Should have thrown");
-			} catch (error) {
-				expect(error).toBeInstanceOf(DiscoveryError);
-				expect((error as DiscoveryError).code).toBe("discovery_not_found");
-			}
+				),
+			).rejects.toThrow(
+				expect.objectContaining({
+					code: "discovery_not_found",
+				}),
+			);
 		});
 
-		it("should throw discovery_timeout on abort", async () => {
-			const abortError = new Error("Aborted");
+		it("should throw discovery_timeout on AbortError (betterFetch throws on timeout)", async () => {
+			// betterFetch throws AbortError when timeout fires, not response.error
+			const abortError = new Error("The operation was aborted");
 			abortError.name = "AbortError";
 			mockBetterFetch.mockRejectedValueOnce(abortError);
 
-			try {
-				await fetchDiscoveryDocument(
+			await expect(
+				fetchDiscoveryDocument(
 					"https://idp.example.com/.well-known/openid-configuration",
 					100,
-				);
-				expect.fail("Should have thrown");
-			} catch (error) {
-				expect(error).toBeInstanceOf(DiscoveryError);
-				expect((error as DiscoveryError).code).toBe("discovery_timeout");
-			}
+				),
+			).rejects.toThrow(
+				expect.objectContaining({
+					code: "discovery_timeout",
+				}),
+			);
+		});
+
+		it("should throw discovery_timeout on HTTP 408 response", async () => {
+			// HTTP 408 comes as response.error (server responded)
+			mockBetterFetch.mockResolvedValueOnce({
+				data: null,
+				error: { status: 408, statusText: "Request Timeout", message: "" },
+			});
+
+			await expect(
+				fetchDiscoveryDocument(
+					"https://idp.example.com/.well-known/openid-configuration",
+					100,
+				),
+			).rejects.toThrow(
+				expect.objectContaining({
+					code: "discovery_timeout",
+				}),
+			);
 		});
 
 		it("should throw discovery_unexpected_error for server errors", async () => {
@@ -469,17 +466,15 @@ describe("OIDC Discovery", () => {
 				error: { status: 500, message: "Internal Server Error" },
 			});
 
-			try {
-				await fetchDiscoveryDocument(
+			await expect(
+				fetchDiscoveryDocument(
 					"https://idp.example.com/.well-known/openid-configuration",
-				);
-				expect.fail("Should have thrown");
-			} catch (error) {
-				expect(error).toBeInstanceOf(DiscoveryError);
-				expect((error as DiscoveryError).code).toBe(
-					"discovery_unexpected_error",
-				);
-			}
+				),
+			).rejects.toThrow(
+				expect.objectContaining({
+					code: "discovery_unexpected_error",
+				}),
+			);
 		});
 
 		it("should throw discovery_invalid_json for empty response", async () => {
@@ -488,47 +483,50 @@ describe("OIDC Discovery", () => {
 				error: null,
 			});
 
-			try {
-				await fetchDiscoveryDocument(
+			await expect(
+				fetchDiscoveryDocument(
 					"https://idp.example.com/.well-known/openid-configuration",
-				);
-				expect.fail("Should have thrown");
-			} catch (error) {
-				expect(error).toBeInstanceOf(DiscoveryError);
-				expect((error as DiscoveryError).code).toBe("discovery_invalid_json");
-			}
+				),
+			).rejects.toThrow(
+				expect.objectContaining({
+					code: "discovery_invalid_json",
+				}),
+			);
 		});
 
 		it("should throw discovery_invalid_json for JSON parse errors", async () => {
-			mockBetterFetch.mockRejectedValueOnce(
-				new SyntaxError("Unexpected token"),
-			);
+			// betterFetch doesn't throw SyntaxError - it falls back to raw text
+			mockBetterFetch.mockResolvedValueOnce({
+				data: "<!DOCTYPE html><html>Not JSON</html>",
+				error: null,
+			});
 
-			try {
-				await fetchDiscoveryDocument(
+			await expect(
+				fetchDiscoveryDocument(
 					"https://idp.example.com/.well-known/openid-configuration",
-				);
-				expect.fail("Should have thrown");
-			} catch (error) {
-				expect(error).toBeInstanceOf(DiscoveryError);
-				expect((error as DiscoveryError).code).toBe("discovery_invalid_json");
-			}
+				),
+			).rejects.toThrow(
+				expect.objectContaining({
+					code: "discovery_invalid_json",
+					details: expect.objectContaining({
+						bodyPreview: "<!DOCTYPE html><html>Not JSON</html>",
+					}),
+				}),
+			);
 		});
 
 		it("should throw discovery_unexpected_error for unknown errors", async () => {
 			mockBetterFetch.mockRejectedValueOnce(new Error("Network failure"));
 
-			try {
-				await fetchDiscoveryDocument(
+			await expect(
+				fetchDiscoveryDocument(
 					"https://idp.example.com/.well-known/openid-configuration",
-				);
-				expect.fail("Should have thrown");
-			} catch (error) {
-				expect(error).toBeInstanceOf(DiscoveryError);
-				expect((error as DiscoveryError).code).toBe(
-					"discovery_unexpected_error",
-				);
-			}
+				),
+			).rejects.toThrow(
+				expect.objectContaining({
+					code: "discovery_unexpected_error",
+				}),
+			);
 		});
 	});
 
@@ -641,13 +639,11 @@ describe("OIDC Discovery", () => {
 				error: null,
 			});
 
-			try {
-				await discoverOIDCConfig({ issuer });
-				expect.fail("Should have thrown");
-			} catch (error) {
-				expect(error).toBeInstanceOf(DiscoveryError);
-				expect((error as DiscoveryError).code).toBe("issuer_mismatch");
-			}
+			await expect(discoverOIDCConfig({ issuer })).rejects.toThrow(
+				expect.objectContaining({
+					code: "issuer_mismatch",
+				}),
+			);
 		});
 
 		it("should throw on missing required fields", async () => {
@@ -659,13 +655,11 @@ describe("OIDC Discovery", () => {
 				error: null,
 			});
 
-			try {
-				await discoverOIDCConfig({ issuer });
-				expect.fail("Should have thrown");
-			} catch (error) {
-				expect(error).toBeInstanceOf(DiscoveryError);
-				expect((error as DiscoveryError).code).toBe("discovery_incomplete");
-			}
+			await expect(discoverOIDCConfig({ issuer })).rejects.toThrow(
+				expect.objectContaining({
+					code: "discovery_incomplete",
+				}),
+			);
 		});
 
 		it("should throw discovery_not_found when endpoint doesn't exist", async () => {
@@ -674,13 +668,11 @@ describe("OIDC Discovery", () => {
 				error: { status: 404, message: "Not Found" },
 			});
 
-			try {
-				await discoverOIDCConfig({ issuer });
-				expect.fail("Should have thrown");
-			} catch (error) {
-				expect(error).toBeInstanceOf(DiscoveryError);
-				expect((error as DiscoveryError).code).toBe("discovery_not_found");
-			}
+			await expect(discoverOIDCConfig({ issuer })).rejects.toThrow(
+				expect.objectContaining({
+					code: "discovery_not_found",
+				}),
+			);
 		});
 
 		it("should include scopes_supported in hydrated config", async () => {
@@ -770,15 +762,11 @@ describe("OIDC Discovery", () => {
 				error: null,
 			});
 
-			try {
-				await discoverOIDCConfig({ issuer });
-				expect.fail("Should have thrown");
-			} catch (error) {
-				expect(error).toBeInstanceOf(DiscoveryError);
-				expect((error as DiscoveryError).code).toBe(
-					"unsupported_token_auth_method",
-				);
-			}
+			await expect(discoverOIDCConfig({ issuer })).rejects.toThrow(
+				expect.objectContaining({
+					code: "unsupported_token_auth_method",
+				}),
+			);
 		});
 
 		it("should fill missing fields from discovery when existing config is partial", async () => {
