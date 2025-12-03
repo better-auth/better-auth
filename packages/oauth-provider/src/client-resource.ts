@@ -172,7 +172,7 @@ export const oauthProviderResourceClient = <T extends Auth | undefined>(
 	} satisfies BetterAuthClientPlugin;
 };
 
-interface VerifyAccessTokenRemote {
+export interface VerifyAccessTokenRemote {
 	/** Full url of the introspect endpoint. Should end with `/oauth2/introspect` */
 	introspectUrl: string;
 	/** Client Secret */

@@ -21,7 +21,7 @@ import type { Listener } from "listhen";
 import { listen } from "listhen";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
-import { oauthProviderResourceClient } from "./client-server";
+import { oauthProviderResourceClient } from "./client-resource";
 import { handleMcpErrors, mcpHandler } from "./mcp";
 import { oauthProvider } from "./oauth";
 import type { OAuthClient } from "./types/oauth";
