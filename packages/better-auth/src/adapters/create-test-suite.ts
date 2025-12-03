@@ -700,7 +700,8 @@ export const createTestSuite = <
 				for (let i = 0; i < testEntries.length; i++) {
 					const { migrateBetterAuth } = testEntries[i]!;
 					const isSkipped =
-						(allDisabled && options?.disableTests?.[testEntries[i]!.name] !== false) ||
+						(allDisabled &&
+							options?.disableTests?.[testEntries[i]!.name] !== false) ||
 						(options?.disableTests?.[testEntries[i]!.name] ?? false);
 
 					// Skip grouping for skipped tests - they'll be handled individually
@@ -759,7 +760,8 @@ export const createTestSuite = <
 			};
 
 			// Track the current group's migration options
-			let currentGroupMigrationOptions: BetterAuthOptions | null | undefined = null;
+			let currentGroupMigrationOptions: BetterAuthOptions | null | undefined =
+				null;
 
 			for (let i = 0; i < testEntries.length; i++) {
 				const { name: testName, testFn, migrateBetterAuth } = testEntries[i]!;
@@ -768,8 +770,7 @@ export const createTestSuite = <
 				const testGroup = testGroups.find((group) =>
 					group.testIndices.includes(i),
 				);
-				const isFirstInGroup =
-					testGroup && testGroup.testIndices[0] === i;
+				const isFirstInGroup = testGroup && testGroup.testIndices[0] === i;
 
 				let shouldSkip =
 					(allDisabled && options?.disableTests?.[testName] !== false) ||
@@ -811,7 +812,10 @@ export const createTestSuite = <
 
 								// Only migrate if the group's options are different from current state
 								if (
-									!deepEqual(currentGroupMigrationOptions, groupMigrationOptions)
+									!deepEqual(
+										currentGroupMigrationOptions,
+										groupMigrationOptions,
+									)
 								) {
 									await applyOptionsAndMigrate(groupFinalOptions, true);
 									currentGroupMigrationOptions = groupMigrationOptions;
