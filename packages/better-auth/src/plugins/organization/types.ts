@@ -14,11 +14,11 @@ import type {
 export interface OrganizationOptions {
 	defaultOrganization?:
 		| {
-  		/**
-  		 * Enable creating a default organization when a user has none
-  		 *
-  		 * @default false
-  		 */
+				/**
+				 * Enable creating a default organization when a user has none
+				 *
+				 * @default false
+				 */
 				enabled?: boolean | undefined;
 				/**
 				 * Whether to prevent the deletion of the users last remaining organization.
