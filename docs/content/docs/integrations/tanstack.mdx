@@ -59,3 +59,44 @@ const signIn = async () => {
     })
 }
 ```
+
+### Middleware
+
+You can use TanStack Start's middleware to protect routes that require authentication. Create a middleware that checks for a valid session and redirects unauthenticated users to the login page.
+
+```ts title="src/middleware/auth.ts"
+import { redirect } from "@tanstack/react-router";
+import { createMiddleware } from "@tanstack/react-start";
+import { auth } from "./auth";
+
+export const authMiddleware = createMiddleware().server(
+    async ({ next, request }) => {
+        const session = await auth.api.getSession({ headers: request.headers })
+
+        if (!session) {
+            throw redirect({ to: "/login" })
+        }
+
+        return await next()
+    }
+);
+```
+
+You can then use this middleware in your route definitions to protect specific routes:
+
+```tsx title="src/routes/dashboard.tsx"
+import { createFileRoute } from '@tanstack/react-router'
+import { authMiddleware } from '@/lib/middleware'
+
+export const Route = createFileRoute('/dashboard')({
+  component: RouteComponent,
+  server: {
+    middleware: [authMiddleware],
+  },
+})
+
+function RouteComponent() {
+  return <div>Hello "/dashboard"!</div>
+}
+```
+
