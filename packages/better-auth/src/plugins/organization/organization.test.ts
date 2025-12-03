@@ -1797,7 +1797,7 @@ describe("auto create organization on sign-up", async () => {
 
 		const headers = new Headers();
 		await client.signUp.email({
-		  name: "Test User",
+			name: "Test User",
 			email: "org-test@test.com",
 			password: "password",
 			fetchOptions: {
@@ -1814,13 +1814,13 @@ describe("auto create organization on sign-up", async () => {
 		expect(orgs?.length).toBe(1);
 
 		await expect(
-  		client.organization.delete({
-  			organizationId: orgs![0]!.id,
-  			fetchOptions: {
-  				headers,
-  			},
-  		})
-		).resolves.toBeDefined()
+			client.organization.delete({
+				organizationId: orgs![0]!.id,
+				fetchOptions: {
+					headers,
+				},
+			}),
+		).resolves.toBeDefined();
 	});
 });
 
