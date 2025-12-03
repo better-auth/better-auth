@@ -14,11 +14,11 @@ import type {
 export interface OrganizationOptions {
 	defaultOrganization?:
 		| {
-				/**
-				 * Whether to automatically create a new organization during sign-up.
-				 *
-				 * @default false
-				 */
+  		/**
+  		 * Enable creating a default organization when a user has none
+  		 *
+  		 * @default false
+  		 */
 				enabled?: boolean | undefined;
 				/**
 				 * Whether to prevent the deletion of the users last remaining organization.
@@ -26,6 +26,9 @@ export interface OrganizationOptions {
 				 * @default true
 				 */
 				preventLastOrgDeletion?: boolean | undefined;
+				/**
+				 * Pass a custom default organization creator function
+				 */
 				customCreateDefaultOrganization?:
 					| ((
 							user: User & Record<string, any>,
