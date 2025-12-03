@@ -1791,7 +1791,11 @@ describe("keep active organization / keep active team", async () => {
 		},
 		{
 			clientOptions: {
-				plugins: [organizationClient()],
+				plugins: [organizationClient({
+  				teams: {
+    				enabled: true,
+  				}
+				})],
 			},
 		},
 	);
@@ -1841,6 +1845,7 @@ describe("keep active organization / keep active team", async () => {
 		});
 
 		expect(session?.session.activeOrganizationId).toBeTypeOf("string");
+		expect(session?.session.activeTeamId).toBeTypeOf("string");
 	});
 });
 
