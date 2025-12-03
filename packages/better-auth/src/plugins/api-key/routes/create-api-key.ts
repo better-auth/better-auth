@@ -1,10 +1,10 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { safeJSONParse } from "@better-auth/core/utils";
 import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../../api";
 import { generateId } from "../../../utils";
 import { getDate } from "../../../utils/date";
-import { safeJSONParse } from "../../../utils/json";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
 import { setApiKey } from "../adapter";

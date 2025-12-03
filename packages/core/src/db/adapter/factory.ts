@@ -1,17 +1,8 @@
-import type { BetterAuthOptions } from "@better-auth/core";
-import type {
-	CleanedWhere,
-	DBAdapter,
-	DBTransactionAdapter,
-	JoinConfig,
-	JoinOption,
-	Where,
-} from "@better-auth/core/db/adapter";
-import { getColorDepth, logger, TTY_COLORS } from "@better-auth/core/env";
-import { BetterAuthError } from "@better-auth/core/error";
-import { withApplyDefault } from "../../adapters/utils";
-import { getAuthTables } from "../../db/get-tables";
+import { getColorDepth, logger, TTY_COLORS } from "../../env";
+import { BetterAuthError } from "../../error";
+import type { BetterAuthOptions } from "../../types";
 import { safeJSONParse } from "../../utils/json";
+import { getAuthTables } from "../get-tables";
 import { initGetDefaultFieldName } from "./get-default-field-name";
 import { initGetDefaultModelName } from "./get-default-model-name";
 import { initGetFieldAttributes } from "./get-field-attributes";
@@ -19,10 +10,19 @@ import { initGetFieldName } from "./get-field-name";
 import { initGetIdField } from "./get-id-field";
 import { initGetModelName } from "./get-model-name";
 import type {
+	CleanedWhere,
+	DBAdapter,
+	DBTransactionAdapter,
+	JoinConfig,
+	JoinOption,
+	Where,
+} from "./index";
+import type {
 	AdapterFactoryConfig,
 	AdapterFactoryOptions,
 	AdapterTestDebugLogs,
 } from "./types";
+import { withApplyDefault } from "./utils";
 
 export {
 	initGetDefaultModelName,
@@ -208,7 +208,7 @@ export const createAdapterFactory =
 				}
 
 				// In some endpoints (like signUpEmail) where there isn't proper Zod validation,
-				// we might recieve a date as a string (this is because of the client converting the Date to a string
+				// we might receive a date as a string (this is because of the client converting the Date to a string
 				// when sending to the server). Because of this, we'll convert the string to a Date.
 				if (
 					fieldAttributes &&
@@ -245,6 +245,13 @@ export const createAdapterFactory =
 					config.supportsJSON === false &&
 					typeof newValue === "object" &&
 					fieldAttributes!.type === "json"
+				) {
+					newValue = JSON.stringify(newValue);
+				} else if (
+					config.supportsJSON === false &&
+					Array.isArray(newValue) &&
+					(fieldAttributes!.type === "string[]" ||
+						fieldAttributes!.type === "number[]")
 				) {
 					newValue = JSON.stringify(newValue);
 				} else if (
@@ -333,6 +340,12 @@ export const createAdapterFactory =
 							config.supportsJSON === false &&
 							typeof newValue === "string" &&
 							field.type === "json"
+						) {
+							newValue = safeJSONParse(newValue);
+						} else if (
+							config.supportsJSON === false &&
+							typeof newValue === "string" &&
+							(field.type === "string[]" || field.type === "number[]")
 						) {
 							newValue = safeJSONParse(newValue);
 						} else if (

@@ -713,12 +713,12 @@ describe("oidc", async () => {
 	});
 
 	describe("max_age parameter handling", () => {
-		it("should force reauthentication when session age exceeds max_age", async ({
+		it("should force re-authentication when session age exceeds max_age", async ({
 			expect,
 		}) => {
-			// This test verifies that max_age triggers reauthentication
+			// This test verifies that max_age triggers re-authentication
 			// In a real scenario, we'd need to manipulate session creation time
-			// For now, we test with max_age=0 which should always trigger reauthentication
+			// For now, we test with max_age=0 which should always trigger re-authentication
 
 			const authUrl = new URL(
 				"http://localhost:3000/api/auth/oauth2/authorize",
@@ -731,7 +731,7 @@ describe("oidc", async () => {
 			authUrl.searchParams.set("response_type", "code");
 			authUrl.searchParams.set("scope", "openid profile email");
 			authUrl.searchParams.set("state", "test-state");
-			authUrl.searchParams.set("max_age", "0"); // Force immediate reauthentication
+			authUrl.searchParams.set("max_age", "0"); // Force immediate re-authentication
 			authUrl.searchParams.set("code_challenge", "test-challenge");
 			authUrl.searchParams.set("code_challenge_method", "S256");
 
@@ -748,7 +748,7 @@ describe("oidc", async () => {
 			expect(redirectURI).toContain("client_id=" + application.clientId);
 		});
 
-		it("should not force reauthentication when session age is within max_age", async ({
+		it("should not force re-authentication when session age is within max_age", async ({
 			expect,
 		}) => {
 			const authUrl = new URL(

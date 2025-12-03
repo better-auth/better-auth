@@ -1156,6 +1156,7 @@ describe("stripe", async () => {
 	});
 
 	it("should not update personal subscription when upgrading with an org referenceId", async () => {
+		/* cspell:disable-next-line */
 		const orgId = "org_b67GF32Cljh7u588AuEblmLVobclDRcP";
 
 		const testOptions = {

@@ -94,7 +94,7 @@ export const APIMethod = ({
 	 */
 	isServerOnly?: boolean;
 	/**
-	 * Wether the code example is client-only, thus maening it's an endpoint.
+	 * Wether the code example is client-only, thus meaning it's an endpoint.
 	 *
 	 * @default false
 	 */

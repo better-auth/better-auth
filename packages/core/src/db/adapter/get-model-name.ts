@@ -1,4 +1,4 @@
-import type { BetterAuthDBSchema } from "@better-auth/core/db";
+import type { BetterAuthDBSchema } from "../type";
 import { initGetDefaultModelName } from "./get-default-model-name";
 
 export const initGetModelName = ({
