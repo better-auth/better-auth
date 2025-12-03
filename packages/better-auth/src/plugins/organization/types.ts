@@ -17,7 +17,17 @@ export interface OrganizationOptions {
 	 *
 	 * @default false
 	 */
-	autoCreateOnSignUp?: boolean | undefined;
+	defaultOrganization?:
+		| {
+				enabled?: boolean | undefined;
+				customCreateDefaultOrganization?:
+					| ((
+							user: User & Record<string, any>,
+							ctx?: GenericEndpointContext | undefined,
+					  ) => Promise<Organization & Record<string, any>>)
+					| undefined;
+		  }
+		| undefined;
 	/**
 	 * Determines whether the user's active organization should persist after sign-out.
 	 * If enabled, the same organization will be restored automatically on the next sign-in.

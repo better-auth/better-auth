@@ -1238,78 +1238,86 @@ export function organization<O extends OrganizationOptions>(
 							return;
 						}
 
-						if (options?.autoCreateOnSignUp) {
-  						const adapter = getOrgAdapter(ctx.context, options);
-  						const orgs = await adapter.listOrganizations(session.user.id);
-						  // Since the user can implicitly sign up via social providers we check that the user always has at least one organization
-  						if (orgs.length === 0) {
-   							const slugify = (text: string) => {
-                 	return text
-                  		.toString()
-                                    .normalize("NFD")
-                  		.toLowerCase()
-                  		.replace(/\s+/g, "-")
-                  		.replace(/[^\w\-]+/g, "")
-                  		.replace(/\-\-+/g, "-")
-                  		.replace(/^-+/, "")
-                  		.replace(/-+$/, "");
-                  };
+						if (options?.defaultOrganization?.enabled) {
+							const adapter = getOrgAdapter(ctx.context, options);
+							const orgs = await adapter.listOrganizations(session.user.id);
+							// Since the user can implicitly sign up via social providers we check that the user always has at least one organization
+							if (orgs.length === 0) {
+								const slugify = (text: string) => {
+									return text
+										.toString()
+										.normalize("NFD")
+										.toLowerCase()
+										.replace(/\s+/g, "-")
+										.replace(/[^\w\-]+/g, "")
+										.replace(/\-\-+/g, "-")
+										.replace(/^-+/, "")
+										.replace(/-+$/, "");
+								};
 
-  							await ctx.context.adapter.transaction(async () => {
-  								const organization = await adapter.createOrganization({
-  									organization: {
-  										name: session.user.name,
-  										slug: `${slugify(session.user.name)}-${generateRandomString(6, "0-9", "a-z", "A-Z")}`,
-  										createdAt: new Date(),
-  									},
-  								});
-  								if (!organization) {
-  									throw new APIError("INTERNAL_SERVER_ERROR", {
-  										message: "Failed to create organization during sign-up",
-  									});
-  								}
+								await ctx.context.adapter.transaction(async () => {
+									const organization =
+										await (options.defaultOrganization?.customCreateDefaultOrganization?.(
+											session.user,
+											ctx,
+										) ||
+											adapter.createOrganization({
+												organization: {
+													name: session.user.name,
+													slug: `${slugify(session.user.name)}-${generateRandomString(6, "0-9", "a-z", "A-Z")}`,
+													createdAt: new Date(),
+												},
+											}));
+									if (!organization) {
+										throw new APIError("INTERNAL_SERVER_ERROR", {
+											message: "Failed to create organization during sign-up",
+										});
+									}
 
-  								let teamId: string | undefined = undefined;
-  								if (
-  									options?.teams?.enabled &&
-  									options.teams.defaultTeam?.enabled !== false
-  								) {
-  									const defaultTeam =
-  										await (options.teams.defaultTeam?.customCreateDefaultTeam?.(
-  											organization,
-  											ctx,
-  										) ||
-  											adapter.createTeam({
-  												organizationId: organization.id,
-  												name: organization.name,
-  												createdAt: new Date(),
-  											}));
-  									teamId = defaultTeam.id;
-  								}
-  								await adapter.createMember({
-  									...(teamId ? { teamId } : {}),
-  									userId: session.user.id,
-  									organizationId: organization.id,
-  									role: options?.creatorRole || "owner",
-  								});
+									let teamId: string | undefined = undefined;
+									if (
+										options?.teams?.enabled &&
+										options.teams.defaultTeam?.enabled !== false
+									) {
+										const defaultTeam =
+											await (options.teams.defaultTeam?.customCreateDefaultTeam?.(
+												organization,
+												ctx,
+											) ||
+												adapter.createTeam({
+													organizationId: organization.id,
+													name: organization.name,
+													createdAt: new Date(),
+												}));
+										teamId = defaultTeam.id;
+									}
+									await adapter.createMember({
+										...(teamId ? { teamId } : {}),
+										userId: session.user.id,
+										organizationId: organization.id,
+										role: options?.creatorRole || "owner",
+									});
 
-  								await ctx.context.internalAdapter.updateSession(
-  									session.session.id,
-  									{
-  										activeOrganizationId: organization.id,
-  										...(teamId
-  											? {
-  													activeTeamId: teamId,
-  												}
-  											: {}),
-  									},
-  								);
-  							});
-  							return;
-  						}
+									await ctx.context.internalAdapter.updateSession(
+										session.session.id,
+										{
+											activeOrganizationId: organization.id,
+											...(teamId
+												? {
+														activeTeamId: teamId,
+													}
+												: {}),
+										},
+									);
+								});
+								return;
+							}
 						}
 
-						if (ctx.path.startsWith("/sign-up") || !options?.keepActiveOrganization) {
+						if (
+							ctx.path.startsWith("/sign-up") ||
+							!options?.keepActiveOrganization
+						) {
 							return;
 						}
 
