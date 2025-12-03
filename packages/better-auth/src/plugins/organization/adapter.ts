@@ -730,7 +730,10 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			return session as Session;
 		},
 
-		listTeamMembers: async (data: { teamId: string }) => {
+		listTeamMembers: async (data: {
+			teamId: string;
+			includeUser?: boolean;
+		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const members = await adapter.findMany<TeamMember>({
 				model: "teamMember",
@@ -742,7 +745,38 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				],
 			});
 
-			return members;
+			if (!data.includeUser) {
+				return members;
+			}
+
+			const users = await adapter.findMany<User>({
+				model: "user",
+				where: [
+					{
+						field: "id",
+						value: members.map((member) => member.userId),
+						operator: "in",
+					},
+				],
+			});
+
+			return members.map((member) => {
+				const user = users.find((user) => user.id === member.userId);
+				if (!user) {
+					throw new BetterAuthError(
+						"Unexpected error: User not found for team member",
+					);
+				}
+				return {
+					...member,
+					user: {
+						id: user.id,
+						name: user.name,
+						email: user.email,
+						image: user.image,
+					},
+				};
+			});
 		},
 		countTeamMembers: async (data: { teamId: string }) => {
 			const adapter = await getCurrentAdapter(baseAdapter);

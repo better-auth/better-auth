@@ -176,6 +176,73 @@ describe("team", async (it) => {
 		expect(res.data).toHaveLength(1);
 	});
 
+	it("should return user details with team members when includeUser is true", async () => {
+		const activeTeamHeaders = new Headers();
+		await client.organization.setActiveTeam(
+			{
+				teamId,
+			},
+			{
+				headers: signUpHeaders,
+				onSuccess: cookieSetter(activeTeamHeaders),
+			},
+		);
+
+		const res = await client.organization.listTeamMembers(
+			{
+				query: {
+					includeUser: "true",
+				},
+			},
+			{
+				headers: activeTeamHeaders,
+			},
+		);
+
+		expect(res.error).toBeNull();
+		expect(res.data).not.toBeNull();
+		expect(res.data).toHaveLength(1);
+
+		const teamMember = res.data?.[0] as any;
+		expect(teamMember).toHaveProperty("user");
+		expect(teamMember?.user).toHaveProperty("id");
+		expect(teamMember?.user).toHaveProperty("name");
+		expect(teamMember?.user).toHaveProperty("email");
+		expect(teamMember?.user?.email).toBe("invited@email.com");
+		expect(teamMember?.user?.name).toBe("Invited User");
+	});
+
+	it("should not return user details when includeUser is false or not provided", async () => {
+		const activeTeamHeaders = new Headers();
+		await client.organization.setActiveTeam(
+			{
+				teamId,
+			},
+			{
+				headers: signUpHeaders,
+				onSuccess: cookieSetter(activeTeamHeaders),
+			},
+		);
+
+		const res = await client.organization.listTeamMembers(
+			{},
+			{
+				headers: activeTeamHeaders,
+			},
+		);
+
+		expect(res.error).toBeNull();
+		expect(res.data).not.toBeNull();
+		expect(res.data).toHaveLength(1);
+
+		const teamMember = res.data?.[0];
+		expect(teamMember).not.toHaveProperty("user");
+		expect(teamMember).toHaveProperty("id");
+		expect(teamMember).toHaveProperty("userId");
+		expect(teamMember).toHaveProperty("teamId");
+		expect(teamMember).toHaveProperty("createdAt");
+	});
+
 	it("should get full organization", async () => {
 		const organization = await client.organization.getFullOrganization({
 			fetchOptions: {

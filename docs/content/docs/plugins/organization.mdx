@@ -881,6 +881,10 @@ type createInvitation = {
      * The team ID to invite the user to.  
      */
     teamId?: string = "team-id"
+    /**
+     * Whether to include user details (name, email) in the response. By default, it's false.
+     */
+    includeUser?: boolean = true
 }
 ```
 </APIMethod>
