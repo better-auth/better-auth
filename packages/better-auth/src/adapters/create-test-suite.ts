@@ -773,13 +773,17 @@ export const createTestSuite = <
 					};
 				}
 
-				const totalTestsInGroups = groupSizes.reduce((sum, size) => sum + size, 0);
-				const groupsWithMultipleTests = groupSizes.filter((size) => size > 1).length;
+				const totalTestsInGroups = groupSizes.reduce(
+					(sum, size) => sum + size,
+					0,
+				);
+				const groupsWithMultipleTests = groupSizes.filter(
+					(size) => size > 1,
+				).length;
 
 				return {
 					totalGroups: nonSkippedGroups.length,
-					averageTestsPerGroup:
-						totalTestsInGroups / nonSkippedGroups.length,
+					averageTestsPerGroup: totalTestsInGroups / nonSkippedGroups.length,
 					largestGroupSize: Math.max(...groupSizes),
 					smallestGroupSize: Math.min(...groupSizes),
 					groupsWithMultipleTests,
