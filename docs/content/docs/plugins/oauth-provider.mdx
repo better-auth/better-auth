@@ -143,7 +143,7 @@ The Resource Server is a client that operates on your API server to perform acti
 ```ts title="client.ts"
 import { auth } from "@/lib/auth"; // optional
 import { createAuthClient } from "better-auth/client";
-import { oauthProviderResourceClient } from "@better-auth/oauth-provider/client"
+import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client"
 const authClient = createAuthClient({
   plugins: [oauthProviderResourceClient(auth)],
 });
@@ -1156,7 +1156,7 @@ If you are using "openid" and confidential MCP clients, you cannot disable the J
     ```ts title="client.ts"
     import { auth } from "@/lib/auth"; // optional
     import { createAuthClient } from "better-auth/client";
-    import { oauthProviderResourceClient } from "@better-auth/oauth-provider/client"
+    import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client"
     const authClient = createAuthClient({
       plugins: [oauthProviderResourceClient(auth)],
     });

@@ -26,6 +26,11 @@
       "dev-source": "./src/client.ts",
       "types": "./dist/client.d.mts",
       "default": "./dist/client.mjs"
+    },
+    "./resource-client": {
+      "dev-source": "./src/client-server.ts",
+      "types": "./dist/client-server.d.mts",
+      "default": "./dist/client-server.mjs"
     }
   },
   "typesVersions": {
@@ -39,15 +44,13 @@
     }
   },
   "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.23.0",
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
     "listhen": "^1.9.0",
     "tsdown": "catalog:"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.23.0",
-    "@simplewebauthn/browser": "^13.1.2",
-    "@simplewebauthn/server": "^13.1.2",
     "jose": "^6.1.0",
     "zod": "^4.1.12"
   },
