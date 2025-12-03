@@ -1,8 +1,8 @@
 import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { capitalizeFirstLetter } from "@better-auth/core/utils";
 import { produceSchema } from "@mrleebo/prisma-ast";
-import { capitalizeFirstLetter } from "better-auth";
 import { initGetFieldName, initGetModelName } from "better-auth/adapters";
 import type { FieldType } from "better-auth/db";
 import { getAuthTables } from "better-auth/db";
