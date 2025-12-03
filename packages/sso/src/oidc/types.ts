@@ -103,6 +103,8 @@ export type DiscoveryErrorCode =
 	| "discovery_invalid_json"
 	/** Discovery URL is invalid or malformed */
 	| "discovery_invalid_url"
+	/** Discovery URL is not trusted by the trusted origins configuration */
+	| "discovery_untrusted_origin"
 	/** Discovery document issuer doesn't match configured issuer */
 	| "issuer_mismatch"
 	/** Discovery document is missing required fields */
@@ -195,6 +197,13 @@ export interface DiscoverOIDCConfigParams {
 	 * @default 10000 (10 seconds)
 	 */
 	timeout?: number;
+
+	/**
+	 * Trusted origin predicate. See "trustedOrigins" option
+	 * @param url the url to test
+	 * @returns {boolean} return true for urls that belong to a trusted origin and false otherwise
+	 */
+	isTrustedOrigin: (url: string) => boolean;
 }
 
 /**

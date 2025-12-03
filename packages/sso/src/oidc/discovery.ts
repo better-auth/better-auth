@@ -24,14 +24,15 @@ const DEFAULT_DISCOVERY_TIMEOUT = 10000;
  *
  * This function:
  * 1. Computes the discovery URL from the issuer
- * 2. Validates the discovery URL (stub for now)
+ * 2. Validates the discovery URL
  * 3. Fetches the discovery document
  * 4. Validates the discovery document (issuer match + required fields)
- * 5. Normalizes URLs (stub for now)
+ * 5. Normalizes URLs
  * 6. Selects token endpoint auth method
  * 7. Merges with existing config (existing values take precedence)
  *
  * @param params - Discovery parameters
+ * @param isTrustedOrigin - Origin verification tester function
  * @returns Hydrated OIDC configuration ready for persistence
  * @throws DiscoveryError on any failure
  */
@@ -49,13 +50,17 @@ export async function discoverOIDCConfig(
 		existingConfig?.discoveryEndpoint ||
 		computeDiscoveryUrl(issuer);
 
-	validateDiscoveryUrl(discoveryUrl);
+	validateDiscoveryUrl(discoveryUrl, params.isTrustedOrigin);
 
 	const discoveryDoc = await fetchDiscoveryDocument(discoveryUrl, timeout);
 
 	validateDiscoveryDocument(discoveryDoc, issuer);
 
-	const normalizedDoc = normalizeDiscoveryUrls(discoveryDoc, issuer);
+	const normalizedDoc = normalizeDiscoveryUrls(
+		discoveryDoc,
+		issuer,
+		params.isTrustedOrigin,
+	);
 
 	const tokenEndpointAuth = selectTokenEndpointAuthMethod(
 		normalizedDoc,
@@ -102,10 +107,22 @@ export function computeDiscoveryUrl(issuer: string): string {
  * Future phases will add SSRF protection, allowlist checks, etc.
  *
  * @param url - The discovery URL to validate
+ * @param isTrustedOrigin - Origin verification tester function
  * @throws DiscoveryError if URL is invalid
  */
-export function validateDiscoveryUrl(url: string): void {
-	parseURL("discoveryEndpoint", url); // ignore result
+export function validateDiscoveryUrl(
+	url: string,
+	isTrustedOrigin: DiscoverOIDCConfigParams["isTrustedOrigin"],
+): void {
+	const discoveryEndpoint = parseURL("discoveryEndpoint", url).toString();
+
+	if (!isTrustedOrigin(discoveryEndpoint)) {
+		throw new DiscoveryError(
+			"discovery_untrusted_origin",
+			`The main discovery endpoint "${discoveryEndpoint}" is not trusted by your trusted origins configuration.`,
+			{ url: discoveryEndpoint },
+		);
+	}
 }
 
 /**
@@ -260,53 +277,82 @@ export function validateDiscoveryDocument(
 /**
  * Normalize URLs in the discovery document.
  *
- * Phase 1: This is a stub that returns the document unchanged.
- * Future phases will:
- * - Resolve relative URLs against issuer base
- * - Normalize URL formats
- * - Apply security transformations
- *
- * TODO(Phase 2): Implement normalization of relative URLs based on issuer/discovery endpoint.
- * For now, this is an identity function so we can wire discovery into flows incrementally.
- *
  * @param doc - The discovery document
  * @param issuer - The base issuer URL (unused in Phase 1)
+ * @param isTrustedOrigin - Origin verification tester function
  * @returns The normalized discovery document
  */
 export function normalizeDiscoveryUrls(
 	doc: OIDCDiscoveryDocument,
 	issuer: string,
+	isTrustedOrigin: DiscoverOIDCConfigParams["isTrustedOrigin"],
 ): OIDCDiscoveryDocument {
-	doc.token_endpoint = normalizeUrl(
+	doc.token_endpoint = normalizeAndValidateUrl(
 		"token_endpoint",
 		doc.token_endpoint,
 		issuer,
+		isTrustedOrigin,
 	);
-	doc.authorization_endpoint = normalizeUrl(
+	doc.authorization_endpoint = normalizeAndValidateUrl(
 		"authorization_endpoint",
 		doc.authorization_endpoint,
 		issuer,
+		isTrustedOrigin,
 	);
 
-	doc.jwks_uri = normalizeUrl("jwks_uri", doc.jwks_uri, issuer);
+	doc.jwks_uri = normalizeAndValidateUrl(
+		"jwks_uri",
+		doc.jwks_uri,
+		issuer,
+		isTrustedOrigin,
+	);
 
 	if (doc.userinfo_endpoint) {
-		doc.userinfo_endpoint = normalizeUrl(
+		doc.userinfo_endpoint = normalizeAndValidateUrl(
 			"userinfo_endpoint",
 			doc.userinfo_endpoint,
 			issuer,
+			isTrustedOrigin,
 		);
 	}
 
 	if (doc.revocation_endpoint) {
-		doc.revocation_endpoint = normalizeUrl(
+		doc.revocation_endpoint = normalizeAndValidateUrl(
 			"revocation_endpoint",
 			doc.revocation_endpoint,
 			issuer,
+			isTrustedOrigin,
 		);
 	}
 
 	return doc;
+}
+
+/**
+ * Normalizes and validates a single URL endpoint
+ * @param context The authentication context
+ * @param name The url name
+ * @param endpoint The url to validate
+ * @param issuer The issuer base url
+ * @returns
+ */
+export function normalizeAndValidateUrl(
+	name: string,
+	endpoint: string,
+	issuer: string,
+	isTrustedOrigin: DiscoverOIDCConfigParams["isTrustedOrigin"],
+): string {
+	const url = normalizeUrl(name, endpoint, issuer);
+
+	if (!isTrustedOrigin(url)) {
+		throw new DiscoveryError(
+			"discovery_untrusted_origin",
+			`The ${name} "${url}" is not trusted by your trusted origins configuration.`,
+			{ endpoint: name, url },
+		);
+	}
+
+	return url;
 }
 
 /**

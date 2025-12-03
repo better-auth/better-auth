@@ -75,10 +75,13 @@ describe("OIDC Discovery", () => {
 	});
 
 	describe("validateDiscoveryUrl", () => {
+		const isTrustedOrigin = vi.fn().mockReturnValue(true);
+
 		it("should accept valid HTTPS URL", () => {
 			expect(() =>
 				validateDiscoveryUrl(
 					"https://idp.example.com/.well-known/openid-configuration",
+					isTrustedOrigin,
 				),
 			).not.toThrow();
 		});
@@ -87,28 +90,31 @@ describe("OIDC Discovery", () => {
 			expect(() =>
 				validateDiscoveryUrl(
 					"http://localhost:8080/.well-known/openid-configuration",
+					isTrustedOrigin,
 				),
 			).not.toThrow();
 		});
 
 		it("should reject invalid URL", () => {
-			expect(() => validateDiscoveryUrl("not-a-url")).toThrow(DiscoveryError);
-			expect(() => validateDiscoveryUrl("not-a-url")).toThrow(
+			expect(() => validateDiscoveryUrl("not-a-url", isTrustedOrigin)).toThrow(
+				DiscoveryError,
+			);
+			expect(() => validateDiscoveryUrl("not-a-url", isTrustedOrigin)).toThrow(
 				'The url "discoveryEndpoint" must be valid',
 			);
 		});
 
 		it("should reject non-HTTP protocols", () => {
-			expect(() => validateDiscoveryUrl("ftp://example.com/config")).toThrow(
-				DiscoveryError,
-			);
-			expect(() => validateDiscoveryUrl("ftp://example.com/config")).toThrow(
-				"must use the http or https supported protocols",
-			);
+			expect(() =>
+				validateDiscoveryUrl("ftp://example.com/config", isTrustedOrigin),
+			).toThrow(DiscoveryError);
+			expect(() =>
+				validateDiscoveryUrl("ftp://example.com/config", isTrustedOrigin),
+			).toThrow("must use the http or https supported protocols");
 		});
 
 		it("should throw DiscoveryError with discovery_invalid_url code for invalid URL", () => {
-			expect(() => validateDiscoveryUrl("not-a-url")).toThrow(
+			expect(() => validateDiscoveryUrl("not-a-url", isTrustedOrigin)).toThrow(
 				expect.objectContaining({
 					code: "discovery_invalid_url",
 					details: expect.objectContaining({
@@ -119,12 +125,30 @@ describe("OIDC Discovery", () => {
 		});
 
 		it("should throw DiscoveryError with discovery_invalid_url code for non-HTTP protocol", () => {
-			expect(() => validateDiscoveryUrl("ftp://example.com/config")).toThrow(
+			expect(() =>
+				validateDiscoveryUrl("ftp://example.com/config", isTrustedOrigin),
+			).toThrow(
 				expect.objectContaining({
 					code: "discovery_invalid_url",
 					details: expect.objectContaining({
 						protocol: "ftp:",
 					}),
+				}),
+			);
+		});
+
+		it("should throw DiscoveryError with discovery_untrusted_origin code for untrusted origins", () => {
+			isTrustedOrigin.mockReturnValue(false);
+
+			expect(() =>
+				validateDiscoveryUrl(
+					"https://untrusted.com/.well-known/openid-configuration",
+					isTrustedOrigin,
+				),
+			).toThrow(
+				expect.objectContaining({
+					code: "discovery_untrusted_origin",
+					message: `The main discovery endpoint "https://untrusted.com/.well-known/openid-configuration" is not trusted by your trusted origins configuration.`,
 				}),
 			);
 		});
@@ -327,9 +351,15 @@ describe("OIDC Discovery", () => {
 	});
 
 	describe("normalizeDiscoveryUrls", () => {
+		const isTrustedOrigin = vi.fn().mockReturnValue(true);
+
 		it("should return the document unchanged if all urls are already absolute", () => {
 			const doc = createMockDiscoveryDocument();
-			const result = normalizeDiscoveryUrls(doc, "https://idp.example.com");
+			const result = normalizeDiscoveryUrls(
+				doc,
+				"https://idp.example.com",
+				isTrustedOrigin,
+			);
 			expect(result).toEqual(doc);
 		});
 
@@ -346,7 +376,11 @@ describe("OIDC Discovery", () => {
 				token_endpoint: "/oauth2/token",
 				jwks_uri: "/.well-known/jwks.json",
 			});
-			const result = normalizeDiscoveryUrls(doc, "https://idp.example.com");
+			const result = normalizeDiscoveryUrls(
+				doc,
+				"https://idp.example.com",
+				isTrustedOrigin,
+			);
 			expect(result).toEqual(expected);
 		});
 
@@ -367,7 +401,11 @@ describe("OIDC Discovery", () => {
 				userinfo_endpoint: "/userinfo",
 				revocation_endpoint: "/revoke",
 			});
-			const result = normalizeDiscoveryUrls(doc, "https://idp.example.com");
+			const result = normalizeDiscoveryUrls(
+				doc,
+				"https://idp.example.com",
+				isTrustedOrigin,
+			);
 			expect(result).toEqual(expected);
 		});
 
@@ -375,8 +413,108 @@ describe("OIDC Discovery", () => {
 			const doc = createMockDiscoveryDocument({
 				authorization_endpoint: "/oauth2/authorize",
 			});
-			expect(() => normalizeDiscoveryUrls(doc, "not-url")).toThrowError(
-				'The url "authorization_endpoint" must be valid',
+			expect(() =>
+				normalizeDiscoveryUrls(doc, "not-url", isTrustedOrigin),
+			).toThrowError('The url "authorization_endpoint" must be valid');
+		});
+
+		it("should reject with discovery_untrusted_origin code on untrusted discovery urls", () => {
+			const doc = createMockDiscoveryDocument({
+				authorization_endpoint: "/oauth2/authorize",
+				token_endpoint: "/oauth2/token",
+				jwks_uri: "/.well-known/jwks.json",
+				userinfo_endpoint: "/userinfo",
+				revocation_endpoint: "/revoke",
+			});
+
+			expect(() =>
+				normalizeDiscoveryUrls(
+					doc,
+					"https://idp.example.com",
+					(url) => !url.endsWith("/oauth2/token"),
+				),
+			).toThrowError(
+				expect.objectContaining({
+					code: "discovery_untrusted_origin",
+					message:
+						'The token_endpoint "https://idp.example.com/oauth2/token" is not trusted by your trusted origins configuration.',
+					details: {
+						endpoint: "token_endpoint",
+						url: "https://idp.example.com/oauth2/token",
+					},
+				}),
+			);
+
+			expect(() =>
+				normalizeDiscoveryUrls(
+					doc,
+					"https://idp.example.com",
+					(url) => !url.endsWith("/oauth2/authorize"),
+				),
+			).toThrowError(
+				expect.objectContaining({
+					code: "discovery_untrusted_origin",
+					message:
+						'The authorization_endpoint "https://idp.example.com/oauth2/authorize" is not trusted by your trusted origins configuration.',
+					details: {
+						endpoint: "authorization_endpoint",
+						url: "https://idp.example.com/oauth2/authorize",
+					},
+				}),
+			);
+
+			expect(() =>
+				normalizeDiscoveryUrls(
+					doc,
+					"https://idp.example.com",
+					(url) => !url.endsWith("/.well-known/jwks.json"),
+				),
+			).toThrowError(
+				expect.objectContaining({
+					code: "discovery_untrusted_origin",
+					message:
+						'The jwks_uri "https://idp.example.com/.well-known/jwks.json" is not trusted by your trusted origins configuration.',
+					details: {
+						endpoint: "jwks_uri",
+						url: "https://idp.example.com/.well-known/jwks.json",
+					},
+				}),
+			);
+
+			expect(() =>
+				normalizeDiscoveryUrls(
+					doc,
+					"https://idp.example.com",
+					(url) => !url.endsWith("/userinfo"),
+				),
+			).toThrowError(
+				expect.objectContaining({
+					code: "discovery_untrusted_origin",
+					message:
+						'The userinfo_endpoint "https://idp.example.com/userinfo" is not trusted by your trusted origins configuration.',
+					details: {
+						endpoint: "userinfo_endpoint",
+						url: "https://idp.example.com/userinfo",
+					},
+				}),
+			);
+
+			expect(() =>
+				normalizeDiscoveryUrls(
+					doc,
+					"https://idp.example.com",
+					(url) => !url.endsWith("/revoke"),
+				),
+			).toThrowError(
+				expect.objectContaining({
+					code: "discovery_untrusted_origin",
+					message:
+						'The revocation_endpoint "https://idp.example.com/revoke" is not trusted by your trusted origins configuration.',
+					details: {
+						endpoint: "revocation_endpoint",
+						url: "https://idp.example.com/revoke",
+					},
+				}),
 			);
 		});
 	});
@@ -633,6 +771,7 @@ describe("OIDC Discovery", () => {
 	describe("discoverOIDCConfig (integration)", () => {
 		const mockBetterFetch = betterFetch as ReturnType<typeof vi.fn>;
 		const issuer = "https://idp.example.com";
+		const isTrustedOrigin = vi.fn().mockReturnValue(true);
 
 		beforeEach(() => {
 			vi.clearAllMocks();
@@ -651,7 +790,7 @@ describe("OIDC Discovery", () => {
 				error: null,
 			});
 
-			const result = await discoverOIDCConfig({ issuer });
+			const result = await discoverOIDCConfig({ issuer, isTrustedOrigin });
 
 			expect(result.issuer).toBe(issuer);
 			expect(result.authorizationEndpoint).toBe(`${issuer}/oauth2/authorize`);
@@ -682,6 +821,7 @@ describe("OIDC Discovery", () => {
 					tokenEndpoint: "https://custom.example.com/token",
 					tokenEndpointAuthentication: "client_secret_post",
 				},
+				isTrustedOrigin,
 			});
 
 			expect(result.tokenEndpoint).toBe("https://custom.example.com/token");
@@ -701,6 +841,7 @@ describe("OIDC Discovery", () => {
 			const result = await discoverOIDCConfig({
 				issuer,
 				discoveryEndpoint: customEndpoint,
+				isTrustedOrigin,
 			});
 
 			expect(result.discoveryEndpoint).toBe(customEndpoint);
@@ -722,6 +863,7 @@ describe("OIDC Discovery", () => {
 				existingConfig: {
 					discoveryEndpoint: existingEndpoint,
 				},
+				isTrustedOrigin,
 			});
 
 			expect(result.discoveryEndpoint).toBe(existingEndpoint);
@@ -739,7 +881,9 @@ describe("OIDC Discovery", () => {
 				error: null,
 			});
 
-			await expect(discoverOIDCConfig({ issuer })).rejects.toThrow(
+			await expect(
+				discoverOIDCConfig({ issuer, isTrustedOrigin }),
+			).rejects.toThrow(
 				expect.objectContaining({
 					code: "issuer_mismatch",
 				}),
@@ -755,7 +899,9 @@ describe("OIDC Discovery", () => {
 				error: null,
 			});
 
-			await expect(discoverOIDCConfig({ issuer })).rejects.toThrow(
+			await expect(
+				discoverOIDCConfig({ issuer, isTrustedOrigin }),
+			).rejects.toThrow(
 				expect.objectContaining({
 					code: "discovery_incomplete",
 				}),
@@ -768,7 +914,9 @@ describe("OIDC Discovery", () => {
 				error: { status: 404, message: "Not Found" },
 			});
 
-			await expect(discoverOIDCConfig({ issuer })).rejects.toThrow(
+			await expect(
+				discoverOIDCConfig({ issuer, isTrustedOrigin }),
+			).rejects.toThrow(
 				expect.objectContaining({
 					code: "discovery_not_found",
 				}),
@@ -785,7 +933,7 @@ describe("OIDC Discovery", () => {
 				error: null,
 			});
 
-			const result = await discoverOIDCConfig({ issuer });
+			const result = await discoverOIDCConfig({ issuer, isTrustedOrigin });
 
 			expect(result.scopesSupported).toEqual(scopes);
 		});
@@ -801,7 +949,7 @@ describe("OIDC Discovery", () => {
 				error: null,
 			});
 
-			const result = await discoverOIDCConfig({ issuer });
+			const result = await discoverOIDCConfig({ issuer, isTrustedOrigin });
 
 			expect(result.issuer).toBe(issuer);
 			expect(result.authorizationEndpoint).toBe(`${issuer}/authorize`);
@@ -832,6 +980,7 @@ describe("OIDC Discovery", () => {
 					tokenEndpointAuthentication: "client_secret_post",
 					scopesSupported: ["openid", "profile"],
 				},
+				isTrustedOrigin,
 			});
 
 			expect(result.issuer).toBe(issuer);
@@ -862,7 +1011,9 @@ describe("OIDC Discovery", () => {
 				error: null,
 			});
 
-			await expect(discoverOIDCConfig({ issuer })).rejects.toThrow(
+			await expect(
+				discoverOIDCConfig({ issuer, isTrustedOrigin }),
+			).rejects.toThrow(
 				expect.objectContaining({
 					code: "unsupported_token_auth_method",
 				}),
@@ -889,6 +1040,7 @@ describe("OIDC Discovery", () => {
 					// Only jwksEndpoint is set (simulating a legacy/partial config)
 					jwksEndpoint: "https://custom.example.com/jwks",
 				},
+				isTrustedOrigin,
 			});
 
 			// Existing value should be preserved
@@ -919,7 +1071,7 @@ describe("OIDC Discovery", () => {
 				error: null,
 			});
 
-			const result = await discoverOIDCConfig({ issuer });
+			const result = await discoverOIDCConfig({ issuer, isTrustedOrigin });
 
 			// Should successfully extract required fields
 			expect(result.issuer).toBe(issuer);
@@ -933,6 +1085,57 @@ describe("OIDC Discovery", () => {
 
 			// Should default auth method when not specified
 			expect(result.tokenEndpointAuthentication).toBe("client_secret_basic");
+		});
+
+		it("should throw an error with discovery_untrusted_origin code when the main discovery url is untrusted", async () => {
+			isTrustedOrigin.mockReturnValue(false);
+
+			await expect(
+				discoverOIDCConfig({ issuer, isTrustedOrigin }),
+			).rejects.toThrow(
+				expect.objectContaining({
+					name: "DiscoveryError",
+					message:
+						'The main discovery endpoint "https://idp.example.com/.well-known/openid-configuration" is not trusted by your trusted origins configuration.',
+					code: "discovery_untrusted_origin",
+					details: {
+						url: "https://idp.example.com/.well-known/openid-configuration",
+					},
+				}),
+			);
+		});
+
+		it("should throw an error with discovery_untrusted_origin code when discovered urls are untrusted", async () => {
+			isTrustedOrigin.mockImplementation((url: string) => {
+				return url.endsWith(".well-known/openid-configuration");
+			});
+
+			const discoveryDoc = createMockDiscoveryDocument({
+				issuer,
+				authorization_endpoint: `${issuer}/oauth2/authorize`,
+				token_endpoint: `${issuer}/oauth2/token`,
+				jwks_uri: `${issuer}/.well-known/jwks.json`,
+				userinfo_endpoint: `${issuer}/userinfo`,
+			});
+			mockBetterFetch.mockResolvedValueOnce({
+				data: discoveryDoc,
+				error: null,
+			});
+
+			await expect(
+				discoverOIDCConfig({ issuer, isTrustedOrigin }),
+			).rejects.toThrow(
+				expect.objectContaining({
+					name: "DiscoveryError",
+					message:
+						'The token_endpoint "https://idp.example.com/oauth2/token" is not trusted by your trusted origins configuration.',
+					code: "discovery_untrusted_origin",
+					details: {
+						endpoint: "token_endpoint",
+						url: "https://idp.example.com/oauth2/token",
+					},
+				}),
+			);
 		});
 	});
 });
