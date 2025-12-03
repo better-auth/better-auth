@@ -716,6 +716,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							session,
 							user: updatedUser,
 						});
+						await ctx.context.internalAdapter.deleteVerificationValue(
+							verificationValue.id,
+						);
 						return ctx.json({
 							status: true,
 							token: session.token,
