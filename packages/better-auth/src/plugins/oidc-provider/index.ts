@@ -132,6 +132,10 @@ export const getMetadata = (
 	};
 };
 
+const DEFAULT_CODE_EXPIRES_IN = 600;
+const DEFAULT_ACCESS_TOKEN_EXPIRES_IN = 3600;
+const DEFAULT_REFRESH_TOKEN_EXPIRES_IN = 604800;
+
 /**
  * OpenID Connect (OIDC) plugin for Better Auth. This plugin implements the
  * authorization code flow and the token exchange flow. It also implements the
@@ -148,10 +152,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 	};
 
 	const opts = {
-		codeExpiresIn: 600,
+		codeExpiresIn: DEFAULT_CODE_EXPIRES_IN,
 		defaultScope: "openid",
-		accessTokenExpiresIn: 3600,
-		refreshTokenExpiresIn: 604800,
+		accessTokenExpiresIn: DEFAULT_ACCESS_TOKEN_EXPIRES_IN,
+		refreshTokenExpiresIn: DEFAULT_REFRESH_TOKEN_EXPIRES_IN,
 		allowPlainCodeChallengeMethod: true,
 		storeClientSecret: "plain" as const,
 		...options,
@@ -464,7 +468,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 					const code = generateRandomString(32, "a-z", "A-Z", "0-9");
-					const codeExpiresInMs = opts.codeExpiresIn * 1000;
+					const codeExpiresInMs =
+						(opts?.codeExpiresIn ?? DEFAULT_CODE_EXPIRES_IN) * 1000;
 					const expiresAt = new Date(Date.now() + codeExpiresInMs);
 					await ctx.context.internalAdapter.updateVerificationValue(
 						verification.id,
@@ -848,7 +853,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 						...additionalUserClaims,
 					};
 					const expirationTime =
-						Math.floor(Date.now() / 1000) + opts.accessTokenExpiresIn;
+						Math.floor(Date.now() / 1000) +
+						(opts?.accessTokenExpiresIn ?? DEFAULT_ACCESS_TOKEN_EXPIRES_IN);
 
 					let idToken: string;
 
@@ -1519,7 +1525,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/endsession",
 				{
 					method: ["GET", "POST"],
-					operationId: "oauth2EndSession",
 					query: z
 						.object({
 							id_token_hint: z.string().optional(),

@@ -148,7 +148,9 @@ export async function authorize(
 	}
 
 	const requestScope =
-		query.scope?.split(" ").filter((s) => s) || opts.defaultScope.split(" ");
+		query.scope?.split(" ").filter((s) => s) ||
+		opts.defaultScope?.split(" ") ||
+		[];
 	const invalidScopes = requestScope.filter((scope) => {
 		return !opts.scopes.includes(scope);
 	});
@@ -191,7 +193,7 @@ export async function authorize(
 	}
 
 	const code = generateRandomString(32, "a-z", "A-Z", "0-9");
-	const codeExpiresInMs = opts.codeExpiresIn * 1000;
+	const codeExpiresInMs = opts.codeExpiresIn! * 1000;
 	const expiresAt = new Date(Date.now() + codeExpiresInMs);
 
 	// Determine if consent is required

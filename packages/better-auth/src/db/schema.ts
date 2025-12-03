@@ -191,12 +191,16 @@ export function mergeSchema<S extends BetterAuthPluginDBSchema>(
 	schema: S,
 	newSchema?:
 		| {
-				[K in keyof S]?: {
-					modelName?: string;
-					fields?: {
-						[P: string]: string;
-					};
-				};
+				[K in keyof S]?:
+					| {
+							modelName?: string | undefined;
+							fields?:
+								| {
+										[P: string]: string;
+								  }
+								| undefined;
+					  }
+					| undefined;
 		  }
 		| undefined,
 ) {
