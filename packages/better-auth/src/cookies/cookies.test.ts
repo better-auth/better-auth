@@ -544,11 +544,11 @@ describe("Cookie Cache Field Filtering", () => {
 		expect(cache?.user?.adminFlags).toBeUndefined();
 	});
 
-	it("should include id in parseUserOutput when generateId is false", () => {
+	it("should always include id in parseUserOutput", () => {
 		const options = {
-			advanced: {
-				database: {
-					generateId: false,
+			user: {
+				additionalFields: {
+					id: { type: "string", returned: false },
 				},
 			},
 		} as any;
