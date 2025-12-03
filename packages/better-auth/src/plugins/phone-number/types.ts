@@ -85,6 +85,7 @@ export interface PhoneNumberOptions {
 				data: {
 					phoneNumber: string;
 					user: UserWithPhoneNumber;
+					code: string;
 				},
 				ctx?: GenericEndpointContext,
 		  ) => Awaitable<void>)
