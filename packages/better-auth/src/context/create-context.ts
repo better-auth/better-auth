@@ -1,4 +1,5 @@
 import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
+import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { createLogger, env, isProduction, isTest } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
@@ -12,7 +13,6 @@ import { checkEndpointConflicts } from "../api";
 import { matchesOriginPattern } from "../auth/trusted-origins";
 import { createCookieGetter, getCookies } from "../cookies";
 import { hashPassword, verifyPassword } from "../crypto/password";
-import { getAuthTables } from "../db/get-tables";
 import { createInternalAdapter } from "../db/internal-adapter";
 import { generateId } from "../utils";
 import { DEFAULT_SECRET } from "../utils/constants";
