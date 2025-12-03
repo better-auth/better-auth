@@ -9,6 +9,7 @@ import {
 import { getCurrentAuthContext } from "@better-auth/core/context";
 import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
+import type { OpenAPIParameter } from "better-call";
 import { jwtVerify, SignJWT } from "jose";
 import * as z from "zod";
 import { APIError, getSessionFromCtx, sessionMiddleware } from "../../api";
@@ -33,7 +34,6 @@ import type {
 } from "./types";
 import { defaultClientSecretHasher } from "./utils";
 import { parsePrompt } from "./utils/prompt";
-import type { OpenAPIParameter } from "better-call";
 
 const getJwtPlugin = (ctx: GenericEndpointContext) => {
 	return ctx.context.options.plugins?.find(
@@ -1590,7 +1590,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 									required: false,
 									schema: { type: "string" },
 								},
-							] as OpenAPIParameter[],
+							] satisfies OpenAPIParameter[],
 							responses: {
 								"302": {
 									description:
