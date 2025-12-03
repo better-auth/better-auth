@@ -1771,6 +1771,57 @@ describe("auto create organization on sign-up", async () => {
 		expect(deleteRes.error).toBeDefined();
 		expect(deleteRes.error?.status).toStrictEqual(400);
 	});
+
+	it("should allow to delete users last organization when preventLastOrgDeletion is false", async () => {
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+				},
+				plugins: [
+					organization({
+						defaultOrganization: {
+							enabled: true,
+							preventLastOrgDeletion: false,
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [organizationClient()],
+				},
+				disableTestUser: true,
+			},
+		);
+
+		const headers = new Headers();
+		await client.signUp.email({
+		  name: "Test User",
+			email: "org-test@test.com",
+			password: "password",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const { data: orgs } = await client.organization.list({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(orgs?.length).toBe(1);
+
+		await expect(
+  		client.organization.delete({
+  			organizationId: orgs![0]!.id,
+  			fetchOptions: {
+  				headers,
+  			},
+  		})
+		).resolves.toBeDefined()
+	});
 });
 
 describe("keep active organization / keep active team", async () => {

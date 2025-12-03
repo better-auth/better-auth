@@ -130,7 +130,7 @@ export interface OrganizationOptions {
 		 * Determines whether the user's active team should persist after sign-out.
 		 * If enabled, the same team will be restored automatically on the next sign-in.
 		 *
-		 * Note: This setting overrides the top-level `keepActiveOrganization` option when teams are enabled.
+		 * Note: Enabling this setting automatically enables the top-level `keepActiveOrganization` option when teams are enabled
 		 *
 		 * @default false
 		 */

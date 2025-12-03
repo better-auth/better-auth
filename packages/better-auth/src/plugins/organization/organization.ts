@@ -1219,7 +1219,7 @@ export function organization<O extends OrganizationOptions>(
 						) {
 							throw new APIError("BAD_REQUEST", {
 								message:
-									"You cannot delete your only organization. Please create another organization and before deleting this one.",
+									"You cannot delete your only organization. Please create another organization before deleting this one.",
 							});
 						}
 					}),
@@ -1279,17 +1279,17 @@ export function organization<O extends OrganizationOptions>(
 
 								await ctx.context.adapter.transaction(async () => {
 									const organization =
-										await (options.defaultOrganization?.customCreateDefaultOrganization?.(
+										(await options.defaultOrganization?.customCreateDefaultOrganization?.(
 											session.user,
 											ctx,
-										) ||
-											adapter.createOrganization({
-												organization: {
-													name: session.user.name,
-													slug: `${slugify(session.user.name)}-${generateRandomString(6, "0-9", "a-z", "A-Z")}`,
-													createdAt: new Date(),
-												},
-											}));
+										)) ||
+										(await adapter.createOrganization({
+											organization: {
+												name: session.user.name,
+												slug: `${slugify(session.user.name || "organization")}-${generateRandomString(6, "0-9", "a-z", "A-Z")}`,
+												createdAt: new Date(),
+											},
+										}));
 									if (!organization) {
 										throw new APIError("INTERNAL_SERVER_ERROR", {
 											message: "Failed to create organization during sign-up",
@@ -1302,15 +1302,15 @@ export function organization<O extends OrganizationOptions>(
 										options.teams.defaultTeam?.enabled !== false
 									) {
 										const defaultTeam =
-											await (options.teams.defaultTeam?.customCreateDefaultTeam?.(
+											(await options.teams.defaultTeam?.customCreateDefaultTeam?.(
 												organization,
 												ctx,
-											) ||
-												adapter.createTeam({
-													organizationId: organization.id,
-													name: organization.name,
-													createdAt: new Date(),
-												}));
+											)) ||
+											(await adapter.createTeam({
+												organizationId: organization.id,
+												name: organization.name,
+												createdAt: new Date(),
+											}));
 										teamId = defaultTeam.id;
 									}
 									await adapter.createMember({
@@ -1321,7 +1321,7 @@ export function organization<O extends OrganizationOptions>(
 									});
 
 									await ctx.context.internalAdapter.updateSession(
-										session.session.id,
+										session.session.token,
 										{
 											activeOrganizationId: organization.id,
 											...(teamId
