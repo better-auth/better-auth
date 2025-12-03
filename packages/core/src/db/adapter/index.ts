@@ -532,3 +532,7 @@ export interface DBAdapterInstance<
 > {
 	(options: BetterAuthOptions): DBAdapter<Options>;
 }
+
+export * from "./factory";
+export * from "./types";
+export * from "./utils";
