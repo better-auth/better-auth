@@ -684,6 +684,66 @@ export const createTestSuite = <
 				return { name, testFn, migrateBetterAuth };
 			});
 
+			/**
+			 * Group tests by their migrateBetterAuth options.
+			 * Tests with equal migration options are grouped together.
+			 */
+			type TestGroup = {
+				migrationOptions: BetterAuthOptions | null | undefined;
+				testIndices: number[];
+			};
+
+			const groupTestsByMigrationOptions = (): TestGroup[] => {
+				const groups: TestGroup[] = [];
+				let currentGroup: TestGroup | null = null;
+
+				for (let i = 0; i < testEntries.length; i++) {
+					const { migrateBetterAuth } = testEntries[i]!;
+					const isSkipped =
+						(allDisabled && options?.disableTests?.[testEntries[i]!.name] !== false) ||
+						(options?.disableTests?.[testEntries[i]!.name] ?? false);
+
+					// Skip grouping for skipped tests - they'll be handled individually
+					if (isSkipped) {
+						if (currentGroup) {
+							groups.push(currentGroup);
+							currentGroup = null;
+						}
+						groups.push({
+							migrationOptions: migrateBetterAuth,
+							testIndices: [i],
+						});
+						continue;
+					}
+
+					// Check if this test belongs to the current group
+					if (
+						currentGroup &&
+						deepEqual(currentGroup.migrationOptions, migrateBetterAuth)
+					) {
+						currentGroup.testIndices.push(i);
+					} else {
+						// Start a new group
+						if (currentGroup) {
+							groups.push(currentGroup);
+						}
+						currentGroup = {
+							migrationOptions: migrateBetterAuth,
+							testIndices: [i],
+						};
+					}
+				}
+
+				// Add the last group if it exists
+				if (currentGroup) {
+					groups.push(currentGroup);
+				}
+
+				return groups;
+			};
+
+			const testGroups = groupTestsByMigrationOptions();
+
 			const onFinish = async (testName: string) => {
 				await cleanupCreatedRows();
 
@@ -698,36 +758,18 @@ export const createTestSuite = <
 				}
 			};
 
-			// Utility to find the next test entry that is not skipped
-			function findNextNonSkippedTest(startIndex: number) {
-				for (let j = startIndex + 1; j < testEntries.length; j++) {
-					const checkName = testEntries[j]!.name;
-					const isSkipped =
-						(allDisabled && options?.disableTests?.[checkName] !== false) ||
-						(options?.disableTests?.[checkName] ?? false);
-					if (!isSkipped) {
-						return testEntries[j];
-					}
-				}
-				return undefined;
-			}
-			// Utility to find the previous test entry that is not skipped
-			function findPreviousNonSkippedTest(startIndex: number) {
-				for (let j = startIndex - 1; j >= 0; j--) {
-					const checkName = testEntries[j]!.name;
-					const isSkipped =
-						(allDisabled && options?.disableTests?.[checkName] !== false) ||
-						(options?.disableTests?.[checkName] ?? false);
-					if (!isSkipped) {
-						return testEntries[j];
-					}
-				}
-			}
+			// Track the current group's migration options
+			let currentGroupMigrationOptions: BetterAuthOptions | null | undefined = null;
 
 			for (let i = 0; i < testEntries.length; i++) {
 				const { name: testName, testFn, migrateBetterAuth } = testEntries[i]!;
-				const previousTest = findPreviousNonSkippedTest(i);
-				const previousTestMigrationOptions = previousTest?.migrateBetterAuth;
+
+				// Find which group this test belongs to
+				const testGroup = testGroups.find((group) =>
+					group.testIndices.includes(i),
+				);
+				const isFirstInGroup =
+					testGroup && testGroup.testIndices[0] === i;
 
 				let shouldSkip =
 					(allDisabled && options?.disableTests?.[testName] !== false) ||
@@ -753,17 +795,34 @@ export const createTestSuite = <
 						// Apply migration options before test runs
 						await (async () => {
 							if (shouldSkip) return;
+
 							const thisMigration = deepmerge(
 								config.defaultBetterAuthOptions || {},
 								migrateBetterAuth || {},
 							);
-							if (migrateBetterAuth) {
-								await applyOptionsAndMigrate(thisMigration, true);
+
+							// If this is the first test in a group, migrate to the group's options
+							if (isFirstInGroup && testGroup) {
+								const groupMigrationOptions = testGroup.migrationOptions;
+								const groupFinalOptions = deepmerge(
+									config.defaultBetterAuthOptions || {},
+									groupMigrationOptions || {},
+								);
+
+								// Only migrate if the group's options are different from current state
+								if (
+									!deepEqual(currentGroupMigrationOptions, groupMigrationOptions)
+								) {
+									await applyOptionsAndMigrate(groupFinalOptions, true);
+									currentGroupMigrationOptions = groupMigrationOptions;
+								}
 							}
-							// if the last test isnt' the same as this test migrations, then we run migrations again to get up to date!
-							// this can happen if this test doesnt use `migrateBetterAuth` option, but the previous test does.
-							if (!deepEqual(previousTestMigrationOptions, thisMigration)) {
+							// If this test is not in a group or not first in group, check if migration is needed
+							else if (
+								!deepEqual(currentGroupMigrationOptions, migrateBetterAuth)
+							) {
 								await applyOptionsAndMigrate(thisMigration, true);
+								currentGroupMigrationOptions = migrateBetterAuth;
 							}
 						})();
 
