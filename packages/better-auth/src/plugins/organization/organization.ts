@@ -122,10 +122,6 @@ export type OrganizationEndpoints<O extends OrganizationOptions> = {
 };
 
 const createHasPermission = <O extends OrganizationOptions>(options: O) => {
-	if (options.teams?.enabled && options.teams.keepActiveTeam) {
-		options.keepActiveOrganization = true;
-	}
-
 	type DefaultStatements = typeof defaultStatements;
 	type Statements = O["ac"] extends AccessControl<infer S>
 		? S
@@ -429,6 +425,9 @@ export function organization<O extends OrganizationOptions>(
 export function organization<O extends OrganizationOptions>(
 	options?: O | undefined,
 ): any {
+	if (options?.teams?.enabled && options.teams.keepActiveTeam) {
+		options.keepActiveOrganization = true;
+	}
 	let endpoints = {
 		/**
 		 * ### Endpoint
@@ -1214,7 +1213,10 @@ export function organization<O extends OrganizationOptions>(
 
 						const adapter = getOrgAdapter(ctx.context, options);
 						const orgs = await adapter.listOrganizations(session.user.id);
-						if (orgs.includes(ctx.body.organizationId) && orgs.length === 1) {
+						if (
+							orgs.some(({ id }) => ctx.body.organizationId === id) &&
+							orgs.length === 1
+						) {
 							throw new APIError("BAD_REQUEST", {
 								message:
 									"You cannot delete your only organization. Please create another organization and before deleting this one.",
@@ -1262,7 +1264,6 @@ export function organization<O extends OrganizationOptions>(
 						if (options?.defaultOrganization?.enabled) {
 							const adapter = getOrgAdapter(ctx.context, options);
 							const orgs = await adapter.listOrganizations(session.user.id);
-							// Since the user can implicitly sign up via social providers we check that the user always has at least one organization
 							if (orgs.length === 0) {
 								const slugify = (text: string) => {
 									return text

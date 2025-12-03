@@ -1743,6 +1743,34 @@ describe("auto create organization on sign-up", async () => {
 		});
 		expect(orgs?.length).toBe(1);
 	});
+
+	it("should allow preventing deleting the users last organization", async () => {
+		const headers = new Headers();
+		await client.signIn.email({
+			email: "org-test@test.com",
+			password: "password",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const { data: orgs } = await client.organization.list({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(orgs?.length).toBe(1);
+
+		const deleteRes = await client.organization.delete({
+			organizationId: orgs![0]!.id,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(deleteRes.error).toBeDefined();
+		expect(deleteRes.error?.status).toStrictEqual(400);
+	});
 });
 
 describe("keep active organization / keep active team", async () => {
