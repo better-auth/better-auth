@@ -12,6 +12,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@better-auth/oauth-provider": "workspace:*",
     "@better-auth/passkey": "workspace:*",
     "@better-auth/sso": "workspace:*",
     "@better-auth/stripe": "workspace:*",
