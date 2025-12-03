@@ -1,5 +1,6 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
+import { deepmerge, initGetModelName } from "@better-auth/core/db/adapter";
 import { TTY_COLORS } from "@better-auth/core/env";
 import { afterAll, beforeAll, describe } from "vitest";
 import { getAuthTables } from "../db";
@@ -62,7 +63,8 @@ export const testAdapter = async ({
 	/**
 	 * A test suite to run.
 	 */
-	tests: ReturnType<ReturnType<typeof createTestSuite>>[];
+	tests: ReturnType<ReturnType<typeof 
+    >>[];
 	/**
 	 * A prefix to add to the test suite name.
 	 */
