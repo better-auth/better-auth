@@ -33,6 +33,7 @@ import type {
 } from "./types";
 import { defaultClientSecretHasher } from "./utils";
 import { parsePrompt } from "./utils/prompt";
+import type { OpenAPIParameter } from "better-call";
 
 const getJwtPlugin = (ctx: GenericEndpointContext) => {
 	return ctx.context.options.plugins?.find(
@@ -1589,7 +1590,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 									required: false,
 									schema: { type: "string" },
 								},
-							],
+							] as OpenAPIParameter[],
 							responses: {
 								"302": {
 									description:
