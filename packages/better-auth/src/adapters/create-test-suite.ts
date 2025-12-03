@@ -80,6 +80,14 @@ export type TestSuiteStats = {
 	suiteStartTime: number;
 	suiteDuration: number;
 	suiteName: string;
+	groupingStats?: {
+		totalGroups: number;
+		averageTestsPerGroup: number;
+		largestGroupSize: number;
+		smallestGroupSize: number;
+		groupsWithMultipleTests: number;
+		totalTestsInGroups: number;
+	};
 };
 
 type GenerateFn = <M extends "user" | "session" | "verification" | "account">(
@@ -745,6 +753,40 @@ export const createTestSuite = <
 
 			const testGroups = groupTestsByMigrationOptions();
 
+			// Calculate grouping statistics
+			const calculateGroupingStats = () => {
+				const nonSkippedGroups = testGroups.filter(
+					(group) => group.testIndices.length > 0,
+				);
+				const groupSizes = nonSkippedGroups.map(
+					(group) => group.testIndices.length,
+				);
+
+				if (groupSizes.length === 0) {
+					return {
+						totalGroups: 0,
+						averageTestsPerGroup: 0,
+						largestGroupSize: 0,
+						smallestGroupSize: 0,
+						groupsWithMultipleTests: 0,
+						totalTestsInGroups: 0,
+					};
+				}
+
+				const totalTestsInGroups = groupSizes.reduce((sum, size) => sum + size, 0);
+				const groupsWithMultipleTests = groupSizes.filter((size) => size > 1).length;
+
+				return {
+					totalGroups: nonSkippedGroups.length,
+					averageTestsPerGroup:
+						totalTestsInGroups / nonSkippedGroups.length,
+					largestGroupSize: Math.max(...groupSizes),
+					smallestGroupSize: Math.min(...groupSizes),
+					groupsWithMultipleTests,
+					totalTestsInGroups,
+				};
+			};
+
 			const onFinish = async (testName: string) => {
 				await cleanupCreatedRows();
 
@@ -755,6 +797,7 @@ export const createTestSuite = <
 
 				if (isLastTest) {
 					stats.suiteDuration = performance.now() - stats.suiteStartTime;
+					stats.groupingStats = calculateGroupingStats();
 					await helpers.onTestFinish(stats);
 				}
 			};

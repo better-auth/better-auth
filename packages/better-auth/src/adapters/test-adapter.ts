@@ -258,6 +258,35 @@ export const testAdapter = async ({
 							console.log(
 								`  Suite Duration: ${TTY_COLORS.fg.blue}${stats.suiteDuration.toFixed(2)}ms${TTY_COLORS.reset}`,
 							);
+
+							// Display grouping statistics if available
+							if (stats.groupingStats) {
+								const {
+									totalGroups,
+									averageTestsPerGroup,
+									largestGroupSize,
+									smallestGroupSize,
+									groupsWithMultipleTests,
+								} = stats.groupingStats;
+								console.log(
+									`  Test Groups: ${TTY_COLORS.fg.cyan}${totalGroups}${TTY_COLORS.reset}`,
+								);
+								if (totalGroups > 0) {
+									console.log(
+										`    Avg Tests/Group: ${TTY_COLORS.fg.cyan}${averageTestsPerGroup.toFixed(2)}${TTY_COLORS.reset}`,
+									);
+									console.log(
+										`    Largest Group: ${TTY_COLORS.fg.cyan}${largestGroupSize}${TTY_COLORS.reset}`,
+									);
+									console.log(
+										`    Smallest Group: ${TTY_COLORS.fg.cyan}${smallestGroupSize}${TTY_COLORS.reset}`,
+									);
+									console.log(
+										`    Groups w/ Multiple Tests: ${TTY_COLORS.fg.cyan}${groupsWithMultipleTests}${TTY_COLORS.reset}`,
+									);
+								}
+							}
+
 							console.log("");
 						}
 
@@ -266,6 +295,25 @@ export const testAdapter = async ({
 							totalMigrations > 0
 								? (totalMigrationTime / totalMigrations).toFixed(2)
 								: "0.00";
+
+						// Calculate total grouping statistics
+						const totalGroups = allSuiteStats.reduce(
+							(sum, stats) => sum + (stats.groupingStats?.totalGroups || 0),
+							0,
+						);
+						const totalGroupsWithMultipleTests = allSuiteStats.reduce(
+							(sum, stats) =>
+								sum + (stats.groupingStats?.groupsWithMultipleTests || 0),
+							0,
+						);
+						const totalTestsInGroups = allSuiteStats.reduce(
+							(sum, stats) =>
+								sum + (stats.groupingStats?.totalTestsInGroups || 0),
+							0,
+						);
+						const avgTestsPerGroup =
+							totalGroups > 0 ? totalTestsInGroups / totalGroups : 0;
+
 						console.log(`${TTY_COLORS.fg.cyan}${separator}`);
 						console.log(
 							`${TTY_COLORS.fg.cyan}${TTY_COLORS.bright}TOTALS${TTY_COLORS.reset}`,
@@ -282,6 +330,20 @@ export const testAdapter = async ({
 						console.log(
 							`  Total Duration: ${TTY_COLORS.fg.blue}${totalDuration.toFixed(2)}ms${TTY_COLORS.reset}`,
 						);
+
+						// Display total grouping statistics
+						if (totalGroups > 0) {
+							console.log(
+								`  Total Test Groups: ${TTY_COLORS.fg.cyan}${totalGroups}${TTY_COLORS.reset}`,
+							);
+							console.log(
+								`    Avg Tests/Group: ${TTY_COLORS.fg.cyan}${avgTestsPerGroup.toFixed(2)}${TTY_COLORS.reset}`,
+							);
+							console.log(
+								`    Groups w/ Multiple Tests: ${TTY_COLORS.fg.cyan}${totalGroupsWithMultipleTests}${TTY_COLORS.reset}`,
+							);
+						}
+
 						console.log(
 							`${TTY_COLORS.fg.cyan}${separator}${TTY_COLORS.reset}\n`,
 						);
