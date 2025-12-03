@@ -13,6 +13,19 @@ import type {
 
 export interface OrganizationOptions {
 	/**
+	 * Whether to automatically create a new organization during sign-up.
+	 *
+	 * @default false
+	 */
+	autoCreateOnSignUp?: boolean | undefined;
+	/**
+	 * Determines whether the user's active organization should persist after sign-out.
+	 * If enabled, the same organization will be restored automatically on the next sign-in.
+	 *
+	 * @default false
+	 */
+	keepActiveOrganization?: boolean | undefined;
+	/**
 	 * Configure whether new users are able to create new organizations.
 	 * You can also pass a function that returns a boolean.
 	 *
@@ -94,6 +107,15 @@ export interface OrganizationOptions {
 		 * Enable team features.
 		 */
 		enabled: boolean;
+		/**
+		 * Determines whether the user's active team should persist after sign-out.
+		 * If enabled, the same team will be restored automatically on the next sign-in.
+		 *
+		 * Note: This setting overrides the top-level `keepActiveOrganization` option when teams are enabled.
+		 *
+		 * @default false
+		 */
+		keepActiveTeam?: boolean | undefined;
 		/**
 		 * Default team configuration
 		 */
@@ -259,6 +281,12 @@ export interface OrganizationOptions {
 	 */
 	schema?:
 		| {
+				user?: {
+					fields?: {
+						lastOrganizationId?: string | undefined;
+						lastTeamId?: string | undefined;
+					};
+				};
 				session?: {
 					fields?: {
 						activeOrganizationId?: string;

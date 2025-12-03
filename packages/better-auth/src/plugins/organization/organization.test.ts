@@ -1696,6 +1696,116 @@ describe("owner can update roles", async () => {
 		};
 });
 
+describe("auto create organization on sign-up", async () => {
+	const { client, cookieSetter } = await getTestInstance({
+		emailAndPassword: {
+			enabled: true,
+		},
+		plugins: [
+			organization({
+				autoCreateOnSignUp: true,
+			}),
+		],
+	}, {
+	  clientOptions: {
+			plugins: [organizationClient()]
+		},
+	  disableTestUser: true
+	});
+
+	it("should create organization on email sign-up", async () => {
+		const headers = new Headers();
+	  await client.signUp.email({
+  		email: "org-test@test.com",
+  		password: "password",
+  		name: "Org Test",
+			fetchOptions: {
+			  onSuccess: cookieSetter(headers),
+			}
+		});
+
+		const { data } = await client.getSession({
+		  fetchOptions: {
+				headers,
+			}
+		});
+		expect(data?.session.activeOrganizationId).toBeDefined();
+
+		const { data: orgs } = await client.organization.list({
+  		fetchOptions: {
+    		headers,
+  		}
+		});
+		expect(orgs?.length).toBe(1);
+	})
+});
+
+describe("keep active organization / keep active team", async () => {
+     const { auth, client, signInWithTestUser } = await getTestInstance({
+   		emailAndPassword: {
+   			enabled: true,
+   		},
+   		plugins: [
+   			organization({
+   				keepActiveOrganization: true,
+   				teams: {
+     				enabled: true,
+     				keepActiveTeam: true,
+   				}
+   			}),
+   		],
+   	}, {
+   	  clientOptions: {
+   			plugins: [organizationClient()]
+   		},
+   	});
+
+  it("should store last active organization and team after sign-out", async () => {
+     const { user: testUser, headers } = await signInWithTestUser();
+
+     const { data: org } = await client.organization.create({
+       name: "test-org",
+       slug: "test-org-1",
+       userId: testUser.id,
+       fetchOptions: {
+         headers,
+       }
+     });
+
+     expect(org).toBeDefined();
+
+     await client.organization.setActive({
+       organizationId: org!.id,
+       fetchOptions: {
+         headers,
+       }
+     });
+
+     await client.signOut({
+       fetchOptions: {
+         headers,
+       },
+     });
+
+     const ctx = await auth.$context;
+     const user = await ctx.internalAdapter.findUserById(testUser.id) as Record<string, any>;
+     expect(user?.lastOrganizationId).toStrictEqual(org!.id);
+     expect(user?.lastTeamId).toBeTypeOf("string");
+   });
+
+  it("should restore last active organization and team after sign-in", async () => {
+    let testUser = await signInWithTestUser();
+
+    const { data: session} = await client.getSession({
+      fetchOptions: {
+        headers: testUser.headers,
+      }
+    });
+
+    expect(session?.session.activeOrganizationId).toBeTypeOf("string");
+  })
+})
+
 describe("types", async (it) => {
 	const { auth } = await getTestInstance({
 		plugins: [organization({})],
