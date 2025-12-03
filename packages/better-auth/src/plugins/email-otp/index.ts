@@ -684,9 +684,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: ERROR_CODES.INVALID_OTP,
 						});
 					}
-					await ctx.context.internalAdapter.deleteVerificationValue(
-						verificationValue.id,
-					);
 					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					if (!user) {
 						/**
@@ -733,6 +730,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							},
 						});
 					}
+					await ctx.context.internalAdapter.deleteVerificationValue(
+						verificationValue.id,
+					);
 					const currentSession = await getSessionFromCtx(ctx);
 					if (currentSession && updatedUser.emailVerified) {
 						const dontRememberMeCookie = await ctx.getSignedCookie(
@@ -864,9 +864,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: ERROR_CODES.INVALID_OTP,
 						});
 					}
-					await ctx.context.internalAdapter.deleteVerificationValue(
-						verificationValue.id,
-					);
 					const user = await ctx.context.internalAdapter.findUserByEmail(email);
 					if (!user) {
 						if (opts.disableSignUp) {
@@ -886,6 +883,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							session,
 							user: newUser,
 						});
+						await ctx.context.internalAdapter.deleteVerificationValue(
+							verificationValue.id,
+						);
 						return ctx.json({
 							token: session.token,
 							user: {
@@ -913,6 +913,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						session,
 						user: user.user,
 					});
+					await ctx.context.internalAdapter.deleteVerificationValue(
+						verificationValue.id,
+					);
 					return ctx.json({
 						token: session.token,
 						user: {
@@ -1111,9 +1114,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							message: ERROR_CODES.INVALID_OTP,
 						});
 					}
-					await ctx.context.internalAdapter.deleteVerificationValue(
-						verificationValue.id,
-					);
 					const user = await ctx.context.internalAdapter.findUserByEmail(
 						email,
 						{
@@ -1158,7 +1158,9 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							passwordHash,
 						);
 					}
-
+					await ctx.context.internalAdapter.deleteVerificationValue(
+						verificationValue.id,
+					);
 					if (ctx.context.options.emailAndPassword?.onPasswordReset) {
 						await ctx.context.options.emailAndPassword.onPasswordReset(
 							{
