@@ -158,28 +158,7 @@ export const generateAuthConfigCode = async ({
 		postAuthConfig: "",
 	};
 
-	if (database && database.dependencies.length > 0) {
-		const confirmed: boolean = await getArguments({
-			flag: "install-database-dependencies",
-			question:
-				"Would you like to install the following dependencies: " +
-				database.dependencies.map((x) => chalk.cyanBright(x)).join(", "),
-			description: "The database dependencies to install.",
-			argument: {
-				index: 0,
-				isProperty: false,
-			},
-			isRequired: true,
-			isConformation: true,
-		});
-
-		if (confirmed) {
-			const s = yoctoSpinner({ color: "white" });
-			s.start(`Installing database dependencies...`);
-			await installDependency(database.dependencies);
-			s.success(`Database dependencies installed successfully!`);
-		}
-	}
+	// Database dependencies are now installed in the Configure Database step
 
 	const code: string[] = [
 		segmentedCode.imports,

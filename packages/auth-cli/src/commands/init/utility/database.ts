@@ -91,7 +91,7 @@ const formatAdapterLabel = (adapter: DatabaseAdapter): string => {
 
 /**
  * Get all unique ORMs from the database config
- * Kysely dialects are shown directly instead of grouping under "kysely"
+ * SQLite variants are grouped under a single "SQLite" option
  */
 export const getAvailableORMs = (): Array<{
 	value: string;
@@ -104,12 +104,22 @@ export const getAvailableORMs = (): Array<{
 		adapter?: DatabaseAdapter;
 	}> = [];
 	const seenORMs = new Set<string>();
+	const seenSQLite = false;
 
 	for (const db of databasesConfig) {
 		const dbORM = getORMFromAdapter(db.adapter);
 
-		// If it's a kysely dialect or mongodb, add it directly
-		if (dbORM === "kysely" || dbORM === "mongodb") {
+		// Group all SQLite variants under a single "SQLite" option
+		if (db.adapter.startsWith("sqlite-")) {
+			if (!seenORMs.has("sqlite")) {
+				seenORMs.add("sqlite");
+				options.push({
+					value: "sqlite",
+					label: "SQLite",
+				});
+			}
+		} else if (dbORM === "kysely" || dbORM === "mongodb") {
+			// For non-SQLite kysely dialects and mongodb, add them directly
 			options.push({
 				value: db.adapter,
 				label: formatAdapterLabel(db.adapter),
@@ -125,7 +135,27 @@ export const getAvailableORMs = (): Array<{
 		}
 	}
 
-	return options.sort((a, b) => a.value.localeCompare(b.value));
+	// Custom sort order: SQLite, PostgreSQL, MySQL, Drizzle, Prisma, MongoDB, MSSQL
+	const sortOrder = [
+		"sqlite",
+		"postgresql",
+		"mysql",
+		"drizzle",
+		"prisma",
+		"mongodb",
+		"mssql",
+	];
+
+	return options.sort((a, b) => {
+		const aIndex = sortOrder.indexOf(a.value);
+		const bIndex = sortOrder.indexOf(b.value);
+		if (aIndex !== -1 && bIndex !== -1) {
+			return aIndex - bIndex;
+		}
+		if (aIndex !== -1) return -1;
+		if (bIndex !== -1) return 1;
+		return a.value.localeCompare(b.value);
+	});
 };
 
 /**

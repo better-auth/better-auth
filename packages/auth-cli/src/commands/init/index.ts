@@ -1,3 +1,4 @@
+import { exec } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import {
@@ -10,13 +11,8 @@ import prompts from "prompts";
 import yoctoSpinner from "yocto-spinner";
 import z from "zod";
 import { possibleAuthConfigPaths } from "../../utils/config-paths";
-import { hasDependency } from "../../utils/get-package-json";
-import {
-	enterAlternateScreen,
-	exitAlternateScreen,
-	generateSecretHash,
-	tryCatch,
-} from "../../utils/utilts";
+import { getPackageJson, hasDependency } from "../../utils/get-package-json";
+import { generateSecretHash, tryCatch } from "../../utils/utilts";
 import type { DatabaseAdapter } from "./configs/databases.config";
 import type { Framework } from "./configs/frameworks.config";
 import { FRAMEWORKS } from "./configs/frameworks.config";
@@ -32,6 +28,7 @@ import { generateAuthClientConfigCode } from "./generate-auth-client";
 import { HeroRenderer } from "./hero-renderer";
 import {
 	getAvailableORMs,
+	getDatabaseCode,
 	getDialectsForORM,
 	isDirectAdapter,
 	isKyselyDialect,
@@ -115,14 +112,14 @@ const log = {
 };
 
 const loopHero = async (phases: string[]) => {
-	const title = chalk.bold("Better Auth CLI");
+	const title = chalk.bold("Better Auth");
 	const renderer = new HeroRenderer(title);
 
 	let phaseIndex = -1;
 	for (const phase of phases) {
 		phaseIndex++;
-		await renderer.typeText(phase);
-		await renderer.blink(500);
+		await renderer.typeText(phase, { delay: 40, spaceDelay: 40 });
+		await renderer.blink(300);
 		if (phaseIndex < phases.length - 1) {
 			await renderer.clearSubtitle(phase);
 		}
@@ -207,32 +204,30 @@ export async function initAction(opts: any) {
 	const options = initActionOptionsSchema.parse(opts);
 	const cwd = options.cwd;
 
-	enterAlternateScreen();
-
-	const phases = ["Welcome to the Better Auth CLI!", "Let's get started!"];
-
-	let renderer = await loopHero(phases);
-	await renderer.clearSubtitle(phases[phases.length - 1]!);
-	await renderer.blink(150);
+	// Check if package.json exists (not an empty project)
+	const { data: packageJson } = await getPackageJson(cwd);
+	if (!packageJson) {
+		const pm = options.packageManager || "npm";
+		const initCommand =
+			pm === "bun" ? "bun init" : pm === "yarn" ? "yarn init" : `${pm} init`;
+		console.error(
+			chalk.red(
+				`\nThis appears to be an empty project. No package.json found.\n`,
+			),
+		);
+		console.error(
+			chalk.yellow(
+				`Please initialize a new project first by running:\n\n  ${chalk.bold(initCommand)}\n`,
+			),
+		);
+		process.exit(1);
+	}
 
 	let currentStep = 0;
 
 	const nextStep = async (text: string) => {
-		if (currentStep === 0) {
-			await new Promise((resolve) => setTimeout(resolve, 1000));
-		}
 		currentStep++;
-		renderer.clear();
-		console.clear();
-		if (renderer.isStopped()) {
-			const title = chalk.bold("Better Auth CLI");
-			renderer = new HeroRenderer(title);
-		} else {
-			renderer.reset();
-		}
-		await renderer.typeText(`${currentStep}. ${text}`, { skipAnimation: true });
-		renderer.pause();
-		renderer.finalize();
+		console.log(chalk.white(`\n${currentStep}. ${text}`));
 	};
 
 	// Get package manager information
@@ -248,128 +243,29 @@ export async function initAction(opts: any) {
 		return { pm, pmString };
 	})();
 
-	// Install Better-Auth
+	// Install Better Auth
 	await (async () => {
 		const hasBetterAuth = await hasDependency(cwd, "better-auth");
 		if (hasBetterAuth) return;
-		await nextStep("Install Better-Auth");
+		await nextStep("Install Better Auth");
 
 		const { shouldInstallBetterAuth } = await prompts({
 			type: "confirm",
 			name: "shouldInstallBetterAuth",
-			message: `Would you like to install Better-Auth using ${chalk.bold(pmString)}?`,
+			message: `Would you like to install better-auth using ${chalk.bold(pm)}?`,
 			initial: true,
 		});
 
 		if (shouldInstallBetterAuth) {
 			const s = yoctoSpinner({
-				text: "Installing Better-Auth...",
+				text: "Installing Better Auth...",
 				color: "white",
 			});
 			s.start();
 			await installDependency("better-auth", { cwd, pm });
-			s.success(`Better-Auth installed successfully!`);
+			s.success(`Better Auth installed successfully!`);
 		}
 	})();
-
-	// Select the framework to use.
-	const framework: Framework = await (async () => {
-		await nextStep("Select Framework");
-
-		const detectedFramework = await autoDetectFramework(cwd);
-
-		if (detectedFramework) {
-			const confirmed = await confirm({
-				message: `Is ${chalk.bold(detectedFramework.name)} your project's framework?`,
-			});
-			if (isCancel(confirmed)) {
-				cancel("✋ Operation cancelled.");
-				process.exit(0);
-			}
-			if (confirmed) return detectedFramework;
-		}
-
-		const selectedFramework = await select({
-			message: `Select the framework you are using:`,
-			options: FRAMEWORKS.map((framework) => ({
-				value: framework.id,
-				label: framework.name,
-			})),
-			initialValue: "next",
-		});
-		if (isCancel(selectedFramework)) {
-			cancel("✋ Operation cancelled.");
-			process.exit(0);
-		}
-		return FRAMEWORKS.find((framework) => framework.id === selectedFramework)!;
-	})();
-
-	// Prompt for auth config file location
-	let authConfigFilePath: string | null = null;
-	const hasAuthConfigAlready = await (async () => {
-		for (const _path of possibleAuthConfigPaths) {
-			const fullPath = path.join(cwd, _path);
-			const { error } = await tryCatch(fs.access(fullPath, fs.constants.F_OK));
-			if (!error) {
-				authConfigFilePath = fullPath;
-				return true;
-			}
-		}
-		return false;
-	})();
-
-	if (!hasAuthConfigAlready) {
-		await nextStep("Configure Auth File Location");
-
-		const { data: allFiles, error } = await tryCatch(fs.readdir(cwd, "utf-8"));
-		if (error) {
-			log.error(`Failed to read directory: ${error.message}`);
-			process.exit(1);
-		}
-		let defaultAuthConfigPath = path.join(cwd, "lib", "auth.ts");
-
-		if (allFiles.some((node) => node === "src")) {
-			defaultAuthConfigPath = path.join(cwd, "src", "lib", "auth.ts");
-		}
-
-		const { filePath } = await prompts({
-			type: "text",
-			name: "filePath",
-			message: `Where would you like to create the auth config file?`,
-			initial: defaultAuthConfigPath,
-		});
-
-		if (isCancel(filePath)) {
-			cancel("✋ Operation cancelled.");
-			process.exit(0);
-		}
-
-		authConfigFilePath = filePath;
-
-		// Generate minimal boilerplate auth config immediately
-		const boilerplateCode = `import { betterAuth } from "better-auth";
-
-export const auth = betterAuth({
-	// Configuration will be added here
-});
-`;
-		const { error: mkdirError } = await tryCatch(
-			fs.mkdir(path.dirname(filePath), { recursive: true }),
-		);
-		if (mkdirError) {
-			const error = `Failed to create auth directory at ${path.dirname(filePath)}: ${mkdirError.message}`;
-			log.error(error);
-			process.exit(1);
-		}
-		const { error: writeFileError } = await tryCatch(
-			fs.writeFile(filePath, boilerplateCode, "utf-8"),
-		);
-		if (writeFileError) {
-			const error = `Failed to write auth file at ${filePath}: ${writeFileError.message}`;
-			log.error(error);
-			process.exit(1);
-		}
-	}
 
 	// Handle ENV files
 	await (async () => {
@@ -377,7 +273,7 @@ export const auth = betterAuth({
 
 		// If no existing ENV files, ask to allow creation of a new one.
 		if (envFiles.length === 0) {
-			await nextStep("Configure Environment Variables");
+			await nextStep("Set Environment Variables");
 
 			const shouldCreateEnv = await confirm({
 				message: `Would you like to create a .env file with the necessary environment variables?`,
@@ -390,7 +286,7 @@ export const auth = betterAuth({
 				const { providedSecret } = await prompts({
 					type: "text",
 					name: "providedSecret",
-					message: `Enter a custom better-auth secret: ${chalk.dim("(Press Enter to auto generate)")}`,
+					message: `Provider secret (used for encryption, hashing, and signing). ${chalk.dim("(Press Enter to auto generate)")}`,
 				});
 				if (isCancel(providedSecret)) {
 					cancel("✋ Operation cancelled.");
@@ -399,7 +295,7 @@ export const auth = betterAuth({
 				const { providedURL } = await prompts({
 					type: "text",
 					name: "providedURL",
-					message: `Enter a custom better-auth URL:`,
+					message: `Provider base URL:`,
 					initial: "http://localhost:3000",
 				});
 				if (isCancel(providedURL)) {
@@ -426,7 +322,7 @@ export const auth = betterAuth({
 			return;
 		}
 
-		await nextStep("Configure Environment Variables");
+		await nextStep("Set Environment Variables");
 
 		// If only one file is missing env variables, just show confirmation prompt
 		if (missingEnvVars.length === 1) {
@@ -446,7 +342,7 @@ export const auth = betterAuth({
 						const { providedSecret } = await prompts({
 							type: "text",
 							name: "providedSecret",
-							message: `Enter a custom better-auth secret: ${chalk.dim("(Press Enter to auto generate)")}`,
+							message: `Provider secret (used for encryption, hashing, and signing). ${chalk.dim("(Press Enter to auto generate)")}`,
 						});
 						if (isCancel(providedSecret)) {
 							cancel("✋ Operation cancelled.");
@@ -459,7 +355,7 @@ export const auth = betterAuth({
 						const { providedURL } = await prompts({
 							type: "text",
 							name: "providedURL",
-							message: `Enter a custom better-auth URL:`,
+							message: `Provider base URL:`,
 							initial: "http://localhost:3000",
 						});
 						if (isCancel(providedURL)) {
@@ -506,9 +402,112 @@ export const auth = betterAuth({
 		}
 	})();
 
+	// Auto-detect framework silently
+	const detectedFramework = await autoDetectFramework(cwd);
+	const framework: Framework =
+		detectedFramework || FRAMEWORKS.find((f) => f.id === "next")!;
+	const frameworkWasDetected = !!detectedFramework;
+
+	// Prompt for auth config file location
+	let authConfigFilePath: string | null = null;
+	const hasAuthConfigAlready = await (async () => {
+		for (const _path of possibleAuthConfigPaths) {
+			const fullPath = path.join(cwd, _path);
+			const { error } = await tryCatch(fs.access(fullPath, fs.constants.F_OK));
+			if (!error) {
+				authConfigFilePath = fullPath;
+				return true;
+			}
+		}
+		return false;
+	})();
+
+	if (!hasAuthConfigAlready) {
+		await nextStep("Create A Better Auth Instance");
+
+		const { data: allFiles, error } = await tryCatch(fs.readdir(cwd, "utf-8"));
+		if (error) {
+			log.error(`Failed to read directory: ${error.message}`);
+			process.exit(1);
+		}
+
+		// Determine default auth config path based on project structure
+		// Priority: lib/ > root, with src/ prefix if src/ exists
+		const hasSrc = allFiles.some((node) => node === "src");
+		const hasLib = allFiles.some((node) => node === "lib");
+
+		let defaultAuthConfigPath: string;
+		if (hasSrc) {
+			// Check if src/lib exists
+			const { data: srcFiles } = await tryCatch(
+				fs.readdir(path.join(cwd, "src"), "utf-8"),
+			);
+			const hasSrcLib = srcFiles?.some((node) => node === "lib");
+			if (hasSrcLib) {
+				defaultAuthConfigPath = path.join(cwd, "src", "lib", "auth.ts");
+			} else {
+				defaultAuthConfigPath = path.join(cwd, "src", "auth.ts");
+			}
+		} else if (hasLib) {
+			defaultAuthConfigPath = path.join(cwd, "lib", "auth.ts");
+		} else {
+			defaultAuthConfigPath = path.join(cwd, "auth.ts");
+		}
+
+		// Convert absolute path to relative path for display
+		const relativeDefaultPath = path.relative(cwd, defaultAuthConfigPath);
+
+		const { filePath } = await prompts({
+			type: "text",
+			name: "filePath",
+			message: `Where would you like to create the auth instance?`,
+			initial: relativeDefaultPath,
+		});
+
+		if (isCancel(filePath)) {
+			cancel("✋ Operation cancelled.");
+			process.exit(0);
+		}
+
+		// Convert relative path back to absolute path
+		// Remove leading slash if present (user might enter /lib/auth.ts meaning relative to project root)
+		const cleanPath = filePath.startsWith("/") ? filePath.slice(1) : filePath;
+		const absoluteFilePath = path.isAbsolute(cleanPath)
+			? cleanPath
+			: path.join(cwd, cleanPath);
+
+		authConfigFilePath = absoluteFilePath;
+
+		// Generate minimal boilerplate auth config immediately
+		const boilerplateCode = `import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+	// Configuration will be added here
+});
+`;
+		const { error: mkdirError } = await tryCatch(
+			fs.mkdir(path.dirname(absoluteFilePath), { recursive: true }),
+		);
+		if (mkdirError) {
+			const error = `Failed to create auth directory at ${path.dirname(absoluteFilePath)}: ${mkdirError.message}`;
+			log.error(error);
+			process.exit(1);
+		}
+		const { error: writeFileError } = await tryCatch(
+			fs.writeFile(absoluteFilePath, boilerplateCode, "utf-8"),
+		);
+		if (writeFileError) {
+			const error = `Failed to write auth file at ${absoluteFilePath}: ${writeFileError.message}`;
+			log.error(error);
+			process.exit(1);
+		}
+	}
+
 	// Select the database to use.
 	let databaseChoice: "yes" | "stateless" | "skip" | null = null;
 	let database: string | null = null;
+	let shouldGenerateSchema = false;
+	let shouldRunMigration = false;
 	await (async () => {
 		await nextStep("Configure Database");
 
@@ -544,9 +543,47 @@ export const auth = betterAuth({
 				process.exit(0);
 			}
 
+			// If "sqlite" was selected, show SQLite variant options
+			if (selectedOption === "sqlite") {
+				// Filter SQLite options based on package manager
+				const sqliteOptions = [];
+
+				// Always show better-sqlite3
+				sqliteOptions.push({
+					value: "sqlite-better-sqlite3",
+					label: "better-sqlite3",
+				});
+
+				// Show Bun SQLite only if using Bun as package manager or has @types/bun
+				if (pm === "bun") {
+					sqliteOptions.push({
+						value: "sqlite-bun",
+						label: "Bun SQLite",
+					});
+				} else {
+					// Show Node SQLite only if NOT using Bun
+					sqliteOptions.push({
+						value: "sqlite-node",
+						label: "Node SQLite",
+					});
+				}
+
+				const sqliteVariants = await select({
+					message: `Select SQLite driver:`,
+					options: sqliteOptions,
+				});
+				if (isCancel(sqliteVariants)) {
+					cancel("✋ Operation cancelled.");
+					process.exit(0);
+				}
+				database = sqliteVariants;
+				return;
+			}
+
 			// If a direct adapter (kysely dialect or mongodb) was selected, return it directly
 			if (isDirectAdapter(selectedOption)) {
-				return selectedOption;
+				database = selectedOption;
+				return;
 			}
 
 			// Otherwise, select the database dialect for the chosen ORM
@@ -564,6 +601,102 @@ export const auth = betterAuth({
 			}
 
 			database = selectedDialect;
+		}
+
+		// Install database dependencies if a database was selected
+		if (database) {
+			const databaseConfig = getDatabaseCode(database as DatabaseAdapter);
+			if (databaseConfig && databaseConfig.dependencies.length > 0) {
+				const { shouldInstallDeps } = await prompts({
+					type: "confirm",
+					name: "shouldInstallDeps",
+					message: `Would you like to install the following dependencies: ${databaseConfig.dependencies.map((x) => chalk.cyan(x)).join(", ")}?`,
+					initial: true,
+				});
+
+				if (isCancel(shouldInstallDeps)) {
+					cancel("✋ Operation cancelled.");
+					process.exit(0);
+				}
+
+				if (shouldInstallDeps) {
+					const s = yoctoSpinner({
+						text: "Installing database dependencies...",
+						color: "white",
+					});
+					s.start();
+					for (const dep of databaseConfig.dependencies) {
+						await installDependency(dep, { cwd, pm });
+					}
+					s.success("Database dependencies installed successfully!");
+				}
+			}
+
+			// Handle schema generation and migration
+			const dbString = String(database);
+			const isDrizzle = dbString.startsWith("drizzle-");
+			const isPrisma = dbString.startsWith("prisma-");
+			const isKysely = isKyselyDialect(dbString);
+			const isMongoDB = dbString === "mongodb";
+
+			// For ORMs (Drizzle, Prisma), ask to generate schema
+			if (isDrizzle || isPrisma) {
+				const response = await prompts({
+					type: "confirm",
+					name: "shouldGenerate",
+					message: `Would you like to generate the database schema?`,
+					initial: true,
+				});
+
+				if (isCancel(response.shouldGenerate)) {
+					cancel("✋ Operation cancelled.");
+					process.exit(0);
+				}
+
+				shouldGenerateSchema = response.shouldGenerate || false;
+
+				if (shouldGenerateSchema) {
+					console.log(
+						chalk.dim(
+							`\n  Schema will be generated after auth configuration is complete.\n`,
+						),
+					);
+				}
+			}
+
+			// For Kysely dialects (SQLite, MySQL, PostgreSQL, MSSQL), ask to run migration
+			if (isKysely) {
+				const response = await prompts({
+					type: "confirm",
+					name: "shouldMigrate",
+					message: `Would you like to run database migration?`,
+					initial: true,
+				});
+
+				if (isCancel(response.shouldMigrate)) {
+					cancel("✋ Operation cancelled.");
+					process.exit(0);
+				}
+
+				shouldRunMigration = response.shouldMigrate || false;
+
+				if (shouldRunMigration) {
+					console.log(
+						chalk.dim(
+							`\n  Migration will run after auth configuration is complete.\n`,
+						),
+					);
+				}
+			}
+
+			// For MongoDB, just show info
+			if (isMongoDB) {
+				console.log(
+					chalk.dim(
+						`\n  MongoDB adapter will automatically create collections as needed.\n`,
+					),
+				);
+			}
 		}
 	})();
 
@@ -699,7 +832,6 @@ export const auth = betterAuth({
 			fs.writeFile(authConfigFilePath, authConfigCode, "utf-8"),
 		);
 		if (writeFileError) {
-			exitAlternateScreen();
 			const error = `Failed to write auth file at ${authConfigFilePath}: ${writeFileError.message}`;
 			log.error(error);
 			process.exit(1);
@@ -720,8 +852,32 @@ export const auth = betterAuth({
 		const isPrisma = dbString.startsWith("prisma-");
 		const isKysely = isKyselyDialect(dbString);
 
-		// Skip Kysely migrations (require real database connection)
-		if (isKysely) {
+		// Handle Kysely migrations
+		if (isKysely && shouldRunMigration) {
+			const s = yoctoSpinner({
+				text: "Running database migration...",
+				color: "white",
+			});
+			s.start();
+
+			await new Promise<void>((resolve, reject) => {
+				exec(
+					`npx @better-auth/cli migrate`,
+					{ cwd },
+					(error, stdout, stderr) => {
+						if (error) {
+							s.stop();
+							log.error(`Failed to run migration: ${error.message}`);
+							if (stderr) log.error(stderr);
+							reject(error);
+							return;
+						}
+						s.success("Database migration completed successfully!");
+						if (stdout) console.log(stdout);
+						resolve();
+					},
+				);
+			});
 			return;
 		}
 
@@ -730,23 +886,14 @@ export const auth = betterAuth({
 			return;
 		}
 
-		const provider = getDatabaseProvider(dbString);
-		if (!provider) {
-			log.error(`Unable to determine database provider for ${database}`);
+		// Only generate schema if user chose to
+		if (!shouldGenerateSchema) {
 			return;
 		}
 
-		const shouldGenerateSchema = await confirm({
-			message: `Would you like us to generate the database schema for you?`,
-			initial: true,
-		});
-
-		if (isCancel(shouldGenerateSchema)) {
-			cancel("✋ Operation cancelled.");
-			process.exit(0);
-		}
-
-		if (!shouldGenerateSchema) {
+		const provider = getDatabaseProvider(dbString);
+		if (!provider) {
+			log.error(`Unable to determine database provider for ${database}`);
 			return;
 		}
 
@@ -845,12 +992,61 @@ export const auth = betterAuth({
 			);
 		} catch (error) {
 			s.stop();
-			exitAlternateScreen();
 			log.error(
 				`Failed to generate schema: ${error instanceof Error ? error.message : String(error)}`,
 			);
 			process.exit(1);
 		}
+	})();
+
+	// Generate the route handler file.
+	await (async () => {
+		// Skip route handler generation if framework wasn't detected
+		if (!frameworkWasDetected) {
+			return;
+		}
+
+		if (!framework.routeHandler) return;
+		const { routeHandler } = framework;
+
+		const fullPath = path.resolve(cwd, routeHandler.path);
+		const access = fs.access(fullPath, fs.constants.F_OK);
+		const { error } = await tryCatch(access);
+
+		if (!error) {
+			return;
+		}
+		await nextStep("Generate Route Handler");
+
+		const { filePath } = await prompts({
+			type: "text",
+			name: "filePath",
+			message: `Enter the path to the route handler file:`,
+			initial: fullPath,
+		});
+		if (isCancel(filePath)) {
+			cancel("✋ Operation cancelled.");
+			process.exit(0);
+		}
+
+		const mkdir = fs.mkdir(path.dirname(filePath), { recursive: true });
+		const { error: mkdirError } = await tryCatch(mkdir);
+		if (mkdirError) {
+			const error = `Failed to create directory at ${path.dirname(filePath)}: ${mkdirError.message}`;
+			log.error(error);
+			process.exit(1);
+		}
+
+		const writeFile = fs.writeFile(filePath, routeHandler.code, "utf-8");
+		const { error: writeFileError } = await tryCatch(writeFile);
+		if (writeFileError) {
+			const error = `Failed to write file at ${filePath}: ${writeFileError.message}`;
+			log.error(error);
+			process.exit(1);
+		}
+
+		const info = "Route handler file created!";
+		return log.success(info);
 	})();
 
 	// Generate the `auth-client.ts` file.
@@ -923,63 +1119,18 @@ export const auth = betterAuth({
 		}
 	})();
 
-	// Generate the route handler file.
-	await (async () => {
-		if (!framework.routeHandler) return;
-		const { routeHandler } = framework;
-
-		const fullPath = path.resolve(cwd, routeHandler.path);
-		const access = fs.access(fullPath, fs.constants.F_OK);
-		const { error } = await tryCatch(access);
-
-		if (!error) {
-			return;
-		}
-		await nextStep("Generate Route Handler");
-
-		const { filePath } = await prompts({
-			type: "text",
-			name: "filePath",
-			message: `Enter the path to the route handler file:`,
-			initial: fullPath,
-		});
-		if (isCancel(filePath)) {
-			cancel("✋ Operation cancelled.");
-			process.exit(0);
-		}
-
-		const mkdir = fs.mkdir(path.dirname(filePath), { recursive: true });
-		const { error: mkdirError } = await tryCatch(mkdir);
-		if (mkdirError) {
-			const error = `Failed to create directory at ${path.dirname(filePath)}: ${mkdirError.message}`;
-			log.error(error);
-			process.exit(1);
-		}
-
-		const writeFile = fs.writeFile(filePath, routeHandler.code, "utf-8");
-		const { error: writeFileError } = await tryCatch(writeFile);
-		if (writeFileError) {
-			const error = `Failed to write file at ${filePath}: ${writeFileError.message}`;
-			log.error(error);
-			process.exit(1);
-		}
-
-		const info = "Route handler file created!";
-		return log.success(info);
-	})();
-
-	exitAlternateScreen();
-	const output = renderer.buildOutput(
-		"Better Auth successfully initialized! 🚀",
-		{ borderless: true },
+	console.log(
+		chalk.green(`\n✔ `) + chalk.bold("Success! ") + "Project setup complete.\n",
 	);
-	renderer.destroy();
-	console.log(`\n${output}\n`);
-	console.log(chalk.dim(chalk.bold(`Next Steps:`)));
+	console.log(chalk.bold("Next steps:"));
+
+	let nextStepNum = 1;
 
 	if (databaseChoice === "yes" && database) {
-		const step1 = `1. Set up your database with nessesary enviroment variables.`;
-		console.log(chalk.dim(step1));
+		console.log(
+			`  ${nextStepNum}. Set up your database with necessary environment variables`,
+		);
+		nextStepNum++;
 
 		// Determine migration command based on database type
 		const dbString = String(database);
@@ -989,19 +1140,29 @@ export const auth = betterAuth({
 
 		// Only show migration tip for Drizzle, Prisma, or Kysely
 		if (isDrizzle || isPrisma || isKysely) {
-			let step2: string;
+			let command: string;
 			if (isDrizzle) {
-				step2 = `2. Run ${chalk.greenBright("npx drizzle-kit push")} or ${chalk.greenBright("npx drizzle-kit migrate")} to apply the schema to your database.`;
+				command = "npx drizzle-kit push";
 			} else if (isPrisma) {
-				step2 = `2. Run ${chalk.greenBright("npx prisma migrate dev")} or ${chalk.greenBright("npx prisma db push")} to apply the schema to your database.`;
-			} else if (isKysely) {
-				step2 = `2. Run ${chalk.greenBright("npx @better-auth/cli migrate")} to apply the schema to your database.`;
+				command = "npx prisma migrate dev";
 			} else {
-				// This shouldn't happen, but fallback
-				step2 = `2. Run ${chalk.greenBright("npx @better-auth/cli migrate")} to apply the schema to your database.`;
+				command = "npx @better-auth/cli migrate";
 			}
-			console.log(chalk.dim(step2));
+			console.log(
+				`  ${nextStepNum}. Run ${chalk.cyan(command)} to apply schema`,
+			);
+			nextStepNum++;
 		}
+	}
+
+	// Show mount handler instructions if framework wasn't detected
+	if (!frameworkWasDetected) {
+		console.log(`  ${nextStepNum}. Mount the auth handler`);
+		console.log(
+			`     Use ${chalk.cyan("auth.handler")} with a Web API compatible request object\n` +
+				`     Default route: ${chalk.cyan('"/api/auth"')} (configurable via ${chalk.cyan("basePath")})`,
+		);
+		nextStepNum++;
 	}
 
 	if (selectedSocialProviders.length > 0) {
@@ -1012,51 +1173,20 @@ export const auth = betterAuth({
 						provider as keyof typeof SOCIAL_PROVIDER_CONFIGS
 					];
 				if (!config) {
-					// Fallback for unknown providers
 					const providerUpper = provider.toUpperCase();
-					return `\n   - ${chalk.cyan(`${providerUpper}_CLIENT_ID`)} and ${chalk.cyan(`${providerUpper}_CLIENT_SECRET`)}`;
+					return `\n     - ${chalk.cyan(`${providerUpper}_CLIENT_ID`)} and ${chalk.cyan(`${providerUpper}_CLIENT_SECRET`)}`;
 				}
 				const envVars = config.options
 					.map((opt) => chalk.cyan(opt.envVar))
 					.join(" and ");
-				return `\n   - ${envVars}`;
+				return `\n     - ${envVars}`;
 			})
 			.join("");
-		// Determine step number based on whether migration step was shown
-		const dbString = database ? String(database) : "";
-		const isDrizzle = dbString.startsWith("drizzle-");
-		const isPrisma = dbString.startsWith("prisma-");
-		const isKysely = isKyselyDialect(dbString);
-		const showedMigrationStep =
-			databaseChoice === "yes" &&
-			database &&
-			(isDrizzle || isPrisma || isKysely);
-		const stepNum = showedMigrationStep ? "3" : "2";
-		const stepSocial = `${stepNum}. Update your environment variables with valid credentials for your selected social providers:${providerList}`;
-		console.log(chalk.dim(stepSocial));
+		console.log(
+			`  ${nextStepNum}. Add social provider credentials to .env:${providerList}`,
+		);
+		nextStepNum++;
 	}
-
-	// Determine final step number
-	const dbString = database ? String(database) : "";
-	const isDrizzle = dbString.startsWith("drizzle-");
-	const isPrisma = dbString.startsWith("prisma-");
-	const isKysely = isKyselyDialect(dbString);
-	const showedMigrationStep =
-		databaseChoice === "yes" && database && (isDrizzle || isPrisma || isKysely);
-	const stepNumber =
-		selectedSocialProviders.length > 0
-			? showedMigrationStep
-				? "4"
-				: databaseChoice === "yes" && database
-					? "3"
-					: "2"
-			: showedMigrationStep
-				? "3"
-				: databaseChoice === "yes" && database
-					? "2"
-					: "1";
-	const stepFinal = `${stepNumber}. Happy hacking!`;
-	console.log(chalk.dim(stepFinal));
 }
 let initBuilder = new Command("init")
 	.option("-c, --cwd <cwd>", "The working directory.", process.cwd())

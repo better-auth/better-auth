@@ -141,7 +141,7 @@ export class HeroRenderer {
 		const hero = getHero(this.title, displayText);
 		const boxedHero = boxen(hero, {
 			padding: opts?.borderless ? 0 : 1,
-			borderStyle: opts?.borderless ? "none" : "bold",
+			borderStyle: opts?.borderless ? "none" : "classic",
 			margin: opts?.borderless ? {} : { left: 1, right: 1 },
 			fullscreen: opts?.borderless
 				? undefined

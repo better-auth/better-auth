@@ -188,7 +188,7 @@ export const databasesConfig = [
 		code({ additionalOptions }) {
 			return drizzleCode({ provider: "sqlite", additionalOptions });
 		},
-		dependencies: ["drizzle-orm", "better-sqlite3"],
+		dependencies: ["drizzle-orm", "better-sqlite3", "@types/better-sqlite3"],
 	},
 	{
 		adapter: "drizzle-sqlite-bun",
@@ -290,11 +290,11 @@ export const databasesConfig = [
 				isNamedImport: true,
 			},
 		],
-		preCode: `const dialect = new Database("database.sqlite")`,
+		preCode: `const database = new Database("auth.db")`,
 		code({ additionalOptions }) {
-			return kyselyCode({ provider: "sqlite", additionalOptions });
+			return `database`;
 		},
-		dependencies: ["better-sqlite3"],
+		dependencies: ["better-sqlite3", "@types/better-sqlite3"],
 	},
 	{
 		adapter: "sqlite-bun",
@@ -305,9 +305,9 @@ export const databasesConfig = [
 				isNamedImport: true,
 			},
 		],
-		preCode: `const dialect = new Database("database.sqlite")`,
+		preCode: `const database = new Database("auth.db")`,
 		code({ additionalOptions }) {
-			return kyselyCode({ provider: "sqlite", additionalOptions });
+			return `database`;
 		},
 		dependencies: [],
 	},
@@ -320,9 +320,9 @@ export const databasesConfig = [
 				isNamedImport: true,
 			},
 		],
-		preCode: `const dialect = new DatabaseSync("database.sqlite")`,
+		preCode: `const database = new DatabaseSync("auth.db")`,
 		code({ additionalOptions }) {
-			return kyselyCode({ provider: "sqlite", additionalOptions });
+			return `database`;
 		},
 		dependencies: [],
 	},

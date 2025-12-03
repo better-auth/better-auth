@@ -34,5 +34,5 @@ export function exitAlternateScreen() {
 }
 
 export const generateSecretHash = () => {
-	return Crypto.randomBytes(32).toString("hex");
+	return Crypto.randomBytes(16).toString("hex");
 };
