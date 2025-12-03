@@ -1,6 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { describe, expect, it } from "vitest";
 import { getCookieCache, getCookies, getSessionCookie } from "../cookies";
+import { parseUserOutput } from "../db/schema";
 import { getTestInstance } from "../test-utils/test-instance";
 import { parseSetCookieHeader } from "./cookie-utils";
 
@@ -481,36 +482,6 @@ describe("Cookie Cache Field Filtering", () => {
 		expect(cache?.user?.internalNote).toBeUndefined();
 	});
 
-	it("should always preserve the user.id in cookie cache", async () => {
-		const { client, testUser, cookieSetter } = await getTestInstance({
-			secret: "better-auth.secret",
-			session: {
-				cookieCache: {
-					enabled: true,
-				},
-			},
-		});
-		const headers = new Headers();
-		await client.signIn.email(
-			{
-				email: testUser.email,
-				password: testUser.password,
-			},
-			{
-				onSuccess: cookieSetter(headers),
-			},
-		);
-		const request = new Request("https://example.com/api/auth/session", {
-			headers,
-		});
-		const cache = await getCookieCache(request, {
-			secret: "better-auth.secret",
-		});
-		expect(cache).not.toBeNull();
-		expect(cache?.user?.id).toBeDefined();
-		expect(typeof cache?.user?.id).toBe("string");
-	});
-
 	it("should correctly filter multiple user fields based on returned config", async () => {
 		const { client, testUser, cookieSetter } = await getTestInstance({
 			secret: "better-auth.secret",
@@ -571,6 +542,26 @@ describe("Cookie Cache Field Filtering", () => {
 		// Fields with returned: false should be excluded
 		expect(cache?.user?.internalNotes).toBeUndefined();
 		expect(cache?.user?.adminFlags).toBeUndefined();
+	});
+
+	it("should always include id in parseUserOutput", () => {
+		const options = {
+			user: {
+				additionalFields: {
+					id: { type: "string", returned: false },
+				},
+			},
+		} as any;
+		const user = {
+			id: "custom-oauth-id-123",
+			email: "test@example.com",
+			emailVerified: true,
+			createdAt: new Date(),
+			updatedAt: new Date(),
+			name: "Test User",
+		};
+		const result = parseUserOutput(options, user);
+		expect(result.id).toBe("custom-oauth-id-123");
 	});
 
 	it("should reduce cookie size when large fields are excluded", async () => {
