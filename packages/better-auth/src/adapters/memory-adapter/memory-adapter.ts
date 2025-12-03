@@ -4,8 +4,8 @@ import type {
 	DBAdapterDebugLogOption,
 	JoinConfig,
 } from "@better-auth/core/db/adapter";
+import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { logger } from "@better-auth/core/env";
-import { createAdapterFactory } from "../adapter-factory";
 
 export interface MemoryDB {
 	[key: string]: any[];
