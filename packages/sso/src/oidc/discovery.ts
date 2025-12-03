@@ -142,15 +142,10 @@ export async function fetchDiscoveryDocument(
 	timeout: number = DEFAULT_DISCOVERY_TIMEOUT,
 ): Promise<OIDCDiscoveryDocument> {
 	try {
-		const controller = new AbortController();
-		const timeoutId = setTimeout(() => controller.abort(), timeout);
-
 		const response = await betterFetch<OIDCDiscoveryDocument>(url, {
 			method: "GET",
-			signal: controller.signal,
+			timeout,
 		});
-
-		clearTimeout(timeoutId);
 
 		if (response.error) {
 			const status = response.error.status;
