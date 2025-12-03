@@ -1,5 +1,10 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBFieldAttribute, DBFieldType } from "@better-auth/core/db";
+import { getAuthTables } from "@better-auth/core/db";
+import {
+	initGetFieldName,
+	initGetModelName,
+} from "@better-auth/core/db/adapter";
 import { createLogger } from "@better-auth/core/env";
 import type {
 	AlterTableBuilder,
@@ -9,12 +14,9 @@ import type {
 	Kysely,
 } from "kysely";
 import { sql } from "kysely";
-import { initGetFieldName } from "../adapters/adapter-factory/get-field-name";
-import { initGetModelName } from "../adapters/adapter-factory/get-model-name";
 import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import { getSchema } from "./get-schema";
-import { getAuthTables } from "./get-tables";
 
 const postgresMap = {
 	string: ["character varying", "varchar", "text", "uuid"],

@@ -3,6 +3,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import { generateId } from "@better-auth/core/utils";
 import * as z from "zod";
 import {
 	APIError,
@@ -15,7 +16,6 @@ import {
 	setSessionCookie,
 } from "../../cookies";
 import { mergeSchema } from "../../db/schema";
-import { generateId } from "../../utils/id";
 import { ANONYMOUS_ERROR_CODES } from "./error-codes";
 import { schema } from "./schema";
 import type { AnonymousOptions } from "./types";
