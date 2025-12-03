@@ -446,10 +446,30 @@ describe("OIDC Discovery", () => {
 			}
 		});
 
-		it("should throw discovery_timeout on abort", async () => {
-			const abortError = new Error("Aborted");
+		it("should throw discovery_timeout on AbortError (betterFetch throws on timeout)", async () => {
+			// betterFetch throws AbortError when timeout fires, not response.error
+			const abortError = new Error("The operation was aborted");
 			abortError.name = "AbortError";
 			mockBetterFetch.mockRejectedValueOnce(abortError);
+
+			try {
+				await fetchDiscoveryDocument(
+					"https://idp.example.com/.well-known/openid-configuration",
+					100,
+				);
+				expect.fail("Should have thrown");
+			} catch (error) {
+				expect(error).toBeInstanceOf(DiscoveryError);
+				expect((error as DiscoveryError).code).toBe("discovery_timeout");
+			}
+		});
+
+		it("should throw discovery_timeout on HTTP 408 response", async () => {
+			// HTTP 408 comes as response.error (server responded)
+			mockBetterFetch.mockResolvedValueOnce({
+				data: null,
+				error: { status: 408, statusText: "Request Timeout", message: "" },
+			});
 
 			try {
 				await fetchDiscoveryDocument(
@@ -500,9 +520,11 @@ describe("OIDC Discovery", () => {
 		});
 
 		it("should throw discovery_invalid_json for JSON parse errors", async () => {
-			mockBetterFetch.mockRejectedValueOnce(
-				new SyntaxError("Unexpected token"),
-			);
+			// betterFetch doesn't throw SyntaxError - it falls back to raw text
+			mockBetterFetch.mockResolvedValueOnce({
+				data: "<!DOCTYPE html><html>Not JSON</html>",
+				error: null,
+			});
 
 			try {
 				await fetchDiscoveryDocument(
@@ -512,6 +534,9 @@ describe("OIDC Discovery", () => {
 			} catch (error) {
 				expect(error).toBeInstanceOf(DiscoveryError);
 				expect((error as DiscoveryError).code).toBe("discovery_invalid_json");
+				expect((error as DiscoveryError).details?.bodyPreview).toBe(
+					"<!DOCTYPE html><html>Not JSON</html>",
+				);
 			}
 		});
 
