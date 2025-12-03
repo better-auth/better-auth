@@ -11,6 +11,10 @@ on:
       - canary
   merge_group:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -64,6 +68,13 @@ jobs:
           TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
           TURBO_CACHE: remote:rw
         run: pnpm lint:packages
+
+      - name: Lint Spell
+        env:
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
+          TURBO_CACHE: remote:rw
+        run: pnpm lint:spell
 
   typecheck:
     runs-on: ubuntu-latest

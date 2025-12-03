@@ -348,7 +348,7 @@ describe("team", async (it) => {
 	});
 });
 
-describe("mulit team support", async (it) => {
+describe("multi team support", async (it) => {
 	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance(
 		{
 			plugins: [
