@@ -121,10 +121,8 @@ export function validateDiscoveryUrl(url: string): void {
 		throw new DiscoveryError(
 			"discovery_invalid_url",
 			`Invalid discovery URL: ${url}`,
-			{
-				url,
-				originalError: error instanceof Error ? error.message : String(error),
-			},
+			{ url },
+			{ cause: error },
 		);
 	}
 }
@@ -218,10 +216,8 @@ export async function fetchDiscoveryDocument(
 		throw new DiscoveryError(
 			"discovery_unexpected_error",
 			`Unexpected error during discovery: ${error instanceof Error ? error.message : String(error)}`,
-			{
-				url,
-				originalError: error instanceof Error ? error.message : String(error),
-			},
+			{ url },
+			{ cause: error },
 		);
 	}
 }
