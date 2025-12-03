@@ -4,9 +4,7 @@ import { deepmerge, initGetModelName } from "@better-auth/core/db/adapter";
 import { TTY_COLORS } from "@better-auth/core/env";
 import { afterAll, beforeAll, describe } from "vitest";
 import { getAuthTables } from "../db";
-import { initGetModelName } from "./adapter-factory";
 import type { createTestSuite, TestSuiteStats } from "./create-test-suite";
-import { deepmerge } from "./utils";
 
 export type Logger = {
 	info: (...args: any[]) => void;
@@ -63,8 +61,7 @@ export const testAdapter = async ({
 	/**
 	 * A test suite to run.
 	 */
-	tests: ReturnType<ReturnType<typeof 
-    >>[];
+	tests: ReturnType<ReturnType<typeof createTestSuite>>[];
 	/**
 	 * A prefix to add to the test suite name.
 	 */
@@ -315,7 +312,6 @@ export const testAdapter = async ({
 						prefixTests,
 						runMigrations: migrate,
 						onTestFinish: async (stats: TestSuiteStats) => {
-							console.log(`stats:`, stats);
 							allSuiteStats.push(stats);
 						},
 						customIdGenerator,
