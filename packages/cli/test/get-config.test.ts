@@ -363,9 +363,7 @@ describe("getConfig", async () => {
 
 		expect(consoleErrorSpy).toHaveBeenCalledWith(
 			expect.stringContaining("Couldn't read your auth config."),
-			expect.objectContaining({
-				code: "MODULE_NOT_FOUND",
-			}),
+			expect.anything(),
 		);
 	});
 

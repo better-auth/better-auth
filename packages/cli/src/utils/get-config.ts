@@ -1,15 +1,12 @@
-import fs, { existsSync } from "node:fs";
+import fs from "node:fs";
 import path from "node:path";
-// @ts-expect-error
-import babelPresetReact from "@babel/preset-react";
-// @ts-expect-error
-import babelPresetTypeScript from "@babel/preset-typescript";
+import { pathToFileURL } from "node:url";
 import type { BetterAuthOptions } from "better-auth";
 import { BetterAuthError, logger } from "better-auth";
-import { loadConfig } from "c12";
-import type { JitiOptions } from "jiti";
-import { addCloudflareModules } from "./add-cloudflare-modules";
-import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
+import dotenv from "dotenv";
+import { build } from "esbuild";
+import { getCloudflareModules } from "./add-cloudflare-modules";
+import { getSvelteKitConfig } from "./add-svelte-kit-env-modules";
 import { getTsconfigInfo } from "./get-tsconfig-info";
 
 let possiblePaths = [
@@ -90,7 +87,10 @@ function getPathAliasesRecursive(
 		for (const [alias, aliasPaths] of obj) {
 			for (const aliasedPath of aliasPaths) {
 				const resolvedBaseUrl = path.resolve(configDir, baseUrl);
-				const finalAlias = alias.slice(-1) === "*" ? alias.slice(0, -1) : alias;
+				let finalAlias = alias.replace(/\*$/, "");
+				if (finalAlias.endsWith("/")) {
+					finalAlias = finalAlias.slice(0, -1);
+				}
 				const finalAliasedPath =
 					aliasedPath.slice(-1) === "*"
 						? aliasedPath.slice(0, -1)
@@ -126,38 +126,12 @@ function getPathAliases(cwd: string): Record<string, string> | null {
 	}
 	try {
 		const result = getPathAliasesRecursive(tsConfigPath);
-		addSvelteKitEnvModules(result);
-		addCloudflareModules(result);
 		return result;
 	} catch (error) {
 		console.error(error);
 		throw new BetterAuthError("Error parsing tsconfig.json");
 	}
 }
-/**
- * .tsx files are not supported by Jiti.
- */
-const jitiOptions = (cwd: string): JitiOptions => {
-	const alias = getPathAliases(cwd) || {};
-	return {
-		transformOptions: {
-			babel: {
-				presets: [
-					[
-						babelPresetTypeScript,
-						{
-							isTSX: true,
-							allExtensions: true,
-						},
-					],
-					[babelPresetReact, { runtime: "automatic" }],
-				],
-			},
-		},
-		extensions: [".ts", ".tsx", ".js", ".jsx"],
-		alias,
-	};
-};
 
 const isDefaultExport = (
 	object: Record<string, unknown>,
@@ -170,6 +144,69 @@ const isDefaultExport = (
 		"options" in object
 	);
 };
+
+async function bundleAndLoad(cwd: string, filePath: string) {
+	const { virtualModules, aliases } = getSvelteKitConfig(cwd);
+	const cloudflareModules = getCloudflareModules();
+	Object.assign(virtualModules, cloudflareModules);
+
+	const tsconfigAliases = getPathAliases(cwd);
+	if (tsconfigAliases) {
+		Object.assign(aliases, tsconfigAliases);
+	}
+
+	const resultFile = path.join(cwd, `better-auth-${Date.now()}.mjs`);
+
+	try {
+		await build({
+			entryPoints: [filePath],
+			bundle: true,
+			outfile: resultFile,
+			platform: "node",
+			format: "esm",
+			plugins: [
+				{
+					name: "virtual-modules",
+					setup(build) {
+						build.onResolve({ filter: /.*/ }, (args) => {
+							if (virtualModules[args.path]) {
+								return { path: args.path, namespace: "virtual-modules" };
+							}
+						});
+						build.onLoad(
+							{ filter: /.*/, namespace: "virtual-modules" },
+							(args) => {
+								return { contents: virtualModules[args.path], loader: "js" };
+							},
+						);
+					},
+				},
+				{
+					name: "make-all-packages-external",
+					setup(build) {
+						build.onResolve({ filter: /^[^./]|^\.[^./]|^\.\.[^/]/ }, (args) => {
+							for (const alias of Object.keys(aliases)) {
+								if (args.path === alias || args.path.startsWith(alias + "/")) {
+									return null;
+								}
+							}
+							return { external: true };
+						});
+					},
+				},
+			],
+			alias: aliases,
+		});
+
+		const imported = await import(pathToFileURL(resultFile).href);
+		return imported.default || imported;
+	} finally {
+		if (fs.existsSync(resultFile)) {
+			fs.unlinkSync(resultFile);
+		}
+	}
+}
+
 export async function getConfig({
 	cwd,
 	configPath,
@@ -179,25 +216,30 @@ export async function getConfig({
 	configPath?: string;
 	shouldThrowOnError?: boolean;
 }) {
+	dotenv.config({ path: path.join(cwd, ".env") });
 	try {
 		let configFile: BetterAuthOptions | null = null;
+		let resolvedPath: string | null = null;
+
 		if (configPath) {
-			let resolvedPath: string = path.join(cwd, configPath);
-			if (existsSync(configPath)) resolvedPath = configPath; // If the configPath is a file, use it as is, as it means the path wasn't relative.
-			const { config } = await loadConfig<
-				| {
-						auth: {
-							options: BetterAuthOptions;
-						};
-				  }
-				| {
-						options: BetterAuthOptions;
-				  }
-			>({
-				configFile: resolvedPath,
-				dotenv: true,
-				jitiOptions: jitiOptions(cwd),
-			});
+			resolvedPath = path.resolve(cwd, configPath);
+			if (!fs.existsSync(resolvedPath)) {
+				resolvedPath = null;
+			}
+		}
+
+		if (!resolvedPath) {
+			for (const possiblePath of possiblePaths) {
+				const p = path.resolve(cwd, possiblePath);
+				if (fs.existsSync(p)) {
+					resolvedPath = p;
+					break;
+				}
+			}
+		}
+
+		if (resolvedPath) {
+			const config = await bundleAndLoad(cwd, resolvedPath);
 			if (!("auth" in config) && !isDefaultExport(config)) {
 				if (shouldThrowOnError) {
 					throw new Error(
@@ -213,65 +255,17 @@ export async function getConfig({
 		}
 
 		if (!configFile) {
-			for (const possiblePath of possiblePaths) {
-				try {
-					const { config } = await loadConfig<{
-						auth: {
-							options: BetterAuthOptions;
-						};
-						default?: {
-							options: BetterAuthOptions;
-						};
-					}>({
-						configFile: possiblePath,
-						jitiOptions: jitiOptions(cwd),
-					});
-					const hasConfig = Object.keys(config).length > 0;
-					if (hasConfig) {
-						configFile =
-							config.auth?.options || config.default?.options || null;
-						if (!configFile) {
-							if (shouldThrowOnError) {
-								throw new Error(
-									"Couldn't read your auth config. Make sure to default export your auth instance or to export as a variable named auth.",
-								);
-							}
-							logger.error("[#better-auth]: Couldn't read your auth config.");
-							console.log("");
-							logger.info(
-								"[#better-auth]: Make sure to default export your auth instance or to export as a variable named auth.",
-							);
-							process.exit(1);
-						}
-						break;
-					}
-				} catch (e) {
-					if (
-						typeof e === "object" &&
-						e &&
-						"message" in e &&
-						typeof e.message === "string" &&
-						e.message.includes(
-							"This module cannot be imported from a Client Component module",
-						)
-					) {
-						if (shouldThrowOnError) {
-							throw new Error(
-								`Please remove import 'server-only' from your auth config file temporarily. The CLI cannot resolve the configuration with it included. You can re-add it after running the CLI.`,
-							);
-						}
-						logger.error(
-							`Please remove import 'server-only' from your auth config file temporarily. The CLI cannot resolve the configuration with it included. You can re-add it after running the CLI.`,
-						);
-						process.exit(1);
-					}
-					if (shouldThrowOnError) {
-						throw e;
-					}
-					logger.error("[#better-auth]: Couldn't read your auth config.", e);
-					process.exit(1);
-				}
+			if (shouldThrowOnError) {
+				throw new Error(
+					"Couldn't read your auth config. Make sure to default export your auth instance or to export as a variable named auth.",
+				);
 			}
+			logger.error("[#better-auth]: Couldn't read your auth config.");
+			console.log("");
+			logger.info(
+				"[#better-auth]: Make sure to default export your auth instance or to export as a variable named auth.",
+			);
+			process.exit(1);
 		}
 		return configFile;
 	} catch (e) {
