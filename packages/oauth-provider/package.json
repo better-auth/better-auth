@@ -28,9 +28,9 @@
       "default": "./dist/client.mjs"
     },
     "./resource-client": {
-      "dev-source": "./src/client-server.ts",
-      "types": "./dist/client-server.d.mts",
-      "default": "./dist/client-server.mjs"
+      "dev-source": "./src/client-resource.ts",
+      "types": "./dist/client-resource.d.mts",
+      "default": "./dist/client-resource.mjs"
     }
   },
   "typesVersions": {
@@ -40,6 +40,9 @@
       ],
       "client": [
         "./dist/client.d.mts"
+      ],
+      "resource-client": [
+        "./dist/client-resource.d.mts"
       ]
     }
   },

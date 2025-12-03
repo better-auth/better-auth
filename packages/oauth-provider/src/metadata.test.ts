@@ -6,7 +6,7 @@ import { getTestInstance } from "better-auth/test";
 import { APIError } from "better-call";
 import { describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
-import { oauthProviderResourceClient } from "./client-server";
+import { oauthProviderResourceClient } from "./client-resource";
 import { oauthProvider } from "./oauth";
 import type { OAuthOptions, Scope } from "./types";
 
