@@ -112,9 +112,20 @@ export function parseInputData<T extends Record<string, any>>(
 				continue;
 			}
 			if (fields[key]!.validator?.input && data[key] !== undefined) {
-				parsedData[key] = fields[key]!.validator.input["~standard"].validate(
+				const result = fields[key]!.validator.input["~standard"].validate(
 					data[key],
 				);
+				if (result instanceof Promise) {
+					throw new APIError("INTERNAL_SERVER_ERROR", {
+						message: "Async validation is not supported for additional fields",
+					});
+				}
+				if ("issues" in result && result.issues) {
+					throw new APIError("BAD_REQUEST", {
+						message: result.issues[0]?.message || "Validation Error",
+					});
+				}
+				parsedData[key] = result.value;
 				continue;
 			}
 			if (fields[key]!.transform?.input && data[key] !== undefined) {
