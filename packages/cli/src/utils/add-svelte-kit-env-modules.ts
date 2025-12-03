@@ -2,36 +2,42 @@ import fs from "node:fs";
 import path from "node:path";
 
 /**
- * Adds SvelteKit environment modules and path aliases
- * @param aliases - The aliases object to populate
+ * Gets SvelteKit environment modules and path aliases
  * @param cwd - Current working directory (optional, defaults to process.cwd())
  */
-export function addSvelteKitEnvModules(
-	aliases: Record<string, string>,
-	cwd?: string,
-) {
+export function getSvelteKitConfig(cwd?: string) {
 	const workingDir = cwd || process.cwd();
+	const virtualModules: Record<string, string> = {};
+	const aliases: Record<string, string> = {};
 
 	// Add SvelteKit environment modules
-	aliases["$env/dynamic/private"] = createDataUriModule(
-		createDynamicEnvModule(),
+	virtualModules["$env/dynamic/private"] = createDynamicEnvModule();
+	virtualModules["$env/dynamic/public"] = createDynamicEnvModule();
+	virtualModules["$env/static/private"] = createStaticEnvModule(
+		filterPrivateEnv("PUBLIC_", ""),
 	);
-	aliases["$env/dynamic/public"] = createDataUriModule(
-		createDynamicEnvModule(),
-	);
-	aliases["$env/static/private"] = createDataUriModule(
-		createStaticEnvModule(filterPrivateEnv("PUBLIC_", "")),
-	);
-	aliases["$env/static/public"] = createDataUriModule(
-		createStaticEnvModule(filterPublicEnv("PUBLIC_", "")),
+	virtualModules["$env/static/public"] = createStaticEnvModule(
+		filterPublicEnv("PUBLIC_", ""),
 	);
 
-	const svelteKitAliases = getSvelteKitPathAliases(workingDir);
-	Object.assign(aliases, svelteKitAliases);
+	const { aliases: skAliases, virtualModules: skVirtualModules } =
+		getSvelteKitPathAliasesNew(workingDir);
+
+	Object.assign(aliases, skAliases);
+	Object.assign(virtualModules, skVirtualModules);
+
+	return {
+		virtualModules,
+		aliases,
+	};
 }
 
-function getSvelteKitPathAliases(cwd: string): Record<string, string> {
+function getSvelteKitPathAliasesNew(cwd: string): {
+	aliases: Record<string, string>;
+	virtualModules: Record<string, string>;
+} {
 	const aliases: Record<string, string> = {};
+	const virtualModules: Record<string, string> = {};
 
 	const packageJsonPath = path.join(cwd, "package.json");
 	const svelteConfigPath = path.join(cwd, "svelte.config.js");
@@ -58,7 +64,7 @@ function getSvelteKitPathAliases(cwd: string): Record<string, string> {
 	}
 
 	if (!isSvelteKitProject) {
-		return aliases;
+		return { aliases, virtualModules };
 	}
 
 	const libPaths = [path.join(cwd, "src", "lib"), path.join(cwd, "lib")];
@@ -78,13 +84,14 @@ function getSvelteKitPathAliases(cwd: string): Record<string, string> {
 		}
 	}
 	// Add simple stub for $app/server to prevent CLI errors
-	aliases["$app/server"] = createDataUriModule(createAppServerModule());
+	virtualModules["$app/server"] = createAppServerModule();
 
 	const customAliases = getSvelteConfigAliases(cwd);
 	Object.assign(aliases, customAliases);
 
-	return aliases;
+	return { aliases, virtualModules };
 }
+
 // for custom aliases in svelte.config.js/ts
 function getSvelteConfigAliases(cwd: string): Record<string, string> {
 	const aliases: Record<string, string> = {};
@@ -126,12 +133,7 @@ function createAppServerModule(): string {
 	return `
 // $app/server stub for CLI compatibility
 export default {};
-// jiti dirty hack: .unknown
 `;
-}
-
-function createDataUriModule(module: string) {
-	return `data:text/javascript;charset=utf-8,${encodeURIComponent(module)}`;
 }
 
 function createStaticEnvModule(env: Record<string, string>) {
@@ -141,14 +143,12 @@ function createStaticEnvModule(env: Record<string, string>) {
 
 	return `
   ${declarations.join("\n")}
-  // jiti dirty hack: .unknown
   `;
 }
 
 function createDynamicEnvModule() {
 	return `
   export const env = process.env;
-  // jiti dirty hack: .unknown
   `;
 }
 

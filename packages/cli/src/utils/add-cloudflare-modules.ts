@@ -1,5 +1,5 @@
 const createModule = () => {
-	const moduleSource = `
+	return `
 const createStub = (label) => {
   const handler = {
     get(_, prop) {
@@ -62,22 +62,14 @@ const defaultExport = {
 };
 
 export default defaultExport;
-// jiti dirty hack: .unknown
 `;
-
-	return `data:text/javascript;charset=utf-8,${encodeURIComponent(moduleSource)}`;
 };
 
 const CLOUDFLARE_STUB_MODULE = createModule();
 
-export function addCloudflareModules(
-	aliases: Record<string, string>,
-	_cwd?: string,
-) {
-	if (!aliases["cloudflare:workers"]) {
-		aliases["cloudflare:workers"] = CLOUDFLARE_STUB_MODULE;
-	}
-	if (!aliases["cloudflare:test"]) {
-		aliases["cloudflare:test"] = CLOUDFLARE_STUB_MODULE;
-	}
+export function getCloudflareModules() {
+	return {
+		"cloudflare:workers": CLOUDFLARE_STUB_MODULE,
+		"cloudflare:test": CLOUDFLARE_STUB_MODULE,
+	};
 }
