@@ -5,7 +5,6 @@ export * from "./field";
 export * from "./field-converter";
 export * from "./get-migration";
 export * from "./get-schema";
-export * from "./get-tables";
 export * from "./internal-adapter";
 export * from "./schema";
 export * from "./to-zod";

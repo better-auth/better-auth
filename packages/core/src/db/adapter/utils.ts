@@ -1,4 +1,4 @@
-import type { DBFieldAttribute } from "@better-auth/core/db";
+import type { DBFieldAttribute } from "../type";
 
 export function withApplyDefault(
 	value: any,

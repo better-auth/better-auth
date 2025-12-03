@@ -1,13 +1,14 @@
 import type { BetterAuthOptions } from "@better-auth/core";
-import type { CleanedWhere, Where } from "@better-auth/core/db/adapter";
-import { describe, expect, test } from "vitest";
-import { betterAuth } from "../../../auth";
-import type { User } from "../../../types";
-import { createAdapterFactory } from "..";
 import type {
 	AdapterFactoryConfig,
 	AdapterFactoryCustomizeAdapterCreator,
-} from "../types";
+	CleanedWhere,
+	Where,
+} from "@better-auth/core/db/adapter";
+import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import { describe, expect, test } from "vitest";
+import { betterAuth } from "../../auth";
+import type { User } from "../../types";
 
 /*
 
