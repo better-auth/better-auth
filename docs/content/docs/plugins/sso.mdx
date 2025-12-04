@@ -9,7 +9,7 @@ Single Sign-On (SSO) allows users to authenticate with multiple applications usi
 
 
 <Callout type="warn">
-This plugin is in active development and may not be suitable for production use. Please report any issues or bugs on [GitHub](https://github.com/better-auth/better-auth).
+The SAML 2.0 support is in active development and may not be suitable for production use. Please report any issues or bugs on [GitHub](https://github.com/better-auth/better-auth).
 </Callout>
 
 ## Installation
@@ -78,6 +78,11 @@ This plugin is in active development and may not be suitable for production use.
 To register an OIDC provider, use the `registerSSOProvider` endpoint and provide the necessary configuration details for the provider.
 
 A redirect URL will be automatically generated using the provider ID. For instance, if the provider ID is `hydra`, the redirect URL would be `{baseURL}/api/auth/sso/callback/hydra`. Note that `/api/auth` may vary depending on your base path configuration.
+
+<Callout type="info">
+ If you're using Google or other standard OIDC providers, we recommend using Generic OAuth
+ instead. Please check whether Generic OAuth covers your use case before requesting the SSO plugin.
+</Callout>
 
 #### Example
 
