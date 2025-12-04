@@ -323,7 +323,109 @@ describe("Admin plugin", async () => {
 		});
 		expect(res.data?.users.length).toBe(1);
 	});
+	it("should allow multi-field search with OR (default) using searchInFields", async () => {
+		const user1 = await client.admin.createUser(
+			{
+				name: "user1",
+				email: "user2@user4.com",
+				password: "password",
+				role: "user",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		const user2 = await client.admin.createUser(
+			{
+				name: "user5",
+				email: "user6@user1.com",
+				password: "password",
+				role: "user",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(user1.data?.user.id).toBeDefined();
+		expect(user2.data?.user.id).toBeDefined();
+		const users = [user1.data?.user, user2.data?.user];
+		const res = await client.admin.listUsers({
+			query: {
+				searchValue: "user1",
+				searchInFields: ["email", "name"],
+				searchOperator: "contains",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res.error).toBeNull();
+		expect(res.data?.users).toEqual(users);
 
+		for (const user of res.data?.users ?? []) {
+			await client.admin.removeUser(
+				{
+					userId: user.id,
+				},
+				{
+					headers: adminHeaders,
+				},
+			);
+		}
+	});
+
+	it("should support searchMode AND when using searchInFields", async () => {
+		const user1 = await client.admin.createUser(
+			{
+				name: "user1",
+				email: "user2@user4.com",
+				password: "password",
+				role: "user",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		const user2 = await client.admin.createUser(
+			{
+				name: "user5",
+				email: "user6@user1.com",
+				password: "password",
+				role: "user",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(user1.data?.user.id).toBeDefined();
+		expect(user2.data?.user.id).toBeDefined();
+		const users = [user1.data?.user, user2.data?.user];
+
+		const res = await client.admin.listUsers({
+			query: {
+				searchValue: "user1",
+				searchInFields: ["email", "name"],
+				searchOperator: "contains",
+				searchMode: "AND",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res.error).toBeNull();
+		expect(res.data?.users).toEqual([]);
+
+		for (const user of res.data?.users ?? []) {
+			await client.admin.removeUser(
+				{
+					userId: user.id,
+				},
+				{
+					headers: adminHeaders,
+				},
+			);
+		}
+	});
 	it("should allow to filter users by role", async () => {
 		const res = await client.admin.listUsers({
 			query: {
