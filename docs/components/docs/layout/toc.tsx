@@ -5,8 +5,8 @@ import type {
 } from "@radix-ui/react-popover";
 import type { TOCItemType } from "fumadocs-core/toc";
 import * as Primitive from "fumadocs-core/toc";
-import { usePageStyles } from "fumadocs-ui/provider";
 import { ChevronRight, Text } from "lucide-react";
+import { usePageStyles } from "../contexts/page-styles";
 import type { ComponentProps, HTMLAttributes, ReactNode } from "react";
 import {
 	createContext,

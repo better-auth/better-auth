@@ -1,7 +1,7 @@
 import type { Root } from "fumadocs-core/page-tree";
-import type { PageStyles } from "fumadocs-ui/provider";
-import { StylesProvider } from "fumadocs-ui/provider";
 import type { HTMLAttributes, ReactNode } from "react";
+import type { PageStyles } from "./contexts/page-styles";
+import { PageStylesProvider } from "./contexts/page-styles";
 import { cn } from "../../lib/utils";
 import ArticleLayout from "../side-bar";
 import { NavProvider } from "./layout/nav";
@@ -50,7 +50,7 @@ export function DocsLayout({ children, ...props }: DocsLayoutProps): ReactNode {
 					>
 						<ArticleLayout />
 					</div>
-					<StylesProvider {...pageStyles}>{children}</StylesProvider>
+					<PageStylesProvider {...pageStyles}>{children}</PageStylesProvider>
 				</main>
 			</NavProvider>
 		</TreeContextProvider>

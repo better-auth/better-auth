@@ -37,9 +37,8 @@ export default async function Page({
 		return <BlogPage />;
 	}
 	const page = blogs.getPage(slug);
-	if (!page) {
-		notFound();
-	}
+	if (!page) notFound();
+
 	const MDX = page.data?.body;
 	const { title, description, date } = page.data;
 	return (

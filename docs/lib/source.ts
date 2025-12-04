@@ -1,6 +1,6 @@
 import { loader } from "fumadocs-core/source";
-import { createMDXSource } from "fumadocs-mdx";
-import { blogCollection, changelogCollection, docs } from "@/.source";
+import { toFumadocsSource } from "fumadocs-mdx/runtime/server";
+import { blogCollection, changelogCollection, docs } from "@/.source/server";
 import { getPageTree } from "@/components/sidebar-content";
 
 export let source = loader({
@@ -10,12 +10,10 @@ export let source = loader({
 
 source = { ...source, pageTree: getPageTree() };
 
-export const changelogs = loader({
+export const changelogs = loader(toFumadocsSource(changelogCollection, []), {
 	baseUrl: "/changelogs",
-	source: createMDXSource(changelogCollection),
 });
 
-export const blogs = loader({
-	baseUrl: "/blogs",
-	source: createMDXSource(blogCollection),
+export const blogs = loader(toFumadocsSource(blogCollection, []), {
+	baseUrl: "/blog",
 });

@@ -281,13 +281,13 @@ function resolveFallbackPaths(
 	return candidates;
 }
 
-function readDocContent(docPage: ReturnType<typeof source.getPage>): string {
+async function readDocContent(docPage: ReturnType<typeof source.getPage>) {
 	if (!docPage) {
 		throw new Error("Missing doc page data");
 	}
 
 	try {
-		return docPage.data.content;
+		return await docPage.data.getText("processed");
 	} catch (error) {
 		for (const fallbackPath of resolveFallbackPaths(docPage)) {
 			if (existsSync(fallbackPath)) {
@@ -302,7 +302,7 @@ function readDocContent(docPage: ReturnType<typeof source.getPage>): string {
 export async function getLLMText(
 	docPage: ReturnType<typeof source.getPage>,
 ): Promise<string> {
-	const rawContent = readDocContent(docPage);
+	const rawContent = await readDocContent(docPage);
 
 	// Extract APIMethod components & other nested wrapper before processing
 	const processedContent = extractAPIMethods(rawContent);
