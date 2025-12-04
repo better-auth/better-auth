@@ -46,6 +46,10 @@ export const subscriptions = {
 				required: false,
 				defaultValue: false,
 			},
+			cancelAt: {
+				type: "date",
+				required: false,
+			},
 			seats: {
 				type: "number",
 				required: false,
