@@ -1325,3 +1325,238 @@ describe("SAML SSO with custom fields", () => {
 		});
 	});
 });
+
+/**
+ * SAML Account Linking Policy Tests
+ *
+ * These tests verify that the SAML callback (callbackSSOSAML) enforces
+ * the same trust policy as OIDC SSO for account linking.
+ */
+describe("SAML SSO Account Linking", () => {
+	const mockIdP = createMockSAMLIdP(8081);
+
+	beforeAll(async () => {
+		await mockIdP.start();
+	});
+
+	afterAll(async () => {
+		await mockIdP.stop();
+	});
+
+	it("should deny auto-linking for untrusted SAML provider with existing user", async () => {
+		const data = {
+			user: [] as any[],
+			session: [] as any[],
+			verification: [] as any[],
+			account: [] as any[],
+			ssoProvider: [] as any[],
+		};
+
+		const memory = memoryAdapter(data);
+
+		// Configure with no trusted providers
+		const auth = betterAuth({
+			database: memory,
+			baseURL: "http://localhost:3000",
+			emailAndPassword: { enabled: true },
+			account: {
+				accountLinking: {
+					enabled: true,
+					trustedProviders: [],
+					existingUserMode: "trusted_providers_only",
+				},
+			},
+			plugins: [sso()],
+		});
+
+		const authClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			plugins: [bearer(), ssoClient()],
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return auth.handler(new Request(url, init));
+				},
+			},
+		});
+
+		// Create existing user with the email the SAML IdP will return
+		await authClient.signUp.email({
+			email: "test@email.com",
+			password: "password123",
+			name: "Existing User",
+		});
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{ email: "test@email.com", password: "password123" },
+			{
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "saml-untrusted",
+				issuer: "http://localhost:8081",
+				domain: "email.com",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: { metadata: idpMetadata },
+					spMetadata: { metadata: spMetadata },
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		let samlResponse: any;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		// Sanity check: mock IdP returned a valid SAML response
+		expect(samlResponse?.samlResponse).toBeDefined();
+
+		let redirectLocation = "";
+		await betterFetch("http://localhost:3000/api/auth/sso/saml2/callback/saml-untrusted", {
+			method: "POST",
+			redirect: "manual",
+			headers: {
+				"Content-Type": "application/x-www-form-urlencoded",
+			},
+			body: new URLSearchParams({
+				SAMLResponse: samlResponse.samlResponse,
+				RelayState: "http://localhost:3000/dashboard",
+			}),
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+			onError: (context) => {
+				redirectLocation = context.response.headers.get("location") || "";
+			},
+		});
+
+		expect(redirectLocation).toContain("account_not_linked");
+
+		const accounts = data.account.filter(
+			(a: any) => a.providerId === "saml-untrusted",
+		);
+		expect(accounts.length).toBe(0);
+	});
+
+	it("should allow auto-linking for trusted SAML provider with existing user", async () => {
+		const data = {
+			user: [] as any[],
+			session: [] as any[],
+			verification: [] as any[],
+			account: [] as any[],
+			ssoProvider: [] as any[],
+		};
+
+		const memory = memoryAdapter(data);
+
+		const auth = betterAuth({
+			database: memory,
+			baseURL: "http://localhost:3000",
+			emailAndPassword: { enabled: true },
+			account: {
+				accountLinking: {
+					enabled: true,
+					trustedProviders: ["saml-trusted"],
+					existingUserMode: "trusted_providers_only",
+				},
+			},
+			plugins: [sso()],
+		});
+
+		const authClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			plugins: [bearer(), ssoClient()],
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return auth.handler(new Request(url, init));
+				},
+			},
+		});
+
+		await authClient.signUp.email({
+			email: "test@email.com",
+			password: "password123",
+			name: "Existing User",
+		});
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{ email: "test@email.com", password: "password123" },
+			{
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "saml-trusted",
+				issuer: "http://localhost:8081",
+				domain: "email.com",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: { metadata: idpMetadata },
+					spMetadata: { metadata: spMetadata },
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		let samlResponse: any;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		// Sanity check: mock IdP returned a valid SAML response
+		expect(samlResponse?.samlResponse).toBeDefined();
+
+		let redirectLocation = "";
+		await betterFetch("http://localhost:3000/api/auth/sso/saml2/callback/saml-trusted", {
+			method: "POST",
+			redirect: "manual",
+			headers: {
+				"Content-Type": "application/x-www-form-urlencoded",
+			},
+			body: new URLSearchParams({
+				SAMLResponse: samlResponse.samlResponse,
+				RelayState: "http://localhost:3000/dashboard",
+			}),
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+			onError: (context) => {
+				redirectLocation = context.response.headers.get("location") || "";
+			},
+		});
+
+		expect(redirectLocation).not.toContain("error");
+		expect(redirectLocation).toContain("/dashboard");
+
+		const accounts = data.account.filter(
+			(a: any) => a.providerId === "saml-trusted",
+		);
+		expect(accounts.length).toBe(1);
+	});
+});
