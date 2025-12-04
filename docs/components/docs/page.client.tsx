@@ -3,7 +3,7 @@
 import { cva } from "class-variance-authority";
 import type { BreadcrumbOptions } from "fumadocs-core/breadcrumb";
 import { getBreadcrumbItemsFromPath } from "fumadocs-core/breadcrumb";
-import type { PageTree } from "fumadocs-core/server";
+import type { Node, Item, Root } from "fumadocs-core/page-tree";
 import { useEffectEvent } from "fumadocs-core/utils/use-effect-event";
 import {
 	useI18n,
@@ -135,8 +135,8 @@ const itemLabel = cva(
 	"inline-flex items-center gap-0.5 text-fd-muted-foreground",
 );
 
-function scanNavigationList(tree: PageTree.Node[]) {
-	const list: PageTree.Item[] = [];
+function scanNavigationList(tree: Node[]) {
+	const list: Item[] = [];
 
 	tree.forEach((node) => {
 		if (node.type === "folder") {
@@ -156,7 +156,7 @@ function scanNavigationList(tree: PageTree.Node[]) {
 	return list;
 }
 
-const listCache = new WeakMap<PageTree.Root, PageTree.Item[]>();
+const listCache = new WeakMap<Root, Item[]>();
 
 export function Footer({ items }: FooterProps) {
 	const { root } = useTreeContext();
