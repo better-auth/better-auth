@@ -1,18 +1,9 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
-import {
-	createAuthMiddleware,
-} from "@better-auth/core/api";
+import { createAuthMiddleware } from "@better-auth/core/api";
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import { APIError } from "../../api";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import { ADMIN_ERROR_CODES } from "./error-codes";
-import {
-	createRole,
-	deleteRole,
-	getRole,
-	listRoles,
-	updateRole,
-} from "./routes/crud-access-control";
 import {
 	adminUpdateUser,
 	banUser,
@@ -30,6 +21,13 @@ import {
 	unbanUser,
 	userHasPermission,
 } from "./routes";
+import {
+	createRole,
+	deleteRole,
+	getRole,
+	listRoles,
+	updateRole,
+} from "./routes/crud-access-control";
 import type {
 	AdminOptions,
 	SessionWithImpersonatedBy,
@@ -46,22 +44,22 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 		...options,
 	};
 	const baseEndpoints = {
-	setRole: setRole(opts),
-	getUser: getUser(opts),
-	createUser: createUser(opts),
-	adminUpdateUser: adminUpdateUser(opts),
-	listUsers: listUsers(opts),
-	listUserSessions: listUserSessions(opts),
-	unbanUser: unbanUser(opts),
-	banUser: banUser(opts),
-	impersonateUser: impersonateUser(opts),
-	stopImpersonating: stopImpersonating(),
-	revokeUserSession: revokeUserSession(opts),
-	revokeUserSessions: revokeUserSessions(opts),
-	removeUser: removeUser(opts),
-	setUserPassword: setUserPassword(opts),
-	userHasPermission: userHasPermission(opts as O),
-	}
+		setRole: setRole(opts),
+		getUser: getUser(opts),
+		createUser: createUser(opts),
+		adminUpdateUser: adminUpdateUser(opts),
+		listUsers: listUsers(opts),
+		listUserSessions: listUserSessions(opts),
+		unbanUser: unbanUser(opts),
+		banUser: banUser(opts),
+		impersonateUser: impersonateUser(opts),
+		stopImpersonating: stopImpersonating(),
+		revokeUserSession: revokeUserSession(opts),
+		revokeUserSessions: revokeUserSessions(opts),
+		removeUser: removeUser(opts),
+		setUserPassword: setUserPassword(opts),
+		userHasPermission: userHasPermission(opts as O),
+	};
 
 	const dynamicAccessControlEndpoints = {
 		createRole: createRole<O>(opts as O),

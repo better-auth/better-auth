@@ -1,6 +1,4 @@
-import type {
-	BetterAuthClientPlugin,
-} from "@better-auth/core";
+import type { BetterAuthClientPlugin } from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
 import type { AccessControl, Role } from "../access";
 import type { defaultStatements } from "./access";
@@ -13,7 +11,7 @@ import type { InferUserRole } from "./schema";
 /**
  * Using the same `hasPermissionFn` function, but without the need for a `ctx` parameter or the `organizationId` parameter.
  */
-export const clientSideHasPermission = (input: HasPermissionBaseInput) => {
+export const clientSideUserHasPermission = (input: HasPermissionBaseInput) => {
 	const acRoles: {
 		[x: string]: Role<any> | undefined;
 	} = input.options?.roles || defaultRoles;
@@ -118,7 +116,7 @@ export const adminClient = <O extends AdminClientOptions>(
 						role: R;
 					},
 				) => {
-					const isAuthorized = clientSideHasPermission({
+					const isAuthorized = clientSideUserHasPermission({
 						role: data.role as string,
 						options: {
 							ac: options?.ac,

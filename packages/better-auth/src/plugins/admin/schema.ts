@@ -21,7 +21,10 @@ export type UserRole = {
 	updatedAt?: Date | undefined;
 };
 
-export type InferUserRole<O extends AdminOptions, isClientSide extends boolean = true> = UserRole & InferAdditionalFieldsFromPluginOptions<"role", O, isClientSide>;
+export type InferUserRole<
+	O extends AdminOptions,
+	isClientSide extends boolean = true,
+> = UserRole & InferAdditionalFieldsFromPluginOptions<"role", O, isClientSide>;
 
 export const getAdditionalFields = <
 	O extends AdminOptions,

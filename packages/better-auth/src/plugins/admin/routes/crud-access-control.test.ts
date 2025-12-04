@@ -125,10 +125,7 @@ describe("dynamic access control", async () => {
 	};
 	const { data: userRes } = await client.signUp.email(user);
 	user.id = userRes?.user.id || "";
-	const { headers } = await signInWithUser(
-		user.email,
-		user.password,
-	);
+	const { headers } = await signInWithUser(user.email, user.password);
 
 	it("should successfully create a new role", async () => {
 		const permission = {

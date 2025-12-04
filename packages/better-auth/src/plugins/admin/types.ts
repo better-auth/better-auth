@@ -66,18 +66,17 @@ export interface AdminOptions {
 								| undefined;
 					  }
 					| undefined;
-				role?:
-					| {
-							modelName?: string;
-							fields?:
-								| {
-										[key in keyof Omit<UserRole, "id">]?: string;
-								  }
-								| undefined;
-							additionalFields?: {
-										[key in string]: DBFieldAttribute;
-								  };
-					  };
+				role?: {
+					modelName?: string;
+					fields?:
+						| {
+								[key in keyof Omit<UserRole, "id">]?: string;
+						  }
+						| undefined;
+					additionalFields?: {
+						[key in string]: DBFieldAttribute;
+					};
+				};
 		  }
 		| undefined;
 	/**
