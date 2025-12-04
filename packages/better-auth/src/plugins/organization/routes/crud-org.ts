@@ -617,6 +617,23 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_ORGANIZATION,
 				});
 			}
+
+			if (
+				options?.defaultOrganization?.enabled &&
+				options.defaultOrganization.preventLastOrgDeletion !== true
+			) {
+				const orgs = await adapter.listOrganizations(session.user.id);
+				if (
+					orgs.some(({ id }) => ctx.body.organizationId === id) &&
+					orgs.length === 1
+				) {
+					throw new APIError("BAD_REQUEST", {
+						message:
+							"You cannot delete your only organization. Please create another organization before deleting this one.",
+					});
+				}
+			}
+
 			if (organizationId === session.session.activeOrganizationId) {
 				/**
 				 * If the organization is deleted, we set the active organization to null

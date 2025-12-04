@@ -1201,30 +1201,6 @@ export function organization<O extends OrganizationOptions>(
 		hooks: {
 			before: [
 				{
-					matcher: (ctx) => ctx.path === "/organization/delete",
-					handler: createAuthMiddleware(async (ctx) => {
-						if (
-							!options?.defaultOrganization?.enabled ||
-							options.defaultOrganization.preventLastOrgDeletion === false
-						)
-							return;
-						const session = await getSessionFromCtx(ctx);
-						if (!session) return;
-
-						const adapter = getOrgAdapter(ctx.context, options);
-						const orgs = await adapter.listOrganizations(session.user.id);
-						if (
-							orgs.some(({ id }) => ctx.body.organizationId === id) &&
-							orgs.length === 1
-						) {
-							throw new APIError("BAD_REQUEST", {
-								message:
-									"You cannot delete your only organization. Please create another organization before deleting this one.",
-							});
-						}
-					}),
-				},
-				{
 					matcher: (ctx) => ctx.path === "/sign-out",
 					handler: createAuthMiddleware(async (ctx) => {
 						if (!options?.keepActiveOrganization) return;
