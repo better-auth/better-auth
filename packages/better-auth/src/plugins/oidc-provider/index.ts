@@ -32,7 +32,7 @@ import type {
 	OIDCMetadata,
 	OIDCOptions,
 } from "./types";
-import { defaultClientSecretHasher } from "./utils";
+import { defaultClientSecretHasher, verifyClientAssertion } from "./utils";
 import { parsePrompt } from "./utils/prompt";
 
 const getJwtPlugin = (ctx: GenericEndpointContext) => {
@@ -66,7 +66,6 @@ export async function getClient(
 			if (!res) {
 				return null;
 			}
-			// omit sensitive fields
 			return {
 				clientId: res.clientId,
 				clientSecret: res.clientSecret,
@@ -74,6 +73,9 @@ export async function getClient(
 				name: res.name,
 				icon: res.icon,
 				disabled: res.disabled,
+				jwks: res.jwks,
+				jwksUri: res.jwksUri,
+				tokenEndpointAuthMethod: res.tokenEndpointAuthMethod,
 				redirectUrls: (res.redirectUrls ?? "").split(","),
 				metadata: res.metadata ? JSON.parse(res.metadata) : {},
 			} satisfies Client;
@@ -114,7 +116,17 @@ export const getMetadata = (
 		token_endpoint_auth_methods_supported: [
 			"client_secret_basic",
 			"client_secret_post",
+			"private_key_jwt",
 			"none",
+		],
+		token_endpoint_auth_signing_alg_values_supported: [
+			"RS256",
+			"RS384",
+			"RS512",
+			"ES256",
+			"ES384",
+			"ES512",
+			"EdDSA",
 		],
 		code_challenge_methods_supported: ["S256"],
 		claims_supported: [
@@ -534,6 +546,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 					let { client_id, client_secret } = body;
+					const { client_assertion, client_assertion_type } = body;
 					const authorization =
 						ctx.request?.headers.get("authorization") || null;
 					if (
@@ -566,6 +579,48 @@ export const oidcProvider = (options: OIDCOptions) => {
 								error: "invalid_client",
 							});
 						}
+					}
+
+					let authenticatedViaAssertion = false;
+					if (
+						client_assertion_type ===
+						"urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+					) {
+						if (!client_assertion) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description:
+									"client_assertion is required when using jwt-bearer",
+								error: "invalid_client",
+							});
+						}
+
+						if (!client_id) {
+							const parts = client_assertion.toString().split(".");
+							if (parts.length !== 3) {
+								throw new APIError("UNAUTHORIZED", {
+									error_description: "invalid jwt format",
+									error: "invalid_client",
+								});
+							}
+							let payload: unknown;
+							try {
+								payload = JSON.parse(
+									new TextDecoder().decode(base64.decode(parts[1])),
+								);
+							} catch {
+								throw new APIError("UNAUTHORIZED", {
+									error_description: "invalid jwt payload",
+									error: "invalid_client",
+								});
+							}
+							const { iss, sub } = payload as {
+								iss?: string;
+								sub?: string;
+							};
+							client_id = iss || sub;
+						}
+
+						authenticatedViaAssertion = true;
 					}
 
 					const now = Date.now();
@@ -612,6 +667,49 @@ export const oidcProvider = (options: OIDCOptions) => {
 								error: "invalid_client",
 							});
 						}
+
+						const client = await getClient(
+							client_id.toString(),
+							trustedClients,
+						);
+						if (!client) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description: "invalid client_id",
+								error: "invalid_client",
+							});
+						}
+
+						if (client.type !== "public") {
+							if (authenticatedViaAssertion) {
+								await verifyClientAssertion({
+									clientAssertion: client_assertion.toString(),
+									clientId: client_id.toString(),
+									client,
+									tokenEndpoint: `${ctx.context.baseURL}/oauth2/token`,
+									ctx,
+								});
+							} else {
+								if (!client.clientSecret || !client_secret) {
+									throw new APIError("UNAUTHORIZED", {
+										error_description:
+											"client_secret is required for confidential clients",
+										error: "invalid_client",
+									});
+								}
+								const isValidSecret = await verifyStoredClientSecret(
+									ctx,
+									client.clientSecret,
+									client_secret.toString(),
+								);
+								if (!isValidSecret) {
+									throw new APIError("UNAUTHORIZED", {
+										error_description: "invalid client_secret",
+										error: "invalid_client",
+									});
+								}
+							}
+						}
+
 						if (token.refreshTokenExpiresAt < new Date()) {
 							throw new APIError("UNAUTHORIZED", {
 								error_description: "refresh token expired",
@@ -744,7 +842,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 					if (client.type === "public") {
-						// For public clients (type: 'public'), validate PKCE instead of client_secret
 						if (!code_verifier) {
 							throw new APIError("BAD_REQUEST", {
 								error_description:
@@ -752,25 +849,34 @@ export const oidcProvider = (options: OIDCOptions) => {
 								error: "invalid_request",
 							});
 						}
-						// PKCE validation happens later in the flow, so we skip client_secret validation
 					} else {
-						if (!client.clientSecret || !client_secret) {
-							throw new APIError("UNAUTHORIZED", {
-								error_description:
-									"client_secret is required for confidential clients",
-								error: "invalid_client",
+						if (authenticatedViaAssertion) {
+							await verifyClientAssertion({
+								clientAssertion: client_assertion.toString(),
+								clientId: client_id.toString(),
+								client,
+								tokenEndpoint: `${ctx.context.baseURL}/oauth2/token`,
+								ctx,
 							});
-						}
-						const isValidSecret = await verifyStoredClientSecret(
-							ctx,
-							client.clientSecret,
-							client_secret.toString(),
-						);
-						if (!isValidSecret) {
-							throw new APIError("UNAUTHORIZED", {
-								error_description: "invalid client_secret",
-								error: "invalid_client",
-							});
+						} else {
+							if (!client.clientSecret || !client_secret) {
+								throw new APIError("UNAUTHORIZED", {
+									error_description:
+										"client_secret is required for confidential clients",
+									error: "invalid_client",
+								});
+							}
+							const isValidSecret = await verifyStoredClientSecret(
+								ctx,
+								client.clientSecret,
+								client_secret.toString(),
+							);
+							if (!isValidSecret) {
+								throw new APIError("UNAUTHORIZED", {
+									error_description: "invalid client_secret",
+									error: "invalid_client",
+								});
+							}
 						}
 					}
 					const challenge =
@@ -1116,7 +1222,12 @@ export const oidcProvider = (options: OIDCOptions) => {
 								'A list of redirect URIs. Eg: ["https://client.example.com/callback"]',
 						}),
 						token_endpoint_auth_method: z
-							.enum(["none", "client_secret_basic", "client_secret_post"])
+							.enum([
+								"none",
+								"client_secret_basic",
+								"client_secret_post",
+								"private_key_jwt",
+							])
 							.meta({
 								description:
 									'The authentication method for the token endpoint. Eg: "client_secret_basic"',
@@ -1382,6 +1493,19 @@ export const oidcProvider = (options: OIDCOptions) => {
 						}
 					}
 
+					// Validate private_key_jwt requires jwks or jwks_uri
+					if (
+						body.token_endpoint_auth_method === "private_key_jwt" &&
+						!body.jwks &&
+						!body.jwks_uri
+					) {
+						throw new APIError("BAD_REQUEST", {
+							error: "invalid_client_metadata",
+							error_description:
+								"When 'private_key_jwt' authentication method is used, either 'jwks' or 'jwks_uri' must be provided",
+						});
+					}
+
 					const clientId =
 						options.generateClientId?.() ||
 						generateRandomString(32, "a-z", "A-Z");
@@ -1398,11 +1522,15 @@ export const oidcProvider = (options: OIDCOptions) => {
 							name: body.client_name,
 							icon: body.logo_uri,
 							metadata: body.metadata ? JSON.stringify(body.metadata) : null,
-							clientId: clientId,
+							clientId,
 							clientSecret: storedClientSecret,
 							redirectUrls: body.redirect_uris.join(","),
 							type: "web",
 							authenticationScheme:
+								body.token_endpoint_auth_method || "client_secret_basic",
+							jwks: body.jwks ? JSON.stringify(body.jwks) : undefined,
+							jwksUri: body.jwks_uri,
+							tokenEndpointAuthMethod:
 								body.token_endpoint_auth_method || "client_secret_basic",
 							disabled: false,
 							userId: session?.session.userId,

@@ -46,6 +46,25 @@ export const oAuthApplicationSchema = z.object({
 	 * Whether the client is disabled or not.
 	 */
 	disabled: z.boolean().optional().default(false),
+	/**
+	 * JSON Web Key Set for private_key_jwt authentication
+	 */
+	jwks: z.string().optional(),
+	/**
+	 * JWKS URI for fetching public keys
+	 */
+	jwksUri: z.string().optional(),
+	/**
+	 * Token endpoint authentication method
+	 */
+	tokenEndpointAuthMethod: z
+		.enum([
+			"client_secret_post",
+			"client_secret_basic",
+			"private_key_jwt",
+			"none",
+		])
+		.optional(),
 
 	// Database fields
 	redirectUrls: z.string(),
@@ -89,6 +108,19 @@ export const schema = {
 				type: "boolean",
 				required: false,
 				defaultValue: false,
+			},
+			jwks: {
+				type: "string",
+				required: false,
+			},
+			jwksUri: {
+				type: "string",
+				required: false,
+			},
+			tokenEndpointAuthMethod: {
+				type: "string",
+				required: false,
+				defaultValue: "client_secret_post",
 			},
 			userId: {
 				type: "string",
