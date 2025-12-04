@@ -1122,12 +1122,13 @@ export const auth = betterAuth({
 	console.log(
 		chalk.green(`\n✔ `) + chalk.bold("Success! ") + "Project setup complete.\n",
 	);
-	console.log(chalk.bold("Next steps:"));
+
+	let logs: string[] = [];
 
 	let nextStepNum = 1;
 
 	if (databaseChoice === "yes" && database) {
-		console.log(
+		logs.push(
 			`  ${nextStepNum}. Set up your database with necessary environment variables`,
 		);
 		nextStepNum++;
@@ -1148,17 +1149,15 @@ export const auth = betterAuth({
 			} else {
 				command = "npx @better-auth/cli migrate";
 			}
-			console.log(
-				`  ${nextStepNum}. Run ${chalk.cyan(command)} to apply schema`,
-			);
+			logs.push(`  ${nextStepNum}. Run ${chalk.cyan(command)} to apply schema`);
 			nextStepNum++;
 		}
 	}
 
 	// Show mount handler instructions if framework wasn't detected
 	if (!frameworkWasDetected) {
-		console.log(`  ${nextStepNum}. Mount the auth handler`);
-		console.log(
+		logs.push(`  ${nextStepNum}. Mount the auth handler`);
+		logs.push(
 			`     Use ${chalk.cyan("auth.handler")} with a Web API compatible request object\n` +
 				`     Default route: ${chalk.cyan('"/api/auth"')} (configurable via ${chalk.cyan("basePath")})`,
 		);
@@ -1182,10 +1181,15 @@ export const auth = betterAuth({
 				return `\n     - ${envVars}`;
 			})
 			.join("");
-		console.log(
+		logs.push(
 			`  ${nextStepNum}. Add social provider credentials to .env:${providerList}`,
 		);
 		nextStepNum++;
+	}
+
+	if (logs.length > 0) {
+		console.log(chalk.bold("Next steps:"));
+		console.log(logs.join("\n"));
 	}
 }
 let initBuilder = new Command("init")

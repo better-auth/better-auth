@@ -1,4 +1,4 @@
-import { exec } from "child_process";
+import { exec } from "node:child_process";
 import type { PackageManager } from "./get-package-manager";
 import { getPackageManager } from "./get-package-manager";
 

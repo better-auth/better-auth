@@ -1,4 +1,4 @@
-import Crypto from "crypto";
+import Crypto from "node:crypto";
 
 type Success<T> = {
 	data: T;

@@ -1,5 +1,3 @@
-import chalk from "chalk";
-import yoctoSpinner from "yocto-spinner";
 import type { ZodSchema } from "zod";
 import type { DatabaseAdapter } from "./configs/databases.config";
 import type { Framework } from "./configs/frameworks.config";
