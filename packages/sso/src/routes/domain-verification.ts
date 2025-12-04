@@ -8,14 +8,16 @@ import { generateRandomString } from "better-auth/crypto";
 import * as z from "zod/v4";
 import type { SSOOptions, SSOProvider } from "../types";
 
+const domainVerificationBodySchema = z.object({
+	providerId: z.string(),
+});
+
 export const requestDomainVerification = (options: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/request-domain-verification",
 		{
 			method: "POST",
-			body: z.object({
-				providerId: z.string(),
-			}),
+			body: domainVerificationBodySchema,
 			metadata: {
 				openapi: {
 					summary: "Request a domain verification",
@@ -127,9 +129,7 @@ export const verifyDomain = (options: SSOOptions) => {
 		"/sso/verify-domain",
 		{
 			method: "POST",
-			body: z.object({
-				providerId: z.string(),
-			}),
+			body: domainVerificationBodySchema,
 			metadata: {
 				openapi: {
 					summary: "Verify the provider domain ownership",

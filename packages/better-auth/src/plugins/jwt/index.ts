@@ -19,6 +19,16 @@ export type * from "./types";
 export { createJwk, generateExportedKeyPair } from "./utils";
 export { verifyJWT } from "./verify";
 
+const signJWTBodySchema = z.object({
+	payload: z.record(z.string(), z.any()),
+	overrideOptions: z.record(z.string(), z.any()).optional(),
+});
+
+const verifyJWTBodySchema = z.object({
+	token: z.string(),
+	issuer: z.string().optional(),
+});
+
 export const jwt = (options?: JwtOptions | undefined) => {
 	// Remote url must be set when using signing function
 	if (options?.jwt?.sign && !options.jwks?.remoteUrl) {
@@ -243,10 +253,7 @@ export const jwt = (options?: JwtOptions | undefined) => {
 							},
 						},
 					},
-					body: z.object({
-						payload: z.record(z.string(), z.any()),
-						overrideOptions: z.record(z.string(), z.any()).optional(),
-					}),
+					body: signJWTBodySchema,
 				},
 				async (c) => {
 					const jwt = await signJWT(c, {
@@ -279,10 +286,7 @@ export const jwt = (options?: JwtOptions | undefined) => {
 							},
 						},
 					},
-					body: z.object({
-						token: z.string(),
-						issuer: z.string().optional(),
-					}),
+					body: verifyJWTBodySchema,
 				},
 				async (ctx) => {
 					const overrideOptions = ctx.body.issuer
