@@ -26,6 +26,7 @@ export const auth = betterAuth({
 		passkey(),
 		openAPI(),
 		bearer(),
+		/* cspell:disable-next-line */
 		admin({ adminUserIds: ["EXD5zjob2SD6CBWcEQ6OpLRHcyoUbnaB"] }),
 		multiSession(),
 		oAuthProxy(),

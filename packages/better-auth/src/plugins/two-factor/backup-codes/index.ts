@@ -1,10 +1,10 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { safeJSONParse } from "@better-auth/core/utils";
 import { APIError } from "better-call";
 import * as z from "zod";
 import { sessionMiddleware } from "../../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
 import { generateRandomString } from "../../../crypto/random";
-import { safeJSONParse } from "../../../utils/json";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import type {
 	TwoFactorProvider,
@@ -325,7 +325,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 						data: JSON.stringify(validate.updated),
 					});
 
-					await ctx.context.adapter.updateMany({
+					const updated = await ctx.context.adapter.updateMany({
 						model: twoFactorTable,
 						update: {
 							backupCodes: updatedBackupCodes,
@@ -335,8 +335,17 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 								field: "userId",
 								value: user.id,
 							},
+							{
+								field: "backupCodes",
+								value: twoFactor.backupCodes,
+							},
 						],
 					});
+					if (!updated) {
+						throw new APIError("CONFLICT", {
+							message: "Failed to verify backup code. Please try again.",
+						});
+					}
 
 					if (!ctx.body.disableSession) {
 						return valid(ctx);

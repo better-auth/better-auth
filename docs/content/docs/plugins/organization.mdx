@@ -29,12 +29,12 @@ export const auth = betterAuth({
 
     <Tabs items={["migrate", "generate"]}>
         <Tab value="migrate">
-        ```bash
+        ```package-install
         npx @better-auth/cli migrate
         ```
         </Tab>
         <Tab value="generate">
-        ```bash
+        ```package-install
         npx @better-auth/cli generate
         ```
         </Tab>
@@ -612,7 +612,7 @@ You can set the active organization by calling the `organization.setActive` func
   set to `null`.
 </Callout>
 
-<APIMethod path="/organization/set-active" method="POST">
+<APIMethod path="/organization/set-active" method="POST" requireSession>
 ```ts
 type setActiveOrganization = {
     /**
@@ -858,7 +858,7 @@ export const auth = betterAuth({
 
 To invite users to an organization, you can use the `invite` function provided by the client. The `invite` function takes an object with the following properties:
 
-<APIMethod path="/organization/invite-member" method="POST">
+<APIMethod path="/organization/invite-member" method="POST" requireSession>
 ```ts
 type createInvitation = {
     /**
@@ -900,7 +900,7 @@ When a user receives an invitation email, they can click on the invitation link 
 
 Make sure to call the `acceptInvitation` function after the user is logged in.
 
-<APIMethod path="/organization/accept-invitation" method="POST">
+<APIMethod path="/organization/accept-invitation" method="POST" requireSession>
 ```ts
 type acceptInvitation = {
     /**
@@ -931,44 +931,13 @@ export const auth = betterAuth({
 });
 ```
 
-### Invitation Accepted Callback
-
-You can configure Better Auth to execute a callback function when an invitation is accepted. This is useful for logging events, updating analytics, sending notifications, or any other custom logic you need to run when someone joins your organization.
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { organization } from "better-auth/plugins";
-
-export const auth = betterAuth({
-  plugins: [
-    organization({
-      async sendInvitationEmail(data) {
-        // ... your invitation email logic
-      },
-      async onInvitationAccepted(data) {
-        // This callback gets triggered when an invitation is accepted
-      },
-    }),
-  ],
-});
-```
-
-The callback receives the following data:
-
-- `id`: The invitation ID
-- `role`: The role assigned to the user
-- `organization`: The organization the user joined
-- `invitation`: The invitation object
-- `inviter`: The member who sent the invitation (including user details)
-- `acceptedUser`: The user who accepted the invitation
-
 ### Cancel Invitation
 
 If a user has sent out an invitation, you can use this method to cancel it.
 
 If you're looking for how a user can reject an invitation, you can find that [here](#reject-invitation).
 
-<APIMethod path="/organization/cancel-invitation" method="POST" noResult>
+<APIMethod path="/organization/cancel-invitation" method="POST" noResult requireSession>
 ```ts
 type cancelInvitation = {
     /**
@@ -983,7 +952,7 @@ type cancelInvitation = {
 
 If this user has received an invitation, but wants to decline it, this method will allow you to do so by rejecting it.
 
-<APIMethod path="/organization/reject-invitation" method="POST" noResult>
+<APIMethod path="/organization/reject-invitation" method="POST" noResult requireSession>
 ```ts
 type rejectInvitation = {
     /**
@@ -1024,7 +993,7 @@ type getInvitation = {
 
 To list all invitations for a given organization you can use the `listInvitations` function provided by the client.
 
-<APIMethod path="/organization/list-invitations" method="GET">
+<APIMethod path="/organization/list-invitations" method="GET" requireSession>
 ```ts
 type listInvitations = {
     /**
@@ -1064,7 +1033,7 @@ const invitations = await auth.api.listUserInvitations({
 
 To list all members of an organization you can use the `listMembers` function.
 
-<APIMethod path="/organization/list-members" method="GET">
+<APIMethod path="/organization/list-members" method="GET" requireSession>
 
 ```ts
 type listMembers = {
@@ -1108,7 +1077,7 @@ type listMembers = {
 
 To remove you can use `organization.removeMember`
 
-<APIMethod path="/organization/remove-member" method="POST">
+<APIMethod path="/organization/remove-member" method="POST" requireSession>
 ```ts
 type removeMember = {
     /**
@@ -1127,7 +1096,7 @@ type removeMember = {
 
 To update the role of a member in an organization, you can use the `organization.updateMemberRole`. If the user has the permission to update the role of the member, the role will be updated.
 
-<APIMethod path="/organization/update-member-role" method="POST" noResult>
+<APIMethod path="/organization/update-member-role" method="POST" noResult requireSession>
 ```ts
 type updateMemberRole = {
     /**
@@ -1942,7 +1911,7 @@ type removeTeam = {
 
 Sets the given team as the current active team. If `teamId` is `null` the current active team is unset.
 
-<APIMethod path="/organization/set-active-team" method="POST">
+<APIMethod path="/organization/set-active-team" method="POST" requireSession>
 ```ts
 type setActiveTeam = {
     /**
@@ -1957,7 +1926,7 @@ type setActiveTeam = {
 
 List all teams that the current user is a part of.
 
-<APIMethod path="/organization/list-user-teams" method="GET">
+<APIMethod path="/organization/list-user-teams" method="GET" requireSession>
   ```ts 
   type listUserTeams = {
   }
@@ -1968,7 +1937,7 @@ List all teams that the current user is a part of.
 
 List the members of the given team.
 
-<APIMethod path="/organization/list-team-members" method="POST" forceAsQuery>
+<APIMethod path="/organization/list-team-members" method="POST" forceAsQuery requireSession>
 ```ts
 type listTeamMembers = {
     /**
@@ -1983,7 +1952,7 @@ type listTeamMembers = {
 
 Add a member to a team.
 
-<APIMethod path="/organization/add-team-member" method="POST">
+<APIMethod path="/organization/add-team-member" method="POST" requireSession>
 ```ts
 type addTeamMember = {
     /**
@@ -2002,7 +1971,7 @@ type addTeamMember = {
 
 Remove a member from a team.
 
-<APIMethod path="/organization/remove-team-member" method="POST">
+<APIMethod path="/organization/remove-team-member" method="POST" requireSession>
 ```ts
 type removeTeamMember = {
     /**
@@ -2041,14 +2010,14 @@ The teams feature supports several configuration options:
     enabled: true,
     maximumTeams: 10 // Fixed number
     // OR
-    maximumTeams: async ({ organizationId, session }, request) => {
+    maximumTeams: async ({ organizationId, session }, ctx) => {
       // Dynamic limit based on organization plan
       const plan = await getPlan(organizationId)
       return plan === 'pro' ? 20 : 5
     },
     maximumMembersPerTeam: 10 // Fixed number
     // OR
-    maximumMembersPerTeam: async ({ teamId, session, organizationId }, request) => {
+    maximumMembersPerTeam: async ({ teamId, session, organizationId }, ctx) => {
       // Dynamic limit based on team plan
       const plan = await getPlan(organizationId, teamId)
       return plan === 'pro' ? 50 : 10
@@ -2500,7 +2469,7 @@ await client.organization.create({
   slug: "test",
   newField: "123", //this should be allowed
   //@ts-expect-error - this field is not available
-  unavalibleField: "123", //this should be not allowed
+  unavailableField: "123", //this should be not allowed
 });
 ```
 

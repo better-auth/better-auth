@@ -9,7 +9,8 @@ import {
 import { getCurrentAuthContext } from "@better-auth/core/context";
 import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
-import { SignJWT } from "jose";
+import type { OpenAPIParameter } from "better-call";
+import { jwtVerify, SignJWT } from "jose";
 import * as z from "zod";
 import { APIError, getSessionFromCtx, sessionMiddleware } from "../../api";
 import { parseSetCookieHeader } from "../../cookies";
@@ -20,7 +21,7 @@ import {
 } from "../../crypto";
 import { mergeSchema } from "../../db";
 import type { jwt } from "../jwt";
-import { getJwtToken } from "../jwt/sign";
+import { getJwtToken, verifyJWT } from "../jwt";
 import { authorize } from "./authorize";
 import type { OAuthApplication } from "./schema";
 import { schema } from "./schema";
@@ -32,6 +33,7 @@ import type {
 	OIDCOptions,
 } from "./types";
 import { defaultClientSecretHasher } from "./utils";
+import { parsePrompt } from "./utils/prompt";
 
 const getJwtPlugin = (ctx: GenericEndpointContext) => {
 	return ctx.context.options.plugins?.find(
@@ -98,6 +100,7 @@ export const getMetadata = (
 		userinfo_endpoint: `${baseURL}/oauth2/userinfo`,
 		jwks_uri: `${baseURL}/jwks`,
 		registration_endpoint: `${baseURL}/oauth2/register`,
+		end_session_endpoint: `${baseURL}/oauth2/endsession`,
 		scopes_supported: ["openid", "profile", "email", "offline_access"],
 		response_types_supported: ["code"],
 		response_modes_supported: ["query"],
@@ -130,6 +133,10 @@ export const getMetadata = (
 	};
 };
 
+const DEFAULT_CODE_EXPIRES_IN = 600;
+const DEFAULT_ACCESS_TOKEN_EXPIRES_IN = 3600;
+const DEFAULT_REFRESH_TOKEN_EXPIRES_IN = 604800;
+
 /**
  * OpenID Connect (OIDC) plugin for Better Auth. This plugin implements the
  * authorization code flow and the token exchange flow. It also implements the
@@ -146,10 +153,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 	};
 
 	const opts = {
-		codeExpiresIn: 600,
+		codeExpiresIn: DEFAULT_CODE_EXPIRES_IN,
 		defaultScope: "openid",
-		accessTokenExpiresIn: 3600,
-		refreshTokenExpiresIn: 604800,
+		accessTokenExpiresIn: DEFAULT_ACCESS_TOKEN_EXPIRES_IN,
+		refreshTokenExpiresIn: DEFAULT_REFRESH_TOKEN_EXPIRES_IN,
 		allowPlainCodeChallengeMethod: true,
 		storeClientSecret: "plain" as const,
 		...options,
@@ -245,7 +252,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						return true;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const cookie = await ctx.getSignedCookie(
+						const loginPromptCookie = await ctx.getSignedCookie(
 							"oidc_login_prompt",
 							ctx.context.secret,
 						);
@@ -254,7 +261,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							ctx.context.responseHeaders?.get("set-cookie") || "",
 						);
 						const hasSessionToken = parsedSetCookieHeader.has(cookieName);
-						if (!cookie || !hasSessionToken) {
+						if (!loginPromptCookie || !hasSessionToken) {
 							return;
 						}
 						ctx.setCookie("oidc_login_prompt", "", {
@@ -266,13 +273,24 @@ export const oidcProvider = (options: OIDCOptions) => {
 							return;
 						}
 						const session =
-							await ctx.context.internalAdapter.findSession(sessionToken);
+							(await ctx.context.internalAdapter.findSession(sessionToken)) ||
+							ctx.context.newSession;
 						if (!session) {
 							return;
 						}
-						ctx.query = JSON.parse(cookie);
-						// Don't force prompt to "consent" - let the authorize function
-						// determine if consent is needed based on OIDC spec requirements
+						ctx.query = JSON.parse(loginPromptCookie);
+
+						// Remove "login" from prompt since user just logged in
+						const promptSet = parsePrompt(String(ctx.query?.prompt));
+						if (promptSet.has("login")) {
+							const newPromptSet = new Set(promptSet);
+							newPromptSet.delete("login");
+							ctx.query = {
+								...ctx.query,
+								prompt: Array.from(newPromptSet).join(" "),
+							};
+						}
+
 						ctx.context.session = session;
 						const response = await authorize(ctx, opts);
 						return response;
@@ -395,10 +413,13 @@ export const oidcProvider = (options: OIDCOptions) => {
 
 					if (!consentCode) {
 						// Check for cookie-based consent flow
-						consentCode = await ctx.getSignedCookie(
+						const cookieValue = await ctx.getSignedCookie(
 							"oidc_consent_prompt",
 							ctx.context.secret,
 						);
+						if (cookieValue) {
+							consentCode = cookieValue;
+						}
 					}
 
 					if (!consentCode) {
@@ -448,7 +469,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 					const code = generateRandomString(32, "a-z", "A-Z", "0-9");
-					const codeExpiresInMs = opts.codeExpiresIn * 1000;
+					const codeExpiresInMs =
+						(opts?.codeExpiresIn ?? DEFAULT_CODE_EXPIRES_IN) * 1000;
 					const expiresAt = new Date(Date.now() + codeExpiresInMs);
 					await ctx.context.internalAdapter.updateVerificationValue(
 						verification.id,
@@ -488,6 +510,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 					body: z.record(z.any(), z.any()),
 					metadata: {
 						isAction: false,
+						allowedMediaTypes: [
+							"application/x-www-form-urlencoded",
+							"application/json",
+						],
 					},
 				},
 				async (ctx) => {
@@ -828,7 +854,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 						...additionalUserClaims,
 					};
 					const expirationTime =
-						Math.floor(Date.now() / 1000) + opts.accessTokenExpiresIn;
+						Math.floor(Date.now() / 1000) +
+						(opts?.accessTokenExpiresIn ?? DEFAULT_ACCESS_TOKEN_EXPIRES_IN);
 
 					let idToken: string;
 
@@ -914,7 +941,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 				{
 					method: "GET",
 					operationId: "oauth2Userinfo",
-					use: [sessionMiddleware],
 					metadata: {
 						isAction: false,
 						openapi: {
@@ -1483,6 +1509,252 @@ export const oidcProvider = (options: OIDCOptions) => {
 						clientId: client.clientId,
 						name: client.name,
 						icon: client.icon || null,
+					});
+				},
+			),
+			/**
+			 * ### Endpoint
+			 *
+			 * GET/POST `/oauth2/endsession`
+			 *
+			 * Implements RP-Initiated Logout as per OpenID Connect RP-Initiated Logout 1.0.
+			 * Allows relying parties to request that an OpenID Provider log out the end-user.
+			 *
+			 * @see [OpenID Connect RP-Initiated Logout Spec](https://openid.net/specs/openid-connect-rpinitiated-1_0.html)
+			 */
+			endSession: createAuthEndpoint(
+				"/oauth2/endsession",
+				{
+					method: ["GET", "POST"],
+					query: z
+						.object({
+							id_token_hint: z.string().optional(),
+							logout_hint: z.string().optional(),
+							client_id: z.string().optional(),
+							post_logout_redirect_uri: z.string().optional(),
+							state: z.string().optional(),
+							ui_locales: z.string().optional(),
+						})
+						.optional(),
+					metadata: {
+						isAction: false,
+						openapi: {
+							description:
+								"RP-Initiated Logout endpoint. Logs out the end-user and optionally redirects to a post-logout URI.",
+							parameters: [
+								{
+									name: "id_token_hint",
+									in: "query",
+									description:
+										"Previously issued ID Token passed as a hint about the End-User's current authenticated session",
+									required: false,
+									schema: { type: "string" },
+								},
+								{
+									name: "logout_hint",
+									in: "query",
+									description:
+										"Hint to the Authorization Server about the End-User that is logging out",
+									required: false,
+									schema: { type: "string" },
+								},
+								{
+									name: "client_id",
+									in: "query",
+									description:
+										"OAuth 2.0 Client Identifier. Required if post_logout_redirect_uri is used without id_token_hint",
+									required: false,
+									schema: { type: "string" },
+								},
+								{
+									name: "post_logout_redirect_uri",
+									in: "query",
+									description:
+										"URL to which the RP is requesting that the End-User's User Agent be redirected after a logout has been performed",
+									required: false,
+									schema: { type: "string", format: "uri" },
+								},
+								{
+									name: "state",
+									in: "query",
+									description:
+										"Opaque value used by the RP to maintain state between the logout request and the callback",
+									required: false,
+									schema: { type: "string" },
+								},
+								{
+									name: "ui_locales",
+									in: "query",
+									description:
+										"End-User's preferred languages and scripts for the user interface",
+									required: false,
+									schema: { type: "string" },
+								},
+							] as OpenAPIParameter[],
+							responses: {
+								"302": {
+									description:
+										"Redirect to post_logout_redirect_uri or logout confirmation page",
+								},
+								"200": {
+									description: "Logout completed successfully",
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const {
+						id_token_hint,
+						logout_hint,
+						client_id,
+						post_logout_redirect_uri,
+						state,
+						ui_locales,
+					} = ctx.query || {};
+
+					let validatedClientId: string | null = null;
+					let validatedUserId: string | null = null;
+
+					// Validate id_token_hint if provided
+					if (id_token_hint) {
+						try {
+							const jwtPlugin = getJwtPlugin(ctx);
+							if (jwtPlugin && jwtPlugin.options && options?.useJWTPlugin) {
+								// For JWT plugin tokens, verify using JWKS
+								const verified = await verifyJWT(
+									id_token_hint,
+									jwtPlugin.options,
+								);
+								if (verified) {
+									validatedUserId = verified.sub;
+									validatedClientId = verified.aud
+										? typeof verified.aud === "string"
+											? verified.aud
+											: verified.aud[0]!
+										: null;
+								}
+							} else {
+								// For HS256 tokens, we need the client_id to verify
+								if (client_id) {
+									const client = await getClient(client_id, trustedClients);
+									if (client && client.clientSecret) {
+										try {
+											const { payload } = await jwtVerify(
+												id_token_hint,
+												new TextEncoder().encode(client.clientSecret),
+											);
+											validatedUserId = payload.sub as string;
+											validatedClientId = payload.aud as string;
+										} catch (error) {
+											// Invalid token, continue with logout but no validation
+										}
+									}
+								}
+							}
+						} catch (error) {
+							// Invalid id_token_hint, but we continue with logout anyway
+							ctx.context.logger.debug(
+								"Invalid id_token_hint provided to end_session endpoint",
+							);
+						}
+					}
+
+					// Validate client_id if provided
+					if (client_id) {
+						const client = await getClient(client_id, trustedClients);
+						if (!client) {
+							throw new APIError("BAD_REQUEST", {
+								error: "invalid_client",
+								error_description: "Invalid client_id",
+							});
+						}
+						// If we have a validated client from the token, ensure they match
+						if (validatedClientId && validatedClientId !== client_id) {
+							throw new APIError("BAD_REQUEST", {
+								error: "invalid_request",
+								error_description:
+									"client_id does not match the ID Token's audience",
+							});
+						}
+						validatedClientId = client_id;
+					}
+
+					// Validate post_logout_redirect_uri if provided
+					if (post_logout_redirect_uri) {
+						if (!validatedClientId) {
+							throw new APIError("BAD_REQUEST", {
+								error: "invalid_request",
+								error_description:
+									"client_id is required when using post_logout_redirect_uri without a valid id_token_hint",
+							});
+						}
+
+						const client = await getClient(validatedClientId, trustedClients);
+						if (!client) {
+							throw new APIError("BAD_REQUEST", {
+								error: "invalid_client",
+								error_description: "Invalid client",
+							});
+						}
+
+						const isValidRedirectUri = client.redirectUrls.some(
+							(registeredUri) => post_logout_redirect_uri === registeredUri,
+						);
+
+						if (!isValidRedirectUri) {
+							throw new APIError("BAD_REQUEST", {
+								error: "invalid_request",
+								error_description:
+									"post_logout_redirect_uri is not registered for this client",
+							});
+						}
+					}
+
+					const session = await getSessionFromCtx(ctx);
+
+					if (validatedUserId || session) {
+						const userId = validatedUserId || session?.user.id;
+						if (userId) {
+							await ctx.context.adapter.deleteMany({
+								model: modelName.oauthAccessToken,
+								where: [{ field: "userId", value: userId }],
+							});
+						}
+					}
+
+					if (session) {
+						await ctx.context.internalAdapter.deleteSession(
+							session.session.token,
+						);
+						ctx.setSignedCookie(
+							ctx.context.authCookies.sessionToken.name,
+							"",
+							ctx.context.secret,
+							{
+								maxAge: 0,
+							},
+						);
+					}
+
+					if (post_logout_redirect_uri) {
+						try {
+							const redirectUrl = new URL(post_logout_redirect_uri);
+							if (state) {
+								redirectUrl.searchParams.set("state", state);
+							}
+							return ctx.redirect(redirectUrl.toString());
+						} catch (error) {
+							throw new APIError("BAD_REQUEST", {
+								error: "invalid_request",
+								error_description: "Invalid post_logout_redirect_uri format",
+							});
+						}
+					}
+
+					return ctx.json({
+						success: true,
+						message: "Logout successful",
 					});
 				},
 			),

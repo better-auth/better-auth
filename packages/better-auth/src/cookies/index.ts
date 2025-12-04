@@ -5,6 +5,7 @@ import type {
 } from "@better-auth/core";
 import { env, isProduction } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
+import { safeJSONParse } from "@better-auth/core/utils";
 import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
@@ -19,7 +20,6 @@ import {
 import { parseUserOutput } from "../db/schema";
 import type { Session, User } from "../types";
 import { getDate } from "../utils/date";
-import { safeJSONParse } from "../utils/json";
 import { getBaseURL } from "../utils/url";
 import { createSessionStore } from "./session-store";
 
@@ -82,6 +82,9 @@ export function getCookies(options: BetterAuthOptions) {
 	const sessionData = createCookie("session_data", {
 		maxAge: options.session?.cookieCache?.maxAge || 60 * 5,
 	});
+	const accountData = createCookie("account_data", {
+		maxAge: options.session?.cookieCache?.maxAge || 60 * 5,
+	});
 	const dontRememberToken = createCookie("dont_remember");
 	return {
 		sessionToken: {
@@ -99,6 +102,10 @@ export function getCookies(options: BetterAuthOptions) {
 		dontRememberToken: {
 			name: dontRememberToken.name,
 			options: dontRememberToken.attributes,
+		},
+		accountData: {
+			name: accountData.name,
+			options: accountData.attributes,
 		},
 	};
 }

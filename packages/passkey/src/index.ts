@@ -60,7 +60,6 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 						})
 						.optional(),
 					metadata: {
-						client: false,
 						openapi: {
 							operationId: "generatePasskeyRegistrationOptions",
 							description: "Generate registration options for a new passkey",
@@ -252,7 +251,7 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 			generatePasskeyAuthenticationOptions: createAuthEndpoint(
 				"/passkey/generate-authenticate-options",
 				{
-					method: "POST",
+					method: "GET",
 					metadata: {
 						openapi: {
 							operationId: "passkeyGenerateAuthenticateOptions",
@@ -803,7 +802,7 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 					},
 				},
 				async (ctx) => {
-					await ctx.context.adapter.delete<Passkey>({
+					const passkey = await ctx.context.adapter.findOne<Passkey>({
 						model: "passkey",
 						where: [
 							{
@@ -812,8 +811,20 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 							},
 						],
 					});
-					return ctx.json(null, {
-						status: 200,
+					if (!passkey) {
+						throw new APIError("NOT_FOUND", {
+							message: PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND,
+						});
+					}
+					if (passkey.userId !== ctx.context.session.user.id) {
+						throw new APIError("UNAUTHORIZED");
+					}
+					await ctx.context.adapter.delete({
+						model: "passkey",
+						where: [{ field: "id", value: passkey.id }],
+					});
+					return ctx.json({
+						status: true,
 					});
 				},
 			),

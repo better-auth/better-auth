@@ -1,7 +1,6 @@
-import { defineConfig } from "vitest/config";
+import { defineProject } from "vitest/config";
 
-export default defineConfig({
-	root: ".",
+export default defineProject({
 	test: {
 		clearMocks: true,
 		globals: true,

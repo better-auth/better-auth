@@ -13,6 +13,7 @@ The API Key plugin allows you to create and manage API keys for your application
 - [metadata for API keys](/docs/plugins/api-key#metadata)
 - Custom prefix
 - [Sessions from API keys](/docs/plugins/api-key#sessions-from-api-keys)
+- [Secondary storage support](/docs/plugins/api-key#secondary-storage) for high-performance API key lookups
 
 ## Installation
 
@@ -38,12 +39,12 @@ The API Key plugin allows you to create and manage API keys for your application
 
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
-            ```bash
+            ```package-install
             npx @better-auth/cli migrate
             ```
             </Tab>
             <Tab value="generate">
-            ```bash
+            ```package-install
             npx @better-auth/cli generate
             ```
             </Tab>
@@ -134,6 +135,7 @@ type createApiKey = {
     rateLimitEnabled?: boolean = true
     /**
      * Permissions of the Api Key.
+     * @serverOnly
      */
     permissions?: Record<string, string[]>
 }
@@ -453,6 +455,121 @@ export const auth = betterAuth({
   ],
 });
 ```
+
+## Storage Modes
+
+The API Key plugin supports multiple storage modes for flexible API key management, allowing you to choose the best strategy for your use case.
+
+### Storage Mode Options
+
+#### `"database"` (Default)
+
+Store API keys only in the database adapter. This is the default mode and requires no additional configuration.
+
+```ts
+export const auth = betterAuth({
+  plugins: [
+    apiKey({
+      storage: "database", // Default, can be omitted
+    }),
+  ],
+});
+```
+
+#### `"secondary-storage"`
+
+Store API keys only in secondary storage (e.g., Redis).
+No fallback to database. Best for high-performance scenarios where all keys are migrated to secondary storage.
+
+```ts
+import { createClient } from "redis";
+import { betterAuth } from "better-auth";
+import { apiKey } from "better-auth/plugins";
+
+const redis = createClient();
+await redis.connect();
+
+export const auth = betterAuth({
+  secondaryStorage: {
+    get: async (key) => await redis.get(key),
+    set: async (key, value, ttl) => {
+      if (ttl) await redis.set(key, value, { EX: ttl });
+      else await redis.set(key, value);
+    },
+    delete: async (key) => await redis.del(key),
+  },
+  plugins: [
+    apiKey({
+      storage: "secondary-storage",
+    }),
+  ],
+});
+```
+
+#### Secondary Storage with Fallback
+
+Check secondary storage first, then fallback to database if not found.
+
+**Read behavior:**
+- Checks secondary storage first
+- If not found, queries the database
+- **Automatically populates secondary storage** when falling back to database (cache warming)
+- Ensures frequently accessed keys stay in cache over time
+
+**Write behavior:**
+- Writes to **both** database and secondary storage
+- Ensures consistency between both storage layers
+
+```ts
+export const auth = betterAuth({
+  secondaryStorage: {
+    get: async (key) => await redis.get(key),
+    set: async (key, value, ttl) => {
+      if (ttl) await redis.set(key, value, { EX: ttl });
+      else await redis.set(key, value);
+    },
+    delete: async (key) => await redis.del(key),
+  },
+  plugins: [
+    apiKey({
+      storage: "secondary-storage",
+      fallbackToDatabase: true,
+    }),
+  ],
+});
+```
+
+### Custom Storage Methods
+
+You can provide custom storage methods specifically for API keys, overriding the global `secondaryStorage` configuration:
+
+```ts
+export const auth = betterAuth({
+  plugins: [
+    apiKey({
+      storage: "secondary-storage",
+      customStorage: {
+        get: async (key) => {
+          // Custom get logic for API keys
+          return await customStorage.get(key);
+        },
+        set: async (key, value, ttl) => {
+          // Custom set logic for API keys
+          await customStorage.set(key, value, ttl);
+        },
+        delete: async (key) => {
+          // Custom delete logic for API keys
+          await customStorage.delete(key);
+        },
+      },
+    }),
+  ],
+});
+```
+
+
+
+
 
 ## Rate Limiting
 
@@ -778,6 +895,70 @@ Custom schema for the API key plugin.
 `enableSessionForAPIKeys` <span className="opacity-70">`boolean`</span>
 
 An API Key can represent a valid session, so we can mock a session for the user if we find a valid API key in the request headers. Default is `false`.
+
+`storage` <span className="opacity-70">`"database" | "secondary-storage"`</span>
+
+Storage backend for API keys. Default is `"database"`.
+
+- `"database"`: Store API keys in the database adapter (default)
+- `"secondary-storage"`: Store API keys in the configured secondary storage (e.g., Redis)
+
+`fallbackToDatabase` <span className="opacity-70">`boolean`</span>
+
+When `storage` is `"secondary-storage"`, enable fallback to database if key is not found in secondary storage.
+Default is `false`.
+
+<Callout>
+  When `storage` is set to `"secondary-storage"`, you must configure `secondaryStorage` in your Better Auth options. API keys will be stored using key-value patterns:
+  - `api-key:${hashedKey}` - Primary lookup by hashed key
+  - `api-key:by-id:${id}` - Lookup by ID
+  - `api-key:by-user:${userId}` - User's API key list
+  
+  If an API key has an expiration date (`expiresAt`), a TTL will be automatically set in secondary storage to ensure automatic cleanup.
+</Callout>
+
+```ts
+export const auth = betterAuth({
+  secondaryStorage: {
+    get: async (key) => {
+      return await redis.get(key);
+    },
+    set: async (key, value, ttl) => {
+      if (ttl) await redis.set(key, value, { EX: ttl });
+      else await redis.set(key, value);
+    },
+    delete: async (key) => {
+      await redis.del(key);
+    },
+  },
+  plugins: [
+    apiKey({
+      storage: "secondary-storage",
+    }),
+  ],
+});
+```
+
+`customStorage` <span className="opacity-70">`{ get: (key: string) => Promise<unknown> | unknown; set: (key: string, value: string, ttl?: number) => Promise<void | null | unknown> | void; delete: (key: string) => Promise<void | null | string> | void; }`</span>
+
+Custom storage methods for API keys. If provided, these methods will be used instead of `ctx.context.secondaryStorage`. Custom methods take precedence over global secondary storage.
+
+Useful when you want to use a different storage backend specifically for API keys, or when you need custom logic for storage operations.
+
+```ts
+export const auth = betterAuth({
+  plugins: [
+    apiKey({
+      storage: "secondary-storage",
+      customStorage: {
+        get: async (key) => await customStorage.get(key),
+        set: async (key, value, ttl) => await customStorage.set(key, value, ttl),
+        delete: async (key) => await customStorage.delete(key), 
+      },
+    }),
+  ],
+});
+```
 
 `permissions` <span className="opacity-70">`{ defaultPermissions?: Statements | ((userId: string, ctx: GenericEndpointContext) => Statements | Promise<Statements>) }`</span>
 

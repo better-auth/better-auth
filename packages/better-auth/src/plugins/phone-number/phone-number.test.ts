@@ -122,6 +122,7 @@ describe("phone auth flow", async () => {
 			user: {
 				changeEmail: {
 					enabled: true,
+					updateEmailWithoutVerification: true,
 				},
 			},
 		},
@@ -206,6 +207,7 @@ describe("phone auth flow", async () => {
 			email: newEmail,
 			password: "password",
 		});
+		console.log(res);
 		expect(res.error).toBe(null);
 	});
 });

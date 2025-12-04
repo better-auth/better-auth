@@ -1,16 +1,14 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type {
+	AdapterFactoryCustomizeAdapterCreator,
+	AdapterFactoryOptions,
 	DBAdapter,
 	DBAdapterDebugLogOption,
 	Where,
 } from "@better-auth/core/db/adapter";
+import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import type { ClientSession, Db, MongoClient } from "mongodb";
 import { ObjectId } from "mongodb";
-import type {
-	AdapterFactoryCustomizeAdapterCreator,
-	AdapterFactoryOptions,
-} from "../adapter-factory";
-import { createAdapterFactory } from "../adapter-factory";
 
 export interface MongoDBAdapterConfig {
 	/**
@@ -47,8 +45,7 @@ export const mongodbAdapter = (
 	let lazyOptions: BetterAuthOptions | null;
 
 	const getCustomIdGenerator = (options: BetterAuthOptions) => {
-		const generator =
-			options.advanced?.database?.generateId || options.advanced?.generateId;
+		const generator = options.advanced?.database?.generateId;
 		if (typeof generator === "function") {
 			return generator;
 		}
@@ -110,12 +107,12 @@ export const mongodbAdapter = (
 									return v;
 								}
 								throw new Error(
-									"Invalid id value, recieved: " + JSON.stringify(v),
+									"Invalid id value, received: " + JSON.stringify(v),
 								);
 							});
 						}
 						throw new Error(
-							"Invalid id value, recieved: " + JSON.stringify(value),
+							"Invalid id value, received: " + JSON.stringify(value),
 						);
 					}
 					try {
@@ -514,10 +511,12 @@ export const mongodbAdapter = (
 						{
 							session,
 							returnDocument: "after",
+							includeResultMetadata: true,
 						},
 					);
-					if (!res) return null;
-					return res as any;
+					const doc = (res as any)?.value ?? null;
+					if (!doc) return null;
+					return doc as any;
 				},
 				async updateMany({ model, where, update: values }) {
 					const clause = convertWhereClause({ where, model });

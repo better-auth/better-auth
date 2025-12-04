@@ -7,7 +7,8 @@ import { APIError } from "better-call";
 import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
 import { parseUserInput } from "../../db";
-import type { AdditionalUserFieldsInput, User } from "../../types";
+import { parseUserOutput } from "../../db/schema";
+import type { AdditionalUserFieldsInput, InferUser, User } from "../../types";
 import { createEmailVerificationToken } from "./email-verification";
 
 export const signUpEmail = <O extends BetterAuthOptions>() =>
@@ -27,6 +28,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						callbackURL?: string | undefined;
 						rememberMe?: boolean | undefined;
 					} & AdditionalUserFieldsInput<O>,
+					returned: {} as {
+						token: string | null;
+						user: InferUser<O>;
+					},
 				},
 				openapi: {
 					operationId: "signUpWithEmailAndPassword",
@@ -307,15 +312,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				) {
 					return ctx.json({
 						token: null,
-						user: {
-							id: createdUser.id,
-							email: createdUser.email,
-							name: createdUser.name,
-							image: createdUser.image,
-							emailVerified: createdUser.emailVerified,
-							createdAt: createdUser.createdAt,
-							updatedAt: createdUser.updatedAt,
-						},
+						user: parseUserOutput(
+							ctx.context.options,
+							createdUser,
+						) as InferUser<O>,
 					});
 				}
 
@@ -338,15 +338,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				);
 				return ctx.json({
 					token: session.token,
-					user: {
-						id: createdUser.id,
-						email: createdUser.email,
-						name: createdUser.name,
-						image: createdUser.image,
-						emailVerified: createdUser.emailVerified,
-						createdAt: createdUser.createdAt,
-						updatedAt: createdUser.updatedAt,
-					},
+					user: parseUserOutput(
+						ctx.context.options,
+						createdUser,
+					) as InferUser<O>,
 				});
 			});
 		},

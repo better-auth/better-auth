@@ -1,6 +1,5 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { defineErrorCodes } from "@better-auth/core/utils";
 import { APIError } from "better-call";
 import type { StringValue as MSStringValue } from "ms";
 import { ms } from "ms";
@@ -9,6 +8,7 @@ import { getSessionFromCtx } from "../../api/routes/session";
 import { generateRandomString } from "../../crypto";
 import { mergeSchema } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
+import { DEVICE_AUTHORIZATION_ERROR_CODES } from "./error-codes";
 import type { DeviceCode } from "./schema";
 import { schema } from "./schema";
 
@@ -27,7 +27,7 @@ const msStringValueSchema = z.custom<MSStringValue>(
 	},
 );
 
-export const $deviceAuthorizationOptionsSchema = z.object({
+export const deviceAuthorizationOptionsSchema = z.object({
 	expiresIn: msStringValueSchema
 		.default("30m")
 		.describe(
@@ -101,46 +101,20 @@ export const $deviceAuthorizationOptionsSchema = z.object({
 		.describe(
 			"Function to handle device authorization requests. If not provided, no additional actions will be taken.",
 		),
+	verificationUri: z
+		.string()
+		.optional()
+		.describe(
+			"The URI where users verify their device code. Can be an absolute URL (https://example.com/device) or relative path (/custom-path). This will be returned as verification_uri in the device code response. If not provided, defaults to /device.",
+		),
 	schema: z.custom<InferOptionSchema<typeof schema>>(() => true),
 });
 
-/**
- * @see {$deviceAuthorizationOptionsSchema}
- */
-export type DeviceAuthorizationOptions = {
-	expiresIn: MSStringValue;
-	interval: MSStringValue;
-	deviceCodeLength: number;
-	userCodeLength: number;
-	generateDeviceCode?: (() => string | Promise<string>) | undefined;
-	generateUserCode?: (() => string | Promise<string>) | undefined;
-	validateClient?:
-		| ((clientId: string) => boolean | Promise<boolean>)
-		| undefined;
-	onDeviceAuthRequest?: (
-		clientId: string,
-		scope: string | undefined,
-	) => void | Promise<void>;
-	schema?: InferOptionSchema<typeof schema> | undefined;
-};
+export type DeviceAuthorizationOptions = z.infer<
+	typeof deviceAuthorizationOptionsSchema
+>;
 
-export { deviceAuthorizationClient } from "./client";
-
-const DEVICE_AUTHORIZATION_ERROR_CODES = defineErrorCodes({
-	INVALID_DEVICE_CODE: "Invalid device code",
-	EXPIRED_DEVICE_CODE: "Device code has expired",
-	EXPIRED_USER_CODE: "User code has expired",
-	AUTHORIZATION_PENDING: "Authorization pending",
-	ACCESS_DENIED: "Access denied",
-	INVALID_USER_CODE: "Invalid user code",
-	DEVICE_CODE_ALREADY_PROCESSED: "Device code already processed",
-	POLLING_TOO_FREQUENTLY: "Polling too frequently",
-	USER_NOT_FOUND: "User not found",
-	FAILED_TO_CREATE_SESSION: "Failed to create session",
-	INVALID_DEVICE_CODE_STATUS: "Invalid device code status",
-	AUTHENTICATION_REQUIRED: "Authentication required",
-});
-
+/* cspell:disable-next-line */
 const defaultCharset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 /**
@@ -160,10 +134,42 @@ const defaultGenerateUserCode = (length: number) => {
 		.join("");
 };
 
+/**
+ * @internal
+ */
+const buildVerificationUris = (
+	verificationUri: string | undefined,
+	baseURL: string,
+	userCode: string,
+): {
+	verificationUri: string;
+	verificationUriComplete: string;
+} => {
+	const uri = verificationUri || "/device";
+
+	let verificationUrl: URL;
+	try {
+		verificationUrl = new URL(uri);
+	} catch {
+		verificationUrl = new URL(uri, baseURL);
+	}
+
+	const verificationUriCompleteUrl = new URL(verificationUrl);
+	verificationUriCompleteUrl.searchParams.set("user_code", userCode);
+
+	const verificationUriString = verificationUrl.toString();
+	const verificationUriCompleteString = verificationUriCompleteUrl.toString();
+
+	return {
+		verificationUri: verificationUriString,
+		verificationUriComplete: verificationUriCompleteString,
+	};
+};
+
 export const deviceAuthorization = (
 	options: Partial<DeviceAuthorizationOptions> = {},
 ) => {
-	const opts = $deviceAuthorizationOptionsSchema.parse(options);
+	const opts = deviceAuthorizationOptionsSchema.parse(options);
 	const generateDeviceCode = async () => {
 		if (opts.generateDeviceCode) {
 			return opts.generateDeviceCode();
@@ -228,11 +234,15 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 													},
 													verification_uri: {
 														type: "string",
-														description: "The URL for user verification",
+														format: "uri",
+														description:
+															"The URL for user verification. Defaults to /device if not configured.",
 													},
 													verification_uri_complete: {
 														type: "string",
-														description: "The complete URL with user code",
+														format: "uri",
+														description:
+															"The complete URL with user code as query parameter.",
 													},
 													expires_in: {
 														type: "number",
@@ -304,22 +314,19 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 						},
 					});
 
-					const baseURL = new URL(ctx.context.baseURL);
-					const verification_uri = new URL("/device", baseURL);
-
-					const verification_uri_complete = new URL(verification_uri);
-					verification_uri_complete.searchParams.set(
-						"user_code",
-						// should we support custom formatting function here?
-						encodeURIComponent(userCode),
-					);
+					const { verificationUri, verificationUriComplete } =
+						buildVerificationUris(
+							opts.verificationUri,
+							ctx.context.baseURL,
+							userCode,
+						);
 
 					return ctx.json(
 						{
 							device_code: deviceCode,
 							user_code: userCode,
-							verification_uri: verification_uri.toString(),
-							verification_uri_complete: verification_uri_complete.toString(),
+							verification_uri: verificationUri,
+							verification_uri_complete: verificationUriComplete,
 							expires_in: Math.floor(expiresIn / 1000),
 							interval: Math.floor(ms(opts.interval) / 1000),
 						},
@@ -548,17 +555,6 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 						deviceCodeRecord.status === "approved" &&
 						deviceCodeRecord.userId
 					) {
-						// Delete the device code after successful authorization
-						await ctx.context.adapter.delete({
-							model: "deviceCode",
-							where: [
-								{
-									field: "id",
-									value: deviceCodeRecord.id,
-								},
-							],
-						});
-
 						const user = await ctx.context.internalAdapter.findUserById(
 							deviceCodeRecord.userId,
 						);
@@ -605,6 +601,17 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 							);
 						}
 
+						// Delete the device code after successful authorization
+						await ctx.context.adapter.delete({
+							model: "deviceCode",
+							where: [
+								{
+									field: "id",
+									value: deviceCodeRecord.id,
+								},
+							],
+						});
+
 						// Return OAuth 2.0 compliant token response
 						return ctx.json(
 							{
@@ -650,10 +657,11 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					}),
 					metadata: {
 						openapi: {
-							description: "Display device verification page",
+							description:
+								"Verify user code and get device authorization status",
 							responses: {
 								200: {
-									description: "Verification page HTML",
+									description: "Device authorization status",
 									content: {
 										"application/json": {
 											schema: {
@@ -679,8 +687,6 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					},
 				},
 				async (ctx) => {
-					// This endpoint would typically serve an HTML page for user verification
-					// For now, we'll return a simple JSON response
 					const { user_code } = ctx.query;
 					const cleanUserCode = user_code.replace(/-/g, "");
 
@@ -775,6 +781,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					}
 
 					const { userCode } = ctx.body;
+					const cleanUserCode = userCode.replace(/-/g, "");
 
 					const deviceCodeRecord =
 						await ctx.context.adapter.findOne<DeviceCode>({
@@ -782,7 +789,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 							where: [
 								{
 									field: "userCode",
-									value: userCode,
+									value: cleanUserCode,
 								},
 							],
 						});

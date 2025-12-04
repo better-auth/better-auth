@@ -1,5 +1,5 @@
 {
-  "$schema": "https://turborepo.org/schema.json",
+  "$schema": "./node_modules/turbo/schema.json",
   "globalDependencies": [
     "package.json",
     "tsconfig.json",
@@ -22,6 +22,9 @@
     },
     "//#format": {},
     "lint": {},
+    "lint:package": {
+      "dependsOn": ["build"]
+    },
     "test": {
       "dependsOn": ["build"]
     },

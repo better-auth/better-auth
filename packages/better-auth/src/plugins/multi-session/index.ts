@@ -13,7 +13,7 @@ import {
 	setSessionCookie,
 } from "../../cookies";
 
-interface MultiSessionConfig {
+export interface MultiSessionConfig {
 	/**
 	 * The maximum number of sessions a user can have
 	 * at a time
@@ -62,7 +62,6 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 					if (!cookieHeader) return ctx.json([]);
 
 					const cookies = Object.fromEntries(parseCookies(cookieHeader));
-
 					const sessionTokens = (
 						await Promise.all(
 							Object.entries(cookies)
@@ -72,7 +71,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 										await ctx.getSignedCookie(key, ctx.context.secret),
 								),
 						)
-					).filter((v) => v !== null);
+					).filter((v) => typeof v === "string");
 
 					if (!sessionTokens.length) return ctx.json([]);
 					const sessions =
@@ -255,7 +254,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 											await ctx.getSignedCookie(key, ctx.context.secret),
 									),
 							)
-						).filter((v): v is string => v !== undefined);
+						).filter((v) => typeof v === "string");
 						const internalAdapter = ctx.context.internalAdapter;
 
 						if (sessionTokens.length > 0) {
@@ -325,24 +324,34 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						const cookieHeader = ctx.headers?.get("cookie");
 						if (!cookieHeader) return;
 						const cookies = Object.fromEntries(parseCookies(cookieHeader));
-						const ids = Object.keys(cookies)
-							.map((key) => {
-								if (isMultiSessionCookie(key)) {
-									ctx.setCookie(
-										key.toLowerCase().replace("__secure-", "__Secure-"),
-										"",
-										{
-											...ctx.context.authCookies.sessionToken.options,
-											maxAge: 0,
-										},
+						const multiSessionKeys = Object.keys(cookies).filter((key) =>
+							isMultiSessionCookie(key),
+						);
+						const verifiedTokens = (
+							await Promise.all(
+								multiSessionKeys.map(async (key) => {
+									const verifiedToken = await ctx.getSignedCookie(
+										key,
+										ctx.context.secret,
 									);
-									const token = cookies[key]!.split(".")[0]!;
-									return token;
-								}
-								return null;
-							})
-							.filter((v): v is string => v !== null);
-						await ctx.context.internalAdapter.deleteSessions(ids);
+									if (verifiedToken) {
+										ctx.setCookie(
+											key.toLowerCase().replace("__secure-", "__Secure-"),
+											"",
+											{
+												...ctx.context.authCookies.sessionToken.options,
+												maxAge: 0,
+											},
+										);
+										return verifiedToken;
+									}
+									return null;
+								}),
+							)
+						).filter((v) => typeof v === "string");
+						if (verifiedTokens.length > 0) {
+							await ctx.context.internalAdapter.deleteSessions(verifiedTokens);
+						}
 					}),
 				},
 			],

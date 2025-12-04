@@ -16,7 +16,7 @@
   - Bug Fixes
   - Fixed date handling by casting DB values to Date objects before using date methods.
   - Fixed Notion OAuth to extract user info correctly.
-  - Ensured session is set in context when reading from cookie cach
+  - Ensured session is set in context when reading from cookie cache
 
 - Updated dependencies [2bd2fa9]
   - better-auth@1.3.4

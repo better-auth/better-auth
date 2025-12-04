@@ -38,19 +38,19 @@ This plugin offers two main methods to do a second factor verification:
         })
         ```
     </Step>
-      <Step>
+    <Step>
         ### Migrate the database
 
         Run the migration or generate the schema to add the necessary fields and tables to the database.
 
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
-            ```bash
+            ```package-install
             npx @better-auth/cli migrate
             ```
             </Tab>
             <Tab value="generate">
-            ```bash
+            ```package-install
             npx @better-auth/cli generate
             ```
             </Tab>
@@ -276,7 +276,7 @@ export const auth = betterAuth({
     plugins: [
         twoFactor({
           	otpOptions: {
-				async sendOTP({ user, otp }, request) {
+				async sendOTP({ user, otp }, ctx) {
                     // send otp to user
 				},
 			},
@@ -410,8 +410,7 @@ You can mark a device as trusted by passing `trustDevice` to `verifyTotp` or `ve
 const verify2FA = async (code: string) => {
     const { data, error } = await authClient.twoFactor.verifyTotp({
         code,
-        callbackURL: "/dashboard",
-        trustDevice: true // Mark this device as trusted
+        trustDevice: true, // Mark this device as trusted
     })
     if (data) {
         // 2FA verified and device trusted

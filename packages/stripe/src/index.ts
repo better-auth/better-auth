@@ -85,7 +85,10 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			const referenceId =
 				ctx.body?.referenceId || ctx.query?.referenceId || session.user.id;
 
-			if (ctx.body?.referenceId && !subscriptionOptions.authorizeReference) {
+			if (
+				referenceId !== session.user.id &&
+				!subscriptionOptions.authorizeReference
+			) {
 				logger.error(
 					`Passing referenceId into a subscription action isn't allowed if subscription.authorizeReference isn't defined in your stripe plugin config.`,
 				);
@@ -243,7 +246,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				use: [
 					sessionMiddleware,
 					originCheck((c) => {
-						return [c.body.successURL as string, c.body.cancelURL as string];
+						return [c.body.successUrl as string, c.body.cancelUrl as string];
 					}),
 					referenceMiddleware("upgrade-subscription"),
 				],
@@ -851,11 +854,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					.catch(async (e) => {
 						if (e.message.includes("already set to be cancel")) {
 							/**
-							 * incase we missed the event from stripe, we set it manually
+							 * in case we missed the event from stripe, we set it manually
 							 * this is a rare case and should not happen
 							 */
 							if (!subscription.cancelAtPeriodEnd) {
-								await ctx.context.adapter.update({
+								await ctx.context.adapter.updateMany({
 									model: "subscription",
 									update: {
 										cancelAtPeriodEnd: true,
@@ -1506,4 +1509,4 @@ export type StripePlugin<O extends StripeOptions> = ReturnType<
 	typeof stripe<O>
 >;
 
-export type { Subscription, StripePlan };
+export type { Subscription, SubscriptionOptions, StripePlan };

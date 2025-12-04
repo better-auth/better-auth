@@ -26,9 +26,9 @@ See the [session management](/docs/concepts/session-management) for more details
 
 Better Auth includes multiple safeguards to prevent Cross-Site Request Forgery (CSRF) attacks:
 
-1. **Non-Simple Headers**
-   POST requests must either have a non-simple header or a `Content-Type` header of `application/json`. Non-simple headers are headers that are not included in the [simple headers](https://developer.mozilla.org/en-US/docs/Glossary/Simple_header) list.
-
+1. **Avoid simple requests**
+   See [Avoiding simple requests](https://developer.mozilla.org/en-US/docs/Web/Security/Attacks/CSRF#avoiding_simple_requests) for more details. Better Auth only allows requests with a non-simple header or a `Content-Type` header of `application/json`.
+   
 2. **Origin Validation**
    Each request’s `Origin` header is verified to confirm it comes from your application or another explicitly trusted source. Requests from untrusted origins are rejected. By default, Better Auth trusts the base URL of your app, but you can specify additional trusted origins via the `trustedOrigins` configuration option.
 

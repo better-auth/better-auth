@@ -1,0 +1,100 @@
+{
+	"$schema": "https://raw.githubusercontent.com/streetsidesoftware/cspell/main/cspell.schema.json",
+	"useGitignore": true,
+	"ignoreRandomStrings": true,
+	"allowCompoundWords": true,
+	"dictionaryDefinitions": [
+		{
+			"name": "company-names",
+			"path": "./.cspell/company-names.txt",
+			"addWords": true
+		},
+		{
+			"name": "third-party",
+			"path": "./.cspell/third-party.txt",
+			"addWords": true
+		},
+		{
+			"name": "tech-terminology",
+			"path": "./.cspell/tech-terms.txt",
+			"addWords": true
+		},
+		{
+			"name": "auth-terminology",
+			"path": "./.cspell/auth-terms.txt",
+			"addWords": true
+		},
+		{
+			"name": "custom-words",
+			"path": "./.cspell/custom-words.txt",
+			"addWords": true
+		},
+		{
+			"name": "names",
+			"path": "./.cspell/names.txt",
+			"addWords": true
+		},
+		{
+			"name": "alt-languages",
+			"path": "./.cspell/alt-languages.txt",
+			"addWords": true
+		},
+		{
+			"name": "misspelled",
+			"path": "./.cspell/misspelled.txt",
+			"addWords": true
+		}
+	],
+	"dictionaries": [
+		"company-names",
+		"third-party",
+		"tech-terminology",
+		"auth-terminology",
+		"custom-words",
+		"names",
+		"alt-languages",
+		"misspelled"
+	],
+	"ignoreRegExpList": [
+		// ignore contributors usernames in markdown files
+		"usernames\\s*=\\s*\\{[^}]*\\}",
+
+		// ignore any account related property value
+		"name:\\s*\"[^\"]*\"",
+		"description:\\s*\"[^\"]*\"",
+		"avatar:\\s*\"[^\"]*\"",
+		"twitter:\\s*\"[^\"]*\"",
+		"image:\\s*\"[^\"]*\"",
+
+		// ignore any secret-like property value
+		"privateKeyPass:\\s*\"[^\"]*\"",
+		"encPrivateKeyPass:\\s*\"[^\"]*\"",
+		"\"x\":\\s*\"[^\"]*\"",
+
+		// markdown links to x.com or github accounts
+		"\\[@[^\\]]+\\]\\([^\\)]+\\)",
+		"\\[[^\\]]+\\]\\(https://github\\.com/\\w+\\)",
+		"\\[[^\\]]+\\]\\(https://x\\.com/\\w+\\)",
+
+		// ignore anything that looks like an npm scope or account handle
+		"@[a-zA-Z0-9-_]+",
+
+		// match any string starting with price_ (stripe related)
+		"price_[a-zA-Z0-9-_]+",
+
+		// match any url-encoded string
+		"%[0-9A-Fa-f]{2}(?:%[0-9A-Fa-f]{2})*",
+
+		// ignore vitest assertions (probably the source of the typo comes from somewhere else)
+		"toBe\\([^\\)]*\\)"
+	],
+	"ignorePaths": [
+		"patches",
+		"pnpm-workspace.yaml",
+		"pnpm-lock.yaml",
+		"e2e/smoke/test/fixtures/cloudflare/worker-configuration.d.ts",
+		"*.config.js",
+		"*.config.ts",
+		"*.json"
+	]
+}
