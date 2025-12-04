@@ -534,32 +534,27 @@ describe("OIDC Discovery", () => {
 			);
 		});
 
-		it("should return endpoint as an absolute url preserving the issuer base path", () => {
-			const endpoint = "/oauth2/token";
-			expect(
-				normalizeUrl("url", endpoint, "https://idp.example.com/base"),
-			).toBe("https://idp.example.com/base/oauth2/token");
-		});
-
-		it("should return endpoint as an absolute url preserving the issuer base path", () => {
-			const endpoint = "oauth2/token";
-			expect(
-				normalizeUrl("url", endpoint, "https://idp.example.com/base"),
-			).toBe("https://idp.example.com/base/oauth2/token");
-		});
-
-		it("should return endpoint as an absolute url preserving the issuer base path (trailing slash)", () => {
-			const endpoint = "/oauth2/token";
-			expect(
-				normalizeUrl("url", endpoint, "https://idp.example.com/base/"),
-			).toBe("https://idp.example.com/base/oauth2/token");
-		});
-
-		it("should return endpoint as an absolute url preserving the issuer base path (multiple slashes)", () => {
-			const endpoint = "//oauth2/token";
-			expect(
-				normalizeUrl("url", endpoint, "https://idp.example.com/base//"),
-			).toBe("https://idp.example.com/base/oauth2/token");
+		it.each([
+			[
+				"/oauth2/token",
+				"https://idp.example.com/base",
+				"endpoint with leading slash",
+			],
+			[
+				"oauth2/token",
+				"https://idp.example.com/base",
+				"endpoint without leading slash",
+			],
+			[
+				"/oauth2/token",
+				"https://idp.example.com/base/",
+				"issuer with trailing slash",
+			],
+			["//oauth2/token", "https://idp.example.com/base//", "multiple slashes"],
+		])("should resolve relative endpoint preserving issuer base path (%s, %s) - %s", (endpoint, issuer) => {
+			expect(normalizeUrl("url", endpoint, issuer)).toBe(
+				"https://idp.example.com/base/oauth2/token",
+			);
 		});
 
 		it("should reject invalid endpoint urls", () => {
