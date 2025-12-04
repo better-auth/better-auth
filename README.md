@@ -24,7 +24,6 @@
 [![npm](https://img.shields.io/npm/dm/better-auth?style=flat&colorA=000000&colorB=000000)](https://npm.chart.dev/better-auth?primary=neutral&gray=neutral&theme=dark)
 [![npm version](https://img.shields.io/npm/v/better-auth.svg?style=flat&colorA=000000&colorB=000000)](https://www.npmjs.com/package/better-auth)
 [![GitHub stars](https://img.shields.io/github/stars/better-auth/better-auth?style=flat&colorA=000000&colorB=000000)](https://github.com/better-auth/better-auth/stargazers)
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/better-auth/better-auth)
 </p>
 
 ## About the Project
