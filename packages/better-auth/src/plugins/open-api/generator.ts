@@ -360,10 +360,10 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 	>((acc, [key, value]) => {
 		const modelName = key.charAt(0).toUpperCase() + key.slice(1);
 		const fields = value.fields;
-		const required: string[] = [];
 		const properties: Record<string, FieldSchema> = {
 			id: { type: "string" },
 		};
+		const required: string[] = ["id"];
 		Object.entries(fields).forEach(([fieldKey, fieldValue]) => {
 			if (!fieldValue) return;
 			properties[fieldKey] = getFieldSchema(fieldValue);
