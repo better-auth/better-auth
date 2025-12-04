@@ -620,6 +620,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 								body.oidcConfig.tokenEndpointAuthentication,
 						},
 						// TODO: This is a stub until the trusted origins refactor is merged
+						// See: https://github.com/better-auth/better-auth/pull/6462
 						isTrustedOrigin: () => true,
 					});
 				} catch (error) {

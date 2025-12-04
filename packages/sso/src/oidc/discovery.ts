@@ -103,9 +103,6 @@ export function computeDiscoveryUrl(issuer: string): string {
 /**
  * Validate a discovery URL before fetching.
  *
- * Phase 1: Only validates that the URL is well-formed.
- * Future phases will add SSRF protection, allowlist checks, etc.
- *
  * @param url - The discovery URL to validate
  * @param isTrustedOrigin - Origin verification tester function
  * @throws DiscoveryError if URL is invalid
@@ -278,7 +275,7 @@ export function validateDiscoveryDocument(
  * Normalize URLs in the discovery document.
  *
  * @param doc - The discovery document
- * @param issuer - The base issuer URL (unused in Phase 1)
+ * @param issuer - The base issuer URL
  * @param isTrustedOrigin - Origin verification tester function
  * @returns The normalized discovery document
  */
@@ -330,10 +327,10 @@ export function normalizeDiscoveryUrls(
 
 /**
  * Normalizes and validates a single URL endpoint
- * @param context The authentication context
  * @param name The url name
  * @param endpoint The url to validate
  * @param issuer The issuer base url
+ * @param isTrustedOrigin - Origin verification tester function
  * @returns
  */
 export function normalizeAndValidateUrl(
