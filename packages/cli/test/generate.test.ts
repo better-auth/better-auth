@@ -1,4 +1,7 @@
-import type { BetterAuthOptions } from "better-auth";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import type { BetterAuthOptions } from "@better-auth/core";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { organization, twoFactor, username } from "better-auth/plugins";
@@ -7,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import { generateDrizzleSchema } from "../src/generators/drizzle";
 import { generateMigrations } from "../src/generators/kysely";
 import { generatePrismaSchema } from "../src/generators/prisma";
+import { getPrismaVersion } from "../src/utils/get-package-info";
 
 describe("generate", async () => {
 	it("should generate prisma schema", async () => {
@@ -649,5 +653,212 @@ describe("usePlural schema generation", () => {
 		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/schema-prisma-use-plural.prisma",
 		);
+	});
+});
+
+describe("Prisma v7 compatibility", () => {
+	it("should detect Prisma version from package.json", () => {
+		// Test with Prisma v7
+		const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prisma-v7-test-"));
+		const packageJson = {
+			dependencies: {
+				prisma: "^7.0.0",
+			},
+		};
+		fs.writeFileSync(
+			path.join(tmpDir, "package.json"),
+			JSON.stringify(packageJson),
+		);
+		const version = getPrismaVersion(tmpDir);
+		expect(version).toBe(7);
+		fs.rmSync(tmpDir, { recursive: true });
+	});
+
+	it("should detect Prisma v5 from package.json", () => {
+		const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prisma-v5-test-"));
+		const packageJson = {
+			dependencies: {
+				prisma: "^5.0.0",
+			},
+		};
+		fs.writeFileSync(
+			path.join(tmpDir, "package.json"),
+			JSON.stringify(packageJson),
+		);
+		const version = getPrismaVersion(tmpDir);
+		expect(version).toBe(5);
+		fs.rmSync(tmpDir, { recursive: true });
+	});
+
+	it("should detect Prisma version from @prisma/client", () => {
+		const tmpDir = fs.mkdtempSync(
+			path.join(os.tmpdir(), "prisma-client-test-"),
+		);
+		const packageJson = {
+			devDependencies: {
+				"@prisma/client": "~7.1.0",
+			},
+		};
+		fs.writeFileSync(
+			path.join(tmpDir, "package.json"),
+			JSON.stringify(packageJson),
+		);
+		const version = getPrismaVersion(tmpDir);
+		expect(version).toBe(7);
+		fs.rmSync(tmpDir, { recursive: true });
+	});
+
+	it("should return null when Prisma is not installed", () => {
+		const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "no-prisma-test-"));
+		const packageJson = {
+			dependencies: {},
+		};
+		fs.writeFileSync(
+			path.join(tmpDir, "package.json"),
+			JSON.stringify(packageJson),
+		);
+		const version = getPrismaVersion(tmpDir);
+		expect(version).toBeNull();
+		fs.rmSync(tmpDir, { recursive: true });
+	});
+
+	it("should generate schema with prisma-client provider for v7+", async () => {
+		const originalCwd = process.cwd();
+		const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prisma-v7-schema-"));
+
+		try {
+			const packageJson = {
+				dependencies: {
+					prisma: "^7.0.0",
+				},
+			};
+			fs.writeFileSync(
+				path.join(tmpDir, "package.json"),
+				JSON.stringify(packageJson),
+			);
+
+			process.chdir(tmpDir);
+
+			const schema = await generatePrismaSchema({
+				file: "test.prisma",
+				adapter: prismaAdapter(
+					{},
+					{
+						provider: "postgresql",
+					},
+				)({} as BetterAuthOptions),
+				options: {
+					database: prismaAdapter(
+						{},
+						{
+							provider: "postgresql",
+						},
+					),
+					plugins: [],
+				},
+			});
+
+			expect(schema.code).toContain('provider = "prisma-client"');
+			expect(schema.code).not.toContain('provider = "prisma-client-js"');
+		} finally {
+			process.chdir(originalCwd);
+			fs.rmSync(tmpDir, { recursive: true });
+		}
+	});
+
+	it("should generate schema with prisma-client-js provider for v5", async () => {
+		const originalCwd = process.cwd();
+		const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prisma-v5-schema-"));
+
+		try {
+			// Create package.json with Prisma v5
+			const packageJson = {
+				dependencies: {
+					prisma: "^5.0.0",
+				},
+			};
+			fs.writeFileSync(
+				path.join(tmpDir, "package.json"),
+				JSON.stringify(packageJson),
+			);
+
+			// Change to temp directory
+			process.chdir(tmpDir);
+
+			const schema = await generatePrismaSchema({
+				file: "test.prisma",
+				adapter: prismaAdapter(
+					{},
+					{
+						provider: "postgresql",
+					},
+				)({} as BetterAuthOptions),
+				options: {
+					database: prismaAdapter(
+						{},
+						{
+							provider: "postgresql",
+						},
+					),
+					plugins: [],
+				},
+			});
+
+			// Check that the schema uses prisma-client-js for v5
+			expect(schema.code).toContain('provider = "prisma-client-js"');
+			expect(schema.code).not.toContain('provider = "prisma-client"');
+		} finally {
+			// Restore original directory
+			process.chdir(originalCwd);
+			fs.rmSync(tmpDir, { recursive: true });
+		}
+	});
+
+	it("should generate schema with prisma-client-js provider for v6", async () => {
+		const originalCwd = process.cwd();
+		const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prisma-v6-schema-"));
+
+		try {
+			// Create package.json with Prisma v6
+			const packageJson = {
+				dependencies: {
+					prisma: "^6.0.0",
+				},
+			};
+			fs.writeFileSync(
+				path.join(tmpDir, "package.json"),
+				JSON.stringify(packageJson),
+			);
+
+			// Change to temp directory
+			process.chdir(tmpDir);
+
+			const schema = await generatePrismaSchema({
+				file: "test.prisma",
+				adapter: prismaAdapter(
+					{},
+					{
+						provider: "postgresql",
+					},
+				)({} as BetterAuthOptions),
+				options: {
+					database: prismaAdapter(
+						{},
+						{
+							provider: "postgresql",
+						},
+					),
+					plugins: [],
+				},
+			});
+
+			// Check that the schema uses prisma-client-js for v6
+			expect(schema.code).toContain('provider = "prisma-client-js"');
+			expect(schema.code).not.toContain('provider = "prisma-client"');
+		} finally {
+			// Restore original directory
+			process.chdir(originalCwd);
+			fs.rmSync(tmpDir, { recursive: true });
+		}
 	});
 });

@@ -31,7 +31,8 @@
           "options": {
             "style": "separatedType"
           }
-        }
+        },
+        "useNodejsImportProtocol": "error"
       },
       "recommended": false,
       "suspicious": {

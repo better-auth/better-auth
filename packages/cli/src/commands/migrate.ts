@@ -1,9 +1,12 @@
-import { createTelemetry, getTelemetryAuthConfig, logger } from "better-auth";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import {
+	createTelemetry,
+	getTelemetryAuthConfig,
+} from "@better-auth/telemetry";
 import { getAdapter, getMigrations } from "better-auth/db";
 import chalk from "chalk";
 import { Command } from "commander";
-import { existsSync } from "fs";
-import path from "path";
 import prompts from "prompts";
 import yoctoSpinner from "yocto-spinner";
 import * as z from "zod/v4";
@@ -21,7 +24,7 @@ export async function migrateAction(opts: any) {
 
 	const cwd = path.resolve(options.cwd);
 	if (!existsSync(cwd)) {
-		logger.error(`The directory "${cwd}" does not exist.`);
+		console.error(`The directory "${cwd}" does not exist.`);
 		process.exit(1);
 	}
 
@@ -30,7 +33,7 @@ export async function migrateAction(opts: any) {
 		configPath: options.config,
 	});
 	if (!config) {
-		logger.error(
+		console.error(
 			"No configuration file found. Add a `auth.ts` file to your project or pass the path to the configuration file using the `--config` flag.",
 		);
 		return;
@@ -39,7 +42,7 @@ export async function migrateAction(opts: any) {
 	const db = await getAdapter(config);
 
 	if (!db) {
-		logger.error(
+		console.error(
 			"Invalid database configuration. Make sure you're not using adapters. Migrate command only works with built-in Kysely adapter.",
 		);
 		process.exit(1);
@@ -47,8 +50,8 @@ export async function migrateAction(opts: any) {
 
 	if (db.id !== "kysely") {
 		if (db.id === "prisma") {
-			logger.error(
-				"The migrate command only works with the built-in Kysely adapter. For Prisma, run `npx @better-auth/cli generate` to create the schema, then use Prisma’s migrate or push to apply it.",
+			console.error(
+				"The migrate command only works with the built-in Kysely adapter. For Prisma, run `npx @better-auth/cli generate` to create the schema, then use Prisma's migrate or push to apply it.",
 			);
 			try {
 				const telemetry = await createTelemetry(config);
@@ -64,8 +67,8 @@ export async function migrateAction(opts: any) {
 			process.exit(0);
 		}
 		if (db.id === "drizzle") {
-			logger.error(
-				"The migrate command only works with the built-in Kysely adapter. For Drizzle, run `npx @better-auth/cli generate` to create the schema, then use Drizzle’s migrate or push to apply it.",
+			console.error(
+				"The migrate command only works with the built-in Kysely adapter. For Drizzle, run `npx @better-auth/cli generate` to create the schema, then use Drizzle's migrate or push to apply it.",
 			);
 			try {
 				const telemetry = await createTelemetry(config);
@@ -80,7 +83,7 @@ export async function migrateAction(opts: any) {
 			} catch {}
 			process.exit(0);
 		}
-		logger.error("Migrate command isn't supported for this adapter.");
+		console.error("Migrate command isn't supported for this adapter.");
 		try {
 			const telemetry = await createTelemetry(config);
 			await telemetry.publish({
@@ -101,7 +104,7 @@ export async function migrateAction(opts: any) {
 
 	if (!toBeAdded.length && !toBeCreated.length) {
 		spinner.stop();
-		logger.info("🚀 No migrations needed.");
+		console.log("🚀 No migrations needed.");
 		try {
 			const telemetry = await createTelemetry(config);
 			await telemetry.publish({
@@ -116,7 +119,7 @@ export async function migrateAction(opts: any) {
 	}
 
 	spinner.stop();
-	logger.info(`🔑 The migration will affect the following:`);
+	console.log(`🔑 The migration will affect the following:`);
 
 	for (const table of [...toBeCreated, ...toBeAdded]) {
 		console.log(
@@ -145,7 +148,7 @@ export async function migrateAction(opts: any) {
 	}
 
 	if (!migrate) {
-		logger.info("Migration cancelled.");
+		console.log("Migration cancelled.");
 		try {
 			const telemetry = await createTelemetry(config);
 			await telemetry.publish({
@@ -159,7 +162,7 @@ export async function migrateAction(opts: any) {
 	spinner?.start("migrating...");
 	await runMigrations();
 	spinner.stop();
-	logger.info("🚀 migration was completed successfully!");
+	console.log("🚀 migration was completed successfully!");
 	try {
 		const telemetry = await createTelemetry(config);
 		await telemetry.publish({
