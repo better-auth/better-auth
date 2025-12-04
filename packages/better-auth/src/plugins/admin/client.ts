@@ -1,15 +1,49 @@
-import type { BetterAuthClientPlugin } from "@better-auth/core";
+import type {
+	BetterAuthClientPlugin,
+} from "@better-auth/core";
+import type { DBFieldAttribute } from "@better-auth/core/db";
 import type { AccessControl, Role } from "../access";
 import type { defaultStatements } from "./access";
-import { adminAc, userAc } from "./access";
+import { adminAc, defaultRoles, userAc } from "./access";
 import type { admin } from "./admin";
-import { hasPermission } from "./has-permission";
+import type { HasPermissionBaseInput } from "./permission";
+import { hasPermissionFn } from "./permission";
+import type { InferUserRole } from "./schema";
+
+/**
+ * Using the same `hasPermissionFn` function, but without the need for a `ctx` parameter or the `organizationId` parameter.
+ */
+export const clientSideHasPermission = (input: HasPermissionBaseInput) => {
+	const acRoles: {
+		[x: string]: Role<any> | undefined;
+	} = input.options?.roles || defaultRoles;
+
+	return hasPermissionFn(input, acRoles);
+};
 
 interface AdminClientOptions {
 	ac?: AccessControl | undefined;
 	roles?:
 		| {
 				[key in string]: Role;
+		  }
+		| undefined;
+	schema?:
+		| {
+				role?:
+					| {
+							additionalFields?:
+								| {
+										[key: string]: DBFieldAttribute;
+								  }
+								| undefined;
+					  }
+					| undefined;
+		  }
+		| undefined;
+	dynamicAccessControl?:
+		| {
+				enabled: boolean;
 		  }
 		| undefined;
 }
@@ -60,9 +94,20 @@ export const adminClient = <O extends AdminClientOptions>(
 							admin: Role;
 							user: Role;
 						};
+				schema: O["schema"];
+				dynamicAccessControl: {
+					enabled: O["dynamicAccessControl"] extends { enabled: true }
+						? true
+						: false;
+				};
 			}>
 		>,
 		getActions: () => ({
+			$Infer: {} as O["dynamicAccessControl"] extends { enabled: true }
+				? {
+						Role: InferUserRole<O, true>;
+					}
+				: {},
 			admin: {
 				checkRolePermission: <
 					R extends O extends { roles: any }
@@ -73,7 +118,7 @@ export const adminClient = <O extends AdminClientOptions>(
 						role: R;
 					},
 				) => {
-					const isAuthorized = hasPermission({
+					const isAuthorized = clientSideHasPermission({
 						role: data.role as string,
 						options: {
 							ac: options?.ac,

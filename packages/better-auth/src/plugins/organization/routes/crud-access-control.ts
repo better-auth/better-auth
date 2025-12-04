@@ -6,22 +6,14 @@ import { APIError } from "../../../api";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db";
 import type { User } from "../../../types";
-import type { AccessControl } from "../../access";
+import type { AccessControl, IsExactlyEmptyObject } from "../../access";
+import { normalizeRoleName } from "../../access";
 import { orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
 import type { Member, OrganizationRole } from "../schema";
 import type { OrganizationOptions } from "../types";
 
-type IsExactlyEmptyObject<T> = keyof T extends never // no keys
-	? T extends {} // is assignable to {}
-		? {} extends T
-			? true
-			: false // and {} is assignable to it
-		: false
-	: false;
-
-const normalizeRoleName = (role: string) => role.toLowerCase();
 const DEFAULT_MAXIMUM_ROLES_PER_ORGANIZATION = Number.POSITIVE_INFINITY;
 
 const getAdditionalFields = <
