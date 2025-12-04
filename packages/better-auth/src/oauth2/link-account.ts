@@ -20,11 +20,6 @@ export async function handleOAuthUserInfo(
 		callbackURL?: string | undefined;
 		disableSignUp?: boolean | undefined;
 		overrideUserInfo?: boolean | undefined;
-		/**
-		 * When true, skip the internal trust gate (trustedProviders/emailVerified check).
-		 * This should only be set by SSO code paths that have already performed
-		 * their own trust evaluation via canAutoLinkExistingUser.
-		 */
 		forceTrusted?: boolean | undefined;
 	},
 ) {

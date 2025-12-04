@@ -704,6 +704,52 @@ mapping: {
 }
 ```
 
+## Account Linking for SSO
+
+When a user signs in via SSO and an account with the same email already exists, Better Auth applies a trust check before auto-linking. This prevents account takeover attacks where a malicious SSO provider could claim any email address.
+
+For SSO providers, auto-linking is allowed when **any** of the following conditions are met:
+
+1. **Trusted Provider**: The provider is listed in `account.accountLinking.trustedProviders`
+2. **Domain Verified**: The SSO provider's domain is verified AND the user's email matches that domain
+
+If neither condition is met, the user will be redirected with `?error=account_not_linked`.
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    account: {
+        accountLinking: {
+            enabled: true,
+            // Option 1: Trust specific providers
+            trustedProviders: ["my-enterprise-sso"],
+            // Option 2: Use existingUserMode to control policy
+            existingUserMode: "trusted_providers_only", // default
+        }
+    },
+    plugins: [
+        sso({
+            // Enable domain verification for trust via domain ownership
+            domainVerification: {
+                enabled: true
+            }
+        })
+    ]
+});
+```
+
+<Callout>
+Domain verification is the recommended approach for enterprise SSO. Once a provider's domain is verified, users with matching email domains can be auto-linked securely without adding every provider to `trustedProviders`.
+</Callout>
+
+### Error Handling
+
+When SSO sign-in fails due to account linking policy, the user is redirected to the callback URL with an error parameter:
+
+- `?error=account_not_linked` — User exists but the provider isn't trusted for auto-linking
+- `?error=account_not_found` — No user exists (when `disableImplicitSignUp` is enabled)
+
+You can handle these errors in your callback page to show appropriate messages or offer manual account linking.
+
 ## Domain verification
 
 Domain verification allows your application to automatically trust a new SSO provider
@@ -759,7 +805,7 @@ See the [Schema](#schema-for-domain-verification) section to add the fields manu
 ### Verify your domain
 
 When domain verification is enabled, every new SSO provider will be untrusted at first.
-This means that new sign-ups or sign-ins will be allowed until the domain ownership has been verified.
+This means that auto-linking to existing accounts will be blocked until the domain ownership has been verified. Once verified, users whose email matches the provider's domain can be auto-linked securely.
 
 To verify your ownership over a domain, follow these steps:
 

@@ -365,9 +365,9 @@ export const auth = betterAuth({
 });
 ```
 
-#### Forced Linking
+#### Trusted Providers
 
-You can specify a list of "trusted providers." When a user logs in using a trusted provider, their account will be automatically linked even if the provider doesn’t confirm the email verification status. Use this with caution as it may increase the risk of account takeover.
+You can specify a list of "trusted providers." When a user logs in using a trusted provider, their account will be automatically linked even if the provider doesn't confirm the email verification status. Use this with caution as it may increase the risk of account takeover.
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
@@ -379,6 +379,33 @@ export const auth = betterAuth({
     },
 });
 ```
+
+#### Existing User Auto-Linking Policy
+
+The `existingUserMode` option controls when OAuth/SSO providers can auto-link to an existing user with the same email address. This provides fine-grained control over account linking security.
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    account: {
+        accountLinking: {
+            enabled: true,
+            existingUserMode: "trusted_providers_only", // default
+        }
+    },
+});
+```
+
+Available modes:
+
+- **`"never"`**: Never auto-link. Users must explicitly link accounts (e.g., via a signed-in "link account" flow).
+
+- **`"trusted_providers_only"`** (default): Only auto-link if the provider passes a trust check. This means the provider must be listed in `trustedProviders`. For SSO providers, domain verification also counts as a trust signal.
+
+- **`"email_match_any"`**: Legacy/relaxed behavior. Auto-link when either the provider is trusted OR the provider's `email_verified` claim is accepted. This mode is less secure and not recommended for production—it's provided as an escape hatch for applications that relied on the previous email-based auto-linking behavior.
+
+<Callout type="warn">
+The default `existingUserMode` is `"trusted_providers_only"`, which is the most secure option. If you're upgrading from a previous version and relied on email-based auto-linking, you may need to explicitly set `existingUserMode: "email_match_any"` to preserve the old behavior.
+</Callout>
 
 #### Manually Linking Accounts
 
