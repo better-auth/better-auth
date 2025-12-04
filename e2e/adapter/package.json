@@ -1,0 +1,19 @@
+{
+  "name": "adapter",
+  "scripts": {
+    "test": "vitest",
+    "prepare": "prisma generate --schema ./test/prisma-adapter/base.prisma"
+  },
+  "private": true,
+  "devDependencies": {
+    "@better-auth/core": "workspace:*",
+    "@better-auth/drizzle-adapter": "workspace:*",
+    "@better-auth/kysely-adapter": "workspace:*",
+    "@better-auth/memory-adapter": "workspace:*",
+    "@better-auth/mongo-adapter": "workspace:*",
+    "@better-auth/prisma-adapter": "workspace:*",
+    "@prisma/client": "^5.22.0",
+    "better-auth": "workspace:*",
+    "prisma": "^5.22.0"
+  }
+}

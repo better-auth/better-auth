@@ -6,6 +6,8 @@ import {
 	initGetModelName,
 } from "@better-auth/core/db/adapter";
 import { createLogger } from "@better-auth/core/env";
+import type { KyselyDatabaseType } from "@better-auth/kysely-adapter";
+import { createKyselyAdapter } from "@better-auth/kysely-adapter";
 import type {
 	AlterTableBuilder,
 	AlterTableColumnAlteringBuilder,
@@ -14,8 +16,6 @@ import type {
 	Kysely,
 } from "kysely";
 import { sql } from "kysely";
-import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
-import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import { getSchema } from "./get-schema";
 
 const postgresMap = {
