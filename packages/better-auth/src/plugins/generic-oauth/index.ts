@@ -580,6 +580,9 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							? authorizationUrlParams(ctx)
 							: authorizationUrlParams;
 
+					console.log("FINAL AUTHORIZATION PARAMS", authorizationUrlParams);
+					console.log("AUTHORIZATION PARAMS", additionalParams);
+
 					const { state, codeVerifier } = await generateState(
 						ctx,
 						undefined,
