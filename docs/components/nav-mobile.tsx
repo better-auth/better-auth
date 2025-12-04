@@ -1,16 +1,16 @@
 "use client";
 import { ChevronRight, Menu } from "lucide-react";
 import Link from "next/link";
-import { Fragment, createContext, useContext, useState } from "react";
+import { usePathname } from "next/navigation";
+import { createContext, Fragment, useContext, useState } from "react";
 import {
 	Accordion,
 	AccordionContent,
 	AccordionItem,
 	AccordionTrigger,
 } from "@/components/ui/accordion";
-import { contents, examples } from "./sidebar-content";
-import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { contents, examples } from "./sidebar-content";
 
 interface NavbarMobileContextProps {
 	isOpen: boolean;
@@ -58,7 +58,7 @@ export const NavbarMobileBtn: React.FC = () => {
 	return (
 		<div className="flex items-center">
 			<button
-				className="overflow-hidden px-2.5 block md:hidden"
+				className="overflow-hidden px-2.5 block navbar:hidden"
 				onClick={() => {
 					toggleNavbar();
 				}}
@@ -77,7 +77,7 @@ export const NavbarMobile = () => {
 	return (
 		<div
 			className={cn(
-				"fixed top-[50px] inset-x-0 transform-gpu z-[100] bg-background grid grid-rows-[0fr] duration-300 transition-all md:hidden",
+				"fixed top-[50px] inset-x-0 transform-gpu z-[100] bg-background grid grid-rows-[0fr] duration-300 transition-all navbar:hidden",
 				isOpen &&
 					"shadow-lg border-b border-[rgba(255,255,255,.1)] grid-rows-[1fr]",
 			)}

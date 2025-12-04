@@ -1,29 +1,28 @@
-import { APIError } from "../../api";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
-import { setSessionCookie } from "../../cookies";
-import * as z from "zod";
-import type { InferOptionSchema } from "../../types";
 import type { BetterAuthPlugin } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import * as z from "zod";
+import { APIError } from "../../api";
+import { setSessionCookie } from "../../cookies";
+import { mergeSchema } from "../../db/schema";
+import type { InferOptionSchema, User } from "../../types";
+import { toChecksumAddress } from "../../utils/hashing";
+import { getOrigin } from "../../utils/url";
+import { schema } from "./schema";
 import type {
 	ENSLookupArgs,
 	ENSLookupResult,
 	SIWEVerifyMessageArgs,
 	WalletAddress,
 } from "./types";
-import type { User } from "../../types";
-import { schema } from "./schema";
-import { getOrigin } from "../../utils/url";
-import { toChecksumAddress } from "../../utils/hashing";
-import { mergeSchema } from "../../db/schema";
 
 export interface SIWEPluginOptions {
 	domain: string;
-	emailDomainName?: string;
-	anonymous?: boolean;
+	emailDomainName?: string | undefined;
+	anonymous?: boolean | undefined;
 	getNonce: () => Promise<string>;
 	verifyMessage: (args: SIWEVerifyMessageArgs) => Promise<boolean>;
-	ensLookup?: (args: ENSLookupArgs) => Promise<ENSLookupResult>;
-	schema?: InferOptionSchema<typeof schema>;
+	ensLookup?: ((args: ENSLookupArgs) => Promise<ENSLookupResult>) | undefined;
+	schema?: InferOptionSchema<typeof schema> | undefined;
 }
 
 export const siwe = (options: SIWEPluginOptions) =>
@@ -83,7 +82,7 @@ export const siwe = (options: SIWEPluginOptions) =>
 								.max(2147483647)
 								.optional()
 								.default(1),
-							email: z.string().email().optional(),
+							email: z.email().optional(),
 						})
 						.refine((data) => options.anonymous !== false || !!data.email, {
 							message:
@@ -272,7 +271,6 @@ export const siwe = (options: SIWEPluginOptions) =>
 
 						const session = await ctx.context.internalAdapter.createSession(
 							user.id,
-							ctx,
 						);
 
 						if (!session) {

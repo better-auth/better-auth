@@ -1,20 +1,20 @@
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
-import type { BetterAuthPlugin } from "@better-auth/core";
-import { APIError } from "better-call";
+import { originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { originCheck } from "../../api";
 import { defaultKeyHasher } from "./utils";
-import type { GenericEndpointContext } from "@better-auth/core";
 
-interface MagicLinkopts {
+export interface MagicLinkOptions {
 	/**
 	 * Time in seconds until the magic link expires.
 	 * @default (60 * 5) // 5 minutes
 	 */
-	expiresIn?: number;
+	expiresIn?: number | undefined;
 	/**
 	 * Send magic link implementation.
 	 */
@@ -24,14 +24,14 @@ interface MagicLinkopts {
 			url: string;
 			token: string;
 		},
-		request?: Request,
+		ctx?: GenericEndpointContext | undefined,
 	) => Promise<void> | void;
 	/**
 	 * Disable sign up if user is not found.
 	 *
 	 * @default false
 	 */
-	disableSignUp?: boolean;
+	disableSignUp?: boolean | undefined;
 	/**
 	 * Rate limit configuration.
 	 *
@@ -40,14 +40,16 @@ interface MagicLinkopts {
 	 *  max: 5,
 	 * }
 	 */
-	rateLimit?: {
-		window: number;
-		max: number;
-	};
+	rateLimit?:
+		| {
+				window: number;
+				max: number;
+		  }
+		| undefined;
 	/**
 	 * Custom function to generate a token
 	 */
-	generateToken?: (email: string) => Promise<string> | string;
+	generateToken?: ((email: string) => Promise<string> | string) | undefined;
 
 	/**
 	 * This option allows you to configure how the token is stored in your database.
@@ -56,16 +58,19 @@ interface MagicLinkopts {
 	 * @default "plain"
 	 */
 	storeToken?:
-		| "plain"
-		| "hashed"
-		| { type: "custom-hasher"; hash: (token: string) => Promise<string> };
+		| (
+				| "plain"
+				| "hashed"
+				| { type: "custom-hasher"; hash: (token: string) => Promise<string> }
+		  )
+		| undefined;
 }
 
-export const magicLink = (options: MagicLinkopts) => {
+export const magicLink = (options: MagicLinkOptions) => {
 	const opts = {
 		storeToken: "plain",
 		...options,
-	} satisfies MagicLinkopts;
+	} satisfies MagicLinkOptions;
 
 	async function storeToken(ctx: GenericEndpointContext, token: string) {
 		if (opts.storeToken === "hashed") {
@@ -105,12 +110,9 @@ export const magicLink = (options: MagicLinkopts) => {
 					method: "POST",
 					requireHeaders: true,
 					body: z.object({
-						email: z
-							.string()
-							.meta({
-								description: "Email address to send the magic link",
-							})
-							.email(),
+						email: z.email().meta({
+							description: "Email address to send the magic link",
+						}),
 						name: z
 							.string()
 							.meta({
@@ -140,6 +142,7 @@ export const magicLink = (options: MagicLinkopts) => {
 					}),
 					metadata: {
 						openapi: {
+							operationId: "signInWithMagicLink",
 							description: "Sign in with magic link",
 							responses: {
 								200: {
@@ -164,31 +167,15 @@ export const magicLink = (options: MagicLinkopts) => {
 				async (ctx) => {
 					const { email } = ctx.body;
 
-					if (opts.disableSignUp) {
-						const user =
-							await ctx.context.internalAdapter.findUserByEmail(email);
-
-						if (!user) {
-							throw new APIError("BAD_REQUEST", {
-								message: BASE_ERROR_CODES.USER_NOT_FOUND,
-							});
-						}
-					}
-
 					const verificationToken = opts?.generateToken
 						? await opts.generateToken(email)
 						: generateRandomString(32, "a-z", "A-Z");
 					const storedToken = await storeToken(ctx, verificationToken);
-					await ctx.context.internalAdapter.createVerificationValue(
-						{
-							identifier: storedToken,
-							value: JSON.stringify({ email, name: ctx.body.name }),
-							expiresAt: new Date(
-								Date.now() + (opts.expiresIn || 60 * 5) * 1000,
-							),
-						},
-						ctx,
-					);
+					await ctx.context.internalAdapter.createVerificationValue({
+						identifier: storedToken,
+						value: JSON.stringify({ email, name: ctx.body.name }),
+						expiresAt: new Date(Date.now() + (opts.expiresIn || 60 * 5) * 1000),
+					});
 					const realBaseURL = new URL(ctx.context.baseURL);
 					const pathname =
 						realBaseURL.pathname === "/" ? "" : realBaseURL.pathname;
@@ -214,7 +201,7 @@ export const magicLink = (options: MagicLinkopts) => {
 							url: url.toString(),
 							token: verificationToken,
 						},
-						ctx.request,
+						ctx,
 					);
 					return ctx.json({
 						status: true,
@@ -285,6 +272,7 @@ export const magicLink = (options: MagicLinkopts) => {
 					requireHeaders: true,
 					metadata: {
 						openapi: {
+							operationId: "verifyMagicLink",
 							description: "Verify magic link",
 							responses: {
 								200: {
@@ -356,7 +344,7 @@ export const magicLink = (options: MagicLinkopts) => {
 					);
 					const { email, name } = JSON.parse(tokenValue.value) as {
 						email: string;
-						name?: string;
+						name?: string | undefined;
 					};
 					let isNewUser = false;
 					let user = await ctx.context.internalAdapter
@@ -365,14 +353,11 @@ export const magicLink = (options: MagicLinkopts) => {
 
 					if (!user) {
 						if (!opts.disableSignUp) {
-							const newUser = await ctx.context.internalAdapter.createUser(
-								{
-									email: email,
-									emailVerified: true,
-									name: name || "",
-								},
-								ctx,
-							);
+							const newUser = await ctx.context.internalAdapter.createUser({
+								email: email,
+								emailVerified: true,
+								name: name || "",
+							});
 							isNewUser = true;
 							user = newUser;
 							if (!user) {
@@ -388,18 +373,13 @@ export const magicLink = (options: MagicLinkopts) => {
 					}
 
 					if (!user.emailVerified) {
-						await ctx.context.internalAdapter.updateUser(
-							user.id,
-							{
-								emailVerified: true,
-							},
-							ctx,
-						);
+						user = await ctx.context.internalAdapter.updateUser(user.id, {
+							emailVerified: true,
+						});
 					}
 
 					const session = await ctx.context.internalAdapter.createSession(
 						user.id,
-						ctx,
 					);
 
 					if (!session) {

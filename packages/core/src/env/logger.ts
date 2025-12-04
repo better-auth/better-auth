@@ -31,26 +31,28 @@ export const TTY_COLORS = {
 	},
 } as const;
 
-export type LogLevel = "info" | "success" | "warn" | "error" | "debug";
+export type LogLevel = "debug" | "info" | "success" | "warn" | "error";
 
-export const levels = ["info", "success", "warn", "error", "debug"] as const;
+export const levels = ["debug", "info", "success", "warn", "error"] as const;
 
 export function shouldPublishLog(
 	currentLogLevel: LogLevel,
 	logLevel: LogLevel,
 ): boolean {
-	return levels.indexOf(logLevel) <= levels.indexOf(currentLogLevel);
+	return levels.indexOf(logLevel) >= levels.indexOf(currentLogLevel);
 }
 
 export interface Logger {
-	disabled?: boolean;
-	disableColors?: boolean;
-	level?: Exclude<LogLevel, "success">;
-	log?: (
-		level: Exclude<LogLevel, "success">,
-		message: string,
-		...args: any[]
-	) => void;
+	disabled?: boolean | undefined;
+	disableColors?: boolean | undefined;
+	level?: Exclude<LogLevel, "success"> | undefined;
+	log?:
+		| ((
+				level: Exclude<LogLevel, "success">,
+				message: string,
+				...args: any[]
+		  ) => void)
+		| undefined;
 }
 
 export type LogHandlerParams = Parameters<NonNullable<Logger["log"]>> extends [
@@ -92,7 +94,7 @@ export type InternalLogger = {
 	get level(): LogLevel;
 };
 
-export const createLogger = (options?: Logger): InternalLogger => {
+export const createLogger = (options?: Logger | undefined): InternalLogger => {
 	const enabled = options?.disabled !== true;
 	const logLevel = options?.level ?? "error";
 

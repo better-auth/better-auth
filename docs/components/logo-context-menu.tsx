@@ -1,11 +1,11 @@
 "use client";
 
-import type React from "react";
-import { useState, useRef, useEffect } from "react";
 import { Code, Image, Type } from "lucide-react";
-import { toast } from "sonner";
-import { useTheme } from "next-themes";
 import type { StaticImageData } from "next/image";
+import { useTheme } from "next-themes";
+import type React from "react";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 interface LogoAssets {
 	darkSvg: string;
@@ -187,7 +187,7 @@ export default function LogoContextMenu({
 								</div>
 								<span>Download Logo PNG</span>
 							</button>
-							<hr className="borde-border" />
+							<hr className="border-border" />
 							<button
 								onClick={(e) => downloadAllAssets(e)}
 								className="flex items-center gap-3 w-full p-2 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-zinc-900 rounded-md transition-colors cursor-pointer"

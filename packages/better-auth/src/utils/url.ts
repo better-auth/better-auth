@@ -13,7 +13,28 @@ function checkHasPath(url: string): boolean {
 	}
 }
 
+function assertHasProtocol(url: string): void {
+	try {
+		const parsedUrl = new URL(url);
+		if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+			throw new BetterAuthError(
+				`Invalid base URL: ${url}. URL must include 'http://' or 'https://'`,
+			);
+		}
+	} catch (error) {
+		if (error instanceof BetterAuthError) {
+			throw error;
+		}
+		throw new BetterAuthError(
+			`Invalid base URL: ${url}. Please provide a valid base URL.`,
+			String(error),
+		);
+	}
+}
+
 function withPath(url: string, path = "/api/auth") {
+	assertHasProtocol(url);
+
 	const hasPath = checkHasPath(url);
 	if (hasPath) {
 		return url;
@@ -34,6 +55,7 @@ export function getBaseURL(
 	path?: string,
 	request?: Request,
 	loadEnv?: boolean,
+	trustedProxyHeaders?: boolean | undefined,
 ) {
 	if (url) {
 		return withPath(url, path);
@@ -55,7 +77,7 @@ export function getBaseURL(
 
 	const fromRequest = request?.headers.get("x-forwarded-host");
 	const fromRequestProto = request?.headers.get("x-forwarded-proto");
-	if (fromRequest && fromRequestProto) {
+	if (fromRequest && fromRequestProto && trustedProxyHeaders) {
 		return withPath(`${fromRequestProto}://${fromRequest}`, path);
 	}
 
@@ -100,6 +122,6 @@ export function getHost(url: string) {
 		const parsedUrl = new URL(url);
 		return parsedUrl.host;
 	} catch (error) {
-		return url;
+		return null;
 	}
 }

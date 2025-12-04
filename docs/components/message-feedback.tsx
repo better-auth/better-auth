@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { Check, Copy, ThumbsDown, ThumbsUp } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { buttonVariants } from "fumadocs-ui/components/ui/button";
+import { Check, Copy, ThumbsDown, ThumbsUp } from "lucide-react";
+import { useState } from "react";
 import {
-	submitFeedbackToInkeep,
 	logEventToInkeep,
+	submitFeedbackToInkeep,
 } from "@/lib/inkeep-analytics";
+import { cn } from "@/lib/utils";
 
 interface MessageFeedbackProps {
 	messageId: string;

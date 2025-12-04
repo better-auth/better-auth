@@ -1,23 +1,23 @@
+import type {
+	BetterAuthClientOptions,
+	BetterAuthClientPlugin,
+} from "@better-auth/core";
+import type { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { capitalizeFirstLetter } from "@better-auth/core/utils";
+import type {
+	BetterFetchError,
+	BetterFetchResponse,
+} from "@better-fetch/fetch";
+import type { Atom } from "nanostores";
+import type { PrettifyDeep, UnionToIntersection } from "../../types/helper";
 import { getClientConfig } from "../config";
-import { capitalizeFirstLetter } from "../../utils/misc";
+import { createDynamicPathProxy } from "../proxy";
 import type {
 	InferActions,
 	InferClientAPI,
 	InferErrorCodes,
 	IsSignal,
 } from "../types";
-import type {
-	BetterAuthClientPlugin,
-	BetterAuthClientOptions,
-} from "@better-auth/core";
-import { createDynamicPathProxy } from "../proxy";
-import type { PrettifyDeep, UnionToIntersection } from "../../types/helper";
-import type { Atom } from "nanostores";
-import type {
-	BetterFetchError,
-	BetterFetchResponse,
-} from "@better-fetch/fetch";
-import type { BASE_ERROR_CODES } from "@better-auth/core/error";
 
 type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
 	plugins: Array<infer Plugin>;
@@ -40,7 +40,7 @@ type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
 	: {};
 
 export function createAuthClient<Option extends BetterAuthClientOptions>(
-	options?: Option,
+	options?: Option | undefined,
 ) {
 	const {
 		pluginPathMethods,
@@ -99,3 +99,5 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 
 export type * from "@better-fetch/fetch";
 export type * from "nanostores";
+export type * from "../../types/helper";
+export type { UnionToIntersection } from "../../types/helper";

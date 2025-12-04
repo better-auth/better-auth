@@ -470,9 +470,47 @@ const authClient = createAuthClient({
 });
 ```
 
+**cookiePrefix**: Prefix(es) for server cookie names to identify which cookies belong to better-auth. This prevents infinite refetching when third-party cookies are set. Can be a single string or an array of strings to match multiple prefixes. Defaults to `"better-auth"`.
+
+```ts title="lib/auth-client.ts"
+import { createAuthClient } from "better-auth/react";
+import { expoClient } from "@better-auth/expo/client";
+import * as SecureStore from "expo-secure-store";
+
+const authClient = createAuthClient({
+    baseURL: "http://localhost:8081",
+    plugins: [
+        expoClient({
+            storage: SecureStore,
+            // Single prefix
+            cookiePrefix: "better-auth"
+        })
+    ]
+});
+```
+
+You can also provide multiple prefixes to match cookies from different authentication systems:
+
+```ts title="lib/auth-client.ts"
+const authClient = createAuthClient({
+    baseURL: "http://localhost:8081",
+    plugins: [
+        expoClient({
+            storage: SecureStore,
+            // Multiple prefixes
+            cookiePrefix: ["better-auth", "my-app", "custom-auth"]
+        })
+    ]
+});
+```
+
+<Callout type="info">
+  **Important:** If you're using plugins like passkey with a custom `webAuthnChallengeCookie` option, make sure to include the cookie prefix in the `cookiePrefix` array. For example, if you set `webAuthnChallengeCookie: "my-app-passkey"`, include `"my-app"` in your `cookiePrefix`. See the [Passkey plugin documentation](/docs/plugins/passkey#expo-integration) for more details.
+</Callout>
+
 
 ### Expo Servers
 
 Server plugin options:
 
-**overrideOrigin**: Override the origin for Expo API routes (default: false). Enable this if you're facing cors origin issues with Expo API routes.
+**disableOriginOverride**: Override the origin for Expo API routes (default: false). Enable this if you're facing cors origin issues with Expo API routes.

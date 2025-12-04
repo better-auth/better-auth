@@ -1,12 +1,13 @@
+import type { AuthContext } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { safeJSONParse } from "@better-auth/core/utils";
 import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../../api";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
-import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
+import { ERROR_CODES } from "..";
+import { getApiKeyById } from "../adapter";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
-import { safeJSONParse } from "../../../utils/json";
-import type { AuthContext } from "@better-auth/core";
 
 export function getApiKey({
 	opts,
@@ -17,7 +18,7 @@ export function getApiKey({
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
-		byPassLastCheckTime?: boolean,
+		byPassLastCheckTime?: boolean | undefined,
 	): void;
 }) {
 	return createAuthEndpoint(
@@ -172,19 +173,14 @@ export function getApiKey({
 
 			const session = ctx.context.session;
 
-			let apiKey = await ctx.context.adapter.findOne<ApiKey>({
-				model: API_KEY_TABLE_NAME,
-				where: [
-					{
-						field: "id",
-						value: id,
-					},
-					{
-						field: "userId",
-						value: session.user.id,
-					},
-				],
-			});
+			let apiKey: ApiKey | null = null;
+
+			apiKey = await getApiKeyById(ctx, id, opts);
+
+			// Verify ownership
+			if (apiKey && apiKey.userId !== session.user.id) {
+				apiKey = null;
+			}
 
 			if (!apiKey) {
 				throw new APIError("NOT_FOUND", {

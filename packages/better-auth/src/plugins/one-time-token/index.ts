@@ -1,33 +1,37 @@
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import * as z from "zod";
-import { defaultKeyHasher } from "..";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
 import { sessionMiddleware } from "../../api";
 import { generateRandomString } from "../../crypto";
-import type { BetterAuthPlugin } from "@better-auth/core";
 import type { Session, User } from "../../types";
-import type { GenericEndpointContext } from "@better-auth/core";
+import { defaultKeyHasher } from "./utils";
 
-interface OneTimeTokenOptions {
+export interface OneTimeTokenOptions {
 	/**
 	 * Expires in minutes
 	 *
 	 * @default 3
 	 */
-	expiresIn?: number;
+	expiresIn?: number | undefined;
 	/**
 	 * Only allow server initiated requests
 	 */
-	disableClientRequest?: boolean;
+	disableClientRequest?: boolean | undefined;
 	/**
 	 * Generate a custom token
 	 */
-	generateToken?: (
-		session: {
-			user: User & Record<string, any>;
-			session: Session & Record<string, any>;
-		},
-		ctx: GenericEndpointContext,
-	) => Promise<string>;
+	generateToken?:
+		| ((
+				session: {
+					user: User & Record<string, any>;
+					session: Session & Record<string, any>;
+				},
+				ctx: GenericEndpointContext,
+		  ) => Promise<string>)
+		| undefined;
 	/**
 	 * This option allows you to configure how the token is stored in your database.
 	 * Note: This will not affect the token that's sent, it will only affect the token stored in your database.
@@ -35,12 +39,15 @@ interface OneTimeTokenOptions {
 	 * @default "plain"
 	 */
 	storeToken?:
-		| "plain"
-		| "hashed"
-		| { type: "custom-hasher"; hash: (token: string) => Promise<string> };
+		| (
+				| "plain"
+				| "hashed"
+				| { type: "custom-hasher"; hash: (token: string) => Promise<string> }
+		  )
+		| undefined;
 }
 
-export const oneTimeToken = (options?: OneTimeTokenOptions) => {
+export const oneTimeToken = (options?: OneTimeTokenOptions | undefined) => {
 	const opts = {
 		storeToken: "plain",
 		...options,

@@ -1,5 +1,5 @@
-import type { siwe } from ".";
 import type { BetterAuthClientPlugin } from "@better-auth/core";
+import type { siwe } from ".";
 
 export const siweClient = () => {
 	return {

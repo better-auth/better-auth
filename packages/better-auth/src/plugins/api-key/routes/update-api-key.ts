@@ -1,14 +1,14 @@
+import type { AuthContext } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { safeJSONParse } from "@better-auth/core/utils";
 import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../../api";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
-import { ERROR_CODES } from "..";
+import { getDate } from "../../../utils/date";
+import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
+import { getApiKeyById, setApiKey } from "../adapter";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
-import { getDate } from "../../../utils/date";
 import type { PredefinedApiKeyOptions } from ".";
-import { safeJSONParse } from "../../../utils/json";
-import { API_KEY_TABLE_NAME } from "..";
-import type { AuthContext } from "@better-auth/core";
 export function updateApiKey({
 	opts,
 	schema,
@@ -18,7 +18,7 @@ export function updateApiKey({
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
-		byPassLastCheckTime?: boolean,
+		byPassLastCheckTime?: boolean | undefined,
 	): void;
 }) {
 	return createAuthEndpoint(
@@ -258,10 +258,19 @@ export function updateApiKey({
 			} = ctx.body;
 
 			const session = await getSessionFromCtx(ctx);
-			const authRequired = (ctx.request || ctx.headers) && !ctx.body.userId;
+			const authRequired = ctx.request || ctx.headers;
 			const user =
-				session?.user ?? (authRequired ? null : { id: ctx.body.userId });
+				authRequired && !session
+					? null
+					: session?.user || { id: ctx.body.userId };
+
 			if (!user?.id) {
+				throw new APIError("UNAUTHORIZED", {
+					message: ERROR_CODES.UNAUTHORIZED_SESSION,
+				});
+			}
+
+			if (session && ctx.body.userId && session?.user.id !== ctx.body.userId) {
 				throw new APIError("UNAUTHORIZED", {
 					message: ERROR_CODES.UNAUTHORIZED_SESSION,
 				});
@@ -285,19 +294,14 @@ export function updateApiKey({
 				}
 			}
 
-			const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-				model: API_KEY_TABLE_NAME,
-				where: [
-					{
-						field: "id",
-						value: keyId,
-					},
-					{
-						field: "userId",
-						value: user.id,
-					},
-				],
-			});
+			let apiKey: ApiKey | null = null;
+
+			apiKey = await getApiKeyById(ctx, keyId, opts);
+
+			// Verify ownership
+			if (apiKey && apiKey.userId !== user.id) {
+				apiKey = null;
+			}
 
 			if (!apiKey) {
 				throw new APIError("NOT_FOUND", {
@@ -396,21 +400,42 @@ export function updateApiKey({
 
 			let newApiKey: ApiKey = apiKey;
 			try {
-				let result = await ctx.context.adapter.update<ApiKey>({
-					model: API_KEY_TABLE_NAME,
-					where: [
-						{
-							field: "id",
-							value: apiKey.id,
-						},
-					],
-					update: {
-						lastRequest: new Date(),
-						remaining: apiKey.remaining === null ? null : apiKey.remaining - 1,
+				if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
+					const dbUpdated = await ctx.context.adapter.update<ApiKey>({
+						model: API_KEY_TABLE_NAME,
+						where: [
+							{
+								field: "id",
+								value: apiKey.id,
+							},
+						],
+						update: newValues,
+					});
+					if (dbUpdated) {
+						await setApiKey(ctx, dbUpdated, opts);
+						newApiKey = dbUpdated;
+					}
+				} else if (opts.storage === "database") {
+					const result = await ctx.context.adapter.update<ApiKey>({
+						model: API_KEY_TABLE_NAME,
+						where: [
+							{
+								field: "id",
+								value: apiKey.id,
+							},
+						],
+						update: newValues,
+					});
+					if (result) newApiKey = result;
+				} else {
+					const updated: ApiKey = {
+						...apiKey,
 						...newValues,
-					},
-				});
-				if (result) newApiKey = result;
+						updatedAt: new Date(),
+					};
+					await setApiKey(ctx, updated, opts);
+					newApiKey = updated;
+				}
 			} catch (error: any) {
 				throw new APIError("INTERNAL_SERVER_ERROR", {
 					message: error?.message,

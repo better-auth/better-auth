@@ -1,13 +1,10 @@
 "use client";
 
+import { ChevronDown, PlusCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-	Popover,
-	PopoverContent,
-	PopoverTrigger,
-} from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
 import {
 	Command,
 	CommandGroup,
@@ -15,10 +12,13 @@ import {
 	CommandList,
 	CommandSeparator,
 } from "@/components/ui/command";
-import { ChevronDown, PlusCircle } from "lucide-react";
-import { Session } from "@/lib/auth-types";
+import {
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+} from "@/components/ui/popover";
 import { client, useSession } from "@/lib/auth-client";
-import { useRouter } from "next/navigation";
+import type { Session } from "@/lib/auth-types";
 
 export default function AccountSwitcher({ sessions }: { sessions: Session[] }) {
 	const { data: currentUser } = useSession();

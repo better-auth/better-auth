@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { RateLimit } from "../../types";
 
@@ -220,5 +220,107 @@ describe("should work with custom rules", async () => {
 		}
 		expect(response).toBeNull();
 		expect(i).toBe(110);
+	});
+});
+
+describe("should work in development/test environment", () => {
+	const LOCALHOST_IP = "127.0.0.1";
+	const REQUEST_PATH = "/sign-in/email";
+
+	let originalNodeEnv: string | undefined;
+	beforeEach(() => {
+		originalNodeEnv = process.env.NODE_ENV;
+	});
+	afterEach(() => {
+		process.env.NODE_ENV = originalNodeEnv;
+		vi.unstubAllEnvs();
+	});
+
+	it("should work in development environment", async () => {
+		vi.stubEnv("NODE_ENV", "development");
+
+		const store = new Map<string, string>();
+		const { client, testUser } = await getTestInstance({
+			rateLimit: {
+				enabled: true,
+				window: 10,
+				max: 3,
+			},
+			secondaryStorage: {
+				set(key, value) {
+					store.set(key, value);
+				},
+				get(key) {
+					return store.get(key) || null;
+				},
+				delete(key) {
+					store.delete(key);
+				},
+			},
+		});
+
+		for (let i = 0; i < 4; i++) {
+			const response = await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+			});
+
+			if (i >= 3) {
+				expect(response.error?.status).toBe(429);
+			} else {
+				expect(response.error).toBeNull();
+			}
+		}
+
+		const signInKeys = Array.from(store.keys()).filter((key) =>
+			key.endsWith(REQUEST_PATH),
+		);
+
+		expect(signInKeys.length).toBeGreaterThan(0);
+		expect(signInKeys[0]).toBe(`${LOCALHOST_IP}${REQUEST_PATH}`);
+	});
+
+	it("should work in test environment", async () => {
+		vi.stubEnv("NODE_ENV", "test");
+
+		const store = new Map<string, string>();
+		const { client, testUser } = await getTestInstance({
+			rateLimit: {
+				enabled: true,
+				window: 10,
+				max: 3,
+			},
+			secondaryStorage: {
+				set(key, value) {
+					store.set(key, value);
+				},
+				get(key) {
+					return store.get(key) || null;
+				},
+				delete(key) {
+					store.delete(key);
+				},
+			},
+		});
+
+		for (let i = 0; i < 4; i++) {
+			const response = await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+			});
+
+			if (i >= 3) {
+				expect(response.error?.status).toBe(429);
+			} else {
+				expect(response.error).toBeNull();
+			}
+		}
+
+		const signInKeys = Array.from(store.keys()).filter((key) =>
+			key.endsWith(REQUEST_PATH),
+		);
+
+		expect(signInKeys.length).toBeGreaterThan(0);
+		expect(signInKeys[0]).toBe(`${LOCALHOST_IP}${REQUEST_PATH}`);
 	});
 });

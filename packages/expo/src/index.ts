@@ -1,19 +1,20 @@
-import type { BetterAuthPlugin } from "better-auth";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import {
-	APIError,
 	createAuthEndpoint,
 	createAuthMiddleware,
-} from "better-auth/api";
-import { z } from "zod";
+} from "@better-auth/core/api";
+import { APIError } from "better-call";
+import * as z from "zod";
 
 export interface ExpoOptions {
 	/**
-	 * Override origin header for expo API routes
+	 * Disable origin override for expo API routes
+	 * When set to true, the origin header will not be overridden for expo API routes
 	 */
-	overrideOrigin?: boolean;
+	disableOriginOverride?: boolean | undefined;
 }
 
-export const expo = (options?: ExpoOptions) => {
+export const expo = (options?: ExpoOptions | undefined) => {
 	return {
 		id: "expo",
 		init: (ctx) => {
@@ -27,11 +28,12 @@ export const expo = (options?: ExpoOptions) => {
 			};
 		},
 		async onRequest(request, ctx) {
-			if (!options?.overrideOrigin || request.headers.get("origin")) {
+			if (options?.disableOriginOverride || request.headers.get("origin")) {
 				return;
 			}
 			/**
-			 * To bypass origin check from expo, we need to set the origin header to the expo-origin header
+			 * To bypass origin check from expo, we need to set the origin
+			 * header to the expo-origin header
 			 */
 			const expoOrigin = request.headers.get("expo-origin");
 			if (!expoOrigin) {
@@ -47,7 +49,7 @@ export const expo = (options?: ExpoOptions) => {
 			after: [
 				{
 					matcher(context) {
-						return (
+						return !!(
 							context.path?.startsWith("/callback") ||
 							context.path?.startsWith("/oauth2/callback")
 						);

@@ -1,18 +1,17 @@
+import type { CookieOptions, EndpointContext } from "better-call";
 import type {
 	Account,
 	BetterAuthDBSchema,
+	ModelNames,
 	SecondaryStorage,
 	Session,
 	User,
 	Verification,
 } from "../db";
-import type { OAuthProvider } from "../oauth2";
-import { createLogger } from "../env";
 import type { DBAdapter, Where } from "../db/adapter";
+import type { createLogger } from "../env";
+import type { OAuthProvider } from "../oauth2";
 import type { BetterAuthCookies } from "./cookie";
-import type { DBPreservedModels } from "../db/type";
-import type { LiteralUnion } from "./helper";
-import type { CookieOptions, EndpointContext } from "better-call";
 import type {
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
@@ -31,45 +30,38 @@ export interface InternalAdapter<
 		user: Omit<User, "id" | "createdAt" | "updatedAt">,
 		account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
 			Partial<Account>,
-		context?: GenericEndpointContext<Options>,
 	): Promise<{ user: User; account: Account }>;
 
 	createUser<T extends Record<string, any>>(
 		user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &
 			Partial<User> &
 			Record<string, any>,
-		context?: GenericEndpointContext<Options>,
 	): Promise<T & User>;
 
 	createAccount<T extends Record<string, any>>(
 		account: Omit<Account, "id" | "createdAt" | "updatedAt"> &
 			Partial<Account> &
 			T,
-		context?: GenericEndpointContext<Options>,
 	): Promise<T & Account>;
 
 	listSessions(userId: string): Promise<Session[]>;
 
 	listUsers(
-		limit?: number,
-		offset?: number,
-		sortBy?: { field: string; direction: "asc" | "desc" },
-		where?: Where[],
+		limit?: number | undefined,
+		offset?: number | undefined,
+		sortBy?: { field: string; direction: "asc" | "desc" } | undefined,
+		where?: Where[] | undefined,
 	): Promise<User[]>;
 
-	countTotalUsers(where?: Where[]): Promise<number>;
+	countTotalUsers(where?: Where[] | undefined): Promise<number>;
 
-	deleteUser(
-		userId: string,
-		context?: GenericEndpointContext<Options>,
-	): Promise<void>;
+	deleteUser(userId: string): Promise<void>;
 
 	createSession(
 		userId: string,
-		ctx: GenericEndpointContext<Options>,
-		dontRememberMe?: boolean,
-		override?: Partial<Session> & Record<string, any>,
-		overrideAll?: boolean,
+		dontRememberMe?: boolean | undefined,
+		override?: (Partial<Session> & Record<string, any>) | undefined,
+		overrideAll?: boolean | undefined,
 	): Promise<Session>;
 
 	findSession(token: string): Promise<{
@@ -84,25 +76,15 @@ export interface InternalAdapter<
 	updateSession(
 		sessionToken: string,
 		session: Partial<Session> & Record<string, any>,
-		context?: GenericEndpointContext<Options>,
 	): Promise<Session | null>;
 
 	deleteSession(token: string): Promise<void>;
 
-	deleteAccounts(
-		userId: string,
-		context?: GenericEndpointContext<Options>,
-	): Promise<void>;
+	deleteAccounts(userId: string): Promise<void>;
 
-	deleteAccount(
-		accountId: string,
-		context?: GenericEndpointContext<Options>,
-	): Promise<void>;
+	deleteAccount(accountId: string): Promise<void>;
 
-	deleteSessions(
-		userIdOrSessionTokens: string | string[],
-		context?: GenericEndpointContext<Options>,
-	): Promise<void>;
+	deleteSessions(userIdOrSessionTokens: string | string[]): Promise<void>;
 
 	findOAuthUser(
 		email: string,
@@ -112,34 +94,27 @@ export interface InternalAdapter<
 
 	findUserByEmail(
 		email: string,
-		options?: { includeAccounts: boolean },
+		options?: { includeAccounts: boolean } | undefined,
 	): Promise<{ user: User; accounts: Account[] } | null>;
 
 	findUserById(userId: string): Promise<User | null>;
 
 	linkAccount(
 		account: Omit<Account, "id" | "createdAt" | "updatedAt"> & Partial<Account>,
-		context?: GenericEndpointContext<Options>,
 	): Promise<Account>;
 
-	// fixme: any type
-	updateUser(
+	// Record<string, any> is to take into account additional fields or plugin-added fields
+	updateUser<T extends Record<string, any>>(
 		userId: string,
 		data: Partial<User> & Record<string, any>,
-		context?: GenericEndpointContext<Options>,
-	): Promise<any>;
+	): Promise<User & T>;
 
-	updateUserByEmail(
+	updateUserByEmail<T extends Record<string, any>>(
 		email: string,
 		data: Partial<User & Record<string, any>>,
-		context?: GenericEndpointContext<Options>,
-	): Promise<User>;
+	): Promise<User & T>;
 
-	updatePassword(
-		userId: string,
-		password: string,
-		context?: GenericEndpointContext<Options>,
-	): Promise<void>;
+	updatePassword(userId: string, password: string): Promise<void>;
 
 	findAccounts(userId: string): Promise<Account[]>;
 
@@ -152,40 +127,28 @@ export interface InternalAdapter<
 
 	findAccountByUserId(userId: string): Promise<Account[]>;
 
-	updateAccount(
-		id: string,
-		data: Partial<Account>,
-		context?: GenericEndpointContext<Options>,
-	): Promise<Account>;
+	updateAccount(id: string, data: Partial<Account>): Promise<Account>;
 
 	createVerificationValue(
 		data: Omit<Verification, "createdAt" | "id" | "updatedAt"> &
 			Partial<Verification>,
-		context?: GenericEndpointContext<Options>,
 	): Promise<Verification>;
 
 	findVerificationValue(identifier: string): Promise<Verification | null>;
 
-	deleteVerificationValue(
-		id: string,
-		context?: GenericEndpointContext<Options>,
-	): Promise<void>;
+	deleteVerificationValue(id: string): Promise<void>;
 
-	deleteVerificationByIdentifier(
-		identifier: string,
-		context?: GenericEndpointContext<Options>,
-	): Promise<void>;
+	deleteVerificationByIdentifier(identifier: string): Promise<void>;
 
 	updateVerificationValue(
 		id: string,
 		data: Partial<Verification>,
-		context?: GenericEndpointContext<Options>,
 	): Promise<Verification>;
 }
 
 type CreateCookieGetterFn = (
 	cookieName: string,
-	overrideAttributes?: Partial<CookieOptions>,
+	overrideAttributes?: Partial<CookieOptions> | undefined,
 ) => {
 	name: string;
 	attributes: CookieOptions;
@@ -202,11 +165,20 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 		appName: string;
 		baseURL: string;
 		trustedOrigins: string[];
-		oauthConfig?: {
+		oauthConfig: {
 			/**
 			 * This is dangerous and should only be used in dev or staging environments.
 			 */
-			skipStateCookieCheck?: boolean;
+			skipStateCookieCheck?: boolean | undefined;
+			/**
+			 * Strategy for storing OAuth state
+			 *
+			 * - "cookie": Store state in an encrypted cookie (stateless)
+			 * - "database": Store state in the database
+			 *
+			 * @default "cookie"
+			 */
+			storeStateStrategy: "database" | "cookie";
 		};
 		/**
 		 * New session that will be set after the request
@@ -245,10 +217,16 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			updateAge: number;
 			expiresIn: number;
 			freshAge: number;
+			cookieRefreshCache:
+				| false
+				| {
+						enabled: true;
+						updateAge: number;
+				  };
 		};
 		generateId: (options: {
-			model: LiteralUnion<DBPreservedModels, string>;
-			size?: number;
+			model: ModelNames;
+			size?: number | undefined;
 		}) => string | false;
 		secondaryStorage: SecondaryStorage | undefined;
 		password: {
@@ -264,7 +242,28 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 		runMigrations: () => Promise<void>;
 		publishTelemetry: (event: {
 			type: string;
-			anonymousId?: string;
+			anonymousId?: string | undefined;
 			payload: Record<string, any>;
 		}) => Promise<void>;
+		/**
+		 * This skips the origin check for all requests.
+		 *
+		 * set to true by default for `test` environments and `false`
+		 * for other environments.
+		 *
+		 * It's inferred from the `options.advanced?.disableCSRFCheck`
+		 * option or `options.advanced?.disableOriginCheck` option.
+		 *
+		 * @default false
+		 */
+		skipOriginCheck: boolean;
+		/**
+		 * This skips the CSRF check for all requests.
+		 *
+		 * This is inferred from the `options.advanced?.
+		 * disableCSRFCheck` option.
+		 *
+		 * @default false
+		 */
+		skipCSRFCheck: boolean;
 	};

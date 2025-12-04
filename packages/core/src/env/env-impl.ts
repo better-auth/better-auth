@@ -53,7 +53,8 @@ export const nodeENV =
 export const isProduction = nodeENV === "production";
 
 /** Detect if `NODE_ENV` environment variable is `dev` or `development` */
-export const isDevelopment = nodeENV === "dev" || nodeENV === "development";
+export const isDevelopment = () =>
+	nodeENV === "dev" || nodeENV === "development";
 
 /** Detect if `NODE_ENV` environment variable is `test` */
 export const isTest = () => nodeENV === "test" || toBoolean(env.TEST);

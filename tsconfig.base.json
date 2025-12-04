@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "downlevelIteration": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": false,
+    "incremental": true,
+    "noErrorTruncation": true,
+    "composite": true,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "types": ["node", "bun"],
+    // Put the .d.ts files output and cache file (tsbuildinfo) in a directory
+    // that will be ignored by other tools.
+    "outDir": "${configDir}/node_modules/.cache/ts/out",
+    "tsBuildInfoFile": "${configDir}/node_modules/.cache/ts/tsbuildinfo",
+    // A custom condition that can be set to the "exports" filed in package.json
+    // and it should directs to the source .ts files. This enables the
+    // jump-to-definition feature in IDEs to function properly.
+    "customConditions": ["dev-source"]
+  },
+  "exclude": ["**/dist/**", "**/node_modules/**"]
+}

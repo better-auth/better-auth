@@ -26,19 +26,19 @@ export async function createAuthorizationURL({
 	redirectURI: string;
 	authorizationEndpoint: string;
 	state: string;
-	codeVerifier?: string;
-	scopes: string[];
-	claims?: string[];
-	duration?: string;
-	prompt?: string;
-	accessType?: string;
-	responseType?: string;
-	display?: string;
-	loginHint?: string;
-	hd?: string;
-	responseMode?: string;
-	additionalParams?: Record<string, string>;
-	scopeJoiner?: string;
+	codeVerifier?: string | undefined;
+	scopes?: string[] | undefined;
+	claims?: string[] | undefined;
+	duration?: string | undefined;
+	prompt?: string | undefined;
+	accessType?: string | undefined;
+	responseType?: string | undefined;
+	display?: string | undefined;
+	loginHint?: string | undefined;
+	hd?: string | undefined;
+	responseMode?: string | undefined;
+	additionalParams?: Record<string, string> | undefined;
+	scopeJoiner?: string | undefined;
 }) {
 	const url = new URL(authorizationEndpoint);
 	url.searchParams.set("response_type", responseType || "code");
@@ -47,7 +47,9 @@ export async function createAuthorizationURL({
 		: options.clientId;
 	url.searchParams.set("client_id", primaryClientId);
 	url.searchParams.set("state", state);
-	url.searchParams.set("scope", scopes.join(scopeJoiner || " "));
+	if (scopes) {
+		url.searchParams.set("scope", scopes.join(scopeJoiner || " "));
+	}
 	url.searchParams.set("redirect_uri", options.redirectURI || redirectURI);
 	duration && url.searchParams.set("duration", duration);
 	display && url.searchParams.set("display", display);

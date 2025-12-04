@@ -1,15 +1,14 @@
-import { Command } from "commander";
-import { logger } from "better-auth";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { cancel, confirm, intro, isCancel, outro } from "@clack/prompts";
 import { createAuthClient } from "better-auth/client";
 import { deviceAuthorizationClient } from "better-auth/client/plugins";
 import chalk from "chalk";
+import { Command } from "commander";
 import open from "open";
 import yoctoSpinner from "yocto-spinner";
 import * as z from "zod/v4";
-import { intro, outro, confirm, isCancel, cancel } from "@clack/prompts";
-import fs from "fs/promises";
-import path from "path";
-import os from "os";
 
 const DEMO_URL = "https://demo.better-auth.com";
 const CLIENT_ID = "better-auth-cli";
@@ -73,7 +72,7 @@ export async function loginAction(opts: any) {
 		spinner.stop();
 
 		if (error || !data) {
-			logger.error(
+			console.error(
 				`Failed to request device authorization: ${error?.error_description || "Unknown error"}`,
 			);
 			process.exit(1);
@@ -154,7 +153,7 @@ export async function loginAction(opts: any) {
 		}
 	} catch (err) {
 		spinner.stop();
-		logger.error(
+		console.error(
 			`Login failed: ${err instanceof Error ? err.message : "Unknown error"}`,
 		);
 		process.exit(1);
@@ -209,23 +208,23 @@ async function pollForToken(
 							break;
 						case "access_denied":
 							spinner.stop();
-							logger.error("Access was denied by the user");
+							console.error("Access was denied by the user");
 							process.exit(1);
 							break;
 						case "expired_token":
 							spinner.stop();
-							logger.error("The device code has expired. Please try again.");
+							console.error("The device code has expired. Please try again.");
 							process.exit(1);
 							break;
 						default:
 							spinner.stop();
-							logger.error(`Error: ${error.error_description}`);
+							console.error(`Error: ${error.error_description}`);
 							process.exit(1);
 					}
 				}
 			} catch (err) {
 				spinner.stop();
-				logger.error(
+				console.error(
 					`Network error: ${err instanceof Error ? err.message : "Unknown error"}`,
 				);
 				process.exit(1);
@@ -254,7 +253,7 @@ async function storeToken(token: any): Promise<void> {
 
 		await fs.writeFile(TOKEN_FILE, JSON.stringify(tokenData, null, 2), "utf-8");
 	} catch (error) {
-		logger.warn("Failed to store authentication token locally");
+		console.warn("Failed to store authentication token locally");
 	}
 }
 

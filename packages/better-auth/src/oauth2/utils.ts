@@ -1,5 +1,5 @@
-import { symmetricDecrypt, symmetricEncrypt } from "../crypto";
 import type { AuthContext } from "@better-auth/core";
+import { symmetricDecrypt, symmetricEncrypt } from "../crypto";
 
 export function decryptOAuthToken(token: string, ctx: AuthContext) {
 	if (!token) return token;

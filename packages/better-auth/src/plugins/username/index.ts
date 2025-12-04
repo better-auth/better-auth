@@ -1,86 +1,94 @@
-import * as z from "zod";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-} from "@better-auth/core/middleware";
-import type { BetterAuthPlugin } from "@better-auth/core";
-import { APIError } from "better-call";
-import type { Account, InferOptionSchema, User } from "../../types";
-import { setSessionCookie } from "../../cookies";
+} from "@better-auth/core/api";
+import type { Account, User } from "@better-auth/core/db";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { getSchema, type UsernameSchema } from "./schema";
-import { mergeSchema } from "../../db";
-import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
+import { APIError } from "better-call";
+import * as z from "zod";
 import { createEmailVerificationToken } from "../../api";
+import { setSessionCookie } from "../../cookies";
+import { mergeSchema } from "../../db";
+import type { InferOptionSchema } from "../../types/plugins";
+import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
+import type { UsernameSchema } from "./schema";
+import { getSchema } from "./schema";
 
 export { USERNAME_ERROR_CODES } from "./error-codes";
 
 export type UsernameOptions = {
-	schema?: InferOptionSchema<UsernameSchema>;
+	schema?: InferOptionSchema<UsernameSchema> | undefined;
 	/**
 	 * The minimum length of the username
 	 *
 	 * @default 3
 	 */
-	minUsernameLength?: number;
+	minUsernameLength?: number | undefined;
 	/**
 	 * The maximum length of the username
 	 *
 	 * @default 30
 	 */
-	maxUsernameLength?: number;
+	maxUsernameLength?: number | undefined;
 	/**
 	 * A function to validate the username
 	 *
 	 * By default, the username should only contain alphanumeric characters and underscores
 	 */
-	usernameValidator?: (username: string) => boolean | Promise<boolean>;
+	usernameValidator?:
+		| ((username: string) => boolean | Promise<boolean>)
+		| undefined;
 	/**
 	 * A function to validate the display username
 	 *
 	 * By default, no validation is applied to display username
 	 */
-	displayUsernameValidator?: (
-		displayUsername: string,
-	) => boolean | Promise<boolean>;
+	displayUsernameValidator?:
+		| ((displayUsername: string) => boolean | Promise<boolean>)
+		| undefined;
 	/**
 	 * A function to normalize the username
 	 *
 	 * @default (username) => username.toLowerCase()
 	 */
-	usernameNormalization?: ((username: string) => string) | false;
+	usernameNormalization?: (((username: string) => string) | false) | undefined;
 	/**
 	 * A function to normalize the display username
 	 *
 	 * @default false
 	 */
-	displayUsernameNormalization?: ((displayUsername: string) => string) | false;
+	displayUsernameNormalization?:
+		| (((displayUsername: string) => string) | false)
+		| undefined;
 	/**
 	 * The order of validation
 	 *
 	 * @default { username: "pre-normalization", displayUsername: "pre-normalization" }
 	 */
-	validationOrder?: {
-		/**
-		 * The order of username validation
-		 *
-		 * @default "pre-normalization"
-		 */
-		username?: "pre-normalization" | "post-normalization";
-		/**
-		 * The order of display username validation
-		 *
-		 * @default "pre-normalization"
-		 */
-		displayUsername?: "pre-normalization" | "post-normalization";
-	};
+	validationOrder?:
+		| {
+				/**
+				 * The order of username validation
+				 *
+				 * @default "pre-normalization"
+				 */
+				username?: "pre-normalization" | "post-normalization";
+				/**
+				 * The order of display username validation
+				 *
+				 * @default "pre-normalization"
+				 */
+				displayUsername?: "pre-normalization" | "post-normalization";
+		  }
+		| undefined;
 };
 
 function defaultUsernameValidator(username: string) {
 	return /^[a-zA-Z0-9_.]+$/.test(username);
 }
 
-export const username = (options?: UsernameOptions) => {
+export const username = (options?: UsernameOptions | undefined) => {
 	const normalizer = (username: string) => {
 		if (options?.usernameNormalization === false) {
 			return username;
@@ -246,6 +254,7 @@ export const username = (options?: UsernameOptions) => {
 							username,
 						});
 						throw new APIError("UNPROCESSABLE_ENTITY", {
+							code: "USERNAME_TOO_SHORT",
 							message: ERROR_CODES.USERNAME_TOO_SHORT,
 						});
 					}
@@ -368,7 +377,6 @@ export const username = (options?: UsernameOptions) => {
 
 					const session = await ctx.context.internalAdapter.createSession(
 						user.id,
-						ctx,
 						ctx.body.rememberMe === false,
 					);
 					if (!session) {
@@ -423,6 +431,7 @@ export const username = (options?: UsernameOptions) => {
 
 					if (username.length < minUsernameLength) {
 						throw new APIError("UNPROCESSABLE_ENTITY", {
+							code: "USERNAME_TOO_SHORT",
 							message: ERROR_CODES.USERNAME_TOO_SHORT,
 						});
 					}
@@ -489,6 +498,7 @@ export const username = (options?: UsernameOptions) => {
 							const maxUsernameLength = options?.maxUsernameLength || 30;
 							if (username.length < minUsernameLength) {
 								throw new APIError("BAD_REQUEST", {
+									code: "USERNAME_TOO_SHORT",
 									message: ERROR_CODES.USERNAME_TOO_SHORT,
 								});
 							}

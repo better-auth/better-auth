@@ -87,6 +87,15 @@ description: Apple provider setup and usage.
     </Step>
 </Steps>
 
+<Callout type="warn">
+**Localhost and Non-TLS Restrictions**
+
+Apple Sign In does **not** support `localhost` or non-HTTPS URLs. During development:
+- You cannot use `http://localhost` as a return URL
+- You must use a domain with valid HTTPS/TLS certificate
+
+This limitation is enforced by Apple's security requirements and cannot be bypassed.
+</Callout>
 
 ## Usage
 

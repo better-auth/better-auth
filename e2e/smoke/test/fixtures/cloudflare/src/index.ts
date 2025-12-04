@@ -1,8 +1,7 @@
-import { Hono } from "hono";
-
 import { betterAuth } from "better-auth";
-import { createDrizzle } from "./db";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { Hono } from "hono";
+import { createDrizzle } from "./db";
 
 interface CloudflareBindings {
 	DB: D1Database;

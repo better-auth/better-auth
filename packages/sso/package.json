@@ -1,9 +1,15 @@
 {
   "name": "@better-auth/sso",
   "author": "Bereket Engida",
-  "version": "1.4.0-beta.10",
+  "version": "1.4.6-beta.2",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "dist/index.mjs",
+  "homepage": "https://www.better-auth.com/docs/plugins/sso",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/better-auth/better-auth",
+    "directory": "packages/sso"
+  },
   "license": "MIT",
   "keywords": [
     "sso",
@@ -20,33 +26,34 @@
   "publishConfig": {
     "access": "public"
   },
-  "module": "dist/index.js",
+  "module": "dist/index.mjs",
   "description": "SSO plugin for Better Auth",
   "scripts": {
     "test": "vitest",
+    "lint:package": "publint run --strict",
     "build": "tsdown",
     "dev": "tsdown --watch",
     "typecheck": "tsc --project tsconfig.json"
   },
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "dev-source": "./src/index.ts",
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
     },
     "./client": {
-      "types": "./dist/client.d.ts",
-      "import": "./dist/client.js",
-      "require": "./dist/client.cjs"
+      "dev-source": "./src/client.ts",
+      "types": "./dist/client.d.mts",
+      "default": "./dist/client.mjs"
     }
   },
   "typesVersions": {
     "*": {
       "*": [
-        "./dist/index.d.ts"
+        "./dist/index.d.mts"
       ],
       "client": [
-        "./dist/client.d.ts"
+        "./dist/client.d.mts"
       ]
     }
   },
@@ -54,17 +61,17 @@
     "@better-fetch/fetch": "catalog:",
     "fast-xml-parser": "^5.2.5",
     "jose": "^6.1.0",
-    "oauth2-mock-server": "^7.2.1",
     "samlify": "^2.10.1",
-    "zod": "^4.1.5"
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@types/body-parser": "^1.19.6",
-    "@types/express": "^5.0.3",
-    "better-auth": "workspace:^",
+    "@types/express": "^5.0.5",
     "better-call": "catalog:",
-    "body-parser": "^2.2.0",
+    "better-auth": "workspace:*",
+    "body-parser": "^2.2.1",
     "express": "^5.1.0",
+    "oauth2-mock-server": "^8.2.0",
     "tsdown": "catalog:"
   },
   "peerDependencies": {

@@ -7,6 +7,6 @@
   },
   "dependencies": {
     "better-auth": "workspace:*",
-    "better-sqlite3": "^12.4.1"
+    "@better-auth/sso": "workspace:*"
   }
 }

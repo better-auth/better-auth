@@ -1,7 +1,8 @@
-import { logger, type Adapter, type BetterAuthOptions } from "better-auth";
+import type { BetterAuthOptions } from "@better-auth/core";
+import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { generateDrizzleSchema } from "./drizzle";
-import { generatePrismaSchema } from "./prisma";
 import { generateMigrations } from "./kysely";
+import { generatePrismaSchema } from "./prisma";
 
 export const adapters = {
 	prisma: generatePrismaSchema,
@@ -10,7 +11,7 @@ export const adapters = {
 };
 
 export const generateSchema = (opts: {
-	adapter: Adapter;
+	adapter: DBAdapter;
 	file?: string;
 	options: BetterAuthOptions;
 }) => {
@@ -34,7 +35,7 @@ export const generateSchema = (opts: {
 			}));
 	}
 
-	logger.error(
+	console.error(
 		`${adapter.id} is not supported. If it is a custom adapter, please request the maintainer to implement createSchema`,
 	);
 	process.exit(1);

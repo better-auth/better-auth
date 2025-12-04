@@ -1,6 +1,7 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
+    "customConditions": [],
     "target": "esnext",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,

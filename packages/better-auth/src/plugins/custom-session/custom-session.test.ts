@@ -1,14 +1,14 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { customSession } from ".";
-import { admin } from "../admin";
 import { createAuthClient } from "../../client";
-import { customSessionClient } from "./client";
+import { parseSetCookieHeader } from "../../cookies";
+import { getTestInstance } from "../../test-utils/test-instance";
 import type { BetterAuthOptions } from "../../types";
+import { admin } from "../admin";
 import { adminClient } from "../admin/client";
 import { multiSession } from "../multi-session";
 import { multiSessionClient } from "../multi-session/client";
-import { parseSetCookieHeader } from "../../cookies";
+import { customSession } from ".";
+import { customSessionClient } from "./client";
 
 describe("Custom Session Plugin Tests", async () => {
 	const options = {

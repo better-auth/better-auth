@@ -1,19 +1,27 @@
-import type { CookieOptions } from "better-call";
-import { BetterAuthError } from "@better-auth/core/error";
-import type { Session, User } from "../types";
-import type { BetterAuthOptions } from "@better-auth/core";
-import { getDate } from "../utils/date";
-import { env, isProduction } from "@better-auth/core/env";
-import { base64Url } from "@better-auth/utils/base64";
-import { ms } from "ms";
-import { createHMAC } from "@better-auth/utils/hmac";
-import { safeJSONParse } from "../utils/json";
-import { getBaseURL } from "../utils/url";
-import { binary } from "@better-auth/utils/binary";
 import type {
 	BetterAuthCookies,
+	BetterAuthOptions,
 	GenericEndpointContext,
 } from "@better-auth/core";
+import { env, isProduction } from "@better-auth/core/env";
+import { BetterAuthError } from "@better-auth/core/error";
+import { safeJSONParse } from "@better-auth/core/utils";
+import { base64Url } from "@better-auth/utils/base64";
+import { binary } from "@better-auth/utils/binary";
+import { createHMAC } from "@better-auth/utils/hmac";
+import type { CookieOptions } from "better-call";
+import { ms } from "ms";
+import {
+	signJWT,
+	symmetricDecodeJWT,
+	symmetricEncodeJWT,
+	verifyJWT,
+} from "../crypto/jwt";
+import { parseUserOutput } from "../db/schema";
+import type { Session, User } from "../types";
+import { getDate } from "../utils/date";
+import { getBaseURL } from "../utils/url";
+import { createSessionStore } from "./session-store";
 
 export function createCookieGetter(options: BetterAuthOptions) {
 	const secure =
@@ -74,6 +82,9 @@ export function getCookies(options: BetterAuthOptions) {
 	const sessionData = createCookie("session_data", {
 		maxAge: options.session?.cookieCache?.maxAge || 60 * 5,
 	});
+	const accountData = createCookie("account_data", {
+		maxAge: options.session?.cookieCache?.maxAge || 60 * 5,
+	});
 	const dontRememberToken = createCookie("dont_remember");
 	return {
 		sessionToken: {
@@ -91,6 +102,10 @@ export function getCookies(options: BetterAuthOptions) {
 		dontRememberToken: {
 			name: dontRememberToken.name,
 			options: dontRememberToken.attributes,
+		},
+		accountData: {
+			name: accountData.name,
+			options: accountData.attributes,
 		},
 	};
 }
@@ -119,7 +134,27 @@ export async function setCookieCache(
 			{} as Record<string, any>,
 		);
 
-		const sessionData = { session: filteredSession, user: session.user };
+		// Apply field filtering to user data
+		const filteredUser = parseUserOutput(ctx.context.options, session.user);
+
+		// Compute version
+		const versionConfig = ctx.context.options.session?.cookieCache?.version;
+		let version = "1"; // default version
+		if (versionConfig) {
+			if (typeof versionConfig === "string") {
+				version = versionConfig;
+			} else if (typeof versionConfig === "function") {
+				const result = versionConfig(session.session, session.user);
+				version = result instanceof Promise ? await result : result;
+			}
+		}
+
+		const sessionData = {
+			session: filteredSession,
+			user: filteredUser,
+			updatedAt: Date.now(),
+			version,
+		};
 
 		const options = {
 			...ctx.context.authCookies.sessionData.options,
@@ -129,29 +164,71 @@ export async function setCookieCache(
 		};
 
 		const expiresAtDate = getDate(options.maxAge || 60, "sec").getTime();
-		const data = base64Url.encode(
-			JSON.stringify({
-				session: sessionData,
-				expiresAt: expiresAtDate,
-				signature: await createHMAC("SHA-256", "base64urlnopad").sign(
-					ctx.context.secret,
-					JSON.stringify({
-						...sessionData,
-						expiresAt: expiresAtDate,
-					}),
-				),
-			}),
-			{
-				padding: false,
-			},
-		);
-		if (data.length > 4093) {
-			ctx.context?.logger?.error(
-				`Session data exceeds cookie size limit (${data.length} bytes > 4093 bytes). Consider reducing session data size or disabling cookie cache. Session will not be cached in cookie.`,
+		const strategy =
+			ctx.context.options.session?.cookieCache?.strategy || "compact";
+
+		let data: string;
+
+		if (strategy === "jwe") {
+			// Use JWE strategy (JSON Web Encryption) with A256CBC-HS512 + HKDF
+			data = await symmetricEncodeJWT(
+				sessionData,
+				ctx.context.secret,
+				"better-auth-session",
+				options.maxAge || 60 * 5,
 			);
-			return;
+		} else if (strategy === "jwt") {
+			// Use JWT strategy with HMAC-SHA256 signature (HS256), no encryption
+			data = await signJWT(
+				sessionData,
+				ctx.context.secret,
+				options.maxAge || 60 * 5,
+			);
+		} else {
+			// Use compact strategy (base64url + HMAC, no JWT spec overhead)
+			// Also handles legacy "base64-hmac" for backward compatibility
+			data = base64Url.encode(
+				JSON.stringify({
+					session: sessionData,
+					expiresAt: expiresAtDate,
+					signature: await createHMAC("SHA-256", "base64urlnopad").sign(
+						ctx.context.secret,
+						JSON.stringify({
+							...sessionData,
+							expiresAt: expiresAtDate,
+						}),
+					),
+				}),
+				{
+					padding: false,
+				},
+			);
 		}
-		ctx.setCookie(ctx.context.authCookies.sessionData.name, data, options);
+
+		// Check if we need to chunk the cookie (only if it exceeds 4093 bytes)
+		if (data.length > 4093) {
+			const sessionStore = createSessionStore(
+				ctx.context.authCookies.sessionData.name,
+				options,
+				ctx,
+			);
+
+			const cookies = sessionStore.chunk(data, options);
+			sessionStore.setCookies(cookies);
+		} else {
+			const sessionStore = createSessionStore(
+				ctx.context.authCookies.sessionData.name,
+				options,
+				ctx,
+			);
+
+			if (sessionStore.hasChunks()) {
+				const cleanCookies = sessionStore.clean();
+				sessionStore.setCookies(cleanCookies);
+			}
+
+			ctx.setCookie(ctx.context.authCookies.sessionData.name, data, options);
+		}
 	}
 }
 
@@ -161,8 +238,8 @@ export async function setSessionCookie(
 		session: Session & Record<string, any>;
 		user: User;
 	},
-	dontRememberMe?: boolean,
-	overrides?: Partial<CookieOptions>,
+	dontRememberMe?: boolean | undefined,
+	overrides?: Partial<CookieOptions> | undefined,
 ) {
 	const dontRememberMeCookie = await ctx.getSignedCookie(
 		ctx.context.authCookies.dontRememberToken.name,
@@ -218,16 +295,22 @@ export async function setSessionCookie(
 
 export function deleteSessionCookie(
 	ctx: GenericEndpointContext,
-	skipDontRememberMe?: boolean,
+	skipDontRememberMe?: boolean | undefined,
 ) {
 	ctx.setCookie(ctx.context.authCookies.sessionToken.name, "", {
 		...ctx.context.authCookies.sessionToken.options,
 		maxAge: 0,
 	});
-	ctx.setCookie(ctx.context.authCookies.sessionData.name, "", {
-		...ctx.context.authCookies.sessionData.options,
-		maxAge: 0,
-	});
+
+	// Use createSessionStore to clean up all session data chunks
+	const sessionStore = createSessionStore(
+		ctx.context.authCookies.sessionData.name,
+		ctx.context.authCookies.sessionData.options,
+		ctx,
+	);
+	const cleanCookies = sessionStore.clean();
+	sessionStore.setCookies(cleanCookies);
+
 	if (!skipDontRememberMe) {
 		ctx.setCookie(ctx.context.authCookies.dontRememberToken.name, "", {
 			...ctx.context.authCookies.dontRememberToken.options,
@@ -251,11 +334,13 @@ export type EligibleCookies = (string & {}) | (keyof BetterAuthCookies & {});
 
 export const getSessionCookie = (
 	request: Request | Headers,
-	config?: {
-		cookiePrefix?: string;
-		cookieName?: string;
-		path?: string;
-	},
+	config?:
+		| {
+				cookiePrefix?: string;
+				cookieName?: string;
+				path?: string;
+		  }
+		| undefined,
 ) => {
 	if (config?.cookiePrefix) {
 		if (config.cookieName) {
@@ -289,15 +374,30 @@ export const getCookieCache = async <
 	S extends {
 		session: Session & Record<string, any>;
 		user: User & Record<string, any>;
+		updatedAt: number;
+		version?: string;
 	},
 >(
 	request: Request | Headers,
-	config?: {
-		cookiePrefix?: string;
-		cookieName?: string;
-		isSecure?: boolean;
-		secret?: string;
-	},
+	config?:
+		| {
+				cookiePrefix?: string;
+				cookieName?: string;
+				isSecure?: boolean;
+				secret?: string;
+				strategy?: "compact" | "jwt" | "jwe"; // base64-hmac for backward compatibility
+				version?:
+					| string
+					| ((
+							session: Session & Record<string, any>,
+							user: User & Record<string, any>,
+					  ) => string)
+					| ((
+							session: Session & Record<string, any>,
+							user: User & Record<string, any>,
+					  ) => Promise<string>);
+		  }
+		| undefined,
 ) => {
 	const headers = request instanceof Headers ? request : request.headers;
 	const cookies = headers.get("cookie");
@@ -315,36 +415,133 @@ export const getCookieCache = async <
 				? `__Secure-${cookiePrefix}.${cookieName}`
 				: `${cookiePrefix}.${cookieName}`;
 	const parsedCookie = parseCookies(cookies);
-	const sessionData = parsedCookie.get(name);
-	if (sessionData) {
-		const sessionDataPayload = safeJSONParse<{
-			session: S;
-			expiresAt: number;
-			signature: string;
-		}>(binary.decode(base64Url.decode(sessionData)));
-		if (!sessionDataPayload) {
-			return null;
+
+	// Check for chunked cookies
+	let sessionData = parsedCookie.get(name);
+	if (!sessionData) {
+		// Try to reconstruct from chunks
+		const chunks: Array<{ index: number; value: string }> = [];
+		for (const [cookieName, value] of parsedCookie.entries()) {
+			if (cookieName.startsWith(name + ".")) {
+				const parts = cookieName.split(".");
+				const indexStr = parts[parts.length - 1];
+				const index = parseInt(indexStr || "0", 10);
+				if (!isNaN(index)) {
+					chunks.push({ index, value });
+				}
+			}
 		}
+
+		if (chunks.length > 0) {
+			// Sort by index and join
+			chunks.sort((a, b) => a.index - b.index);
+			sessionData = chunks.map((c) => c.value).join("");
+		}
+	}
+
+	if (sessionData) {
 		const secret = config?.secret || env.BETTER_AUTH_SECRET;
 		if (!secret) {
 			throw new BetterAuthError(
 				"getCookieCache requires a secret to be provided. Either pass it as an option or set the BETTER_AUTH_SECRET environment variable",
 			);
 		}
-		const isValid = await createHMAC("SHA-256", "base64urlnopad").verify(
-			secret,
-			JSON.stringify({
-				...sessionDataPayload.session,
-				expiresAt: sessionDataPayload.expiresAt,
-			}),
-			sessionDataPayload.signature,
-		);
-		if (!isValid) {
+
+		const strategy = config?.strategy || "compact";
+
+		if (strategy === "jwe") {
+			// Use JWE strategy (encrypted)
+			const payload = await symmetricDecodeJWT<S>(
+				sessionData,
+				secret,
+				"better-auth-session",
+			);
+
+			if (payload && payload.session && payload.user) {
+				// Validate version if provided
+				if (config?.version) {
+					const cookieVersion = payload.version || "1";
+					let expectedVersion = "1";
+					if (typeof config.version === "string") {
+						expectedVersion = config.version;
+					} else if (typeof config.version === "function") {
+						const result = config.version(payload.session, payload.user);
+						expectedVersion = result instanceof Promise ? await result : result;
+					}
+					if (cookieVersion !== expectedVersion) {
+						return null;
+					}
+				}
+				return payload;
+			}
 			return null;
+		} else if (strategy === "jwt") {
+			// Use JWT strategy with HMAC signature (HS256), no encryption
+			const payload = await verifyJWT<S>(sessionData, secret);
+
+			if (payload && payload.session && payload.user) {
+				// Validate version if provided
+				if (config?.version) {
+					const cookieVersion = payload.version || "1";
+					let expectedVersion = "1";
+					if (typeof config.version === "string") {
+						expectedVersion = config.version;
+					} else if (typeof config.version === "function") {
+						const result = config.version(payload.session, payload.user);
+						expectedVersion = result instanceof Promise ? await result : result;
+					}
+					if (cookieVersion !== expectedVersion) {
+						return null;
+					}
+				}
+				return payload;
+			}
+			return null;
+		} else {
+			// Use compact strategy (or legacy base64-hmac)
+			const sessionDataPayload = safeJSONParse<{
+				session: S;
+				expiresAt: number;
+				signature: string;
+			}>(binary.decode(base64Url.decode(sessionData)));
+			if (!sessionDataPayload) {
+				return null;
+			}
+			const isValid = await createHMAC("SHA-256", "base64urlnopad").verify(
+				secret,
+				JSON.stringify({
+					...sessionDataPayload.session,
+					expiresAt: sessionDataPayload.expiresAt,
+				}),
+				sessionDataPayload.signature,
+			);
+			if (!isValid) {
+				return null;
+			}
+
+			// Validate version if provided
+			if (config?.version && sessionDataPayload.session) {
+				const cookieVersion = sessionDataPayload.session.version || "1";
+				let expectedVersion = "1";
+				if (typeof config.version === "string") {
+					expectedVersion = config.version;
+				} else if (typeof config.version === "function") {
+					const result = config.version(
+						sessionDataPayload.session.session,
+						sessionDataPayload.session.user,
+					);
+					expectedVersion = result instanceof Promise ? await result : result;
+				}
+				if (cookieVersion !== expectedVersion) {
+					return null;
+				}
+			}
+
+			return sessionDataPayload.session;
 		}
-		return sessionDataPayload.session;
 	}
 	return null;
 };
 
 export * from "./cookie-utils";
+export { createSessionStore, getChunkedCookie } from "./session-store";

@@ -1,20 +1,19 @@
-import { ENV, getBooleanEnvVar, isTest } from "@better-auth/core/env";
-import { getProjectId } from "./project-id";
 import type { BetterAuthOptions } from "@better-auth/core";
-import { detectEnvironment, detectRuntime } from "./detectors/detect-runtime";
+import { ENV, getBooleanEnvVar, isTest, logger } from "@better-auth/core/env";
+import { betterFetch } from "@better-fetch/fetch";
+import { getTelemetryAuthConfig } from "./detectors/detect-auth-config";
 import { detectDatabase } from "./detectors/detect-database";
 import { detectFramework } from "./detectors/detect-framework";
-import { detectSystemInfo } from "./detectors/detect-system-info";
 import { detectPackageManager } from "./detectors/detect-project-info";
-import { betterFetch } from "@better-fetch/fetch";
+import { detectEnvironment, detectRuntime } from "./detectors/detect-runtime";
+import { detectSystemInfo } from "./detectors/detect-system-info";
+import { getProjectId } from "./project-id";
 import type { TelemetryContext, TelemetryEvent } from "./types";
-import { logger } from "@better-auth/core/env";
-import { getTelemetryAuthConfig } from "./detectors/detect-auth-config";
 export { getTelemetryAuthConfig };
 export type { TelemetryEvent } from "./types";
 export async function createTelemetry(
 	options: BetterAuthOptions,
-	context?: TelemetryContext,
+	context?: TelemetryContext | undefined,
 ) {
 	const debugEnabled =
 		options.telemetry?.debug ||
@@ -54,7 +53,7 @@ export async function createTelemetry(
 		anonymousId = await getProjectId(options.baseURL);
 
 		const payload = {
-			config: getTelemetryAuthConfig(options),
+			config: getTelemetryAuthConfig(options, context),
 			runtime: detectRuntime(),
 			database: await detectDatabase(),
 			framework: await detectFramework(),

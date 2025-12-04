@@ -1,0 +1,17 @@
+{
+  "name": "@better-auth/test",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest",
+    "lint:package": "publint run --strict"
+  },
+  "devDependencies": {
+    "@better-auth/core": "workspace:*",
+    "@better-fetch/fetch": "catalog:",
+    "better-auth": "workspace:*",
+    "msw": "^2.12.4",
+    "openid-client": "^6.8.1",
+    "vitest": "catalog:"
+  }
+}

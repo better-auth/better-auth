@@ -1,9 +1,9 @@
-import type { TelemetryContext } from "../types";
 import type { BetterAuthOptions } from "@better-auth/core";
+import type { TelemetryContext } from "../types";
 
 export function getTelemetryAuthConfig(
 	options: BetterAuthOptions,
-	context?: TelemetryContext,
+	context?: TelemetryContext | undefined,
 ) {
 	return {
 		database: context?.database,
@@ -79,6 +79,7 @@ export function getTelemetryAuthConfig(
 			cookieCache: {
 				enabled: options.session?.cookieCache?.enabled,
 				maxAge: options.session?.cookieCache?.maxAge,
+				strategy: options.session?.cookieCache?.strategy,
 			},
 			disableSessionRefresh: options.session?.disableSessionRefresh,
 			expiresIn: options.session?.expiresIn,
@@ -116,7 +117,9 @@ export function getTelemetryAuthConfig(
 					options.advanced?.crossSubDomainCookies?.additionalCookies,
 			},
 			database: {
-				useNumberId: !!options.advanced?.database?.useNumberId,
+				useNumberId:
+					!!options.advanced?.database?.useNumberId ||
+					options.advanced?.database?.generateId === "serial",
 				generateId: options.advanced?.database?.generateId,
 				defaultFindManyLimit: options.advanced?.database?.defaultFindManyLimit,
 			},

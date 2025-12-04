@@ -13,18 +13,18 @@ export interface LineIdTokenPayload {
 	aud: string;
 	exp: number;
 	iat: number;
-	name?: string;
-	picture?: string;
-	email?: string;
-	amr?: string[];
-	nonce?: string;
+	name?: string | undefined;
+	picture?: string | undefined;
+	email?: string | undefined;
+	amr?: string[] | undefined;
+	nonce?: string | undefined;
 }
 
 export interface LineUserInfo {
 	sub: string;
-	name?: string;
-	picture?: string;
-	email?: string;
+	name?: string | undefined;
+	picture?: string | undefined;
+	email?: string | undefined;
 }
 
 export interface LineOptions
@@ -60,8 +60,8 @@ export const line = (options: LineOptions) => {
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["openid", "profile", "email"];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			return await createAuthorizationURL({
 				id: "line",
 				options,

@@ -1,16 +1,17 @@
-import { APIError } from "../../api";
-import { createAuthMiddleware } from "@better-auth/core/middleware";
 import type { BetterAuthPlugin } from "@better-auth/core";
-import { mergeSchema } from "../../db";
-import { apiKeySchema } from "./schema";
-import { getIp } from "../../utils/get-request-ip";
-import { getDate } from "../../utils/date";
-import type { ApiKeyOptions } from "./types";
-import { createApiKeyRoutes, deleteAllExpiredApiKeys } from "./routes";
-import { validateApiKey } from "./routes/verify-api-key";
+import { createAuthMiddleware } from "@better-auth/core/api";
+import { defineErrorCodes } from "@better-auth/core/utils";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
-import { defineErrorCodes } from "@better-auth/core/utils";
+import { APIError } from "../../api";
+import { generateRandomString } from "../../crypto/random";
+import { mergeSchema } from "../../db";
+import { getDate } from "../../utils/date";
+import { getIp } from "../../utils/get-request-ip";
+import { createApiKeyRoutes, deleteAllExpiredApiKeys } from "./routes";
+import { validateApiKey } from "./routes/verify-api-key";
+import { apiKeySchema } from "./schema";
+import type { ApiKeyOptions } from "./types";
 
 export const defaultKeyHasher = async (key: string) => {
 	const hash = await createHash("SHA-256").digest(
@@ -58,7 +59,7 @@ export const ERROR_CODES = defineErrorCodes({
 
 export const API_KEY_TABLE_NAME = "apikey";
 
-export const apiKey = (options?: ApiKeyOptions) => {
+export const apiKey = (options?: ApiKeyOptions | undefined) => {
 	const opts = {
 		...options,
 		apiKeyHeaders: options?.apiKeyHeaders ?? "x-api-key",
@@ -70,6 +71,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 		enableMetadata: options?.enableMetadata ?? false,
 		disableKeyHashing: options?.disableKeyHashing ?? false,
 		requireName: options?.requireName ?? false,
+		storage: options?.storage ?? "database",
 		rateLimit: {
 			enabled:
 				options?.rateLimit?.enabled === undefined
@@ -91,6 +93,8 @@ export const apiKey = (options?: ApiKeyOptions) => {
 				options?.startingCharactersConfig?.charactersLength ?? 6,
 		},
 		enableSessionForAPIKeys: options?.enableSessionForAPIKeys ?? false,
+		fallbackToDatabase: options?.fallbackToDatabase ?? false,
+		customStorage: options?.customStorage,
 	} satisfies ApiKeyOptions;
 
 	const schema = mergeSchema(
@@ -119,14 +123,8 @@ export const apiKey = (options?: ApiKeyOptions) => {
 	const keyGenerator =
 		opts.customKeyGenerator ||
 		(async (options: { length: number; prefix: string | undefined }) => {
-			const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-			let apiKey = `${options.prefix || ""}`;
-			for (let i = 0; i < options.length; i++) {
-				const randomIndex = Math.floor(Math.random() * characters.length);
-				apiKey += characters[randomIndex];
-			}
-
-			return apiKey;
+			const key = generateRandomString(options.length, "a-z", "A-Z");
+			return `${options.prefix || ""}${key}`;
 		});
 
 	const routes = createApiKeyRoutes({ keyGenerator, opts, schema });

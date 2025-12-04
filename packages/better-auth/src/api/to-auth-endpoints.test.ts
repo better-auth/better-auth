@@ -1,13 +1,13 @@
-import { describe, expect, it } from "vitest";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-} from "@better-auth/core/middleware";
-import { toAuthEndpoints } from "./to-auth-endpoints";
-import { init } from "../init";
-import * as z from "zod";
+} from "@better-auth/core/api";
 import { APIError } from "better-call";
+import { describe, expect, it } from "vitest";
+import * as z from "zod";
+import { init } from "../context/init";
 import { getTestInstance } from "../test-utils/test-instance";
+import { toAuthEndpoints } from "./to-auth-endpoints";
 
 describe("before hook", async () => {
 	describe("context", async () => {
@@ -595,5 +595,39 @@ describe("debug mode stack trace", () => {
 			expect(error.stack).toBeDefined();
 			expect(error.stack).toMatch(/ErrorWithStack:|Error:|APIError:/);
 		}
+	});
+});
+
+describe("custom response code", () => {
+	const endpoints = {
+		responseWithStatus: createAuthEndpoint(
+			"/response-with-status",
+			{
+				method: "GET",
+			},
+			async (c) => {
+				c.setStatus(201);
+				return { success: true };
+			},
+		),
+	};
+
+	const authContext = init({});
+	const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+	it("should return response with custom status", async () => {
+		const response = await authEndpoints.responseWithStatus({
+			asResponse: true,
+		});
+		expect(response).toBeInstanceOf(Response);
+		expect(response.status).toBe(201);
+	});
+
+	it("should return status code", async () => {
+		const response = await authEndpoints.responseWithStatus({
+			returnStatus: true,
+		});
+		expect(response.status).toBe(201);
+		expect(response.response).toEqual({ success: true });
 	});
 });

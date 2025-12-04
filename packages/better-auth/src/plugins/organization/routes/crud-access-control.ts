@@ -1,19 +1,17 @@
+import type { GenericEndpointContext } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import type { Where } from "@better-auth/core/db/adapter";
 import * as z from "zod";
 import { APIError } from "../../../api";
-import { createAuthEndpoint } from "@better-auth/core/middleware";
-import type { OrganizationOptions } from "../types";
+import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
+import { toZodSchema } from "../../../db";
+import type { User } from "../../../types";
+import type { AccessControl } from "../../access";
 import { orgSessionMiddleware } from "../call";
+import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
 import type { Member, OrganizationRole } from "../schema";
-import type { User } from "../../../types";
-import type { Where } from "@better-auth/core/db/adapter";
-import type { AccessControl } from "../../access";
-import {
-	toZodSchema,
-	type InferAdditionalFieldsFromPluginOptions,
-} from "../../../db";
-import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import type { GenericEndpointContext } from "@better-auth/core";
+import type { OrganizationOptions } from "../types";
 
 type IsExactlyEmptyObject<T> = keyof T extends never // no keys
 	? T extends {} // is assignable to {}
@@ -92,7 +90,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 						role: string;
 						permission: Record<string, string[]>;
 					} & (IsExactlyEmptyObject<AdditionalFields> extends true
-						? { additionalFields?: {} }
+						? { additionalFields?: {} | undefined }
 						: { additionalFields: AdditionalFields }),
 				},
 			},
@@ -494,6 +492,7 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 		"/organization/list-roles",
 		{
 			method: "GET",
+			requireHeaders: true,
 			use: [orgSessionMiddleware],
 			query: z
 				.object({
@@ -503,15 +502,6 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 					}),
 				})
 				.optional(),
-			metadata: {
-				$Infer: {
-					query: {} as
-						| {
-								organizationId?: string | undefined;
-						  }
-						| undefined,
-				},
-			},
 		},
 		async (ctx) => {
 			const { session, user } = ctx.context.session;
@@ -614,6 +604,7 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 		"/organization/get-role",
 		{
 			method: "GET",
+			requireHeaders: true,
 			use: [orgSessionMiddleware],
 			query: z
 				.object({
@@ -832,6 +823,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					},
 				},
 			},
+			requireHeaders: true,
 			use: [orgSessionMiddleware],
 		},
 		async (ctx) => {
@@ -1124,7 +1116,7 @@ async function checkIfMemberHasPermission({
 		});
 	if (missingPermissions.length > 0) {
 		ctx.context.logger.error(
-			`[Dynamic Access Control] The user is missing permissions nessesary to ${action} a role with those set of permissions.\n`,
+			`[Dynamic Access Control] The user is missing permissions necessary to ${action} a role with those set of permissions.\n`,
 			{
 				userId: user.id,
 				organizationId,

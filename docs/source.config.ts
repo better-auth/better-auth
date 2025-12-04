@@ -1,11 +1,11 @@
-import {
-	defineDocs,
-	defineConfig,
-	defineCollections,
-} from "fumadocs-mdx/config";
-import { z } from "zod";
-import { remarkAutoTypeTable, createGenerator } from "fumadocs-typescript";
 import { remarkNpm } from "fumadocs-core/mdx-plugins";
+import {
+	defineCollections,
+	defineConfig,
+	defineDocs,
+} from "fumadocs-mdx/config";
+import { createGenerator, remarkAutoTypeTable } from "fumadocs-typescript";
+import * as z from "zod";
 
 export const docs = defineDocs({
 	dir: "./content/docs",

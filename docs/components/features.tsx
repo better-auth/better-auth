@@ -1,5 +1,6 @@
 "use client";
 
+import { LockClosedIcon } from "@radix-ui/react-icons";
 import {
 	Globe2Icon,
 	PlugIcon,
@@ -9,13 +10,12 @@ import {
 	ShieldCheckIcon,
 	Webhook,
 } from "lucide-react";
-import { LockClosedIcon } from "@radix-ui/react-icons";
-
-import { TechStackDisplay } from "./display-techstack";
-import { Ripple } from "./ripple";
-import { GithubStat } from "./github-stat";
 import { cn } from "@/lib/utils";
+import { TechStackDisplay } from "./display-techstack";
+import { GithubStat } from "./github-stat";
 import { Testimonial } from "./landing/testimonials";
+import { Ripple } from "./ripple";
+
 const features = [
 	{
 		id: 1,
@@ -71,7 +71,7 @@ const features = [
 
 export default function Features({ stars }: { stars: string | null }) {
 	return (
-		<div className="md:w-10/12 mt-10 mx-auto font-geist relative md:border-l-0 md:border-b-0 md:border-[1.2px] rounded-none -pr-2 dark:bg-black/[0.95] ">
+		<div className="md:w-10/12 mt-10 mx-auto relative md:border-l-0 md:border-b-0 md:border-[1.2px] rounded-none -pr-2 dark:bg-black/[0.95] ">
 			<div className="w-full md:mx-0">
 				<div className="grid grid-cols-1 relative md:grid-rows-2 md:grid-cols-3 border-b-[1.2px]">
 					<div className="hidden md:grid top-1/2 left-0 -translate-y-1/2 w-full grid-cols-3 z-10 pointer-events-none select-none absolute">
@@ -82,7 +82,7 @@ export default function Features({ stars }: { stars: string | null }) {
 						<div
 							key={feature.id}
 							className={cn(
-								"justify-center border-l-[1.2px] md:min-h-[240px] border-t-[1.2px] md:border-t-0 transform-gpu flex flex-col p-10 2xl:p-12",
+								"justify-center md:border-l-[1.2px] md:min-h-[240px] border-t-[1.2px] md:border-t-0 transform-gpu flex flex-col p-10 2xl:p-12",
 								index >= 3 && "md:border-t-[1.2px]",
 							)}
 						>
@@ -113,10 +113,10 @@ export default function Features({ stars }: { stars: string | null }) {
 						</div>
 					))}
 				</div>
-				<div className="w-full border-l-2 hidden md:block">
+				<div className="w-full md:border-l hidden md:block">
 					<Testimonial />
 				</div>
-				<div className="relative col-span-3 border-t-[1.2px] border-l-[1.2px] md:border-b-[1.2px] dark:border-b-0  h-full py-20">
+				<div className="relative col-span-3 md:border-l-[1.2px] md:border-t-[1.2px] h-full py-20">
 					<div className="w-full h-full p-16 pt-10 md:px-10 2xl:px-16">
 						<div className="flex flex-col items-center justify-center w-full h-full gap-3">
 							<div className="flex items-center gap-2">
@@ -136,8 +136,8 @@ export default function Features({ stars }: { stars: string | null }) {
 										"svelteKit",
 										"astro",
 										"solidStart",
-										// "react",
-										// "hono",
+										"react",
+										"hono",
 										"expo",
 										"tanstack",
 									]}

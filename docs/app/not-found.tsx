@@ -1,5 +1,5 @@
-import Section from "@/components/landing/section";
 import Link from "next/link";
+import Section from "@/components/landing/section";
 import { Logo } from "@/components/logo";
 export default function NotFound() {
 	return (

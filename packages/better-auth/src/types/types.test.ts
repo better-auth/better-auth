@@ -1,6 +1,6 @@
 import { describe, expectTypeOf } from "vitest";
-import { getTestInstance } from "../test-utils/test-instance";
 import { organization, twoFactor } from "../plugins";
+import { getTestInstance } from "../test-utils/test-instance";
 
 describe("general types", async (it) => {
 	it("should infer base session", async () => {
@@ -44,7 +44,7 @@ describe("general types", async (it) => {
 			twoFactorEnabled: boolean | undefined | null;
 		}>();
 
-		expectTypeOf<typeof auth.$Infer.Session.session>().toEqualTypeOf<{
+		expectTypeOf<typeof auth.$Infer.Session.session>().toMatchObjectType<{
 			id: string;
 			userId: string;
 			expiresAt: Date;
