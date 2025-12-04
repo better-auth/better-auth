@@ -76,7 +76,7 @@ export async function handleOAuthUserInfo(
 					);
 				}
 				return {
-					error: "account_not_linked",
+					error: "account not linked",
 					data: null,
 				};
 			}
@@ -107,7 +107,7 @@ export async function handleOAuthUserInfo(
 						);
 					}
 					return {
-						error: "account_not_linked",
+						error: "account not linked",
 						data: null,
 					};
 				}

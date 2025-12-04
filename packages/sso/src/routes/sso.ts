@@ -1375,6 +1375,10 @@ export const callbackSSO = (options?: SSOOptions) => {
 				);
 			}
 
+			// SSO performs its own trust check before calling handleOAuthUserInfo.
+			// If the check passes, we set forceTrusted=true to skip the core's
+			// redundant check. This separation exists because SSO has stricter
+			// trust requirements (domain verification) that core doesn't handle.
 			let forceTrusted = false;
 			const existingUser = await ctx.context.adapter.findOne<User>({
 				model: "user",
@@ -1751,6 +1755,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			});
 
 			if (existingUser) {
+				// Check if this SSO account is already linked to the user
 				const existingAccount = await ctx.context.adapter.findOne<Account>({
 					model: "account",
 					where: [
@@ -1761,6 +1766,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 				});
 
 				if (!existingAccount) {
+					// SSO trust check: only auto-link if provider is trusted or domain-verified
 					const canLink = canAutoLinkExistingUser(ctx, {
 						providerId: provider.providerId,
 						userEmail: userInfo.email,
@@ -2126,6 +2132,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			});
 
 			if (existingUser) {
+				// Check if this SSO account is already linked to the user
 				const account = await ctx.context.adapter.findOne<Account>({
 					model: "account",
 					where: [
@@ -2135,6 +2142,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 					],
 				});
 				if (!account) {
+					// SSO trust check: only auto-link if provider is trusted or domain-verified
 					const canLink = canAutoLinkExistingUser(ctx, {
 						providerId: provider.providerId,
 						userEmail: userInfo.email,
