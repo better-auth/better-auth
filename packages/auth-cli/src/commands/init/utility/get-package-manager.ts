@@ -1,7 +1,7 @@
 import { exec } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { tryCatch } from "../../../utils/utilts";
+import { tryCatch } from "../../../utils/utils";
 
 export const PACKAGE_MANAGERS = ["npm", "pnpm", "bun", "yarn"] as const;
 export type PackageManager = (typeof PACKAGE_MANAGERS)[number];
@@ -59,6 +59,7 @@ const isMonorepoRoot = async (dir: string): Promise<boolean> => {
 	// Check for other monorepo indicators
 	const monorepoIndicators = [
 		"lerna.json", // Lerna
+		/* cSpell:disable */
 		"turbo.json", // Turborepo
 		"nx.json", // Nx
 		"rush.json", // Rush

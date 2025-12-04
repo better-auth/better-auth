@@ -12,7 +12,7 @@ import yoctoSpinner from "yocto-spinner";
 import z from "zod";
 import { possibleAuthConfigPaths } from "../../utils/config-paths";
 import { getPackageJson, hasDependency } from "../../utils/get-package-json";
-import { generateSecretHash, tryCatch } from "../../utils/utilts";
+import { generateSecretHash, tryCatch } from "../../utils/utils";
 import type { DatabaseAdapter } from "./configs/databases.config";
 import type { Framework } from "./configs/frameworks.config";
 import { FRAMEWORKS } from "./configs/frameworks.config";
@@ -789,7 +789,7 @@ export const auth = betterAuth({
 	// Select the plugins to use. For now this is skipped.
 	const plugins = await (async (): Promise<Plugin[]> => {
 		// For now we do not want to allow configurations of plugins.
-		// Possibily in the future we can support this.
+		// Possibly in the future we can support this.
 		const skip = true;
 		if (skip) return [];
 

@@ -64,7 +64,7 @@ export const createImport = ({
 };
 
 /**
- * Converts an import object to a string. This is specificaly for the variables in the import.
+ * Converts an import object to a string. This is specifically for the variables in the import.
  * For the full import statement, use the `getImportString` function.
  */
 const getImportVariableString = (import_: Import) => {
