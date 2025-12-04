@@ -4,9 +4,6 @@
 		"interface": true,
 		"type": true
 	},
-	"ignoreIssues": {
-		"**": ["duplicates"]
-	},
 	"tags": ["-lintignore"],
 	"workspaces": {
 		"packages/*": {
