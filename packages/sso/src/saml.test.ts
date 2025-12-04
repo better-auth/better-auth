@@ -1426,23 +1426,26 @@ describe("SAML SSO Account Linking", () => {
 		expect(samlResponse?.samlResponse).toBeDefined();
 
 		let redirectLocation = "";
-		await betterFetch("http://localhost:3000/api/auth/sso/saml2/callback/saml-untrusted", {
-			method: "POST",
-			redirect: "manual",
-			headers: {
-				"Content-Type": "application/x-www-form-urlencoded",
+		await betterFetch(
+			"http://localhost:3000/api/auth/sso/saml2/callback/saml-untrusted",
+			{
+				method: "POST",
+				redirect: "manual",
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					SAMLResponse: samlResponse.samlResponse,
+					RelayState: "http://localhost:3000/dashboard",
+				}),
+				customFetchImpl: async (url, init) => {
+					return auth.handler(new Request(url, init));
+				},
+				onError: (context) => {
+					redirectLocation = context.response.headers.get("location") || "";
+				},
 			},
-			body: new URLSearchParams({
-				SAMLResponse: samlResponse.samlResponse,
-				RelayState: "http://localhost:3000/dashboard",
-			}),
-			customFetchImpl: async (url, init) => {
-				return auth.handler(new Request(url, init));
-			},
-			onError: (context) => {
-				redirectLocation = context.response.headers.get("location") || "";
-			},
-		});
+		);
 
 		expect(redirectLocation).toContain("account_not_linked");
 
@@ -1533,23 +1536,26 @@ describe("SAML SSO Account Linking", () => {
 		expect(samlResponse?.samlResponse).toBeDefined();
 
 		let redirectLocation = "";
-		await betterFetch("http://localhost:3000/api/auth/sso/saml2/callback/saml-trusted", {
-			method: "POST",
-			redirect: "manual",
-			headers: {
-				"Content-Type": "application/x-www-form-urlencoded",
+		await betterFetch(
+			"http://localhost:3000/api/auth/sso/saml2/callback/saml-trusted",
+			{
+				method: "POST",
+				redirect: "manual",
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					SAMLResponse: samlResponse.samlResponse,
+					RelayState: "http://localhost:3000/dashboard",
+				}),
+				customFetchImpl: async (url, init) => {
+					return auth.handler(new Request(url, init));
+				},
+				onError: (context) => {
+					redirectLocation = context.response.headers.get("location") || "";
+				},
 			},
-			body: new URLSearchParams({
-				SAMLResponse: samlResponse.samlResponse,
-				RelayState: "http://localhost:3000/dashboard",
-			}),
-			customFetchImpl: async (url, init) => {
-				return auth.handler(new Request(url, init));
-			},
-			onError: (context) => {
-				redirectLocation = context.response.headers.get("location") || "";
-			},
-		});
+		);
 
 		expect(redirectLocation).not.toContain("error");
 		expect(redirectLocation).toContain("/dashboard");
