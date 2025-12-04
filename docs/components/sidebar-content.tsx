@@ -1,5 +1,5 @@
+import type { Folder, Root } from "fumadocs-core/page-tree";
 import type { LucideIcon } from "lucide-react";
-import type { Root, Folder } from "fumadocs-core/page-tree";
 import {
 	Binoculars,
 	Book,
