@@ -161,42 +161,37 @@ Better Auth automatically fetches and validates the provider's [OpenID Connect D
 
 This allows most endpoint-related fields in `oidcConfig` to be **optional** — they will be hydrated automatically from the Identity Provider (IdP).
 
-<Tabs items={["client", "server"]}>
-    <Tab value="client">
-```ts title="minimal-oidc-registration.ts"
-import { authClient } from "@/lib/auth-client";
-
-// Minimal OIDC configuration — endpoints discovered automatically
-await authClient.sso.register({
-    providerId: "okta",
-    issuer: "https://your-org.okta.com",
-    domain: "yourcompany.com",
+<APIMethod path="/sso/register" method="POST" requireSession note="Minimal OIDC configuration — endpoints are discovered automatically from the issuer.">
+```ts
+type registerSSOProvider = {
+    /**
+     * Unique identifier for the provider
+     */
+    providerId: string = "okta"
+    /**
+     * The OIDC issuer URL. Discovery document is fetched from `{issuer}/.well-known/openid-configuration`
+     */
+    issuer: string = "https://your-org.okta.com"
+    /**
+     * Email domain for this provider
+     */
+    domain: string = "yourcompany.com"
+    /**
+     * OIDC configuration (most fields are auto-discovered)
+     */
     oidcConfig: {
-        clientId: "your-client-id",
-        clientSecret: "your-client-secret",
+        /**
+         * OAuth client ID from your IdP
+         */
+        clientId: string = "your-client-id"
+        /**
+         * OAuth client secret from your IdP
+         */
+        clientSecret: string = "your-client-secret"
     }
-});
+}
 ```
-    </Tab>
-
-    <Tab value="server">
-```ts title="minimal-oidc-registration.ts"
-const { headers } = await signInWithTestUser();
-await auth.api.registerSSOProvider({
-    body: {
-        providerId: "okta",
-        issuer: "https://your-org.okta.com",
-        domain: "yourcompany.com",
-        oidcConfig: {
-            clientId: "your-client-id",
-            clientSecret: "your-client-secret",
-        }
-    },
-    headers,
-});
-```
-    </Tab>
-</Tabs>
+</APIMethod>
 
 #### Fields Automatically Discovered
 
