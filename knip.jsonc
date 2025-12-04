@@ -5,7 +5,7 @@
 		"type": true
 	},
 	"ignoreIssues": {
-		"**": ["exports", "types", "duplicates"]
+		"**": ["types", "duplicates"]
 	},
 	"tags": ["-lintignore"],
 	"workspaces": {

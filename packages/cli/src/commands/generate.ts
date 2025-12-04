@@ -11,7 +11,7 @@ import * as z from "zod/v4";
 import { generateSchema } from "../generators";
 import { getConfig } from "../utils/get-config";
 
-export async function generateAction(opts: any) {
+async function generateAction(opts: any) {
 	const options = z
 		.object({
 			cwd: z.string(),
