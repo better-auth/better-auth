@@ -1,7 +1,10 @@
 import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { createTelemetry, getTelemetryAuthConfig, logger } from "better-auth";
+import {
+	createTelemetry,
+	getTelemetryAuthConfig,
+} from "@better-auth/telemetry";
 import { getAdapter } from "better-auth/db";
 import chalk from "chalk";
 import { Command } from "commander";
@@ -24,7 +27,7 @@ async function generateAction(opts: any) {
 
 	const cwd = path.resolve(options.cwd);
 	if (!existsSync(cwd)) {
-		logger.error(`The directory "${cwd}" does not exist.`);
+		console.error(`The directory "${cwd}" does not exist.`);
 		process.exit(1);
 	}
 	const config = await getConfig({
@@ -32,14 +35,14 @@ async function generateAction(opts: any) {
 		configPath: options.config,
 	});
 	if (!config) {
-		logger.error(
+		console.error(
 			"No configuration file found. Add a `auth.ts` file to your project or pass the path to the configuration file using the `--config` flag.",
 		);
 		return;
 	}
 
 	const adapter = await getAdapter(config).catch((e) => {
-		logger.error(e.message);
+		console.error(e.message);
 		process.exit(1);
 	});
 
@@ -53,7 +56,7 @@ async function generateAction(opts: any) {
 
 	spinner.stop();
 	if (!schema.code) {
-		logger.info("Your schema is already up to date.");
+		console.log("Your schema is already up to date.");
 		// telemetry: track generate attempted, no changes
 		try {
 			const telemetry = await createTelemetry(config);
@@ -98,7 +101,7 @@ async function generateAction(opts: any) {
 			} else {
 				await fs.appendFile(path.join(cwd, schema.fileName), schema.code);
 			}
-			logger.success(
+			console.log(
 				`🚀 Schema was ${
 					schema.overwrite ? "overwritten" : "appended"
 				} successfully!`,
@@ -116,7 +119,7 @@ async function generateAction(opts: any) {
 			} catch {}
 			process.exit(0);
 		} else {
-			logger.error("Schema generation aborted.");
+			console.error("Schema generation aborted.");
 			// telemetry: track generate aborted
 			try {
 				const telemetry = await createTelemetry(config);
@@ -151,7 +154,7 @@ async function generateAction(opts: any) {
 	}
 
 	if (!confirm) {
-		logger.error("Schema generation aborted.");
+		console.error("Schema generation aborted.");
 		// telemetry: track generate aborted before write
 		try {
 			const telemetry = await createTelemetry(config);
@@ -175,7 +178,7 @@ async function generateAction(opts: any) {
 		options.output || path.join(cwd, schema.fileName),
 		schema.code,
 	);
-	logger.success(`🚀 Schema was generated successfully!`);
+	console.log(`🚀 Schema was generated successfully!`);
 	// telemetry: track generate success
 	try {
 		const telemetry = await createTelemetry(config);
