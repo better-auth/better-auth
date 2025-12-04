@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { bearer } from "../bearer";
+import { username } from "../username";
+import { usernameClient } from "../username/client";
 import { emailOTP } from ".";
 import { emailOTPClient } from "./client";
 import { splitAtLastColon } from "./utils";
@@ -72,6 +74,100 @@ describe("email-otp", async () => {
 			},
 		);
 		expect(verifiedUser.data?.token).toBeDefined();
+	});
+
+	it("should sign-in with username otp", async () => {
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				plugins: [
+					username({ minUsernameLength: 4 }),
+					emailOTP({
+						async sendVerificationOTP({ email, otp: _otp, type }) {
+							otp = _otp;
+							otpFn(email, _otp, type);
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient(), usernameClient()],
+				},
+			},
+		);
+
+		const newUser = {
+			email: "new-email@gamil.com",
+			username: "new_username",
+			password: "new-password",
+			name: "new-name",
+		};
+
+		const headers = new Headers();
+		await client.signUp.email(newUser, {
+			onSuccess: sessionSetter(headers),
+		});
+
+		const { data, error } = await client.emailOtp.sendUsernameSignInOtp({
+			username: newUser.username,
+		});
+
+		expect(error).toBeNull();
+		expect(data).not.toBeNull();
+		expect(data?.success).toBeTruthy();
+
+		const user = await client.signIn.usernameOtp(
+			{
+				username: newUser.username,
+				otp,
+			},
+			{
+				onSuccess: (ctx) => {
+					const header = ctx.response.headers.get("set-cookie");
+					expect(header).toContain("better-auth.session_token");
+				},
+			},
+		);
+		expect(user.data?.token).toBeDefined();
+	});
+
+	it("should return error when username plugin is not enabled", async () => {
+		const { client, sessionSetter, auth } = await getTestInstance(
+			{
+				plugins: [
+					emailOTP({
+						async sendVerificationOTP({ email, otp: _otp, type }) {
+							otp = _otp;
+							otpFn(email, _otp, type);
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient(), usernameClient()],
+				},
+			},
+		);
+
+		const newUser = {
+			email: "new-email@gamil.com",
+			password: "new-password",
+			name: "new-name",
+		};
+
+		const headers = new Headers();
+		await client.signUp.email(newUser, {
+			onSuccess: sessionSetter(headers),
+		});
+
+		const { data, error } = await client.emailOtp.sendUsernameSignInOtp({
+			username: "new_username",
+		});
+
+		expect(data).toBeNull();
+		expect(error).not.toBeNull();
+		expect(error?.message).toBe("username plugin not enabled");
 	});
 
 	it("should sign-up with otp", async () => {

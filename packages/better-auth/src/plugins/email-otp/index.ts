@@ -6,6 +6,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import type { User } from "@better-auth/core/db";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { defineErrorCodes } from "@better-auth/core/utils";
 import * as z from "zod";
@@ -19,6 +20,8 @@ import {
 } from "../../crypto";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
+import type { UsernameOptions } from "../username";
+import { USERNAME_ERROR_CODES } from "../username";
 import { defaultKeyHasher, splitAtLastColon } from "./utils";
 
 export interface EmailOTPOptions {
@@ -120,6 +123,20 @@ export const emailOTP = (options: EmailOTPOptions) => {
 		storeOTP: "plain",
 		...options,
 	} satisfies EmailOTPOptions;
+
+	function normalizer(username: string, options: UsernameOptions) {
+		if (options?.usernameNormalization === false) {
+			return username;
+		}
+		if (options?.usernameNormalization) {
+			return options.usernameNormalization(username);
+		}
+		return username.toLowerCase();
+	}
+
+	function defaultUsernameValidator(username: string) {
+		return /^[a-zA-Z0-9_.]+$/.test(username);
+	}
 
 	async function storeOTP(ctx: GenericEndpointContext, otp: string) {
 		if (opts.storeOTP === "encrypted") {
@@ -361,6 +378,158 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						expiresAt: getDate(opts.expiresIn, "sec"),
 					});
 					return otp;
+				},
+			),
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/email-otp/send-username-sign-in-otp`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.sendUsernameSignInOtp`
+			 *
+			 * **client:**
+			 * `authClient.emailOtp.sendUsernameSignInOtp`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/email-otp#api-method-email-otp-send-username-sign-in-otp)
+			 */
+			sendUsernameSignInOtp: createAuthEndpoint(
+				"/email-otp/send-username-sign-in-otp",
+				{
+					method: "POST",
+					body: z.object({
+						username: z.string().meta({
+							description: "Username of the account to send the OTP to",
+						}),
+					}),
+					metadata: {
+						openapi: {
+							operationId: "sendUsernameSignInOtp",
+							description:
+								"Send a sign-in OTP to the email of the account with the given username",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													success: {
+														type: "boolean",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const usernameOptions = ctx.context.options.plugins?.find(
+						(plugin) => plugin.id === "username",
+					) as UsernameOptions | undefined;
+
+					if (!usernameOptions) {
+						ctx.context.logger.error("username plugin not enabled");
+						throw new APIError("BAD_REQUEST", {
+							message: "username plugin not enabled",
+						});
+					}
+
+					const username =
+						usernameOptions?.validationOrder?.username === "pre-normalization"
+							? normalizer(ctx.body.username, usernameOptions)
+							: ctx.body.username;
+
+					const minUsernameLength = usernameOptions?.minUsernameLength || 3;
+					const maxUsernameLength = usernameOptions?.maxUsernameLength || 30;
+
+					if (username.length < minUsernameLength) {
+						ctx.context.logger.error("Username too short", {
+							username,
+						});
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							code: "USERNAME_TOO_SHORT",
+							message: USERNAME_ERROR_CODES.USERNAME_TOO_SHORT,
+						});
+					}
+
+					if (username.length > maxUsernameLength) {
+						ctx.context.logger.error("Username too long", {
+							username,
+						});
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: USERNAME_ERROR_CODES.USERNAME_TOO_LONG,
+						});
+					}
+
+					const validator =
+						usernameOptions?.usernameValidator || defaultUsernameValidator;
+
+					if (!validator(username)) {
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: USERNAME_ERROR_CODES.INVALID_USERNAME,
+						});
+					}
+
+					const normalizedUsername = normalizer(username, usernameOptions);
+
+					const user = await ctx.context.adapter.findOne<
+						User & { username: string; displayUsername: string }
+					>({
+						model: "user",
+						where: [
+							{
+								field: "username",
+								value: normalizedUsername,
+							},
+						],
+					});
+					if (!user) {
+						return ctx.json({ success: true });
+					}
+
+					let otp =
+						opts.generateOTP({ email: user.email, type: "sign-in" }, ctx) ||
+						defaultOTPGenerator(opts);
+
+					let storedOTP = await storeOTP(ctx, otp);
+
+					// use different namespace identifier to avoid collision with email-based sign-in
+					await ctx.context.internalAdapter
+						.createVerificationValue({
+							value: `${storedOTP}:0`,
+							identifier: `sign-in-otp-username-${normalizedUsername}`,
+							expiresAt: getDate(opts.expiresIn, "sec"),
+						})
+						.catch(async (error) => {
+							// might be duplicate key error
+							await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+								`sign-in-otp-username-${normalizedUsername}`,
+							);
+							//try again
+							await ctx.context.internalAdapter.createVerificationValue({
+								value: `${storedOTP}:0`,
+								identifier: `sign-in-otp-username-${normalizedUsername}`,
+								expiresAt: getDate(opts.expiresIn, "sec"),
+							});
+						});
+
+					await options.sendVerificationOTP(
+						{
+							email: user.email,
+							otp,
+							type: "sign-in",
+						},
+						ctx,
+					);
+
+					return ctx.json({ success: true });
 				},
 			),
 			/**
@@ -930,6 +1099,207 @@ export const emailOTP = (options: EmailOTPOptions) => {
 			/**
 			 * ### Endpoint
 			 *
+			 * POST `/sign-in/username-otp`
+			 *
+			 * ### API Methods
+			 *
+			 * **server:**
+			 * `auth.api.signInUsernameOtp`
+			 *
+			 * **client:**
+			 * `authClient.signIn.usernameOtp`
+			 *
+			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/email-otp#api-method-sign-in-username-otp)
+			 */
+			signInUsernameOtp: createAuthEndpoint(
+				"/sign-in/username-otp",
+				{
+					method: "POST",
+					body: z.object({
+						username: z.string({}).meta({
+							description: "Username of the account to sign in",
+						}),
+						otp: z.string().meta({
+							required: true,
+							description:
+								"OTP sent to the email associated with the given username",
+						}),
+					}),
+					metadata: {
+						openapi: {
+							operationId: "signInUsernameOtp",
+							description: "Sign in with username and OTP",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													token: {
+														type: "string",
+														description:
+															"Session token for the authenticated session",
+													},
+													user: {
+														$ref: "#/components/schemas/User",
+													},
+												},
+												required: ["token", "user"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const usernameOptions = ctx.context.options.plugins?.find(
+						(plugin) => plugin.id === "username",
+					) as UsernameOptions | undefined;
+
+					if (!usernameOptions) {
+						ctx.context.logger.error("username plugin not enabled");
+						throw new APIError("BAD_REQUEST", {
+							message: "username plugin not enabled",
+						});
+					}
+
+					const username =
+						usernameOptions?.validationOrder?.username === "pre-normalization"
+							? normalizer(ctx.body.username, usernameOptions)
+							: ctx.body.username;
+
+					const minUsernameLength = usernameOptions?.minUsernameLength || 3;
+					const maxUsernameLength = usernameOptions?.maxUsernameLength || 30;
+
+					if (username.length < minUsernameLength) {
+						ctx.context.logger.error("Username too short", {
+							username,
+						});
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							code: "USERNAME_TOO_SHORT",
+							message: USERNAME_ERROR_CODES.USERNAME_TOO_SHORT,
+						});
+					}
+
+					if (username.length > maxUsernameLength) {
+						ctx.context.logger.error("Username too long", {
+							username,
+						});
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: USERNAME_ERROR_CODES.USERNAME_TOO_LONG,
+						});
+					}
+
+					const validator =
+						usernameOptions?.usernameValidator || defaultUsernameValidator;
+
+					if (!validator(username)) {
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: USERNAME_ERROR_CODES.INVALID_USERNAME,
+						});
+					}
+
+					const normalizedUsername = normalizer(username, usernameOptions);
+
+					const verificationValue =
+						await ctx.context.internalAdapter.findVerificationValue(
+							`sign-in-otp-username-${normalizedUsername}`,
+						);
+
+					if (!verificationValue) {
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.INVALID_OTP,
+						});
+					}
+
+					if (verificationValue.expiresAt < new Date()) {
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.OTP_EXPIRED,
+						});
+					}
+
+					const [otpValue, attempts] = splitAtLastColon(
+						verificationValue.value,
+					);
+
+					const allowedAttempts = options?.allowedAttempts || 3;
+
+					if (attempts && parseInt(attempts) >= allowedAttempts) {
+						await ctx.context.internalAdapter.deleteVerificationValue(
+							verificationValue.id,
+						);
+
+						throw new APIError("FORBIDDEN", {
+							message: ERROR_CODES.TOO_MANY_ATTEMPTS,
+						});
+					}
+
+					const verified = await verifyStoredOTP(ctx, otpValue, ctx.body.otp);
+					if (!verified) {
+						await ctx.context.internalAdapter.updateVerificationValue(
+							verificationValue.id,
+							{
+								value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
+							},
+						);
+						throw new APIError("BAD_REQUEST", {
+							message: ERROR_CODES.INVALID_OTP,
+						});
+					}
+
+					await ctx.context.internalAdapter.deleteVerificationValue(
+						verificationValue.id,
+					);
+
+					const user = await ctx.context.adapter.findOne<
+						User & { username: string; displayUsername: string }
+					>({
+						model: "user",
+						where: [
+							{
+								field: "username",
+								value: normalizedUsername,
+							},
+						],
+					});
+					if (!user) {
+						throw new APIError("UNAUTHORIZED", {
+							message: USERNAME_ERROR_CODES.INVALID_USERNAME,
+						});
+					}
+
+					if (!user.emailVerified) {
+						await ctx.context.internalAdapter.updateUser(user.id, {
+							emailVerified: true,
+						});
+					}
+
+					const session = await ctx.context.internalAdapter.createSession(
+						user.id,
+					);
+					await setSessionCookie(ctx, { session, user });
+
+					return ctx.json({
+						token: session.token,
+						user: {
+							id: user.id,
+							email: user.email,
+							emailVerified: user.emailVerified,
+							name: user.name,
+							image: user.image,
+							createdAt: user.createdAt,
+							updatedAt: user.updatedAt,
+						},
+					});
+				},
+			),
+			/**
+			 * ### Endpoint
+			 *
 			 * POST `/forget-password/email-otp`
 			 *
 			 * ### API Methods
@@ -1249,6 +1619,20 @@ export const emailOTP = (options: EmailOTPOptions) => {
 			{
 				pathMatcher(path) {
 					return path === "/sign-in/email-otp";
+				},
+				window: 60,
+				max: 3,
+			},
+			{
+				pathMatcher(path) {
+					return path === "/email-otp/send-username-sign-in-otp";
+				},
+				window: 60,
+				max: 3,
+			},
+			{
+				pathMatcher(path) {
+					return path === "/sign-in/username-otp";
 				},
 				window: 60,
 				max: 3,
