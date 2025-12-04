@@ -15,6 +15,7 @@ import { signJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { createAccessControl } from "../access";
+import { defaultRoles } from "./access";
 import { admin } from "./admin";
 import { adminClient } from "./client";
 import type { UserWithRole } from "./types";
@@ -110,7 +111,7 @@ describe("Admin plugin", async () => {
 		baseURL: "http://localhost:3000",
 	});
 
-	const { headers: adminHeaders } = await signInWithTestUser();
+	const { headers: adminHeaders, user } = await signInWithTestUser();
 	let newUser: UserWithRole | undefined;
 	const testNonAdminUser = {
 		id: "123",
@@ -908,6 +909,51 @@ describe("Admin plugin", async () => {
 		expect(res.error?.status).toBe(403);
 		expect(res.error?.code).toBe("YOU_ARE_NOT_ALLOWED_TO_UPDATE_USERS");
 	});
+
+	it("should allow admin to get any user's statements", async () => {
+		const res = await client.admin.getUserStatements({
+			query: {
+				userId: testNonAdminUser.id,
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+
+		expect(res.data?.statements).toEqual(defaultRoles.user.statements);
+	});
+
+	it("should not allow user to get any user's statements", async () => {
+		const res = await client.admin.getUserStatements({
+			query: {
+				userId: user.id,
+			},
+			fetchOptions: {
+				headers: userHeaders,
+			},
+		});
+
+		expect(res.error?.status).toEqual(403);
+	});
+
+	it("should allow user to get their own statements", async () => {
+		const adminRes = await client.admin.getUserStatements({
+			query: {},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+
+		const userRes = await client.admin.getUserStatements({
+			query: {},
+			fetchOptions: {
+				headers: userHeaders,
+			},
+		});
+
+		expect(adminRes.data?.statements).toEqual(defaultRoles.admin.statements);
+		expect(userRes.data?.statements).toEqual(defaultRoles.user.statements);
+	});
 });
 
 describe("access control", async (it) => {
@@ -921,16 +967,24 @@ describe("access control", async (it) => {
 			"bulk-delete",
 			"set-role",
 		],
-		order: ["create", "read", "update", "delete", "update-many"],
+		order: [
+			"create",
+			"read",
+			"update",
+			"delete",
+			"update-many",
+			"audit",
+			"approve",
+		],
 	});
 
 	const adminAc = ac.newRole({
 		user: ["create", "read", "update", "delete", "list", "set-role"],
-		order: ["create", "read", "update", "delete"],
+		order: ["create", "read", "update", "delete", "approve"],
 	});
 	const userAc = ac.newRole({
 		user: ["read"],
-		order: ["read"],
+		order: ["read", "audit"],
 	});
 
 	const {
@@ -1303,5 +1357,26 @@ describe("access control", async (it) => {
 			{ userId: createdUser.data?.user.id || "" },
 			{ headers: headers },
 		);
+	});
+
+	it("should merge statements for users with multiple roles", async () => {
+		const res = await client.admin.createUser(
+			{
+				name: "Test User",
+				email: "test3@test.com",
+				password: "password",
+				role: ["user", "admin"],
+			},
+			{ headers },
+		);
+		const statementsRes = await client.admin.getUserStatements({
+			query: { userId: res.data?.user.id },
+			fetchOptions: { headers },
+		});
+
+		expect(statementsRes.data?.statements).toEqual({
+			user: ["create", "read", "update", "delete", "list", "set-role"],
+			order: ["create", "read", "update", "delete", "approve", "audit"],
+		});
 	});
 });

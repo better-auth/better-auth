@@ -15,7 +15,7 @@ import { getEndpointResponse } from "../../utils/plugin-helper";
 import type { AccessControl } from "../access";
 import type { defaultStatements } from "./access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
-import { hasPermission } from "./has-permission";
+import { getStatements, hasPermission, isAdmin } from "./has-permission";
 import { schema } from "./schema";
 import type {
 	AdminOptions,
@@ -1709,6 +1709,143 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 					return ctx.json({
 						error: null,
 						success: result,
+					});
+				},
+			),
+			getUserStatements: createAuthEndpoint(
+				"/admin/get-user-statements",
+				{
+					method: "GET",
+					query: z
+						.object({
+							userId: z.coerce.string().optional().meta({
+								description: `The user id. Eg: "user-id"`,
+							}),
+							role: z.string().or(z.string().array()).optional().meta({
+								description: `The role to check permission for. Eg: "admin"`,
+							}),
+						})
+						.optional(),
+					metadata: {
+						openapi: {
+							description: "Get all permissions for a user",
+							parameters: [
+								{
+									in: "query",
+									name: "userId",
+									required: false,
+									description: `The user id. Eg: "user-id"`,
+								},
+								{
+									in: "query",
+									name: "role",
+									required: false,
+									description: `The role to check permission for. Eg: "admin"`,
+								},
+							],
+							responses: {
+								"200": {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													statements: {
+														type: "object",
+														additionalProperties: {
+															type: "array",
+															items: {
+																type: "string",
+															},
+														},
+													},
+												},
+												required: ["statements"],
+											},
+										},
+									},
+								},
+							},
+						},
+						$Infer: {
+							query: {} as {
+								userId?: string;
+								role?:
+									| InferAdminRolesFromOption<O>
+									| InferAdminRolesFromOption<O>[];
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const session = await getSessionFromCtx(ctx);
+
+					if (!session && (ctx.request || ctx.headers)) {
+						throw new APIError("UNAUTHORIZED");
+					}
+
+					if (!session && !ctx.query.userId) {
+						throw new APIError("BAD_REQUEST", {
+							message: "user id is required",
+						});
+					}
+
+					let user: UserWithRole | undefined = undefined;
+					if (ctx.query.role) {
+						if (
+							session &&
+							!isAdmin(
+								{
+									userId: session.user.id,
+									role: session.user.role,
+								},
+								opts,
+							)
+						) {
+							throw new APIError("FORBIDDEN", {
+								message: "You're not allowed to get another user's statements",
+							});
+						}
+						user = {
+							id: ctx.query.userId,
+							role: ctx.query.role,
+						} as UserWithRole;
+					} else if (ctx.query.userId) {
+						if (
+							session &&
+							!isAdmin(
+								{
+									userId: session.user.id,
+									role: session.user.role,
+								},
+								opts,
+							)
+						) {
+							throw new APIError("FORBIDDEN", {
+								message: "You're not allowed to get another user's statements",
+							});
+						}
+						user = (await ctx.context.internalAdapter.findUserById(
+							ctx.query.userId!,
+						)) as UserWithRole;
+					} else {
+						user = session?.user;
+					}
+					if (!user) {
+						throw new APIError("BAD_REQUEST", {
+							message: "user not found",
+						});
+					}
+
+					const statements = getStatements({
+						userId: user.id,
+						role: user.role,
+						options,
+					});
+
+					return ctx.json({
+						statements,
 					});
 				},
 			),
