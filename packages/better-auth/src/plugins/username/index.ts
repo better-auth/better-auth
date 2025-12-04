@@ -87,6 +87,29 @@ function defaultUsernameValidator(username: string) {
 	return /^[a-zA-Z0-9_.]+$/.test(username);
 }
 
+const signInUsernameBodySchema = z.object({
+	username: z.string().meta({ description: "The username of the user" }),
+	password: z.string().meta({ description: "The password of the user" }),
+	rememberMe: z
+		.boolean()
+		.meta({
+			description: "Remember the user session",
+		})
+		.optional(),
+	callbackURL: z
+		.string()
+		.meta({
+			description: "The URL to redirect to after email verification",
+		})
+		.optional(),
+});
+
+const isUsernameAvailableBodySchema = z.object({
+	username: z.string().meta({
+		description: "The username to check",
+	}),
+});
+
 export const username = (options?: UsernameOptions | undefined) => {
 	const normalizer = (username: string) => {
 		if (options?.usernameNormalization === false) {
@@ -167,26 +190,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 				"/sign-in/username",
 				{
 					method: "POST",
-					body: z.object({
-						username: z
-							.string()
-							.meta({ description: "The username of the user" }),
-						password: z
-							.string()
-							.meta({ description: "The password of the user" }),
-						rememberMe: z
-							.boolean()
-							.meta({
-								description: "Remember the user session",
-							})
-							.optional(),
-						callbackURL: z
-							.string()
-							.meta({
-								description: "The URL to redirect to after email verification",
-							})
-							.optional(),
-					}),
+					body: signInUsernameBodySchema,
 					metadata: {
 						openapi: {
 							summary: "Sign in with username",
@@ -411,11 +415,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 				"/is-username-available",
 				{
 					method: "POST",
-					body: z.object({
-						username: z.string().meta({
-							description: "The username to check",
-						}),
-					}),
+					body: isUsernameAvailableBodySchema,
 				},
 				async (ctx) => {
 					const username = ctx.body.username;

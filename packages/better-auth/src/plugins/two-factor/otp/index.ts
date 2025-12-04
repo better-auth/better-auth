@@ -76,6 +76,35 @@ export interface OTPOptions {
 		| undefined;
 }
 
+const verifyOTPBodySchema = z.object({
+	code: z.string().meta({
+		description: 'The otp code to verify. Eg: "012345"',
+	}),
+	/**
+	 * if true, the device will be trusted
+	 * for 30 days. It'll be refreshed on
+	 * every sign in request within this time.
+	 */
+	trustDevice: z.boolean().optional().meta({
+		description:
+			"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
+	}),
+});
+
+const send2FaOTPBodySchema = z
+	.object({
+		/**
+		 * if true, the device will be trusted
+		 * for 30 days. It'll be refreshed on
+		 * every sign in request within this time.
+		 */
+		trustDevice: z.boolean().optional().meta({
+			description:
+				"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
+		}),
+	})
+	.optional();
+
 /**
  * The otp adapter is created from the totp adapter.
  */
@@ -132,19 +161,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 		"/two-factor/send-otp",
 		{
 			method: "POST",
-			body: z
-				.object({
-					/**
-					 * if true, the device will be trusted
-					 * for 30 days. It'll be refreshed on
-					 * every sign in request within this time.
-					 */
-					trustDevice: z.boolean().optional().meta({
-						description:
-							"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
-					}),
-				})
-				.optional(),
+			body: send2FaOTPBodySchema,
 			metadata: {
 				openapi: {
 					summary: "Send two factor OTP",
@@ -198,20 +215,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 		"/two-factor/verify-otp",
 		{
 			method: "POST",
-			body: z.object({
-				code: z.string().meta({
-					description: 'The otp code to verify. Eg: "012345"',
-				}),
-				/**
-				 * if true, the device will be trusted
-				 * for 30 days. It'll be refreshed on
-				 * every sign in request within this time.
-				 */
-				trustDevice: z.boolean().optional().meta({
-					description:
-						"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
-				}),
-			}),
+			body: verifyOTPBodySchema,
 			metadata: {
 				openapi: {
 					summary: "Verify two factor OTP",
