@@ -13,15 +13,6 @@ const ensureAsyncStorage = async () => {
 	return currentAdapterAsyncStorage;
 };
 
-/**
- * This is for internal use only. Most users should use `getCurrentAdapter` instead.
- *
- * It is exposed for advanced use cases where you need direct access to the AsyncLocalStorage instance.
- */
-export const getCurrentDBAdapterAsyncLocalStorage = async () => {
-	return ensureAsyncStorage();
-};
-
 export const getCurrentAdapter = async (
 	fallback: DBTransactionAdapter,
 ): Promise<DBTransactionAdapter> => {
