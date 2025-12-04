@@ -324,6 +324,24 @@ export function normalizeDiscoveryUrls(
 		);
 	}
 
+	if (doc.end_session_endpoint) {
+		doc.end_session_endpoint = normalizeAndValidateUrl(
+			"end_session_endpoint",
+			doc.end_session_endpoint,
+			issuer,
+			isTrustedOrigin,
+		);
+	}
+
+	if (doc.introspection_endpoint) {
+		doc.introspection_endpoint = normalizeAndValidateUrl(
+			"introspection_endpoint",
+			doc.introspection_endpoint,
+			issuer,
+			isTrustedOrigin,
+		);
+	}
+
 	return doc;
 }
 

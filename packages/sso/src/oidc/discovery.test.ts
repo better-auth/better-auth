@@ -425,6 +425,8 @@ describe("OIDC Discovery", () => {
 				jwks_uri: "/.well-known/jwks.json",
 				userinfo_endpoint: "/userinfo",
 				revocation_endpoint: "/revoke",
+				end_session_endpoint: "/endsession",
+				introspection_endpoint: "/introspection",
 			});
 
 			expect(() =>
@@ -513,6 +515,42 @@ describe("OIDC Discovery", () => {
 					details: {
 						endpoint: "revocation_endpoint",
 						url: "https://idp.example.com/revoke",
+					},
+				}),
+			);
+
+			expect(() =>
+				normalizeDiscoveryUrls(
+					doc,
+					"https://idp.example.com",
+					(url) => !url.endsWith("/endsession"),
+				),
+			).toThrowError(
+				expect.objectContaining({
+					code: "discovery_untrusted_origin",
+					message:
+						'The end_session_endpoint "https://idp.example.com/endsession" is not trusted by your trusted origins configuration.',
+					details: {
+						endpoint: "end_session_endpoint",
+						url: "https://idp.example.com/endsession",
+					},
+				}),
+			);
+
+			expect(() =>
+				normalizeDiscoveryUrls(
+					doc,
+					"https://idp.example.com",
+					(url) => !url.endsWith("/introspection"),
+				),
+			).toThrowError(
+				expect.objectContaining({
+					code: "discovery_untrusted_origin",
+					message:
+						'The introspection_endpoint "https://idp.example.com/introspection" is not trusted by your trusted origins configuration.',
+					details: {
+						endpoint: "introspection_endpoint",
+						url: "https://idp.example.com/introspection",
 					},
 				}),
 			);
