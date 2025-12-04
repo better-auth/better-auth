@@ -9,15 +9,7 @@ import { verifyAccessToken } from "./verify";
  *
  * @external
  */
-export const mcpHandler = <
-	Request extends {
-		readonly url: string;
-		readonly headers: Headers;
-		context?: {
-			jwt?: JWTPayload;
-		};
-	},
->(
+export const mcpHandler = (
 	/** Resource is the same url as the audience */
 	verifyOptions: Parameters<typeof verifyAccessToken>[1],
 	handler: (req: Request, jwt: JWTPayload) => Awaitable<Response>,

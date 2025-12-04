@@ -29,13 +29,13 @@ export default async function AuthorizePage({
 	const session = await auth.api.getSession({
 		headers: await headers(),
 	});
-	// @ts-expect-error
-	const clientDetails = await auth.api.getOAuthClient({
-		params: {
-			id: client_id,
+	const clientDetails = await auth.api.getOAuthClientPublic({
+		query: {
+			client_id,
 		},
 		headers: await headers(),
 	});
+	clientDetails.ic;
 
 	return (
 		<div className="container mx-auto py-10">
@@ -46,9 +46,9 @@ export default async function AuthorizePage({
 				<div className="flex flex-col items-center justify-center max-w-2xl mx-auto px-4">
 					<div className="flex items-center gap-8 mb-8">
 						<div className="w-16 h-16 border rounded-full flex items-center justify-center">
-							{clientDetails.icon ? (
+							{clientDetails.logo_uri ? (
 								<Image
-									src={clientDetails.icon}
+									src={clientDetails.logo_uri}
 									alt="App Logo"
 									className="object-cover"
 									width={64}
@@ -72,7 +72,7 @@ export default async function AuthorizePage({
 					</div>
 
 					<h1 className="text-3xl font-semibold text-center mb-8">
-						{clientDetails.name} is requesting access to your Better Auth
+						{clientDetails.client_name} is requesting access to your Better Auth
 						account
 					</h1>
 
@@ -87,7 +87,8 @@ export default async function AuthorizePage({
 							</div>
 							<div className="flex flex-col gap-1">
 								<div className="text-lg mb-4">
-									Continuing will allow Sign in with {clientDetails.name} to:
+									Continuing will allow Sign in with {clientDetails.client_name}{" "}
+									to:
 								</div>
 								{scope.includes("profile") && (
 									<div className="flex items-center gap-3 text-zinc-300">

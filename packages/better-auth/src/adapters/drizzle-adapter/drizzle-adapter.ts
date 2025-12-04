@@ -582,7 +582,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			supportsJSON:
 				config.provider === "pg" // even though mysql also supports it, mysql requires to pass stringified json anyway.
 					? true
-					: false,
+					: false,screenTop,
 			supportsArrays: config.provider === "pg" ? true : false,
 			transaction:
 				(config.transaction ?? false)
