@@ -92,7 +92,11 @@ type enableTwoFactor = {
     /**
      * The user's password
      */
-    password: string = "secure-password"
+    password: string = "secure-password",
+    /**
+     * Whether to enable the OTP method or TOTP method (uses the TOTP method by default)
+     */
+    twoFactorMethod?: "otp" | "totp" = "totp",
     /**
      * An optional custom issuer for the TOTP URI. Defaults to app-name defined in your auth config.
      */
