@@ -5,13 +5,10 @@ import type { BreadcrumbOptions } from "fumadocs-core/breadcrumb";
 import { getBreadcrumbItemsFromPath } from "fumadocs-core/breadcrumb";
 import type { Node, Item, Root } from "fumadocs-core/page-tree";
 import { useEffectEvent } from "fumadocs-core/utils/use-effect-event";
-import {
-	useI18n,
-	usePageStyles,
-	useSidebar,
-	useTreeContext,
-	useTreePath,
-} from "fumadocs-ui/provider";
+import { usePageStyles } from "fumadocs-ui/provider";
+import { useSidebar } from "fumadocs-ui/components/sidebar/base";
+import { useI18n } from "fumadocs-ui/contexts/i18n";
+import { useTreeContext, useTreePath } from "fumadocs-ui/contexts/tree";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
