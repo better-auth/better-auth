@@ -1,5 +1,5 @@
 import { Analytics } from "@vercel/analytics/react";
-import { RootProvider } from "fumadocs-ui/provider";
+import { RootProvider } from "fumadocs-ui/provider/next";
 import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
 import type { ReactNode } from "react";
@@ -10,9 +10,10 @@ import { CustomSearchDialog } from "@/components/search-dialog";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { baseUrl, createMetadata } from "@/lib/metadata";
+import type { Metadata } from "next";
 import "./global.css";
 
-export const metadata = createMetadata({
+export const metadata: Metadata = createMetadata({
 	title: {
 		template: "%s | Better Auth",
 		default: "Better Auth",

@@ -1,7 +1,7 @@
 import type { TableOfContents } from "fumadocs-core/toc";
 import type { AnchorProviderProps } from "fumadocs-core/toc";
 import { AnchorProvider } from "fumadocs-core/toc";
-import { I18nLabel } from "fumadocs-ui/provider";
+import { I18nLabel } from "fumadocs-ui/contexts/i18n";
 import { Edit, Text } from "lucide-react";
 import type { AnchorHTMLAttributes, HTMLAttributes, ReactNode } from "react";
 import { forwardRef } from "react";

@@ -5,7 +5,7 @@ import type {
 } from "@radix-ui/react-popover";
 import type { TOCItemType } from "fumadocs-core/toc";
 import * as Primitive from "fumadocs-core/toc";
-import { useI18n, usePageStyles } from "fumadocs-ui/provider";
+import { usePageStyles } from "fumadocs-ui/provider";
 import { ChevronRight, Text } from "lucide-react";
 import type { ComponentProps, HTMLAttributes, ReactNode } from "react";
 import {
@@ -24,6 +24,7 @@ import {
 } from "../ui/collapsible";
 import { ScrollArea, ScrollViewport } from "../ui/scroll-area";
 import { TocThumb } from "./toc-thumb";
+import { useI18n } from "fumadocs-ui/contexts/i18n";
 
 export interface TOCProps {
 	/**
