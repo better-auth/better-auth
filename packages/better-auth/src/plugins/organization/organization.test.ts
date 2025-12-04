@@ -332,6 +332,25 @@ describe("organization", async (it) => {
 		expect(org?.members.length).toBe(1);
 	});
 
+	it("should allow getting org", async () => {
+		const org = await auth.api.getOrganization({
+			query: {
+				organizationId,
+			},
+			headers,
+		});
+
+		expect(org?.name).toBe("test2");
+		expect(org?.slug).toBe("test");
+	});
+
+	it("should allow getting the active org", async () => {
+		const org = await auth.api.getOrganization({ headers });
+
+		expect(org?.name).toBe("test2");
+		expect(org?.slug).toBe("test");
+	});
+
 	it.each([
 		{
 			role: "owner",
