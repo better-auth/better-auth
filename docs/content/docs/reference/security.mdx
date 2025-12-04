@@ -139,7 +139,7 @@ The most basic usage is to specify exact origins:
 }
 ```
 
-### Wildcard Domains
+### Wildcard Origins
 
 Better Auth supports wildcard patterns in trusted origins, which allows you to trust multiple subdomains with a single entry:
 
@@ -180,6 +180,23 @@ Trusted origins also support custom schemes for mobile apps and browser extensio
   ]
 }
 ```
+
+### Dynamic origin list
+
+You can also dynamically set the list of trusted origins by providing a function that returns it:
+
+```typescript
+{
+  trustedOrigins: async (request) => {
+    const trustedOrigins = await queryTrustedDomains();
+    return trustedOrigins;
+  }
+}
+```
+
+<Callout>
+**Important**: This function will be invoked per incoming request, so be careful if you decide to dynamically fetch your list of trusted domains.
+</Callout>
 
 ## Reporting Vulnerabilities
 
