@@ -264,5 +264,5 @@ export const passkeyClient = () => {
 	} satisfies BetterAuthClientPlugin;
 };
 
-export type * from "./types";
 export type * from "@simplewebauthn/server";
+export type * from "./types";
