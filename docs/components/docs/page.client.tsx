@@ -3,10 +3,9 @@
 import { cva } from "class-variance-authority";
 import type { BreadcrumbOptions } from "fumadocs-core/breadcrumb";
 import { getBreadcrumbItemsFromPath } from "fumadocs-core/breadcrumb";
-import type { Node, Item, Root } from "fumadocs-core/page-tree";
+import type { Item, Node, Root } from "fumadocs-core/page-tree";
 import { useEffectEvent } from "fumadocs-core/utils/use-effect-event";
 import { useSidebar } from "fumadocs-ui/components/sidebar/base";
-import { usePageStyles } from "./contexts/page-styles";
 import { useI18n } from "fumadocs-ui/contexts/i18n";
 import { useTreeContext, useTreePath } from "fumadocs-ui/contexts/tree";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -16,6 +15,7 @@ import type { HTMLAttributes } from "react";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { isActive } from "../../lib/is-active";
 import { cn } from "../../lib/utils";
+import { usePageStyles } from "./contexts/page-styles";
 import { useNav } from "./layout/nav";
 import { TocPopover } from "./layout/toc";
 

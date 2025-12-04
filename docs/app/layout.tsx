@@ -2,6 +2,7 @@ import { Analytics } from "@vercel/analytics/react";
 import { RootProvider } from "fumadocs-ui/provider/next";
 import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { AnchorScroll } from "@/components/anchor-scroll-fix";
 import { Navbar } from "@/components/nav-bar";
@@ -10,7 +11,6 @@ import { CustomSearchDialog } from "@/components/search-dialog";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { baseUrl, createMetadata } from "@/lib/metadata";
-import type { Metadata } from "next";
 import "./global.css";
 
 export const metadata: Metadata = createMetadata({
