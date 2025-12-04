@@ -95,6 +95,46 @@ describe("passkey", async () => {
 		expect(passkeys[0]).toHaveProperty("aaguid");
 	});
 
+	it("should have allowCredentials populated if the session is not provided but email is provided", async () => {
+		const { user } = await signInWithTestUser();
+		const context = await auth.$context;
+		const createdPasskey = await context.adapter.create<
+			Omit<Passkey, "id">,
+			Passkey
+		>({
+			model: "passkey",
+			data: {
+				userId: user.id,
+				publicKey: "mockPublicKey",
+				name: "mockName",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "mockCredentialID",
+				createdAt: new Date(),
+				backedUp: false,
+				transports: "usb,nfc",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+
+		// Call endpoint WITHOUT session headers but WITH email query
+		const options = await auth.api.generatePasskeyAuthenticationOptions({
+			query: {
+				email: user.email,
+			},
+		});
+
+		expect(options).toBeDefined();
+		expect(options).toHaveProperty("challenge");
+		expect(options).toHaveProperty("rpId");
+		expect(options).toHaveProperty("allowCredentials");
+		expect(options).toHaveProperty("userVerification");
+
+		// Verify allowCredentials is populated with the user's passkey
+		expect(options.allowCredentials).toBeDefined();
+		expect(Array.isArray(options.allowCredentials)).toBe(true);
+		expect(options.allowCredentials?.[0]?.id).toBe(createdPasskey.credentialID);
+	});
 	it("should update a passkey", async () => {
 		const { headers } = await signInWithTestUser();
 		const passkeys = await auth.api.listPasskeys({

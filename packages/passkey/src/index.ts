@@ -252,6 +252,11 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 				"/passkey/generate-authenticate-options",
 				{
 					method: "GET",
+					query: z
+						.object({
+							email: z.string().email().optional(),
+						})
+						.optional(),
 					metadata: {
 						openapi: {
 							operationId: "passkeyGenerateAuthenticateOptions",
@@ -347,7 +352,38 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 				async (ctx) => {
 					const session = await getSessionFromCtx(ctx);
 					let userPasskeys: Passkey[] = [];
-					if (session) {
+					let userId: string | undefined = session?.user.id;
+
+					// If no session but email is provided, look up user by email
+					if (!session && ctx.query?.email) {
+						const user = await ctx.context.internalAdapter.findUserByEmail(
+							ctx.query.email,
+						);
+						if (user) {
+							userId = user.user.id;
+							userPasskeys = await ctx.context.adapter.findMany<Passkey>({
+								model: "passkey",
+								where: [
+									{
+										field: "userId",
+										value: user.user.id,
+									},
+								],
+							});
+						} else {
+							// Mitigate timing attacks by performing dummy operations
+							await ctx.context.adapter.findMany<Passkey>({
+								model: "passkey",
+								where: [
+									{
+										field: "userId",
+										value: "non-existent-user-id",
+									},
+								],
+							});
+						}
+					} else if (session) {
+						// If session exists, use session user's passkeys
 						userPasskeys = await ctx.context.adapter.findMany<Passkey>({
 							model: "passkey",
 							where: [
@@ -358,6 +394,7 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 							],
 						});
 					}
+
 					const options = await generateAuthenticationOptions({
 						rpID: getRpID(opts, ctx.context.options.baseURL),
 						userVerification: "preferred",
@@ -375,7 +412,7 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 					const data = {
 						expectedChallenge: options.challenge,
 						userData: {
-							id: session?.user.id || "",
+							id: userId || "",
 						},
 					};
 					const id = generateId(32);

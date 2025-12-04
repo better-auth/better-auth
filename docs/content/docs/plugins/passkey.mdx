@@ -126,6 +126,22 @@ await authClient.signIn.passkey({
         }
     }
 });
+
+// With email hinting
+await authClient.signIn.passkey({
+    autoFill: true,
+    fetchOptions: {
+        onSuccess(context) {
+            // Redirect to dashboard after successful authentication
+            window.location.href = "/dashboard";
+        },
+        onError(context) {
+            // Handle authentication errors
+            console.error("Authentication failed:", context.error.message);
+        }
+    },
+    email: "test@gmail.com" // Provide email hint to identify user account
+});
 ```
 
 ### List passkeys
