@@ -12,6 +12,7 @@ let server = new OAuth2Server();
 describe("SSO", async () => {
 	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
 		await getTestInstance({
+			trustedOrigins: ["http://localhost:8080"],
 			plugins: [sso(), organization()],
 		});
 
@@ -261,6 +262,7 @@ describe("SSO", async () => {
 describe("SSO disable implicit sign in", async () => {
 	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
 		await getTestInstance({
+			trustedOrigins: ["http://localhost:8080"],
 			plugins: [sso({ disableImplicitSignUp: true }), organization()],
 		});
 
@@ -425,6 +427,7 @@ describe("SSO disable implicit sign in", async () => {
 describe("provisioning", async (ctx) => {
 	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
 		await getTestInstance({
+			trustedOrigins: ["http://localhost:8080"],
 			plugins: [sso(), organization()],
 		});
 
@@ -581,6 +584,7 @@ describe("provisioning", async (ctx) => {
 
 describe("OIDC Discovery errors at registration", async () => {
 	const { auth, signInWithTestUser } = await getTestInstance({
+		trustedOrigins: ["http://localhost:8080", "https://*.example.com"],
 		plugins: [sso(), organization()],
 	});
 
@@ -646,6 +650,34 @@ describe("OIDC Discovery errors at registration", async () => {
 			status: "BAD_REQUEST",
 			body: {
 				code: "issuer_mismatch",
+			},
+		});
+	});
+
+	it("should fail registration when discovery endpoint is untrusted", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			trustedOrigins: ["https://trusted.example.com"],
+			plugins: [sso(), organization()],
+		});
+		const { headers } = await signInWithTestUser();
+		await expect(
+			auth.api.registerSSOProvider({
+				body: {
+					issuer: "https://untrusted.example.com",
+					domain: "notfound.com",
+					providerId: "notfound-provider",
+					oidcConfig: {
+						clientId: "test",
+						clientSecret: "test",
+						tokenEndpointAuthentication: "client_secret_basic",
+					},
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: {
+				code: "discovery_untrusted_origin",
 			},
 		});
 	});
