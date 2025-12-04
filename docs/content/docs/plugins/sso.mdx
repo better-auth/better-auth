@@ -706,7 +706,11 @@ mapping: {
 
 ## Account Linking for SSO
 
-When a user signs in via SSO and an account with the same email already exists, Better Auth applies a trust check before auto-linking. This prevents account takeover attacks where a malicious SSO provider could claim any email address.
+When a user signs in via SSO and an account with the same email already exists, Better Auth applies a **strict trust check** before auto-linking. This prevents account takeover attacks where a malicious SSO provider could claim any email address.
+
+<Callout type="warn">
+**Important**: SSO account linking is stricter than regular OAuth linking. Even if `existingUserMode` is set to `"email_match_any"` in your core config, SSO providers **still require a trust signal** before auto-linking to existing accounts.
+</Callout>
 
 For SSO providers, auto-linking is allowed when **any** of the following conditions are met:
 
@@ -720,10 +724,8 @@ export const auth = betterAuth({
     account: {
         accountLinking: {
             enabled: true,
-            // Option 1: Trust specific providers
+            // Trust specific SSO providers
             trustedProviders: ["my-enterprise-sso"],
-            // Option 2: Use existingUserMode to control policy
-            existingUserMode: "trusted_providers_only", // default
         }
     },
     plugins: [
@@ -738,7 +740,7 @@ export const auth = betterAuth({
 ```
 
 <Callout>
-Domain verification is the recommended approach for enterprise SSO. Once a provider's domain is verified, users with matching email domains can be auto-linked securely without adding every provider to `trustedProviders`.
+**Recommended approach**: Enable domain verification. Once a provider's domain is verified, users with matching email domains can be auto-linked securely without adding every provider to `trustedProviders`.
 </Callout>
 
 ### Error Handling

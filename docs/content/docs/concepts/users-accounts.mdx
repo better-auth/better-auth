@@ -389,7 +389,7 @@ export const auth = betterAuth({
     account: {
         accountLinking: {
             enabled: true,
-            existingUserMode: "trusted_providers_only", // default
+            existingUserMode: "trusted_providers_only", // recommended
         }
     },
 });
@@ -399,12 +399,16 @@ Available modes:
 
 - **`"never"`**: Never auto-link. Users must explicitly link accounts (e.g., via a signed-in "link account" flow).
 
-- **`"trusted_providers_only"`** (default): Only auto-link if the provider passes a trust check. This means the provider must be listed in `trustedProviders`. For SSO providers, domain verification also counts as a trust signal.
+- **`"trusted_providers_only"`** (recommended): Only auto-link if the provider passes a trust check. This means the provider must be listed in `trustedProviders`. For SSO providers, domain verification also counts as a trust signal.
 
-- **`"email_match_any"`**: Legacy/relaxed behavior. Auto-link when either the provider is trusted OR the provider's `email_verified` claim is accepted. This mode is less secure and not recommended for production—it's provided as an escape hatch for applications that relied on the previous email-based auto-linking behavior.
+- **`"email_match_any"`** (default): Legacy behavior for backward compatibility. Auto-link when either the provider is trusted OR the provider returns `email_verified: true`.
+
+<Callout type="info">
+**Security Recommendation**: For production applications, we recommend setting `existingUserMode: "trusted_providers_only"` and explicitly listing your trusted providers. The `"email_match_any"` default is maintained for backward compatibility but relies on trusting the `email_verified` claim from any provider.
+</Callout>
 
 <Callout type="warn">
-The default `existingUserMode` is `"trusted_providers_only"`, which is the most secure option. If you're upgrading from a previous version and relied on email-based auto-linking, you may need to explicitly set `existingUserMode: "email_match_any"` to preserve the old behavior.
+**SSO Plugin Behavior**: When using the SSO plugin (`@better-auth/sso`), the linking policy is stricter. Even in `"email_match_any"` mode, SSO requires a trust signal (trusted provider or domain-verified) before auto-linking. This is because enterprise SSO providers should prove domain ownership before linking to existing accounts.
 </Callout>
 
 #### Manually Linking Accounts
