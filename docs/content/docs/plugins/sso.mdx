@@ -210,14 +210,14 @@ Example of relative endpoint and issuer without base path:
 
 - `issuer`: `"https://your-org.okta.com"`
 - `token_endpoint`: `"/v1/tokens"`
-- `token_url`: `"https://your-org.okta.com/v1/tokens"`
+- normalized `token_endpoint`: `"https://your-org.okta.com/v1/tokens"`
 
 
 Example of relative endpoint and issuer with base path:
 
 - `issuer`: `"https://your-org.okta.com/v1"`
 - `token_endpoint`: `"/tokens"`
-- `token_url`: `"https://your-org.okta.com/v1/tokens"`
+- normalized `token_endpoint`: `"https://your-org.okta.com/v1/tokens"`
 
 <Callout type="info">
 If you explicitly set these fields in `oidcConfig`, your values override the discovered ones.
