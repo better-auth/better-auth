@@ -1,4 +1,5 @@
 import type { LiteralString } from "../types";
+// import type {Alg} from "jose"
 
 export interface OAuth2Tokens {
 	tokenType?: string | undefined;
@@ -105,6 +106,30 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 * The client secret of your application
 	 */
 	clientSecret?: string | undefined;
+	/**
+	 * The client private key of your application
+	 * JWK and PKCS8 formats are supported.
+	 */
+	clientPrivateKey?: string | undefined;
+	/**
+	 * Specify the Id of the file to be used in the provider
+	 * Some providers, like okta, enforces the use of a key Id
+	 * when multiple keys are registered. 
+	 */
+	clientPrivateKeyId?: string | undefined;
+	/**
+	 * The format of the client private key.
+	 * @default "jwk"
+	 */
+	clientPrivateKeyType?: "jwk" | "pkcs8" | undefined;
+	/**
+	 * Specifies the algorithm used in the client private key.
+	 * Common algorithms include "RS256", "ES256", and "PS256".
+	 *
+	 * Note: Ensure that the chosen algorithm is supported by the OAuth2 provider.
+	 * @default "RS256"
+	 */
+	clientPrivateKeyAlg?: string | undefined;
 	/**
 	 * The scopes you want to request from the provider
 	 */
