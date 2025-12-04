@@ -68,7 +68,6 @@
     "open": "^10.2.0",
     "pg": "^8.16.3",
     "prettier": "^3.6.2",
-    "prisma": "^5.22.0",
     "prompts": "^2.4.2",
     "semver": "^7.7.2",
     "yocto-spinner": "^0.2.3",
