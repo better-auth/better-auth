@@ -50,6 +50,12 @@ export function mapDiscoveryErrorToAPIError(error: DiscoveryError): APIError {
 				code: error.code,
 			});
 
+		case "discovery_untrusted_origin":
+			return new APIError("BAD_REQUEST", {
+				message: `Untrusted OIDC discovery URL: ${error.message}`,
+				code: error.code,
+			});
+
 		case "discovery_invalid_json":
 			return new APIError("BAD_REQUEST", {
 				message: `OIDC discovery returned invalid data: ${error.message}`,
