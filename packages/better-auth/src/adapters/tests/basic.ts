@@ -97,36 +97,35 @@ export const getNormalTestSuiteTests = (
 			});
 			expect(findResult).toEqual(res);
 		},
-		"create - should return null for nullable foreign keys": async () => {
-			await modifyBetterAuthOptions(
-				{
-					plugins: [
-						{
-							id: "nullable-test",
-							schema: {
-								testModel: {
-									fields: {
-										nullableReference: {
-											type: "string",
-											references: { field: "id", model: "user" },
-											required: false,
-										},
+		"create - should return null for nullable foreign keys": {
+			migrateBetterAuth: {
+				plugins: [
+					{
+						id: "nullable-test",
+						schema: {
+							testModel: {
+								fields: {
+									nullableReference: {
+										type: "string",
+										references: { field: "id", model: "user" },
+										required: false,
 									},
 								},
 							},
-						} satisfies BetterAuthPlugin,
-					],
-				},
-				true,
-			);
-			const { nullableReference } = await adapter.create<{
-				nullableReference: string | null;
-			}>({
-				model: "testModel",
-				data: { nullableReference: null },
-				forceAllowId: true,
-			});
-			expect(nullableReference).toBeNull();
+						},
+					} satisfies BetterAuthPlugin,
+				],
+			},
+			test: async () => {
+				const { nullableReference } = await adapter.create<{
+					nullableReference: string | null;
+				}>({
+					model: "testModel",
+					data: { nullableReference: null },
+					forceAllowId: true,
+				});
+				expect(nullableReference).toBeNull();
+			},
 		},
 
 		"create - should apply default values to fields": async () => {

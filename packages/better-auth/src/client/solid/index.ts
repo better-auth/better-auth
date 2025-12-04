@@ -3,13 +3,13 @@ import type {
 	BetterAuthClientPlugin,
 } from "@better-auth/core";
 import type { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { capitalizeFirstLetter } from "@better-auth/core/utils";
 import type {
 	BetterFetchError,
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
 import type { Accessor } from "solid-js";
 import type { PrettifyDeep, UnionToIntersection } from "../../types/helper";
-import { capitalizeFirstLetter } from "../../utils/misc";
 import { getClientConfig } from "../config";
 import { createDynamicPathProxy } from "../proxy";
 import type {

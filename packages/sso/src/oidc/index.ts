@@ -18,6 +18,8 @@ export {
 	validateDiscoveryUrl,
 } from "./discovery";
 
+export { mapDiscoveryErrorToAPIError } from "./errors";
+
 export {
 	type DiscoverOIDCConfigParams,
 	DiscoveryError,

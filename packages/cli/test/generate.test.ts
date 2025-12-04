@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { BetterAuthOptions } from "better-auth";
+import type { BetterAuthOptions } from "@better-auth/core";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { organization, twoFactor, username } from "better-auth/plugins";

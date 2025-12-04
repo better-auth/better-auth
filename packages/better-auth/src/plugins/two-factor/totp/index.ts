@@ -41,6 +41,36 @@ export type TOTPOptions = {
 	disable?: boolean | undefined;
 };
 
+const generateTOTPBodySchema = z.object({
+	secret: z.string().meta({
+		description: "The secret to generate the TOTP code",
+	}),
+});
+
+const getTOTPURIBodySchema = z.object({
+	password: z.string().meta({
+		description: "User password",
+	}),
+});
+
+const verifyTOTPBodySchema = z.object({
+	code: z.string().meta({
+		description: 'The otp code to verify. Eg: "012345"',
+	}),
+	/**
+	 * if true, the device will be trusted
+	 * for 30 days. It'll be refreshed on
+	 * every sign in request within this time.
+	 */
+	trustDevice: z
+		.boolean()
+		.meta({
+			description:
+				"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
+		})
+		.optional(),
+});
+
 export const totp2fa = (options?: TOTPOptions | undefined) => {
 	const opts = {
 		...options,
@@ -54,11 +84,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 		"/totp/generate",
 		{
 			method: "POST",
-			body: z.object({
-				secret: z.string().meta({
-					description: "The secret to generate the TOTP code",
-				}),
-			}),
+			body: generateTOTPBodySchema,
 			metadata: {
 				openapi: {
 					summary: "Generate TOTP code",
@@ -106,11 +132,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 		{
 			method: "POST",
 			use: [sessionMiddleware],
-			body: z.object({
-				password: z.string().meta({
-					description: "User password",
-				}),
-			}),
+			body: getTOTPURIBodySchema,
 			metadata: {
 				openapi: {
 					summary: "Get TOTP URI",
@@ -178,23 +200,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 		"/two-factor/verify-totp",
 		{
 			method: "POST",
-			body: z.object({
-				code: z.string().meta({
-					description: 'The otp code to verify. Eg: "012345"',
-				}),
-				/**
-				 * if true, the device will be trusted
-				 * for 30 days. It'll be refreshed on
-				 * every sign in request within this time.
-				 */
-				trustDevice: z
-					.boolean()
-					.meta({
-						description:
-							"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
-					})
-					.optional(),
-			}),
+			body: verifyTOTPBodySchema,
 			metadata: {
 				openapi: {
 					summary: "Verify two factor TOTP",

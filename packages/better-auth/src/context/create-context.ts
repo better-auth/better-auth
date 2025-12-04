@@ -10,6 +10,7 @@ import { createTelemetry } from "@better-auth/telemetry";
 import defu from "defu";
 import type { Entries } from "type-fest";
 import { checkEndpointConflicts } from "../api";
+import { matchesOriginPattern } from "../auth/trusted-origins";
 import { createCookieGetter, getCookies } from "../cookies";
 import { hashPassword, verifyPassword } from "../crypto/password";
 import { createInternalAdapter } from "../db/internal-adapter";
@@ -174,6 +175,11 @@ export async function createAuthContext(
 		},
 		tables,
 		trustedOrigins: getTrustedOrigins(options),
+		isTrustedOrigin(url: string, settings?: { allowRelativePaths: boolean }) {
+			return ctx.trustedOrigins.some((origin) =>
+				matchesOriginPattern(url, origin, settings),
+			);
+		},
 		baseURL: baseURL || "",
 		sessionConfig: {
 			updateAge:
