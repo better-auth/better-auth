@@ -46,6 +46,7 @@ export async function onCheckoutSessionCompleted(
 						update: {
 							plan: plan.name.toLowerCase(),
 							status: subscription.status,
+							priceId,
 							updatedAt: new Date(),
 							periodStart: new Date(
 								subscription.items.data[0]!.current_period_start * 1000,
@@ -152,6 +153,7 @@ export async function onSubscriptionUpdated(
 							limits: plan.limits,
 						}
 					: {}),
+				priceId,
 				updatedAt: new Date(),
 				status: subscriptionUpdated.status,
 				periodStart: new Date(
