@@ -492,6 +492,7 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 		"/organization/list-roles",
 		{
 			method: "GET",
+			requireHeaders: true,
 			use: [orgSessionMiddleware],
 			query: z
 				.object({
@@ -603,6 +604,7 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 		"/organization/get-role",
 		{
 			method: "GET",
+			requireHeaders: true,
 			use: [orgSessionMiddleware],
 			query: z
 				.object({
@@ -821,6 +823,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					},
 				},
 			},
+			requireHeaders: true,
 			use: [orgSessionMiddleware],
 		},
 		async (ctx) => {
@@ -1113,7 +1116,7 @@ async function checkIfMemberHasPermission({
 		});
 	if (missingPermissions.length > 0) {
 		ctx.context.logger.error(
-			`[Dynamic Access Control] The user is missing permissions nessesary to ${action} a role with those set of permissions.\n`,
+			`[Dynamic Access Control] The user is missing permissions necessary to ${action} a role with those set of permissions.\n`,
 			{
 				userId: user.id,
 				organizationId,

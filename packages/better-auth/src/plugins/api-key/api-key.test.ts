@@ -799,7 +799,7 @@ describe("api-key", async () => {
 		expect(result.error?.body.message).toEqual(ERROR_CODES.METADATA_DISABLED);
 	});
 
-	it("should have the first 6 chracaters of the key as the start property", async () => {
+	it("should have the first 6 characters of the key as the start property", async () => {
 		const { data: apiKey } = await client.apiKey.create(
 			{},
 			{ headers: headers },
@@ -1681,37 +1681,98 @@ describe("api-key", async () => {
 	// Sessions from API keys
 	// =========================================================================
 
-	it("should get session from an API key", async () => {
-		const { client, auth, signInWithTestUser } = await getTestInstance(
-			{
-				plugins: [
-					apiKey({
-						enableSessionForAPIKeys: true,
-					}),
-				],
-			},
-			{
-				clientOptions: {
-					plugins: [apiKeyClient()],
+	describe("enableSessionForAPIKeys", () => {
+		it("should get session from an API key", async () => {
+			const { client, auth, signInWithTestUser } = await getTestInstance(
+				{
+					plugins: [
+						apiKey({
+							enableSessionForAPIKeys: true,
+						}),
+					],
 				},
-			},
-		);
+				{
+					clientOptions: {
+						plugins: [apiKeyClient()],
+					},
+				},
+			);
 
-		const { headers: userHeaders } = await signInWithTestUser();
+			const { headers: userHeaders } = await signInWithTestUser();
 
-		const { data: apiKey2 } = await client.apiKey.create(
-			{},
-			{ headers: userHeaders },
-		);
-		if (!apiKey2) return;
-		const headers = new Headers();
-		headers.set("x-api-key", apiKey2.key);
+			const { data: apiKey2 } = await client.apiKey.create(
+				{},
+				{ headers: userHeaders },
+			);
+			if (!apiKey2) return;
+			const headers = new Headers();
+			headers.set("x-api-key", apiKey2.key);
 
-		const session = await auth.api.getSession({
-			headers: headers,
+			const session = await auth.api.getSession({
+				headers: headers,
+			});
+
+			expect(session?.session).toBeDefined();
 		});
 
-		expect(session?.session).toBeDefined();
+		it("should not get session from an API key if enableSessionForAPIKeys is false", async () => {
+			const { client, auth, signInWithTestUser } = await getTestInstance(
+				{
+					plugins: [
+						apiKey({
+							enableSessionForAPIKeys: false,
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [apiKeyClient()],
+					},
+				},
+			);
+			const { headers: userHeaders } = await signInWithTestUser();
+			const { data: apiKey2 } = await client.apiKey.create(
+				{},
+				{ headers: userHeaders },
+			);
+			if (!apiKey2) return;
+			const headers = new Headers();
+			headers.set("x-api-key", apiKey2.key);
+			const session = await auth.api.getSession({
+				headers: headers,
+			});
+			expect(session).toBeNull();
+		});
+
+		it("should get the Response object when asResponse is true", async () => {
+			const { client, auth, signInWithTestUser } = await getTestInstance(
+				{
+					plugins: [
+						apiKey({
+							enableSessionForAPIKeys: true,
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [apiKeyClient()],
+					},
+				},
+			);
+			const { headers: userHeaders } = await signInWithTestUser();
+			const { data: apiKey2 } = await client.apiKey.create(
+				{},
+				{ headers: userHeaders },
+			);
+			if (!apiKey2) return;
+			const headers = new Headers();
+			headers.set("x-api-key", apiKey2.key);
+			const res = await auth.api.getSession({
+				headers: headers,
+				asResponse: true,
+			});
+			expect(res).toBeInstanceOf(Response);
+		});
 	});
 
 	// =========================================================================

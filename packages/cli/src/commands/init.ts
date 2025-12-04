@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import fs from "node:fs/promises";
+import path from "node:path";
 import {
 	cancel,
 	confirm,
@@ -13,9 +16,6 @@ import {
 import chalk from "chalk";
 import { Command } from "commander";
 import { parse } from "dotenv";
-import { existsSync } from "fs";
-import fs from "fs/promises";
-import path from "path";
 import { format as prettierFormat } from "prettier";
 import semver from "semver";
 import * as z from "zod/v4";

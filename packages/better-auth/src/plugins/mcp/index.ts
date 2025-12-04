@@ -16,6 +16,7 @@ import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
 import { parseSetCookieHeader } from "../../cookies";
 import { generateRandomString } from "../../crypto";
+import { HIDE_METADATA } from "../../utils";
 import { getBaseURL } from "../../utils/url";
 import type {
 	Client,
@@ -92,10 +93,11 @@ export const getMCPProtectedResourceMetadata = (
 	options?: MCPOptions | undefined,
 ) => {
 	const baseURL = ctx.context.baseURL;
+	const origin = new URL(baseURL).origin;
 
 	return {
-		resource: options?.resource ?? new URL(baseURL).origin,
-		authorization_servers: [baseURL],
+		resource: options?.resource ?? origin,
+		authorization_servers: [origin],
 		jwks_uri: options?.oidcConfig?.metadata?.jwks_uri ?? `${baseURL}/mcp/jwks`,
 		scopes_supported: options?.oidcConfig?.metadata?.scopes_supported ?? [
 			"openid",
@@ -191,7 +193,7 @@ export const mcp = (options: MCPOptions) => {
 				{
 					method: "GET",
 					metadata: {
-						client: false,
+						...HIDE_METADATA,
 					},
 				},
 				async (c) => {
@@ -209,7 +211,7 @@ export const mcp = (options: MCPOptions) => {
 				{
 					method: "GET",
 					metadata: {
-						client: false,
+						...HIDE_METADATA,
 					},
 				},
 				async (c) => {
@@ -955,7 +957,7 @@ export const withMcpAuth = <
 	auth: Auth,
 	handler: (
 		req: Request,
-		sesssion: OAuthAccessToken,
+		session: OAuthAccessToken,
 	) => Response | Promise<Response>,
 ) => {
 	return async (req: Request) => {

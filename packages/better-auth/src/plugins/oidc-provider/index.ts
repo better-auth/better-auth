@@ -408,10 +408,13 @@ export const oidcProvider = (options: OIDCOptions) => {
 
 					if (!consentCode) {
 						// Check for cookie-based consent flow
-						consentCode = await ctx.getSignedCookie(
+						const cookieValue = await ctx.getSignedCookie(
 							"oidc_consent_prompt",
 							ctx.context.secret,
 						);
+						if (cookieValue) {
+							consentCode = cookieValue;
+						}
 					}
 
 					if (!consentCode) {
@@ -931,7 +934,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 				{
 					method: "GET",
 					operationId: "oauth2Userinfo",
-					use: [sessionMiddleware],
 					metadata: {
 						isAction: false,
 						openapi: {

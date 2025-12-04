@@ -255,7 +255,7 @@ export async function authorize(
 			const sessionAge =
 				(Date.now() - new Date(session.session.createdAt).getTime()) / 1000;
 			if (sessionAge > maxAge) {
-				// Session is older than max_age, force reauthentication
+				// Session is older than max_age, force re-authentication
 				requireLogin = true;
 			}
 		}

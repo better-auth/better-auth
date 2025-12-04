@@ -30,7 +30,13 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 			const ctx = await authContext;
 			const basePath = ctx.options.basePath || "/api/auth";
 			if (!ctx.options.baseURL) {
-				const baseURL = getBaseURL(undefined, basePath, request);
+				const baseURL = getBaseURL(
+					undefined,
+					basePath,
+					request,
+					undefined,
+					ctx.options.advanced?.trustedProxyHeaders,
+				);
 				if (baseURL) {
 					ctx.baseURL = baseURL;
 					ctx.options.baseURL = getOrigin(ctx.baseURL) || undefined;
@@ -40,6 +46,7 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 					);
 				}
 			}
+
 			ctx.trustedOrigins = [
 				...(options.trustedOrigins
 					? Array.isArray(options.trustedOrigins)

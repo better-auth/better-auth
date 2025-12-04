@@ -1,13 +1,14 @@
 import type { BetterAuthOptions } from "@better-auth/core";
-import type { CleanedWhere, Where } from "@better-auth/core/db/adapter";
-import { describe, expect, test } from "vitest";
-import { betterAuth } from "../../../auth";
-import type { User } from "../../../types";
-import { createAdapterFactory } from "..";
 import type {
 	AdapterFactoryConfig,
 	AdapterFactoryCustomizeAdapterCreator,
-} from "../types";
+	CleanedWhere,
+	Where,
+} from "@better-auth/core/db/adapter";
+import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import { describe, expect, test } from "vitest";
+import { betterAuth } from "../../auth";
+import type { User } from "../../types";
 
 /*
 
@@ -520,6 +521,82 @@ describe("Create Adapter Helper", async () => {
 					});
 				expect(createFALSEParameters.data).toHaveProperty("emailVerified");
 				expect(createFALSEParameters.data.emailVerified).toBe(0);
+			});
+
+			test("Should modify string[] type to TEXT if the DB doesn't support it. And expect the result to be transformed back to string[]", async () => {
+				const createJSONParameters: { data: { preferences: string } } =
+					await new Promise(async (r) => {
+						const adapter = await createTestAdapter({
+							config: {
+								supportsJSON: false,
+							},
+							options: {
+								user: {
+									additionalFields: {
+										preferences: {
+											type: "string[]",
+										},
+									},
+								},
+							},
+							adapter(args_0) {
+								return {
+									async create(data) {
+										r(data as any);
+										return data.data;
+									},
+								};
+							},
+						});
+						const obj = { preferences: ["medium", "large"] };
+						const res = await adapter.create({
+							model: "user",
+							data: obj,
+						});
+						expect(res).toHaveProperty("preferences");
+						expect(res.preferences).toEqual(obj.preferences);
+					});
+				expect(createJSONParameters.data).toHaveProperty("preferences");
+				expect(createJSONParameters.data.preferences).toEqual(
+					'[\"medium\",\"large\"]',
+				);
+			});
+
+			test("Should modify number[] type to TEXT if the DB doesn't support it. And expect the result to be transformed back to number[]", async () => {
+				const createJSONParameters: { data: { preferences: string } } =
+					await new Promise(async (r) => {
+						const adapter = await createTestAdapter({
+							config: {
+								supportsJSON: false,
+							},
+							options: {
+								user: {
+									additionalFields: {
+										preferences: {
+											type: "number[]",
+										},
+									},
+								},
+							},
+							adapter(args_0) {
+								return {
+									async create(data) {
+										r(data as any);
+										return data.data;
+									},
+								};
+							},
+						});
+						const obj = { preferences: [6, 7] };
+						const res = await adapter.create({
+							model: "user",
+							data: obj,
+						});
+						expect(res).toHaveProperty("preferences");
+						expect(res.preferences).toEqual(obj.preferences);
+					});
+				expect(createJSONParameters.data).toHaveProperty("preferences");
+				expect(createJSONParameters.data.preferences).toEqual("[6,7]");
 			});
 
 			test("Should modify JSON type to TEXT if the DB doesn't support it. And expect the result to be transformed back to JSON", async () => {
@@ -1510,6 +1587,7 @@ describe("Create Adapter Helper", async () => {
 										const fakeResult: Omit<User, "email"> & {
 											email_address: string;
 										} = {
+											/* cspell:disable-next-line */
 											id: "random-id-oudwduwbdouwbdu123b",
 											email_address: "test@test.com",
 											emailVerified: false,

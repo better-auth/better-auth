@@ -7,9 +7,9 @@ import * as z from "zod";
 import { sessionMiddleware } from "../../api";
 import { generateRandomString } from "../../crypto";
 import type { Session, User } from "../../types";
-import { defaultKeyHasher } from "..";
+import { defaultKeyHasher } from "./utils";
 
-interface OneTimeTokenOptions {
+export interface OneTimeTokenOptions {
 	/**
 	 * Expires in minutes
 	 *

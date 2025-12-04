@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/expo",
-  "version": "1.4.1-beta.1",
+  "version": "1.4.6-beta.2",
   "type": "module",
   "description": "Better Auth integration for Expo and React Native applications.",
   "main": "dist/index.mjs",
@@ -13,6 +13,7 @@
   "homepage": "https://www.better-auth.com/docs/integrations/expo",
   "scripts": {
     "test": "vitest",
+    "lint:package": "publint run --strict",
     "build": "tsdown",
     "dev": "tsdown --watch",
     "typecheck": "tsc --project tsconfig.json"
@@ -64,6 +65,7 @@
     "tsdown": "catalog:"
   },
   "peerDependencies": {
+    "better-auth": "workspace:*",
     "@better-auth/core": "workspace:*",
     "expo-constants": ">=17.0.0",
     "expo-linking": ">=7.0.0",

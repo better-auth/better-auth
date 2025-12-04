@@ -1,5 +1,5 @@
-import type { BetterAuthDBSchema } from "@better-auth/core/db";
-import { BetterAuthError } from "@better-auth/core/error";
+import { BetterAuthError } from "../../error";
+import type { BetterAuthDBSchema } from "../type";
 
 export const initGetDefaultModelName = ({
 	usePlural,

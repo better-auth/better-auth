@@ -13,7 +13,7 @@ We need to mount the handler to an API route. Create a route file inside `/api/a
 import { auth } from "@/lib/auth";
 import { toNextJsHandler } from "better-auth/next-js";
 
-export const { GET, POST } = toNextJsHandler(auth.handler);
+export const { GET, POST } = toNextJsHandler(auth);
 ```
 
 <Callout type="info">
@@ -154,7 +154,6 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  runtime: "nodejs", // Required for auth.api calls
   matcher: ["/dashboard"], // Specify the routes the middleware applies to
 };
 ```

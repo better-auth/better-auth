@@ -1,16 +1,14 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type {
+	AdapterFactoryCustomizeAdapterCreator,
+	AdapterFactoryOptions,
 	DBAdapter,
 	DBAdapterDebugLogOption,
 	JoinConfig,
 	Where,
 } from "@better-auth/core/db/adapter";
+import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
-import type {
-	AdapterFactoryCustomizeAdapterCreator,
-	AdapterFactoryOptions,
-} from "../adapter-factory";
-import { createAdapterFactory } from "../adapter-factory";
 
 export interface PrismaConfig {
 	/**
@@ -367,6 +365,11 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					});
 				},
 				async updateMany({ model, where, update }) {
+					if (!db[model]) {
+						throw new BetterAuthError(
+							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
+						);
+					}
 					const whereClause = convertWhereClause(model, where);
 					const result = await db[model]!.updateMany({
 						where: whereClause,
@@ -375,6 +378,11 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					return result ? (result.count as number) : 0;
 				},
 				async delete({ model, where }) {
+					if (!db[model]) {
+						throw new BetterAuthError(
+							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
+						);
+					}
 					const whereClause = convertWhereClause(model, where);
 					try {
 						await db[model]!.delete({

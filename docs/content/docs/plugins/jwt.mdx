@@ -33,12 +33,12 @@ export const auth = betterAuth({
 
     <Tabs items={["migrate", "generate"]}>
         <Tab value="migrate">
-        ```bash
+        ```package-install
         npx @better-auth/cli migrate
         ```
         </Tab>
         <Tab value="generate">
-        ```bash
+        ```package-install
         npx @better-auth/cli generate
         ```
         </Tab>
@@ -238,6 +238,57 @@ jwt({
   }
 })
 ```
+
+### Custom JWKS Path
+
+By default, the JWKS endpoint is available at `/jwks`. You can customize this path using the `jwksPath` option.
+
+This is useful when you need to:
+- Follow OAuth 2.0/OIDC conventions (e.g., `/.well-known/jwks.json`)
+- Match existing API conventions in your application
+- Avoid path conflicts with other endpoints
+
+**Server Configuration:**
+
+```ts title="auth.ts"
+jwt({
+  jwks: {
+    jwksPath: "/.well-known/jwks.json"
+  }
+})
+```
+
+**Client Configuration:**
+
+When using a custom `jwksPath` on the server, you **MUST** configure the client with the same path:
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+import { jwtClient } from "better-auth/client/plugins"
+
+export const authClient = createAuthClient({
+  plugins: [
+    jwtClient({
+      jwks: {
+        jwksPath: "/.well-known/jwks.json" // Must match server configuration
+      }
+    })
+  ]
+})
+```
+
+Then you can use the `jwks()` method as usual:
+
+```ts
+const { data, error } = await authClient.jwks()
+if (data) {
+  // Use data.keys to verify JWT tokens
+}
+```
+
+<Callout type="warning">
+  The `jwksPath` configured on the client **MUST** match the server configuration. If they don't match, the client will not be able to fetch the JWKS.
+</Callout>
 
 ### Custom Signing
 

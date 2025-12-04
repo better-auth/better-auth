@@ -246,7 +246,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				use: [
 					sessionMiddleware,
 					originCheck((c) => {
-						return [c.body.successURL as string, c.body.cancelURL as string];
+						return [c.body.successUrl as string, c.body.cancelUrl as string];
 					}),
 					referenceMiddleware("upgrade-subscription"),
 				],
@@ -854,7 +854,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					.catch(async (e) => {
 						if (e.message.includes("already set to be cancel")) {
 							/**
-							 * incase we missed the event from stripe, we set it manually
+							 * in case we missed the event from stripe, we set it manually
 							 * this is a rare case and should not happen
 							 */
 							if (!subscription.cancelAtPeriodEnd) {

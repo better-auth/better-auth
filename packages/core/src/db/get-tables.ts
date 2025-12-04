@@ -1,8 +1,5 @@
-import type { BetterAuthOptions } from "@better-auth/core";
-import type {
-	BetterAuthDBSchema,
-	DBFieldAttribute,
-} from "@better-auth/core/db";
+import type { BetterAuthOptions } from "../types";
+import type { BetterAuthDBSchema, DBFieldAttribute } from "./type";
 
 export const getAuthTables = (
 	options: BetterAuthOptions,
