@@ -6,6 +6,10 @@ description: One Tap plugin for Better Auth
 The One Tap plugin allows users to log in with a single tap using Google's One Tap API. The plugin
 provides a simple way to integrate One Tap into your application, handling the client-side and server-side logic for you.
 
+<Callout type="info">
+**FedCM Support**: This plugin supports both traditional Google One Tap (iframe-based) and the modern FedCM (Federated Credential Management) API. FedCM is a browser-native authentication standard that doesn't rely on third-party cookies. Both methods provide the same user experience but use different underlying technologies.
+</Callout>
+
 ## Installation
 
 ### Add the Server Plugin
@@ -120,7 +124,155 @@ await authClient.oneTap({
 ### Server Options
 
 - **disableSignUp**:  Disable the sign-up option, allowing only existing users to sign in. Default is `false`.
-- **ClientId**: Optionally, pass a client ID here if it is not provided in your social provider configuration.
+- **clientId**: Optionally, pass a client ID here if it is not provided in your social provider configuration.
+- **fedcm**: FedCM (Federated Credential Management) configuration options. See [FedCM Support](#fedcm-support) section for details.
+  - **enabled**: Enable FedCM support. Default is `false`.
+  - **privacyPolicyUrl**: URL to your privacy policy (required for production)
+  - **termsOfServiceUrl**: URL to your terms of service (required for production)
+  - **branding**: Customize the FedCM dialog appearance
+    - **backgroundColor**: Background color (hex)
+    - **color**: Text color (hex)
+    - **iconUrl**: URL to your icon image (must be HTTPS)
+
+## FedCM Support
+
+### What is FedCM?
+
+FedCM (Federated Credential Management) is a browser-native API that provides privacy-preserving authentication without relying on third-party cookies. It's a W3C standard supported by Chrome 108+ and Edge 108+.
+
+**Key differences**:
+- **Traditional One Tap**: Uses iframe and third-party cookies
+- **FedCM**: Uses browser-native API, no third-party cookies needed
+
+**Important**: The user experience is identical in both modes. FedCM is just a different technical implementation.
+
+### Fixing CORS Errors (Chrome 108+)
+
+If you're seeing errors like "Server did not send the correct CORS headers" or "FedCM get() rejects with IdentityCredentialError", Chrome is trying to use FedCM but the request/response does not meet FedCM's CORS requirements.
+
+With FedCM enabled in Better Auth:
+
+- The **discovery and config endpoints** (`/.well-known/web-identity`, `/one-tap/fedcm/config`, `/one-tap/fedcm/client-metadata`) return public data and can be accessed from any origin (no credentials).
+- The **accounts and assertion endpoints** (`/one-tap/fedcm/accounts`, `/one-tap/fedcm/assertion`) are **restricted to the same origin as your `baseURL`** and only allow credentialed CORS from that origin for security reasons.
+
+**Checklist before disabling FedCM:**
+
+- Make sure your **frontend origin exactly matches** the origin of `baseURL` (e.g. both `https://app.example.com`, not mixing ports or protocols).
+- Ensure you're serving over **HTTPS** (FedCM requires it in production).
+
+If you still want to temporarily fall back to traditional One Tap in the browser, you can disable FedCM at the client:
+
+```ts title="auth-client.ts"
+oneTapClient({
+  clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!,
+  additionalOptions: {
+    use_fedcm_for_prompt: false  // Disable FedCM, use traditional mode
+  }
+})
+```
+
+### Enabling FedCM
+
+<Callout type="warning">
+**Browser Support**: FedCM is currently only supported in Chrome 108+ and Edge 108+. Safari and Firefox don't support it yet. The plugin will automatically fall back to traditional mode in unsupported browsers.
+</Callout>
+
+To enable FedCM support on the server:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { oneTap } from "better-auth/plugins";
+
+export const auth = betterAuth({
+  plugins: [
+    oneTap({
+      fedcm: {
+        enabled: true,  // Enable FedCM endpoints
+        privacyPolicyUrl: "https://your-domain.com/privacy",
+        termsOfServiceUrl: "https://your-domain.com/terms",
+        branding: {
+          backgroundColor: "#1a73e8",  // Google blue
+          color: "#ffffff",
+          iconUrl: "https://your-domain.com/icon-192.png"
+        }
+      }
+    })
+  ],
+  socialProviders: {
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!
+    }
+  }
+});
+```
+
+**Client configuration** (optional):
+
+```ts title="auth-client.ts"
+oneTapClient({
+  clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!,
+  // Let Google automatically choose between FedCM and traditional mode
+  // based on browser support
+  additionalOptions: {
+    // use_fedcm_for_prompt: true  // Optional: explicitly enable FedCM
+  }
+})
+```
+
+### FedCM Requirements
+
+When FedCM is enabled (`fedcm.enabled: true`), the following endpoints will be created:
+
+- `GET /.well-known/web-identity` - FedCM discovery endpoint
+- `GET /one-tap/fedcm/config` - FedCM configuration
+- `GET /one-tap/fedcm/accounts` - User accounts list
+- `GET /one-tap/fedcm/client-metadata` - Client metadata
+- `POST /one-tap/fedcm/assertion` - ID token generation
+
+**HTTPS Requirement**: FedCM requires HTTPS. For local development, you can use:
+
+```bash
+# Next.js
+next dev --experimental-https
+
+# Or use ngrok
+ngrok http 3000
+```
+
+### Migration Strategy
+
+**Recommended approach**:
+
+1. **Now**: Use traditional mode, disable FedCM
+   ```ts
+   additionalOptions: { use_fedcm_for_prompt: false }
+   ```
+
+2. **Future**: When you're ready, enable FedCM on the server
+   ```ts
+   oneTap({ fedcm: { enabled: true } })
+   ```
+
+3. **Let Google handle it**: The Google script will automatically choose the best method based on browser support
+
+<Callout type="info">
+**Gradual Migration**: You don't need to choose one or the other. With FedCM enabled on the server, Google's script will use FedCM in supported browsers and automatically fall back to traditional mode in unsupported browsers.
+</Callout>
+
+### Troubleshooting
+
+**Issue: "Server did not send the correct CORS headers"**
+- **Solution**: First ensure your frontend runs on the same origin as `baseURL` and over HTTPS. If you still need to force traditional mode in the browser, disable FedCM with `use_fedcm_for_prompt: false` in `additionalOptions`.
+
+**Issue: "FedCM endpoints not found"**
+- **Solution**: Make sure `fedcm: { enabled: true }` is set in server configuration
+
+**Issue: "Invalid client_id"**
+- **Solution**: Ensure the same `clientId` is used in both server and client configuration
+
+**Issue: "Empty accounts list"**
+- **Solution**: Make sure you're logged in and cookies are being sent correctly
 
 ### Authorized JavaScript origins
 Ensure you have configured the Authorized JavaScript origins (e.g., http://localhost:3000, https://example.com) for your Client ID in the Google Cloud Console. This is a required step for the Google One Tap API, and it will not function correctly unless your origins are correctly set.

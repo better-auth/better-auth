@@ -104,4 +104,42 @@ At this time, you can't remove the `name`, `image`, or `email` fields from the u
 
 We do plan to have more customizability in the future in this regard, but for now, you can't remove these fields.
 </Accordion>
+
+<Accordion title='Google One Tap: "Server did not send the correct CORS headers"'>
+If you're encountering FedCM-related errors with Google One Tap in Chrome 108+:
+
+```
+The fetch of the id assertion endpoint resulted in a network error: ERR_FAILED
+Server did not send the correct CORS headers
+[GSI_LOGGER]: FedCM get() rejects with IdentityCredentialError
+```
+
+This happens because Chrome is trying to use the new FedCM (Federated Credential Management) API, which requires additional server endpoints.
+
+**Quick Fix** - Disable FedCM (recommended for most users):
+
+```ts title="auth-client.ts"
+oneTapClient({
+  clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!,
+  additionalOptions: {
+    use_fedcm_for_prompt: false  // Force traditional mode
+  }
+})
+```
+
+**Alternative** - Enable FedCM support on your server (advanced):
+
+```ts title="auth.ts"
+oneTap({
+  fedcm: {
+    enabled: true,
+    privacyPolicyUrl: "https://your-domain.com/privacy",
+    termsOfServiceUrl: "https://your-domain.com/terms"
+  }
+})
+```
+
+See the <Link href="/docs/plugins/one-tap#fedcm-support">One Tap plugin documentation</Link> for more details.
+</Accordion>
+
 </Accordions>
