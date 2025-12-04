@@ -184,7 +184,7 @@ describe("oauth logout", async () => {
 		expect(response.data?.post_logout_redirect_uris).toEqual([
 			logoutRedirectUri,
 		]);
-		expect(response.data?.enable_end_session).toBeNull();
+		expect(response.data?.enable_end_session).toBeUndefined();
 	});
 
 	it("should fail for clients without enable_end_session access", async () => {
@@ -199,7 +199,7 @@ describe("oauth logout", async () => {
 		expect(response?.user_id).toBeDefined();
 		expect(response?.client_secret).toBeDefined();
 		expect(response?.redirect_uris).toEqual([redirectUri]);
-		expect(response?.enable_end_session).toBeNull();
+		expect(response?.enable_end_session).toBeUndefined();
 
 		const { url: authUrl, codeVerifier } = await createAuthUrl({
 			scopes,

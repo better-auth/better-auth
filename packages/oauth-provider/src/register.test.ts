@@ -247,7 +247,7 @@ describe("oauth register - unauthenticated", async () => {
 			redirect_uris: [redirectUri],
 		});
 		expect(response.data?.client_id).toBeDefined();
-		expect(response.data?.user_id).toBeDefined();
+		expect(response.data?.user_id).toBeUndefined();
 		expect(response.data?.client_secret).toBeUndefined();
 	});
 
@@ -323,7 +323,7 @@ describe("oauth register - organization", async () => {
 		const client = await serverClient.oauth2.register({
 			redirect_uris: [redirectUri],
 		});
-		expect(client.data?.user_id).toBeNull();
+		expect(client.data?.user_id).toBeUndefined();
 		expect(client.data?.reference_id).toBe(org.id);
 	});
 });
