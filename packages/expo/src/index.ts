@@ -1,11 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
-import {
-	createAuthEndpoint,
-	createAuthMiddleware,
-} from "@better-auth/core/api";
-import { HIDE_METADATA } from "better-auth";
-import { APIError } from "better-call";
-import * as z from "zod";
+import { createAuthMiddleware } from "@better-auth/core/api";
+import { expoAuthorizationProxy } from "./routes";
 
 export interface ExpoOptions {
 	/**
@@ -86,36 +81,7 @@ export const expo = (options?: ExpoOptions | undefined) => {
 			],
 		},
 		endpoints: {
-			expoAuthorizationProxy: createAuthEndpoint(
-				"/expo-authorization-proxy",
-				{
-					method: "GET",
-					query: z.object({
-						authorizationURL: z.string(),
-					}),
-					metadata: HIDE_METADATA,
-				},
-				async (ctx) => {
-					const { authorizationURL } = ctx.query;
-					const url = new URL(authorizationURL);
-					const state = url.searchParams.get("state");
-					if (!state) {
-						throw new APIError("BAD_REQUEST", {
-							message: "Unexpected error",
-						});
-					}
-					const stateCookie = ctx.context.createAuthCookie("state", {
-						maxAge: 5 * 60 * 1000, // 5 minutes
-					});
-					await ctx.setSignedCookie(
-						stateCookie.name,
-						state,
-						ctx.context.secret,
-						stateCookie.attributes,
-					);
-					return ctx.redirect(ctx.query.authorizationURL);
-				},
-			),
+			expoAuthorizationProxy,
 		},
 	} satisfies BetterAuthPlugin;
 };

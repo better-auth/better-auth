@@ -15,18 +15,20 @@ import {
 	sessionMiddleware,
 } from "./session";
 
+const updateUserBodySchema = z.record(
+	z.string().meta({
+		description: "Field name must be a string",
+	}),
+	z.any(),
+);
+
 export const updateUser = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
 		"/update-user",
 		{
 			method: "POST",
 			operationId: "updateUser",
-			body: z.record(
-				z.string().meta({
-					description: "Field name must be a string",
-				}),
-				z.any(),
-			),
+			body: updateUserBodySchema,
 			use: [sessionMiddleware],
 			metadata: {
 				$Infer: {
