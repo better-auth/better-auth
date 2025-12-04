@@ -977,6 +977,9 @@ importers:
 
   e2e/smoke/test/fixtures/tsconfig-exact-optional-property-types:
     dependencies:
+      '@better-auth/sso':
+        specifier: workspace:*
+        version: link:../../../../../packages/sso
       better-auth:
         specifier: workspace:*
         version: link:../../../../../packages/better-auth
