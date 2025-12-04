@@ -173,7 +173,8 @@ describe("team", async (it) => {
 
 		expect(res.error).toBeNull();
 		expect(res.data).not.toBeNull();
-		expect(res.data).toHaveLength(1);
+		// Should have 2 members: the team creator and the invited user
+		expect(res.data).toHaveLength(2);
 	});
 
 	it("should get full organization", async () => {
@@ -538,8 +539,10 @@ describe("multi team support", async (it) => {
 			headers: { cookie: activeTeamCookie },
 		});
 
-		expect(members).toHaveLength(1);
-		expect(members.at(0)!.teamId).toBe(team1Id);
+		// Should have 2 members: the team creator and the invited user from team1
+		expect(members).toHaveLength(2);
+		// Both members should be from team1
+		expect(members.every((m: any) => m.teamId === team1Id)).toBe(true);
 	});
 
 	it("should allow user to list team members of any team the user is in", async () => {
@@ -555,8 +558,10 @@ describe("multi team support", async (it) => {
 			},
 		});
 
-		expect(team2Members).toHaveLength(1);
-		expect(team2Members.at(0)!.teamId).toBe(team2Id);
+		// Should have 2 members: the team creator and the invited user
+		expect(team2Members).toHaveLength(2);
+		// Both members should be from team2
+		expect(team2Members.every((m: any) => m.teamId === team2Id)).toBe(true);
 
 		const team3Members = await auth.api.listTeamMembers({
 			headers: { cookie: invitedUser.headers.getSetCookie()[0]! },
@@ -565,7 +570,9 @@ describe("multi team support", async (it) => {
 			},
 		});
 
-		expect(team3Members).toHaveLength(1);
+		// Should have 2 members: the team creator and the invited user
+		expect(team3Members).toHaveLength(2);
+		expect(team3Members.every((m: any) => m.teamId === team3Id)).toBe(true);
 		expect(team3Members.at(0)!.teamId).toBe(team3Id);
 	});
 

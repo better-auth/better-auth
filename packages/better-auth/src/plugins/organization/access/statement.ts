@@ -5,6 +5,7 @@ export const defaultStatements = {
 	member: ["create", "update", "delete"],
 	invitation: ["create", "cancel"],
 	team: ["create", "update", "delete"],
+	teamMember: ["create", "update", "delete", "read"],
 	ac: ["create", "read", "update", "delete"],
 } as const;
 
@@ -15,6 +16,7 @@ export const adminAc = defaultAc.newRole({
 	invitation: ["create", "cancel"],
 	member: ["create", "update", "delete"],
 	team: ["create", "update", "delete"],
+	teamMember: ["create", "update", "delete", "read"],
 	ac: ["create", "read", "update", "delete"],
 });
 
@@ -23,6 +25,7 @@ export const ownerAc = defaultAc.newRole({
 	member: ["create", "update", "delete"],
 	invitation: ["create", "cancel"],
 	team: ["create", "update", "delete"],
+	teamMember: ["create", "update", "delete", "read"],
 	ac: ["create", "read", "update", "delete"],
 });
 
@@ -31,6 +34,7 @@ export const memberAc = defaultAc.newRole({
 	member: [],
 	invitation: [],
 	team: [],
+	teamMember: ["read"],
 	ac: ["read"], // Allow members to see all roles for their org.
 });
 

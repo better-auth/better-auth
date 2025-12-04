@@ -800,6 +800,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		findOrCreateTeamMember: async (data: {
 			teamId: string;
 			userId: string;
+			role?: string;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const member = await adapter.findOne<TeamMember>({
@@ -823,10 +824,31 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				data: {
 					teamId: data.teamId,
 					userId: data.userId,
+					role: data.role || options?.teams?.teamRoles?.defaultRole || "member",
 					createdAt: new Date(),
 				},
 			});
 		},
+
+		updateTeamMemberRole: async (data: {
+			teamId: string;
+			userId: string;
+			role: string;
+		}) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const teamMember = await adapter.update<TeamMember>({
+				model: "teamMember",
+				where: [
+					{ field: "teamId", value: data.teamId },
+					{ field: "userId", value: data.userId },
+				],
+				update: {
+					role: data.role,
+				},
+			});
+			return teamMember;
+		},
+
 		removeTeamMember: async (data: { teamId: string; userId: string }) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			// use `deleteMany` instead of `delete` since Prisma requires 1 unique field for normal `delete` operations
