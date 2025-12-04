@@ -11,6 +11,63 @@ import type { UserRole } from "../schema";
 import { getAdditionalFields } from "../schema";
 import type { AdminOptions } from "../types";
 
+const baseCreateRoleSchema = z.object({
+	role: z.string().meta({
+		description: "The name of the role to create",
+	}),
+	permission: z.record(z.string(), z.array(z.string())).meta({
+		description: "The permissions to assign to the role",
+	}),
+});
+
+const deleteRoleSchema = z.union([
+	z.object({
+		roleName: z.string().nonempty().meta({
+			description: "The name of the role to delete",
+		}),
+	}),
+	z.object({
+		roleId: z.string().nonempty().meta({
+			description: "The id of the role to delete",
+		}),
+	}),
+]);
+
+const getRoleSchema = z.union([
+	z.object({
+		roleName: z.string().nonempty().meta({
+			description: "The name of the role to read",
+		}),
+	}),
+	z.object({
+		roleId: z.string().nonempty().meta({
+			description: "The id of the role to read",
+		}),
+	}),
+]);
+
+const baseUpdateRoleDataSchema = z.object({
+	permission: z.record(z.string(), z.array(z.string())).optional().meta({
+		description: "The permission to update the role with",
+	}),
+	roleName: z.string().optional().meta({
+		description: "The name of the role to update",
+	}),
+});
+
+const roleNameOrIdSchema = z.union([
+	z.object({
+		roleName: z.string().nonempty().meta({
+			description: "The name of the role to update",
+		}),
+	}),
+	z.object({
+		roleId: z.string().nonempty().meta({
+			description: "The id of the role to update",
+		}),
+	}),
+]);
+
 export const createRole = <O extends AdminOptions>(options: O) => {
 	const { additionalFieldsSchema, $AdditionalFields, $ReturnAdditionalFields } =
 		getAdditionalFields<O>(options, false);
@@ -21,13 +78,7 @@ export const createRole = <O extends AdminOptions>(options: O) => {
 		"/admin/create-role",
 		{
 			method: "POST",
-			body: z.object({
-				role: z.string().meta({
-					description: "The name of the role to create",
-				}),
-				permission: z.record(z.string(), z.array(z.string())).meta({
-					description: "The permissions to assign to the role",
-				}),
+			body: baseCreateRoleSchema.extend({
 				additionalFields: z
 					.object({
 						...additionalFieldsSchema.shape,
@@ -134,18 +185,7 @@ export const deleteRole = <O extends AdminOptions>(options: O) => {
 		"/admin/delete-role",
 		{
 			method: "POST",
-			body: z.union([
-				z.object({
-					roleName: z.string().nonempty().meta({
-						description: "The name of the role to delete",
-					}),
-				}),
-				z.object({
-					roleId: z.string().nonempty().meta({
-						description: "The id of the role to delete",
-					}),
-				}),
-			]),
+			body: deleteRoleSchema,
 			requireHeaders: true,
 			use: [adminMiddleware],
 			metadata: {
@@ -324,18 +364,7 @@ export const getRole = <O extends AdminOptions>(options: O) => {
 			method: "POST",
 			requireHeaders: true,
 			use: [adminMiddleware],
-			query: z.union([
-				z.object({
-					roleName: z.string().nonempty().meta({
-						description: "The name of the role to read",
-					}),
-				}),
-				z.object({
-					roleId: z.string().nonempty().meta({
-						description: "The id of the role to read",
-					}),
-				}),
-			]),
+			query: getRoleSchema,
 			metadata: {
 				$Infer: {
 					query: {} as {
@@ -434,33 +463,11 @@ export const updateRole = <O extends AdminOptions>(options: O) => {
 			method: "POST",
 			body: z
 				.object({
-					data: z.object({
-						permission: z
-							.record(z.string(), z.array(z.string()))
-							.optional()
-							.meta({
-								description: "The permission to update the role with",
-							}),
-						roleName: z.string().optional().meta({
-							description: "The name of the role to update",
-						}),
+					data: baseUpdateRoleDataSchema.extend({
 						...additionalFieldsSchema.shape,
 					}),
 				})
-				.and(
-					z.union([
-						z.object({
-							roleName: z.string().nonempty().meta({
-								description: "The name of the role to update",
-							}),
-						}),
-						z.object({
-							roleId: z.string().nonempty().meta({
-								description: "The id of the role to update",
-							}),
-						}),
-					]),
-				),
+				.and(roleNameOrIdSchema),
 			metadata: {
 				$Infer: {
 					body: {} as {
