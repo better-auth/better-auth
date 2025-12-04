@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FRAMEWORKS } from "../configs/frameworks.config";
-import type { Framework } from "../configs/frameworks.config";
 import { autoDetectFramework } from "./framework";
 
 // Mock the hasDependency function
@@ -428,7 +427,13 @@ describe("Init CLI - framework utility", () => {
 		});
 
 		it("should have null auth client for server-only frameworks", async () => {
-			const serverFrameworks = ["hono", "fastify", "express", "elysia", "nitro"];
+			const serverFrameworks = [
+				"hono",
+				"fastify",
+				"express",
+				"elysia",
+				"nitro",
+			];
 
 			for (const frameworkId of serverFrameworks) {
 				const framework = FRAMEWORKS.find((f) => f.id === frameworkId);
@@ -445,4 +450,3 @@ describe("Init CLI - framework utility", () => {
 		});
 	});
 });
-
