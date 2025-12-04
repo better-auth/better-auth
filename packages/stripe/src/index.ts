@@ -528,6 +528,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							stripeCustomerId: customerId,
 							status: "incomplete",
 							referenceId,
+							priceId: plan.priceId,
 							seats: ctx.body.seats || 1,
 						},
 					});
@@ -619,6 +620,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								userId: user.id,
 								subscriptionId: subscription.id,
 								referenceId,
+								priceId: plan.priceId ?? null,
 								...params?.params?.metadata,
 							},
 						},
