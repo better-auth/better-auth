@@ -13,12 +13,19 @@ export async function handleOAuthUserInfo(
 		callbackURL,
 		disableSignUp,
 		overrideUserInfo,
+		forceTrusted,
 	}: {
 		userInfo: Omit<User, "createdAt" | "updatedAt">;
 		account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
 		callbackURL?: string | undefined;
 		disableSignUp?: boolean | undefined;
 		overrideUserInfo?: boolean | undefined;
+		/**
+		 * When true, skip the internal trust gate (trustedProviders/emailVerified check).
+		 * This should only be set by SSO code paths that have already performed
+		 * their own trust evaluation via canAutoLinkExistingUser.
+		 */
+		forceTrusted?: boolean | undefined;
 	},
 ) {
 	const dbUser = await c.context.internalAdapter
@@ -46,24 +53,48 @@ export async function handleOAuthUserInfo(
 				a.accountId === account.accountId,
 		);
 		if (!hasBeenLinked) {
-			const trustedProviders =
-				c.context.options.account?.accountLinking?.trustedProviders;
-			const isTrustedProvider = trustedProviders?.includes(
-				account.providerId as "apple",
-			);
-			if (
-				(!isTrustedProvider && !userInfo.emailVerified) ||
-				c.context.options.account?.accountLinking?.enabled === false
-			) {
+			if (c.context.options.account?.accountLinking?.enabled === false) {
 				if (isDevelopment()) {
 					logger.warn(
-						`User already exist but account isn't linked to ${account.providerId}. To read more about how account linking works in Better Auth see https://www.better-auth.com/docs/concepts/users-accounts#account-linking.`,
+						`Account linking is disabled. User exists but account isn't linked to ${account.providerId}. To enable account linking, see https://www.better-auth.com/docs/concepts/users-accounts#account-linking.`,
 					);
 				}
 				return {
-					error: "account not linked",
+					error: "account_not_linked",
 					data: null,
 				};
+			}
+
+			if (!forceTrusted) {
+				const trustedProviders =
+					c.context.options.account?.accountLinking?.trustedProviders;
+				const isTrustedProvider = trustedProviders?.includes(
+					account.providerId as "apple",
+				);
+				const existingUserMode =
+					c.context.options.account?.accountLinking?.existingUserMode ??
+					"trusted_providers_only";
+
+				let canLink = false;
+				if (existingUserMode === "never") {
+					canLink = false;
+				} else if (existingUserMode === "email_match_any") {
+					canLink = isTrustedProvider || !!userInfo.emailVerified;
+				} else {
+					canLink = !!isTrustedProvider;
+				}
+
+				if (!canLink) {
+					if (isDevelopment()) {
+						logger.warn(
+							`Auto-linking denied by existingUserMode policy for provider ${account.providerId}. To allow linking, add the provider to trustedProviders or adjust existingUserMode. See https://www.better-auth.com/docs/concepts/users-accounts#account-linking.`,
+						);
+					}
+					return {
+						error: "account_not_linked",
+						data: null,
+					};
+				}
 			}
 			try {
 				await c.context.internalAdapter.linkAccount({

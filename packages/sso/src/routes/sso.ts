@@ -22,7 +22,7 @@ import type { IdentityProvider } from "samlify/types/src/entity-idp";
 import type { FlowResult } from "samlify/types/src/flow";
 import * as z from "zod/v4";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
-import { validateEmailDomain } from "../utils";
+import { canAutoLinkExistingUser } from "../utils";
 
 /**
  * Safely parses a value that might be a JSON string or already a parsed object
@@ -1374,6 +1374,39 @@ export const callbackSSO = (options?: SSOOptions) => {
 					}/error?error=invalid_provider&error_description=missing_user_info`,
 				);
 			}
+
+			let forceTrusted = false;
+			const existingUser = await ctx.context.adapter.findOne<User>({
+				model: "user",
+				where: [{ field: "email", value: userInfo.email.toLowerCase() }],
+			});
+
+			if (existingUser) {
+				const existingAccount = await ctx.context.adapter.findOne<Account>({
+					model: "account",
+					where: [
+						{ field: "userId", value: existingUser.id },
+						{ field: "providerId", value: provider.providerId },
+						{ field: "accountId", value: userInfo.id },
+					],
+				});
+
+				if (!existingAccount) {
+					const canLink = canAutoLinkExistingUser(ctx, {
+						providerId: provider.providerId,
+						userEmail: userInfo.email,
+						provider,
+					});
+
+					if (!canLink) {
+						throw ctx.redirect(
+							`${errorURL || callbackURL}?error=account_not_linked`,
+						);
+					}
+					forceTrusted = true;
+				}
+			}
+
 			const linked = await handleOAuthUserInfo(ctx, {
 				userInfo: {
 					email: userInfo.email,
@@ -1397,6 +1430,7 @@ export const callbackSSO = (options?: SSOOptions) => {
 				callbackURL,
 				disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
 				overrideUserInfo: config.overrideUserInfo,
+				forceTrusted,
 			});
 			if (linked.error) {
 				throw ctx.redirect(
@@ -1717,6 +1751,36 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			});
 
 			if (existingUser) {
+				const existingAccount = await ctx.context.adapter.findOne<Account>({
+					model: "account",
+					where: [
+						{ field: "userId", value: existingUser.id },
+						{ field: "providerId", value: provider.providerId },
+						{ field: "accountId", value: userInfo.id },
+					],
+				});
+
+				if (!existingAccount) {
+					const canLink = canAutoLinkExistingUser(ctx, {
+						providerId: provider.providerId,
+						userEmail: userInfo.email,
+						provider,
+					});
+
+					if (!canLink) {
+						const redirectUrl =
+							RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+						throw ctx.redirect(`${redirectUrl}?error=account_not_linked`);
+					}
+
+					await ctx.context.internalAdapter.createAccount({
+						userId: existingUser.id,
+						providerId: provider.providerId,
+						accountId: userInfo.id,
+						accessToken: "",
+						refreshToken: "",
+					});
+				}
 				user = existingUser;
 			} else {
 				// if implicit sign up is disabled, we should not create a new user nor a new account.
@@ -1732,19 +1796,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 					name: userInfo.name,
 					emailVerified: userInfo.emailVerified,
 				});
-			}
 
-			// Create or update account link
-			const account = await ctx.context.adapter.findOne<Account>({
-				model: "account",
-				where: [
-					{ field: "userId", value: user.id },
-					{ field: "providerId", value: provider.providerId },
-					{ field: "accountId", value: userInfo.id },
-				],
-			});
-
-			if (!account) {
 				await ctx.context.internalAdapter.createAccount({
 					userId: user.id,
 					providerId: provider.providerId,
@@ -2083,18 +2135,18 @@ export const acsEndpoint = (options?: SSOOptions) => {
 					],
 				});
 				if (!account) {
-					const isTrustedProvider =
-						ctx.context.options.account?.accountLinking?.trustedProviders?.includes(
-							provider.providerId,
-						) ||
-						("domainVerified" in provider &&
-							provider.domainVerified &&
-							validateEmailDomain(userInfo.email, provider.domain));
-					if (!isTrustedProvider) {
-						throw ctx.redirect(
-							`${parsedSamlConfig.callbackUrl}?error=account_not_found`,
-						);
+					const canLink = canAutoLinkExistingUser(ctx, {
+						providerId: provider.providerId,
+						userEmail: userInfo.email,
+						provider,
+					});
+
+					if (!canLink) {
+						const redirectUrl =
+							RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+						throw ctx.redirect(`${redirectUrl}?error=account_not_linked`);
 					}
+
 					await ctx.context.internalAdapter.createAccount({
 						userId: existingUser.id,
 						providerId: provider.providerId,

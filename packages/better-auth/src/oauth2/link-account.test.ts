@@ -231,6 +231,360 @@ describe("oauth2 - email verification on link", async () => {
 	});
 });
 
+describe("oauth2 - existingUserMode", () => {
+	describe("existingUserMode: 'never'", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			emailAndPassword: {
+				enabled: true,
+			},
+			account: {
+				accountLinking: {
+					enabled: true,
+					trustedProviders: ["google"], // Even trusted providers should be denied
+					existingUserMode: "never",
+				},
+			},
+		});
+
+		const ctx = await auth.$context;
+
+		it("should deny auto-linking even for trusted providers", async () => {
+			const testEmail = "never-mode@example.com";
+
+			// Create user first
+			await client.signUp.email({
+				email: testEmail,
+				password: "password123",
+				name: "Test User",
+			});
+
+			// Mock Google OAuth response
+			server.use(
+				http.post("https://oauth2.googleapis.com/token", async () => {
+					const profile: GoogleProfile = {
+						email: testEmail,
+						email_verified: true,
+						name: "Test User",
+						picture: "https://example.com/photo.jpg",
+						exp: 1234567890,
+						sub: "google_never_mode_test",
+						iat: 1234567890,
+						aud: "test",
+						azp: "test",
+						nbf: 1234567890,
+						iss: "test",
+						locale: "en",
+						jti: "test",
+						given_name: "Test",
+						family_name: "User",
+					};
+					const idToken = await signJWT(profile, DEFAULT_SECRET);
+					return HttpResponse.json({
+						access_token: "test_access_token",
+						refresh_token: "test_refresh_token",
+						id_token: idToken,
+					});
+				}),
+			);
+
+			const oAuthHeaders = new Headers();
+			const signInRes = await client.signIn.social({
+				provider: "google",
+				callbackURL: "/",
+				fetchOptions: {
+					onSuccess: cookieSetter(oAuthHeaders),
+				},
+			});
+
+			const state =
+				new URL(signInRes.data!.url!).searchParams.get("state") || "";
+			let redirectLocation = "";
+
+			await client.$fetch("/callback/google", {
+				query: { state, code: "test_code" },
+				method: "GET",
+				headers: oAuthHeaders,
+				onError(context) {
+					redirectLocation = context.response.headers.get("location") || "";
+				},
+			});
+
+			// Should redirect with account_not_linked error
+			expect(redirectLocation).toContain("account_not_linked");
+
+			// Verify no account was linked
+			const accounts = await ctx.adapter.findMany({
+				model: "account",
+				where: [{ field: "providerId", value: "google" }],
+			});
+			const linkedAccount = accounts.find(
+				(a: any) => a.accountId === "google_never_mode_test",
+			);
+			expect(linkedAccount).toBeUndefined();
+		});
+	});
+
+	describe("existingUserMode: 'trusted_providers_only' (default)", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+				github: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			emailAndPassword: {
+				enabled: true,
+			},
+			account: {
+				accountLinking: {
+					enabled: true,
+					trustedProviders: ["google"], // Only google is trusted
+					// existingUserMode defaults to "trusted_providers_only"
+				},
+			},
+		});
+
+		const ctx = await auth.$context;
+
+		it("should allow auto-linking for trusted providers", async () => {
+			const testEmail = "trusted-provider@example.com";
+
+			// Create user first
+			await client.signUp.email({
+				email: testEmail,
+				password: "password123",
+				name: "Test User",
+			});
+
+			// Mock Google OAuth response
+			server.use(
+				http.post("https://oauth2.googleapis.com/token", async () => {
+					const profile: GoogleProfile = {
+						email: testEmail,
+						email_verified: true,
+						name: "Test User",
+						picture: "https://example.com/photo.jpg",
+						exp: 1234567890,
+						sub: "google_trusted_test",
+						iat: 1234567890,
+						aud: "test",
+						azp: "test",
+						nbf: 1234567890,
+						iss: "test",
+						locale: "en",
+						jti: "test",
+						given_name: "Test",
+						family_name: "User",
+					};
+					const idToken = await signJWT(profile, DEFAULT_SECRET);
+					return HttpResponse.json({
+						access_token: "test_access_token",
+						refresh_token: "test_refresh_token",
+						id_token: idToken,
+					});
+				}),
+			);
+
+			const oAuthHeaders = new Headers();
+			const signInRes = await client.signIn.social({
+				provider: "google",
+				callbackURL: "/",
+				fetchOptions: {
+					onSuccess: cookieSetter(oAuthHeaders),
+				},
+			});
+
+			const state =
+				new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+			await client.$fetch("/callback/google", {
+				query: { state, code: "test_code" },
+				method: "GET",
+				headers: oAuthHeaders,
+				onError(context) {
+					expect(context.response.status).toBe(302);
+				},
+			});
+
+			// Verify account was linked
+			const accounts = await ctx.adapter.findMany({
+				model: "account",
+				where: [{ field: "providerId", value: "google" }],
+			});
+			const linkedAccount = accounts.find(
+				(a: any) => a.accountId === "google_trusted_test",
+			);
+			expect(linkedAccount).toBeDefined();
+		});
+
+		it("should deny auto-linking for untrusted providers", async () => {
+			const testEmail = "untrusted-provider@example.com";
+
+			// Create user first
+			await client.signUp.email({
+				email: testEmail,
+				password: "password123",
+				name: "Test User",
+			});
+
+			// Mock GitHub OAuth response (github is NOT in trustedProviders)
+			server.use(
+				http.post("https://github.com/login/oauth/access_token", async () => {
+					return HttpResponse.json({
+						access_token: "test_access_token",
+						token_type: "bearer",
+						scope: "user:email",
+					});
+				}),
+				http.get("https://api.github.com/user", async () => {
+					return HttpResponse.json({
+						id: 12345,
+						login: "testuser",
+						name: "Test User",
+						email: testEmail,
+						avatar_url: "https://example.com/photo.jpg",
+					});
+				}),
+				http.get("https://api.github.com/user/emails", async () => {
+					return HttpResponse.json([
+						{ email: testEmail, primary: true, verified: true },
+					]);
+				}),
+			);
+
+			const oAuthHeaders = new Headers();
+			const signInRes = await client.signIn.social({
+				provider: "github",
+				callbackURL: "/",
+				fetchOptions: {
+					onSuccess: cookieSetter(oAuthHeaders),
+				},
+			});
+
+			const state =
+				new URL(signInRes.data!.url!).searchParams.get("state") || "";
+			let redirectLocation = "";
+
+			await client.$fetch("/callback/github", {
+				query: { state, code: "test_code" },
+				method: "GET",
+				headers: oAuthHeaders,
+				onError(context) {
+					redirectLocation = context.response.headers.get("location") || "";
+				},
+			});
+
+			// Should redirect with account_not_linked error
+			expect(redirectLocation).toContain("account_not_linked");
+		});
+	});
+
+	describe("existingUserMode: 'email_match_any' (legacy)", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				github: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			emailAndPassword: {
+				enabled: true,
+			},
+			account: {
+				accountLinking: {
+					enabled: true,
+					trustedProviders: [], // No trusted providers
+					existingUserMode: "email_match_any", // Legacy mode
+				},
+			},
+		});
+
+		const ctx = await auth.$context;
+
+		it("should allow auto-linking for any provider with matching email", async () => {
+			const testEmail = "legacy-mode@example.com";
+
+			// Create user first
+			await client.signUp.email({
+				email: testEmail,
+				password: "password123",
+				name: "Test User",
+			});
+
+			// Mock GitHub OAuth response (github is NOT trusted, but email_match_any allows it)
+			server.use(
+				http.post("https://github.com/login/oauth/access_token", async () => {
+					return HttpResponse.json({
+						access_token: "test_access_token",
+						token_type: "bearer",
+						scope: "user:email",
+					});
+				}),
+				http.get("https://api.github.com/user", async () => {
+					return HttpResponse.json({
+						id: 67890,
+						login: "legacyuser",
+						name: "Test User",
+						email: testEmail,
+						avatar_url: "https://example.com/photo.jpg",
+					});
+				}),
+				http.get("https://api.github.com/user/emails", async () => {
+					return HttpResponse.json([
+						{ email: testEmail, primary: true, verified: true },
+					]);
+				}),
+			);
+
+			const oAuthHeaders = new Headers();
+			const signInRes = await client.signIn.social({
+				provider: "github",
+				callbackURL: "/",
+				fetchOptions: {
+					onSuccess: cookieSetter(oAuthHeaders),
+				},
+			});
+
+			const state =
+				new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+			await client.$fetch("/callback/github", {
+				query: { state, code: "test_code" },
+				method: "GET",
+				headers: oAuthHeaders,
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					// Should redirect to callback, not error
+					const location = context.response.headers.get("location") || "";
+					expect(location).not.toContain("error");
+				},
+			});
+
+			// Verify account was linked
+			const accounts = await ctx.adapter.findMany({
+				model: "account",
+				where: [{ field: "providerId", value: "github" }],
+			});
+			const linkedAccount = accounts.find((a: any) => a.accountId === "67890");
+			expect(linkedAccount).toBeDefined();
+		});
+	});
+});
+
 describe("oauth2 - override user info on sign-in", async () => {
 	const { auth, client, cookieSetter } = await getTestInstance({
 		socialProviders: {
