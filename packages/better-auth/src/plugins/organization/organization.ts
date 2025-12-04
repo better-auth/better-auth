@@ -121,6 +121,23 @@ export type OrganizationEndpoints<O extends OrganizationOptions> = {
 	hasPermission: ReturnType<typeof createHasPermission<O>>;
 };
 
+const createHasPermissionBodySchema = z
+	.object({
+		organizationId: z.string().optional(),
+	})
+	.and(
+		z.union([
+			z.object({
+				permission: z.record(z.string(), z.array(z.string())),
+				permissions: z.undefined(),
+			}),
+			z.object({
+				permission: z.undefined(),
+				permissions: z.record(z.string(), z.array(z.string())),
+			}),
+		]),
+	);
+
 const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 	type DefaultStatements = typeof defaultStatements;
 	type Statements = O["ac"] extends AccessControl<infer S>
@@ -151,22 +168,7 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 		{
 			method: "POST",
 			requireHeaders: true,
-			body: z
-				.object({
-					organizationId: z.string().optional(),
-				})
-				.and(
-					z.union([
-						z.object({
-							permission: z.record(z.string(), z.array(z.string())),
-							permissions: z.undefined(),
-						}),
-						z.object({
-							permission: z.undefined(),
-							permissions: z.record(z.string(), z.array(z.string())),
-						}),
-					]),
-				),
+			body: createHasPermissionBodySchema,
 			use: [orgSessionMiddleware],
 			metadata: {
 				$Infer: {

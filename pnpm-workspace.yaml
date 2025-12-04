@@ -8,7 +8,7 @@ packages:
 catalog:
   '@better-fetch/fetch': 1.1.18
   better-call: 1.1.4
-  tsdown: ^0.16.0
+  tsdown: ^0.17.0
   typescript: ^5.9.3
   vitest: 4.0.13
 
@@ -16,10 +16,7 @@ catalogs:
   react19:
     '@types/react': ^19.2.0
     '@types/react-dom': ^19.2.0
-    react: ^19.2.0
-    react-dom: ^19.2.0
+    react: ^19.2.1
+    react-dom: ^19.2.1
 
 neverBuiltDependencies: []
-
-patchedDependencies:
-  msw: patches/msw.patch
