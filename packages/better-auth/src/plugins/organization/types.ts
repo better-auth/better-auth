@@ -622,11 +622,12 @@ export interface OrganizationOptions {
 				 */
 				beforeCreateInvitation?: (data: {
 					invitation: {
-						email: string;
+						email?: string;
 						role: string;
 						organizationId: string;
 						inviterId: string;
 						teamId?: string;
+						domainWhitelist?: string;
 						[key: string]: any;
 					};
 					inviter: User & Record<string, any>;

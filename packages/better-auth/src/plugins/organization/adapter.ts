@@ -871,10 +871,11 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			user,
 		}: {
 			invitation: {
-				email: string;
+				email?: string;
 				role: string;
 				organizationId: string;
 				teamIds: string[];
+				domainWhitelist?: string;
 			} & Record<string, any>; // This represents the additionalFields for the invitation
 			user: User;
 		}) => {
@@ -897,6 +898,9 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					...invitation,
 					teamId:
 						invitation.teamIds.length > 0 ? invitation.teamIds.join(",") : null,
+					domainWhitelist: !invitation.email
+						? invitation.domainWhitelist
+						: undefined,
 				},
 			});
 
