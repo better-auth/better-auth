@@ -42,6 +42,27 @@ export async function handleOAuthUserInfo(
 	let isRegister = !user;
 
 	if (dbUser) {
+		if ("banned" in dbUser.user && dbUser.user.banned === true) {
+			if (
+				"banExpires" in dbUser.user &&
+				dbUser.user.banExpires &&
+				new Date(dbUser.user.banExpires as Date).getTime() < Date.now()
+			) {
+				// Ban expired, clear it
+				await c.context.internalAdapter.updateUser(dbUser.user.id, {
+					banned: false,
+					banReason: null,
+					banExpires: null,
+				});
+			} else {
+				// User is banned and ban hasn't expired
+				return {
+					error: "banned",
+					data: null,
+				};
+			}
+		}
+
 		const hasBeenLinked = dbUser.accounts.find(
 			(a) =>
 				a.providerId === account.providerId &&
@@ -68,7 +89,7 @@ export async function handleOAuthUserInfo(
 				);
 				const existingUserMode =
 					c.context.options.account?.accountLinking?.existingUserMode ??
-					"trusted_providers_only";
+					"email_match_any";
 
 				let canLink = false;
 				if (existingUserMode === "never") {

@@ -892,19 +892,20 @@ export type BetterAuthOptions = {
 					 *    Never auto-link. Users must explicitly link accounts (e.g. via a
 					 *    signed-in "link account" flow).
 					 *
-					 * - `"trusted_providers_only"` (default):
+					 * - `"trusted_providers_only"` (recommended):
 					 *    Only auto-link if the provider passes a trust check. In core this
-					 *    means the provider is listed in `trustedProviders`. SSO plugins may
-					 *    apply additional trust rules (e.g. domain verification) before
-					 *    calling into core.
+					 *    means the provider is listed in `trustedProviders`. SSO plugins
+					 *    apply additional trust rules (e.g. domain verification).
 					 *
-					 * - `"email_match_any"`:
-					 *    Legacy / relaxed behavior. Auto-link when either:
+					 * - `"email_match_any"` (default):
+					 *    Legacy behavior for backward compatibility. Auto-link when either:
 					 *    - the provider is trusted, or
-					 *    - the provider's `email_verified` claim is trusted via configuration.
+					 *    - the provider returns `email_verified: true`.
 					 *
+					 *    Note: For SSO plugins, this mode still requires a trust signal
+					 *    (trusted provider or domain-verified) for security.
 					 *
-					 * @default "trusted_providers_only"
+					 * @default "email_match_any"
 					 */
 					existingUserMode?:
 						| "never"
