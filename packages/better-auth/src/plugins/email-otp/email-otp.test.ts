@@ -51,6 +51,31 @@ describe("email-otp", async () => {
 		expect(verifiedUser.data?.status).toBe(true);
 	});
 
+	it("should delete OTP after successful verification with autoSignInAfterVerification", async () => {
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "email-verification",
+		});
+
+		const currentOtp = otp;
+		expect(currentOtp).toBeTruthy();
+
+		// First attempt - should succeed with auto sign-in
+		const firstAttempt = await client.emailOtp.verifyEmail({
+			email: testUser.email,
+			otp: currentOtp,
+		});
+		expect(firstAttempt.data?.status).toBe(true);
+		expect(firstAttempt.data?.token).toBeDefined();
+
+		// Second attempt with same OTP - should fail (OTP should be deleted)
+		const secondAttempt = await client.emailOtp.verifyEmail({
+			email: testUser.email,
+			otp: currentOtp,
+		});
+		expect(secondAttempt.error?.message).toBe("Invalid OTP");
+	});
+
 	it("should sign-in with otp", async () => {
 		const res = await client.emailOtp.sendVerificationOtp({
 			email: testUser.email,
@@ -505,6 +530,143 @@ describe("email-otp-verify", async () => {
 		});
 		expect(res.error?.status).toBe(403);
 		expect(res.error?.message).toBe("Too many attempts");
+	});
+
+	it("should block sign-in with email OTP after exceeding allowed attempts", async () => {
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "sign-in",
+		});
+
+		for (let i = 0; i < 3; i++) {
+			const res = await client.signIn.emailOtp({
+				email: testUser.email,
+				otp: "wrong-otp",
+			});
+			expect(res.error?.status).toBe(400);
+			expect(res.error?.message).toBe("Invalid OTP");
+		}
+
+		// Try one more time - should be blocked
+		const res = await client.signIn.emailOtp({
+			email: testUser.email,
+			otp: "000000",
+		});
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.message).toBe("Too many attempts");
+	});
+
+	it("should keep OTP valid when password validation fails", async () => {
+		// Send OTP for password reset
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "forget-password",
+		});
+
+		const currentOtp = otp[otp.length - 1] || "";
+		expect(currentOtp).toBeTruthy();
+
+		// First attempt with a password that is too short
+		// - should fail validation
+		const firstAttempt = await client.emailOtp.resetPassword({
+			email: testUser.email,
+			otp: currentOtp,
+			password: "123",
+		});
+		expect(firstAttempt.error?.status).toBe(400);
+		expect(firstAttempt.error?.message).toBe("Password too short");
+
+		// Second attempt with the same OTP but valid password
+		// - should succeed
+		const secondAttempt = await client.emailOtp.resetPassword({
+			email: testUser.email,
+			otp: currentOtp,
+			password: "new-valid-password",
+		});
+		expect(secondAttempt.data).toBeDefined();
+		expect(secondAttempt.error).toBe(null);
+
+		// Verify the password was actually changed
+		const signIn = await client.signIn.email({
+			email: testUser.email,
+			password: "new-valid-password",
+		});
+		expect(signIn.data?.user).toBeDefined();
+	});
+
+	it("should keep OTP valid when verifyEmail fails due to user not found", async () => {
+		// Create a test instance and send OTP, then delete the user before verification
+		let testOtp = "";
+		const { client: testClient, sessionSetter } = await getTestInstance(
+			{
+				user: {
+					deleteUser: {
+						enabled: true,
+					},
+				},
+				plugins: [
+					emailOTP({
+						async sendVerificationOTP({ otp: _otp }) {
+							testOtp = _otp;
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+			},
+		);
+
+		// Create a new user to delete
+		const headers = new Headers();
+		const signUpRes = await testClient.signUp.email({
+			email: `delete-test-${Date.now()}@email.com`,
+			password: "password123",
+			name: "Test User",
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+		expect(signUpRes.data?.user).toBeDefined();
+		const userToDelete = signUpRes.data!.user;
+
+		// Send OTP for email verification while user exists
+		await testClient.emailOtp.sendVerificationOtp({
+			email: userToDelete.email,
+			type: "email-verification",
+		});
+
+		expect(testOtp).toBeTruthy();
+
+		// Delete the user after OTP is sent
+		// - simulates edge case
+		const deleteRes = await testClient.deleteUser({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(deleteRes.error).toBeFalsy();
+		expect(deleteRes.data?.success).toBe(true);
+
+		// First attempt
+		// - should fail because user no longer exists
+		const firstAttempt = await testClient.emailOtp.verifyEmail({
+			email: userToDelete.email,
+			otp: testOtp,
+		});
+		expect(firstAttempt.error?.status).toBe(400);
+		expect(firstAttempt.error?.message).toBe("User not found");
+
+		// Second attempt with the same OTP should still return "User not found" not "Invalid OTP"
+		// - OTP should not be consumed on business logic failure
+		const secondAttempt = await testClient.emailOtp.verifyEmail({
+			email: userToDelete.email,
+			otp: testOtp,
+		});
+		expect(secondAttempt.error?.status).toBe(400);
+		expect(secondAttempt.error?.message).toBe("User not found");
 	});
 });
 
