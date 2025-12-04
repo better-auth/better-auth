@@ -1256,11 +1256,12 @@ If you are using "openid" and confidential MCP clients, you cannot disable the J
     - Using `mcpHandler` helper
 
     ```ts title="api/[transport]/route.ts"
-    import { createMcpHandler } from "@vercel/mcp-adapter";
+    import { createMcpHandler } from "mcp-handler";
     import { mcpHandler } from "@better-auth/oauth-provider";
     import { z } from "zod";
 
     const handler = mcpHandler({
+      jwksUrl: "https://auth.example.com/api/auth/jwks",
       verifyOptions: {
         issuer: "https://auth.example.com",
         audience: "https://api.example.com",
@@ -1268,35 +1269,38 @@ If you are using "openid" and confidential MCP clients, you cannot disable the J
     }, (req, jwt) => {
       return createMcpHandler(
         (server) => {
-          server.tool(
-            "echo",
-            "Echo a message",
-            { message: z.string() },
-            async ({ message }) => {
-              return {
-                content: [{
-                  type: "text",
-                  text: `User ${jwt.sub}: ${message}`
-                }],
-              };
-            },
-          );
-        },
-        {
-          capabilities: {
-            tools: {
-              echo: {
-                description: "Echo a message",
+          server.registerTool(
+            "echo", {
+              description: "Echo a message",
+              inputSchema: {
+                message: z.string(),
               },
             },
-          },
-        },
-        {
-          redisUrl: process.env.REDIS_URL,
+            async ({ message }) => {
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: `Echo: ${message}${
+                      jwt?.sub
+                        ? ` for user ${jwt.sub}`
+                        : ""
+                    }`,
+                  },
+                ],
+              };
+            }
+          );
+        }, {
+          serverInfo: {
+            name: "demo-better-auth",
+            version: "1.0.0",
+          }
+        }, {
           basePath: "/api",
-          verboseLogs: true,
           maxDuration: 60,
-        },
+          verboseLogs: true,
+        }
       )(req);
     });
 

@@ -361,19 +361,19 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		..._metadata,
 		// Important Fields
 		client_id: clientId,
-		client_secret: clientSecret,
+		client_secret: clientSecret ?? undefined,
 		client_secret_expires_at: clientSecret ? (_expiresAt ?? 0) : undefined,
-		scope: _scopes,
+		scope: _scopes ?? undefined,
 		// Recommended client data
-		user_id: userId,
-		client_id_issued_at: _createdAt,
+		user_id: userId ?? undefined,
+		client_id_issued_at: _createdAt ?? undefined,
 		// UI Metadata
-		client_name: name,
-		client_uri: uri,
-		logo_uri: icon,
+		client_name: name ?? undefined,
+		client_uri: uri ?? undefined,
+		logo_uri: icon ?? undefined,
 		contacts: contacts ?? undefined,
-		tos_uri: tos,
-		policy_uri: policy,
+		tos_uri: tos ?? undefined,
+		policy_uri: policy ?? undefined,
 		// Jwks (only one can be used)
 		// jwks, // Not Stored
 		// jwks_uri: jwksUri, // Not Stored
@@ -382,18 +382,18 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		software_version: softwareVersion ?? undefined,
 		software_statement: softwareStatement ?? undefined,
 		// Authentication Metadata
-		redirect_uris: redirectUris,
-		post_logout_redirect_uris: postLogoutRedirectUris,
-		token_endpoint_auth_method: tokenEndpointAuthMethod,
-		grant_types: grantTypes,
-		response_types: responseTypes,
+		redirect_uris: redirectUris ?? undefined,
+		post_logout_redirect_uris: postLogoutRedirectUris ?? undefined,
+		token_endpoint_auth_method: tokenEndpointAuthMethod ?? undefined,
+		grant_types: grantTypes ?? undefined,
+		response_types: responseTypes ?? undefined,
 		// RFC6749 Spec
-		public: _public,
-		type,
+		public: _public ?? undefined,
+		type: type ?? undefined,
 		// Not Part of RFC7591 Spec
-		disabled,
-		skip_consent: skipConsent,
-		enable_end_session: enableEndSession,
-		reference_id: referenceId,
+		disabled: disabled ?? undefined,
+		skip_consent: skipConsent ?? undefined,
+		enable_end_session: enableEndSession ?? undefined,
+		reference_id: referenceId ?? undefined,
 	};
 }
