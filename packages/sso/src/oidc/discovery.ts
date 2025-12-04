@@ -274,16 +274,18 @@ export function validateDiscoveryDocument(
 /**
  * Normalize URLs in the discovery document.
  *
- * @param doc - The discovery document
+ * @param document - The discovery document
  * @param issuer - The base issuer URL
  * @param isTrustedOrigin - Origin verification tester function
  * @returns The normalized discovery document
  */
 export function normalizeDiscoveryUrls(
-	doc: OIDCDiscoveryDocument,
+	document: OIDCDiscoveryDocument,
 	issuer: string,
 	isTrustedOrigin: DiscoverOIDCConfigParams["isTrustedOrigin"],
 ): OIDCDiscoveryDocument {
+	const doc = { ...document };
+
 	doc.token_endpoint = normalizeAndValidateUrl(
 		"token_endpoint",
 		doc.token_endpoint,
