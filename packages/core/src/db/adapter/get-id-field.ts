@@ -1,10 +1,7 @@
-import type { BetterAuthOptions } from "@better-auth/core";
-import type {
-	BetterAuthDBSchema,
-	DBFieldAttribute,
-} from "@better-auth/core/db";
-import { logger } from "@better-auth/core/env";
+import { logger } from "../../env";
+import type { BetterAuthOptions } from "../../types";
 import { generateId as defaultGenerateId } from "../../utils";
+import type { BetterAuthDBSchema, DBFieldAttribute } from "../type";
 import { initGetDefaultModelName } from "./get-default-model-name";
 
 export const initGetIdField = ({

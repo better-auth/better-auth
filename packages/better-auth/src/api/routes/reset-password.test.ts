@@ -4,7 +4,7 @@ import type { Account } from "../../types";
 
 describe("forget password", async (it) => {
 	const mockSendEmail = vi.fn();
-	const mockonPasswordReset = vi.fn();
+	const mockOnPasswordReset = vi.fn();
 	let token = "";
 
 	const { client, testUser, db } = await getTestInstance(
@@ -16,7 +16,7 @@ describe("forget password", async (it) => {
 					await mockSendEmail();
 				},
 				onPasswordReset: async ({ user }) => {
-					await mockonPasswordReset(user);
+					await mockOnPasswordReset(user);
 				},
 			},
 		},
@@ -231,7 +231,7 @@ describe("forget password", async (it) => {
 			newPassword: "new-password",
 			token,
 		});
-		expect(mockonPasswordReset).toHaveBeenCalled();
+		expect(mockOnPasswordReset).toHaveBeenCalled();
 		expect(res2.error?.status).toBe(400);
 	});
 

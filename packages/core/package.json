@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/core",
-  "version": "1.4.4-beta.1",
+  "version": "1.4.6-beta.2",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "repository": {
@@ -114,9 +114,7 @@
   "devDependencies": {
     "@better-auth/utils": "0.3.0",
     "@better-fetch/fetch": "catalog:",
-    "@types/better-sqlite3": "^7.6.13",
     "better-call": "catalog:",
-    "better-sqlite3": "^12.4.1",
     "jose": "^6.1.0",
     "kysely": "^0.28.5",
     "nanostores": "^1.0.1",

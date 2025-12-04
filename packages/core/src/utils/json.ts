@@ -1,4 +1,4 @@
-import { logger } from "@better-auth/core/env";
+import { logger } from "../env";
 
 export function safeJSONParse<T>(data: unknown): T | null {
 	function reviver(_: string, value: any): any {
