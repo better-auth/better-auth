@@ -15,6 +15,7 @@ export {
 } from "./request-state";
 export {
 	getCurrentAdapter,
+	getCurrentDBAdapterAsyncLocalStorage,
 	runWithAdapter,
 	runWithTransaction,
 } from "./transaction";
