@@ -23,7 +23,7 @@ export const oauthProviderClient = () => {
 				description: "Adds the current page query to oauth requests",
 				hooks: {
 					async onRequest(ctx) {
-						if (ctx.body?.additionalData?.query) return;
+						if (ctx.body?.oauth_query) return;
 						const pathname =
 							typeof ctx.url === "string"
 								? new URL(ctx.url).pathname

@@ -203,24 +203,24 @@ export async function authorizeEndpoint(
 		ctx.context.authorize_only &&
 		opts.selectAccount
 	) {
-		const selectedAccount = await opts.selectAccount.shouldRedirect({
+		const selectedAccountRedirect = await opts.selectAccount.shouldRedirect({
 			headers: ctx.request.headers,
 			user: session.user,
 			session: session.session,
 			scopes: requestedScopes,
 		});
-		if (!selectedAccount) {
+		if (selectedAccountRedirect) {
 			return redirectWithPromptCode(ctx, opts, "select_account");
 		}
 	}
 
 	if (!ctx.context.post_login && opts.postLogin) {
-		const postLogin = await opts.postLogin.shouldRedirect({
+		const postLoginRedirect = await opts.postLogin.shouldRedirect({
 			user: session.user,
 			session: session.session,
 			scopes: requestedScopes,
 		});
-		if (!postLogin) {
+		if (postLoginRedirect) {
 			return redirectWithPromptCode(ctx, opts, "post_login");
 		}
 	}

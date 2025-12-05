@@ -266,8 +266,8 @@ export interface OAuthOptions<
 		 * for the `/oauth2/authorize` endpoint.
 		 *
 		 * @returns
-		 * - `true`: intended user or account selected
-		 * - `false`: account is not selected and needs selection
+		 * - `true`: account is not selected and needs selection
+		 * - `false`: intended user or account already selected
 		 */
 		shouldRedirect: (context: {
 			headers: Headers;
@@ -303,8 +303,8 @@ export interface OAuthOptions<
 		 * Upon selection of a specific account, use `/oauth2/continue`.
 		 *
 		 * @returns
-		 * - `true`: intended user or account selected
-		 * - `false`: account is not selected and needs selection
+		 * - `true`: account is not selected and needs selection
+		 * - `false`: intended user or account selected
 		 */
 		shouldRedirect: (context: {
 			user: User & Record<string, unknown>;
