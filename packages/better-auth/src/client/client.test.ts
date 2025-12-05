@@ -144,6 +144,88 @@ describe("run time proxy", async () => {
 		expect(proxy.catch).toBeUndefined();
 		expect(proxy.finally).toBeUndefined();
 	});
+
+	it("should send body as form-urlencoded when content-type header is set", async () => {
+		let receivedBody: string | undefined;
+		const client = createSolidClient({
+			plugins: [testClientPlugin()],
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					receivedBody = init?.body as string;
+					return new Response(JSON.stringify({ success: true }));
+				},
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		await client.test(
+			{
+				grant_type: "client_credentials",
+				client_id: "test-client",
+				client_secret: "test-secret",
+			} as any,
+			{
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+
+		expect(receivedBody).toBe(
+			"grant_type=client_credentials&client_id=test-client&client_secret=test-secret",
+		);
+	});
+
+	it("should send body as form-urlencoded when content-type is set via first argument fetchOptions", async () => {
+		let receivedBody: string | undefined;
+		const client = createSolidClient({
+			plugins: [testClientPlugin()],
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					receivedBody = init?.body as string;
+					return new Response(JSON.stringify({ success: true }));
+				},
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		await client.test({
+			grant_type: "authorization_code",
+			code: "test-code",
+			fetchOptions: {
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		} as any);
+
+		expect(receivedBody).toBe("grant_type=authorization_code&code=test-code");
+	});
+
+	it("should send body as JSON when content-type is not form-urlencoded", async () => {
+		let receivedBody: any;
+		const client = createSolidClient({
+			plugins: [testClientPlugin()],
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					receivedBody = init?.body;
+					return new Response(JSON.stringify({ success: true }));
+				},
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		await client.test({
+			email: "test@example.com",
+			password: "password123",
+		} as any);
+
+		// Body should be JSON stringified when not form-urlencoded
+		expect(JSON.parse(receivedBody)).toEqual({
+			email: "test@example.com",
+			password: "password123",
+		});
+	});
 });
 
 describe("type", () => {
