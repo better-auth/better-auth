@@ -365,7 +365,7 @@ describe("SSO Account Linking - linkingPolicy: trusted_providers_only", () => {
 	});
 });
 
-describe("SSO Account Linking - email_match_any still requires trust for SSO", () => {
+describe("SSO Account Linking - verified_email_trusted still requires trust for SSO", () => {
 	const server = new OAuth2Server();
 
 	beforeAll(async () => {
@@ -387,14 +387,14 @@ describe("SSO Account Linking - email_match_any still requires trust for SSO", (
 			token.payload.sub = "email-match-sub-789";
 		});
 
-		// SSO should still require trust even in email_match_any mode
+		// SSO should still require trust even in verified_email_trusted mode
 		const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
 			await getTestInstance({
 				account: {
 					accountLinking: {
 						enabled: true,
 						trustedProviders: [], // No trusted providers
-						linkingPolicy: "email_match_any",
+						linkingPolicy: "verified_email_trusted",
 					},
 				},
 				plugins: [sso()],
@@ -474,7 +474,7 @@ describe("SSO Account Linking - email_match_any still requires trust for SSO", (
 			});
 		}
 
-		// SSO should still require trust signal even in email_match_any mode
+		// SSO should still require trust signal even in verified_email_trusted mode
 		// (unlike core OAuth which allows email_verified as trust in this mode)
 		expect(redirectLocation).toContain("account_not_linked");
 

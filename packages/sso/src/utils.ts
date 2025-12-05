@@ -17,9 +17,9 @@ export const validateEmailDomain = (email: string, domain: string) => {
  * based on the configured trust policy.
  *
  * This function implements a unified trust model for all SSO paths (OIDC and SAML).
- * For SSO, both "trusted_providers_only" and "email_match_any" modes still require
+ * For SSO, both "trusted_providers_only" and "verified_email_trusted" modes still require
  * a trust signal (trusted provider OR domain-verified + domain match). The "relaxed"
- * behavior of "email_match_any" only applies in core handleOAuthUserInfo for non-SSO
+ * behavior of "verified_email_trusted" only applies in core handleOAuthUserInfo for non-SSO
  * flows where emailVerified can be used as a trust signal.
  *
  * @param ctx - The endpoint context with auth options
@@ -44,7 +44,7 @@ export function canAutoLinkExistingUser(
 		return false;
 	}
 
-	// SSO defaults to "trusted_providers_only" (stricter than core's "email_match_any")
+	// SSO defaults to "trusted_providers_only" (stricter than core's "verified_email_trusted")
 	// because enterprise SSO providers should prove domain ownership or be explicitly
 	// trusted before auto-linking to existing accounts.
 	const linkingPolicy =
@@ -54,8 +54,8 @@ export function canAutoLinkExistingUser(
 		return false;
 	}
 
-	// For SSO, both "trusted_providers_only" and "email_match_any" still require
-	// a provider/domain trust signal. The "relaxed" behavior of "email_match_any"
+	// For SSO, both "trusted_providers_only" and "verified_email_trusted" still require
+	// a provider/domain trust signal. The "relaxed" behavior of "verified_email_trusted"
 	// (allowing emailVerified as trust) only applies in core handleOAuthUserInfo.
 	const trustedProviders = accountLinking?.trustedProviders;
 	if (trustedProviders?.includes(providerId)) {

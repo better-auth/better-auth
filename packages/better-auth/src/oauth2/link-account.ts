@@ -89,12 +89,12 @@ export async function handleOAuthUserInfo(
 				);
 				const linkingPolicy =
 					c.context.options.account?.accountLinking?.linkingPolicy ??
-					"email_match_any";
+					"verified_email_trusted";
 
 				let canLink = false;
 				if (linkingPolicy === "never") {
 					canLink = false;
-				} else if (linkingPolicy === "email_match_any") {
+				} else if (linkingPolicy === "verified_email_trusted") {
 					canLink = isTrustedProvider || !!userInfo.emailVerified;
 				} else {
 					canLink = !!isTrustedProvider;
