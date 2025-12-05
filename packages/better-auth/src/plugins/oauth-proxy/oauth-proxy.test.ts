@@ -244,7 +244,7 @@ describe("oauth-proxy", async () => {
 			},
 		});
 	});
-	it("should redirect to proxy url", async () => {
+	it("should redirect to proxy url with encrypted payload", async () => {
 		const { client, auth } = await getTestInstance({
 			plugins: [
 				oAuthProxy({
@@ -267,13 +267,20 @@ describe("oauth-proxy", async () => {
 		const mockCookiesString = Object.entries(mockCookies)
 			.map(([k, v]) => `${k}=${v}`)
 			.join(", ");
-		const cookies = await symmetricEncrypt({
+
+		// Create payload with timestamp (new format)
+		const payload = {
+			cookies: mockCookiesString,
+			timestamp: Date.now(),
+		};
+
+		const encryptedPayload = await symmetricEncrypt({
 			key: secret,
-			data: mockCookiesString,
+			data: JSON.stringify(payload),
 		});
 
 		await client.$fetch(
-			`/oauth-proxy-callback?callbackURL=%2Fdashboard&cookies=${cookies}`,
+			`/oauth-proxy-callback?callbackURL=%2Fdashboard&cookies=${encryptedPayload}`,
 			{
 				onError(context) {
 					const headersList = [...context.response.headers];
@@ -473,6 +480,277 @@ describe("oauth-proxy", async () => {
 					expect(location).toContain("/dashboard");
 				},
 			});
+		});
+	});
+
+	describe("reply protection", () => {
+		it("should include timestamp in encrypted payload", async () => {
+			const { client, auth } = await getTestInstance({
+				plugins: [
+					oAuthProxy({
+						currentURL: "http://preview-localhost:3000",
+					}),
+				],
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			});
+			const { secret } = await auth.$context;
+
+			const payload = {
+				cookies: "sessionid=abcd1234; state=statevalue",
+				timestamp: Date.now(),
+			};
+
+			const encryptedCookies = await symmetricEncrypt({
+				key: secret,
+				data: JSON.stringify(payload),
+			});
+
+			let requestSucceeded = false;
+			await client.$fetch(
+				`/oauth-proxy-callback?callbackURL=%2Fdashboard&cookies=${encryptedCookies}`,
+				{
+					onError(context) {
+						if (context.response.status === 302) {
+							const location = context.response.headers.get("location");
+							expect(location).toContain("/dashboard");
+							requestSucceeded = true;
+						}
+					},
+				},
+			);
+			expect(requestSucceeded).toBe(true);
+		});
+
+		it("should reject expired payloads", async () => {
+			const { client, auth } = await getTestInstance({
+				plugins: [
+					oAuthProxy({
+						currentURL: "http://preview-localhost:3000",
+						maxAge: 60, // 60 seconds
+					}),
+				],
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			});
+			const { secret } = await auth.$context;
+
+			// Create payload with expired timestamp (2 minutes ago)
+			const payload = {
+				cookies: "sessionid=abcd1234; state=statevalue",
+				timestamp: Date.now() - 120000, // 2 minutes ago
+			};
+
+			const encryptedCookies = await symmetricEncrypt({
+				key: secret,
+				data: JSON.stringify(payload),
+			});
+
+			await client.$fetch(
+				`/oauth-proxy-callback?callbackURL=%2Fdashboard&cookies=${encryptedCookies}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						expect(location).toContain("error");
+						expect(location).toContain("expired or invalid");
+					},
+				},
+			);
+		});
+
+		it("should reject payloads with future timestamps", async () => {
+			const { client, auth } = await getTestInstance({
+				plugins: [
+					oAuthProxy({
+						currentURL: "http://preview-localhost:3000",
+					}),
+				],
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			});
+			const { secret } = await auth.$context;
+
+			// Create payload with future timestamp
+			const payload = {
+				cookies: "sessionid=abcd1234; state=statevalue",
+				timestamp: Date.now() + 120000, // 2 minutes in the future
+			};
+
+			const encryptedCookies = await symmetricEncrypt({
+				key: secret,
+				data: JSON.stringify(payload),
+			});
+
+			await client.$fetch(
+				`/oauth-proxy-callback?callbackURL=%2Fdashboard&cookies=${encryptedCookies}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						expect(location).toContain("error");
+						expect(location).toContain("expired or invalid");
+					},
+				},
+			);
+		});
+
+		it("should reject malformed payload missing timestamp", async () => {
+			const { client, auth } = await getTestInstance({
+				plugins: [
+					oAuthProxy({
+						currentURL: "http://preview-localhost:3000",
+					}),
+				],
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			});
+			const { secret } = await auth.$context;
+
+			// Create payload missing required timestamp field
+			const malformedPayload = {
+				cookies: "sessionid=abcd1234",
+				// missing timestamp
+			};
+
+			const encryptedCookies = await symmetricEncrypt({
+				key: secret,
+				data: JSON.stringify(malformedPayload),
+			});
+
+			await client.$fetch(
+				`/oauth-proxy-callback?callbackURL=%2Fdashboard&cookies=${encryptedCookies}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						expect(location).toContain("error");
+					},
+				},
+			);
+		});
+
+		it("should allow multiple requests within time window", async () => {
+			const { client, auth } = await getTestInstance({
+				plugins: [
+					oAuthProxy({
+						currentURL: "http://preview-localhost:3000",
+						maxAge: 60,
+					}),
+				],
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			});
+			const { secret } = await auth.$context;
+
+			// First request
+			const payload1 = {
+				cookies: "sessionid=first; state=state1",
+				timestamp: Date.now(),
+			};
+
+			const encryptedCookies1 = await symmetricEncrypt({
+				key: secret,
+				data: JSON.stringify(payload1),
+			});
+
+			let firstSucceeded = false;
+			await client.$fetch(
+				`/oauth-proxy-callback?callbackURL=%2Fdashboard&cookies=${encryptedCookies1}`,
+				{
+					onError(context) {
+						if (context.response.status === 302) {
+							const location = context.response.headers.get("location");
+							expect(location).toContain("/dashboard");
+							firstSucceeded = true;
+						}
+					},
+				},
+			);
+			expect(firstSucceeded).toBe(true);
+
+			// Second request should also succeed
+			const payload2 = {
+				cookies: "sessionid=second; state=state2",
+				timestamp: Date.now(),
+			};
+
+			const encryptedCookies2 = await symmetricEncrypt({
+				key: secret,
+				data: JSON.stringify(payload2),
+			});
+
+			let secondSucceeded = false;
+			await client.$fetch(
+				`/oauth-proxy-callback?callbackURL=%2Fdashboard&cookies=${encryptedCookies2}`,
+				{
+					onError(context) {
+						if (context.response.status === 302) {
+							const location = context.response.headers.get("location");
+							expect(location).toContain("/dashboard");
+							secondSucceeded = true;
+						}
+					},
+				},
+			);
+			expect(secondSucceeded).toBe(true);
+		});
+
+		it("should use custom maxAge setting", async () => {
+			const { client, auth } = await getTestInstance({
+				plugins: [
+					oAuthProxy({
+						currentURL: "http://preview-localhost:3000",
+						maxAge: 5, // 5 seconds
+					}),
+				],
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			});
+			const { secret } = await auth.$context;
+
+			// Create payload that's 10 seconds old (older than maxAge of 5)
+			const payload = {
+				cookies: "sessionid=abcd1234",
+				timestamp: Date.now() - 10000, // 10 seconds ago
+			};
+
+			const encryptedCookies = await symmetricEncrypt({
+				key: secret,
+				data: JSON.stringify(payload),
+			});
+
+			await client.$fetch(
+				`/oauth-proxy-callback?callbackURL=%2Fdashboard&cookies=${encryptedCookies}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						expect(location).toContain("error");
+						expect(location).toContain("expired or invalid");
+					},
+				},
+			);
 		});
 	});
 });

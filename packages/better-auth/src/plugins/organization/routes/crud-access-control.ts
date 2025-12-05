@@ -316,7 +316,6 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 		async (ctx) => {
 			const { session, user } = ctx.context.session;
 
-			// We can verify if the org id is valid and associated with the user in the next step when we try to find the member.
 			const organizationId =
 				ctx.body.organizationId ?? session.activeOrganizationId;
 			if (!organizationId) {
@@ -328,8 +327,6 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// Get the user's role associated with the organization.
-			// This also serves as a check to ensure the org id is valid.
 			const member = await ctx.context.adapter.findOne<Member>({
 				model: "member",
 				where: [

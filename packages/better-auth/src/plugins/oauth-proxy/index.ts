@@ -29,9 +29,26 @@ export interface OAuthProxyOptions {
 	 * default to `BETTER_AUTH_URL`
 	 */
 	productionURL?: string | undefined;
+	/**
+	 * Maximum age in seconds for the encrypted cookies payload.
+	 * Payloads older than this will be rejected to prevent replay attacks.
+	 *
+	 * Keep this value short (e.g., 30-60 seconds) to minimize the window
+	 * for potential replay attacks while still allowing normal OAuth flows.
+	 *
+	 * @default 60 (1 minute)
+	 */
+	maxAge?: number | undefined;
+}
+
+interface EncryptedCookiesPayload {
+	cookies: string;
+	timestamp: number;
 }
 
 export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
+	const maxAge = opts?.maxAge ?? 60; // Default 60 seconds
+
 	return {
 		id: "oauth-proxy",
 		options: opts,
@@ -85,17 +102,21 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 					},
 				},
 				async (ctx) => {
-					const decryptedCookies = await symmetricDecrypt({
-						key: ctx.context.secret,
-						data: ctx.query.cookies,
-					}).catch((e) => {
+					// Decrypt the payload
+					let decryptedPayload: string | null = null;
+					try {
+						decryptedPayload = await symmetricDecrypt({
+							key: ctx.context.secret,
+							data: ctx.query.cookies,
+						});
+					} catch (e) {
 						ctx.context.logger.error(
 							"Failed to decrypt OAuth proxy cookies:",
 							e,
 						);
-						return null;
-					});
-					if (!decryptedCookies) {
+					}
+
+					if (!decryptedPayload) {
 						const errorURL =
 							ctx.context.options.onAPIError?.errorURL ||
 							`${ctx.context.options.baseURL}/api/auth/error`;
@@ -104,6 +125,58 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 							`${errorURL}?error=OAuthProxy - Invalid cookies or secret`,
 						);
 					}
+
+					// Parse and validate the payload
+					let payload: EncryptedCookiesPayload;
+					try {
+						payload = parseJSON<EncryptedCookiesPayload>(decryptedPayload);
+					} catch (e) {
+						ctx.context.logger.error("Failed to parse OAuth proxy payload:", e);
+						const errorURL =
+							ctx.context.options.onAPIError?.errorURL ||
+							`${ctx.context.options.baseURL}/api/auth/error`;
+
+						throw ctx.redirect(
+							`${errorURL}?error=OAuthProxy - Invalid payload format`,
+						);
+					}
+
+					// Validate required fields
+					if (
+						!payload.cookies ||
+						typeof payload.cookies !== "string" ||
+						typeof payload.timestamp !== "number"
+					) {
+						ctx.context.logger.error(
+							"OAuth proxy payload missing required fields",
+						);
+						const errorURL =
+							ctx.context.options.onAPIError?.errorURL ||
+							`${ctx.context.options.baseURL}/api/auth/error`;
+
+						throw ctx.redirect(
+							`${errorURL}?error=OAuthProxy - Invalid payload structure`,
+						);
+					}
+
+					// Validate timestamp to prevent replay attacks
+					const now = Date.now();
+					const age = (now - payload.timestamp) / 1000; // age in seconds
+
+					if (age > maxAge || age < 0) {
+						ctx.context.logger.error(
+							`OAuth proxy payload expired or invalid (age: ${age}s, maxAge: ${maxAge}s)`,
+						);
+						const errorURL =
+							ctx.context.options.onAPIError?.errorURL ||
+							`${ctx.context.options.baseURL}/api/auth/error`;
+
+						throw ctx.redirect(
+							`${errorURL}?error=OAuthProxy - Payload expired or invalid`,
+						);
+					}
+
+					const decryptedCookies = payload.cookies;
 
 					const currentURL = resolveCurrentURL(ctx, opts);
 					const isSecureContext = currentURL.protocol === "https:";
@@ -460,9 +533,16 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 						if (!setCookies) {
 							return;
 						}
+
+						// Create payload with timestamp for replay attack protection
+						const payload: EncryptedCookiesPayload = {
+							cookies: setCookies,
+							timestamp: Date.now(),
+						};
+
 						const encryptedCookies = await symmetricEncrypt({
 							key: ctx.context.secret,
-							data: setCookies,
+							data: JSON.stringify(payload),
 						});
 						const locationWithCookies = `${location}&cookies=${encodeURIComponent(
 							encryptedCookies,
