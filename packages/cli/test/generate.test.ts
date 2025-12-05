@@ -320,6 +320,63 @@ describe("generate", async () => {
 		);
 	});
 
+	// Plugin that tests multiple relations to different models (should be combined)
+	const multiRelationPlugin = (): BetterAuthPlugin => {
+		return {
+			id: "multi-relation",
+			schema: {
+				project: {
+					fields: {
+						ownerId: {
+							type: "string",
+							required: false,
+							references: {
+								model: "user",
+								field: "id",
+								onDelete: "set null",
+							},
+						},
+						sessionId: {
+							type: "string",
+							required: false,
+							references: {
+								model: "session",
+								field: "id",
+								onDelete: "set null",
+							},
+						},
+					},
+				},
+			},
+		};
+	};
+
+	it("should combine multiple relations to different models into single export", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: drizzleAdapter(
+				{},
+				{
+					provider: "sqlite",
+					schema: {},
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: drizzleAdapter(
+					{},
+					{
+						provider: "sqlite",
+						schema: {},
+					},
+				),
+				plugins: [multiRelationPlugin()],
+			},
+		});
+		await expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/auth-schema-multi-relation.txt",
+		);
+	});
+
 	it("should generate kysely schema", async () => {
 		const schema = await generateMigrations({
 			file: "test.sql",

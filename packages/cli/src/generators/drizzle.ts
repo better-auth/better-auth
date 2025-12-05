@@ -429,52 +429,89 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			}
 		}
 
-		// Generate relation exports - use field-specific naming only for duplicates
+		// Separate relations with duplicates (same model) from those without
+		const duplicateRelations: Relation[] = [];
+		const singleRelations: Relation[] = [];
+
 		for (const [modelKey, relations] of relationsByModel.entries()) {
-			const hasDuplicates = relations.length > 1;
-
-			if (hasDuplicates) {
-				// Multiple relations to the same model - use field-specific naming
-				for (const relation of relations) {
-					if (relation.reference) {
-						const fieldName = relation.reference.fieldName;
-						const relationExportName = `${modelName}${fieldName.charAt(0).toUpperCase() + fieldName.slice(1)}Relations`;
-
-						const tableRelation = `export const ${relationExportName} = relations(${getModelName(
-							table.modelName,
-						)}, ({ one }) => ({
-				${relation.key}: one(${relation.model}, {
-					fields: [${relation.reference.field}],
-					references: [${relation.reference.references}],
-				})
-			}))`;
-
-						relationsString += `\n${tableRelation}\n`;
-					}
-				}
+			if (relations.length > 1) {
+				// Multiple relations to the same model - these need field-specific naming
+				duplicateRelations.push(...relations);
 			} else {
-				// Single relation - use standard naming
-				const relation = relations[0]!;
-				if (relation.reference) {
-					const relationExportName = `${modelName}Relations`;
-
-					const tableRelation = `export const ${relationExportName} = relations(${getModelName(
-						table.modelName,
-					)}, ({ one }) => ({
-				${relation.key}: one(${relation.model}, {
-					fields: [${relation.reference.field}],
-					references: [${relation.reference.references}],
-				})
-			}))`;
-
-					relationsString += `\n${tableRelation}\n`;
-				}
+				// Single relation to this model - can be combined with others
+				singleRelations.push(relations[0]!);
 			}
 		}
 
-		// Generate a single relation export for "many" relations if any exist
-		if (manyRelations.length > 0) {
-			const tableRelation = `export const ${table.modelName}Relations = relations(${getModelName(
+		// Generate field-specific exports for duplicate relations
+		for (const relation of duplicateRelations) {
+			if (relation.reference) {
+				const fieldName = relation.reference.fieldName;
+				const relationExportName = `${modelName}${fieldName.charAt(0).toUpperCase() + fieldName.slice(1)}Relations`;
+
+				const tableRelation = `export const ${relationExportName} = relations(${getModelName(
+					table.modelName,
+				)}, ({ one }) => ({
+				${relation.key}: one(${relation.model}, {
+					fields: [${relation.reference.field}],
+					references: [${relation.reference.references}],
+				})
+			}))`;
+
+				relationsString += `\n${tableRelation}\n`;
+			}
+		}
+
+		// Combine all single "one" relations and "many" relations into exports
+		const hasOne = singleRelations.length > 0;
+		const hasMany = manyRelations.length > 0;
+
+		if (hasOne && hasMany) {
+			// Both "one" and "many" relations exist - combine in one export
+			const tableRelation = `export const ${modelName}Relations = relations(${getModelName(
+				table.modelName,
+			)}, ({ one, many }) => ({
+				${singleRelations
+					.map((relation) =>
+						relation.reference
+							? ` ${relation.key}: one(${relation.model}, {
+					fields: [${relation.reference.field}],
+					references: [${relation.reference.references}],
+				})`
+							: "",
+					)
+					.filter((x) => x !== "")
+					.join(",\n ")}${
+					singleRelations.length > 0 && manyRelations.length > 0 ? "," : ""
+				}
+				${manyRelations
+					.map(({ key, model }) => ` ${key}: many(${model})`)
+					.join(",\n ")}
+			}))`;
+
+			relationsString += `\n${tableRelation}\n`;
+		} else if (hasOne) {
+			// Only "one" relations exist
+			const tableRelation = `export const ${modelName}Relations = relations(${getModelName(
+				table.modelName,
+			)}, ({ one }) => ({
+				${singleRelations
+					.map((relation) =>
+						relation.reference
+							? ` ${relation.key}: one(${relation.model}, {
+					fields: [${relation.reference.field}],
+					references: [${relation.reference.references}],
+				})`
+							: "",
+					)
+					.filter((x) => x !== "")
+					.join(",\n ")}
+			}))`;
+
+			relationsString += `\n${tableRelation}\n`;
+		} else if (hasMany) {
+			// Only "many" relations exist
+			const tableRelation = `export const ${modelName}Relations = relations(${getModelName(
 				table.modelName,
 			)}, ({ many }) => ({
 				${manyRelations
