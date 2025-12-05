@@ -281,7 +281,6 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 						throw e;
 					});
 
-				await ctx.context.internalAdapter.deleteSession(session.session.token);
 				await setSessionCookie(ctx, {
 					session: newSession,
 					user: updatedUser,
