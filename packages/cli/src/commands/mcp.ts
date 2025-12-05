@@ -13,7 +13,7 @@ interface MCPOptions {
 	manual?: boolean;
 }
 
-export async function mcpAction(options: MCPOptions) {
+async function mcpAction(options: MCPOptions) {
 	const mcpUrl = "https://mcp.chonkie.ai/better-auth/better-auth-builder/mcp";
 	const mcpName = "Better Auth";
 
