@@ -1185,16 +1185,19 @@ describe("SAML SSO", async () => {
 
 	it("should deny account linking when provider is not trusted and domain is not verified", async () => {
 		// Create a separate auth instance for this test
-		const { auth: authUntrusted, signInWithTestUser, client } =
-			await getTestInstance({
-				account: {
-					accountLinking: {
-						enabled: true,
-						trustedProviders: [], // No trusted providers
-					},
+		const {
+			auth: authUntrusted,
+			signInWithTestUser,
+			client,
+		} = await getTestInstance({
+			account: {
+				accountLinking: {
+					enabled: true,
+					trustedProviders: [], // No trusted providers
 				},
-				plugins: [sso()],
-			});
+			},
+			plugins: [sso()],
+		});
 
 		// Create existing user (signInWithTestUser creates test@test.com)
 		const { headers } = await signInWithTestUser();
