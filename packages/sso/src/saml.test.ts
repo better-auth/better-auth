@@ -1184,7 +1184,6 @@ describe("SAML SSO", async () => {
 	});
 
 	it("should deny account linking when provider is not trusted and domain is not verified", async () => {
-		// Create a separate auth instance for this test
 		const {
 			auth: authUntrusted,
 			signInWithTestUser,
@@ -1193,16 +1192,14 @@ describe("SAML SSO", async () => {
 			account: {
 				accountLinking: {
 					enabled: true,
-					trustedProviders: [], // No trusted providers
+					trustedProviders: [],
 				},
 			},
 			plugins: [sso()],
 		});
 
-		// Create existing user (signInWithTestUser creates test@test.com)
 		const { headers } = await signInWithTestUser();
 
-		// Register SAML provider (NOT in trustedProviders, domainVerified is false by default)
 		await authUntrusted.api.registerSSOProvider({
 			body: {
 				providerId: "untrusted-saml-provider",
@@ -1228,7 +1225,6 @@ describe("SAML SSO", async () => {
 			headers,
 		});
 
-		// Create another user with the email that the mock IdP returns (test@email.com)
 		const ctx = await authUntrusted.$context;
 		await ctx.adapter.create({
 			model: "user",
@@ -1242,7 +1238,6 @@ describe("SAML SSO", async () => {
 			},
 		});
 
-		// Get SAML response from mock IdP (returns test@email.com which matches existing user)
 		let samlResponse: any;
 		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
 			onSuccess: async (context) => {
@@ -1250,7 +1245,6 @@ describe("SAML SSO", async () => {
 			},
 		});
 
-		// Attempt SAML callback - should fail with account_not_linked error
 		const response = await authUntrusted.handler(
 			new Request(
 				"http://localhost:3000/api/auth/sso/saml2/callback/untrusted-saml-provider",
@@ -1273,7 +1267,6 @@ describe("SAML SSO", async () => {
 	});
 
 	it("should allow account linking when provider is in trustedProviders", async () => {
-		// Create auth instance with trustedProviders
 		const { auth: authWithTrusted, signInWithTestUser } = await getTestInstance(
 			{
 				account: {
@@ -1286,10 +1279,8 @@ describe("SAML SSO", async () => {
 			},
 		);
 
-		// Create existing user (signInWithTestUser creates test@test.com)
 		const { headers } = await signInWithTestUser();
 
-		// Register SAML provider that IS in trustedProviders
 		await authWithTrusted.api.registerSSOProvider({
 			body: {
 				providerId: "trusted-saml-provider",
@@ -1315,7 +1306,6 @@ describe("SAML SSO", async () => {
 			headers,
 		});
 
-		// Create another user with the email that the mock IdP returns (test@email.com)
 		const ctx = await authWithTrusted.$context;
 		await ctx.adapter.create({
 			model: "user",
@@ -1329,7 +1319,6 @@ describe("SAML SSO", async () => {
 			},
 		});
 
-		// Get SAML response from mock IdP
 		let samlResponse: any;
 		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
 			onSuccess: async (context) => {
@@ -1337,7 +1326,6 @@ describe("SAML SSO", async () => {
 			},
 		});
 
-		// Attempt SAML callback - should succeed because provider is trusted
 		const response = await authWithTrusted.handler(
 			new Request(
 				"http://localhost:3000/api/auth/sso/saml2/callback/trusted-saml-provider",
@@ -1356,7 +1344,6 @@ describe("SAML SSO", async () => {
 
 		expect(response.status).toBe(302);
 		const redirectLocation = response.headers.get("location") || "";
-		// Should redirect to dashboard, not error
 		expect(redirectLocation).not.toContain("error");
 		expect(redirectLocation).toContain("dashboard");
 	});
