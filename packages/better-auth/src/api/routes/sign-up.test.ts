@@ -144,4 +144,49 @@ describe("sign-up with custom fields", async (it) => {
 			}),
 		).rejects.toThrow("role is not allowed to be set");
 	});
+
+	it("should properly encode callbackURL with query parameters when sending verification email on sign-up", async () => {
+		let capturedUrl = "";
+		const { auth } = await getTestInstance(
+			{
+				trustedOrigins: ["https://example.com"],
+				emailVerification: {
+					sendOnSignUp: true,
+					async sendVerificationEmail({ user, url, token }) {
+						capturedUrl = url;
+					},
+				},
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const callbackURL =
+			"https://example.com/app?redirect=/dashboard&tab=settings&user=Jane+Doe&email=test%40example.com#main";
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "callback-test@test.com",
+				password: "password",
+				name: "Callback Test",
+				callbackURL,
+			},
+		});
+
+		expect(capturedUrl).toBeDefined();
+		expect(capturedUrl).not.toBe("");
+
+		const emailUrl = new URL(capturedUrl);
+		const callbackURLParam = emailUrl.searchParams.get("callbackURL");
+
+		expect(callbackURLParam).toBe(callbackURL);
+		expect(callbackURLParam).toContain(
+			"?redirect=/dashboard&tab=settings&user=Jane+Doe&email=test%40example.com#main",
+		);
+	});
 });
