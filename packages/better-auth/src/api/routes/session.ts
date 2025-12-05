@@ -45,6 +45,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								"application/json": {
 									schema: {
 										type: "object",
+										nullable: true,
 										properties: {
 											session: {
 												$ref: "#/components/schemas/Session",
