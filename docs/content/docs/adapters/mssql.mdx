@@ -42,11 +42,11 @@ const dialect = new MssqlDialect({
       },
       server: 'localhost',
     }),
+    TYPES: {
+      ...Tedious.TYPES,
+      DateTime: Tedious.TYPES.DateTime2,
+    },
   },
-  TYPES: {
-		...Tedious.TYPES,
-		DateTime: Tedious.TYPES.DateTime2,
-	},
 })
 
 export const auth = betterAuth({

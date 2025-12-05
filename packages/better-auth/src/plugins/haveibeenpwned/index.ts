@@ -57,6 +57,9 @@ async function checkPasswordCompromise(
 }
 
 export interface HaveIBeenPwnedOptions {
+	/**
+	 * Custom message to display when a password is compromised.
+	 */
 	customPasswordCompromisedMessage?: string | undefined;
 	/**
 	 * Paths to check for password

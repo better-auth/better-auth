@@ -33,23 +33,22 @@ export interface PasskeyOptions {
 	 *
 	 * if this isn't provided. The client itself will
 	 * pass this value.
+	 *
+	 * @description The URL at which registrations and authentications should occur.
 	 */
 	origin?: (string | string[] | null) | undefined;
+
 	/**
 	 * Allow customization of the authenticatorSelection options
 	 * during passkey registration.
 	 */
 	authenticatorSelection?: AuthenticatorSelectionCriteria | undefined;
+
 	/**
 	 * Advanced options
 	 */
 	advanced?:
 		| {
-				/**
-				 * Cookie name for storing WebAuthn challenge ID during authentication flow
-				 *
-				 * @default "better-auth-passkey"
-				 */
 				webAuthnChallengeCookie?: string;
 		  }
 		| undefined;

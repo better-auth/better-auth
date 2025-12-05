@@ -3,7 +3,6 @@
 import { Command } from "commander";
 import { generate } from "./commands/generate";
 import { info } from "./commands/info";
-import { init } from "./commands/init";
 import { login } from "./commands/login";
 import { mcp } from "./commands/mcp";
 import { migrate } from "./commands/migrate";
@@ -26,7 +25,6 @@ async function main() {
 		// it doesn't matter if we can't read the package.json file, we'll just use an empty object
 	}
 	program
-		.addCommand(init)
 		.addCommand(migrate)
 		.addCommand(generate)
 		.addCommand(generateSecret)

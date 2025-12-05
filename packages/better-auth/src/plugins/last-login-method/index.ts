@@ -14,8 +14,8 @@ export interface LastLoginMethodOptions {
 	 */
 	cookieName?: string | undefined;
 	/**
-	 * Cookie expiration time in seconds
-	 * @default 2592000 (30 days)
+	 * Cookie expiration time in seconds. By default it's 2592000 seconds (30 days)
+	 * @default 2592000
 	 */
 	maxAge?: number | undefined;
 	/**
