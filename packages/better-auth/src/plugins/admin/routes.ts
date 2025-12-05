@@ -604,10 +604,14 @@ export const listUsers = (opts: AdminOptions) =>
 			if (ctx.query?.searchValue) {
 				const operator = ctx.query.searchOperator || "contains";
 				const value = ctx.query.searchValue;
-				const searchFields =
-					!ctx.query.searchField || ctx.query.searchField.length === 0
+				let searchFields =
+					!ctx.query.searchField ||
+					(Array.isArray(ctx.query.searchField) &&
+						ctx.query.searchField.length === 0)
 						? ["email"]
-						: ctx.query.searchField;
+						: Array.isArray(ctx.query.searchField)
+							? ctx.query.searchField
+							: [ctx.query.searchField];
 
 				where.push(
 					...searchFields.map(
