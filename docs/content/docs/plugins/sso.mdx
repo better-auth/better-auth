@@ -769,10 +769,11 @@ import { sso, type AuthnRequestStore } from "@better-auth/sso";
 const redisAuthnRequestStore: AuthnRequestStore = {
     async save(record) {
         const ttl = Math.ceil((record.expiresAt - Date.now()) / 1000);
-        await redis.setex(
+        await redis.set(
             `authn:${record.id}`,
-            ttl,
-            JSON.stringify(record)
+            JSON.stringify(record),
+            "EX",
+            ttl
         );
     },
     async get(id) {
