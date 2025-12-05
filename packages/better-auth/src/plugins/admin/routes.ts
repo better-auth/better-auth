@@ -1018,9 +1018,13 @@ export const impersonateUser = (opts: AdminOptions) =>
 			const adminRoles = (
 				Array.isArray(opts.adminRoles)
 					? opts.adminRoles
-					: opts.adminRoles.split(",")
+					: opts.adminRoles?.split(",") || []
 			).map((role) => role.trim());
-			const targetUserRole = (targetUser.role || opts.defaultRole).split(",");
+			const targetUserRole = (
+				targetUser.role ||
+				opts.defaultRole ||
+				"user"
+			).split(",");
 			if (
 				opts.allowImpersonatingAdmins !== true &&
 				(targetUserRole.some((role) => adminRoles.includes(role)) ||
