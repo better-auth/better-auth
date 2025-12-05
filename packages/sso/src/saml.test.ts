@@ -1182,6 +1182,157 @@ describe("SAML SSO", async () => {
 			},
 		});
 	});
+
+	it("should deny account linking when provider is not trusted and domain is not verified", async () => {
+		// Create a user first
+		const existingEmail = "test@email.com";
+		await authClient.signUp.email({
+			email: existingEmail,
+			password: "password123",
+			name: "Existing User",
+		});
+
+		const headers = await getAuthHeaders();
+
+		// Register SAML provider (NOT in trustedProviders, domainVerified is false by default)
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "untrusted-saml-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		// Get SAML response from mock IdP (returns test@email.com which matches existing user)
+		let samlResponse: any;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		// Attempt SAML callback - should fail with account_not_linked error
+		let redirectLocation = "";
+		await betterFetch(
+			"http://localhost:3000/api/sso/saml2/callback/untrusted-saml-provider",
+			{
+				method: "POST",
+				redirect: "manual",
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					SAMLResponse: samlResponse.samlResponse,
+					RelayState: "http://localhost:3000/dashboard",
+				}),
+				customFetchImpl: async (url, init) => {
+					return auth.handler(new Request(url, init));
+				},
+				onError: (context) => {
+					redirectLocation = context.response.headers.get("location") || "";
+				},
+			},
+		);
+
+		expect(redirectLocation).toContain("error=account_not_linked");
+	});
+
+	it("should allow account linking when provider is in trustedProviders", async () => {
+		// Create auth instance with trustedProviders
+		const { auth: authWithTrusted, signInWithTestUser } = await getTestInstance(
+			{
+				account: {
+					accountLinking: {
+						enabled: true,
+						trustedProviders: ["trusted-saml-provider"],
+					},
+				},
+				plugins: [sso()],
+			},
+		);
+
+		// Create existing user
+		const existingEmail = "test@email.com";
+		const { headers } = await signInWithTestUser();
+
+		// Register SAML provider that IS in trustedProviders
+		await authWithTrusted.api.registerSSOProvider({
+			body: {
+				providerId: "trusted-saml-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		// Get SAML response from mock IdP
+		let samlResponse: any;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		// Attempt SAML callback - should succeed because provider is trusted
+		let redirectLocation = "";
+		await betterFetch(
+			"http://localhost:3000/api/sso/saml2/callback/trusted-saml-provider",
+			{
+				method: "POST",
+				redirect: "manual",
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					SAMLResponse: samlResponse.samlResponse,
+					RelayState: "http://localhost:3000/dashboard",
+				}),
+				customFetchImpl: async (url, init) => {
+					return authWithTrusted.handler(new Request(url, init));
+				},
+				onError: (context) => {
+					redirectLocation = context.response.headers.get("location") || "";
+				},
+			},
+		);
+
+		// Should redirect to dashboard, not error
+		expect(redirectLocation).not.toContain("error");
+		expect(redirectLocation).toContain("dashboard");
+	});
 });
 
 describe("SAML SSO with custom fields", () => {
