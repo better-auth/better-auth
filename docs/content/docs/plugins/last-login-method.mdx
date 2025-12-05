@@ -300,20 +300,6 @@ export const authClient = createAuthClient({
 - Must match the server-side `cookieName` configuration
 - Default: `"better-auth.last_used_login_method"`
 
-**advanced.customGetMethod**: `() => string | null`
-- Custom method to retrieve the last login method
-- Returns the last login method
-
-**advanced.customClearMethod**: `() => void`
-- Custom method to clear the last login method
-
-**advanced.customResolveMethod**: `(url: string | URL) => Awaitable<string | null>`
-- Custom method for resolving the last login method (on client-side)
-- Only applied when `advanced.onLastMethodRetrieved` is provided
-
-**advanced.onLastMethodRetrieved**: `(method: string | null) => Awaitable<void>`
-- Callback fired when the last login method is retrieved (on client-side)
-
 ### Default Method Resolution
 
 By default, the plugin tracks these authentication methods:
