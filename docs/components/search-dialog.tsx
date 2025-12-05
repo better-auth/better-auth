@@ -15,8 +15,6 @@ import {
 	SearchDialogOverlay,
 } from "fumadocs-ui/components/dialog/search";
 import { useI18n } from "fumadocs-ui/contexts/i18n";
-import { useAtom } from "jotai";
-import { aiChatModalAtom } from "./ai-chat-modal";
 
 const client = new OramaCloud({
 	projectId: process.env.NEXT_PUBLIC_ORAMA_PROJECT_ID!,
@@ -25,22 +23,11 @@ const client = new OramaCloud({
 
 export function CustomSearchDialog(props: SharedProps) {
 	const { locale } = useI18n();
-	const [isAIModalOpen, setIsAIModalOpen] = useAtom(aiChatModalAtom);
-
 	const { search, setSearch, query } = useDocsSearch({
 		type: "orama-cloud",
 		client,
 		locale,
 	});
-
-	const handleAskAIClick = () => {
-		props.onOpenChange?.(false);
-		setIsAIModalOpen(true);
-	};
-
-	const handleAIModalClose = () => {
-		setIsAIModalOpen(false);
-	};
 
 	return (
 		<>
