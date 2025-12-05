@@ -16,7 +16,8 @@
     "build": "tsdown",
     "start": "node ./dist/index.mjs",
     "dev": "tsx ./src/index.ts",
-    "typecheck": "tsc --project tsconfig.json"
+    "typecheck": "tsc --project tsconfig.json",
+    "test": "vitest"
   },
   "publishConfig": {
     "access": "public",
