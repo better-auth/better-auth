@@ -25,6 +25,7 @@ vi.mock("../../utils/get-package-json", () => {
 	return {
 		getPackageJson: mockGetPackageJson,
 		hasDependency: vi.fn(),
+	};
 });
 
 vi.mock("./utility/get-package-manager", async () => {
