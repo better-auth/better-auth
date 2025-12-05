@@ -46,6 +46,15 @@ interface EncryptedCookiesPayload {
 	timestamp: number;
 }
 
+const oAuthProxyQuerySchema = z.object({
+	callbackURL: z.string().meta({
+		description: "The URL to redirect to after the proxy",
+	}),
+	cookies: z.string().meta({
+		description: "The cookies to set after the proxy",
+	}),
+});
+
 export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 	const maxAge = opts?.maxAge ?? 60; // Default 60 seconds
 
@@ -58,14 +67,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 				{
 					method: "GET",
 					operationId: "oauthProxyCallback",
-					query: z.object({
-						callbackURL: z.string().meta({
-							description: "The URL to redirect to after the proxy",
-						}),
-						cookies: z.string().meta({
-							description: "The cookies to set after the proxy",
-						}),
-					}),
+					query: oAuthProxyQuerySchema,
 					use: [originCheck((ctx) => ctx.query.callbackURL)],
 					metadata: {
 						openapi: {
