@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 	description: "Specify which organization to authorize to this application",
 };
 
-export default async function SelectAccountPage() {
+export default async function SelectOrganizationPage() {
 	const organizations = await auth.api.listOrganizations({
 		headers: await headers(),
 	});
