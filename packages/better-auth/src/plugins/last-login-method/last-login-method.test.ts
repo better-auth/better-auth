@@ -1,15 +1,7 @@
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
-import {
-	afterAll,
-	afterEach,
-	beforeAll,
-	describe,
-	expect,
-	it,
-	vi,
-} from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { parseCookies, parseSetCookieHeader } from "../../cookies";
 import { signJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -449,76 +441,5 @@ describe("lastLoginMethod", async () => {
 		expect((oauthSession?.data?.user as any).lastLoginMethod).toBe(
 			"my-provider-id",
 		);
-	});
-
-	it("should allow custom client side resolver for non-browser environments", async () => {
-		let lastMethod: string | null = null;
-
-		const onLastMethodRetrieved = vi.fn(async (method) => {
-			lastMethod = method;
-		});
-
-		const { client, testUser, cookieSetter } = await getTestInstance(
-			{
-				emailAndPassword: {
-					enabled: true,
-				},
-			},
-			{
-				clientOptions: {
-					plugins: [
-						lastLoginMethodClient({
-							advanced: {
-								customGetMethod() {
-									return lastMethod;
-								},
-								customClearMethod() {
-									lastMethod = null;
-								},
-								onLastMethodRetrieved,
-							},
-						}),
-					],
-				},
-			},
-		);
-
-		const headers = new Headers();
-		await client.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-			fetchOptions: {
-				onSuccess: cookieSetter(headers),
-			},
-		});
-
-		expect(onLastMethodRetrieved).toHaveBeenCalled();
-		expect(client.getLastUsedLoginMethod()).toStrictEqual("email");
-
-		client.clearLastUsedLoginMethod();
-
-		expect(lastMethod).toBeNull();
-
-		await client.signOut();
-
-		const oAuthHeaders = new Headers();
-		const signInRes = await client.signIn.social({
-			provider: "google",
-			callbackURL: "/callback",
-			fetchOptions: {
-				onSuccess: cookieSetter(oAuthHeaders),
-			},
-		});
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
-		await client.$fetch("/callback/google", {
-			query: {
-				state,
-				code: "test",
-			},
-			headers: oAuthHeaders,
-			method: "GET",
-		});
-
-		expect(client.getLastUsedLoginMethod()).toStrictEqual("google");
 	});
 });

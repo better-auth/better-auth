@@ -345,8 +345,8 @@ When you enable `crossSubDomainCookies` or `crossOriginCookies` in your Better A
 If you have custom OAuth providers or authentication methods, you can use the `customResolveMethod` option:
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { lastLoginMethod } from "better-auth/plugins";
+import { betterAuth } from "better-auth"
+import { lastLoginMethod } from "better-auth/plugins"
 
 export const auth = betterAuth({
     plugins: [
@@ -354,51 +354,52 @@ export const auth = betterAuth({
             customResolveMethod: (ctx) => {
                 // Track custom SAML provider
                 if (ctx.path === "/saml/callback") {
-                    return "saml";
+                    return "saml"
                 }
                 
                 // Track magic link authentication
                 if (ctx.path === "/magic-link/verify") {
-                    return "magic-link";
+                    return "magic-link"
                 }
                 
                 // Track phone authentication
                 if (ctx.path === "/sign-in/phone") {
-                    return "phone";
+                    return "phone"
                 }
                 
                 // Return null to use default logic
-                return null;
-            },
-        }),
-    ],
-});
+                return null
+            }
+        })
+    ]
+})
 ```
 
 ### Usage with Expo
 
-In non-browser environments like Expo, where there is no cookie storage, you can connect the client plugin to your own storage layer so the last login method can be persisted locally.
+When using Better Auth with Expo, make sure to import the client plugin from `@better-auth/expo/plugins` rather than from `better-auth/plugins/client`. This ensures the last login method is stored correctly using the configured storage.
 
 ```ts
-import { createAuthClient } from "better-auth/react";
-import { lastLoginMethodClient } from "better-auth/client/plugins";
-import * as SecureStore from "expo-secure-store";
+import { createAuthClient } from "better-auth/react"
+import { expoClient } from "@better-auth/expo"
+import { lastLoginMethodClient } from "@better-auth/expo/plugins" // [!code highlight]
+import * as SecureStore from "expo-secure-store"
 
 export const authClient = createAuthClient({
   plugins: [
-    lastLoginMethodClient({
-      advanced: {
-        async onLastMethodRetrieved(method) {
-          await SecureStore.setItemAsync("last_login_method", method);
-        },
-        customGetMethod() {
-          return SecureStore.getItem("last_login_method");
-        },
-        customClearMethod() {
-          void SecureStore.deleteItemAsync("last_login_method");
-        },
-      },
+    expoClient({
+      scheme: "myapp",
+      storagePrefix: "myapp",
+      storage: SecureStore,
     }),
-  ],
-});
+    lastLoginMethodClient({
+      storagePrefix: "myapp",
+      storage: SecureStorage,
+    })
+  ]
+})
 ```
+
+<Callout type="info">
+    In Expo only apps, where browser support isn’t needed, you can omit the server plugin and rely solely on the client plugin.
+</Callout>

@@ -3,7 +3,6 @@ import type {
 	GenericEndpointContext,
 } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
-import { defaultResolveMethod } from "./resolve";
 
 /**
  * Configuration for tracking different authentication methods
@@ -51,6 +50,24 @@ export interface LastLoginMethodOptions {
 export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 	userConfig?: O | undefined,
 ) => {
+	const paths = [
+		"/callback/:id",
+		"/oauth2/callback/:providerId",
+		"/sign-in/email",
+		"/sign-up/email",
+	];
+
+	const defaultResolveMethod = (ctx: GenericEndpointContext) => {
+		if (paths.includes(ctx.path)) {
+			return (
+				ctx.params?.id || ctx.params?.providerId || ctx.path.split("/").pop()
+			);
+		}
+		if (ctx.path.includes("siwe")) return "siwe";
+		if (ctx.path.includes("/passkey/verify-authentication")) return "passkey";
+		return null;
+	};
+
 	const config = {
 		cookieName: "better-auth.last_used_login_method",
 		maxAge: 60 * 60 * 24 * 30,
@@ -70,7 +87,7 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 									if (!context) return;
 									const lastUsedLoginMethod =
 										config.customResolveMethod?.(context) ??
-										defaultResolveMethod({ context });
+										defaultResolveMethod(context);
 									if (lastUsedLoginMethod) {
 										return {
 											data: {
@@ -89,7 +106,7 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 									if (!context) return;
 									const lastUsedLoginMethod =
 										config.customResolveMethod?.(context) ??
-										defaultResolveMethod({ context });
+										defaultResolveMethod(context);
 									if (lastUsedLoginMethod && session?.userId) {
 										try {
 											await ctx.internalAdapter.updateUser(session.userId, {
@@ -117,8 +134,7 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const lastUsedLoginMethod =
-							config.customResolveMethod?.(ctx) ??
-							defaultResolveMethod({ context: ctx });
+							config.customResolveMethod?.(ctx) ?? defaultResolveMethod(ctx);
 						if (lastUsedLoginMethod) {
 							const setCookie = ctx.context.responseHeaders?.get("set-cookie");
 							const sessionTokenName =
