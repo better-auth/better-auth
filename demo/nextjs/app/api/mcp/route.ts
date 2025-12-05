@@ -29,13 +29,16 @@ const handler = mcpHandler(
 						},
 					},
 					async ({ message }) => {
+						const baseUrl =
+							process.env.BETTER_AUTH_URL || "https://demo.better-auth.com";
+						const org = jwt?.[baseUrl + "/org"];
 						return {
 							content: [
 								{
 									type: "text",
 									text: `Echo: ${message}${
 										jwt?.sub ? ` for user ${jwt?.sub}` : ""
-									}`,
+									}${org ? ` for organization ${org}` : ""}`,
 								},
 							],
 						};

@@ -785,16 +785,21 @@ oauthProvider({
   scopes: ["openid", "profile", "email", "read:organization"]
   postLogin: {
     page: "/select-organization", // [!code highlight]
-    shouldRedirect: async ({ session }) => { // [!code highlight]
+    shouldRedirect: async ({ session, scopes }) => { // [!code highlight]
       const userOnlyScopes = ["openid", "profile", "email", "offline_access"];
       if (scopes.every((sc) => userOnlyScopes.includes(sc))) {
-        return true;
+        return false;
       }
-      return !!context.session?.activeOrganizationId;
+      const organizations = await auth.api.listOrganizations({
+        headers,
+      });
+      return organizations.length > 1 || !(
+        organizations.length === 1 && organizations.at(0)?.id === session.activeOrganizationId
+      )
     },
     consentReferenceId: ({ session, scopes }) => {
       if (scopes.includes("read:organization")) {
-        const activeOrganizationId = (context.session?.activeOrganizationId ?? undefined) as string | undefined;
+        const activeOrganizationId = (session?.activeOrganizationId ?? undefined) as string | undefined;
         if (!activeOrganizationId) {
           throw new APIError("BAD_REQUEST", {
             error: "set_organization",
@@ -881,16 +886,16 @@ Pro tip: these functions can may also throw errors such as a user is no longer a
 ```ts title="auth.ts"
 oauthProvider({
   // Attach claims to id tokens
-  customIdTokenClaims: ({ user, scopes, reference_id, metadata }) => {
+  customIdTokenClaims: ({ user, scopes, referenceId, metadata }) => {
     return {
       locale: "en-GB",
-      "https://example.com/org": reference_id,
+      "https://example.com/org": referenceId,
     };
   },
   // Attach claims to access tokens
-  customAccessTokenClaims: ({ user, scopes, reference_id, metadata }) => {
+  customAccessTokenClaims: ({ user, scopes, referenceId, metadata }) => {
     return {
-      "https://example.com/org": reference_id,
+      "https://example.com/org": referenceId,
       "https://example.com/roles": ["editor"],
     };
   },

@@ -1,7 +1,14 @@
-import { ArrowLeftRight, ArrowUpRight, Mail, Users } from "lucide-react";
+import {
+	ArrowLeftRight,
+	ArrowUpRight,
+	Building,
+	Mail,
+	User,
+} from "lucide-react";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import Image from "next/image";
+import { redirect } from "next/navigation";
 import { Logo } from "@/components/logo";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,16 +33,25 @@ export default async function AuthorizePage({
 	searchParams,
 }: AuthorizePageProps) {
 	const { redirect_uri, scope, client_id, cancel_uri } = await searchParams;
-	const session = await auth.api.getSession({
-		headers: await headers(),
+	const [session, clientDetails] = await Promise.all([
+		await auth.api.getSession({
+			headers: await headers(),
+		}),
+		await auth.api.getOAuthClientPublic({
+			query: {
+				client_id,
+			},
+			headers: await headers(),
+		}),
+	]).catch((e) => {
+		throw redirect("/sign-in");
 	});
-	const clientDetails = await auth.api.getOAuthClientPublic({
-		query: {
-			client_id,
-		},
-		headers: await headers(),
-	});
-	clientDetails.ic;
+
+	const organization = session?.session?.activeOrganizationId
+		? await auth.api.getFullOrganization({
+				headers: await headers(),
+			})
+		: undefined;
 
 	return (
 		<div className="container mx-auto py-10">
@@ -92,7 +108,7 @@ export default async function AuthorizePage({
 								</div>
 								{scope.includes("profile") && (
 									<div className="flex items-center gap-3 text-zinc-300">
-										<Users className="h-5 w-5" />
+										<User className="h-5 w-5" />
 										<span>Read your Better Auth user data.</span>
 									</div>
 								)}
@@ -101,6 +117,15 @@ export default async function AuthorizePage({
 									<div className="flex items-center gap-3 text-zinc-300">
 										<Mail className="h-5 w-5" />
 										<span>Read your email address.</span>
+									</div>
+								)}
+
+								{scope.includes("read:organization") && (
+									<div className="flex items-center gap-3 text-zinc-300">
+										<Building className="h-5 w-5" />
+										<span>
+											Read your organization {organization?.name ?? ""}.
+										</span>
 									</div>
 								)}
 							</div>

@@ -5,18 +5,9 @@ import { auth } from "@/lib/auth";
 import { AnotherAccountBtn, SelectAccountBtn } from "./account-button";
 
 export const metadata: Metadata = {
-	title: "Authorize Application",
-	description: "Grant access to your account",
+	title: "Select Account",
+	description: "Select account to authorize this application",
 };
-
-interface AuthorizePageProps {
-	searchParams: Promise<{
-		redirect_uri: string;
-		scope: string;
-		cancel_uri: string;
-		client_id: string;
-	}>;
-}
 
 export default async function SelectAccountPage() {
 	const sessions = await auth.api.listDeviceSessions({
@@ -34,7 +25,7 @@ export default async function SelectAccountPage() {
 						</CardHeader>
 						<CardContent className="p-6">
 							{sessions.map((s, i) => (
-								<SelectAccountBtn session={s} />
+								<SelectAccountBtn key={s.session.id ?? i} session={s} />
 							))}
 						</CardContent>
 						<AnotherAccountBtn />
