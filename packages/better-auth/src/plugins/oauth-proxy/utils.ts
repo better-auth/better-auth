@@ -50,14 +50,12 @@ export function checkSkipProxy(
 		return false;
 	}
 
-	// Use request URL to determine current environment, not baseURL
-	// because baseURL is always the production URL
+
 	const currentURL = ctx.request?.url || getVendorBaseURL();
 	if (!currentURL) {
 		return false;
 	}
 
-	// Compare origins - if same, we're in production so skip proxy
 	const productionOrigin = getOrigin(productionURL);
 	const currentOrigin = getOrigin(currentURL);
 

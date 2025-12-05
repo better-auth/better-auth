@@ -104,7 +104,6 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 					},
 				},
 				async (ctx) => {
-					// Decrypt the payload
 					let decryptedPayload: string | null = null;
 					try {
 						decryptedPayload = await symmetricDecrypt({
@@ -128,7 +127,6 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 						);
 					}
 
-					// Parse and validate the payload
 					let payload: EncryptedCookiesPayload;
 					try {
 						payload = parseJSON<EncryptedCookiesPayload>(decryptedPayload);
@@ -142,8 +140,6 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 							`${errorURL}?error=OAuthProxy - Invalid payload format`,
 						);
 					}
-
-					// Validate required fields
 					if (
 						!payload.cookies ||
 						typeof payload.cookies !== "string" ||
@@ -160,10 +156,9 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 							`${errorURL}?error=OAuthProxy - Invalid payload structure`,
 						);
 					}
-
-					// Validate timestamp to prevent replay attacks
+	
 					const now = Date.now();
-					const age = (now - payload.timestamp) / 1000; // age in seconds
+					const age = (now - payload.timestamp) / 1000;
 
 					if (age > maxAge || age < 0) {
 						ctx.context.logger.error(
