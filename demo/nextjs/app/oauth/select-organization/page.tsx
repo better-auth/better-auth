@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { auth } from "@/lib/auth";
-import { SelectOrganizationBtn } from "./account-button";
+import { GoBackBtn, SelectOrganizationBtn } from "./org-buttons";
 
 export const metadata: Metadata = {
 	title: "Select Organization",
@@ -37,9 +37,12 @@ export default async function SelectOrganizationPage() {
 										organizations exist for this account.
 									</p>
 									<br />
-									<Link href="/dashboard">
-										<Button className="w-full">Create Organization</Button>
-									</Link>
+									<div className="flex flex-col gap-1">
+										<Link href="/dashboard">
+											<Button className="w-full">Create Organization</Button>
+										</Link>
+										<GoBackBtn />
+									</div>
 								</div>
 							)}
 						</CardContent>
