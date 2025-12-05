@@ -1,7 +1,6 @@
 {
   "name": "@better-auth/oauth-provider",
-  "author": "Dylan Vanmali",
-  "version": "1.0.0",
+  "version": "1.4.6-beta.3",
   "type": "module",
   "description": "An oauth provider plugin for Better Auth",
   "main": "dist/index.mjs",
