@@ -334,16 +334,42 @@ export const listRoles = <O extends AdminOptions>(options: O) => {
 				},
 				ctx,
 			);
+			let canOnlyListOwnRoles = false;
 			if (!canListRoles) {
-				ctx.context.logger.error(
-					"[Dynamic Access Control] The user is not permitted to list roles.",
+				canOnlyListOwnRoles = await hasPermission(
 					{
 						userId: user.id,
 						role: user.role,
+						options,
+						permissions: {
+							ac: ["read-own"],
+						},
 					},
+					ctx,
 				);
-				throw new APIError("FORBIDDEN", {
-					message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE,
+
+				if (!canOnlyListOwnRoles) {
+					ctx.context.logger.error(
+						"[Dynamic Access Control] The user is not permitted to list roles.",
+						{
+							userId: user.id,
+							role: user.role,
+						},
+					);
+					throw new APIError("FORBIDDEN", {
+						message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE,
+					});
+				}
+			}
+
+			let conditions: Where[] = [];
+
+			if (canOnlyListOwnRoles) {
+				conditions.push({
+					field: "role",
+					value: (user.role || options.defaultRole || "user").split(","),
+					operator: "in",
+					connector: "AND",
 				});
 			}
 
@@ -351,6 +377,7 @@ export const listRoles = <O extends AdminOptions>(options: O) => {
 				UserRole & ReturnAdditionalFields
 			>({
 				model: "role",
+				where: conditions,
 			});
 
 			roles = roles.map((x) => ({
@@ -376,7 +403,6 @@ export const getRole = <O extends AdminOptions>(options: O) => {
 			metadata: {
 				$Infer: {
 					query: {} as {
-						organizationId?: string | undefined;
 						roleName?: string | undefined;
 						roleId?: string | undefined;
 					},
@@ -397,46 +423,63 @@ export const getRole = <O extends AdminOptions>(options: O) => {
 				},
 				ctx,
 			);
+			let canOnlyReadOwnRoles = false;
 			if (!canListRoles) {
-				ctx.context.logger.error(
-					"[Dynamic Access Control] The user is not permitted to read a role.",
+				canOnlyReadOwnRoles = await hasPermission(
 					{
 						userId: user.id,
 						role: user.role,
+						options,
+						permissions: {
+							ac: ["read-own"],
+						},
 					},
+					ctx,
 				);
-				throw new APIError("FORBIDDEN", {
-					message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_READ_A_ROLE,
-				});
+
+				if (!canOnlyReadOwnRoles) {
+					ctx.context.logger.error(
+						"[Dynamic Access Control] The user is not permitted to read a role.",
+						{
+							userId: user.id,
+							role: user.role,
+						},
+					);
+					throw new APIError("FORBIDDEN", {
+						message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_READ_A_ROLE,
+					});
+				}
 			}
 
-			let condition: Where;
+			let conditions: Where[] = [];
 			if (ctx.query.roleName) {
-				condition = {
+				conditions.push({
 					field: "role",
 					value: ctx.query.roleName,
 					operator: "eq",
 					connector: "AND",
-				};
+				});
 			} else if (ctx.query.roleId) {
-				condition = {
+				conditions.push({
 					field: "id",
 					value: ctx.query.roleId,
 					operator: "eq",
 					connector: "AND",
-				};
+				});
 			} else {
-				condition = {
-					field: "role",
-					value: user.role || options.defaultRole || "user",
-					operator: "eq",
-					connector: "AND",
-				};
+				// shouldn't be able to reach here given the schema validation.
+				// But just in case, throw an error.
+				ctx.context.logger.error(
+					`[Dynamic Access Control] The role name/id is not provided in the request body.`,
+				);
+				throw new APIError("BAD_REQUEST", {
+					message: ADMIN_ERROR_CODES.ROLE_NOT_FOUND,
+				});
 			}
 
 			let role = await ctx.context.adapter.findOne<UserRole>({
 				model: "role",
-				where: [condition],
+				where: conditions,
 			});
 			if (!role) {
 				ctx.context.logger.error(
@@ -447,6 +490,13 @@ export const getRole = <O extends AdminOptions>(options: O) => {
 				);
 				throw new APIError("BAD_REQUEST", {
 					message: ADMIN_ERROR_CODES.ROLE_NOT_FOUND,
+				});
+			}
+
+			const userRole = (user.role || options.defaultRole || "user").split(",");
+			if (canOnlyReadOwnRoles && !userRole.some((r) => r === role.role)) {
+				throw new APIError("FORBIDDEN", {
+					message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_READ_A_ROLE,
 				});
 			}
 

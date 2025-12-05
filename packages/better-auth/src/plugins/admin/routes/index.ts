@@ -1,9 +1,5 @@
 import type { LiteralString } from "@better-auth/core";
-import {
-	createAuthEndpoint,
-	createAuthMiddleware,
-} from "@better-auth/core/api";
-import type { Session } from "@better-auth/core/db";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import type { Where } from "@better-auth/core/db/adapter";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
@@ -13,6 +9,7 @@ import { parseUserOutput } from "../../../db/schema";
 import { getDate } from "../../../utils/date";
 import type { AccessControl } from "../../access";
 import type { defaultStatements } from "../access";
+import { adminMiddleware } from "../call";
 import { ADMIN_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
 import type { UserRole } from "../schema";
@@ -22,25 +19,6 @@ import type {
 	SessionWithImpersonatedBy,
 	UserWithRole,
 } from "../types";
-
-/**
- * Ensures a valid session, if not will throw.
- * Will also provide additional types on the user to include role types.
- */
-const adminMiddleware = createAuthMiddleware(async (ctx) => {
-	const session = await getSessionFromCtx(ctx);
-	if (!session) {
-		throw new APIError("UNAUTHORIZED");
-	}
-	return {
-		session,
-	} as {
-		session: {
-			user: UserWithRole;
-			session: Session;
-		};
-	};
-});
 
 function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;

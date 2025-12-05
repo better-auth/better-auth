@@ -14,26 +14,26 @@ import { ADMIN_ERROR_CODES } from "../error-codes";
 
 describe("dynamic access control", async () => {
 	const ac = createAccessControl({
-		project: ["create", "read", "update", "delete"],
-		sales: ["create", "read", "update", "delete"],
+		discount: ["create", "read", "update", "delete"],
+		order: ["create", "read", "update", "delete"],
 		...defaultStatements,
 	});
 
 	const adminAc = ac.newRole({
-		project: ["create", "read", "update", "delete"],
-		sales: ["create", "read", "update", "delete"],
+		discount: ["create", "read", "update", "delete"],
+		order: ["create", "read", "update", "delete"],
 		...defaultAdminAc.statements,
 	});
 
 	const moderatorAc = ac.newRole({
-		project: ["create", "read", "update"],
-		sales: ["create", "read"],
+		discount: ["create", "read", "update"],
+		order: ["create", "read"],
 		ac: ["create", "read", "update"],
 	});
 
 	const userAc = ac.newRole({
-		project: ["read"],
-		sales: ["read"],
+		discount: ["read"],
+		order: ["read"],
 		...defaultUserAc.statements,
 	});
 
@@ -159,7 +159,7 @@ describe("dynamic access control", async () => {
 
 	it("should successfully create a new role", async () => {
 		const permission = {
-			project: ["create"],
+			discount: ["create"],
 		};
 		const testRole = await client.admin.createRole(
 			{
@@ -197,7 +197,7 @@ describe("dynamic access control", async () => {
 			body: {
 				userId: user.id,
 				permissions: {
-					project: ["delete"],
+					discount: ["delete"],
 				},
 			},
 			headers,
@@ -208,7 +208,7 @@ describe("dynamic access control", async () => {
 			body: {
 				userId: user.id,
 				permissions: {
-					project: ["create"],
+					discount: ["create"],
 				},
 			},
 			headers,
@@ -221,7 +221,7 @@ describe("dynamic access control", async () => {
 			{
 				role: `test-${crypto.randomUUID()}`,
 				permission: {
-					project: ["create"],
+					discount: ["create"],
 				},
 				additionalFields: {
 					color: "#000000",
@@ -240,7 +240,7 @@ describe("dynamic access control", async () => {
 			{
 				role: `test-${crypto.randomUUID()}`,
 				permission: {
-					sales: ["create", "delete", "create", "update", "read"], // Intentionally duplicate the "create" permission.
+					order: ["create", "delete", "create", "update", "read"], // Intentionally duplicate the "create" permission.
 				},
 				additionalFields: {
 					color: "#000000",
@@ -256,8 +256,8 @@ describe("dynamic access control", async () => {
 		expect("missingPermissions" in testRole.error).toBe(true);
 		if (!("missingPermissions" in testRole.error)) return;
 		expect(testRole.error?.missingPermissions).toEqual([
-			"sales:delete",
-			"sales:update",
+			"order:delete",
+			"order:update",
 		]);
 	});
 
@@ -266,7 +266,7 @@ describe("dynamic access control", async () => {
 			{
 				role: "admin", // This is a predefined role.
 				permission: {
-					project: ["create"],
+					discount: ["create"],
 				},
 				additionalFields: {
 					color: "#000000",
@@ -283,7 +283,7 @@ describe("dynamic access control", async () => {
 			{
 				role: "test", // This is a role that was created in a previous test.
 				permission: {
-					project: ["create"],
+					discount: ["create"],
 				},
 				additionalFields: {
 					color: "#000000",
@@ -302,7 +302,7 @@ describe("dynamic access control", async () => {
 			{
 				role: `test-${crypto.randomUUID()}`,
 				permission: {
-					project: ["create"],
+					discount: ["create"],
 				},
 				additionalFields: {
 					color: "#000000",
@@ -327,7 +327,7 @@ describe("dynamic access control", async () => {
 			{
 				role: `test-${crypto.randomUUID()}`,
 				permission: {
-					project: ["create"],
+					discount: ["create"],
 				},
 				additionalFields: {
 					color: "#000000",
@@ -350,7 +350,7 @@ describe("dynamic access control", async () => {
 			{
 				role: `test-${crypto.randomUUID()}`,
 				permission: {
-					project: ["create"],
+					discount: ["create"],
 				},
 				additionalFields: {
 					color: "#000000",
@@ -385,7 +385,7 @@ describe("dynamic access control", async () => {
 
 	it("should list roles", async () => {
 		const permission = {
-			project: ["create"],
+			discount: ["create"],
 			ac: ["read", "update", "create", "delete"],
 		};
 		await client.admin.createRole(
@@ -414,7 +414,7 @@ describe("dynamic access control", async () => {
 	});
 
 	it("should not be allowed to list roles without necessary permissions", async () => {
-		expect(auth.api.listRoles({ headers })).rejects.toThrow(
+		await expect(auth.api.listRoles({ headers })).rejects.toThrow(
 			ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE,
 		);
 	});
@@ -424,7 +424,7 @@ describe("dynamic access control", async () => {
 			{
 				role: `read-test-role-${crypto.randomUUID()}`,
 				permission: {
-					project: ["create"],
+					discount: ["create"],
 				},
 				additionalFields: {
 					color: "#000000",
@@ -454,7 +454,7 @@ describe("dynamic access control", async () => {
 			{
 				role: `read-test-role-${crypto.randomUUID()}`,
 				permission: {
-					project: ["create"],
+					discount: ["create"],
 				},
 				additionalFields: {
 					color: "#000000",
@@ -483,7 +483,7 @@ describe("dynamic access control", async () => {
 			{
 				role: `update-test-role-${crypto.randomUUID()}`,
 				permission: {
-					project: ["create"],
+					discount: ["create"],
 				},
 				additionalFields: {
 					color: "#000000",
@@ -498,13 +498,13 @@ describe("dynamic access control", async () => {
 		const res = await auth.api.updateRole({
 			body: {
 				roleId,
-				data: { permission: { project: ["create", "delete"] } },
+				data: { permission: { discount: ["create", "delete"] } },
 			},
 			headers: adminHeaders,
 		});
 		expect(res).not.toBeNull();
 		expect(res.roleData.role).toBe(testRole.data.roleData.role);
-		expect(res.roleData.permission).toEqual({ project: ["create", "delete"] });
+		expect(res.roleData.permission).toEqual({ discount: ["create", "delete"] });
 	});
 
 	it("should update a role's name by name", async () => {
@@ -512,7 +512,7 @@ describe("dynamic access control", async () => {
 			{
 				role: `test-${crypto.randomUUID()}`,
 				permission: {
-					project: ["create"],
+					discount: ["create"],
 				},
 				additionalFields: {
 					color: "#000000",
@@ -545,7 +545,7 @@ describe("dynamic access control", async () => {
 			{
 				role: `update-not-allowed-${crypto.randomUUID()}`,
 				permission: {
-					project: ["create"],
+					discount: ["create"],
 				},
 				additionalFields: {
 					color: "#000000",
@@ -571,7 +571,7 @@ describe("dynamic access control", async () => {
 			{
 				role: `test-${crypto.randomUUID()}`,
 				permission: {
-					project: ["create"],
+					discount: ["create"],
 				},
 				additionalFields: {
 					color: "#000000",
@@ -593,5 +593,23 @@ describe("dynamic access control", async () => {
 		expect(res.roleData.color).toBe("#111111");
 		//@ts-expect-error - intentionally invalid key
 		expect(res.roleData.someInvalidKey).toBeUndefined();
+	});
+
+	it("should restrict normal users to only list own roles", async () => {
+		await auth.api.setRole({
+			body: {
+				userId: user.id,
+				role: ["user", "test"],
+			},
+			headers: adminHeaders,
+		});
+
+		const res = await auth.api.listRoles({ headers });
+		expect(res).not.toBeNull();
+		expect(res[0]).toMatchObject(
+			expect.objectContaining({
+				role: "test",
+			}),
+		);
 	});
 });
