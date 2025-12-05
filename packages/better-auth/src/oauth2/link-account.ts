@@ -13,14 +13,14 @@ export async function handleOAuthUserInfo(
 		callbackURL,
 		disableSignUp,
 		overrideUserInfo,
-		forceTrusted,
+		skipTrustCheck,
 	}: {
 		userInfo: Omit<User, "createdAt" | "updatedAt">;
 		account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
 		callbackURL?: string | undefined;
 		disableSignUp?: boolean | undefined;
 		overrideUserInfo?: boolean | undefined;
-		forceTrusted?: boolean | undefined;
+		skipTrustCheck?: boolean | undefined;
 	},
 ) {
 	const dbUser = await c.context.internalAdapter
@@ -81,7 +81,7 @@ export async function handleOAuthUserInfo(
 				};
 			}
 
-			if (!forceTrusted) {
+			if (!skipTrustCheck) {
 				const trustedProviders =
 					c.context.options.account?.accountLinking?.trustedProviders;
 				const isTrustedProvider = trustedProviders?.includes(

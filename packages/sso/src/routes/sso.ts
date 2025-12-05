@@ -1379,10 +1379,10 @@ export const callbackSSO = (options?: SSOOptions) => {
 			}
 
 			// SSO performs its own trust check before calling handleOAuthUserInfo.
-			// If the check passes, we set forceTrusted=true to skip the core's
+			// If the check passes, we set skipTrustCheck=true to skip the core's
 			// redundant check. This separation exists because SSO has stricter
 			// trust requirements (domain verification) that core doesn't handle.
-			let forceTrusted = false;
+			let skipTrustCheck = false;
 			const existingUser = await ctx.context.adapter.findOne<User>({
 				model: "user",
 				where: [{ field: "email", value: userInfo.email.toLowerCase() }],
@@ -1410,7 +1410,7 @@ export const callbackSSO = (options?: SSOOptions) => {
 							`${errorURL || callbackURL}?error=account_not_linked`,
 						);
 					}
-					forceTrusted = true;
+					skipTrustCheck = true;
 				}
 			}
 
@@ -1437,7 +1437,7 @@ export const callbackSSO = (options?: SSOOptions) => {
 				callbackURL,
 				disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
 				overrideUserInfo: config.overrideUserInfo,
-				forceTrusted,
+				skipTrustCheck,
 			});
 			if (linked.error) {
 				throw ctx.redirect(
