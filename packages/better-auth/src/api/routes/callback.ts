@@ -88,7 +88,7 @@ export const callbackOAuth = createAuthEndpoint(
 			requestSignUp,
 		} = parsedState;
 		if (query)
-			oauthQuery.set({
+			await oauthQuery.set({
 				query: new URLSearchParams(query),
 			});
 

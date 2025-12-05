@@ -1,8 +1,8 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { oauthQuery } from "@better-auth/core/api";
 import { APIError } from "better-auth/api";
 import { authorizeEndpoint } from "./authorize";
 import type { OAuthOptions, Scope } from "./types";
-import { oauthQuery } from "./utils";
 
 export async function continueEndpoint(
 	ctx: GenericEndpointContext,

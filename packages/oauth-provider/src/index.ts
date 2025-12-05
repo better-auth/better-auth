@@ -7,4 +7,3 @@ export {
 } from "./metadata";
 export { oauthProvider } from "./oauth";
 export type * from "./types";
-export { oauthQuery } from "./utils";

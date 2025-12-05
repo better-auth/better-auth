@@ -1,3 +1,4 @@
+import { oauthQuery } from "@better-auth/core/api";
 import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import {
@@ -26,7 +27,7 @@ import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
 import { SafeUrlSchema } from "./types/zod";
 import { userInfoEndpoint } from "./userinfo";
-import { getJwtPlugin, oauthQuery } from "./utils";
+import { getJwtPlugin } from "./utils";
 
 /**
  * oAuth 2.1 provider plugin for Better Auth.
@@ -210,7 +211,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						) {
 							if (ctx.body.additionalData?.query) return;
 							if (!ctx.body.additionalData) ctx.body.additionalData = {};
-							ctx.body.additionalData.query = query;
+							ctx.body.additionalData.query = queryParams.toString();
 						}
 					}),
 				},
@@ -222,6 +223,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						return (
 							(ctx.path === "/sign-in/email" ||
 								ctx.path === "/sign-in/social" ||
+								ctx.path.startsWith("/callback") ||
 								ctx.path.startsWith("/oauth2/callback")) &&
 							parseSetCookieHeader(
 								ctx.context.responseHeaders?.get("set-cookie") || "",
@@ -245,7 +247,6 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						// but clearing the login prompt cookie if forced login prompt
 						const query = (await oauthQuery.get()).query;
 						if (!query) return;
-						ctx.headers?.set("accept", "application/json");
 						let prompts = query.get("prompt")?.split(" ");
 						const foundPrompt = prompts?.findIndex((v) => v === "login") ?? -1;
 						if (ctx.query && foundPrompt >= 0) {
