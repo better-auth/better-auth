@@ -160,7 +160,8 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 					const now = Date.now();
 					const age = (now - payload.timestamp) / 1000;
 
-					if (age > maxAge || age < 0) {
+					// Allow up to 10 seconds of future skew for clock differences
+					if (age > maxAge || age < -10) {
 						ctx.context.logger.error(
 							`OAuth proxy payload expired or invalid (age: ${age}s, maxAge: ${maxAge}s)`,
 						);
