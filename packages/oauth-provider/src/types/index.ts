@@ -307,6 +307,7 @@ export interface OAuthOptions<
 		 * - `false`: intended user or account selected
 		 */
 		shouldRedirect: (context: {
+			headers: Headers;
 			user: User & Record<string, unknown>;
 			session: Session & Record<string, unknown>;
 			scopes: Scopes;
@@ -419,8 +420,6 @@ export interface OAuthOptions<
 		scopes: Scopes;
 		/** oAuthClient metadata */
 		metadata?: Record<string, any>;
-		/** oAuthClient referenceId field (eg. organization, team) */
-		referenceId?: string;
 	}) => Awaitable<Record<string, any>>;
 	/**
 	 * Custom claims attached to access tokens.
@@ -438,14 +437,14 @@ export interface OAuthOptions<
 	customAccessTokenClaims?: (info?: {
 		/** The user object if token is associated to a user. Null if user doesn't exist. Undefined if user not applicable. */
 		user?: (User & Record<string, unknown>) | null;
+		/** reference of the consent/authorization */
+		referenceId?: string;
 		/** Scopes granted for this token */
 		scopes: Scopes;
 		/** The resource requesting. Provided by the token endpoint. */
 		resource?: string;
 		/** oAuthClient metadata */
 		metadata?: Record<string, any>;
-		/** oAuthClient reference (eg. organization, team) */
-		referenceId?: string;
 	}) => Awaitable<Record<string, any>>;
 	/**
 	 * Overwrite specific /.well-known/openid-configuration
@@ -701,6 +700,7 @@ export interface VerificationValue {
 	query: OAuthAuthorizationQuery;
 	sessionId: string;
 	userId: string;
+	referenceId?: string;
 }
 
 /**
@@ -843,6 +843,13 @@ export interface OAuthOpaqueAccessToken<
 	 */
 	userId?: string;
 	/**
+	 * Reference Id of the consent/authorization.
+	 *
+	 * Not available in client credentials grant
+	 * where no user is involved.
+	 */
+	referenceId?: string;
+	/**
 	 * The refresh token the access token is associated with.
 	 *
 	 * Not available without the "offline_access" scope
@@ -869,6 +876,7 @@ export interface OAuthRefreshToken<
 	token: string;
 	sessionId: string;
 	userId: string;
+	referenceId?: string;
 	clientId?: string;
 	expiresAt: Date;
 	createdAt: Date;

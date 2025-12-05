@@ -117,26 +117,6 @@ async function validateJwtAccessToken(
 		}
 	}
 
-	// Add Custom Claims
-	if (opts.customAccessTokenClaims) {
-		let user: User | null | undefined;
-		if (jwtPayload.sub) {
-			user =
-				(await ctx.context.internalAdapter.findUserById(jwtPayload.sub)) ??
-				undefined;
-		}
-		const customClaims = await opts.customAccessTokenClaims({
-			user,
-			scopes: ((jwtPayload.scopes as string | undefined) ?? "")?.split(" "),
-			referenceId: client?.referenceId,
-			metadata: client?.metadata ? JSON.parse(client.metadata) : undefined,
-		});
-		jwtPayload = {
-			...customClaims,
-			...jwtPayload,
-		};
-	}
-
 	// Return the JWT payload in introspection format
 	// https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
 	if (jwtPayload.azp) {
@@ -237,7 +217,7 @@ async function validateOpaqueAccessToken(
 		? await opts.customAccessTokenClaims({
 				user,
 				scopes: accessToken.scopes,
-				referenceId: client?.referenceId,
+				referenceId: accessToken?.referenceId,
 				metadata: client?.metadata ? JSON.parse(client.metadata) : undefined,
 			})
 		: {};

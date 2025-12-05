@@ -71,6 +71,7 @@ async function createJwtAccessToken(
 	client: SchemaClient<Scope[]>,
 	audience: string | string[],
 	scopes: string[],
+	referenceId?: string,
 	overrides?: {
 		iat?: number;
 		exp?: number;
@@ -84,7 +85,7 @@ async function createJwtAccessToken(
 				user,
 				scopes,
 				resource: ctx.body.resource,
-				referenceId: client.referenceId,
+				referenceId,
 				metadata: client.metadata ? JSON.parse(client.metadata) : undefined,
 			})
 		: {};
@@ -142,7 +143,6 @@ async function createIdToken(
 		? await opts.customIdTokenClaims({
 				user,
 				scopes,
-				referenceId: client.referenceId,
 				metadata: client.metadata ? JSON.parse(client.metadata) : undefined,
 			})
 		: {};
@@ -237,6 +237,7 @@ async function createOpaqueAccessToken(
 	client: SchemaClient<Scope[]>,
 	scopes: string[],
 	payload: JWTPayload,
+	referenceId?: string,
 	refreshId?: string,
 ) {
 	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
@@ -251,6 +252,7 @@ async function createOpaqueAccessToken(
 			clientId: client.clientId,
 			sessionId: payload?.sid,
 			userId: user?.id,
+			referenceId,
 			refreshId,
 			scopes,
 			createdAt: new Date(iat * 1000),
@@ -264,6 +266,7 @@ async function createRefreshToken(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	user: User,
+	referenceId: string | undefined,
 	client: SchemaClient<Scope[]>,
 	scopes: string[],
 	payload: JWTPayload,
@@ -299,6 +302,7 @@ async function createRefreshToken(
 			clientId: client.clientId,
 			sessionId,
 			userId: user.id,
+			referenceId,
 			scopes,
 			createdAt: new Date(iat * 1000),
 			expiresAt: new Date(exp * 1000),
@@ -355,6 +359,7 @@ async function createUserTokens(
 	client: SchemaClient<Scope[]>,
 	scopes: string[],
 	user: User,
+	referenceId?: string,
 	sessionId?: string,
 	nonce?: string,
 	additional?: {
@@ -390,6 +395,7 @@ async function createUserTokens(
 					ctx,
 					opts,
 					user,
+					referenceId,
 					client,
 					scopes,
 					{
@@ -404,11 +410,20 @@ async function createUserTokens(
 	// Sign jwt and refresh tokens in parallel
 	const [accessToken, refreshToken, idToken] = await Promise.all([
 		isJwtAccessToken
-			? createJwtAccessToken(ctx, opts, user, client, audience, scopes, {
-					iat,
-					exp,
-					sid: sessionId,
-				})
+			? createJwtAccessToken(
+					ctx,
+					opts,
+					user,
+					client,
+					audience,
+					scopes,
+					referenceId,
+					{
+						iat,
+						exp,
+						sid: sessionId,
+					},
+				)
 			: createOpaqueAccessToken(
 					ctx,
 					opts,
@@ -420,6 +435,7 @@ async function createUserTokens(
 						exp,
 						sid: sessionId,
 					},
+					referenceId,
 					earlyRefreshToken?.id,
 				),
 		earlyRefreshToken
@@ -429,6 +445,7 @@ async function createUserTokens(
 						ctx,
 						opts,
 						user,
+						referenceId,
 						client,
 						scopes,
 						{
@@ -687,6 +704,7 @@ async function handleAuthorizationCodeGrant(
 		client,
 		verificationValue.query.scope?.split(" ") ?? [],
 		user,
+		verificationValue.referenceId,
 		session.id,
 		verificationValue.query?.nonce,
 	);
@@ -795,7 +813,6 @@ async function handleClientCredentialsGrant(
 		? await opts.customAccessTokenClaims({
 				scopes: requestedScopes,
 				resource: ctx.body.resource,
-				referenceId: client.referenceId,
 				metadata: client.metadata ? JSON.parse(client.metadata) : undefined,
 			})
 		: {};
@@ -986,6 +1003,7 @@ async function handleRefreshTokenGrant(
 		client,
 		requestedScopes ?? scopes,
 		user,
+		refreshToken.referenceId,
 		refreshToken.sessionId,
 		undefined,
 		{
