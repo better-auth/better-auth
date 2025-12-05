@@ -87,14 +87,14 @@ export async function handleOAuthUserInfo(
 				const isTrustedProvider = trustedProviders?.includes(
 					account.providerId as "apple",
 				);
-				const existingUserMode =
-					c.context.options.account?.accountLinking?.existingUserMode ??
+				const linkingPolicy =
+					c.context.options.account?.accountLinking?.linkingPolicy ??
 					"email_match_any";
 
 				let canLink = false;
-				if (existingUserMode === "never") {
+				if (linkingPolicy === "never") {
 					canLink = false;
-				} else if (existingUserMode === "email_match_any") {
+				} else if (linkingPolicy === "email_match_any") {
 					canLink = isTrustedProvider || !!userInfo.emailVerified;
 				} else {
 					canLink = !!isTrustedProvider;
@@ -103,7 +103,7 @@ export async function handleOAuthUserInfo(
 				if (!canLink) {
 					if (isDevelopment()) {
 						logger.warn(
-							`Auto-linking denied by existingUserMode policy for provider ${account.providerId}. To allow linking, add the provider to trustedProviders or adjust existingUserMode. See https://www.better-auth.com/docs/concepts/users-accounts#account-linking.`,
+							`Auto-linking denied by linkingPolicy for provider ${account.providerId}. To allow linking, add the provider to trustedProviders or adjust linkingPolicy. See https://www.better-auth.com/docs/concepts/users-accounts#account-linking.`,
 						);
 					}
 					return {

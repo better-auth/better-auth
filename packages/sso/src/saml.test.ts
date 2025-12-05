@@ -1363,7 +1363,7 @@ describe("SAML SSO Account Linking", () => {
 				accountLinking: {
 					enabled: true,
 					trustedProviders: [],
-					existingUserMode: "trusted_providers_only",
+					linkingPolicy: "trusted_providers_only",
 				},
 			},
 			plugins: [sso()],
@@ -1474,7 +1474,7 @@ describe("SAML SSO Account Linking", () => {
 				accountLinking: {
 					enabled: true,
 					trustedProviders: ["saml-trusted"],
-					existingUserMode: "trusted_providers_only",
+					linkingPolicy: "trusted_providers_only",
 				},
 			},
 			plugins: [sso()],

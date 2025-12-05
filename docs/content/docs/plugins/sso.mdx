@@ -709,7 +709,7 @@ mapping: {
 When a user signs in via SSO and an account with the same email already exists, Better Auth applies a **strict trust check** before auto-linking. This prevents account takeover attacks where a malicious SSO provider could claim any email address.
 
 <Callout type="warn">
-**Important**: SSO account linking is stricter than regular OAuth linking. Even if `existingUserMode` is set to `"email_match_any"` in your core config, SSO providers **still require a trust signal** before auto-linking to existing accounts.
+**Important**: SSO account linking is stricter than regular OAuth linking. Even if `linkingPolicy` is set to `"email_match_any"` in your core config, SSO providers **still require a trust signal** before auto-linking to existing accounts.
 </Callout>
 
 For SSO providers, auto-linking is allowed when **any** of the following conditions are met:

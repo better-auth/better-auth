@@ -231,8 +231,8 @@ describe("oauth2 - email verification on link", async () => {
 	});
 });
 
-describe("oauth2 - existingUserMode", () => {
-	describe("existingUserMode: 'never'", async () => {
+describe("oauth2 - linkingPolicy", () => {
+	describe("linkingPolicy: 'never'", async () => {
 		const { auth, client, cookieSetter } = await getTestInstance({
 			socialProviders: {
 				google: {
@@ -248,7 +248,7 @@ describe("oauth2 - existingUserMode", () => {
 				accountLinking: {
 					enabled: true,
 					trustedProviders: ["google"], // Even trusted providers should be denied
-					existingUserMode: "never",
+					linkingPolicy: "never",
 				},
 			},
 		});
@@ -331,7 +331,7 @@ describe("oauth2 - existingUserMode", () => {
 		});
 	});
 
-	describe("existingUserMode: 'trusted_providers_only'", async () => {
+	describe("linkingPolicy: 'trusted_providers_only'", async () => {
 		const { auth, client, cookieSetter } = await getTestInstance({
 			socialProviders: {
 				google: {
@@ -352,7 +352,7 @@ describe("oauth2 - existingUserMode", () => {
 				accountLinking: {
 					enabled: true,
 					trustedProviders: ["google"], // Only google is trusted
-					existingUserMode: "trusted_providers_only",
+					linkingPolicy: "trusted_providers_only",
 				},
 			},
 		});
@@ -492,7 +492,7 @@ describe("oauth2 - existingUserMode", () => {
 		});
 	});
 
-	describe("existingUserMode: 'email_match_any' (default)", async () => {
+	describe("linkingPolicy: 'email_match_any' (default)", async () => {
 		const { auth, client, cookieSetter } = await getTestInstance({
 			socialProviders: {
 				github: {
@@ -508,7 +508,7 @@ describe("oauth2 - existingUserMode", () => {
 				accountLinking: {
 					enabled: true,
 					trustedProviders: [], // No trusted providers
-					// existingUserMode defaults to "email_match_any"
+					// linkingPolicy defaults to "email_match_any"
 				},
 			},
 		});
