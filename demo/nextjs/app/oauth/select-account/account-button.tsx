@@ -1,0 +1,60 @@
+"use client";
+
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { toast } from "sonner";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { client } from "@/lib/auth-client";
+import type { Session } from "@/lib/auth-types";
+
+export function SelectAccountBtn({ session }: { session: Partial<Session> }) {
+	return (
+		<Button
+			className="w-full gap-2 h-12"
+			variant="outline"
+			onClick={async () => {
+				if (!session.session?.token) {
+					toast.error("No session");
+					return;
+				}
+				await client.multiSession.setActive({
+					sessionToken: session.session.token,
+				});
+				const { data } = await client.oauth2.continue({
+					selected: true,
+				});
+				if (data?.redirect_uri) {
+					window.location.href = data.redirect_uri;
+					return;
+				}
+				toast.error("Failed to continue");
+			}}
+		>
+			<Avatar className="mr-2 h-5 w-5">
+				<AvatarImage
+					src={session.user?.image || undefined}
+					alt={session.user?.name}
+				/>
+				<AvatarFallback>{session.user?.name?.charAt(0)}</AvatarFallback>
+			</Avatar>
+			<div className="flex text-start w-full">
+				<div>
+					<p>{session.user?.name}</p>
+					<p className="text-xs">{session.user?.email}</p>
+				</div>
+			</div>
+		</Button>
+	);
+}
+
+export function AnotherAccountBtn() {
+	const params = useSearchParams();
+	return (
+		<Link href={`/sign-in${params ? `?${params.toString()}` : ""}`}>
+			<Button className="w-full gap-2 h-12" variant="outline">
+				Another Account
+			</Button>
+		</Link>
+	);
+}
