@@ -6,8 +6,20 @@ import { APIError, getSessionFromCtx } from "../../../api";
 import { ERROR_CODES } from "..";
 import { getApiKeyById } from "../adapter";
 import type { apiKeySchema } from "../schema";
-import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
+
+const getApiKeyQuerySchema = z.object({
+	id: z.string().meta({
+		description: "The id of the Api Key",
+	}),
+	userId: z.coerce
+		.string()
+		.meta({
+			description:
+				'User Id of the user that the Api Key belongs to. server-only. Eg: "user-id"',
+		})
+		.optional(),
+});
 
 export function getApiKey({
 	opts,
@@ -25,18 +37,7 @@ export function getApiKey({
 		"/api-key/get",
 		{
 			method: "GET",
-			query: z.object({
-				id: z.string().meta({
-					description: "The id of the Api Key",
-				}),
-				userId: z.coerce
-					.string()
-					.meta({
-						description:
-							'User Id of the user that the Api Key belongs to. server-only. Eg: "user-id"',
-					})
-					.optional(),
-			}),
+			query: getApiKeyQuerySchema,
 			metadata: {
 				openapi: {
 					description: "Retrieve an existing API key by ID",
