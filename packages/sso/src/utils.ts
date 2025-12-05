@@ -1,7 +1,7 @@
 import type { GenericEndpointContext } from "better-auth";
 import type { SSOOptions, SSOProvider } from "./types";
 
-export const validateEmailDomain = (email: string, domain: string) => {
+const validateEmailDomain = (email: string, domain: string) => {
 	const emailDomain = email.split("@")[1]?.toLowerCase();
 	const providerDomain = domain.toLowerCase();
 	if (!emailDomain || !providerDomain) {
