@@ -250,15 +250,22 @@ describe("oauth", async () => {
 			writable: true,
 		});
 
-		const res = await authClient.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-		});
-		expect(res.data?.redirect).toBeTruthy();
-		expect(res.data?.url).toContain(rpBaseUrl);
+		let signInEmailRedirectUri = "";
+		await authClient.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onResponse(ctx) {
+					signInEmailRedirectUri = ctx.response.headers.get("Location") || "";
+				},
+			},
+		);
+		expect(signInEmailRedirectUri).toContain(rpBaseUrl);
 
 		let callbackUrl = "";
-		await client.$fetch(res.data?.url!, {
+		await client.$fetch(signInEmailRedirectUri!, {
 			method: "GET",
 			headers,
 			onError(context) {
@@ -323,15 +330,22 @@ describe("oauth", async () => {
 			writable: true,
 		});
 
-		const res = await authClient.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-		});
-		expect(res.data?.redirect).toBeTruthy();
-		expect(res.data?.url).toContain(rpBaseUrl);
+		let signInEmailRedirectUri = "";
+		await authClient.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onResponse(ctx) {
+					signInEmailRedirectUri = ctx.response.headers.get("Location") || "";
+				},
+			},
+		);
+		expect(signInEmailRedirectUri).toContain(rpBaseUrl);
 
 		let callbackURL = "";
-		await client.$fetch(res.data?.url!, {
+		await client.$fetch(signInEmailRedirectUri!, {
 			method: "GET",
 			headers,
 			onError(ctx) {
@@ -926,19 +940,20 @@ describe("oauth - prompt", async () => {
 		});
 
 		// Check for redirection to /consent after login
-		const loginRes = await serverClient.signIn.email(
+		let signInEmailRedirectUri = "";
+		await serverClient.signIn.email(
 			{
 				email: testUser.email,
 				password: testUser.password,
 			},
 			{
-				headers,
-				throw: true,
+				onResponse(ctx) {
+					signInEmailRedirectUri = ctx.response.headers.get("Location") || "";
+				},
 			},
 		);
-		expect(loginRes?.redirect).toBeTruthy();
-		expect(loginRes?.url).toContain("/consent");
-		expect(loginRes?.url).toContain("prompt=consent");
+		expect(signInEmailRedirectUri).toContain("/consent");
+		expect(signInEmailRedirectUri).toContain("prompt=consent");
 	});
 
 	it("select_account+consent - should always redirect to select_account and force consent (notice consent previously given)", async () => {
