@@ -1,19 +1,14 @@
-import type { BetterAuthOptions } from "@better-auth/core";
+import type { BetterAuthOptions } from "../../types";
+import type { Prettify } from "../../types/helper";
+import type { BetterAuthDBSchema, DBFieldAttribute } from "../type";
 import type {
-	BetterAuthDBSchema,
-	DBFieldAttribute,
-} from "@better-auth/core/db";
-import type {
+	DBAdapterSchemaCreation as AdapterSchemaCreation,
 	CustomAdapter as CoreCustomAdapter,
 	DBAdapterFactoryConfig,
 	JoinConfig,
-} from "@better-auth/core/db/adapter";
-import type {
-	AdapterSchemaCreation,
-	TransactionAdapter,
+	DBTransactionAdapter as TransactionAdapter,
 	Where,
-} from "../../types";
-import type { Prettify } from "../../types/helper";
+} from "./index";
 
 export type AdapterFactoryOptions = {
 	config: AdapterFactoryConfig;

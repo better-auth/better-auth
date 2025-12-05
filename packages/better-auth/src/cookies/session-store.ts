@@ -1,10 +1,10 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import type { Account } from "@better-auth/core/db";
 import type { InternalLogger } from "@better-auth/core/env";
+import { safeJSONParse } from "@better-auth/core/utils";
 import type { CookieOptions } from "better-call";
 import * as z from "zod";
 import { symmetricDecodeJWT, symmetricEncodeJWT } from "../crypto";
-import { safeJSONParse } from "../utils/json";
 
 // Cookie size constants based on browser limits
 const ALLOWED_COOKIE_SIZE = 4096;
@@ -229,7 +229,7 @@ const storeFactory =
 	};
 
 export const createSessionStore = storeFactory("Session");
-export const createAccountStore = storeFactory("Account");
+const createAccountStore = storeFactory("Account");
 
 export function getChunkedCookie(
 	ctx: GenericEndpointContext,
