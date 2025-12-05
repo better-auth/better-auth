@@ -91,8 +91,8 @@ type createOrganization = {
   */
   metadata?: Record<string, any>
   /**
-  * The user ID of the organization creator. If not provided, the current user will be used. Should only be used by admins or when called by the server.
-  * @serverOnly
+  * The user ID of the organization creator.
+  * @serverOnly - This is ignored if session headers are provided.
   */
   userId?: string = "some_user_id"
   /**
@@ -101,6 +101,16 @@ type createOrganization = {
   keepCurrentActiveOrganization?: boolean = false
 }
 ```
+
+<Callout type="warn">
+**Mutually Exclusive Parameters**
+
+The `userId` and session headers cannot be used together:
+- **With session headers:** The organization is created for the authenticated session user. The `userId` field is **silently ignored**.
+- **Without session headers (Server-side only):** The organization is created for the user specified by `userId`.
+
+**For Admins:** To create an organization on behalf of another user, you must make the API call server-side **without** passing session headers.
+</Callout>
 
 </APIMethod>
 
