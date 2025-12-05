@@ -1,7 +1,7 @@
+import fs from "node:fs/promises";
+import { join } from "node:path";
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
-import fs from "fs/promises";
-import { join } from "path";
 import { drizzleAdapter } from "../drizzle-adapter";
 
 let generationCount = 0;

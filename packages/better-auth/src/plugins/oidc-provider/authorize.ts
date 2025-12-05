@@ -148,7 +148,9 @@ export async function authorize(
 	}
 
 	const requestScope =
-		query.scope?.split(" ").filter((s) => s) || opts.defaultScope.split(" ");
+		query.scope?.split(" ").filter((s) => s) ||
+		opts.defaultScope?.split(" ") ||
+		[];
 	const invalidScopes = requestScope.filter((scope) => {
 		return !opts.scopes.includes(scope);
 	});
@@ -191,7 +193,7 @@ export async function authorize(
 	}
 
 	const code = generateRandomString(32, "a-z", "A-Z", "0-9");
-	const codeExpiresInMs = opts.codeExpiresIn * 1000;
+	const codeExpiresInMs = opts.codeExpiresIn! * 1000;
 	const expiresAt = new Date(Date.now() + codeExpiresInMs);
 
 	// Determine if consent is required
@@ -202,6 +204,7 @@ export async function authorize(
 	const hasAlreadyConsented = await ctx.context.adapter
 		.findOne<{
 			consentGiven: boolean;
+			scopes: string;
 		}>({
 			model: "oauthConsent",
 			where: [
@@ -215,7 +218,16 @@ export async function authorize(
 				},
 			],
 		})
-		.then((res) => !!res?.consentGiven);
+		.then((res) => {
+			if (!res?.consentGiven) {
+				return false;
+			}
+			const consentedScopes = res.scopes ? res.scopes.split(" ") : [];
+			const hasConsented = requestScope.every((scope) =>
+				consentedScopes.includes(scope),
+			);
+			return hasConsented;
+		});
 
 	const promptSet = parsePrompt(query.prompt ?? "");
 
@@ -245,7 +257,7 @@ export async function authorize(
 			const sessionAge =
 				(Date.now() - new Date(session.session.createdAt).getTime()) / 1000;
 			if (sessionAge > maxAge) {
-				// Session is older than max_age, force reauthentication
+				// Session is older than max_age, force re-authentication
 				requireLogin = true;
 			}
 		}

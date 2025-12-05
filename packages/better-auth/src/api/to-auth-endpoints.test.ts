@@ -422,11 +422,11 @@ describe("after hook", async () => {
 });
 
 describe("disabled paths", async () => {
-	const { client } = await getTestInstance({
-		disabledPaths: ["/sign-in/email"],
-	});
-
 	it("should return 404 for disabled paths", async () => {
+		const { client, auth } = await getTestInstance({
+			disabledPaths: ["/sign-in/email"],
+		});
+
 		const response = await client.$fetch("/ok");
 		expect(response.data).toEqual({ ok: true });
 		const { error } = await client.signIn.email({
@@ -434,6 +434,27 @@ describe("disabled paths", async () => {
 			password: "test",
 		});
 		expect(error?.status).toBe(404);
+	});
+
+	it("should return 404 for when base path is /", async () => {
+		const { auth } = await getTestInstance({
+			basePath: "/",
+			disabledPaths: ["/sign-in/email"],
+		});
+
+		const response2 = await auth.handler(
+			new Request("http://localhost:3000/sign-in/email", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					email: "test@test.com",
+					password: "test",
+				}),
+			}),
+		);
+		expect(response2).toBeInstanceOf(Response);
 	});
 });
 

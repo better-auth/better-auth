@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
+import { join } from "node:path";
 import type { BetterAuthOptions } from "@better-auth/core";
-import { join } from "path";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,

@@ -77,7 +77,7 @@ export interface OIDCOptions {
 		| ((props: {
 				clientId: string;
 				clientName: string;
-				clientIcon?: string;
+				clientIcon?: string | undefined;
 				clientMetadata: Record<string, any> | null;
 				code: string;
 				scopes: string[];

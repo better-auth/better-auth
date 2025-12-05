@@ -10,12 +10,15 @@ import {
 } from "@better-auth/core/context";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import type { InternalLogger } from "@better-auth/core/env";
+import { generateId, safeJSONParse } from "@better-auth/core/utils";
 import type { Account, Session, User, Verification } from "../types";
-import { generateId } from "../utils";
 import { getDate } from "../utils/date";
 import { getIp } from "../utils/get-request-ip";
-import { safeJSONParse } from "../utils/json";
-import { parseSessionOutput, parseUserOutput } from "./schema";
+import {
+	parseSessionInput,
+	parseSessionOutput,
+	parseUserOutput,
+} from "./schema";
 import { getWithHooks } from "./with-hooks";
 
 export const createInternalAdapter = (
@@ -264,13 +267,18 @@ export const createInternalAdapter = (
 			override?: (Partial<Session> & Record<string, any>) | undefined,
 			overrideAll?: boolean | undefined,
 		) => {
-			const ctx = await getCurrentAuthContext();
-			const headers = ctx.headers || ctx.request?.headers;
+			const ctx = await getCurrentAuthContext().catch(() => null);
+			const headers = ctx?.headers || ctx?.request?.headers;
 			const { id: _, ...rest } = override || {};
+			//we're parsing default values for session additional fields
+			const defaultAdditionalFields = parseSessionInput(
+				ctx?.context.options ?? options,
+				{},
+			);
 			const data: Omit<Session, "id"> = {
 				ipAddress:
-					ctx.request || ctx.headers
-						? getIp(ctx.request || ctx.headers!, ctx.context.options) || ""
+					ctx?.request || ctx?.headers
+						? getIp(ctx?.request || ctx?.headers!, ctx?.context.options) || ""
 						: "",
 				userAgent: headers?.get("user-agent") || "",
 				...rest,
@@ -287,6 +295,7 @@ export const createInternalAdapter = (
 				// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 				createdAt: new Date(),
 				updatedAt: new Date(),
+				...defaultAdditionalFields,
 				...(overrideAll ? rest : {}),
 			};
 			const res = await createWithHooks(
@@ -403,37 +412,27 @@ export const createInternalAdapter = (
 				}
 			}
 
-			const session = await (await getCurrentAdapter(adapter)).findOne<Session>(
-				{
-					model: "session",
-					where: [
-						{
-							value: token,
-							field: "token",
-						},
-					],
-				},
-			);
-
-			if (!session) {
-				return null;
-			}
-
-			const user = await (await getCurrentAdapter(adapter)).findOne<User>({
-				model: "user",
+			const currentAdapter = await getCurrentAdapter(adapter);
+			const result = await currentAdapter.findOne<
+				Session & { user: User | null }
+			>({
+				model: "session",
 				where: [
 					{
-						value: session.userId,
-						field: "id",
+						value: token,
+						field: "token",
 					},
 				],
+				join: {
+					user: true,
+				},
 			});
-			if (!user) {
-				return null;
-			}
+			if (!result) return null;
+
+			const { user, ...session } = result;
+			if (!user) return null;
 			const parsedSession = parseSessionOutput(ctx.options, session);
 			const parsedUser = parseUserOutput(ctx.options, user);
-
 			return {
 				session: parsedSession,
 				user: parsedUser,
@@ -473,9 +472,9 @@ export const createInternalAdapter = (
 				return sessions;
 			}
 
-			const sessions = await (
-				await getCurrentAdapter(adapter)
-			).findMany<Session>({
+			const sessions = await (await getCurrentAdapter(adapter)).findMany<
+				Session & { user: User | null }
+			>({
 				model: "session",
 				where: [
 					{
@@ -484,32 +483,21 @@ export const createInternalAdapter = (
 						operator: "in",
 					},
 				],
+				join: {
+					user: true,
+				},
 			});
-			const userIds = sessions.map((session) => {
-				return session.userId;
-			});
-			if (!userIds.length) return [];
-			const users = await (await getCurrentAdapter(adapter)).findMany<User>({
-				model: "user",
-				where: [
-					{
-						field: "id",
-						value: userIds,
-						operator: "in",
-					},
-				],
-			});
-			return sessions.map((session) => {
-				const user = users.find((u) => u.id === session.userId);
-				if (!user) return null;
+
+			if (!sessions.length) return [];
+			if (sessions.some((session) => !session.user)) return [];
+
+			return sessions.map((_session) => {
+				const { user, ...session } = _session;
 				return {
 					session,
-					user,
+					user: user!,
 				};
-			}) as {
-				session: Session;
-				user: User;
-			}[];
+			});
 		},
 		updateSession: async (
 			sessionToken: string,
@@ -679,7 +667,7 @@ export const createInternalAdapter = (
 		) => {
 			// we need to find account first to avoid missing user if the email changed with the provider for the same account
 			const account = await (await getCurrentAdapter(adapter))
-				.findMany<Account>({
+				.findMany<Account & { user: User | null }>({
 					model: "account",
 					where: [
 						{
@@ -687,23 +675,17 @@ export const createInternalAdapter = (
 							field: "accountId",
 						},
 					],
+					join: {
+						user: true,
+					},
 				})
 				.then((accounts) => {
 					return accounts.find((a) => a.providerId === providerId);
 				});
 			if (account) {
-				const user = await (await getCurrentAdapter(adapter)).findOne<User>({
-					model: "user",
-					where: [
-						{
-							value: account.userId,
-							field: "id",
-						},
-					],
-				});
-				if (user) {
+				if (account.user) {
 					return {
-						user,
+						user: account.user,
 						accounts: [account],
 					};
 				} else {
@@ -759,7 +741,10 @@ export const createInternalAdapter = (
 			email: string,
 			options?: { includeAccounts: boolean } | undefined,
 		) => {
-			const user = await (await getCurrentAdapter(adapter)).findOne<User>({
+			const currentAdapter = await getCurrentAdapter(adapter);
+			const result = await currentAdapter.findOne<
+				User & { account: Account[] | undefined }
+			>({
 				model: "user",
 				where: [
 					{
@@ -767,31 +752,19 @@ export const createInternalAdapter = (
 						field: "email",
 					},
 				],
+				join: {
+					...(options?.includeAccounts ? { account: true } : {}),
+				},
 			});
-			if (!user) return null;
-			if (options?.includeAccounts) {
-				const accounts = await (
-					await getCurrentAdapter(adapter)
-				).findMany<Account>({
-					model: "account",
-					where: [
-						{
-							value: user.id,
-							field: "userId",
-						},
-					],
-				});
-				return {
-					user,
-					accounts,
-				};
-			}
+			if (!result) return null;
+			const { account: accounts, ...user } = result;
 			return {
 				user,
-				accounts: [],
+				accounts: accounts ?? [],
 			};
 		},
 		findUserById: async (userId: string) => {
+			if (!userId) return null;
 			const user = await (await getCurrentAdapter(adapter)).findOne<User>({
 				model: "user",
 				where: [

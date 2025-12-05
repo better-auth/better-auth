@@ -7,6 +7,11 @@ import { getGlobalOnlineManager } from "./online-manager";
 
 const now = () => Math.floor(Date.now() / 1000);
 
+/**
+ * Rate limit: don't refetch on focus if a session request was made within this many seconds
+ */
+const FOCUS_REFETCH_RATE_LIMIT_SECONDS = 5;
+
 export interface SessionRefreshOptions {
 	sessionAtom: WritableAtom<any>;
 	sessionSignal: WritableAtom<boolean>;
@@ -16,6 +21,7 @@ export interface SessionRefreshOptions {
 
 interface SessionRefreshState {
 	lastSync: number;
+	lastSessionRequest: number;
 	cachedSession: any;
 	pollInterval?: ReturnType<typeof setInterval> | undefined;
 	unsubscribeBroadcast?: (() => void) | undefined;
@@ -34,6 +40,7 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 
 	const state: SessionRefreshState = {
 		lastSync: 0,
+		lastSessionRequest: 0,
 		cachedSession: undefined,
 	};
 
@@ -59,6 +66,7 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 		const currentSession = sessionAtom.get();
 
 		if (event?.event === "poll") {
+			state.lastSessionRequest = now();
 			$fetch("/get-session")
 				.then((res) => {
 					sessionAtom.set({
@@ -73,11 +81,26 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 			return;
 		}
 
+		// Rate limit: don't refetch on focus if a session request was made recently
+		if (event?.event === "visibilitychange") {
+			const timeSinceLastRequest = now() - state.lastSessionRequest;
+			if (
+				timeSinceLastRequest < FOCUS_REFETCH_RATE_LIMIT_SECONDS &&
+				currentSession?.data !== null &&
+				currentSession?.data !== undefined
+			) {
+				return;
+			}
+		}
+
 		if (
 			currentSession?.data === null ||
 			currentSession?.data === undefined ||
 			event?.event === "visibilitychange"
 		) {
+			if (event?.event === "visibilitychange") {
+				state.lastSessionRequest = now();
+			}
 			state.lastSync = now();
 			sessionSignal.set(!sessionSignal.get());
 		}
@@ -155,6 +178,7 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 			state.unsubscribeOnline = undefined;
 		}
 		state.lastSync = 0;
+		state.lastSessionRequest = 0;
 		state.cachedSession = undefined;
 	};
 

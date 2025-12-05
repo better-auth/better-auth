@@ -9,7 +9,8 @@ import {
 import { getCurrentAuthContext } from "@better-auth/core/context";
 import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
-import { importJWK, jwtVerify, SignJWT } from "jose";
+import type { OpenAPIParameter } from "better-call";
+import { jwtVerify, SignJWT } from "jose";
 import * as z from "zod";
 import { APIError, getSessionFromCtx, sessionMiddleware } from "../../api";
 import { parseSetCookieHeader } from "../../cookies";
@@ -20,8 +21,7 @@ import {
 } from "../../crypto";
 import { mergeSchema } from "../../db";
 import type { jwt } from "../jwt";
-import { getJwtToken } from "../jwt";
-import { getJwksAdapter } from "../jwt/adapter";
+import { getJwtToken, verifyJWT } from "../jwt";
 import { authorize } from "./authorize";
 import type { OAuthApplication } from "./schema";
 import { schema } from "./schema";
@@ -40,68 +40,6 @@ const getJwtPlugin = (ctx: GenericEndpointContext) => {
 		(plugin) => plugin.id === "jwt",
 	) as ReturnType<typeof jwt>;
 };
-
-/**
- * Verify a JWT token using the JWKS public keys
- * Returns the payload if valid, null otherwise
- */
-async function verifyJwtWithJWKS(
-	ctx: GenericEndpointContext,
-	token: string,
-	jwtPlugin: ReturnType<typeof jwt>,
-): Promise<{ sub: string; aud: string } | null> {
-	try {
-		const parts = token.split(".");
-		if (parts.length !== 3) {
-			return null;
-		}
-
-		const headerStr = new TextDecoder().decode(base64.decode(parts[0]!));
-		const header = JSON.parse(headerStr);
-		const kid = header.kid;
-
-		if (!kid) {
-			ctx.context.logger.debug("JWT missing kid in header");
-			return null;
-		}
-
-		// Get all JWKS keys
-		const adapter = getJwksAdapter(ctx.context.adapter, jwtPlugin.options);
-		const keys = await adapter.getAllKeys(ctx);
-
-		if (!keys || keys.length === 0) {
-			ctx.context.logger.debug("No JWKS keys available");
-			return null;
-		}
-
-		const key = keys.find((k) => k.id === kid);
-		if (!key) {
-			ctx.context.logger.debug(`No JWKS key found for kid: ${kid}`);
-			return null;
-		}
-
-		const publicKey = JSON.parse(key.publicKey);
-		const alg =
-			key.alg ?? jwtPlugin.options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
-		const cryptoKey = await importJWK(publicKey, alg);
-
-		const { payload } = await jwtVerify(token, cryptoKey, {
-			issuer: jwtPlugin.options?.jwt?.issuer ?? ctx.context.options.baseURL,
-		});
-
-		if (!payload.sub || !payload.aud) {
-			return null;
-		}
-
-		return {
-			sub: payload.sub as string,
-			aud: payload.aud as string,
-		};
-	} catch (error) {
-		ctx.context.logger.debug("JWT verification failed", error);
-		return null;
-	}
-}
 
 /**
  * Get a client by ID, checking trusted clients first, then database
@@ -195,6 +133,144 @@ export const getMetadata = (
 	};
 };
 
+const oAuthConsentBodySchema = z.object({
+	accept: z.boolean(),
+	consent_code: z.string().optional().nullish(),
+});
+
+const oAuth2TokenBodySchema = z.record(z.any(), z.any());
+
+const registerOAuthApplicationBodySchema = z.object({
+	redirect_uris: z.array(z.string()).meta({
+		description:
+			'A list of redirect URIs. Eg: ["https://client.example.com/callback"]',
+	}),
+	token_endpoint_auth_method: z
+		.enum(["none", "client_secret_basic", "client_secret_post"])
+		.meta({
+			description:
+				'The authentication method for the token endpoint. Eg: "client_secret_basic"',
+		})
+		.default("client_secret_basic")
+		.optional(),
+	grant_types: z
+		.array(
+			z.enum([
+				"authorization_code",
+				"implicit",
+				"password",
+				"client_credentials",
+				"refresh_token",
+				"urn:ietf:params:oauth:grant-type:jwt-bearer",
+				"urn:ietf:params:oauth:grant-type:saml2-bearer",
+			]),
+		)
+		.meta({
+			description:
+				'The grant types supported by the application. Eg: ["authorization_code"]',
+		})
+		.default(["authorization_code"])
+		.optional(),
+	response_types: z
+		.array(z.enum(["code", "token"]))
+		.meta({
+			description:
+				'The response types supported by the application. Eg: ["code"]',
+		})
+		.default(["code"])
+		.optional(),
+	client_name: z
+		.string()
+		.meta({
+			description: 'The name of the application. Eg: "My App"',
+		})
+		.optional(),
+	client_uri: z
+		.string()
+		.meta({
+			description:
+				'The URI of the application. Eg: "https://client.example.com"',
+		})
+		.optional(),
+	logo_uri: z
+		.string()
+		.meta({
+			description:
+				'The URI of the application logo. Eg: "https://client.example.com/logo.png"',
+		})
+		.optional(),
+	scope: z
+		.string()
+		.meta({
+			description:
+				'The scopes supported by the application. Separated by spaces. Eg: "profile email"',
+		})
+		.optional(),
+	contacts: z
+		.array(z.string())
+		.meta({
+			description:
+				'The contact information for the application. Eg: ["admin@example.com"]',
+		})
+		.optional(),
+	tos_uri: z
+		.string()
+		.meta({
+			description:
+				'The URI of the application terms of service. Eg: "https://client.example.com/tos"',
+		})
+		.optional(),
+	policy_uri: z
+		.string()
+		.meta({
+			description:
+				'The URI of the application privacy policy. Eg: "https://client.example.com/policy"',
+		})
+		.optional(),
+	jwks_uri: z
+		.string()
+		.meta({
+			description:
+				'The URI of the application JWKS. Eg: "https://client.example.com/jwks"',
+		})
+		.optional(),
+	jwks: z
+		.record(z.any(), z.any())
+		.meta({
+			description:
+				'The JWKS of the application. Eg: {"keys": [{"kty": "RSA", "alg": "RS256", "use": "sig", "n": "...", "e": "..."}]}',
+		})
+		.optional(),
+	metadata: z
+		.record(z.any(), z.any())
+		.meta({
+			description: 'The metadata of the application. Eg: {"key": "value"}',
+		})
+		.optional(),
+	software_id: z
+		.string()
+		.meta({
+			description: 'The software ID of the application. Eg: "my-software"',
+		})
+		.optional(),
+	software_version: z
+		.string()
+		.meta({
+			description: 'The software version of the application. Eg: "1.0.0"',
+		})
+		.optional(),
+	software_statement: z
+		.string()
+		.meta({
+			description: "The software statement of the application.",
+		})
+		.optional(),
+});
+
+const DEFAULT_CODE_EXPIRES_IN = 600;
+const DEFAULT_ACCESS_TOKEN_EXPIRES_IN = 3600;
+const DEFAULT_REFRESH_TOKEN_EXPIRES_IN = 604800;
+
 /**
  * OpenID Connect (OIDC) plugin for Better Auth. This plugin implements the
  * authorization code flow and the token exchange flow. It also implements the
@@ -211,10 +287,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 	};
 
 	const opts = {
-		codeExpiresIn: 600,
+		codeExpiresIn: DEFAULT_CODE_EXPIRES_IN,
 		defaultScope: "openid",
-		accessTokenExpiresIn: 3600,
-		refreshTokenExpiresIn: 604800,
+		accessTokenExpiresIn: DEFAULT_ACCESS_TOKEN_EXPIRES_IN,
+		refreshTokenExpiresIn: DEFAULT_REFRESH_TOKEN_EXPIRES_IN,
 		allowPlainCodeChallengeMethod: true,
 		storeClientSecret: "plain" as const,
 		...options,
@@ -407,10 +483,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				{
 					method: "POST",
 					operationId: "oauth2Consent",
-					body: z.object({
-						accept: z.boolean(),
-						consent_code: z.string().optional().nullish(),
-					}),
+					body: oAuthConsentBodySchema,
 					use: [sessionMiddleware],
 					metadata: {
 						openapi: {
@@ -471,10 +544,13 @@ export const oidcProvider = (options: OIDCOptions) => {
 
 					if (!consentCode) {
 						// Check for cookie-based consent flow
-						consentCode = await ctx.getSignedCookie(
+						const cookieValue = await ctx.getSignedCookie(
 							"oidc_consent_prompt",
 							ctx.context.secret,
 						);
+						if (cookieValue) {
+							consentCode = cookieValue;
+						}
 					}
 
 					if (!consentCode) {
@@ -524,7 +600,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 					const code = generateRandomString(32, "a-z", "A-Z", "0-9");
-					const codeExpiresInMs = opts.codeExpiresIn * 1000;
+					const codeExpiresInMs =
+						(opts?.codeExpiresIn ?? DEFAULT_CODE_EXPIRES_IN) * 1000;
 					const expiresAt = new Date(Date.now() + codeExpiresInMs);
 					await ctx.context.internalAdapter.updateVerificationValue(
 						verification.id,
@@ -561,7 +638,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				{
 					method: "POST",
 					operationId: "oauth2Token",
-					body: z.record(z.any(), z.any()),
+					body: oAuth2TokenBodySchema,
 					metadata: {
 						isAction: false,
 						allowedMediaTypes: [
@@ -908,7 +985,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 						...additionalUserClaims,
 					};
 					const expirationTime =
-						Math.floor(Date.now() / 1000) + opts.accessTokenExpiresIn;
+						Math.floor(Date.now() / 1000) +
+						(opts?.accessTokenExpiresIn ?? DEFAULT_ACCESS_TOKEN_EXPIRES_IN);
 
 					let idToken: string;
 
@@ -994,7 +1072,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 				{
 					method: "GET",
 					operationId: "oauth2Userinfo",
-					use: [sessionMiddleware],
 					metadata: {
 						isAction: false,
 						openapi: {
@@ -1164,135 +1241,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/register",
 				{
 					method: "POST",
-					body: z.object({
-						redirect_uris: z.array(z.string()).meta({
-							description:
-								'A list of redirect URIs. Eg: ["https://client.example.com/callback"]',
-						}),
-						token_endpoint_auth_method: z
-							.enum(["none", "client_secret_basic", "client_secret_post"])
-							.meta({
-								description:
-									'The authentication method for the token endpoint. Eg: "client_secret_basic"',
-							})
-							.default("client_secret_basic")
-							.optional(),
-						grant_types: z
-							.array(
-								z.enum([
-									"authorization_code",
-									"implicit",
-									"password",
-									"client_credentials",
-									"refresh_token",
-									"urn:ietf:params:oauth:grant-type:jwt-bearer",
-									"urn:ietf:params:oauth:grant-type:saml2-bearer",
-								]),
-							)
-							.meta({
-								description:
-									'The grant types supported by the application. Eg: ["authorization_code"]',
-							})
-							.default(["authorization_code"])
-							.optional(),
-						response_types: z
-							.array(z.enum(["code", "token"]))
-							.meta({
-								description:
-									'The response types supported by the application. Eg: ["code"]',
-							})
-							.default(["code"])
-							.optional(),
-						client_name: z
-							.string()
-							.meta({
-								description: 'The name of the application. Eg: "My App"',
-							})
-							.optional(),
-						client_uri: z
-							.string()
-							.meta({
-								description:
-									'The URI of the application. Eg: "https://client.example.com"',
-							})
-							.optional(),
-						logo_uri: z
-							.string()
-							.meta({
-								description:
-									'The URI of the application logo. Eg: "https://client.example.com/logo.png"',
-							})
-							.optional(),
-						scope: z
-							.string()
-							.meta({
-								description:
-									'The scopes supported by the application. Separated by spaces. Eg: "profile email"',
-							})
-							.optional(),
-						contacts: z
-							.array(z.string())
-							.meta({
-								description:
-									'The contact information for the application. Eg: ["admin@example.com"]',
-							})
-							.optional(),
-						tos_uri: z
-							.string()
-							.meta({
-								description:
-									'The URI of the application terms of service. Eg: "https://client.example.com/tos"',
-							})
-							.optional(),
-						policy_uri: z
-							.string()
-							.meta({
-								description:
-									'The URI of the application privacy policy. Eg: "https://client.example.com/policy"',
-							})
-							.optional(),
-						jwks_uri: z
-							.string()
-							.meta({
-								description:
-									'The URI of the application JWKS. Eg: "https://client.example.com/jwks"',
-							})
-							.optional(),
-						jwks: z
-							.record(z.any(), z.any())
-							.meta({
-								description:
-									'The JWKS of the application. Eg: {"keys": [{"kty": "RSA", "alg": "RS256", "use": "sig", "n": "...", "e": "..."}]}',
-							})
-							.optional(),
-						metadata: z
-							.record(z.any(), z.any())
-							.meta({
-								description:
-									'The metadata of the application. Eg: {"key": "value"}',
-							})
-							.optional(),
-						software_id: z
-							.string()
-							.meta({
-								description:
-									'The software ID of the application. Eg: "my-software"',
-							})
-							.optional(),
-						software_version: z
-							.string()
-							.meta({
-								description:
-									'The software version of the application. Eg: "1.0.0"',
-							})
-							.optional(),
-						software_statement: z
-							.string()
-							.meta({
-								description: "The software statement of the application.",
-							})
-							.optional(),
-					}),
+					body: registerOAuthApplicationBodySchema,
 					metadata: {
 						openapi: {
 							description: "Register an OAuth2 application",
@@ -1580,7 +1529,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/endsession",
 				{
 					method: ["GET", "POST"],
-					operationId: "oauth2EndSession",
 					query: z
 						.object({
 							id_token_hint: z.string().optional(),
@@ -1645,7 +1593,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 									required: false,
 									schema: { type: "string" },
 								},
-							],
+							] as OpenAPIParameter[],
 							responses: {
 								"302": {
 									description:
@@ -1677,14 +1625,17 @@ export const oidcProvider = (options: OIDCOptions) => {
 							const jwtPlugin = getJwtPlugin(ctx);
 							if (jwtPlugin && jwtPlugin.options && options?.useJWTPlugin) {
 								// For JWT plugin tokens, verify using JWKS
-								const verified = await verifyJwtWithJWKS(
-									ctx,
+								const verified = await verifyJWT(
 									id_token_hint,
-									jwtPlugin,
+									jwtPlugin.options,
 								);
 								if (verified) {
 									validatedUserId = verified.sub;
-									validatedClientId = verified.aud;
+									validatedClientId = verified.aud
+										? typeof verified.aud === "string"
+											? verified.aud
+											: verified.aud[0]!
+										: null;
 								}
 							} else {
 								// For HS256 tokens, we need the client_id to verify

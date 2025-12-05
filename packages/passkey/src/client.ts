@@ -1,5 +1,9 @@
-import type { BetterAuthClientPlugin, ClientStore } from "@better-auth/core";
-import type { BetterFetch, BetterFetchOption } from "@better-fetch/fetch";
+import type {
+	BetterAuthClientPlugin,
+	ClientFetchOption,
+	ClientStore,
+} from "@better-auth/core";
+import type { BetterFetch } from "@better-fetch/fetch";
 import type {
 	PublicKeyCredentialCreationOptionsJSON,
 	PublicKeyCredentialRequestOptionsJSON,
@@ -29,15 +33,15 @@ export const getPasskeyActions = (
 		opts?:
 			| {
 					autoFill?: boolean;
-					fetchOptions?: BetterFetchOption;
+					fetchOptions?: ClientFetchOption;
 			  }
 			| undefined,
-		options?: BetterFetchOption | undefined,
+		options?: ClientFetchOption | undefined,
 	) => {
 		const response = await $fetch<PublicKeyCredentialRequestOptionsJSON>(
 			"/passkey/generate-authenticate-options",
 			{
-				method: "POST",
+				method: "GET",
 				throw: false,
 			},
 		);
@@ -81,7 +85,7 @@ export const getPasskeyActions = (
 	const registerPasskey = async (
 		opts?:
 			| {
-					fetchOptions?: BetterFetchOption;
+					fetchOptions?: ClientFetchOption;
 					/**
 					 * The name of the passkey. This is used to
 					 * identify the passkey in the UI.
@@ -102,7 +106,7 @@ export const getPasskeyActions = (
 					useAutoRegister?: boolean;
 			  }
 			| undefined,
-		fetchOpts?: BetterFetchOption | undefined,
+		fetchOpts?: ClientFetchOption | undefined,
 	) => {
 		const options = await $fetch<PublicKeyCredentialCreationOptionsJSON>(
 			"/passkey/generate-register-options",
@@ -259,3 +263,6 @@ export const passkeyClient = () => {
 		],
 	} satisfies BetterAuthClientPlugin;
 };
+
+export type * from "@simplewebauthn/server";
+export type * from "./types";
