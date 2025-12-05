@@ -127,6 +127,45 @@ export async function getBackupCodes(
 	return safeJSONParse<string[]>(backupCodes);
 }
 
+const verifyBackupCodeBodySchema = z.object({
+	code: z.string().meta({
+		description: `A backup code to verify. Eg: "123456"`,
+	}),
+	/**
+	 * Disable setting the session cookie
+	 */
+	disableSession: z
+		.boolean()
+		.meta({
+			description: "If true, the session cookie will not be set.",
+		})
+		.optional(),
+	/**
+	 * if true, the device will be trusted
+	 * for 30 days. It'll be refreshed on
+	 * every sign in request within this time.
+	 */
+	trustDevice: z
+		.boolean()
+		.meta({
+			description:
+				"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
+		})
+		.optional(),
+});
+
+const viewBackupCodesBodySchema = z.object({
+	userId: z.coerce.string().meta({
+		description: `The user ID to view all backup codes. Eg: "user-id"`,
+	}),
+});
+
+const generateBackupCodesBodySchema = z.object({
+	password: z.string().meta({
+		description: "The users password.",
+	}),
+});
+
 export const backupCode2fa = (opts: BackupCodeOptions) => {
 	const twoFactorTable = "twoFactor";
 
@@ -153,32 +192,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 
 				{
 					method: "POST",
-					body: z.object({
-						code: z.string().meta({
-							description: `A backup code to verify. Eg: "123456"`,
-						}),
-						/**
-						 * Disable setting the session cookie
-						 */
-						disableSession: z
-							.boolean()
-							.meta({
-								description: "If true, the session cookie will not be set.",
-							})
-							.optional(),
-						/**
-						 * if true, the device will be trusted
-						 * for 30 days. It'll be refreshed on
-						 * every sign in request within this time.
-						 */
-						trustDevice: z
-							.boolean()
-							.meta({
-								description:
-									"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
-							})
-							.optional(),
-					}),
+					body: verifyBackupCodeBodySchema,
 					metadata: {
 						openapi: {
 							description: "Verify a backup code for two-factor authentication",
@@ -383,11 +397,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 				"/two-factor/generate-backup-codes",
 				{
 					method: "POST",
-					body: z.object({
-						password: z.string().meta({
-							description: "The users password.",
-						}),
-					}),
+					body: generateBackupCodesBodySchema,
 					use: [sessionMiddleware],
 					metadata: {
 						openapi: {
@@ -469,11 +479,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 				"/two-factor/view-backup-codes",
 				{
 					method: "POST",
-					body: z.object({
-						userId: z.coerce.string().meta({
-							description: `The user ID to view all backup codes. Eg: "user-id"`,
-						}),
-					}),
+					body: viewBackupCodesBodySchema,
 					metadata: {
 						SERVER_ONLY: true,
 					},

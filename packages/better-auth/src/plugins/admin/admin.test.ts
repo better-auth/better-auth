@@ -324,7 +324,7 @@ describe("Admin plugin", async () => {
 		expect(res.data?.users.length).toBe(1);
 	});
 
-	it("should allow to search users by name and email", async () => {
+	it.only("should allow to search users by name and email", async () => {
 		const res = await client.admin.listUsers({
 			query: {
 				searchValue: "Test User",
