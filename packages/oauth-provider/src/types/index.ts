@@ -394,7 +394,7 @@ export interface OAuthOptions<
 	 * @param info - context that may be useful when creating custom claims
 	 * @returns Additional claims for userinfo request
 	 */
-	customUserInfoClaims?: (info?: {
+	customUserInfoClaims?: (info: {
 		/** The user object */
 		user: User & Record<string, unknown>;
 		/** The scopes from the access token used
@@ -413,7 +413,7 @@ export interface OAuthOptions<
 	 *
 	 * @param info - context that may be useful when creating custom claims
 	 */
-	customIdTokenClaims?: (info?: {
+	customIdTokenClaims?: (info: {
 		/** The user object if token is associated to a user. */
 		user: User & Record<string, unknown>;
 		/** Scopes granted for this token */
@@ -434,7 +434,7 @@ export interface OAuthOptions<
 	 *
 	 * @param info - context that may be useful when creating custom claims
 	 */
-	customAccessTokenClaims?: (info?: {
+	customAccessTokenClaims?: (info: {
 		/** The user object if token is associated to a user. Null if user doesn't exist. Undefined if user not applicable. */
 		user?: (User & Record<string, unknown>) | null;
 		/** reference of the consent/authorization */
