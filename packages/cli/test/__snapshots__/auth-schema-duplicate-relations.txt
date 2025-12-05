@@ -115,9 +115,16 @@ export const accountRelations = relations(account, ({ one }) => ({
   }),
 }));
 
-export const testRelations = relations(test, ({ one }) => ({
+export const testUserIdRelations = relations(test, ({ one }) => ({
   user: one(user, {
-    fields: [test.userId, test.managerId],
+    fields: [test.userId],
+    references: [user.id],
+  }),
+}));
+
+export const testManagerIdRelations = relations(test, ({ one }) => ({
+  user: one(user, {
+    fields: [test.managerId],
     references: [user.id],
   }),
 }));

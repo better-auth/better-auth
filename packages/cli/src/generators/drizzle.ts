@@ -292,6 +292,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	let relationsString: string = "";
 	for (const tableKey in tables) {
 		const table = tables[tableKey]!;
+		const modelName = getModelName(tableKey);
 
 		type Relation = {
 			/**
@@ -314,20 +315,12 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			reference?: {
 				field: string;
 				references: string;
+				fieldName: string; // Original field name for generating unique relation export names
 			};
 		};
 
-		const relations: Relation[] = [];
-		// Map to track "one" relations by key to combine fields/references
-		const oneRelationsMap = new Map<
-			string,
-			{
-				key: string;
-				model: string;
-				fields: string[];
-				references: string[];
-			}
-		>();
+		const oneRelations: Relation[] = [];
+		const manyRelations: Relation[] = [];
 		// Set to track "many" relations by key to prevent duplicates
 		const manyRelationsSet = new Set<string>();
 
@@ -341,38 +334,15 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			const fieldRef = `${getModelName(tableKey)}.${getFieldName({ model: tableKey, field: fieldName })}`;
 			const referenceRef = `${getModelName(referencedModel)}.${getFieldName({ model: referencedModel, field: field.references!.field || "id" })}`;
 
-			if (oneRelationsMap.has(relationKey)) {
-				// Combine with existing relation
-				const existing = oneRelationsMap.get(relationKey)!;
-				existing.fields.push(fieldRef);
-				existing.references.push(referenceRef);
-			} else {
-				// Create new relation
-				oneRelationsMap.set(relationKey, {
-					key: relationKey,
-					model: getModelName(referencedModel),
-					fields: [fieldRef],
-					references: [referenceRef],
-				});
-			}
-		}
-
-		// Convert map to relations array
-		for (const relation of oneRelationsMap.values()) {
-			// Deduplicate references if they're all the same
-			const uniqueReferences = [...new Set(relation.references)];
-			const referencesStr =
-				uniqueReferences.length === 1
-					? uniqueReferences[0]!
-					: relation.references.join(", ");
-
-			relations.push({
-				key: relation.key,
-				model: relation.model,
+			// Create a separate relation for each foreign key
+			oneRelations.push({
+				key: relationKey,
+				model: getModelName(referencedModel),
 				type: "one",
 				reference: {
-					field: relation.fields.join(", "),
-					references: referencesStr,
+					field: fieldRef,
+					references: referenceRef,
+					fieldName: fieldName,
 				},
 			});
 		}
@@ -439,7 +409,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			// Only add if we haven't seen this key before
 			if (!manyRelationsSet.has(relationKey)) {
 				manyRelationsSet.add(relationKey);
-				relations.push({
+				manyRelations.push({
 					key: relationKey,
 					model: getModelName(modelName),
 					type: relationType,
@@ -447,28 +417,71 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			}
 		}
 
-		const hasOne = relations.some((relation) => relation.type === "one");
-		const hasMany = relations.some((relation) => relation.type === "many");
+		// Group "one" relations by referenced model to detect duplicates
+		const relationsByModel = new Map<string, Relation[]>();
+		for (const relation of oneRelations) {
+			if (relation.reference) {
+				const modelKey = relation.key;
+				if (!relationsByModel.has(modelKey)) {
+					relationsByModel.set(modelKey, []);
+				}
+				relationsByModel.get(modelKey)!.push(relation);
+			}
+		}
 
-		let tableRelation = `export const ${table.modelName}Relations = relations(${getModelName(
-			table.modelName,
-		)}, ({ ${hasOne ? "one" : ""}${hasMany ? `${hasOne ? ", " : ""}many` : ""} }) => ({
-				${relations
-					.map(
-						({ key, type, model, reference }) =>
-							` ${key}: ${type}(${model}${
-								!reference
-									? ""
-									: `, {
-								fields: [${reference.field}],
-								references: [${reference.references}],
-							}`
-							})`,
-					)
+		// Generate relation exports - use field-specific naming only for duplicates
+		for (const [modelKey, relations] of relationsByModel.entries()) {
+			const hasDuplicates = relations.length > 1;
+
+			if (hasDuplicates) {
+				// Multiple relations to the same model - use field-specific naming
+				for (const relation of relations) {
+					if (relation.reference) {
+						const fieldName = relation.reference.fieldName;
+						const relationExportName = `${modelName}${fieldName.charAt(0).toUpperCase() + fieldName.slice(1)}Relations`;
+
+						const tableRelation = `export const ${relationExportName} = relations(${getModelName(
+							table.modelName,
+						)}, ({ one }) => ({
+				${relation.key}: one(${relation.model}, {
+					fields: [${relation.reference.field}],
+					references: [${relation.reference.references}],
+				})
+			}))`;
+
+						relationsString += `\n${tableRelation}\n`;
+					}
+				}
+			} else {
+				// Single relation - use standard naming
+				const relation = relations[0]!;
+				if (relation.reference) {
+					const relationExportName = `${modelName}Relations`;
+
+					const tableRelation = `export const ${relationExportName} = relations(${getModelName(
+						table.modelName,
+					)}, ({ one }) => ({
+				${relation.key}: one(${relation.model}, {
+					fields: [${relation.reference.field}],
+					references: [${relation.reference.references}],
+				})
+			}))`;
+
+					relationsString += `\n${tableRelation}\n`;
+				}
+			}
+		}
+
+		// Generate a single relation export for "many" relations if any exist
+		if (manyRelations.length > 0) {
+			const tableRelation = `export const ${table.modelName}Relations = relations(${getModelName(
+				table.modelName,
+			)}, ({ many }) => ({
+				${manyRelations
+					.map(({ key, model }) => ` ${key}: many(${model})`)
 					.join(",\n ")}
 			}))`;
 
-		if (relations.length > 0) {
 			relationsString += `\n${tableRelation}\n`;
 		}
 	}
