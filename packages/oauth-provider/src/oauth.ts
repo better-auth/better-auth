@@ -453,7 +453,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							description:
 								"List of accept of accepted space-separated scopes. If none is provided, then all originally requested scopes are accepted.",
 						}),
-						query: z.string().optional().meta({
+						oauth_query: z.string().optional().meta({
 							description: "The redirected page's query parameters",
 						}),
 					}),
@@ -501,7 +501,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						postLogin: z.boolean().optional().meta({
 							description: "Confirms organization and/or team selection.",
 						}),
-						query: z.string().optional().meta({
+						oauth_query: z.string().optional().meta({
 							description: "The redirected page's query parameters",
 						}),
 					}),

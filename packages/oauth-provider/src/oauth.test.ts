@@ -351,9 +351,9 @@ describe("oauth - prompt", async () => {
 	let enablePostLogin = false;
 	const {
 		auth: authorizationServer,
-		signInWithTestUser,
 		customFetchImpl,
 		testUser,
+		cookieSetter,
 	} = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
@@ -374,14 +374,14 @@ describe("oauth - prompt", async () => {
 				},
 				postLogin: {
 					page: "/select-organization",
-					shouldRedirect(context) {
-						if (!enablePostLogin) return true;
-						return !!context.session?.activeOrganizationId;
+					shouldRedirect({ session }) {
+						if (!enablePostLogin) return false;
+						return !session?.activeOrganizationId;
 					},
-					consentReferenceId(context) {
+					consentReferenceId({ session }) {
 						if (!enablePostLogin) return undefined;
-						const activeOrganizationId = (context.session
-							?.activeOrganizationId ?? undefined) as string | undefined;
+						const activeOrganizationId = (session?.activeOrganizationId ??
+							undefined) as string | undefined;
 						if (!activeOrganizationId)
 							throw new APIError("BAD_REQUEST", {
 								error: "set_organization",
@@ -395,14 +395,13 @@ describe("oauth - prompt", async () => {
 	});
 
 	async function selectAccount(context: { headers: Headers }) {
-		if (!enableSelectAccount) return true;
+		if (!enableSelectAccount) return false;
 		const allSessions = await authorizationServer.api.listDeviceSessions({
 			headers: context.headers,
 		});
 		return allSessions?.length >= 1;
 	}
 
-	const { headers, user } = await signInWithTestUser();
 	const serverClient = createAuthClient({
 		plugins: [
 			oauthProviderClient(),
@@ -412,10 +411,10 @@ describe("oauth - prompt", async () => {
 		baseURL: authServerBaseUrl,
 		fetchOptions: {
 			customFetchImpl,
-			headers,
 		},
 	});
 
+	const headers = new Headers();
 	let server: Listener;
 	let oauthClient: OAuthClient | null;
 	let org: Organization;
@@ -425,6 +424,15 @@ describe("oauth - prompt", async () => {
 
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
+		Object.defineProperty(global, "window", {
+			value: {
+				location: {
+					search: undefined,
+				},
+			},
+			writable: true,
+		});
+
 		// Opens the authorization server for testing with genericOAuth
 		server = await listen(
 			async (req, res) => {
@@ -441,6 +449,17 @@ describe("oauth - prompt", async () => {
 				port,
 			},
 		);
+		const { user } = await serverClient.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				throw: true,
+				onSuccess: cookieSetter(headers),
+			},
+		);
+		expect(user.id).toBeDefined();
 
 		const response = await authorizationServer.api.adminCreateOAuthClient({
 			headers,
@@ -467,6 +486,14 @@ describe("oauth - prompt", async () => {
 
 	afterAll(async () => {
 		await server.close();
+		Object.defineProperty(global, "window", {
+			value: {
+				location: {
+					search: undefined,
+				},
+			},
+			writable: true,
+		});
 	});
 
 	async function createTestInstance(
@@ -596,13 +623,12 @@ describe("oauth - prompt", async () => {
 
 		// Check for redirection to /consent
 		let consentRedirectUri = "";
-		const newHeaders = new Headers();
 		await serverClient.$fetch(data.url, {
 			method: "GET",
+			headers,
 			onError(context) {
 				consentRedirectUri = context.response.headers.get("Location") || "";
-				cookieSetter(newHeaders)(context);
-				newHeaders.append("Cookie", headers.get("Cookie") || "");
+				cookieSetter(headers)(context);
 			},
 		});
 		expect(consentRedirectUri).toContain(`/consent`);
@@ -624,7 +650,7 @@ describe("oauth - prompt", async () => {
 				accept: true,
 			},
 			{
-				headers: newHeaders,
+				headers,
 				throw: true,
 			},
 		);
@@ -648,7 +674,7 @@ describe("oauth - prompt", async () => {
 			},
 		});
 		expect(callbackURL).toContain("/success");
-		expect(newHeaders.get("cookie")).toContain("better-auth.session_token=");
+		expect(headers.get("cookie")).toContain("better-auth.session_token=");
 	});
 
 	it("consent - should sign in given previous consent (see previous test)", async ({
@@ -669,15 +695,15 @@ describe("oauth - prompt", async () => {
 		});
 
 		// Generate authorize url
-		const oauthHeaders = new Headers();
 		const data = await client.signIn.oauth2(
 			{
 				providerId,
 				callbackURL: "/success",
 			},
 			{
+				headers,
 				throw: true,
-				onSuccess: cookieSetter(oauthHeaders),
+				onSuccess: cookieSetter(headers),
 			},
 		);
 		expect(data.url).toContain(
@@ -687,13 +713,12 @@ describe("oauth - prompt", async () => {
 
 		// No redirect and user should get code
 		let callbackRedirectUrl = "";
-		const newHeaders = new Headers();
 		await serverClient.$fetch(data.url, {
 			method: "GET",
+			headers,
 			onError(context) {
 				callbackRedirectUrl = context.response.headers.get("Location") || "";
-				cookieSetter(newHeaders)(context);
-				newHeaders.append("Cookie", headers.get("Cookie") || "");
+				cookieSetter(headers)(context);
 			},
 		});
 		expect(callbackRedirectUrl).toContain(redirectUri);
@@ -712,7 +737,7 @@ describe("oauth - prompt", async () => {
 		let callbackURL = "";
 		await client.$fetch(callbackRedirectUrl, {
 			method: "GET",
-			headers: oauthHeaders,
+			headers,
 			onError(context) {
 				callbackURL = context.response.headers.get("Location") || "";
 			},
@@ -738,15 +763,15 @@ describe("oauth - prompt", async () => {
 		});
 
 		// Generate authorize url
-		const oauthHeaders = new Headers();
 		const data = await client.signIn.oauth2(
 			{
 				providerId,
 				callbackURL: "/success",
 			},
 			{
+				headers,
 				throw: true,
-				onSuccess: cookieSetter(oauthHeaders),
+				onSuccess: cookieSetter(headers),
 			},
 		);
 		expect(data.url).toContain(
@@ -756,9 +781,9 @@ describe("oauth - prompt", async () => {
 
 		// Check for redirection to /consent
 		let consentRedirectUri = "";
-		const newHeaders = new Headers();
 		await serverClient.$fetch(data.url, {
 			method: "GET",
+			headers,
 			onError(context) {
 				consentRedirectUri = context.response.headers.get("Location") || "";
 			},
@@ -785,7 +810,6 @@ describe("oauth - prompt", async () => {
 		});
 
 		// Generate authorize url
-		const oauthHeaders = new Headers();
 		const data = await client.signIn.oauth2(
 			{
 				providerId,
@@ -793,7 +817,8 @@ describe("oauth - prompt", async () => {
 			},
 			{
 				throw: true,
-				onSuccess: cookieSetter(oauthHeaders),
+				headers,
+				onSuccess: cookieSetter(headers),
 			},
 		);
 		expect(data.url).toContain(
@@ -803,14 +828,13 @@ describe("oauth - prompt", async () => {
 
 		// Check for redirection to /select-account
 		let selectAccountRedirectUri = "";
-		const authClientHeaders = new Headers();
 		await serverClient.$fetch(data.url, {
 			method: "GET",
 			headers,
 			onError(ctx) {
 				selectAccountRedirectUri = ctx.response.headers.get("Location") || "";
-				cookieSetter(authClientHeaders)(ctx);
-				authClientHeaders.append("Cookie", headers.get("Cookie") || "");
+				cookieSetter(headers)(ctx);
+				headers.append("Cookie", headers.get("Cookie") || "");
 			},
 		});
 		expect(selectAccountRedirectUri).toContain(`/select-account`);
@@ -834,7 +858,7 @@ describe("oauth - prompt", async () => {
 				selected: true,
 			},
 			{
-				headers: authClientHeaders,
+				headers,
 				throw: true,
 			},
 		);
@@ -868,6 +892,7 @@ describe("oauth - prompt", async () => {
 				callbackURL: "/success",
 			},
 			{
+				headers,
 				throw: true,
 			},
 		);
@@ -878,13 +903,12 @@ describe("oauth - prompt", async () => {
 
 		// Check for redirection to /login
 		let loginRedirectUri = "";
-		const newHeaders = new Headers();
 		await serverClient.$fetch(data.url, {
 			method: "GET",
-			headers: newHeaders,
+			headers,
 			onError(context) {
 				loginRedirectUri = context.response.headers.get("Location") || "";
-				cookieSetter(newHeaders)(context);
+				cookieSetter(headers)(context);
 			},
 		});
 		expect(loginRedirectUri).toContain("/login");
@@ -908,7 +932,7 @@ describe("oauth - prompt", async () => {
 				password: testUser.password,
 			},
 			{
-				headers: newHeaders,
+				headers,
 				throw: true,
 			},
 		);
@@ -936,15 +960,15 @@ describe("oauth - prompt", async () => {
 		});
 
 		// Generate authorize url
-		const oauthHeaders = new Headers();
 		const data = await client.signIn.oauth2(
 			{
 				providerId,
 				callbackURL: "/success",
 			},
 			{
+				headers,
 				throw: true,
-				onSuccess: cookieSetter(oauthHeaders),
+				onSuccess: cookieSetter(headers),
 			},
 		);
 		expect(data.url).toContain(
@@ -954,14 +978,13 @@ describe("oauth - prompt", async () => {
 
 		// Check for redirection to /select-account
 		let selectAccountRedirectUri = "";
-		const authClientHeaders = new Headers();
 		await serverClient.$fetch(data.url, {
 			method: "GET",
 			headers,
 			onError(ctx) {
 				selectAccountRedirectUri = ctx.response.headers.get("Location") || "";
-				cookieSetter(authClientHeaders)(ctx);
-				authClientHeaders.append("Cookie", headers.get("Cookie") || "");
+				cookieSetter(headers)(ctx);
+				headers.append("Cookie", headers.get("Cookie") || "");
 			},
 		});
 		expect(selectAccountRedirectUri).toContain(`/select-account`);
@@ -985,7 +1008,7 @@ describe("oauth - prompt", async () => {
 				selected: true,
 			},
 			{
-				headers: authClientHeaders,
+				headers,
 				throw: true,
 			},
 		);
@@ -1021,6 +1044,7 @@ describe("oauth - prompt", async () => {
 				callbackURL: "/success",
 			},
 			{
+				headers,
 				throw: true,
 				onSuccess: cookieSetter(oauthHeaders),
 			},
@@ -1032,14 +1056,13 @@ describe("oauth - prompt", async () => {
 
 		// Check for redirection to /select-account
 		let selectAccountRedirectUri = "";
-		const newHeaders = new Headers();
 		await serverClient.$fetch(data.url, {
 			method: "GET",
+			headers,
 			onError(context) {
 				selectAccountRedirectUri =
 					context.response.headers.get("Location") || "";
-				cookieSetter(newHeaders)(context);
-				newHeaders.append("Cookie", headers.get("Cookie") || "");
+				cookieSetter(headers)(context);
 			},
 		});
 		expect(selectAccountRedirectUri).toContain(`/select-organization`);
@@ -1048,20 +1071,35 @@ describe("oauth - prompt", async () => {
 		);
 		expect(selectAccountRedirectUri).toContain(`scope=`);
 		expect(selectAccountRedirectUri).toContain(`state=`);
+		Object.defineProperty(global, "window", {
+			value: {
+				location: {
+					search: new URL(selectAccountRedirectUri, authServerBaseUrl).search,
+				},
+			},
+			writable: true,
+		});
 
 		// Select Account and continue auth flow
-		await serverClient.organization.setActive({
-			organizationId: org.id,
-			organizationSlug: org.slug,
-		});
+		await serverClient.organization.setActive(
+			{
+				organizationId: org.id,
+				organizationSlug: org.slug,
+			},
+			{
+				headers,
+				throw: true,
+				onResponse: cookieSetter(headers),
+			},
+		);
 		const selectedAccountRes = await serverClient.oauth2.continue(
 			{
 				postLogin: true,
 			},
 			{
-				headers: newHeaders,
+				headers,
 				throw: true,
-				onResponse: cookieSetter(newHeaders),
+				onResponse: cookieSetter(headers),
 			},
 		);
 		const consentRedirectUri = selectedAccountRes?.redirect_uri;
@@ -1084,8 +1122,9 @@ describe("oauth - prompt", async () => {
 				accept: true,
 			},
 			{
-				headers: newHeaders,
+				headers,
 				throw: true,
+				onResponse: cookieSetter(headers),
 			},
 		);
 		expect(consentRes.redirect_uri).toContain(redirectUri);
