@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
+import { safeJSONParse } from "@better-auth/core/utils";
 import Database from "better-sqlite3";
 import { Kysely, SqliteDialect } from "kysely";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -12,7 +13,6 @@ import type {
 	Session,
 	User,
 } from "../types";
-import { safeJSONParse } from "../utils/json";
 import { getMigrations } from "./get-migration";
 
 describe("internal adapter test", async () => {
@@ -218,7 +218,7 @@ describe("internal adapter test", async () => {
 		const sampleUser = {
 			name: "sample",
 			email: "sample@sampling.com",
-			password: "sampliiiiiing",
+			password: "some-sample-password",
 		};
 		const hookUserCreateAfter = vi.fn();
 

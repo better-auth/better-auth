@@ -35,6 +35,16 @@ exports[`base context creation > should match config 1`] = `
   },
   "appName": "Better Auth",
   "authCookies": {
+    "accountData": {
+      "name": "better-auth.account_data",
+      "options": {
+        "httpOnly": true,
+        "maxAge": 300,
+        "path": "/",
+        "sameSite": "lax",
+        "secure": false,
+      },
+    },
     "dontRememberToken": {
       "name": "better-auth.dont_remember",
       "options": {
@@ -102,6 +112,7 @@ exports[`base context creation > should match config 1`] = `
     "updateUserByEmail": [Function],
     "updateVerificationValue": [Function],
   },
+  "isTrustedOrigin": [Function],
   "logger": {
     "debug": [Function],
     "error": [Function],
@@ -116,15 +127,14 @@ exports[`base context creation > should match config 1`] = `
     "storeStateStrategy": "cookie",
   },
   "options": {
-    "advanced": {
-      "oauthConfig": {
-        "storeStateStrategy": "cookie",
-      },
+    "account": {
+      "storeAccountCookie": true,
+      "storeStateStrategy": "cookie",
     },
     "basePath": "/api/auth",
     "baseURL": "http://localhost:3000",
     "plugins": [],
-    "secret": "better-auth-secret-123456789",
+    "secret": "better-auth-secret-12345678901234567890",
     "session": {
       "cookieCache": {
         "enabled": true,
@@ -151,7 +161,7 @@ exports[`base context creation > should match config 1`] = `
   },
   "runMigrations": [Function],
   "secondaryStorage": undefined,
-  "secret": "better-auth-secret-123456789",
+  "secret": "better-auth-secret-12345678901234567890",
   "session": null,
   "sessionConfig": {
     "cookieRefreshCache": {

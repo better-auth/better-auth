@@ -13,7 +13,7 @@ export interface JwtOptions {
 				 * Useful if jwks are not managed at /jwks or
 				 * if your jwks are signed with a certificate and placed on your CDN.
 				 */
-				remoteUrl?: string;
+				remoteUrl?: string | undefined;
 				/**
 				 * Key pair configuration
 				 * @description A subset of the options available for the generateKeyPair function
@@ -22,14 +22,35 @@ export interface JwtOptions {
 				 *
 				 * @default { alg: 'EdDSA', crv: 'Ed25519' }
 				 */
-				keyPairConfig?: JWKOptions;
+				keyPairConfig?: JWKOptions | undefined;
 				/**
 				 * Disable private key encryption
 				 * @description Disable the encryption of the private key in the database
 				 *
 				 * @default false
 				 */
-				disablePrivateKeyEncryption?: boolean;
+				disablePrivateKeyEncryption?: boolean | undefined;
+				/**
+				 * The key rotation interval in seconds.
+				 *
+				 * @default undefined (disabled)
+				 */
+				rotationInterval?: number | undefined;
+				/**
+				 * The grace period in seconds.
+				 *
+				 * @default 2592000 (30 days)
+				 */
+				gracePeriod?: number | undefined;
+				/**
+				 * The path of the endpoint exposing the JWKS.
+				 * When set, this replaces the default /jwks endpoint.
+				 * The old endpoint will return 404.
+				 *
+				 * @default /jwks
+				 * @example "/.well-known/jwks.json"
+				 */
+				jwksPath?: string | undefined;
 		  }
 		| undefined;
 
@@ -38,11 +59,11 @@ export interface JwtOptions {
 				/**
 				 * The issuer of the JWT
 				 */
-				issuer?: string;
+				issuer?: string | undefined;
 				/**
 				 * The audience of the JWT
 				 */
-				audience?: string;
+				audience?: string | undefined;
 				/**
 				 * Set the "exp" (Expiration Time) Claim.
 				 *
@@ -66,14 +87,14 @@ export interface JwtOptions {
 				 *
 				 * @default 15m
 				 */
-				expirationTime?: number | string | Date;
+				expirationTime?: number | string | Date | undefined;
 				/**
 				 * A function that is called to define the payload of the JWT
 				 */
 				definePayload?: (session: {
 					user: User & Record<string, any>;
 					session: Session & Record<string, any>;
-				}) => Promise<Record<string, any>> | Record<string, any>;
+				}) => Promise<Record<string, any>> | Record<string, any> | undefined;
 				/**
 				 * A function that is called to get the subject of the JWT
 				 *
@@ -82,7 +103,7 @@ export interface JwtOptions {
 				getSubject?: (session: {
 					user: User & Record<string, any>;
 					session: Session & Record<string, any>;
-				}) => Promise<string> | string;
+				}) => Promise<string> | string | undefined;
 				/**
 				 * A custom function to remote sign the jwt payload.
 				 *
@@ -93,7 +114,7 @@ export interface JwtOptions {
 				 * @requires jwks.remoteUrl
 				 * @invalidates other jwt.* options
 				 */
-				sign?: (payload: JWTPayload) => Awaitable<string>;
+				sign?: ((payload: JWTPayload) => Awaitable<string>) | undefined;
 		  }
 		| undefined;
 
@@ -130,18 +151,6 @@ export interface JwtOptions {
 		getJwks?: (
 			ctx: GenericEndpointContext,
 		) => Promise<Jwk[] | null | undefined>;
-		/**
-		 * A custom function to get the latest key from the database or
-		 * other source
-		 *
-		 * This will override the default getLatestKey from the database
-		 *
-		 * @param ctx - The context of the request
-		 * @returns The latest key
-		 */
-		getLatestKey?: (
-			ctx: GenericEndpointContext,
-		) => Promise<Jwk | null | undefined>;
 		/**
 		 * A custom function to create a new key in the database or
 		 * other source
@@ -194,6 +203,7 @@ export interface Jwk {
 	publicKey: string;
 	privateKey: string;
 	createdAt: Date;
+	expiresAt?: Date;
 	alg?: JWSAlgorithms | undefined;
 	crv?: ("Ed25519" | "P-256" | "P-521") | undefined;
 }

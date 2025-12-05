@@ -15,12 +15,13 @@ export { coreSchema } from "./schema/shared";
 export { type User, userSchema } from "./schema/user";
 export { type Verification, verificationSchema } from "./schema/verification";
 export type {
+	BaseModelNames,
 	BetterAuthDBSchema,
 	DBFieldAttribute,
 	DBFieldAttributeConfig,
 	DBFieldType,
-	DBPreservedModels,
 	DBPrimitive,
+	ModelNames,
 	SecondaryStorage,
 } from "./type";
 
@@ -48,3 +49,5 @@ export type Primitive = DBPrimitive;
  * @deprecated Backport for 1.3.x, we will remove this in 1.4.x
  */
 export type BetterAuthDbSchema = BetterAuthDBSchema;
+
+export { getAuthTables } from "./get-tables";
