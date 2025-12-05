@@ -26,6 +26,20 @@ const serverPlugin = {
 				};
 			},
 		),
+		testNonAction: createAuthEndpoint(
+			"/test-non-action",
+			{
+				method: "GET",
+				metadata: {
+					isAction: false,
+				},
+			},
+			async (c) => {
+				return {
+					data: "test",
+				};
+			},
+		),
 		testSignOut2: createAuthEndpoint(
 			"/test-2/sign-out",
 			{

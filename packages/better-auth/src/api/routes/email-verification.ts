@@ -309,20 +309,10 @@ export const verifyEmail = createAuthEndpoint(
 			return redirectOnError("user_not_found");
 		}
 		if (parsed.updateTo) {
-			const session = await getSessionFromCtx(ctx);
-			if (!session) {
-				if (ctx.query.callbackURL) {
-					throw ctx.redirect(`${ctx.query.callbackURL}?error=unauthorized`);
-				}
+			let session = await getSessionFromCtx(ctx);
+			if (session && session.user.email !== parsed.email) {
 				return redirectOnError("unauthorized");
 			}
-			if (session.user.email !== parsed.email) {
-				if (ctx.query.callbackURL) {
-					throw ctx.redirect(`${ctx.query.callbackURL}?error=unauthorized`);
-				}
-				return redirectOnError("unauthorized");
-			}
-
 			if (parsed.requestType === "change-email-confirmation") {
 				const newToken = await createEmailVerificationToken(
 					ctx.context.secret,
@@ -340,7 +330,7 @@ export const verifyEmail = createAuthEndpoint(
 				await ctx.context.options.emailVerification?.sendVerificationEmail?.(
 					{
 						user: {
-							...session.user,
+							...user.user,
 							email: parsed.updateTo,
 						},
 						url,
@@ -355,7 +345,20 @@ export const verifyEmail = createAuthEndpoint(
 					status: true,
 				});
 			}
-
+			if (!session) {
+				const newSession = await ctx.context.internalAdapter.createSession(
+					user.user.id,
+				);
+				if (!newSession) {
+					throw new APIError("INTERNAL_SERVER_ERROR", {
+						message: "Failed to create session",
+					});
+				}
+				session = {
+					session: newSession,
+					user: user.user,
+				};
+			}
 			if (parsed.requestType === "change-email-verification") {
 				const updatedUser = await ctx.context.internalAdapter.updateUserByEmail(
 					parsed.email,

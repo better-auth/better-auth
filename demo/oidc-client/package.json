@@ -1,0 +1,38 @@
+{
+  "name": "@better-auth/oidc-client-demo",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@radix-ui/react-avatar": "^1.1.10",
+    "@radix-ui/react-dropdown-menu": "^2.1.16",
+    "@radix-ui/react-slot": "^1.2.3",
+    "better-auth": "workspace:*",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "geist": "^1.4.2",
+    "lucide-react": "^0.542.0",
+    "next-themes": "^0.4.6",
+    "oauth4webapi": "^2.10.3",
+    "react": "catalog:react19",
+    "react-dom": "catalog:react19",
+    "sonner": "^2.0.7",
+    "tailwind-merge": "^3.3.1",
+    "wouter": "^3.7.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.13",
+    "@types/react": "catalog:react19",
+    "@types/react-dom": "catalog:react19",
+    "@vitejs/plugin-react-swc": "^4.0.0",
+    "tailwindcss": "^4.1.13",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.4"
+  }
+}

@@ -6,9 +6,17 @@ import type { ReadableAtom } from "nanostores";
 import type { Accessor } from "solid-js";
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { Ref } from "vue";
-import { twoFactorClient } from "../plugins";
 import type { Session, SessionQueryParams } from "../types";
-import { emailOTPClient, organizationClient } from "./plugins";
+import {
+	adminClient,
+	deviceAuthorizationClient,
+	emailOTPClient,
+	genericOAuthClient,
+	multiSessionClient,
+	oidcClient,
+	organizationClient,
+	twoFactorClient,
+} from "./plugins";
 import { createAuthClient as createReactClient } from "./react";
 import { createAuthClient as createSolidClient } from "./solid";
 import { createAuthClient as createSvelteClient } from "./svelte";
@@ -139,6 +147,18 @@ describe("run time proxy", async () => {
 });
 
 describe("type", () => {
+	it("should not infer non-action endpoints", () => {
+		const client = createReactClient({
+			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
+		});
+		expectTypeOf<typeof client>().not.toHaveProperty("testNonAction");
+	});
 	it("should infer session additional fields", () => {
 		const client = createReactClient({
 			plugins: [testClientPlugin()],
@@ -383,5 +403,62 @@ describe("type", () => {
 				queryParams?: { query?: SessionQueryParams } | undefined,
 			) => void;
 		}>();
+	});
+
+	it("should infer $ERROR_CODES with multiple plugins", () => {
+		const client = createReactClient({
+			plugins: [
+				organizationClient(),
+				twoFactorClient(),
+				emailOTPClient(),
+				adminClient(),
+				multiSessionClient(),
+				oidcClient(),
+				genericOAuthClient(),
+				deviceAuthorizationClient(),
+				testClientPlugin(),
+				testClientPlugin2(),
+			],
+		});
+
+		// Should have organization error codes
+		expectTypeOf(
+			client.$ERROR_CODES.ORGANIZATION_NOT_FOUND,
+		).toEqualTypeOf<"Organization not found">();
+
+		// Should have two-factor error codes
+		expectTypeOf(
+			client.$ERROR_CODES.OTP_HAS_EXPIRED,
+		).toEqualTypeOf<"OTP has expired">();
+
+		// Should have email-otp error codes
+		expectTypeOf(
+			client.$ERROR_CODES.INVALID_EMAIL,
+		).toEqualTypeOf<"Invalid email">();
+
+		// Should have admin error codes
+		expectTypeOf(
+			client.$ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REVOKE_USERS_SESSIONS,
+		).toEqualTypeOf<"You are not allowed to revoke users sessions">();
+
+		// Should have multi-session error codes
+		expectTypeOf(
+			client.$ERROR_CODES.INVALID_SESSION_TOKEN,
+		).toEqualTypeOf<"Invalid session token">();
+
+		// Should have generic-oauth error codes
+		expectTypeOf(
+			client.$ERROR_CODES.PROVIDER_NOT_FOUND,
+		).toEqualTypeOf<"Provider not found">();
+
+		// Should have device-authorization error codes
+		expectTypeOf(
+			client.$ERROR_CODES.INVALID_DEVICE_CODE,
+		).toEqualTypeOf<"Invalid device code">();
+
+		// Should have base error codes
+		expectTypeOf(
+			client.$ERROR_CODES.USER_NOT_FOUND,
+		).toEqualTypeOf<"User not found">();
 	});
 });

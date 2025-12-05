@@ -6,7 +6,7 @@ import { Logo } from "@/components/logo";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
 import { auth } from "@/lib/auth";
-import { ConsentBtns } from "./concet-buttons";
+import { ConsentBtns } from "./consent-buttons";
 
 export const metadata: Metadata = {
 	title: "Authorize Application",

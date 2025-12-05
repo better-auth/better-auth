@@ -3,9 +3,20 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../../api";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
+import {
+	deleteApiKey as deleteApiKeyFromStorage,
+	getApiKeyById,
+} from "../adapter";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
+
+const deleteApiKeyBodySchema = z.object({
+	keyId: z.string().meta({
+		description: "The id of the Api Key",
+	}),
+});
+
 export function deleteApiKey({
 	opts,
 	schema,
@@ -22,11 +33,7 @@ export function deleteApiKey({
 		"/api-key/delete",
 		{
 			method: "POST",
-			body: z.object({
-				keyId: z.string().meta({
-					description: "The id of the Api Key",
-				}),
-			}),
+			body: deleteApiKeyBodySchema,
 			use: [sessionMiddleware],
 			metadata: {
 				openapi: {
@@ -78,15 +85,10 @@ export function deleteApiKey({
 					message: ERROR_CODES.USER_BANNED,
 				});
 			}
-			const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-				model: API_KEY_TABLE_NAME,
-				where: [
-					{
-						field: "id",
-						value: keyId,
-					},
-				],
-			});
+
+			let apiKey: ApiKey | null = null;
+
+			apiKey = await getApiKeyById(ctx, keyId, opts);
 
 			if (!apiKey || apiKey.userId !== session.user.id) {
 				throw new APIError("NOT_FOUND", {
@@ -95,15 +97,30 @@ export function deleteApiKey({
 			}
 
 			try {
-				await ctx.context.adapter.delete<ApiKey>({
-					model: API_KEY_TABLE_NAME,
-					where: [
-						{
-							field: "id",
-							value: apiKey.id,
-						},
-					],
-				});
+				if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
+					await deleteApiKeyFromStorage(ctx, apiKey, opts);
+					await ctx.context.adapter.delete<ApiKey>({
+						model: API_KEY_TABLE_NAME,
+						where: [
+							{
+								field: "id",
+								value: apiKey.id,
+							},
+						],
+					});
+				} else if (opts.storage === "database") {
+					await ctx.context.adapter.delete<ApiKey>({
+						model: API_KEY_TABLE_NAME,
+						where: [
+							{
+								field: "id",
+								value: apiKey.id,
+							},
+						],
+					});
+				} else {
+					await deleteApiKeyFromStorage(ctx, apiKey, opts);
+				}
 			} catch (error: any) {
 				throw new APIError("INTERNAL_SERVER_ERROR", {
 					message: error?.message,

@@ -713,12 +713,12 @@ describe("oidc", async () => {
 	});
 
 	describe("max_age parameter handling", () => {
-		it("should force reauthentication when session age exceeds max_age", async ({
+		it("should force re-authentication when session age exceeds max_age", async ({
 			expect,
 		}) => {
-			// This test verifies that max_age triggers reauthentication
+			// This test verifies that max_age triggers re-authentication
 			// In a real scenario, we'd need to manipulate session creation time
-			// For now, we test with max_age=0 which should always trigger reauthentication
+			// For now, we test with max_age=0 which should always trigger re-authentication
 
 			const authUrl = new URL(
 				"http://localhost:3000/api/auth/oauth2/authorize",
@@ -731,7 +731,7 @@ describe("oidc", async () => {
 			authUrl.searchParams.set("response_type", "code");
 			authUrl.searchParams.set("scope", "openid profile email");
 			authUrl.searchParams.set("state", "test-state");
-			authUrl.searchParams.set("max_age", "0"); // Force immediate reauthentication
+			authUrl.searchParams.set("max_age", "0"); // Force immediate re-authentication
 			authUrl.searchParams.set("code_challenge", "test-challenge");
 			authUrl.searchParams.set("code_challenge_method", "S256");
 
@@ -748,7 +748,7 @@ describe("oidc", async () => {
 			expect(redirectURI).toContain("client_id=" + application.clientId);
 		});
 
-		it("should not force reauthentication when session age is within max_age", async ({
+		it("should not force re-authentication when session age is within max_age", async ({
 			expect,
 		}) => {
 			const authUrl = new URL(
@@ -1390,218 +1390,218 @@ describe("oidc-jwt", async () => {
 	test.each([
 		{ useJwt: true, description: "with jwt plugin", expected: "EdDSA" },
 		{ useJwt: false, description: "without jwt plugin", expected: "HS256" },
-	])(
-		"testing oidc-provider $description to return token signed with $expected",
-		async ({ useJwt, expected }) => {
-			const {
-				auth: authorizationServer,
-				signInWithTestUser,
+	])("testing oidc-provider $description to return token signed with $expected", async ({
+		useJwt,
+		expected,
+	}) => {
+		const {
+			auth: authorizationServer,
+			signInWithTestUser,
+			customFetchImpl,
+			testUser,
+		} = await getTestInstance({
+			baseURL: "http://localhost:3000",
+			plugins: [
+				oidcProvider({
+					loginPage: "/login",
+					consentPage: "/oauth2/authorize",
+					requirePKCE: true,
+					getAdditionalUserInfoClaim(user) {
+						return {
+							custom: "custom value",
+							userId: user.id,
+						};
+					},
+					useJWTPlugin: useJwt,
+				}),
+				...(useJwt ? [jwt()] : []),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const serverClient = createAuthClient({
+			plugins: [oidcClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
 				customFetchImpl,
-				testUser,
-			} = await getTestInstance({
-				baseURL: "http://localhost:3000",
-				plugins: [
-					oidcProvider({
-						loginPage: "/login",
-						consentPage: "/oauth2/authorize",
-						requirePKCE: true,
-						getAdditionalUserInfoClaim(user) {
-							return {
-								custom: "custom value",
-								userId: user.id,
-							};
-						},
-						useJWTPlugin: useJwt,
-					}),
-					...(useJwt ? [jwt()] : []),
-				],
-			});
-			const { headers } = await signInWithTestUser();
-			const serverClient = createAuthClient({
-				plugins: [oidcClient()],
-				baseURL: "http://localhost:3000",
-				fetchOptions: {
-					customFetchImpl,
-					headers,
-				},
-			});
-			server = await listen(toNodeHandler(authorizationServer.handler), {
-				port: 3000,
-			});
-			let application: Client = {
-				clientId: "test-client-id",
-				clientSecret: "test-client-secret-oidc",
-				redirectUrls: ["http://localhost:3000/api/auth/oauth2/callback/test"],
+				headers,
+			},
+		});
+		server = await listen(toNodeHandler(authorizationServer.handler), {
+			port: 3000,
+		});
+		let application: Client = {
+			clientId: "test-client-id",
+			clientSecret: "test-client-secret-oidc",
+			redirectUrls: ["http://localhost:3000/api/auth/oauth2/callback/test"],
+			metadata: {},
+			icon: "",
+			type: "web",
+			disabled: false,
+			name: "test",
+		};
+		const createdClient = await serverClient.oauth2.register({
+			client_name: application.name,
+			redirect_uris: application.redirectUrls,
+			logo_uri: application.icon,
+		});
+		expect(createdClient.data).toMatchObject({
+			client_id: expect.any(String),
+			client_secret: expect.any(String),
+			client_name: "test",
+			logo_uri: "",
+			redirect_uris: ["http://localhost:3000/api/auth/oauth2/callback/test"],
+			grant_types: ["authorization_code"],
+			response_types: ["code"],
+			token_endpoint_auth_method: "client_secret_basic",
+			client_id_issued_at: expect.any(Number),
+			client_secret_expires_at: 0,
+		});
+		if (createdClient.data) {
+			application = {
+				clientId: createdClient.data.client_id,
+				clientSecret: createdClient.data.client_secret,
+				redirectUrls: createdClient.data.redirect_uris,
 				metadata: {},
-				icon: "",
+				icon: createdClient.data.logo_uri || "",
 				type: "web",
 				disabled: false,
-				name: "test",
+				name: createdClient.data.client_name || "",
 			};
-			const createdClient = await serverClient.oauth2.register({
-				client_name: application.name,
-				redirect_uris: application.redirectUrls,
-				logo_uri: application.icon,
-			});
-			expect(createdClient.data).toMatchObject({
-				client_id: expect.any(String),
-				client_secret: expect.any(String),
-				client_name: "test",
-				logo_uri: "",
-				redirect_uris: ["http://localhost:3000/api/auth/oauth2/callback/test"],
-				grant_types: ["authorization_code"],
-				response_types: ["code"],
-				token_endpoint_auth_method: "client_secret_basic",
-				client_id_issued_at: expect.any(Number),
-				client_secret_expires_at: 0,
-			});
-			if (createdClient.data) {
-				application = {
-					clientId: createdClient.data.client_id,
-					clientSecret: createdClient.data.client_secret,
-					redirectUrls: createdClient.data.redirect_uris,
-					metadata: {},
-					icon: createdClient.data.logo_uri || "",
-					type: "web",
-					disabled: false,
-					name: createdClient.data.client_name || "",
-				};
-			}
+		}
 
-			// The RP (Relying Party) - the client application
-			const { customFetchImpl: customFetchImplRP, cookieSetter } =
-				await getTestInstance({
-					account: {
-						accountLinking: {
-							trustedProviders: ["test"],
-						},
+		// The RP (Relying Party) - the client application
+		const { customFetchImpl: customFetchImplRP, cookieSetter } =
+			await getTestInstance({
+				account: {
+					accountLinking: {
+						trustedProviders: ["test"],
 					},
-					plugins: [
-						genericOAuth({
-							config: [
-								{
-									providerId: "test",
-									clientId: application.clientId,
-									clientSecret: application.clientSecret || "",
-									authorizationUrl:
-										"http://localhost:3000/api/auth/oauth2/authorize",
-									tokenUrl: "http://localhost:3000/api/auth/oauth2/token",
-									scopes: ["openid", "profile", "email"],
-									pkce: true,
-								},
-							],
-						}),
-					],
-				});
-
-			const client = createAuthClient({
-				plugins: [genericOAuthClient()],
-				baseURL: "http://localhost:5000",
-				fetchOptions: {
-					customFetchImpl: customFetchImplRP,
 				},
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "test",
+								clientId: application.clientId,
+								clientSecret: application.clientSecret || "",
+								authorizationUrl:
+									"http://localhost:3000/api/auth/oauth2/authorize",
+								tokenUrl: "http://localhost:3000/api/auth/oauth2/token",
+								scopes: ["openid", "profile", "email"],
+								pkce: true,
+							},
+						],
+					}),
+				],
 			});
-			const oAuthHeaders = new Headers();
-			const data = await client.signIn.oauth2(
+
+		const client = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:5000",
+			fetchOptions: {
+				customFetchImpl: customFetchImplRP,
+			},
+		});
+		const oAuthHeaders = new Headers();
+		const data = await client.signIn.oauth2(
+			{
+				providerId: "test",
+				callbackURL: "/dashboard",
+			},
+			{
+				throw: true,
+				onSuccess: cookieSetter(oAuthHeaders),
+			},
+		);
+		expect(data.url).toContain(
+			"http://localhost:3000/api/auth/oauth2/authorize",
+		);
+		expect(data.url).toContain(`client_id=${application.clientId}`);
+
+		let redirectURI = "";
+		const newHeaders = new Headers();
+		await serverClient.$fetch(data.url, {
+			method: "GET",
+			onError(context) {
+				redirectURI = context.response.headers.get("Location") || "";
+				cookieSetter(newHeaders)(context);
+				if (headers.get("Cookie")) {
+					newHeaders.append("Cookie", headers.get("Cookie") || "");
+				}
+			},
+		});
+
+		// Check if consent is needed (per OIDC spec)
+		if (redirectURI.includes("consent_code=")) {
+			// Handle consent flow - this is expected per OIDC spec for non-trusted clients
+			expect(redirectURI).toContain("/oauth2/authorize?");
+			expect(redirectURI).toContain("consent_code=");
+			expect(redirectURI).toContain("client_id=");
+
+			// Extract consent_code from URL
+			const url = new URL(redirectURI, "http://localhost:3000");
+			const consentCode = url.searchParams.get("consent_code");
+
+			const res = await serverClient.oauth2.consent(
 				{
-					providerId: "test",
-					callbackURL: "/dashboard",
+					accept: true,
+					consent_code: consentCode,
 				},
 				{
+					headers: newHeaders,
 					throw: true,
-					onSuccess: cookieSetter(oAuthHeaders),
 				},
 			);
-			expect(data.url).toContain(
-				"http://localhost:3000/api/auth/oauth2/authorize",
+			expect(res.redirectURI).toContain(
+				"http://localhost:3000/api/auth/oauth2/callback/test?code=",
 			);
-			expect(data.url).toContain(`client_id=${application.clientId}`);
-
-			let redirectURI = "";
-			const newHeaders = new Headers();
-			await serverClient.$fetch(data.url, {
-				method: "GET",
-				onError(context) {
-					redirectURI = context.response.headers.get("Location") || "";
-					cookieSetter(newHeaders)(context);
-					if (headers.get("Cookie")) {
-						newHeaders.append("Cookie", headers.get("Cookie") || "");
-					}
-				},
-			});
-
-			// Check if consent is needed (per OIDC spec)
-			if (redirectURI.includes("consent_code=")) {
-				// Handle consent flow - this is expected per OIDC spec for non-trusted clients
-				expect(redirectURI).toContain("/oauth2/authorize?");
-				expect(redirectURI).toContain("consent_code=");
-				expect(redirectURI).toContain("client_id=");
-
-				// Extract consent_code from URL
-				const url = new URL(redirectURI, "http://localhost:3000");
-				const consentCode = url.searchParams.get("consent_code");
-
-				const res = await serverClient.oauth2.consent(
-					{
-						accept: true,
-						consent_code: consentCode,
-					},
-					{
-						headers: newHeaders,
-						throw: true,
-					},
-				);
-				expect(res.redirectURI).toContain(
-					"http://localhost:3000/api/auth/oauth2/callback/test?code=",
-				);
-				redirectURI = res.redirectURI;
-			} else {
-				// Direct code response (trusted client)
-				expect(redirectURI).toContain(
-					"http://localhost:3000/api/auth/oauth2/callback/test?code=",
-				);
-			}
-			let authToken = undefined;
-			let callbackURL = "";
-			await client.$fetch(redirectURI, {
-				headers: oAuthHeaders,
-				onError(context) {
-					callbackURL = context.response.headers.get("Location") || "";
-					authToken = context.response.headers.get("set-auth-token")!;
-				},
-			});
-			expect(callbackURL).toContain("/dashboard");
-			const accessToken = await client.getAccessToken(
-				{ providerId: "test", userId: testUser.id },
-				{
-					auth: {
-						type: "Bearer",
-						token: authToken,
-					},
-				},
+			redirectURI = res.redirectURI;
+		} else {
+			// Direct code response (trusted client)
+			expect(redirectURI).toContain(
+				"http://localhost:3000/api/auth/oauth2/callback/test?code=",
 			);
-			const decoded = decodeProtectedHeader(accessToken.data?.idToken!);
-			if (useJwt) {
-				const jwks = await authorizationServer.api.getJwks();
-				const jwkSet = createLocalJWKSet(jwks);
-				const checkSignature = await jwtVerify(
-					accessToken.data?.idToken!,
-					jwkSet,
-				);
-				expect(checkSignature).toBeDefined();
-				expect(Number.isInteger(checkSignature.payload.iat)).toBeTruthy();
-				expect(Number.isInteger(checkSignature.payload.exp)).toBeTruthy();
-			} else {
-				const clientSecret = application.clientSecret;
-				const checkSignature = await jwtVerify(
-					accessToken.data?.idToken!,
-					new TextEncoder().encode(clientSecret),
-				);
-				expect(checkSignature).toBeDefined();
-			}
+		}
+		let authToken = undefined;
+		let callbackURL = "";
+		await client.$fetch(redirectURI, {
+			headers: oAuthHeaders,
+			onError(context) {
+				callbackURL = context.response.headers.get("Location") || "";
+				authToken = context.response.headers.get("set-auth-token")!;
+			},
+		});
+		expect(callbackURL).toContain("/dashboard");
+		const accessToken = await client.getAccessToken(
+			{ providerId: "test", userId: testUser.id },
+			{
+				auth: {
+					type: "Bearer",
+					token: authToken,
+				},
+			},
+		);
+		const decoded = decodeProtectedHeader(accessToken.data?.idToken!);
+		if (useJwt) {
+			const jwks = await authorizationServer.api.getJwks();
+			const jwkSet = createLocalJWKSet(jwks);
+			const checkSignature = await jwtVerify(
+				accessToken.data?.idToken!,
+				jwkSet,
+			);
+			expect(checkSignature).toBeDefined();
+			expect(Number.isInteger(checkSignature.payload.iat)).toBeTruthy();
+			expect(Number.isInteger(checkSignature.payload.exp)).toBeTruthy();
+		} else {
+			const clientSecret = application.clientSecret;
+			const checkSignature = await jwtVerify(
+				accessToken.data?.idToken!,
+				new TextEncoder().encode(clientSecret),
+			);
+			expect(checkSignature).toBeDefined();
+		}
 
-			// expect(checkSignature.payload).toBeDefined();
-			expect(decoded.alg).toBe(expected);
-		},
-	);
+		// expect(checkSignature.payload).toBeDefined();
+		expect(decoded.alg).toBe(expected);
+	});
 });

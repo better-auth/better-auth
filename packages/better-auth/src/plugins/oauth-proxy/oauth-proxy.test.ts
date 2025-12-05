@@ -293,4 +293,186 @@ describe("oauth-proxy", async () => {
 			},
 		);
 	});
+
+	describe("stateless mode (cookie-based)", () => {
+		it("should encrypt state package for cross-origin OAuth", async () => {
+			const { client } = await getTestInstance({
+				database: undefined, // Stateless mode
+				plugins: [
+					oAuthProxy({
+						currentURL: "http://preview-localhost:3000",
+					}),
+				],
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			});
+
+			const res = await client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{
+					throw: true,
+				},
+			);
+
+			const state = new URL(res.url!).searchParams.get("state");
+			expect(state).toBeTruthy();
+
+			// State should be an encrypted package, not the original state
+			// In stateless mode, the state parameter contains encrypted data
+			expect(state!.length).toBeGreaterThan(50); // Encrypted data is longer
+		});
+
+		it("should handle OAuth callback with encrypted state package", async () => {
+			const { client } = await getTestInstance({
+				database: undefined, // Stateless mode
+				plugins: [
+					oAuthProxy({
+						currentURL: "http://preview-localhost:3000",
+					}),
+				],
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			});
+
+			// Initiate sign-in
+			const res = await client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{
+					throw: true,
+				},
+			);
+
+			const encryptedState = new URL(res.url!).searchParams.get("state");
+			expect(encryptedState).toBeTruthy();
+
+			// Simulate OAuth provider callback with encrypted state
+			await client.$fetch(
+				`/callback/google?code=test&state=${encryptedState}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						expect(location).toBeTruthy();
+
+						// Should redirect to proxy callback
+						expect(location).toContain("/oauth-proxy-callback");
+						expect(location).toContain("callbackURL");
+					},
+				},
+			);
+		});
+
+		it("should decrypt state package correctly", async () => {
+			const { client, auth } = await getTestInstance({
+				database: undefined, // Stateless mode
+				plugins: [
+					oAuthProxy({
+						currentURL: "http://preview-localhost:3000",
+					}),
+				],
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			});
+
+			const { secret } = await auth.$context;
+
+			// Perform OAuth flow to get encrypted state
+			const res = await client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{
+					throw: true,
+				},
+			);
+
+			const encryptedState = new URL(res.url!).searchParams.get("state");
+			expect(encryptedState).toBeTruthy();
+
+			// Verify we can decrypt the state package
+			const { symmetricDecrypt } = await import("../../crypto");
+			const { parseJSON } = await import("../../client/parser");
+
+			const decrypted = await symmetricDecrypt({
+				key: secret,
+				data: encryptedState!,
+			});
+
+			const statePackage = parseJSON<{
+				state: string;
+				stateCookie: string;
+				isOAuthProxy: boolean;
+			}>(decrypted);
+
+			// Verify state package structure
+			expect(statePackage).toHaveProperty("state");
+			expect(statePackage).toHaveProperty("stateCookie");
+			expect(statePackage).toHaveProperty("isOAuthProxy");
+			expect(statePackage.isOAuthProxy).toBe(true);
+		});
+
+		it("should work on same origin without proxy", async () => {
+			const { client, cookieSetter } = await getTestInstance({
+				database: undefined, // Stateless mode
+				plugins: [
+					oAuthProxy({
+						productionURL: "http://localhost:3000",
+					}),
+				],
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			});
+
+			const headers = new Headers();
+			const res = await client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{
+					throw: true,
+					onSuccess: cookieSetter(headers),
+				},
+			);
+
+			const state = new URL(res.url!).searchParams.get("state");
+
+			// On same origin, state should NOT be encrypted package
+			// It should be the regular random state
+			expect(state!.length).toBeLessThan(50);
+
+			await client.$fetch(`/callback/google?code=test&state=${state}`, {
+				headers,
+				onError(context) {
+					const location = context.response.headers.get("location");
+
+					// Should NOT redirect to proxy
+					expect(location).not.toContain("/oauth-proxy-callback");
+					expect(location).toContain("/dashboard");
+				},
+			});
+		});
+	});
 });

@@ -1,19 +1,22 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBFieldAttribute, DBFieldType } from "@better-auth/core/db";
+import { getAuthTables } from "@better-auth/core/db";
+import {
+	initGetFieldName,
+	initGetModelName,
+} from "@better-auth/core/db/adapter";
 import { createLogger } from "@better-auth/core/env";
 import type {
+	AlterTableBuilder,
 	AlterTableColumnAlteringBuilder,
 	CreateIndexBuilder,
 	CreateTableBuilder,
 	Kysely,
 } from "kysely";
 import { sql } from "kysely";
-import { initGetFieldName } from "../adapters/adapter-factory/get-field-name";
-import { initGetModelName } from "../adapters/adapter-factory/get-model-name";
 import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import { getSchema } from "./get-schema";
-import { getAuthTables } from "./get-tables";
 
 const postgresMap = {
 	string: ["character varying", "varchar", "text", "uuid"],
@@ -263,6 +266,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 
 	const migrations: (
 		| AlterTableColumnAlteringBuilder
+		| ReturnType<AlterTableBuilder["addIndex"]>
 		| CreateTableBuilder<string, string>
 		| CreateIndexBuilder
 	)[] = [];
@@ -369,6 +373,11 @@ export async function getMigrations(config: BetterAuthOptions) {
 		if (Array.isArray(type)) {
 			return "text";
 		}
+		if (!(type in typeMap)) {
+			throw new Error(
+				`Unsupported field type '${String(type)}' for field '${fieldName}'. Allowed types are: string, number, boolean, date, string[], number[]. If you need to store structured data, store it as a JSON string (type: "string") or split it into primitive fields. See https://better-auth.com/docs/advanced/schema#additional-fields`,
+			);
+		}
 		return typeMap[type]![dbType || "sqlite"];
 	}
 	const getModelName = initGetModelName({
@@ -400,8 +409,10 @@ export async function getMigrations(config: BetterAuthOptions) {
 				let builder = db.schema.alterTable(table.table);
 
 				if (field.index) {
-					//@ts-expect-error
-					builder = builder.addIndex(`${table.table}_${fieldName}_idx`);
+					const index = db.schema
+						.alterTable(table.table)
+						.addIndex(`${table.table}_${fieldName}_idx`);
+					migrations.push(index);
 				}
 
 				let built = builder.addColumn(fieldName, type, (col) => {
