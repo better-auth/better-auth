@@ -1,5 +1,5 @@
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 
 /**
  * Adds SvelteKit environment modules and path aliases
@@ -152,7 +152,7 @@ function createDynamicEnvModule() {
   `;
 }
 
-export function filterPrivateEnv(publicPrefix: string, privatePrefix: string) {
+function filterPrivateEnv(publicPrefix: string, privatePrefix: string) {
 	return Object.fromEntries(
 		Object.entries(process.env).filter(
 			([k]) =>
@@ -162,7 +162,7 @@ export function filterPrivateEnv(publicPrefix: string, privatePrefix: string) {
 	) as Record<string, string>;
 }
 
-export function filterPublicEnv(publicPrefix: string, privatePrefix: string) {
+function filterPublicEnv(publicPrefix: string, privatePrefix: string) {
 	return Object.fromEntries(
 		Object.entries(process.env).filter(
 			([k]) =>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getAuthTables } from "./get-tables";
+import { getAuthTables } from "../get-tables";
 
 describe("getAuthTables", () => {
 	it("should use correct field name for refreshTokenExpiresAt", () => {
