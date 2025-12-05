@@ -62,10 +62,6 @@ When the OAuth provider returns the user to your server, the plugin automaticall
 
 To share cookies between the proxy server and your main server it uses URL query parameters to pass the cookies encrypted in the URL. This is secure as the cookies are encrypted and can only be decrypted by the server.
 
-### Security
-
-The plugin includes built-in protection against replay attacks by adding timestamps to encrypted payloads. If an encrypted URL is intercepted, it can only be used within a short time window (default: 60 seconds) before it expires. This prevents attackers from reusing leaked URLs to gain unauthorized access.
-
 <Callout type="warn">
 This plugin requires skipping the state cookie check. This has security implications and should only be used in dev or staging environments. If `baseURL` and `productionURL` are the same, the plugin will not proxy the request.
 </Callout>
