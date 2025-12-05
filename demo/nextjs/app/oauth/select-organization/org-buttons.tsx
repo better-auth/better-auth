@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,19 @@ export function SelectOrganizationBtn({
 					<p>{organization?.name}</p>
 				</div>
 			</div>
+		</Button>
+	);
+}
+
+export function GoBackBtn() {
+	const router = useRouter();
+	return (
+		<Button
+			className="w-full gap-2 h-12"
+			variant="outline"
+			onClick={() => router.back()}
+		>
+			Go Back
 		</Button>
 	);
 }
