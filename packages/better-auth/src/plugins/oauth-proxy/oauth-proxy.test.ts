@@ -483,7 +483,7 @@ describe("oauth-proxy", async () => {
 		});
 	});
 
-	describe("reply protection", () => {
+	describe("payload timestamp", () => {
 		it("should include timestamp in encrypted payload", async () => {
 			const { client, auth } = await getTestInstance({
 				plugins: [
