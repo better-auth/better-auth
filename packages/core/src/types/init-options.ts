@@ -879,6 +879,39 @@ export type BetterAuthOptions = {
 						LiteralUnion<SocialProviderList[number] | "email-password", string>
 					>;
 					/**
+					 * Controls when OAuth/SSO providers can auto-link to an existing user
+					 * with the same email address.
+					 *
+					 * This setting only applies when:
+					 * - account linking is enabled, and
+					 * - a user already exists with the same email, and
+					 * - the provider/account is not yet linked.
+					 *
+					 * Policies:
+					 * - `"never"`:
+					 *    Never auto-link. Users must explicitly link accounts (e.g. via a
+					 *    signed-in "link account" flow).
+					 *
+					 * - `"trusted_providers_only"` (recommended):
+					 *    Only auto-link if the provider passes a trust check. In core this
+					 *    means the provider is listed in `trustedProviders`. SSO plugins
+					 *    apply additional trust rules (e.g. domain verification).
+					 *
+					 * - `"verified_email_trusted"` (default):
+					 *    Legacy behavior for backward compatibility. Auto-link when either:
+					 *    - the provider is trusted, or
+					 *    - the provider returns `email_verified: true`.
+					 *
+					 *    Note: For SSO plugins, this policy still requires a trust signal
+					 *    (trusted provider or domain-verified) for security.
+					 *
+					 * @default "verified_email_trusted"
+					 */
+					linkingPolicy?:
+						| "never"
+						| "trusted_providers_only"
+						| "verified_email_trusted";
+					/**
 					 * If enabled (true), this will allow users to manually linking accounts with different email addresses than the main user.
 					 *
 					 * @default false

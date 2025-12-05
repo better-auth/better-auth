@@ -365,9 +365,40 @@ export const auth = betterAuth({
 });
 ```
 
-#### Forced Linking
+#### Existing User Auto-Linking Policy
 
-You can specify a list of "trusted providers." When a user logs in using a trusted provider, their account will be automatically linked even if the provider doesn’t confirm the email verification status. Use this with caution as it may increase the risk of account takeover.
+The `linkingPolicy` option controls when OAuth/SSO providers can auto-link to an existing user with the same email address. This provides fine-grained control over account linking security.
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    account: {
+        accountLinking: {
+            enabled: true,
+            linkingPolicy: "trusted_providers_only", // recommended
+        }
+    },
+});
+```
+
+Available policies:
+
+- **`"never"`**: Never auto-link. Users must explicitly link accounts (e.g., via a signed-in "link account" flow).
+
+- **`"trusted_providers_only"`** (recommended): Only auto-link if the provider passes a trust check. This means the provider must be listed in `trustedProviders` or the associated domain has been verified.
+
+- **`"verified_email_trusted"`** (default): Legacy behavior for backward compatibility. Auto-link when either the provider is trusted OR the provider returns `email_verified: true`.
+
+<Callout type="info">
+**Security Recommendation**: For production applications, we recommend setting `linkingPolicy: "trusted_providers_only"` and explicitly listing your trusted providers. The `"verified_email_trusted"` default is maintained for backward compatibility but relies on trusting the `email_verified` claim from any provider.
+</Callout>
+
+<Callout type="warn">
+**SSO Plugin Behavior**: The SSO plugin only supports `"trusted_providers_only"` and `"never"` policies. If you set `"verified_email_trusted"`, SSO will default to `"trusted_providers_only"`. This is intentional—enterprise SSO providers should prove domain ownership or be explicitly trusted before linking to existing accounts.
+</Callout>
+
+#### Trusted Providers
+
+You can specify a list of "trusted providers." When a user logs in using a trusted provider, their account will be automatically linked even if the provider doesn't confirm the email verification status. Use this with caution as it may increase the risk of account takeover.
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
