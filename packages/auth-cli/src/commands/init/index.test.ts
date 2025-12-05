@@ -29,9 +29,9 @@ vi.mock("../../utils/get-package-json", () => {
 });
 
 vi.mock("./utility/get-package-manager", async () => {
-	const actual = await vi.importActual<typeof import("./utility/get-package-manager")>(
-		"./utility/get-package-manager",
-	);
+	const actual = await vi.importActual<
+		typeof import("./utility/get-package-manager")
+	>("./utility/get-package-manager");
 	return {
 		...actual,
 		getPackageManager: vi.fn(),
@@ -161,7 +161,10 @@ describe("initAction - Full Flow", () => {
 				return { value: true };
 			}
 			// Handle confirm prompts (they use type: "confirm" and return { value: boolean })
-			if (question.type === "confirm" && question.message?.includes(".env file")) {
+			if (
+				question.type === "confirm" &&
+				question.message?.includes(".env file")
+			) {
 				return { value: true };
 			}
 			if (question.name === "providedSecret") {
@@ -316,18 +319,21 @@ describe("initAction - Full Flow", () => {
 		// Mock prompts - should not be called for auth config since it exists
 		mockPrompts.mockImplementation(async (questions: any) => {
 			const question = Array.isArray(questions) ? questions[0] : questions;
-			
+
 			// Handle other prompts that might be called
 			if (question.name === "shouldInstallBetterAuth") {
 				return { shouldInstallBetterAuth: false };
 			}
-			if (question.type === "confirm" && question.message?.includes(".env file")) {
+			if (
+				question.type === "confirm" &&
+				question.message?.includes(".env file")
+			) {
 				return { value: false };
 			}
 			if (question.message?.includes("configure a database")) {
 				return { value: "skip" };
 			}
-			
+
 			return {};
 		});
 
@@ -336,10 +342,7 @@ describe("initAction - Full Flow", () => {
 		// Should preserve existing auth config (not overwrite it)
 		// Note: The init command will still generate the config code, but it should
 		// detect the existing file and skip the generation step
-		const authConfigContent = await fs.readFile(
-			existingAuthPath,
-			"utf-8",
-		);
+		const authConfigContent = await fs.readFile(existingAuthPath, "utf-8");
 		// The file might be updated, but let's check it at least exists
 		expect(authConfigContent).toContain("betterAuth");
 	});
@@ -383,17 +386,26 @@ describe("initAction - Full Flow", () => {
 			if (question.name === "shouldInstallBetterAuth") {
 				return { shouldInstallBetterAuth: false };
 			}
-			if (question.type === "confirm" && question.message?.includes(".env file")) {
+			if (
+				question.type === "confirm" &&
+				question.message?.includes(".env file")
+			) {
 				return { value: false };
 			}
-			if (question.name === "filePath" && question.message?.includes("auth instance")) {
+			if (
+				question.name === "filePath" &&
+				question.message?.includes("auth instance")
+			) {
 				return { filePath: "auth.ts" };
 			}
 			if (question.message?.includes("configure a database")) {
 				return { value: "yes" };
 			}
 			// First select "sqlite" which triggers SQLite variant selection
-			if (question.message?.includes("Select the database") && !question.message?.includes("SQLite driver")) {
+			if (
+				question.message?.includes("Select the database") &&
+				!question.message?.includes("SQLite driver")
+			) {
 				return { value: "sqlite" };
 			}
 			// Then select the SQLite driver variant
@@ -418,7 +430,7 @@ describe("initAction - Full Flow", () => {
 
 			return {};
 		});
-		
+
 		mockHasDependency.mockReset();
 		mockHasDependency.mockResolvedValue(false);
 
@@ -442,10 +454,16 @@ describe("initAction - Full Flow", () => {
 			if (question.name === "shouldInstallBetterAuth") {
 				return { shouldInstallBetterAuth: false };
 			}
-			if (question.type === "confirm" && question.message?.includes(".env file")) {
+			if (
+				question.type === "confirm" &&
+				question.message?.includes(".env file")
+			) {
 				return { value: false };
 			}
-			if (question.name === "filePath" && question.message?.includes("auth instance")) {
+			if (
+				question.name === "filePath" &&
+				question.message?.includes("auth instance")
+			) {
 				return { filePath: "src/auth.ts" };
 			}
 			if (question.message?.includes("configure a database")) {
@@ -500,10 +518,16 @@ describe("initAction - Full Flow", () => {
 			if (question.name === "shouldInstallBetterAuth") {
 				return { shouldInstallBetterAuth: false };
 			}
-			if (question.type === "confirm" && question.message?.includes(".env file")) {
+			if (
+				question.type === "confirm" &&
+				question.message?.includes(".env file")
+			) {
 				return { value: false };
 			}
-			if (question.name === "filePath" && question.message?.includes("auth instance")) {
+			if (
+				question.name === "filePath" &&
+				question.message?.includes("auth instance")
+			) {
 				return { filePath: "auth.ts" };
 			}
 			if (question.message?.includes("configure a database")) {
@@ -541,7 +565,10 @@ describe("initAction - Full Flow", () => {
 			path.join(tempDir, "package.json"),
 			JSON.stringify({ name: "test-project", version: "1.0.0" }),
 		);
-		await fs.writeFile(path.join(tempDir, ".env"), "BETTER_AUTH_SECRET=test\nBETTER_AUTH_URL=http://localhost:3000");
+		await fs.writeFile(
+			path.join(tempDir, ".env"),
+			"BETTER_AUTH_SECRET=test\nBETTER_AUTH_URL=http://localhost:3000",
+		);
 
 		mockPrompts.mockImplementation(async (questions: any) => {
 			const question = Array.isArray(questions) ? questions[0] : questions;
@@ -549,7 +576,10 @@ describe("initAction - Full Flow", () => {
 			if (question.name === "shouldInstallBetterAuth") {
 				return { shouldInstallBetterAuth: false };
 			}
-			if (question.name === "filePath" && question.message?.includes("auth instance")) {
+			if (
+				question.name === "filePath" &&
+				question.message?.includes("auth instance")
+			) {
 				return { filePath: "auth.ts" };
 			}
 			if (question.message?.includes("configure a database")) {
@@ -606,10 +636,16 @@ describe("initAction - Full Flow", () => {
 			if (question.name === "shouldInstallBetterAuth") {
 				return { shouldInstallBetterAuth: false };
 			}
-			if (question.type === "confirm" && question.message?.includes(".env file")) {
+			if (
+				question.type === "confirm" &&
+				question.message?.includes(".env file")
+			) {
 				return { value: false };
 			}
-			if (question.name === "filePath" && question.message?.includes("auth instance")) {
+			if (
+				question.name === "filePath" &&
+				question.message?.includes("auth instance")
+			) {
 				return { filePath: "auth.ts" };
 			}
 			if (question.message?.includes("configure a database")) {
@@ -662,10 +698,16 @@ describe("initAction - Full Flow", () => {
 			if (question.name === "shouldInstallBetterAuth") {
 				return { shouldInstallBetterAuth: false };
 			}
-			if (question.type === "confirm" && question.message?.includes(".env file")) {
+			if (
+				question.type === "confirm" &&
+				question.message?.includes(".env file")
+			) {
 				return { value: false };
 			}
-			if (question.name === "filePath" && question.message?.includes("auth instance")) {
+			if (
+				question.name === "filePath" &&
+				question.message?.includes("auth instance")
+			) {
 				return { filePath: "src/lib/auth.ts" };
 			}
 			if (question.message?.includes("configure a database")) {
@@ -674,7 +716,10 @@ describe("initAction - Full Flow", () => {
 			if (question.message?.includes("auth client configuration")) {
 				return { value: true };
 			}
-			if (question.name === "filePath" && question.message?.includes("auth-client.ts")) {
+			if (
+				question.name === "filePath" &&
+				question.message?.includes("auth-client.ts")
+			) {
 				authClientPromptCalled = true;
 				// Return absolute path to ensure it works
 				return { filePath: path.join(tempDir, "src/lib/auth-client.ts") };
@@ -687,7 +732,7 @@ describe("initAction - Full Flow", () => {
 
 		// Verify the prompt was called
 		expect(authClientPromptCalled).toBe(true);
-		
+
 		// Check that auth client file was created
 		const authClientPath = path.join(tempDir, "src/lib/auth-client.ts");
 		const authClientExists = await fs
@@ -715,10 +760,16 @@ describe("initAction - Full Flow", () => {
 			if (question.name === "shouldInstallBetterAuth") {
 				return { shouldInstallBetterAuth: false };
 			}
-			if (question.type === "confirm" && question.message?.includes(".env file")) {
+			if (
+				question.type === "confirm" &&
+				question.message?.includes(".env file")
+			) {
 				return { value: false };
 			}
-			if (question.name === "filePath" && question.message?.includes("auth instance")) {
+			if (
+				question.name === "filePath" &&
+				question.message?.includes("auth instance")
+			) {
 				return { filePath: "src/lib/auth.ts" };
 			}
 			if (question.message?.includes("configure a database")) {
@@ -746,7 +797,11 @@ describe("initAction - Full Flow", () => {
 				return { value: false };
 			}
 			// Overwrite confirmation - check for the confirm type
-			if (question.type === "confirm" && question.message?.includes("already exists") && question.message?.includes("overwrite")) {
+			if (
+				question.type === "confirm" &&
+				question.message?.includes("already exists") &&
+				question.message?.includes("overwrite")
+			) {
 				overwritePromptCalled = true;
 				return { value: true };
 			}
@@ -785,10 +840,16 @@ describe("initAction - Full Flow", () => {
 			if (question.name === "shouldInstallBetterAuth") {
 				return { shouldInstallBetterAuth: false };
 			}
-			if (question.type === "confirm" && question.message?.includes(".env file")) {
+			if (
+				question.type === "confirm" &&
+				question.message?.includes(".env file")
+			) {
 				return { value: false };
 			}
-			if (question.name === "filePath" && question.message?.includes("auth instance")) {
+			if (
+				question.name === "filePath" &&
+				question.message?.includes("auth instance")
+			) {
 				return { filePath: "auth.ts" };
 			}
 			if (question.message?.includes("configure a database")) {
@@ -836,10 +897,16 @@ describe("initAction - Full Flow", () => {
 			if (question.name === "shouldInstallBetterAuth") {
 				return { shouldInstallBetterAuth: false };
 			}
-			if (question.type === "confirm" && question.message?.includes(".env file")) {
+			if (
+				question.type === "confirm" &&
+				question.message?.includes(".env file")
+			) {
 				return { value: false };
 			}
-			if (question.name === "filePath" && question.message?.includes("auth instance")) {
+			if (
+				question.name === "filePath" &&
+				question.message?.includes("auth instance")
+			) {
 				return { filePath: "auth.ts" };
 			}
 			if (question.message?.includes("configure a database")) {
@@ -886,7 +953,10 @@ describe("initAction - Full Flow", () => {
 			if (question.name === "shouldInstallBetterAuth") {
 				return { shouldInstallBetterAuth: false };
 			}
-			if (question.name === "filePath" && question.message?.includes("auth instance")) {
+			if (
+				question.name === "filePath" &&
+				question.message?.includes("auth instance")
+			) {
 				return { filePath: "auth.ts" };
 			}
 			if (question.message?.includes("configure a database")) {
@@ -907,7 +977,10 @@ describe("initAction - Full Flow", () => {
 
 		// Both env files should have been checked
 		const envContent = await fs.readFile(path.join(tempDir, ".env"), "utf-8");
-		const envLocalContent = await fs.readFile(path.join(tempDir, ".env.local"), "utf-8");
+		const envLocalContent = await fs.readFile(
+			path.join(tempDir, ".env.local"),
+			"utf-8",
+		);
 		expect(envContent).toBeTruthy();
 		expect(envLocalContent).toBeTruthy();
 	});
@@ -929,10 +1002,16 @@ describe("initAction - Full Flow", () => {
 			if (question.name === "shouldInstallBetterAuth") {
 				return { shouldInstallBetterAuth: true };
 			}
-			if (question.type === "confirm" && question.message?.includes(".env file")) {
+			if (
+				question.type === "confirm" &&
+				question.message?.includes(".env file")
+			) {
 				return { value: false };
 			}
-			if (question.name === "filePath" && question.message?.includes("auth instance")) {
+			if (
+				question.name === "filePath" &&
+				question.message?.includes("auth instance")
+			) {
 				return { filePath: "auth.ts" };
 			}
 			if (question.message?.includes("configure a database")) {
@@ -964,10 +1043,16 @@ describe("initAction - Full Flow", () => {
 			if (question.name === "shouldInstallBetterAuth") {
 				return { shouldInstallBetterAuth: false };
 			}
-			if (question.type === "confirm" && question.message?.includes(".env file")) {
+			if (
+				question.type === "confirm" &&
+				question.message?.includes(".env file")
+			) {
 				return { value: false };
 			}
-			if (question.name === "filePath" && question.message?.includes("auth instance")) {
+			if (
+				question.name === "filePath" &&
+				question.message?.includes("auth instance")
+			) {
 				return { filePath: "auth.ts" };
 			}
 			if (question.message?.includes("configure a database")) {
