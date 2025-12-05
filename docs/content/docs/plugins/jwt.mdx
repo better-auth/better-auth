@@ -526,11 +526,6 @@ jwt({
       // This overrides the default database query
       return await yourCustomStorage.getAllKeys()
     },
-    getLatestKey: async (ctx) => {
-      // Custom implementation to get the latest key
-      // This overrides the default database query
-      return await yourCustomStorage.getLatestKey()
-    },
     createJwk: async (ctx, webKey) => {
       // Custom implementation to create a new key
       // This overrides the default database insert
