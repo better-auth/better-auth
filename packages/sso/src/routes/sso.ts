@@ -29,6 +29,11 @@ const spMetadataQuerySchema = z.object({
 	format: z.enum(["xml", "json"]).default("xml"),
 });
 
+const spMetadataQuerySchema = z.object({
+	providerId: z.string(),
+	format: z.enum(["xml", "json"]).default("xml"),
+});
+
 export const spMetadata = () => {
 	return createAuthEndpoint(
 		"/sso/saml2/sp/metadata",
