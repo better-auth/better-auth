@@ -1183,6 +1183,171 @@ describe("SAML SSO", async () => {
 		});
 	});
 
+	it("should deny account linking when provider is not trusted and domain is not verified", async () => {
+		const {
+			auth: authUntrusted,
+			signInWithTestUser,
+			client,
+		} = await getTestInstance({
+			account: {
+				accountLinking: {
+					enabled: true,
+					trustedProviders: [],
+				},
+			},
+			plugins: [sso()],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await authUntrusted.api.registerSSOProvider({
+			body: {
+				providerId: "untrusted-saml-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		const ctx = await authUntrusted.$context;
+		await ctx.adapter.create({
+			model: "user",
+			data: {
+				id: "existing-user-id",
+				email: "test@email.com",
+				name: "Existing User",
+				emailVerified: true,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		let samlResponse: any;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		const response = await authUntrusted.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/callback/untrusted-saml-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse.samlResponse,
+						RelayState: "http://localhost:3000/dashboard",
+					}),
+				},
+			),
+		);
+
+		expect(response.status).toBe(302);
+		const redirectLocation = response.headers.get("location") || "";
+		expect(redirectLocation).toContain("error=account_not_linked");
+	});
+
+	it("should allow account linking when provider is in trustedProviders", async () => {
+		const { auth: authWithTrusted, signInWithTestUser } = await getTestInstance(
+			{
+				account: {
+					accountLinking: {
+						enabled: true,
+						trustedProviders: ["trusted-saml-provider"],
+					},
+				},
+				plugins: [sso()],
+			},
+		);
+
+		const { headers } = await signInWithTestUser();
+
+		await authWithTrusted.api.registerSSOProvider({
+			body: {
+				providerId: "trusted-saml-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		const ctx = await authWithTrusted.$context;
+		await ctx.adapter.create({
+			model: "user",
+			data: {
+				id: "existing-user-id-2",
+				email: "test@email.com",
+				name: "Existing User",
+				emailVerified: true,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		let samlResponse: any;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		const response = await authWithTrusted.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/callback/trusted-saml-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse.samlResponse,
+						RelayState: "http://localhost:3000/dashboard",
+					}),
+				},
+			),
+		);
+
+		expect(response.status).toBe(302);
+		const redirectLocation = response.headers.get("location") || "";
+		expect(redirectLocation).not.toContain("error");
+		expect(redirectLocation).toContain("dashboard");
+	});
+
 	it("should reject unsolicited SAML response when allowIdpInitiated is false", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [
@@ -1222,7 +1387,6 @@ describe("SAML SSO", async () => {
 			headers,
 		});
 
-		// Get SAML response from mock IdP (has InResponseTo: "null" - simulating IdP-initiated)
 		let samlResponse: any;
 		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
 			onSuccess: async (context) => {
@@ -1230,7 +1394,6 @@ describe("SAML SSO", async () => {
 			},
 		});
 
-		// Attempt callback - should fail because IdP-initiated is disabled
 		const response = await auth.handler(
 			new Request(
 				"http://localhost:3000/api/auth/sso/saml2/callback/strict-saml-provider",
@@ -1291,7 +1454,6 @@ describe("SAML SSO", async () => {
 			headers,
 		});
 
-		// Get SAML response from mock IdP
 		let samlResponse: any;
 		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
 			onSuccess: async (context) => {
@@ -1299,7 +1461,6 @@ describe("SAML SSO", async () => {
 			},
 		});
 
-		// Attempt callback - should succeed (IdP-initiated allowed)
 		const response = await auth.handler(
 			new Request(
 				"http://localhost:3000/api/auth/sso/saml2/callback/permissive-saml-provider",
@@ -1318,12 +1479,10 @@ describe("SAML SSO", async () => {
 
 		expect(response.status).toBe(302);
 		const redirectLocation = response.headers.get("location") || "";
-		// Should NOT contain error - should redirect to dashboard
 		expect(redirectLocation).not.toContain("error=unsolicited_response");
 	});
 
 	it("should skip InResponseTo validation when not explicitly enabled (backward compatibility)", async () => {
-		// Default SSO without enableInResponseToValidation
 		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [sso()],
 		});
@@ -1355,7 +1514,6 @@ describe("SAML SSO", async () => {
 			headers,
 		});
 
-		// Get SAML response from mock IdP (simulates IdP-initiated or unsolicited)
 		let samlResponse: any;
 		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
 			onSuccess: async (context) => {
@@ -1363,7 +1521,6 @@ describe("SAML SSO", async () => {
 			},
 		});
 
-		// Attempt callback - should succeed because validation is not enabled
 		const response = await auth.handler(
 			new Request(
 				"http://localhost:3000/api/auth/sso/saml2/callback/legacy-saml-provider",
@@ -1382,7 +1539,6 @@ describe("SAML SSO", async () => {
 
 		expect(response.status).toBe(302);
 		const redirectLocation = response.headers.get("location") || "";
-		// Should NOT contain any error - validation is skipped
 		expect(redirectLocation).not.toContain("error=");
 	});
 
@@ -1394,7 +1550,7 @@ describe("SAML SSO", async () => {
 				sso({
 					saml: {
 						authnRequestStore: customStore,
-						allowIdpInitiated: false, // Reject IdP-initiated to test store is being used
+						allowIdpInitiated: false,
 					},
 				}),
 			],
@@ -1427,7 +1583,6 @@ describe("SAML SSO", async () => {
 			headers,
 		});
 
-		// Get SAML response from mock IdP (unsolicited - no InResponseTo)
 		let samlResponse: any;
 		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
 			onSuccess: async (context) => {
@@ -1435,8 +1590,6 @@ describe("SAML SSO", async () => {
 			},
 		});
 
-		// Attempt callback - should fail because validation is automatically enabled
-		// and allowIdpInitiated is false
 		const response = await auth.handler(
 			new Request(
 				"http://localhost:3000/api/auth/sso/saml2/callback/custom-store-provider",
@@ -1455,7 +1608,6 @@ describe("SAML SSO", async () => {
 
 		expect(response.status).toBe(302);
 		const redirectLocation = response.headers.get("location") || "";
-		// Should contain error because validation is enabled via custom store
 		expect(redirectLocation).toContain("error=unsolicited_response");
 	});
 });

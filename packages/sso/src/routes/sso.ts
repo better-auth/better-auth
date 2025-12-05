@@ -1790,6 +1790,35 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			});
 
 			if (existingUser) {
+				const account = await ctx.context.adapter.findOne<Account>({
+					model: "account",
+					where: [
+						{ field: "userId", value: existingUser.id },
+						{ field: "providerId", value: provider.providerId },
+						{ field: "accountId", value: userInfo.id },
+					],
+				});
+				if (!account) {
+					const isTrustedProvider =
+						ctx.context.options.account?.accountLinking?.trustedProviders?.includes(
+							provider.providerId,
+						) ||
+						("domainVerified" in provider &&
+							provider.domainVerified &&
+							validateEmailDomain(userInfo.email, provider.domain));
+					if (!isTrustedProvider) {
+						const redirectUrl =
+							RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+						throw ctx.redirect(`${redirectUrl}?error=account_not_linked`);
+					}
+					await ctx.context.internalAdapter.createAccount({
+						userId: existingUser.id,
+						providerId: provider.providerId,
+						accountId: userInfo.id,
+						accessToken: "",
+						refreshToken: "",
+					});
+				}
 				user = existingUser;
 			} else {
 				// if implicit sign up is disabled, we should not create a new user nor a new account.
@@ -1805,19 +1834,6 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 					name: userInfo.name,
 					emailVerified: userInfo.emailVerified,
 				});
-			}
-
-			// Create or update account link
-			const account = await ctx.context.adapter.findOne<Account>({
-				model: "account",
-				where: [
-					{ field: "userId", value: user.id },
-					{ field: "providerId", value: provider.providerId },
-					{ field: "accountId", value: userInfo.id },
-				],
-			});
-
-			if (!account) {
 				await ctx.context.internalAdapter.createAccount({
 					userId: user.id,
 					providerId: provider.providerId,
