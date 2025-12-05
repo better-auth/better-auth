@@ -360,6 +360,13 @@ export const auth = betterAuth({
 				(process.env.BETTER_AUTH_URL || "https://demo.better-auth.com") +
 					"/api/mcp",
 			],
+			selectAccount: {
+				page: "/oauth/select-account",
+				shouldRedirect: async ({ headers }) => {
+					const allSessions = await getAllDeviceSessions(headers);
+					return allSessions?.length >= 1;
+				},
+			},
 			silenceWarnings: {
 				openidConfig: true,
 				oauthAuthServerConfig: true,
@@ -373,3 +380,9 @@ export const auth = betterAuth({
 		"https://appleid.apple.com",
 	],
 });
+
+async function getAllDeviceSessions(headers: Headers): Promise<unknown[]> {
+	return await auth.api.listDeviceSessions({
+		headers,
+	});
+}
