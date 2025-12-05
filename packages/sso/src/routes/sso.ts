@@ -21,6 +21,7 @@ import type { BindingContext } from "samlify/types/src/entity";
 import type { IdentityProvider } from "samlify/types/src/entity-idp";
 import type { FlowResult } from "samlify/types/src/flow";
 import * as z from "zod/v4";
+import { DEFAULT_AUTHN_REQUEST_TTL_MS } from "../authn-request-store";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
 import { validateEmailDomain } from "../utils";
 
@@ -1081,12 +1082,27 @@ export const signInSSO = (options?: SSOOptions) => {
 				const loginRequest = sp.createLoginRequest(
 					idp,
 					"redirect",
-				) as BindingContext & { entityEndpoint: string; type: string };
+				) as BindingContext & {
+					entityEndpoint: string;
+					type: string;
+					id: string;
+				};
 				if (!loginRequest) {
 					throw new APIError("BAD_REQUEST", {
 						message: "Invalid SAML request",
 					});
 				}
+
+				if (loginRequest.id && options?.saml?.authnRequestStore) {
+					const ttl = options.saml.requestTTL ?? DEFAULT_AUTHN_REQUEST_TTL_MS;
+					await options.saml.authnRequestStore.save({
+						id: loginRequest.id,
+						providerId: provider.providerId,
+						createdAt: Date.now(),
+						expiresAt: Date.now() + ttl,
+					});
+				}
+
 				return ctx.json({
 					url: `${loginRequest.context}&RelayState=${encodeURIComponent(
 						body.callbackURL,
@@ -1663,6 +1679,58 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			}
 
 			const { extract } = parsedResponse!;
+
+			const inResponseTo = (extract as any).inResponseTo as string | undefined;
+			if (options?.saml?.authnRequestStore) {
+				const allowIdpInitiated = options.saml.allowIdpInitiated !== false;
+
+				if (inResponseTo) {
+					const storedRequest =
+						await options.saml.authnRequestStore.get(inResponseTo);
+
+					if (!storedRequest) {
+						ctx.context.logger.error(
+							"SAML InResponseTo validation failed: unknown or expired request ID",
+							{ inResponseTo, providerId: provider.providerId },
+						);
+						const redirectUrl =
+							RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+						throw ctx.redirect(
+							`${redirectUrl}?error=invalid_saml_response&error_description=Unknown+or+expired+request+ID`,
+						);
+					}
+
+					if (storedRequest.providerId !== provider.providerId) {
+						ctx.context.logger.error(
+							"SAML InResponseTo validation failed: provider mismatch",
+							{
+								inResponseTo,
+								expectedProvider: storedRequest.providerId,
+								actualProvider: provider.providerId,
+							},
+						);
+						await options.saml.authnRequestStore.delete(inResponseTo);
+						const redirectUrl =
+							RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+						throw ctx.redirect(
+							`${redirectUrl}?error=invalid_saml_response&error_description=Provider+mismatch`,
+						);
+					}
+
+					await options.saml.authnRequestStore.delete(inResponseTo);
+				} else if (!allowIdpInitiated) {
+					ctx.context.logger.error(
+						"SAML IdP-initiated SSO rejected: InResponseTo missing and allowIdpInitiated is false",
+						{ providerId: provider.providerId },
+					);
+					const redirectUrl =
+						RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+					throw ctx.redirect(
+						`${redirectUrl}?error=unsolicited_response&error_description=IdP-initiated+SSO+not+allowed`,
+					);
+				}
+			}
+
 			const attributes = extract.attributes || {};
 			const mapping = parsedSamlConfig.mapping ?? {};
 
@@ -2019,6 +2087,60 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			}
 
 			const { extract } = parsedResponse!;
+
+			const inResponseToAcs = (extract as any).inResponseTo as
+				| string
+				| undefined;
+			if (options?.saml?.authnRequestStore) {
+				const allowIdpInitiated = options.saml.allowIdpInitiated !== false;
+
+				if (inResponseToAcs) {
+					const storedRequest =
+						await options.saml.authnRequestStore.get(inResponseToAcs);
+
+					if (!storedRequest) {
+						ctx.context.logger.error(
+							"SAML InResponseTo validation failed: unknown or expired request ID",
+							{ inResponseTo: inResponseToAcs, providerId },
+						);
+						const redirectUrl =
+							RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+						throw ctx.redirect(
+							`${redirectUrl}?error=invalid_saml_response&error_description=Unknown+or+expired+request+ID`,
+						);
+					}
+
+					if (storedRequest.providerId !== providerId) {
+						ctx.context.logger.error(
+							"SAML InResponseTo validation failed: provider mismatch",
+							{
+								inResponseTo: inResponseToAcs,
+								expectedProvider: storedRequest.providerId,
+								actualProvider: providerId,
+							},
+						);
+						await options.saml.authnRequestStore.delete(inResponseToAcs);
+						const redirectUrl =
+							RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+						throw ctx.redirect(
+							`${redirectUrl}?error=invalid_saml_response&error_description=Provider+mismatch`,
+						);
+					}
+
+					await options.saml.authnRequestStore.delete(inResponseToAcs);
+				} else if (!allowIdpInitiated) {
+					ctx.context.logger.error(
+						"SAML IdP-initiated SSO rejected: InResponseTo missing and allowIdpInitiated is false",
+						{ providerId },
+					);
+					const redirectUrl =
+						RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+					throw ctx.redirect(
+						`${redirectUrl}?error=unsolicited_response&error_description=IdP-initiated+SSO+not+allowed`,
+					);
+				}
+			}
+
 			const attributes = extract.attributes || {};
 			const mapping = parsedSamlConfig.mapping ?? {};
 
