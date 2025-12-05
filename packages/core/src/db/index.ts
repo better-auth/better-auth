@@ -1,25 +1,34 @@
+import type { BetterAuthPluginDBSchema } from "./plugin";
 import type {
+	BetterAuthDBSchema,
 	DBFieldAttribute,
 	DBFieldAttributeConfig,
 	DBFieldType,
 	DBPrimitive,
-	BetterAuthDBSchema,
 } from "./type";
 
+export type { BetterAuthPluginDBSchema } from "./plugin";
+export { type Account, accountSchema } from "./schema/account";
+export { type RateLimit, rateLimitSchema } from "./schema/rate-limit";
+export { type Session, sessionSchema } from "./schema/session";
 export { coreSchema } from "./schema/shared";
-export { userSchema, type User } from "./schema/user";
-export { accountSchema, type Account } from "./schema/account";
-export { sessionSchema, type Session } from "./schema/session";
-export { verificationSchema, type Verification } from "./schema/verification";
-
+export { type User, userSchema } from "./schema/user";
+export { type Verification, verificationSchema } from "./schema/verification";
 export type {
+	BaseModelNames,
+	BetterAuthDBSchema,
 	DBFieldAttribute,
 	DBFieldAttributeConfig,
 	DBFieldType,
 	DBPrimitive,
-	BetterAuthDBSchema,
-};
+	ModelNames,
+	SecondaryStorage,
+} from "./type";
 
+/**
+ * @deprecated Backport for 1.3.x, we will remove this in 1.4.x
+ */
+export type AuthPluginSchema = BetterAuthPluginDBSchema;
 /**
  * @deprecated Backport for 1.3.x, we will remove this in 1.4.x
  */
@@ -40,3 +49,5 @@ export type Primitive = DBPrimitive;
  * @deprecated Backport for 1.3.x, we will remove this in 1.4.x
  */
 export type BetterAuthDbSchema = BetterAuthDBSchema;
+
+export { getAuthTables } from "./get-tables";

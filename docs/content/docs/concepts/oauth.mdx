@@ -132,6 +132,139 @@ const requestAdditionalScopes = async () => {
 Make sure you're running Better Auth version 1.2.7 or later. Earlier versions (like 1.2.2) may show a "Social account already linked" error when trying to link with an existing provider for additional scopes.
 </Callout>
 
+### Passing Additional Data Through OAuth Flow
+
+Better Auth allows you to pass additional data through the OAuth flow without storing it in the database. This is useful for scenarios like tracking referral codes, analytics sources, or other temporary data that should be processed during authentication but not persisted.
+
+When initiating OAuth sign-in or account linking, pass the additional data:
+
+```ts
+// Client-side: Sign in with additional data
+await authClient.signIn.social({
+  provider: "google",
+  additionalData: {
+    referralCode: "ABC123",
+    source: "landing-page",
+  },
+});
+
+// Client-side: Link account with additional data
+await authClient.linkSocial({
+  provider: "google",
+  additionalData: {
+    referralCode: "ABC123",
+  },
+});
+
+// Server-side: Sign in with additional data
+await auth.api.signInSocial({
+  body: {
+    provider: "google",
+    additionalData: {
+      referralCode: "ABC123",
+      source: "admin-panel",
+    },
+  },
+});
+```
+
+#### Accessing Additional Data in Hooks
+
+The additional data is available in your hooks during the OAuth callback through the `getOAuthState`.
+
+<Callout>
+This usually works for `/callback/:id` paths and the generic OAuth plugin callback path (`/oauth2/callback/:providerId`).
+</Callout>
+
+Example using a before hook:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { getOAuthState } from "better-auth/api";
+
+export const auth = betterAuth({
+  // Other configurations...
+  hooks: {
+    after: [
+      {
+        matcher: () => true,
+        handler: async (ctx) => {
+          // Additional data is only available during OAuth callback
+          if (ctx.path === "/callback/:id") {
+            const additionalData = await getOAuthState<{
+              referralCode?: string;
+              source?: string;
+            }>();
+
+            if (additionalData) {
+              // IMPORTANT: Validate and sanitize the data before using it
+              // This data comes from the client and should not be trusted
+
+              // Example: Validate and process referral code
+              if (additionalData.referralCode) {
+                const isValidFormat = /^[A-Z0-9]{6}$/.test(additionalData.referralCode);
+                if (isValidFormat) {
+                  // Verify the referral code exists in your database
+                  const referral = await db.referrals.findByCode(additionalData.referralCode);
+                  if (referral) {
+                    // Safe to use the verified referral
+                    await db.referrals.incrementUsage(referral.id);
+                  }
+                }
+              }
+
+              // Track analytics (low-risk usage)
+              if (additionalData.source) {
+                await analytics.track("oauth_signin", {
+                  source: additionalData.source,
+                  userId: ctx.context.session?.user.id,
+                });
+              }
+            }
+          }
+        },
+      },
+    ],
+  },
+});
+```
+
+Example using a database hook:
+
+```ts title="auth.ts"
+ // You can also access additional data in database hooks
+  databaseHooks: {
+    user: {
+      create: {
+        before: async (user, ctx) => {
+          if (ctx.path === "/callback/:id") {
+            const additionalData = await getOAuthState<{ referredFrom?: string }>();
+            if (additionalData?.referredFrom) {
+              return {
+                data: {
+                  referredFrom: additionalData.referredFrom,
+                },
+              };
+            }
+          }
+        },
+      },
+    },
+  },
+```
+
+<Callout>
+By default OAuth state includes the following data:
+- `callbackURL` - the callback URL for the OAuth flow
+- `codeVerifier` - the code verifier for the OAuth flow
+- `errorURL` - the error URL for the OAuth flow
+- `newUserURL` - the new user URL for the OAuth flow
+- `link` - the link for the OAuth flow (email and user id)
+- `requestSignUp` - whether to request sign up for the OAuth flow
+- `expiresAt` - the expiration time of the OAuth state
+- `[key: string]`: any additional data you pass in the OAuth flow
+</Callout>
+
 ## Provider Options
 
 ### scope

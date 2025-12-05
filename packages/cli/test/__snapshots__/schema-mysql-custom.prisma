@@ -15,7 +15,7 @@ model User {
   emailVerified        Boolean               @default(false)
   image                String?               @db.Text
   createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @default(now()) @updatedAt
+  updatedAt            DateTime              @updatedAt
   twoFactorEnabled     Boolean?              @default(false)
   username             String?
   displayUsername      String?               @db.Text
@@ -43,6 +43,7 @@ model Session {
   activeOrganizationId String?  @db.Text
 
   @@unique([token])
+  @@index([userId(length: 191)])
   @@map("session")
 }
 
@@ -62,6 +63,7 @@ model Account {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
+  @@index([userId(length: 191)])
   @@map("account")
 }
 
@@ -71,8 +73,9 @@ model Verification {
   value      String   @db.Text
   expiresAt  DateTime
   createdAt  DateTime @default(now())
-  updatedAt  DateTime @default(now()) @updatedAt
+  updatedAt  DateTime @updatedAt
 
+  @@index([identifier(length: 191)])
   @@map("verification")
 }
 
@@ -83,6 +86,8 @@ model TwoFactor {
   userId      String
   user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([secret(length: 191)])
+  @@index([userId(length: 191)])
   @@map("twoFactor")
 }
 
@@ -109,6 +114,8 @@ model Member {
   role           String    @db.Text
   createdAt      DateTime
 
+  @@index([organizationId(length: 191)])
+  @@index([userId(length: 191)])
   @@map("member")
 }
 
@@ -120,8 +127,11 @@ model WorkspaceInvitation {
   role           String?   @db.Text
   status         String    @db.Text
   expiresAt      DateTime
+  createdAt      DateTime  @default(now())
   inviterId      String
   user           User      @relation(fields: [inviterId], references: [id], onDelete: Cascade)
 
+  @@index([organizationId(length: 191)])
+  @@index([email(length: 191)])
   @@map("workspaceInvitation")
 }

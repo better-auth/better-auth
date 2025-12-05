@@ -1,8 +1,8 @@
 import "./globals.css";
-import { Toaster } from "@/components/ui/sonner";
-import { ThemeProvider } from "@/components/theme-provider";
 import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
+import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "@/components/ui/sonner";
 import { Wrapper, WrapperWithQuery } from "@/components/wrapper";
 import { createMetadata } from "@/lib/metadata";
 
@@ -11,7 +11,7 @@ export const metadata = createMetadata({
 		template: "%s | Better Auth",
 		default: "Better Auth",
 	},
-	description: "The most comprehensive authentication library for typescript",
+	description: "The most comprehensive authentication framework for TypeScript",
 	metadataBase: new URL("https://demo.better-auth.com"),
 });
 

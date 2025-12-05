@@ -1,65 +1,135 @@
 {
   "name": "@better-auth/core",
-  "version": "1.4.0-beta.6",
-  "description": "The most comprehensive authentication library for TypeScript.",
+  "version": "1.4.6-beta.3",
+  "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
-  "main": "./dist/index.cjs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/better-auth/better-auth",
+    "directory": "packages/core"
+  },
+  "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
   "exports": {
     ".": {
-      "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.mjs"
-      },
-      "require": {
-        "types": "./dist/index.d.cts",
-        "default": "./dist/index.cjs"
-      }
+      "dev-source": "./src/index.ts",
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    },
+    "./api": {
+      "dev-source": "./src/api/index.ts",
+      "types": "./dist/api/index.d.mts",
+      "default": "./dist/api/index.mjs"
     },
     "./async_hooks": {
-      "import": {
-        "types": "./dist/async_hooks/index.d.ts",
-        "default": "./dist/async_hooks/index.mjs"
-      },
-      "require": {
-        "types": "./dist/async_hooks/index.d.cts",
-        "default": "./dist/async_hooks/index.cjs"
-      }
+      "dev-source": "./src/async_hooks/index.ts",
+      "types": "./dist/async_hooks/index.d.mts",
+      "default": "./dist/async_hooks/index.mjs"
+    },
+    "./context": {
+      "dev-source": "./src/context/index.ts",
+      "types": "./dist/context/index.d.mts",
+      "default": "./dist/context/index.mjs"
+    },
+    "./env": {
+      "dev-source": "./src/env/index.ts",
+      "types": "./dist/env/index.d.mts",
+      "default": "./dist/env/index.mjs"
+    },
+    "./error": {
+      "dev-source": "./src/error/index.ts",
+      "types": "./dist/error/index.d.mts",
+      "default": "./dist/error/index.mjs"
+    },
+    "./utils": {
+      "dev-source": "./src/utils/index.ts",
+      "types": "./dist/utils/index.d.mts",
+      "default": "./dist/utils/index.mjs"
+    },
+    "./social-providers": {
+      "dev-source": "./src/social-providers/index.ts",
+      "types": "./dist/social-providers/index.d.mts",
+      "default": "./dist/social-providers/index.mjs"
     },
     "./db": {
-      "import": {
-        "types": "./dist/db/index.d.ts",
-        "default": "./dist/db/index.mjs"
-      },
-      "require": {
-        "types": "./dist/db/index.d.cts",
-        "default": "./dist/db/index.cjs"
-      }
+      "dev-source": "./src/db/index.ts",
+      "types": "./dist/db/index.d.mts",
+      "default": "./dist/db/index.mjs"
+    },
+    "./db/adapter": {
+      "dev-source": "./src/db/adapter/index.ts",
+      "types": "./dist/db/adapter/index.d.mts",
+      "default": "./dist/db/adapter/index.mjs"
+    },
+    "./oauth2": {
+      "dev-source": "./src/oauth2/index.ts",
+      "types": "./dist/oauth2/index.d.mts",
+      "default": "./dist/oauth2/index.mjs"
     }
   },
   "typesVersions": {
     "*": {
-      "index": [
-        "dist/index.d.ts"
+      ".": [
+        "dist/index.d.mts"
+      ],
+      "api": [
+        "dist/api/index.d.mts"
       ],
       "async_hooks": [
-        "dist/async_hooks.d.ts"
+        "dist/async_hooks/index.d.mts"
+      ],
+      "context": [
+        "dist/context/index.d.mts"
+      ],
+      "env": [
+        "dist/env/index.d.mts"
+      ],
+      "error": [
+        "dist/error/index.d.mts"
+      ],
+      "utils": [
+        "dist/utils/index.d.mts"
+      ],
+      "social-providers": [
+        "dist/social-providers/index.d.mts"
       ],
       "db": [
-        "dist/db.d.ts"
+        "dist/db/index.d.mts"
+      ],
+      "db/adapter": [
+        "dist/db/adapter/index.d.mts"
+      ],
+      "oauth2": [
+        "dist/oauth2/index.d.mts"
       ]
     }
   },
   "scripts": {
-    "build": "unbuild --clean",
-    "stub": "unbuild --stub",
-    "typecheck": "tsc --project tsconfig.json"
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "lint:package": "publint run --strict",
+    "typecheck": "tsc --project tsconfig.json",
+    "test": "vitest"
   },
   "devDependencies": {
-    "unbuild": "catalog:"
+    "@better-auth/utils": "0.3.0",
+    "@better-fetch/fetch": "catalog:",
+    "better-call": "catalog:",
+    "jose": "^6.1.0",
+    "kysely": "^0.28.5",
+    "nanostores": "^1.0.1",
+    "tsdown": "catalog:"
   },
   "dependencies": {
+    "@standard-schema/spec": "^1.0.0",
+    "zod": "^4.1.12"
+  },
+  "peerDependencies": {
+    "@better-auth/utils": "0.3.0",
+    "@better-fetch/fetch": "catalog:",
     "better-call": "catalog:",
-    "zod": "^4.1.5"
+    "jose": "^6.1.0",
+    "kysely": "^0.28.5",
+    "nanostores": "^1.0.1"
   }
 }

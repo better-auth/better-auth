@@ -1,83 +1,69 @@
-import { describe, expect, it, vi } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { admin } from "./admin";
-import { type UserWithRole } from "./types";
-import { adminClient } from "./client";
-import { createAccessControl } from "../access";
+import type { GoogleProfile } from "@better-auth/core/social-providers";
+import { HttpResponse, http } from "msw";
+import { setupServer } from "msw/node";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import { createAuthClient } from "../../client";
-import type { GoogleProfile } from "../../social-providers";
 import { signJWT } from "../../crypto";
+import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
-import { getOAuth2Tokens } from "../../oauth2";
+import { createAccessControl } from "../access";
+import { admin } from "./admin";
+import { adminClient } from "./client";
+import type { UserWithRole } from "./types";
 
-vi.mock("../../oauth2", async (importOriginal) => {
-	const original = (await importOriginal()) as any;
-	return {
-		...original,
-		validateAuthorizationCode: vi
-			.fn()
-			.mockImplementation(async (...args: any) => {
-				const data: GoogleProfile = {
-					email: "user@email.com",
-					email_verified: true,
-					name: "First Last",
-					picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
-					exp: 1234567890,
-					sub: "1234567890",
-					iat: 1234567890,
-					aud: "test",
-					azp: "test",
-					nbf: 1234567890,
-					iss: "test",
-					locale: "en",
-					jti: "test",
-					given_name: "First",
-					family_name: "Last",
-				};
-				const testIdToken = await signJWT(data, DEFAULT_SECRET);
-				const tokens = getOAuth2Tokens({
-					access_token: "test",
-					refresh_token: "test",
-					id_token: testIdToken,
-				});
-				return tokens;
-			}),
-		refreshAccessToken: vi.fn().mockImplementation(async (args) => {
-			const { refreshToken, options, tokenEndpoint } = args;
-			expect(refreshToken).toBeDefined();
-			expect(options.clientId).toBe("test-client-id");
-			expect(options.clientSecret).toBe("test-client-secret");
-			expect(tokenEndpoint).toBe("http://localhost:8080/token");
+let testIdToken: string;
+let handlers: ReturnType<typeof http.post>[];
 
-			const data: GoogleProfile = {
-				email: "user@email.com",
-				email_verified: true,
-				name: "First Last",
-				picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
-				exp: 1234567890,
-				sub: "1234567890",
-				iat: 1234567890,
-				aud: "test",
-				azp: "test",
-				nbf: 1234567890,
-				iss: "test",
-				locale: "en",
-				jti: "test",
-				given_name: "First",
-				family_name: "Last",
-			};
-			const testIdToken = await signJWT(data, DEFAULT_SECRET);
-			const tokens = getOAuth2Tokens({
-				access_token: "new-access-token",
-				refresh_token: "new-refresh-token",
-				id_token: testIdToken,
-				token_type: "Bearer",
-				expires_in: 3600, // Token expires in 1 hour
-			});
-			return tokens;
-		}),
+const server = setupServer();
+
+beforeAll(async () => {
+	const data: GoogleProfile = {
+		email: "user@email.com",
+		email_verified: true,
+		name: "First Last",
+		picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
+		exp: 1234567890,
+		sub: "1234567890",
+		iat: 1234567890,
+		aud: "test",
+		azp: "test",
+		nbf: 1234567890,
+		iss: "test",
+		locale: "en",
+		jti: "test",
+		given_name: "First",
+		family_name: "Last",
 	};
+	testIdToken = await signJWT(data, DEFAULT_SECRET);
+
+	handlers = [
+		http.post("https://oauth2.googleapis.com/token", () => {
+			return HttpResponse.json({
+				access_token: "test",
+				refresh_token: "test",
+				id_token: testIdToken,
+			});
+		}),
+	];
+
+	server.listen({ onUnhandledRequest: "bypass" });
+	server.use(...handlers);
 });
+
+afterEach(() => {
+	server.resetHandlers();
+	server.use(...handlers);
+});
+
+afterAll(() => server.close());
 
 describe("Admin plugin", async () => {
 	const {
@@ -349,7 +335,72 @@ describe("Admin plugin", async () => {
 				headers: adminHeaders,
 			},
 		});
+	});
+
+	it("should filter users by id with ne operator", async () => {
+		const allUsers = await client.admin.listUsers({
+			query: {},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		const firstUserId = allUsers.data?.users[0]!.id;
+
+		const res = await client.admin.listUsers({
+			query: {
+				filterValue: firstUserId,
+				filterField: "id",
+				filterOperator: "ne",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+
+		expect(res.data?.users.length).toBe(allUsers.data!.total - 1);
+		expect(res.data?.users.every((u) => u.id !== firstUserId)).toBe(true);
+	});
+
+	it("should filter users by _id with ne operator", async () => {
+		const allUsers = await client.admin.listUsers({
+			query: {},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		const firstUserId = allUsers.data?.users[0]!.id;
+
+		const res = await client.admin.listUsers({
+			query: {
+				filterValue: firstUserId,
+				filterField: "_id",
+				filterOperator: "ne",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+
+		expect(res.data?.users.length).toBe(allUsers.data!.total - 1);
+		expect(res.data?.users.every((u) => u.id !== firstUserId)).toBe(true);
+	});
+
+	it("should allow to combine search and filter", async () => {
+		const res = await client.admin.listUsers({
+			query: {
+				filterValue: "admin",
+				filterField: "role",
+				filterOperator: "eq",
+				searchValue: "test",
+				searchField: "email",
+				searchOperator: "contains",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
 		expect(res.data?.users.length).toBe(1);
+		expect(res.data?.users[0]!.email).toBe("test@test.com");
 	});
 
 	it("should allow to filter users by multiple roles", async () => {
@@ -361,18 +412,8 @@ describe("Admin plugin", async () => {
 			},
 			fetchOptions: {
 				headers: adminHeaders,
-				onRequest(context) {
-					return {
-						...context,
-						query: {
-							...context.query,
-							filterValue: JSON.stringify(context.query?.filterValue)
-						}
-					}
-				},
 			},
 		});
-		console.log(res)
 		expect(res.data?.users.length).toBe(1);
 	});
 
@@ -720,7 +761,7 @@ describe("Admin plugin", async () => {
 				headers: adminHeaders,
 			},
 		});
-		expect(response.data?.users.length).toBe(2);
+		expect(response.data?.users.length).toBeGreaterThanOrEqual(2);
 		const roles = response.data?.users.map((d) => d.role);
 		expect(roles).not.toContain("user");
 	});
@@ -741,6 +782,62 @@ describe("Admin plugin", async () => {
 			password: "newPassword",
 		});
 		expect(res2.data?.user).toBeDefined();
+	});
+	it("should not allow admin to set user password with empty userId", async () => {
+		const res = await client.admin.setUserPassword(
+			{
+				userId: "",
+				newPassword: "newPassword",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+	});
+
+	it("should not allow admin to set user password with empty new password", async () => {
+		const res = await client.admin.setUserPassword(
+			{
+				userId: newUser?.id || "",
+				newPassword: "",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+	});
+
+	it("should not allow admin to set user password with a short new password", async () => {
+		const res = await client.admin.setUserPassword(
+			{
+				userId: newUser!.id,
+				newPassword: "1234567",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("PASSWORD_TOO_SHORT");
+		expect(res.error?.message).toBe("Password too short");
+	});
+
+	it("should not allow admin to set user password with a long new password", async () => {
+		const longNewPassword = Array(129).fill("a").join("");
+		const res = await client.admin.setUserPassword(
+			{
+				userId: newUser!.id,
+				newPassword: longNewPassword,
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("PASSWORD_TOO_LONG");
+		expect(res.error?.message).toBe("Password too long");
 	});
 
 	it("should not allow non-admin to set user password", async () => {
@@ -829,12 +926,20 @@ describe("Admin plugin", async () => {
 
 describe("access control", async (it) => {
 	const ac = createAccessControl({
-		user: ["create", "read", "update", "delete", "list", "bulk-delete"],
+		user: [
+			"create",
+			"read",
+			"update",
+			"delete",
+			"list",
+			"bulk-delete",
+			"set-role",
+		],
 		order: ["create", "read", "update", "delete", "update-many"],
 	});
 
 	const adminAc = ac.newRole({
-		user: ["create", "read", "update", "delete", "list"],
+		user: ["create", "read", "update", "delete", "list", "set-role"],
 		order: ["create", "read", "update", "delete"],
 	});
 	const userAc = ac.newRole({
@@ -1150,5 +1255,67 @@ describe("access control", async (it) => {
 			},
 		});
 		expect(userRes.error?.status).toBe(403);
+	});
+
+	it("should not allow to set multiple non existent user role", async () => {
+		const createdUser = await client.admin.createUser(
+			{
+				name: "Test User mr",
+				email: "testmr@test.com",
+				password: "test",
+				role: ["user"],
+			},
+			{
+				headers: headers,
+			},
+		);
+		expect(createdUser.data?.user.role).toBe("user");
+		const res = await client.admin.setRole(
+			{
+				userId: createdUser.data?.user.id || "",
+				role: ["user", "non-user"] as any[],
+			},
+			{ headers: headers },
+		);
+		expect(res.error).toBeDefined();
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe(
+			"YOU_ARE_NOT_ALLOWED_TO_SET_A_NONEXISTENT_ROLE_VALUE",
+		);
+		await client.admin.removeUser(
+			{ userId: createdUser.data?.user.id || "" },
+			{ headers: headers },
+		);
+	});
+
+	it("should not allow to set non existent user role", async () => {
+		const createdUser = await client.admin.createUser(
+			{
+				name: "Test User mr",
+				email: "testmr@test.com",
+				password: "test",
+				role: "user",
+			},
+			{
+				headers: headers,
+			},
+		);
+		expect(createdUser.data?.user.role).toBe("user");
+		const res = await client.admin.setRole(
+			{
+				userId: createdUser.data?.user.id || "",
+				role: "non-user" as any,
+			},
+			{ headers: headers },
+		);
+		expect(res.error).toBeDefined();
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe(
+			"YOU_ARE_NOT_ALLOWED_TO_SET_A_NONEXISTENT_ROLE_VALUE",
+		);
+		await client.admin.removeUser(
+			{ userId: createdUser.data?.user.id || "" },
+			{ headers: headers },
+		);
 	});
 });

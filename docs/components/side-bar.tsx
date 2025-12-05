@@ -1,12 +1,12 @@
 "use client";
 
-import { AsideLink } from "@/components/ui/aside-link";
-import { cn } from "@/lib/utils";
-import { AnimatePresence, motion, MotionConfig } from "framer-motion";
+import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import { useSearchContext } from "fumadocs-ui/provider";
 import { ChevronDownIcon, Search } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
+import { AsideLink } from "@/components/ui/aside-link";
+import { cn } from "@/lib/utils";
 import { contents, examples } from "./sidebar-content";
 import { Badge } from "./ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "./ui/select";
@@ -38,8 +38,8 @@ export default function ArticleLayout() {
 		<div className={cn("fixed start-0 top-0")}>
 			<aside
 				className={cn(
-					"md:transition-all",
-					"border-r border-lines top-[55px] md:flex hidden md:w-[268px] lg:w-[286px] overflow-y-auto absolute h-[calc(100dvh-55px)] pb-2 flex-col justify-between w-[var(--fd-sidebar-width)]",
+					"navbar:transition-all",
+					"border-r border-lines top-[55px] navbar:flex hidden navbar:w-[268px] lg:w-[286px] overflow-y-auto absolute h-[calc(100dvh-55px)] pb-2 flex-col justify-between w-[var(--fd-sidebar-width)]",
 				)}
 			>
 				<div>

@@ -1,8 +1,9 @@
+import fs from "node:fs/promises";
+import { join } from "node:path";
+import type { BetterAuthOptions } from "@better-auth/core";
+import type { DBAdapter } from "@better-auth/core/db/adapter";
 import type { PrismaClient } from "@prisma/client";
-import type { Adapter, BetterAuthOptions } from "../../../types";
 import { prismaAdapter } from "../prisma-adapter";
-import { join } from "path";
-import fs from "fs/promises";
 
 export async function generatePrismaSchema(
 	betterAuthOptions: BetterAuthOptions,
@@ -12,10 +13,10 @@ export async function generatePrismaSchema(
 ) {
 	const i = async (x: string) => await import(x);
 	const { generateSchema } = (await i(
-		"./../../../../../cli/src/generators/index",
+		join(import.meta.dirname, "./../../../../../cli/src/generators/index"),
 	)) as {
 		generateSchema: (opts: {
-			adapter: Adapter;
+			adapter: DBAdapter<BetterAuthOptions>;
 			file?: string;
 			options: BetterAuthOptions;
 		}) => Promise<{

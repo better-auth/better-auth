@@ -1,13 +1,15 @@
-import * as z from "zod";
-import { createAuthEndpoint } from "../call";
+import type { GenericEndpointContext } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "better-call";
-import { getSessionFromCtx } from "./session";
-import { setSessionCookie } from "../../cookies";
-import type { GenericEndpointContext, User } from "../../types";
-import { jwtVerify, type JWTPayload, type JWTVerifyResult } from "jose";
-import { signJWT } from "../../crypto/jwt";
-import { originCheck } from "../middlewares";
+import type { JWTPayload, JWTVerifyResult } from "jose";
+import { jwtVerify } from "jose";
 import { JWTExpired } from "jose/errors";
+import * as z from "zod";
+import { setSessionCookie } from "../../cookies";
+import { signJWT } from "../../crypto/jwt";
+import type { User } from "../../types";
+import { originCheck } from "../middlewares";
+import { getSessionFromCtx } from "./session";
 
 export async function createEmailVerificationToken(
 	secret: string,
@@ -15,16 +17,21 @@ export async function createEmailVerificationToken(
 	/**
 	 * The email to update from
 	 */
-	updateTo?: string,
+	updateTo?: string | undefined,
 	/**
 	 * The time in seconds for the token to expire
 	 */
 	expiresIn: number = 3600,
+	/**
+	 * Extra payload to include in the token
+	 */
+	extraPayload?: Record<string, any>,
 ) {
 	const token = await signJWT(
 		{
 			email: email.toLowerCase(),
 			updateTo,
+			...extraPayload,
 		},
 		secret,
 		expiresIn,
@@ -68,6 +75,7 @@ export const sendVerificationEmail = createAuthEndpoint(
 	"/send-verification-email",
 	{
 		method: "POST",
+		operationId: "sendVerificationEmail",
 		body: z.object({
 			email: z.email().meta({
 				description: "The email to send the verification email to",
@@ -81,6 +89,7 @@ export const sendVerificationEmail = createAuthEndpoint(
 		}),
 		metadata: {
 			openapi: {
+				operationId: "sendVerificationEmail",
 				description: "Send a verification email to the user",
 				requestBody: {
 					content: {
@@ -158,6 +167,12 @@ export const sendVerificationEmail = createAuthEndpoint(
 		if (!session) {
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user) {
+				await createEmailVerificationToken(
+					ctx.context.secret,
+					email,
+					undefined,
+					ctx.context.options.emailVerification?.expiresIn,
+				);
 				//we're returning true to avoid leaking information about the user
 				return ctx.json({
 					status: true,
@@ -190,6 +205,7 @@ export const verifyEmail = createAuthEndpoint(
 	"/verify-email",
 	{
 		method: "GET",
+		operationId: "verifyEmail",
 		query: z.object({
 			token: z.string().meta({
 				description: "The token to verify the email",
@@ -235,46 +251,7 @@ export const verifyEmail = createAuthEndpoint(
 									properties: {
 										user: {
 											type: "object",
-											properties: {
-												id: {
-													type: "string",
-													description: "User ID",
-												},
-												email: {
-													type: "string",
-													description: "User email",
-												},
-												name: {
-													type: "string",
-													description: "User name",
-												},
-												image: {
-													type: "string",
-													description: "User image URL",
-												},
-												emailVerified: {
-													type: "boolean",
-													description:
-														"Indicates if the user email is verified",
-												},
-												createdAt: {
-													type: "string",
-													description: "User creation date",
-												},
-												updatedAt: {
-													type: "string",
-													description: "User update date",
-												},
-											},
-											required: [
-												"id",
-												"email",
-												"name",
-												"image",
-												"emailVerified",
-												"createdAt",
-												"updatedAt",
-											],
+											$ref: "#/components/schemas/User",
 										},
 										status: {
 											type: "boolean",
@@ -320,8 +297,9 @@ export const verifyEmail = createAuthEndpoint(
 			return redirectOnError("invalid_token");
 		}
 		const schema = z.object({
-			email: z.string().email(),
+			email: z.email(),
 			updateTo: z.string().optional(),
+			requestType: z.string().optional(),
 		});
 		const parsed = schema.parse(jwt.payload);
 		const user = await ctx.context.internalAdapter.findUserByEmail(
@@ -331,18 +309,79 @@ export const verifyEmail = createAuthEndpoint(
 			return redirectOnError("user_not_found");
 		}
 		if (parsed.updateTo) {
-			const session = await getSessionFromCtx(ctx);
-			if (!session) {
-				if (ctx.query.callbackURL) {
-					throw ctx.redirect(`${ctx.query.callbackURL}?error=unauthorized`);
-				}
+			let session = await getSessionFromCtx(ctx);
+			if (session && session.user.email !== parsed.email) {
 				return redirectOnError("unauthorized");
 			}
-			if (session.user.email !== parsed.email) {
+			if (parsed.requestType === "change-email-confirmation") {
+				const newToken = await createEmailVerificationToken(
+					ctx.context.secret,
+					parsed.email,
+					parsed.updateTo,
+					ctx.context.options.emailVerification?.expiresIn,
+					{
+						requestType: "change-email-verification",
+					},
+				);
+				const updateCallbackURL = ctx.query.callbackURL
+					? encodeURIComponent(ctx.query.callbackURL)
+					: encodeURIComponent("/");
+				const url = `${ctx.context.baseURL}/verify-email?token=${newToken}&callbackURL=${updateCallbackURL}`;
+				await ctx.context.options.emailVerification?.sendVerificationEmail?.(
+					{
+						user: {
+							...user.user,
+							email: parsed.updateTo,
+						},
+						url,
+						token: newToken,
+					},
+					ctx.request,
+				);
 				if (ctx.query.callbackURL) {
-					throw ctx.redirect(`${ctx.query.callbackURL}?error=unauthorized`);
+					throw ctx.redirect(ctx.query.callbackURL);
 				}
-				return redirectOnError("unauthorized");
+				return ctx.json({
+					status: true,
+				});
+			}
+			if (!session) {
+				const newSession = await ctx.context.internalAdapter.createSession(
+					user.user.id,
+				);
+				if (!newSession) {
+					throw new APIError("INTERNAL_SERVER_ERROR", {
+						message: "Failed to create session",
+					});
+				}
+				session = {
+					session: newSession,
+					user: user.user,
+				};
+			}
+			if (parsed.requestType === "change-email-verification") {
+				const updatedUser = await ctx.context.internalAdapter.updateUserByEmail(
+					parsed.email,
+					{
+						email: parsed.updateTo,
+						emailVerified: true,
+					},
+				);
+				await setSessionCookie(ctx, {
+					session: session.session,
+					user: {
+						...session.user,
+						email: parsed.updateTo,
+						emailVerified: true,
+					},
+				});
+				if (ctx.query.callbackURL) {
+					throw ctx.redirect(ctx.query.callbackURL);
+				}
+				return ctx.json({
+					status: true,
+					user: updatedUser,
+				});
 			}
 
 			const updatedUser = await ctx.context.internalAdapter.updateUserByEmail(
@@ -351,7 +390,6 @@ export const verifyEmail = createAuthEndpoint(
 					email: parsed.updateTo,
 					emailVerified: false,
 				},
-				ctx,
 			);
 
 			const newToken = await createEmailVerificationToken(
@@ -397,6 +435,15 @@ export const verifyEmail = createAuthEndpoint(
 				},
 			});
 		}
+		if (user.user.emailVerified) {
+			if (ctx.query.callbackURL) {
+				throw ctx.redirect(ctx.query.callbackURL);
+			}
+			return ctx.json({
+				status: true,
+				user: null,
+			});
+		}
 		if (ctx.context.options.emailVerification?.onEmailVerification) {
 			await ctx.context.options.emailVerification.onEmailVerification(
 				user.user,
@@ -408,7 +455,6 @@ export const verifyEmail = createAuthEndpoint(
 			{
 				emailVerified: true,
 			},
-			ctx,
 		);
 		if (ctx.context.options.emailVerification?.afterEmailVerification) {
 			await ctx.context.options.emailVerification.afterEmailVerification(
@@ -421,7 +467,6 @@ export const verifyEmail = createAuthEndpoint(
 			if (!currentSession || currentSession.user.email !== parsed.email) {
 				const session = await ctx.context.internalAdapter.createSession(
 					user.user.id,
-					ctx,
 				);
 				if (!session) {
 					throw new APIError("INTERNAL_SERVER_ERROR", {

@@ -1,10 +1,13 @@
-import { describe, expect, it } from "vitest";
-import { createAuthEndpoint, createAuthMiddleware } from "./call";
-import { toAuthEndpoints } from "./to-auth-endpoints";
-import { init } from "../init";
-import * as z from "zod";
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+} from "@better-auth/core/api";
 import { APIError } from "better-call";
+import { describe, expect, it } from "vitest";
+import * as z from "zod";
+import { init } from "../context/init";
 import { getTestInstance } from "../test-utils/test-instance";
+import { toAuthEndpoints } from "./to-auth-endpoints";
 
 describe("before hook", async () => {
 	describe("context", async () => {
@@ -419,11 +422,11 @@ describe("after hook", async () => {
 });
 
 describe("disabled paths", async () => {
-	const { client } = await getTestInstance({
-		disabledPaths: ["/sign-in/email"],
-	});
-
 	it("should return 404 for disabled paths", async () => {
+		const { client, auth } = await getTestInstance({
+			disabledPaths: ["/sign-in/email"],
+		});
+
 		const response = await client.$fetch("/ok");
 		expect(response.data).toEqual({ ok: true });
 		const { error } = await client.signIn.email({
@@ -431,6 +434,27 @@ describe("disabled paths", async () => {
 			password: "test",
 		});
 		expect(error?.status).toBe(404);
+	});
+
+	it("should return 404 for when base path is /", async () => {
+		const { auth } = await getTestInstance({
+			basePath: "/",
+			disabledPaths: ["/sign-in/email"],
+		});
+
+		const response2 = await auth.handler(
+			new Request("http://localhost:3000/sign-in/email", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					email: "test@test.com",
+					password: "test",
+				}),
+			}),
+		);
+		expect(response2).toBeInstanceOf(Response);
 	});
 });
 
@@ -592,5 +616,39 @@ describe("debug mode stack trace", () => {
 			expect(error.stack).toBeDefined();
 			expect(error.stack).toMatch(/ErrorWithStack:|Error:|APIError:/);
 		}
+	});
+});
+
+describe("custom response code", () => {
+	const endpoints = {
+		responseWithStatus: createAuthEndpoint(
+			"/response-with-status",
+			{
+				method: "GET",
+			},
+			async (c) => {
+				c.setStatus(201);
+				return { success: true };
+			},
+		),
+	};
+
+	const authContext = init({});
+	const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+	it("should return response with custom status", async () => {
+		const response = await authEndpoints.responseWithStatus({
+			asResponse: true,
+		});
+		expect(response).toBeInstanceOf(Response);
+		expect(response.status).toBe(201);
+	});
+
+	it("should return status code", async () => {
+		const response = await authEndpoints.responseWithStatus({
+			returnStatus: true,
+		});
+		expect(response.status).toBe(201);
+		expect(response.response).toEqual({ success: true });
 	});
 });

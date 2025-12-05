@@ -1,0 +1,538 @@
+import type { BetterAuthOptions } from "../../types";
+import type { BetterAuthDBSchema, DBFieldAttribute } from "../type";
+
+export type DBAdapterDebugLogOption =
+	| boolean
+	| {
+			/**
+			 * Useful when you want to log only certain conditions.
+			 */
+			logCondition?: (() => boolean) | undefined;
+			create?: boolean | undefined;
+			update?: boolean | undefined;
+			updateMany?: boolean | undefined;
+			findOne?: boolean | undefined;
+			findMany?: boolean | undefined;
+			delete?: boolean | undefined;
+			deleteMany?: boolean | undefined;
+			count?: boolean | undefined;
+	  }
+	| {
+			/**
+			 * Only used for adapter tests to show debug logs if a test fails.
+			 *
+			 * @deprecated Not actually deprecated. Doing this for IDEs to show this option at the very bottom and stop end-users from using this.
+			 */
+			isRunningAdapterTests: boolean;
+	  };
+
+export type DBAdapterSchemaCreation = {
+	/**
+	 * Code to be inserted into the file
+	 */
+	code: string;
+	/**
+	 * Path to the file, including the file name and extension.
+	 * Relative paths are supported, with the current working directory of the developer's project as the base.
+	 */
+	path: string;
+	/**
+	 * Append the file if it already exists.
+	 * Note: This will not apply if `overwrite` is set to true.
+	 */
+	append?: boolean | undefined;
+	/**
+	 * Overwrite the file if it already exists
+	 */
+	overwrite?: boolean | undefined;
+};
+
+export interface DBAdapterFactoryConfig<
+	Options extends BetterAuthOptions = BetterAuthOptions,
+> {
+	/**
+	 * Use plural table names.
+	 *
+	 * All tables will be named with an `s` at the end.
+	 *
+	 * @default false
+	 */
+	usePlural?: boolean | undefined;
+	/**
+	 * Enable debug logs.
+	 *
+	 * @default false
+	 */
+	debugLogs?: DBAdapterDebugLogOption | undefined;
+	/**
+	 * Name of the adapter.
+	 *
+	 * This is used to identify the adapter in the debug logs.
+	 *
+	 * @default `adapterId`
+	 */
+	adapterName?: string | undefined;
+	/**
+	 * Adapter id
+	 */
+	adapterId: string;
+	/**
+	 * If the database supports numeric ids, set this to `true`.
+	 *
+	 * @default true
+	 */
+	supportsNumericIds?: boolean | undefined;
+	/**
+	 * If the database supports natively generating UUIDs, set this to `true`.
+	 *
+	 * @default false
+	 */
+	supportsUUIDs?: boolean | undefined;
+	/**
+	 * If the database doesn't support JSON columns, set this to `false`.
+	 *
+	 * We will handle the translation between using `JSON` columns, and saving `string`s to the database.
+	 *
+	 * @default false
+	 */
+	supportsJSON?: boolean | undefined;
+	/**
+	 * If the database doesn't support dates, set this to `false`.
+	 *
+	 * We will handle the translation between using `Date` objects, and saving `string`s to the database.
+	 *
+	 * @default true
+	 */
+	supportsDates?: boolean | undefined;
+	/**
+	 * If the database doesn't support booleans, set this to `false`.
+	 *
+	 * We will handle the translation between using `boolean`s, and saving `0`s and `1`s to the database.
+	 *
+	 * @default true
+	 */
+	supportsBooleans?: boolean | undefined;
+	/**
+	 * Execute multiple operations in a transaction.
+	 *
+	 * If the database doesn't support transactions, set this to `false` and operations will be executed sequentially.
+	 *
+	 * @default false
+	 */
+	transaction?:
+		| (
+				| false
+				| (<R>(
+						callback: (trx: DBTransactionAdapter<Options>) => Promise<R>,
+				  ) => Promise<R>)
+		  )
+		| undefined;
+	/**
+	 * Disable id generation for the `create` method.
+	 *
+	 * This is useful for databases that don't support custom id values and would auto-generate them for you.
+	 *
+	 * @default false
+	 */
+	disableIdGeneration?: boolean | undefined;
+	/**
+	 * Map the keys of the input data.
+	 *
+	 * This is useful for databases that expect a different key name for a given situation.
+	 *
+	 * For example, MongoDB uses `_id` while in Better-Auth we use `id`.
+	 *
+	 *
+	 * @example
+	 * Each key represents the old key to replace.
+	 * The value represents the new key
+	 *
+	 * This can be a partial object that only transforms some keys.
+	 *
+	 * ```ts
+	 * mapKeysTransformInput: {
+	 *  id: "_id" // We want to replace `id` to `_id` to save into MongoDB
+	 * }
+	 * ```
+	 */
+	mapKeysTransformInput?: Record<string, string> | undefined;
+	/**
+	 * Map the keys of the output data.
+	 *
+	 * This is useful for databases that expect a different key name for a given situation.
+	 *
+	 * For example, MongoDB uses `_id` while in Better-Auth we use `id`.
+	 *
+	 * @example
+	 * Each key represents the old key to replace.
+	 * The value represents the new key
+	 *
+	 * This can be a partial object that only transforms some keys.
+	 *
+	 * ```ts
+	 * mapKeysTransformOutput: {
+	 *  _id: "id" // In MongoDB, we save `id` as `_id`. So we want to replace `_id` with `id` when we get the data back.
+	 * }
+	 * ```
+	 */
+	mapKeysTransformOutput?: Record<string, string> | undefined;
+	/**
+	 * Custom transform input function.
+	 *
+	 * This function is used to transform the input data before it is saved to the database.
+	 */
+	customTransformInput?:
+		| ((props: {
+				data: any;
+				/**
+				 * The fields of the model.
+				 */
+				fieldAttributes: DBFieldAttribute;
+				/**
+				 * The field to transform.
+				 */
+				field: string;
+				/**
+				 * The action which was called from the adapter.
+				 */
+				action: "create" | "update" | "findOne" | "findMany";
+				/**
+				 * The model name.
+				 */
+				model: string;
+				/**
+				 * The schema of the user's Better-Auth instance.
+				 */
+				schema: BetterAuthDBSchema;
+				/**
+				 * The options of the user's Better-Auth instance.
+				 */
+				options: Options;
+		  }) => any)
+		| undefined;
+	/**
+	 * Custom transform output function.
+	 *
+	 * This function is used to transform the output data before it is returned to the user.
+	 */
+	customTransformOutput?:
+		| ((props: {
+				data: any;
+				/**
+				 * The fields of the model.
+				 */
+				fieldAttributes: DBFieldAttribute;
+				/**
+				 * The field to transform.
+				 */
+				field: string;
+				/**
+				 * The fields to select.
+				 */
+				select: string[];
+				/**
+				 * The model name.
+				 */
+				model: string;
+				/**
+				 * The schema of the user's Better-Auth instance.
+				 */
+				schema: BetterAuthDBSchema;
+				/**
+				 * The options of the user's Better-Auth instance.
+				 */
+				options: Options;
+		  }) => any)
+		| undefined;
+	/**
+	 * Custom ID generator function.
+	 *
+	 * By default, we can handle ID generation for you, however if the database your adapter is for only supports a specific custom id generation,
+	 * then you can use this function to generate your own IDs.
+	 *
+	 *
+	 * Notes:
+	 * - If the user enabled `useNumberId` or `generateId` set to `serial`, then this option will be ignored. Unless this adapter config has `supportsNumericIds` set to `false`.
+	 * - If `generateId` is `false` in the user's Better-Auth config, then this option will be ignored.
+	 * - If `generateId` is a function, then it will override this option.
+	 *
+	 * @example
+	 *
+	 * ```ts
+	 * customIdGenerator: ({ model }) => {
+	 *  return "my-super-unique-id";
+	 * }
+	 * ```
+	 */
+	customIdGenerator?: ((props: { model: string }) => string) | undefined;
+	/**
+	 * Whether to disable the transform output.
+	 * Do not use this option unless you know what you are doing.
+	 * @default false
+	 */
+	disableTransformOutput?: boolean | undefined;
+	/**
+	 * Whether to disable the transform input.
+	 * Do not use this option unless you know what you are doing.
+	 * @default false
+	 */
+	disableTransformInput?: boolean | undefined;
+	/**
+	 * Whether to disable the transform join.
+	 * Do not use this option unless you know what you are doing.
+	 * @default false
+	 */
+	disableTransformJoin?: boolean | undefined;
+}
+
+export type Where = {
+	/**
+	 * @default eq
+	 */
+	operator?:
+		| (
+				| "eq"
+				| "ne"
+				| "lt"
+				| "lte"
+				| "gt"
+				| "gte"
+				| "in"
+				| "not_in"
+				| "contains"
+				| "starts_with"
+				| "ends_with"
+		  )
+		| undefined;
+	value: string | number | boolean | string[] | number[] | Date | null;
+	field: string;
+	/**
+	 * @default AND
+	 */
+	connector?: ("AND" | "OR") | undefined;
+};
+
+/**
+ * JoinOption configuration for relational queries.
+ *
+ * Allows you to join related tables/models in a single query operation.
+ * Each key represents the name of the joined table/model, and the value
+ * configures how the join should be performed.
+ */
+export type JoinOption = {
+	[model: string]: boolean | { limit?: number };
+};
+
+/**
+ * Once `JoinOption` has gone through the adapter factory, it will be transformed into a `JoinConfig`.
+ */
+export type JoinConfig = {
+	[model: string]: {
+		/**
+		 * The joining column names.
+		 */
+		on: {
+			/**
+			 * Column name from the main table
+			 */
+			from: string;
+			/**
+			 * Column name from the joined table
+			 */
+			to: string;
+		};
+		/**
+		 * Limit the number of rows to return.
+		 *
+		 * If the relation has `unique` constraint, then this option will be ignored and limit will be set to 1.
+		 *
+		 * @default 100
+		 */
+		limit?: number;
+		/**
+		 * The relation type. Determines the output joined model data.
+		 *
+		 * `one-to-one` would have a single object in the output.
+		 * `one-to-many` would have an array of objects in the output.
+		 * `many-to-many` would have an array of objects in the output.
+		 *
+		 * @default "one-to-many"
+		 */
+		relation?: "one-to-one" | "one-to-many" | "many-to-many";
+	};
+};
+
+export type DBTransactionAdapter<
+	Options extends BetterAuthOptions = BetterAuthOptions,
+> = Omit<DBAdapter<Options>, "transaction">;
+
+export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
+	id: string;
+	create: <T extends Record<string, any>, R = T>(data: {
+		model: string;
+		data: Omit<T, "id">;
+		select?: string[] | undefined;
+		/**
+		 * By default, any `id` provided in `data` will be ignored.
+		 *
+		 * If you want to force the `id` to be the same as the `data.id`, set this to `true`.
+		 */
+		forceAllowId?: boolean | undefined;
+	}) => Promise<R>;
+	findOne: <T>(data: {
+		model: string;
+		where: Where[];
+		select?: string[] | undefined;
+		join?: JoinOption | undefined;
+	}) => Promise<T | null>;
+	findMany: <T>(data: {
+		model: string;
+		where?: Where[] | undefined;
+		limit?: number | undefined;
+		sortBy?:
+			| {
+					field: string;
+					direction: "asc" | "desc";
+			  }
+			| undefined;
+		offset?: number | undefined;
+		join?: JoinOption | undefined;
+	}) => Promise<T[]>;
+	count: (data: {
+		model: string;
+		where?: Where[] | undefined;
+	}) => Promise<number>;
+	/**
+	 * ⚠︎ Update may not return the updated data
+	 * if multiple where clauses are provided
+	 */
+	update: <T>(data: {
+		model: string;
+		where: Where[];
+		update: Record<string, any>;
+	}) => Promise<T | null>;
+	updateMany: (data: {
+		model: string;
+		where: Where[];
+		update: Record<string, any>;
+	}) => Promise<number>;
+	delete: <T>(data: { model: string; where: Where[] }) => Promise<void>;
+	deleteMany: (data: { model: string; where: Where[] }) => Promise<number>;
+	/**
+	 * Execute multiple operations in a transaction.
+	 * If the adapter doesn't support transactions, operations will be executed sequentially.
+	 */
+	transaction: <R>(
+		callback: (trx: DBTransactionAdapter<Options>) => Promise<R>,
+	) => Promise<R>;
+	/**
+	 *
+	 * @param options
+	 * @param file - file path if provided by the user
+	 */
+	createSchema?:
+		| ((options: Options, file?: string) => Promise<DBAdapterSchemaCreation>)
+		| undefined;
+	options?:
+		| ({
+				adapterConfig: DBAdapterFactoryConfig<Options>;
+		  } & CustomAdapter["options"])
+		| undefined;
+};
+
+export type CleanedWhere = Required<Where>;
+
+export interface CustomAdapter {
+	create: <T extends Record<string, any>>({
+		data,
+		model,
+		select,
+	}: {
+		model: string;
+		data: T;
+		select?: string[] | undefined;
+	}) => Promise<T>;
+	update: <T>(data: {
+		model: string;
+		where: CleanedWhere[];
+		update: T;
+	}) => Promise<T | null>;
+	updateMany: (data: {
+		model: string;
+		where: CleanedWhere[];
+		update: Record<string, any>;
+	}) => Promise<number>;
+	findOne: <T>({
+		model,
+		where,
+		select,
+		join,
+	}: {
+		model: string;
+		where: CleanedWhere[];
+		select?: string[] | undefined;
+		join?: JoinConfig | undefined;
+	}) => Promise<T | null>;
+	findMany: <T>({
+		model,
+		where,
+		limit,
+		sortBy,
+		offset,
+		join,
+	}: {
+		model: string;
+		where?: CleanedWhere[] | undefined;
+		limit: number;
+		sortBy?: { field: string; direction: "asc" | "desc" } | undefined;
+		offset?: number | undefined;
+		join?: JoinConfig | undefined;
+	}) => Promise<T[]>;
+	delete: ({
+		model,
+		where,
+	}: {
+		model: string;
+		where: CleanedWhere[];
+	}) => Promise<void>;
+	deleteMany: ({
+		model,
+		where,
+	}: {
+		model: string;
+		where: CleanedWhere[];
+	}) => Promise<number>;
+	count: ({
+		model,
+		where,
+	}: {
+		model: string;
+		where?: CleanedWhere[] | undefined;
+	}) => Promise<number>;
+	createSchema?:
+		| ((props: {
+				/**
+				 * The file the user may have passed in to the `generate` command as the expected schema file output path.
+				 */
+				file?: string;
+				/**
+				 * The tables from the user's Better-Auth instance schema.
+				 */
+				tables: BetterAuthDBSchema;
+		  }) => Promise<DBAdapterSchemaCreation>)
+		| undefined;
+	/**
+	 * Your adapter's options.
+	 */
+	options?: Record<string, any> | undefined;
+}
+
+export interface DBAdapterInstance<
+	Options extends BetterAuthOptions = BetterAuthOptions,
+> {
+	(options: BetterAuthOptions): DBAdapter<Options>;
+}
+
+export * from "./factory";
+export * from "./types";
+export * from "./utils";

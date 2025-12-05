@@ -13,6 +13,7 @@ The API Key plugin allows you to create and manage API keys for your application
 - [metadata for API keys](/docs/plugins/api-key#metadata)
 - Custom prefix
 - [Sessions from API keys](/docs/plugins/api-key#sessions-from-api-keys)
+- [Secondary storage support](/docs/plugins/api-key#secondary-storage) for high-performance API key lookups
 
 ## Installation
 
@@ -38,12 +39,12 @@ The API Key plugin allows you to create and manage API keys for your application
 
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
-            ```bash
+            ```package-install
             npx @better-auth/cli migrate
             ```
             </Tab>
             <Tab value="generate">
-            ```bash
+            ```package-install
             npx @better-auth/cli generate
             ```
             </Tab>
@@ -134,6 +135,7 @@ type createApiKey = {
     rateLimitEnabled?: boolean = true
     /**
      * Permissions of the Api Key.
+     * @serverOnly
      */
     permissions?: Record<string, string[]>
 }
@@ -380,11 +382,16 @@ Any time an endpoint in Better Auth is called that has a valid API key in the he
  This is generally not recommended, as it can lead to security issues if not used carefully. A leaked api key can be used to impersonate a user.
 </Callout>
 
+<Callout>
+  **Rate Limiting Note**: When `enableSessionForAPIKeys` is enabled, the API key is validated once per request, and rate limiting is applied accordingly.
+  If you manually verify an API key and then fetch a session separately, both operations will increment the rate limit counter. Using `enableSessionForAPIKeys` avoids this double increment.
+</Callout>
+
 ```ts
 export const auth = betterAuth({
   plugins: [
     apiKey({
-      sessionForAPIKeys: true,
+      enableSessionForAPIKeys: true,
     }),
   ],
 });
@@ -431,10 +438,135 @@ export const auth = betterAuth({
 });
 ```
 
+## Storage Modes
+
+The API Key plugin supports multiple storage modes for flexible API key management, allowing you to choose the best strategy for your use case.
+
+### Storage Mode Options
+
+#### `"database"` (Default)
+
+Store API keys only in the database adapter. This is the default mode and requires no additional configuration.
+
+```ts
+export const auth = betterAuth({
+  plugins: [
+    apiKey({
+      storage: "database", // Default, can be omitted
+    }),
+  ],
+});
+```
+
+#### `"secondary-storage"`
+
+Store API keys only in secondary storage (e.g., Redis).
+No fallback to database. Best for high-performance scenarios where all keys are migrated to secondary storage.
+
+```ts
+import { createClient } from "redis";
+import { betterAuth } from "better-auth";
+import { apiKey } from "better-auth/plugins";
+
+const redis = createClient();
+await redis.connect();
+
+export const auth = betterAuth({
+  secondaryStorage: {
+    get: async (key) => await redis.get(key),
+    set: async (key, value, ttl) => {
+      if (ttl) await redis.set(key, value, { EX: ttl });
+      else await redis.set(key, value);
+    },
+    delete: async (key) => await redis.del(key),
+  },
+  plugins: [
+    apiKey({
+      storage: "secondary-storage",
+    }),
+  ],
+});
+```
+
+#### Secondary Storage with Fallback
+
+Check secondary storage first, then fallback to database if not found.
+
+**Read behavior:**
+- Checks secondary storage first
+- If not found, queries the database
+- **Automatically populates secondary storage** when falling back to database (cache warming)
+- Ensures frequently accessed keys stay in cache over time
+
+**Write behavior:**
+- Writes to **both** database and secondary storage
+- Ensures consistency between both storage layers
+
+```ts
+export const auth = betterAuth({
+  secondaryStorage: {
+    get: async (key) => await redis.get(key),
+    set: async (key, value, ttl) => {
+      if (ttl) await redis.set(key, value, { EX: ttl });
+      else await redis.set(key, value);
+    },
+    delete: async (key) => await redis.del(key),
+  },
+  plugins: [
+    apiKey({
+      storage: "secondary-storage",
+      fallbackToDatabase: true,
+    }),
+  ],
+});
+```
+
+### Custom Storage Methods
+
+You can provide custom storage methods specifically for API keys, overriding the global `secondaryStorage` configuration:
+
+```ts
+export const auth = betterAuth({
+  plugins: [
+    apiKey({
+      storage: "secondary-storage",
+      customStorage: {
+        get: async (key) => {
+          // Custom get logic for API keys
+          return await customStorage.get(key);
+        },
+        set: async (key, value, ttl) => {
+          // Custom set logic for API keys
+          await customStorage.set(key, value, ttl);
+        },
+        delete: async (key) => {
+          // Custom delete logic for API keys
+          await customStorage.delete(key);
+        },
+      },
+    }),
+  ],
+});
+```
+
+
+
+
+
 ## Rate Limiting
 
-Every API key can have its own rate limit settings, however, the built-in rate-limiting only applies to the verification process for a given API key.
-For every other endpoint/method, you should utilize Better Auth's [built-in rate-limiting](/docs/concepts/rate-limit).
+Every API key can have its own rate limit settings. The built-in rate-limiting applies whenever an API key is validated, which includes:
+- When verifying an API key via the `/api-key/verify` endpoint
+- When using API keys for session creation (if `enableSessionForAPIKeys` is enabled), rate limiting applies to all endpoints that use the API key
+
+For other endpoints/methods that don't use API keys, you should utilize Better Auth's [built-in rate-limiting](/docs/concepts/rate-limit).
+
+<Callout type="warn">
+  **Double Rate-Limit Increment**: If you manually verify an API key using `verifyApiKey()` and then fetch a session using `getSession()` with the same API key header, both operations will increment the rate limit counter, resulting in two increments for a single request. To avoid this, either:
+  
+  - Use `enableSessionForAPIKeys: true` and let Better Auth handle session creation automatically (recommended)
+  - Or verify the API key once and reuse the validated result instead of calling both methods separately
+</Callout>
 
 You can refer to the rate-limit default configurations below in the API Key plugin options.
 
@@ -473,13 +605,27 @@ const apiKey = await auth.api.createApiKey({
 
 ### How does it work?
 
-For each request, a counter (internally called `requestCount`) is incremented.
-If the `rateLimitMax` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset.
+The rate limiting system uses a sliding window approach:
+
+1. **First Request**: When an API key is used for the first time (no previous `lastRequest`), the request is allowed and `requestCount` is set to 1.
+
+2. **Within Window**: For subsequent requests within the `timeWindow`, the `requestCount` is incremented. If `requestCount` reaches `rateLimitMax`, the request is rejected with a `RATE_LIMITED` error code.
+
+3. **Window Reset**: If the time since the last request exceeds the `timeWindow`, the window resets: `requestCount` is reset to 1 and `lastRequest` is updated to the current time.
+
+4. **Rate Limit Exceeded**: When a request is rejected due to rate limiting, the error response includes a `tryAgainIn` value (in milliseconds) indicating how long to wait before the window resets.
+
+**Disabling Rate Limiting**:
+- **Globally**: Set `rateLimit.enabled: false` in plugin options
+- **Per Key**: Set `rateLimitEnabled: false` when creating or updating an API key
+- **Null Values**: If `rateLimitTimeWindow` or `rateLimitMax` is `null`, rate limiting is effectively disabled for that key
+
+When rate limiting is disabled (globally or per-key), requests are still allowed but `lastRequest` is updated for tracking purposes.
 
 ## Remaining, refill, and expiration
 
 The remaining count is the number of requests left before the API key is disabled.
-The refill interval is the interval in milliseconds where the `remaining` count is refilled by day.
+The refill interval is the interval in milliseconds where the `remaining` count is refilled when the interval has passed since the last refill (or since creation if no refill has occurred yet).
 The expiration time is the expiration date of the API key.
 
 ### How does it work?
@@ -493,9 +639,12 @@ If the `remaining` count is 0, then the API key is disabled & removed.
 
 #### refillInterval & refillAmount:
 
-Whenever an API key is created, the `refillInterval` and `refillAmount` are set to `null`.
+Whenever an API key is created, the `refillInterval` and `refillAmount` are set to `null` by default.
 This means that the API key will not be refilled automatically.
-However, if `refillInterval` & `refillAmount` are set, then the API key will be refilled accordingly.
+However, if both `refillInterval` & `refillAmount` are set, then whenever the API key is used:
+- The system checks if the time since the last refill (or since creation if no refill has occurred) exceeds the `refillInterval`
+- If the interval has passed, the `remaining` count is reset to `refillAmount` (not incremented)
+- The `lastRefillAt` timestamp is updated to the current time
 
 #### Expiration:
 
@@ -620,7 +769,7 @@ Customize the starting characters configuration.
   <Accordion title="startingCharactersConfig Options">
     `shouldStore` <span className="opacity-70">`boolean`</span>
 
-    Wether to store the starting characters in the database.
+    Whether to store the starting characters in the database.
     If false, we will set `start` to `null`.
     Default is `true`.
 
@@ -681,7 +830,7 @@ Customize the key expiration.
 
     `disableCustomExpiresTime` <span className="opacity-70">`boolean`</span>
 
-    Wether to disable the expires time passed from the client.
+    Whether to disable the expires time passed from the client.
     If `true`, the expires time will be based on the default values.
     Default is `false`.
 
@@ -725,9 +874,73 @@ Customize the rate-limiting.
 
 Custom schema for the API key plugin.
 
-`disableSessionForAPIKeys` <span className="opacity-70">`boolean`</span>
+`enableSessionForAPIKeys` <span className="opacity-70">`boolean`</span>
 
-An API Key can represent a valid session, so we automatically mock a session for the user if we find a valid API key in the request headers.
+An API Key can represent a valid session, so we can mock a session for the user if we find a valid API key in the request headers. Default is `false`.
+
+`storage` <span className="opacity-70">`"database" | "secondary-storage"`</span>
+
+Storage backend for API keys. Default is `"database"`.
+
+- `"database"`: Store API keys in the database adapter (default)
+- `"secondary-storage"`: Store API keys in the configured secondary storage (e.g., Redis)
+
+`fallbackToDatabase` <span className="opacity-70">`boolean`</span>
+
+When `storage` is `"secondary-storage"`, enable fallback to database if key is not found in secondary storage.
+Default is `false`.
+
+<Callout>
+  When `storage` is set to `"secondary-storage"`, you must configure `secondaryStorage` in your Better Auth options. API keys will be stored using key-value patterns:
+  - `api-key:${hashedKey}` - Primary lookup by hashed key
+  - `api-key:by-id:${id}` - Lookup by ID
+  - `api-key:by-user:${userId}` - User's API key list
+  
+  If an API key has an expiration date (`expiresAt`), a TTL will be automatically set in secondary storage to ensure automatic cleanup.
+</Callout>
+
+```ts
+export const auth = betterAuth({
+  secondaryStorage: {
+    get: async (key) => {
+      return await redis.get(key);
+    },
+    set: async (key, value, ttl) => {
+      if (ttl) await redis.set(key, value, { EX: ttl });
+      else await redis.set(key, value);
+    },
+    delete: async (key) => {
+      await redis.del(key);
+    },
+  },
+  plugins: [
+    apiKey({
+      storage: "secondary-storage",
+    }),
+  ],
+});
+```
+
+`customStorage` <span className="opacity-70">`{ get: (key: string) => Promise<unknown> | unknown; set: (key: string, value: string, ttl?: number) => Promise<void | null | unknown> | void; delete: (key: string) => Promise<void | null | string> | void; }`</span>
+
+Custom storage methods for API keys. If provided, these methods will be used instead of `ctx.context.secondaryStorage`. Custom methods take precedence over global secondary storage.
+
+Useful when you want to use a different storage backend specifically for API keys, or when you need custom logic for storage operations.
+
+```ts
+export const auth = betterAuth({
+  plugins: [
+    apiKey({
+      storage: "secondary-storage",
+      customStorage: {
+        get: async (key) => await customStorage.get(key),
+        set: async (key, value, ttl) => await customStorage.set(key, value, ttl),
+        delete: async (key) => await customStorage.delete(key), 
+      },
+    }),
+  ],
+});
+```
 
 `permissions` <span className="opacity-70">`{ defaultPermissions?: Statements | ((userId: string, ctx: GenericEndpointContext) => Statements | Promise<Statements>) }`</span>
 

@@ -11,11 +11,14 @@ The username plugin is a lightweight plugin that adds username support to the em
     <Step>
         ### Add Plugin to the server
 
-        ```ts title="auth.ts" 
+        ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
         import { username } from "better-auth/plugins"
 
         export const auth = betterAuth({
+            emailAndPassword: { // [!code highlight]
+                enabled: true, // [!code highlight]
+            }, // [!code highlight]
             plugins: [ // [!code highlight]
                 username() // [!code highlight]
             ] // [!code highlight]
@@ -29,12 +32,12 @@ The username plugin is a lightweight plugin that adds username support to the em
 
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
-            ```bash
+            ```package-install
             npx @better-auth/cli migrate
             ```
             </Tab>
             <Tab value="generate">
-            ```bash
+            ```package-install
             npx @better-auth/cli generate
             ```
             </Tab>
@@ -43,11 +46,11 @@ The username plugin is a lightweight plugin that adds username support to the em
     </Step>
     <Step>
         ### Add the client plugin
-        
+
         ```ts title="auth-client.ts"
         import { createAuthClient } from "better-auth/client"
         import { usernameClient } from "better-auth/client/plugins"
-        
+
         export const authClient = createAuthClient({
             plugins: [ // [!code highlight]
                 usernameClient() // [!code highlight]
@@ -82,7 +85,7 @@ type signUpEmail = {
     /**
      * The username of the user.
     */
-    username: string = "test"
+    username?: string = "test"
     /**
      * An optional display username of the user.
     */
@@ -162,6 +165,9 @@ import { betterAuth } from "better-auth"
 import { username } from "better-auth/plugins"
 
 const auth = betterAuth({
+    emailAndPassword: {
+        enabled: true,
+    },
     plugins: [
         username({
             minUsernameLength: 5
@@ -179,6 +185,9 @@ import { betterAuth } from "better-auth"
 import { username } from "better-auth/plugins"
 
 const auth = betterAuth({
+    emailAndPassword: {
+        enabled: true,
+    },
     plugins: [
         username({
             maxUsernameLength: 100
@@ -196,6 +205,9 @@ import { betterAuth } from "better-auth"
 import { username } from "better-auth/plugins"
 
 const auth = betterAuth({
+    emailAndPassword: {
+        enabled: true,
+    },
     plugins: [
         username({
             usernameValidator: (username) => {
@@ -218,6 +230,9 @@ import { betterAuth } from "better-auth"
 import { username } from "better-auth/plugins"
 
 const auth = betterAuth({
+    emailAndPassword: {
+        enabled: true,
+    },
     plugins: [
         username({
             displayUsernameValidator: (displayUsername) => {
@@ -240,6 +255,9 @@ import { betterAuth } from "better-auth"
 import { username } from "better-auth/plugins"
 
 const auth = betterAuth({
+    emailAndPassword: {
+        enabled: true,
+    },
     plugins: [
         username({
             usernameNormalization: (username) => {
@@ -264,11 +282,14 @@ import { betterAuth } from "better-auth"
 import { username } from "better-auth/plugins"
 
 const auth = betterAuth({
+    emailAndPassword: {
+        enabled: true,
+    },
     plugins: [
         username({
             displayUsernameNormalization: (displayUsername) => displayUsername.toLowerCase(),
         })
-    ]   
+    ]
 })
 ```
 
@@ -281,6 +302,9 @@ import { betterAuth } from "better-auth"
 import { username } from "better-auth/plugins"
 
 const auth = betterAuth({
+    emailAndPassword: {
+        enabled: true,
+    },
     plugins: [
         username({
             validationOrder: {
@@ -292,21 +316,40 @@ const auth = betterAuth({
 })
 ```
 
+### Disable Is Username Available
+
+By default, the plugin exposes an endpoint `/is-username-available` to check if a username is available. You can disable this endpoint by providing `disablePaths` option to the better-auth configuration. This is useful if you want to protect usernames from being enumerated.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
+
+const auth = betterAuth({
+    emailAndPassword: {
+        enabled: true,
+    },
+    disablePaths: ["/is-username-available"],
+    plugins: [
+        username()
+    ]
+})
+```
+
 ## Schema
 
 The plugin requires 2 fields to be added to the user table:
 
 <DatabaseTable
     fields={[
-        { 
-            name: "username", 
-            type: "string", 
+        {
+            name: "username",
+            type: "string",
             description: "The username of the user",
             isUnique: true
         },
-        { 
-            name: "displayUsername", 
-            type: "string", 
+        {
+            name: "displayUsername",
+            type: "string",
             description: "Non normalized username of the user",
             isUnique: true
         },

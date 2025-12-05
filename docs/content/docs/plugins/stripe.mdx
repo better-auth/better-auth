@@ -38,7 +38,7 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
         Next, install the Stripe SDK on your server:
 
         ```package-install
-        stripe@^18.0.0
+        stripe@^20.0.0
         ```
     </Step>
     <Step>
@@ -50,7 +50,7 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
         import Stripe from "stripe"
 
         const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-            apiVersion: "2025-02-24.acacia",
+            apiVersion: "2025-11-17.clover", // Latest API version as of Stripe SDK v20.0.0
         })
 
         export const auth = betterAuth({
@@ -64,6 +64,10 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
             ]
         })
         ```
+
+        <Callout type="info">
+        **Upgrading from Stripe v18?** Version 19 uses async webhook signature verification (`constructEventAsync`) which is handled internally by the plugin. No code changes required on your end!
+        </Callout>
     </Step>
     <Step>
         ### Add the client plugin
@@ -89,12 +93,12 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
 
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
-            ```bash
+            ```package-install
             npx @better-auth/cli migrate
             ```
             </Tab>
             <Tab value="generate">
-            ```bash
+            ```package-install
             npx @better-auth/cli generate
             ```
             </Tab>
@@ -133,11 +137,11 @@ You can customize the customer creation process:
 stripe({
     // ... other options
     createCustomerOnSignUp: true,
-    onCustomerCreate: async ({ customer, stripeCustomer, user }, request) => {
+    onCustomerCreate: async ({ stripeCustomer, user }, ctx) => {
         // Do something with the newly created customer
-        console.log(`Customer ${customer.id} created for user ${user.id}`);
+        console.log(`Customer ${stripeCustomer.id} created for user ${user.id}`);
     },
-    getCustomerCreateParams: async ({ user, session }, request) => {
+    getCustomerCreateParams: async (user, ctx) => {
         // Customize the Stripe customer creation parameters
         return {
             metadata: {
@@ -327,6 +331,29 @@ const projectLimit = subscriptions?.limits?.projects || 0;
 ```
 </APIMethod>
 
+Make sure to provide `authorizeReference` in your plugin config to authorize the reference ID
+
+```ts title="auth.ts"
+stripe({
+    // ... other options
+    subscription: {
+        // ... other subscription options
+        authorizeReference: async ({ user, session, referenceId, action }) => {
+            if(action === "list-subscription") {
+                const org = await db.member.findFirst({
+                    where: {
+                        organizationId: referenceId,
+                        userId: user.id
+                    }   
+                });
+                return org?.role === "owner"
+            }
+            // Check if the user has permission to list subscriptions for this reference
+            return true;
+        }
+    }
+})
+```
 #### Canceling a Subscription
 
 To cancel a subscription:
@@ -543,11 +570,11 @@ You can configure trial periods for your plans:
             // Called when a trial starts
             await sendTrialStartEmail(subscription.referenceId);
         },
-        onTrialEnd: async ({ subscription, user }, request) => {
+        onTrialEnd: async ({ subscription }, ctx) => {
             // Called when a trial ends
-            await sendTrialEndEmail(user.email);
+            await sendTrialEndEmail(subscription.referenceId);
         },
-        onTrialExpired: async (subscription) => {
+        onTrialExpired: async (subscription, ctx) => {
             // Called when a trial expires without conversion
             await sendTrialExpiredEmail(subscription.referenceId);
         }
@@ -595,8 +622,8 @@ Table Name: `subscription`
     { 
       name: "referenceId", 
       type: "string", 
-      description: "The ID this subscription is associated with (user ID by default)",
-      isUnique: true
+      description: "The ID this subscription is associated with (user ID by default). This should NOT be a unique field in your database, as it must allow users to resubscribe after a cancellation.",
+      isUnique: false
     },
     { 
       name: "stripeCustomerId", 
@@ -684,9 +711,9 @@ stripe({
 
 **createCustomerOnSignUp**: `boolean` - Whether to automatically create a Stripe customer when a user signs up. Default: `false`.
 
-**onCustomerCreate**: `(data: { customer: Customer, stripeCustomer: Stripe.Customer, user: User }, request?: Request) => Promise<void>` - A function called after a customer is created.
+**onCustomerCreate**: `(data: { stripeCustomer: Stripe.Customer, user: User }, ctx: GenericEndpointContext) => Promise<void>` - A function called after a customer is created.
 
-**getCustomerCreateParams**: `(data: { user: User, session: Session }, request?: Request) => Promise<{}>` - A function to customize the Stripe customer creation parameters.
+**getCustomerCreateParams**: `(user: User, ctx: GenericEndpointContext) => Promise<{}>` - A function to customize the Stripe customer creation parameters.
 
 **onEvent**: `(event: Stripe.Event) => Promise<void>` - A function called for any Stripe webhook event.
 
@@ -698,7 +725,7 @@ stripe({
 
 **requireEmailVerification**: `boolean` - Whether to require email verification before allowing subscription upgrades. Default: `false`.
 
-**authorizeReference**: `(data: { user: User, session: Session, referenceId: string, action: "upgrade-subscription" | "list-subscription" | "cancel-subscription" | "restore-subscription"}, request?: Request) => Promise<boolean>` - A function to authorize reference IDs.
+**authorizeReference**: `(data: { user: User, session: Session, referenceId: string, action: "upgrade-subscription" | "list-subscription" | "cancel-subscription" | "restore-subscription"}, ctx: GenericEndpointContext) => Promise<boolean>` - A function to authorize reference IDs.
 
 ### Plan Configuration
 
@@ -714,15 +741,15 @@ Each plan can have the following properties:
 
 **annualDiscountLookupKey**: `string` - The Stripe price lookup key for annual billing. Alternative to `annualDiscountPriceId`.
 
-**limits**: `Record<string, number>` - Limits associated with the plan (e.g., `{ projects: 10, storage: 5 }`).
+**limits**: `Record<string, unknown>` - Limits associated with the plan (e.g., `{ projects: 10, storage: 5 }`). Useful when you want to define plan-specific metadata.
 
 **group**: `string` - A group name for the plan, useful for categorizing plans.
 
 **freeTrial**: Object containing trial configuration:
   - **days**: `number` - Number of trial days.
   - **onTrialStart**: `(subscription: Subscription) => Promise<void>` - Called when a trial starts.
-  - **onTrialEnd**: `(data: { subscription: Subscription, user: User }, request?: Request) => Promise<void>` - Called when a trial ends.
-  - **onTrialExpired**: `(subscription: Subscription) => Promise<void>` - Called when a trial expires without conversion.
+  - **onTrialEnd**: `(data: { subscription: Subscription }, ctx: GenericEndpointContext) => Promise<void>` - Called when a trial ends.
+  - **onTrialExpired**: `(subscription: Subscription, ctx: GenericEndpointContext) => Promise<void>` - Called when a trial expires without conversion.
 
 ## Advanced Usage
 
@@ -748,15 +775,18 @@ await client.subscription.upgrade({
 Make sure to implement the `authorizeReference` function to verify that the user has permission to manage subscriptions for the organization:
 
 ```ts title="auth.ts"
-authorizeReference: async ({ user, referenceId, action }) => {
-    const member = await db.members.findFirst({
-        where: {
-            userId: user.id,
-            organizationId: referenceId
-        }
-    });
-    
-    return member?.role === "owner" || member?.role === "admin";
+subscription: {
+    // ... other subscription options
+    authorizeReference: async ({ user, referenceId, action }) => {
+        const member = await db.members.findFirst({
+            where: {
+                userId: user.id,
+                organizationId: referenceId
+            }
+        });
+        
+        return member?.role === "owner" || member?.role === "admin";
+    }
 }
 ```
 
@@ -765,7 +795,7 @@ authorizeReference: async ({ user, referenceId, action }) => {
 You can customize the Stripe Checkout session with additional parameters:
 
 ```ts title="auth.ts"
-getCheckoutSessionParams: async ({ user, session, plan, subscription }, request) => {
+getCheckoutSessionParams: async ({ user, session, plan, subscription }, ctx) => {
     return {
         params: {
             allow_promotion_codes: true,
@@ -797,7 +827,7 @@ To collect tax IDs from the customer, set `tax_id_collection` to true:
 ```ts title="auth.ts"
 subscription: {
     // ... other options
-    getCheckoutSessionParams: async ({ user, session, plan, subscription }, request) => {
+    getCheckoutSessionParams: async ({ user, session, plan, subscription }, ctx) => {
         return {
             params: {
                 tax_id_collection: {
@@ -816,7 +846,7 @@ To enable automatic tax calculation using the customer's location, set `automati
 ```ts title="auth.ts"
 subscription: {
     // ... other options
-    getCheckoutSessionParams: async ({ user, session, plan, subscription }, request) => {
+    getCheckoutSessionParams: async ({ user, session, plan, subscription }, ctx) => {
         return {
             params: {
                 automatic_tax: {

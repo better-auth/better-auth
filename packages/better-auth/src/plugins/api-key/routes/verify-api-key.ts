@@ -1,14 +1,16 @@
+import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { safeJSONParse } from "@better-auth/core/utils";
 import * as z from "zod";
-import { APIError, createAuthEndpoint } from "../../../api";
+import { APIError } from "../../../api";
+import { role } from "../../access";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
+import { defaultKeyHasher } from "../";
+import { deleteApiKey, getApiKey, setApiKey } from "../adapter";
+import { isRateLimited } from "../rate-limit";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
-import { isRateLimited } from "../rate-limit";
-import type { AuthContext, GenericEndpointContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
-import { safeJSONParse } from "../../../utils/json";
-import { role } from "../../access";
-import { defaultKeyHasher } from "../";
 
 export async function validateApiKey({
 	hashedKey,
@@ -20,18 +22,10 @@ export async function validateApiKey({
 	hashedKey: string;
 	opts: PredefinedApiKeyOptions;
 	schema: ReturnType<typeof apiKeySchema>;
-	permissions?: Record<string, string[]>;
+	permissions?: Record<string, string[]> | undefined;
 	ctx: GenericEndpointContext;
 }) {
-	const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-		model: API_KEY_TABLE_NAME,
-		where: [
-			{
-				field: "key",
-				value: hashedKey,
-			},
-		],
-	});
+	const apiKey = await getApiKey(ctx, hashedKey, opts);
 
 	if (!apiKey) {
 		throw new APIError("UNAUTHORIZED", {
@@ -47,19 +41,34 @@ export async function validateApiKey({
 	}
 
 	if (apiKey.expiresAt) {
-		const now = new Date().getTime();
+		const now = Date.now();
 		const expiresAt = new Date(apiKey.expiresAt).getTime();
 		if (now > expiresAt) {
 			try {
-				ctx.context.adapter.delete({
-					model: API_KEY_TABLE_NAME,
-					where: [
-						{
-							field: "id",
-							value: apiKey.id,
-						},
-					],
-				});
+				if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
+					await deleteApiKey(ctx, apiKey, opts);
+					await ctx.context.adapter.delete({
+						model: API_KEY_TABLE_NAME,
+						where: [
+							{
+								field: "id",
+								value: apiKey.id,
+							},
+						],
+					});
+				} else if (opts.storage === "secondary-storage") {
+					await deleteApiKey(ctx, apiKey, opts);
+				} else {
+					await ctx.context.adapter.delete({
+						model: API_KEY_TABLE_NAME,
+						where: [
+							{
+								field: "id",
+								value: apiKey.id,
+							},
+						],
+					});
+				}
 			} catch (error) {
 				ctx.context.logger.error(`Failed to delete expired API keys:`, error);
 			}
@@ -100,15 +109,21 @@ export async function validateApiKey({
 	if (apiKey.remaining === 0 && apiKey.refillAmount === null) {
 		// if there is no more remaining requests, and there is no refill amount, than the key is revoked
 		try {
-			ctx.context.adapter.delete({
-				model: API_KEY_TABLE_NAME,
-				where: [
-					{
-						field: "id",
-						value: apiKey.id,
-					},
-				],
-			});
+			if (opts.storage === "secondary-storage") {
+				// Secondary storage mode: delete from storage
+				await deleteApiKey(ctx, apiKey, opts);
+			} else {
+				// Database mode: delete from DB
+				await ctx.context.adapter.delete({
+					model: API_KEY_TABLE_NAME,
+					where: [
+						{
+							field: "id",
+							value: apiKey.id,
+						},
+					],
+				});
+			}
 		} catch (error) {
 			ctx.context.logger.error(`Failed to delete expired API keys:`, error);
 		}
@@ -118,7 +133,7 @@ export async function validateApiKey({
 			code: "USAGE_EXCEEDED" as const,
 		});
 	} else if (remaining !== null) {
-		let now = new Date().getTime();
+		let now = Date.now();
 		const refillInterval = apiKey.refillInterval;
 		const refillAmount = apiKey.refillAmount;
 		let lastTime = new Date(lastRefillAt ?? apiKey.createdAt).getTime();
@@ -146,20 +161,32 @@ export async function validateApiKey({
 
 	const { message, success, update, tryAgainIn } = isRateLimited(apiKey, opts);
 
-	const newApiKey = await ctx.context.adapter.update<ApiKey>({
-		model: API_KEY_TABLE_NAME,
-		where: [
-			{
-				field: "id",
-				value: apiKey.id,
-			},
-		],
-		update: {
-			...update,
-			remaining,
-			lastRefillAt,
-		},
-	});
+	let newApiKey: ApiKey | null = null;
+	const updated: ApiKey = {
+		...apiKey,
+		...update,
+		remaining,
+		lastRefillAt,
+		updatedAt: new Date(),
+	};
+
+	if (opts.storage === "database") {
+		// Database mode only
+		newApiKey = await ctx.context.adapter.update<ApiKey>({
+			model: API_KEY_TABLE_NAME,
+			where: [
+				{
+					field: "id",
+					value: apiKey.id,
+				},
+			],
+			update: updated,
+		});
+	} else {
+		// Secondary storage mode: update in storage
+		await setApiKey(ctx, updated, opts);
+		newApiKey = updated;
+	}
 
 	if (!newApiKey) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -181,6 +208,18 @@ export async function validateApiKey({
 	return newApiKey;
 }
 
+const verifyApiKeyBodySchema = z.object({
+	key: z.string().meta({
+		description: "The key to verify",
+	}),
+	permissions: z
+		.record(z.string(), z.array(z.string()))
+		.meta({
+			description: "The permissions to verify.",
+		})
+		.optional(),
+});
+
 export function verifyApiKey({
 	opts,
 	schema,
@@ -190,24 +229,14 @@ export function verifyApiKey({
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
-		byPassLastCheckTime?: boolean,
+		byPassLastCheckTime?: boolean | undefined,
 	): void;
 }) {
 	return createAuthEndpoint(
 		"/api-key/verify",
 		{
 			method: "POST",
-			body: z.object({
-				key: z.string().meta({
-					description: "The key to verify",
-				}),
-				permissions: z
-					.record(z.string(), z.array(z.string()))
-					.meta({
-						description: "The permissions to verify.",
-					})
-					.optional(),
-			}),
+			body: verifyApiKeyBodySchema,
 			metadata: {
 				SERVER_ONLY: true,
 			},

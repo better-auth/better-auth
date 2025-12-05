@@ -4,10 +4,7 @@ const nextConfig: NextConfig = {
 	typescript: {
 		ignoreBuildErrors: true,
 	},
-	webpack: (config) => {
-		config.externals.push("@libsql/client");
-		return config;
-	},
+	serverExternalPackages: ["@libsql/client", "libsql", "better-sqlite3"],
 };
 
 export default nextConfig;

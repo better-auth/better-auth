@@ -1,4 +1,4 @@
-import type { AuthPluginSchema } from "../../types";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 
 export const schema = {
 	jwks: {
@@ -15,6 +15,10 @@ export const schema = {
 				type: "date",
 				required: true,
 			},
+			expiresAt: {
+				type: "date",
+				required: false,
+			},
 		},
 	},
-} satisfies AuthPluginSchema;
+} satisfies BetterAuthPluginDBSchema;

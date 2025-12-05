@@ -24,7 +24,43 @@ See the [session management](/docs/concepts/session-management) for more details
 
 ## CSRF Protection
 
-Better Auth ensures CSRF protection by validating the Origin header in requests. This check confirms that requests originate from the application or a trusted source. If a request comes from an untrusted origin, it is blocked to prevent potential CSRF attacks. By default, the origin matching the base URL is trusted, but you can set a list of trusted origins in the trustedOrigins configuration option.
+Better Auth includes multiple safeguards to prevent Cross-Site Request Forgery (CSRF) attacks:
+
+1. **Avoid simple requests**
+   See [Avoiding simple requests](https://developer.mozilla.org/en-US/docs/Web/Security/Attacks/CSRF#avoiding_simple_requests) for more details. Better Auth only allows requests with a non-simple header or a `Content-Type` header of `application/json`.
+   
+2. **Origin Validation**
+   Each request’s `Origin` header is verified to confirm it comes from your application or another explicitly trusted source. Requests from untrusted origins are rejected. By default, Better Auth trusts the base URL of your app, but you can specify additional trusted origins via the `trustedOrigins` configuration option.
+
+3. **Secure Cookie Settings**
+   Session cookies use the `SameSite=Lax` attribute by default, preventing browsers from sending cookies with most cross-site requests. You can override this behavior using the `defaultCookieAttributes` option.
+
+4. **No Mutations on GET Requests (with additional safeguards)**
+  `GET` requests are assumed to be read-only and should not alter the application’s state. In cases where a `GET` request must perform a mutation—such as during OAuth callbacks - Better Auth applies extra security measures, including validating `nonce` and `state` parameters to ensure the request’s authenticity.
+
+You can skip the CSRF check for all requests by setting the `disableCSRFCheck` option to `true` in the configuration.
+
+```typescript
+{
+  advanced: {
+    disableCSRFCheck: true
+  }
+}
+```
+
+You can skip the origin check for all requests by setting the `disableOriginCheck` option to `true` in the configuration.
+
+```typescript
+{
+  advanced: {
+    disableOriginCheck: true
+  }
+}
+```
+
+<Callout type="warning">
+  Skipping csrf check will open your application to CSRF attacks. And skipping origin check may open up your application to other security vulnerabilities including open redirects.
+</Callout>
 
 ## OAuth State and PKCE
 
@@ -84,7 +120,7 @@ The most basic usage is to specify exact origins:
 }
 ```
 
-### Wildcard Domains
+### Wildcard Origins
 
 Better Auth supports wildcard patterns in trusted origins, which allows you to trust multiple subdomains with a single entry:
 
@@ -119,10 +155,29 @@ Trusted origins also support custom schemes for mobile apps and browser extensio
 {
   trustedOrigins: [
     "myapp://",                               // Mobile app scheme
-    "chrome-extension://YOUR_EXTENSION_ID"    // Browser extension
+    "chrome-extension://YOUR_EXTENSION_ID",   // Browser extension
+    "exp://*/*",                              // Trust all Expo development URLs
+    "exp://10.0.0.*:*/*",                     // Trust 10.0.0.x IP range with any port
   ]
 }
 ```
+
+### Dynamic origin list
+
+You can also dynamically set the list of trusted origins by providing a function that returns it:
+
+```typescript
+{
+  trustedOrigins: async (request) => {
+    const trustedOrigins = await queryTrustedDomains();
+    return trustedOrigins;
+  }
+}
+```
+
+<Callout>
+**Important**: This function will be invoked per incoming request, so be careful if you decide to dynamically fetch your list of trusted domains.
+</Callout>
 
 ## Reporting Vulnerabilities
 

@@ -1,11 +1,12 @@
-import { Kysely, MssqlDialect } from "kysely";
+import type { BetterAuthOptions } from "@better-auth/core";
+import type { Dialect } from "kysely";
 import {
-	type Dialect,
+	Kysely,
+	MssqlDialect,
 	MysqlDialect,
 	PostgresDialect,
 	SqliteDialect,
 } from "kysely";
-import type { BetterAuthOptions } from "../../types";
 import type { KyselyDatabaseType } from "./types";
 
 export function getKyselyDatabaseType(

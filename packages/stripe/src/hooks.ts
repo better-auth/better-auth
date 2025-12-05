@@ -1,4 +1,5 @@
-import { type GenericEndpointContext, logger } from "better-auth";
+import type { GenericEndpointContext } from "better-auth";
+import { logger } from "better-auth";
 import type Stripe from "stripe";
 import type { InputSubscription, StripeOptions, Subscription } from "./types";
 import { getPlanByPriceInfo } from "./utils";
@@ -142,7 +143,7 @@ export async function onSubscriptionUpdated(
 		}
 
 		const seats = subscriptionUpdated.items.data[0]!.quantity;
-		await ctx.context.adapter.update({
+		const updatedSubscription = await ctx.context.adapter.update<Subscription>({
 			model: "subscription",
 			update: {
 				...(plan
@@ -185,7 +186,7 @@ export async function onSubscriptionUpdated(
 		}
 		await options.subscription.onSubscriptionUpdate?.({
 			event,
-			subscription,
+			subscription: updatedSubscription || subscription,
 		});
 		if (plan) {
 			if (

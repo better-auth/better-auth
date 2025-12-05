@@ -1,23 +1,24 @@
+import fs from "node:fs/promises";
+import { join } from "node:path";
+import type { BetterAuthOptions } from "@better-auth/core";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
+	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
-	performanceTestSuite,
 	transactionsTestSuite,
+	uuidTestSuite,
 } from "../../tests";
 import { prismaAdapter } from "../prisma-adapter";
 import { generateAuthConfigFile } from "./generate-auth-config";
 import { generatePrismaSchema } from "./generate-prisma-schema";
-import { pushPrismaSchema } from "./push-prisma-schema";
-import type { BetterAuthOptions } from "../../../types";
-import { join } from "path";
-import fs from "node:fs/promises";
 import {
 	destroyPrismaClient,
 	getPrismaClient,
 	incrementMigrationCount,
 } from "./get-prisma-client";
+import { pushPrismaSchema } from "./push-prisma-schema";
 
 const dialect = "sqlite";
 const { execute } = await testAdapter({
@@ -48,7 +49,8 @@ const { execute } = await testAdapter({
 		transactionsTestSuite(),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
-		performanceTestSuite({ dialect }),
+		joinsTestSuite(),
+		uuidTestSuite(),
 	],
 	onFinish: async () => {},
 	prefixTests: dialect,

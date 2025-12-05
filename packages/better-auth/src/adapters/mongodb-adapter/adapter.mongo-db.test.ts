@@ -1,12 +1,12 @@
 import { MongoClient, ObjectId } from "mongodb";
 import { testAdapter } from "../test-adapter";
-import { mongodbAdapter } from "./mongodb-adapter";
 import {
-	normalTestSuite,
-	performanceTestSuite,
 	authFlowTestSuite,
+	joinsTestSuite,
+	normalTestSuite,
 	transactionsTestSuite,
 } from "../tests";
+import { mongodbAdapter } from "./mongodb-adapter";
 
 const dbClient = async (connectionString: string, dbName: string) => {
 	const client = new MongoClient(connectionString);
@@ -22,18 +22,20 @@ const { db, client } = await dbClient(
 
 const { execute } = await testAdapter({
 	adapter: (options) => {
-		return mongodbAdapter(db, { transaction: false });
+		return mongodbAdapter(db, {
+			transaction: false,
+		});
 	},
 	runMigrations: async (betterAuthOptions) => {},
 	tests: [
 		normalTestSuite(),
 		authFlowTestSuite(),
 		transactionsTestSuite(),
-		// numberIdTestSuite(), // Mongo doesn't support number ids
-		performanceTestSuite(),
+		joinsTestSuite(),
+		// numberIdTestSuite(), // no support
+		// uuidTestSuite() // no support
 	],
-	customIdGenerator: () => new ObjectId().toString(),
-	defaultRetryCount: 20,
+	customIdGenerator: () => new ObjectId().toHexString(),
 });
 
 execute();

@@ -1,9 +1,10 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-call";
-import type { GenericEndpointContext } from "../../types";
 import { getSessionFromCtx } from "../../api";
-import type { AuthorizationQuery, OIDCOptions } from "./types";
 import { generateRandomString } from "../../crypto";
 import { getClient } from "./index";
+import type { AuthorizationQuery, OIDCOptions } from "./types";
+import { parsePrompt } from "./utils/prompt";
 
 function formatErrorURL(url: string, error: string, description: string) {
 	return `${
@@ -58,6 +59,19 @@ export async function authorize(
 	}
 	const session = await getSessionFromCtx(ctx);
 	if (!session) {
+		// Handle prompt=none per OIDC spec - must return error instead of redirecting
+		const query = ctx.query as AuthorizationQuery;
+		const promptSet = parsePrompt(query.prompt ?? "");
+		if (promptSet.has("none") && query.redirect_uri) {
+			return handleRedirect(
+				formatErrorURL(
+					query.redirect_uri,
+					"login_required",
+					"Authentication required but prompt is none",
+				),
+			);
+		}
+
 		/**
 		 * If the user is not logged in, we need to redirect them to the
 		 * login page.
@@ -92,14 +106,11 @@ export async function authorize(
 			"invalid_request",
 			"response_type is required",
 		);
-		throw ctx.redirect(
-			getErrorURL(ctx, "invalid_request", "response_type is required"),
-		);
+		throw ctx.redirect(errorURL);
 	}
 
 	const client = await getClient(
 		ctx.query.client_id,
-		ctx.context.adapter,
 		options.trustedClients || [],
 	);
 	if (!client) {
@@ -110,7 +121,7 @@ export async function authorize(
 		);
 		throw ctx.redirect(errorURL);
 	}
-	const redirectURI = client.redirectURLs.find(
+	const redirectURI = client.redirectUrls.find(
 		(url) => url === ctx.query.redirect_uri,
 	);
 
@@ -137,7 +148,9 @@ export async function authorize(
 	}
 
 	const requestScope =
-		query.scope?.split(" ").filter((s) => s) || opts.defaultScope.split(" ");
+		query.scope?.split(" ").filter((s) => s) ||
+		opts.defaultScope?.split(" ") ||
+		[];
 	const invalidScopes = requestScope.filter((scope) => {
 		return !opts.scopes.includes(scope);
 	});
@@ -180,7 +193,7 @@ export async function authorize(
 	}
 
 	const code = generateRandomString(32, "a-z", "A-Z", "0-9");
-	const codeExpiresInMs = opts.codeExpiresIn * 1000;
+	const codeExpiresInMs = opts.codeExpiresIn! * 1000;
 	const expiresAt = new Date(Date.now() + codeExpiresInMs);
 
 	// Determine if consent is required
@@ -191,6 +204,7 @@ export async function authorize(
 	const hasAlreadyConsented = await ctx.context.adapter
 		.findOne<{
 			consentGiven: boolean;
+			scopes: string;
 		}>({
 			model: "oauthConsent",
 			where: [
@@ -204,44 +218,85 @@ export async function authorize(
 				},
 			],
 		})
-		.then((res) => !!res?.consentGiven);
+		.then((res) => {
+			if (!res?.consentGiven) {
+				return false;
+			}
+			const consentedScopes = res.scopes ? res.scopes.split(" ") : [];
+			const hasConsented = requestScope.every((scope) =>
+				consentedScopes.includes(scope),
+			);
+			return hasConsented;
+		});
+
+	const promptSet = parsePrompt(query.prompt ?? "");
+
+	// Handle prompt=none per OIDC spec 3.1.2.1
+	// The Authorization Server MUST NOT display any authentication or consent UI
+	if (promptSet.has("none")) {
+		// If consent is required, return consent_required error
+		if (!skipConsentForTrustedClient && !hasAlreadyConsented) {
+			return handleRedirect(
+				formatErrorURL(
+					query.redirect_uri,
+					"consent_required",
+					"Consent required but prompt is none",
+				),
+			);
+		}
+		// If we reach here, user is authenticated and consent is satisfied
+		// Continue without any UI interaction
+	}
+
+	// Handle max_age parameter per OIDC spec 3.1.2.1
+	// max_age=0 is equivalent to prompt=login
+	let requireLogin = promptSet.has("login");
+	if (query.max_age !== undefined) {
+		const maxAge = Number(query.max_age);
+		if (Number.isInteger(maxAge) && maxAge >= 0) {
+			const sessionAge =
+				(Date.now() - new Date(session.session.createdAt).getTime()) / 1000;
+			if (sessionAge > maxAge) {
+				// Session is older than max_age, force re-authentication
+				requireLogin = true;
+			}
+		}
+		// If max_age is invalid (not a non-negative integer), ignore it per OIDC spec
+	}
 
 	const requireConsent =
 		!skipConsentForTrustedClient &&
-		(!hasAlreadyConsented || query.prompt === "consent");
+		(!hasAlreadyConsented || promptSet.has("consent"));
 
 	try {
 		/**
 		 * Save the code in the database
 		 */
-		await ctx.context.internalAdapter.createVerificationValue(
-			{
-				value: JSON.stringify({
-					clientId: client.clientId,
-					redirectURI: query.redirect_uri,
-					scope: requestScope,
-					userId: session.user.id,
-					authTime: new Date(session.session.createdAt).getTime(),
-					/**
-					 * Consent is required per OIDC spec unless:
-					 * 1. Client is trusted (skipConsent = true)
-					 * 2. User has already consented (and prompt is not "consent")
-					 *
-					 * When consent is required, the code needs to be treated as a
-					 * consent request. Once the user consents, the code will be
-					 * updated with the actual authorization code.
-					 */
-					requireConsent,
-					state: requireConsent ? query.state : null,
-					codeChallenge: query.code_challenge,
-					codeChallengeMethod: query.code_challenge_method,
-					nonce: query.nonce,
-				}),
-				identifier: code,
-				expiresAt,
-			},
-			ctx,
-		);
+		await ctx.context.internalAdapter.createVerificationValue({
+			value: JSON.stringify({
+				clientId: client.clientId,
+				redirectURI: query.redirect_uri,
+				scope: requestScope,
+				userId: session.user.id,
+				authTime: new Date(session.session.createdAt).getTime(),
+				/**
+				 * Consent is required per OIDC spec unless:
+				 * 1. Client is trusted (skipConsent = true)
+				 * 2. User has already consented (and prompt is not "consent")
+				 *
+				 * When consent is required, the code needs to be treated as a
+				 * consent request. Once the user consents, the code will be
+				 * updated with the actual authorization code.
+				 */
+				requireConsent,
+				state: requireConsent ? query.state : null,
+				codeChallenge: query.code_challenge,
+				codeChallengeMethod: query.code_challenge_method,
+				nonce: query.nonce,
+			}),
+			identifier: code,
+			expiresAt,
+		});
 	} catch (e) {
 		return handleRedirect(
 			formatErrorURL(
@@ -250,6 +305,31 @@ export async function authorize(
 				"An error occurred while processing the request",
 			),
 		);
+	}
+
+	if (requireLogin) {
+		await ctx.setSignedCookie(
+			"oidc_login_prompt",
+			JSON.stringify(ctx.query),
+			ctx.context.secret,
+			{
+				maxAge: 600,
+				path: "/",
+				sameSite: "lax",
+			},
+		);
+		await ctx.setSignedCookie("oidc_consent_prompt", code, ctx.context.secret, {
+			maxAge: 600,
+			path: "/",
+			sameSite: "lax",
+		});
+
+		const loginURI = `${options.loginPage}?${new URLSearchParams({
+			client_id: client.clientId,
+			code,
+			state: query.state,
+		}).toString()}`;
+		return handleRedirect(loginURI);
 	}
 
 	// If consent is not required, redirect with the code immediately

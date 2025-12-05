@@ -1,5 +1,5 @@
+import type { BetterAuthClientPlugin } from "@better-auth/core";
 import type { apiKey } from ".";
-import type { BetterAuthClientPlugin } from "../../types";
 
 export const apiKeyClient = () => {
 	return {
@@ -12,3 +12,7 @@ export const apiKeyClient = () => {
 		},
 	} satisfies BetterAuthClientPlugin;
 };
+
+export type ApiKeyClientPlugin = ReturnType<typeof apiKeyClient>;
+
+export type * from "./types";

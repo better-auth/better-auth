@@ -1,14 +1,12 @@
-import {
-	getAuthTables,
-	type BetterAuthDBSchema,
-	type DBFieldAttribute,
-} from "better-auth/db";
+import { existsSync } from "node:fs";
+import { initGetFieldName, initGetModelName } from "better-auth/adapters";
+import type { BetterAuthDBSchema, DBFieldAttribute } from "better-auth/db";
+import { getAuthTables } from "better-auth/db";
 import type { BetterAuthOptions } from "better-auth/types";
-import { existsSync } from "fs";
-import type { SchemaGenerator } from "./types";
 import prettier from "prettier";
+import type { SchemaGenerator } from "./types";
 
-export function convertToSnakeCase(str: string, camelCase?: boolean) {
+function convertToSnakeCase(str: string, camelCase?: boolean) {
 	if (camelCase) {
 		return str;
 	}
@@ -36,11 +34,25 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	}
 	const fileExist = existsSync(filePath);
 
-	let code: string = generateImport({ databaseType, tables, options });
+	let code: string = generateImport({
+		databaseType,
+		tables,
+		options,
+	});
+
+	const getModelName = initGetModelName({
+		schema: tables,
+		usePlural: adapter.options?.adapterConfig?.usePlural,
+	});
+
+	const getFieldName = initGetFieldName({
+		schema: tables,
+		usePlural: adapter.options?.adapterConfig?.usePlural,
+	});
 
 	for (const tableKey in tables) {
 		const table = tables[tableKey]!;
-		const modelName = getModelName(table.modelName, adapter.options);
+		const modelName = getModelName(tableKey);
 		const fields = table.fields;
 
 		function getType(name: string, field: DBFieldAttribute) {
@@ -52,7 +64,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			}
 			name = convertToSnakeCase(name, adapter.options?.camelCase);
 			if (field.references?.field === "id") {
-				if (options.advanced?.database?.useNumberId) {
+				const useNumberId =
+					options.advanced?.database?.useNumberId ||
+					options.advanced?.database?.generateId === "serial";
+				const useUUIDs = options.advanced?.database?.generateId === "uuid";
+				if (useNumberId) {
 					if (databaseType === "pg") {
 						return `integer('${name}')`;
 					} else if (databaseType === "mysql") {
@@ -62,6 +78,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 						return `integer('${name}')`;
 					}
 				}
+				if (useUUIDs && databaseType === "pg") {
+					return `uuid('${name}')`;
+				}
 				if (field.references.field) {
 					if (databaseType === "mysql") {
 						return `varchar('${name}', { length: 36 })`;
@@ -69,13 +88,20 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				}
 				return `text('${name}')`;
 			}
-			const type = field.type as
-				| "string"
-				| "number"
-				| "boolean"
-				| "date"
-				| "json"
-				| `${"string" | "number"}[]`;
+			const type = field.type;
+			if (typeof type !== "string") {
+				if (Array.isArray(type) && type.every((x) => typeof x === "string")) {
+					return {
+						sqlite: `text({ enum: [${type.map((x) => `'${x}'`).join(", ")}] })`,
+						pg: `text('${name}', { enum: [${type.map((x) => `'${x}'`).join(", ")}] })`,
+						mysql: `mysqlEnum([${type.map((x) => `'${x}'`).join(", ")}])`,
+					}[databaseType];
+				} else {
+					throw new TypeError(
+						`Invalid field type for field ${name} in model ${modelName}`,
+					);
+				}
+			}
 			const typeMap: Record<
 				typeof type,
 				Record<typeof databaseType, string>
@@ -87,7 +113,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 						? `varchar('${name}', { length: 255 })`
 						: field.references
 							? `varchar('${name}', { length: 36 })`
-							: `text('${name}')`,
+							: field.sortable
+								? `varchar('${name}', { length: 255 })`
+								: field.index
+									? `varchar('${name}', { length: 255 })`
+									: `text('${name}')`,
 				},
 				boolean: {
 					sqlite: `integer('${name}', { mode: 'boolean' })`,
@@ -128,14 +158,29 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					mysql: `json('${name}')`,
 				},
 			} as const;
-			return typeMap[type][databaseType];
+			const dbTypeMap = (
+				typeMap as Record<string, Record<typeof databaseType, string>>
+			)[type as string];
+			if (!dbTypeMap) {
+				throw new Error(
+					`Unsupported field type '${field.type}' for field '${name}'.`,
+				);
+			}
+			return dbTypeMap[databaseType];
 		}
 
 		let id: string = "";
 
-		if (options.advanced?.database?.useNumberId) {
+		const useNumberId =
+			options.advanced?.database?.useNumberId ||
+			options.advanced?.database?.generateId === "serial";
+		const useUUIDs = options.advanced?.database?.generateId === "uuid";
+
+		if (useUUIDs && databaseType === "pg") {
+			id = `uuid("id").default(sql\`pg_catalog.gen_random_uuid()\`).primaryKey()`;
+		} else if (useNumberId) {
 			if (databaseType === "pg") {
-				id = `serial("id").primaryKey()`;
+				id = `integer("id").generatedByDefaultAsIdentity().primaryKey()`;
 			} else if (databaseType === "sqlite") {
 				id = `integer("id", { mode: "number" }).primaryKey({ autoIncrement: true })`;
 			} else {
@@ -151,6 +196,24 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			}
 		}
 
+		type Index = { type: "uniqueIndex" | "index"; name: string; on: string };
+
+		let indexes: Index[] = [];
+
+		const assignIndexes = (indexes: Index[]): string => {
+			if (!indexes.length) return "";
+
+			let code: string[] = [`, (table) => [`];
+
+			for (const index of indexes) {
+				code.push(`  ${index.type}("${index.name}").on(table.${index.on}),`);
+			}
+
+			code.push(`]`);
+
+			return code.join("\n");
+		};
+
 		const schema = `export const ${modelName} = ${databaseType}Table("${convertToSnakeCase(
 			modelName,
 			adapter.options?.camelCase,
@@ -161,6 +224,21 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							const attr = fields[field]!;
 							const fieldName = attr.fieldName || field;
 							let type = getType(fieldName, attr);
+
+							if (attr.index && !attr.unique) {
+								indexes.push({
+									type: "index",
+									name: `${modelName}_${fieldName}_idx`,
+									on: fieldName,
+								});
+							} else if (attr.index && attr.unique) {
+								indexes.push({
+									type: "uniqueIndex",
+									name: `${modelName}_${fieldName}_uidx`,
+									on: fieldName,
+								});
+							}
+
 							if (
 								attr.defaultValue !== null &&
 								typeof attr.defaultValue !== "undefined"
@@ -176,7 +254,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 											type += `.defaultNow()`;
 										}
 									} else {
-										type += `.$defaultFn(${attr.defaultValue})`;
+										// we are intentionally not adding .$defaultFn(${attr.defaultValue})
+										// this is because if the defaultValue is a function, it could have
+										// custom logic within that function that might not work in drizzle's context.
 									}
 								} else if (typeof attr.defaultValue === "string") {
 									type += `.default("${attr.defaultValue}")`;
@@ -191,24 +271,131 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 									type += `.$onUpdate(${attr.onUpdate})`;
 								}
 							}
+
 							return `${fieldName}: ${type}${attr.required ? ".notNull()" : ""}${
 								attr.unique ? ".unique()" : ""
 							}${
 								attr.references
 									? `.references(()=> ${getModelName(
-											tables[attr.references.model]?.modelName ||
-												attr.references.model,
-											adapter.options,
-										)}.${fields[attr.references.field]?.fieldName || attr.references.field}, { onDelete: '${
+											attr.references.model,
+										)}.${getFieldName({ model: attr.references.model, field: attr.references.field })}, { onDelete: '${
 											attr.references.onDelete || "cascade"
 										}' })`
 									: ""
 							}`;
 						})
 						.join(",\n ")}
-				});`;
+					}${assignIndexes(indexes)});`;
 		code += `\n${schema}\n`;
 	}
+
+	let relationsString: string = "";
+	for (const tableKey in tables) {
+		const table = tables[tableKey]!;
+
+		type Relation = {
+			/**
+			 * The key of the relation that will be defined in the Drizzle schema.
+			 * For "one" relations: singular (e.g., "user")
+			 * For "many" relations: plural (e.g., "posts")
+			 */
+			key: string;
+			/**
+			 * The model name being referenced.
+			 */
+			model: string;
+			/**
+			 * The type of the relation: "one" (many-to-one) or "many" (one-to-many).
+			 */
+			type: "one" | "many";
+			/**
+			 * Foreign key field name and reference details (only for "one" relations).
+			 */
+			reference?: {
+				field: string;
+				references: string;
+			};
+		};
+
+		const relations: Relation[] = [];
+
+		// 1. Find all foreign keys in THIS table (creates "one" relations)
+		const fields = Object.entries(table.fields);
+		const foreignFields = fields.filter(([_, field]) => field.references);
+
+		for (const [fieldName, field] of foreignFields) {
+			const referencedModel = field.references!.model;
+			relations.push({
+				key: getModelName(referencedModel),
+				model: getModelName(referencedModel),
+				type: "one",
+				reference: {
+					field: `${getModelName(tableKey)}.${getFieldName({ model: tableKey, field: fieldName })}`,
+					references: `${getModelName(referencedModel)}.${getFieldName({ model: referencedModel, field: field.references!.field || "id" })}`,
+				},
+			});
+		}
+
+		// 2. Find all OTHER tables that reference THIS table (creates "many" relations)
+		const otherModels = Object.entries(tables).filter(
+			([modelName]) => modelName !== tableKey,
+		);
+
+		for (const [modelName, otherTable] of otherModels) {
+			const foreignKeysPointingHere = Object.entries(otherTable.fields).filter(
+				([_, field]) =>
+					field.references?.model === tableKey ||
+					field.references?.model === getModelName(tableKey),
+			);
+
+			for (const [fieldName, field] of foreignKeysPointingHere) {
+				const isUnique = !!field.unique;
+				let relationKey = getModelName(modelName);
+
+				// We have to apply this after checking if they have usePlural because otherwise they will end up seeing:
+				/* cspell:disable-next-line */
+				// "sesionss", or "accountss" - double s's.
+				if (!adapter.options?.adapterConfig?.usePlural && !isUnique) {
+					relationKey = `${relationKey}s`;
+				}
+
+				const model = getModelName(modelName);
+
+				relations.push({
+					key: relationKey,
+					model: model,
+					type: isUnique ? "one" : "many",
+				});
+			}
+		}
+
+		const hasOne = relations.some((relation) => relation.type === "one");
+		const hasMany = relations.some((relation) => relation.type === "many");
+
+		let tableRelation = `export const ${table.modelName}Relations = relations(${getModelName(
+			table.modelName,
+		)}, ({ ${hasOne ? "one" : ""}${hasMany ? `${hasOne ? ", " : ""}many` : ""} }) => ({
+				${relations
+					.map(
+						({ key, type, model, reference }) =>
+							` ${key}: ${type}(${model}${
+								!reference
+									? ""
+									: `, {
+								fields: [${reference.field}],
+								references: [${reference.references}],
+							}`
+							})`,
+					)
+					.join(",\n ")}
+			}))`;
+
+		if (relations.length > 0) {
+			relationsString += `\n${tableRelation}\n`;
+		}
+	}
+	code += `\n${relationsString}`;
+
 	const formattedCode = await prettier.format(code, {
 		parser: "typescript",
 	});
@@ -228,7 +415,7 @@ function generateImport({
 	tables: BetterAuthDBSchema;
 	options: BetterAuthOptions;
 }) {
-	const rootImports: string[] = [];
+	const rootImports: string[] = ["relations"];
 	const coreImports: string[] = [];
 
 	let hasBigint = false;
@@ -242,7 +429,11 @@ function generateImport({
 		if (hasJson && hasBigint) break;
 	}
 
-	const useNumberId = options.advanced?.database?.useNumberId;
+	const useNumberId =
+		options.advanced?.database?.useNumberId ||
+		options.advanced?.database?.generateId === "serial";
+
+	const useUUIDs = options.advanced?.database?.generateId === "uuid";
 
 	coreImports.push(`${databaseType}Table`);
 	coreImports.push(
@@ -269,7 +460,22 @@ function generateImport({
 		if (needsInt) {
 			coreImports.push("int");
 		}
+		const hasEnum = Object.values(tables).some((table) =>
+			Object.values(table.fields).some(
+				(field) =>
+					typeof field.type !== "string" &&
+					Array.isArray(field.type) &&
+					field.type.every((x) => typeof x === "string"),
+			),
+		);
+		if (hasEnum) {
+			coreImports.push("mysqlEnum");
+		}
 	} else if (databaseType === "pg") {
+		if (useUUIDs) {
+			rootImports.push("sql");
+		}
+
 		// Only include integer for PG if actually needed
 		const hasNonBigintNumber = Object.values(tables).some((table) =>
 			Object.values(table.fields).some(
@@ -286,14 +492,18 @@ function generateImport({
 		// handles the references field with useNumberId
 		const needsInteger =
 			hasNonBigintNumber ||
-			(options.advanced?.database?.useNumberId && hasFkToId);
+			((options.advanced?.database?.useNumberId ||
+				options.advanced?.database?.generateId === "serial") &&
+				hasFkToId);
 		if (needsInteger) {
 			coreImports.push("integer");
 		}
 	} else {
 		coreImports.push("integer");
 	}
-	coreImports.push(useNumberId ? (databaseType === "pg" ? "serial" : "") : "");
+	if (databaseType === "pg" && useUUIDs) {
+		coreImports.push("uuid");
+	}
 
 	//handle json last on the import order
 	if (hasJson) {
@@ -319,15 +529,22 @@ function generateImport({
 		rootImports.push("sql");
 	}
 
+	//handle indexes
+	const hasIndexes = Object.values(tables).some((table) =>
+		Object.values(table.fields).some((field) => field.index && !field.unique),
+	);
+	const hasUniqueIndexes = Object.values(tables).some((table) =>
+		Object.values(table.fields).some((field) => field.unique && field.index),
+	);
+	if (hasIndexes) {
+		coreImports.push("index");
+	}
+	if (hasUniqueIndexes) {
+		coreImports.push("uniqueIndex");
+	}
+
 	return `${rootImports.length > 0 ? `import { ${rootImports.join(", ")} } from "drizzle-orm";\n` : ""}import { ${coreImports
 		.map((x) => x.trim())
 		.filter((x) => x !== "")
 		.join(", ")} } from "drizzle-orm/${databaseType}-core";\n`;
-}
-
-function getModelName(
-	modelName: string,
-	options: Record<string, any> | undefined,
-) {
-	return options?.usePlural ? `${modelName}s` : modelName;
 }

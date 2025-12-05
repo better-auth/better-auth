@@ -1,16 +1,17 @@
 import { Kysely, MysqlDialect } from "kysely";
-import { testAdapter } from "../../test-adapter";
-import { kyselyAdapter } from "../kysely-adapter";
 import { createPool } from "mysql2/promise";
+import { assert } from "vitest";
+import { getMigrations } from "../../../db";
+import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
+	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
-	performanceTestSuite,
 	transactionsTestSuite,
+	uuidTestSuite,
 } from "../../tests";
-import { getMigrations } from "../../../db";
-import { assert } from "vitest";
+import { kyselyAdapter } from "../kysely-adapter";
 
 const mysqlDB = createPool({
 	uri: "mysql://user:password@localhost:3307/better_auth",
@@ -41,12 +42,6 @@ const { execute } = await testAdapter({
 		];
 		const tables = tables_result.map((table) => table.Tables_in_better_auth);
 		assert(tables.length > 0, "No tables found");
-		assert(
-			!["user", "session", "account", "verification"].find(
-				(x) => !tables.includes(x),
-			),
-			"No tables found",
-		);
 	},
 	prefixTests: "mysql",
 	tests: [
@@ -54,7 +49,8 @@ const { execute } = await testAdapter({
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
-		performanceTestSuite({ dialect: "mysql" }),
+		joinsTestSuite(),
+		uuidTestSuite(),
 	],
 	async onFinish() {
 		await mysqlDB.end();

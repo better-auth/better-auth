@@ -1,3 +1,20 @@
+import { randomUUID } from "node:crypto";
+import type { createServer } from "node:http";
+import { betterFetch } from "@better-fetch/fetch";
+import { betterAuth } from "better-auth";
+import { memoryAdapter } from "better-auth/adapters/memory";
+import { createAuthClient } from "better-auth/client";
+import { setCookieToHeader } from "better-auth/cookies";
+import { bearer } from "better-auth/plugins";
+import { getTestInstance } from "better-auth/test";
+import bodyParser from "body-parser";
+import type {
+	Application as ExpressApp,
+	Request as ExpressRequest,
+	Response as ExpressResponse,
+} from "express";
+import express from "express";
+import * as saml from "samlify";
 import {
 	afterAll,
 	beforeAll,
@@ -7,25 +24,8 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { betterAuth } from "better-auth";
-import { memoryAdapter } from "better-auth/adapters/memory";
-import { createAuthClient } from "better-auth/client";
-import { betterFetch } from "@better-fetch/fetch";
-import { setCookieToHeader } from "better-auth/cookies";
-import { bearer } from "better-auth/plugins";
 import { sso } from ".";
 import { ssoClient } from "./client";
-import { createServer } from "http";
-import * as saml from "samlify";
-import type {
-	Application as ExpressApp,
-	Request as ExpressRequest,
-	Response as ExpressResponse,
-} from "express";
-import express from "express";
-import bodyParser from "body-parser";
-import { randomUUID } from "crypto";
-import { getTestInstanceMemory } from "better-auth/test";
 
 const spMetadata = `
     <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:3001/api/sso/saml2/sp/metadata">
@@ -926,7 +926,7 @@ describe("SAML SSO", async () => {
 	});
 
 	it("should not allow creating a provider if limit is set to 0", async () => {
-		const { auth, signInWithTestUser } = await getTestInstanceMemory({
+		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [sso({ providersLimit: 0 })],
 		});
 		const { headers } = await signInWithTestUser();
@@ -957,7 +957,7 @@ describe("SAML SSO", async () => {
 	});
 
 	it("should not allow creating a provider if limit is reached", async () => {
-		const { auth, signInWithTestUser } = await getTestInstanceMemory({
+		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [sso({ providersLimit: 1 })],
 		});
 		const { headers } = await signInWithTestUser();
@@ -1011,7 +1011,7 @@ describe("SAML SSO", async () => {
 	});
 
 	it("should not allow creating a provider if limit from function is reached", async () => {
-		const { auth, signInWithTestUser } = await getTestInstanceMemory({
+		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [
 				sso({
 					providersLimit: async (user) => {
@@ -1115,6 +1115,212 @@ describe("SAML SSO", async () => {
 			status: "UNPROCESSABLE_ENTITY",
 			body: {
 				message: "SSO provider with this providerId already exists",
+			},
+		});
+	});
+
+	it("should reject SAML sign-in when disableImplicitSignUp is true and user doesn't exist", async () => {
+		const { auth: authWithDisabledSignUp, signInWithTestUser } =
+			await getTestInstance({
+				plugins: [sso({ disableImplicitSignUp: true })],
+			});
+
+		const { headers } = await signInWithTestUser();
+
+		// Register SAML provider
+		await authWithDisabledSignUp.api.registerSSOProvider({
+			body: {
+				providerId: "saml-test-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers: headers,
+		});
+
+		// Identity Provider-initiated: Get SAML response directly from IdP
+		// The mock IdP will return test@email.com, which doesn't exist in the DB
+		let samlResponse: any;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		// Attempt to complete SAML callback - should fail because test@email.com doesn't exist
+		// and disableImplicitSignUp is true
+		await expect(
+			authWithDisabledSignUp.api.callbackSSOSAML({
+				body: {
+					SAMLResponse: samlResponse.samlResponse,
+					RelayState: "http://localhost:3000/dashboard",
+				},
+				params: {
+					providerId: "saml-test-provider",
+				},
+			}),
+		).rejects.toMatchObject({
+			status: "UNAUTHORIZED",
+			body: {
+				message:
+					"User not found and implicit sign up is disabled for this provider",
+			},
+		});
+	});
+});
+
+describe("SAML SSO with custom fields", () => {
+	const ssoOptions = {
+		modelName: "sso_provider",
+		fields: {
+			issuer: "the_issuer",
+			oidcConfig: "oidc_config",
+			samlConfig: "saml_config",
+			userId: "user_id",
+			providerId: "provider_id",
+			organizationId: "organization_id",
+			domain: "the_domain",
+		},
+	};
+
+	const data = {
+		user: [],
+		session: [],
+		verification: [],
+		account: [],
+		sso_provider: [],
+	};
+
+	const memory = memoryAdapter(data);
+	const mockIdP = createMockSAMLIdP(8081); // Different port from your main app
+
+	const auth = betterAuth({
+		database: memory,
+		baseURL: "http://localhost:3000",
+		emailAndPassword: {
+			enabled: true,
+		},
+		plugins: [sso(ssoOptions)],
+	});
+
+	const authClient = createAuthClient({
+		baseURL: "http://localhost:3000",
+		plugins: [bearer(), ssoClient()],
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
+	const testUser = {
+		email: "test@email.com",
+		password: "password",
+		name: "Test User",
+	};
+
+	beforeAll(async () => {
+		await mockIdP.start();
+		const res = await authClient.signUp.email({
+			email: testUser.email,
+			password: testUser.password,
+			name: testUser.name,
+		});
+	});
+
+	afterAll(async () => {
+		await mockIdP.stop();
+	});
+
+	beforeEach(() => {
+		data.user = [];
+		data.session = [];
+		data.verification = [];
+		data.account = [];
+		data.sso_provider = [];
+
+		vi.clearAllMocks();
+	});
+
+	async function getAuthHeaders() {
+		const headers = new Headers();
+		await authClient.signUp.email({
+			email: testUser.email,
+			password: testUser.password,
+			name: testUser.name,
+		});
+		await authClient.signIn.email(testUser, {
+			throw: true,
+			onSuccess: setCookieToHeader(headers),
+		});
+		return headers;
+	}
+
+	it("should register a new SAML provider", async () => {
+		const headers = await getAuthHeaders();
+
+		const provider = await auth.api.registerSSOProvider({
+			body: {
+				providerId: "saml-provider-1",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: mockIdP.metadataUrl,
+					cert: certificate,
+					callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+						privateKey: idpPrivateKey,
+						privateKeyPass: "q9ALNhGT5EhfcRmp8Pg7e9zTQeP2x1bW",
+						isAssertionEncrypted: true,
+						encPrivateKey: idpEncryptionKey,
+						encPrivateKeyPass: "g7hGcRmp8PxT5QeP2q9Ehf1bWe9zTALN",
+					},
+					spMetadata: {
+						metadata: spMetadata,
+						binding: "post",
+						privateKey: spPrivateKey,
+						privateKeyPass: "VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px",
+						isAssertionEncrypted: true,
+						encPrivateKey: spEncryptionKey,
+						encPrivateKeyPass: "BXFNKpxrsjrCkGA8cAu5wUVHOSpci1RU",
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+		expect(provider).toMatchObject({
+			id: expect.any(String),
+			issuer: "http://localhost:8081",
+			samlConfig: {
+				entryPoint: mockIdP.metadataUrl,
+				cert: expect.any(String),
+				callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
+				wantAssertionsSigned: false,
+				signatureAlgorithm: "sha256",
+				digestAlgorithm: "sha256",
+				identifierFormat:
+					"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
 			},
 		});
 	});

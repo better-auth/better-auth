@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { magicLink } from ".";
-import { createAuthClient } from "../../client";
 import { magicLinkClient } from "./client";
 import { defaultKeyHasher } from "./utils";
 
@@ -134,6 +134,83 @@ describe("magic link", async () => {
 			email: "new-email@email.com",
 			emailVerified: true,
 		});
+	});
+
+	it("should verify email and return emailVerified true in session for existing unverified user", async () => {
+		// Create an unverified user with a separate test instance
+		const email = "unverified-user@email.com";
+		let magicLinkEmail: VerificationEmail = {
+			email: "",
+			token: "",
+			url: "",
+		};
+
+		const {
+			auth,
+			customFetchImpl: testFetchImpl,
+			sessionSetter: testSessionSetter,
+		} = await getTestInstance({
+			plugins: [
+				magicLink({
+					async sendMagicLink(data) {
+						magicLinkEmail = data;
+					},
+				}),
+			],
+		});
+
+		const testClient = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: {
+				customFetchImpl: testFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+
+		const internalAdapter = (await auth.$context).internalAdapter;
+
+		// Create user with emailVerified: false
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email,
+				name: "Unverified User",
+				password: "password123",
+			},
+		});
+
+		expect(newUser.user?.emailVerified).toBe(false);
+
+		// Send magic link
+		await testClient.signIn.magicLink({
+			email,
+		});
+
+		// Verify magic link
+		const headers = new Headers();
+		const response = await testClient.magicLink.verify({
+			query: {
+				token: new URL(magicLinkEmail.url).searchParams.get("token") || "",
+			},
+			fetchOptions: {
+				onSuccess: testSessionSetter(headers),
+			},
+		});
+
+		// Check that the response contains emailVerified: true
+		expect(response.data?.user.emailVerified).toBe(true);
+
+		// Also verify session has emailVerified: true
+		const session = await testClient.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data?.user.emailVerified).toBe(true);
+
+		// Verify DB was actually updated
+		const updatedUser = await internalAdapter.findUserByEmail(email);
+		expect(updatedUser?.user.emailVerified).toBe(true);
 	});
 
 	it("should use custom generateToken function", async () => {

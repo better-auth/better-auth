@@ -1,6 +1,6 @@
-import fs from "fs/promises";
-import type { BetterAuthOptions } from "../../../types";
-import path from "path";
+import fs from "node:fs/promises";
+import path from "node:path";
+import type { BetterAuthOptions } from "@better-auth/core";
 
 export const generateAuthConfigFile = async (_options: BetterAuthOptions) => {
 	const options = { ..._options };

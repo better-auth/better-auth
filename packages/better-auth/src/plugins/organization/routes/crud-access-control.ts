@@ -1,16 +1,17 @@
+import type { GenericEndpointContext } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import type { Where } from "@better-auth/core/db/adapter";
 import * as z from "zod";
-import { APIError, createAuthEndpoint } from "../../../api";
-import type { OrganizationOptions } from "../types";
+import { APIError } from "../../../api";
+import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
+import { toZodSchema } from "../../../db";
+import type { User } from "../../../types";
+import type { AccessControl } from "../../access";
 import { orgSessionMiddleware } from "../call";
+import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
 import type { Member, OrganizationRole } from "../schema";
-import type { GenericEndpointContext, User, Where } from "../../../types";
-import type { AccessControl } from "../../access";
-import {
-	toZodSchema,
-	type InferAdditionalFieldsFromPluginOptions,
-} from "../../../db";
-import { ORGANIZATION_ERROR_CODES } from "../error-codes";
+import type { OrganizationOptions } from "../types";
 
 type IsExactlyEmptyObject<T> = keyof T extends never // no keys
 	? T extends {} // is assignable to {}
@@ -57,6 +58,19 @@ const getAdditionalFields = <
 	};
 };
 
+const baseCreateOrgRoleSchema = z.object({
+	organizationId: z.string().optional().meta({
+		description:
+			"The id of the organization to create the role in. If not provided, the user's active organization will be used.",
+	}),
+	role: z.string().meta({
+		description: "The name of the role to create",
+	}),
+	permission: z.record(z.string(), z.array(z.string())).meta({
+		description: "The permission to assign to the role",
+	}),
+});
+
 export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 	const { additionalFieldsSchema, $AdditionalFields, $ReturnAdditionalFields } =
 		getAdditionalFields<O>(options, false);
@@ -67,17 +81,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 		"/organization/create-role",
 		{
 			method: "POST",
-			body: z.object({
-				organizationId: z.string().optional().meta({
-					description:
-						"The id of the organization to create the role in. If not provided, the user's active organization will be used.",
-				}),
-				role: z.string().meta({
-					description: "The name of the role to create",
-				}),
-				permission: z.record(z.string(), z.array(z.string())).meta({
-					description: "The permission to assign to the role",
-				}),
+			body: baseCreateOrgRoleSchema.safeExtend({
 				additionalFields: z
 					.object({ ...additionalFieldsSchema.shape })
 					.optional(),
@@ -89,7 +93,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 						role: string;
 						permission: Record<string, string[]>;
 					} & (IsExactlyEmptyObject<AdditionalFields> extends true
-						? { additionalFields?: {} }
+						? { additionalFields?: {} | undefined }
 						: { additionalFields: AdditionalFields }),
 				},
 			},
@@ -274,44 +278,43 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 	);
 };
 
+const deleteOrgRoleBodySchema = z
+	.object({
+		organizationId: z.string().optional().meta({
+			description:
+				"The id of the organization to create the role in. If not provided, the user's active organization will be used.",
+		}),
+	})
+	.and(
+		z.union([
+			z.object({
+				roleName: z.string().nonempty().meta({
+					description: "The name of the role to delete",
+				}),
+			}),
+			z.object({
+				roleId: z.string().nonempty().meta({
+					description: "The id of the role to delete",
+				}),
+			}),
+		]),
+	);
+
 export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 	return createAuthEndpoint(
 		"/organization/delete-role",
 		{
 			method: "POST",
-			body: z
-				.object({
-					organizationId: z.string().optional().meta({
-						description:
-							"The id of the organization to create the role in. If not provided, the user's active organization will be used.",
-					}),
-				})
-				.and(
-					z.union([
-						z.object({
-							roleName: z.string().meta({
-								description: "The name of the role to delete",
-							}),
-						}),
-						z.object({
-							roleId: z.string().meta({
-								description: "The id of the role to delete",
-							}),
-						}),
-					]),
-				),
+			body: deleteOrgRoleBodySchema,
 			requireHeaders: true,
 			use: [orgSessionMiddleware],
 			metadata: {
 				$Infer: {
-					body: {} as (
-						| {
-								roleName: string;
-						  }
-						| {
-								roleId: string;
-						  }
-					) & { organizationId?: string | undefined },
+					body: {} as {
+						roleName?: string | undefined;
+						roleId?: string | undefined;
+						organizationId?: string | undefined;
+					},
 				},
 			},
 		},
@@ -389,7 +392,7 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			if ("roleName" in ctx.body) {
+			if (ctx.body.roleName) {
 				const roleName = ctx.body.roleName;
 				const defaultRoles = options.roles
 					? Object.keys(options.roles)
@@ -410,20 +413,29 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 			}
 
 			let condition: Where;
-			if ("roleName" in ctx.body) {
+			if (ctx.body.roleName) {
 				condition = {
 					field: "role",
 					value: ctx.body.roleName,
 					operator: "eq",
 					connector: "AND",
 				};
-			} else {
+			} else if (ctx.body.roleId) {
 				condition = {
 					field: "id",
 					value: ctx.body.roleId,
 					operator: "eq",
 					connector: "AND",
 				};
+			} else {
+				// shouldn't be able to reach here given the schema validation.
+				// But just in case, throw an error.
+				ctx.context.logger.error(
+					`[Dynamic Access Control] The role name/id is not provided in the request body.`,
+				);
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+				});
 			}
 			const existingRoleInDB =
 				await ctx.context.adapter.findOne<OrganizationRole>({
@@ -477,6 +489,15 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 	);
 };
 
+const listOrgRolesQuerySchema = z
+	.object({
+		organizationId: z.string().optional().meta({
+			description:
+				"The id of the organization to list roles for. If not provided, the user's active organization will be used.",
+		}),
+	})
+	.optional();
+
 export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 	const { $ReturnAdditionalFields } = getAdditionalFields<O>(options, false);
 	type ReturnAdditionalFields = typeof $ReturnAdditionalFields;
@@ -485,24 +506,9 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 		"/organization/list-roles",
 		{
 			method: "GET",
+			requireHeaders: true,
 			use: [orgSessionMiddleware],
-			query: z
-				.object({
-					organizationId: z.string().optional().meta({
-						description:
-							"The id of the organization to list roles for. If not provided, the user's active organization will be used.",
-					}),
-				})
-				.optional(),
-			metadata: {
-				$Infer: {
-					query: {} as
-						| {
-								organizationId?: string | undefined;
-						  }
-						| undefined,
-				},
-			},
+			query: listOrgRolesQuerySchema,
 		},
 		async (ctx) => {
 			const { session, user } = ctx.context.session;
@@ -598,6 +604,29 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 	);
 };
 
+const getOrgRoleQuerySchema = z
+	.object({
+		organizationId: z.string().optional().meta({
+			description:
+				"The id of the organization to read a role for. If not provided, the user's active organization will be used.",
+		}),
+	})
+	.and(
+		z.union([
+			z.object({
+				roleName: z.string().nonempty().meta({
+					description: "The name of the role to read",
+				}),
+			}),
+			z.object({
+				roleId: z.string().nonempty().meta({
+					description: "The id of the role to read",
+				}),
+			}),
+		]),
+	)
+	.optional();
+
 export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 	const { $ReturnAdditionalFields } = getAdditionalFields<O>(options, false);
 	type ReturnAdditionalFields = typeof $ReturnAdditionalFields;
@@ -605,34 +634,16 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 		"/organization/get-role",
 		{
 			method: "GET",
+			requireHeaders: true,
 			use: [orgSessionMiddleware],
-			query: z
-				.object({
-					organizationId: z.string().optional().meta({
-						description:
-							"The id of the organization to read a role for. If not provided, the user's active organization will be used.",
-					}),
-				})
-				.and(
-					z.union([
-						z.object({
-							roleName: z.string().meta({
-								description: "The name of the role to read",
-							}),
-						}),
-						z.object({
-							roleId: z.string().meta({
-								description: "The id of the role to read",
-							}),
-						}),
-					]),
-				)
-				.optional(),
+			query: getOrgRoleQuerySchema,
 			metadata: {
 				$Infer: {
 					query: {} as {
 						organizationId?: string | undefined;
-					} & ({ roleName: string } | { roleId: string }),
+						roleName?: string | undefined;
+						roleId?: string | undefined;
+					},
 				},
 			},
 		},
@@ -707,20 +718,29 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 			}
 
 			let condition: Where;
-			if ("roleName" in ctx.query) {
+			if (ctx.query.roleName) {
 				condition = {
 					field: "role",
 					value: ctx.query.roleName,
 					operator: "eq",
 					connector: "AND",
 				};
-			} else {
+			} else if (ctx.query.roleId) {
 				condition = {
 					field: "id",
 					value: ctx.query.roleId,
 					operator: "eq",
 					connector: "AND",
 				};
+			} else {
+				// shouldn't be able to reach here given the schema validation.
+				// But just in case, throw an error.
+				ctx.context.logger.error(
+					`[Dynamic Access Control] The role name/id is not provided in the request query.`,
+				);
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+				});
 			}
 			let role = await ctx.context.adapter.findOne<OrganizationRole>({
 				model: "organizationRole",
@@ -756,6 +776,19 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 	);
 };
 
+const roleNameOrIdSchema = z.union([
+	z.object({
+		roleName: z.string().nonempty().meta({
+			description: "The name of the role to update",
+		}),
+	}),
+	z.object({
+		roleId: z.string().nonempty().meta({
+			description: "The id of the role to update",
+		}),
+	}),
+]);
+
 export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 	const { additionalFieldsSchema, $AdditionalFields, $ReturnAdditionalFields } =
 		getAdditionalFields<O, true>(options, true);
@@ -785,20 +818,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 						...additionalFieldsSchema.shape,
 					}),
 				})
-				.and(
-					z.union([
-						z.object({
-							roleName: z.string().meta({
-								description: "The name of the role to update",
-							}),
-						}),
-						z.object({
-							roleId: z.string().meta({
-								description: "The id of the role to update",
-							}),
-						}),
-					]),
-				),
+				.and(roleNameOrIdSchema),
 			metadata: {
 				$Infer: {
 					body: {} as {
@@ -807,9 +827,12 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 							permission?: Record<string, string[]> | undefined;
 							roleName?: string | undefined;
 						} & AdditionalFields;
-					} & ({ roleName: string } | { roleId: string }),
+						roleName?: string | undefined;
+						roleId?: string | undefined;
+					},
 				},
 			},
+			requireHeaders: true,
 			use: [orgSessionMiddleware],
 		},
 		async (ctx) => {
@@ -890,20 +913,29 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 			}
 
 			let condition: Where;
-			if ("roleName" in ctx.body) {
+			if (ctx.body.roleName) {
 				condition = {
 					field: "role",
 					value: ctx.body.roleName,
 					operator: "eq",
 					connector: "AND",
 				};
-			} else {
+			} else if (ctx.body.roleId) {
 				condition = {
 					field: "id",
 					value: ctx.body.roleId,
 					operator: "eq",
 					connector: "AND",
 				};
+			} else {
+				// shouldn't be able to reach here given the schema validation.
+				// But just in case, throw an error.
+				ctx.context.logger.error(
+					`[Dynamic Access Control] The role name/id is not provided in the request body.`,
+				);
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+				});
 			}
 			let role = await ctx.context.adapter.findOne<OrganizationRole>({
 				model: "organizationRole",
@@ -1093,7 +1125,7 @@ async function checkIfMemberHasPermission({
 		});
 	if (missingPermissions.length > 0) {
 		ctx.context.logger.error(
-			`[Dynamic Access Control] The user is missing permissions nessesary to ${action} a role with those set of permissions.\n`,
+			`[Dynamic Access Control] The user is missing permissions necessary to ${action} a role with those set of permissions.\n`,
 			{
 				userId: user.id,
 				organizationId,

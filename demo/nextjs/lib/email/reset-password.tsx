@@ -8,9 +8,9 @@ import {
 	Html,
 	Link,
 	Preview,
-	Text,
-	Tailwind,
 	Section,
+	Tailwind,
+	Text,
 } from "@react-email/components";
 
 interface BetterAuthResetPasswordEmailProps {
