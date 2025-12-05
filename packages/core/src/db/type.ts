@@ -14,6 +14,7 @@ export type DBFieldType =
 	| "boolean"
 	| "date"
 	| "json"
+	| "jsonb"
 	| `${"string" | "number"}[]`
 	| Array<LiteralString>;
 
