@@ -785,7 +785,7 @@ oauthProvider({
   scopes: ["openid", "profile", "email", "read:organization"]
   postLogin: {
     page: "/select-organization", // [!code highlight]
-    shouldRedirect: async ({ session, scopes }) => { // [!code highlight]
+    shouldRedirect: async ({ session, scopes, headers }) => { // [!code highlight]
       const userOnlyScopes = ["openid", "profile", "email", "offline_access"];
       if (scopes.every((sc) => userOnlyScopes.includes(sc))) {
         return false;
