@@ -140,6 +140,14 @@ export async function verifyAccessToken(
 			if (error instanceof Error) {
 				if (error.name === "TypeError" || error.name === "JWSInvalid") {
 					// likely an opaque token (continue)
+				} else if (error.name === "JWTExpired") {
+					throw new APIError("UNAUTHORIZED", {
+						message: "token expired",
+					});
+				} else if (error.name === "JWTInvalid") {
+					throw new APIError("UNAUTHORIZED", {
+						message: "token invalid",
+					});
 				} else {
 					throw error;
 				}
