@@ -33,7 +33,8 @@ const { execute } = await testAdapter({
 		transactionsTestSuite(),
 		joinsTestSuite(),
 		// numberIdTestSuite(), // no support
-		// uuidTestSuite() // no support
+		// uuidTestSuite(), // no support
+		// uuidv7TestSuite(), // no support
 	],
 	customIdGenerator: () => new ObjectId().toHexString(),
 });
