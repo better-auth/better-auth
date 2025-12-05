@@ -144,8 +144,6 @@ function transform(
 	return result;
 }
 
-export default transform;
-
 interface WildcardMatchOptions {
 	/** Separator to be used to split patterns and samples into segments */
 	separator?: string | boolean;
@@ -245,4 +243,4 @@ function wildcardMatch(
 	return fn;
 }
 
-export { wildcardMatch, isMatch };
+export { wildcardMatch };

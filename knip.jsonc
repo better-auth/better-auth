@@ -4,9 +4,6 @@
 		"interface": true,
 		"type": true
 	},
-	"ignoreIssues": {
-		"**": ["exports", "types", "duplicates"]
-	},
 	"tags": ["-lintignore"],
 	"workspaces": {
 		"packages/*": {

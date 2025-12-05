@@ -1,5 +1,5 @@
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
-import parseJSON from "../../client/parser";
+import { parseJSON } from "../../client/parser";
 
 export const apiKeySchema = ({
 	timeWindow,

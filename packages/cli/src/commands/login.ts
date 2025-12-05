@@ -15,7 +15,7 @@ const CLIENT_ID = "better-auth-cli";
 const CONFIG_DIR = path.join(os.homedir(), ".better-auth");
 const TOKEN_FILE = path.join(CONFIG_DIR, "token.json");
 
-export async function loginAction(opts: any) {
+async function loginAction(opts: any) {
 	const options = z
 		.object({
 			serverUrl: z.string().optional(),

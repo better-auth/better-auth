@@ -4,7 +4,7 @@ export const getAccountId = (userName: string, externalId?: string) => {
 	return externalId ?? userName;
 };
 
-export const getFormattedName = (name: SCIMName) => {
+const getFormattedName = (name: SCIMName) => {
 	if (name.givenName && name.familyName) {
 		return `${name.givenName} ${name.familyName}`;
 	}

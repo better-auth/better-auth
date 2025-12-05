@@ -25,7 +25,7 @@ export class SCIMAPIError extends APIError {
 	}
 }
 
-export const SCIMErrorOpenAPISchema = {
+const SCIMErrorOpenAPISchema = {
 	type: "object",
 	properties: {
 		schemas: {
