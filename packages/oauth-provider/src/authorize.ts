@@ -216,6 +216,7 @@ export async function authorizeEndpoint(
 
 	if (!ctx.context.post_login && opts.postLogin) {
 		const postLoginRedirect = await opts.postLogin.shouldRedirect({
+			headers: ctx.request.headers,
 			user: session.user,
 			session: session.session,
 			scopes: requestedScopes,
@@ -230,6 +231,12 @@ export async function authorizeEndpoint(
 		return redirectWithPromptCode(ctx, opts, "consent");
 	}
 
+	const referenceId = await opts.postLogin?.consentReferenceId?.({
+		user: session.user,
+		session: session.session,
+		scopes: requestedScopes,
+	});
+
 	// Can skip consent (unless forced by prompt above)
 	if (client.skipConsent) {
 		return redirectWithAuthorizationCode(ctx, opts, {
@@ -237,13 +244,9 @@ export async function authorizeEndpoint(
 			clientId: client.clientId,
 			userId: session.user.id,
 			sessionId: session.session.id,
+			referenceId,
 		});
 	}
-	const referenceId = await opts.postLogin?.consentReferenceId?.({
-		user: session.user,
-		session: session.session,
-		scopes: requestedScopes,
-	});
 	const consent = await ctx.context.adapter.findOne<OAuthConsent<Scope[]>>({
 		model: opts.schema?.oauthConsent?.modelName ?? "oauthConsent",
 		where: [
@@ -278,6 +281,7 @@ export async function authorizeEndpoint(
 		clientId: client.clientId,
 		userId: session.user.id,
 		sessionId: session.session.id,
+		referenceId,
 	});
 }
 
@@ -289,6 +293,7 @@ async function redirectWithAuthorizationCode(
 		clientId: string;
 		userId: string;
 		sessionId: string;
+		referenceId?: string;
 	},
 ) {
 	const code = generateRandomString(32, "a-z", "A-Z", "0-9");
@@ -304,6 +309,7 @@ async function redirectWithAuthorizationCode(
 			query: ctx.query,
 			userId: verificationValue.userId,
 			sessionId: verificationValue?.sessionId,
+			referenceId: verificationValue.referenceId,
 		} satisfies VerificationValue),
 	};
 	ctx.context.verification_id

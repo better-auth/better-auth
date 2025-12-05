@@ -165,6 +165,10 @@ export const schema = {
 					field: "id",
 				},
 			},
+			referenceId: {
+				type: "string",
+				required: false,
+			},
 			expiresAt: {
 				type: "date",
 			},
@@ -232,6 +236,10 @@ export const schema = {
 					model: "user",
 					field: "id",
 				},
+			},
+			referenceId: {
+				type: "string",
+				required: false,
 			},
 			refreshId: {
 				type: "string",
