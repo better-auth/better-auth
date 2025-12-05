@@ -15,6 +15,7 @@ import type { AccessControl } from "../../access";
 import type { defaultStatements } from "../access";
 import { ADMIN_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
+import type { UserRole } from "../schema";
 import type {
 	AdminOptions,
 	InferAdminRolesFromOption,
@@ -142,18 +143,43 @@ export const setRole = <O extends AdminOptions>(opts: O) =>
 				});
 			}
 			const roles = opts.roles;
-			// TODO: check for dynamic roles
-			if (roles && !opts.dynamicAccessControl?.enabled) {
+			if (roles) {
 				const inputRoles = Array.isArray(ctx.body.role)
 					? ctx.body.role
 					: [ctx.body.role];
+				const nonExistentRoles = new Set<string>();
 				for (const role of inputRoles) {
 					if (!roles[role as keyof typeof roles]) {
-						throw new APIError("BAD_REQUEST", {
-							message:
-								ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE,
-						});
+						nonExistentRoles.add(role);
 					}
+				}
+				if (nonExistentRoles.size > 0 && opts.dynamicAccessControl?.enabled) {
+					const roles = await ctx.context.adapter.findMany<UserRole>({
+						model: "role",
+						where: [
+							{
+								field: "role",
+								value: Array.from(nonExistentRoles.values()),
+								operator: "in",
+							},
+						],
+					});
+					if (roles.length !== nonExistentRoles.size) {
+						for (const { role } of roles) {
+							nonExistentRoles.delete(role);
+						}
+					} else {
+						nonExistentRoles.clear();
+					}
+				}
+				if (nonExistentRoles.size > 0) {
+					ctx.context.logger.error("Unable to set non-existent roles", {
+						nonExistentRoles: Array.from(nonExistentRoles.values()),
+					});
+					throw new APIError("BAD_REQUEST", {
+						message:
+							ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE,
+					});
 				}
 			}
 			const updatedUser = await ctx.context.internalAdapter.updateUser(

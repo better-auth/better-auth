@@ -9,7 +9,7 @@ import { ADMIN_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
 import type { UserRole } from "../schema";
 import { getAdditionalFields } from "../schema";
-import type { AdminOptions } from "../types";
+import type { AdminOptions, UserWithRole } from "../types";
 
 const baseCreateRoleSchema = z.object({
 	role: z.string().meta({
@@ -146,6 +146,14 @@ export const createRole = <O extends AdminOptions>(options: O) => {
 			}
 
 			await checkForInvalidResources({ ac, ctx, permission });
+
+			await checkIfUserHasPermission({
+				ctx,
+				options,
+				permissionRequired: permission,
+				user,
+				action: "create",
+			});
 
 			await checkIfRoleNameIsTakenByRoleInDB({
 				ctx,
@@ -418,14 +426,12 @@ export const getRole = <O extends AdminOptions>(options: O) => {
 					connector: "AND",
 				};
 			} else {
-				// shouldn't be able to reach here given the schema validation.
-				// But just in case, throw an error.
-				ctx.context.logger.error(
-					`[Dynamic Access Control] The role name/id is not provided in the request query.`,
-				);
-				throw new APIError("BAD_REQUEST", {
-					message: ADMIN_ERROR_CODES.ROLE_NOT_FOUND,
-				});
+				condition = {
+					field: "role",
+					value: user.role || options.defaultRole || "user",
+					operator: "eq",
+					connector: "AND",
+				};
 			}
 
 			let role = await ctx.context.adapter.findOne<UserRole>({
@@ -586,6 +592,14 @@ export const updateRole = <O extends AdminOptions>(options: O) => {
 					permission: newPermission,
 				});
 
+				await checkIfUserHasPermission({
+					ctx,
+					user,
+					options,
+					permissionRequired: newPermission,
+					action: "update",
+				});
+
 				updateData.permission = newPermission;
 			}
 			if (ctx.body.data.roleName) {
@@ -712,4 +726,82 @@ async function checkIfRoleNameIsTakenByRoleInDB({
 			message: ADMIN_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN,
 		});
 	}
+}
+
+async function checkIfUserHasPermission({
+	ctx,
+	permissionRequired: permission,
+	options,
+	user,
+	action,
+}: {
+	ctx: GenericEndpointContext;
+	permissionRequired: Record<string, string[]>;
+	options: AdminOptions;
+	user: UserWithRole;
+	action: "create" | "update" | "delete" | "read" | "list" | "get";
+}) {
+	const hasNecessaryPermissions: {
+		resource: { [x: string]: string[] };
+		hasPermission: boolean;
+	}[] = [];
+	const permissionEntries = Object.entries(permission);
+	for await (const [resource, permissions] of permissionEntries) {
+		for await (const perm of permissions) {
+			hasNecessaryPermissions.push({
+				resource: { [resource]: [perm] },
+				hasPermission: await hasPermission(
+					{
+						options,
+						permissions: { [resource]: [perm] },
+						useMemoryCache: true,
+						userId: user.id,
+						role: user.role,
+					},
+					ctx,
+				),
+			});
+		}
+	}
+	const missingPermissions = hasNecessaryPermissions
+		.filter((x) => x.hasPermission === false)
+		.map((x) => {
+			const key = Object.keys(x.resource)[0]!;
+			return `${key}:${x.resource[key]![0]}` as const;
+		});
+	if (missingPermissions.length === 0) return;
+
+	ctx.context.logger.error(
+		`[Dynamic Access Control] The user is missing permissions necessary to ${action} a role with those set of permissions.\n`,
+		{
+			userId: user.id,
+			role: user.role,
+			missingPermissions,
+		},
+	);
+	let errorMessage: string;
+	switch (action) {
+		case "create":
+			errorMessage = ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE;
+			break;
+		case "update":
+			errorMessage = ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_A_ROLE;
+			break;
+		case "delete":
+			errorMessage = ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_A_ROLE;
+			break;
+		case "read":
+			errorMessage = ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_READ_A_ROLE;
+			break;
+		case "list":
+			errorMessage = ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE;
+			break;
+		default:
+			errorMessage = ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_GET_A_ROLE;
+	}
+
+	throw new APIError("FORBIDDEN", {
+		message: errorMessage,
+		missingPermissions,
+	});
 }
