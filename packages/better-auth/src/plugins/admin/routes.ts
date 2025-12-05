@@ -615,21 +615,19 @@ export const listUsers = (opts: AdminOptions) =>
 				| string
 				| number
 				| boolean
+				| string[]
+				| number[]
 				| undefined;
 			if (ctx.query.filterOperator === "in") {
-				try {
-					filterValue =
-						typeof filterValue === "string"
-							? JSON.parse(filterValue)
-							: filterValue;
-				} catch {
-					console.log(filterValue);
-					if (!Array.isArray(filterValue)) {
-						throw new APIError("BAD_REQUEST", {
-							message: "Value must be an array",
-						});
-					}
+				if (!Array.isArray(filterValue)) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Value must be an array",
+					});
 				}
+			} else if (Array.isArray(filterValue)) {
+				throw new APIError("BAD_REQUEST", {
+					message: "Value cannot be an array",
+				});
 			}
 			if (filterValue) {
 				where.push({

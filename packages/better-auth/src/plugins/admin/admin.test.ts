@@ -414,7 +414,7 @@ describe("Admin plugin", async () => {
 				headers: adminHeaders,
 			},
 		});
-		expect(res.data?.users.length).toBe(2);
+		expect(res.data?.users.length).toBe(3);
 	});
 
 	it("should allow to set user role", async () => {
