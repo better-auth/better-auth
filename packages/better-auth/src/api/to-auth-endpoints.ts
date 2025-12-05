@@ -106,8 +106,8 @@ export function toAuthEndpoints<
 					}
 
 					internalContext.asResponse = false;
-					internalContext.returnHeaders = true;
-					internalContext.returnStatus = true;
+					internalContext.returnHeaders = context?.returnHeaders ?? false;
+					internalContext.returnStatus = context?.returnStatus ?? false;
 					const result = (await runWithEndpointContext(internalContext, () =>
 						(endpoint as any)(internalContext as any),
 					).catch((e: any) => {
@@ -119,12 +119,12 @@ export function toAuthEndpoints<
 							return {
 								response: e,
 								status: e.statusCode,
-								headers: e.headers ? new Headers(e.headers) : null,
+								headers: e.headers ? new Headers(e.headers) : undefined,
 							};
 						}
 						throw e;
 					})) as {
-						headers: Headers;
+						headers: Headers | undefined;
 						response: any;
 						status: number;
 					};
@@ -134,46 +134,58 @@ export function toAuthEndpoints<
 						return result;
 					}
 
-					internalContext.context.returned = result.response;
-					internalContext.context.responseHeaders = result.headers;
+					if (result) {
+						internalContext.context.returned = result.response;
+						if (result.headers) {
+							internalContext.context.responseHeaders = result.headers;
+						}
+					}
 
 					const after = await runAfterHooks(internalContext, afterHooks);
 
+					// Use result or fallback to after response
+					let responseData = result?.response;
+					let headers = result?.headers;
+					let status = result?.status;
+
 					if (after.response) {
-						result.response = after.response;
+						responseData = after.response;
 					}
 
 					if (
-						result.response instanceof APIError &&
+						responseData instanceof APIError &&
 						shouldPublishLog(authContext.logger.level, "debug")
 					) {
 						// inherit stack from errorStack if debug mode is enabled
-						result.response.stack = result.response.errorStack;
+						responseData.stack = responseData.errorStack;
 					}
 
-					if (result.response instanceof APIError && !context?.asResponse) {
-						throw result.response;
+					if (responseData instanceof APIError && !context?.asResponse) {
+						throw responseData;
 					}
 
 					const response = context?.asResponse
-						? toResponse(result.response, {
-								headers: result.headers,
-								status: result.status,
+						? toResponse(responseData, {
+								headers: headers,
+								status:
+									responseData instanceof APIError
+										? responseData.statusCode
+										: (status ?? 200),
 							})
 						: context?.returnHeaders
 							? context?.returnStatus
 								? {
-										headers: result.headers,
-										response: result.response,
-										status: result.status,
+										headers: headers,
+										response: responseData,
+										status: status ?? 200,
 									}
 								: {
-										headers: result.headers,
-										response: result.response,
+										headers: headers,
+										response: responseData,
 									}
 							: context?.returnStatus
-								? { response: result.response, status: result.status }
-								: result.response;
+								? { response: responseData, status: status ?? 200 }
+								: responseData;
 					return response;
 				});
 			};
@@ -257,15 +269,15 @@ async function runAfterHooks(
 					}
 					return {
 						response: e,
-						headers: e.headers ? new Headers(e.headers) : null,
+						headers: e.headers ? new Headers(e.headers) : undefined,
 					};
 				}
 				throw e;
 			})) as {
 				response: any;
-				headers: Headers;
-			};
-			if (result.headers) {
+				headers?: Headers;
+			} | void;
+			if (result && result.headers) {
 				result.headers.forEach((value, key) => {
 					if (!context.context.responseHeaders) {
 						context.context.responseHeaders = new Headers({
@@ -280,7 +292,7 @@ async function runAfterHooks(
 					}
 				});
 			}
-			if (result.response) {
+			if (result && result.response) {
 				context.context.returned = result.response;
 			}
 		}

@@ -369,6 +369,214 @@ describe("session", async () => {
 			},
 		);
 	});
+
+	it("should return session data directly without wrapping when returnHeaders is not set", async () => {
+		const context = await auth.$context;
+		await runWithEndpointContext(
+			{
+				context,
+			} as unknown as GenericEndpointContext,
+			async () => {
+				const signInRes = await auth.api.signInEmail({
+					body: {
+						email: testUser.email,
+						password: testUser.password,
+					},
+					returnHeaders: true,
+				});
+
+				const signInHeaders = new Headers();
+				signInHeaders.set("cookie", signInRes.headers.getSetCookie()[0]!);
+
+				const sessionRes = await auth.api.getSession({
+					headers: signInHeaders,
+				});
+
+				// Should return session data directly, not wrapped in { response: ... }
+				expect(sessionRes).toHaveProperty("user");
+				expect(sessionRes).toHaveProperty("session");
+				// @ts-expect-error: response property should not exist
+				expect(sessionRes.response).toBeUndefined();
+				// @ts-expect-error: headers property should not exist
+				expect(sessionRes.headers).toBeUndefined();
+				// @ts-expect-error: status property should not exist
+				expect(sessionRes.status).toBeUndefined();
+
+				expect(sessionRes?.user).toBeDefined();
+				expect(sessionRes?.session).toBeDefined();
+				expect(sessionRes?.user.email).toBe(testUser.email);
+			},
+		);
+	});
+
+	it("should return status without headers when only returnStatus is true", async () => {
+		const context = await auth.$context;
+		await runWithEndpointContext(
+			{
+				context,
+			} as unknown as GenericEndpointContext,
+			async () => {
+				const signInRes = await auth.api.signInEmail({
+					body: {
+						email: testUser.email,
+						password: testUser.password,
+					},
+					returnHeaders: true,
+				});
+
+				const signInHeaders = new Headers();
+				signInHeaders.set("cookie", signInRes.headers.getSetCookie()[0]!);
+
+				const sessionRes = await auth.api.getSession({
+					headers: signInHeaders,
+					returnStatus: true,
+				});
+
+				expect(sessionRes).toHaveProperty("response");
+				expect(sessionRes).toHaveProperty("status");
+				expect(sessionRes.response).toHaveProperty("user");
+				expect(sessionRes.response).toHaveProperty("session");
+				// @ts-expect-error: headers property should not exist
+				expect(sessionRes.headers).toBeUndefined();
+			},
+		);
+	});
+
+	it("should respect explicit returnHeaders: false", async () => {
+		const context = await auth.$context;
+		await runWithEndpointContext(
+			{
+				context,
+			} as unknown as GenericEndpointContext,
+			async () => {
+				const signInRes = await auth.api.signInEmail({
+					body: {
+						email: testUser.email,
+						password: testUser.password,
+					},
+					returnHeaders: true,
+				});
+
+				const signInHeaders = new Headers();
+				signInHeaders.set("cookie", signInRes.headers.getSetCookie()[0]!);
+
+				const sessionRes = await auth.api.getSession({
+					headers: signInHeaders,
+					returnHeaders: false,
+					returnStatus: false,
+				});
+
+				expect(sessionRes).toHaveProperty("user");
+				expect(sessionRes).toHaveProperty("session");
+				// @ts-expect-error: response property should not exist
+				expect(sessionRes.response).toBeUndefined();
+			},
+		);
+	});
+
+	it("should return both headers and status when both options are true", async () => {
+		const context = await auth.$context;
+		await runWithEndpointContext(
+			{
+				context,
+			} as unknown as GenericEndpointContext,
+			async () => {
+				const signInRes = await auth.api.signInEmail({
+					body: {
+						email: testUser.email,
+						password: testUser.password,
+					},
+					returnHeaders: true,
+					returnStatus: true,
+				});
+
+				expect(signInRes).toHaveProperty("headers");
+				expect(signInRes).toHaveProperty("response");
+				expect(signInRes).toHaveProperty("status");
+				expect(signInRes.response).toHaveProperty("user");
+				expect(signInRes.response).toHaveProperty("session");
+			},
+		);
+	});
+
+	it("should use APIError statusCode when asResponse is true", async () => {
+		const context = await auth.$context;
+		await runWithEndpointContext(
+			{
+				context,
+			} as unknown as GenericEndpointContext,
+			async () => {
+				const errorRes = await auth.api.signInEmail(
+					{
+						body: {
+							email: "wrong@example.com",
+							password: "wrongpassword",
+						},
+						asResponse: true,
+					},
+					{
+						onError: (context) => {
+							expect(context.response).toBeInstanceOf(Response);
+							expect(context.response.status).toBe(401);
+						},
+					},
+				);
+
+				expect(errorRes.error).toBeDefined();
+			},
+		);
+	});
+
+	it("should include APIError statusCode when returnStatus is true", async () => {
+		const context = await auth.$context;
+		await runWithEndpointContext(
+			{
+				context,
+			} as unknown as GenericEndpointContext,
+			async () => {
+				const errorRes = await auth.api.signInEmail({
+					body: {
+						email: "wrong@example.com",
+						password: "wrongpassword",
+					},
+					returnStatus: true,
+				});
+
+				expect(errorRes.error).toBeDefined();
+				expect(errorRes.error?.status).toBe(401);
+			},
+		);
+	});
+
+	it("should handle different APIError status codes correctly", async () => {
+		const context = await auth.$context;
+		await runWithEndpointContext(
+			{
+				context,
+			} as unknown as GenericEndpointContext,
+			async () => {
+				const unauthorizedRes = await auth.api.signInEmail({
+					body: {
+						email: "wrong@example.com",
+						password: "wrongpassword",
+					},
+					returnStatus: true,
+					returnHeaders: true,
+				});
+				expect(unauthorizedRes.error?.status).toBe(401);
+
+				const badRequestRes = await auth.api.signInEmail({
+					body: {
+						email: "invalid-email",
+						password: "password",
+					},
+					returnStatus: true,
+					returnHeaders: true,
+				});
+				expect(badRequestRes.error?.status).toBe(400);
+			},
+		);
+	});
 });
 
 describe("session storage", async () => {
