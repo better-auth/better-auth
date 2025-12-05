@@ -706,10 +706,10 @@ mapping: {
 
 ## Account Linking for SSO
 
-When a user signs in via SSO and an account with the same email already exists, Better Auth applies a **strict trust check** before auto-linking. This prevents account takeover attacks where a malicious SSO provider could claim any email address.
+When a user signs in via SSO and an account with the same email already exists, Better Auth applies a trust check before auto-linking. This prevents account takeover attacks where a malicious SSO provider could claim any email address.
 
-<Callout type="warn">
-**Important**: SSO account linking is stricter than regular OAuth linking. Even if `linkingPolicy` is set to `"email_match_any"` in your core config, SSO providers **still require a trust signal** before auto-linking to existing accounts.
+<Callout type="info">
+**SSO Linking Policies**: The SSO plugin only supports `"trusted_providers_only"` and `"never"` linking policies. If your core config uses `"verified_email_trusted"`, SSO will automatically default to `"trusted_providers_only"`. This is intentional—enterprise SSO providers should prove domain ownership or be explicitly trusted before linking to existing accounts.
 </Callout>
 
 For SSO providers, auto-linking is allowed when **any** of the following conditions are met:
@@ -717,7 +717,7 @@ For SSO providers, auto-linking is allowed when **any** of the following conditi
 1. **Trusted Provider**: The provider is listed in `account.accountLinking.trustedProviders`
 2. **Domain Verified**: The SSO provider's domain is verified AND the user's email matches that domain
 
-If neither condition is met, the user will be redirected with `?error=account_not_linked`.
+If neither condition is met (or if `linkingPolicy` is set to `"never"`), the user will be redirected with `?error=account_not_linked`.
 
 ```ts title="auth.ts"
 export const auth = betterAuth({

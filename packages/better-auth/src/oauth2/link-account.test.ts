@@ -492,7 +492,7 @@ describe("oauth2 - linkingPolicy", () => {
 		});
 	});
 
-	describe("linkingPolicy: 'email_match_any' (default)", async () => {
+	describe("linkingPolicy: 'verified_email_trusted' (default)", async () => {
 		const { auth, client, cookieSetter } = await getTestInstance({
 			socialProviders: {
 				github: {
@@ -508,7 +508,7 @@ describe("oauth2 - linkingPolicy", () => {
 				accountLinking: {
 					enabled: true,
 					trustedProviders: [], // No trusted providers
-					// linkingPolicy defaults to "email_match_any"
+					// linkingPolicy defaults to "verified_email_trusted"
 				},
 			},
 		});
@@ -525,7 +525,7 @@ describe("oauth2 - linkingPolicy", () => {
 				name: "Test User",
 			});
 
-			// Mock GitHub OAuth response (github is NOT trusted, but email_match_any allows it)
+			// Mock GitHub OAuth response (github is NOT trusted, but verified_email_trusted allows it)
 			server.use(
 				http.post("https://github.com/login/oauth/access_token", async () => {
 					return HttpResponse.json({

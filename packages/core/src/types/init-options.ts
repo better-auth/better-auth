@@ -897,7 +897,7 @@ export type BetterAuthOptions = {
 					 *    means the provider is listed in `trustedProviders`. SSO plugins
 					 *    apply additional trust rules (e.g. domain verification).
 					 *
-					 * - `"email_match_any"` (default):
+					 * - `"verified_email_trusted"` (default):
 					 *    Legacy behavior for backward compatibility. Auto-link when either:
 					 *    - the provider is trusted, or
 					 *    - the provider returns `email_verified: true`.
@@ -905,12 +905,12 @@ export type BetterAuthOptions = {
 					 *    Note: For SSO plugins, this policy still requires a trust signal
 					 *    (trusted provider or domain-verified) for security.
 					 *
-					 * @default "email_match_any"
+					 * @default "verified_email_trusted"
 					 */
 					linkingPolicy?:
 						| "never"
 						| "trusted_providers_only"
-						| "email_match_any";
+						| "verified_email_trusted";
 					/**
 					 * If enabled (true), this will allow users to manually linking accounts with different email addresses than the main user.
 					 *
