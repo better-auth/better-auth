@@ -47,10 +47,10 @@ export function canAutoLinkExistingUser(
 	// SSO defaults to "trusted_providers_only" (stricter than core's "email_match_any")
 	// because enterprise SSO providers should prove domain ownership or be explicitly
 	// trusted before auto-linking to existing accounts.
-	const existingUserMode =
-		accountLinking?.existingUserMode ?? "trusted_providers_only";
+	const linkingPolicy =
+		accountLinking?.linkingPolicy ?? "trusted_providers_only";
 
-	if (existingUserMode === "never") {
+	if (linkingPolicy === "never") {
 		return false;
 	}
 

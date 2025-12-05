@@ -382,20 +382,20 @@ export const auth = betterAuth({
 
 #### Existing User Auto-Linking Policy
 
-The `existingUserMode` option controls when OAuth/SSO providers can auto-link to an existing user with the same email address. This provides fine-grained control over account linking security.
+The `linkingPolicy` option controls when OAuth/SSO providers can auto-link to an existing user with the same email address. This provides fine-grained control over account linking security.
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
     account: {
         accountLinking: {
             enabled: true,
-            existingUserMode: "trusted_providers_only", // recommended
+            linkingPolicy: "trusted_providers_only", // recommended
         }
     },
 });
 ```
 
-Available modes:
+Available policies:
 
 - **`"never"`**: Never auto-link. Users must explicitly link accounts (e.g., via a signed-in "link account" flow).
 
@@ -404,7 +404,7 @@ Available modes:
 - **`"email_match_any"`** (default): Legacy behavior for backward compatibility. Auto-link when either the provider is trusted OR the provider returns `email_verified: true`.
 
 <Callout type="info">
-**Security Recommendation**: For production applications, we recommend setting `existingUserMode: "trusted_providers_only"` and explicitly listing your trusted providers. The `"email_match_any"` default is maintained for backward compatibility but relies on trusting the `email_verified` claim from any provider.
+**Security Recommendation**: For production applications, we recommend setting `linkingPolicy: "trusted_providers_only"` and explicitly listing your trusted providers. The `"email_match_any"` default is maintained for backward compatibility but relies on trusting the `email_verified` claim from any provider.
 </Callout>
 
 <Callout type="warn">

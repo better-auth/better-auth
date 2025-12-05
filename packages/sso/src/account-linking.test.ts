@@ -16,7 +16,7 @@ import { ssoClient } from "./client";
  * 4. All auto-link modes work correctly for SSO
  */
 
-describe("SSO Account Linking - existingUserMode: never", () => {
+describe("SSO Account Linking - linkingPolicy: never", () => {
 	const server = new OAuth2Server();
 	const existingUserEmail = "existing-never@test.com";
 
@@ -43,7 +43,7 @@ describe("SSO Account Linking - existingUserMode: never", () => {
 					accountLinking: {
 						enabled: true,
 						trustedProviders: ["sso-never-test"], // Even trusted should be denied
-						existingUserMode: "never",
+						linkingPolicy: "never",
 					},
 				},
 				plugins: [sso()],
@@ -137,7 +137,7 @@ describe("SSO Account Linking - existingUserMode: never", () => {
 	});
 });
 
-describe("SSO Account Linking - existingUserMode: trusted_providers_only", () => {
+describe("SSO Account Linking - linkingPolicy: trusted_providers_only", () => {
 	const server = new OAuth2Server();
 
 	beforeAll(async () => {
@@ -165,7 +165,7 @@ describe("SSO Account Linking - existingUserMode: trusted_providers_only", () =>
 					accountLinking: {
 						enabled: true,
 						trustedProviders: ["sso-trusted"],
-						existingUserMode: "trusted_providers_only",
+						linkingPolicy: "trusted_providers_only",
 					},
 				},
 				plugins: [sso()],
@@ -273,7 +273,7 @@ describe("SSO Account Linking - existingUserMode: trusted_providers_only", () =>
 					accountLinking: {
 						enabled: true,
 						trustedProviders: ["some-other-provider"], // sso-untrusted is NOT trusted
-						existingUserMode: "trusted_providers_only",
+						linkingPolicy: "trusted_providers_only",
 					},
 				},
 				plugins: [sso()],
@@ -394,7 +394,7 @@ describe("SSO Account Linking - email_match_any still requires trust for SSO", (
 					accountLinking: {
 						enabled: true,
 						trustedProviders: [], // No trusted providers
-						existingUserMode: "email_match_any",
+						linkingPolicy: "email_match_any",
 					},
 				},
 				plugins: [sso()],
@@ -515,7 +515,7 @@ describe("SSO Account Linking - domain verification", () => {
 					accountLinking: {
 						enabled: true,
 						trustedProviders: [], // No trusted providers - rely on domain verification
-						existingUserMode: "trusted_providers_only",
+						linkingPolicy: "trusted_providers_only",
 					},
 				},
 				plugins: [
@@ -618,4 +618,3 @@ describe("SSO Account Linking - domain verification", () => {
 		expect(accounts.length).toBe(1);
 	});
 });
-

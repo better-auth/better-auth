@@ -887,7 +887,7 @@ export type BetterAuthOptions = {
 					 * - a user already exists with the same email, and
 					 * - the provider/account is not yet linked.
 					 *
-					 * Modes:
+					 * Policies:
 					 * - `"never"`:
 					 *    Never auto-link. Users must explicitly link accounts (e.g. via a
 					 *    signed-in "link account" flow).
@@ -902,12 +902,12 @@ export type BetterAuthOptions = {
 					 *    - the provider is trusted, or
 					 *    - the provider returns `email_verified: true`.
 					 *
-					 *    Note: For SSO plugins, this mode still requires a trust signal
+					 *    Note: For SSO plugins, this policy still requires a trust signal
 					 *    (trusted provider or domain-verified) for security.
 					 *
 					 * @default "email_match_any"
 					 */
-					existingUserMode?:
+					linkingPolicy?:
 						| "never"
 						| "trusted_providers_only"
 						| "email_match_any";
