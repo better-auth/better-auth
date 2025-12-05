@@ -86,7 +86,7 @@ function createDBStorage(ctx: AuthContext) {
 }
 
 const memory = new Map<string, RateLimit>();
-export function getRateLimitStorage(
+function getRateLimitStorage(
 	ctx: AuthContext,
 	rateLimitSettings?:
 		| {
