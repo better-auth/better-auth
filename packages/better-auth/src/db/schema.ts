@@ -60,7 +60,10 @@ function getAllFields(options: BetterAuthOptions, table: string) {
 
 export function parseUserOutput(options: BetterAuthOptions, user: User) {
 	const schema = getAllFields(options, "user");
-	return parseOutputData(user, { fields: schema });
+	return {
+		...parseOutputData(user, { fields: schema }),
+		id: user.id,
+	};
 }
 
 export function parseAccountOutput(
@@ -109,9 +112,20 @@ export function parseInputData<T extends Record<string, any>>(
 				continue;
 			}
 			if (fields[key]!.validator?.input && data[key] !== undefined) {
-				parsedData[key] = fields[key]!.validator.input["~standard"].validate(
+				const result = fields[key]!.validator.input["~standard"].validate(
 					data[key],
 				);
+				if (result instanceof Promise) {
+					throw new APIError("INTERNAL_SERVER_ERROR", {
+						message: "Async validation is not supported for additional fields",
+					});
+				}
+				if ("issues" in result && result.issues) {
+					throw new APIError("BAD_REQUEST", {
+						message: result.issues[0]?.message || "Validation Error",
+					});
+				}
+				parsedData[key] = result.value;
 				continue;
 			}
 			if (fields[key]!.transform?.input && data[key] !== undefined) {
@@ -123,6 +137,10 @@ export function parseInputData<T extends Record<string, any>>(
 		}
 
 		if (fields[key]!.defaultValue !== undefined && action === "create") {
+			if (typeof fields[key]!.defaultValue === "function") {
+				parsedData[key] = fields[key]!.defaultValue();
+				continue;
+			}
 			parsedData[key] = fields[key]!.defaultValue;
 			continue;
 		}
@@ -173,12 +191,16 @@ export function mergeSchema<S extends BetterAuthPluginDBSchema>(
 	schema: S,
 	newSchema?:
 		| {
-				[K in keyof S]?: {
-					modelName?: string;
-					fields?: {
-						[P: string]: string;
-					};
-				};
+				[K in keyof S]?:
+					| {
+							modelName?: string | undefined;
+							fields?:
+								| {
+										[P: string]: string;
+								  }
+								| undefined;
+					  }
+					| undefined;
 		  }
 		| undefined,
 ) {
