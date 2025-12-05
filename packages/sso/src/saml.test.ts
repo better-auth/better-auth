@@ -1184,18 +1184,23 @@ describe("SAML SSO", async () => {
 	});
 
 	it("should deny account linking when provider is not trusted and domain is not verified", async () => {
-		// Create a user first
-		const existingEmail = "test@email.com";
-		await authClient.signUp.email({
-			email: existingEmail,
-			password: "password123",
-			name: "Existing User",
-		});
+		// Create a separate auth instance for this test
+		const { auth: authUntrusted, signInWithTestUser, client } =
+			await getTestInstance({
+				account: {
+					accountLinking: {
+						enabled: true,
+						trustedProviders: [], // No trusted providers
+					},
+				},
+				plugins: [sso()],
+			});
 
-		const headers = await getAuthHeaders();
+		// Create existing user (signInWithTestUser creates test@test.com)
+		const { headers } = await signInWithTestUser();
 
 		// Register SAML provider (NOT in trustedProviders, domainVerified is false by default)
-		await auth.api.registerSSOProvider({
+		await authUntrusted.api.registerSSOProvider({
 			body: {
 				providerId: "untrusted-saml-provider",
 				issuer: "http://localhost:8081",
@@ -1218,6 +1223,20 @@ describe("SAML SSO", async () => {
 				},
 			},
 			headers,
+		});
+
+		// Create another user with the email that the mock IdP returns (test@email.com)
+		const ctx = await authUntrusted.$context;
+		await ctx.adapter.create({
+			model: "user",
+			data: {
+				id: "existing-user-id",
+				email: "test@email.com",
+				name: "Existing User",
+				emailVerified: true,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
 		});
 
 		// Get SAML response from mock IdP (returns test@email.com which matches existing user)
@@ -1243,7 +1262,7 @@ describe("SAML SSO", async () => {
 					RelayState: "http://localhost:3000/dashboard",
 				}),
 				customFetchImpl: async (url, init) => {
-					return auth.handler(new Request(url, init));
+					return authUntrusted.handler(new Request(url, init));
 				},
 				onError: (context) => {
 					redirectLocation = context.response.headers.get("location") || "";
@@ -1268,8 +1287,7 @@ describe("SAML SSO", async () => {
 			},
 		);
 
-		// Create existing user
-		const existingEmail = "test@email.com";
+		// Create existing user (signInWithTestUser creates test@test.com)
 		const { headers } = await signInWithTestUser();
 
 		// Register SAML provider that IS in trustedProviders
@@ -1296,6 +1314,20 @@ describe("SAML SSO", async () => {
 				},
 			},
 			headers,
+		});
+
+		// Create another user with the email that the mock IdP returns (test@email.com)
+		const ctx = await authWithTrusted.$context;
+		await ctx.adapter.create({
+			model: "user",
+			data: {
+				id: "existing-user-id-2",
+				email: "test@email.com",
+				name: "Existing User",
+				emailVerified: true,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
 		});
 
 		// Get SAML response from mock IdP
