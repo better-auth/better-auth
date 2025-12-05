@@ -1,0 +1,42 @@
+---
+title: Migrating from WorkOS to Better Auth
+description: A step-by-step guide to transitioning from WorkOS to Better Auth.
+---
+
+## Before we begin
+
+<Accordions>
+  <Accordion title="🟢 Supported">
+<>
+| from WorkOS | to Better Auth |
+|---------|-------------|
+| Single Sign-On | Use the [SSO Plugin](/docs/plugins/sso). |
+| Email + Password | Available out of the box. |
+| Passkeys | Use the [Passkey Plugin](/docs/plugins/passkey). |
+| Social Login | Available out of the box with even more providers. |
+| Multi-Factor Auth | Use the [Two Factor Plugin](/docs/plugins/2fa). |
+| Magic Auth | Use the [Magic Link Plugin](/docs/plugins/magic-link). |
+| CLI Auth | Use the Device Authorization Plugin. |
+| API Keys | Use the API Key Plugin. |
+| Custom Emails | Fully customizable. |
+| Directory Provisioning | Use the SCIM Plugin. |
+| Domain Verification | Use the SSO Plugin. |
+| Email Verification | Available out of the box. |
+| Identity Linking | Available out of the box. |
+| Impersonation | Use the Admin Plugin. |
+| JWT Templates | Use the JWT Plugin. |
+| Metadata External IDs | Can be freely added by extending the core schema. |
+| Roles and Permissions | Use the Organization Plugin. |
+</>
+  </Accordion>
+
+  <Accordion title="🟡 Partially supported">
+<>
+| from WorkOS | to Better Auth |
+|---------|-------------|
+| JIT Provisioning | Partially supported via the SSO Plugin. |
+| Invitations | No ready-to-use dashboard, but can be implemented using the Admin, Organization Plugin. |
+| Organization Policies | Partially supported, but can be fully implemented using SSO Plugin + Organization Plugin hooks. |
+</>
+  </Accordion>
+</Accordions>
