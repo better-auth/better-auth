@@ -1358,5 +1358,6 @@ function formatAction(action: string) {
 
 /**
  * @deprecated Use `createAdapterFactory` instead. This export will be removed in a future version.
+ * @alias
  */
 export const createAdapter = createAdapterFactory;

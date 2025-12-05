@@ -302,5 +302,3 @@ export async function getConfig({
 		process.exit(1);
 	}
 }
-
-export { possiblePaths };
