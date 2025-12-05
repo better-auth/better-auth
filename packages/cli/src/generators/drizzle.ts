@@ -318,6 +318,18 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		};
 
 		const relations: Relation[] = [];
+		// Map to track "one" relations by key to combine fields/references
+		const oneRelationsMap = new Map<
+			string,
+			{
+				key: string;
+				model: string;
+				fields: string[];
+				references: string[];
+			}
+		>();
+		// Set to track "many" relations by key to prevent duplicates
+		const manyRelationsSet = new Set<string>();
 
 		// 1. Find all foreign keys in THIS table (creates "one" relations)
 		const fields = Object.entries(table.fields);
@@ -325,13 +337,42 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		for (const [fieldName, field] of foreignFields) {
 			const referencedModel = field.references!.model;
+			const relationKey = getModelName(referencedModel);
+			const fieldRef = `${getModelName(tableKey)}.${getFieldName({ model: tableKey, field: fieldName })}`;
+			const referenceRef = `${getModelName(referencedModel)}.${getFieldName({ model: referencedModel, field: field.references!.field || "id" })}`;
+
+			if (oneRelationsMap.has(relationKey)) {
+				// Combine with existing relation
+				const existing = oneRelationsMap.get(relationKey)!;
+				existing.fields.push(fieldRef);
+				existing.references.push(referenceRef);
+			} else {
+				// Create new relation
+				oneRelationsMap.set(relationKey, {
+					key: relationKey,
+					model: getModelName(referencedModel),
+					fields: [fieldRef],
+					references: [referenceRef],
+				});
+			}
+		}
+
+		// Convert map to relations array
+		for (const relation of oneRelationsMap.values()) {
+			// Deduplicate references if they're all the same
+			const uniqueReferences = [...new Set(relation.references)];
+			const referencesStr =
+				uniqueReferences.length === 1
+					? uniqueReferences[0]!
+					: relation.references.join(", ");
+
 			relations.push({
-				key: getModelName(referencedModel),
-				model: getModelName(referencedModel),
+				key: relation.key,
+				model: relation.model,
 				type: "one",
 				reference: {
-					field: `${getModelName(tableKey)}.${getFieldName({ model: tableKey, field: fieldName })}`,
-					references: `${getModelName(referencedModel)}.${getFieldName({ model: referencedModel, field: field.references!.field || "id" })}`,
+					field: relation.fields.join(", "),
+					references: referencesStr,
 				},
 			});
 		}
@@ -341,6 +382,16 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			([modelName]) => modelName !== tableKey,
 		);
 
+		// Map to track relations by model name to determine if unique or many
+		const modelRelationsMap = new Map<
+			string,
+			{
+				modelName: string;
+				hasUnique: boolean;
+				hasMany: boolean;
+			}
+		>();
+
 		for (const [modelName, otherTable] of otherModels) {
 			const foreignKeysPointingHere = Object.entries(otherTable.fields).filter(
 				([_, field]) =>
@@ -348,23 +399,50 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					field.references?.model === getModelName(tableKey),
 			);
 
-			for (const [fieldName, field] of foreignKeysPointingHere) {
-				const isUnique = !!field.unique;
-				let relationKey = getModelName(modelName);
+			if (foreignKeysPointingHere.length === 0) continue;
 
-				// We have to apply this after checking if they have usePlural because otherwise they will end up seeing:
-				/* cspell:disable-next-line */
-				// "sesionss", or "accountss" - double s's.
-				if (!adapter.options?.adapterConfig?.usePlural && !isUnique) {
-					relationKey = `${relationKey}s`;
-				}
+			// Check if any foreign key is unique
+			const hasUnique = foreignKeysPointingHere.some(
+				([_, field]) => !!field.unique,
+			);
+			const hasMany = foreignKeysPointingHere.some(
+				([_, field]) => !field.unique,
+			);
 
-				const model = getModelName(modelName);
+			modelRelationsMap.set(modelName, {
+				modelName,
+				hasUnique,
+				hasMany,
+			});
+		}
 
+		// Add relations, deduplicating by relationKey
+		for (const {
+			modelName,
+			hasUnique,
+			hasMany,
+		} of modelRelationsMap.values()) {
+			// Determine relation type: if all are unique, it's "one", otherwise "many"
+			const relationType = hasMany ? "many" : "one";
+			let relationKey = getModelName(modelName);
+
+			// We have to apply this after checking if they have usePlural because otherwise they will end up seeing:
+			/* cspell:disable-next-line */
+			// "sesionss", or "accountss" - double s's.
+			if (
+				!adapter.options?.adapterConfig?.usePlural &&
+				relationType === "many"
+			) {
+				relationKey = `${relationKey}s`;
+			}
+
+			// Only add if we haven't seen this key before
+			if (!manyRelationsSet.has(relationKey)) {
+				manyRelationsSet.add(relationKey);
 				relations.push({
 					key: relationKey,
-					model: model,
-					type: isUnique ? "one" : "many",
+					model: getModelName(modelName),
+					type: relationType,
 				});
 			}
 		}
