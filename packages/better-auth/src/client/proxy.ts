@@ -3,7 +3,7 @@ import type {
 	ClientFetchOption,
 } from "@better-auth/core";
 import type { BetterFetch } from "@better-fetch/fetch";
-import type { Atom, PreinitializedWritableAtom } from "nanostores";
+import type { Atom } from "nanostores";
 import { isAtom } from "../utils/is-atom";
 import type { ProxyRequest } from "./path-to-object";
 
@@ -30,11 +30,6 @@ function getMethod(
 	}
 	return "GET";
 }
-
-export type AuthProxySignal = {
-	atom: PreinitializedWritableAtom<boolean>;
-	matcher: (path: string) => boolean;
-};
 
 export function createDynamicPathProxy<T extends Record<string, any>>(
 	routes: T,

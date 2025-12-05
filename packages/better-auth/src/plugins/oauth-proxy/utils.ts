@@ -6,7 +6,7 @@ import type { OAuthProxyOptions } from "./index";
 /**
  * Get base URL from vendor-specific environment variables
  */
-export function getVendorBaseURL() {
+function getVendorBaseURL() {
 	const vercel = env.VERCEL_URL ? `https://${env.VERCEL_URL}` : undefined;
 	const netlify = env.NETLIFY_URL;
 	const render = env.RENDER_URL;

@@ -4,6 +4,8 @@ import { SCIMAPIError } from "./scim-error";
 import { verifySCIMToken } from "./scim-tokens";
 import type { SCIMOptions, SCIMProvider } from "./types";
 
+export type AuthMiddleware = ReturnType<typeof authMiddlewareFactory>;
+
 /**
  * The middleware forces the endpoint to have a valid token
  */

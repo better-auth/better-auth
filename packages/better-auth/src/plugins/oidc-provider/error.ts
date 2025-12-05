@@ -1,6 +1,6 @@
 import { APIError } from "better-call";
 
-export class OIDCProviderError extends APIError {}
+class OIDCProviderError extends APIError {}
 
 export class InvalidRequest extends OIDCProviderError {
 	constructor(error_description: string, error_detail?: string) {

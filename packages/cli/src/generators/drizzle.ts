@@ -6,7 +6,7 @@ import type { BetterAuthOptions } from "better-auth/types";
 import prettier from "prettier";
 import type { SchemaGenerator } from "./types";
 
-export function convertToSnakeCase(str: string, camelCase?: boolean) {
+function convertToSnakeCase(str: string, camelCase?: boolean) {
 	if (camelCase) {
 		return str;
 	}

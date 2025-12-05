@@ -8,7 +8,7 @@ import {
 	shallowRef,
 } from "vue";
 
-export function registerStore(store: Store) {
+function registerStore(store: Store) {
 	let instance = getCurrentInstance();
 	if (instance && instance.proxy) {
 		let vm = instance.proxy as any;
