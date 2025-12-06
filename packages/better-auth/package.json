@@ -480,7 +480,6 @@
     "drizzle-kit": "^0.31.4",
     "drizzle-orm": "^0.41.0",
     "happy-dom": "^20.0.10",
-    "kysely": "^0.28.5",
     "listhen": "^1.9.0",
     "mongodb": "^6.18.0",
     "msw": "^2.12.4",
