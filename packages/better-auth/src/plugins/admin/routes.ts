@@ -1127,6 +1127,10 @@ export const stopImpersonating = () =>
 			}
 			await ctx.context.internalAdapter.deleteSession(session.session.token);
 			await setSessionCookie(ctx, adminSession, !!dontRememberMeCookie);
+			await ctx.setSignedCookie(adminCookieName, "", ctx.context.secret, {
+				expires: new Date(0),
+				maxAge: 0,
+			});
 			return ctx.json(adminSession);
 		},
 	);
