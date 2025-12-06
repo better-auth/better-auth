@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { BetterAuthOptions } from "@better-auth/core";
+import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { organization, twoFactor, username } from "better-auth/plugins";
@@ -260,6 +260,120 @@ describe("generate", async () => {
 		});
 		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-number-id.txt",
+		);
+	});
+
+	// Minimal plugin that reproduces the bug: two fields referencing the same model
+	const testPlugin = (): BetterAuthPlugin => {
+		return {
+			id: "test",
+			schema: {
+				test: {
+					fields: {
+						userId: {
+							type: "string",
+							required: false,
+							references: {
+								model: "user",
+								field: "id",
+								onDelete: "set null",
+							},
+						},
+						managerId: {
+							type: "string",
+							required: false,
+							references: {
+								model: "user",
+								field: "id",
+								onDelete: "set null",
+							},
+						},
+					},
+				},
+			},
+		};
+	};
+
+	it("should generate drizzle schema without duplicate relations", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: drizzleAdapter(
+				{},
+				{
+					provider: "sqlite",
+					schema: {},
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: drizzleAdapter(
+					{},
+					{
+						provider: "sqlite",
+						schema: {},
+					},
+				),
+				plugins: [testPlugin()],
+			},
+		});
+		await expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/auth-schema-duplicate-relations.txt",
+		);
+	});
+
+	// Plugin that tests multiple relations to different models (should be combined)
+	const multiRelationPlugin = (): BetterAuthPlugin => {
+		return {
+			id: "multi-relation",
+			schema: {
+				project: {
+					fields: {
+						ownerId: {
+							type: "string",
+							required: false,
+							references: {
+								model: "user",
+								field: "id",
+								onDelete: "set null",
+							},
+						},
+						sessionId: {
+							type: "string",
+							required: false,
+							references: {
+								model: "session",
+								field: "id",
+								onDelete: "set null",
+							},
+						},
+					},
+				},
+			},
+		};
+	};
+
+	it("should combine multiple relations to different models into single export", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: drizzleAdapter(
+				{},
+				{
+					provider: "sqlite",
+					schema: {},
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: drizzleAdapter(
+					{},
+					{
+						provider: "sqlite",
+						schema: {},
+					},
+				),
+				plugins: [multiRelationPlugin()],
+			},
+		});
+		await expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/auth-schema-multi-relation.txt",
 		);
 	});
 
