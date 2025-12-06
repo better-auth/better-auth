@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { inferAdditionalFields } from "../../client/plugins";
 import { getTestInstance } from "../../test-utils/test-instance";
-import type { Account } from "../../types";
+import type { Account, Session } from "../../types";
 
 describe("updateUser", async () => {
 	const sendChangeEmail = vi.fn();
@@ -438,6 +438,54 @@ describe("delete user", async () => {
 			const session = await client.getSession();
 			expect(session.data).toBeNull();
 		});
+	});
+
+	it("should delete every session from deleted user", async () => {
+		const store = new Map<string, string>();
+		const { client, signInWithTestUser } = await getTestInstance({
+			user: {
+				deleteUser: {
+					enabled: true,
+				},
+			},
+			secondaryStorage: {
+				set(key, value) {
+					store.set(key, value);
+				},
+				get(key) {
+					return store.get(key) || null;
+				},
+				delete(key) {
+					store.delete(key);
+				},
+			},
+		});
+
+		// Create a second session
+		const { headers } = await signInWithTestUser();
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		// Check if there are multiple sessions
+		const userId = session.data!.session.userId;
+		const sessions = JSON.parse(
+			store.get(`active-sessions-${userId}`)!,
+		) as Array<Session>;
+		expect(sessions.length).toBe(2);
+
+		// Delete user
+		await client.deleteUser({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		// All sessions should be gone now
+		expect(store.get(`active-sessions-${userId}`)).toBeUndefined();
+		expect(store.size).toBe(0);
 	});
 
 	it("should delete with verification flow and password", async () => {
