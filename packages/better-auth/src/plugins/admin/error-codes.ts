@@ -28,4 +28,5 @@ export const ADMIN_ERROR_CODES = defineErrorCodes({
 	YOU_CANNOT_REMOVE_YOURSELF: "You cannot remove yourself",
 	YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE:
 		"You are not allowed to set a non-existent role value",
+	YOU_CANNOT_IMPERSONATE_ADMINS: "You cannot impersonate admins",
 });

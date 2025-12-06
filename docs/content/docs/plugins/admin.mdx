@@ -820,3 +820,13 @@ admin({
   bannedUserMessage: "Custom banned user message",
 });
 ```
+
+### allowImpersonatingAdmins
+
+Whether to allow impersonating other admin users. Defaults to `false`.
+
+```ts title="auth.ts"
+admin({
+  allowImpersonatingAdmins: true,
+});
+```
