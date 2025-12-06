@@ -17,17 +17,32 @@ export function SelectOrganizationBtn({
 			className="w-full gap-2 h-12"
 			variant="outline"
 			onClick={async () => {
-				await client.organization.setActive({
-					organizationId: organization.id,
-				});
-				const { data } = await client.oauth2.continue({
-					postLogin: true,
-				});
-				if (data?.redirect_uri) {
+				try {
+					if (!organization.id) {
+						toast.error("No organization");
+						return;
+					}
+					const { data: active, error: activeError } =
+						await client.organization.setActive({
+							organizationId: organization.id,
+						});
+					if (activeError || !active) {
+						toast.error(
+							activeError?.message ?? "Failed to set active organization",
+						);
+						return;
+					}
+					const { data, error } = await client.oauth2.continue({
+						postLogin: true,
+					});
+					if (error || !data.redirect_uri) {
+						toast.error(error?.message ?? "Failed to continue");
+						return;
+					}
 					window.location.href = data.redirect_uri;
-					return;
+				} catch (error) {
+					toast.error(String(error));
 				}
-				toast.error("Failed to continue");
 			}}
 		>
 			<Avatar className="mr-2 h-5 w-5">

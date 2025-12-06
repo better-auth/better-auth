@@ -1,3 +1,4 @@
+import { safeJSONParse } from "@better-auth/core/utils";
 import type { BetterAuthClientPlugin } from "better-auth/types";
 import type { oauthProvider } from "./oauth";
 
@@ -23,7 +24,11 @@ export const oauthProviderClient = () => {
 				description: "Adds the current page query to oauth requests",
 				hooks: {
 					async onRequest(ctx) {
-						if (ctx.body?.oauth_query) return;
+						const body =
+							typeof ctx.body === "string"
+								? safeJSONParse<Record<string, unknown>>(ctx.body ?? "{}")
+								: ctx.body;
+						if (body?.oauth_query) return;
 						const pathname =
 							typeof ctx.url === "string"
 								? new URL(ctx.url).pathname
@@ -36,7 +41,6 @@ export const oauthProviderClient = () => {
 							pathname.endsWith("/oauth2/consent") ||
 							pathname.endsWith("/oauth2/continue")
 						) {
-							const body = JSON.parse(ctx.body ?? "{}");
 							ctx.body = JSON.stringify({
 								...body,
 								oauth_query:

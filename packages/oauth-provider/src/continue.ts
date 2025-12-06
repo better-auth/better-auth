@@ -48,7 +48,7 @@ async function postLogin(
 ) {
 	const query = (await oauthQuery.get()).query;
 	ctx.headers?.set("accept", "application/json");
-	ctx.context.post_login = true;
+	ctx.context.postLogin = true;
 	ctx.query = Object.fromEntries(query);
 	const { url } = await authorizeEndpoint(ctx, opts);
 	return {

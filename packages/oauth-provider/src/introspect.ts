@@ -428,7 +428,7 @@ export async function introspectEndpoint(
 					token,
 					client.clientId,
 				);
-				return ctx.json(payload);
+				return payload;
 			} catch (error) {
 				if (error instanceof APIError) {
 					if (token_type_hint === "access_token") {
@@ -451,7 +451,7 @@ export async function introspectEndpoint(
 					refreshToken.token,
 					client.clientId,
 				);
-				return ctx.json(payload);
+				return payload;
 			} catch (error) {
 				if (error instanceof APIError) {
 					if (token_type_hint === "refresh_token") {

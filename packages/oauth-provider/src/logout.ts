@@ -62,7 +62,7 @@ export async function rpInitiatedLogoutEndpoint(
 	const client = await getClient(ctx, opts, clientId);
 	if (!client) {
 		throw new APIError("BAD_REQUEST", {
-			error_description: "client is doesn't exist",
+			error_description: "client doesn't exist",
 			error: "invalid_client",
 		});
 	}
@@ -165,11 +165,11 @@ export async function rpInitiatedLogoutEndpoint(
 		session?.token
 			? await ctx.context.internalAdapter.deleteSession(session?.token)
 			: session?.id
-				? await ctx.context.adapter.findOne<Session>({
+				? await ctx.context.adapter.delete<Session>({
 						model: "session",
 						where: [{ field: "id", value: session.id }],
 					})
-				: await ctx.context.adapter.findOne<Session>({
+				: await ctx.context.adapter.delete<Session>({
 						model: "session",
 						where: [{ field: "id", value: sessionId }],
 					});

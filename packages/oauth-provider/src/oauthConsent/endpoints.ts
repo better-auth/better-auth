@@ -35,7 +35,13 @@ export async function getConsentEndpoint(
 	}
 	const consent = await getConsent(ctx, opts, id);
 
-	if (consent?.userId !== session.user.id) {
+	if (!consent) {
+		throw new APIError("NOT_FOUND", {
+			error_description: "no consent",
+			error: "not_found",
+		});
+	}
+	if (consent.userId !== session.user.id) {
 		throw new APIError("UNAUTHORIZED");
 	}
 	return consent;
@@ -98,6 +104,9 @@ export async function updateConsentEndpoint(
 	ctx: GenericEndpointContext & { body: { id: string } },
 	opts: OAuthOptions<Scope[]>,
 ) {
+	const session = await getSessionFromCtx(ctx);
+	if (!session) throw new APIError("UNAUTHORIZED");
+
 	const { id } = ctx.body;
 	if (!id) {
 		throw new APIError("NOT_FOUND", {
@@ -114,6 +123,16 @@ export async function updateConsentEndpoint(
 	}
 
 	const client = await getClient(ctx, opts, consent.clientId);
+	if (!consent) {
+		throw new APIError("NOT_FOUND", {
+			error_description: "no consent",
+			error: "not_found",
+		});
+	}
+	if (consent.userId !== session.user.id) {
+		throw new APIError("UNAUTHORIZED");
+	}
+
 	const allowedScopes = client?.scopes ?? opts.scopes ?? [];
 
 	// Check if scopes are granted to that client

@@ -178,7 +178,7 @@ export async function verifyAccessToken(
 		});
 		if (introspectError)
 			logger.error(
-				`Jwks failed: ${introspectError.message ?? introspectError.statusText}`,
+				`Introspection failed: ${introspectError.message ?? introspectError.statusText}`,
 			);
 		if (!introspect)
 			throw new APIError("INTERNAL_SERVER_ERROR", {

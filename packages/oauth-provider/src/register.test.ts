@@ -117,6 +117,7 @@ describe("oauth register", async () => {
 			body: {
 				token_endpoint_auth_method: "none",
 				redirect_uris: [redirectUri],
+				type,
 			},
 		});
 		expect(response?.client_id).toBeDefined();

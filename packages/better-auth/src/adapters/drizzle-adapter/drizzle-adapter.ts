@@ -579,7 +579,6 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
 			supportsUUIDs: config.provider === "pg" ? true : false,
-			supportsJSON: config.provider === "pg" ? true : false,
 			transaction:
 				(config.transaction ?? false)
 					? (cb) =>

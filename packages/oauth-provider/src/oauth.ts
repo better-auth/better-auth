@@ -8,7 +8,7 @@ import {
 	sessionMiddleware,
 } from "better-auth/api";
 import { parseSetCookieHeader } from "better-auth/cookies";
-import { makeSignature, timingSafeEqual } from "better-auth/crypto";
+import { constantTimeEqual, makeSignature } from "better-auth/crypto";
 import { mergeSchema } from "better-auth/db";
 import type { BetterAuthPlugin } from "better-auth/types";
 import * as z from "zod";
@@ -192,7 +192,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						);
 						if (
 							!sig ||
-							!timingSafeEqual(sig, verifySig) ||
+							!constantTimeEqual(sig, verifySig) ||
 							new Date(exp * 1000) < new Date()
 						) {
 							throw new APIError("BAD_REQUEST", {
@@ -280,7 +280,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				async (ctx) => {
 					if (opts.scopes && opts.scopes.includes("openid")) {
 						const metadata = oidcServerMetadata(ctx, opts);
-						return ctx.json(metadata);
+						return metadata;
 					} else {
 						const jwtPluginOptions = opts.disableJwtPlugin
 							? undefined
@@ -289,7 +289,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							scopes_supported:
 								opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
 						});
-						return ctx.json(authMetadata);
+						return authMetadata;
 					}
 				},
 			),
@@ -313,7 +313,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						throw new APIError("NOT_FOUND");
 					}
 					const metadata = oidcServerMetadata(ctx, opts);
-					return ctx.json(metadata);
+					return metadata;
 				},
 			),
 			oauth2Authorize: createAuthEndpoint(

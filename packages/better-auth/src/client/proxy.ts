@@ -85,7 +85,7 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 					...fetchOptions,
 					...argFetchOptions,
 				} as ClientFetchOption;
-				const headers = new Headers(fetchOptions.headers);
+				const headers = new Headers(options.headers);
 				const contentType = headers.get("content-type");
 				const _body = {
 					...body,

@@ -101,12 +101,12 @@ export async function getClientsEndpoint(
 		throw new APIError("UNAUTHORIZED");
 	}
 
-	const reference_id = await opts.clientReference?.(session);
-	if (reference_id) {
+	const referenceId = await opts.clientReference?.(session);
+	if (referenceId) {
 		const dbClients = await ctx.context.adapter
 			.findMany<SchemaClient<Scope[]>>({
 				model: opts.schema?.oauthClient?.modelName ?? "oauthClient",
-				where: [{ field: "referenceId", value: reference_id }],
+				where: [{ field: "referenceId", value: referenceId }],
 			})
 			.then((res) => {
 				if (!res) return null;
@@ -189,7 +189,7 @@ export async function deleteClientEndpoint(
 		where: [
 			{
 				field: "clientId",
-				value: ctx.query.client_id,
+				value: clientId,
 			},
 		],
 	});
