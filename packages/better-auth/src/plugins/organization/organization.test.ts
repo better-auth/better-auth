@@ -1,7 +1,7 @@
+import { memoryAdapter } from "@better-auth/memory-adapter";
 import type { Prettify } from "better-call";
 import { APIError } from "better-call";
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { memoryAdapter } from "../../adapters/memory-adapter";
 import type {
 	BetterFetchError,
 	PreinitializedWritableAtom,
