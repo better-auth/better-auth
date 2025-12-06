@@ -1,14 +1,17 @@
+import { oauthProvider } from "@better-auth/oauth-provider";
 import { passkey } from "@better-auth/passkey";
 import { sso } from "@better-auth/sso";
 import { stripe } from "@better-auth/stripe";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
-import { betterAuth } from "better-auth";
+import { APIError, betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
+import type { Organization } from "better-auth/plugins";
 import {
 	admin,
 	bearer,
 	customSession,
 	deviceAuthorization,
+	jwt,
 	lastLoginMethod,
 	multiSession,
 	oAuthProxy,
@@ -343,6 +346,90 @@ export const auth = betterAuth({
 			interval: "5s",
 		}),
 		lastLoginMethod(),
+		jwt({
+			jwt: {
+				issuer: process.env.BETTER_AUTH_URL,
+			},
+		}),
+		oauthProvider({
+			loginPage: "/sign-in",
+			consentPage: "/oauth/authorize",
+			allowDynamicClientRegistration: true,
+			allowUnauthenticatedClientRegistration: true,
+			scopes: [
+				"openid",
+				"profile",
+				"email",
+				"offline_access",
+				"read:organization",
+			],
+			validAudiences: [
+				process.env.BETTER_AUTH_URL || "https://demo.better-auth.com",
+				(process.env.BETTER_AUTH_URL || "https://demo.better-auth.com") +
+					"/api/mcp",
+			],
+			selectAccount: {
+				page: "/oauth/select-account",
+				shouldRedirect: async ({ headers }) => {
+					const allSessions = await getAllDeviceSessions(headers);
+					return allSessions?.length >= 1;
+				},
+			},
+			customAccessTokenClaims({ referenceId, scopes }) {
+				if (referenceId && scopes.includes("read:organization")) {
+					const baseUrl =
+						process.env.BETTER_AUTH_URL || "https://demo.better-auth.com";
+					return {
+						[`${baseUrl}/org`]: referenceId,
+					};
+				}
+				return {};
+			},
+			postLogin: {
+				page: "/oauth/select-organization",
+				async shouldRedirect({ session, scopes, headers }) {
+					const userOnlyScopes = [
+						"openid",
+						"profile",
+						"email",
+						"offline_access",
+					];
+					if (scopes.every((sc) => userOnlyScopes.includes(sc))) {
+						return false;
+					}
+					// Check if user has multiple organizations to select from
+					const organizations = (await getAllUserOrganizations(
+						headers,
+					)) as Organization[];
+					return (
+						organizations.length > 1 ||
+						!(
+							organizations.length === 1 &&
+							organizations.at(0)?.id === session.activeOrganizationId
+						)
+					);
+				},
+				consentReferenceId({ session, scopes }) {
+					if (scopes.includes("read:organization")) {
+						const activeOrganizationId = (session?.activeOrganizationId ??
+							undefined) as string | undefined;
+						if (!activeOrganizationId) {
+							throw new APIError("BAD_REQUEST", {
+								error: "set_organization",
+								error_description: "must set organization for these scopes",
+							});
+						}
+						return activeOrganizationId;
+					} else {
+						return undefined;
+					}
+				},
+			},
+			silenceWarnings: {
+				openidConfig: true,
+				oauthAuthServerConfig: true,
+			},
+		}),
 	],
 	trustedOrigins: [
 		"https://*.better-auth.com",
@@ -351,3 +438,15 @@ export const auth = betterAuth({
 		"https://appleid.apple.com",
 	],
 });
+
+async function getAllDeviceSessions(headers: Headers): Promise<unknown[]> {
+	return await auth.api.listDeviceSessions({
+		headers,
+	});
+}
+
+async function getAllUserOrganizations(headers: Headers): Promise<unknown[]> {
+	return await auth.api.listOrganizations({
+		headers,
+	});
+}

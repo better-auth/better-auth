@@ -35,6 +35,8 @@ import type {
 import { defaultClientSecretHasher } from "./utils";
 import { parsePrompt } from "./utils/prompt";
 
+export { parsePrompt } from "./utils/prompt";
+
 const getJwtPlugin = (ctx: GenericEndpointContext) => {
 	return ctx.context.options.plugins?.find(
 		(plugin) => plugin.id === "jwt",
@@ -278,6 +280,8 @@ const DEFAULT_REFRESH_TOKEN_EXPIRES_IN = 604800;
  *
  * @param options - The options for the OIDC plugin.
  * @returns A Better Auth plugin.
+ *
+ * @deprecated Use [oauthProvider](https://better-auth.com/docs/plugins/oauth-provider) instead
  */
 export const oidcProvider = (options: OIDCOptions) => {
 	const modelName = {

@@ -1,4 +1,4 @@
-import { createAuthEndpoint } from "@better-auth/core/api";
+import { createAuthEndpoint, oauthQuery } from "@better-auth/core/api";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { safeJSONParse } from "@better-auth/core/utils";
 import * as z from "zod";
@@ -76,6 +76,7 @@ export const callbackOAuth = createAuthEndpoint(
 			const url = `${defaultErrorURL}${sep}state=state_not_found`;
 			throw c.redirect(url);
 		}
+		const parsedState = await parseState(c);
 
 		const {
 			codeVerifier,
@@ -83,8 +84,13 @@ export const callbackOAuth = createAuthEndpoint(
 			link,
 			errorURL,
 			newUserURL,
+			query,
 			requestSignUp,
-		} = await parseState(c);
+		} = parsedState;
+		if (query)
+			await oauthQuery.set({
+				query: new URLSearchParams(query),
+			});
 
 		function redirectOnError(error: string, description?: string | undefined) {
 			const baseURL = errorURL ?? defaultErrorURL;

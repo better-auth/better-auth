@@ -1,6 +1,6 @@
 import type { EndpointContext, EndpointOptions } from "better-call";
 import { createEndpoint, createMiddleware } from "better-call";
-import { runWithEndpointContext } from "../context";
+import { defineRequestState, runWithEndpointContext } from "../context";
 import type { AuthContext } from "../types";
 
 export const optionsMiddleware = createMiddleware(async () => {
@@ -48,6 +48,10 @@ export const createAuthEndpoint = <
 		async (ctx) => runWithEndpointContext(ctx as any, () => handler(ctx)),
 	);
 };
+
+export const oauthQuery = defineRequestState(
+	() => ({}) as { query: URLSearchParams },
+);
 
 export type AuthEndpoint = ReturnType<typeof createAuthEndpoint>;
 export type AuthMiddleware = ReturnType<typeof createAuthMiddleware>;

@@ -410,6 +410,9 @@
       "plugins/one-time-token": [
         "./dist/plugins/one-time-token/index.d.mts"
       ],
+      "plugins/oauth-provider": [
+        "./dist/plugins/oauth-provider/index.d.mts"
+      ],
       "plugins/oidc-provider": [
         "./dist/plugins/oidc-provider/index.d.mts"
       ],

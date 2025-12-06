@@ -151,6 +151,12 @@ const registerMcpClientBodySchema = z.object({
 
 const mcpOAuthTokenBodySchema = z.record(z.any(), z.any());
 
+/**
+ * MCP plugin for Better Auth.
+ *
+ * @see https://better-auth.com/docs/plugins/mcp
+ * @deprecated Use [oauthProvider](https://better-auth.com/docs/plugins/oauth-provider) instead
+ */
 export const mcp = (options: MCPOptions) => {
 	const opts = {
 		codeExpiresIn: 600,

@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { createAuthEndpoint } from "@better-auth/core/api";
+import { createAuthEndpoint, oauthQuery } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { OAuth2Tokens, OAuth2UserInfo } from "@better-auth/core/oauth2";
 import {
@@ -305,9 +305,14 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 				errorURL,
 				requestSignUp,
 				newUserURL,
+				query,
 				link,
 			} = parsedState;
 			const code = ctx.query.code;
+			if (query)
+				await oauthQuery.set({
+					query: new URLSearchParams(query),
+				});
 
 			function redirectOnError(error: string) {
 				const defaultErrorURL =

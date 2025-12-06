@@ -80,16 +80,21 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 					...fetchOptions,
 					...argFetchOptions,
 				} as ClientFetchOption;
+				const headers = new Headers(options.headers);
+				const contentType = headers.get("content-type");
+				const _body = {
+					...body,
+					...(options?.body || {}),
+				};
 				const method = getMethod(routePath, knownPathMethods, arg);
 				return await client(routePath, {
 					...options,
 					body:
 						method === "GET"
 							? undefined
-							: {
-									...body,
-									...(options?.body || {}),
-								},
+							: contentType === "application/x-www-form-urlencoded"
+								? new URLSearchParams(_body).toString()
+								: _body,
 					query: query || options?.query,
 					method,
 					async onSuccess(context) {
