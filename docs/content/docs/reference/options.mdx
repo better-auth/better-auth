@@ -482,7 +482,7 @@ export const auth = betterAuth({
 			// disable generating IDS so your database will generate them,
 			// or use "serial" to use your database's auto-incrementing ID,
 			// or "uuid" to use a random UUID.
-			// or "uuidv7" to use a time-ordered UUID.
+			// or "uuidv7" to use a time-ordered UUID (requires PostgreSQL 18+ for database generation).
 			generateId: (((options: {
 				model: LiteralUnion<Models, string>;
 				size?: number;
