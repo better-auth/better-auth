@@ -503,7 +503,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 
 				if (ctx.context.options?.emailVerification?.sendOnSignIn) {
 					const token = await createEmailVerificationToken(
-						ctx.context.secret,
+						ctx,
 						user.user.email,
 						undefined,
 						ctx.context.options.emailVerification?.expiresIn,

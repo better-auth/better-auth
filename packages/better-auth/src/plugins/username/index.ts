@@ -356,7 +356,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 
 						if (ctx.context.options?.emailVerification?.sendOnSignIn) {
 							const token = await createEmailVerificationToken(
-								ctx.context.secret,
+								ctx,
 								user.email,
 								undefined,
 								ctx.context.options.emailVerification?.expiresIn,
