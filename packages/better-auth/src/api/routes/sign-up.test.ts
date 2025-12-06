@@ -144,4 +144,20 @@ describe("sign-up with custom fields", async (it) => {
 			}),
 		).rejects.toThrow("role is not allowed to be set");
 	});
+
+	it("should return redirect object when redirectTo is defined", async () => {
+		await expect(
+			auth.api.signUpEmail({
+				body: {
+					email: "email3@test.com",
+					password: "password",
+					name: "Test Name",
+					redirectTo: "https://example.com",
+				},
+			}),
+		).resolves.toMatchObject({
+			redirect: true,
+			url: "https://example.com",
+		});
+	});
 });
