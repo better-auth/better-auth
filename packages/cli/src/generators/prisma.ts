@@ -169,12 +169,15 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 							.attribute("id")
 							.attribute("default(autoincrement())");
 					} else if (useUUIDs && provider === "postgresql") {
-						const isUUIDv7 = options.advanced?.database?.generateId === "uuidv7";
+						const isUUIDv7 =
+							options.advanced?.database?.generateId === "uuidv7";
 						builder
 							.model(modelName)
 							.field("id", "String")
 							.attribute("id")
-							.attribute(`default(dbgenerated("${isUUIDv7 ? 'uuidv7()' : 'pg_catalog.gen_random_uuid()'}"))`)
+							.attribute(
+								`default(dbgenerated("${isUUIDv7 ? "uuidv7()" : "pg_catalog.gen_random_uuid()"}"))`,
+							)
 							.attribute("db.Uuid");
 					} else {
 						builder.model(modelName).field("id", "String").attribute("id");

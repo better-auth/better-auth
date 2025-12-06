@@ -178,12 +178,12 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			options.advanced?.database?.useNumberId ||
 			options.advanced?.database?.generateId === "serial";
 		const useUUIDs =
-		 	options.advanced?.database?.generateId === "uuid" ||
-		  	options.advanced?.database?.generateId === "uuidv7";
+			options.advanced?.database?.generateId === "uuid" ||
+			options.advanced?.database?.generateId === "uuidv7";
 
 		if (useUUIDs && databaseType === "pg") {
 			const isUUIDv7 = options.advanced?.database?.generateId === "uuidv7";
-			id = `uuid("id").default(sql\`${isUUIDv7 ? 'uuidv7()' : 'pg_catalog.gen_random_uuid()'}\`).primaryKey()`;
+			id = `uuid("id").default(sql\`${isUUIDv7 ? "uuidv7()" : "pg_catalog.gen_random_uuid()"}\`).primaryKey()`;
 		} else if (useNumberId) {
 			if (databaseType === "pg") {
 				id = `integer("id").generatedByDefaultAsIdentity().primaryKey()`;
@@ -441,7 +441,7 @@ function generateImport({
 
 	const useUUIDs =
 		options.advanced?.database?.generateId === "uuid" ||
-	 	options.advanced?.database?.generateId === "uuidv7";
+		options.advanced?.database?.generateId === "uuidv7";
 
 	coreImports.push(`${databaseType}Table`);
 	coreImports.push(

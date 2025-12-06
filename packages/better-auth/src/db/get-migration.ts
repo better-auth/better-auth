@@ -477,10 +477,13 @@ export async function getMigrations(config: BetterAuthOptions) {
 					}
 					if (useUUIDs) {
 						if (dbType === "postgres") {
-							const isUUIDv7 = config.advanced?.database?.generateId === "uuidv7";
+							const isUUIDv7 =
+								config.advanced?.database?.generateId === "uuidv7";
 							return col
 								.primaryKey()
-								.defaultTo(isUUIDv7 ? sql`uuidv7()` : sql`pg_catalog.gen_random_uuid()`)
+								.defaultTo(
+									isUUIDv7 ? sql`uuidv7()` : sql`pg_catalog.gen_random_uuid()`,
+								)
 								.notNull();
 						}
 						return col.primaryKey().notNull();
