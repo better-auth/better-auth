@@ -315,31 +315,32 @@ export const magicLink = (options: MagicLinkOptions) => {
 							? decodeURIComponent(ctx.query.errorCallbackURL)
 							: callbackURL,
 						ctx.context.baseURL,
-					).toString();
+					);
+
+					function redirectWithError(error: string): never {
+						errorCallbackURL.searchParams.set("error", error);
+						throw ctx.redirect(errorCallbackURL.toString());
+					}
+
 					const newUserCallbackURL = new URL(
 						ctx.query.newUserCallbackURL
 							? decodeURIComponent(ctx.query.newUserCallbackURL)
 							: callbackURL,
 						ctx.context.baseURL,
 					).toString();
-					const toRedirectTo = callbackURL?.startsWith("http")
-						? callbackURL
-						: callbackURL
-							? `${ctx.context.options.baseURL}${callbackURL}`
-							: ctx.context.options.baseURL;
 					const storedToken = await storeToken(ctx, token);
 					const tokenValue =
 						await ctx.context.internalAdapter.findVerificationValue(
 							storedToken,
 						);
 					if (!tokenValue) {
-						throw ctx.redirect(`${errorCallbackURL}?error=INVALID_TOKEN`);
+						redirectWithError("INVALID_TOKEN");
 					}
 					if (tokenValue.expiresAt < new Date()) {
 						await ctx.context.internalAdapter.deleteVerificationValue(
 							tokenValue.id,
 						);
-						throw ctx.redirect(`${errorCallbackURL}?error=EXPIRED_TOKEN`);
+						redirectWithError("EXPIRED_TOKEN");
 					}
 					await ctx.context.internalAdapter.deleteVerificationValue(
 						tokenValue.id,
@@ -363,14 +364,10 @@ export const magicLink = (options: MagicLinkOptions) => {
 							isNewUser = true;
 							user = newUser;
 							if (!user) {
-								throw ctx.redirect(
-									`${errorCallbackURL}?error=failed_to_create_user`,
-								);
+								redirectWithError("failed_to_create_user");
 							}
 						} else {
-							throw ctx.redirect(
-								`${errorCallbackURL}?error=new_user_signup_disabled`,
-							);
+							redirectWithError("new_user_signup_disabled");
 						}
 					}
 
@@ -385,9 +382,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 					);
 
 					if (!session) {
-						throw ctx.redirect(
-							`${errorCallbackURL}?error=failed_to_create_session`,
-						);
+						redirectWithError("failed_to_create_session");
 					}
 
 					await setSessionCookie(ctx, {
