@@ -15,5 +15,9 @@
     "@prisma/client": "^5.22.0",
     "better-auth": "workspace:*",
     "prisma": "^5.22.0"
+  },
+  "dependencies": {
+    "deepmerge": "^4.3.1",
+    "kysely": "^0.28.5"
   }
 }
