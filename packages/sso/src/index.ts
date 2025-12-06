@@ -17,6 +17,25 @@ import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "./types";
 
 export type { SAMLConfig, OIDCConfig, SSOOptions, SSOProvider };
 
+export {
+	computeDiscoveryUrl,
+	type DiscoverOIDCConfigParams,
+	DiscoveryError,
+	type DiscoveryErrorCode,
+	discoverOIDCConfig,
+	fetchDiscoveryDocument,
+	type HydratedOIDCConfig,
+	needsRuntimeDiscovery,
+	normalizeDiscoveryUrls,
+	normalizeUrl,
+	type OIDCDiscoveryDocument,
+	REQUIRED_DISCOVERY_FIELDS,
+	type RequiredDiscoveryField,
+	selectTokenEndpointAuthMethod,
+	validateDiscoveryDocument,
+	validateDiscoveryUrl,
+} from "./oidc";
+
 const fastValidator = {
 	async validate(xml: string) {
 		const isValid = XMLValidator.validate(xml, {
