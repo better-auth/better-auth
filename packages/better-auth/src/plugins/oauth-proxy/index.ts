@@ -156,7 +156,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 							`${errorURL}?error=OAuthProxy - Invalid payload structure`,
 						);
 					}
-	
+
 					const now = Date.now();
 					const age = (now - payload.timestamp) / 1000;
 

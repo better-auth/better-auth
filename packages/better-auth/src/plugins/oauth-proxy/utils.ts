@@ -50,7 +50,6 @@ export function checkSkipProxy(
 		return false;
 	}
 
-
 	const currentURL = ctx.request?.url || getVendorBaseURL();
 	if (!currentURL) {
 		return false;
