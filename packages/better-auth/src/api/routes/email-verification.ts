@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { safeJSONParse } from "@better-auth/core/utils";
 import { APIError } from "better-call";
 import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
@@ -7,7 +8,6 @@ import { generateRandomString } from "../../crypto";
 import type { User } from "../../types";
 import { originCheck } from "../middlewares";
 import { getSessionFromCtx } from "./session";
-import { safeJSONParse } from "@better-auth/core/utils";
 
 export async function createEmailVerificationToken(
 	ctx: GenericEndpointContext,
