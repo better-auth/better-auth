@@ -33,14 +33,14 @@ export async function consentEndpoint(
 	// Consent not accepted (ensure it's strictly boolean true)
 	const accepted = ctx.body.accept === true;
 	if (!accepted) {
-		return ctx.json({
+		return {
 			redirect_uri: formatErrorURL(
 				query.get("redirect_uri") ?? "",
 				"access_denied",
 				"User denied access",
 				query.get("state") ?? undefined,
 			),
-		});
+		};
 	}
 
 	// Consent accepted
@@ -114,7 +114,7 @@ export async function consentEndpoint(
 			? query.set("prompt", prompts.join(" "))
 			: query.delete("prompt");
 	}
-	ctx.context.post_login = true;
+	ctx.context.postLogin = true;
 	ctx.query = Object.fromEntries(query);
 	const { url } = await authorizeEndpoint(ctx, opts);
 	return {

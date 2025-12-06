@@ -5,8 +5,8 @@ import type { JWSAlgorithms } from "better-auth/plugins/jwt";
  */
 export type GrantType =
 	| "authorization_code"
-	// | "implicit" // NEVER SUPPORT - depreciated in oAuth2.1
-	// | "password" // NEVER SUPPORT - depreciated in oAuth2.1
+	// | "implicit" // NEVER SUPPORT - deprecated in oAuth2.1
+	// | "password" // NEVER SUPPORT - deprecated in oAuth2.1
 	| "client_credentials"
 	| "refresh_token";
 // | "urn:ietf:params:oauth:grant-type:device_code"  // specified in oAuth2.1 but not yet implemented

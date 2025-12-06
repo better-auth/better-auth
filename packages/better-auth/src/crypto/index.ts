@@ -40,22 +40,6 @@ export const symmetricDecrypt = async ({
 	return new TextDecoder().decode(chacha.decrypt(dataAsBytes));
 };
 
-export function timingSafeEqual(
-	a: string | Buffer,
-	b: string | Buffer,
-): boolean {
-	const bufA = typeof a === "string" ? Buffer.from(a, "utf8") : a;
-	const bufB = typeof b === "string" ? Buffer.from(b, "utf8") : b;
-	if (bufA.length !== bufB.length) {
-		return false;
-	}
-	let result = 0;
-	for (let i = 0; i < bufA.length; i++) {
-		result |= bufA[i]! ^ bufB[i]!;
-	}
-	return result === 0;
-}
-
 export const getCryptoKey = async (secret: string | BufferSource) => {
 	const secretBuf =
 		typeof secret === "string" ? new TextEncoder().encode(secret) : secret;

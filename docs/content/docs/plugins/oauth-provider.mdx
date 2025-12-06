@@ -152,7 +152,7 @@ const authClient = createAuthClient({
 
 ## Usage
 
-The plugin operates as an OAuth 2.1 server with OIDC compatable endpoints and JWT verifiable access tokens. The following provides more detailed information about each endpoint.
+The plugin operates as an OAuth 2.1 server with OIDC compatible endpoints and JWT verifiable access tokens. The following provides more detailed information about each endpoint.
 
 
 ### OAuth Clients
@@ -171,7 +171,7 @@ type getOAuthClient = {
   /**
    * The OAuth client's client_id
    */
-  client_id: boolean,
+  client_id: string,
 }
 ```
 </APIMethod>
@@ -186,7 +186,7 @@ type getOAuthClientPublic = {
   /**
    * The OAuth client's client_id
    */
-  client_id: boolean,
+  client_id: string,
 }
 ```
 </APIMethod>
@@ -235,7 +235,7 @@ type updateOAuthClient = {
   /**
    * The OAuth client's client_id
    */
-  client_id: boolean,
+  client_id: string,
   /**
    * The fields to update
    */
@@ -276,7 +276,7 @@ type rotateClientSecret = {
   /**
    * The OAuth client's client_id
    */
-  client_id: boolean,
+  client_id: string,
 }
 ```
 </APIMethod>
@@ -291,7 +291,7 @@ type deleteOAuthClient = {
   /**
    * The OAuth client's client_id
    */
-  client_id: boolean,
+  client_id: string,
 }
 ```
 </APIMethod>
@@ -835,10 +835,10 @@ For first-party applications and internal services, you can cache trusted client
 oauthProvider({
   loginPage: "/sign-in",
   // List of clientIds of the clients
-  cachedTrustedClients: new Set[
+  cachedTrustedClients: new Set([
     "internal-dashboard",
     "mobile-app",
-  ],
+  ]),
 })
 ```
 
@@ -1750,7 +1750,7 @@ Option 2 (more complex):
 ```
 
 
-### From [MCP Plugin](/docs/plugins/oidc-provider)
+### From [MCP Plugin](/docs/plugins/mcp)
 
 The MCP endpoints moved from `/mcp` to the `/oauth2` equivalent.
 

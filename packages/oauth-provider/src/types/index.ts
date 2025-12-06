@@ -351,14 +351,14 @@ export interface OAuthOptions<
 	 * - "hashed" - The client secret is hashed using the `hash` function.
 	 * - {
 	 * 	hash: (clientSecret: string) => Awaitable<string>,
-	 * 	verify?: (clientSecret: string) => Awaitable<boolean>
+	 * 	verify?: (clientSecret: string, storedHash: string) => Awaitable<boolean>
 	 * } - A function that hashes the client secret.
 	 *
 	 * When disableJwtPlugin = true:
 	 * - "encrypted" - The client secret is encrypted using the `encrypt` function.
 	 * - {
 	 * 	encrypt: (clientSecret: string) => Awaitable<string>,
-	 * 	decrypt: (clientSecret: string) => Awaitable<string>
+	 * 	decrypt: (storedSecret: string) => Awaitable<string>
 	 * } - A function that encrypts and decrypts the client secret.
 	 *
 	 * @default
@@ -369,11 +369,14 @@ export interface OAuthOptions<
 		| "encrypted"
 		| {
 				hash: (clientSecret: string) => Awaitable<string>;
-				verify?: (clientSecret: string) => Awaitable<boolean>;
+				verify?: (
+					clientSecret: string,
+					storedHash: string,
+				) => Awaitable<boolean>;
 		  }
 		| {
 				encrypt: (clientSecret: string) => Awaitable<string>;
-				decrypt: (clientSecret: string) => Awaitable<string>;
+				decrypt: (storedSecret: string) => Awaitable<string>;
 		  };
 	/**
 	 * Storage method of opaque access tokens and refresh tokens on your database.

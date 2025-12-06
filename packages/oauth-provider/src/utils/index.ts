@@ -3,9 +3,9 @@ import { BetterAuthError } from "@better-auth/core/error";
 import { base64, base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import {
+	constantTimeEqual,
 	symmetricDecrypt,
 	symmetricEncrypt,
-	timingSafeEqual,
 } from "better-auth/crypto";
 import type { jwt } from "better-auth/plugins/jwt";
 import type { Auth } from "better-auth/types";
@@ -156,18 +156,21 @@ async function verifyStoredClientSecret(
 			: undefined;
 		return (
 			!!hashedClientSecret &&
-			timingSafeEqual(hashedClientSecret, storedClientSecret)
+			constantTimeEqual(hashedClientSecret, storedClientSecret)
 		);
 	} else if (typeof storageMethod === "object" && "hash" in storageMethod) {
 		if (storageMethod.verify) {
-			return !!clientSecret && (await storageMethod.verify(clientSecret));
+			return (
+				!!clientSecret &&
+				(await storageMethod.verify(clientSecret, storedClientSecret))
+			);
 		} else {
 			const hashedClientSecret = clientSecret
 				? await storageMethod.hash(clientSecret)
 				: undefined;
 			return (
 				!!hashedClientSecret &&
-				timingSafeEqual(hashedClientSecret, storedClientSecret)
+				constantTimeEqual(hashedClientSecret, storedClientSecret)
 			);
 		}
 	} else if (
@@ -180,7 +183,7 @@ async function verifyStoredClientSecret(
 			storedClientSecret,
 		);
 		return (
-			!!clientSecret && timingSafeEqual(decryptedClientSecret, clientSecret)
+			!!clientSecret && constantTimeEqual(decryptedClientSecret, clientSecret)
 		);
 	}
 
@@ -253,11 +256,11 @@ export async function getStoredToken(
 	type: StoreTokenType,
 ) {
 	if (storageMethod === "hashed") {
-		const hashedClientSecret = await defaultHasher(token);
-		return hashedClientSecret;
+		const hashedToken = await defaultHasher(token);
+		return hashedToken;
 	} else if (typeof storageMethod === "object" && "hash" in storageMethod) {
-		const hashedClientSecret = await storageMethod.hash(token, type);
-		return hashedClientSecret;
+		const hashedToken = await storageMethod.hash(token, type);
+		return hashedToken;
 	}
 
 	throw new BetterAuthError(

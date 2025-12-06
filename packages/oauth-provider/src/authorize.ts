@@ -2,8 +2,8 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { getSessionFromCtx } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
+import { parsePrompt } from "better-auth/plugins/oidc-provider";
 import { APIError } from "better-call";
-import { parsePrompt } from "../../better-auth/src/plugins/oidc-provider/utils/prompt";
 import type {
 	OAuthAuthorizationQuery,
 	OAuthConsent,
@@ -33,10 +33,10 @@ export function formatErrorURL(
 export const handleRedirect = (ctx: GenericEndpointContext, uri: string) => {
 	const acceptJson = ctx.headers?.get("accept")?.includes("application/json");
 	if (acceptJson) {
-		return ctx.json({
+		return {
 			redirect: true,
 			url: uri.toString(),
-		});
+		};
 	} else {
 		throw ctx.redirect(uri);
 	}
@@ -214,7 +214,7 @@ export async function authorizeEndpoint(
 		}
 	}
 
-	if (!ctx.context.post_login && opts.postLogin) {
+	if (!ctx.context.postLogin && opts.postLogin) {
 		const postLoginRedirect = await opts.postLogin.shouldRedirect({
 			headers: ctx.request.headers,
 			user: session.user,

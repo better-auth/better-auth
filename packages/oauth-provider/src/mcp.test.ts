@@ -288,6 +288,7 @@ describe("mcp - server-client flows", async () => {
 					res.statusCode = 500;
 					res.end(JSON.stringify(String(error)));
 				}
+				return;
 			}
 		}
 	}

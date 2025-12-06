@@ -14,21 +14,30 @@ export function SelectAccountBtn({ session }: { session: Partial<Session> }) {
 			className="w-full gap-2 h-12"
 			variant="outline"
 			onClick={async () => {
-				if (!session.session?.token) {
-					toast.error("No session");
-					return;
-				}
-				await client.multiSession.setActive({
-					sessionToken: session.session.token,
-				});
-				const { data } = await client.oauth2.continue({
-					selected: true,
-				});
-				if (data?.redirect_uri) {
+				try {
+					if (!session.session?.token) {
+						toast.error("No session");
+						return;
+					}
+					const { data: active, error: activeError } =
+						await client.multiSession.setActive({
+							sessionToken: session.session.token,
+						});
+					if (activeError || !active?.session) {
+						toast.error(activeError?.message ?? "Failed to set active session");
+						return;
+					}
+					const { data, error } = await client.oauth2.continue({
+						selected: true,
+					});
+					if (error || !active?.session || !data.redirect_uri) {
+						toast.error(error?.message ?? "Failed to continue");
+						return;
+					}
 					window.location.href = data.redirect_uri;
-					return;
+				} catch (error) {
+					toast.error(String(error));
 				}
-				toast.error("Failed to continue");
 			}}
 		>
 			<Avatar className="mr-2 h-5 w-5">

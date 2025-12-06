@@ -34,15 +34,16 @@ export default async function AuthorizePage({
 }: AuthorizePageProps) {
 
 	const { redirect_uri, scope, client_id, cancel_uri } = await searchParams;
+	const _headers = await headers();
 	const [session, clientDetails] = await Promise.all([
-		await auth.api.getSession({
-			headers: await headers(),
+		auth.api.getSession({
+			headers: _headers,
 		}),
-		await auth.api.getOAuthClientPublic({
+		auth.api.getOAuthClientPublic({
 			query: {
 				client_id,
 			},
-			headers: await headers(),
+			headers: _headers,
 		}),
 	]).catch((e) => {
 		throw redirect("/sign-in");
@@ -50,7 +51,7 @@ export default async function AuthorizePage({
 
 	const organization = session?.session?.activeOrganizationId
 		? await auth.api.getFullOrganization({
-				headers: await headers(),
+				headers: _headers,
 			})
 		: undefined;
 

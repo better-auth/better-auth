@@ -84,8 +84,8 @@ export async function userInfoEndpoint(
 		opts.customUserInfoClaims && scopes?.length
 			? await opts.customUserInfoClaims({ user, scopes, jwt })
 			: {};
-	return ctx.json({
+	return {
 		...baseUserClaims,
 		...additionalInfoUserClaims,
-	});
+	};
 }

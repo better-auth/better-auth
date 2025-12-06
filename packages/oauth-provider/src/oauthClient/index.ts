@@ -104,11 +104,11 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 											},
 											client_uri: {
 												type: "string",
-												description: "Name of the OAuth2 application",
+												description: "URI of the OAuth2 application",
 											},
 											logo_uri: {
 												type: "string",
-												description: "Icon URL for the application",
+												description: "Icon URI for the application",
 											},
 											contacts: {
 												type: "array",
@@ -150,8 +150,7 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 											},
 											token_endpoint_auth_method: {
 												type: "string",
-												description:
-													"Requested authentication method for the token endpoint",
+												description: "Response types the client may use",
 												enum: [
 													"none",
 													"client_secret_basic",
@@ -301,11 +300,11 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 											},
 											client_uri: {
 												type: "string",
-												description: "Name of the OAuth2 application",
+												description: "URI of the OAuth2 application",
 											},
 											logo_uri: {
 												type: "string",
-												description: "Icon URL for the application",
+												description: "Icon URI for the application",
 											},
 											contacts: {
 												type: "array",
@@ -347,8 +346,7 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 											},
 											token_endpoint_auth_method: {
 												type: "string",
-												description:
-													"Requested authentication method for the token endpoint",
+												description: "Response types the client may use",
 												enum: [
 													"none",
 													"client_secret_basic",

@@ -2,11 +2,10 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { generateCodeChallenge } from "better-auth/oauth2";
+import { signJWT, toExpJWT } from "better-auth/plugins/jwt";
 import type { Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import { SignJWT } from "jose";
-import { signJWT } from "../../better-auth/src/plugins/jwt/sign";
-import { toExpJWT } from "../../better-auth/src/plugins/jwt/utils";
 import type {
 	OAuthOptions,
 	OAuthRefreshToken,
@@ -324,7 +323,12 @@ async function checkResource(
 	scopes: string[],
 ) {
 	let resource: string | string[] | undefined = ctx.body.resource;
-	const audience = typeof resource === "string" ? [resource] : resource;
+	const audience =
+		typeof resource === "string"
+			? [resource]
+			: resource
+				? [...resource]
+				: undefined;
 	if (audience) {
 		// Adds /userinfo to audience
 		if (scopes.includes("openid")) {
