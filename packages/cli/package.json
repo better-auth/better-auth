@@ -4,6 +4,7 @@
   "type": "module",
   "description": "The CLI for Better Auth",
   "module": "dist/index.mjs",
+  "types": "dist/index.d.mts",
   "repository": {
     "type": "git",
     "url": "https://github.com/better-auth/better-auth",
