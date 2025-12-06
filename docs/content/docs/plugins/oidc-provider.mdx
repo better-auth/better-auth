@@ -96,6 +96,7 @@ To register a new OIDC client, use the `oauth2.register` method on the client or
 type registerOAuthApplication = {
     /**
      * A list of redirect URIs. 
+     * Supports wildcard patterns in the host part (e.g., `https://*.example.com/callback`).
      */
     redirect_uris: string[] = ["https://client.example.com/callback"]
     /**
@@ -172,6 +173,10 @@ This endpoint supports [RFC7591](https://datatracker.ietf.org/doc/html/rfc7591) 
 
 Once the application is created, you will receive a `client_id` and `client_secret` that you can display to the user.
 
+<Callout type="info">
+**Wildcard Redirect URIs**: You can use wildcard patterns in redirect URIs to match multiple subdomains. For example, `https://*.example.com/callback` will match `https://app.example.com/callback`, `https://api.example.com/callback`, etc. Wildcards are only supported in the host part of the URL (not in the path or protocol).
+</Callout>
+
 ### Trusted Clients
 
 For first-party applications and internal services, you can configure trusted clients directly in your OIDC provider configuration. Trusted clients bypass database lookups for better performance and can optionally skip consent screens for improved user experience.
@@ -190,7 +195,10 @@ const auth = betterAuth({
                 clientSecret: "secure-secret-here",
                 name: "Internal Dashboard",
                 type: "web",
-                redirectURLs: ["https://dashboard.company.com/auth/callback"],
+                redirectURLs: [
+                    "https://dashboard.company.com/auth/callback",
+                    "https://*.company.com/auth/callback" // Wildcard pattern for subdomains
+                ],
                 disabled: false,
                 skipConsent: true, // Skip consent for this trusted client
                 metadata: { internal: true }

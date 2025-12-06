@@ -982,6 +982,56 @@ describe("oidc", async () => {
 			});
 		});
 
+		it("should accept wildcard post_logout_redirect_uri", async ({
+			expect,
+		}) => {
+			// Register client with wildcard redirect URI
+			const wildcardClient = await serverClient.oauth2.register({
+				client_name: "wildcard-logout-test",
+				redirect_uris: ["https://*.example.com/callback"],
+			});
+
+			expect(wildcardClient.data).toBeDefined();
+			if (!wildcardClient.data) return;
+
+			// Logout with matching subdomain
+			const response = await serverClient.$fetch(
+				`/oauth2/endsession?client_id=${wildcardClient.data.client_id}&post_logout_redirect_uri=${encodeURIComponent("https://app.example.com/callback")}`,
+				{
+					method: "GET",
+				},
+			);
+			expect(response.data).toMatchObject({
+				success: true,
+				message: "Logout successful",
+			});
+		});
+
+		it("should reject non-matching wildcard post_logout_redirect_uri", async ({
+			expect,
+		}) => {
+			// Register client with wildcard redirect URI
+			const wildcardClient = await serverClient.oauth2.register({
+				client_name: "wildcard-logout-reject",
+				redirect_uris: ["https://*.example.com/callback"],
+			});
+
+			expect(wildcardClient.data).toBeDefined();
+			if (!wildcardClient.data) return;
+
+			// Try logout with non-matching domain
+			const response = await serverClient.$fetch(
+				`/oauth2/endsession?client_id=${wildcardClient.data.client_id}&post_logout_redirect_uri=${encodeURIComponent("https://app.other.com/callback")}`,
+				{
+					method: "GET",
+				},
+			);
+			expect(response.error).toMatchObject({
+				error: "invalid_request",
+				error_description: expect.stringContaining("not registered"),
+			});
+		});
+
 		it("should support POST method", async ({ expect }) => {
 			const response = await serverClient.$fetch("/oauth2/endsession", {
 				method: "POST",
@@ -990,6 +1040,385 @@ describe("oidc", async () => {
 				success: true,
 				message: "Logout successful",
 			});
+		});
+	});
+
+	describe("wildcard redirect URIs", () => {
+		it("should accept wildcard redirect URI in authorization flow", async ({
+			expect,
+		}) => {
+			// Register client with wildcard redirect URI
+			const wildcardClient = await serverClient.oauth2.register({
+				client_name: "wildcard-test",
+				redirect_uris: ["https://*.example.com/callback"],
+			});
+
+			expect(wildcardClient.data).toBeDefined();
+			if (!wildcardClient.data) return;
+
+			// Try to authorize with a matching subdomain
+			const authUrl = new URL(
+				"http://localhost:3000/api/auth/oauth2/authorize",
+			);
+			authUrl.searchParams.set("client_id", wildcardClient.data.client_id);
+			authUrl.searchParams.set(
+				"redirect_uri",
+				"https://app.example.com/callback",
+			);
+			authUrl.searchParams.set("response_type", "code");
+			authUrl.searchParams.set("scope", "openid profile email");
+			authUrl.searchParams.set("state", "test-state");
+			authUrl.searchParams.set("code_challenge", "test-challenge");
+			authUrl.searchParams.set("code_challenge_method", "S256");
+
+			let redirectURI = "";
+			await serverClient.$fetch(authUrl.toString(), {
+				method: "GET",
+				onError(context) {
+					redirectURI = context.response.headers.get("Location") || "";
+				},
+			});
+
+			// Should redirect to consent or callback (not error)
+			expect(redirectURI).not.toContain("error=invalid");
+			expect(redirectURI).toContain("https://app.example.com/callback");
+		});
+
+		it("should reject non-matching redirect URI with wildcard pattern", async ({
+			expect,
+		}) => {
+			// Register client with wildcard redirect URI
+			const wildcardClient = await serverClient.oauth2.register({
+				client_name: "wildcard-test-reject",
+				redirect_uris: ["https://*.example.com/callback"],
+			});
+
+			expect(wildcardClient.data).toBeDefined();
+			if (!wildcardClient.data) return;
+
+			// Try to authorize with a non-matching domain
+			const authUrl = new URL(
+				"http://localhost:3000/api/auth/oauth2/authorize",
+			);
+			authUrl.searchParams.set("client_id", wildcardClient.data.client_id);
+			authUrl.searchParams.set(
+				"redirect_uri",
+				"https://app.other.com/callback",
+			);
+			authUrl.searchParams.set("response_type", "code");
+			authUrl.searchParams.set("scope", "openid profile email");
+			authUrl.searchParams.set("state", "test-state");
+			authUrl.searchParams.set("code_challenge", "test-challenge");
+			authUrl.searchParams.set("code_challenge_method", "S256");
+
+			let errorThrown = false;
+			try {
+				await serverClient.$fetch(authUrl.toString(), {
+					method: "GET",
+					throw: true,
+				});
+			} catch (error: any) {
+				errorThrown = true;
+				expect(error.status).toBe(400);
+				expect(error.body?.message).toContain("Invalid redirect URI");
+			}
+			expect(errorThrown).toBe(true);
+		});
+
+		it("should complete full OAuth flow with wildcard redirect URI", async ({
+			expect,
+		}) => {
+			// Register client with wildcard redirect URI
+			const wildcardClient = await serverClient.oauth2.register({
+				client_name: "wildcard-full-flow",
+				redirect_uris: ["https://*.example.com/callback"],
+			});
+
+			expect(wildcardClient.data).toBeDefined();
+			if (!wildcardClient.data) return;
+
+			// Authorize with matching subdomain
+			const authUrl = new URL(
+				"http://localhost:3000/api/auth/oauth2/authorize",
+			);
+			authUrl.searchParams.set("client_id", wildcardClient.data.client_id);
+			authUrl.searchParams.set(
+				"redirect_uri",
+				"https://api.example.com/callback",
+			);
+			authUrl.searchParams.set("response_type", "code");
+			authUrl.searchParams.set("scope", "openid profile email");
+			authUrl.searchParams.set("state", "test-state");
+			authUrl.searchParams.set("code_challenge", "test-challenge");
+			authUrl.searchParams.set("code_challenge_method", "S256");
+
+			let redirectURI = "";
+			const consentHeaders = new Headers(headers);
+			await serverClient.$fetch(authUrl.toString(), {
+				method: "GET",
+				onError(context) {
+					redirectURI = context.response.headers.get("Location") || "";
+					// Copy any Set-Cookie headers to consentHeaders
+					const setCookie = context.response.headers.get("Set-Cookie");
+					if (setCookie) {
+						consentHeaders.set("Cookie", setCookie);
+					}
+				},
+			});
+
+			// Handle consent if needed
+			redirectURI = await handleConsentFlow(
+				redirectURI,
+				serverClient,
+				headers,
+				consentHeaders,
+			);
+
+			// Extract authorization code
+			expect(redirectURI).toContain("https://api.example.com/callback");
+			expect(redirectURI).toContain("code=");
+			const codeMatch = redirectURI.match(/code=([^&]+)/);
+			expect(codeMatch).toBeDefined();
+			if (!codeMatch) return;
+
+			const code = codeMatch[1];
+
+			// Exchange code for token with matching redirect URI
+			const tokenResponse = await customFetchImpl(
+				"http://localhost:3000/api/auth/oauth2/token",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({
+						grant_type: "authorization_code",
+						code,
+						redirect_uri: "https://api.example.com/callback",
+						client_id: wildcardClient.data.client_id,
+						client_secret: wildcardClient.data.client_secret,
+						code_verifier: "test-challenge",
+					}),
+				},
+			);
+
+			const tokenData = await tokenResponse.json();
+			expect(tokenData).toBeDefined();
+			expect(tokenData.access_token).toBeDefined();
+		});
+
+		it("should reject token exchange with non-matching redirect URI", async ({
+			expect,
+		}) => {
+			// Register client with wildcard redirect URI
+			const wildcardClient = await serverClient.oauth2.register({
+				client_name: "wildcard-token-reject",
+				redirect_uris: ["https://*.example.com/callback"],
+			});
+
+			expect(wildcardClient.data).toBeDefined();
+			if (!wildcardClient.data) return;
+
+			// Authorize with matching subdomain
+			const authUrl = new URL(
+				"http://localhost:3000/api/auth/oauth2/authorize",
+			);
+			authUrl.searchParams.set("client_id", wildcardClient.data.client_id);
+			authUrl.searchParams.set(
+				"redirect_uri",
+				"https://app.example.com/callback",
+			);
+			authUrl.searchParams.set("response_type", "code");
+			authUrl.searchParams.set("scope", "openid profile email");
+			authUrl.searchParams.set("state", "test-state");
+			authUrl.searchParams.set("code_challenge", "test-challenge");
+			authUrl.searchParams.set("code_challenge_method", "S256");
+
+			let redirectURI = "";
+			const consentHeaders = new Headers(headers);
+			await serverClient.$fetch(authUrl.toString(), {
+				method: "GET",
+				onError(context) {
+					redirectURI = context.response.headers.get("Location") || "";
+					// Copy any Set-Cookie headers to consentHeaders
+					const setCookie = context.response.headers.get("Set-Cookie");
+					if (setCookie) {
+						consentHeaders.set("Cookie", setCookie);
+					}
+				},
+			});
+
+			// Handle consent if needed
+			redirectURI = await handleConsentFlow(
+				redirectURI,
+				serverClient,
+				headers,
+				consentHeaders,
+			);
+
+			// Extract authorization code
+			const codeMatch = redirectURI.match(/code=([^&]+)/);
+			expect(codeMatch).toBeDefined();
+			if (!codeMatch) return;
+
+			const code = codeMatch[1];
+
+			// Try to exchange code with different redirect URI (should fail)
+			const tokenResponse = await customFetchImpl(
+				"http://localhost:3000/api/auth/oauth2/token",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({
+						grant_type: "authorization_code",
+						code,
+						redirect_uri: "https://app.other.com/callback", // Different domain
+						client_id: wildcardClient.data.client_id,
+						client_secret: wildcardClient.data.client_secret,
+						code_verifier: "test-challenge",
+					}),
+				},
+			);
+
+			const tokenData = await tokenResponse.json();
+			expect(tokenResponse.status).toBe(401);
+			expect(tokenData.error_description).toContain("invalid redirect_uri");
+		});
+
+		it("should work with multiple wildcard patterns", async ({ expect }) => {
+			// Register client with multiple wildcard redirect URIs
+			const multiWildcardClient = await serverClient.oauth2.register({
+				client_name: "multi-wildcard",
+				redirect_uris: [
+					"https://*.example.com/callback",
+					"https://*.test.com/oauth/callback",
+					"https://exact.example.com/callback", // Also allow exact match
+				],
+			});
+
+			expect(multiWildcardClient.data).toBeDefined();
+			if (!multiWildcardClient.data) return;
+
+			// Test first wildcard pattern
+			const authUrl1 = new URL(
+				"http://localhost:3000/api/auth/oauth2/authorize",
+			);
+			authUrl1.searchParams.set(
+				"client_id",
+				multiWildcardClient.data.client_id,
+			);
+			authUrl1.searchParams.set(
+				"redirect_uri",
+				"https://app.example.com/callback",
+			);
+			authUrl1.searchParams.set("response_type", "code");
+			authUrl1.searchParams.set("scope", "openid");
+			authUrl1.searchParams.set("state", "test");
+			authUrl1.searchParams.set("code_challenge", "test");
+			authUrl1.searchParams.set("code_challenge_method", "S256");
+
+			let redirectURI1 = "";
+			await serverClient.$fetch(authUrl1.toString(), {
+				method: "GET",
+				onError(context) {
+					redirectURI1 = context.response.headers.get("Location") || "";
+				},
+			});
+
+			expect(redirectURI1).toContain("https://app.example.com/callback");
+
+			// Test second wildcard pattern
+			const authUrl2 = new URL(
+				"http://localhost:3000/api/auth/oauth2/authorize",
+			);
+			authUrl2.searchParams.set(
+				"client_id",
+				multiWildcardClient.data.client_id,
+			);
+			authUrl2.searchParams.set(
+				"redirect_uri",
+				"https://api.test.com/oauth/callback",
+			);
+			authUrl2.searchParams.set("response_type", "code");
+			authUrl2.searchParams.set("scope", "openid");
+			authUrl2.searchParams.set("state", "test");
+			authUrl2.searchParams.set("code_challenge", "test");
+			authUrl2.searchParams.set("code_challenge_method", "S256");
+
+			let redirectURI2 = "";
+			await serverClient.$fetch(authUrl2.toString(), {
+				method: "GET",
+				onError(context) {
+					redirectURI2 = context.response.headers.get("Location") || "";
+				},
+			});
+
+			expect(redirectURI2).toContain("https://api.test.com/oauth/callback");
+
+			// Test exact match
+			const authUrl3 = new URL(
+				"http://localhost:3000/api/auth/oauth2/authorize",
+			);
+			authUrl3.searchParams.set(
+				"client_id",
+				multiWildcardClient.data.client_id,
+			);
+			authUrl3.searchParams.set(
+				"redirect_uri",
+				"https://exact.example.com/callback",
+			);
+			authUrl3.searchParams.set("response_type", "code");
+			authUrl3.searchParams.set("scope", "openid");
+			authUrl3.searchParams.set("state", "test");
+			authUrl3.searchParams.set("code_challenge", "test");
+			authUrl3.searchParams.set("code_challenge_method", "S256");
+
+			let redirectURI3 = "";
+			await serverClient.$fetch(authUrl3.toString(), {
+				method: "GET",
+				onError(context) {
+					redirectURI3 = context.response.headers.get("Location") || "";
+				},
+			});
+
+			expect(redirectURI3).toContain("https://exact.example.com/callback");
+		});
+
+		it("should maintain backward compatibility with exact matches", async ({
+			expect,
+		}) => {
+			// Register client with exact redirect URI (no wildcard)
+			const exactClient = await serverClient.oauth2.register({
+				client_name: "exact-match-test",
+				redirect_uris: ["https://example.com/callback"],
+			});
+
+			expect(exactClient.data).toBeDefined();
+			if (!exactClient.data) return;
+
+			// Should work with exact match
+			const authUrl = new URL(
+				"http://localhost:3000/api/auth/oauth2/authorize",
+			);
+			authUrl.searchParams.set("client_id", exactClient.data.client_id);
+			authUrl.searchParams.set("redirect_uri", "https://example.com/callback");
+			authUrl.searchParams.set("response_type", "code");
+			authUrl.searchParams.set("scope", "openid");
+			authUrl.searchParams.set("state", "test");
+			authUrl.searchParams.set("code_challenge", "test");
+			authUrl.searchParams.set("code_challenge_method", "S256");
+
+			let redirectURI = "";
+			await serverClient.$fetch(authUrl.toString(), {
+				method: "GET",
+				onError(context) {
+					redirectURI = context.response.headers.get("Location") || "";
+				},
+			});
+
+			expect(redirectURI).toContain("https://example.com/callback");
 		});
 	});
 });
