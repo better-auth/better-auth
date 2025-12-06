@@ -288,7 +288,7 @@ export const verifyEmail = createAuthEndpoint(
 		if (!token) {
 			return redirectOnError("invalid_token");
 		}
-		if (token.expiresAt > new Date()) {
+		if (token.expiresAt < new Date()) {
 			return redirectOnError("token_expired");
 		}
 
