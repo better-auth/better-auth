@@ -28,6 +28,10 @@
     "test": {
       "dependsOn": ["build"]
     },
+    "coverage": {
+      "dependsOn": ["build"],
+      "outputs": ["coverage"]
+    },
     "e2e:smoke": {
       "dependsOn": ["build"]
     },
