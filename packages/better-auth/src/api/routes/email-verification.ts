@@ -7,6 +7,7 @@ import { generateRandomString } from "../../crypto";
 import type { User } from "../../types";
 import { originCheck } from "../middlewares";
 import { getSessionFromCtx } from "./session";
+import { safeJSONParse } from "@better-auth/core/utils";
 
 export async function createEmailVerificationToken(
 	ctx: GenericEndpointContext,
@@ -288,17 +289,19 @@ export const verifyEmail = createAuthEndpoint(
 		if (!token) {
 			return redirectOnError("invalid_token");
 		}
+		await ctx.context.internalAdapter.deleteVerificationValue(
+			`email-verification:${token.id}`,
+		);
 		if (token.expiresAt < new Date()) {
 			return redirectOnError("token_expired");
 		}
-		await ctx.context.internalAdapter.deleteVerificationValue(token.id);
 
 		const schema = z.object({
 			email: z.email(),
 			updateTo: z.string().optional(),
 			requestType: z.string().optional(),
 		});
-		const parsed = schema.parse(JSON.parse(token.value));
+		const parsed = schema.parse(safeJSONParse(token.value));
 		const user = await ctx.context.internalAdapter.findUserByEmail(
 			parsed.email,
 		);
