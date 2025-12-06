@@ -30,7 +30,7 @@ export function SelectAccountBtn({ session }: { session: Partial<Session> }) {
 					const { data, error } = await client.oauth2.continue({
 						selected: true,
 					});
-					if (error || !active?.session || !data.redirect_uri) {
+					if (error || !active?.session || !data?.redirect_uri) {
 						toast.error(error?.message ?? "Failed to continue");
 						return;
 					}

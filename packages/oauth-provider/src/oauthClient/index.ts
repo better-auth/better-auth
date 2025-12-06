@@ -150,7 +150,8 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 											},
 											token_endpoint_auth_method: {
 												type: "string",
-												description: "Response types the client may use",
+												description:
+													"Requested authentication method for the token endpoint",
 												enum: [
 													"none",
 													"client_secret_basic",
