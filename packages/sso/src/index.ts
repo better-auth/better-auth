@@ -1,6 +1,14 @@
 import type { BetterAuthPlugin } from "better-auth";
 import { XMLValidator } from "fast-xml-parser";
 import * as saml from "samlify";
+import type {
+	AuthnRequestRecord,
+	AuthnRequestStore,
+} from "./authn-request-store";
+import {
+	createInMemoryAuthnRequestStore,
+	DEFAULT_AUTHN_REQUEST_TTL_MS,
+} from "./authn-request-store";
 import {
 	requestDomainVerification,
 	verifyDomain,
@@ -16,6 +24,8 @@ import {
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "./types";
 
 export type { SAMLConfig, OIDCConfig, SSOOptions, SSOProvider };
+export type { AuthnRequestStore, AuthnRequestRecord };
+export { createInMemoryAuthnRequestStore, DEFAULT_AUTHN_REQUEST_TTL_MS };
 
 const fastValidator = {
 	async validate(xml: string) {
@@ -71,19 +81,35 @@ export function sso<O extends SSOOptions>(
 };
 
 export function sso<O extends SSOOptions>(options?: O | undefined): any {
+	const shouldEnableValidation =
+		options?.saml?.authnRequestStore ||
+		options?.saml?.enableInResponseToValidation;
+
+	const authnRequestStore = shouldEnableValidation
+		? (options?.saml?.authnRequestStore ?? createInMemoryAuthnRequestStore())
+		: undefined;
+
+	const optionsWithStore = {
+		...options,
+		saml: {
+			...options?.saml,
+			authnRequestStore,
+		},
+	} as O;
+
 	let endpoints = {
 		spMetadata: spMetadata(),
-		registerSSOProvider: registerSSOProvider(options as O),
-		signInSSO: signInSSO(options as O),
-		callbackSSO: callbackSSO(options as O),
-		callbackSSOSAML: callbackSSOSAML(options as O),
-		acsEndpoint: acsEndpoint(options as O),
+		registerSSOProvider: registerSSOProvider(optionsWithStore),
+		signInSSO: signInSSO(optionsWithStore),
+		callbackSSO: callbackSSO(optionsWithStore),
+		callbackSSOSAML: callbackSSOSAML(optionsWithStore),
+		acsEndpoint: acsEndpoint(optionsWithStore),
 	};
 
 	if (options?.domainVerification?.enabled) {
 		const domainVerificationEndpoints = {
-			requestDomainVerification: requestDomainVerification(options as O),
-			verifyDomain: verifyDomain(options as O),
+			requestDomainVerification: requestDomainVerification(optionsWithStore),
+			verifyDomain: verifyDomain(optionsWithStore),
 		};
 
 		endpoints = {

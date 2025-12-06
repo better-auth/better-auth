@@ -1,4 +1,5 @@
 import type { OAuth2Tokens, User } from "better-auth";
+import type { AuthnRequestStore } from "./authn-request-store";
 
 export interface OIDCMapping {
 	id?: string | undefined;
@@ -252,5 +253,48 @@ export interface SSOOptions {
 		 * @default "better-auth-token-"
 		 */
 		tokenPrefix?: string;
+	};
+	/**
+	 * SAML security options for AuthnRequest/InResponseTo validation.
+	 * This prevents unsolicited responses, replay attacks, and cross-provider injection.
+	 */
+	saml?: {
+		/**
+		 * Enable InResponseTo validation for SP-initiated SAML flows.
+		 * When enabled, AuthnRequest IDs are tracked and validated against SAML responses.
+		 *
+		 * ⚠️ For multi-instance deployments, you MUST provide a custom `authnRequestStore`
+		 * (e.g., Redis-backed) when enabling this feature. The default in-memory store
+		 * only works for single-instance deployments.
+		 *
+		 * @default false
+		 */
+		enableInResponseToValidation?: boolean;
+		/**
+		 * Allow IdP-initiated SSO (unsolicited SAML responses).
+		 * When true, responses without InResponseTo are accepted.
+		 * When false, all responses must correlate to a stored AuthnRequest.
+		 *
+		 * Only applies when InResponseTo validation is enabled.
+		 *
+		 * @default true
+		 */
+		allowIdpInitiated?: boolean;
+		/**
+		 * TTL for AuthnRequest records in milliseconds.
+		 * Requests older than this will be rejected.
+		 *
+		 * Only applies when InResponseTo validation is enabled.
+		 *
+		 * @default 300000 (5 minutes)
+		 */
+		requestTTL?: number;
+		/**
+		 * Custom AuthnRequest store implementation.
+		 * Use this to provide a Redis-backed store for multi-instance deployments.
+		 *
+		 * Providing a custom store automatically enables InResponseTo validation.
+		 */
+		authnRequestStore?: AuthnRequestStore;
 	};
 }
