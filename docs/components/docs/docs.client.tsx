@@ -1,7 +1,9 @@
 "use client";
 
-import { SidebarTrigger } from "fumadocs-core/sidebar";
-import { useSidebar } from "fumadocs-ui/provider";
+import {
+	SidebarTrigger,
+	useSidebar,
+} from "fumadocs-ui/components/sidebar/base";
 import { Menu, X } from "lucide-react";
 import type { ButtonHTMLAttributes, HTMLAttributes } from "react";
 import { cn } from "../../lib/utils";
