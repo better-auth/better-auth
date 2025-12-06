@@ -9,6 +9,7 @@ import { setSessionCookie } from "../../cookies";
 import { parseUserInput } from "../../db";
 import { parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput, InferUser, User } from "../../types";
+import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
 
 const signUpEmailBodySchema = z.record(z.string(), z.any());
@@ -19,8 +20,13 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 		{
 			method: "POST",
 			operationId: "signUpWithEmailAndPassword",
-			body: signUpEmailBodySchema,
+			use: [formCsrfMiddleware],
+			body: z.record(z.string(), z.any()),
 			metadata: {
+				allowedMediaTypes: [
+					"application/x-www-form-urlencoded",
+					"application/json",
+				],
 				$Infer: {
 					body: {} as {
 						name: string;
