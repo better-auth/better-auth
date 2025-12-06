@@ -5,6 +5,7 @@ import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
 import { setCookieCache, setSessionCookie } from "../../cookies";
 import { generateRandomString, symmetricDecrypt } from "../../crypto";
+import { parseUserInput } from "../../db";
 import { getDate } from "../../utils/date";
 import { storeOTP, verifyStoredOTP } from "./otp-token";
 import type { EmailOTPOptions } from "./types";
@@ -610,6 +611,14 @@ const signInEmailOTPBodySchema = z.object({
 		required: true,
 		description: "OTP sent to the email",
 	}),
+	signupData: z
+		.record(
+			z.string().meta({
+				description: "Field name must be a string",
+			}),
+			z.any(),
+		)
+		.optional(),
 });
 
 /**
@@ -637,6 +646,31 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				openapi: {
 					operationId: "signInWithEmailOTP",
 					description: "Sign in with email and OTP",
+					requestBody: {
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										email: {
+											type: "string",
+											description: "Email address to sign-in",
+										},
+										otp: {
+											type: "string",
+											description: "OTP sent to the email",
+										},
+										signupData: {
+											type: "object",
+											description:
+												"Additional properties to use during automatic signup",
+										},
+									},
+									required: ["otp", "email"],
+								},
+							},
+						},
+					},
 					responses: {
 						200: {
 							description: "Success",
@@ -664,6 +698,12 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			},
 		},
 		async (ctx) => {
+			const body = ctx.body as {
+				email: string;
+				otp: string;
+				[key: string]: any;
+			};
+			const { otp, signupData } = body;
 			const email = ctx.body.email.toLowerCase();
 			const verificationValue =
 				await ctx.context.internalAdapter.findVerificationValue(
@@ -689,7 +729,7 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 					message: ERROR_CODES.TOO_MANY_ATTEMPTS,
 				});
 			}
-			const verified = await verifyStoredOTP(ctx, opts, otpValue, ctx.body.otp);
+			const verified = await verifyStoredOTP(ctx, opts, otpValue, otp);
 			if (!verified) {
 				await ctx.context.internalAdapter.updateVerificationValue(
 					verificationValue.id,
@@ -711,10 +751,17 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 						message: BASE_ERROR_CODES.USER_NOT_FOUND,
 					});
 				}
+				const additionalFields = parseUserInput(
+					ctx.context.options,
+					signupData,
+					"create",
+				);
 				const newUser = await ctx.context.internalAdapter.createUser({
 					email,
 					emailVerified: true,
-					name: "",
+					name: signupData?.name ?? "",
+					image: signupData?.image ?? "",
+					...additionalFields,
 				});
 				const session = await ctx.context.internalAdapter.createSession(
 					newUser.id,
