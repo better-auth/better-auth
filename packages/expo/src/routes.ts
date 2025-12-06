@@ -1,3 +1,4 @@
+import { HIDE_METADATA } from "better-auth";
 import { APIError, createAuthEndpoint } from "better-auth/api";
 import * as z from "zod";
 
@@ -8,9 +9,7 @@ export const expoAuthorizationProxy = createAuthEndpoint(
 		query: z.object({
 			authorizationURL: z.string(),
 		}),
-		metadata: {
-			isAction: false,
-		},
+		metadata: HIDE_METADATA,
 	},
 	async (ctx) => {
 		const { authorizationURL } = ctx.query;

@@ -233,13 +233,9 @@ export function verifyApiKey({
 	): void;
 }) {
 	return createAuthEndpoint(
-		"/api-key/verify",
 		{
 			method: "POST",
 			body: verifyApiKeyBodySchema,
-			metadata: {
-				SERVER_ONLY: true,
-			},
 		},
 		async (ctx) => {
 			const { key } = ctx.body;

@@ -81,7 +81,6 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 	const twoFactorTable = "twoFactor";
 
 	const generateTOTP = createAuthEndpoint(
-		"/totp/generate",
 		{
 			method: "POST",
 			body: generateTOTPBodySchema,
@@ -107,7 +106,6 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 						},
 					},
 				},
-				SERVER_ONLY: true,
 			},
 		},
 		async (ctx) => {

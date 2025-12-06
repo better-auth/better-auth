@@ -233,9 +233,7 @@ export const mcp = (options: MCPOptions) => {
 				"/.well-known/oauth-authorization-server",
 				{
 					method: "GET",
-					metadata: {
-						...HIDE_METADATA,
-					},
+					metadata: HIDE_METADATA,
 				},
 				async (c) => {
 					try {
@@ -251,9 +249,7 @@ export const mcp = (options: MCPOptions) => {
 				"/.well-known/oauth-protected-resource",
 				{
 					method: "GET",
-					metadata: {
-						...HIDE_METADATA,
-					},
+					metadata: HIDE_METADATA,
 				},
 				async (c) => {
 					const metadata = getMCPProtectedResourceMetadata(c, options);
@@ -296,7 +292,7 @@ export const mcp = (options: MCPOptions) => {
 					method: "POST",
 					body: mcpOAuthTokenBodySchema,
 					metadata: {
-						isAction: false,
+						...HIDE_METADATA,
 						allowedMediaTypes: [
 							"application/x-www-form-urlencoded",
 							"application/json",

@@ -1,5 +1,6 @@
 import { base64Url } from "@better-auth/utils/base64";
 import type { Account, DBAdapter, User } from "better-auth";
+import { HIDE_METADATA } from "better-auth";
 import { APIError, sessionMiddleware } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import type { Member } from "better-auth/plugins";
@@ -179,7 +180,7 @@ export const createSCIMUser = (authMiddleware: AuthMiddleware) =>
 			method: "POST",
 			body: APIUserSchema,
 			metadata: {
-				isAction: false,
+				...HIDE_METADATA,
 				allowedMediaTypes: supportedMediaTypes,
 				openapi: {
 					summary: "Create SCIM user.",
@@ -309,7 +310,7 @@ export const updateSCIMUser = (authMiddleware: AuthMiddleware) =>
 			method: "PUT",
 			body: APIUserSchema,
 			metadata: {
-				isAction: false,
+				...HIDE_METADATA,
 				allowedMediaTypes: supportedMediaTypes,
 				openapi: {
 					summary: "Update SCIM user.",
@@ -396,7 +397,7 @@ export const listSCIMUsers = (authMiddleware: AuthMiddleware) =>
 			method: "GET",
 			query: listSCIMUsersQuerySchema,
 			metadata: {
-				isAction: false,
+				...HIDE_METADATA,
 				allowedMediaTypes: supportedMediaTypes,
 				openapi: {
 					summary: "List SCIM users",
@@ -482,7 +483,7 @@ export const getSCIMUser = (authMiddleware: AuthMiddleware) =>
 		{
 			method: "GET",
 			metadata: {
-				isAction: false,
+				...HIDE_METADATA,
 				allowedMediaTypes: supportedMediaTypes,
 				openapi: {
 					summary: "Get SCIM user details",
@@ -549,7 +550,7 @@ export const patchSCIMUser = (authMiddleware: AuthMiddleware) =>
 			method: "PATCH",
 			body: patchSCIMUserBodySchema,
 			metadata: {
-				isAction: false,
+				...HIDE_METADATA,
 				allowedMediaTypes: supportedMediaTypes,
 				openapi: {
 					summary: "Patch SCIM user",
@@ -621,7 +622,7 @@ export const deleteSCIMUser = (authMiddleware: AuthMiddleware) =>
 		{
 			method: "DELETE",
 			metadata: {
-				isAction: false,
+				...HIDE_METADATA,
 				allowedMediaTypes: supportedMediaTypes,
 				openapi: {
 					summary: "Delete SCIM user",
@@ -666,7 +667,7 @@ export const getSCIMServiceProviderConfig = createAuthEndpoint(
 	{
 		method: "GET",
 		metadata: {
-			isAction: false,
+			...HIDE_METADATA,
 			allowedMediaTypes: supportedMediaTypes,
 			openapi: {
 				summary: "SCIM Service Provider Configuration",
@@ -717,7 +718,7 @@ export const getSCIMSchemas = createAuthEndpoint(
 	{
 		method: "GET",
 		metadata: {
-			isAction: false,
+			...HIDE_METADATA,
 			allowedMediaTypes: supportedMediaTypes,
 			openapi: {
 				summary: "SCIM Service Provider Configuration Schemas",
@@ -764,7 +765,7 @@ export const getSCIMSchema = createAuthEndpoint(
 	{
 		method: "GET",
 		metadata: {
-			isAction: false,
+			...HIDE_METADATA,
 			allowedMediaTypes: supportedMediaTypes,
 			openapi: {
 				summary: "SCIM a Service Provider Configuration Schema",
@@ -810,7 +811,7 @@ export const getSCIMResourceTypes = createAuthEndpoint(
 	{
 		method: "GET",
 		metadata: {
-			isAction: false,
+			...HIDE_METADATA,
 			allowedMediaTypes: supportedMediaTypes,
 			openapi: {
 				summary: "SCIM Service Provider Supported Resource Types",
@@ -865,7 +866,7 @@ export const getSCIMResourceType = createAuthEndpoint(
 	{
 		method: "GET",
 		metadata: {
-			isAction: false,
+			...HIDE_METADATA,
 			allowedMediaTypes: supportedMediaTypes,
 			openapi: {
 				summary: "SCIM Service Provider Supported Resource Type",
