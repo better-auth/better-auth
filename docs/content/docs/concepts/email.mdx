@@ -8,8 +8,11 @@ Email is a key part of Better Auth, required for all users regardless of their a
 
 ## Email Verification
 
-Email verification is a security feature that ensures users provide a valid email address. It helps prevent spam and abuse by confirming that the email address belongs to the user. In this guide, you'll get a walk through of how to implement token based email verification in your app.
-To use otp based email verification, check out the [OTP Verification](/docs/plugins/email-otp) guide.
+Email verification is a security feature that ensures users provide a valid email address. It helps prevent spam and abuse by confirming that the email address belongs to the user. Better Auth supports multiple email verification methods:
+
+- **Link-based verification**: Users click a link in their email (token-based)
+- **OTP-based verification**: Users enter a one-time code (see [Email OTP Plugin](/docs/plugins/email-otp))
+- **Link + OTP verification**: Send both a link and OTP in the same email for flexible user experience
 
 ### Adding Email Verification to Your App
 
@@ -19,8 +22,11 @@ To enable email verification, you need to pass a function that sends a verificat
   - `user`: The user object containing the email address.
   - `url`: The verification URL the user must click to verify their email.
   - `token`: The verification token used to complete the email verification to be used when implementing a custom verification URL.
+  - `otp` (optional): A one-time password code when `includeOTP` is enabled.
 
 and a `request` object as the second parameter.
+
+#### Link-only Verification (Default)
 
 ```ts title="auth.ts"
 import { betterAuth } from 'better-auth';
@@ -39,11 +45,60 @@ export const auth = betterAuth({
 })
 ```
 
+#### Link + OTP Verification
+
+You can enable OTP alongside the verification link to provide users with two verification methods in the same email. Simply set `includeOTP: true`:
+
+```ts title="auth.ts"
+import { betterAuth } from 'better-auth';
+import { sendEmail } from './email'; // your email sending function
+
+export const auth = betterAuth({
+    emailVerification: {
+        includeOTP: true,  // 👈 That's it!
+        sendVerificationEmail: async ({ user, url, otp }) => {
+            void sendEmail({
+                to: user.email,
+                subject: 'Verify your email address',
+                html: `
+                    <h1>Verify Your Email</h1>
+                    <p>Click the button to verify instantly:</p>
+                    <a href="${url}" style="padding: 12px 24px; background: #0070f3; color: white;">
+                        Verify Email
+                    </a>
+                    
+                    <p>Or enter this code: <strong>${otp}</strong></p>
+                `
+            })
+        }
+    }
+})
+```
+
+That's it! Now your users can choose:
+- **Click the link** (instant verification)
+- **Enter the code** `${otp}` (6-digit code by default)
+
+Both methods work until expiration (1 hour by default).
+
+<Callout type="info">
+This is different from the [Email OTP Plugin](/docs/plugins/email-otp) which provides **OTP-only** authentication. Use `includeOTP` when you want to provide **both** link and OTP in the same email for better user experience.
+</Callout>
+
+**Optional Configuration:**
+
+```ts
+emailVerification: {
+    includeOTP: true,
+    otpLength: 8,      // Custom OTP length (default: 6)
+    expiresIn: 7200,   // 2 hours (default: 3600)
+}
+```
+
 <Callout type="warn">
   Avoid awaiting the email sending to prevent 
   timing attacks. On serverless platforms, use `waitUntil` or similar to ensure the email is sent.
 </Callout>
-
 ### Triggering Email Verification
 
 You can initiate email verification in several ways:
@@ -125,6 +180,10 @@ await authClient.sendVerificationEmail({
 
 ### Verifying the Email
 
+Better Auth supports multiple verification methods:
+
+#### 1. Via Link (Default)
+
 If the user clicks the provided verification URL, their email is automatically verified, and they are redirected to the `callbackURL`.
 
 For manual verification, you can send the user a custom link with the `token` and call the `verifyEmail` function.
@@ -136,6 +195,73 @@ await authClient.verifyEmail({
     }
 })
 ```
+
+#### 2. Via OTP (When `includeOTP` is enabled)
+
+When users receive the email with an OTP code, they can enter it on a verification page. Here's a complete example:
+
+```tsx title="verify-email-otp.tsx"
+"use client";
+
+import { useState } from "react";
+import { authClient } from "@/lib/auth-client";
+import { useRouter } from "next/navigation";
+
+export default function VerifyEmailWithOTP() {
+  const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
+  const [error, setError] = useState("");
+  const [isVerifying, setIsVerifying] = useState(false);
+  const router = useRouter();
+
+  const handleVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsVerifying(true);
+    setError("");
+
+    const { data, error: verifyError } = await authClient.verifyEmail.otp({
+      email,
+      otp,
+    });
+
+    if (verifyError) {
+      setError(verifyError.message || "Invalid OTP");
+      setIsVerifying(false);
+    } else {
+      // Email verified successfully! If autoSignInAfterVerification is enabled, the session is updated.
+      router.push("/dashboard");
+    }
+  };
+
+  return (
+    <form onSubmit={handleVerify}>
+      <input
+        type="email"
+        placeholder="Email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        required
+      />
+      <input
+        type="text"
+        placeholder="Enter 6-digit code"
+        value={otp}
+        onChange={(e) => setOtp(e.target.value)}
+        maxLength={6}
+        required
+      />
+      <button type="submit" disabled={isVerifying}>
+        {isVerifying ? "Verifying..." : "Verify Email"}
+      </button>
+      {error && <p>{error}</p>}
+    </form>
+  );
+}
+```
+
+After successful verification:
+- The user's `emailVerified` status is updated to `true`
+- If `autoSignInAfterVerification` is enabled, the user is automatically signed in and the session is updated on the client
 
 ### Auto Sign In After Verification
 

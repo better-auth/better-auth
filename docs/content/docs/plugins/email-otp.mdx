@@ -5,6 +5,20 @@ description: Email OTP plugin for Better Auth.
 
 The Email OTP plugin allows user to sign in, verify their email, or reset their password using a one-time password (OTP) sent to their email address.
 
+<Callout type="info">
+**Link + OTP vs OTP-only**
+
+This plugin provides **OTP-only** authentication and verification. If you want to send **both a link and OTP** in the same email for email verification, use the built-in `includeOTP` option instead. See [Email Verification with Link + OTP](/docs/concepts/email#link--otp-verification).
+
+Choose this plugin when:
+- You want passwordless authentication using only OTP
+- You want OTP-only email verification
+- You need OTP for password reset
+
+Choose `includeOTP` when:
+- You want to provide both link and OTP options for email verification
+- You want to maintain traditional link-based verification with OTP as an alternative
+</Callout>
 
 ## Installation
 
