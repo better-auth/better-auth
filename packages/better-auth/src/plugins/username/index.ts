@@ -212,6 +212,14 @@ export const username = (options?: UsernameOptions | undefined) => {
 													user: {
 														$ref: "#/components/schemas/User",
 													},
+													redirect: {
+														type: "boolean",
+														description: "Whether to redirect the user",
+													},
+													url: {
+														type: "string",
+														description: "The URL to redirect to",
+													},
 												},
 												required: ["token", "user"],
 											},
@@ -397,6 +405,8 @@ export const username = (options?: UsernameOptions | undefined) => {
 						ctx.body.rememberMe === false,
 					);
 					return ctx.json({
+						redirect: !!ctx.body.callbackURL,
+						url: ctx.body.callbackURL,
 						token: session.token,
 						user: {
 							id: user.id,
