@@ -267,12 +267,12 @@ export const router = <Option extends BetterAuthOptions>(
 		async onRequest(req) {
 			//handle disabled paths
 			const disabledPaths = ctx.options.disabledPaths || [];
-			const pathname = new URL(req.url).pathname;
+			const pathname = new URL(req.url).pathname.replace(/\/+$/, "") || "/";
 			const normalizedPath =
 				basePath === "/"
 					? pathname
 					: pathname.startsWith(basePath)
-						? pathname.slice(basePath.length) || "/"
+						? pathname.slice(basePath.length).replace(/\/+$/, "") || "/"
 						: pathname;
 			if (disabledPaths.includes(normalizedPath)) {
 				return new Response("Not Found", { status: 404 });
