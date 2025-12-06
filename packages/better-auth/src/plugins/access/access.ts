@@ -86,3 +86,7 @@ export function createAccessControl<const TStatements extends Statements>(
 		statements: s,
 	};
 }
+
+export function normalizeRoleName(name: string) {
+	return name.toLowerCase();
+}

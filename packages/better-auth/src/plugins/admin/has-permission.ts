@@ -1,40 +1,72 @@
+import type { GenericEndpointContext } from "@better-auth/core";
+import * as z from "zod";
+import { APIError } from "../../api";
+import type { Role } from "../access";
 import { defaultRoles } from "./access";
-import type { AdminOptions } from "./types";
+import type { HasPermissionBaseInput } from "./permission";
+import { cacheAllRoles, hasPermissionFn } from "./permission";
+import type { UserRole } from "./schema";
 
-type PermissionExclusive =
-	| {
-			/**
-			 * @deprecated Use `permissions` instead
-			 */
-			permission: { [key: string]: string[] };
-			permissions?: never | undefined;
-	  }
-	| {
-			permissions: { [key: string]: string[] };
-			permission?: never | undefined;
-	  };
-
-export const hasPermission = (
+export const hasPermission = async (
 	input: {
-		userId?: string | undefined;
-		role?: string | undefined;
-		options?: AdminOptions | undefined;
-	} & PermissionExclusive,
+		userId: string;
+		/**
+		 * If true, will use the in-memory cache of the roles.
+		 * Keep in mind to use this in a stateless mindset, the purpose of this is to avoid unnecessary database calls when running multiple
+		 * hasPermission calls in a row.
+		 *
+		 * @default false
+		 */
+		useMemoryCache?: boolean | undefined;
+	} & HasPermissionBaseInput,
+	ctx: GenericEndpointContext,
 ) => {
-	if (input.userId && input.options?.adminUserIds?.includes(input.userId)) {
-		return true;
-	}
-	if (!input.permissions && !input.permission) {
-		return false;
-	}
-	const roles = (input.role || input.options?.defaultRole || "user").split(",");
-	const acRoles = input.options?.roles || defaultRoles;
-	for (const role of roles) {
-		const _role = acRoles[role as keyof typeof acRoles];
-		const result = _role?.authorize(input.permission ?? input.permissions);
-		if (result?.success) {
-			return true;
+	let acRoles: {
+		[x: string]: Role<any> | undefined;
+	} = { ...(input.options?.roles || defaultRoles) };
+
+	if (
+		ctx &&
+		input.userId &&
+		input.options?.dynamicAccessControl?.enabled &&
+		input.options.ac &&
+		!input.useMemoryCache
+	) {
+		// Load roles from database
+		const roles = await ctx.context.adapter.findMany<
+			UserRole & { permission: string }
+		>({
+			model: "role",
+		});
+
+		for (const { role, permission: permissionsString } of roles) {
+			// If it's for an existing role, skip as we shouldn't override hard-coded roles.
+			if (role in acRoles) continue;
+
+			const result = z
+				.record(z.string(), z.array(z.string()))
+				.safeParse(JSON.parse(permissionsString));
+
+			if (!result.success) {
+				ctx.context.logger.error(
+					"[hasPermission] Invalid permissions for role " + role,
+					{
+						permissions: JSON.parse(permissionsString),
+					},
+				);
+				throw new APIError("INTERNAL_SERVER_ERROR", {
+					message: "Invalid permissions for role " + role,
+				});
+			}
+
+			acRoles[role] = input.options.ac.newRole(result.data);
 		}
 	}
-	return false;
+
+	if (input.useMemoryCache) {
+		acRoles = cacheAllRoles.get(input.userId) || acRoles;
+	}
+	cacheAllRoles.set(input.userId, acRoles);
+
+	return hasPermissionFn(input, acRoles);
 };

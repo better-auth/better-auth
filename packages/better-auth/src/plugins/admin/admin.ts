@@ -1,7 +1,7 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import { APIError } from "../../api";
-import { mergeSchema } from "../../db/schema";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import {
@@ -21,7 +21,13 @@ import {
 	unbanUser,
 	userHasPermission,
 } from "./routes";
-import { schema } from "./schema";
+import {
+	createRole,
+	deleteRole,
+	getRole,
+	listRoles,
+	updateRole,
+} from "./routes/crud-access-control";
 import type {
 	AdminOptions,
 	SessionWithImpersonatedBy,
@@ -36,6 +42,31 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 			options?.bannedUserMessage ??
 			"You have been banned from this application. Please contact support if you believe this is an error.",
 		...options,
+	};
+	const baseEndpoints = {
+		setRole: setRole(opts),
+		getUser: getUser(opts),
+		createUser: createUser(opts),
+		adminUpdateUser: adminUpdateUser(opts),
+		listUsers: listUsers(opts),
+		listUserSessions: listUserSessions(opts),
+		unbanUser: unbanUser(opts),
+		banUser: banUser(opts),
+		impersonateUser: impersonateUser(opts),
+		stopImpersonating: stopImpersonating(),
+		revokeUserSession: revokeUserSession(opts),
+		revokeUserSessions: revokeUserSessions(opts),
+		removeUser: removeUser(opts),
+		setUserPassword: setUserPassword(opts),
+		userHasPermission: userHasPermission(opts as O),
+	};
+
+	const dynamicAccessControlEndpoints = {
+		createRole: createRole<O>(opts as O),
+		deleteRole: deleteRole<O>(opts as O),
+		listRoles: listRoles<O>(opts as O),
+		getRole: getRole<O>(opts as O),
+		updateRole: updateRole<O>(opts as O),
 	};
 
 	return {
@@ -130,24 +161,84 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 			],
 		},
 		endpoints: {
-			setRole: setRole(opts),
-			getUser: getUser(opts),
-			createUser: createUser(opts),
-			adminUpdateUser: adminUpdateUser(opts),
-			listUsers: listUsers(opts),
-			listUserSessions: listUserSessions(opts),
-			unbanUser: unbanUser(opts),
-			banUser: banUser(opts),
-			impersonateUser: impersonateUser(opts),
-			stopImpersonating: stopImpersonating(),
-			revokeUserSession: revokeUserSession(opts),
-			revokeUserSessions: revokeUserSessions(opts),
-			removeUser: removeUser(opts),
-			setUserPassword: setUserPassword(opts),
-			userHasPermission: userHasPermission(opts as O),
-		},
+			...baseEndpoints,
+			...(options?.dynamicAccessControl ? dynamicAccessControlEndpoints : {}),
+		} as typeof baseEndpoints &
+			(O extends { dynamicAccessControl: { enabled: true } }
+				? typeof dynamicAccessControlEndpoints
+				: {}),
 		$ERROR_CODES: ADMIN_ERROR_CODES,
-		schema: mergeSchema(schema, opts.schema),
+		schema: {
+			user: {
+				fields: {
+					role: {
+						type: "string",
+						required: false,
+						input: false,
+						fieldName: opts.schema?.user?.fields?.role,
+					},
+					banned: {
+						type: "boolean",
+						defaultValue: false,
+						required: false,
+						input: false,
+						fieldName: opts.schema?.user?.fields?.banned,
+					},
+					banReason: {
+						type: "string",
+						required: false,
+						input: false,
+						fieldName: opts.schema?.user?.fields?.banReason,
+					},
+					banExpires: {
+						type: "date",
+						required: false,
+						input: false,
+						fieldName: opts.schema?.user?.fields?.banExpires,
+					},
+				},
+			},
+			session: {
+				fields: {
+					impersonatedBy: {
+						type: "string",
+						required: false,
+						fieldName: opts.schema?.session?.fields?.impersonatedBy,
+					},
+				},
+			},
+			...(opts.dynamicAccessControl?.enabled
+				? ({
+						role: {
+							modelName: opts.schema?.role?.modelName,
+							fields: {
+								role: {
+									type: "string",
+									required: true,
+									fieldName: opts.schema?.role?.fields?.role,
+								},
+								permission: {
+									type: "string",
+									required: true,
+									fieldName: opts.schema?.role?.fields?.permission,
+								},
+								createdAt: {
+									type: "date",
+									required: true,
+									defaultValue: () => new Date(),
+									fieldName: opts.schema?.role?.fields?.createdAt,
+								},
+								updatedAt: {
+									type: "date",
+									required: false,
+									fieldName: opts.schema?.role?.fields?.updatedAt,
+								},
+								...(opts.schema?.role?.additionalFields || {}),
+							},
+						},
+					} satisfies BetterAuthPluginDBSchema)
+				: {}),
+		},
 		options: options as any,
 	} satisfies BetterAuthPlugin;
 };

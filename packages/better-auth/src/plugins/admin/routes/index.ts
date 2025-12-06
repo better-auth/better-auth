@@ -1,44 +1,24 @@
-import {
-	createAuthEndpoint,
-	createAuthMiddleware,
-} from "@better-auth/core/api";
-import type { Session } from "@better-auth/core/db";
+import type { LiteralString } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import type { Where } from "@better-auth/core/db/adapter";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { APIError, getSessionFromCtx } from "../../api";
-import { deleteSessionCookie, setSessionCookie } from "../../cookies";
-import { parseUserOutput } from "../../db/schema";
-import { getDate } from "../../utils/date";
-import type { AccessControl } from "../access";
-import type { defaultStatements } from "./access";
-import { ADMIN_ERROR_CODES } from "./error-codes";
-import { hasPermission } from "./has-permission";
+import { APIError, getSessionFromCtx } from "../../../api";
+import { deleteSessionCookie, setSessionCookie } from "../../../cookies";
+import { parseUserOutput } from "../../../db/schema";
+import { getDate } from "../../../utils/date";
+import type { AccessControl } from "../../access";
+import type { defaultStatements } from "../access";
+import { adminMiddleware } from "../call";
+import { ADMIN_ERROR_CODES } from "../error-codes";
+import { hasPermission } from "../has-permission";
+import type { UserRole } from "../schema";
 import type {
 	AdminOptions,
 	InferAdminRolesFromOption,
 	SessionWithImpersonatedBy,
 	UserWithRole,
-} from "./types";
-
-/**
- * Ensures a valid session, if not will throw.
- * Will also provide additional types on the user to include role types.
- */
-const adminMiddleware = createAuthMiddleware(async (ctx) => {
-	const session = await getSessionFromCtx(ctx);
-	if (!session) {
-		throw new APIError("UNAUTHORIZED");
-	}
-	return {
-		session,
-	} as {
-		session: {
-			user: UserWithRole;
-			session: Session;
-		};
-	};
-});
+} from "../types";
 
 function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;
@@ -114,20 +94,27 @@ export const setRole = <O extends AdminOptions>(opts: O) =>
 				$Infer: {
 					body: {} as {
 						userId: string;
-						role: InferAdminRolesFromOption<O> | InferAdminRolesFromOption<O>[];
+						role:
+							| InferAdminRolesFromOption<O>
+							| InferAdminRolesFromOption<O>[]
+							| LiteralString
+							| LiteralString[];
 					},
 				},
 			},
 		},
 		async (ctx) => {
-			const canSetRole = hasPermission({
-				userId: ctx.context.session.user.id,
-				role: ctx.context.session.user.role,
-				options: opts,
-				permissions: {
-					user: ["set-role"],
+			const canSetRole = await hasPermission(
+				{
+					userId: ctx.context.session.user.id,
+					role: ctx.context.session.user.role,
+					options: opts,
+					permissions: {
+						user: ["set-role"],
+					},
 				},
-			});
+				ctx,
+			);
 			if (!canSetRole) {
 				throw new APIError("FORBIDDEN", {
 					message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CHANGE_USERS_ROLE,
@@ -138,13 +125,39 @@ export const setRole = <O extends AdminOptions>(opts: O) =>
 				const inputRoles = Array.isArray(ctx.body.role)
 					? ctx.body.role
 					: [ctx.body.role];
+				const nonExistentRoles = new Set<string>();
 				for (const role of inputRoles) {
 					if (!roles[role as keyof typeof roles]) {
-						throw new APIError("BAD_REQUEST", {
-							message:
-								ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE,
-						});
+						nonExistentRoles.add(role);
 					}
+				}
+				if (nonExistentRoles.size > 0 && opts.dynamicAccessControl?.enabled) {
+					const roles = await ctx.context.adapter.findMany<UserRole>({
+						model: "role",
+						where: [
+							{
+								field: "role",
+								value: Array.from(nonExistentRoles.values()),
+								operator: "in",
+							},
+						],
+					});
+					if (roles.length !== nonExistentRoles.size) {
+						for (const { role } of roles) {
+							nonExistentRoles.delete(role);
+						}
+					} else {
+						nonExistentRoles.clear();
+					}
+				}
+				if (nonExistentRoles.size > 0) {
+					ctx.context.logger.error("Unable to set non-existent roles", {
+						nonExistentRoles: Array.from(nonExistentRoles.values()),
+					});
+					throw new APIError("BAD_REQUEST", {
+						message:
+							ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE,
+					});
 				}
 			}
 			const updatedUser = await ctx.context.internalAdapter.updateUser(
@@ -200,14 +213,17 @@ export const getUser = (opts: AdminOptions) =>
 		async (ctx) => {
 			const { id } = ctx.query;
 
-			const canGetUser = hasPermission({
-				userId: ctx.context.session.user.id,
-				role: ctx.context.session.user.role,
-				options: opts,
-				permissions: {
-					user: ["get"],
+			const canGetUser = await hasPermission(
+				{
+					userId: ctx.context.session.user.id,
+					role: ctx.context.session.user.role,
+					options: opts,
+					permissions: {
+						user: ["get"],
+					},
 				},
-			});
+				ctx,
+			);
 
 			if (!canGetUser) {
 				throw ctx.error("FORBIDDEN", {
@@ -325,14 +341,17 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 				throw ctx.error("UNAUTHORIZED");
 			}
 			if (session) {
-				const canCreateUser = hasPermission({
-					userId: session.user.id,
-					role: session.user.role,
-					options: opts,
-					permissions: {
-						user: ["create"],
+				const canCreateUser = await hasPermission(
+					{
+						userId: session.user.id,
+						role: session.user.role,
+						options: opts,
+						permissions: {
+							user: ["create"],
+						},
 					},
-				});
+					ctx,
+				);
 				if (!canCreateUser) {
 					throw new APIError("FORBIDDEN", {
 						message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_USERS,
@@ -440,14 +459,17 @@ export const adminUpdateUser = (opts: AdminOptions) =>
 			},
 		},
 		async (ctx) => {
-			const canUpdateUser = hasPermission({
-				userId: ctx.context.session.user.id,
-				role: ctx.context.session.user.role,
-				options: opts,
-				permissions: {
-					user: ["update"],
+			const canUpdateUser = await hasPermission(
+				{
+					userId: ctx.context.session.user.id,
+					role: ctx.context.session.user.role,
+					options: opts,
+					permissions: {
+						user: ["update"],
+					},
 				},
-			});
+				ctx,
+			);
 			if (!canUpdateUser) {
 				throw ctx.error("FORBIDDEN", {
 					message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_USERS,
@@ -585,14 +607,17 @@ export const listUsers = (opts: AdminOptions) =>
 		},
 		async (ctx) => {
 			const session = ctx.context.session;
-			const canListUsers = hasPermission({
-				userId: ctx.context.session.user.id,
-				role: session.user.role,
-				options: opts,
-				permissions: {
-					user: ["list"],
+			const canListUsers = await hasPermission(
+				{
+					userId: ctx.context.session.user.id,
+					role: session.user.role,
+					options: opts,
+					permissions: {
+						user: ["list"],
+					},
 				},
-			});
+				ctx,
+			);
 			if (!canListUsers) {
 				throw new APIError("FORBIDDEN", {
 					message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_USERS,
@@ -705,14 +730,17 @@ export const listUserSessions = (opts: AdminOptions) =>
 		},
 		async (ctx) => {
 			const session = ctx.context.session;
-			const canListSessions = hasPermission({
-				userId: ctx.context.session.user.id,
-				role: session.user.role,
-				options: opts,
-				permissions: {
-					session: ["list"],
+			const canListSessions = await hasPermission(
+				{
+					userId: ctx.context.session.user.id,
+					role: session.user.role,
+					options: opts,
+					permissions: {
+						session: ["list"],
+					},
 				},
-			});
+				ctx,
+			);
 			if (!canListSessions) {
 				throw new APIError("FORBIDDEN", {
 					message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_USERS_SESSIONS,
@@ -782,14 +810,17 @@ export const unbanUser = (opts: AdminOptions) =>
 		},
 		async (ctx) => {
 			const session = ctx.context.session;
-			const canBanUser = hasPermission({
-				userId: ctx.context.session.user.id,
-				role: session.user.role,
-				options: opts,
-				permissions: {
-					user: ["ban"],
+			const canBanUser = await hasPermission(
+				{
+					userId: ctx.context.session.user.id,
+					role: session.user.role,
+					options: opts,
+					permissions: {
+						user: ["ban"],
+					},
 				},
-			});
+				ctx,
+			);
 			if (!canBanUser) {
 				throw new APIError("FORBIDDEN", {
 					message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_BAN_USERS,
@@ -884,14 +915,17 @@ export const banUser = (opts: AdminOptions) =>
 		},
 		async (ctx) => {
 			const session = ctx.context.session;
-			const canBanUser = hasPermission({
-				userId: ctx.context.session.user.id,
-				role: session.user.role,
-				options: opts,
-				permissions: {
-					user: ["ban"],
+			const canBanUser = await hasPermission(
+				{
+					userId: ctx.context.session.user.id,
+					role: session.user.role,
+					options: opts,
+					permissions: {
+						user: ["ban"],
+					},
 				},
-			});
+				ctx,
+			);
 			if (!canBanUser) {
 				throw new APIError("FORBIDDEN", {
 					message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_BAN_USERS,
@@ -991,14 +1025,17 @@ export const impersonateUser = (opts: AdminOptions) =>
 			},
 		},
 		async (ctx) => {
-			const canImpersonateUser = hasPermission({
-				userId: ctx.context.session.user.id,
-				role: ctx.context.session.user.role,
-				options: opts,
-				permissions: {
-					user: ["impersonate"],
+			const canImpersonateUser = await hasPermission(
+				{
+					userId: ctx.context.session.user.id,
+					role: ctx.context.session.user.role,
+					options: opts,
+					permissions: {
+						user: ["impersonate"],
+					},
 				},
-			});
+				ctx,
+			);
 			if (!canImpersonateUser) {
 				throw new APIError("FORBIDDEN", {
 					message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_IMPERSONATE_USERS,
@@ -1185,14 +1222,17 @@ export const revokeUserSession = (opts: AdminOptions) =>
 		},
 		async (ctx) => {
 			const session = ctx.context.session;
-			const canRevokeSession = hasPermission({
-				userId: ctx.context.session.user.id,
-				role: session.user.role,
-				options: opts,
-				permissions: {
-					session: ["revoke"],
+			const canRevokeSession = await hasPermission(
+				{
+					userId: ctx.context.session.user.id,
+					role: session.user.role,
+					options: opts,
+					permissions: {
+						session: ["revoke"],
+					},
 				},
-			});
+				ctx,
+			);
 			if (!canRevokeSession) {
 				throw new APIError("FORBIDDEN", {
 					message:
@@ -1261,14 +1301,17 @@ export const revokeUserSessions = (opts: AdminOptions) =>
 		},
 		async (ctx) => {
 			const session = ctx.context.session;
-			const canRevokeSession = hasPermission({
-				userId: ctx.context.session.user.id,
-				role: session.user.role,
-				options: opts,
-				permissions: {
-					session: ["revoke"],
+			const canRevokeSession = await hasPermission(
+				{
+					userId: ctx.context.session.user.id,
+					role: session.user.role,
+					options: opts,
+					permissions: {
+						session: ["revoke"],
+					},
 				},
-			});
+				ctx,
+			);
 			if (!canRevokeSession) {
 				throw new APIError("FORBIDDEN", {
 					message:
@@ -1339,14 +1382,17 @@ export const removeUser = (opts: AdminOptions) =>
 		},
 		async (ctx) => {
 			const session = ctx.context.session;
-			const canDeleteUser = hasPermission({
-				userId: ctx.context.session.user.id,
-				role: session.user.role,
-				options: opts,
-				permissions: {
-					user: ["delete"],
+			const canDeleteUser = await hasPermission(
+				{
+					userId: ctx.context.session.user.id,
+					role: session.user.role,
+					options: opts,
+					permissions: {
+						user: ["delete"],
+					},
 				},
-			});
+				ctx,
+			);
 			if (!canDeleteUser) {
 				throw new APIError("FORBIDDEN", {
 					message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_USERS,
@@ -1433,14 +1479,17 @@ export const setUserPassword = (opts: AdminOptions) =>
 			},
 		},
 		async (ctx) => {
-			const canSetUserPassword = hasPermission({
-				userId: ctx.context.session.user.id,
-				role: ctx.context.session.user.role,
-				options: opts,
-				permissions: {
-					user: ["set-password"],
+			const canSetUserPassword = await hasPermission(
+				{
+					userId: ctx.context.session.user.id,
+					role: ctx.context.session.user.role,
+					options: opts,
+					permissions: {
+						user: ["set-password"],
+					},
 				},
-			});
+				ctx,
+			);
 			if (!canSetUserPassword) {
 				throw new APIError("FORBIDDEN", {
 					message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_USERS_PASSWORD,
@@ -1621,12 +1670,15 @@ export const userHasPermission = <O extends AdminOptions>(opts: O) => {
 					message: "user not found",
 				});
 			}
-			const result = hasPermission({
-				userId: user.id,
-				role: user.role,
-				options: opts as AdminOptions,
-				permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
-			});
+			const result = await hasPermission(
+				{
+					userId: user.id,
+					role: user.role,
+					options: opts as AdminOptions,
+					permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
+				},
+				ctx,
+			);
 			return ctx.json({
 				error: null,
 				success: result,

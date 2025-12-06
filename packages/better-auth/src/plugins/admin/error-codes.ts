@@ -28,4 +28,16 @@ export const ADMIN_ERROR_CODES = defineErrorCodes({
 	YOU_CANNOT_REMOVE_YOURSELF: "You cannot remove yourself",
 	YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE:
 		"You are not allowed to set a non-existent role value",
+	ROLE_NOT_FOUND: "Role not found",
+	MISSING_AC_INSTANCE:
+		"Dynamic Access Control requires a pre-defined ac instance on the server auth plugin. Read server logs for more information",
+	YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE: "You are not allowed to create a role",
+	YOU_ARE_NOT_ALLOWED_TO_UPDATE_A_ROLE: "You are not allowed to update a role",
+	YOU_ARE_NOT_ALLOWED_TO_DELETE_A_ROLE: "You are not allowed to delete a role",
+	YOU_ARE_NOT_ALLOWED_TO_READ_A_ROLE: "You are not allowed to read a role",
+	YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE: "You are not allowed to list a role",
+	YOU_ARE_NOT_ALLOWED_TO_GET_A_ROLE: "You are not allowed to get a role",
+	INVALID_RESOURCE: "The provided permission includes an invalid resource",
+	ROLE_NAME_IS_ALREADY_TAKEN: "That role name is already taken",
+	CANNOT_DELETE_A_PRE_DEFINED_ROLE: "Cannot delete a pre-defined role",
 });
