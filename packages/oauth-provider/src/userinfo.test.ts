@@ -9,8 +9,9 @@ import { getTestInstance } from "better-auth/test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
-import type { MakeRequired } from "./types/helpers";
 import type { OAuthClient } from "./types/oauth";
+
+type MakeRequired<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
 
 describe("oauth userinfo", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
