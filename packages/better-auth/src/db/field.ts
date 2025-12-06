@@ -36,74 +36,80 @@ export type InferValueType<T extends DBFieldType> = T extends "string"
 							? T[number]
 							: never;
 
-export type InferFieldsOutput<Field> = Field extends Record<
-	infer Key,
-	DBFieldAttribute
->
-	? {
-			[key in Key as Field[key]["returned"] extends false
-				? never
-				: Field[key]["required"] extends false
-					? Field[key]["defaultValue"] extends boolean | string | number | Date
-						? key
-						: never
-					: key]: InferFieldOutput<Field[key]>;
-		} & {
-			[key in Key as Field[key]["returned"] extends false
-				? never
-				: Field[key]["required"] extends false
-					? Field[key]["defaultValue"] extends boolean | string | number | Date
-						? never
-						: key
-					: never]?: InferFieldOutput<Field[key]> | null;
-		}
-	: {};
-
-export type InferFieldsInput<Field> = Field extends Record<
-	infer Key,
-	DBFieldAttribute
->
-	? {
-			[key in Key as Field[key]["required"] extends false
-				? never
-				: Field[key]["defaultValue"] extends string | number | boolean | Date
+export type InferFieldsOutput<Field> =
+	Field extends Record<infer Key, DBFieldAttribute>
+		? {
+				[key in Key as Field[key]["returned"] extends false
 					? never
-					: Field[key]["input"] extends false
+					: Field[key]["required"] extends false
+						? Field[key]["defaultValue"] extends
+								| boolean
+								| string
+								| number
+								| Date
+							? key
+							: never
+						: key]: InferFieldOutput<Field[key]>;
+			} & {
+				[key in Key as Field[key]["returned"] extends false
+					? never
+					: Field[key]["required"] extends false
+						? Field[key]["defaultValue"] extends
+								| boolean
+								| string
+								| number
+								| Date
+							? never
+							: key
+						: never]?: InferFieldOutput<Field[key]> | null;
+			}
+		: {};
+
+export type InferFieldsInput<Field> =
+	Field extends Record<infer Key, DBFieldAttribute>
+		? {
+				[key in Key as Field[key]["required"] extends false
+					? never
+					: Field[key]["defaultValue"] extends string | number | boolean | Date
 						? never
-						: key]: InferFieldInput<Field[key]>;
-		} & {
-			[key in Key as Field[key]["input"] extends false ? never : key]?:
-				| InferFieldInput<Field[key]>
-				| undefined
-				| null;
-		}
-	: {};
+						: Field[key]["input"] extends false
+							? never
+							: key]: InferFieldInput<Field[key]>;
+			} & {
+				[key in Key as Field[key]["input"] extends false ? never : key]?:
+					| InferFieldInput<Field[key]>
+					| undefined
+					| null;
+			}
+		: {};
 
 /**
  * For client will add "?" on optional fields
  */
-export type InferFieldsInputClient<Field> = Field extends Record<
-	infer Key,
-	DBFieldAttribute
->
-	? {
-			[key in Key as Field[key]["required"] extends false
-				? never
-				: Field[key]["defaultValue"] extends string | number | boolean | Date
+export type InferFieldsInputClient<Field> =
+	Field extends Record<infer Key, DBFieldAttribute>
+		? {
+				[key in Key as Field[key]["required"] extends false
 					? never
-					: Field[key]["input"] extends false
-						? never
-						: key]: InferFieldInput<Field[key]>;
-		} & {
-			[key in Key as Field[key]["input"] extends false
-				? never
-				: Field[key]["required"] extends false
-					? key
 					: Field[key]["defaultValue"] extends string | number | boolean | Date
+						? never
+						: Field[key]["input"] extends false
+							? never
+							: key]: InferFieldInput<Field[key]>;
+			} & {
+				[key in Key as Field[key]["input"] extends false
+					? never
+					: Field[key]["required"] extends false
 						? key
-						: never]?: InferFieldInput<Field[key]> | undefined | null;
-		}
-	: {};
+						: Field[key]["defaultValue"] extends
+									| string
+									| number
+									| boolean
+									| Date
+							? key
+							: never]?: InferFieldInput<Field[key]> | undefined | null;
+			}
+		: {};
 
 type InferFieldOutput<T extends DBFieldAttribute> = T["returned"] extends false
 	? never

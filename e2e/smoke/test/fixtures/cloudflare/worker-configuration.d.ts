@@ -7835,25 +7835,26 @@ declare namespace Rpc {
 	// Note we use `StubBase` instead of `Stub` here to avoid circular dependencies:
 	// `Stub` depends on `Provider`, which depends on `Unstubify`, which would depend on `Stub`.
 	// prettier-ignore
-	type Unstubify<T> = T extends StubBase<infer V>
-		? V
-		: T extends Map<infer K, infer V>
-			? Map<Unstubify<K>, Unstubify<V>>
-			: T extends Set<infer V>
-				? Set<Unstubify<V>>
-				: T extends Array<infer V>
-					? Array<Unstubify<V>>
-					: T extends ReadonlyArray<infer V>
-						? ReadonlyArray<Unstubify<V>>
-						: T extends BaseType
-							? T
-							: T extends {
-										[key: string | number]: unknown;
-									}
-								? {
-										[K in keyof T]: Unstubify<T[K]>;
-									}
-								: T;
+	type Unstubify<T> =
+		T extends StubBase<infer V>
+			? V
+			: T extends Map<infer K, infer V>
+				? Map<Unstubify<K>, Unstubify<V>>
+				: T extends Set<infer V>
+					? Set<Unstubify<V>>
+					: T extends Array<infer V>
+						? Array<Unstubify<V>>
+						: T extends ReadonlyArray<infer V>
+							? ReadonlyArray<Unstubify<V>>
+							: T extends BaseType
+								? T
+								: T extends {
+											[key: string | number]: unknown;
+										}
+									? {
+											[K in keyof T]: Unstubify<T[K]>;
+										}
+									: T;
 	type UnstubifyAll<A extends any[]> = {
 		[I in keyof A]: Unstubify<A[I]>;
 	};
