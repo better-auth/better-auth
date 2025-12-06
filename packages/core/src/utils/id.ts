@@ -4,7 +4,7 @@ export const generateId = (size?: number) => {
 	return createRandomStringGenerator("a-z", "A-Z", "0-9")(size || 32);
 };
 
-export const generateUUIDv7 = (): string => {
+export const uuidv7 = (): string => {
 	// 1. Generate 16 random bytes (128 bits)
 	const value = new Uint8Array(16);
 	crypto.getRandomValues(value);

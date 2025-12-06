@@ -1,6 +1,6 @@
 import { logger } from "../../env";
 import type { BetterAuthOptions } from "../../types";
-import { generateId as defaultGenerateId, generateUUIDv7 } from "../../utils";
+import { generateId as defaultGenerateId, uuidv7 } from "../../utils";
 import type { BetterAuthDBSchema, DBFieldAttribute } from "../type";
 import { initGetDefaultModelName } from "./get-default-model-name";
 
@@ -74,7 +74,7 @@ export const initGetIdField = ({
 								return crypto.randomUUID();
 							}
 							if (generateId === "uuidv7") {
-								return generateUUIDv7();
+								return uuidv7();
 							}
 							return defaultGenerateId();
 						},
@@ -130,7 +130,7 @@ export const initGetIdField = ({
 						}
 						// if the value is not a string, and the database doesn't support generating it's own UUIDs, then we should be generating the UUID.
 						if (typeof value !== "string" && !supportsUUIDs) {
-							return isUUIDv7 ? generateUUIDv7() : crypto.randomUUID();
+							return isUUIDv7 ? uuidv7() : crypto.randomUUID();
 						}
 						return undefined;
 					}
