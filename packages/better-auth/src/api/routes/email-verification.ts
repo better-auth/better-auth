@@ -1,18 +1,15 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "better-call";
-import type { JWTPayload, JWTVerifyResult } from "jose";
-import { jwtVerify } from "jose";
-import { JWTExpired } from "jose/errors";
 import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
-import { signJWT } from "../../crypto/jwt";
+import { generateRandomString } from "../../crypto";
 import type { User } from "../../types";
 import { originCheck } from "../middlewares";
 import { getSessionFromCtx } from "./session";
 
 export async function createEmailVerificationToken(
-	secret: string,
+	ctx: GenericEndpointContext,
 	email: string,
 	/**
 	 * The email to update from
@@ -27,16 +24,17 @@ export async function createEmailVerificationToken(
 	 */
 	extraPayload?: Record<string, any>,
 ) {
-	const token = await signJWT(
-		{
+	const prefix = "email-verification:";
+	const data = await ctx.context.internalAdapter.createVerificationValue({
+		identifier: `${prefix}${generateRandomString(32, "A-Z", "a-z", "0-9")}`,
+		value: JSON.stringify({
 			email: email.toLowerCase(),
 			updateTo,
 			...extraPayload,
-		},
-		secret,
-		expiresIn,
-	);
-	return token;
+		}),
+		expiresAt: new Date(Date.now() + expiresIn * 1000),
+	});
+	return data.identifier.substring(prefix.length);
 }
 
 /**
@@ -53,7 +51,7 @@ export async function sendVerificationEmailFn(
 		});
 	}
 	const token = await createEmailVerificationToken(
-		ctx.context.secret,
+		ctx,
 		user.email,
 		undefined,
 		ctx.context.options.emailVerification?.expiresIn,
@@ -168,11 +166,15 @@ export const sendVerificationEmail = createAuthEndpoint(
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user) {
 				await createEmailVerificationToken(
-					ctx.context.secret,
+					ctx,
 					email,
 					undefined,
 					ctx.context.options.emailVerification?.expiresIn,
-				);
+				).then((token) => {
+					void ctx.context.internalAdapter.deleteVerificationByIdentifier(
+						`email-verification:${token}`,
+					);
+				});
 				//we're returning true to avoid leaking information about the user
 				return ctx.json({
 					status: true,
@@ -280,28 +282,22 @@ export const verifyEmail = createAuthEndpoint(
 				message: error,
 			});
 		}
-		const { token } = ctx.query;
-		let jwt: JWTVerifyResult<JWTPayload>;
-		try {
-			jwt = await jwtVerify(
-				token,
-				new TextEncoder().encode(ctx.context.secret),
-				{
-					algorithms: ["HS256"],
-				},
-			);
-		} catch (e) {
-			if (e instanceof JWTExpired) {
-				return redirectOnError("token_expired");
-			}
+		const token = await ctx.context.internalAdapter.findVerificationValue(
+			`email-verification:${ctx.query.token}`,
+		);
+		if (!token) {
 			return redirectOnError("invalid_token");
 		}
+		if (token.expiresAt > new Date()) {
+			return redirectOnError("token_expired");
+		}
+
 		const schema = z.object({
 			email: z.email(),
 			updateTo: z.string().optional(),
 			requestType: z.string().optional(),
 		});
-		const parsed = schema.parse(jwt.payload);
+		const parsed = schema.parse(JSON.parse(token.value));
 		const user = await ctx.context.internalAdapter.findUserByEmail(
 			parsed.email,
 		);
@@ -315,7 +311,7 @@ export const verifyEmail = createAuthEndpoint(
 			}
 			if (parsed.requestType === "change-email-confirmation") {
 				const newToken = await createEmailVerificationToken(
-					ctx.context.secret,
+					ctx,
 					parsed.email,
 					parsed.updateTo,
 					ctx.context.options.emailVerification?.expiresIn,
@@ -392,10 +388,7 @@ export const verifyEmail = createAuthEndpoint(
 				},
 			);
 
-			const newToken = await createEmailVerificationToken(
-				ctx.context.secret,
-				parsed.updateTo,
-			);
+			const newToken = await createEmailVerificationToken(ctx, parsed.updateTo);
 
 			//send verification email to the new email
 			const updateCallbackURL = ctx.query.callbackURL
