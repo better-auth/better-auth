@@ -48,6 +48,12 @@ describe("Email Verification", async () => {
 	});
 
 	it("should redirect to callback", async () => {
+		await auth.api.sendVerificationEmail({
+			body: {
+				email: testUser.email,
+			},
+		});
+
 		await client.verifyEmail(
 			{
 				query: {
