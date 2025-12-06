@@ -4,6 +4,7 @@
   "version": "1.4.5",
   "type": "module",
   "main": "dist/index.mjs",
+  "types": "dist/index.d.mts",
   "license": "MIT",
   "homepage": "https://www.better-auth.com/docs/plugins/stripe",
   "repository": {
