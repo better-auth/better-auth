@@ -9,7 +9,7 @@ export default defineConfig({
 		}
 		return { js: ".js", dts: ".d.ts" };
 	},
-	entry: ["./src/index.ts", "./src/client.ts"],
+	entry: ["./src/index.ts", "./src/client.ts", "./src/plugins/index.ts"],
 	external: [
 		"better-auth",
 		"better-call",
