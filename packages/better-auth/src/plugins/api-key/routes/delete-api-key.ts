@@ -1,7 +1,7 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import * as z from "zod";
-import { APIError, sessionMiddleware } from "../../../api";
+import { APIError, getSessionFromCtx } from "../../../api";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import {
 	deleteApiKey as deleteApiKeyFromStorage,
@@ -15,6 +15,13 @@ const deleteApiKeyBodySchema = z.object({
 	keyId: z.string().meta({
 		description: "The id of the Api Key",
 	}),
+	userId: z.coerce
+		.string()
+		.meta({
+			description:
+				'User Id of the user that the Api Key belongs to. server-only. Eg: "user-id"',
+		})
+		.optional(),
 });
 
 export function deleteApiKey({
@@ -34,7 +41,6 @@ export function deleteApiKey({
 		{
 			method: "POST",
 			body: deleteApiKeyBodySchema,
-			use: [sessionMiddleware],
 			metadata: {
 				openapi: {
 					description: "Delete an existing API key",
@@ -79,18 +85,35 @@ export function deleteApiKey({
 		},
 		async (ctx) => {
 			const { keyId } = ctx.body;
-			const session = ctx.context.session;
-			if (session.user.banned === true) {
+
+			const session = await getSessionFromCtx(ctx);
+			const authRequired = ctx.request || ctx.headers;
+			const user =
+				authRequired && !session
+					? null
+					: session?.user || { id: ctx.body.userId };
+
+			if (!user?.id) {
+				throw new APIError("UNAUTHORIZED", {
+					message: ERROR_CODES.UNAUTHORIZED_SESSION,
+				});
+			}
+
+			if (session && ctx.body.userId) {
+				throw new APIError("UNAUTHORIZED", {
+					message: ERROR_CODES.UNAUTHORIZED_SESSION,
+				});
+			}
+
+			if (session && session.user.banned === true) {
 				throw new APIError("UNAUTHORIZED", {
 					message: ERROR_CODES.USER_BANNED,
 				});
 			}
 
-			let apiKey: ApiKey | null = null;
+			const apiKey = await getApiKeyById(ctx, keyId, opts);
 
-			apiKey = await getApiKeyById(ctx, keyId, opts);
-
-			if (!apiKey || apiKey.userId !== session.user.id) {
+			if (!apiKey || apiKey.userId !== user.id) {
 				throw new APIError("NOT_FOUND", {
 					message: ERROR_CODES.KEY_NOT_FOUND,
 				});
