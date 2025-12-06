@@ -1,4 +1,4 @@
-import { uuidv7 } from "@better-auth/core/utils";
+import { randomUUIDv7 } from "@better-auth/core/utils";
 import { expect } from "vitest";
 import type { User } from "../../../../core/src/db/schema/user";
 import { createTestSuite } from "../create-test-suite";
@@ -19,7 +19,7 @@ export const uuidv7TestSuite = createTestSuite(
 		// This is here to overwrite `generateId` functions to generate UUIDv7s instead of the default.
 		// Since existing tests often use generated IDs as well as `forceAllowId` to be true, this is needed to ensure the tests pass.
 		customIdGenerator() {
-			return uuidv7();
+			return randomUUIDv7();
 		},
 	},
 	(helpers) => {
