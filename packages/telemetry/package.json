@@ -20,7 +20,7 @@
   "typesVersions": {
     "*": {
       "index": [
-        "dist/index.d.mts"
+        "./dist/index.d.mts"
       ]
     }
   },

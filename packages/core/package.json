@@ -70,37 +70,37 @@
   "typesVersions": {
     "*": {
       ".": [
-        "dist/index.d.mts"
+        "./dist/index.d.mts"
       ],
       "api": [
-        "dist/api/index.d.mts"
+        "./dist/api/index.d.mts"
       ],
       "async_hooks": [
-        "dist/async_hooks/index.d.mts"
+        "./dist/async_hooks/index.d.mts"
       ],
       "context": [
-        "dist/context/index.d.mts"
+        "./dist/context/index.d.mts"
       ],
       "env": [
-        "dist/env/index.d.mts"
+        "./dist/env/index.d.mts"
       ],
       "error": [
-        "dist/error/index.d.mts"
+        "./dist/error/index.d.mts"
       ],
       "utils": [
-        "dist/utils/index.d.mts"
+        "./dist/utils/index.d.mts"
       ],
       "social-providers": [
-        "dist/social-providers/index.d.mts"
+        "./dist/social-providers/index.d.mts"
       ],
       "db": [
-        "dist/db/index.d.mts"
+        "./dist/db/index.d.mts"
       ],
       "db/adapter": [
-        "dist/db/adapter/index.d.mts"
+        "./dist/db/adapter/index.d.mts"
       ],
       "oauth2": [
-        "dist/oauth2/index.d.mts"
+        "./dist/oauth2/index.d.mts"
       ]
     }
   },
