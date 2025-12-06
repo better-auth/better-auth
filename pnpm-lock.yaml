@@ -1084,6 +1084,9 @@ importers:
       jose:
         specifier: ^6.1.0
         version: 6.1.0
+      kysely:
+        specifier: ^0.28.5
+        version: 0.28.5
       ms:
         specifier: 4.0.0-nightly.202508271359
         version: 4.0.0-nightly.202508271359
@@ -1130,9 +1133,6 @@ importers:
       happy-dom:
         specifier: ^20.0.10
         version: 20.0.10
-      kysely:
-        specifier: ^0.28.5
-        version: 0.28.5
       listhen:
         specifier: ^1.9.0
         version: 1.9.0
@@ -1475,6 +1475,10 @@ importers:
         version: 0.17.0(oxc-resolver@11.15.0)(publint@0.3.15)(synckit@0.11.11)(typescript@5.9.3)
 
   packages/prisma-adapter:
+    dependencies:
+      '@prisma/client':
+        specifier: ^5.0.0
+        version: 5.22.0(prisma@5.22.0)
     devDependencies:
       '@better-auth/core':
         specifier: workspace:*
@@ -1482,9 +1486,6 @@ importers:
       '@better-auth/utils':
         specifier: ^0.3.0
         version: 0.3.0
-      '@prisma/client':
-        specifier: ^5.0.0
-        version: 5.22.0(prisma@5.22.0)
       prisma:
         specifier: ^5.0.0
         version: 5.22.0
@@ -18889,7 +18890,9 @@ snapshots:
       metro-runtime: 0.83.3
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
     optional: true
 
   '@react-native/normalize-colors@0.74.89': {}
