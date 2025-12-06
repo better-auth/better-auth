@@ -3,6 +3,7 @@
 import { Command } from "commander";
 import { init } from "./commands/init";
 import { getPackageJson } from "./utils/get-package-json";
+import { generateSecret } from "./commands/secret";
 
 const program = new Command("auth");
 
@@ -13,6 +14,7 @@ program.version(cliVersion);
 program.description("Better Auth CLI");
 
 program.addCommand(init);
+program.addCommand(generateSecret);
 
 program.parse();
 
