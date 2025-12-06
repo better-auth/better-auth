@@ -319,3 +319,5 @@ export const inferOrgAdditionalFields = <
 		: undefined;
 	return {} as undefined extends S ? Schema : S;
 };
+
+export type * from "./schema";
