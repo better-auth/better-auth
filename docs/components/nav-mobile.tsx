@@ -56,16 +56,15 @@ export const NavbarMobileBtn: React.FC = () => {
 	const { toggleNavbar } = useNavbarMobile();
 
 	return (
-		<div className="flex items-center">
-			<button
-				className="overflow-hidden px-2.5 block navbar:hidden"
-				onClick={() => {
-					toggleNavbar();
-				}}
-			>
-				<Menu className="size-5" />
-			</button>
-		</div>
+		<button
+			aria-label="Toggle navigation menu"
+			className="flex items-center justify-center size-8 navbar:hidden"
+			onClick={() => {
+				toggleNavbar();
+			}}
+		>
+			<Menu className="size-5" />
+		</button>
 	);
 };
 
