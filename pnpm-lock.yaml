@@ -10,8 +10,8 @@ catalogs:
       specifier: 1.1.18
       version: 1.1.18
     better-call:
-      specifier: 1.1.4
-      version: 1.1.4
+      specifier: 1.1.5
+      version: 1.1.5
     tsdown:
       specifier: ^0.17.0
       version: 0.17.0
@@ -1032,7 +1032,7 @@ importers:
         version: 1.139.8(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(vite@7.2.6(@types/node@24.10.1)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.2))
       better-call:
         specifier: 'catalog:'
-        version: 1.1.4(zod@4.1.13)
+        version: 1.1.5(zod@4.1.13)
       defu:
         specifier: ^6.1.4
         version: 6.1.4
@@ -1263,7 +1263,7 @@ importers:
         version: 1.1.18
       better-call:
         specifier: 'catalog:'
-        version: 1.1.4(zod@4.1.13)
+        version: 1.1.5(zod@4.1.13)
       jose:
         specifier: ^6.1.0
         version: 6.1.0
@@ -1284,7 +1284,7 @@ importers:
         version: 1.1.18
       better-call:
         specifier: 'catalog:'
-        version: 1.1.4(zod@4.1.13)
+        version: 1.1.5(zod@4.1.13)
       zod:
         specifier: ^4.1.12
         version: 4.1.13
@@ -1336,7 +1336,7 @@ importers:
         version: 13.1.2
       better-call:
         specifier: 'catalog:'
-        version: 1.1.4(zod@4.1.13)
+        version: 1.1.5(zod@4.1.13)
       nanostores:
         specifier: ^1.0.1
         version: 1.0.1
@@ -1364,7 +1364,7 @@ importers:
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.1.4(zod@4.1.13)
+        version: 1.1.5(zod@4.1.13)
       zod:
         specifier: ^4.1.5
         version: 4.1.13
@@ -1405,7 +1405,7 @@ importers:
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.1.4(zod@4.1.13)
+        version: 1.1.5(zod@4.1.13)
       body-parser:
         specifier: ^2.2.1
         version: 2.2.1
@@ -1436,7 +1436,7 @@ importers:
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.1.4(zod@4.1.13)
+        version: 1.1.5(zod@4.1.13)
       stripe:
         specifier: ^20.0.0
         version: 20.0.0(@types/node@24.10.1)
@@ -7227,8 +7227,8 @@ packages:
     peerDependencies:
       better-auth: ^1.0.3
 
-  better-call@1.1.4:
-    resolution: {integrity: sha512-NJouLY6IVKv0nDuFoc6FcbKDFzEnmgMNofC9F60Mwx1Ecm7X6/Ecyoe5b+JSVZ42F/0n46/M89gbYP1ZCVv8xQ==}
+  better-call@1.1.5:
+    resolution: {integrity: sha512-nQJ3S87v6wApbDwbZ++FrQiSiVxWvZdjaO+2v6lZJAG2WWggkB2CziUDjPciz3eAt9TqfRursIQMZIcpkBnvlw==}
     peerDependencies:
       zod: ^4.0.0
     peerDependenciesMeta:
@@ -20601,7 +20601,7 @@ snapshots:
       mailchecker: 6.0.18
       validator: 13.15.15
 
-  better-call@1.1.4(zod@4.1.13):
+  better-call@1.1.5(zod@4.1.13):
     dependencies:
       '@better-auth/utils': 0.3.0
       '@better-fetch/fetch': 1.1.18
