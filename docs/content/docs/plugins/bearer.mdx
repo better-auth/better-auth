@@ -114,12 +114,15 @@ const response = await fetch("https://api.example.com/data", {
 const data = await response.json();
 ```
 
-And in the server, you can use the `auth.api.getSession` function to authenticate requests:
+On the server, you can authenticate requests using the `auth.api.getSession` function,
+as long as the Authorization Bearer token header is present in the request:
+
 
 ```ts title="server.ts"
 import { auth } from "@/auth";
 
 export async function handler(req, res) {
+  // Make sure `req.headers` contains the Authorization Bearer token header!
   const session = await auth.api.getSession({
     headers: req.headers
   });
