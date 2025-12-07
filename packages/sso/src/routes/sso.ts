@@ -52,15 +52,17 @@ function safeJsonParse<T>(value: string | T | null | undefined): T | null {
 	return null;
 }
 
+const spMetadataQuerySchema = z.object({
+	providerId: z.string(),
+	format: z.enum(["xml", "json"]).default("xml"),
+});
+
 export const spMetadata = () => {
 	return createAuthEndpoint(
 		"/sso/saml2/sp/metadata",
 		{
 			method: "GET",
-			query: z.object({
-				providerId: z.string(),
-				format: z.enum(["xml", "json"]).default("xml"),
-			}),
+			query: spMetadataQuerySchema,
 			metadata: {
 				openapi: {
 					operationId: "getSSOServiceProviderMetadata",
@@ -128,213 +130,211 @@ export const spMetadata = () => {
 	);
 };
 
+const ssoProviderBodySchema = z.object({
+	providerId: z.string({}).meta({
+		description:
+			"The ID of the provider. This is used to identify the provider during login and callback",
+	}),
+	issuer: z.string({}).meta({
+		description: "The issuer of the provider",
+	}),
+	domain: z.string({}).meta({
+		description: "The domain of the provider. This is used for email matching",
+	}),
+	oidcConfig: z
+		.object({
+			clientId: z.string({}).meta({
+				description: "The client ID",
+			}),
+			clientSecret: z.string({}).meta({
+				description: "The client secret",
+			}),
+			authorizationEndpoint: z
+				.string({})
+				.meta({
+					description: "The authorization endpoint",
+				})
+				.optional(),
+			tokenEndpoint: z
+				.string({})
+				.meta({
+					description: "The token endpoint",
+				})
+				.optional(),
+			userInfoEndpoint: z
+				.string({})
+				.meta({
+					description: "The user info endpoint",
+				})
+				.optional(),
+			tokenEndpointAuthentication: z
+				.enum(["client_secret_post", "client_secret_basic"])
+				.optional(),
+			jwksEndpoint: z
+				.string({})
+				.meta({
+					description: "The JWKS endpoint",
+				})
+				.optional(),
+			discoveryEndpoint: z.string().optional(),
+			scopes: z
+				.array(z.string(), {})
+				.meta({
+					description:
+						"The scopes to request. Defaults to ['openid', 'email', 'profile', 'offline_access']",
+				})
+				.optional(),
+			pkce: z
+				.boolean({})
+				.meta({
+					description: "Whether to use PKCE for the authorization flow",
+				})
+				.default(true)
+				.optional(),
+			mapping: z
+				.object({
+					id: z.string({}).meta({
+						description: "Field mapping for user ID (defaults to 'sub')",
+					}),
+					email: z.string({}).meta({
+						description: "Field mapping for email (defaults to 'email')",
+					}),
+					emailVerified: z
+						.string({})
+						.meta({
+							description:
+								"Field mapping for email verification (defaults to 'email_verified')",
+						})
+						.optional(),
+					name: z.string({}).meta({
+						description: "Field mapping for name (defaults to 'name')",
+					}),
+					image: z
+						.string({})
+						.meta({
+							description: "Field mapping for image (defaults to 'picture')",
+						})
+						.optional(),
+					extraFields: z.record(z.string(), z.any()).optional(),
+				})
+				.optional(),
+		})
+		.optional(),
+	samlConfig: z
+		.object({
+			entryPoint: z.string({}).meta({
+				description: "The entry point of the provider",
+			}),
+			cert: z.string({}).meta({
+				description: "The certificate of the provider",
+			}),
+			callbackUrl: z.string({}).meta({
+				description: "The callback URL of the provider",
+			}),
+			audience: z.string().optional(),
+			idpMetadata: z
+				.object({
+					metadata: z.string().optional(),
+					entityID: z.string().optional(),
+					cert: z.string().optional(),
+					privateKey: z.string().optional(),
+					privateKeyPass: z.string().optional(),
+					isAssertionEncrypted: z.boolean().optional(),
+					encPrivateKey: z.string().optional(),
+					encPrivateKeyPass: z.string().optional(),
+					singleSignOnService: z
+						.array(
+							z.object({
+								Binding: z.string().meta({
+									description: "The binding type for the SSO service",
+								}),
+								Location: z.string().meta({
+									description: "The URL for the SSO service",
+								}),
+							}),
+						)
+						.optional()
+						.meta({
+							description: "Single Sign-On service configuration",
+						}),
+				})
+				.optional(),
+			spMetadata: z.object({
+				metadata: z.string().optional(),
+				entityID: z.string().optional(),
+				binding: z.string().optional(),
+				privateKey: z.string().optional(),
+				privateKeyPass: z.string().optional(),
+				isAssertionEncrypted: z.boolean().optional(),
+				encPrivateKey: z.string().optional(),
+				encPrivateKeyPass: z.string().optional(),
+			}),
+			wantAssertionsSigned: z.boolean().optional(),
+			signatureAlgorithm: z.string().optional(),
+			digestAlgorithm: z.string().optional(),
+			identifierFormat: z.string().optional(),
+			privateKey: z.string().optional(),
+			decryptionPvk: z.string().optional(),
+			additionalParams: z.record(z.string(), z.any()).optional(),
+			mapping: z
+				.object({
+					id: z.string({}).meta({
+						description: "Field mapping for user ID (defaults to 'nameID')",
+					}),
+					email: z.string({}).meta({
+						description: "Field mapping for email (defaults to 'email')",
+					}),
+					emailVerified: z
+						.string({})
+						.meta({
+							description: "Field mapping for email verification",
+						})
+						.optional(),
+					name: z.string({}).meta({
+						description: "Field mapping for name (defaults to 'displayName')",
+					}),
+					firstName: z
+						.string({})
+						.meta({
+							description:
+								"Field mapping for first name (defaults to 'givenName')",
+						})
+						.optional(),
+					lastName: z
+						.string({})
+						.meta({
+							description:
+								"Field mapping for last name (defaults to 'surname')",
+						})
+						.optional(),
+					extraFields: z.record(z.string(), z.any()).optional(),
+				})
+				.optional(),
+		})
+		.optional(),
+	organizationId: z
+		.string({})
+		.meta({
+			description:
+				"If organization plugin is enabled, the organization id to link the provider to",
+		})
+		.optional(),
+	overrideUserInfo: z
+		.boolean({})
+		.meta({
+			description:
+				"Override user info with the provider info. Defaults to false",
+		})
+		.default(false)
+		.optional(),
+});
+
 export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 	return createAuthEndpoint(
 		"/sso/register",
 		{
 			method: "POST",
-			body: z.object({
-				providerId: z.string({}).meta({
-					description:
-						"The ID of the provider. This is used to identify the provider during login and callback",
-				}),
-				issuer: z.string({}).meta({
-					description: "The issuer of the provider",
-				}),
-				domain: z.string({}).meta({
-					description:
-						"The domain of the provider. This is used for email matching",
-				}),
-				oidcConfig: z
-					.object({
-						clientId: z.string({}).meta({
-							description: "The client ID",
-						}),
-						clientSecret: z.string({}).meta({
-							description: "The client secret",
-						}),
-						authorizationEndpoint: z
-							.string({})
-							.meta({
-								description: "The authorization endpoint",
-							})
-							.optional(),
-						tokenEndpoint: z
-							.string({})
-							.meta({
-								description: "The token endpoint",
-							})
-							.optional(),
-						userInfoEndpoint: z
-							.string({})
-							.meta({
-								description: "The user info endpoint",
-							})
-							.optional(),
-						tokenEndpointAuthentication: z
-							.enum(["client_secret_post", "client_secret_basic"])
-							.optional(),
-						jwksEndpoint: z
-							.string({})
-							.meta({
-								description: "The JWKS endpoint",
-							})
-							.optional(),
-						discoveryEndpoint: z.string().optional(),
-						scopes: z
-							.array(z.string(), {})
-							.meta({
-								description:
-									"The scopes to request. Defaults to ['openid', 'email', 'profile', 'offline_access']",
-							})
-							.optional(),
-						pkce: z
-							.boolean({})
-							.meta({
-								description: "Whether to use PKCE for the authorization flow",
-							})
-							.default(true)
-							.optional(),
-						mapping: z
-							.object({
-								id: z.string({}).meta({
-									description: "Field mapping for user ID (defaults to 'sub')",
-								}),
-								email: z.string({}).meta({
-									description: "Field mapping for email (defaults to 'email')",
-								}),
-								emailVerified: z
-									.string({})
-									.meta({
-										description:
-											"Field mapping for email verification (defaults to 'email_verified')",
-									})
-									.optional(),
-								name: z.string({}).meta({
-									description: "Field mapping for name (defaults to 'name')",
-								}),
-								image: z
-									.string({})
-									.meta({
-										description:
-											"Field mapping for image (defaults to 'picture')",
-									})
-									.optional(),
-								extraFields: z.record(z.string(), z.any()).optional(),
-							})
-							.optional(),
-					})
-					.optional(),
-				samlConfig: z
-					.object({
-						entryPoint: z.string({}).meta({
-							description: "The entry point of the provider",
-						}),
-						cert: z.string({}).meta({
-							description: "The certificate of the provider",
-						}),
-						callbackUrl: z.string({}).meta({
-							description: "The callback URL of the provider",
-						}),
-						audience: z.string().optional(),
-						idpMetadata: z
-							.object({
-								metadata: z.string().optional(),
-								entityID: z.string().optional(),
-								cert: z.string().optional(),
-								privateKey: z.string().optional(),
-								privateKeyPass: z.string().optional(),
-								isAssertionEncrypted: z.boolean().optional(),
-								encPrivateKey: z.string().optional(),
-								encPrivateKeyPass: z.string().optional(),
-								singleSignOnService: z
-									.array(
-										z.object({
-											Binding: z.string().meta({
-												description: "The binding type for the SSO service",
-											}),
-											Location: z.string().meta({
-												description: "The URL for the SSO service",
-											}),
-										}),
-									)
-									.optional()
-									.meta({
-										description: "Single Sign-On service configuration",
-									}),
-							})
-							.optional(),
-						spMetadata: z.object({
-							metadata: z.string().optional(),
-							entityID: z.string().optional(),
-							binding: z.string().optional(),
-							privateKey: z.string().optional(),
-							privateKeyPass: z.string().optional(),
-							isAssertionEncrypted: z.boolean().optional(),
-							encPrivateKey: z.string().optional(),
-							encPrivateKeyPass: z.string().optional(),
-						}),
-						wantAssertionsSigned: z.boolean().optional(),
-						signatureAlgorithm: z.string().optional(),
-						digestAlgorithm: z.string().optional(),
-						identifierFormat: z.string().optional(),
-						privateKey: z.string().optional(),
-						decryptionPvk: z.string().optional(),
-						additionalParams: z.record(z.string(), z.any()).optional(),
-						mapping: z
-							.object({
-								id: z.string({}).meta({
-									description:
-										"Field mapping for user ID (defaults to 'nameID')",
-								}),
-								email: z.string({}).meta({
-									description: "Field mapping for email (defaults to 'email')",
-								}),
-								emailVerified: z
-									.string({})
-									.meta({
-										description: "Field mapping for email verification",
-									})
-									.optional(),
-								name: z.string({}).meta({
-									description:
-										"Field mapping for name (defaults to 'displayName')",
-								}),
-								firstName: z
-									.string({})
-									.meta({
-										description:
-											"Field mapping for first name (defaults to 'givenName')",
-									})
-									.optional(),
-								lastName: z
-									.string({})
-									.meta({
-										description:
-											"Field mapping for last name (defaults to 'surname')",
-									})
-									.optional(),
-								extraFields: z.record(z.string(), z.any()).optional(),
-							})
-							.optional(),
-					})
-					.optional(),
-				organizationId: z
-					.string({})
-					.meta({
-						description:
-							"If organization plugin is enabled, the organization id to link the provider to",
-					})
-					.optional(),
-				overrideUserInfo: z
-					.boolean({})
-					.meta({
-						description:
-							"Override user info with the provider info. Defaults to false",
-					})
-					.default(false)
-					.optional(),
-			}),
+			body: ssoProviderBodySchema,
 			use: [sessionMiddleware],
 			metadata: {
 				openapi: {
@@ -699,76 +699,77 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 	);
 };
 
+const signInSSOBodySchema = z.object({
+	email: z
+		.string({})
+		.meta({
+			description:
+				"The email address to sign in with. This is used to identify the issuer to sign in with. It's optional if the issuer is provided",
+		})
+		.optional(),
+	organizationSlug: z
+		.string({})
+		.meta({
+			description: "The slug of the organization to sign in with",
+		})
+		.optional(),
+	providerId: z
+		.string({})
+		.meta({
+			description:
+				"The ID of the provider to sign in with. This can be provided instead of email or issuer",
+		})
+		.optional(),
+	domain: z
+		.string({})
+		.meta({
+			description: "The domain of the provider.",
+		})
+		.optional(),
+	callbackURL: z.string({}).meta({
+		description: "The URL to redirect to after login",
+	}),
+	errorCallbackURL: z
+		.string({})
+		.meta({
+			description: "The URL to redirect to after login",
+		})
+		.optional(),
+	newUserCallbackURL: z
+		.string({})
+		.meta({
+			description: "The URL to redirect to after login if the user is new",
+		})
+		.optional(),
+	scopes: z
+		.array(z.string(), {})
+		.meta({
+			description: "Scopes to request from the provider.",
+		})
+		.optional(),
+	loginHint: z
+		.string({})
+		.meta({
+			description:
+				"Login hint to send to the identity provider (e.g., email or identifier). If supported, will be sent as 'login_hint'.",
+		})
+		.optional(),
+	requestSignUp: z
+		.boolean({})
+		.meta({
+			description:
+				"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider",
+		})
+		.optional(),
+	providerType: z.enum(["oidc", "saml"]).optional(),
+});
+
 export const signInSSO = (options?: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sign-in/sso",
 		{
 			method: "POST",
-			body: z.object({
-				email: z
-					.string({})
-					.meta({
-						description:
-							"The email address to sign in with. This is used to identify the issuer to sign in with. It's optional if the issuer is provided",
-					})
-					.optional(),
-				organizationSlug: z
-					.string({})
-					.meta({
-						description: "The slug of the organization to sign in with",
-					})
-					.optional(),
-				providerId: z
-					.string({})
-					.meta({
-						description:
-							"The ID of the provider to sign in with. This can be provided instead of email or issuer",
-					})
-					.optional(),
-				domain: z
-					.string({})
-					.meta({
-						description: "The domain of the provider.",
-					})
-					.optional(),
-				callbackURL: z.string({}).meta({
-					description: "The URL to redirect to after login",
-				}),
-				errorCallbackURL: z
-					.string({})
-					.meta({
-						description: "The URL to redirect to after login",
-					})
-					.optional(),
-				newUserCallbackURL: z
-					.string({})
-					.meta({
-						description:
-							"The URL to redirect to after login if the user is new",
-					})
-					.optional(),
-				scopes: z
-					.array(z.string(), {})
-					.meta({
-						description: "Scopes to request from the provider.",
-					})
-					.optional(),
-				loginHint: z
-					.string({})
-					.meta({
-						description:
-							"Login hint to send to the identity provider (e.g., email or identifier). If supported, will be sent as 'login_hint'.",
-					})
-					.optional(),
-				requestSignUp: z
-					.boolean({})
-					.meta({
-						description:
-							"Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider",
-					})
-					.optional(),
-				providerType: z.enum(["oidc", "saml"]).optional(),
-			}),
+			body: signInSSOBodySchema,
 			metadata: {
 				openapi: {
 					operationId: "signInWithSSO",
@@ -1101,17 +1102,19 @@ export const signInSSO = (options?: SSOOptions) => {
 	);
 };
 
+const callbackSSOQuerySchema = z.object({
+	code: z.string().optional(),
+	state: z.string(),
+	error: z.string().optional(),
+	error_description: z.string().optional(),
+});
+
 export const callbackSSO = (options?: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/callback/:providerId",
 		{
 			method: "GET",
-			query: z.object({
-				code: z.string().optional(),
-				state: z.string(),
-				error: z.string().optional(),
-				error_description: z.string().optional(),
-			}),
+			query: callbackSSOQuerySchema,
 			allowedMediaTypes: [
 				"application/x-www-form-urlencoded",
 				"application/json",
@@ -1468,15 +1471,17 @@ export const callbackSSO = (options?: SSOOptions) => {
 	);
 };
 
+const callbackSSOSAMLBodySchema = z.object({
+	SAMLResponse: z.string(),
+	RelayState: z.string().optional(),
+});
+
 export const callbackSSOSAML = (options?: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/saml2/callback/:providerId",
 		{
 			method: "POST",
-			body: z.object({
-				SAMLResponse: z.string(),
-				RelayState: z.string().optional(),
-			}),
+			body: callbackSSOSAMLBodySchema,
 			metadata: {
 				isAction: false,
 				allowedMediaTypes: [
@@ -1717,6 +1722,35 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			});
 
 			if (existingUser) {
+				const account = await ctx.context.adapter.findOne<Account>({
+					model: "account",
+					where: [
+						{ field: "userId", value: existingUser.id },
+						{ field: "providerId", value: provider.providerId },
+						{ field: "accountId", value: userInfo.id },
+					],
+				});
+				if (!account) {
+					const isTrustedProvider =
+						ctx.context.options.account?.accountLinking?.trustedProviders?.includes(
+							provider.providerId,
+						) ||
+						("domainVerified" in provider &&
+							provider.domainVerified &&
+							validateEmailDomain(userInfo.email, provider.domain));
+					if (!isTrustedProvider) {
+						const redirectUrl =
+							RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+						throw ctx.redirect(`${redirectUrl}?error=account_not_linked`);
+					}
+					await ctx.context.internalAdapter.createAccount({
+						userId: existingUser.id,
+						providerId: provider.providerId,
+						accountId: userInfo.id,
+						accessToken: "",
+						refreshToken: "",
+					});
+				}
 				user = existingUser;
 			} else {
 				// if implicit sign up is disabled, we should not create a new user nor a new account.
@@ -1732,19 +1766,6 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 					name: userInfo.name,
 					emailVerified: userInfo.emailVerified,
 				});
-			}
-
-			// Create or update account link
-			const account = await ctx.context.adapter.findOne<Account>({
-				model: "account",
-				where: [
-					{ field: "userId", value: user.id },
-					{ field: "providerId", value: provider.providerId },
-					{ field: "accountId", value: userInfo.id },
-				],
-			});
-
-			if (!account) {
 				await ctx.context.internalAdapter.createAccount({
 					userId: user.id,
 					providerId: provider.providerId,
@@ -1815,18 +1836,22 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 	);
 };
 
+const acsEndpointParamsSchema = z.object({
+	providerId: z.string().optional(),
+});
+
+const acsEndpointBodySchema = z.object({
+	SAMLResponse: z.string(),
+	RelayState: z.string().optional(),
+});
+
 export const acsEndpoint = (options?: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/saml2/sp/acs/:providerId",
 		{
 			method: "POST",
-			params: z.object({
-				providerId: z.string().optional(),
-			}),
-			body: z.object({
-				SAMLResponse: z.string(),
-				RelayState: z.string().optional(),
-			}),
+			params: acsEndpointParamsSchema,
+			body: acsEndpointBodySchema,
 			metadata: {
 				isAction: false,
 				allowedMediaTypes: [
