@@ -302,6 +302,11 @@ export function deleteSessionCookie(
 		maxAge: 0,
 	});
 
+	ctx.setCookie(ctx.context.authCookies.sessionData.name, "", {
+		...ctx.context.authCookies.sessionData.options,
+		maxAge: 0,
+	});
+
 	// Use createSessionStore to clean up all session data chunks
 	const sessionStore = createSessionStore(
 		ctx.context.authCookies.sessionData.name,
