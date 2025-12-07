@@ -413,7 +413,14 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 			adapterName: "Prisma Adapter",
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
-			supportsUUIDs: config.provider === "postgresql" ? true : false,
+			supportsUUIDs:
+				config.provider === "postgresql" ||
+				config.provider === "cockroachdb" ||
+				config.provider === "mongodb",
+			supportsJSON:
+				config.provider === "postgresql" ||
+				config.provider === "cockroachdb" ||
+				config.provider === "mongodb",
 			transaction:
 				(config.transaction ?? false)
 					? (cb) =>
