@@ -1,6 +1,10 @@
 import type { User } from "better-auth";
 import type { Member } from "better-auth/plugins";
 
+export interface UserWithActive extends User {
+	active?: boolean | undefined;
+}
+
 export interface SCIMProvider {
 	id: string;
 	providerId: string;

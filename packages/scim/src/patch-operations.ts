@@ -13,6 +13,11 @@ type Mapping = {
 	map: (user: User, op: Operation) => any;
 };
 
+type Resources = {
+	user: Record<string, any>;
+	account: Record<string, any>;
+};
+
 const identity = (user: User, op: Operation) => {
 	return op.value;
 };
@@ -56,24 +61,82 @@ const userPatchMappings: Record<string, Mapping> = {
 		map: identity,
 	},
 	"/userName": { resource: "user", target: "email", map: lowerCase },
+	"/active": { resource: "user", target: "active", map: identity },
+};
+
+const normalizePath = (path: string): string => {
+	const withoutLeadingSlash = path.startsWith("/") ? path.slice(1) : path;
+	return `/${withoutLeadingSlash.replaceAll(".", "/")}`;
+};
+
+const isNestedObject = (value: unknown): value is Record<string, unknown> => {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+};
+
+const applyMapping = (
+	user: User,
+	resources: Resources,
+	path: string,
+	value: unknown,
+	op: "add" | "replace",
+) => {
+	const normalizedPath = normalizePath(path);
+	const mapping = userPatchMappings[normalizedPath];
+
+	if (!mapping) {
+		return;
+	}
+
+	const newValue = mapping.map(user, {
+		op,
+		value,
+		path: normalizedPath,
+	});
+
+	if (op === "add" && mapping.resource === "user") {
+		const currentValue = (user as Record<string, unknown>)[mapping.target];
+		if (currentValue === newValue) {
+			return;
+		}
+	}
+
+	resources[mapping.resource][mapping.target] = newValue;
+};
+
+const applyPatchValue = (
+	user: User,
+	resources: Resources,
+	value: unknown,
+	op: "add" | "replace",
+	path = "",
+) => {
+	if (isNestedObject(value)) {
+		for (const [key, nestedValue] of Object.entries(value)) {
+			const nestedPath = path ? `${path}.${key}` : key;
+			applyPatchValue(user, resources, nestedValue, op, nestedPath);
+		}
+	} else if (path) {
+		applyMapping(user, resources, path, value, op);
+	}
 };
 
 export const buildUserPatch = (user: User, operations: Operation[]) => {
 	const userPatch: Record<string, any> = {};
 	const accountPatch: Record<string, any> = {};
-
-	const resources = { user: userPatch, account: accountPatch };
+	const resources: Resources = { user: userPatch, account: accountPatch };
 
 	for (const operation of operations) {
-		if (operation.op !== "replace" || !operation.path) {
+		if (operation.op !== "add" && operation.op !== "replace") {
 			continue;
 		}
 
-		const mapping = userPatchMappings[operation.path];
-		if (mapping) {
-			const resource = resources[mapping.resource];
-			resource[mapping.target] = mapping.map(user, operation);
-		}
+		applyPatchValue(
+			user,
+			resources,
+			operation.value,
+			operation.op,
+			operation.path,
+		);
 	}
 
 	return resources;

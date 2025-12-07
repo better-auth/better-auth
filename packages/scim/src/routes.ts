@@ -241,6 +241,7 @@ export const createSCIMUser = (authMiddleware: AuthMiddleware) =>
 				ctx.context.internalAdapter.createUser({
 					email,
 					name,
+					active: body.active,
 				});
 
 			const createOrgMembership = async (userId: string) => {
@@ -359,6 +360,7 @@ export const updateSCIMUser = (authMiddleware: AuthMiddleware) =>
 							{
 								email,
 								name,
+								active: body.active,
 								updatedAt: new Date(),
 							},
 						);
@@ -535,7 +537,11 @@ const patchSCIMUserBodySchema = z.object({
 		),
 	Operations: z.array(
 		z.object({
-			op: z.enum(["replace", "add", "remove"]).default("replace"),
+			op: z
+				.string()
+				.toLowerCase()
+				.default("replace")
+				.pipe(z.enum(["replace", "add", "remove"])),
 			path: z.string().optional(),
 			value: z.any(),
 		}),
@@ -622,7 +628,7 @@ export const deleteSCIMUser = (authMiddleware: AuthMiddleware) =>
 			method: "DELETE",
 			metadata: {
 				isAction: false,
-				allowedMediaTypes: supportedMediaTypes,
+				allowedMediaTypes: [...supportedMediaTypes, ""],
 				openapi: {
 					summary: "Delete SCIM user",
 					description:

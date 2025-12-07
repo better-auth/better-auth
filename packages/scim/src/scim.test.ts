@@ -1386,6 +1386,201 @@ describe("SCIM", () => {
 			});
 		});
 
+		it("should support add operation", async () => {
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
+
+			const user = await auth.api.createSCIMUser({
+				body: {
+					userName: "add-test-user",
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			await auth.api.patchSCIMUser({
+				params: { userId: user.id },
+				body: {
+					schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+					Operations: [
+						{ op: "add", path: "/name/formatted", value: "Added Name" },
+					],
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			const updatedUser = await auth.api.getSCIMUser({
+				params: { userId: user.id },
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			expect(updatedUser.name.formatted).toBe("Added Name");
+			expect(updatedUser.displayName).toBe("Added Name");
+		});
+
+		it("should support nested object values with path prefix", async () => {
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
+
+			const user = await auth.api.createSCIMUser({
+				body: {
+					userName: "nested-test-user",
+					name: { formatted: "Original Name" },
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			await auth.api.patchSCIMUser({
+				params: { userId: user.id },
+				body: {
+					schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+					Operations: [
+						{
+							op: "replace",
+							path: "name",
+							value: { formatted: "Nested Name" },
+						},
+					],
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			const updatedUser = await auth.api.getSCIMUser({
+				params: { userId: user.id },
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			expect(updatedUser.name.formatted).toBe("Nested Name");
+			expect(updatedUser.displayName).toBe("Nested Name");
+		});
+
+		it("should update active status", async () => {
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
+
+			const user = await auth.api.createSCIMUser({
+				body: {
+					userName: "active-test-user",
+					active: true,
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			expect(user.active).toBe(true);
+
+			await auth.api.patchSCIMUser({
+				params: { userId: user.id },
+				body: {
+					schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+					Operations: [{ op: "replace", path: "/active", value: false }],
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			const updatedUser = await auth.api.getSCIMUser({
+				params: { userId: user.id },
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			expect(updatedUser.active).toBe(false);
+		});
+
+		it("should support operations without explicit path", async () => {
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
+
+			const user = await auth.api.createSCIMUser({
+				body: {
+					userName: "no-path-test-user",
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			await auth.api.patchSCIMUser({
+				params: { userId: user.id },
+				body: {
+					schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+					Operations: [
+						{
+							op: "replace",
+							value: {
+								name: { formatted: "No Path Name" },
+								active: false,
+							},
+						},
+					],
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			const updatedUser = await auth.api.getSCIMUser({
+				params: { userId: user.id },
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			expect(updatedUser.name.formatted).toBe("No Path Name");
+			expect(updatedUser.active).toBe(false);
+		});
+
+		it("should support dot notation in paths", async () => {
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
+
+			const user = await auth.api.createSCIMUser({
+				body: {
+					userName: "dot-notation-user",
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			await auth.api.patchSCIMUser({
+				params: { userId: user.id },
+				body: {
+					schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+					Operations: [
+						{ op: "replace", path: "name.formatted", value: "Dot Notation" },
+					],
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			const updatedUser = await auth.api.getSCIMUser({
+				params: { userId: user.id },
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			expect(updatedUser.name.formatted).toBe("Dot Notation");
+		});
+
 		it("should return not found for missing users", async () => {
 			const { auth, getSCIMToken } = createTestInstance();
 			const scimToken = await getSCIMToken();
