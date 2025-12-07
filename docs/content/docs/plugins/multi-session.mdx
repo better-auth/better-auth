@@ -110,6 +110,7 @@ You can specify the maximum number of sessions a user can have by passing the `m
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
+import { multiSession } from "better-auth/plugins"
 
 export const auth = betterAuth({
     plugins: [
@@ -131,6 +132,7 @@ You can infer additional fields for the `user` and `session` schema by passing t
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
+import { multiSession } from "better-auth/plugins"
 
 export const auth = betterAuth({
     plugins: [
