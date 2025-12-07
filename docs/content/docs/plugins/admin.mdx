@@ -694,6 +694,275 @@ const canDeleteUserAndRevokeSession = authClient.admin.checkRolePermission({
 });
 ```
 
+<Callout type="warning">
+    This will not include any dynamic roles as everything is ran synchronously on the client side.
+    Please use the [userHasPermission](#access-control-usage) APIs to include checks for any dynamic roles & permissions.
+</Callout>
+
+## Dynamic Access Control
+
+Dynamic access control allows you to create roles at runtime. This is achieved by storing the created roles and permissions in a database table.
+
+### Enabling Dynamic Access Control
+
+To enable dynamic access control, pass the `dynamicAccessControl` configuration option with `enabled` set to `true` to both server and client plugins.
+
+Ensure you have pre-defined an `ac` instance on the server auth plugin. This is important as this is how we can infer the permissions that are available for use.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { admin } from "better-auth/plugins";
+import { ac } from "@/auth/permissions";
+
+export const auth = betterAuth({
+  plugins: [ // [!code highlight]
+    admin({ // [!code highlight]
+      ac, // [!code highlight]
+      dynamicAccessControl: { // [!code highlight]
+        enabled: true, // [!code highlight]
+      }, // [!code highlight]
+    }), // [!code highlight]
+  ], // [!code highlight]
+});
+```
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { adminClient } from "better-auth/client/plugins";
+
+export const authClient = createAuthClient({
+  plugins: [ // [!code highlight]
+    adminClient({ // [!code highlight]
+      dynamicAccessControl: { // [!code highlight]
+        enabled: true, // [!code highlight]
+      }, // [!code highlight]
+    }), // [!code highlight]
+  ], // [!code highlight]
+});
+```
+
+<Callout type="info">
+    This will require you to run migrations to add the new `role` table to the database.
+</Callout>
+
+<Callout type="warning">
+    The `authClient.admin.checkRolePermission` function will not include any dynamic roles as everything is ran synchronously on the client side.
+    Please use the [userHasPermission](#access-control-usage) APIs to include checks for any dynamic roles.
+</Callout>
+
+### Creating a role
+
+To create a new role at runtime, you can use the `createRole` function.
+
+Only users with roles which contain the `ac` resource with the `create` permission can create a new role.
+By default, only the `admin` role has this permission. You also cannot add permissions that your current role can't already access.
+
+<APIMethod
+  path="/admin/create-role"
+  method="POST"
+  requireSession
+  noResult
+>
+```ts
+// To use custom resources or permissions,
+// make sure they are defined in the `ac` instance of your organization config.
+const permission = {
+  project: ["create", "update", "delete"]
+}
+
+type createRole = {
+  /**
+   * A unique name of the role to create
+   */
+  role: string = "my-unique-role"
+  /**
+   * The permissions to assign to the role.
+   */
+  permission?: Record<string, string[]> = permission,
+}
+```
+</APIMethod>
+
+Now you can freely call [`setRole`](#set-user-role) to update the role of a user with your newly created role.
+
+### Deleting a role
+
+To delete a role, you can use the `deleteRole` function, then provide either a `roleName` or `roleId` parameter.
+
+<APIMethod
+  path="/admin/delete-role"
+  method="POST"
+  requireSession
+  noResult
+>
+```ts
+type deleteRole = {
+  /**
+   * The name of the role to delete.
+   * Alternatively, you can pass a `roleId`
+   * parameter instead.
+   */
+   roleName?: string = "my-role"
+  /**
+   * The id of the role to delete.
+   * Alternatively, you can pass a `roleName`
+   * parameter instead.
+   */
+  roleId?: string = "role-id"
+}
+```
+</APIMethod>
+
+### Listing roles
+
+To list roles, you can use the `listRoles` function.
+This requires the `ac` resource with the `read` permission to list all roles or the `read-own` permission to only list roles the user is assigned to.
+By default, admins have the `read` and users the `read-own` permission.
+
+<APIMethod
+  path="/admin/list-roles"
+  method="GET"
+  requireSession
+  resultVariable="roles"
+>
+```ts
+type listRoles = {
+}
+```
+</APIMethod>
+
+### Getting a specific role
+
+To get a specific role, you can use the `getRole` function and pass either a `roleName` or `roleId` parameter.
+This requires the `ac` resource with either the `read` permission to get any role or the `read-own` permission to only get roles the user is assigned to.
+
+<APIMethod
+  path="/admin/get-role"
+  method="GET"
+  requireSession
+  resultVariable="role"
+>
+```ts
+type getRole = {
+  /**
+   * The name of the role to delete.
+   * Alternatively, you can pass a `roleId`
+   * parameter instead.
+   */
+   roleName?: string = "my-role"
+  /**
+   * The id of the role to delete.
+   * Alternatively, you can pass a `roleName`
+   * parameter instead.
+   */
+  roleId?: string = "role-id"
+}
+```
+</APIMethod>
+
+### Updating a role
+
+To update a role, you can use the `updateRole` function and pass either a `roleName` or `roleId`. This requires the `ac` resource with the `update` permission.
+
+<APIMethod
+  path="/admin/update-role"
+  method="POST"
+  requireSession
+  resultVariable="updatedRole"
+>
+```ts
+type updateRole = {
+  /**
+   * The name of the role to delete.
+   * Alternatively, you can pass a `roleId`
+   * parameter instead.
+   */
+   roleName?: string = "my-role"
+  /**
+   * The id of the role to delete.
+   * Alternatively, you can pass a `roleName`
+   * parameter instead.
+   */
+  roleId?: string = "role-id"
+  /**
+   * The data which will be updated
+   */
+  data: {
+    /**
+     * Optionally update the permissions of
+     * the role.
+     */
+    permission?: Record<string, string[]> = { project: ["create", "update", "delete"] }
+    /**
+     * Optionally update the name of the role.
+     */
+    roleName?: string = "my-new-role"
+  }
+}
+```
+</APIMethod>
+
+### Additional Fields
+
+To add additional fields to the `role` table, you can pass the `additionalFields` configuration option to the `admin` plugin.
+
+```ts
+admin({
+  schema: {
+    role: {
+      additionalFields: {
+        // Role colors
+        color: {
+          type: "string",
+          defaultValue: "#ffffff",
+        },
+        //... other fields
+      },
+    },
+  },
+});
+```
+
+Then you can use `inferAdminAdditionalFields` to infer the additional fields.
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { adminClient, inferAdminAdditionalFields } from "better-auth/client/plugins";
+import type { auth } from "./auth";
+
+export const authClient = createAuthClient({
+  plugins: [
+    adminClient({
+      schema: inferAdminAdditionalFields<typeof auth>(),
+    }),
+  ],
+});
+```
+
+Otherwise, you can pass the schema values directly, the same way as on the server plugin.
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { adminClient } from "better-auth/client/plugins";
+
+export const authClient = createAuthClient({
+  plugins: [
+    adminClient({
+      schema: {
+        role: {
+          additionalFields: {
+            color: {
+              type: "string",
+              defaultValue: "#ffffff",
+            },
+          },
+        },
+      },
+    }),
+  ],
+});
+```
+
 ## Schema
 
 This plugin adds the following fields to the `user` table:

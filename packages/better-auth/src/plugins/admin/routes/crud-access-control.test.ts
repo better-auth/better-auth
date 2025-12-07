@@ -1,4 +1,3 @@
-import type { DBFieldAttribute } from "@better-auth/core/db";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthClient } from "../../../client";
 import { getTestInstance } from "../../../test-utils";
@@ -9,7 +8,7 @@ import {
 	userAc as defaultUserAc,
 } from "../access";
 import { admin } from "../admin";
-import { adminClient } from "../client";
+import { adminClient, inferAdminAdditionalFields } from "../client";
 import { ADMIN_ERROR_CODES } from "../error-codes";
 
 describe("dynamic access control", async () => {
@@ -36,20 +35,6 @@ describe("dynamic access control", async () => {
 		order: ["read"],
 		...defaultUserAc.statements,
 	});
-
-	const additionalFields = {
-		color: {
-			type: "string",
-			defaultValue: "#ffffff",
-			required: true,
-		},
-		serverOnlyValue: {
-			type: "string",
-			defaultValue: "server-only-value",
-			input: false,
-			required: true,
-		},
-	} satisfies Record<string, DBFieldAttribute>;
 
 	const { auth, customFetchImpl, signInWithTestUser, signInWithUser } =
 		await getTestInstance(
@@ -87,7 +72,19 @@ describe("dynamic access control", async () => {
 						schema: {
 							role: {
 								modelName: "role",
-								additionalFields,
+								additionalFields: {
+									color: {
+										type: "string",
+										defaultValue: "#ffffff",
+										required: true,
+									},
+									serverOnlyValue: {
+										type: "string",
+										defaultValue: "server-only-value",
+										input: false,
+										required: true,
+									},
+								},
 							},
 						},
 					}),
@@ -109,11 +106,7 @@ describe("dynamic access control", async () => {
 				dynamicAccessControl: {
 					enabled: true,
 				},
-				schema: {
-					role: {
-						additionalFields,
-					},
-				},
+				schema: inferAdminAdditionalFields<typeof auth>(),
 			}),
 		],
 		fetchOptions: {

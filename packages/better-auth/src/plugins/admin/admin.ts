@@ -239,6 +239,6 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 					} satisfies BetterAuthPluginDBSchema)
 				: {}),
 		},
-		options: options as any,
+		options: options as O,
 	} satisfies BetterAuthPlugin;
 };
