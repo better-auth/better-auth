@@ -1,13 +1,13 @@
 {
   "name": "better-auth",
-  "version": "1.4.6-beta.2",
+  "version": "1.4.6-beta.3",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "license": "MIT",
   "homepage": "https://better-auth.com",
   "repository": {
     "type": "git",
-    "url": "https://github.com/better-auth/better-auth",
+    "url": "git+https://github.com/better-auth/better-auth.git",
     "directory": "packages/better-auth"
   },
   "keywords": [
@@ -36,6 +36,7 @@
   ],
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     ".": {
       "dev-source": "./src/index.ts",
