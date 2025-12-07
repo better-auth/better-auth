@@ -14,6 +14,11 @@ describe("two factor", async () => {
 	const { testUser, customFetchImpl, sessionSetter, db, auth } =
 		await getTestInstance({
 			secret: DEFAULT_SECRET,
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
 			plugins: [
 				twoFactor({
 					otpOptions: {
@@ -149,6 +154,7 @@ describe("two factor", async () => {
 						context.response.headers.get("Set-Cookie") || "",
 					);
 					expect(parsed.get("better-auth.session_token")?.value).toBe("");
+					expect(parsed.get("better-auth.session_data")?.value).toBe("");
 					expect(parsed.get("better-auth.two_factor")?.value).toBeDefined();
 					expect(parsed.get("better-auth.dont_remember")?.value).toBeDefined();
 					headers.append(
