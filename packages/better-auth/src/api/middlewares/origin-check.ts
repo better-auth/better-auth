@@ -139,7 +139,7 @@ async function validateOrigin(
 			: url.startsWith(pattern);
 	};
 
-	const isTrustedOrigin = trustedOrigins.some((origin) =>
+	const isTrustedOrigin = ctx.context.isTrustedOrigin(originHeader)
 		matchesPattern(originHeader, origin),
 	);
 	if (!isTrustedOrigin) {
