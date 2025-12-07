@@ -13,4 +13,3 @@ prefs
 uncompromised
 myapp
 Neue
-unconfigured

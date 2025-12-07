@@ -1309,7 +1309,7 @@ describe("access control", async (it) => {
 	it("should throw error when assigning unconfigured admin roles", async () => {
 		expect(() =>
 			admin({
-				adminRoles: ["admin", "non-existent-role"],
+				adminRoles: ["non-existent-role"],
 			}),
 		).toThrowError(BetterAuthError);
 	});

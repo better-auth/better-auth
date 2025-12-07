@@ -40,18 +40,21 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 		...options,
 	};
 
-	if (
-		options?.adminRoles &&
-		(Array.isArray(options.adminRoles)
+	if (options?.adminRoles) {
+		const adminRoles = Array.isArray(options.adminRoles)
 			? options.adminRoles
-			: [...options.adminRoles.split(",")]
-		).some((role) =>
-			Object.keys(options?.roles || defaultRoles).includes(role.toLowerCase()),
-		)
-	) {
-		throw new BetterAuthError(
-			"You cannot assign unconfigured roles as admin roles. Please check your `adminRoles` and `roles` configuration.",
+			: [...options.adminRoles.split(",")];
+		const invalidRoles = adminRoles.filter(
+			(role) =>
+				!Object.keys(options?.roles || defaultRoles)
+					.map((r) => r.toLowerCase())
+					.includes(role.toLowerCase()),
 		);
+		if (invalidRoles.length > 0) {
+			throw new BetterAuthError(
+				`Invalid admin roles: ${invalidRoles.join(", ")}. Admin roles must be defined in the 'roles' configuration.`,
+			);
+		}
 	}
 
 	return {
