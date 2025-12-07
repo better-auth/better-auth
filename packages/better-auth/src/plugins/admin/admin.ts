@@ -1,8 +1,10 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import { BetterAuthError } from "@better-auth/core/error";
 import { APIError } from "../../api";
 import { mergeSchema } from "../../db/schema";
 import { getEndpointResponse } from "../../utils/plugin-helper";
+import { defaultRoles } from "./access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import {
 	adminUpdateUser,
@@ -37,6 +39,20 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 			"You have been banned from this application. Please contact support if you believe this is an error.",
 		...options,
 	};
+
+	if (
+		options?.adminRoles &&
+		(Array.isArray(options.adminRoles)
+			? options.adminRoles
+			: [...options.adminRoles.split(",")]
+		).some((role) =>
+			Object.keys(options?.roles || defaultRoles).includes(role.toLowerCase()),
+		)
+	) {
+		throw new BetterAuthError(
+			"You cannot assign unconfigured roles as admin roles. Please check your `adminRoles` and `roles` configuration.",
+		);
+	}
 
 	return {
 		id: "admin",

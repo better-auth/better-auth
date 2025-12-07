@@ -1,3 +1,4 @@
+import { BetterAuthError } from "@better-auth/core/error";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
@@ -1303,5 +1304,13 @@ describe("access control", async (it) => {
 			{ userId: createdUser.data?.user.id || "" },
 			{ headers: headers },
 		);
+	});
+
+	it("should throw error when assigning unconfigured admin roles", async () => {
+		expect(() =>
+			admin({
+				adminRoles: ["admin", "non-existent-role"],
+			}),
+		).toThrowError(BetterAuthError);
 	});
 });
