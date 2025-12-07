@@ -289,9 +289,7 @@ export const verifyEmail = createAuthEndpoint(
 		if (!token) {
 			return redirectOnError("invalid_token");
 		}
-		await ctx.context.internalAdapter.deleteVerificationValue(
-			`email-verification:${token.id}`,
-		);
+		await ctx.context.internalAdapter.deleteVerificationValue(token.id);
 		if (token.expiresAt < new Date()) {
 			return redirectOnError("token_expired");
 		}
