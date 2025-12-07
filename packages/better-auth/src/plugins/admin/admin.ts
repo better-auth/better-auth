@@ -162,7 +162,9 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 		},
 		endpoints: {
 			...baseEndpoints,
-			...(options?.dynamicAccessControl ? dynamicAccessControlEndpoints : {}),
+			...(options?.dynamicAccessControl?.enabled
+				? dynamicAccessControlEndpoints
+				: {}),
 		} as typeof baseEndpoints &
 			(O extends { dynamicAccessControl: { enabled: true } }
 				? typeof dynamicAccessControlEndpoints

@@ -224,7 +224,7 @@ describe("dynamic access control", async () => {
 		);
 	});
 
-	it("should not be allowed to crate a role with higher permissions than the current role", async () => {
+	it("should not be allowed to create a role with higher permissions than the current role", async () => {
 		const testRole = await client.admin.createRole(
 			{
 				role: `test-${crypto.randomUUID()}`,
@@ -348,7 +348,7 @@ describe("dynamic access control", async () => {
 			{ headers: adminHeaders },
 		);
 		if (!testRole.data) throw testRole.error;
-		expect(
+		await expect(
 			auth.api.deleteRole({
 				body: { roleName: testRole.data.roleData.role },
 				headers,

@@ -845,13 +845,13 @@ This requires the `ac` resource with either the `read` permission to get any rol
 ```ts
 type getRole = {
   /**
-   * The name of the role to delete.
+   * The name of the role to get.
    * Alternatively, you can pass a `roleId`
    * parameter instead.
    */
    roleName?: string = "my-role"
   /**
-   * The id of the role to delete.
+   * The id of the role to get.
    * Alternatively, you can pass a `roleName`
    * parameter instead.
    */
@@ -873,13 +873,13 @@ To update a role, you can use the `updateRole` function and pass either a `roleN
 ```ts
 type updateRole = {
   /**
-   * The name of the role to delete.
+   * The name of the role to update.
    * Alternatively, you can pass a `roleId`
    * parameter instead.
    */
    roleName?: string = "my-role"
   /**
-   * The id of the role to delete.
+   * The id of the role to update.
    * Alternatively, you can pass a `roleName`
    * parameter instead.
    */

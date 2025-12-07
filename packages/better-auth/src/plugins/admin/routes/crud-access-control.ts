@@ -234,7 +234,7 @@ export const deleteRole = <O extends AdminOptions>(options: O) => {
 			}
 
 			if (ctx.body.roleName) {
-				const roleName = ctx.body.roleName;
+				const roleName = normalizeRoleName(ctx.body.roleName);
 				const defaultRoles = options.roles
 					? Object.keys(options.roles)
 					: ["admin", "user"];
@@ -396,7 +396,7 @@ export const getRole = <O extends AdminOptions>(options: O) => {
 	return createAuthEndpoint(
 		"/admin/get-role",
 		{
-			method: "POST",
+			method: "GET",
 			requireHeaders: true,
 			use: [adminMiddleware],
 			query: getRoleSchema,
@@ -452,14 +452,14 @@ export const getRole = <O extends AdminOptions>(options: O) => {
 			}
 
 			let conditions: Where[] = [];
-			if (ctx.query.roleName) {
+			if (ctx.query?.roleName) {
 				conditions.push({
 					field: "role",
 					value: ctx.query.roleName,
 					operator: "eq",
 					connector: "AND",
 				});
-			} else if (ctx.query.roleId) {
+			} else if (ctx.query?.roleId) {
 				conditions.push({
 					field: "id",
 					value: ctx.query.roleId,
