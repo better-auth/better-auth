@@ -351,6 +351,20 @@ The plugin requires additional fields in the `scimProvider` table to store the p
     ]}
 />
 
+And adds one field in the `user` table:
+
+<DatabaseTable
+  fields={[
+    {
+      name: "active",
+      type: "boolean",
+      description:
+        "Indicates whether the user is active.",
+      isOptional: true,
+    }
+  ]}
+/>
+
 
 ## Options
 
