@@ -38,6 +38,17 @@ export type UsernameOptions = {
 	usernameValidator?:
 		| ((username: string) => boolean | Promise<boolean>)
 		| undefined;
+
+	/**
+	 * A function to check if a username is available
+	 *
+	 * This is called before the database query to allow custom availability checks
+	 * (e.g., checking against external systems). Return false if the username is NOT available.
+	 *
+	 */
+	usernameAvailabilityChecker?:
+		| ((username: string) => boolean | Promise<boolean>)
+		| undefined;
 	/**
 	 * A function to validate the display username
 	 *
@@ -447,6 +458,19 @@ export const username = (options?: UsernameOptions | undefined) => {
 							message: ERROR_CODES.INVALID_USERNAME,
 						});
 					}
+
+					if (options?.usernameAvailabilityChecker) {
+						const usernameAvailable = await options.usernameAvailabilityChecker(
+							normalizer(username),
+						);
+
+						if (!usernameAvailable) {
+							return ctx.json({
+								available: false,
+							});
+						}
+					}
+
 					const user = await ctx.context.adapter.findOne<User>({
 						model: "user",
 						where: [
@@ -514,6 +538,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 									message: ERROR_CODES.INVALID_USERNAME,
 								});
 							}
+
 							const user = await ctx.context.adapter.findOne<User>({
 								model: "user",
 								where: [

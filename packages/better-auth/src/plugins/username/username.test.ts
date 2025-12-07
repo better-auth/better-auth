@@ -574,3 +574,45 @@ describe("username email verification flow (no info leak)", async (it) => {
 		expect(res.error?.code).toBe("EMAIL_NOT_VERIFIED");
 	});
 });
+
+describe("usernameAvailabilityChecker", async (it) => {
+	// Simulated external system with reserved usernames
+	const externalReservedUsernames = new Set([
+		"admin",
+		"root",
+		"system",
+		"moderator",
+	]);
+
+	const { client } = await getTestInstance(
+		{
+			plugins: [
+				username({
+					usernameAvailabilityChecker: async (username) => {
+						// Check if username is reserved in external system
+						return !externalReservedUsernames.has(username.toLowerCase());
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [usernameClient()],
+			},
+		},
+	);
+
+	it("should return available: false for externally reserved username via isUsernameAvailable", async () => {
+		const res = await client.isUsernameAvailable({
+			username: "admin",
+		});
+		expect(res.data?.available).toBe(false);
+	});
+
+	it("should return available: true for non-reserved username", async () => {
+		const res = await client.isUsernameAvailable({
+			username: "regular_user",
+		});
+		expect(res.data?.available).toBe(true);
+	});
+});
