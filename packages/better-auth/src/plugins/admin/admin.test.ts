@@ -1306,7 +1306,7 @@ describe("access control", async (it) => {
 		);
 	});
 
-	it("should throw error when assigning unconfigured admin roles", async () => {
+	it("should throw error when assigning non-existent admin roles", async () => {
 		expect(() =>
 			admin({
 				adminRoles: ["non-existent-role"],
