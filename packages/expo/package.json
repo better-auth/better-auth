@@ -5,9 +5,10 @@
   "description": "Better Auth integration for Expo and React Native applications.",
   "main": "dist/index.mjs",
   "module": "dist/index.mjs",
+  "types": "dist/index.d.mts",
   "repository": {
     "type": "git",
-    "url": "https://github.com/better-auth/better-auth",
+    "url": "git+https://github.com/better-auth/better-auth.git",
     "directory": "packages/expo"
   },
   "homepage": "https://www.better-auth.com/docs/integrations/expo",
