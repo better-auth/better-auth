@@ -62,11 +62,11 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 	};
 
 	const dynamicAccessControlEndpoints = {
-		createRole: createRole<O>(opts as O),
-		deleteRole: deleteRole<O>(opts as O),
-		listRoles: listRoles<O>(opts as O),
-		getRole: getRole<O>(opts as O),
-		updateRole: updateRole<O>(opts as O),
+		createRole: createRole(opts as O),
+		deleteRole: deleteRole(opts as O),
+		listRoles: listRoles(opts as O),
+		getRole: getRole(opts as O),
+		updateRole: updateRole(opts as O),
 	};
 
 	return {

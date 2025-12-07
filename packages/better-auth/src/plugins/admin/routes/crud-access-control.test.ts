@@ -114,11 +114,7 @@ describe("dynamic access control", async () => {
 		},
 	});
 
-	const {
-		headers: adminHeaders,
-		user: adminUser,
-		session,
-	} = await signInWithTestUser();
+	const { headers: adminHeaders } = await signInWithTestUser();
 
 	const moderator = {
 		id: "456",
