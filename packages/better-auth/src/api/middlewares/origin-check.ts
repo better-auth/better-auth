@@ -2,8 +2,7 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
-import { getHost, getOrigin, getProtocol } from "../../utils/url";
-import { wildcardMatch } from "../../utils/wildcard";
+import { matchesOriginPattern } from "../../auth/trusted-origins";
 
 /**
  * A middleware to validate callbackURL and origin against trustedOrigins.
@@ -110,7 +109,6 @@ async function validateOrigin(
 		throw new APIError("FORBIDDEN", { message: "Missing or null Origin" });
 	}
 
-	// Handle dynamic trusted origins (function-based) or static (array-based)
 	const trustedOrigins: string[] = Array.isArray(
 		ctx.context.options.trustedOrigins,
 	)
@@ -119,28 +117,9 @@ async function validateOrigin(
 				...ctx.context.trustedOrigins,
 				...((await ctx.context.options.trustedOrigins?.(ctx.request)) || []),
 			];
-	const matchesPattern = (url: string, pattern: string): boolean => {
-		if (url.startsWith("/")) {
-			return false;
-		}
-		if (pattern.includes("*")) {
-			if (pattern.includes("://")) {
-				return wildcardMatch(pattern)(getOrigin(url) || url);
-			}
-			const host = getHost(url);
-			if (!host) {
-				return false;
-			}
-			return wildcardMatch(pattern)(host);
-		}
-		const protocol = getProtocol(url);
-		return protocol === "http:" || protocol === "https:" || !protocol
-			? pattern === getOrigin(url)
-			: url.startsWith(pattern);
-	};
 
-	const isTrustedOrigin = ctx.context.isTrustedOrigin(originHeader)
-		matchesPattern(originHeader, origin),
+	const isTrustedOrigin = trustedOrigins.some((origin) =>
+		matchesOriginPattern(originHeader, origin),
 	);
 	if (!isTrustedOrigin) {
 		ctx.context.logger.error(`Invalid origin: ${originHeader}`);
