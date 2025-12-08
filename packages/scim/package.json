@@ -1,7 +1,7 @@
 {
   "name": "@better-auth/scim",
   "author": "Jonathan Samines",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "type": "module",
   "main": "dist/index.mjs",
   "types": "dist/index.d.mts",
@@ -59,6 +59,6 @@
     "tsdown": "catalog:"
   },
   "peerDependencies": {
-    "better-auth": "workspace:*"
+    "@decocms/better-auth": "workspace:*"
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/expo",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "type": "module",
   "description": "Better Auth integration for Expo and React Native applications.",
   "main": "dist/index.mjs",
@@ -56,7 +56,7 @@
     "@better-auth/core": "workspace:*",
     "@better-fetch/fetch": "catalog:",
     "@types/better-sqlite3": "^7.6.13",
-    "better-auth": "workspace:*",
+    "@decocms/better-auth": "workspace:*",
     "better-sqlite3": "^12.2.0",
     "expo-constants": "~17.1.7",
     "expo-network": "^8.0.7",
@@ -66,7 +66,7 @@
     "tsdown": "catalog:"
   },
   "peerDependencies": {
-    "better-auth": "workspace:*",
+    "@decocms/better-auth": "workspace:*",
     "@better-auth/core": "workspace:*",
     "expo-constants": ">=17.0.0",
     "expo-linking": ">=7.0.0",

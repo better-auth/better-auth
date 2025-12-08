@@ -1,7 +1,7 @@
 {
   "name": "@better-auth/sso",
   "author": "Bereket Engida",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "type": "module",
   "main": "dist/index.mjs",
   "types": "dist/index.d.mts",
@@ -69,13 +69,13 @@
     "@types/body-parser": "^1.19.6",
     "@types/express": "^5.0.5",
     "better-call": "catalog:",
-    "better-auth": "workspace:*",
+    "@decocms/better-auth": "workspace:*",
     "body-parser": "^2.2.1",
     "express": "^5.1.0",
     "oauth2-mock-server": "^8.2.0",
     "tsdown": "catalog:"
   },
   "peerDependencies": {
-    "better-auth": "workspace:*"
+    "@decocms/better-auth": "workspace:*"
   }
 }

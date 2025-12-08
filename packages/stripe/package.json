@@ -1,7 +1,7 @@
 {
   "name": "@better-auth/stripe",
   "author": "Bereket Engida",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "type": "module",
   "main": "dist/index.mjs",
   "types": "dist/index.d.mts",
@@ -57,12 +57,12 @@
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
-    "better-auth": "workspace:*",
+    "@decocms/better-auth": "workspace:*",
     "stripe": "^18 || ^19 || ^20"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
-    "better-auth": "workspace:*",
+    "@decocms/better-auth": "workspace:*",
     "better-call": "catalog:",
     "stripe": "^20.0.0",
     "tsdown": "catalog:"
