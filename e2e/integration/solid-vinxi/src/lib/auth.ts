@@ -12,8 +12,6 @@ export const auth = betterAuth({
 		enabled: true,
 	},
 	trustedOrigins: [
-		baseURL,
-		"http://localhost:3000",
 		"http://test.com:3000", // Playwright host mapping if used
 	],
 });
