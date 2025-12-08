@@ -47,7 +47,7 @@
     "@radix-ui/react-toggle": "^1.1.10",
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.8",
-    "@react-email/components": "^0.5.1",
+    "@react-email/components": "^1.0.1",
     "@tanstack/react-query": "^5.85.9",
     "@types/better-sqlite3": "^7.6.13",
     "better-auth": "workspace:*",
