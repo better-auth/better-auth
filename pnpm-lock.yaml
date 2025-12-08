@@ -78,6 +78,9 @@ importers:
       '@better-auth/expo':
         specifier: workspace:*
         version: link:../../packages/expo
+      '@decocms/better-auth':
+        specifier: workspace:*
+        version: link:../../packages/better-auth
       '@expo/metro-runtime':
         specifier: ^6.1.2
         version: 6.1.2(expo@54.0.21)(react-dom@19.2.1(react@19.2.1))(react-native@0.81.5(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.3))(@react-native/metro-config@0.81.0(@babel/core@7.28.4))(@types/react@19.2.2)(react@19.2.1))(react@19.2.1)
@@ -111,9 +114,6 @@ importers:
       babel-plugin-transform-import-meta:
         specifier: ^2.2.1
         version: 2.3.3(@babel/core@7.28.4)
-      better-auth:
-        specifier: workspace:*
-        version: link:../../packages/better-auth
       better-sqlite3:
         specifier: ^11.6.0
         version: 11.10.0
@@ -232,6 +232,9 @@ importers:
       '@better-auth/stripe':
         specifier: workspace:*
         version: link:../../packages/stripe
+      '@decocms/better-auth':
+        specifier: workspace:*
+        version: link:../../packages/better-auth
       '@hookform/resolvers':
         specifier: ^5.2.1
         version: 5.2.1(react-hook-form@7.62.0(react@19.2.1))
@@ -337,9 +340,6 @@ importers:
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
-      better-auth:
-        specifier: workspace:*
-        version: link:../../packages/better-auth
       better-sqlite3:
         specifier: ^12.2.0
         version: 12.4.1
@@ -461,6 +461,9 @@ importers:
 
   demo/oidc-client:
     dependencies:
+      '@decocms/better-auth':
+        specifier: workspace:*
+        version: link:../../packages/better-auth
       '@radix-ui/react-avatar':
         specifier: ^1.1.10
         version: 1.1.10(@types/react-dom@19.2.2(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
@@ -470,9 +473,6 @@ importers:
       '@radix-ui/react-slot':
         specifier: ^1.2.3
         version: 1.2.3(@types/react@19.2.2)(react@19.2.1)
-      better-auth:
-        specifier: workspace:*
-        version: link:../../packages/better-auth
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -531,7 +531,7 @@ importers:
 
   demo/stateless:
     dependencies:
-      better-auth:
+      '@decocms/better-auth':
         specifier: workspace:*
         version: link:../../packages/better-auth
       next:
@@ -860,7 +860,7 @@ importers:
 
   e2e/integration:
     dependencies:
-      better-auth:
+      '@decocms/better-auth':
         specifier: workspace:*
         version: link:../../packages/better-auth
     devDependencies:
@@ -870,15 +870,15 @@ importers:
 
   e2e/integration/solid-vinxi:
     dependencies:
+      '@decocms/better-auth':
+        specifier: workspace:*
+        version: link:../../../packages/better-auth
       '@solidjs/router':
         specifier: ^0.15.3
         version: 0.15.3(solid-js@1.9.9)
       '@solidjs/start':
         specifier: ^1.1.7
         version: 1.1.7(289b7b32f8ebc3ad2c4aa2de3cbda9c6)
-      better-auth:
-        specifier: workspace:*
-        version: link:../../../packages/better-auth
       better-sqlite3:
         specifier: ^12.2.0
         version: 12.4.1
@@ -901,7 +901,7 @@ importers:
 
   e2e/integration/vanilla-node:
     dependencies:
-      better-auth:
+      '@decocms/better-auth':
         specifier: workspace:*
         version: link:../../../packages/better-auth
       better-sqlite3:
@@ -926,13 +926,13 @@ importers:
 
   e2e/smoke:
     dependencies:
-      better-auth:
+      '@decocms/better-auth':
         specifier: workspace:*
         version: link:../../packages/better-auth
 
   e2e/smoke/test/fixtures/cloudflare:
     dependencies:
-      better-auth:
+      '@decocms/better-auth':
         specifier: workspace:*
         version: link:../../../../../packages/better-auth
       drizzle-orm:
@@ -966,7 +966,7 @@ importers:
       '@better-auth/stripe':
         specifier: workspace:*
         version: link:../../../../../packages/stripe
-      better-auth:
+      '@decocms/better-auth':
         specifier: workspace:*
         version: link:../../../../../packages/better-auth
       stripe:
@@ -978,31 +978,31 @@ importers:
       '@better-auth/sso':
         specifier: workspace:*
         version: link:../../../../../packages/sso
-      better-auth:
+      '@decocms/better-auth':
         specifier: workspace:*
         version: link:../../../../../packages/better-auth
 
   e2e/smoke/test/fixtures/tsconfig-isolated-module-bundler:
     dependencies:
-      better-auth:
+      '@decocms/better-auth':
         specifier: workspace:*
         version: link:../../../../../packages/better-auth
       better-auth-harmony:
         specifier: ^1.2.5
-        version: 1.2.5(better-auth@packages+better-auth)
+        version: 1.2.5(better-auth@1.4.5(@lynx-js/react@0.114.0(@types/react@19.2.2))(@sveltejs/kit@2.37.1(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.1.3(svelte@5.38.2)(vite@7.2.6(@types/node@24.10.1)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.2)))(svelte@5.38.2)(vite@7.2.6(@types/node@24.10.1)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.2)))(@tanstack/react-start@1.139.8(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(vite@7.2.6(@types/node@24.10.1)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.2)))(next@16.0.7(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(sass@1.90.0))(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(solid-js@1.9.9)(svelte@5.38.2)(vue@3.5.19(typescript@5.9.3)))
 
   e2e/smoke/test/fixtures/tsconfig-verbatim-module-syntax-node10:
     dependencies:
       '@better-auth/expo':
         specifier: workspace:*
         version: link:../../../../../packages/expo
-      better-auth:
+      '@decocms/better-auth':
         specifier: workspace:*
         version: link:../../../../../packages/better-auth
 
   e2e/smoke/test/fixtures/vite:
     dependencies:
-      better-auth:
+      '@decocms/better-auth':
         specifier: workspace:*
         version: link:../../../../../packages/better-auth
     devDependencies:
@@ -1013,11 +1013,11 @@ importers:
   packages/better-auth:
     dependencies:
       '@better-auth/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: 1.4.6-beta.3
+        version: 1.4.6-beta.3(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(better-call@1.1.5(zod@4.1.13))(jose@6.1.0)(kysely@0.28.5)(nanostores@1.0.1)
       '@better-auth/telemetry':
-        specifier: workspace:*
-        version: link:../telemetry
+        specifier: 1.4.6-beta.3
+        version: 1.4.6-beta.3(@better-auth/core@1.4.6-beta.3(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(better-call@1.1.5(zod@4.1.13))(jose@6.1.0)(kysely@0.28.5)(nanostores@1.0.1))
       '@better-auth/utils':
         specifier: 0.3.0
         version: 0.3.0
@@ -1169,6 +1169,9 @@ importers:
       '@clack/prompts':
         specifier: ^0.11.0
         version: 0.11.0
+      '@decocms/better-auth':
+        specifier: workspace:^
+        version: link:../better-auth
       '@mrleebo/prisma-ast':
         specifier: ^0.13.0
         version: 0.13.0
@@ -1178,9 +1181,6 @@ importers:
       '@types/pg':
         specifier: ^8.15.5
         version: 8.15.5
-      better-auth:
-        specifier: workspace:^
-        version: link:../better-auth
       better-sqlite3:
         specifier: ^12.2.0
         version: 12.4.1
@@ -1295,12 +1295,12 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
+      '@decocms/better-auth':
+        specifier: workspace:*
+        version: link:../better-auth
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
-      better-auth:
-        specifier: workspace:*
-        version: link:../better-auth
       better-sqlite3:
         specifier: ^12.2.0
         version: 12.4.1
@@ -1350,7 +1350,7 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
-      better-auth:
+      '@decocms/better-auth':
         specifier: workspace:*
         version: link:../better-auth
       tsdown:
@@ -1362,7 +1362,7 @@ importers:
       '@better-auth/utils':
         specifier: 0.3.0
         version: 0.3.0
-      better-auth:
+      '@decocms/better-auth':
         specifier: workspace:*
         version: link:../better-auth
       better-call:
@@ -1397,15 +1397,15 @@ importers:
         specifier: ^4.1.12
         version: 4.1.13
     devDependencies:
+      '@decocms/better-auth':
+        specifier: workspace:*
+        version: link:../better-auth
       '@types/body-parser':
         specifier: ^1.19.6
         version: 1.19.6
       '@types/express':
         specifier: ^5.0.5
         version: 5.0.5
-      better-auth:
-        specifier: workspace:*
-        version: link:../better-auth
       better-call:
         specifier: 'catalog:'
         version: 1.1.5(zod@4.1.13)
@@ -1434,7 +1434,7 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
-      better-auth:
+      '@decocms/better-auth':
         specifier: workspace:*
         version: link:../better-auth
       better-call:
@@ -1474,7 +1474,7 @@ importers:
       '@better-fetch/fetch':
         specifier: 'catalog:'
         version: 1.1.18
-      better-auth:
+      '@decocms/better-auth':
         specifier: workspace:*
         version: link:../packages/better-auth
       msw:
@@ -2356,6 +2356,36 @@ packages:
   '@babel/types@7.28.5':
     resolution: {integrity: sha512-qQ5m48eI/MFLQ5PxQj4PFaprjyCTLI37ElWMmNs0K8Lk3dVeOdNpB3ks8jc7yM5CDmVC73eMVk/trk3fgmrUpA==}
     engines: {node: '>=6.9.0'}
+
+  '@better-auth/core@1.4.5':
+    resolution: {integrity: sha512-dQ3hZOkUJzeBXfVEPTm2LVbzmWwka1nqd9KyWmB2OMlMfjr7IdUeBX4T7qJctF67d7QDhlX95jMoxu6JG0Eucw==}
+    peerDependencies:
+      '@better-auth/utils': 0.3.0
+      '@better-fetch/fetch': 1.1.18
+      better-call: 1.1.4
+      jose: ^6.1.0
+      kysely: ^0.28.5
+      nanostores: ^1.0.1
+
+  '@better-auth/core@1.4.6-beta.3':
+    resolution: {integrity: sha512-yjiu7wva4a0HFiWNWoaKfazLXMOx0+2mpyIbB5A1ov1Ta/YXZAg7jeh9A9uyBGXI8Y2qBVMYExumXVp1m1Xz+w==}
+    peerDependencies:
+      '@better-auth/utils': 0.3.0
+      '@better-fetch/fetch': 1.1.18
+      better-call: 1.1.4
+      jose: ^6.1.0
+      kysely: ^0.28.5
+      nanostores: ^1.0.1
+
+  '@better-auth/telemetry@1.4.5':
+    resolution: {integrity: sha512-r3NyksbaBYA10SC86JA6QwmZfHwFutkUGcphgWGfu6MVx1zutYmZehIeC8LxTjOWZqqF9FI8vLjglWBHvPQeTg==}
+    peerDependencies:
+      '@better-auth/core': 1.4.5
+
+  '@better-auth/telemetry@1.4.6-beta.3':
+    resolution: {integrity: sha512-97xIVEV6qf45IA6eXSwoD7jj95yVgVTOazsV000Q3jIcCLExSMzjQKOMniGiWsNF2UF+ZjpxWtixZ/HK98gXUw==}
+    peerDependencies:
+      '@better-auth/core': 1.4.6-beta.3
 
   '@better-auth/utils@0.3.0':
     resolution: {integrity: sha512-W+Adw6ZA6mgvnSnhOki270rwJ42t4XzSK6YWGF//BbVXL6SwCLWfyzBc1lN2m/4RM28KubdBKQ4X5VMoLRNPQw==}
@@ -7275,6 +7305,46 @@ packages:
     resolution: {integrity: sha512-4YaAK5vrLnB6heImYJB8Pf524BPFrOYmUy1IFTHk6btGDCbgh3xT/hBCM6Ougwv/drURxtfZlB/FPktIjKLMtg==}
     peerDependencies:
       better-auth: ^1.0.3
+
+  better-auth@1.4.5:
+    resolution: {integrity: sha512-pHV2YE0OogRHvoA6pndHXCei4pcep/mjY7psSaHVrRgjBtumVI68SV1g9U9XPRZ4KkoGca9jfwuv+bB2UILiFw==}
+    peerDependencies:
+      '@lynx-js/react': '*'
+      '@sveltejs/kit': ^2.0.0
+      '@tanstack/react-start': ^1.0.0
+      next: ^14.0.0 || ^15.0.0 || ^16.0.0
+      react: ^18.0.0 || ^19.0.0
+      react-dom: ^18.0.0 || ^19.0.0
+      solid-js: ^1.0.0
+      svelte: ^4.0.0 || ^5.0.0
+      vue: ^3.0.0
+    peerDependenciesMeta:
+      '@lynx-js/react':
+        optional: true
+      '@sveltejs/kit':
+        optional: true
+      '@tanstack/react-start':
+        optional: true
+      next:
+        optional: true
+      react:
+        optional: true
+      react-dom:
+        optional: true
+      solid-js:
+        optional: true
+      svelte:
+        optional: true
+      vue:
+        optional: true
+
+  better-call@1.1.4:
+    resolution: {integrity: sha512-NJouLY6IVKv0nDuFoc6FcbKDFzEnmgMNofC9F60Mwx1Ecm7X6/Ecyoe5b+JSVZ42F/0n46/M89gbYP1ZCVv8xQ==}
+    peerDependencies:
+      zod: ^4.0.0
+    peerDependenciesMeta:
+      zod:
+        optional: true
 
   better-call@1.1.5:
     resolution: {integrity: sha512-nQJ3S87v6wApbDwbZ++FrQiSiVxWvZdjaO+2v6lZJAG2WWggkB2CziUDjPciz3eAt9TqfRursIQMZIcpkBnvlw==}
@@ -15259,6 +15329,40 @@ snapshots:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.28.5
 
+  '@better-auth/core@1.4.5(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(better-call@1.1.4(zod@4.1.13))(jose@6.1.0)(kysely@0.28.5)(nanostores@1.0.1)':
+    dependencies:
+      '@better-auth/utils': 0.3.0
+      '@better-fetch/fetch': 1.1.18
+      '@standard-schema/spec': 1.0.0
+      better-call: 1.1.4(zod@4.1.13)
+      jose: 6.1.0
+      kysely: 0.28.5
+      nanostores: 1.0.1
+      zod: 4.1.13
+
+  '@better-auth/core@1.4.6-beta.3(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(better-call@1.1.5(zod@4.1.13))(jose@6.1.0)(kysely@0.28.5)(nanostores@1.0.1)':
+    dependencies:
+      '@better-auth/utils': 0.3.0
+      '@better-fetch/fetch': 1.1.18
+      '@standard-schema/spec': 1.0.0
+      better-call: 1.1.5(zod@4.1.13)
+      jose: 6.1.0
+      kysely: 0.28.5
+      nanostores: 1.0.1
+      zod: 4.1.13
+
+  '@better-auth/telemetry@1.4.5(@better-auth/core@1.4.5(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(better-call@1.1.4(zod@4.1.13))(jose@6.1.0)(kysely@0.28.5)(nanostores@1.0.1))':
+    dependencies:
+      '@better-auth/core': 1.4.5(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(better-call@1.1.4(zod@4.1.13))(jose@6.1.0)(kysely@0.28.5)(nanostores@1.0.1)
+      '@better-auth/utils': 0.3.0
+      '@better-fetch/fetch': 1.1.18
+
+  '@better-auth/telemetry@1.4.6-beta.3(@better-auth/core@1.4.6-beta.3(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(better-call@1.1.5(zod@4.1.13))(jose@6.1.0)(kysely@0.28.5)(nanostores@1.0.1))':
+    dependencies:
+      '@better-auth/core': 1.4.6-beta.3(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(better-call@1.1.5(zod@4.1.13))(jose@6.1.0)(kysely@0.28.5)(nanostores@1.0.1)
+      '@better-auth/utils': 0.3.0
+      '@better-fetch/fetch': 1.1.18
+
   '@better-auth/utils@0.3.0': {}
 
   '@better-fetch/fetch@1.1.18': {}
@@ -18687,7 +18791,9 @@ snapshots:
       metro-runtime: 0.83.3
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
     optional: true
 
   '@react-native/normalize-colors@0.74.89': {}
@@ -20671,12 +20777,47 @@ snapshots:
     dependencies:
       safe-buffer: 5.1.2
 
-  better-auth-harmony@1.2.5(better-auth@packages+better-auth):
+  better-auth-harmony@1.2.5(better-auth@1.4.5(@lynx-js/react@0.114.0(@types/react@19.2.2))(@sveltejs/kit@2.37.1(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.1.3(svelte@5.38.2)(vite@7.2.6(@types/node@24.10.1)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.2)))(svelte@5.38.2)(vite@7.2.6(@types/node@24.10.1)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.2)))(@tanstack/react-start@1.139.8(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(vite@7.2.6(@types/node@24.10.1)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.2)))(next@16.0.7(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(sass@1.90.0))(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(solid-js@1.9.9)(svelte@5.38.2)(vue@3.5.19(typescript@5.9.3))):
     dependencies:
-      better-auth: link:packages/better-auth
+      better-auth: 1.4.5(@lynx-js/react@0.114.0(@types/react@19.2.2))(@sveltejs/kit@2.37.1(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.1.3(svelte@5.38.2)(vite@7.2.6(@types/node@24.10.1)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.2)))(svelte@5.38.2)(vite@7.2.6(@types/node@24.10.1)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.2)))(@tanstack/react-start@1.139.8(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(vite@7.2.6(@types/node@24.10.1)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.2)))(next@16.0.7(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(sass@1.90.0))(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(solid-js@1.9.9)(svelte@5.38.2)(vue@3.5.19(typescript@5.9.3))
       libphonenumber-js: 1.12.24
       mailchecker: 6.0.18
       validator: 13.15.15
+
+  better-auth@1.4.5(@lynx-js/react@0.114.0(@types/react@19.2.2))(@sveltejs/kit@2.37.1(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.1.3(svelte@5.38.2)(vite@7.2.6(@types/node@24.10.1)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.2)))(svelte@5.38.2)(vite@7.2.6(@types/node@24.10.1)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.2)))(@tanstack/react-start@1.139.8(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(vite@7.2.6(@types/node@24.10.1)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.2)))(next@16.0.7(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(sass@1.90.0))(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(solid-js@1.9.9)(svelte@5.38.2)(vue@3.5.19(typescript@5.9.3)):
+    dependencies:
+      '@better-auth/core': 1.4.5(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(better-call@1.1.4(zod@4.1.13))(jose@6.1.0)(kysely@0.28.5)(nanostores@1.0.1)
+      '@better-auth/telemetry': 1.4.5(@better-auth/core@1.4.5(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(better-call@1.1.4(zod@4.1.13))(jose@6.1.0)(kysely@0.28.5)(nanostores@1.0.1))
+      '@better-auth/utils': 0.3.0
+      '@better-fetch/fetch': 1.1.18
+      '@noble/ciphers': 2.0.0
+      '@noble/hashes': 2.0.0
+      better-call: 1.1.4(zod@4.1.13)
+      defu: 6.1.4
+      jose: 6.1.0
+      kysely: 0.28.5
+      ms: 4.0.0-nightly.202508271359
+      nanostores: 1.0.1
+      zod: 4.1.13
+    optionalDependencies:
+      '@lynx-js/react': 0.114.0(@types/react@19.2.2)
+      '@sveltejs/kit': 2.37.1(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.1.3(svelte@5.38.2)(vite@7.2.6(@types/node@24.10.1)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.2)))(svelte@5.38.2)(vite@7.2.6(@types/node@24.10.1)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.2))
+      '@tanstack/react-start': 1.139.8(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(vite@7.2.6(@types/node@24.10.1)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.2))
+      next: 16.0.7(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(sass@1.90.0)
+      react: 19.2.1
+      react-dom: 19.2.1(react@19.2.1)
+      solid-js: 1.9.9
+      svelte: 5.38.2
+      vue: 3.5.19(typescript@5.9.3)
+
+  better-call@1.1.4(zod@4.1.13):
+    dependencies:
+      '@better-auth/utils': 0.3.0
+      '@better-fetch/fetch': 1.1.18
+      rou3: 0.7.10
+      set-cookie-parser: 2.7.2
+    optionalDependencies:
+      zod: 4.1.13
 
   better-call@1.1.5(zod@4.1.13):
     dependencies:

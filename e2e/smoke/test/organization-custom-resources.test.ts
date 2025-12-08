@@ -278,7 +278,6 @@ describe("organization custom resources integration", async () => {
 		const testCases = [
 			{ name: "Invalid-Name", reason: "contains dash" },
 			{ name: "Invalid Name", reason: "contains space" },
-			{ name: "InvalidName", reason: "contains uppercase" },
 			{ name: "", reason: "empty" },
 		];
 
@@ -299,6 +298,22 @@ describe("organization custom resources integration", async () => {
 
 			expect(result.error).toBeDefined();
 		}
+	});
+
+	it("should accept uppercase in resource names", async () => {
+		const result = await authClient.organization.createOrgResource(
+			{
+				organizationId,
+				resource: "MyCustomResource",
+				permissions: ["read", "write"],
+			},
+			{
+				headers,
+			},
+		);
+
+		expect(result.data?.success).toBe(true);
+		expect(result.data?.resource.resource).toBe("MyCustomResource");
 	});
 
 	it("should reject reserved resource names", async () => {

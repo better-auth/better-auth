@@ -5,7 +5,7 @@
     "build": "vite build"
   },
   "dependencies": {
-    "better-auth": "workspace:*"
+    "@decocms/better-auth": "workspace:*"
   },
   "devDependencies": {
     "vite": "^7.2.4"

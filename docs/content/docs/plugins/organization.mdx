@@ -1848,7 +1848,7 @@ To create a custom resource for an organization:
 type createOrgResource = {
     /**
      * The name of the resource to create.
-     * Must be lowercase alphanumeric with underscores only.
+     * Must be alphanumeric with underscores only.
      * Length between 1 and 50 characters.
      */
     resource: string = "project"
@@ -2042,24 +2042,25 @@ This is particularly useful when:
 - Migrating existing data structures
 
 <Callout type="info">
-  Auto-creation only works when `enableCustomResources` is `true`. The resource names must still pass validation (lowercase alphanumeric with underscores, not reserved names).
+  Auto-creation only works when `enableCustomResources` is `true`. The resource names must still pass validation (alphanumeric with underscores, not reserved names).
 </Callout>
 
 #### Resource Name Validation
 
 Resource names must follow these rules:
 
-- Must be lowercase alphanumeric with underscores only
+- Must be alphanumeric with underscores only (uppercase and lowercase allowed)
 - Length between 1 and 50 characters
 - Cannot be a reserved name (organization, member, invitation, team, ac by default)
 
 **Valid names:**
 - `project`
+- `Project`
 - `task_123`
-- `my_custom_resource`
+- `myCustomResource`
+- `MY_RESOURCE`
 
 **Invalid names:**
-- `Project` (contains uppercase)
 - `my-resource` (contains dash)
 - `my resource` (contains space)
 - `organization` (reserved name)
@@ -2144,6 +2145,41 @@ To manage custom resources, users need the following permissions from the `ac` r
 - `ac:delete` - Delete resources
 
 By default, only organization owners and admins have these permissions.
+
+### Custom Role Creation Logic
+
+You can extend the default permission checking logic for role creation by providing a `canCreateRole` callback:
+
+```ts
+organization({
+  dynamicAccessControl: {
+    enabled: true,
+    canCreateRole: async ({ member, organizationId, permission, roleName }) => {
+      // Example: Users with "*" wildcard permission can do anything
+      const memberPermissions = JSON.parse(member.permission || "{}");
+      if (memberPermissions["*"]?.includes("*")) {
+        return "yes"; // Allow without further checks
+      }
+      
+      // Custom logic: Only admins can create roles with more than 5 resources
+      if (Object.keys(permission).length > 5 && member.role !== "admin") {
+        return {
+          allowed: false,
+          message: "Only admins can create roles with more than 5 resources"
+        };
+      }
+      
+      // Use default permission logic (check ac:create)
+      return "default";
+    }
+  }
+})
+```
+
+The callback can return:
+- `"yes"` - Allow the action (skip default permission checks)
+- `"default"` - Use the default permission logic (check for `ac: ["create"]`)
+- `{ allowed: false, message: string }` - Deny with a custom error message
 
 #### Database Schema
 

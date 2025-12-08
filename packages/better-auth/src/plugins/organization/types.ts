@@ -129,6 +129,34 @@ export interface OrganizationOptions {
 							name: string,
 					  ) => boolean | { valid: boolean; error?: string })
 					| undefined;
+				/**
+				 * Custom logic to determine if a user can create a role.
+				 *
+				 * @returns
+				 * - "yes" - Allow the action (skip default checks)
+				 * - "default" - Use default permission logic
+				 * - { allowed: false, message: string } - Deny with custom error message
+				 *
+				 * @example
+				 * ```ts
+				 * canCreateRole: async ({ member, organizationId }) => {
+				 *   // Users with "*" permission can do anything
+				 *   if (member.role === "superadmin") return "yes";
+				 *   
+				 *   // Use default logic for others
+				 *   return "default";
+				 * }
+				 * ```
+				 */
+				canCreateRole?: (data: {
+					organizationId: string;
+					userId: string;
+					member: Member & Record<string, any>;
+					permission: Record<string, string[]>;
+					roleName: string;
+				}) => Promise<
+					"yes" | "default" | { allowed: false; message: string }
+				> | "yes" | "default" | { allowed: false; message: string };
 		  }
 		| undefined;
 	/**

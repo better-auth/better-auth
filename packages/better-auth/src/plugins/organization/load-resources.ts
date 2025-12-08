@@ -167,10 +167,10 @@ export function validateResourceName(
 	}
 
 	// Basic format validation
-	if (!/^[a-z0-9_]+$/.test(name)) {
+	if (!/^[a-zA-Z0-9_]+$/.test(name)) {
 		return {
 			valid: false,
-			error: "Resource name must be lowercase alphanumeric with underscores only",
+			error: "Resource name must be alphanumeric with underscores only",
 		};
 	}
 

@@ -4,7 +4,7 @@
     "e2e:integration": "playwright test"
   },
   "dependencies": {
-    "better-auth": "workspace:*"
+    "@decocms/better-auth": "workspace:*"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1"

@@ -10,7 +10,7 @@
     "vite": "^7.2.4"
   },
   "dependencies": {
-    "better-auth": "workspace:*",
+    "@decocms/better-auth": "workspace:*",
     "better-sqlite3": "^12.2.0",
     "kysely": "^0.28.5",
     "kysely-postgres-js": "^3.0.0",

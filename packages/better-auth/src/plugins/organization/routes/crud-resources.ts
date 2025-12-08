@@ -182,8 +182,7 @@ export const createOrgResource = <O extends OrganizationOptions>(options: O) => 
 				});
 			}
 
-			// Normalize resource name (lowercase)
-			resourceName = resourceName.toLowerCase();
+			// Resource name is used as-is (no normalization)
 
 			// Validate resource name
 			const validation = validateResourceName(resourceName, options);
@@ -420,7 +419,7 @@ export const updateOrgResource = <O extends OrganizationOptions>(
 				});
 			}
 
-			const resourceName = ctx.body.resource.toLowerCase();
+			const resourceName = ctx.body.resource;
 			const permissions = ctx.body.permissions;
 			const additionalFields = ctx.body.additionalFields;
 
@@ -620,7 +619,7 @@ export const deleteOrgResource = <O extends OrganizationOptions>(
 				});
 			}
 
-			const resourceName = ctx.body.resource.toLowerCase();
+			const resourceName = ctx.body.resource;
 
 			// Check if resource is reserved (can't delete reserved resources)
 			const reservedNames = getReservedResourceNames(options);
@@ -972,7 +971,7 @@ export const getOrgResource = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			const resourceName = ctx.query.resource.toLowerCase();
+			const resourceName = ctx.query.resource;
 
 			// Check if it's a default resource
 			const defaultResources = options.ac?.statements || {};

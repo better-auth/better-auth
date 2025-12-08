@@ -51,7 +51,7 @@ describe("load-resources utility functions", () => {
 	});
 
 	describe("validateResourceName", () => {
-		it("should accept valid lowercase alphanumeric names", () => {
+		it("should accept valid alphanumeric names", () => {
 			const options: OrganizationOptions = {};
 			expect(validateResourceName("project", options)).toEqual({ valid: true });
 			expect(validateResourceName("task123", options)).toEqual({
@@ -60,13 +60,13 @@ describe("load-resources utility functions", () => {
 			expect(validateResourceName("my_resource", options)).toEqual({
 				valid: true,
 			});
-		});
-
-		it("should reject names with uppercase letters", () => {
-			const options: OrganizationOptions = {};
-			const result = validateResourceName("Project", options);
-			expect(result.valid).toBe(false);
-			expect(result.error).toContain("lowercase");
+			expect(validateResourceName("Project", options)).toEqual({ valid: true });
+			expect(validateResourceName("MyResource", options)).toEqual({
+				valid: true,
+			});
+			expect(validateResourceName("UPPERCASE", options)).toEqual({
+				valid: true,
+			});
 		});
 
 		it("should reject names with special characters", () => {
@@ -203,11 +203,11 @@ describe("load-resources utility functions", () => {
 			expect(validateResourceName("123", options).valid).toBe(true);
 		});
 
-		it("should reject mixed case even with valid characters", () => {
+		it("should accept mixed case with valid characters", () => {
 			const options: OrganizationOptions = {};
-			expect(validateResourceName("camelCase", options).valid).toBe(false);
-			expect(validateResourceName("PascalCase", options).valid).toBe(false);
-			expect(validateResourceName("UPPERCASE", options).valid).toBe(false);
+			expect(validateResourceName("camelCase", options).valid).toBe(true);
+			expect(validateResourceName("PascalCase", options).valid).toBe(true);
+			expect(validateResourceName("UPPERCASE", options).valid).toBe(true);
 		});
 	});
 });

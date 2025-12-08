@@ -174,19 +174,66 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			const canCreateRole = await hasPermission(
-				{
-					options,
+			// Check if user can create role using custom callback or default logic
+			let canCreateRole = false;
+			let customDenialMessage: string | undefined;
+			let skipDelegationCheck = false; // Track if we should skip delegation check
+
+			if (options.dynamicAccessControl?.canCreateRole) {
+				const callbackResult = await options.dynamicAccessControl.canCreateRole({
 					organizationId,
-					permissions: {
-						ac: ["create"],
+					userId: user.id,
+					member,
+					permission,
+					roleName,
+				});
+
+				if (callbackResult === "yes") {
+					canCreateRole = true;
+					skipDelegationCheck = true; // Skip delegation check when callback says "yes"
+					ctx.context.logger.info(
+						`[Dynamic Access Control] Custom canCreateRole callback allowed role creation for user ${user.id}, skipping delegation check`,
+						{
+							userId: user.id,
+							organizationId,
+							roleName,
+						},
+					);
+				} else if (callbackResult === "default") {
+					// Fall through to default logic below
+				} else {
+					// callbackResult is { allowed: false, message: string }
+					canCreateRole = false;
+					customDenialMessage = callbackResult.message;
+					ctx.context.logger.error(
+						`[Dynamic Access Control] Custom canCreateRole callback denied role creation: ${callbackResult.message}`,
+						{
+							userId: user.id,
+							organizationId,
+							roleName,
+						},
+					);
+				}
+			}
+
+			// If callback returned "default" or doesn't exist, use default permission check
+			if (!canCreateRole && !customDenialMessage) {
+				canCreateRole = await hasPermission(
+					{
+						options,
+						organizationId,
+						permissions: {
+							ac: ["create"],
+						},
+						role: member.role,
 					},
-					role: member.role,
-				},
-				ctx,
-			);
+					ctx,
+				);
+			}
+
 			if (!canCreateRole) {
 				ctx.context.logger.error(
+					customDenialMessage || 
 					`[Dynamic Access Control] The user is not permitted to create a role. If this is unexpected, please make sure the role associated to that member has the "ac" resource with the "create" permission.`,
 					{
 						userId: user.id,
@@ -195,7 +242,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 					},
 				);
 				throw new APIError("FORBIDDEN", {
-					message:
+					message: customDenialMessage ||
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE,
 				});
 			}
@@ -233,17 +280,30 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			await checkForInvalidResources({ ac, ctx, permission, organizationId, options });
+			const autoCreatedResources = await checkForInvalidResources({ ac, ctx, permission, organizationId, options });
 
-			await checkIfMemberHasPermission({
-				ctx,
-				member,
-				options,
-				organizationId,
-				permissionRequired: permission,
-				user,
-				action: "create",
-			});
+			// Only perform delegation check if not skipped by custom callback
+			if (!skipDelegationCheck) {
+				await checkIfMemberHasPermission({
+					ctx,
+					member,
+					options,
+					organizationId,
+					permissionRequired: permission,
+					user,
+					action: "create",
+					skipResourcesForDelegationCheck: autoCreatedResources,
+				});
+			} else {
+				ctx.context.logger.info(
+					`[Dynamic Access Control] Skipping delegation check for role creation due to custom canCreateRole callback`,
+					{
+						userId: user.id,
+						organizationId,
+						roleName,
+					},
+				);
+			}
 
 			await checkIfRoleNameIsTakenByRoleInDB({
 				ctx,
@@ -978,7 +1038,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 			if (ctx.body.data.permission) {
 				let newPermission = ctx.body.data.permission;
 
-				await checkForInvalidResources({ 
+				const autoCreatedResources = await checkForInvalidResources({ 
 					ac, 
 					ctx, 
 					permission: newPermission,
@@ -994,6 +1054,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					permissionRequired: newPermission,
 					user,
 					action: "update",
+					skipResourcesForDelegationCheck: autoCreatedResources,
 				});
 
 				updateData.permission = newPermission;
@@ -1066,7 +1127,7 @@ async function checkForInvalidResources({
 	permission: Record<string, string[]>;
 	organizationId: string;
 	options: OrganizationOptions;
-}) {
+}): Promise<string[]> {
 	// Get organization-specific statements (merged default + custom)
 	const orgStatements = await getOrganizationStatements(organizationId, options, ctx);
 	const validResources = Object.keys(orgStatements);
@@ -1076,6 +1137,7 @@ async function checkForInvalidResources({
 	const missingResources = providedResources.filter(
 		(r) => !validResources.includes(r),
 	);
+	const autoCreatedResources: string[] = [];
 
 	// If custom resources are enabled, auto-create missing resources
 	if (missingResources.length > 0 && options.dynamicAccessControl?.enableCustomResources) {
@@ -1141,6 +1203,9 @@ async function checkForInvalidResources({
 						permissions: resourcePermissions,
 					},
 				);
+
+				// Track that this resource was auto-created
+				autoCreatedResources.push(resourceName);
 			}
 		}
 
@@ -1185,6 +1250,9 @@ async function checkForInvalidResources({
 				});
 			}
 		}
+
+		// Return the list of auto-created resources
+		return autoCreatedResources;
 	} else if (missingResources.length > 0) {
 		// Custom resources not enabled, so throw error for missing resources
 		ctx.context.logger.error(
@@ -1222,6 +1290,9 @@ async function checkForInvalidResources({
 			}
 		}
 	}
+
+	// Return empty array if no resources were auto-created
+	return [];
 }
 
 async function checkIfMemberHasPermission({
@@ -1232,6 +1303,7 @@ async function checkIfMemberHasPermission({
 	member,
 	user,
 	action,
+	skipResourcesForDelegationCheck = [],
 }: {
 	ctx: GenericEndpointContext;
 	permissionRequired: Record<string, string[]>;
@@ -1240,6 +1312,7 @@ async function checkIfMemberHasPermission({
 	member: Member;
 	user: User;
 	action: "create" | "update" | "delete" | "read" | "list" | "get";
+	skipResourcesForDelegationCheck?: string[];
 }) {
 	const hasNecessaryPermissions: {
 		resource: { [x: string]: string[] };
@@ -1247,6 +1320,19 @@ async function checkIfMemberHasPermission({
 	}[] = [];
 	const permissionEntries = Object.entries(permission);
 	for await (const [resource, permissions] of permissionEntries) {
+		// Skip delegation check for auto-created resources
+		// Users don't need to have permissions for resources that were just created
+		if (skipResourcesForDelegationCheck.includes(resource)) {
+			ctx.context.logger.info(
+				`[Dynamic Access Control] Skipping permission delegation check for auto-created resource "${resource}"`,
+				{
+					resource,
+					organizationId,
+				},
+			);
+			continue;
+		}
+
 		for await (const perm of permissions) {
 			hasNecessaryPermissions.push({
 				resource: { [resource]: [perm] },

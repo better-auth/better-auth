@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "better-auth": "workspace:*",
+    "@decocms/better-auth": "workspace:*",
     "next": "16.0.7",
     "react": "catalog:react19",
     "react-dom": "catalog:react19"
