@@ -810,6 +810,7 @@ describe("OIDC account linking with domainVerified", async () => {
 					clientSecret: "test",
 					authorizationEndpoint: `${server.issuer.url}/authorize`,
 					tokenEndpoint: `${server.issuer.url}/token`,
+					tokenEndpointAuthentication: "client_secret_basic",
 					jwksEndpoint: `${server.issuer.url}/jwks`,
 					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
 					mapping: {
