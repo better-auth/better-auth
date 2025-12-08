@@ -707,7 +707,9 @@ mapping: {
 ## Domain verification
 
 Domain verification allows your application to automatically trust a new SSO provider
-by automatically validating ownership via the associated domain:
+by automatically validating ownership via the associated domain.
+
+When a provider's domain is verified, it is also trusted for **automatic account linking**. This means that if a user signs in with an SSO provider (OIDC or SAML) and an existing account with the same email exists, the accounts will be linked automatically — as long as the user's email domain matches the provider's verified domain.
 
 <Tabs items={["client", "server"]}>
     <Tab value="client">
