@@ -456,6 +456,19 @@ describe("disabled paths", async () => {
 		);
 		expect(response2).toBeInstanceOf(Response);
 	});
+
+	it("should return 404 for disabled paths with a trailing slash", async () => {
+		const { auth } = await getTestInstance({
+			disabledPaths: ["/sign-in/email"],
+		});
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-in/email/", {
+				method: "POST",
+			}),
+		);
+		expect(response.status).toBe(404);
+	});
 });
 
 describe("debug mode stack trace", () => {
