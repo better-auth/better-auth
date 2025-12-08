@@ -220,6 +220,7 @@ export const createAdapterFactory =
 					try {
 						value = new Date(value);
 					} catch {
+						const logger = createLogger(options.logger);
 						logger.error("[Adapter Factory] Failed to convert string to date", {
 							value,
 							field,
