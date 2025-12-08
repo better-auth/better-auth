@@ -27,8 +27,7 @@ export async function generateState(
 
 	const codeVerifier = generateRandomString(128);
 	const state = generateRandomString(32);
-	const storeStateStrategy =
-		c.context.oauthConfig?.storeStateStrategy || "cookie";
+	const storeStateStrategy = c.context.oauthConfig.storeStateStrategy;
 
 	const stateData = {
 		...(additionalData ? additionalData : {}),
@@ -99,8 +98,7 @@ export async function generateState(
 
 export async function parseState(c: GenericEndpointContext) {
 	const state = c.query.state || c.body.state;
-	const storeStateStrategy =
-		c.context.oauthConfig.storeStateStrategy || "cookie";
+	const storeStateStrategy = c.context.oauthConfig.storeStateStrategy;
 
 	const stateDataSchema = z.looseObject({
 		callbackURL: z.string(),
