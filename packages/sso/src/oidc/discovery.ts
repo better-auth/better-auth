@@ -353,7 +353,7 @@ export function normalizeDiscoveryUrls(
  * @param isTrustedOrigin - Origin verification tester function
  * @returns
  */
-export function normalizeAndValidateUrl(
+function normalizeAndValidateUrl(
 	name: string,
 	endpoint: string,
 	issuer: string,
@@ -411,7 +411,7 @@ export function normalizeUrl(
  * @param [base] optional base path
  * @returns
  */
-export function parseURL(name: string, endpoint: string, base?: string) {
+function parseURL(name: string, endpoint: string, base?: string) {
 	let endpointURL: URL | undefined;
 
 	try {
