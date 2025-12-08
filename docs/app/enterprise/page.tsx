@@ -2,11 +2,41 @@ import Section from "@/components/landing/section";
 import { EnterpriseForm } from "./_components/enterprise-form";
 import { EnterpriseHero } from "./_components/enterprise-hero";
 
-export const metadata = {
-	title: "Enterprise - Better Auth",
-	description:
-		"Better Auth can be deployed securely inside your organization with no data or context stored and no licensing restrictions",
-};
+export async function generateMetadata(): Promise<Metadata> {
+	const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL;
+	const ogImage = `${
+		baseUrl?.startsWith("http") ? baseUrl : `https://${baseUrl}`
+	}/enterprise.png`;
+
+	return {
+		title: "Enterprise | Better Auth",
+		description:
+			"Get direct support from the Better Auth team and deploy Better Auth securely inside your organization.",
+		openGraph: {
+			title: "Enterprise | Better Auth",
+			description:
+				"Get direct support from the Better Auth team and deploy Better Auth securely inside your organization.",
+			images: [
+				{
+					url: ogImage,
+					width: 1200,
+					height: 630,
+					alt: "Better Auth Community",
+				},
+			],
+			url: `${
+				baseUrl?.startsWith("http") ? baseUrl : `https://${baseUrl}`
+			}/enterprise`,
+		},
+		twitter: {
+			card: "summary_large_image",
+			title: "Enterprise | Better Auth",
+			description:
+				"Get direct support from the Better Auth team and deploy Better Auth securely inside your organization.",
+			images: [ogImage],
+		},
+	};
+}
 
 export default function EnterprisePage() {
 	return (

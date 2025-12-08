@@ -3,6 +3,7 @@ import { MobileSearchIcon } from "@/components/mobile-search-icon";
 import { ThemeToggle } from "@/components/theme-toggler";
 import DarkPng from "../public/branding/better-auth-logo-dark.png";
 import WhitePng from "../public/branding/better-auth-logo-light.png";
+import { Grid } from "./blocks/features";
 import { Logo } from "./logo";
 import LogoContextMenu from "./logo-context-menu";
 import { NavLink } from "./nav-link";
@@ -10,29 +11,25 @@ import { NavbarMobile, NavbarMobileBtn } from "./nav-mobile";
 
 export const navMenu = [
 	{
-		name: "Hello_",
+		name: "_hello",
 		path: "/",
 	},
 	{
-		name: "Docs",
+		name: "docs",
 
 		path: "/docs",
 	},
 	{
-		name: "Changelogs",
+		name: "changelogs",
 		path: "/changelogs",
 	},
 	{
-		name: "Blogs",
+		name: "blogs",
 		path: "/blog",
 	},
 	{
-		name: "Community",
+		name: "community",
 		path: "/community",
-	},
-	{
-		name: "Enterprise",
-		path: "/enterprise",
 	},
 ];
 
@@ -110,6 +107,9 @@ export const Navbar = () => {
 								{menu.name}
 							</NavLink>
 						))}
+						<NavLink href="/enterprise" className="relative bg-muted/30">
+							enterprise
+						</NavLink>
 						<NavLink
 							href="https://github.com/better-auth/better-auth"
 							className="bg-muted/20"

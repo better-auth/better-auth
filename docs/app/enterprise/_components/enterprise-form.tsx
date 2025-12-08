@@ -58,9 +58,9 @@ export function EnterpriseForm() {
 	};
 
 	return (
-		<div className="relative bg-linear-to-b from-zinc-50 to-white dark:from-zinc-900 dark:to-zinc-950 border-2 border-zinc-200 dark:border-zinc-800 shadow-[0_0_50px_-15px_rgba(0,0,0,0.1)] dark:shadow-[0_0_50px_-15px_rgba(255,255,255,0.05)] w-full max-w-xl overflow-hidden">
+		<div className="relative bg-gradient-to-b from-zinc-50 to-white dark:from-zinc-950 dark:to-zinc-950 border-2 border-zinc-200 dark:border-zinc-800 shadow-[0_0_50px_-15px_rgba(0,0,0,0.1)] dark:shadow-[0_0_50px_-15px_rgba(255,255,255,0.05)] w-full max-w-xl overflow-hidden">
 			<Grid size={20} />
-			<div className="absolute top-0 left-0 w-full h-px bg-linear-to-r from-transparent via-zinc-300 dark:via-zinc-700 to-transparent"></div>
+			<div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-zinc-300 dark:via-zinc-700 to-transparent"></div>
 			<div className="relative z-10 p-4 md:p-5">
 				<div className="mb-3">
 					<h2 className="text-lg md:text-xl font-bold text-zinc-900 dark:text-white mb-1">
@@ -157,7 +157,7 @@ export function EnterpriseForm() {
 							onChange={(e) =>
 								setFormData({ ...formData, userCount: e.target.value })
 							}
-							className="w-full px-4 py-2 pr-10 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600 transition-all text-sm appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 20 20%27%3E%3Cpath stroke=%27%2371717a%27 strokeLinecap=%27round%27 strokeLinejoin=%27round%27 strokeWidth=%271.5%27 d=%27m6 8 4 4 4-4%27/%3E%3C/svg%3E')] bg-size-[1.25rem] bg-position-[right_0.5rem_center] bg-no-repeat"
+							className="w-full px-4 py-2 pr-10 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600 transition-all text-sm appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 20 20%27%3E%3Cpath stroke=%27%2371717a%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%271.5%27 d=%27m6 8 4 4 4-4%27/%3E%3C/svg%3E')] bg-[length:1.25rem] bg-[right_0.5rem_center] bg-no-repeat"
 						>
 							<option value="">Select range</option>
 							<option value="1-1000">1-1,000 users</option>
