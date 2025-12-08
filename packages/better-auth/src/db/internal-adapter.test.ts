@@ -1,5 +1,4 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { runWithEndpointContext } from "@better-auth/core/context";
 import { safeJSONParse } from "@better-auth/core/utils";
 import Database from "better-sqlite3";
 import { Kysely, SqliteDialect } from "kysely";
@@ -122,22 +121,20 @@ describe("internal adapter test", async () => {
 	const internalAdapter = authContext.internalAdapter;
 
 	it("should create oauth user with custom generate id", async () => {
-		const user = await runWithEndpointContext(ctx, () =>
-			internalAdapter.createOAuthUser(
-				{
-					email: "email@email.com",
-					name: "name",
-					emailVerified: false,
-				},
-				{
-					providerId: "provider",
-					accountId: "account",
-					accessTokenExpiresAt: new Date(),
-					refreshTokenExpiresAt: new Date(),
-					createdAt: new Date(),
-					updatedAt: new Date(),
-				},
-			),
+		const user = await internalAdapter.createOAuthUser(
+			{
+				email: "email@email.com",
+				name: "name",
+				emailVerified: false,
+			},
+			{
+				providerId: "provider",
+				accountId: "account",
+				accessTokenExpiresAt: new Date(),
+				refreshTokenExpiresAt: new Date(),
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
 		);
 		expect(user).toMatchObject({
 			user: {
@@ -443,9 +440,7 @@ describe("internal adapter test", async () => {
 			name: "test-user",
 			email: "test@email.com",
 		});
-		const session = await runWithEndpointContext(ctx, () =>
-			internalAdapter.createSession(user.id),
-		);
+		const session = await internalAdapter.createSession(user.id);
 		const storedSessions: { token: string; expiresAt: number }[] = JSON.parse(
 			map.get(`active-sessions-${user.id}`),
 		);

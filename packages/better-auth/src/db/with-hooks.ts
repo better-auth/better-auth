@@ -26,22 +26,20 @@ export function getWithHooks(
 	) {
 		const context = await getCurrentAuthContext().catch(() => null);
 		let actualData = data;
-		if (context !== null) {
-			for (const hook of hooks || []) {
-				const toRun = hook[model]?.create?.before;
-				if (toRun) {
-					// @ts-expect-error context type mismatch
-					const result = await toRun(actualData as any, context);
-					if (result === false) {
-						return null;
-					}
-					const isObject = typeof result === "object" && "data" in result;
-					if (isObject) {
-						actualData = {
-							...actualData,
-							...result.data,
-						};
-					}
+		for (const hook of hooks || []) {
+			const toRun = hook[model]?.create?.before;
+			if (toRun) {
+				// @ts-expect-error context type mismatch
+				const result = await toRun(actualData as any, context);
+				if (result === false) {
+					return null;
+				}
+				const isObject = typeof result === "object" && "data" in result;
+				if (isObject) {
+					actualData = {
+						...actualData,
+						...result.data,
+					};
 				}
 			}
 		}
@@ -83,22 +81,20 @@ export function getWithHooks(
 		const context = await getCurrentAuthContext().catch(() => null);
 		let actualData = data;
 
-		if (context !== null) {
-			for (const hook of hooks || []) {
-				const toRun = hook[model]?.update?.before;
-				if (toRun) {
-					// @ts-expect-error context type mismatch
-					const result = await toRun(data as any, context);
-					if (result === false) {
-						return null;
-					}
-					const isObject = typeof result === "object" && "data" in result;
-					if (isObject) {
-						actualData = {
-							...actualData,
-							...result.data,
-						};
-					}
+		for (const hook of hooks || []) {
+			const toRun = hook[model]?.update?.before;
+			if (toRun) {
+				// @ts-expect-error context type mismatch
+				const result = await toRun(data as any, context);
+				if (result === false) {
+					return null;
+				}
+				const isObject = typeof result === "object" && "data" in result;
+				if (isObject) {
+					actualData = {
+						...actualData,
+						...result.data,
+					};
 				}
 			}
 		}
@@ -140,22 +136,20 @@ export function getWithHooks(
 		const context = await getCurrentAuthContext().catch(() => null);
 		let actualData = data;
 
-		if (context !== null) {
-			for (const hook of hooks || []) {
-				const toRun = hook[model]?.update?.before;
-				if (toRun) {
-					// @ts-expect-error context type mismatch
-					const result = await toRun(data as any, context);
-					if (result === false) {
-						return null;
-					}
-					const isObject = typeof result === "object" && "data" in result;
-					if (isObject) {
-						actualData = {
-							...actualData,
-							...result.data,
-						};
-					}
+		for (const hook of hooks || []) {
+			const toRun = hook[model]?.update?.before;
+			if (toRun) {
+				// @ts-expect-error context type mismatch
+				const result = await toRun(data as any, context);
+				if (result === false) {
+					return null;
+				}
+				const isObject = typeof result === "object" && "data" in result;
+				if (isObject) {
+					actualData = {
+						...actualData,
+						...result.data,
+					};
 				}
 			}
 		}
@@ -208,7 +202,7 @@ export function getWithHooks(
 			// If we can't find the entity, we'll still proceed with deletion
 		}
 
-		if (entityToDelete && context !== null) {
+		if (entityToDelete) {
 			for (const hook of hooks || []) {
 				const toRun = hook[model]?.delete?.before;
 				if (toRun) {
@@ -268,16 +262,14 @@ export function getWithHooks(
 			// If we can't find the entities, we'll still proceed with deletion
 		}
 
-		if (context !== null) {
-			for (const entity of entitiesToDelete) {
-				for (const hook of hooks || []) {
-					const toRun = hook[model]?.delete?.before;
-					if (toRun) {
-						// @ts-expect-error context type mismatch
-						const result = await toRun(entity as any, context);
-						if (result === false) {
-							return null;
-						}
+		for (const entity of entitiesToDelete) {
+			for (const hook of hooks || []) {
+				const toRun = hook[model]?.delete?.before;
+				if (toRun) {
+					// @ts-expect-error context type mismatch
+					const result = await toRun(entity as any, context);
+					if (result === false) {
+						return null;
 					}
 				}
 			}
