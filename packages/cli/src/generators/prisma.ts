@@ -140,7 +140,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					// SQLite and MySQL don't support array of strings, so we use string instead
 					// adapter should handle JSON.stringify and JSON.parse conversion for these fields
 					if (provider === "sqlite" || provider === "mysql") {
-							return isOptional ? "String?" : "String";
+						return isOptional ? "String?" : "String";
 					}
 					return isOptional ? "String[]" : "String[]";
 				}
