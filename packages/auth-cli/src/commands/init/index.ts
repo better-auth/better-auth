@@ -276,7 +276,7 @@ export async function initAction(opts: any) {
 			await nextStep("Set Environment Variables");
 
 			const shouldCreateEnv = await confirm({
-				message: `Would you like to create a .env file with the necessary environment variables?`,
+				message: `Would you like to set environment variables?`,
 			});
 			if (isCancel(shouldCreateEnv)) {
 				cancel("✋ Operation cancelled.");
@@ -286,7 +286,7 @@ export async function initAction(opts: any) {
 				const { providedSecret } = await prompts({
 					type: "text",
 					name: "providedSecret",
-					message: `Provider secret (used for encryption, hashing, and signing). ${chalk.dim("(Press Enter to auto generate)")}`,
+					message: `Better Auth secret (used for encryption, hashing, and signing). ${chalk.dim("(Press Enter to auto generate)")}`,
 				});
 				if (isCancel(providedSecret)) {
 					cancel("✋ Operation cancelled.");
@@ -295,7 +295,7 @@ export async function initAction(opts: any) {
 				const { providedURL } = await prompts({
 					type: "text",
 					name: "providedURL",
-					message: `Provider base URL:`,
+					message: `Better Auth Base URL (your auth server URL):`,
 					initial: "http://localhost:3000",
 				});
 				if (isCancel(providedURL)) {
@@ -342,7 +342,7 @@ export async function initAction(opts: any) {
 						const { providedSecret } = await prompts({
 							type: "text",
 							name: "providedSecret",
-							message: `Provider secret (used for encryption, hashing, and signing). ${chalk.dim("(Press Enter to auto generate)")}`,
+							message: `Better Auth secret (used for encryption, hashing, and signing). ${chalk.dim("(Press Enter to auto generate)")}`,
 						});
 						if (isCancel(providedSecret)) {
 							cancel("✋ Operation cancelled.");
@@ -355,7 +355,7 @@ export async function initAction(opts: any) {
 						const { providedURL } = await prompts({
 							type: "text",
 							name: "providedURL",
-							message: `Provider base URL:`,
+							message: `Better Auth base URL (your auth server URL):`,
 							initial: "http://localhost:3000",
 						});
 						if (isCancel(providedURL)) {
@@ -401,7 +401,7 @@ export async function initAction(opts: any) {
 			return;
 		}
 	})();
-
+	å;
 	// Auto-detect framework silently
 	const detectedFramework = await autoDetectFramework(cwd);
 	const framework: Framework =
@@ -1007,6 +1007,8 @@ export const auth = betterAuth({
 		}
 
 		if (!framework.routeHandler) return;
+		if (!authConfigFilePath) return;
+
 		const { routeHandler } = framework;
 
 		const fullPath = path.resolve(cwd, routeHandler.path);
@@ -1018,29 +1020,79 @@ export const auth = betterAuth({
 		}
 		await nextStep("Generate Route Handler");
 
+		// Convert absolute path to relative path for display
+		const relativeHandlerPath = path.relative(cwd, fullPath);
+
 		const { filePath } = await prompts({
 			type: "text",
 			name: "filePath",
 			message: `Enter the path to the route handler file:`,
-			initial: fullPath,
+			initial: relativeHandlerPath,
 		});
 		if (isCancel(filePath)) {
 			cancel("✋ Operation cancelled.");
 			process.exit(0);
 		}
 
-		const mkdir = fs.mkdir(path.dirname(filePath), { recursive: true });
+		// Convert user input back to absolute path
+		const cleanHandlerPath = filePath.startsWith("/")
+			? filePath.slice(1)
+			: filePath;
+		const absoluteHandlerPath = path.isAbsolute(cleanHandlerPath)
+			? cleanHandlerPath
+			: path.join(cwd, cleanHandlerPath);
+
+		// Generate the correct import path for the auth file
+		const authImportPath = await generateAuthImportPath(
+			cwd,
+			authConfigFilePath,
+			absoluteHandlerPath,
+			framework,
+		);
+
+		console.log(chalk.dim(`\nDebug: Generating import path...`));
+		console.log(chalk.dim(`  cwd: ${cwd}`));
+		console.log(chalk.dim(`  authConfigFilePath: ${authConfigFilePath}`));
+		console.log(chalk.dim(`  absoluteHandlerPath: ${absoluteHandlerPath}`));
+		console.log(chalk.dim(`  Generated import: ${authImportPath}\n`));
+
+		// Replace the hardcoded import path in the route handler code with the generated one
+		// Common patterns to replace:
+		// - import { auth } from "@/lib/auth"
+		// - import { auth } from "~/lib/auth"
+		// - import { auth } from "$lib/auth"
+		// - import { auth } from "./auth"
+		let updatedCode = routeHandler.code;
+		const importPatterns = [
+			/from\s+["']@\/[^"']+["']/,
+			/from\s+["']~\/[^"']+["']/,
+			/from\s+["']\$lib\/[^"']+["']/,
+			/from\s+["']\.\/[^"']+["']/,
+			/from\s+["']\.\.\/[^"']+["']/,
+		];
+
+		for (const pattern of importPatterns) {
+			const newCode = updatedCode.replace(pattern, `from "${authImportPath}"`);
+			if (newCode !== updatedCode) {
+				updatedCode = newCode;
+				break;
+			}
+		}
+
+		const mkdir = fs.mkdir(path.dirname(absoluteHandlerPath), {
+			recursive: true,
+		});
 		const { error: mkdirError } = await tryCatch(mkdir);
 		if (mkdirError) {
-			const error = `Failed to create directory at ${path.dirname(filePath)}: ${mkdirError.message}`;
+			const error = `Failed to create directory at ${path.dirname(absoluteHandlerPath)}: ${mkdirError.message}`;
 			log.error(error);
 			process.exit(1);
 		}
 
-		const writeFile = fs.writeFile(filePath, routeHandler.code, "utf-8");
+		const writeFile = fs.writeFile(absoluteHandlerPath, updatedCode, "utf-8");
 		const { error: writeFileError } = await tryCatch(writeFile);
 		if (writeFileError) {
-			const error = `Failed to write file at ${filePath}: ${writeFileError.message}`;
+			const error = `Failed to write file at ${absoluteHandlerPath}: ${writeFileError.message}`;
 			log.error(error);
 			process.exit(1);
 		}
@@ -1086,34 +1138,63 @@ export const auth = betterAuth({
 			log.error(`Failed to read directory: ${error.message}`);
 			process.exit(1);
 		}
-		let authConfigPath = path.join(cwd, "lib", "auth-client.ts");
 
-		if (allFiles.some((node) => node === "src")) {
-			authConfigPath = path.join(cwd, "src", "lib", "auth-client.ts");
+		// Determine default auth-client config path based on project structure
+		// Priority: lib/ > root, with src/ prefix if src/ exists
+		const hasSrc = allFiles.some((node) => node === "src");
+		let hasLib = allFiles.some((node) => node === "lib");
+
+		let defaultAuthClientPath: string;
+		if (hasSrc) {
+			// Check if src/lib exists
+			const { data: srcFiles } = await tryCatch(
+				fs.readdir(path.join(cwd, "src"), "utf-8"),
+			);
+			const hasSrcLib = srcFiles?.some((node) => node === "lib");
+			if (hasSrcLib) {
+				defaultAuthClientPath = path.join(cwd, "src", "lib", "auth-client.ts");
+			} else {
+				defaultAuthClientPath = path.join(cwd, "src", "auth-client.ts");
+			}
+		} else if (hasLib) {
+			defaultAuthClientPath = path.join(cwd, "lib", "auth-client.ts");
+		} else {
+			defaultAuthClientPath = path.join(cwd, "auth-client.ts");
 		}
+
+		// Convert absolute path to relative path for display
+		const relativeDefaultClientPath = path.relative(cwd, defaultAuthClientPath);
+
 		const { filePath } = await prompts({
 			type: "text",
 			name: "filePath",
 			message: `Enter the path to the auth-client.ts file:`,
-			initial: authConfigPath,
+			initial: relativeDefaultClientPath,
 		});
 		if (isCancel(filePath)) {
 			cancel("✋ Operation cancelled.");
 			process.exit(0);
 		}
+
+		// Convert relative path back to absolute path
+		const cleanPath = filePath.startsWith("/") ? filePath.slice(1) : filePath;
+		const absoluteClientFilePath = path.isAbsolute(cleanPath)
+			? cleanPath
+			: path.join(cwd, cleanPath);
+
 		const { error: mkdirError } = await tryCatch(
-			fs.mkdir(path.dirname(filePath), { recursive: true }),
+			fs.mkdir(path.dirname(absoluteClientFilePath), { recursive: true }),
 		);
 		if (mkdirError) {
-			const error = `Failed to create auth client directory at ${path.dirname(authConfigPath)}: ${mkdirError.message}`;
+			const error = `Failed to create auth client directory at ${path.dirname(absoluteClientFilePath)}: ${mkdirError.message}`;
 			log.error(error);
 			process.exit(1);
 		}
 		const { error: writeFileError } = await tryCatch(
-			fs.writeFile(filePath, authClientCode, "utf-8"),
+			fs.writeFile(absoluteClientFilePath, authClientCode, "utf-8"),
 		);
 		if (writeFileError) {
-			const error = `Failed to write auth client file at ${authConfigPath}: ${writeFileError.message}`;
+			const error = `Failed to write auth client file at ${absoluteClientFilePath}: ${writeFileError.message}`;
 			log.error(error);
 			process.exit(1);
 		}
