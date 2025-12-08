@@ -1,13 +1,14 @@
 {
   "name": "@better-auth/sso",
   "author": "Bereket Engida",
-  "version": "1.4.6-beta.2",
+  "version": "1.4.6-beta.3",
   "type": "module",
   "main": "dist/index.mjs",
+  "types": "dist/index.d.mts",
   "homepage": "https://www.better-auth.com/docs/plugins/sso",
   "repository": {
     "type": "git",
-    "url": "https://github.com/better-auth/better-auth",
+    "url": "git+https://github.com/better-auth/better-auth.git",
     "directory": "packages/sso"
   },
   "license": "MIT",
