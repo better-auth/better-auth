@@ -2,7 +2,14 @@ import { execSync } from "node:child_process";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { testAdapter } from "../../test-adapter";
-import { normalTestSuite } from "../../tests";
+import {
+	authFlowTestSuite,
+	joinsTestSuite,
+	normalTestSuite,
+	numberIdTestSuite,
+	transactionsTestSuite,
+	uuidTestSuite,
+} from "../../tests";
 import { drizzleAdapter } from "../drizzle-adapter";
 import { generateDrizzleSchema, resetGenerationCount } from "./generate-schema";
 
@@ -52,18 +59,12 @@ const { execute } = await testAdapter({
 	},
 	prefixTests: "pg",
 	tests: [
-		normalTestSuite({
-			disableTests: {
-				ALL: true,
-				"create - should support json": false,
-				"create - should support arrays": false,
-			},
-		}),
-		// transactionsTestSuite({ disableTests: { ALL: true } }),
-		// authFlowTestSuite(),
-		// numberIdTestSuite(),
-		// joinsTestSuite(),
-		// uuidTestSuite(),
+		normalTestSuite(),
+		transactionsTestSuite({ disableTests: { ALL: true } }),
+		authFlowTestSuite(),
+		numberIdTestSuite(),
+		joinsTestSuite(),
+		uuidTestSuite(),
 	],
 	async onFinish() {
 		await cleanupDatabase(true);
