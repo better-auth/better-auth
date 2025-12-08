@@ -31,6 +31,7 @@
   "description": "SSO plugin for Better Auth",
   "scripts": {
     "test": "vitest",
+    "coverage": "vitest run --coverage",
     "lint:package": "publint run --strict",
     "build": "tsdown",
     "dev": "tsdown --watch",
