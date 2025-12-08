@@ -1,6 +1,6 @@
 {
   "name": "@decocms/better-auth",
-  "version": "1.5.4",
+  "version": "1.5.5",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -443,8 +443,8 @@
     }
   },
   "dependencies": {
-    "@better-auth/core": "1.4.5",
-    "@better-auth/telemetry": "1.4.5",
+    "@better-auth/core": "1.4.6-beta.3",
+    "@better-auth/telemetry": "1.4.6-beta.3",
     "@better-auth/utils": "0.3.0",
     "@better-fetch/fetch": "catalog:",
     "@noble/ciphers": "^2.0.0",
