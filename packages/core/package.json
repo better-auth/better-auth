@@ -110,7 +110,8 @@
     "dev": "tsdown --watch",
     "lint:package": "publint run --strict",
     "typecheck": "tsc --project tsconfig.json",
-    "test": "vitest"
+    "test": "vitest",
+    "coverage": "vitest run --coverage"
   },
   "devDependencies": {
     "@better-auth/utils": "0.3.0",
