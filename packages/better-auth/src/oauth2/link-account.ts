@@ -7,20 +7,17 @@ import { setTokenUtil } from "./utils";
 
 export async function handleOAuthUserInfo(
 	c: GenericEndpointContext,
-	{
-		userInfo,
-		account,
-		callbackURL,
-		disableSignUp,
-		overrideUserInfo,
-	}: {
+	opts: {
 		userInfo: Omit<User, "createdAt" | "updatedAt">;
 		account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
 		callbackURL?: string | undefined;
 		disableSignUp?: boolean | undefined;
 		overrideUserInfo?: boolean | undefined;
+		isTrustedProvider?: boolean | undefined;
 	},
 ) {
+	const { userInfo, account, callbackURL, disableSignUp, overrideUserInfo } =
+		opts;
 	const dbUser = await c.context.internalAdapter
 		.findOAuthUser(
 			userInfo.email.toLowerCase(),
@@ -48,9 +45,9 @@ export async function handleOAuthUserInfo(
 		if (!hasBeenLinked) {
 			const trustedProviders =
 				c.context.options.account?.accountLinking?.trustedProviders;
-			const isTrustedProvider = trustedProviders?.includes(
-				account.providerId as "apple",
-			);
+			const isTrustedProvider =
+				opts.isTrustedProvider ||
+				trustedProviders?.includes(account.providerId as "apple");
 			if (
 				(!isTrustedProvider && !userInfo.emailVerified) ||
 				c.context.options.account?.accountLinking?.enabled === false
