@@ -26,6 +26,7 @@ import {
 	DiscoveryError,
 	discoverOIDCConfig,
 	mapDiscoveryErrorToAPIError,
+	needsRuntimeDiscovery,
 } from "../oidc";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
 import { safeJsonParse, validateEmailDomain } from "../utils";
@@ -34,6 +35,38 @@ const spMetadataQuerySchema = z.object({
 	providerId: z.string(),
 	format: z.enum(["xml", "json"]).default("xml"),
 });
+
+/**
+ * Handles discovery errors during callback by redirecting with error params.
+ * Used for runtime fallback discovery in callbackSSO.
+ *
+ * @param ctx - The endpoint context with redirect capability
+ * @param error - The caught error (may or may not be DiscoveryError)
+ * @param redirectURL - The URL to redirect to (errorURL or callbackURL)
+ * @throws Redirect response with error and error_description params
+ */
+function handleDiscoveryErrorInCallback(
+	ctx: { redirect: (url: string) => unknown },
+	error: unknown,
+	redirectURL: string,
+): never {
+	const params = new URLSearchParams();
+
+	if (error instanceof DiscoveryError) {
+		params.set("error", error.code);
+		params.set("error_description", error.message);
+	} else {
+		params.set("error", "discovery_unexpected_error");
+		params.set(
+			"error_description",
+			error instanceof Error ? error.message : "Unknown discovery error",
+		);
+	}
+
+	//support callback URLs that already have query parameters
+	const separator = redirectURL.includes("?") ? "&" : "?";
+	throw ctx.redirect(`${redirectURL}${separator}${params.toString()}`);
+}
 
 export const spMetadata = () => {
 	return createAuthEndpoint(
@@ -1225,30 +1258,33 @@ export const callbackSSO = (options?: SSOOptions) => {
 				);
 			}
 
-			const discovery = await betterFetch<{
-				token_endpoint: string;
-				userinfo_endpoint: string;
-				token_endpoint_auth_method:
-					| "client_secret_basic"
-					| "client_secret_post";
-			}>(config.discoveryEndpoint);
-
-			if (discovery.data) {
-				config = {
-					tokenEndpoint: discovery.data.token_endpoint,
-					tokenEndpointAuthentication:
-						discovery.data.token_endpoint_auth_method,
-					userInfoEndpoint: discovery.data.userinfo_endpoint,
-					scopes: ["openid", "email", "profile", "offline_access"],
-					...config,
-				};
+			if (needsRuntimeDiscovery(config)) {
+				try {
+					const hydrated = await discoverOIDCConfig({
+						issuer: provider.issuer,
+						existingConfig: {
+							discoveryEndpoint: config.discoveryEndpoint,
+							authorizationEndpoint: config.authorizationEndpoint,
+							tokenEndpoint: config.tokenEndpoint,
+							jwksEndpoint: config.jwksEndpoint,
+							userInfoEndpoint: config.userInfoEndpoint,
+							tokenEndpointAuthentication: config.tokenEndpointAuthentication,
+						},
+					});
+					config = {
+						...config,
+						...hydrated,
+					};
+				} catch (error) {
+					handleDiscoveryErrorInCallback(ctx, error, errorURL || callbackURL);
+				}
 			}
 
 			if (!config.tokenEndpoint) {
 				throw ctx.redirect(
 					`${
 						errorURL || callbackURL
-					}/error?error=invalid_provider&error_description=token_endpoint_not_found`,
+					}?error=token_endpoint_not_found&error_description=Missing token endpoint in OIDC configuration`,
 				);
 			}
 
