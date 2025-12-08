@@ -58,6 +58,19 @@ const getAdditionalFields = <
 	};
 };
 
+const baseCreateOrgRoleSchema = z.object({
+	organizationId: z.string().optional().meta({
+		description:
+			"The id of the organization to create the role in. If not provided, the user's active organization will be used.",
+	}),
+	role: z.string().meta({
+		description: "The name of the role to create",
+	}),
+	permission: z.record(z.string(), z.array(z.string())).meta({
+		description: "The permission to assign to the role",
+	}),
+});
+
 export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 	const { additionalFieldsSchema, $AdditionalFields, $ReturnAdditionalFields } =
 		getAdditionalFields<O>(options, false);
@@ -68,17 +81,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 		"/organization/create-role",
 		{
 			method: "POST",
-			body: z.object({
-				organizationId: z.string().optional().meta({
-					description:
-						"The id of the organization to create the role in. If not provided, the user's active organization will be used.",
-				}),
-				role: z.string().meta({
-					description: "The name of the role to create",
-				}),
-				permission: z.record(z.string(), z.array(z.string())).meta({
-					description: "The permission to assign to the role",
-				}),
+			body: baseCreateOrgRoleSchema.safeExtend({
 				additionalFields: z
 					.object({ ...additionalFieldsSchema.shape })
 					.optional(),
@@ -275,32 +278,34 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 	);
 };
 
+const deleteOrgRoleBodySchema = z
+	.object({
+		organizationId: z.string().optional().meta({
+			description:
+				"The id of the organization to create the role in. If not provided, the user's active organization will be used.",
+		}),
+	})
+	.and(
+		z.union([
+			z.object({
+				roleName: z.string().nonempty().meta({
+					description: "The name of the role to delete",
+				}),
+			}),
+			z.object({
+				roleId: z.string().nonempty().meta({
+					description: "The id of the role to delete",
+				}),
+			}),
+		]),
+	);
+
 export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 	return createAuthEndpoint(
 		"/organization/delete-role",
 		{
 			method: "POST",
-			body: z
-				.object({
-					organizationId: z.string().optional().meta({
-						description:
-							"The id of the organization to create the role in. If not provided, the user's active organization will be used.",
-					}),
-				})
-				.and(
-					z.union([
-						z.object({
-							roleName: z.string().nonempty().meta({
-								description: "The name of the role to delete",
-							}),
-						}),
-						z.object({
-							roleId: z.string().nonempty().meta({
-								description: "The id of the role to delete",
-							}),
-						}),
-					]),
-				),
+			body: deleteOrgRoleBodySchema,
 			requireHeaders: true,
 			use: [orgSessionMiddleware],
 			metadata: {
@@ -316,7 +321,6 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 		async (ctx) => {
 			const { session, user } = ctx.context.session;
 
-			// We can verify if the org id is valid and associated with the user in the next step when we try to find the member.
 			const organizationId =
 				ctx.body.organizationId ?? session.activeOrganizationId;
 			if (!organizationId) {
@@ -328,8 +332,6 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// Get the user's role associated with the organization.
-			// This also serves as a check to ensure the org id is valid.
 			const member = await ctx.context.adapter.findOne<Member>({
 				model: "member",
 				where: [
@@ -484,6 +486,15 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 	);
 };
 
+const listOrgRolesQuerySchema = z
+	.object({
+		organizationId: z.string().optional().meta({
+			description:
+				"The id of the organization to list roles for. If not provided, the user's active organization will be used.",
+		}),
+	})
+	.optional();
+
 export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 	const { $ReturnAdditionalFields } = getAdditionalFields<O>(options, false);
 	type ReturnAdditionalFields = typeof $ReturnAdditionalFields;
@@ -494,14 +505,7 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 			method: "GET",
 			requireHeaders: true,
 			use: [orgSessionMiddleware],
-			query: z
-				.object({
-					organizationId: z.string().optional().meta({
-						description:
-							"The id of the organization to list roles for. If not provided, the user's active organization will be used.",
-					}),
-				})
-				.optional(),
+			query: listOrgRolesQuerySchema,
 		},
 		async (ctx) => {
 			const { session, user } = ctx.context.session;
@@ -597,6 +601,29 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 	);
 };
 
+const getOrgRoleQuerySchema = z
+	.object({
+		organizationId: z.string().optional().meta({
+			description:
+				"The id of the organization to read a role for. If not provided, the user's active organization will be used.",
+		}),
+	})
+	.and(
+		z.union([
+			z.object({
+				roleName: z.string().nonempty().meta({
+					description: "The name of the role to read",
+				}),
+			}),
+			z.object({
+				roleId: z.string().nonempty().meta({
+					description: "The id of the role to read",
+				}),
+			}),
+		]),
+	)
+	.optional();
+
 export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 	const { $ReturnAdditionalFields } = getAdditionalFields<O>(options, false);
 	type ReturnAdditionalFields = typeof $ReturnAdditionalFields;
@@ -606,28 +633,7 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 			method: "GET",
 			requireHeaders: true,
 			use: [orgSessionMiddleware],
-			query: z
-				.object({
-					organizationId: z.string().optional().meta({
-						description:
-							"The id of the organization to read a role for. If not provided, the user's active organization will be used.",
-					}),
-				})
-				.and(
-					z.union([
-						z.object({
-							roleName: z.string().nonempty().meta({
-								description: "The name of the role to read",
-							}),
-						}),
-						z.object({
-							roleId: z.string().nonempty().meta({
-								description: "The id of the role to read",
-							}),
-						}),
-					]),
-				)
-				.optional(),
+			query: getOrgRoleQuerySchema,
 			metadata: {
 				$Infer: {
 					query: {} as {
@@ -767,6 +773,19 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 	);
 };
 
+const roleNameOrIdSchema = z.union([
+	z.object({
+		roleName: z.string().nonempty().meta({
+			description: "The name of the role to update",
+		}),
+	}),
+	z.object({
+		roleId: z.string().nonempty().meta({
+			description: "The id of the role to update",
+		}),
+	}),
+]);
+
 export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 	const { additionalFieldsSchema, $AdditionalFields, $ReturnAdditionalFields } =
 		getAdditionalFields<O, true>(options, true);
@@ -796,20 +815,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 						...additionalFieldsSchema.shape,
 					}),
 				})
-				.and(
-					z.union([
-						z.object({
-							roleName: z.string().nonempty().meta({
-								description: "The name of the role to update",
-							}),
-						}),
-						z.object({
-							roleId: z.string().nonempty().meta({
-								description: "The id of the role to update",
-							}),
-						}),
-					]),
-				),
+				.and(roleNameOrIdSchema),
 			metadata: {
 				$Infer: {
 					body: {} as {
