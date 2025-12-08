@@ -13,12 +13,14 @@ export async function handleOAuthUserInfo(
 		callbackURL,
 		disableSignUp,
 		overrideUserInfo,
+		isTrustedByDomain,
 	}: {
 		userInfo: Omit<User, "createdAt" | "updatedAt">;
 		account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
 		callbackURL?: string | undefined;
 		disableSignUp?: boolean | undefined;
 		overrideUserInfo?: boolean | undefined;
+		isTrustedByDomain?: boolean | undefined;
 	},
 ) {
 	const dbUser = await c.context.internalAdapter
@@ -52,7 +54,9 @@ export async function handleOAuthUserInfo(
 				account.providerId as "apple",
 			);
 			if (
-				(!isTrustedProvider && !userInfo.emailVerified) ||
+				(!isTrustedProvider &&
+					!isTrustedByDomain &&
+					!userInfo.emailVerified) ||
 				c.context.options.account?.accountLinking?.enabled === false
 			) {
 				if (isDevelopment()) {
