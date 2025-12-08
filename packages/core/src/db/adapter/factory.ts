@@ -1,17 +1,8 @@
-import type { BetterAuthOptions } from "@better-auth/core";
-import type {
-	CleanedWhere,
-	DBAdapter,
-	DBTransactionAdapter,
-	JoinConfig,
-	JoinOption,
-	Where,
-} from "@better-auth/core/db/adapter";
-import { getColorDepth, logger, TTY_COLORS } from "@better-auth/core/env";
-import { BetterAuthError } from "@better-auth/core/error";
-import { withApplyDefault } from "../../adapters/utils";
-import { getAuthTables } from "../../db/get-tables";
+import { createLogger, getColorDepth, TTY_COLORS } from "../../env";
+import { BetterAuthError } from "../../error";
+import type { BetterAuthOptions } from "../../types";
 import { safeJSONParse } from "../../utils/json";
+import { getAuthTables } from "../get-tables";
 import { initGetDefaultFieldName } from "./get-default-field-name";
 import { initGetDefaultModelName } from "./get-default-model-name";
 import { initGetFieldAttributes } from "./get-field-attributes";
@@ -19,10 +10,19 @@ import { initGetFieldName } from "./get-field-name";
 import { initGetIdField } from "./get-id-field";
 import { initGetModelName } from "./get-model-name";
 import type {
+	CleanedWhere,
+	DBAdapter,
+	DBTransactionAdapter,
+	JoinConfig,
+	JoinOption,
+	Where,
+} from "./index";
+import type {
 	AdapterFactoryConfig,
 	AdapterFactoryOptions,
 	AdapterTestDebugLogs,
 } from "./types";
+import { withApplyDefault } from "./utils";
 
 export {
 	initGetDefaultModelName,
@@ -83,6 +83,7 @@ export const createAdapterFactory =
 
 		const debugLog = (...args: any[]) => {
 			if (config.debugLogs === true || typeof config.debugLogs === "object") {
+				const logger = createLogger({ level: "info" });
 				// If we're running adapter tests, we'll keep debug logs in memory, then print them out if a test fails.
 				if (
 					typeof config.debugLogs === "object" &&
@@ -137,6 +138,8 @@ export const createAdapterFactory =
 				}
 			}
 		};
+
+		const logger = createLogger(options.logger);
 
 		const getDefaultModelName = initGetDefaultModelName({
 			usePlural: config.usePlural,
@@ -1358,5 +1361,6 @@ function formatAction(action: string) {
 
 /**
  * @deprecated Use `createAdapterFactory` instead. This export will be removed in a future version.
+ * @alias
  */
 export const createAdapter = createAdapterFactory;

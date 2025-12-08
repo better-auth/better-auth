@@ -1,8 +1,8 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { safeJSONParse } from "@better-auth/core/utils";
 import * as z from "zod";
 import { APIError } from "../../../api";
-import { safeJSONParse } from "../../../utils/json";
 import { role } from "../../access";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
@@ -208,6 +208,18 @@ export async function validateApiKey({
 	return newApiKey;
 }
 
+const verifyApiKeyBodySchema = z.object({
+	key: z.string().meta({
+		description: "The key to verify",
+	}),
+	permissions: z
+		.record(z.string(), z.array(z.string()))
+		.meta({
+			description: "The permissions to verify.",
+		})
+		.optional(),
+});
+
 export function verifyApiKey({
 	opts,
 	schema,
@@ -224,17 +236,7 @@ export function verifyApiKey({
 		"/api-key/verify",
 		{
 			method: "POST",
-			body: z.object({
-				key: z.string().meta({
-					description: "The key to verify",
-				}),
-				permissions: z
-					.record(z.string(), z.array(z.string()))
-					.meta({
-						description: "The permissions to verify.",
-					})
-					.optional(),
-			}),
+			body: verifyApiKeyBodySchema,
 			metadata: {
 				SERVER_ONLY: true,
 			},

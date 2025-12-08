@@ -49,3 +49,5 @@ export type Primitive = DBPrimitive;
  * @deprecated Backport for 1.3.x, we will remove this in 1.4.x
  */
 export type BetterAuthDbSchema = BetterAuthDBSchema;
+
+export { getAuthTables } from "./get-tables";

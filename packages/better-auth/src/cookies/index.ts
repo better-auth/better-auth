@@ -5,6 +5,7 @@ import type {
 } from "@better-auth/core";
 import { env, isProduction } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
+import { safeJSONParse } from "@better-auth/core/utils";
 import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
@@ -19,7 +20,6 @@ import {
 import { parseUserOutput } from "../db/schema";
 import type { Session, User } from "../types";
 import { getDate } from "../utils/date";
-import { safeJSONParse } from "../utils/json";
 import { getBaseURL } from "../utils/url";
 import { createSessionStore } from "./session-store";
 
@@ -299,6 +299,11 @@ export function deleteSessionCookie(
 ) {
 	ctx.setCookie(ctx.context.authCookies.sessionToken.name, "", {
 		...ctx.context.authCookies.sessionToken.options,
+		maxAge: 0,
+	});
+
+	ctx.setCookie(ctx.context.authCookies.sessionData.name, "", {
+		...ctx.context.authCookies.sessionData.options,
 		maxAge: 0,
 	});
 

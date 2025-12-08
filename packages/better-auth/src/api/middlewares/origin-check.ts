@@ -19,61 +19,27 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	) {
 		return;
 	}
-	const request = ctx.request;
-	const { body, query, context } = ctx;
-
 	await validateOrigin(ctx);
 
+	const { body, query } = ctx;
 	const callbackURL = body?.callbackURL || query?.callbackURL;
 	const redirectURL = body?.redirectTo;
 	const errorCallbackURL = body?.errorCallbackURL;
 	const newUserCallbackURL = body?.newUserCallbackURL;
 
-	const trustedOrigins: string[] = Array.isArray(context.options.trustedOrigins)
-		? context.trustedOrigins
-		: [
-				...context.trustedOrigins,
-				...((await context.options.trustedOrigins?.(request)) || []),
-			];
-
-	const matchesPattern = (url: string, pattern: string): boolean => {
-		if (url.startsWith("/")) {
-			return false;
-		}
-		if (pattern.includes("*")) {
-			// For protocol-specific wildcards, match the full origin
-			if (pattern.includes("://")) {
-				return wildcardMatch(pattern)(getOrigin(url) || url);
-			}
-			const host = getHost(url);
-			if (!host) {
-				return false;
-			}
-			return wildcardMatch(pattern)(host);
-		}
-
-		const protocol = getProtocol(url);
-		return protocol === "http:" || protocol === "https:" || !protocol
-			? pattern === getOrigin(url)
-			: url.startsWith(pattern);
-	};
-
 	const validateURL = (url: string | undefined, label: string) => {
 		if (!url) {
 			return;
 		}
-		const isTrustedOrigin = trustedOrigins.some(
-			(origin) =>
-				matchesPattern(url, origin) ||
-				(url?.startsWith("/") &&
-					label !== "origin" &&
-					/^\/(?!\/|\\|%2f|%5c)[\w\-.\+/@]*(?:\?[\w\-.\+/=&%@]*)?$/.test(url)),
-		);
+		const isTrustedOrigin = ctx.context.isTrustedOrigin(url, {
+			allowRelativePaths: label !== "origin",
+		});
+
 		if (!isTrustedOrigin) {
 			ctx.context.logger.error(`Invalid ${label}: ${url}`);
 			ctx.context.logger.info(
 				`If it's a valid URL, please add ${url} to trustedOrigins in your auth config\n`,
-				`Current list of trustedOrigins: ${trustedOrigins}`,
+				`Current list of trustedOrigins: ${ctx.context.trustedOrigins}`,
 			);
 			throw new APIError("FORBIDDEN", { message: `Invalid ${label}` });
 		}
@@ -92,57 +58,20 @@ export const originCheck = (
 		if (!ctx.request) {
 			return;
 		}
-		const { context } = ctx;
 		const callbackURL = getValue(ctx);
-		const trustedOrigins: string[] = Array.isArray(
-			context.options.trustedOrigins,
-		)
-			? context.trustedOrigins
-			: [
-					...context.trustedOrigins,
-					...((await context.options.trustedOrigins?.(ctx.request)) || []),
-				];
-
-		const matchesPattern = (url: string, pattern: string): boolean => {
-			if (url.startsWith("/")) {
-				return false;
-			}
-			if (pattern.includes("*")) {
-				// For protocol-specific wildcards, match the full origin
-				if (pattern.includes("://")) {
-					return wildcardMatch(pattern)(getOrigin(url) || url);
-				}
-				const host = getHost(url);
-				if (!host) {
-					return false;
-				}
-				// For host-only wildcards, match just the host
-				return wildcardMatch(pattern)(host);
-			}
-			const protocol = getProtocol(url);
-			return protocol === "http:" || protocol === "https:" || !protocol
-				? pattern === getOrigin(url)
-				: url.startsWith(pattern);
-		};
-
 		const validateURL = (url: string | undefined, label: string) => {
 			if (!url) {
 				return;
 			}
-			const isTrustedOrigin = trustedOrigins.some(
-				(origin) =>
-					matchesPattern(url, origin) ||
-					(url?.startsWith("/") &&
-						label !== "origin" &&
-						/^\/(?!\/|\\|%2f|%5c)[\w\-.\+/@]*(?:\?[\w\-.\+/=&%@]*)?$/.test(
-							url,
-						)),
-			);
+			const isTrustedOrigin = ctx.context.isTrustedOrigin(url, {
+				allowRelativePaths: label !== "origin",
+			});
+
 			if (!isTrustedOrigin) {
 				ctx.context.logger.error(`Invalid ${label}: ${url}`);
 				ctx.context.logger.info(
 					`If it's a valid URL, please add ${url} to trustedOrigins in your auth config\n`,
-					`Current list of trustedOrigins: ${trustedOrigins}`,
+					`Current list of trustedOrigins: ${ctx.context.trustedOrigins}`,
 				);
 				throw new APIError("FORBIDDEN", { message: `Invalid ${label}` });
 			}
@@ -210,7 +139,7 @@ async function validateOrigin(
 			: url.startsWith(pattern);
 	};
 
-	const isTrustedOrigin = trustedOrigins.some((origin) =>
+	const isTrustedOrigin = ctx.context.isTrustedOrigin(originHeader)
 		matchesPattern(originHeader, origin),
 	);
 	if (!isTrustedOrigin) {
