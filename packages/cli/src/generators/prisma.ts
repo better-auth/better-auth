@@ -134,6 +134,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					return isOptional ? "DateTime?" : "DateTime";
 				}
 				if (type === "json") {
+					if (provider === "sqlite" || provider === "mysql") {
+						return isOptional ? "String?" : "String";
+					}
 					return isOptional ? "Json?" : "Json";
 				}
 				if (type === "string[]") {
