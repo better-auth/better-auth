@@ -54,9 +54,7 @@ export async function handleOAuthUserInfo(
 				account.providerId as "apple",
 			);
 			if (
-				(!isTrustedProvider &&
-					!isTrustedByDomain &&
-					!userInfo.emailVerified) ||
+				(!isTrustedProvider && !isTrustedByDomain && !userInfo.emailVerified) ||
 				c.context.options.account?.accountLinking?.enabled === false
 			) {
 				if (isDevelopment()) {
