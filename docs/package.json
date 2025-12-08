@@ -88,6 +88,7 @@
     "recharts": "^3.1.2",
     "rehype-highlight": "^7.0.2",
     "remark": "^15.0.1",
+    "resend": "^4.0.1",
     "remark-gfm": "^4.0.1",
     "remark-mdx": "^3.1.1",
     "remark-rehype": "^11.1.2",
