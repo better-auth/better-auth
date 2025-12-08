@@ -52,9 +52,9 @@ export function EnterpriseForm() {
 	};
 
 	return (
-		<div className="relative bg-gradient-to-b from-zinc-50 to-white dark:from-zinc-950 dark:to-zinc-950 border-2 border-zinc-200 dark:border-zinc-800 shadow-[0_0_50px_-15px_rgba(0,0,0,0.1)] dark:shadow-[0_0_50px_-15px_rgba(255,255,255,0.05)] w-full max-w-xl overflow-hidden">
+		<div className="relative bg-linear-to-b from-zinc-50 to-white dark:from-zinc-950 dark:to-zinc-950 border-2 border-zinc-200 dark:border-zinc-800 shadow-[0_0_50px_-15px_rgba(0,0,0,0.1)] dark:shadow-[0_0_50px_-15px_rgba(255,255,255,0.05)] w-full max-w-xl overflow-hidden">
 			<Grid size={20} />
-			<div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-zinc-300 dark:via-zinc-700 to-transparent"></div>
+			<div className="absolute top-0 left-0 w-full h-px bg-linear-to-r from-transparent via-zinc-300 dark:via-zinc-700 to-transparent"></div>
 			<div className="relative z-10 p-4 md:p-5">
 				<div className="mb-3">
 					<h2 className="text-lg md:text-xl font-bold text-zinc-900 dark:text-white mb-1">
@@ -161,7 +161,7 @@ export function EnterpriseForm() {
 					<Button
 						type="submit"
 						disabled={isSubmitting}
-						className="w-full hover:shadow-sm dark:border-stone-100 dark:hover:shadow-sm border-2 border-black bg-white px-6 py-3 text-sm uppercase text-black shadow-[1px_1px_rgba(0,0,0),2px_2px_rgba(0,0,0),3px_3px_rgba(0,0,0),4px_4px_rgba(0,0,0),5px_5px_0px_0px_rgba(0,0,0)] transition duration-200 dark:shadow-[1px_1px_rgba(255,255,255),2px_2px_rgba(255,255,255),3px_3px_rgba(255,255,255),4px_4px_rgba(255,255,255),5px_5px_0px_0px_rgba(255,255,255)] disabled:opacity-50 disabled:cursor-not-allowed"
+						className="w-full bg-white hover:bg-white hover:shadow-sm border-black dark:border-stone-100 dark:hover:shadow-sm border-2  px-6 py-3 text-sm uppercase text-black shadow-[1px_1px_rgba(0,0,0),2px_2px_rgba(0,0,0),3px_3px_rgba(0,0,0),4px_4px_rgba(0,0,0),5px_5px_0px_0px_rgba(0,0,0)] transition duration-200 dark:shadow-[1px_1px_rgba(255,255,255),2px_2px_rgba(255,255,255),3px_3px_rgba(255,255,255),4px_4px_rgba(255,255,255),5px_5px_0px_0px_rgba(255,255,255)] disabled:opacity-50 disabled:cursor-not-allowed"
 					>
 						{isSubmitting ? "Sending..." : "Send"}
 					</Button>
