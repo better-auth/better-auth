@@ -21,6 +21,7 @@ import type { BindingContext } from "samlify/types/src/entity";
 import type { IdentityProvider } from "samlify/types/src/entity-idp";
 import type { FlowResult } from "samlify/types/src/flow";
 import * as z from "zod/v4";
+import { generateRelayState, parseRelayState } from "../saml-state";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
 import { safeJsonParse, validateEmailDomain } from "../utils";
 
@@ -1060,10 +1061,15 @@ export const signInSSO = (options?: SSOOptions) => {
 						message: "Invalid SAML request",
 					});
 				}
+
+				const { state: RelayState } = await generateRelayState(
+					ctx,
+					undefined,
+					false,
+				);
+
 				return ctx.json({
-					url: `${loginRequest.context}&RelayState=${encodeURIComponent(
-						body.callbackURL,
-					)}`,
+					url: `${loginRequest.context}&RelayState=${encodeURIComponent(RelayState)}`,
 					redirect: true,
 				});
 			}
@@ -1486,7 +1492,13 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			},
 		},
 		async (ctx) => {
-			const { SAMLResponse, RelayState } = ctx.body;
+			const { SAMLResponse, RelayState: _RelayState } = ctx.body;
+			let RelayState: Awaited<ReturnType<typeof parseRelayState>> | undefined;
+
+			if (_RelayState) {
+				RelayState = await parseRelayState(ctx);
+			}
+
 			const { providerId } = ctx.params;
 			let provider: SSOProvider<SSOOptions> | null = null;
 			if (options?.defaultSSO?.length) {
@@ -1611,7 +1623,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 					parsedResponse = await sp.parseLoginResponse(idp, "post", {
 						body: {
 							SAMLResponse,
-							RelayState: RelayState || undefined,
+							RelayState: ctx.body.RelayState,
 						},
 					});
 				} catch (parseError) {
@@ -1718,7 +1730,9 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 							validateEmailDomain(userInfo.email, provider.domain));
 					if (!isTrustedProvider) {
 						const redirectUrl =
-							RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+							RelayState?.callbackURL ||
+							parsedSamlConfig.callbackUrl ||
+							ctx.context.baseURL;
 						throw ctx.redirect(`${redirectUrl}?error=account_not_linked`);
 					}
 					await ctx.context.internalAdapter.createAccount({
@@ -1808,7 +1822,9 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 
 			// Redirect to callback URL
 			const callbackUrl =
-				RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+				RelayState?.callbackURL ||
+				parsedSamlConfig.callbackUrl ||
+				ctx.context.baseURL;
 			throw ctx.redirect(callbackUrl);
 		},
 	);
