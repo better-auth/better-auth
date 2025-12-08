@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Section from "@/components/landing/section";
 import { EnterpriseForm } from "./_components/enterprise-form";
 import { EnterpriseHero } from "./_components/enterprise-hero";

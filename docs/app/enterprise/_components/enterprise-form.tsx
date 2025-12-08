@@ -9,9 +9,6 @@ export function EnterpriseForm() {
 		name: "",
 		email: "",
 		company: "",
-		userCount: "",
-		migrating: "",
-		currentPlatform: "",
 		additional: "",
 	});
 	const [isSubmitting, setIsSubmitting] = useState(false);
@@ -41,9 +38,6 @@ export function EnterpriseForm() {
 					name: "",
 					email: "",
 					company: "",
-					userCount: "",
-					migrating: "",
-					currentPlatform: "",
 					additional: "",
 				});
 			} else {
@@ -146,108 +140,21 @@ export function EnterpriseForm() {
 
 					<div>
 						<label
-							htmlFor="userCount"
-							className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2"
-						>
-							Expected user count
-						</label>
-						<select
-							id="userCount"
-							value={formData.userCount}
-							onChange={(e) =>
-								setFormData({ ...formData, userCount: e.target.value })
-							}
-							className="w-full px-4 py-2 pr-10 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600 transition-all text-sm appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 20 20%27%3E%3Cpath stroke=%27%2371717a%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%271.5%27 d=%27m6 8 4 4 4-4%27/%3E%3C/svg%3E')] bg-[length:1.25rem] bg-[right_0.5rem_center] bg-no-repeat"
-						>
-							<option value="">Select range</option>
-							<option value="1-1000">1-1,000 users</option>
-							<option value="1000-10000">1,000-10,000 users</option>
-							<option value="10000-100000">10,000-100,000 users</option>
-							<option value="100000-1000000">100,000-1M users</option>
-							<option value="1000000+">1M+ users</option>
-						</select>
-					</div>
-
-					<div>
-						<label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
-							Are you migrating from another platform?
-						</label>
-						<div className="flex gap-4">
-							<label className="flex items-center gap-2 cursor-pointer">
-								<input
-									type="radio"
-									name="migrating"
-									value="yes"
-									checked={formData.migrating === "yes"}
-									onChange={(e) =>
-										setFormData({ ...formData, migrating: e.target.value })
-									}
-									className="w-4 h-4 text-zinc-900 dark:text-white border-zinc-300 dark:border-zinc-700 focus:ring-0"
-								/>
-								<span className="text-sm text-zinc-700 dark:text-zinc-300">
-									Yes
-								</span>
-							</label>
-							<label className="flex items-center gap-2 cursor-pointer">
-								<input
-									type="radio"
-									name="migrating"
-									value="no"
-									checked={formData.migrating === "no"}
-									onChange={(e) => {
-										setFormData({
-											...formData,
-											migrating: e.target.value,
-											currentPlatform: "",
-										});
-									}}
-									className="w-4 h-4 text-zinc-900 dark:text-white border-zinc-300 dark:border-zinc-700 focus:ring-0"
-								/>
-								<span className="text-sm text-zinc-700 dark:text-zinc-300">
-									No
-								</span>
-							</label>
-						</div>
-					</div>
-
-					{formData.migrating === "yes" && (
-						<div>
-							<label
-								htmlFor="currentPlatform"
-								className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2"
-							>
-								Which platform are you currently using?
-							</label>
-							<input
-								type="text"
-								id="currentPlatform"
-								value={formData.currentPlatform}
-								onChange={(e) =>
-									setFormData({ ...formData, currentPlatform: e.target.value })
-								}
-								placeholder="e.g., Auth0, Clerk, Supabase Auth"
-								className="w-full px-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white placeholder-zinc-500 dark:placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-900 dark:focus:ring-zinc-400 focus:border-transparent transition-all text-sm"
-							/>
-						</div>
-					)}
-
-					<div>
-						<label
 							htmlFor="additional"
 							className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2"
 						>
-							What problem are you trying to solve?
+							What do you need help with?
 						</label>
 						<textarea
 							id="additional"
 							required
-							rows={2}
+							rows={5}
 							value={formData.additional}
 							onChange={(e) =>
 								setFormData({ ...formData, additional: e.target.value })
 							}
 							placeholder="We need help with..."
-							className="w-full px-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white placeholder-zinc-500 dark:placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-900 dark:focus:ring-zinc-400 focus:border-transparent transition-all resize-none text-sm"
+							className="w-full px-4 py-3 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white placeholder-zinc-500 dark:placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-900 dark:focus:ring-zinc-400 focus:border-transparent transition-all resize-y text-sm leading-relaxed"
 						/>
 					</div>
 
