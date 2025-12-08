@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/passkey",
-  "version": "1.5.5",
+  "version": "1.5.6",
   "type": "module",
   "description": "Passkey plugin for Better Auth",
   "main": "dist/index.mjs",
