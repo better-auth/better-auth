@@ -20,6 +20,13 @@ import {
 	updateOrgRole,
 } from "./routes/crud-access-control";
 import {
+	createOrgResource,
+	deleteOrgResource,
+	getOrgResource,
+	listOrgResources,
+	updateOrgResource,
+} from "./routes/crud-resources";
+import {
 	acceptInvitation,
 	cancelInvitation,
 	createInvitation,
@@ -78,6 +85,14 @@ export type DynamicAccessControlEndpoints<O extends OrganizationOptions> = {
 	listOrgRoles: ReturnType<typeof listOrgRoles<O>>;
 	getOrgRole: ReturnType<typeof getOrgRole<O>>;
 	updateOrgRole: ReturnType<typeof updateOrgRole<O>>;
+};
+
+export type DynamicResourceEndpoints<O extends OrganizationOptions> = {
+	createOrgResource: ReturnType<typeof createOrgResource<O>>;
+	deleteOrgResource: ReturnType<typeof deleteOrgResource<O>>;
+	listOrgResources: ReturnType<typeof listOrgResources<O>>;
+	getOrgResource: ReturnType<typeof getOrgResource<O>>;
+	updateOrgResource: ReturnType<typeof updateOrgResource<O>>;
 };
 
 export type TeamEndpoints<O extends OrganizationOptions> = {
@@ -262,6 +277,9 @@ export type OrganizationPlugin<O extends OrganizationOptions> = {
 		(O extends { teams: { enabled: true } } ? TeamEndpoints<O> : {}) &
 		(O extends { dynamicAccessControl: { enabled: true } }
 			? DynamicAccessControlEndpoints<O>
+			: {}) &
+		(O extends { dynamicAccessControl: { enableCustomResources: true } }
+			? DynamicResourceEndpoints<O>
 			: {});
 	schema: OrganizationSchema<O>;
 	$Infer: {
@@ -908,6 +926,20 @@ export function organization<O extends OrganizationOptions>(
 			...dynamicAccessControlEndpoints,
 		};
 	}
+
+	const dynamicResourceEndpoints = {
+		createOrgResource: createOrgResource(options as O),
+		deleteOrgResource: deleteOrgResource(options as O),
+		listOrgResources: listOrgResources(options as O),
+		getOrgResource: getOrgResource(options as O),
+		updateOrgResource: updateOrgResource(options as O),
+	};
+	if (options?.dynamicAccessControl?.enableCustomResources) {
+		endpoints = {
+			...endpoints,
+			...dynamicResourceEndpoints,
+		};
+	}
 	const roles = {
 		...defaultRoles,
 		...options?.roles,
@@ -1026,6 +1058,55 @@ export function organization<O extends OrganizationOptions>(
 			} satisfies BetterAuthPluginDBSchema)
 		: {};
 
+	const organizationResourceSchema = options?.dynamicAccessControl
+		?.enableCustomResources
+		? ({
+				organizationResource: {
+					fields: {
+						organizationId: {
+							type: "string",
+							required: true,
+							references: {
+								model: "organization",
+								field: "id",
+							},
+							fieldName:
+								options?.schema?.organizationResource?.fields?.organizationId,
+							index: true,
+						},
+						resource: {
+							type: "string",
+							required: true,
+							fieldName: options?.schema?.organizationResource?.fields?.resource,
+							index: true,
+						},
+						permissions: {
+							type: "string",
+							required: true,
+							fieldName:
+								options?.schema?.organizationResource?.fields?.permissions,
+						},
+						createdAt: {
+							type: "date",
+							required: true,
+							defaultValue: () => new Date(),
+							fieldName:
+								options?.schema?.organizationResource?.fields?.createdAt,
+						},
+						updatedAt: {
+							type: "date",
+							required: false,
+							fieldName:
+								options?.schema?.organizationResource?.fields?.updatedAt,
+							onUpdate: () => new Date(),
+						},
+						...(options?.schema?.organizationResource?.additionalFields || {}),
+					},
+					modelName: options?.schema?.organizationResource?.modelName,
+				},
+			} satisfies BetterAuthPluginDBSchema)
+		: {};
+
 	const schema = {
 		...({
 			organization: {
@@ -1064,6 +1145,7 @@ export function organization<O extends OrganizationOptions>(
 			},
 		} satisfies BetterAuthPluginDBSchema),
 		...organizationRoleSchema,
+		...organizationResourceSchema,
 		...teamSchema,
 		...({
 			member: {

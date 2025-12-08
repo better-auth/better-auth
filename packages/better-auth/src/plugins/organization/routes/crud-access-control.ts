@@ -6,11 +6,12 @@ import { APIError } from "../../../api";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db";
 import type { User } from "../../../types";
-import type { AccessControl } from "../../access";
+import type { AccessControl, Statements } from "../../access";
 import { orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
-import type { Member, OrganizationRole } from "../schema";
+import { getOrganizationStatements, getReservedResourceNames, invalidateResourceCache, validateResourceName } from "../load-resources";
+import type { Member, OrganizationResource, OrganizationRole } from "../schema";
 import type { OrganizationOptions } from "../types";
 
 type IsExactlyEmptyObject<T> = keyof T extends never // no keys
@@ -232,7 +233,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			await checkForInvalidResources({ ac, ctx, permission });
+			await checkForInvalidResources({ ac, ctx, permission, organizationId, options });
 
 			await checkIfMemberHasPermission({
 				ctx,
@@ -977,7 +978,13 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 			if (ctx.body.data.permission) {
 				let newPermission = ctx.body.data.permission;
 
-				await checkForInvalidResources({ ac, ctx, permission: newPermission });
+				await checkForInvalidResources({ 
+					ac, 
+					ctx, 
+					permission: newPermission,
+					organizationId,
+					options,
+				});
 
 				await checkIfMemberHasPermission({
 					ctx,
@@ -1051,27 +1058,169 @@ async function checkForInvalidResources({
 	ac,
 	ctx,
 	permission,
+	organizationId,
+	options,
 }: {
 	ac: AccessControl;
 	ctx: GenericEndpointContext;
 	permission: Record<string, string[]>;
+	organizationId: string;
+	options: OrganizationOptions;
 }) {
-	const validResources = Object.keys(ac.statements);
+	// Get organization-specific statements (merged default + custom)
+	const orgStatements = await getOrganizationStatements(organizationId, options, ctx);
+	const validResources = Object.keys(orgStatements);
 	const providedResources = Object.keys(permission);
-	const hasInvalidResource = providedResources.some(
+	
+	// Find resources that don't exist yet
+	const missingResources = providedResources.filter(
 		(r) => !validResources.includes(r),
 	);
-	if (hasInvalidResource) {
+
+	// If custom resources are enabled, auto-create missing resources
+	if (missingResources.length > 0 && options.dynamicAccessControl?.enableCustomResources) {
+		const reservedNames = getReservedResourceNames(options);
+		
+		for (const resourceName of missingResources) {
+			// Validate the resource name
+			const validation = validateResourceName(resourceName, options);
+			if (!validation.valid) {
+				ctx.context.logger.error(
+					`[Dynamic Access Control] Cannot auto-create resource "${resourceName}": ${validation.error}`,
+					{
+						resourceName,
+						error: validation.error,
+					},
+				);
+				throw new APIError("BAD_REQUEST", {
+					message: validation.error || `Invalid resource name: ${resourceName}`,
+				});
+			}
+
+			// Check if resource name already exists (shouldn't happen, but double-check)
+			const existingResource = await ctx.context.adapter.findOne<OrganizationResource>({
+				model: "organizationResource",
+				where: [
+					{
+						field: "organizationId",
+						value: organizationId,
+						operator: "eq",
+						connector: "AND",
+					},
+					{
+						field: "resource",
+						value: resourceName,
+						operator: "eq",
+						connector: "AND",
+					},
+				],
+			});
+
+			if (!existingResource) {
+				// Get the permissions for this resource from the permission object
+				const resourcePermissions = permission[resourceName] || [];
+
+				// Create the resource
+				await ctx.context.adapter.create<
+					Omit<OrganizationResource, "permissions"> & { permissions: string }
+				>({
+					model: "organizationResource",
+					data: {
+						createdAt: new Date(),
+						organizationId,
+						permissions: JSON.stringify(resourcePermissions),
+						resource: resourceName,
+					},
+				});
+
+				ctx.context.logger.info(
+					`[Dynamic Access Control] Auto-created resource "${resourceName}" for organization ${organizationId}`,
+					{
+						resourceName,
+						organizationId,
+						permissions: resourcePermissions,
+					},
+				);
+			}
+		}
+
+		// Invalidate cache so new resources are picked up
+		if (missingResources.length > 0) {
+			invalidateResourceCache(organizationId);
+		}
+
+		// Reload statements after creating resources
+		const updatedStatements = await getOrganizationStatements(organizationId, options, ctx);
+		
+		// Now validate that the provided permissions for each resource are valid
+		for (const [resource, permissions] of Object.entries(permission)) {
+			const validPermissions = updatedStatements[resource as keyof Statements];
+			if (!validPermissions) {
+				// This shouldn't happen after auto-creation, but just in case
+				ctx.context.logger.error(
+					`[Dynamic Access Control] Resource "${resource}" still not found after auto-creation.`,
+					{
+						resource,
+					},
+				);
+				throw new APIError("INTERNAL_SERVER_ERROR", {
+					message: `Failed to create resource "${resource}"`,
+				});
+			}
+
+			const invalidPermissions = permissions.filter(
+				(p) => !validPermissions.includes(p),
+			);
+			if (invalidPermissions.length > 0) {
+				ctx.context.logger.error(
+					`[Dynamic Access Control] The provided permissions include invalid actions for resource "${resource}".`,
+					{
+						resource,
+						invalidPermissions,
+						validPermissions,
+					},
+				);
+				throw new APIError("BAD_REQUEST", {
+					message: `Invalid permissions for resource "${resource}": ${invalidPermissions.join(", ")}`,
+				});
+			}
+		}
+	} else if (missingResources.length > 0) {
+		// Custom resources not enabled, so throw error for missing resources
 		ctx.context.logger.error(
-			`[Dynamic Access Control] The provided permission includes an invalid resource.`,
+			`[Dynamic Access Control] The provided permission includes invalid resources.`,
 			{
 				providedResources,
 				validResources,
+				missingResources,
 			},
 		);
 		throw new APIError("BAD_REQUEST", {
 			message: ORGANIZATION_ERROR_CODES.INVALID_RESOURCE,
 		});
+	} else {
+		// All resources exist, validate permissions
+		for (const [resource, permissions] of Object.entries(permission)) {
+			const validPermissions = orgStatements[resource as keyof Statements];
+			if (!validPermissions) continue;
+
+			const invalidPermissions = permissions.filter(
+				(p) => !validPermissions.includes(p),
+			);
+			if (invalidPermissions.length > 0) {
+				ctx.context.logger.error(
+					`[Dynamic Access Control] The provided permissions include invalid actions for resource "${resource}".`,
+					{
+						resource,
+						invalidPermissions,
+						validPermissions,
+					},
+				);
+				throw new APIError("BAD_REQUEST", {
+					message: `Invalid permissions for resource "${resource}": ${invalidPermissions.join(", ")}`,
+				});
+			}
+		}
 	}
 }
 

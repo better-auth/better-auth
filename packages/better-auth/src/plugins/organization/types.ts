@@ -6,6 +6,7 @@ import type {
 	Invitation,
 	Member,
 	Organization,
+	OrganizationResource,
 	OrganizationRole,
 	Team,
 	TeamMember,
@@ -84,6 +85,50 @@ export interface OrganizationOptions {
 				maximumRolesPerOrganization?:
 					| number
 					| ((organizationId: string) => Promise<number> | number);
+				/**
+				 * Whether to enable custom resources per organization.
+				 *
+				 * When enabled, organizations can define their own resources and permissions
+				 * alongside the default resources (organization, member, invitation, team, ac).
+				 *
+				 * @default false
+				 */
+				enableCustomResources?: boolean;
+				/**
+				 * The maximum number of custom resources that can be created for an organization.
+				 *
+				 * @default 50
+				 */
+				maximumResourcesPerOrganization?:
+					| number
+					| ((organizationId: string) => Promise<number> | number);
+				/**
+				 * Reserved resource names that cannot be used for custom resources.
+				 *
+				 * @default ["organization", "member", "invitation", "team", "ac"]
+				 */
+				reservedResourceNames?: string[];
+				/**
+				 * Custom validation function for resource names.
+				 *
+				 * @param name - The resource name to validate
+				 * @returns true if valid, false otherwise, or an object with valid flag and error message
+				 *
+				 * @example
+				 * ```ts
+				 * resourceNameValidation: (name) => {
+				 *   if (name.length > 50) {
+				 *     return { valid: false, error: "Resource name too long" };
+				 *   }
+				 *   return true;
+				 * }
+				 * ```
+				 */
+				resourceNameValidation?:
+					| ((
+							name: string,
+					  ) => boolean | { valid: boolean; error?: string })
+					| undefined;
 		  }
 		| undefined;
 	/**
@@ -311,6 +356,15 @@ export interface OrganizationOptions {
 					modelName?: string;
 					fields?: {
 						[key in keyof Omit<OrganizationRole, "id">]?: string;
+					};
+					additionalFields?: {
+						[key in string]: DBFieldAttribute;
+					};
+				};
+				organizationResource?: {
+					modelName?: string;
+					fields?: {
+						[key in keyof Omit<OrganizationResource, "id">]?: string;
 					};
 					additionalFields?: {
 						[key in string]: DBFieldAttribute;

@@ -3,6 +3,7 @@ import * as z from "zod";
 import { APIError } from "../../api";
 import type { Role } from "../access";
 import { defaultRoles } from "./access";
+import { getOrganizationAccessControl } from "./load-resources";
 import type { HasPermissionBaseInput } from "./permission";
 import { cacheAllRoles, hasPermissionFn } from "./permission";
 import type { OrganizationRole } from "./schema";
@@ -32,6 +33,11 @@ export const hasPermission = async (
 		input.options.ac &&
 		!input.useMemoryCache
 	) {
+		// Get the organization-specific AC instance (with merged default + custom resources)
+		const orgAc = input.options.dynamicAccessControl?.enableCustomResources
+			? await getOrganizationAccessControl(input.organizationId, input.options, ctx)
+			: input.options.ac;
+
 		// Load roles from database
 		const roles = await ctx.context.adapter.findMany<
 			OrganizationRole & { permission: string }
@@ -65,7 +71,8 @@ export const hasPermission = async (
 				});
 			}
 
-			acRoles[role] = input.options.ac.newRole(result.data);
+			// Use the organization-specific AC to create the role
+			acRoles[role] = orgAc.newRole(result.data);
 		}
 	}
 
