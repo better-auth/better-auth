@@ -14,6 +14,7 @@
   "homepage": "https://www.better-auth.com/docs/integrations/expo",
   "scripts": {
     "test": "vitest",
+    "coverage": "vitest run --coverage",
     "lint:package": "publint run --strict",
     "build": "tsdown",
     "dev": "tsdown --watch",

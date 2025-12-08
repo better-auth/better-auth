@@ -81,6 +81,7 @@
     "includes": [
       "**",
       "!**/dist",
+      "!**/coverage",
       "!**/build",
       "!**/.next",
       "!**/.svelte-kit",
