@@ -1393,7 +1393,8 @@ describe("SSO Provider Config Parsing", () => {
 			baseURL: "http://localhost:3000",
 			plugins: [bearer(), ssoClient()],
 			fetchOptions: {
-				customFetchImpl: async (url, init) => auth.handler(new Request(url, init)),
+				customFetchImpl: async (url, init) =>
+					auth.handler(new Request(url, init)),
 			},
 		});
 
@@ -1458,7 +1459,8 @@ describe("SSO Provider Config Parsing", () => {
 			baseURL: "http://localhost:3000",
 			plugins: [bearer(), ssoClient()],
 			fetchOptions: {
-				customFetchImpl: async (url, init) => auth.handler(new Request(url, init)),
+				customFetchImpl: async (url, init) =>
+					auth.handler(new Request(url, init)),
 			},
 		});
 
