@@ -501,24 +501,24 @@ describe("isUsernameAvailable with custom validator", async (it) => {
 	});
 
 	it("should reject username that doesn't match custom validator during sign-up/sign-in", async () => {
-	  const signUpRes = await client.signUp.email({
+		const signUpRes = await client.signUp.email({
 			email: "test-user@test.com",
 			password: "password1234",
 			name: "Test user",
-  		username: "invalid_user",
+			username: "invalid_user",
 		});
 
 		expect(signUpRes.error).toBeDefined();
 		expect(signUpRes.error?.code).toBe("USERNAME_IS_INVALID");
 
 		const signInRes = await client.signIn.username({
-  		username: "invalid_user",
-  		password: "password1234",
-		})
+			username: "invalid_user",
+			password: "password1234",
+		});
 
 		expect(signInRes.error).toBeDefined();
 		expect(signInRes.error?.code).toBe("USERNAME_IS_INVALID");
-	})
+	});
 });
 
 describe("post normalization flow", async (it) => {
