@@ -94,16 +94,13 @@ export function EnterpriseHero() {
 									className="inline-block cursor-pointer hover:opacity-100 transition-opacity"
 								>
 									<svg
+										xmlns="http://www.w3.org/2000/svg"
 										width="1.3em"
 										height="1.3em"
-										viewBox="0 0 76 65"
-										fill="none"
-										xmlns="http://www.w3.org/2000/svg"
+										viewBox="0 0 256 222"
+										fill="currentColor"
 									>
-										<path
-											d="M37.5274 0L75.0548 65H0L37.5274 0Z"
-											fill="#ffffff"
-										/>
+										<path d="m128 0l128 221.705H0z" />
 									</svg>
 								</a>
 							</TooltipTrigger>
