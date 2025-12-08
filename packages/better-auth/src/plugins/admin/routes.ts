@@ -1127,6 +1127,10 @@ export const stopImpersonating = () =>
 			}
 			await ctx.context.internalAdapter.deleteSession(session.session.token);
 			await setSessionCookie(ctx, adminSession, !!dontRememberMeCookie);
+			await ctx.setSignedCookie(adminCookieName, "", ctx.context.secret, {
+				...ctx.context.authCookies.sessionToken.options,
+				maxAge: 0,
+			});
 			return ctx.json(adminSession);
 		},
 	);
@@ -1509,9 +1513,8 @@ const userHasPermissionBodySchema = z
  */
 export const userHasPermission = <O extends AdminOptions>(opts: O) => {
 	type DefaultStatements = typeof defaultStatements;
-	type Statements = O["ac"] extends AccessControl<infer S>
-		? S
-		: DefaultStatements;
+	type Statements =
+		O["ac"] extends AccessControl<infer S> ? S : DefaultStatements;
 
 	type PermissionType = {
 		[key in keyof Statements]?: Array<
