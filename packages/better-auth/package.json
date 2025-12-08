@@ -1,6 +1,6 @@
 {
-  "name": "better-auth",
-  "version": "1.5.0",
+  "name": "@decocms/better-auth",
+  "version": "1.5.1",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "license": "MIT",
