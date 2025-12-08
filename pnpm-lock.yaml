@@ -805,6 +805,9 @@ importers:
       remark-stringify:
         specifier: ^11.0.0
         version: 11.0.0
+      resend:
+        specifier: ^4.0.1
+        version: 4.8.0(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
       shiki:
         specifier: ^3.13.0
         version: 3.13.0
@@ -5308,6 +5311,13 @@ packages:
     engines: {node: '>=18.0.0'}
     peerDependencies:
       react: ^18.0 || ^19.0 || ^19.0.0-rc
+
+  '@react-email/render@1.1.2':
+    resolution: {integrity: sha512-RnRehYN3v9gVlNMehHPHhyp2RQo7+pSkHDtXPvg3s0GbzM9SQMW4Qrf8GRNvtpLC4gsI+Wt0VatNRUFqjvevbw==}
+    engines: {node: '>=18.0.0'}
+    peerDependencies:
+      react: ^18.0 || ^19.0 || ^19.0.0-rc
+      react-dom: ^18.0 || ^19.0 || ^19.0.0-rc
 
   '@react-email/render@1.2.1':
     resolution: {integrity: sha512-7M4Xi8ITESZKS7pOPE0HWhKJWtS/JrAqPIyFPqIPJXZJHkjFMYXn2b/tAsHOufYW5/LTk4U1IkBMaVwE06kykw==}
@@ -12324,6 +12334,10 @@ packages:
   reselect@5.1.1:
     resolution: {integrity: sha512-K/BG6eIky/SBpzfHZv/dd+9JBFiS4SWV7FIujVyJRux6e45+73RaUHXLmIR1f7WOMaQ0U1km6qwklRQxpJJY0w==}
 
+  resend@4.8.0:
+    resolution: {integrity: sha512-R8eBOFQDO6dzRTDmaMEdpqrkmgSjPpVXt4nGfWsZdYOet0kqra0xgbvTES6HmCriZEXbmGk3e0DiGIaLFTFSHA==}
+    engines: {node: '>=18'}
+
   resend@6.0.2:
     resolution: {integrity: sha512-um08qWpSVvEVqAePEy/bsa7pqtnJK+qTCZ0Et7YE7xuqM46J0C9gnSbIJKR3LIcRVMgO9jUeot8rH0UI84eqMQ==}
     engines: {node: '>=18'}
@@ -18220,6 +18234,14 @@ snapshots:
     dependencies:
       react: 19.2.1
 
+  '@react-email/render@1.1.2(react-dom@19.2.1(react@19.2.1))(react@19.2.1)':
+    dependencies:
+      html-to-text: 9.0.5
+      prettier: 3.6.2
+      react: 19.2.1
+      react-dom: 19.2.1(react@19.2.1)
+      react-promise-suspense: 0.3.4
+
   '@react-email/render@1.2.1(react-dom@19.2.1(react@19.2.1))(react@19.2.1)':
     dependencies:
       html-to-text: 9.0.5
@@ -22521,8 +22543,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  fast-deep-equal@2.0.1:
-    optional: true
+  fast-deep-equal@2.0.1: {}
 
   fast-deep-equal@3.1.3: {}
 
@@ -26553,7 +26574,6 @@ snapshots:
   react-promise-suspense@0.3.4:
     dependencies:
       fast-deep-equal: 2.0.1
-    optional: true
 
   react-qr-code@2.0.18(react@19.2.1):
     dependencies:
@@ -26879,6 +26899,13 @@ snapshots:
   requires-port@1.0.0: {}
 
   reselect@5.1.1: {}
+
+  resend@4.8.0(react-dom@19.2.1(react@19.2.1))(react@19.2.1):
+    dependencies:
+      '@react-email/render': 1.1.2(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+    transitivePeerDependencies:
+      - react
+      - react-dom
 
   resend@6.0.2(@react-email/render@1.2.1(react-dom@19.2.1(react@19.2.1))(react@19.2.1)):
     optionalDependencies:
