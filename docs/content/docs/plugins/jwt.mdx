@@ -33,12 +33,12 @@ export const auth = betterAuth({
 
     <Tabs items={["migrate", "generate"]}>
         <Tab value="migrate">
-        ```bash
+        ```package-install
         npx @better-auth/cli migrate
         ```
         </Tab>
         <Tab value="generate">
-        ```bash
+        ```package-install
         npx @better-auth/cli generate
         ```
         </Tab>
@@ -525,11 +525,6 @@ jwt({
       // Custom implementation to get all JWKS
       // This overrides the default database query
       return await yourCustomStorage.getAllKeys()
-    },
-    getLatestKey: async (ctx) => {
-      // Custom implementation to get the latest key
-      // This overrides the default database query
-      return await yourCustomStorage.getLatestKey()
     },
     createJwk: async (ctx, webKey) => {
       // Custom implementation to create a new key

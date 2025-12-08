@@ -1,13 +1,14 @@
 {
   "name": "@better-auth/sso",
   "author": "Bereket Engida",
-  "version": "1.4.4-beta.1",
+  "version": "1.4.6-beta.3",
   "type": "module",
   "main": "dist/index.mjs",
+  "types": "dist/index.d.mts",
   "homepage": "https://www.better-auth.com/docs/plugins/sso",
   "repository": {
     "type": "git",
-    "url": "https://github.com/better-auth/better-auth",
+    "url": "git+https://github.com/better-auth/better-auth.git",
     "directory": "packages/sso"
   },
   "license": "MIT",
@@ -67,8 +68,8 @@
   "devDependencies": {
     "@types/body-parser": "^1.19.6",
     "@types/express": "^5.0.5",
-    "better-auth": "workspace:*",
     "better-call": "catalog:",
+    "better-auth": "workspace:*",
     "body-parser": "^2.2.1",
     "express": "^5.1.0",
     "oauth2-mock-server": "^8.2.0",

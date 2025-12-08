@@ -169,6 +169,7 @@ export const auth = betterAuth({
 		openAPI(),
 		bearer(),
 		admin({
+			/* cspell:disable-next-line */
 			adminUserIds: ["EXD5zjob2SD6CBWcEQ6OpLRHcyoUbnaB"],
 		}),
 		multiSession(),

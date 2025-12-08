@@ -1,4 +1,5 @@
 import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
+import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { createLogger, env, isProduction, isTest } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
@@ -9,9 +10,9 @@ import { createTelemetry } from "@better-auth/telemetry";
 import defu from "defu";
 import type { Entries } from "type-fest";
 import { checkEndpointConflicts } from "../api";
+import { matchesOriginPattern } from "../auth/trusted-origins";
 import { createCookieGetter, getCookies } from "../cookies";
 import { hashPassword, verifyPassword } from "../crypto/password";
-import { getAuthTables } from "../db/get-tables";
 import { createInternalAdapter } from "../db/internal-adapter";
 import { generateId } from "../utils";
 import { DEFAULT_SECRET } from "../utils/constants";
@@ -23,6 +24,59 @@ import {
 	getTrustedOrigins,
 	runPluginInit,
 } from "./helpers";
+
+/**
+ * Estimates the entropy of a string in bits.
+ * This is a simple approximation that helps detect low-entropy secrets.
+ */
+function estimateEntropy(str: string): number {
+	const unique = new Set(str).size;
+	if (unique === 0) return 0;
+	return Math.log2(Math.pow(unique, str.length));
+}
+
+/**
+ * Validates that the secret meets minimum security requirements.
+ * Throws BetterAuthError if the secret is invalid.
+ * Skips validation for DEFAULT_SECRET in test environments only.
+ * Only throws for DEFAULT_SECRET in production environment.
+ */
+function validateSecret(
+	secret: string,
+	logger: ReturnType<typeof createLogger>,
+): void {
+	const isDefaultSecret = secret === DEFAULT_SECRET;
+
+	if (isTest()) {
+		return;
+	}
+
+	if (isDefaultSecret && isProduction) {
+		throw new BetterAuthError(
+			"You are using the default secret. Please set `BETTER_AUTH_SECRET` in your environment variables or pass `secret` in your auth config.",
+		);
+	}
+
+	if (!secret) {
+		throw new BetterAuthError(
+			"BETTER_AUTH_SECRET is missing. Set it in your environment or pass `secret` to betterAuth({ secret }).",
+		);
+	}
+
+	if (secret.length < 32) {
+		throw new BetterAuthError(
+			`Invalid BETTER_AUTH_SECRET: must be at least 32 characters long for adequate security. Generate one with \`npx @better-auth/cli secret\` or \`openssl rand -base64 32\`.`,
+		);
+	}
+
+	// Optional high-entropy check: warn if entropy appears low
+	const entropy = estimateEntropy(secret);
+	if (entropy < 120) {
+		logger.warn(
+			"[better-auth] Warning: your BETTER_AUTH_SECRET appears low-entropy. Use a randomly generated secret for production.",
+		);
+	}
+}
 
 export async function createAuthContext(
 	adapter: DBAdapter<BetterAuthOptions>,
@@ -56,13 +110,7 @@ export async function createAuthContext(
 		env.AUTH_SECRET ||
 		DEFAULT_SECRET;
 
-	if (secret === DEFAULT_SECRET) {
-		if (isProduction) {
-			logger.error(
-				"You are using the default secret. Please set `BETTER_AUTH_SECRET` in your environment variables or pass `secret` in your auth config.",
-			);
-		}
-	}
+	validateSecret(secret, logger);
 
 	options = {
 		...options,
@@ -127,6 +175,11 @@ export async function createAuthContext(
 		},
 		tables,
 		trustedOrigins: getTrustedOrigins(options),
+		isTrustedOrigin(url: string, settings?: { allowRelativePaths: boolean }) {
+			return ctx.trustedOrigins.some((origin) =>
+				matchesOriginPattern(url, origin, settings),
+			);
+		},
 		baseURL: baseURL || "",
 		sessionConfig: {
 			updateAge:

@@ -2,7 +2,7 @@
 const { getDefaultConfig } = require("expo/metro-config");
 const { FileStore } = require("metro-cache");
 const { withNativeWind } = require("nativewind/metro");
-const path = require("path");
+const path = require("node:path");
 
 const config = withMonorepoPaths(
 	withNativeWind(getDefaultConfig(__dirname), { input: "./src/global.css" }),

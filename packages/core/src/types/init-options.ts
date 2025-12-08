@@ -12,7 +12,7 @@ import type { AuthMiddleware } from "../api";
 import type {
 	Account,
 	DBFieldAttribute,
-	DBPreservedModels,
+	ModelNames,
 	RateLimit,
 	SecondaryStorage,
 	Session,
@@ -33,7 +33,7 @@ type Optional<T> = {
 };
 
 export type GenerateIdFn = (options: {
-	model: LiteralUnion<DBPreservedModels, string>;
+	model: ModelNames;
 	size?: number | undefined;
 }) => string | false;
 
