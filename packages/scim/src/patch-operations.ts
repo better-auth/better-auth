@@ -114,7 +114,7 @@ const applyPatchValue = (
 	resources: Resources,
 	value: unknown,
 	op: "add" | "replace",
-	path = "",
+	path?: string | undefined,
 ) => {
 	if (isNestedObject(value)) {
 		for (const [key, nestedValue] of Object.entries(value)) {
