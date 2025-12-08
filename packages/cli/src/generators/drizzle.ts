@@ -139,7 +139,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					mysql: `timestamp('${name}', { fsp: 3 })`,
 				},
 				"number[]": {
-					sqlite: `integer('${name}').array()`,
+					sqlite: `integer('${name}', { mode: "json" })`,
 					pg: field.bigint
 						? `bigint('${name}', { mode: 'number' }).array()`
 						: `integer('${name}').array()`,
@@ -148,12 +148,12 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 						: `int('${name}').array()`,
 				},
 				"string[]": {
-					sqlite: `text('${name}').array()`,
+					sqlite: `text('${name}', { mode: "json" })`,
 					pg: `text('${name}').array()`,
 					mysql: `text('${name}').array()`,
 				},
 				json: {
-					sqlite: `text('${name}')`,
+					sqlite: `text('${name}', { mode: "json" })`,
 					pg: `jsonb('${name}')`,
 					mysql: `json('${name}')`,
 				},
