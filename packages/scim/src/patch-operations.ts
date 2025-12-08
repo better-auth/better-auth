@@ -10,7 +10,7 @@ type Operation = {
 type Mapping = {
 	target: string;
 	resource: "user" | "account";
-	map: (user: User, op: Operation) => any;
+	map: (user: User, op: Operation, resources: Resources) => any;
 };
 
 type Resources = {
@@ -18,16 +18,17 @@ type Resources = {
 	account: Record<string, any>;
 };
 
-const identity = (user: User, op: Operation) => {
+const identity = (user: User, op: Operation, resources: Resources) => {
 	return op.value;
 };
 
-const lowerCase = (user: User, op: Operation) => {
+const lowerCase = (user: User, op: Operation, resources: Resources) => {
 	return op.value.toLowerCase();
 };
 
-const givenName = (user: User, op: Operation) => {
-	const familyName = user.name.split(" ").slice(1).join(" ").trim();
+const givenName = (user: User, op: Operation, resources: Resources) => {
+	const currentName = (resources.user.name as string) ?? user.name;
+	const familyName = currentName.split(" ").slice(1).join(" ").trim();
 	const givenName = op.value;
 
 	return getUserFullName(user.email, {
@@ -36,9 +37,10 @@ const givenName = (user: User, op: Operation) => {
 	});
 };
 
-const familyName = (user: User, op: Operation) => {
+const familyName = (user: User, op: Operation, resources: Resources) => {
+	const currentName = (resources.user.name as string) ?? user.name;
 	const givenName = (
-		user.name.split(" ").slice(0, -1).join(" ") || user.name
+		currentName.split(" ").slice(0, -1).join(" ") || currentName
 	).trim();
 	const familyName = op.value;
 	return getUserFullName(user.email, {
@@ -87,11 +89,15 @@ const applyMapping = (
 		return;
 	}
 
-	const newValue = mapping.map(user, {
-		op,
-		value,
-		path: normalizedPath,
-	});
+	const newValue = mapping.map(
+		user,
+		{
+			op,
+			value,
+			path: normalizedPath,
+		},
+		resources,
+	);
 
 	if (op === "add" && mapping.resource === "user") {
 		const currentValue = (user as Record<string, unknown>)[mapping.target];
