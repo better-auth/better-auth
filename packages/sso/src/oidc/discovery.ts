@@ -98,9 +98,6 @@ export function computeDiscoveryUrl(issuer: string): string {
 /**
  * Validate a discovery URL before fetching.
  *
- * Phase 1: Only validates that the URL is well-formed.
- * Future phases will add SSRF protection, allowlist checks, etc.
- *
  * @param url - The discovery URL to validate
  * @throws DiscoveryError if URL is invalid
  */
@@ -279,41 +276,25 @@ export function validateDiscoveryDocument(
 /**
  * Normalize URLs in the discovery document.
  *
- * Phase 1: This is a stub that returns the document unchanged.
- * Future phases will:
- * - Resolve relative URLs against issuer base
- * - Normalize URL formats
- * - Apply security transformations
- *
- * TODO(Phase 2): Implement normalization of relative URLs based on issuer/discovery endpoint.
- * For now, this is an identity function so we can wire discovery into flows incrementally.
- *
  * @param doc - The discovery document
- * @param _issuerBase - The base issuer URL (unused in Phase 1)
+ * @param _issuerBase - The base issuer URL
  * @returns The normalized discovery document
  */
 export function normalizeDiscoveryUrls(
 	doc: OIDCDiscoveryDocument,
 	_issuerBase: string,
 ): OIDCDiscoveryDocument {
-	// TODO(Phase 2): Implement URL normalization
 	return doc;
 }
 
 /**
  * Normalize a single URL endpoint.
  *
- * Phase 1: This is a stub that returns the endpoint unchanged.
- *
- * TODO(Phase 2): Implement normalization of relative URLs based on issuer/discovery endpoint.
- * For now, this is an identity function so we can wire discovery into flows incrementally.
- *
  * @param endpoint - The endpoint URL to normalize
- * @param _issuerBase - The base issuer URL (unused in Phase 1)
+ * @param _issuerBase - The base issuer URL
  * @returns The normalized endpoint URL
  */
 export function normalizeUrl(endpoint: string, _issuerBase: string): string {
-	// TODO(Phase 2): Implement URL normalization
 	return endpoint;
 }
 
