@@ -25,8 +25,8 @@ export function EnterpriseHero() {
 				</p>
 
 				{/* Trusted By Section */}
-				<div className="pt-6 border-t border-zinc-200 dark:border-zinc-800">
-					<p className="text-xs text-zinc-600 dark:text-zinc-400 mb-1 text-center xl:text-left">
+				<div className="py-8 space-y-4 border-t border-zinc-200 dark:border-zinc-800">
+					<p className="text-xs text-zinc-600 dark:text-zinc-400 text-center xl:text-left">
 						Trusted by teams at
 					</p>
 					<div className="flex flex-wrap items-center justify-center xl:justify-start gap-6 md:gap-4 opacity-60 text-zinc-900 dark:text-white">
@@ -148,7 +148,7 @@ export function EnterpriseHero() {
 									<svg
 										xmlns="http://www.w3.org/2000/svg"
 										width="3em"
-										height="3em"
+										height="1.3em"
 										viewBox="0 0 78 27"
 										fill="currentColor"
 									>
