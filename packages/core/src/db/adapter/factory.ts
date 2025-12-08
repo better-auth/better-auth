@@ -139,6 +139,8 @@ export const createAdapterFactory =
 			}
 		};
 
+		const logger = createLogger(options.logger);
+
 		const getDefaultModelName = initGetDefaultModelName({
 			usePlural: config.usePlural,
 			schema,
@@ -220,7 +222,6 @@ export const createAdapterFactory =
 					try {
 						value = new Date(value);
 					} catch {
-						const logger = createLogger(options.logger);
 						logger.error("[Adapter Factory] Failed to convert string to date", {
 							value,
 							field,
