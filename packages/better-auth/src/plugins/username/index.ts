@@ -275,7 +275,8 @@ export const username = (options?: UsernameOptions | undefined) => {
 					const validator =
 						options?.usernameValidator || defaultUsernameValidator;
 
-					if (!(await validator(username))) {
+					const valid = await validator(username);
+					if (!valid) {
 						throw new APIError("UNPROCESSABLE_ENTITY", {
 							message: ERROR_CODES.INVALID_USERNAME,
 						});
@@ -445,7 +446,8 @@ export const username = (options?: UsernameOptions | undefined) => {
 					const validator =
 						options?.usernameValidator || defaultUsernameValidator;
 
-					if (!(await validator(username))) {
+					const valid = await validator(username);
+					if (!valid) {
 						throw new APIError("UNPROCESSABLE_ENTITY", {
 							message: ERROR_CODES.INVALID_USERNAME,
 						});
