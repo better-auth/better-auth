@@ -368,13 +368,13 @@ export async function getMigrations(config: BetterAuthOptions) {
 				sqlite: "text",
 				postgres: "jsonb",
 				mysql: "json",
-				mssql: "json",
+				mssql: "varchar(8000)",
 			},
 			"number[]": {
 				sqlite: "text",
 				postgres: "jsonb",
 				mysql: "json",
-				mssql: "json",
+				mssql: "varchar(8000)",
 			},
 		} as const;
 		if (fieldName === "id" || field.references?.field === "id") {

@@ -2930,7 +2930,6 @@ export const getNormalTestSuiteTests = (
 					model: "testModel",
 					data: { stringArray: ["1", "2", "3"], numberArray: [1, 2, 3] },
 				});
-				console.log(result);
 				expect(result.stringArray).toEqual(["1", "2", "3"]);
 				expect(result.numberArray).toEqual([1, 2, 3]);
 
@@ -2972,7 +2971,6 @@ export const getNormalTestSuiteTests = (
 					model: "testModel",
 					data: { json: { foo: "bar" } },
 				});
-				console.log(result);
 				expect(result.json).toEqual({ foo: "bar" });
 
 				const findResult = await adapter.findOne<{
@@ -2983,6 +2981,7 @@ export const getNormalTestSuiteTests = (
 				});
 				expect(findResult).toEqual(result);
 				expect(findResult?.json).toEqual({ foo: "bar" });
+				console.log(findResult);
 			},
 		},
 	};
