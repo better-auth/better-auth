@@ -49,7 +49,7 @@ export async function POST(request: Request) {
 				await resend.emails.send({
 					from: "Enterprise Support <enterprise@better-auth.com>",
 					to: toEmail || "",
-					subject: `${interest === "enterprise" ? "Enterprise" : "Support"} Inquiry from ${escapeHtml(name)}`,
+					subject: `${interest === "enterprise" ? "Enterprise" : "Support"} Inquiry from ${name}`,
 					html: `
 						<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
 							<h2 style="color: #18181b;">${interest === "enterprise" ? "Enterprise" : "Support"} Inquiry</h2>
