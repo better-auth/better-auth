@@ -14,7 +14,8 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 	options,
 	file,
 }) => {
-	const provider = adapter.options?.provider || "postgresql";
+	const provider: "sqlite" | "postgresql" | "mysql" | "mongodb" =
+		adapter.options?.provider || "postgresql";
 	const tables = getAuthTables(options);
 	const filePath = file || "./prisma/schema.prisma";
 	const schemaPrismaExist = existsSync(path.join(process.cwd(), filePath));
@@ -136,9 +137,19 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					return isOptional ? "Json?" : "Json";
 				}
 				if (type === "string[]") {
+					// SQLite and MySQL don't support array of strings, so we use string instead
+					// adapter should handle JSON.stringify and JSON.parse conversion for these fields
+					if (provider === "sqlite" || provider === "mysql") {
+						return "String";
+					}
 					return isOptional ? "String[]" : "String[]";
 				}
 				if (type === "number[]") {
+					// SQLite and MySQL don't support array of numbers, so we use int instead
+					// adapter should handle JSON.stringify and JSON.parse conversion for these fields
+					if (provider === "sqlite" || provider === "mysql") {
+						return "String";
+					}
 					return isOptional ? "Int[]" : "Int[]";
 				}
 			}
