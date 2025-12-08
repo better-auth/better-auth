@@ -21,6 +21,12 @@ import type { BindingContext } from "samlify/types/src/entity";
 import type { IdentityProvider } from "samlify/types/src/entity-idp";
 import type { FlowResult } from "samlify/types/src/flow";
 import * as z from "zod/v4";
+import type { HydratedOIDCConfig } from "../oidc";
+import {
+	DiscoveryError,
+	discoverOIDCConfig,
+	mapDiscoveryErrorToAPIError,
+} from "../oidc";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
 import { safeJsonParse, validateEmailDomain } from "../utils";
 
@@ -568,6 +574,32 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				});
 			}
 
+			// Run OIDC discovery at registration time to validate issuer and hydrate endpoints.
+			// This may fail fast if the IdP is misconfigured or unreachable.
+			// User-provided values in existingConfig override discovered values.
+			let hydratedOIDCConfig: HydratedOIDCConfig | null = null;
+			if (body.oidcConfig) {
+				try {
+					hydratedOIDCConfig = await discoverOIDCConfig({
+						issuer: body.issuer,
+						existingConfig: {
+							discoveryEndpoint: body.oidcConfig.discoveryEndpoint,
+							authorizationEndpoint: body.oidcConfig.authorizationEndpoint,
+							tokenEndpoint: body.oidcConfig.tokenEndpoint,
+							jwksEndpoint: body.oidcConfig.jwksEndpoint,
+							userInfoEndpoint: body.oidcConfig.userInfoEndpoint,
+							tokenEndpointAuthentication:
+								body.oidcConfig.tokenEndpointAuthentication,
+						},
+					});
+				} catch (error) {
+					if (error instanceof DiscoveryError) {
+						throw mapDiscoveryErrorToAPIError(error);
+					}
+					throw error;
+				}
+			}
+
 			const provider = await ctx.context.adapter.create<
 				Record<string, any>,
 				SSOProvider<O>
@@ -577,29 +609,31 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 					issuer: body.issuer,
 					domain: body.domain,
 					domainVerified: false,
-					oidcConfig: body.oidcConfig
-						? JSON.stringify({
-								issuer: body.issuer,
-								clientId: body.oidcConfig.clientId,
-								clientSecret: body.oidcConfig.clientSecret,
-								authorizationEndpoint: body.oidcConfig.authorizationEndpoint,
-								tokenEndpoint: body.oidcConfig.tokenEndpoint,
-								tokenEndpointAuthentication:
-									body.oidcConfig.tokenEndpointAuthentication,
-								jwksEndpoint: body.oidcConfig.jwksEndpoint,
-								pkce: body.oidcConfig.pkce,
-								discoveryEndpoint:
-									body.oidcConfig.discoveryEndpoint ||
-									`${body.issuer}/.well-known/openid-configuration`,
-								mapping: body.oidcConfig.mapping,
-								scopes: body.oidcConfig.scopes,
-								userInfoEndpoint: body.oidcConfig.userInfoEndpoint,
-								overrideUserInfo:
-									ctx.body.overrideUserInfo ||
-									options?.defaultOverrideUserInfo ||
-									false,
-							})
-						: null,
+					// Use hydrated config from discovery, with user-provided values for
+					// fields not in discovery (clientId, clientSecret, pkce, mapping, scopes)
+					oidcConfig:
+						body.oidcConfig && hydratedOIDCConfig
+							? JSON.stringify({
+									issuer: hydratedOIDCConfig.issuer,
+									clientId: body.oidcConfig.clientId,
+									clientSecret: body.oidcConfig.clientSecret,
+									authorizationEndpoint:
+										hydratedOIDCConfig.authorizationEndpoint,
+									tokenEndpoint: hydratedOIDCConfig.tokenEndpoint,
+									tokenEndpointAuthentication:
+										hydratedOIDCConfig.tokenEndpointAuthentication,
+									jwksEndpoint: hydratedOIDCConfig.jwksEndpoint,
+									pkce: body.oidcConfig.pkce,
+									discoveryEndpoint: hydratedOIDCConfig.discoveryEndpoint,
+									mapping: body.oidcConfig.mapping,
+									scopes: body.oidcConfig.scopes,
+									userInfoEndpoint: hydratedOIDCConfig.userInfoEndpoint,
+									overrideUserInfo:
+										ctx.body.overrideUserInfo ||
+										options?.defaultOverrideUserInfo ||
+										false,
+								})
+							: null,
 					samlConfig: body.samlConfig
 						? JSON.stringify({
 								issuer: body.issuer,

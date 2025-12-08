@@ -93,6 +93,7 @@ describe("SSO", async () => {
 					clientSecret: "test",
 					authorizationEndpoint: `${server.issuer.url}/authorize`,
 					tokenEndpoint: `${server.issuer.url}/token`,
+					tokenEndpointAuthentication: "client_secret_basic",
 					jwksEndpoint: `${server.issuer.url}/jwks`,
 					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
 					mapping: {
@@ -116,6 +117,7 @@ describe("SSO", async () => {
 				clientSecret: "test",
 				authorizationEndpoint: "http://localhost:8080/authorize",
 				tokenEndpoint: "http://localhost:8080/token",
+				tokenEndpointAuthentication: "client_secret_basic",
 				jwksEndpoint: "http://localhost:8080/jwks",
 				discoveryEndpoint:
 					"http://localhost:8080/.well-known/openid-configuration",
@@ -168,6 +170,7 @@ describe("SSO", async () => {
 				oidcConfig: {
 					clientId: "test",
 					clientSecret: "test",
+					tokenEndpointAuthentication: "client_secret_basic",
 				},
 			},
 			headers,
@@ -182,6 +185,7 @@ describe("SSO", async () => {
 					oidcConfig: {
 						clientId: "test2",
 						clientSecret: "test2",
+						tokenEndpointAuthentication: "client_secret_basic",
 					},
 				},
 				headers,
@@ -338,6 +342,7 @@ describe("SSO disable implicit sign in", async () => {
 					clientSecret: "test",
 					authorizationEndpoint: `${server.issuer.url}/authorize`,
 					tokenEndpoint: `${server.issuer.url}/token`,
+					tokenEndpointAuthentication: "client_secret_basic",
 					jwksEndpoint: `${server.issuer.url}/jwks`,
 					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
 					mapping: {
@@ -361,6 +366,7 @@ describe("SSO disable implicit sign in", async () => {
 				clientSecret: "test",
 				authorizationEndpoint: "http://localhost:8080/authorize",
 				tokenEndpoint: "http://localhost:8080/token",
+				tokenEndpointAuthentication: "client_secret_basic",
 				jwksEndpoint: "http://localhost:8080/jwks",
 				discoveryEndpoint:
 					"http://localhost:8080/.well-known/openid-configuration",
@@ -506,6 +512,7 @@ describe("provisioning", async (ctx) => {
 					clientSecret: "test",
 					authorizationEndpoint: `${server.issuer.url}/authorize`,
 					tokenEndpoint: `${server.issuer.url}/token`,
+					tokenEndpointAuthentication: "client_secret_basic",
 					jwksEndpoint: `${server.issuer.url}/jwks`,
 					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
 					mapping: {
@@ -569,5 +576,165 @@ describe("provisioning", async (ctx) => {
 		});
 
 		expect(res.url).toContain("http://localhost:8080/authorize");
+	});
+});
+
+describe("OIDC Discovery errors at registration", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [sso(), organization()],
+	});
+
+	beforeAll(async () => {
+		await server.issuer.keys.generate("RS256");
+		await server.start(8080, "localhost");
+	});
+
+	afterAll(async () => {
+		await server.stop().catch(() => {});
+	});
+
+	it("should fail registration when IdP only supports unsupported token auth methods", async () => {
+		// The mock server advertises only "none" which we don't support
+		// Without tokenEndpointAuthentication override, discovery should fail
+		const { headers } = await signInWithTestUser();
+
+		await expect(
+			auth.api.registerSSOProvider({
+				body: {
+					issuer: server.issuer.url!,
+					domain: "unsupported-auth.com",
+					providerId: "unsupported-auth-provider",
+					oidcConfig: {
+						clientId: "test",
+						clientSecret: "test",
+						// Note: NOT providing tokenEndpointAuthentication
+						// so discovery will check the IdP's advertised methods
+					},
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: {
+				code: "unsupported_token_auth_method",
+			},
+		});
+	});
+
+	it("should fail registration when discovery endpoint returns invalid issuer", async () => {
+		const { headers } = await signInWithTestUser();
+
+		// Use a mismatched issuer - the mock server's issuer is http://localhost:8080
+		// but we claim a different issuer
+		await expect(
+			auth.api.registerSSOProvider({
+				body: {
+					issuer: "https://different-issuer.example.com",
+					domain: "mismatch.com",
+					providerId: "issuer-mismatch-provider",
+					oidcConfig: {
+						clientId: "test",
+						clientSecret: "test",
+						tokenEndpointAuthentication: "client_secret_basic",
+						// Point discovery to the mock server (which will return different issuer)
+						discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					},
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: {
+				code: "issuer_mismatch",
+			},
+		});
+	});
+
+	it("should fail registration when discovery endpoint is unreachable", async () => {
+		const { headers } = await signInWithTestUser();
+
+		// DNS lookup failure or connection error results in discovery_unexpected_error
+		// Note: discovery_not_found (404) would require a real server that returns 404
+		await expect(
+			auth.api.registerSSOProvider({
+				body: {
+					issuer: "https://nonexistent-idp.example.com",
+					domain: "notfound.com",
+					providerId: "notfound-provider",
+					oidcConfig: {
+						clientId: "test",
+						clientSecret: "test",
+						tokenEndpointAuthentication: "client_secret_basic",
+					},
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_GATEWAY",
+			body: {
+				code: "discovery_unexpected_error",
+			},
+		});
+	});
+
+	it("should succeed when user provides all required endpoints (discovery still validates)", async () => {
+		const { headers } = await signInWithTestUser();
+
+		const provider = await auth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "full-config.com",
+				providerId: "full-config-provider",
+				oidcConfig: {
+					clientId: "test",
+					clientSecret: "test",
+					// Providing all endpoints + tokenEndpointAuthentication
+					// Discovery still runs but our values override
+					authorizationEndpoint: `${server.issuer.url}/custom-authorize`,
+					tokenEndpoint: `${server.issuer.url}/custom-token`,
+					jwksEndpoint: `${server.issuer.url}/custom-jwks`,
+					userInfoEndpoint: `${server.issuer.url}/custom-userinfo`,
+					tokenEndpointAuthentication: "client_secret_post",
+				},
+			},
+			headers,
+		});
+
+		// User-provided values should be preserved (not overwritten by discovery)
+		expect(provider.oidcConfig).toMatchObject({
+			authorizationEndpoint: `${server.issuer.url}/custom-authorize`,
+			tokenEndpoint: `${server.issuer.url}/custom-token`,
+			jwksEndpoint: `${server.issuer.url}/custom-jwks`,
+			userInfoEndpoint: `${server.issuer.url}/custom-userinfo`,
+			tokenEndpointAuthentication: "client_secret_post",
+		});
+	});
+
+	it("should hydrate missing endpoints from discovery", async () => {
+		const { headers } = await signInWithTestUser();
+
+		const provider = await auth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "partial-config.com",
+				providerId: "partial-config-provider",
+				oidcConfig: {
+					clientId: "test",
+					clientSecret: "test",
+					// Only providing required overrides, let discovery fill the rest
+					tokenEndpointAuthentication: "client_secret_basic",
+				},
+			},
+			headers,
+		});
+
+		// Endpoints should be hydrated from discovery
+		expect(provider.oidcConfig).toMatchObject({
+			issuer: server.issuer.url,
+			authorizationEndpoint: `${server.issuer.url}/authorize`,
+			tokenEndpoint: `${server.issuer.url}/token`,
+			jwksEndpoint: `${server.issuer.url}/jwks`,
+			tokenEndpointAuthentication: "client_secret_basic",
+		});
 	});
 });
