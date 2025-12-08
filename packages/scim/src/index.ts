@@ -64,6 +64,7 @@ export const scim = (options?: SCIMOptions) => {
 					active: {
 						type: "boolean",
 						required: false,
+						defaultValue: true,
 					},
 				},
 			},
