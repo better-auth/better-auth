@@ -1381,6 +1381,11 @@ export const callbackSSO = (options?: SSOOptions) => {
 					}/error?error=invalid_provider&error_description=missing_user_info`,
 				);
 			}
+			const isTrustedProvider =
+				"domainVerified" in provider &&
+				(provider as { domainVerified?: boolean }).domainVerified === true &&
+				validateEmailDomain(userInfo.email, provider.domain);
+
 			const linked = await handleOAuthUserInfo(ctx, {
 				userInfo: {
 					email: userInfo.email,
@@ -1404,6 +1409,7 @@ export const callbackSSO = (options?: SSOOptions) => {
 				callbackURL,
 				disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
 				overrideUserInfo: config.overrideUserInfo,
+				isTrustedProvider,
 			});
 			if (linked.error) {
 				throw ctx.redirect(
