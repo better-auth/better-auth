@@ -200,6 +200,157 @@ const createMockAdapter = (
 	};
 };
 
+/**
+ * Generate the correct import path for the auth file in route handlers
+ */
+const generateAuthImportPath = async (
+	cwd: string,
+	authFilePath: string,
+	routeHandlerPath: string,
+	framework?: Framework,
+): Promise<string> => {
+	// Special handling for SvelteKit's $lib alias
+	if (framework?.id === "sveltekit") {
+		const relativeAuthPath = path.relative(cwd, authFilePath);
+		const normalizedPath = relativeAuthPath.replace(/\\/g, "/");
+
+		// Check if auth file is in src/lib
+		if (normalizedPath.startsWith("src/lib/") || normalizedPath === "src/lib") {
+			const pathAfterLib = normalizedPath.slice("src/lib/".length);
+			const pathWithoutExt = pathAfterLib.replace(/\.(ts|js|tsx|jsx)$/, "");
+			return pathWithoutExt ? `$lib/${pathWithoutExt}` : "$lib/auth";
+		}
+	}
+
+	// Special handling for Hono - use relative imports
+	if (framework?.id === "hono") {
+		const routeHandlerDir = path.dirname(path.join(cwd, routeHandlerPath));
+		let relativePath = path.relative(routeHandlerDir, authFilePath);
+		relativePath = relativePath.replace(/\.(ts|js|tsx|jsx)$/, "");
+		if (!relativePath.startsWith(".")) {
+			relativePath = `./${relativePath}`;
+		}
+		return relativePath.replace(/\\/g, "/");
+	}
+
+	// Read tsconfig.json to check for path aliases
+	const tsconfigPath = path.join(cwd, "tsconfig.json");
+	const { data: tsconfigContent } = await tryCatch(
+		fs.readFile(tsconfigPath, "utf-8"),
+	);
+
+	let aliasPrefix: string | null = null;
+	let aliasBasePath: string | null = null;
+
+	if (tsconfigContent) {
+		try {
+			// Remove comments from JSON (simple approach)
+			const cleanedContent = tsconfigContent.replace(
+				/\/\*[\s\S]*?\*\/|\/\/.*/g,
+				"",
+			);
+			const tsconfig = JSON.parse(cleanedContent);
+			const compilerOptions = tsconfig?.compilerOptions;
+			const paths = compilerOptions?.paths;
+			const baseUrl = compilerOptions?.baseUrl;
+
+			if (paths) {
+				// Look for common aliases like @/*, ~/* etc
+				for (const [alias, targets] of Object.entries(paths)) {
+					if (
+						typeof alias === "string" &&
+						alias.endsWith("/*") &&
+						Array.isArray(targets) &&
+						targets.length > 0
+					) {
+						const target = targets[0] as string;
+						if (target.endsWith("/*")) {
+							aliasPrefix = alias.slice(0, -2); // Remove /*
+							let basePath = target.slice(0, -2); // Remove /*
+
+							// If baseUrl is set, resolve the base path relative to it
+							if (baseUrl && baseUrl !== ".") {
+								basePath = path.join(baseUrl, basePath);
+							}
+
+							aliasBasePath = basePath;
+							break;
+						}
+					}
+				}
+			}
+		} catch (e) {
+			// Ignore tsconfig parsing errors
+		}
+	}
+
+	// Get relative path from cwd to auth file
+	const relativeAuthPath = path.relative(cwd, authFilePath);
+
+	console.log(chalk.dim(`    relativeAuthPath: ${relativeAuthPath}`));
+	console.log(chalk.dim(`    aliasPrefix: ${aliasPrefix}`));
+	console.log(chalk.dim(`    aliasBasePath: ${aliasBasePath}`));
+
+	// If we have an alias, try to use it
+	if (aliasPrefix && aliasBasePath !== null) {
+		// Normalize the base path (handle . and ./ and empty string)
+		let normalizedBasePath = path.normalize(aliasBasePath);
+
+		console.log(chalk.dim(`    normalizedBasePath: ${normalizedBasePath}`));
+
+		// If base path is "." or empty, it means the alias points to the project root
+		if (
+			normalizedBasePath === "." ||
+			normalizedBasePath === "" ||
+			normalizedBasePath === "./"
+		) {
+			// The auth file is relative to cwd, so we can use the alias directly
+			const pathWithoutExt = relativeAuthPath.replace(/\.(ts|js|tsx|jsx)$/, "");
+			const result = `${aliasPrefix}/${pathWithoutExt}`.replace(/\\/g, "/");
+			console.log(chalk.dim(`    Using alias, returning: ${result}`));
+			return result;
+		}
+
+		// For other base paths like "src" or "app", check if auth file is within that path
+		// Ensure we're comparing normalized paths
+		const normalizedRelativePath = relativeAuthPath.replace(/\\/g, "/");
+		const normalizedBasePathForward = normalizedBasePath.replace(/\\/g, "/");
+
+		if (
+			normalizedRelativePath === normalizedBasePathForward ||
+			normalizedRelativePath.startsWith(normalizedBasePathForward + "/")
+		) {
+			// Remove the base path and use the alias
+			let pathAfterBase: string;
+			if (normalizedRelativePath === normalizedBasePathForward) {
+				pathAfterBase = "";
+			} else {
+				pathAfterBase = normalizedRelativePath.slice(
+					normalizedBasePathForward.length + 1,
+				);
+			}
+			// Remove file extension
+			const pathWithoutExt = pathAfterBase.replace(/\.(ts|js|tsx|jsx)$/, "");
+			return pathWithoutExt ? `${aliasPrefix}/${pathWithoutExt}` : aliasPrefix;
+		}
+	}
+
+	// Fallback: use relative path from route handler to auth file
+	const routeHandlerDir = path.dirname(path.join(cwd, routeHandlerPath));
+	let relativePath = path.relative(routeHandlerDir, authFilePath);
+
+	// Remove file extension
+	relativePath = relativePath.replace(/\.(ts|js|tsx|jsx)$/, "");
+
+	// Ensure it starts with ./ or ../
+	if (!relativePath.startsWith(".")) {
+		relativePath = `./${relativePath}`;
+	}
+
+	// Convert Windows paths to Unix paths
+	return relativePath.replace(/\\/g, "/");
+};
+
 export async function initAction(opts: any) {
 	const options = initActionOptionsSchema.parse(opts);
 	const cwd = options.cwd;
@@ -401,12 +552,50 @@ export async function initAction(opts: any) {
 			return;
 		}
 	})();
-	å;
+
 	// Auto-detect framework silently
 	const detectedFramework = await autoDetectFramework(cwd);
-	const framework: Framework =
+	let framework: Framework =
 		detectedFramework || FRAMEWORKS.find((f) => f.id === "next")!;
 	const frameworkWasDetected = !!detectedFramework;
+
+	// For Next.js, detect if using App Router or Pages Router
+	if (framework.id === "next" && framework.routeHandler) {
+		const { data: rootFiles } = await tryCatch(fs.readdir(cwd, "utf-8"));
+		const hasAppDir = rootFiles?.some((file) => file === "app");
+		const hasPagesDir = rootFiles?.some((file) => file === "pages");
+		const hasSrcDir = rootFiles?.some((file) => file === "src");
+
+		let routeHandlerPath = "app/api/auth/[...all]/route.ts";
+
+		// Check for src/app or src/pages
+		if (hasSrcDir) {
+			const { data: srcFiles } = await tryCatch(
+				fs.readdir(path.join(cwd, "src"), "utf-8"),
+			);
+			const hasSrcApp = srcFiles?.some((file) => file === "app");
+			const hasSrcPages = srcFiles?.some((file) => file === "pages");
+
+			if (hasSrcPages) {
+				routeHandlerPath = "src/pages/api/auth/[...all].ts";
+			} else if (hasSrcApp) {
+				routeHandlerPath = "src/app/api/auth/[...all]/route.ts";
+			}
+		} else if (hasPagesDir) {
+			routeHandlerPath = "pages/api/auth/[...all].ts";
+		} else if (hasAppDir) {
+			routeHandlerPath = "app/api/auth/[...all]/route.ts";
+		}
+
+		// Update the framework with the correct path
+		framework = {
+			...framework,
+			routeHandler: {
+				...framework.routeHandler,
+				path: routeHandlerPath as typeof framework.routeHandler.path,
+			},
+		};
+	}
 
 	// Prompt for auth config file location
 	let authConfigFilePath: string | null = null;
@@ -1062,7 +1251,7 @@ export const auth = betterAuth({
 		// - import { auth } from "~/lib/auth"
 		// - import { auth } from "$lib/auth"
 		// - import { auth } from "./auth"
-		let updatedCode = routeHandler.code;
+		let updatedCode = routeHandler.code as string;
 		const importPatterns = [
 			/from\s+["']@\/[^"']+["']/,
 			/from\s+["']~\/[^"']+["']/,
