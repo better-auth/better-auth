@@ -233,6 +233,35 @@ Discovery will fail with the `discovery_untrusted_origin` code unless you explic
 trustedOrigins: ["https://your-org.okta.com"],
 ```
 
+If your use-case requires to support multiple arbitrary but known IDPs (e.g Okta), we recommend to:
+
+1. Register a list of well known IDPs ahead of time
+
+```ts
+trustedOrigins: [
+    "https://your-org.okta.com",
+    "https://accounts.google.com",
+    "https://login.microsoftonline.com",
+    "https://auth0.com",
+    "https://idp.example.com"
+],
+```
+
+2. Or dynamically compute the `trustedOrigins` by specifying a callback function:
+
+```ts
+trustedOrigins: async (request: Request) => {
+    // SSO trusted origin list
+    if (request.url.endsWith("/sso/register")) {
+        const trustedOrigins = await fetchOriginList();
+        return trustedOrigins;
+    }
+
+    // Your normal origin list for everything else
+    return [];
+}
+```
+
 See the [`trustedOrigins`](/docs/reference/security#trusted-origins) docs for more information.
 
 #### Why Discovery Can Fail
