@@ -10,25 +10,29 @@ import { NavbarMobile, NavbarMobileBtn } from "./nav-mobile";
 
 export const navMenu = [
 	{
-		name: "helo_",
+		name: "Hello_",
 		path: "/",
 	},
 	{
-		name: "docs",
+		name: "Docs",
 
 		path: "/docs",
 	},
 	{
-		name: "changelogs",
+		name: "Changelogs",
 		path: "/changelogs",
 	},
 	{
-		name: "blogs",
+		name: "Blogs",
 		path: "/blog",
 	},
 	{
-		name: "community",
+		name: "Community",
 		path: "/community",
+	},
+	{
+		name: "Enterprise",
+		path: "/enterprise",
 	},
 ];
 
