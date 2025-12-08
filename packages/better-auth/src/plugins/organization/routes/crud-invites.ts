@@ -1116,6 +1116,17 @@ export const listUserInvitations = <O extends OrganizationOptions>(
 												organizationName: {
 													type: "string",
 												},
+												inviterId: {
+													type: "string",
+													description:
+														"The ID of the user who created the invitation",
+												},
+												teamId: {
+													type: "string",
+													description:
+														"The ID of the team associated with the invitation",
+													nullable: true,
+												},
 												status: {
 													type: "string",
 												},
