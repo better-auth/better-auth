@@ -1,4 +1,4 @@
-import { getColorDepth, logger, TTY_COLORS } from "../../env";
+import { createLogger, getColorDepth, TTY_COLORS } from "../../env";
 import { BetterAuthError } from "../../error";
 import type { BetterAuthOptions } from "../../types";
 import { safeJSONParse } from "../../utils/json";
@@ -83,6 +83,7 @@ export const createAdapterFactory =
 
 		const debugLog = (...args: any[]) => {
 			if (config.debugLogs === true || typeof config.debugLogs === "object") {
+				const logger = createLogger({ level: "info" });
 				// If we're running adapter tests, we'll keep debug logs in memory, then print them out if a test fails.
 				if (
 					typeof config.debugLogs === "object" &&
