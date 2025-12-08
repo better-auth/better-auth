@@ -10,7 +10,7 @@ import { NavbarMobile, NavbarMobileBtn } from "./nav-mobile";
 
 export const navMenu = [
 	{
-		name: "helo_",
+		name: "_hello",
 		path: "/",
 	},
 	{
@@ -106,6 +106,9 @@ export const Navbar = () => {
 								{menu.name}
 							</NavLink>
 						))}
+						<NavLink href="/enterprise" className="relative bg-muted/30">
+							enterprise
+						</NavLink>
 						<NavLink
 							href="https://github.com/better-auth/better-auth"
 							className="bg-muted/20"
