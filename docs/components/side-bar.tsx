@@ -39,7 +39,7 @@ export default function ArticleLayout() {
 			<aside
 				className={cn(
 					"navbar:transition-all",
-					"border-r border-lines top-[55px] navbar:flex hidden navbar:w-[268px] lg:w-[286px] overflow-y-auto absolute h-[calc(100dvh-55px)] pb-2 flex-col justify-between w-[var(--fd-sidebar-width)]",
+					"border-r border-lines top-[55px] navbar:flex hidden navbar:w-[268px] lg:w-[286px]! overflow-y-auto absolute h-[calc(100dvh-55px)] pb-2 flex-col justify-between w-[var(--fd-sidebar-width)]",
 				)}
 			>
 				<div>
@@ -94,7 +94,24 @@ export default function ArticleLayout() {
 												<motion.div className="text-sm">
 													{item.list.map((listItem, j) => (
 														<div key={listItem.title}>
-															<Suspense fallback={<>Loading...</>}>
+															<Suspense
+																fallback={
+																	<div className="flex items-center gap-2 px-5 py-1.5 animate-pulse">
+																		<div
+																			className="size-4 shrink-0 bg-muted rounded-full"
+																			aria-hidden="true"
+																		/>
+																		<div
+																			className="h-3 bg-muted rounded-md"
+																			style={{
+																				width: `${Math.random() * (70 - 30) + 30}%`,
+																			}}
+																			aria-hidden="true"
+																		/>
+																		<span className="sr-only">Loading...</span>
+																	</div>
+																}
+															>
 																{listItem.group ? (
 																	<div className="flex flex-row items-center gap-2 mx-5 my-1 ">
 																		<p className="text-sm text-transparent bg-gradient-to-tr dark:from-gray-100 dark:to-stone-200 bg-clip-text from-gray-900 to-stone-900">

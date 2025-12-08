@@ -102,6 +102,8 @@ type createOrganization = {
 }
 ```
 
+</APIMethod>
+
 <Callout type="warn">
 **Mutually Exclusive Parameters**
 
@@ -111,8 +113,6 @@ The `userId` and session headers cannot be used together:
 
 **For Admins:** To create an organization on behalf of another user, you must make the API call server-side **without** passing session headers.
 </Callout>
-
-</APIMethod>
 
 #### Restrict who can create an organization
 
@@ -1510,12 +1510,6 @@ To create a new role for an organization at runtime, you can use the `createRole
 Only users with roles which contain the `ac` resource with the `create` permission can create a new role.
 By default, only the `admin` and `owner` roles have this permission. You also cannot add permissions that your
 current role in that organization can't already access.
-
-<Callout>
-  TIP: You can validate role names by using the `dynamicAccessControl.validateRoleName` option in the organization plugin config.
-  Learn more [here](#validaterolename).
-</Callout>
-
 
 <APIMethod
   path="/organization/create-role"

@@ -81,7 +81,6 @@ export function sso<O extends SSOOptions>(
 };
 
 export function sso<O extends SSOOptions>(options?: O | undefined): any {
-
 	const optionsWithStore = options as O;
 
 	let endpoints = {

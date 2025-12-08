@@ -6,7 +6,7 @@
   "module": "dist/index.mjs",
   "repository": {
     "type": "git",
-    "url": "https://github.com/better-auth/better-auth",
+    "url": "git+https://github.com/better-auth/better-auth.git",
     "directory": "packages/cli"
   },
   "homepage": "https://www.better-auth.com/docs/concepts/cli",
@@ -17,6 +17,7 @@
     "lint:package": "publint run --strict",
     "dev": "tsx ./src/index.ts",
     "test": "vitest",
+    "coverage": "vitest run --coverage",
     "typecheck": "tsc --project tsconfig.json"
   },
   "publishConfig": {
