@@ -24,7 +24,7 @@ export function getWithHooks(
 			  }
 			| undefined,
 	) {
-		const context = await getCurrentAuthContext();
+		const context = await getCurrentAuthContext().catch(() => null);
 		let actualData = data;
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.create?.before;
@@ -78,7 +78,7 @@ export function getWithHooks(
 			  }
 			| undefined,
 	) {
-		const context = await getCurrentAuthContext();
+		const context = await getCurrentAuthContext().catch(() => null);
 		let actualData = data;
 
 		for (const hook of hooks || []) {
@@ -133,7 +133,7 @@ export function getWithHooks(
 			  }
 			| undefined,
 	) {
-		const context = await getCurrentAuthContext();
+		const context = await getCurrentAuthContext().catch(() => null);
 		let actualData = data;
 
 		for (const hook of hooks || []) {
@@ -188,7 +188,7 @@ export function getWithHooks(
 			  }
 			| undefined,
 	) {
-		const context = await getCurrentAuthContext();
+		const context = await getCurrentAuthContext().catch(() => null);
 		let entityToDelete: T | null = null;
 
 		try {
@@ -250,7 +250,7 @@ export function getWithHooks(
 			  }
 			| undefined,
 	) {
-		const context = await getCurrentAuthContext();
+		const context = await getCurrentAuthContext().catch(() => null);
 		let entitiesToDelete: T[] = [];
 
 		try {

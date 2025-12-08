@@ -3,10 +3,7 @@ import { runWithAdapter } from "@better-auth/core/context";
 import { BASE_ERROR_CODES, BetterAuthError } from "@better-auth/core/error";
 import { getEndpoints, router } from "../api";
 import type { Auth } from "../types";
-import type { Expand } from "../types/helper";
 import { getBaseURL, getOrigin } from "../utils/url";
-
-export type WithJsDoc<T, D> = Expand<T & D>;
 
 export const createBetterAuth = <Options extends BetterAuthOptions>(
 	options: Options &
