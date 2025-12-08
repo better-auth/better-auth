@@ -4,11 +4,12 @@
   "version": "1.4.6-beta.3",
   "type": "module",
   "main": "dist/index.mjs",
+  "types": "dist/index.d.mts",
   "license": "MIT",
   "homepage": "https://www.better-auth.com/docs/plugins/stripe",
   "repository": {
     "type": "git",
-    "url": "https://github.com/better-auth/better-auth",
+    "url": "git+https://github.com/better-auth/better-auth.git",
     "directory": "packages/stripe"
   },
   "keywords": [
@@ -20,6 +21,7 @@
   "description": "Stripe plugin for Better Auth",
   "scripts": {
     "test": "vitest",
+    "coverage": "vitest run --coverage",
     "lint:package": "publint run --strict",
     "build": "tsdown",
     "dev": "tsdown --watch",

@@ -23,35 +23,7 @@ import type { FlowResult } from "samlify/types/src/flow";
 import * as z from "zod/v4";
 import { DEFAULT_AUTHN_REQUEST_TTL_MS } from "../authn-request-store";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
-import { validateEmailDomain } from "../utils";
-
-/**
- * Safely parses a value that might be a JSON string or already a parsed object
- * This handles cases where ORMs like Drizzle might return already parsed objects
- * instead of JSON strings from TEXT/JSON columns
- */
-function safeJsonParse<T>(value: string | T | null | undefined): T | null {
-	if (!value) return null;
-
-	// If it's already an object (not a string), return it as-is
-	if (typeof value === "object") {
-		return value as T;
-	}
-
-	// If it's a string, try to parse it
-	if (typeof value === "string") {
-		try {
-			return JSON.parse(value) as T;
-		} catch (error) {
-			// If parsing fails, this might indicate the string is not valid JSON
-			throw new Error(
-				`Failed to parse JSON: ${error instanceof Error ? error.message : "Unknown error"}`,
-			);
-		}
-	}
-
-	return null;
-}
+import { safeJsonParse, validateEmailDomain } from "../utils";
 
 const spMetadataQuerySchema = z.object({
 	providerId: z.string(),
@@ -684,12 +656,12 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 
 			return ctx.json({
 				...provider,
-				oidcConfig: JSON.parse(
+				oidcConfig: safeJsonParse<OIDCConfig>(
 					provider.oidcConfig as unknown as string,
-				) as OIDCConfig,
-				samlConfig: JSON.parse(
+				),
+				samlConfig: safeJsonParse<SAMLConfig>(
 					provider.samlConfig as unknown as string,
-				) as SAMLConfig,
+				),
 				redirectURI: `${ctx.context.baseURL}/sso/callback/${provider.providerId}`,
 				...(options?.domainVerification?.enabled ? { domainVerified } : {}),
 				...(options?.domainVerification?.enabled
