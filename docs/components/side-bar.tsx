@@ -96,7 +96,7 @@ export default function ArticleLayout() {
 														<div key={listItem.title}>
 															<Suspense
 																fallback={
-																	<div className="text-red-500 flex items-center gap-2 px-5 py-1.5 animate-pulse">
+																	<div className="flex items-center gap-2 px-5 py-1.5 animate-pulse">
 																		<div
 																			className="size-4 shrink-0 bg-muted rounded-full"
 																			aria-hidden="true"
@@ -106,7 +106,9 @@ export default function ArticleLayout() {
 																			style={{
 																				width: `${Math.random() * (70 - 30) + 30}%`,
 																			}}
+																			aria-hidden="true"
 																		/>
+																		<span className="sr-only">Loading...</span>
 																	</div>
 																}
 															>
