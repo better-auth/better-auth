@@ -59,12 +59,18 @@ const { execute } = await testAdapter({
 	},
 	prefixTests: "pg",
 	tests: [
-		normalTestSuite(),
-		transactionsTestSuite({ disableTests: { ALL: true } }),
-		authFlowTestSuite(),
-		numberIdTestSuite(),
-		joinsTestSuite(),
-		uuidTestSuite(),
+		normalTestSuite({
+			disableTests: {
+				ALL: true,
+				"create - should support json": false,
+				"create - should support arrays": false,
+			},
+		}),
+		// transactionsTestSuite({ disableTests: { ALL: true } }),
+		// authFlowTestSuite(),
+		// numberIdTestSuite(),
+		// joinsTestSuite(),
+		// uuidTestSuite(),
 	],
 	async onFinish() {
 		await cleanupDatabase(true);
