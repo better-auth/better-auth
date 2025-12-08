@@ -1088,6 +1088,74 @@ export const listUserInvitations = <O extends OrganizationOptions>(
 						.optional(),
 				})
 				.optional(),
+			metadata: {
+				openapi: {
+					description: "List all invitations a user has received",
+					responses: {
+						"200": {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "array",
+										items: {
+											type: "object",
+											properties: {
+												id: {
+													type: "string",
+												},
+												email: {
+													type: "string",
+												},
+												role: {
+													type: "string",
+												},
+												organizationId: {
+													type: "string",
+												},
+												organizationName: {
+													type: "string",
+												},
+												inviterId: {
+													type: "string",
+													description:
+														"The ID of the user who created the invitation",
+												},
+												teamId: {
+													type: "string",
+													description:
+														"The ID of the team associated with the invitation",
+													nullable: true,
+												},
+												status: {
+													type: "string",
+												},
+												expiresAt: {
+													type: "string",
+												},
+												createdAt: {
+													type: "string",
+												},
+											},
+											required: [
+												"id",
+												"email",
+												"role",
+												"organizationId",
+												"organizationName",
+												"inviterId",
+												"status",
+												"expiresAt",
+												"createdAt",
+											],
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		async (ctx) => {
 			const session = await getSessionFromCtx(ctx);
