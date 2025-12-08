@@ -2946,6 +2946,45 @@ export const getNormalTestSuiteTests = (
 				expect(findResult?.numberArray).toEqual([1, 2, 3]);
 			},
 		},
+		"create - should support json": {
+			migrateBetterAuth: {
+				plugins: [
+					{
+						id: "json-test",
+						schema: {
+							testModel: {
+								fields: {
+									json: {
+										type: "json",
+										required: true,
+									},
+								},
+							},
+						},
+					} satisfies BetterAuthPlugin,
+				],
+			},
+			test: async () => {
+				const result = await adapter.create<{
+					id: string;
+					json: Record<string, any>;
+				}>({
+					model: "testModel",
+					data: { json: { foo: "bar" } },
+				});
+				console.log(result);
+				expect(result.json).toEqual({ foo: "bar" });
+
+				const findResult = await adapter.findOne<{
+					json: Record<string, any>;
+				}>({
+					model: "testModel",
+					where: [{ field: "id", value: result.id }],
+				});
+				expect(findResult).toEqual(result);
+				expect(findResult?.json).toEqual({ foo: "bar" });
+			},
+		},
 	};
 };
 
