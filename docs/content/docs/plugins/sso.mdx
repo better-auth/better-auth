@@ -874,6 +874,16 @@ For a detailed guide on setting up SAML SSO with examples for Okta and testing w
 
 If you want to allow account linking for specific trusted providers, enable the `accountLinking` option in your auth config and specify those providers in the `trustedProviders` list.
 
+<Callout type="warn">
+**Deprecated:** `trustEmailVerified` is deprecated and should not be used in new projects. Relying on provider-level `email_verified` is a weaker trust signal compared to more explicit mechanisms.
+
+**Recommended alternatives:**
+- Use [`trustedProviders`](/docs/concepts/users-accounts#forced-linking) in your `accountLinking` configuration to specify which providers you trust for automatic account linking.
+- Enable [`domainVerification`](#domain-verification) to require verified domains before allowing SSO sign-ins.
+
+Existing configurations using `trustEmailVerified` will continue to work, but this option may be removed in a future major version.
+</Callout>
+
 <TypeTable
   type={{
     provisionUser: {
