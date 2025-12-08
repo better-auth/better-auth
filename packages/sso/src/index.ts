@@ -81,21 +81,8 @@ export function sso<O extends SSOOptions>(
 };
 
 export function sso<O extends SSOOptions>(options?: O | undefined): any {
-	const shouldEnableValidation =
-		options?.saml?.authnRequestStore ||
-		options?.saml?.enableInResponseToValidation;
 
-	const authnRequestStore = shouldEnableValidation
-		? (options?.saml?.authnRequestStore ?? createInMemoryAuthnRequestStore())
-		: undefined;
-
-	const optionsWithStore = {
-		...options,
-		saml: {
-			...options?.saml,
-			authnRequestStore,
-		},
-	} as O;
+	const optionsWithStore = options as O;
 
 	let endpoints = {
 		spMetadata: spMetadata(),

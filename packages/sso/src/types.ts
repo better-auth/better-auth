@@ -263,9 +263,11 @@ export interface SSOOptions {
 		 * Enable InResponseTo validation for SP-initiated SAML flows.
 		 * When enabled, AuthnRequest IDs are tracked and validated against SAML responses.
 		 *
-		 * ⚠️ For multi-instance deployments, you MUST provide a custom `authnRequestStore`
-		 * (e.g., Redis-backed) when enabling this feature. The default in-memory store
-		 * only works for single-instance deployments.
+		 * Storage behavior:
+		 * - Uses `secondaryStorage` (e.g., Redis) if configured in your auth options
+		 * - Falls back to the verification table in the database otherwise
+		 *
+		 * This works correctly in serverless environments without any additional configuration.
 		 *
 		 * @default false
 		 */
@@ -291,9 +293,12 @@ export interface SSOOptions {
 		requestTTL?: number;
 		/**
 		 * Custom AuthnRequest store implementation.
-		 * Use this to provide a Redis-backed store for multi-instance deployments.
+		 * Use this to provide a custom storage backend (e.g., Redis-backed store).
 		 *
 		 * Providing a custom store automatically enables InResponseTo validation.
+		 *
+		 * Note: When not provided, the default storage (secondaryStorage with
+		 * verification table fallback) is used automatically.
 		 */
 		authnRequestStore?: AuthnRequestStore;
 	};

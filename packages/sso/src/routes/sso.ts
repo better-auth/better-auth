@@ -21,9 +21,12 @@ import type { BindingContext } from "samlify/types/src/entity";
 import type { IdentityProvider } from "samlify/types/src/entity-idp";
 import type { FlowResult } from "samlify/types/src/flow";
 import * as z from "zod/v4";
+import type { AuthnRequestRecord } from "../authn-request-store";
 import { DEFAULT_AUTHN_REQUEST_TTL_MS } from "../authn-request-store";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
 import { validateEmailDomain } from "../utils";
+
+const AUTHN_REQUEST_KEY_PREFIX = "saml-authn-request:";
 
 /**
  * Safely parses a value that might be a JSON string or already a parsed object
@@ -1094,14 +1097,27 @@ export const signInSSO = (options?: SSOOptions) => {
 					});
 				}
 
-				if (loginRequest.id && options?.saml?.authnRequestStore) {
-					const ttl = options.saml.requestTTL ?? DEFAULT_AUTHN_REQUEST_TTL_MS;
-					await options.saml.authnRequestStore.save({
+				const shouldSaveRequest =
+					loginRequest.id &&
+					(options?.saml?.authnRequestStore ||
+						options?.saml?.enableInResponseToValidation);
+				if (shouldSaveRequest) {
+					const ttl = options?.saml?.requestTTL ?? DEFAULT_AUTHN_REQUEST_TTL_MS;
+					const record: AuthnRequestRecord = {
 						id: loginRequest.id,
 						providerId: provider.providerId,
 						createdAt: Date.now(),
 						expiresAt: Date.now() + ttl,
-					});
+					};
+					if (options?.saml?.authnRequestStore) {
+						await options.saml.authnRequestStore.save(record);
+					} else {
+						await ctx.context.internalAdapter.createVerificationValue({
+							identifier: `${AUTHN_REQUEST_KEY_PREFIX}${record.id}`,
+							value: JSON.stringify(record),
+							expiresAt: new Date(record.expiresAt),
+						});
+					}
 				}
 
 				return ctx.json({
@@ -1686,12 +1702,31 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			const { extract } = parsedResponse!;
 
 			const inResponseTo = (extract as any).inResponseTo as string | undefined;
-			if (options?.saml?.authnRequestStore) {
-				const allowIdpInitiated = options.saml.allowIdpInitiated !== false;
+			const shouldValidateInResponseTo =
+				options?.saml?.authnRequestStore ||
+				options?.saml?.enableInResponseToValidation;
+
+			if (shouldValidateInResponseTo) {
+				const allowIdpInitiated = options?.saml?.allowIdpInitiated !== false;
 
 				if (inResponseTo) {
-					const storedRequest =
-						await options.saml.authnRequestStore.get(inResponseTo);
+					let storedRequest: AuthnRequestRecord | null = null;
+
+					if (options?.saml?.authnRequestStore) {
+						storedRequest = await options.saml.authnRequestStore.get(inResponseTo);
+					} else {
+						const verification =
+							await ctx.context.internalAdapter.findVerificationValue(
+								`${AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
+							);
+						if (verification) {
+							try {
+								storedRequest = JSON.parse(verification.value) as AuthnRequestRecord;
+							} catch {
+								storedRequest = null;
+							}
+						}
+					}
 
 					if (!storedRequest) {
 						ctx.context.logger.error(
@@ -1714,7 +1749,14 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 								actualProvider: provider.providerId,
 							},
 						);
-						await options.saml.authnRequestStore.delete(inResponseTo);
+
+						if (options?.saml?.authnRequestStore) {
+							await options.saml.authnRequestStore.delete(inResponseTo);
+						} else {
+							await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+								`${AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
+							);
+						}
 						const redirectUrl =
 							RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
 						throw ctx.redirect(
@@ -1722,7 +1764,13 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 						);
 					}
 
-					await options.saml.authnRequestStore.delete(inResponseTo);
+					if (options?.saml?.authnRequestStore) {
+						await options.saml.authnRequestStore.delete(inResponseTo);
+					} else {
+						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+							`${AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
+						);
+					}
 				} else if (!allowIdpInitiated) {
 					ctx.context.logger.error(
 						"SAML IdP-initiated SSO rejected: InResponseTo missing and allowIdpInitiated is false",
@@ -2116,12 +2164,31 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			const inResponseToAcs = (extract as any).inResponseTo as
 				| string
 				| undefined;
-			if (options?.saml?.authnRequestStore) {
-				const allowIdpInitiated = options.saml.allowIdpInitiated !== false;
+			const shouldValidateInResponseToAcs =
+				options?.saml?.authnRequestStore ||
+				options?.saml?.enableInResponseToValidation;
+
+			if (shouldValidateInResponseToAcs) {
+				const allowIdpInitiated = options?.saml?.allowIdpInitiated !== false;
 
 				if (inResponseToAcs) {
-					const storedRequest =
-						await options.saml.authnRequestStore.get(inResponseToAcs);
+					let storedRequest: AuthnRequestRecord | null = null;
+
+					if (options?.saml?.authnRequestStore) {
+						storedRequest = await options.saml.authnRequestStore.get(inResponseToAcs);
+					} else {
+						const verification =
+							await ctx.context.internalAdapter.findVerificationValue(
+								`${AUTHN_REQUEST_KEY_PREFIX}${inResponseToAcs}`,
+							);
+						if (verification) {
+							try {
+								storedRequest = JSON.parse(verification.value) as AuthnRequestRecord;
+							} catch {
+								storedRequest = null;
+							}
+						}
+					}
 
 					if (!storedRequest) {
 						ctx.context.logger.error(
@@ -2144,7 +2211,13 @@ export const acsEndpoint = (options?: SSOOptions) => {
 								actualProvider: providerId,
 							},
 						);
-						await options.saml.authnRequestStore.delete(inResponseToAcs);
+						if (options?.saml?.authnRequestStore) {
+							await options.saml.authnRequestStore.delete(inResponseToAcs);
+						} else {
+							await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+								`${AUTHN_REQUEST_KEY_PREFIX}${inResponseToAcs}`,
+							);
+						}
 						const redirectUrl =
 							RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
 						throw ctx.redirect(
@@ -2152,7 +2225,13 @@ export const acsEndpoint = (options?: SSOOptions) => {
 						);
 					}
 
-					await options.saml.authnRequestStore.delete(inResponseToAcs);
+					if (options?.saml?.authnRequestStore) {
+						await options.saml.authnRequestStore.delete(inResponseToAcs);
+					} else {
+						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+							`${AUTHN_REQUEST_KEY_PREFIX}${inResponseToAcs}`,
+						);
+					}
 				} else if (!allowIdpInitiated) {
 					ctx.context.logger.error(
 						"SAML IdP-initiated SSO rejected: InResponseTo missing and allowIdpInitiated is false",

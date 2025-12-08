@@ -23,9 +23,16 @@ export interface AuthnRequestStore {
 }
 
 /**
+ * Default TTL for AuthnRequest records (5 minutes).
+ * This should be sufficient for most IdPs while protecting against stale requests.
+ */
+export const DEFAULT_AUTHN_REQUEST_TTL_MS = 5 * 60 * 1000;
+
+/**
  * In-memory implementation of AuthnRequestStore.
- * Suitable for single-instance deployments and testing.
- * For multi-instance deployments, use Redis or a shared cache.
+ * ⚠️ Only suitable for testing or single-instance non-serverless deployments.
+ * For production, rely on the default behavior (uses verification table)
+ * or provide a custom Redis-backed store.
  */
 export function createInMemoryAuthnRequestStore(): AuthnRequestStore {
 	const store = new Map<string, AuthnRequestRecord>();
@@ -67,9 +74,3 @@ export function createInMemoryAuthnRequestStore(): AuthnRequestStore {
 		},
 	};
 }
-
-/**
- * Default TTL for AuthnRequest records (5 minutes).
- * This should be sufficient for most IdPs while protecting against stale requests.
- */
-export const DEFAULT_AUTHN_REQUEST_TTL_MS = 5 * 60 * 1000;
