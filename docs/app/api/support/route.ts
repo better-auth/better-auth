@@ -24,6 +24,12 @@ export async function POST(request: Request) {
 			);
 		}
 		const toEmail = process.env.SUPPORT_EMAIL;
+		if (!toEmail) {
+			return NextResponse.json(
+				{ error: "Missing required fields" },
+				{ status: 400 },
+			);
+		}
 		const resendApiKey = process.env.RESEND_API_KEY;
 		if (resendApiKey) {
 			try {
