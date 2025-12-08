@@ -2,7 +2,7 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
-import { z } from "zod";
+import * as z from "zod";
 import { setSessionCookie } from "../../../cookies";
 import {
 	generateRandomString,
@@ -50,7 +50,7 @@ export interface OTPOptions {
 				/**
 				 * The request object
 				 */
-				request?: Request,
+				ctx?: GenericEndpointContext,
 		  ) => Promise<void> | void)
 		| undefined;
 	/**
@@ -190,7 +190,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			});
 			await options.sendOTP(
 				{ user: session.user as UserWithTwoFactor, otp: code },
-				ctx.request,
+				ctx,
 			);
 			return ctx.json({ status: true });
 		},

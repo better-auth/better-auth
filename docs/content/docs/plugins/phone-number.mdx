@@ -52,7 +52,7 @@ The phone number plugin extends the authentication system by allowing users to s
         import { createAuthClient } from "better-auth/client"
         import { phoneNumberClient } from "better-auth/client/plugins"
 
-        const authClient =  createAuthClient({
+        const authClient = createAuthClient({
             plugins: [ // [!code highlight]
                 phoneNumberClient() // [!code highlight]
             ] // [!code highlight]
@@ -230,10 +230,22 @@ type resetPasswordPhoneNumber = {
 
 ## Options
 
-- `otpLength`: The length of the OTP code to be generated. Default is `6`.
-- `sendOTP`: A function that sends the OTP code to the user's phone number. It takes the phone number and the OTP code as arguments.
-- `expiresIn`: The time in seconds after which the OTP code expires. Default is `300` seconds.
-- `callbackOnVerification`: A function that is called after the phone number is verified. It takes the phone number and the user object as the first argument and a request object as the second argument.
+### `otpLength`
+
+The length of the OTP code to be generated. Default is `6`.
+
+### `sendOTP`
+
+A function that sends the OTP code to the user's phone number. It takes the phone number and the OTP code as arguments.
+
+### `expiresIn`
+
+The time in seconds after which the OTP code expires. Default is `300` seconds.
+
+### `callbackOnVerification`
+
+A function that is called after the phone number is verified. It takes the phone number and the user object as the first argument and a request object as the second argument.
+
 ```ts
 export const auth = betterAuth({
     plugins: [
@@ -241,20 +253,60 @@ export const auth = betterAuth({
             sendOTP: ({ phoneNumber, code }, request) => {
                 // Implement sending OTP code via SMS
             },
-            callbackOnVerification: async ({ phoneNumber, user }, request) => {
-                // Implement callback after phone number verification
-            }
+            callbackOnVerification: async ({ phoneNumber, user }, request) => { // [!code highlight]
+                // Implement callback after phone number verification // [!code highlight]
+            } // [!code highlight]
         })
     ]
 })
 ```
-- `sendPasswordResetOTP`: A function that sends the OTP code to the user's phone number for password reset. It takes the phone number and the OTP code as arguments.
-- `phoneNumberValidator`: A custom function to validate the phone number. It takes the phone number as an argument and returns a boolean indicating whether the phone number is valid.
-- `signUpOnVerification`: An object with the following properties:
-    - `getTempEmail`: A function that generates a temporary email for the user. It takes the phone number as an argument and returns the temporary email.
-    - `getTempName`: A function that generates a temporary name for the user. It takes the phone number as an argument and returns the temporary name.
 
-- `requireVerification`: When enabled, users cannot sign in with their phone number until it has been verified. If an unverified user attempts to sign in, the server will respond with a 401 error (PHONE_NUMBER_NOT_VERIFIED) and automatically trigger an OTP send to start the verification process.
+### `sendPasswordResetOTP`
+
+A function that sends the OTP code to the user's phone number for password reset. It takes the phone number and the OTP code as arguments.
+
+### `phoneNumberValidator`
+
+A custom function to validate the phone number. It takes the phone number as an argument and returns a boolean indicating whether the phone number is valid.
+
+### `verifyOTP`
+
+A custom function to verify the OTP code. When provided, this function will be used instead of the default internal verification logic. This is useful when you want to integrate with external SMS providers that handle OTP verification (e.g., Twilio Verify, AWS SNS). The function takes an object with `phoneNumber` and `code` properties and a request object, and returns a boolean or a promise that resolves to a boolean indicating whether the OTP is valid.
+
+```ts
+export const auth = betterAuth({
+    plugins: [
+        phoneNumber({
+            sendOTP: ({ phoneNumber, code }, request) => {
+                // Send OTP via your SMS provider
+            },
+            verifyOTP: async ({ phoneNumber, code }, request) => { // [!code highlight]
+                // Verify OTP with your desired logic (e.g., Twilio Verify) // [!code highlight]
+                // This is just an example, not a real implementation. // [!code highlight]
+                const isValid = await twilioClient.verify // [!code highlight]
+                    .services('YOUR_SERVICE_SID') // [!code highlight]
+                    .verificationChecks // [!code highlight]
+                    .create({ to: phoneNumber, code }); // [!code highlight]
+                return isValid.status === 'approved'; // [!code highlight]
+            } // [!code highlight]
+        })
+    ]
+})
+```
+
+<Callout type="warn">
+When using this option, ensure that proper validation is implemented, as it overrides our internal verification logic.
+</Callout>
+
+### `signUpOnVerification`
+
+An object with the following properties:
+- `getTempEmail`: A function that generates a temporary email for the user. It takes the phone number as an argument and returns the temporary email.
+- `getTempName`: A function that generates a temporary name for the user. It takes the phone number as an argument and returns the temporary name.
+
+### `requireVerification`
+
+When enabled, users cannot sign in with their phone number until it has been verified. If an unverified user attempts to sign in, the server will respond with a 401 error (PHONE_NUMBER_NOT_VERIFIED) and automatically trigger an OTP send to start the verification process.
     
 ## Schema
 

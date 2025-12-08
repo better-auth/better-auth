@@ -29,6 +29,9 @@
     },
     {
       "path": "./packages/telemetry/tsconfig.json"
+    },
+    {
+      "path": "./test/tsconfig.json"
     }
   ]
 }

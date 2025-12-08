@@ -9,7 +9,13 @@ import { wildcardMatch } from "../../utils/wildcard";
  * trustedOrigins.
  */
 export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
-	if (ctx.request?.method !== "POST" || !ctx.request) {
+	// Skip origin check for GET, OPTIONS, HEAD requests - we don't mutate state here.
+	if (
+		ctx.request?.method === "GET" ||
+		ctx.request?.method === "OPTIONS" ||
+		ctx.request?.method === "HEAD" ||
+		!ctx.request
+	) {
 		return;
 	}
 	const headers = ctx.request?.headers;

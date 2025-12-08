@@ -355,7 +355,7 @@ describe("api-key", async () => {
 
 	it("should create an API key with a custom expiresIn", async () => {
 		const expiresIn = 60 * 60 * 24 * 7; // 7 days
-		const expectedResult = new Date().getTime() + expiresIn;
+		const expectedResult = Date.now() + expiresIn;
 		const apiKey = await auth.api.createApiKey({
 			body: {
 				expiresIn: expiresIn,
@@ -1176,7 +1176,7 @@ describe("api-key", async () => {
 
 	it("should update API key expiresIn value", async () => {
 		const expiresIn = 60 * 60 * 24 * 7; // 7 days
-		const expectedResult = new Date().getTime() + expiresIn;
+		const expectedResult = Date.now() + expiresIn;
 		const apiKey = await auth.api.updateApiKey({
 			body: {
 				keyId: firstApiKey.id,

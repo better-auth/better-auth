@@ -103,7 +103,9 @@ const user = await authClient.signIn.email({
 
 ## Options
 
-- `emailDomainName`: The domain name to use when generating an email address for anonymous users. Defaults to the domain name of the current site.
+### `emailDomainName`
+
+The domain name to use when generating an email address for anonymous users. If not provided, the default format `temp@{id}.com` is used.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -111,17 +113,49 @@ import { betterAuth } from "better-auth"
 export const auth = betterAuth({
     plugins: [
         anonymous({
-            emailDomainName: "example.com"
+            emailDomainName: "example.com" // [!code highlight] -> temp-{id}@example.com
         })
     ]
 })
 ```
 
-- `onLinkAccount`: A callback function that is called when an anonymous user links their account to a new authentication method. The callback receives an object with the `anonymousUser` and the `newUser`.
+### `generateRandomEmail`
 
-- `disableDeleteAnonymousUser`: By default, the anonymous user is deleted when the account is linked to a new authentication method. Set this option to `true` to disable this behavior.
+A custom function to generate email addresses for anonymous users. This allows you to define your own email format. The function can be synchronous or asynchronous.
 
-- `generateName`: A callback function that is called to generate a name for the anonymous user. Useful if you want to have random names for anonymous users, or if `name` is unique in your database.
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    plugins: [
+        anonymous({
+            generateRandomEmail: () => { // [!code highlight]
+                const id = crypto.randomUUID() // [!code highlight]
+                return `guest-${id}@example.com` // [!code highlight]
+            } // [!code highlight]
+        })
+    ]
+})
+```
+
+<Callout type="info">
+**Notes:**
+- If `generateRandomEmail` is provided, `emailDomainName` is ignored.
+- You are responsible for ensuring the email is unique to avoid conflicts. The returned email must be in a valid format.
+</Callout>
+
+
+### `onLinkAccount`
+
+A callback function that is called when an anonymous user links their account to a new authentication method. The callback receives an object with the `anonymousUser` and the `newUser`.
+
+### `disableDeleteAnonymousUser`
+
+By default, the anonymous user is deleted when the account is linked to a new authentication method. Set this option to `true` to disable this behavior.
+
+### `generateName`
+
+A callback function that is called to generate a name for the anonymous user. Useful if you want to have random names for anonymous users, or if `name` is unique in your database.
 
 ## Schema
 

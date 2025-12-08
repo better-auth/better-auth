@@ -57,6 +57,27 @@ your database schema based on your Better Auth configuration and plugins.
 npx @better-auth/cli@latest generate
 ```
 
+## Joins (Experimental)
+
+Database joins is useful when Better-Auth needs to fetch related data from multiple tables in a single query.
+Endpoints like `/get-session`, `/get-full-organization` and many others benefit greatly from this feature,
+seeing upwards of 2x to 3x performance improvements depending on database latency.
+
+The Prisma adapter supports joins out of the box since version `1.4.0`.
+To enable this feature, you need to set the `experimental.joins` option to `true` in your auth configuration.
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  experimental: { joins: true }
+});
+```
+
+<Callout type="warn">
+  Please make sure that your Prisma schema has the necessary relations defined.
+  If you do not see any relations in your Prisma schema, you can manually add them using the `@relation` directive
+  or run our latest CLI version `npx auth@latest generate` to generate a new Prisma schema with the relations.
+</Callout>
+
 ## Additional Information
 
 If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.

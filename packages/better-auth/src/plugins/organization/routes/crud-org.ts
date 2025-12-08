@@ -1,6 +1,6 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "better-call";
-import { z } from "zod";
+import * as z from "zod";
 import { getSessionFromCtx, requestOnlySessionMiddleware } from "../../../api";
 import { setSessionCookie } from "../../../cookies";
 import {
@@ -15,8 +15,8 @@ import type {
 	InferInvitation,
 	InferMember,
 	InferOrganization,
+	InferTeam,
 	Member,
-	Team,
 	TeamMember,
 } from "../schema";
 import type { OrganizationOptions } from "../types";
@@ -264,7 +264,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 				const defaultTeam =
 					(await options.teams.defaultTeam?.customCreateDefaultTeam?.(
 						organization,
-						ctx.request,
+						ctx,
 					)) || (await adapter.createTeam(teamData));
 
 				teamMember = await adapter.findOrCreateTeamMember({
@@ -682,6 +682,7 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
 				openapi: {
+					operationId: "getOrganization",
 					description: "Get the full organization",
 					responses: {
 						"200": {
@@ -735,16 +736,17 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				});
 			}
+
 			type OrganizationReturn = O["teams"] extends { enabled: true }
 				? {
-						members: InferMember<O>[];
-						invitations: InferInvitation<O>[];
-						teams: Team[];
-					} & InferOrganization<O>
+						members: InferMember<O, false>[];
+						invitations: InferInvitation<O, false>[];
+						teams: InferTeam<O, false>[];
+					} & InferOrganization<O, false>
 				: {
-						members: InferMember<O>[];
-						invitations: InferInvitation<O>[];
-					} & InferOrganization<O>;
+						members: InferMember<O, false>[];
+						invitations: InferInvitation<O, false>[];
+					} & InferOrganization<O, false>;
 			return ctx.json(organization as unknown as OrganizationReturn);
 		},
 	);
@@ -776,6 +778,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 			use: [orgSessionMiddleware, orgMiddleware],
 			metadata: {
 				openapi: {
+					operationId: "setActiveOrganization",
 					description: "Set the active organization",
 					responses: {
 						"200": {
@@ -871,14 +874,14 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 			});
 			type OrganizationReturn = O["teams"] extends { enabled: true }
 				? {
-						members: InferMember<O>[];
-						invitations: InferInvitation<O>[];
-						teams: Team[];
-					} & InferOrganization<O>
+						members: InferMember<O, false>[];
+						invitations: InferInvitation<O, false>[];
+						teams: InferTeam<O, false>[];
+					} & InferOrganization<O, false>
 				: {
-						members: InferMember<O>[];
-						invitations: InferInvitation<O>[];
-					} & InferOrganization<O>;
+						members: InferMember<O, false>[];
+						invitations: InferInvitation<O, false>[];
+					} & InferOrganization<O, false>;
 			return ctx.json(organization as unknown as OrganizationReturn);
 		},
 	);

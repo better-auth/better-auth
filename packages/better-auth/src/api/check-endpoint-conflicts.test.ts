@@ -4,8 +4,8 @@ import { createEndpoint } from "better-call";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { checkEndpointConflicts } from "./index";
 
-export let mockLoggerLevel: LogLevel = "debug";
-export const mockLogger = {
+let mockLoggerLevel: LogLevel = "debug";
+const mockLogger = {
 	error: vi.fn(),
 	warn: vi.fn(),
 	info: vi.fn(),

@@ -1,5 +1,5 @@
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
-import { z } from "zod";
+import * as z from "zod";
 
 export const oAuthApplicationSchema = z.object({
 	/**
@@ -98,6 +98,7 @@ export const schema = {
 					field: "id",
 					onDelete: "cascade",
 				},
+				index: true,
 			},
 			createdAt: {
 				type: "date",
@@ -131,6 +132,7 @@ export const schema = {
 					field: "clientId",
 					onDelete: "cascade",
 				},
+				index: true,
 			},
 			userId: {
 				type: "string",
@@ -140,6 +142,7 @@ export const schema = {
 					field: "id",
 					onDelete: "cascade",
 				},
+				index: true,
 			},
 			scopes: {
 				type: "string",
@@ -162,6 +165,7 @@ export const schema = {
 					field: "clientId",
 					onDelete: "cascade",
 				},
+				index: true,
 			},
 			userId: {
 				type: "string",
@@ -170,6 +174,7 @@ export const schema = {
 					field: "id",
 					onDelete: "cascade",
 				},
+				index: true,
 			},
 			scopes: {
 				type: "string",

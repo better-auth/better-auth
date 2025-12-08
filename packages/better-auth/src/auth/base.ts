@@ -1,26 +1,20 @@
 import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
 import { runWithAdapter } from "@better-auth/core/context";
 import { BASE_ERROR_CODES, BetterAuthError } from "@better-auth/core/error";
-import { getEndpoints, router } from "./api";
-import { init } from "./init";
-import type {
-	InferAPI,
-	InferPluginErrorCodes,
-	InferPluginTypes,
-	InferSession,
-	InferUser,
-} from "./types";
-import type { Expand, PrettifyDeep } from "./types/helper";
-import { getBaseURL, getOrigin } from "./utils/url";
+import { getEndpoints, router } from "../api";
+import type { Auth } from "../types";
+import type { Expand } from "../types/helper";
+import { getBaseURL, getOrigin } from "../utils/url";
 
 export type WithJsDoc<T, D> = Expand<T & D>;
 
-export const betterAuth = <Options extends BetterAuthOptions>(
+export const createBetterAuth = <Options extends BetterAuthOptions>(
 	options: Options &
 		// fixme(alex): do we need Record<never, never> here?
 		Record<never, never>,
+	initFn: (options: Options) => Promise<AuthContext>,
 ): Auth<Options> => {
-	const authContext = init(options);
+	const authContext = initFn(options);
 	const { api } = getEndpoints(authContext, options);
 	const errorCodes = options.plugins?.reduce((acc, plugin) => {
 		if (plugin.$ERROR_CODES) {
@@ -65,25 +59,4 @@ export const betterAuth = <Options extends BetterAuthOptions>(
 			...BASE_ERROR_CODES,
 		},
 	} as any;
-};
-
-export type Auth<Options extends BetterAuthOptions = BetterAuthOptions> = {
-	handler: (request: Request) => Promise<Response>;
-	api: InferAPI<ReturnType<typeof router<Options>>["endpoints"]>;
-	options: Options;
-	$ERROR_CODES: InferPluginErrorCodes<Options> & typeof BASE_ERROR_CODES;
-	$context: Promise<AuthContext>;
-	/**
-	 * Share types
-	 */
-	$Infer: InferPluginTypes<Options> extends {
-		Session: any;
-	}
-		? InferPluginTypes<Options>
-		: {
-				Session: {
-					session: PrettifyDeep<InferSession<Options>>;
-					user: PrettifyDeep<InferUser<Options>>;
-				};
-			} & InferPluginTypes<Options>;
 };
