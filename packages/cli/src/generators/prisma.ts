@@ -142,7 +142,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					if (provider === "sqlite" || provider === "mysql") {
 						return isOptional ? "String?" : "String";
 					}
-					return isOptional ? "String[]" : "String[]";
+					return "String[]";
 				}
 				if (type === "number[]") {
 					// SQLite and MySQL don't support array of numbers, so we use int instead
@@ -150,7 +150,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					if (provider === "sqlite" || provider === "mysql") {
 						return "String";
 					}
-					return isOptional ? "Int[]" : "Int[]";
+					return "Int[]";
 				}
 			}
 
