@@ -681,8 +681,12 @@ export const refreshToken = createAuthEndpoint(
 			});
 		}
 		try {
-			const tokens: OAuth2Tokens = await provider.refreshAccessToken(
+			const refreshToken = await decryptOAuthToken(
 				account.refreshToken as string,
+				ctx.context,
+			);
+			const tokens: OAuth2Tokens = await provider.refreshAccessToken(
+				refreshToken,
 			);
 			await ctx.context.internalAdapter.updateAccount(account.id, {
 				accessToken: await setTokenUtil(tokens.accessToken, ctx.context),
