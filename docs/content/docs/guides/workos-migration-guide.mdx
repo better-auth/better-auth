@@ -164,10 +164,9 @@ export const auth = betterAuth({
 ```
 
 <Callout type="info">
-If you rely on advanced WorkOS features beyond basic email/password and social login, refer to the feature mapping above to configure the appropriate plugins.
+If you rely on advanced WorkOS features beyond basic email+password and social login, refer to the feature mapping above to configure the appropriate plugins.
 </Callout>
 </Step>
-
 
 <Step>
 ## Generate Schema
@@ -524,7 +523,7 @@ In Better Auth, instead of fetching these values via an API, you can create the 
 
 ### Middleware auth
 
-WorkOS provides Proxy (Middleware) authentication. Better Auth doesn’t recommend protecting resources directly in middleware, so it doesn’t provide dedicated helpers for that.
+WorkOS provides Proxy (Middleware) authentication. Better Auth doesn’t recommend protecting resources directly in middleware, so we don't provide dedicated helpers for that.
 
 ```ts title="proxy.ts / middleware.ts"
 import { authkitMiddleware } from '@workos-inc/authkit-nextjs';
@@ -692,7 +691,7 @@ npm uninstall @workos-inc/node @workos-inc/authkit-nextjs
 
 <strong className='underline italic'>Password hashes</strong>
 
-If you’ve been managing users with an email + password system, WorkOS does not provide an export of password hashes. After migration, users will need to reset their passwords within your authentication system. Make sure to notify them of this change with sufficient lead time before and after the migration.
+If you’ve been managing users with an email + password system, WorkOS does not provide an export of password hashes at this time. After migration, users will need to reset their passwords within your authentication system. Make sure to notify them of this change with sufficient lead time both before and after the migration.
 
 <strong className='underline italic'>Data syncing</strong>
 
