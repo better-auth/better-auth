@@ -760,6 +760,7 @@ describe("OIDC Discovery errors at registration", async () => {
 describe("OIDC account linking with domainVerified", async () => {
 	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
 		await getTestInstance({
+			trustedOrigins: ["http://localhost:8080"],
 			account: {
 				accountLinking: {
 					enabled: true,
