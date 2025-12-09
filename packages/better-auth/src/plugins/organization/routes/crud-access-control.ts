@@ -1268,6 +1268,10 @@ async function checkForInvalidResources({
 		});
 	} else {
 		// All resources exist, validate permissions
+		// If custom resources are enabled, auto-expand permissions for custom resources
+		const defaultStatements = ac.statements;
+		const needsUpdate: Array<{ resource: string; newPermissions: string[] }> = [];
+
 		for (const [resource, permissions] of Object.entries(permission)) {
 			const validPermissions = orgStatements[resource as keyof Statements];
 			if (!validPermissions) continue;
@@ -1275,19 +1279,101 @@ async function checkForInvalidResources({
 			const invalidPermissions = permissions.filter(
 				(p) => !validPermissions.includes(p),
 			);
+
 			if (invalidPermissions.length > 0) {
-				ctx.context.logger.error(
-					`[Dynamic Access Control] The provided permissions include invalid actions for resource "${resource}".`,
-					{
-						resource,
-						invalidPermissions,
-						validPermissions,
-					},
-				);
-				throw new APIError("BAD_REQUEST", {
-					message: `Invalid permissions for resource "${resource}": ${invalidPermissions.join(", ")}`,
-				});
+				// Check if this is a custom resource (not a default one)
+				const isCustomResource = !defaultStatements[resource as keyof Statements];
+				
+				if (isCustomResource && options.dynamicAccessControl?.enableCustomResources) {
+					// Auto-expand the custom resource with new permissions
+					const existingResource = await ctx.context.adapter.findOne<OrganizationResource>({
+						model: "organizationResource",
+						where: [
+							{
+								field: "organizationId",
+								value: organizationId,
+								operator: "eq",
+								connector: "AND",
+							},
+							{
+								field: "resource",
+								value: resource,
+								operator: "eq",
+								connector: "AND",
+							},
+						],
+					});
+
+					if (existingResource) {
+						// Parse existing permissions
+						const existingPermissions: string[] = JSON.parse(
+							existingResource.permissions as never as string
+						);
+
+						// Merge with new permissions
+						const mergedPermissions = Array.from(
+							new Set([...existingPermissions, ...invalidPermissions])
+						);
+
+						// Update the resource
+						await ctx.context.adapter.update<
+							Omit<OrganizationResource, "permissions"> & { permissions: string }
+						>({
+							model: "organizationResource",
+							where: [
+								{
+									field: "organizationId",
+									value: organizationId,
+									operator: "eq",
+									connector: "AND",
+								},
+								{
+									field: "resource",
+									value: resource,
+									operator: "eq",
+									connector: "AND",
+								},
+							],
+							update: {
+								permissions: JSON.stringify(mergedPermissions),
+								updatedAt: new Date(),
+							},
+						});
+
+						ctx.context.logger.info(
+							`[Dynamic Access Control] Auto-expanded permissions for custom resource "${resource}"`,
+							{
+								resource,
+								organizationId,
+								oldPermissions: existingPermissions,
+								newPermissions: invalidPermissions,
+								mergedPermissions,
+							},
+						);
+
+						needsUpdate.push({ resource, newPermissions: mergedPermissions });
+					}
+				} else {
+					// Not a custom resource or custom resources disabled - throw error
+					ctx.context.logger.error(
+						`[Dynamic Access Control] The provided permissions include invalid actions for resource "${resource}".`,
+						{
+							resource,
+							invalidPermissions,
+							validPermissions,
+							isCustomResource,
+						},
+					);
+					throw new APIError("BAD_REQUEST", {
+						message: `Invalid permissions for resource "${resource}": ${invalidPermissions.join(", ")}`,
+					});
+				}
 			}
+		}
+
+		// Invalidate cache if any resources were updated
+		if (needsUpdate.length > 0) {
+			invalidateResourceCache(organizationId);
 		}
 	}
 
