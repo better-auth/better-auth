@@ -93,7 +93,6 @@ describe("SSO", async () => {
 					clientSecret: "test",
 					authorizationEndpoint: `${server.issuer.url}/authorize`,
 					tokenEndpoint: `${server.issuer.url}/token`,
-					tokenEndpointAuthentication: "client_secret_basic",
 					jwksEndpoint: `${server.issuer.url}/jwks`,
 					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
 					mapping: {
@@ -117,7 +116,6 @@ describe("SSO", async () => {
 				clientSecret: "test",
 				authorizationEndpoint: "http://localhost:8080/authorize",
 				tokenEndpoint: "http://localhost:8080/token",
-				tokenEndpointAuthentication: "client_secret_basic",
 				jwksEndpoint: "http://localhost:8080/jwks",
 				discoveryEndpoint:
 					"http://localhost:8080/.well-known/openid-configuration",
@@ -170,7 +168,6 @@ describe("SSO", async () => {
 				oidcConfig: {
 					clientId: "test",
 					clientSecret: "test",
-					tokenEndpointAuthentication: "client_secret_basic",
 				},
 			},
 			headers,
@@ -185,7 +182,6 @@ describe("SSO", async () => {
 					oidcConfig: {
 						clientId: "test2",
 						clientSecret: "test2",
-						tokenEndpointAuthentication: "client_secret_basic",
 					},
 				},
 				headers,
@@ -342,7 +338,6 @@ describe("SSO disable implicit sign in", async () => {
 					clientSecret: "test",
 					authorizationEndpoint: `${server.issuer.url}/authorize`,
 					tokenEndpoint: `${server.issuer.url}/token`,
-					tokenEndpointAuthentication: "client_secret_basic",
 					jwksEndpoint: `${server.issuer.url}/jwks`,
 					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
 					mapping: {
@@ -366,7 +361,6 @@ describe("SSO disable implicit sign in", async () => {
 				clientSecret: "test",
 				authorizationEndpoint: "http://localhost:8080/authorize",
 				tokenEndpoint: "http://localhost:8080/token",
-				tokenEndpointAuthentication: "client_secret_basic",
 				jwksEndpoint: "http://localhost:8080/jwks",
 				discoveryEndpoint:
 					"http://localhost:8080/.well-known/openid-configuration",
@@ -512,7 +506,6 @@ describe("provisioning", async (ctx) => {
 					clientSecret: "test",
 					authorizationEndpoint: `${server.issuer.url}/authorize`,
 					tokenEndpoint: `${server.issuer.url}/token`,
-					tokenEndpointAuthentication: "client_secret_basic",
 					jwksEndpoint: `${server.issuer.url}/jwks`,
 					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
 					mapping: {
@@ -576,316 +569,5 @@ describe("provisioning", async (ctx) => {
 		});
 
 		expect(res.url).toContain("http://localhost:8080/authorize");
-	});
-});
-
-describe("OIDC Discovery errors at registration", async () => {
-	const { auth, signInWithTestUser } = await getTestInstance({
-		plugins: [sso(), organization()],
-	});
-
-	beforeAll(async () => {
-		await server.issuer.keys.generate("RS256");
-		await server.start(8080, "localhost");
-	});
-
-	afterAll(async () => {
-		await server.stop().catch(() => {});
-	});
-
-	it("should fail registration when IdP only supports unsupported token auth methods", async () => {
-		const { headers } = await signInWithTestUser();
-
-		await expect(
-			auth.api.registerSSOProvider({
-				body: {
-					issuer: server.issuer.url!,
-					domain: "unsupported-auth.com",
-					providerId: "unsupported-auth-provider",
-					oidcConfig: {
-						clientId: "test",
-						clientSecret: "test",
-					},
-				},
-				headers,
-			}),
-		).rejects.toMatchObject({
-			status: "BAD_REQUEST",
-			body: {
-				code: "unsupported_token_auth_method",
-			},
-		});
-	});
-
-	it("should fail registration when discovery endpoint returns invalid issuer", async () => {
-		const { headers } = await signInWithTestUser();
-
-		await expect(
-			auth.api.registerSSOProvider({
-				body: {
-					issuer: "https://different-issuer.example.com",
-					domain: "mismatch.com",
-					providerId: "issuer-mismatch-provider",
-					oidcConfig: {
-						clientId: "test",
-						clientSecret: "test",
-						tokenEndpointAuthentication: "client_secret_basic",
-						discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
-					},
-				},
-				headers,
-			}),
-		).rejects.toMatchObject({
-			status: "BAD_REQUEST",
-			body: {
-				code: "issuer_mismatch",
-			},
-		});
-	});
-
-	it("should fail registration when discovery endpoint is unreachable", async () => {
-		const { headers } = await signInWithTestUser();
-
-		await expect(
-			auth.api.registerSSOProvider({
-				body: {
-					issuer: "https://nonexistent-idp.example.com",
-					domain: "notfound.com",
-					providerId: "notfound-provider",
-					oidcConfig: {
-						clientId: "test",
-						clientSecret: "test",
-						tokenEndpointAuthentication: "client_secret_basic",
-					},
-				},
-				headers,
-			}),
-		).rejects.toMatchObject({
-			status: "BAD_GATEWAY",
-			body: {
-				code: "discovery_unexpected_error",
-			},
-		});
-	});
-
-	it("should succeed when user provides all required endpoints (discovery still validates)", async () => {
-		const { headers } = await signInWithTestUser();
-
-		const provider = await auth.api.registerSSOProvider({
-			body: {
-				issuer: server.issuer.url!,
-				domain: "full-config.com",
-				providerId: "full-config-provider",
-				oidcConfig: {
-					clientId: "test",
-					clientSecret: "test",
-					authorizationEndpoint: `${server.issuer.url}/custom-authorize`,
-					tokenEndpoint: `${server.issuer.url}/custom-token`,
-					jwksEndpoint: `${server.issuer.url}/custom-jwks`,
-					userInfoEndpoint: `${server.issuer.url}/custom-userinfo`,
-					tokenEndpointAuthentication: "client_secret_post",
-				},
-			},
-			headers,
-		});
-
-		expect(provider.oidcConfig).toMatchObject({
-			authorizationEndpoint: `${server.issuer.url}/custom-authorize`,
-			tokenEndpoint: `${server.issuer.url}/custom-token`,
-			jwksEndpoint: `${server.issuer.url}/custom-jwks`,
-			userInfoEndpoint: `${server.issuer.url}/custom-userinfo`,
-			tokenEndpointAuthentication: "client_secret_post",
-		});
-	});
-
-	it("should hydrate missing endpoints from discovery", async () => {
-		const { headers } = await signInWithTestUser();
-
-		const provider = await auth.api.registerSSOProvider({
-			body: {
-				issuer: server.issuer.url!,
-				domain: "partial-config.com",
-				providerId: "partial-config-provider",
-				oidcConfig: {
-					clientId: "test",
-					clientSecret: "test",
-					tokenEndpointAuthentication: "client_secret_basic",
-				},
-			},
-			headers,
-		});
-
-		expect(provider.oidcConfig).toMatchObject({
-			issuer: server.issuer.url,
-			authorizationEndpoint: `${server.issuer.url}/authorize`,
-			tokenEndpoint: `${server.issuer.url}/token`,
-			jwksEndpoint: `${server.issuer.url}/jwks`,
-			tokenEndpointAuthentication: "client_secret_basic",
-		});
-	});
-});
-
-describe("OIDC account linking with domainVerified", async () => {
-	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
-		await getTestInstance({
-			account: {
-				accountLinking: {
-					enabled: true,
-					trustedProviders: [],
-				},
-			},
-			plugins: [
-				sso({
-					domainVerification: {
-						enabled: true,
-					},
-				}),
-			],
-		});
-
-	const authClient = createAuthClient({
-		plugins: [ssoClient()],
-		baseURL: "http://localhost:3000",
-		fetchOptions: {
-			customFetchImpl,
-		},
-	});
-
-	beforeAll(async () => {
-		await server.issuer.keys.generate("RS256");
-		await server.start(8080, "localhost");
-	});
-
-	afterAll(async () => {
-		await server.stop().catch(() => {});
-	});
-
-	async function simulateOAuthFlow(authUrl: string, headers: Headers) {
-		let location: string | null = null;
-		await betterFetch(authUrl, {
-			method: "GET",
-			redirect: "manual",
-			onError(context) {
-				location = context.response.headers.get("location");
-			},
-		});
-
-		if (!location) throw new Error("No redirect location found");
-
-		let callbackURL = "";
-		const newHeaders = new Headers();
-		await betterFetch(location, {
-			method: "GET",
-			customFetchImpl,
-			headers,
-			onError(context) {
-				callbackURL = context.response.headers.get("location") || "";
-				cookieSetter(newHeaders)(context);
-			},
-		});
-
-		return { callbackURL, headers: newHeaders };
-	}
-
-	it("should allow account linking when domain is verified and email domain matches", async () => {
-		const testEmail = "linking-test@verified-oidc.com";
-		const testDomain = "verified-oidc.com";
-
-		server.service.on("beforeTokenSigning", (token) => {
-			token.payload.email = testEmail;
-			token.payload.email_verified = false;
-			token.payload.name = "Domain Verified User";
-			token.payload.sub = "oidc-domain-verified-user";
-		});
-
-		const { headers } = await signInWithTestUser();
-
-		const provider = await auth.api.registerSSOProvider({
-			body: {
-				providerId: "domain-verified-oidc",
-				issuer: server.issuer.url!,
-				domain: testDomain,
-				oidcConfig: {
-					clientId: "test",
-					clientSecret: "test",
-					authorizationEndpoint: `${server.issuer.url}/authorize`,
-					tokenEndpoint: `${server.issuer.url}/token`,
-					tokenEndpointAuthentication: "client_secret_basic",
-					jwksEndpoint: `${server.issuer.url}/jwks`,
-					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
-					mapping: {
-						id: "sub",
-						email: "email",
-						emailVerified: "email_verified",
-						name: "name",
-					},
-				},
-			},
-			headers,
-		});
-
-		expect(provider.domainVerified).toBe(false);
-
-		const ctx = await auth.$context;
-		await ctx.adapter.update({
-			model: "ssoProvider",
-			where: [{ field: "providerId", value: provider.providerId }],
-			update: {
-				domainVerified: true,
-			},
-		});
-
-		const updatedProvider = await ctx.adapter.findOne<{
-			domainVerified: boolean;
-			domain: string;
-		}>({
-			model: "ssoProvider",
-			where: [{ field: "providerId", value: provider.providerId }],
-		});
-		expect(updatedProvider?.domainVerified).toBe(true);
-
-		await ctx.adapter.create({
-			model: "user",
-			data: {
-				id: "existing-oidc-domain-user",
-				email: testEmail,
-				name: "Existing User",
-				emailVerified: true,
-				createdAt: new Date(),
-				updatedAt: new Date(),
-			},
-			forceAllowId: true,
-		});
-
-		const newHeaders = new Headers();
-		const res = await authClient.signIn.sso({
-			providerId: "domain-verified-oidc",
-			callbackURL: "/dashboard",
-			fetchOptions: {
-				throw: true,
-				onSuccess: cookieSetter(newHeaders),
-			},
-		});
-
-		expect(res.url).toContain("http://localhost:8080/authorize");
-
-		const { callbackURL } = await simulateOAuthFlow(res.url, newHeaders);
-
-		expect(callbackURL).toContain("/dashboard");
-		expect(callbackURL).not.toContain("error");
-
-		const accounts = await ctx.adapter.findMany<{
-			providerId: string;
-			accountId: string;
-			userId: string;
-		}>({
-			model: "account",
-			where: [{ field: "userId", value: "existing-oidc-domain-user" }],
-		});
-		const linkedAccount = accounts.find(
-			(a) => a.providerId === "domain-verified-oidc",
-		);
-		expect(linkedAccount).toBeTruthy();
-		expect(linkedAccount?.accountId).toBe("oidc-domain-verified-user");
 	});
 });
