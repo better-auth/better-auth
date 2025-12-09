@@ -308,6 +308,12 @@ export function deleteSessionCookie(
 	});
 
 	if (ctx.context.options.account?.storeAccountCookie) {
+		ctx.setCookie(ctx.context.authCookies.accountData.name, "", {
+			...ctx.context.authCookies.accountData.options,
+			maxAge: 0,
+		});
+
+		//clean up the account data chunks
 		const accountStore = createAccountStore(
 			ctx.context.authCookies.accountData.name,
 			ctx.context.authCookies.accountData.options,
