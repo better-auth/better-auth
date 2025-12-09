@@ -105,13 +105,35 @@ export const kyselyAdapter = (
 					// This isn't good, but kysely doesn't support returning in mysql and it doesn't return the inserted id.
 					// Change this if there is a better way.
 					await builder.execute();
-					const field = values.id
-						? "id"
-						: where.length > 0 && where[0]?.field
-							? where[0].field
-							: "id";
+					const valueKeys = Object.keys(values);
 
+					let field: string | null = (() => {
+						if ("id" in values && values.id) return "id";
+
+						const allFields = schema[getDefaultModelName(model)]?.fields || {};
+						const allFieldKeys = Object.keys(allFields);
+						const gfa = (field: string) => getFieldAttributes({ model, field });
+						const uniqueFields = allFieldKeys
+							.map((field) => ({ attr: gfa(field), key: field }))
+							.filter((field) => field.attr.unique)
+							.map((field) => field.attr.fieldName || field.key);
+
+						// if any unique fields are found in the values, use that.
+						const foundKey = valueKeys.find((f) => uniqueFields.includes(f));
+						if (foundKey) return foundKey;
+
+						// if `id` field or unique fields are not to be found, check common like `createdAt` and `updatedAt` fields:
+						if ("createdAt" in values && values.createdAt) return "createdAt";
+						if ("updatedAt" in values && values.updatedAt) return "updatedAt";
+
+						return null;
+					})();
+
+					// if it was an `create` operation (known by `where.length === 0`) and there is no `id` known ahead of time,
+					// we should just get the last inserted from the database based on the `orderBy` clause.
+					// Race-conditions is still possible, but it's better than nothing.
 					if (!values.id && where.length === 0) {
+						const field = valueKeys[0] || "id";
 						res = await db
 							.selectFrom(model)
 							.selectAll()
@@ -121,7 +143,8 @@ export const kyselyAdapter = (
 						return res;
 					}
 
-					const value = values[field] || where[0]?.value;
+					const value = field ? values[field] : where[0]?.value;
+					if (!value || !field) return null;
 					res = await db
 						.selectFrom(model)
 						.selectAll()
