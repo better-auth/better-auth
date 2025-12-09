@@ -101,7 +101,7 @@ The `useSession` action provides a reactive way to access the current session.
 ```ts client="client.ts"
 import { authClient } from "@/lib/client"
 
-const { data: session } = authClient.useSession()
+const { data: session } = authClient.useSession.get()
 ```
 
 ### List Sessions
@@ -384,7 +384,7 @@ const authClient = createAuthClient({
     plugins: [customSessionClient<typeof auth>()],
 });
 
-const { data } = authClient.useSession();
+const { data } = authClient.useSession.get();
 const { data: sessionData } = await authClient.getSession();
 // data.roles
 // data.user.newField
