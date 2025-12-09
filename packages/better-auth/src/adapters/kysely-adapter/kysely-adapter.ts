@@ -536,8 +536,10 @@ export const kyselyAdapter = (
 					if (or) {
 						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 					}
-					const res = await query.execute();
-					return res.length;
+					const res = (await query.executeTakeFirst()).numUpdatedRows;
+					return res > Number.MAX_SAFE_INTEGER
+						? Number.MAX_SAFE_INTEGER
+						: Number(res);
 				},
 				async count({ model, where }) {
 					const { and, or } = convertWhereClause(model, where);
@@ -581,7 +583,10 @@ export const kyselyAdapter = (
 					if (or) {
 						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 					}
-					return (await query.execute()).length;
+					const res = (await query.executeTakeFirst()).numDeletedRows;
+					return res > Number.MAX_SAFE_INTEGER
+						? Number.MAX_SAFE_INTEGER
+						: Number(res);
 				},
 				options: config,
 			};
