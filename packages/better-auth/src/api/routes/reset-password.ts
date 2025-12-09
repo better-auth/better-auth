@@ -147,7 +147,16 @@ export const requestPasswordResetCallback = createAuthEndpoint(
 				description: "The URL to redirect the user to reset their password",
 			}),
 		}),
-		use: [originCheck((ctx) => ctx.query.callbackURL)],
+		use: [
+			originCheck((ctx) => {
+				const v = ctx.query.callbackURL;
+				try {
+					return decodeURIComponent(v);
+				} catch {
+					return v;
+				}
+			}),
+		],
 		metadata: {
 			openapi: {
 				operationId: "resetPasswordCallback",
@@ -195,9 +204,20 @@ export const requestPasswordResetCallback = createAuthEndpoint(
 	async (ctx) => {
 		const { token } = ctx.params;
 		const { callbackURL } = ctx.query;
-		if (!token || !callbackURL) {
+		const decodedCallbackURL = callbackURL
+			? (() => {
+					try {
+						return decodeURIComponent(callbackURL);
+					} catch {
+						return callbackURL;
+					}
+				})()
+			: undefined;
+		if (!token || !decodedCallbackURL) {
 			throw ctx.redirect(
-				redirectError(ctx.context, callbackURL, { error: "INVALID_TOKEN" }),
+				redirectError(ctx.context, decodedCallbackURL, {
+					error: "INVALID_TOKEN",
+				}),
 			);
 		}
 		const verification =
@@ -206,14 +226,18 @@ export const requestPasswordResetCallback = createAuthEndpoint(
 			);
 		if (!verification || verification.expiresAt < new Date()) {
 			throw ctx.redirect(
-				redirectError(ctx.context, callbackURL, { error: "INVALID_TOKEN" }),
+				redirectError(ctx.context, decodedCallbackURL, {
+					error: "INVALID_TOKEN",
+				}),
 			);
 		}
 
-		throw ctx.redirect(redirectCallback(ctx.context, callbackURL, { token }));
+		throw ctx.redirect(
+			redirectCallback(ctx.context, decodedCallbackURL, { token }),        
+		);
 	},
 );
-
+ 
 export const resetPassword = createAuthEndpoint(
 	"/reset-password",
 	{
@@ -221,7 +245,7 @@ export const resetPassword = createAuthEndpoint(
 		operationId: "resetPassword",
 		query: z
 			.object({
-				token: z.string().optional(),
+				token: z.string().optional(), 
 			})
 			.optional(),
 		body: z.object({
