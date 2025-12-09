@@ -208,7 +208,12 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 								: stripSecureCookiePrefix(name);
 
 							// URI-decoded value because `ctx.setCookie` will URI-encode it again
-							const cookieValue = decodeURIComponent(attrs.value);
+							let cookieValue: string;
+							try {
+								cookieValue = decodeURIComponent(attrs.value);
+							} catch {
+								cookieValue = attrs.value;
+							}
 
 							return {
 								name: cookieName,
