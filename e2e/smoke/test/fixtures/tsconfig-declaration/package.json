@@ -9,7 +9,7 @@
     "@better-auth/sso": "workspace:*",
     "@better-auth/stripe": "workspace:*",
     "@better-auth/passkey": "workspace:*",
-    "@decocms/better-auth": "workspace:*",
+    "better-auth": "workspace:*",
     "stripe": "^20.0.0"
   }
 }

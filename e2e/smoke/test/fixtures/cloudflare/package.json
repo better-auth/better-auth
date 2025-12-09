@@ -2,7 +2,7 @@
   "name": "cloudflare",
   "private": true,
   "dependencies": {
-    "@decocms/better-auth": "workspace:*",
+    "better-auth": "workspace:*",
     "drizzle-orm": "^0.44.5",
     "hono": "^4.9.7"
   },

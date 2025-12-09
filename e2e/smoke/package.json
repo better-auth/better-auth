@@ -2,7 +2,7 @@
   "name": "smoke",
   "type": "module",
   "dependencies": {
-    "@decocms/better-auth": "workspace:*"
+    "better-auth": "workspace:*"
   },
   "scripts": {
     "e2e:smoke": "node --test ./test/*.spec.ts"

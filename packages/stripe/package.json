@@ -57,12 +57,12 @@
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
-    "@decocms/better-auth": "workspace:*",
+    "better-auth": "workspace:*",
     "stripe": "^18 || ^19 || ^20"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
-    "@decocms/better-auth": "workspace:*",
+    "better-auth": "workspace:*",
     "better-call": "catalog:",
     "stripe": "^20.0.0",
     "tsdown": "catalog:"

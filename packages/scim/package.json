@@ -59,6 +59,6 @@
     "tsdown": "catalog:"
   },
   "peerDependencies": {
-    "@decocms/better-auth": "workspace:*"
+    "better-auth": "workspace:*"
   }
 }

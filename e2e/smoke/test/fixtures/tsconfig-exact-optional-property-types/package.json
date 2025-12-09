@@ -6,7 +6,7 @@
     "typecheck": "tsc --project tsconfig.json"
   },
   "dependencies": {
-    "@decocms/better-auth": "workspace:*",
+    "better-auth": "workspace:*",
     "@better-auth/sso": "workspace:*"
   }
 }

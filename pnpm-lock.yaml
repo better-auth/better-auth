@@ -78,7 +78,7 @@ importers:
       '@better-auth/expo':
         specifier: workspace:*
         version: link:../../packages/expo
-      '@decocms/better-auth':
+      'better-auth':
         specifier: workspace:*
         version: link:../../packages/better-auth
       '@expo/metro-runtime':
@@ -232,7 +232,7 @@ importers:
       '@better-auth/stripe':
         specifier: workspace:*
         version: link:../../packages/stripe
-      '@decocms/better-auth':
+      'better-auth':
         specifier: workspace:*
         version: link:../../packages/better-auth
       '@hookform/resolvers':
@@ -461,7 +461,7 @@ importers:
 
   demo/oidc-client:
     dependencies:
-      '@decocms/better-auth':
+      'better-auth':
         specifier: workspace:*
         version: link:../../packages/better-auth
       '@radix-ui/react-avatar':
@@ -531,7 +531,7 @@ importers:
 
   demo/stateless:
     dependencies:
-      '@decocms/better-auth':
+      'better-auth':
         specifier: workspace:*
         version: link:../../packages/better-auth
       next:
@@ -860,7 +860,7 @@ importers:
 
   e2e/integration:
     dependencies:
-      '@decocms/better-auth':
+      'better-auth':
         specifier: workspace:*
         version: link:../../packages/better-auth
     devDependencies:
@@ -870,7 +870,7 @@ importers:
 
   e2e/integration/solid-vinxi:
     dependencies:
-      '@decocms/better-auth':
+      'better-auth':
         specifier: workspace:*
         version: link:../../../packages/better-auth
       '@solidjs/router':
@@ -901,7 +901,7 @@ importers:
 
   e2e/integration/vanilla-node:
     dependencies:
-      '@decocms/better-auth':
+      'better-auth':
         specifier: workspace:*
         version: link:../../../packages/better-auth
       better-sqlite3:
@@ -926,13 +926,13 @@ importers:
 
   e2e/smoke:
     dependencies:
-      '@decocms/better-auth':
+      'better-auth':
         specifier: workspace:*
         version: link:../../packages/better-auth
 
   e2e/smoke/test/fixtures/cloudflare:
     dependencies:
-      '@decocms/better-auth':
+      'better-auth':
         specifier: workspace:*
         version: link:../../../../../packages/better-auth
       drizzle-orm:
@@ -966,7 +966,7 @@ importers:
       '@better-auth/stripe':
         specifier: workspace:*
         version: link:../../../../../packages/stripe
-      '@decocms/better-auth':
+      'better-auth':
         specifier: workspace:*
         version: link:../../../../../packages/better-auth
       stripe:
@@ -978,13 +978,13 @@ importers:
       '@better-auth/sso':
         specifier: workspace:*
         version: link:../../../../../packages/sso
-      '@decocms/better-auth':
+      'better-auth':
         specifier: workspace:*
         version: link:../../../../../packages/better-auth
 
   e2e/smoke/test/fixtures/tsconfig-isolated-module-bundler:
     dependencies:
-      '@decocms/better-auth':
+      'better-auth':
         specifier: workspace:*
         version: link:../../../../../packages/better-auth
       better-auth-harmony:
@@ -996,13 +996,13 @@ importers:
       '@better-auth/expo':
         specifier: workspace:*
         version: link:../../../../../packages/expo
-      '@decocms/better-auth':
+      'better-auth':
         specifier: workspace:*
         version: link:../../../../../packages/better-auth
 
   e2e/smoke/test/fixtures/vite:
     dependencies:
-      '@decocms/better-auth':
+      'better-auth':
         specifier: workspace:*
         version: link:../../../../../packages/better-auth
     devDependencies:
@@ -1169,7 +1169,7 @@ importers:
       '@clack/prompts':
         specifier: ^0.11.0
         version: 0.11.0
-      '@decocms/better-auth':
+      'better-auth':
         specifier: workspace:^
         version: link:../better-auth
       '@mrleebo/prisma-ast':
@@ -1295,7 +1295,7 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
-      '@decocms/better-auth':
+      'better-auth':
         specifier: workspace:*
         version: link:../better-auth
       '@types/better-sqlite3':
@@ -1350,7 +1350,7 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
-      '@decocms/better-auth':
+      'better-auth':
         specifier: workspace:*
         version: link:../better-auth
       tsdown:
@@ -1362,7 +1362,7 @@ importers:
       '@better-auth/utils':
         specifier: 0.3.0
         version: 0.3.0
-      '@decocms/better-auth':
+      'better-auth':
         specifier: workspace:*
         version: link:../better-auth
       better-call:
@@ -1397,7 +1397,7 @@ importers:
         specifier: ^4.1.12
         version: 4.1.13
     devDependencies:
-      '@decocms/better-auth':
+      'better-auth':
         specifier: workspace:*
         version: link:../better-auth
       '@types/body-parser':
@@ -1434,7 +1434,7 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
-      '@decocms/better-auth':
+      'better-auth':
         specifier: workspace:*
         version: link:../better-auth
       better-call:
@@ -1474,7 +1474,7 @@ importers:
       '@better-fetch/fetch':
         specifier: 'catalog:'
         version: 1.1.18
-      '@decocms/better-auth':
+      'better-auth':
         specifier: workspace:*
         version: link:../packages/better-auth
       msw:

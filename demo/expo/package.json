@@ -24,7 +24,7 @@
     "@rn-primitives/types": "^1.1.0",
     "@types/better-sqlite3": "^7.6.12",
     "babel-plugin-transform-import-meta": "^2.2.1",
-    "@decocms/better-auth": "workspace:*",
+    "better-auth": "workspace:*",
     "better-sqlite3": "^11.6.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

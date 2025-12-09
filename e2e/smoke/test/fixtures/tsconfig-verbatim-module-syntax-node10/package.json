@@ -7,6 +7,6 @@
   },
   "dependencies": {
     "@better-auth/expo": "workspace:*",
-    "@decocms/better-auth": "workspace:*"
+    "better-auth": "workspace:*"
   }
 }

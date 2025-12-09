@@ -69,13 +69,13 @@
     "@types/body-parser": "^1.19.6",
     "@types/express": "^5.0.5",
     "better-call": "catalog:",
-    "@decocms/better-auth": "workspace:*",
+    "better-auth": "workspace:*",
     "body-parser": "^2.2.1",
     "express": "^5.1.0",
     "oauth2-mock-server": "^8.2.0",
     "tsdown": "catalog:"
   },
   "peerDependencies": {
-    "@decocms/better-auth": "workspace:*"
+    "better-auth": "workspace:*"
   }
 }
