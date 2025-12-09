@@ -43,7 +43,6 @@ export const getNormalTestSuiteTests = (
 	return {
 		"create - should create a model": async () => {
 			const user = await generate("user");
-			// console.log(`pre-transformed:`, user);
 			const result = await adapter.create<User>({
 				model: "user",
 				data: user,
@@ -60,8 +59,6 @@ export const getNormalTestSuiteTests = (
 
 			expect(typeof result.id).toEqual("string");
 			const transformed = transformGeneratedModel(user);
-			// console.log(`transformed:`, transformed);
-			// console.log(`result:`, result);
 			expect(result).toEqual(transformed);
 		},
 		"create - should always return an id": async () => {
@@ -857,7 +854,6 @@ export const getNormalTestSuiteTests = (
 		},
 		"findMany - should find many models": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
-			console.log("users", users);
 			const result = await adapter.findMany<User>({
 				model: "user",
 			});
@@ -2982,7 +2978,6 @@ export const getNormalTestSuiteTests = (
 				});
 				expect(findResult).toEqual(result);
 				expect(findResult?.json).toEqual({ foo: "bar" });
-				console.log(findResult);
 			},
 		},
 		"create - should not get race-condition issues during concurrent row creations":
