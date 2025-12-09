@@ -93,7 +93,7 @@ describe("Email Verification", async () => {
 
 		let sessionToken = "";
 		let verifyHeaders = new Headers();
-		const res = await client.verifyEmail({
+		await client.verifyEmail({
 			query: {
 				token,
 			},
@@ -273,7 +273,7 @@ describe("Email Verification", async () => {
 describe("Email Verification Secondary Storage", async () => {
 	let store = new Map<string, string>();
 	let token: string;
-	const { client, signInWithTestUser, db, auth, testUser, cookieSetter } =
+	const { client, signInWithTestUser, auth, testUser, cookieSetter } =
 		await getTestInstance({
 			secondaryStorage: {
 				set(key, value, ttl) {
