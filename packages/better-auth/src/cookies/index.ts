@@ -314,7 +314,7 @@ export function deleteSessionCookie(
 		});
 	}
 
-	if (ctx.context.options.account?.storeStateStrategy === "cookie") {
+	if (ctx.context.oauthConfig.storeStateStrategy === "cookie") {
 		const stateCookie = ctx.context.createAuthCookie("oauth_state");
 		ctx.setCookie(stateCookie.name, "", {
 			...stateCookie.attributes,
