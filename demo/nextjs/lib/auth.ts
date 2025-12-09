@@ -1,4 +1,5 @@
 import { passkey } from "@better-auth/passkey";
+import { scim } from "@better-auth/scim";
 import { sso } from "@better-auth/sso";
 import { stripe } from "@better-auth/stripe";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
@@ -335,6 +336,16 @@ export const auth = betterAuth({
 						},
 						callbackUrl: "/dashboard",
 					},
+				},
+			],
+		}),
+		scim({
+			defaultSCIM: [
+				{
+					providerId: "sso",
+					/* cspell:disable-next-line */
+					// encoded token = ZGVmYXVsdC1zY2ltLXRva2VuOnNzbw==
+					scimToken: "default-scim-token",
 				},
 			],
 		}),

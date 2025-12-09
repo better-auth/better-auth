@@ -84,6 +84,7 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@better-auth/scim": "workspace:^",
     "@tailwindcss/postcss": "^4.1.13",
     "@types/canvas-confetti": "^1.9.0",
     "@types/react": "catalog:react19",
