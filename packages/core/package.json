@@ -30,7 +30,8 @@
       "bun": "./dist/async_hooks/index.mjs",
       "edge": "./dist/async_hooks/pure.index.mjs",
       "workerd": "./dist/async_hooks/index.mjs",
-      "default": "./dist/async_hooks/pure.index.mjs"
+      "browser": "./dist/async_hooks/pure.index.mjs",
+      "default": "./dist/async_hooks/index.mjs"
     },
     "./context": {
       "dev-source": "./src/context/index.ts",
