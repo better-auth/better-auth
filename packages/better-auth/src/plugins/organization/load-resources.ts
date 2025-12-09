@@ -6,6 +6,7 @@ import { createAccessControl } from "../access";
 import { defaultStatements } from "./access/statement";
 import type { OrganizationResource } from "./schema";
 import type { OrganizationOptions } from "./types";
+import { safeJSONParse } from "@better-auth/core/utils";
 
 /**
  * In-memory cache for custom resources per organization
@@ -47,16 +48,17 @@ export async function loadCustomResources(
 	const statements: Record<string, readonly string[]> = {};
 
 	for (const resource of resources) {
+		const permissions = safeJSONParse(resource.permissions);
 		const result = z
 			.array(z.string())
-			.safeParse(JSON.parse(resource.permissions));
+			.safeParse(permissions);
 
 		if (!result.success) {
 			ctx.context.logger.error(
 				"[loadCustomResources] Invalid permissions for resource " +
 					resource.resource,
 				{
-					permissions: JSON.parse(resource.permissions),
+					permissions,
 				},
 			);
 			throw new APIError("INTERNAL_SERVER_ERROR", {
