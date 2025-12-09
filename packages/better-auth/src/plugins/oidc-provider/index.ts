@@ -691,7 +691,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							}
 							client_id = id;
 							client_secret = secret;
-						} catch (error) {
+						} catch {
 							throw new APIError("UNAUTHORIZED", {
 								error_description: "invalid authorization header format",
 								error: "invalid_client",
@@ -1607,14 +1607,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 					},
 				},
 				async (ctx) => {
-					const {
-						id_token_hint,
-						logout_hint,
-						client_id,
-						post_logout_redirect_uri,
-						state,
-						ui_locales,
-					} = ctx.query || {};
+					const { id_token_hint, client_id, post_logout_redirect_uri, state } =
+						ctx.query || {};
 
 					let validatedClientId: string | null = null;
 					let validatedUserId: string | null = null;
@@ -1649,13 +1643,13 @@ export const oidcProvider = (options: OIDCOptions) => {
 											);
 											validatedUserId = payload.sub as string;
 											validatedClientId = payload.aud as string;
-										} catch (error) {
+										} catch {
 											// Invalid token, continue with logout but no validation
 										}
 									}
 								}
 							}
-						} catch (error) {
+						} catch {
 							// Invalid id_token_hint, but we continue with logout anyway
 							ctx.context.logger.debug(
 								"Invalid id_token_hint provided to end_session endpoint",
@@ -1747,7 +1741,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 								redirectUrl.searchParams.set("state", state);
 							}
 							return ctx.redirect(redirectUrl.toString());
-						} catch (error) {
+						} catch {
 							throw new APIError("BAD_REQUEST", {
 								error: "invalid_request",
 								error_description: "Invalid post_logout_redirect_uri format",
