@@ -64,11 +64,13 @@ export const createAdapterFactory =
 			adapterName: cfg.adapterName ?? cfg.adapterId,
 			supportsNumericIds: cfg.supportsNumericIds ?? true,
 			supportsUUIDs: cfg.supportsUUIDs ?? false,
+			supportsArrays: cfg.supportsArrays ?? false,
 			transaction: cfg.transaction ?? false,
 			disableTransformInput: cfg.disableTransformInput ?? false,
 			disableTransformOutput: cfg.disableTransformOutput ?? false,
 			disableTransformJoin: cfg.disableTransformJoin ?? false,
 		} satisfies AdapterFactoryConfig;
+
 		const useNumberId =
 			options.advanced?.database?.useNumberId === true ||
 			options.advanced?.database?.generateId === "serial";
@@ -251,7 +253,7 @@ export const createAdapterFactory =
 				) {
 					newValue = JSON.stringify(newValue);
 				} else if (
-					config.supportsJSON === false &&
+					config.supportsArrays === false &&
 					Array.isArray(newValue) &&
 					(fieldAttributes!.type === "string[]" ||
 						fieldAttributes!.type === "number[]")
@@ -346,7 +348,7 @@ export const createAdapterFactory =
 						) {
 							newValue = safeJSONParse(newValue);
 						} else if (
-							config.supportsJSON === false &&
+							config.supportsArrays === false &&
 							typeof newValue === "string" &&
 							(field.type === "string[]" || field.type === "number[]")
 						) {

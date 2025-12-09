@@ -11,7 +11,9 @@ export function EnterpriseHero() {
 		<div className="max-w-xl">
 			<div className="space-y-2 xl:space-y-3 text-center xl:text-left">
 				<h1 className="text-3xl sm:text-4xl md:text-5xl tracking-tight text-zinc-900 dark:text-white">
-					<span className="block sm:inline">BETTER AUTH</span>{" "}
+					<span className="block sm:inline bg-foreground text-background">
+						BETTER AUTH.
+					</span>{" "}
 					<span className="relative inline-block">
 						<span className="relative z-10 font-extralight">ENTERPRISE</span>
 						<span className="absolute bottom-0.5 sm:bottom-1 left-0 w-full h-1.5 sm:h-2 bg-zinc-200 dark:bg-zinc-800"></span>
@@ -23,8 +25,8 @@ export function EnterpriseHero() {
 				</p>
 
 				{/* Trusted By Section */}
-				<div className="pt-6 border-t border-zinc-200 dark:border-zinc-800">
-					<p className="text-xs text-zinc-600 dark:text-zinc-400 mb-1 text-center xl:text-left">
+				<div className="py-8 space-y-4 border-t border-zinc-200 dark:border-zinc-800">
+					<p className="text-xs text-zinc-600 dark:text-zinc-400 text-center xl:text-left">
 						Trusted by teams at
 					</p>
 					<div className="flex flex-wrap items-center justify-center xl:justify-start gap-6 md:gap-4 opacity-60 text-zinc-900 dark:text-white">
@@ -92,16 +94,13 @@ export function EnterpriseHero() {
 									className="inline-block cursor-pointer hover:opacity-100 transition-opacity"
 								>
 									<svg
+										xmlns="http://www.w3.org/2000/svg"
 										width="1.3em"
 										height="1.3em"
-										viewBox="0 0 76 65"
-										fill="none"
-										xmlns="http://www.w3.org/2000/svg"
+										viewBox="0 0 256 222"
+										fill="currentColor"
 									>
-										<path
-											d="M37.5274 0L75.0548 65H0L37.5274 0Z"
-											fill="#ffffff"
-										/>
+										<path d="m128 0l128 221.705H0z" />
 									</svg>
 								</a>
 							</TooltipTrigger>
@@ -149,7 +148,7 @@ export function EnterpriseHero() {
 									<svg
 										xmlns="http://www.w3.org/2000/svg"
 										width="3em"
-										height="3em"
+										height="1.3em"
 										viewBox="0 0 78 27"
 										fill="currentColor"
 									>

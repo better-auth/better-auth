@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.4.6-beta.3",
+  "version": "1.4.6-beta.4",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -26,6 +26,7 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest",
+    "coverage": "vitest run --coverage",
     "lint:package": "publint run --strict",
     "test:adapters": "vitest run --config vitest.config.adapters.ts",
     "prepare": "prisma generate --schema ./src/adapters/prisma-adapter/test/base.prisma",
