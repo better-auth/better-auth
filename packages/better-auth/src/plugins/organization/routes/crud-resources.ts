@@ -1,6 +1,4 @@
-import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import type { Where } from "@better-auth/core/db/adapter";
 import * as z from "zod";
 import { APIError } from "../../../api";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
@@ -45,9 +43,7 @@ const getAdditionalFields = <
 		isClientSide: true,
 	});
 	type AdditionalFields = AllPartial extends true
-		? Partial<
-				InferAdditionalFieldsFromPluginOptions<"organizationResource", O>
-			>
+		? Partial<InferAdditionalFieldsFromPluginOptions<"organizationResource", O>>
 		: InferAdditionalFieldsFromPluginOptions<"organizationResource", O>;
 	type ReturnAdditionalFields = InferAdditionalFieldsFromPluginOptions<
 		"organizationResource",
@@ -75,7 +71,9 @@ const baseCreateResourceSchema = z.object({
 	}),
 });
 
-export const createOrgResource = <O extends OrganizationOptions>(options: O) => {
+export const createOrgResource = <O extends OrganizationOptions>(
+	options: O,
+) => {
 	const { additionalFieldsSchema, $AdditionalFields, $ReturnAdditionalFields } =
 		getAdditionalFields<O>(options, false);
 	type AdditionalFields = typeof $AdditionalFields;
@@ -195,7 +193,8 @@ export const createOrgResource = <O extends OrganizationOptions>(options: O) => 
 					},
 				);
 				throw new APIError("BAD_REQUEST", {
-					message: validation.error || ORGANIZATION_ERROR_CODES.INVALID_RESOURCE_NAME,
+					message:
+						validation.error || ORGANIZATION_ERROR_CODES.INVALID_RESOURCE_NAME,
 				});
 			}
 
@@ -759,7 +758,8 @@ export const listOrgResources = <O extends OrganizationOptions>(options: O) => {
 		async (ctx) => {
 			const { session, user } = ctx.context.session;
 
-			const organizationId = ctx.query?.organizationId ?? session.activeOrganizationId;
+			const organizationId =
+				ctx.query?.organizationId ?? session.activeOrganizationId;
 			if (!organizationId) {
 				ctx.context.logger.error(
 					`[Dynamic Resources] The session is missing an active organization id to list resources.`,
@@ -857,10 +857,11 @@ export const listOrgResources = <O extends OrganizationOptions>(options: O) => {
 				permissions: JSON.parse(r.permissions) as string[],
 				isCustom: true,
 				isProtected: false,
-			})) as (OrganizationResource & ReturnAdditionalFields & {
-				isCustom: boolean;
-				isProtected: boolean;
-			})[];
+			})) as (OrganizationResource &
+				ReturnAdditionalFields & {
+					isCustom: boolean;
+					isProtected: boolean;
+				})[];
 
 			return ctx.json({
 				resources: [...defaultResourceList, ...customResourceList],
@@ -902,7 +903,8 @@ export const getOrgResource = <O extends OrganizationOptions>(options: O) => {
 		async (ctx) => {
 			const { session, user } = ctx.context.session;
 
-			const organizationId = ctx.query.organizationId ?? session.activeOrganizationId;
+			const organizationId =
+				ctx.query.organizationId ?? session.activeOrganizationId;
 			if (!organizationId) {
 				ctx.context.logger.error(
 					`[Dynamic Resources] The session is missing an active organization id to get a resource.`,
@@ -1029,12 +1031,12 @@ export const getOrgResource = <O extends OrganizationOptions>(options: O) => {
 					) as string[],
 					isCustom: true,
 					isProtected: false,
-				} as OrganizationResource & ReturnAdditionalFields & {
-					isCustom: boolean;
-					isProtected: boolean;
-				},
+				} as OrganizationResource &
+					ReturnAdditionalFields & {
+						isCustom: boolean;
+						isProtected: boolean;
+					},
 			});
 		},
 	);
 };
-

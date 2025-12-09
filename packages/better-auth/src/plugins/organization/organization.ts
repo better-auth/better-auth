@@ -20,13 +20,6 @@ import {
 	updateOrgRole,
 } from "./routes/crud-access-control";
 import {
-	createOrgResource,
-	deleteOrgResource,
-	getOrgResource,
-	listOrgResources,
-	updateOrgResource,
-} from "./routes/crud-resources";
-import {
 	acceptInvitation,
 	cancelInvitation,
 	createInvitation,
@@ -53,6 +46,13 @@ import {
 	setActiveOrganization,
 	updateOrganization,
 } from "./routes/crud-org";
+import {
+	createOrgResource,
+	deleteOrgResource,
+	getOrgResource,
+	listOrgResources,
+	updateOrgResource,
+} from "./routes/crud-resources";
 import {
 	addTeamMember,
 	createTeam,
@@ -1077,7 +1077,8 @@ export function organization<O extends OrganizationOptions>(
 						resource: {
 							type: "string",
 							required: true,
-							fieldName: options?.schema?.organizationResource?.fields?.resource,
+							fieldName:
+								options?.schema?.organizationResource?.fields?.resource,
 							index: true,
 						},
 						permissions: {

@@ -10,7 +10,12 @@ import type { AccessControl, Statements } from "../../access";
 import { orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
-import { getOrganizationStatements, getReservedResourceNames, invalidateResourceCache, validateResourceName } from "../load-resources";
+import {
+	getOrganizationStatements,
+	getReservedResourceNames,
+	invalidateResourceCache,
+	validateResourceName,
+} from "../load-resources";
 import type { Member, OrganizationResource, OrganizationRole } from "../schema";
 import type { OrganizationOptions } from "../types";
 
@@ -174,13 +179,11 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			// Check if user can create role using custom callback or default logic
-			let canCreateRole = false;
-			let customDenialMessage: string | undefined;
-			let skipDelegationCheck = false; // Track if we should skip delegation check
+			// Check custom hook if provided
+			let bypassDefaultChecks = false;
 
 			if (options.dynamicAccessControl?.canCreateRole) {
-				const callbackResult = await options.dynamicAccessControl.canCreateRole({
+				const result = await options.dynamicAccessControl.canCreateRole({
 					organizationId,
 					userId: user.id,
 					member,
@@ -188,37 +191,37 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 					roleName,
 				});
 
-				if (callbackResult === "yes") {
-					canCreateRole = true;
-					skipDelegationCheck = true; // Skip delegation check when callback says "yes"
-					ctx.context.logger.info(
-						`[Dynamic Access Control] Custom canCreateRole callback allowed role creation for user ${user.id}, skipping delegation check`,
+				// Handle denial
+				if (!result.allow) {
+					ctx.context.logger.error(
+						`[Dynamic Access Control] Custom canCreateRole callback denied role creation`,
 						{
 							userId: user.id,
 							organizationId,
 							roleName,
+							reason: result.message,
 						},
 					);
-				} else if (callbackResult === "default") {
-					// Fall through to default logic below
-				} else {
-					// callbackResult is { allowed: false, message: string }
-					canCreateRole = false;
-					customDenialMessage = callbackResult.message;
-					ctx.context.logger.error(
-						`[Dynamic Access Control] Custom canCreateRole callback denied role creation: ${callbackResult.message}`,
-						{
-							userId: user.id,
-							organizationId,
-							roleName,
-						},
+					throw new APIError("FORBIDDEN", {
+						message:
+							result.message ||
+							ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE,
+					});
+				}
+
+				// Handle bypass
+				if (result.bypass) {
+					bypassDefaultChecks = true;
+					ctx.context.logger.info(
+						`[Dynamic Access Control] Bypassing default permission and delegation checks for role creation`,
+						{ userId: user.id, organizationId, roleName },
 					);
 				}
 			}
 
-			// If callback returned "default" or doesn't exist, use default permission check
-			if (!canCreateRole && !customDenialMessage) {
-				canCreateRole = await hasPermission(
+			// Perform default checks unless explicitly bypassed
+			if (!bypassDefaultChecks) {
+				const canCreateRole = await hasPermission(
 					{
 						options,
 						organizationId,
@@ -229,22 +232,21 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 					},
 					ctx,
 				);
-			}
 
-			if (!canCreateRole) {
-				ctx.context.logger.error(
-					customDenialMessage || 
-					`[Dynamic Access Control] The user is not permitted to create a role. If this is unexpected, please make sure the role associated to that member has the "ac" resource with the "create" permission.`,
-					{
-						userId: user.id,
-						organizationId,
-						role: member.role,
-					},
-				);
-				throw new APIError("FORBIDDEN", {
-					message: customDenialMessage ||
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE,
-				});
+				if (!canCreateRole) {
+					ctx.context.logger.error(
+						`[Dynamic Access Control] The user is not permitted to create a role. If this is unexpected, please make sure the role associated to that member has the "ac" resource with the "create" permission.`,
+						{
+							userId: user.id,
+							organizationId,
+							role: member.role,
+						},
+					);
+					throw new APIError("FORBIDDEN", {
+						message:
+							ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE,
+					});
+				}
 			}
 
 			const maximumRolesPerOrganization =
@@ -280,10 +282,16 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			const autoCreatedResources = await checkForInvalidResources({ ac, ctx, permission, organizationId, options });
+			const autoCreatedResources = await checkForInvalidResources({
+				ac,
+				ctx,
+				permission,
+				organizationId,
+				options,
+			});
 
-			// Only perform delegation check if not skipped by custom callback
-			if (!skipDelegationCheck) {
+			// Perform delegation check unless bypassed
+			if (!bypassDefaultChecks) {
 				await checkIfMemberHasPermission({
 					ctx,
 					member,
@@ -294,15 +302,6 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 					action: "create",
 					skipResourcesForDelegationCheck: autoCreatedResources,
 				});
-			} else {
-				ctx.context.logger.info(
-					`[Dynamic Access Control] Skipping delegation check for role creation due to custom canCreateRole callback`,
-					{
-						userId: user.id,
-						organizationId,
-						roleName,
-					},
-				);
 			}
 
 			await checkIfRoleNameIsTakenByRoleInDB({
@@ -1038,9 +1037,9 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 			if (ctx.body.data.permission) {
 				let newPermission = ctx.body.data.permission;
 
-				const autoCreatedResources = await checkForInvalidResources({ 
-					ac, 
-					ctx, 
+				const autoCreatedResources = await checkForInvalidResources({
+					ac,
+					ctx,
 					permission: newPermission,
 					organizationId,
 					options,
@@ -1129,10 +1128,14 @@ async function checkForInvalidResources({
 	options: OrganizationOptions;
 }): Promise<string[]> {
 	// Get organization-specific statements (merged default + custom)
-	const orgStatements = await getOrganizationStatements(organizationId, options, ctx);
+	const orgStatements = await getOrganizationStatements(
+		organizationId,
+		options,
+		ctx,
+	);
 	const validResources = Object.keys(orgStatements);
 	const providedResources = Object.keys(permission);
-	
+
 	// Find resources that don't exist yet
 	const missingResources = providedResources.filter(
 		(r) => !validResources.includes(r),
@@ -1140,9 +1143,12 @@ async function checkForInvalidResources({
 	const autoCreatedResources: string[] = [];
 
 	// If custom resources are enabled, auto-create missing resources
-	if (missingResources.length > 0 && options.dynamicAccessControl?.enableCustomResources) {
+	if (
+		missingResources.length > 0 &&
+		options.dynamicAccessControl?.enableCustomResources
+	) {
 		const reservedNames = getReservedResourceNames(options);
-		
+
 		for (const resourceName of missingResources) {
 			// Validate the resource name
 			const validation = validateResourceName(resourceName, options);
@@ -1160,23 +1166,24 @@ async function checkForInvalidResources({
 			}
 
 			// Check if resource name already exists (shouldn't happen, but double-check)
-			const existingResource = await ctx.context.adapter.findOne<OrganizationResource>({
-				model: "organizationResource",
-				where: [
-					{
-						field: "organizationId",
-						value: organizationId,
-						operator: "eq",
-						connector: "AND",
-					},
-					{
-						field: "resource",
-						value: resourceName,
-						operator: "eq",
-						connector: "AND",
-					},
-				],
-			});
+			const existingResource =
+				await ctx.context.adapter.findOne<OrganizationResource>({
+					model: "organizationResource",
+					where: [
+						{
+							field: "organizationId",
+							value: organizationId,
+							operator: "eq",
+							connector: "AND",
+						},
+						{
+							field: "resource",
+							value: resourceName,
+							operator: "eq",
+							connector: "AND",
+						},
+					],
+				});
 
 			if (!existingResource) {
 				// Get the permissions for this resource from the permission object
@@ -1215,8 +1222,12 @@ async function checkForInvalidResources({
 		}
 
 		// Reload statements after creating resources
-		const updatedStatements = await getOrganizationStatements(organizationId, options, ctx);
-		
+		const updatedStatements = await getOrganizationStatements(
+			organizationId,
+			options,
+			ctx,
+		);
+
 		// Now validate that the provided permissions for each resource are valid
 		for (const [resource, permissions] of Object.entries(permission)) {
 			const validPermissions = updatedStatements[resource as keyof Statements];
@@ -1270,7 +1281,8 @@ async function checkForInvalidResources({
 		// All resources exist, validate permissions
 		// If custom resources are enabled, auto-expand permissions for custom resources
 		const defaultStatements = ac.statements;
-		const needsUpdate: Array<{ resource: string; newPermissions: string[] }> = [];
+		const needsUpdate: Array<{ resource: string; newPermissions: string[] }> =
+			[];
 
 		for (const [resource, permissions] of Object.entries(permission)) {
 			const validPermissions = orgStatements[resource as keyof Statements];
@@ -1282,42 +1294,49 @@ async function checkForInvalidResources({
 
 			if (invalidPermissions.length > 0) {
 				// Check if this is a custom resource (not a default one)
-				const isCustomResource = !defaultStatements[resource as keyof Statements];
-				
-				if (isCustomResource && options.dynamicAccessControl?.enableCustomResources) {
+				const isCustomResource =
+					!defaultStatements[resource as keyof Statements];
+
+				if (
+					isCustomResource &&
+					options.dynamicAccessControl?.enableCustomResources
+				) {
 					// Auto-expand the custom resource with new permissions
-					const existingResource = await ctx.context.adapter.findOne<OrganizationResource>({
-						model: "organizationResource",
-						where: [
-							{
-								field: "organizationId",
-								value: organizationId,
-								operator: "eq",
-								connector: "AND",
-							},
-							{
-								field: "resource",
-								value: resource,
-								operator: "eq",
-								connector: "AND",
-							},
-						],
-					});
+					const existingResource =
+						await ctx.context.adapter.findOne<OrganizationResource>({
+							model: "organizationResource",
+							where: [
+								{
+									field: "organizationId",
+									value: organizationId,
+									operator: "eq",
+									connector: "AND",
+								},
+								{
+									field: "resource",
+									value: resource,
+									operator: "eq",
+									connector: "AND",
+								},
+							],
+						});
 
 					if (existingResource) {
 						// Parse existing permissions
 						const existingPermissions: string[] = JSON.parse(
-							existingResource.permissions as never as string
+							existingResource.permissions as never as string,
 						);
 
 						// Merge with new permissions
 						const mergedPermissions = Array.from(
-							new Set([...existingPermissions, ...invalidPermissions])
+							new Set([...existingPermissions, ...invalidPermissions]),
 						);
 
 						// Update the resource
 						await ctx.context.adapter.update<
-							Omit<OrganizationResource, "permissions"> & { permissions: string }
+							Omit<OrganizationResource, "permissions"> & {
+								permissions: string;
+							}
 						>({
 							model: "organizationResource",
 							where: [

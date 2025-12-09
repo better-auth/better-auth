@@ -12,6 +12,27 @@ import type {
 	TeamMember,
 } from "./schema";
 
+/**
+ * Result from canCreateRole hook
+ * Uses discriminated union for type safety and clear intent
+ */
+export type CreateRoleAuthResult =
+	| {
+			allow: true;
+			/**
+			 * Bypass default permission and delegation checks.
+			 * ⚠️ Use with caution - only for trusted roles/scenarios.
+			 */
+			bypass?: boolean;
+	  }
+	| {
+			allow: false;
+			/**
+			 * Custom error message explaining why creation is denied
+			 */
+			message?: string;
+	  };
+
 export interface OrganizationOptions {
 	/**
 	 * Configure whether new users are able to create new organizations.
@@ -89,7 +110,7 @@ export interface OrganizationOptions {
 				 * Whether to enable custom resources per organization.
 				 *
 				 * When enabled, organizations can define their own resources and permissions
-				 * alongside the default resources (organization, member, invitation, team, ac).
+				 * dynamically alongside the statically defined resources
 				 *
 				 * @default false
 				 */
@@ -125,26 +146,32 @@ export interface OrganizationOptions {
 				 * ```
 				 */
 				resourceNameValidation?:
-					| ((
-							name: string,
-					  ) => boolean | { valid: boolean; error?: string })
+					| ((name: string) => boolean | { valid: boolean; error?: string })
 					| undefined;
 				/**
 				 * Custom logic to determine if a user can create a role.
 				 *
-				 * @returns
-				 * - "yes" - Allow the action (skip default checks)
-				 * - "default" - Use default permission logic
-				 * - { allowed: false, message: string } - Deny with custom error message
+				 * @returns Authorization result
+				 * - `{ allow: true }` - Allow and continue with default permission/delegation checks
+				 * - `{ allow: true, bypass: true }` - Allow and skip all checks (⚠️ use with caution)
+				 * - `{ allow: false, message: "..." }` - Deny with custom error message
 				 *
 				 * @example
 				 * ```ts
 				 * canCreateRole: async ({ member, organizationId }) => {
-				 *   // Users with "*" permission can do anything
-				 *   if (member.role === "superadmin") return "yes";
-				 *   
+				 *   // Check subscription
+				 *   const subscription = await getSubscription(organizationId);
+				 *   if (!subscription.premium) {
+				 *     return { allow: false, message: "Premium required" };
+				 *   }
+				 *
+				 *   // Superadmin can bypass all checks
+				 *   if (member.role === "superadmin") {
+				 *     return { allow: true, bypass: true };
+				 *   }
+				 *
 				 *   // Use default logic for others
-				 *   return "default";
+				 *   return { allow: true };
 				 * }
 				 * ```
 				 */
@@ -154,9 +181,7 @@ export interface OrganizationOptions {
 					member: Member & Record<string, any>;
 					permission: Record<string, string[]>;
 					roleName: string;
-				}) => Promise<
-					"yes" | "default" | { allowed: false; message: string }
-				> | "yes" | "default" | { allowed: false; message: string };
+				}) => Promise<CreateRoleAuthResult> | CreateRoleAuthResult;
 		  }
 		| undefined;
 	/**

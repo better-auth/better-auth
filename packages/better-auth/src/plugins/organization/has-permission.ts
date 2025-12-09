@@ -35,7 +35,11 @@ export const hasPermission = async (
 	) {
 		// Get the organization-specific AC instance (with merged default + custom resources)
 		const orgAc = input.options.dynamicAccessControl?.enableCustomResources
-			? await getOrganizationAccessControl(input.organizationId, input.options, ctx)
+			? await getOrganizationAccessControl(
+					input.organizationId,
+					input.options,
+					ctx,
+				)
 			: input.options.ac;
 
 		// Load roles from database

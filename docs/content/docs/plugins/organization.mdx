@@ -2155,31 +2155,39 @@ organization({
   dynamicAccessControl: {
     enabled: true,
     canCreateRole: async ({ member, organizationId, permission, roleName }) => {
-      // Example: Users with "*" wildcard permission can do anything
-      const memberPermissions = JSON.parse(member.permission || "{}");
-      if (memberPermissions["*"]?.includes("*")) {
-        return "yes"; // Allow without further checks
+      // Check subscription
+      const subscription = await getSubscription(organizationId);
+      if (!subscription.premium) {
+        return { 
+          allow: false, 
+          message: "Premium subscription required to create custom roles" 
+        };
       }
       
       // Custom logic: Only admins can create roles with more than 5 resources
       if (Object.keys(permission).length > 5 && member.role !== "admin") {
         return {
-          allowed: false,
+          allow: false,
           message: "Only admins can create roles with more than 5 resources"
         };
       }
       
-      // Use default permission logic (check ac:create)
-      return "default";
+      // Superadmin can bypass all permission checks
+      if (member.role === "superadmin") {
+        return { allow: true, bypass: true };
+      }
+      
+      // Use default permission logic (check ac:create and delegation)
+      return { allow: true };
     }
   }
 })
 ```
 
-The callback can return:
-- `"yes"` - Allow the action (skip default permission checks)
-- `"default"` - Use the default permission logic (check for `ac: ["create"]`)
-- `{ allowed: false, message: string }` - Deny with a custom error message
+The callback returns a discriminated union:
+- `{ allow: true }` - Allow and continue with default permission/delegation checks
+- `{ allow: true, bypass: true }` - Allow and skip all checks (⚠️ use with caution)
+- `{ allow: false, message: "..." }` - Deny with a custom error message
 
 #### Database Schema
 

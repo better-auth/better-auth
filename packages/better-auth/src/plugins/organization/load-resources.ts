@@ -1,7 +1,8 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import * as z from "zod";
 import { APIError } from "../../api";
-import { createAccessControl, type AccessControl, type Statements } from "../access";
+import type { AccessControl, Statements } from "../access";
+import { createAccessControl } from "../access";
 import { defaultStatements } from "./access/statement";
 import type { OrganizationResource } from "./schema";
 import type { OrganizationOptions } from "./types";
@@ -46,11 +47,14 @@ export async function loadCustomResources(
 	const statements: Record<string, readonly string[]> = {};
 
 	for (const resource of resources) {
-		const result = z.array(z.string()).safeParse(JSON.parse(resource.permissions));
+		const result = z
+			.array(z.string())
+			.safeParse(JSON.parse(resource.permissions));
 
 		if (!result.success) {
 			ctx.context.logger.error(
-				"[loadCustomResources] Invalid permissions for resource " + resource.resource,
+				"[loadCustomResources] Invalid permissions for resource " +
+					resource.resource,
 				{
 					permissions: JSON.parse(resource.permissions),
 				},
@@ -112,7 +116,11 @@ export async function getOrganizationAccessControl(
 	options: OrganizationOptions,
 	ctx: GenericEndpointContext,
 ): Promise<AccessControl> {
-	const statements = await getOrganizationStatements(organizationId, options, ctx);
+	const statements = await getOrganizationStatements(
+		organizationId,
+		options,
+		ctx,
+	);
 	return createAccessControl(statements);
 }
 
@@ -140,7 +148,9 @@ export function getDefaultReservedResourceNames(): string[] {
 /**
  * Get reserved resource names from config or defaults
  */
-export function getReservedResourceNames(options: OrganizationOptions): string[] {
+export function getReservedResourceNames(
+	options: OrganizationOptions,
+): string[] {
 	return (
 		options.dynamicAccessControl?.reservedResourceNames ||
 		getDefaultReservedResourceNames()
@@ -185,7 +195,8 @@ export function validateResourceName(
 
 	// Custom validation if provided
 	if (options.dynamicAccessControl?.resourceNameValidation) {
-		const customResult = options.dynamicAccessControl.resourceNameValidation(name);
+		const customResult =
+			options.dynamicAccessControl.resourceNameValidation(name);
 		if (typeof customResult === "boolean") {
 			return customResult
 				? { valid: true }
@@ -196,4 +207,3 @@ export function validateResourceName(
 
 	return { valid: true };
 }
-

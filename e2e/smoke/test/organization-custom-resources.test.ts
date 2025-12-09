@@ -1,10 +1,15 @@
-import { getTestInstance } from "../../../packages/better-auth/src/test-utils/test-instance";
+import { beforeAll, describe, expect, it } from "vitest";
 import { createAuthClient } from "../../../packages/better-auth/src/client";
-import { organizationClient } from "../../../packages/better-auth/src/plugins/organization/client";
-import { organization } from "../../../packages/better-auth/src/plugins/organization";
 import { createAccessControl } from "../../../packages/better-auth/src/plugins/access";
-import { defaultStatements, ownerAc, adminAc, memberAc } from "../../../packages/better-auth/src/plugins/organization/access";
-import { describe, expect, it, beforeAll } from "vitest";
+import { organization } from "../../../packages/better-auth/src/plugins/organization";
+import {
+	adminAc,
+	defaultStatements,
+	memberAc,
+	ownerAc,
+} from "../../../packages/better-auth/src/plugins/organization/access";
+import { organizationClient } from "../../../packages/better-auth/src/plugins/organization/client";
+import { getTestInstance } from "../../../packages/better-auth/src/test-utils/test-instance";
 
 describe("organization custom resources integration", async () => {
 	const ac = createAccessControl({
@@ -317,7 +322,13 @@ describe("organization custom resources integration", async () => {
 	});
 
 	it("should reject reserved resource names", async () => {
-		const reservedNames = ["organization", "member", "invitation", "team", "ac"];
+		const reservedNames = [
+			"organization",
+			"member",
+			"invitation",
+			"team",
+			"ac",
+		];
 
 		for (const name of reservedNames) {
 			const result = await authClient.organization.createOrgResource(
@@ -441,4 +452,3 @@ describe("organization custom resources integration", async () => {
 		expect(result.error?.message).toContain("not allowed");
 	});
 });
-

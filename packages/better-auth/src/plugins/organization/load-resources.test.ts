@@ -1,10 +1,10 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import {
-	validateResourceName,
-	getReservedResourceNames,
-	getDefaultReservedResourceNames,
-	invalidateResourceCache,
 	clearAllResourceCache,
+	getDefaultReservedResourceNames,
+	getReservedResourceNames,
+	invalidateResourceCache,
+	validateResourceName,
 } from "./load-resources";
 import type { OrganizationOptions } from "./types";
 
@@ -166,7 +166,10 @@ describe("load-resources utility functions", () => {
 			const result1 = validateResourceName("short", options);
 			expect(result1.valid).toBe(true);
 
-			const result2 = validateResourceName("verylongnamethatexceedstwentycharacters", options);
+			const result2 = validateResourceName(
+				"verylongnamethatexceedstwentycharacters",
+				options,
+			);
 			expect(result2.valid).toBe(false);
 			expect(result2.error).toContain("custom validation");
 		});
@@ -211,4 +214,3 @@ describe("load-resources utility functions", () => {
 		});
 	});
 });
-
