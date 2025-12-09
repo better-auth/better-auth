@@ -111,13 +111,13 @@ export const createOrgResource = <O extends OrganizationOptions>(
 			// Get the organization id
 			const organizationId =
 				ctx.body.organizationId ?? session.activeOrganizationId;
+
 			if (!organizationId) {
 				ctx.context.logger.error(
 					`[Dynamic Resources] The session is missing an active organization id to create a resource. Either set an active org id, or pass an organizationId in the request body.`,
 				);
 				throw new APIError("BAD_REQUEST", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_MUST_BE_IN_AN_ORGANIZATION_TO_CREATE_A_ROLE,
+					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				});
 			}
 

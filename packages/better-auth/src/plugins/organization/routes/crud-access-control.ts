@@ -12,7 +12,6 @@ import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
 import {
 	getOrganizationStatements,
-	getReservedResourceNames,
 	invalidateResourceCache,
 	validateResourceName,
 } from "../load-resources";
@@ -1140,34 +1139,82 @@ async function checkForInvalidResources({
 	const missingResources = providedResources.filter(
 		(r) => !validResources.includes(r),
 	);
-	const autoCreatedResources: string[] = [];
 
-	// If custom resources are enabled, auto-create missing resources
+	// Guard: Handle missing resources when custom resources not enabled
 	if (
 		missingResources.length > 0 &&
-		options.dynamicAccessControl?.enableCustomResources
+		!options.dynamicAccessControl?.enableCustomResources
 	) {
-		const reservedNames = getReservedResourceNames(options);
+		ctx.context.logger.error(
+			`[Dynamic Access Control] The provided permission includes invalid resources.`,
+			{
+				providedResources,
+				validResources,
+				missingResources,
+			},
+		);
+		throw new APIError("BAD_REQUEST", {
+			message: ORGANIZATION_ERROR_CODES.INVALID_RESOURCE,
+		});
+	}
 
-		for (const resourceName of missingResources) {
-			// Validate the resource name
-			const validation = validateResourceName(resourceName, options);
-			if (!validation.valid) {
-				ctx.context.logger.error(
-					`[Dynamic Access Control] Cannot auto-create resource "${resourceName}": ${validation.error}`,
-					{
-						resourceName,
-						error: validation.error,
-					},
-				);
-				throw new APIError("BAD_REQUEST", {
-					message: validation.error || `Invalid resource name: ${resourceName}`,
-				});
-			}
+	// Auto-create missing resources if custom resources enabled
+	if (missingResources.length > 0) {
+		return await autoCreateMissingResources({
+			missingResources,
+			permission,
+			organizationId,
+			options,
+			ctx,
+		});
+	}
 
-			// Check if resource name already exists (shouldn't happen, but double-check)
-			const existingResource =
-				await ctx.context.adapter.findOne<OrganizationResource>({
+	// All resources exist, validate and auto-expand permissions if needed
+	return await validateAndExpandPermissions({
+		permission,
+		orgStatements,
+		ac,
+		organizationId,
+		options,
+		ctx,
+	});
+}
+
+async function autoCreateMissingResources({
+	missingResources,
+	permission,
+	organizationId,
+	options,
+	ctx,
+}: {
+	missingResources: string[];
+	permission: Record<string, string[]>;
+	organizationId: string;
+	options: OrganizationOptions;
+	ctx: GenericEndpointContext;
+}): Promise<string[]> {
+	// Validate all resource names first
+	for (const resourceName of missingResources) {
+		const validation = validateResourceName(resourceName, options);
+		if (!validation.valid) {
+			ctx.context.logger.error(
+				`[Dynamic Access Control] Cannot auto-create resource "${resourceName}": ${validation.error}`,
+				{
+					resourceName,
+					error: validation.error,
+				},
+			);
+			throw new APIError("BAD_REQUEST", {
+				message: validation.error || `Invalid resource name: ${resourceName}`,
+			});
+		}
+	}
+
+	// Check for existing resources in parallel
+	const existingResourceChecks = await Promise.all(
+		missingResources.map((resourceName) =>
+			ctx.context.adapter
+				.findOne<OrganizationResource>({
 					model: "organizationResource",
 					where: [
 						{
@@ -1183,220 +1230,273 @@ async function checkForInvalidResources({
 							connector: "AND",
 						},
 					],
-				});
+				})
+				.then((existing: OrganizationResource | null) => ({
+					resourceName,
+					existing,
+				})),
+		),
+	);
 
-			if (!existingResource) {
-				// Get the permissions for this resource from the permission object
-				const resourcePermissions = permission[resourceName] || [];
+	// Create resources that don't exist in parallel
+	const resourcesToCreate = existingResourceChecks.filter(
+		(r: { resourceName: string; existing: OrganizationResource | null }) =>
+			!r.existing,
+	);
+	const autoCreatedResources: string[] = [];
 
-				// Create the resource
-				await ctx.context.adapter.create<
-					Omit<OrganizationResource, "permissions"> & { permissions: string }
+	if (resourcesToCreate.length > 0) {
+		await Promise.all(
+			resourcesToCreate.map(
+				async ({
+					resourceName,
+				}: {
+					resourceName: string;
+					existing: OrganizationResource | null;
+				}) => {
+					const resourcePermissions = permission[resourceName] || [];
+
+					await ctx.context.adapter.create<
+						Omit<OrganizationResource, "permissions"> & { permissions: string }
+					>({
+						model: "organizationResource",
+						data: {
+							createdAt: new Date(),
+							organizationId,
+							permissions: JSON.stringify(resourcePermissions),
+							resource: resourceName,
+						},
+					});
+
+					ctx.context.logger.info(
+						`[Dynamic Access Control] Auto-created resource "${resourceName}" for organization ${organizationId}`,
+						{
+							resourceName,
+							organizationId,
+							permissions: resourcePermissions,
+						},
+					);
+
+					autoCreatedResources.push(resourceName);
+				},
+			),
+		);
+
+		// Invalidate cache so new resources are picked up
+		invalidateResourceCache(organizationId);
+	}
+
+	// Reload statements after creating resources
+	const updatedStatements = await getOrganizationStatements(
+		organizationId,
+		options,
+		ctx,
+	);
+
+	// Validate that the provided permissions for each resource are valid
+	for (const [resource, permissions] of Object.entries(permission)) {
+		const validPermissions = updatedStatements[resource as keyof Statements];
+
+		if (!validPermissions) {
+			ctx.context.logger.error(
+				`[Dynamic Access Control] Resource "${resource}" still not found after auto-creation.`,
+				{ resource },
+			);
+			throw new APIError("INTERNAL_SERVER_ERROR", {
+				message: `Failed to create resource "${resource}"`,
+			});
+		}
+
+		const invalidPermissions = permissions.filter(
+			(p) => !validPermissions.includes(p),
+		);
+
+		if (invalidPermissions.length > 0) {
+			ctx.context.logger.error(
+				`[Dynamic Access Control] The provided permissions include invalid actions for resource "${resource}".`,
+				{
+					resource,
+					invalidPermissions,
+					validPermissions,
+				},
+			);
+			throw new APIError("BAD_REQUEST", {
+				message: `Invalid permissions for resource "${resource}": ${invalidPermissions.join(", ")}`,
+			});
+		}
+	}
+
+	return autoCreatedResources;
+}
+
+async function validateAndExpandPermissions({
+	permission,
+	orgStatements,
+	ac,
+	organizationId,
+	options,
+	ctx,
+}: {
+	permission: Record<string, string[]>;
+	orgStatements: Statements;
+	ac: AccessControl;
+	organizationId: string;
+	options: OrganizationOptions;
+	ctx: GenericEndpointContext;
+}): Promise<string[]> {
+	const defaultStatements = ac.statements;
+	const resourcesToExpand: Array<{
+		resource: string;
+		existingPermissions: string[];
+		invalidPermissions: string[];
+	}> = [];
+
+	// Find resources that need permission expansion
+	for (const [resource, permissions] of Object.entries(permission)) {
+		const validPermissions = orgStatements[resource as keyof Statements];
+		if (!validPermissions) continue;
+
+		const invalidPermissions = permissions.filter(
+			(p) => !validPermissions.includes(p),
+		);
+
+		if (invalidPermissions.length === 0) continue;
+
+		// Check if this is a custom resource (not a default one)
+		const isCustomResource = !defaultStatements[resource as keyof Statements];
+
+		if (
+			!isCustomResource ||
+			!options.dynamicAccessControl?.enableCustomResources
+		) {
+			ctx.context.logger.error(
+				`[Dynamic Access Control] The provided permissions include invalid actions for resource "${resource}".`,
+				{
+					resource,
+					invalidPermissions,
+					validPermissions,
+					isCustomResource,
+				},
+			);
+			throw new APIError("BAD_REQUEST", {
+				message: `Invalid permissions for resource "${resource}": ${invalidPermissions.join(", ")}`,
+			});
+		}
+
+		resourcesToExpand.push({
+			resource,
+			existingPermissions: [...validPermissions],
+			invalidPermissions,
+		});
+	}
+
+	// No resources need expansion
+	if (resourcesToExpand.length === 0) {
+		return [];
+	}
+
+	// Fetch existing resources in parallel
+	const existingResources = await Promise.all(
+		resourcesToExpand.map(({ resource }) =>
+			ctx.context.adapter
+				.findOne<OrganizationResource>({
+					model: "organizationResource",
+					where: [
+						{
+							field: "organizationId",
+							value: organizationId,
+							operator: "eq",
+							connector: "AND",
+						},
+						{
+							field: "resource",
+							value: resource,
+							operator: "eq",
+							connector: "AND",
+						},
+					],
+				})
+				.then((existing: OrganizationResource | null) => ({
+					resource,
+					existing,
+				})),
+		),
+	);
+
+	// Update resources with expanded permissions in parallel
+	await Promise.all(
+		existingResources.map(
+			async ({
+				resource,
+				existing,
+			}: {
+				resource: string;
+				existing: OrganizationResource | null;
+			}) => {
+				if (!existing) return;
+
+				const resourceToExpand = resourcesToExpand.find(
+					(r) => r.resource === resource,
+				);
+				if (!resourceToExpand) return;
+
+				// Parse existing permissions
+				const existingPermissions: string[] = JSON.parse(
+					existing.permissions as never as string,
+				);
+
+				// Merge with new permissions
+				const mergedPermissions = Array.from(
+					new Set([
+						...existingPermissions,
+						...resourceToExpand.invalidPermissions,
+					]),
+				);
+
+				// Update the resource
+				await ctx.context.adapter.update<
+					Omit<OrganizationResource, "permissions"> & {
+						permissions: string;
+					}
 				>({
 					model: "organizationResource",
-					data: {
-						createdAt: new Date(),
-						organizationId,
-						permissions: JSON.stringify(resourcePermissions),
-						resource: resourceName,
+					where: [
+						{
+							field: "organizationId",
+							value: organizationId,
+							operator: "eq",
+							connector: "AND",
+						},
+						{
+							field: "resource",
+							value: resource,
+							operator: "eq",
+							connector: "AND",
+						},
+					],
+					update: {
+						permissions: JSON.stringify(mergedPermissions),
+						updatedAt: new Date(),
 					},
 				});
 
 				ctx.context.logger.info(
-					`[Dynamic Access Control] Auto-created resource "${resourceName}" for organization ${organizationId}`,
+					`[Dynamic Access Control] Auto-expanded permissions for custom resource "${resource}"`,
 					{
-						resourceName,
+						resource,
 						organizationId,
-						permissions: resourcePermissions,
+						oldPermissions: existingPermissions,
+						newPermissions: resourceToExpand.invalidPermissions,
+						mergedPermissions,
 					},
 				);
-
-				// Track that this resource was auto-created
-				autoCreatedResources.push(resourceName);
-			}
-		}
-
-		// Invalidate cache so new resources are picked up
-		if (missingResources.length > 0) {
-			invalidateResourceCache(organizationId);
-		}
-
-		// Reload statements after creating resources
-		const updatedStatements = await getOrganizationStatements(
-			organizationId,
-			options,
-			ctx,
-		);
-
-		// Now validate that the provided permissions for each resource are valid
-		for (const [resource, permissions] of Object.entries(permission)) {
-			const validPermissions = updatedStatements[resource as keyof Statements];
-			if (!validPermissions) {
-				// This shouldn't happen after auto-creation, but just in case
-				ctx.context.logger.error(
-					`[Dynamic Access Control] Resource "${resource}" still not found after auto-creation.`,
-					{
-						resource,
-					},
-				);
-				throw new APIError("INTERNAL_SERVER_ERROR", {
-					message: `Failed to create resource "${resource}"`,
-				});
-			}
-
-			const invalidPermissions = permissions.filter(
-				(p) => !validPermissions.includes(p),
-			);
-			if (invalidPermissions.length > 0) {
-				ctx.context.logger.error(
-					`[Dynamic Access Control] The provided permissions include invalid actions for resource "${resource}".`,
-					{
-						resource,
-						invalidPermissions,
-						validPermissions,
-					},
-				);
-				throw new APIError("BAD_REQUEST", {
-					message: `Invalid permissions for resource "${resource}": ${invalidPermissions.join(", ")}`,
-				});
-			}
-		}
-
-		// Return the list of auto-created resources
-		return autoCreatedResources;
-	} else if (missingResources.length > 0) {
-		// Custom resources not enabled, so throw error for missing resources
-		ctx.context.logger.error(
-			`[Dynamic Access Control] The provided permission includes invalid resources.`,
-			{
-				providedResources,
-				validResources,
-				missingResources,
 			},
-		);
-		throw new APIError("BAD_REQUEST", {
-			message: ORGANIZATION_ERROR_CODES.INVALID_RESOURCE,
-		});
-	} else {
-		// All resources exist, validate permissions
-		// If custom resources are enabled, auto-expand permissions for custom resources
-		const defaultStatements = ac.statements;
-		const needsUpdate: Array<{ resource: string; newPermissions: string[] }> =
-			[];
+		),
+	);
 
-		for (const [resource, permissions] of Object.entries(permission)) {
-			const validPermissions = orgStatements[resource as keyof Statements];
-			if (!validPermissions) continue;
+	// Invalidate cache after updates
+	invalidateResourceCache(organizationId);
 
-			const invalidPermissions = permissions.filter(
-				(p) => !validPermissions.includes(p),
-			);
-
-			if (invalidPermissions.length > 0) {
-				// Check if this is a custom resource (not a default one)
-				const isCustomResource =
-					!defaultStatements[resource as keyof Statements];
-
-				if (
-					isCustomResource &&
-					options.dynamicAccessControl?.enableCustomResources
-				) {
-					// Auto-expand the custom resource with new permissions
-					const existingResource =
-						await ctx.context.adapter.findOne<OrganizationResource>({
-							model: "organizationResource",
-							where: [
-								{
-									field: "organizationId",
-									value: organizationId,
-									operator: "eq",
-									connector: "AND",
-								},
-								{
-									field: "resource",
-									value: resource,
-									operator: "eq",
-									connector: "AND",
-								},
-							],
-						});
-
-					if (existingResource) {
-						// Parse existing permissions
-						const existingPermissions: string[] = JSON.parse(
-							existingResource.permissions as never as string,
-						);
-
-						// Merge with new permissions
-						const mergedPermissions = Array.from(
-							new Set([...existingPermissions, ...invalidPermissions]),
-						);
-
-						// Update the resource
-						await ctx.context.adapter.update<
-							Omit<OrganizationResource, "permissions"> & {
-								permissions: string;
-							}
-						>({
-							model: "organizationResource",
-							where: [
-								{
-									field: "organizationId",
-									value: organizationId,
-									operator: "eq",
-									connector: "AND",
-								},
-								{
-									field: "resource",
-									value: resource,
-									operator: "eq",
-									connector: "AND",
-								},
-							],
-							update: {
-								permissions: JSON.stringify(mergedPermissions),
-								updatedAt: new Date(),
-							},
-						});
-
-						ctx.context.logger.info(
-							`[Dynamic Access Control] Auto-expanded permissions for custom resource "${resource}"`,
-							{
-								resource,
-								organizationId,
-								oldPermissions: existingPermissions,
-								newPermissions: invalidPermissions,
-								mergedPermissions,
-							},
-						);
-
-						needsUpdate.push({ resource, newPermissions: mergedPermissions });
-					}
-				} else {
-					// Not a custom resource or custom resources disabled - throw error
-					ctx.context.logger.error(
-						`[Dynamic Access Control] The provided permissions include invalid actions for resource "${resource}".`,
-						{
-							resource,
-							invalidPermissions,
-							validPermissions,
-							isCustomResource,
-						},
-					);
-					throw new APIError("BAD_REQUEST", {
-						message: `Invalid permissions for resource "${resource}": ${invalidPermissions.join(", ")}`,
-					});
-				}
-			}
-		}
-
-		// Invalidate cache if any resources were updated
-		if (needsUpdate.length > 0) {
-			invalidateResourceCache(organizationId);
-		}
-	}
-
-	// Return empty array if no resources were auto-created
 	return [];
 }
 
