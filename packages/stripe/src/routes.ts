@@ -525,6 +525,9 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						subscription_data: {
 							...freeTrial,
 							metadata: {
+								subscriptionId: subscription.id,
+								userId: user.id,
+								referenceId,
 								...ctx.body.metadata,
 								...params?.params?.subscription_data?.metadata,
 							},
