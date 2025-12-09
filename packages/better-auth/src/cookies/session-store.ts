@@ -229,7 +229,7 @@ const storeFactory =
 	};
 
 export const createSessionStore = storeFactory("Session");
-const createAccountStore = storeFactory("Account");
+export const createAccountStore = storeFactory("Account");
 
 export function getChunkedCookie(
 	ctx: GenericEndpointContext,
