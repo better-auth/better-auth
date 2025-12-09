@@ -21,7 +21,7 @@ import { parseUserOutput } from "../db/schema";
 import type { Session, User } from "../types";
 import { getDate } from "../utils/date";
 import { getBaseURL } from "../utils/url";
-import { createSessionStore } from "./session-store";
+import { createAccountStore, createSessionStore } from "./session-store";
 
 export function createCookieGetter(options: BetterAuthOptions) {
 	const secure =
@@ -308,10 +308,13 @@ export function deleteSessionCookie(
 	});
 
 	if (ctx.context.options.account?.storeAccountCookie) {
-		ctx.setCookie(ctx.context.authCookies.accountData.name, "", {
-			...ctx.context.authCookies.accountData.options,
-			maxAge: 0,
-		});
+		const accountStore = createAccountStore(
+			ctx.context.authCookies.accountData.name,
+			ctx.context.authCookies.accountData.options,
+			ctx,
+		);
+		const cleanCookies = accountStore.clean();
+		accountStore.setCookies(cleanCookies);
 	}
 
 	if (ctx.context.oauthConfig.storeStateStrategy === "cookie") {
