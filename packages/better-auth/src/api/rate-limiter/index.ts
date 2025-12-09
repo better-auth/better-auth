@@ -1,8 +1,8 @@
+import type { AuthContext } from "@better-auth/core";
+import { safeJSONParse } from "@better-auth/core/utils";
 import type { RateLimit } from "../../types";
-import { safeJSONParse } from "../../utils/json";
 import { getIp } from "../../utils/get-request-ip";
 import { wildcardMatch } from "../../utils/wildcard";
-import type { AuthContext } from "@better-auth/core";
 
 function shouldRateLimit(
 	max: number,
@@ -53,7 +53,11 @@ function createDBStorage(ctx: AuthContext) {
 
 			return data;
 		},
-		set: async (key: string, value: RateLimit, _update?: boolean) => {
+		set: async (
+			key: string,
+			value: RateLimit,
+			_update?: boolean | undefined,
+		) => {
 			try {
 				if (_update) {
 					await db.updateMany({
@@ -82,11 +86,13 @@ function createDBStorage(ctx: AuthContext) {
 }
 
 const memory = new Map<string, RateLimit>();
-export function getRateLimitStorage(
+function getRateLimitStorage(
 	ctx: AuthContext,
-	rateLimitSettings?: {
-		window?: number;
-	},
+	rateLimitSettings?:
+		| {
+				window?: number;
+		  }
+		| undefined,
 ) {
 	if (ctx.options.rateLimit?.customStorage) {
 		return ctx.options.rateLimit.customStorage;
@@ -98,7 +104,11 @@ export function getRateLimitStorage(
 				const data = await ctx.options.secondaryStorage?.get(key);
 				return data ? safeJSONParse<RateLimit>(data) : undefined;
 			},
-			set: async (key: string, value: RateLimit, _update?: boolean) => {
+			set: async (
+				key: string,
+				value: RateLimit,
+				_update?: boolean | undefined,
+			) => {
 				const ttl =
 					rateLimitSettings?.window ?? ctx.options.rateLimit?.window ?? 10;
 				await ctx.options.secondaryStorage?.set?.(
@@ -113,7 +123,7 @@ export function getRateLimitStorage(
 			async get(key: string) {
 				return memory.get(key);
 			},
-			async set(key: string, value: RateLimit, _update?: boolean) {
+			async set(key: string, value: RateLimit, _update?: boolean | undefined) {
 				memory.set(key, value);
 			},
 		};
@@ -125,10 +135,9 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 	if (!ctx.rateLimit.enabled) {
 		return;
 	}
-	const path = new URL(req.url).pathname.replace(
-		ctx.options.basePath || "/api/auth",
-		"",
-	);
+	const path = new URL(req.url).pathname
+		.replace(ctx.options.basePath || "/api/auth", "")
+		.replace(/\/+$/, "");
 	let window = ctx.rateLimit.window;
 	let max = ctx.rateLimit.max;
 	const ip = getIp(req, ctx.options);

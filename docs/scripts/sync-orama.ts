@@ -1,7 +1,8 @@
-import { sync, type OramaDocument } from "fumadocs-core/search/orama-cloud";
 import * as fs from "node:fs/promises";
-import { CloudManager } from "@oramacloud/client";
 import * as process from "node:process";
+import { CloudManager } from "@oramacloud/client";
+import type { OramaDocument } from "fumadocs-core/search/orama-cloud";
+import { sync } from "fumadocs-core/search/orama-cloud";
 import "dotenv/config";
 
 const filePath = ".next/server/app/static.json.body";

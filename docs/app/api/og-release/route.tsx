@@ -1,5 +1,5 @@
 import { ImageResponse } from "@vercel/og";
-import { z } from "zod";
+import * as z from "zod";
 export const runtime = "edge";
 
 const ogSchema = z.object({

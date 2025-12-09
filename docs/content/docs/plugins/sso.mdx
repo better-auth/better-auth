@@ -38,12 +38,12 @@ Single Sign-On (SSO) allows users to authenticate with multiple applications usi
 
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
-            ```bash
+            ```package-install
             npx @better-auth/cli migrate
             ```
             </Tab>
             <Tab value="generate">
-            ```bash
+            ```package-install
             npx @better-auth/cli generate
             ```
             </Tab>
@@ -704,6 +704,124 @@ mapping: {
 }
 ```
 
+## Domain verification
+
+Domain verification allows your application to automatically trust a new SSO provider
+by automatically validating ownership via the associated domain.
+
+When a provider's domain is verified, it is also trusted for **automatic account linking**. This means that if a user signs in with an SSO provider (OIDC or SAML) and an existing account with the same email exists, the accounts will be linked automatically — as long as the user's email domain matches the provider's verified domain.
+
+<Tabs items={["client", "server"]}>
+    <Tab value="client">
+```ts title="auth.ts"
+const authClient = createAuthClient({
+    plugins: [
+        ssoClient({ // [!code highlight]
+            domainVerification: { // [!code highlight]
+                enabled: true // [!code highlight]
+            } // [!code highlight]
+        }) // [!code highlight]
+    ]
+})
+```
+    </Tab>
+
+    <Tab value="server">
+```ts title="auth-client.ts"
+const auth = betterAuth({
+    plugins: [
+        sso({ // [!code highlight]
+            domainVerification: { // [!code highlight]
+                enabled: true // [!code highlight]
+            } // [!code highlight]
+        }) // [!code highlight]
+    ]
+});
+```
+    </Tab>
+</Tabs>
+
+Once enabled, make sure you migrate the database schema (again).
+
+<Tabs items={["migrate", "generate"]}>
+    <Tab value="migrate">
+    ```bash
+    npx @better-auth/cli migrate
+    ```
+    </Tab>
+    <Tab value="generate">
+    ```bash
+    npx @better-auth/cli generate
+    ```
+    </Tab>
+</Tabs>
+
+See the [Schema](#schema-for-domain-verification) section to add the fields manually.
+
+### Verify your domain
+
+When domain verification is enabled, every new SSO provider will be untrusted at first.
+This means that new sign-ups or sign-ins will be allowed until the domain ownership has been verified.
+
+To verify your ownership over a domain, follow these steps:
+
+<Steps>
+    <Step>
+#### Acquire verification token
+When an SSO provider is registered, a **verification token** will be issued to the provider (it will be returned as part of the response).
+You can use this token to prove ownership over the domain.
+    </Step>
+    <Step>
+#### Create `TXT` DNS record
+To do this, you'll need to add a `TXT` record to your domain's DNS settings:
+
+    *   **Host:** `better-auth-token-{your-provider-id}` (**Note:** This assumes the default token prefix, which can be customized through the `domainVerification.tokenPrefix` option)
+    *   **Value:** The verification token you were given.
+
+**Save the record and wait for it to propagate.** This can take up to 48 hours, but it's usually much faster.
+    </Step>
+    <Step>
+#### Submit a validation request
+**Once the DNS record has propagated**, you can submit a validation request (See below)
+    </Step>
+</Steps>
+
+### Domain validation request
+
+Once you have configured your domain, you can use your `auth` instance to submit a validation request.
+This request will either result in a rejection (could not prove your ownership over the domain)
+or if the verification is successful, your SSO provider domain will be marked as verified.
+
+<APIMethod path="/sso/verify-domain" method="POST" requireSession>
+```ts
+type verifyDomain = {
+  /**
+  * The provider id
+  */
+  providerId: string = "acme-corp"
+}
+```
+</APIMethod>
+
+### Creating a new verification token
+
+Every domain verification token will have a default expiry of 1 week since the moment it was issued
+or the moment when the SSO provider was registered.
+
+After that time, the token will expire and cannot longer be used. When that happens,
+you can create a new verification token:
+
+<APIMethod path="/sso/request-domain-verification" method="POST" requireSession>
+```ts
+type requestDomainVerification = {
+  /**
+  * The provider id
+  */
+  providerId: string = "acme-corp"
+}
+```
+</APIMethod>
+
 ### SAML Endpoints
 
 The plugin automatically creates the following SAML endpoints:
@@ -726,7 +844,17 @@ The plugin requires additional fields in the `ssoProvider` table to store the pr
         { name: "samlConfig", type: "string", description: "The SAML configuration (JSON string)", isRequired: false },
         { name: "userId", type: "string", description: "The user ID", isRequired: true, references: { model: "user", field: "id" } },
         { name: "providerId", type: "string", description: "The provider ID. Used to identify a provider and to generate a redirect URL.", isRequired: true, isUnique: true },
-        { name: "organizationId", type: "string", description: "The organization Id. If provider is linked to an organization.", isRequired: false },
+        { name: "organizationId", type: "string", description: "The organization Id. If provider is linked to an organization.", isRequired: false }
+    ]}
+/>
+
+### If you have enabled domain verification:
+
+The `ssoProvider` schema is extended as follows:
+
+<DatabaseTable
+    fields={[
+        { name: "domainVerified", type: "boolean", description: "A flag indicating whether the provider domain has been verified.", isRequired: false },
     ]}
 />
 
@@ -744,7 +872,7 @@ For a detailed guide on setting up SAML SSO with examples for Okta and testing w
 
 **disableImplicitSignUp**: Disable implicit sign up for new users.
 
-**trustEmailVerified**: Trust the email verified flag from the provider.
+If you want to allow account linking for specific trusted providers, enable the `accountLinking` option in your auth config and specify those providers in the `trustedProviders` list.
 
 <TypeTable
   type={{
@@ -788,6 +916,23 @@ For a detailed guide on setting up SAML SSO with examples for Okta and testing w
         type: "number | function",
         default: 10,
     },
+    domainVerification: {
+        description: "Configure the domain verification feature",
+        type: "object",
+        properties: {
+            enabled: {
+                description: "Enables or disables the domain verification feature",
+                type: "boolean",
+                required: false
+            },
+            tokenPrefix: {
+                description: "Prefix to append to the verification token identifier",
+                type: "string",
+                required: false,
+                default: "better-auth-token-"
+            },
+        },
+    },
     defaultSSO: {
         description: "Configure a default SSO provider for testing and development. This provider will be used when no matching provider is found in the database.",
         type: "object",
@@ -814,5 +959,47 @@ For a detailed guide on setting up SAML SSO with examples for Okta and testing w
             },
         },
     },
+    modelName: {
+        description: "The model name for the SSO provider table",
+        type: "string",
+        default: "ssoProvider"
+    },
+    fields: {
+        issuer: {
+            description: "Custom name for the issuer column",
+            type: "string",
+            default: "issuer",
+        },
+		oidcConfig: {
+            description: "Custom name for the oidcConfig column",
+            type: "string",
+            default: "oidcConfig",
+        },
+		samlConfig: {
+            description: "Custom name for the samlConfig column",
+            type: "string",
+            default: "samlConfig",
+        },
+		userId: {
+            description: "Custom name for the userId column",
+            type: "string",
+            default: "userId",
+        },
+		providerId: {
+            description: "Custom name for the providerId column",
+            type: "string",
+            default: "providerId",
+        },
+		organizationId: {
+            description: "Custom name for the organizationId column",
+            type: "string",
+            default: "organizationId",
+        },
+		domain: {
+            description: "Custom name for the domain column",
+            type: "string",
+            default: "domain",
+        }
+    }
   }}
 />

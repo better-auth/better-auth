@@ -1,23 +1,24 @@
+import { BetterAuthError } from "@better-auth/core/error";
+import type { GoogleProfile } from "@better-auth/core/social-providers";
+import { HttpResponse, http } from "msw";
+import { setupServer } from "msw/node";
 import {
+	afterAll,
+	afterEach,
+	beforeAll,
 	describe,
 	expect,
 	it,
 	vi,
-	beforeAll,
-	afterAll,
-	afterEach,
 } from "vitest";
-import { setupServer } from "msw/node";
-import { http, HttpResponse } from "msw";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { admin } from "./admin";
-import { type UserWithRole } from "./types";
-import { adminClient } from "./client";
-import { createAccessControl } from "../access";
 import { createAuthClient } from "../../client";
-import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { signJWT } from "../../crypto";
+import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
+import { createAccessControl } from "../access";
+import { admin } from "./admin";
+import { adminClient } from "./client";
+import type { UserWithRole } from "./types";
 
 let testIdToken: string;
 let handlers: ReturnType<typeof http.post>[];
@@ -337,6 +338,54 @@ describe("Admin plugin", async () => {
 		});
 	});
 
+	it("should filter users by id with ne operator", async () => {
+		const allUsers = await client.admin.listUsers({
+			query: {},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		const firstUserId = allUsers.data?.users[0]!.id;
+
+		const res = await client.admin.listUsers({
+			query: {
+				filterValue: firstUserId,
+				filterField: "id",
+				filterOperator: "ne",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+
+		expect(res.data?.users.length).toBe(allUsers.data!.total - 1);
+		expect(res.data?.users.every((u) => u.id !== firstUserId)).toBe(true);
+	});
+
+	it("should filter users by _id with ne operator", async () => {
+		const allUsers = await client.admin.listUsers({
+			query: {},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		const firstUserId = allUsers.data?.users[0]!.id;
+
+		const res = await client.admin.listUsers({
+			query: {
+				filterValue: firstUserId,
+				filterField: "_id",
+				filterOperator: "ne",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+
+		expect(res.data?.users.length).toBe(allUsers.data!.total - 1);
+		expect(res.data?.users.every((u) => u.id !== firstUserId)).toBe(true);
+	});
+
 	it("should allow to combine search and filter", async () => {
 		const res = await client.admin.listUsers({
 			query: {
@@ -605,6 +654,30 @@ describe("Admin plugin", async () => {
 		expect(res.error?.status).toBe(403);
 	});
 
+	it("should not allow to impersonate admins", async () => {
+		const userToImpersonate = await client.signUp.email({
+			email: "impersonate-admin@mail.com",
+			password: "password",
+			name: "Impersonate Admin User",
+		});
+		const userId = userToImpersonate.data?.user.id || "";
+		await client.admin.setRole({
+			userId,
+			role: "admin",
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		const res = await client.admin.impersonateUser(
+			{
+				userId,
+			},
+			{ headers: adminHeaders },
+		);
+
+		expect(res.error?.status).toBe(403);
+	});
+
 	it("should filter impersonated sessions", async () => {
 		const { headers } = await signInWithUser(data.email, data.password);
 		const res = await client.listSessions({
@@ -864,12 +937,20 @@ describe("Admin plugin", async () => {
 
 describe("access control", async (it) => {
 	const ac = createAccessControl({
-		user: ["create", "read", "update", "delete", "list", "bulk-delete"],
+		user: [
+			"create",
+			"read",
+			"update",
+			"delete",
+			"list",
+			"bulk-delete",
+			"set-role",
+		],
 		order: ["create", "read", "update", "delete", "update-many"],
 	});
 
 	const adminAc = ac.newRole({
-		user: ["create", "read", "update", "delete", "list"],
+		user: ["create", "read", "update", "delete", "list", "set-role"],
 		order: ["create", "read", "update", "delete"],
 	});
 	const userAc = ac.newRole({
@@ -1185,5 +1266,75 @@ describe("access control", async (it) => {
 			},
 		});
 		expect(userRes.error?.status).toBe(403);
+	});
+
+	it("should not allow to set multiple non existent user role", async () => {
+		const createdUser = await client.admin.createUser(
+			{
+				name: "Test User mr",
+				email: "testmr@test.com",
+				password: "test",
+				role: ["user"],
+			},
+			{
+				headers: headers,
+			},
+		);
+		expect(createdUser.data?.user.role).toBe("user");
+		const res = await client.admin.setRole(
+			{
+				userId: createdUser.data?.user.id || "",
+				role: ["user", "non-user"] as any[],
+			},
+			{ headers: headers },
+		);
+		expect(res.error).toBeDefined();
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe(
+			"YOU_ARE_NOT_ALLOWED_TO_SET_A_NONEXISTENT_ROLE_VALUE",
+		);
+		await client.admin.removeUser(
+			{ userId: createdUser.data?.user.id || "" },
+			{ headers: headers },
+		);
+	});
+
+	it("should not allow to set non existent user role", async () => {
+		const createdUser = await client.admin.createUser(
+			{
+				name: "Test User mr",
+				email: "testmr@test.com",
+				password: "test",
+				role: "user",
+			},
+			{
+				headers: headers,
+			},
+		);
+		expect(createdUser.data?.user.role).toBe("user");
+		const res = await client.admin.setRole(
+			{
+				userId: createdUser.data?.user.id || "",
+				role: "non-user" as any,
+			},
+			{ headers: headers },
+		);
+		expect(res.error).toBeDefined();
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe(
+			"YOU_ARE_NOT_ALLOWED_TO_SET_A_NONEXISTENT_ROLE_VALUE",
+		);
+		await client.admin.removeUser(
+			{ userId: createdUser.data?.user.id || "" },
+			{ headers: headers },
+		);
+	});
+
+	it("should throw error when assigning non-existent admin roles", async () => {
+		expect(() =>
+			admin({
+				adminRoles: ["non-existent-role"],
+			}),
+		).toThrowError(BetterAuthError);
 	});
 });

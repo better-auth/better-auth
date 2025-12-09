@@ -1,6 +1,6 @@
 "use client";
-import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { cn } from "@/lib/utils";
 
 function Method({ method }: { method: "POST" | "GET" | "DELETE" | "PUT" }) {
 	return (

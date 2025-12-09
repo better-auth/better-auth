@@ -33,12 +33,12 @@ export const auth = betterAuth({
 
     <Tabs items={["migrate", "generate"]}>
         <Tab value="migrate">
-        ```bash
+        ```package-install
         npx @better-auth/cli migrate
         ```
         </Tab>
         <Tab value="generate">
-        ```bash
+        ```package-install
         npx @better-auth/cli generate
         ```
         </Tab>
@@ -239,6 +239,57 @@ jwt({
 })
 ```
 
+### Custom JWKS Path
+
+By default, the JWKS endpoint is available at `/jwks`. You can customize this path using the `jwksPath` option.
+
+This is useful when you need to:
+- Follow OAuth 2.0/OIDC conventions (e.g., `/.well-known/jwks.json`)
+- Match existing API conventions in your application
+- Avoid path conflicts with other endpoints
+
+**Server Configuration:**
+
+```ts title="auth.ts"
+jwt({
+  jwks: {
+    jwksPath: "/.well-known/jwks.json"
+  }
+})
+```
+
+**Client Configuration:**
+
+When using a custom `jwksPath` on the server, you **MUST** configure the client with the same path:
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+import { jwtClient } from "better-auth/client/plugins"
+
+export const authClient = createAuthClient({
+  plugins: [
+    jwtClient({
+      jwks: {
+        jwksPath: "/.well-known/jwks.json" // Must match server configuration
+      }
+    })
+  ]
+})
+```
+
+Then you can use the `jwks()` method as usual:
+
+```ts
+const { data, error } = await authClient.jwks()
+if (data) {
+  // Use data.keys to verify JWT tokens
+}
+```
+
+<Callout type="warning">
+  The `jwksPath` configured on the client **MUST** match the server configuration. If they don't match, the client will not be able to fetch the JWKS.
+</Callout>
+
 ### Custom Signing
 
 This is an advanced feature. Configuration outside of this plugin **MUST** be provided.
@@ -338,6 +389,12 @@ Table Name: `jwks`
       type: "Date", 
       description: "Timestamp of when the web key was created" 
     },
+    { 
+      name: "expiresAt", 
+      type: "Date", 
+      description: "Timestamp of when the web key expires",
+      isOptional: true
+    },
   ]}
   />
 
@@ -404,6 +461,24 @@ jwt({
 })
 ```
 
+### Key Rotation
+
+You can enable key rotation by setting the `rotationInterval` option. This will automatically rotate the key pair at the specified interval.
+
+The default value is `undefined` (disabled).
+
+```ts title="auth.ts"
+jwt({
+  jwks: {
+    rotationInterval: 60 * 60 * 24 * 30, // 30 days
+    gracePeriod: 60 * 60 * 24 * 30 // 30 days
+  }
+})
+```
+
+- `rotationInterval`: The interval in seconds to rotate the key pair.
+- `gracePeriod`: The period in seconds to keep the old key pair valid after rotation. This is useful to allow clients to verify tokens signed by the old key pair. The default value is 30 days.
+
 ### Modify JWT payload
 
 By default the entire user object is added to the JWT payload. You can modify the payload by providing a function to the `definePayload` option.
@@ -434,6 +509,27 @@ jwt({
     getSubject: (session) => {
       // by default the subject is the user id
       return session.user.email
+    }
+  }
+})
+```
+
+### Custom Adapter
+
+By default, the JWT plugin stores and retrieves JWKS from your database. You can provide a custom adapter to override this behavior, allowing you to store JWKS in alternative locations such as Redis, external services, or in-memory storage.
+
+```ts title="auth.ts"
+jwt({
+  adapter: {
+    getJwks: async (ctx) => {
+      // Custom implementation to get all JWKS
+      // This overrides the default database query
+      return await yourCustomStorage.getAllKeys()
+    },
+    createJwk: async (ctx, webKey) => {
+      // Custom implementation to create a new key
+      // This overrides the default database insert
+      return await yourCustomStorage.createKey(webKey)
     }
   }
 })

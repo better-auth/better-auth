@@ -1,8 +1,8 @@
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
-	dts: true,
-	format: ["esm", "cjs"],
+	dts: { build: true, incremental: true },
+	format: ["esm"],
 	entry: [
 		"./src/index.ts",
 		"./src/db/index.ts",

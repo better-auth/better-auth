@@ -1,5 +1,5 @@
-import { SignInButton, SignInFallback } from "@/components/sign-in-btn";
 import { Suspense } from "react";
+import { SignInButton, SignInFallback } from "@/components/sign-in-btn";
 
 const features = [
 	{
@@ -63,7 +63,7 @@ export default async function Home() {
 				<div className="md:w-10/12 w-full flex flex-col gap-4">
 					<div className="flex flex-col gap-3 pt-2 flex-wrap">
 						<div className="border-y py-2 border-dotted bg-secondary/60 opacity-80">
-							<div className="text-xs flex items-center gap-2 justify-center text-muted-foreground ">
+							<div className="text-xs flex items-center gap-2 justify-center text-muted-foreground">
 								<span className="text-center">
 									All features on this demo are implemented with Better Auth
 									without any custom backend code

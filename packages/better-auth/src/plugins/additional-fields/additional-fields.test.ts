@@ -1,9 +1,9 @@
-import { type Session } from "./../../types";
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
-import { inferAdditionalFields } from "./client";
+import { getTestInstance } from "../../test-utils/test-instance";
+import type { Session } from "./../../types";
 import { twoFactor, twoFactorClient } from "../two-factor";
+import { inferAdditionalFields } from "./client";
 
 describe("additionalFields", async () => {
 	const { auth, signInWithTestUser, customFetchImpl, sessionSetter } =
@@ -218,5 +218,126 @@ describe("additionalFields", async () => {
 			};
 			session: Session;
 		} | null>;
+	});
+
+	it("should apply default values", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			databaseHooks: {
+				session: {
+					create: {
+						before: async (session) => {
+							return {
+								data: {
+									newField2: "new-field-2",
+								},
+							};
+						},
+					},
+				},
+			},
+			session: {
+				additionalFields: {
+					newField: {
+						type: "string",
+						defaultValue: "default-value",
+					},
+					newField2: {
+						type: "string",
+					},
+				},
+			},
+		});
+
+		const { headers } = await signInWithTestUser();
+		const res = await auth.api.getSession({
+			headers,
+		});
+		expect(res?.session.newField).toBe("default-value");
+	});
+	it("should apply default values with secondary storage", async () => {
+		const store = new Map<string, string>();
+		const { client, auth, signInWithTestUser } = await getTestInstance({
+			secondaryStorage: {
+				set(key, value) {
+					store.set(key, value);
+				},
+				get(key) {
+					return store.get(key) || null;
+				},
+				delete(key) {
+					store.delete(key);
+				},
+			},
+			databaseHooks: {
+				session: {
+					create: {
+						before: async (session) => {
+							return {
+								data: {
+									newField2: "new-field-2",
+								},
+							};
+						},
+					},
+				},
+			},
+			session: {
+				additionalFields: {
+					newField: {
+						type: "string",
+						defaultValue: "default-value",
+					},
+					newField2: {
+						type: "string",
+					},
+				},
+			},
+		});
+
+		const { headers } = await signInWithTestUser();
+		const res = await auth.api.getSession({
+			headers,
+		});
+		expect(res?.session.newField).toBe("default-value");
+	});
+});
+
+describe("runtime", async () => {
+	it("should apply default value function on runtime", async () => {
+		const { auth } = await getTestInstance({
+			user: {
+				additionalFields: {
+					newField: {
+						type: "string",
+						defaultValue: () => "test",
+						required: false,
+					},
+					dateField: {
+						type: "date",
+						defaultValue: () =>
+							new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString(),
+						required: false,
+					},
+				},
+			},
+		});
+
+		const res = await auth.api.signUpEmail({
+			body: {
+				email: "test2@test.com",
+				name: "test",
+				password: "test-password",
+			},
+		});
+		const session = await auth.api.getSession({
+			headers: {
+				Authorization: `Bearer ${res.token}`,
+			},
+		});
+		expect(session?.user.newField).toBe("test");
+		expect(session?.user.dateField).toBeInstanceOf(Date);
+		expect(session?.user.dateField?.getTime()).toBeGreaterThan(
+			new Date(Date.now() + 1000 * 60 * 60 * 23).getTime(),
+		);
 	});
 });

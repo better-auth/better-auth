@@ -1,8 +1,10 @@
-import type { DBPreservedModels } from "@better-auth/core/db";
 import type { BetterAuthOptions } from "@better-auth/core";
+import {
+	getCurrentAdapter,
+	getCurrentAuthContext,
+} from "@better-auth/core/context";
+import type { BaseModelNames } from "@better-auth/core/db";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
-import { getCurrentAdapter } from "@better-auth/core/context";
-import { getCurrentAuthContext } from "@better-auth/core/context";
 
 export function getWithHooks(
 	adapter: DBAdapter<BetterAuthOptions>,
@@ -12,19 +14,17 @@ export function getWithHooks(
 	},
 ) {
 	const hooks = ctx.hooks;
-	type BaseModels = Extract<
-		DBPreservedModels,
-		"user" | "account" | "session" | "verification"
-	>;
 	async function createWithHooks<T extends Record<string, any>>(
 		data: T,
-		model: BaseModels,
-		customCreateFn?: {
-			fn: (data: Record<string, any>) => void | Promise<any>;
-			executeMainFn?: boolean;
-		},
+		model: BaseModelNames,
+		customCreateFn?:
+			| {
+					fn: (data: Record<string, any>) => void | Promise<any>;
+					executeMainFn?: boolean;
+			  }
+			| undefined,
 	) {
-		const context = await getCurrentAuthContext();
+		const context = await getCurrentAuthContext().catch(() => null);
 		let actualData = data;
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.create?.before;
@@ -70,13 +70,15 @@ export function getWithHooks(
 	async function updateWithHooks<T extends Record<string, any>>(
 		data: any,
 		where: Where[],
-		model: BaseModels,
-		customUpdateFn?: {
-			fn: (data: Record<string, any>) => void | Promise<any>;
-			executeMainFn?: boolean;
-		},
+		model: BaseModelNames,
+		customUpdateFn?:
+			| {
+					fn: (data: Record<string, any>) => void | Promise<any>;
+					executeMainFn?: boolean;
+			  }
+			| undefined,
 	) {
-		const context = await getCurrentAuthContext();
+		const context = await getCurrentAuthContext().catch(() => null);
 		let actualData = data;
 
 		for (const hook of hooks || []) {
@@ -87,8 +89,13 @@ export function getWithHooks(
 				if (result === false) {
 					return null;
 				}
-				const isObject = typeof result === "object";
-				actualData = isObject ? (result as any).data : result;
+				const isObject = typeof result === "object" && "data" in result;
+				if (isObject) {
+					actualData = {
+						...actualData,
+						...result.data,
+					};
+				}
 			}
 		}
 
@@ -118,13 +125,15 @@ export function getWithHooks(
 	async function updateManyWithHooks<T extends Record<string, any>>(
 		data: any,
 		where: Where[],
-		model: BaseModels,
-		customUpdateFn?: {
-			fn: (data: Record<string, any>) => void | Promise<any>;
-			executeMainFn?: boolean;
-		},
+		model: BaseModelNames,
+		customUpdateFn?:
+			| {
+					fn: (data: Record<string, any>) => void | Promise<any>;
+					executeMainFn?: boolean;
+			  }
+			| undefined,
 	) {
-		const context = await getCurrentAuthContext();
+		const context = await getCurrentAuthContext().catch(() => null);
 		let actualData = data;
 
 		for (const hook of hooks || []) {
@@ -135,8 +144,13 @@ export function getWithHooks(
 				if (result === false) {
 					return null;
 				}
-				const isObject = typeof result === "object";
-				actualData = isObject ? (result as any).data : result;
+				const isObject = typeof result === "object" && "data" in result;
+				if (isObject) {
+					actualData = {
+						...actualData,
+						...result.data,
+					};
+				}
 			}
 		}
 
@@ -166,13 +180,15 @@ export function getWithHooks(
 
 	async function deleteWithHooks<T extends Record<string, any>>(
 		where: Where[],
-		model: BaseModels,
-		customDeleteFn?: {
-			fn: (where: Where[]) => void | Promise<any>;
-			executeMainFn?: boolean;
-		},
+		model: BaseModelNames,
+		customDeleteFn?:
+			| {
+					fn: (where: Where[]) => void | Promise<any>;
+					executeMainFn?: boolean;
+			  }
+			| undefined,
 	) {
-		const context = await getCurrentAuthContext();
+		const context = await getCurrentAuthContext().catch(() => null);
 		let entityToDelete: T | null = null;
 
 		try {
@@ -226,13 +242,15 @@ export function getWithHooks(
 
 	async function deleteManyWithHooks<T extends Record<string, any>>(
 		where: Where[],
-		model: BaseModels,
-		customDeleteFn?: {
-			fn: (where: Where[]) => void | Promise<any>;
-			executeMainFn?: boolean;
-		},
+		model: BaseModelNames,
+		customDeleteFn?:
+			| {
+					fn: (where: Where[]) => void | Promise<any>;
+					executeMainFn?: boolean;
+			  }
+			| undefined,
 	) {
-		const context = await getCurrentAuthContext();
+		const context = await getCurrentAuthContext().catch(() => null);
 		let entitiesToDelete: T[] = [];
 
 		try {

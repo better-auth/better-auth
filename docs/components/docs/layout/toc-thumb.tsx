@@ -1,7 +1,8 @@
-import { type HTMLAttributes, type RefObject, useEffect, useRef } from "react";
 import * as Primitive from "fumadocs-core/toc";
-import { useOnChange } from "fumadocs-core/utils/use-on-change";
 import { useEffectEvent } from "fumadocs-core/utils/use-effect-event";
+import { useOnChange } from "fumadocs-core/utils/use-on-change";
+import type { HTMLAttributes, RefObject } from "react";
+import { useEffect, useRef } from "react";
 
 export type TOCThumb = [top: number, height: number];
 
@@ -65,6 +66,11 @@ export function TocThumb({
 
 	useOnChange(active, () => {
 		if (!containerRef.current || !thumbRef.current) return;
+
+		// Skip updates during anchor scroll animation to prevent flicker
+		if (document.documentElement.hasAttribute("data-anchor-scrolling")) {
+			return;
+		}
 
 		update(thumbRef.current, calc(containerRef.current, active));
 	});

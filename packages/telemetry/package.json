@@ -1,38 +1,40 @@
 {
   "name": "@better-auth/telemetry",
-  "version": "1.4.0-beta.12",
+  "version": "1.4.6-beta.4",
   "description": "Telemetry package for Better Auth",
   "type": "module",
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/better-auth/better-auth.git",
+    "directory": "packages/telemetry"
+  },
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     ".": {
-      "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
-      },
-      "require": {
-        "types": "./dist/index.d.cts",
-        "default": "./dist/index.cjs"
-      }
+      "dev-source": "./src/index.ts",
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
     }
   },
   "typesVersions": {
     "*": {
       "index": [
-        "dist/index.d.ts"
+        "dist/index.d.mts"
       ]
     }
   },
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
+    "lint:package": "publint run --strict",
     "typecheck": "tsc --project tsconfig.json"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
-    "tsdown": "^0.15.6",
-    "type-fest": "^4.31.0"
+    "tsdown": "catalog:",
+    "type-fest": "^5.2.0"
   },
   "dependencies": {
     "@better-auth/utils": "0.3.0",

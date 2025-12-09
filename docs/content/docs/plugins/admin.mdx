@@ -34,12 +34,12 @@ The Admin plugin provides a set of administrative functions for user management 
 
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
-            ```bash
+            ```package-install
             npx @better-auth/cli migrate
             ```
             </Tab>
             <Tab value="generate">
-            ```bash
+            ```package-install
             npx @better-auth/cli generate
             ```
             </Tab>
@@ -754,7 +754,7 @@ admin({
 ```
 ### Admin Roles
 
-The roles that are considered admin roles. Defaults to `["admin"]`.
+The roles that are considered admin roles when **not** using custom access control. Defaults to `["admin"]`.
 
 ```ts title="auth.ts"
 admin({
@@ -763,8 +763,10 @@ admin({
 ```
 
 <Callout type="warning">
-  Any role that isn't in the `adminRoles` list, even if they have the permission,
-  will not be considered an admin.
+  **Note:** The `adminRoles` option is **not required** when using custom access control (via `ac` and `roles`). When you define custom roles with specific permissions, those roles will have exactly the permissions you grant them through the access control system.  
+  
+  **Warning:** When **not** using custom access control, any role that isn't in the `adminRoles` list will **not** be able to perform admin operations.
+  
 </Callout>
 
 ### Admin userIds
@@ -816,5 +818,15 @@ The message to show when a banned user tries to sign in. Defaults to "You have b
 ```ts title="auth.ts"
 admin({
   bannedUserMessage: "Custom banned user message",
+});
+```
+
+### allowImpersonatingAdmins
+
+Whether to allow impersonating other admin users. Defaults to `false`.
+
+```ts title="auth.ts"
+admin({
+  allowImpersonatingAdmins: true,
 });
 ```

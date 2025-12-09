@@ -1,0 +1,325 @@
+name: Cherry-pick to Main
+
+on:
+  schedule:
+    # Run every 5 minutes
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  cherry-pick:
+    runs-on: ubuntu-latest
+    if: github.repository == 'better-auth/better-auth'
+
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Find PRs with merge-to-main label
+        id: find-prs
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            // Get all closed PRs targeting canary branch
+            const prs = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'closed',
+              base: 'canary',
+              per_page: 100,
+              sort: 'updated',
+              direction: 'desc'
+            });
+
+            // Filter for merged PRs with merge-to-main label
+            const prsToProcess = prs.data.filter(pr =>
+              pr.merged_at &&
+              pr.labels.some(label => label.name === 'merge-to-main')
+            );
+
+            console.log(`Found ${prsToProcess.length} PRs with merge-to-main label`);
+
+            if (prsToProcess.length === 0) {
+              console.log('No PRs to process');
+              core.setOutput('has_prs', 'false');
+              return;
+            }
+
+            core.setOutput('has_prs', 'true');
+            core.setOutput('prs_to_process', JSON.stringify(prsToProcess.map(pr => ({
+              number: pr.number,
+              merge_commit_sha: pr.merge_commit_sha,
+              title: pr.title
+            }))));
+
+      - name: Cherry-pick to main
+        id: cherry-pick
+        if: steps.find-prs.outputs.has_prs == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          # Fetch all branches
+          git fetch origin main
+          git fetch origin canary
+
+          # Checkout main branch
+          git checkout -B main origin/main
+
+          set +e  # Don't exit on error
+
+          echo "Processing PRs with merge-to-main label..."
+          echo '${{ steps.find-prs.outputs.prs_to_process }}' > prs.json
+
+          success_prs=""
+          conflict_prs=""
+          skipped_prs=""
+          success_count=0
+          conflict_count=0
+          skipped_count=0
+
+          for row in $(jq -r '.[] | @base64' prs.json); do
+            _jq() {
+              echo ${row} | base64 --decode | jq -r ${1}
+            }
+
+            PR_NUM=$(_jq '.number')
+            MERGE_COMMIT=$(_jq '.merge_commit_sha')
+            PR_TITLE=$(_jq '.title')
+
+            echo "----------------------------------------"
+            echo "Processing PR #$PR_NUM: $PR_TITLE"
+            echo "Merge commit: $MERGE_COMMIT"
+
+            # Check if commit already exists in main
+            if git branch -r --contains "$MERGE_COMMIT" | grep -q "origin/main"; then
+              echo "✓ PR #$PR_NUM already in main, will remove label"
+              skipped_prs="$skipped_prs $PR_NUM"
+              skipped_count=$((skipped_count + 1))
+              continue
+            fi
+
+            # Attempt cherry-pick
+            if git cherry-pick -m 1 "$MERGE_COMMIT"; then
+              echo "✅ Successfully cherry-picked PR #$PR_NUM"
+              success_prs="$success_prs $PR_NUM"
+              success_count=$((success_count + 1))
+            else
+              echo "❌ Conflict in PR #$PR_NUM"
+              conflict_prs="$conflict_prs $PR_NUM"
+              git cherry-pick --abort
+              conflict_count=$((conflict_count + 1))
+            fi
+          done
+
+          set -e  # Re-enable exit on error
+
+          echo "----------------------------------------"
+          echo "Summary:"
+          echo "  Success: $success_count"
+          echo "  Conflicts: $conflict_count"
+          echo "  Already in main: $skipped_count"
+
+          # Push all successful cherry-picks
+          if [ $success_count -gt 0 ]; then
+            git push origin main
+            echo "✅ Pushed $success_count cherry-pick(s) to main"
+          fi
+
+          # Save results for next steps
+          echo "success_prs=$success_prs" >> $GITHUB_OUTPUT
+          echo "conflict_prs=$conflict_prs" >> $GITHUB_OUTPUT
+          echo "skipped_prs=$skipped_prs" >> $GITHUB_OUTPUT
+          echo "success_count=$success_count" >> $GITHUB_OUTPUT
+          echo "conflict_count=$conflict_count" >> $GITHUB_OUTPUT
+          echo "skipped_count=$skipped_count" >> $GITHUB_OUTPUT
+
+      - name: Remove label and comment on successful PRs
+        if: always() && steps.cherry-pick.outputs.success_prs != ''
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            const successPrs = '${{ steps.cherry-pick.outputs.success_prs }}'.trim().split(' ').filter(Boolean);
+
+            for (const prNumber of successPrs) {
+              console.log(`Processing successful PR #${prNumber}`);
+
+              // Remove merge-to-main label
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  name: 'merge-to-main'
+                });
+                console.log(`✅ Removed merge-to-main label from PR #${prNumber}`);
+              } catch (error) {
+                console.log(`⚠️ Could not remove merge-to-main label from PR #${prNumber}: ${error.message}`);
+              }
+
+              // Remove merge-to-main-failure label if it exists
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  name: 'merge-to-main-failure'
+                });
+                console.log(`✅ Removed merge-to-main-failure label from PR #${prNumber}`);
+              } catch (error) {
+                // Ignore if label doesn't exist
+                if (error.status !== 404) {
+                  console.log(`⚠️ Could not remove merge-to-main-failure label from PR #${prNumber}: ${error.message}`);
+                }
+              }
+
+              // Add success comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: '✅ Successfully cherry-picked to `main` branch!'
+              });
+            }
+
+      - name: Remove label from skipped PRs
+        if: always() && steps.cherry-pick.outputs.skipped_prs != ''
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            const skippedPrs = '${{ steps.cherry-pick.outputs.skipped_prs }}'.trim().split(' ').filter(Boolean);
+
+            for (const prNumber of skippedPrs) {
+              console.log(`Processing skipped PR #${prNumber}`);
+
+              // Remove merge-to-main label
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  name: 'merge-to-main'
+                });
+                console.log(`✅ Removed merge-to-main label from PR #${prNumber}`);
+              } catch (error) {
+                console.log(`⚠️ Could not remove merge-to-main label from PR #${prNumber}: ${error.message}`);
+              }
+
+              // Remove merge-to-main-failure label if it exists
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  name: 'merge-to-main-failure'
+                });
+                console.log(`✅ Removed merge-to-main-failure label from PR #${prNumber}`);
+              } catch (error) {
+                // Ignore if label doesn't exist
+                if (error.status !== 404) {
+                  console.log(`⚠️ Could not remove merge-to-main-failure label from PR #${prNumber}: ${error.message}`);
+                }
+              }
+
+              // Add info comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: 'ℹ️ This commit already exists in the `main` branch. Removed `merge-to-main` label.'
+              });
+            }
+
+      - name: Comment on PRs with conflicts
+        if: always() && steps.cherry-pick.outputs.conflict_prs != ''
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            const conflictPrs = '${{ steps.cherry-pick.outputs.conflict_prs }}'.trim().split(' ').filter(Boolean);
+
+            for (const prNumber of conflictPrs) {
+              console.log(`Checking PR #${prNumber} for existing conflict comment`);
+
+              // Check if we've already commented about conflicts
+              const comments = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+              });
+
+              const hasConflictComment = comments.data.some(comment =>
+                comment.body.includes('Cherry-pick to `main` failed due to conflicts')
+              );
+
+              if (hasConflictComment) {
+                console.log(`⏭️ Skipping PR #${prNumber} - conflict comment already exists`);
+                continue;
+              }
+
+              console.log(`Adding conflict comment and label to PR #${prNumber}`);
+
+              // Add merge-to-main-failure label
+              try {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  labels: ['merge-to-main-failure']
+                });
+                console.log(`✅ Added merge-to-main-failure label to PR #${prNumber}`);
+              } catch (error) {
+                console.log(`⚠️ Could not add label to PR #${prNumber}: ${error.message}`);
+              }
+
+              // Remove merge-to-main label to stop retry attempts
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  name: 'merge-to-main'
+                });
+                console.log(`✅ Removed merge-to-main label from PR #${prNumber}`);
+              } catch (error) {
+                console.log(`⚠️ Could not remove label from PR #${prNumber}: ${error.message}`);
+              }
+
+              // Add conflict comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: `⚠️ **Cherry-pick to \`main\` failed due to conflicts!**\n\nPlease manually cherry-pick this commit to the \`main\` branch and resolve the conflicts.`
+              });
+            }
+
+      - name: Workflow Summary
+        if: always() && steps.find-prs.outputs.has_prs == 'true'
+        run: |
+          echo "### Cherry-pick Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Success: ${{ steps.cherry-pick.outputs.success_count }}" >> $GITHUB_STEP_SUMMARY
+          echo "- ⚠️ Conflicts: ${{ steps.cherry-pick.outputs.conflict_count }}" >> $GITHUB_STEP_SUMMARY
+          echo "- ℹ️ Already in main: ${{ steps.cherry-pick.outputs.skipped_count }}" >> $GITHUB_STEP_SUMMARY
+
+          if [ -n "${{ steps.cherry-pick.outputs.success_prs }}" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Successful PRs:** ${{ steps.cherry-pick.outputs.success_prs }}" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ -n "${{ steps.cherry-pick.outputs.conflict_prs }}" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**PRs with conflicts:** ${{ steps.cherry-pick.outputs.conflict_prs }}" >> $GITHUB_STEP_SUMMARY
+          fi

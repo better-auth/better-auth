@@ -1,3 +1,6 @@
+import { ArrowUpFromLine, CreditCard, RefreshCcw } from "lucide-react";
+import { useId, useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -11,9 +14,6 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { client } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
-import { ArrowUpFromLine, CreditCard, RefreshCcw } from "lucide-react";
-import { useId, useState } from "react";
-import { toast } from "sonner";
 
 function Component(props: { currentPlan?: string; isTrial?: boolean }) {
 	const [selectedPlan, setSelectedPlan] = useState("plus");

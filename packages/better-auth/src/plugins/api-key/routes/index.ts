@@ -1,14 +1,14 @@
+import type { AuthContext } from "@better-auth/core";
+import { API_KEY_TABLE_NAME } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey, ApiKeyOptions } from "../types";
 import { createApiKey } from "./create-api-key";
+import { deleteAllExpiredApiKeysEndpoint } from "./delete-all-expired-api-keys";
 import { deleteApiKey } from "./delete-api-key";
 import { getApiKey } from "./get-api-key";
+import { listApiKeys } from "./list-api-keys";
 import { updateApiKey } from "./update-api-key";
 import { verifyApiKey } from "./verify-api-key";
-import { listApiKeys } from "./list-api-keys";
-import { deleteAllExpiredApiKeysEndpoint } from "./delete-all-expired-api-keys";
-import { API_KEY_TABLE_NAME } from "..";
-import type { AuthContext } from "@better-auth/core";
 
 export type PredefinedApiKeyOptions = ApiKeyOptions &
 	Required<
@@ -27,6 +27,8 @@ export type PredefinedApiKeyOptions = ApiKeyOptions &
 			| "enableMetadata"
 			| "enableSessionForAPIKeys"
 			| "startingCharactersConfig"
+			| "storage"
+			| "fallbackToDatabase"
 		>
 	> & {
 		keyExpiration: Required<ApiKeyOptions["keyExpiration"]>;

@@ -1,10 +1,8 @@
-import { ProvideLinksToolSchema } from "@/lib/chat/inkeep-qa-schema";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { convertToModelMessages, streamText } from "ai";
-import {
-	logConversationToAnalytics,
-	type InkeepMessage,
-} from "@/lib/inkeep-analytics";
+import { ProvideLinksToolSchema } from "@/lib/chat/inkeep-qa-schema";
+import type { InkeepMessage } from "@/lib/inkeep-analytics";
+import { logConversationToAnalytics } from "@/lib/inkeep-analytics";
 
 export const runtime = "edge";
 

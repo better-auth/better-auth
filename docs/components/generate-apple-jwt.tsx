@@ -1,10 +1,10 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { KJUR } from "jsrsasign";
 import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
-import { KJUR } from "jsrsasign";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+
 // Zod schema for validation
 const appleJwtSchema = z.object({
 	teamId: z.string().min(1, { message: "Team ID is required." }),
@@ -60,7 +61,7 @@ export const GenerateAppleJwt = () => {
 		setError(null);
 		startTransition(() => {
 			try {
-				//normalize the private key by replacing \r\n with \n and trimming whitespace just incase lol
+				//normalize the private key by replacing \r\n with \n and trimming whitespace just in-case lol
 				const normalizedKey = data.privateKey.replace(/\r\n/g, "\n").trim();
 
 				//since jose is not working with safari, we are using jsrsasign

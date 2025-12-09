@@ -1,10 +1,10 @@
-import { Command } from "commander";
-import { execSync } from "child_process";
-import * as os from "os";
-import * as fs from "fs";
-import * as path from "path";
-import chalk from "chalk";
+import { execSync } from "node:child_process";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import { base64 } from "@better-auth/utils/base64";
+import chalk from "chalk";
+import { Command } from "commander";
 
 interface MCPOptions {
 	cursor?: boolean;
@@ -13,7 +13,7 @@ interface MCPOptions {
 	manual?: boolean;
 }
 
-export async function mcpAction(options: MCPOptions) {
+async function mcpAction(options: MCPOptions) {
 	const mcpUrl = "https://mcp.chonkie.ai/better-auth/better-auth-builder/mcp";
 	const mcpName = "Better Auth";
 

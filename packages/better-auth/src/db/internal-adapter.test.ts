@@ -1,21 +1,20 @@
-import { beforeAll, expect, it, describe, vi, afterEach } from "vitest";
+import type { GenericEndpointContext } from "@better-auth/core";
+import { safeJSONParse } from "@better-auth/core/utils";
+import Database from "better-sqlite3";
+import { Kysely, SqliteDialect } from "kysely";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { betterAuth } from "../auth";
+import { init } from "../context/init";
+import { getTestInstance } from "../test-utils/test-instance";
 import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
 	Session,
 	User,
 } from "../types";
-import Database from "better-sqlite3";
-import { init } from "../init";
-import { betterAuth } from "../auth";
 import { getMigrations } from "./get-migration";
-import { Kysely, SqliteDialect } from "kysely";
-import { getTestInstance } from "../test-utils/test-instance";
-import { safeJSONParse } from "../utils/json";
-import { runWithEndpointContext } from "@better-auth/core/context";
-import type { GenericEndpointContext } from "@better-auth/core";
 
-describe("adapter test", async () => {
+describe("internal adapter test", async () => {
 	const sqliteDialect = new SqliteDialect({
 		database: new Database(":memory:"),
 	});
@@ -122,22 +121,20 @@ describe("adapter test", async () => {
 	const internalAdapter = authContext.internalAdapter;
 
 	it("should create oauth user with custom generate id", async () => {
-		const user = await runWithEndpointContext(ctx, () =>
-			internalAdapter.createOAuthUser(
-				{
-					email: "email@email.com",
-					name: "name",
-					emailVerified: false,
-				},
-				{
-					providerId: "provider",
-					accountId: "account",
-					accessTokenExpiresAt: new Date(),
-					refreshTokenExpiresAt: new Date(),
-					createdAt: new Date(),
-					updatedAt: new Date(),
-				},
-			),
+		const user = await internalAdapter.createOAuthUser(
+			{
+				email: "email@email.com",
+				name: "name",
+				emailVerified: false,
+			},
+			{
+				providerId: "provider",
+				accountId: "account",
+				accessTokenExpiresAt: new Date(),
+				refreshTokenExpiresAt: new Date(),
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
 		);
 		expect(user).toMatchObject({
 			user: {
@@ -184,26 +181,22 @@ describe("adapter test", async () => {
 	});
 
 	it("should delete expired verification values on find", async () => {
-		await runWithEndpointContext(ctx, () =>
-			internalAdapter.createVerificationValue({
-				identifier: `test-id-1`,
-				value: "test-id-1",
-				expiresAt: new Date(Date.now() - 1000),
-			}),
-		);
+		await internalAdapter.createVerificationValue({
+			identifier: `test-id-1`,
+			value: "test-id-1",
+			expiresAt: new Date(Date.now() - 1000),
+		});
 		const value = await internalAdapter.findVerificationValue("test-id-1");
 		expect(value).toMatchObject({
 			identifier: "test-id-1",
 		});
 		const value2 = await internalAdapter.findVerificationValue("test-id-1");
 		expect(value2).toBe(undefined);
-		await runWithEndpointContext(ctx, () =>
-			internalAdapter.createVerificationValue({
-				identifier: `test-id-1`,
-				value: "test-id-1",
-				expiresAt: new Date(Date.now() + 1000),
-			}),
-		);
+		await internalAdapter.createVerificationValue({
+			identifier: `test-id-1`,
+			value: "test-id-1",
+			expiresAt: new Date(Date.now() + 1000),
+		});
 		const value3 = await internalAdapter.findVerificationValue("test-id-1");
 		expect(value3).toMatchObject({
 			identifier: "test-id-1",
@@ -218,7 +211,7 @@ describe("adapter test", async () => {
 		const sampleUser = {
 			name: "sample",
 			email: "sample@sampling.com",
-			password: "sampliiiiiing",
+			password: "some-sample-password",
 		};
 		const hookUserCreateAfter = vi.fn();
 
@@ -284,7 +277,10 @@ describe("adapter test", async () => {
 	});
 
 	it("should calculate TTL correctly with Math.floor for secondary storage", async () => {
-		const mockStorage = new Map<string, { value: string; ttl?: number }>();
+		const mockStorage = new Map<
+			string,
+			{ value: string; ttl?: number | undefined }
+		>();
 		const capturedTTLs: number[] = [];
 
 		const testOpts = {
@@ -295,7 +291,7 @@ describe("adapter test", async () => {
 				type: "sqlite",
 			},
 			secondaryStorage: {
-				set(key: string, value: string, ttl?: number) {
+				set(key: string, value: string, ttl?: number | undefined) {
 					if (ttl !== undefined) {
 						capturedTTLs.push(ttl);
 						mockStorage.set(key, { value, ttl });
@@ -333,9 +329,7 @@ describe("adapter test", async () => {
 		};
 
 		// Create a user in the database first
-		await runWithEndpointContext(ctx, () =>
-			ctx.context.internalAdapter.createUser(testUser),
-		);
+		await ctx.context.internalAdapter.createUser(testUser);
 
 		// Test case 1: Session with fractional seconds in TTL
 		const expiresAt = new Date(Date.now() + 3599500); // 59 minutes and 59.5 seconds from now
@@ -366,11 +360,9 @@ describe("adapter test", async () => {
 		);
 
 		// Trigger refreshUserSessions by updating the user
-		await runWithEndpointContext(ctx, () =>
-			ctx.context.internalAdapter.updateUser(testUser.id, {
-				name: "Updated Name",
-			}),
-		);
+		await ctx.context.internalAdapter.updateUser(testUser.id, {
+			name: "Updated Name",
+		});
 
 		// The TTL should be properly rounded down
 		const lastTTL = capturedTTLs[capturedTTLs.length - 1];
@@ -400,11 +392,9 @@ describe("adapter test", async () => {
 			JSON.stringify({ session: almostExpiredSession, user: testUser }),
 		);
 
-		await runWithEndpointContext(ctx, () =>
-			ctx.context.internalAdapter.updateUser(testUser.id, {
-				name: "Updated Again",
-			}),
-		);
+		await ctx.context.internalAdapter.updateUser(testUser.id, {
+			name: "Updated Again",
+		});
 
 		// Should be rounded down to 0
 		expect(capturedTTLs.at(-1)).toBe(0);
@@ -432,11 +422,9 @@ describe("adapter test", async () => {
 			JSON.stringify({ session: longSession, user: testUser }),
 		);
 
-		await runWithEndpointContext(ctx, () =>
-			ctx.context.internalAdapter.updateUser(testUser.id, {
-				name: "Final Update",
-			}),
-		);
+		await ctx.context.internalAdapter.updateUser(testUser.id, {
+			name: "Final Update",
+		});
 
 		// Should be rounded down to 7199
 		const finalTTL = capturedTTLs.at(-1);
@@ -448,15 +436,11 @@ describe("adapter test", async () => {
 		// Create session
 		const now = Date.now();
 		const expiresAt = new Date(now + 60 * 60 * 24 * 7 * 1000);
-		const user = await runWithEndpointContext(ctx, () =>
-			internalAdapter.createUser({
-				name: "test-user",
-				email: "test@email.com",
-			}),
-		);
-		const session = await runWithEndpointContext(ctx, () =>
-			internalAdapter.createSession(user.id),
-		);
+		const user = await internalAdapter.createUser({
+			name: "test-user",
+			email: "test@email.com",
+		});
+		const session = await internalAdapter.createSession(user.id);
 		const storedSessions: { token: string; expiresAt: number }[] = JSON.parse(
 			map.get(`active-sessions-${user.id}`),
 		);
@@ -502,15 +486,13 @@ describe("adapter test", async () => {
 		for (let i = -5; i < 5; i++) {
 			const expiresIn = i * 60 * 60 * 24 * 1000;
 			const expiresAt = new Date(now + expiresIn);
-			await runWithEndpointContext(ctx, () =>
-				internalAdapter.createSession(
-					userId,
-					undefined,
-					{
-						expiresAt,
-					},
-					true,
-				),
+			await internalAdapter.createSession(
+				userId,
+				undefined,
+				{
+					expiresAt,
+				},
+				true,
 			);
 			if (i > 0) {
 				const actualExp = expirationMap.get(`active-sessions-${userId}`);
@@ -532,9 +514,7 @@ describe("adapter test", async () => {
 		expect(tokenStored).toBeDefined();
 
 		// Delete session should clean expiresAt and token
-		await runWithEndpointContext(ctx, () =>
-			internalAdapter.deleteSession(token!),
-		);
+		await internalAdapter.deleteSession(token!);
 		const afterDeleted: { token: string; expiresAt: number }[] = JSON.parse(
 			map.get(`active-sessions-${userId}`),
 		);
@@ -554,62 +534,48 @@ describe("adapter test", async () => {
 	});
 
 	it("should delete a single account", async () => {
-		const user = await runWithEndpointContext(ctx, () =>
-			internalAdapter.createUser({
-				name: "Account Delete User",
-				email: "account.delete@example.com",
-			}),
-		);
+		const user = await internalAdapter.createUser({
+			name: "Account Delete User",
+			email: "account.delete@example.com",
+		});
 
-		const account = await runWithEndpointContext(ctx, () =>
-			internalAdapter.createAccount({
-				userId: user.id,
-				providerId: "test-provider",
-				accountId: "test-account-id-1",
-			}),
-		);
+		const account = await internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "test-provider",
+			accountId: "test-account-id-1",
+		});
 
 		let foundAccount = await internalAdapter.findAccount(account.accountId);
 		expect(foundAccount).toBeDefined();
 
-		await runWithEndpointContext(ctx, () =>
-			internalAdapter.deleteAccount(account.id),
-		);
+		await internalAdapter.deleteAccount(account.id);
 
 		foundAccount = await internalAdapter.findAccount(account.accountId);
 		expect(foundAccount).toBeNull();
 	});
 
 	it("should delete multiple accounts for a user", async () => {
-		const user = await runWithEndpointContext(ctx, () =>
-			internalAdapter.createUser({
-				name: "Accounts Delete User",
-				email: "accounts.delete@example.com",
-			}),
-		);
+		const user = await internalAdapter.createUser({
+			name: "Accounts Delete User",
+			email: "accounts.delete@example.com",
+		});
 
-		await runWithEndpointContext(ctx, () =>
-			internalAdapter.createAccount({
-				userId: user.id,
-				providerId: "test-provider-1",
-				accountId: "test-account-id-2",
-			}),
-		);
+		await internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "test-provider-1",
+			accountId: "test-account-id-2",
+		});
 
-		await runWithEndpointContext(ctx, () =>
-			internalAdapter.createAccount({
-				userId: user.id,
-				providerId: "test-provider-2",
-				accountId: "test-account-id-3",
-			}),
-		);
+		await internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "test-provider-2",
+			accountId: "test-account-id-3",
+		});
 
 		let accounts = await internalAdapter.findAccounts(user.id);
 		expect(accounts.length).toBe(2);
 
-		await runWithEndpointContext(ctx, () =>
-			internalAdapter.deleteAccounts(user.id),
-		);
+		await internalAdapter.deleteAccounts(user.id);
 
 		accounts = await internalAdapter.findAccounts(user.id);
 		expect(accounts.length).toBe(0);

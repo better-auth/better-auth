@@ -1,16 +1,16 @@
 import type {
 	DBAdapter,
+	DBAdapterInstance,
+	DBAdapterSchemaCreation,
 	DBTransactionAdapter,
 	Where,
-	DBAdapterSchemaCreation,
-	DBAdapterInstance,
 } from "@better-auth/core/db/adapter";
 
 export type {
 	DBAdapter,
-	DBTransactionAdapter,
-	DBAdapterSchemaCreation,
 	DBAdapterInstance,
+	DBAdapterSchemaCreation,
+	DBTransactionAdapter,
 } from "@better-auth/core/db/adapter";
 
 export type { Where };

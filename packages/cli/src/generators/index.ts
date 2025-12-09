@@ -1,7 +1,8 @@
-import { logger, type DBAdapter, type BetterAuthOptions } from "better-auth";
+import type { BetterAuthOptions } from "@better-auth/core";
+import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { generateDrizzleSchema } from "./drizzle";
-import { generatePrismaSchema } from "./prisma";
 import { generateMigrations } from "./kysely";
+import { generatePrismaSchema } from "./prisma";
 
 export const adapters = {
 	prisma: generatePrismaSchema,
@@ -34,14 +35,8 @@ export const generateSchema = (opts: {
 			}));
 	}
 
-	logger.error(
+	console.error(
 		`${adapter.id} is not supported. If it is a custom adapter, please request the maintainer to implement createSchema`,
 	);
 	process.exit(1);
 };
-
-/**
- * @deprecated getGenerator is a misnomer as this function gets a generator AND uses it to generate
- * and return the schema. Use generateSchema instead
- */
-export const getGenerator = generateSchema;

@@ -1,19 +1,24 @@
+import { createOTP } from "@better-auth/utils/otp";
 import { describe, expect, it, vi } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { TWO_FACTOR_ERROR_CODES, twoFactor, twoFactorClient } from ".";
 import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
-import type { TwoFactorTable, UserWithTwoFactor } from "./types";
-import { DEFAULT_SECRET } from "../../utils/constants";
 import { symmetricDecrypt } from "../../crypto";
 import { convertSetCookieToCookie } from "../../test-utils/headers";
-import { createOTP } from "@better-auth/utils/otp";
+import { getTestInstance } from "../../test-utils/test-instance";
+import { DEFAULT_SECRET } from "../../utils/constants";
+import { TWO_FACTOR_ERROR_CODES, twoFactor, twoFactorClient } from ".";
+import type { TwoFactorTable, UserWithTwoFactor } from "./types";
 
 describe("two factor", async () => {
 	let OTP = "";
 	const { testUser, customFetchImpl, sessionSetter, db, auth } =
 		await getTestInstance({
 			secret: DEFAULT_SECRET,
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
 			plugins: [
 				twoFactor({
 					otpOptions: {
@@ -149,6 +154,7 @@ describe("two factor", async () => {
 						context.response.headers.get("Set-Cookie") || "",
 					);
 					expect(parsed.get("better-auth.session_token")?.value).toBe("");
+					expect(parsed.get("better-auth.session_data")?.value).toBe("");
 					expect(parsed.get("better-auth.two_factor")?.value).toBeDefined();
 					expect(parsed.get("better-auth.dont_remember")?.value).toBeDefined();
 					headers.append(
@@ -193,15 +199,64 @@ describe("two factor", async () => {
 	});
 
 	it("should fail if two factor cookie is missing", async () => {
-		const res = await client.twoFactor.verifyTotp({
-			code: "123456",
+		const headers = new Headers();
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			rememberMe: false,
+			fetchOptions: {
+				onResponse(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					expect(parsed.get("better-auth.session_token")?.value).toBe("");
+					// 2FA Cookie is in response, but we are not setting it in headers
+					expect(parsed.get("better-auth.two_factor")?.value).toBeDefined();
+					expect(parsed.get("better-auth.dont_remember")?.value).toBeDefined();
+					headers.append(
+						"cookie",
+						`better-auth.dont_remember=${
+							parsed.get("better-auth.dont_remember")?.value
+						}`,
+					);
+				},
+			},
+		});
+		expect((res.data as any)?.twoFactorRedirect).toBe(true);
+		await client.twoFactor.sendOtp({
 			fetchOptions: {
 				headers,
 			},
 		});
-		expect(res.error?.message).toBe(
+
+		const verifyRes = await client.twoFactor.verifyOtp({
+			code: OTP,
+			fetchOptions: {
+				headers,
+				onResponse(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					// Session should not be defined when two factor cookie is missing
+					expect(
+						parsed.get("better-auth.session_token")?.value,
+					).not.toBeDefined();
+				},
+			},
+		});
+		expect(verifyRes.error?.message).toBe(
 			TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
 		);
+	});
+
+	it("should fail when passing invalid TOTP code with expected error code", async () => {
+		const res = await client.twoFactor.verifyTotp({
+			code: "invalid-code",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(res.error?.message).toBe(TWO_FACTOR_ERROR_CODES.INVALID_CODE);
 	});
 
 	let backupCodes: string[] = [];
@@ -267,10 +322,30 @@ describe("two factor", async () => {
 		expect(currentBackupCodes.backupCodes).toBeDefined();
 		expect(currentBackupCodes.backupCodes).not.toContain(backupCode);
 
+		// Start a new 2FA session to test invalid backup code
+		const headers2 = new Headers();
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				onSuccess(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					headers2.append(
+						"cookie",
+						`better-auth.two_factor=${
+							parsed.get("better-auth.two_factor")?.value
+						}`,
+					);
+				},
+			},
+		});
+
 		const res = await client.twoFactor.verifyBackupCode({
 			code: "invalid-code",
 			fetchOptions: {
-				headers,
+				headers: headers2,
 				onSuccess(context) {
 					const parsed = parseSetCookieHeader(
 						context.response.headers.get("Set-Cookie") || "",
@@ -329,6 +404,7 @@ describe("two factor", async () => {
 					const parsed = parseSetCookieHeader(
 						context.response.headers.get("Set-Cookie") || "",
 					);
+					expect(parsed.get("better-auth.trust_device")?.value).toBeDefined();
 					newHeaders.set(
 						"cookie",
 						`better-auth.trust_device=${
@@ -339,14 +415,47 @@ describe("two factor", async () => {
 			},
 		});
 
+		const updatedHeaders = new Headers();
 		const signInRes = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				headers: newHeaders,
+				onSuccess(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					expect(parsed.get("better-auth.trust_device")?.value).toBeDefined();
+					updatedHeaders.set(
+						"cookie",
+						`better-auth.trust_device=${
+							parsed.get("better-auth.trust_device")?.value
+						}`,
+					);
+				},
+			},
+		});
+		expect(signInRes.data?.user).toBeDefined();
+
+		// Should still work with original headers
+		const signIn2Res = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
 			fetchOptions: {
 				headers: newHeaders,
 			},
 		});
-		expect(signInRes.data?.user).toBeDefined();
+		expect(signIn2Res.data?.user).toBeDefined();
+
+		// Should work with updated headers
+		const signIn3Res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				headers: updatedHeaders,
+			},
+		});
+		expect(signIn3Res.data?.user).toBeDefined();
 	});
 
 	it("should limit OTP verification attempts", async () => {

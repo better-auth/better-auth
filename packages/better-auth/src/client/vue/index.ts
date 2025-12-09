@@ -1,24 +1,24 @@
-import { useStore } from "./vue-store";
+import type {
+	BetterAuthClientOptions,
+	BetterAuthClientPlugin,
+} from "@better-auth/core";
+import type { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { capitalizeFirstLetter } from "@better-auth/core/utils";
+import type {
+	BetterFetchError,
+	BetterFetchResponse,
+} from "@better-fetch/fetch";
 import type { DeepReadonly, Ref } from "vue";
+import type { PrettifyDeep, UnionToIntersection } from "../../types/helper";
 import { getClientConfig } from "../config";
-import { capitalizeFirstLetter } from "../../utils/misc";
+import { createDynamicPathProxy } from "../proxy";
 import type {
 	InferActions,
 	InferClientAPI,
 	InferErrorCodes,
 	IsSignal,
 } from "../types";
-import type {
-	BetterAuthClientPlugin,
-	BetterAuthClientOptions,
-} from "@better-auth/core";
-import { createDynamicPathProxy } from "../proxy";
-import type { PrettifyDeep, UnionToIntersection } from "../../types/helper";
-import type {
-	BetterFetchError,
-	BetterFetchResponse,
-} from "@better-fetch/fetch";
-import type { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { useStore } from "./vue-store";
 
 function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;
@@ -47,7 +47,7 @@ type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
 	: {};
 
 export function createAuthClient<Option extends BetterAuthClientOptions>(
-	options?: Option,
+	options?: Option | undefined,
 ) {
 	const {
 		baseURL,
@@ -88,13 +88,13 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		data: Ref<Session>;
 		isPending: false; //this is just to be consistent with the default hook
 		error: Ref<{
-			message?: string;
+			message?: string | undefined;
 			status: number;
 			statusText: string;
 		}>;
 	}>;
 	function useSession<UseFetch extends <T>(...args: any) => any>(
-		useFetch?: UseFetch,
+		useFetch?: UseFetch | undefined,
 	) {
 		if (useFetch) {
 			const ref = useStore(pluginsAtoms.$sessionSignal!);
@@ -144,3 +144,5 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 
 export type * from "@better-fetch/fetch";
 export type * from "nanostores";
+export type * from "../../types/helper";
+export type { UnionToIntersection } from "../../types/helper";

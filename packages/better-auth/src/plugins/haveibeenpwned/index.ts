@@ -1,8 +1,9 @@
-import { APIError } from "../../api";
+import type { BetterAuthPlugin } from "@better-auth/core";
+import { getCurrentAuthContext } from "@better-auth/core/context";
+import { defineErrorCodes } from "@better-auth/core/utils";
 import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
-import type { BetterAuthPlugin } from "@better-auth/core";
-import { defineErrorCodes } from "@better-auth/core/utils";
+import { APIError } from "../../api";
 
 const ERROR_CODES = defineErrorCodes({
 	PASSWORD_COMPROMISED:
@@ -11,7 +12,7 @@ const ERROR_CODES = defineErrorCodes({
 
 async function checkPasswordCompromise(
 	password: string,
-	customMessage?: string,
+	customMessage?: string | undefined,
 ) {
 	if (!password) return;
 
@@ -56,11 +57,23 @@ async function checkPasswordCompromise(
 }
 
 export interface HaveIBeenPwnedOptions {
-	customPasswordCompromisedMessage?: string;
+	customPasswordCompromisedMessage?: string | undefined;
+	/**
+	 * Paths to check for password
+	 *
+	 * @default ["/sign-up/email", "/change-password", "/reset-password"]
+	 */
+	paths?: string[];
 }
 
-export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions) =>
-	({
+export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
+	const paths = options?.paths || [
+		"/sign-up/email",
+		"/change-password",
+		"/reset-password",
+	];
+
+	return {
 		id: "haveIBeenPwned",
 		init(ctx) {
 			return {
@@ -68,6 +81,10 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions) =>
 					password: {
 						...ctx.password,
 						async hash(password) {
+							const c = await getCurrentAuthContext();
+							if (!c.path || !paths.includes(c.path)) {
+								return ctx.password.hash(password);
+							}
 							await checkPasswordCompromise(
 								password,
 								options?.customPasswordCompromisedMessage,
@@ -79,4 +96,5 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions) =>
 			};
 		},
 		$ERROR_CODES: ERROR_CODES,
-	}) satisfies BetterAuthPlugin;
+	} satisfies BetterAuthPlugin;
+};

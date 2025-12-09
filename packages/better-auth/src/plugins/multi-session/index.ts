@@ -1,31 +1,44 @@
-import * as z from "zod";
-import { APIError, sessionMiddleware } from "../../api";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import { defineErrorCodes } from "@better-auth/core/utils";
+import * as z from "zod";
+import { APIError, sessionMiddleware } from "../../api";
 import {
 	deleteSessionCookie,
 	parseCookies,
 	parseSetCookieHeader,
 	setSessionCookie,
 } from "../../cookies";
-import type { BetterAuthPlugin } from "@better-auth/core";
-import { defineErrorCodes } from "@better-auth/core/utils";
 
-interface MultiSessionConfig {
+export interface MultiSessionConfig {
 	/**
 	 * The maximum number of sessions a user can have
 	 * at a time
 	 * @default 5
 	 */
-	maximumSessions?: number;
+	maximumSessions?: number | undefined;
 }
 
 const ERROR_CODES = defineErrorCodes({
 	INVALID_SESSION_TOKEN: "Invalid session token",
 });
-export const multiSession = (options?: MultiSessionConfig) => {
+
+const setActiveSessionBodySchema = z.object({
+	sessionToken: z.string().meta({
+		description: "The session token to set as active",
+	}),
+});
+
+const revokeDeviceSessionBodySchema = z.object({
+	sessionToken: z.string().meta({
+		description: "The session token to revoke",
+	}),
+});
+
+export const multiSession = (options?: MultiSessionConfig | undefined) => {
 	const opts = {
 		maximumSessions: 5,
 		...options,
@@ -62,7 +75,6 @@ export const multiSession = (options?: MultiSessionConfig) => {
 					if (!cookieHeader) return ctx.json([]);
 
 					const cookies = Object.fromEntries(parseCookies(cookieHeader));
-
 					const sessionTokens = (
 						await Promise.all(
 							Object.entries(cookies)
@@ -72,7 +84,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 										await ctx.getSignedCookie(key, ctx.context.secret),
 								),
 						)
-					).filter((v) => v !== null);
+					).filter((v) => typeof v === "string");
 
 					if (!sessionTokens.length) return ctx.json([]);
 					const sessions =
@@ -111,11 +123,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 				"/multi-session/set-active",
 				{
 					method: "POST",
-					body: z.object({
-						sessionToken: z.string().meta({
-							description: "The session token to set as active",
-						}),
-					}),
+					body: setActiveSessionBodySchema,
 					requireHeaders: true,
 					use: [sessionMiddleware],
 					metadata: {
@@ -189,11 +197,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 				"/multi-session/revoke",
 				{
 					method: "POST",
-					body: z.object({
-						sessionToken: z.string().meta({
-							description: "The session token to revoke",
-						}),
-					}),
+					body: revokeDeviceSessionBodySchema,
 					requireHeaders: true,
 					use: [sessionMiddleware],
 					metadata: {
@@ -255,7 +259,7 @@ export const multiSession = (options?: MultiSessionConfig) => {
 											await ctx.getSignedCookie(key, ctx.context.secret),
 									),
 							)
-						).filter((v): v is string => v !== undefined);
+						).filter((v) => typeof v === "string");
 						const internalAdapter = ctx.context.internalAdapter;
 
 						if (sessionTokens.length > 0) {
@@ -325,24 +329,34 @@ export const multiSession = (options?: MultiSessionConfig) => {
 						const cookieHeader = ctx.headers?.get("cookie");
 						if (!cookieHeader) return;
 						const cookies = Object.fromEntries(parseCookies(cookieHeader));
-						const ids = Object.keys(cookies)
-							.map((key) => {
-								if (isMultiSessionCookie(key)) {
-									ctx.setCookie(
-										key.toLowerCase().replace("__secure-", "__Secure-"),
-										"",
-										{
-											...ctx.context.authCookies.sessionToken.options,
-											maxAge: 0,
-										},
+						const multiSessionKeys = Object.keys(cookies).filter((key) =>
+							isMultiSessionCookie(key),
+						);
+						const verifiedTokens = (
+							await Promise.all(
+								multiSessionKeys.map(async (key) => {
+									const verifiedToken = await ctx.getSignedCookie(
+										key,
+										ctx.context.secret,
 									);
-									const token = cookies[key]!.split(".")[0]!;
-									return token;
-								}
-								return null;
-							})
-							.filter((v): v is string => v !== null);
-						await ctx.context.internalAdapter.deleteSessions(ids);
+									if (verifiedToken) {
+										ctx.setCookie(
+											key.toLowerCase().replace("__secure-", "__Secure-"),
+											"",
+											{
+												...ctx.context.authCookies.sessionToken.options,
+												maxAge: 0,
+											},
+										);
+										return verifiedToken;
+									}
+									return null;
+								}),
+							)
+						).filter((v) => typeof v === "string");
+						if (verifiedTokens.length > 0) {
+							await ctx.context.internalAdapter.deleteSessions(verifiedTokens);
+						}
 					}),
 				},
 			],

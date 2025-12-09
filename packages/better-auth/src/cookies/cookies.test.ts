@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
-import { getTestInstance } from "../test-utils/test-instance";
-import { getCookieCache, getCookies, getSessionCookie } from "../cookies";
-import { parseSetCookieHeader } from "./cookie-utils";
 import type { BetterAuthOptions } from "@better-auth/core";
+import { describe, expect, it } from "vitest";
+import { getCookieCache, getCookies, getSessionCookie } from "../cookies";
+import { parseUserOutput } from "../db/schema";
+import { getTestInstance } from "../test-utils/test-instance";
+import { parseSetCookieHeader } from "./cookie-utils";
 
 describe("cookies", async () => {
 	const { client, testUser } = await getTestInstance();
@@ -369,17 +370,8 @@ describe("getSessionCookie", async () => {
 		await expect(getCookieCache(request)).rejects.toThrow();
 	});
 
-	it("should log error and skip setting cookie when data exceeds size limit", async () => {
-		const loggerErrors: string[] = [];
-		const mockLogger = {
-			log: (level: string, message: string) => {
-				if (level === "error") {
-					loggerErrors.push(message);
-				}
-			},
-		};
-
-		const { auth } = await getTestInstance({
+	it("should chunk large cookies instead of logging error", async () => {
+		const { client, testUser } = await getTestInstance({
 			secret: "better-auth.secret",
 			user: {
 				additionalFields: {
@@ -402,35 +394,46 @@ describe("getSessionCookie", async () => {
 					enabled: true,
 				},
 			},
-			logger: mockLogger,
 		});
 
 		// Create a very large string that will exceed the cookie size limit when combined with session data
 		// The limit is 4093 bytes, so we create data that will definitely exceed it
 		const largeString = "x".repeat(2000);
 
+		const headers = new Headers();
+		let hasCookieChunks = false;
+
 		// Sign up with large user data using the server API
-		const result = await auth.api.signUpEmail({
-			body: {
+		await client.signUp.email(
+			{
 				name: "Test User",
 				email: "large-data-test@example.com",
 				password: "password123",
 				customField1: largeString,
 				customField2: largeString,
 				customField3: largeString,
+			} as any,
+			{
+				onSuccess(context) {
+					const setCookie = context.response.headers.get("set-cookie");
+					if (setCookie) {
+						const parsed = parseSetCookieHeader(setCookie);
+						parsed.forEach((value, name) => {
+							if (
+								name.includes("session_data.0") ||
+								name.includes("session_data.1")
+							) {
+								hasCookieChunks = true;
+							}
+							headers.append("cookie", `${name}=${value.value}`);
+						});
+					}
+				},
 			},
-		});
-
-		// Check that logger recorded an error about exceeding size limit
-		const sizeError = loggerErrors.find((msg) =>
-			msg.includes("Session data exceeds cookie size limit"),
 		);
-		expect(sizeError).toBeDefined();
-		expect(sizeError).toContain("4093 bytes");
 
-		// The sign up should still succeed
-		expect(result).toBeDefined();
-		expect(result?.user).toBeDefined();
+		// Verify that chunking happened (instead of logging an error and not caching)
+		expect(hasCookieChunks).toBe(true);
 	});
 });
 
@@ -539,6 +542,26 @@ describe("Cookie Cache Field Filtering", () => {
 		// Fields with returned: false should be excluded
 		expect(cache?.user?.internalNotes).toBeUndefined();
 		expect(cache?.user?.adminFlags).toBeUndefined();
+	});
+
+	it("should always include id in parseUserOutput", () => {
+		const options = {
+			user: {
+				additionalFields: {
+					id: { type: "string", returned: false },
+				},
+			},
+		} as any;
+		const user = {
+			id: "custom-oauth-id-123",
+			email: "test@example.com",
+			emailVerified: true,
+			createdAt: new Date(),
+			updatedAt: new Date(),
+			name: "Test User",
+		};
+		const result = parseUserOutput(options, user);
+		expect(result.id).toBe("custom-oauth-id-123");
 	});
 
 	it("should reduce cookie size when large fields are excluded", async () => {
@@ -691,5 +714,401 @@ describe("Cookie Cache Field Filtering", () => {
 		// Standard fields like email, name should be included (backward compatibility)
 		expect(cache?.user?.email).toEqual(testUser.email);
 		expect(cache?.user?.name).toBeDefined();
+	});
+
+	it("should work with JWT strategy", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwt",
+				},
+			},
+		});
+
+		const headers = new Headers();
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+
+		const cache = await getCookieCache(request, {
+			secret: "better-auth.secret",
+			strategy: "jwt",
+		});
+		expect(cache).not.toBeNull();
+		expect(cache?.user?.email).toEqual(testUser.email);
+		expect(cache?.session?.token).toEqual(expect.any(String));
+	});
+
+	it("should work with compact strategy", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "compact",
+				},
+			},
+		});
+
+		const headers = new Headers();
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+
+		const cache = await getCookieCache(request, {
+			secret: "better-auth.secret",
+			strategy: "compact",
+		});
+		expect(cache).not.toBeNull();
+		expect(cache?.user?.email).toEqual(testUser.email);
+		expect(cache?.session?.token).toEqual(expect.any(String));
+	});
+
+	it("should return null for invalid JWT token", async () => {
+		const { cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwt",
+				},
+			},
+		});
+
+		const headers = new Headers();
+		// Set an invalid JWT token manually
+		headers.set("cookie", "better-auth.session_data=invalid.jwt.token");
+
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+
+		const cache = await getCookieCache(request, {
+			secret: "better-auth.secret",
+			strategy: "jwt",
+		});
+		expect(cache).toBeNull();
+	});
+
+	it("should default to JWT strategy when not specified", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
+			session: {
+				cookieCache: {
+					enabled: true,
+					// No strategy specified, should default to "jwt"
+				},
+			},
+		});
+
+		const headers = new Headers();
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+
+		const cache = await getCookieCache(request, {
+			secret: "better-auth.secret",
+			// No strategy specified, should default to "jwt"
+		});
+		expect(cache).not.toBeNull();
+		expect(cache?.user?.email).toEqual(testUser.email);
+		expect(cache?.session?.token).toEqual(expect.any(String));
+	});
+});
+
+describe("Cookie Chunking", () => {
+	it("should chunk cookies when they exceed 4KB", async () => {
+		// Create a large string that will exceed the cookie size limit
+		const largeString = "x".repeat(2000);
+
+		const { client, cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
+			user: {
+				additionalFields: {
+					field1: {
+						type: "string",
+						defaultValue: "",
+					},
+					field2: {
+						type: "string",
+						defaultValue: "",
+					},
+				},
+			},
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+
+		const headers = new Headers();
+
+		// Sign up with large user data
+		await client.signUp.email(
+			{
+				name: "Test User",
+				email: "chunk-test@example.com",
+				password: "password123",
+				field1: largeString,
+				field2: largeString,
+			} as any,
+			{
+				onSuccess(context) {
+					const setCookie = context.response.headers.get("set-cookie");
+					expect(setCookie).toBeDefined();
+
+					// Parse set-cookie header to check for chunks
+					const parsed = parseSetCookieHeader(setCookie!);
+					let hasChunks = false;
+
+					// Check if we have chunked cookies
+					parsed.forEach((value, name) => {
+						if (
+							name.includes("session_data.0") ||
+							name.includes("session_data.1")
+						) {
+							hasChunks = true;
+						}
+					});
+
+					expect(hasChunks).toBe(true);
+
+					// Set cookies in headers for next request
+					parsed.forEach((value, name) => {
+						headers.append("cookie", `${name}=${value.value}`);
+					});
+				},
+			},
+		);
+
+		// Now verify we can read it back
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+
+		const cache = await getCookieCache(request, {
+			secret: "better-auth.secret",
+		});
+
+		expect(cache).not.toBeNull();
+		expect(cache?.user?.email).toEqual("chunk-test@example.com");
+		expect(cache?.session?.token).toEqual(expect.any(String));
+	});
+
+	it("should reconstruct chunked cookies correctly", async () => {
+		const largeString = "y".repeat(2500);
+
+		const { client, cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
+			user: {
+				additionalFields: {
+					largeField: {
+						type: "string",
+						defaultValue: "",
+					},
+				},
+			},
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+
+		const headers = new Headers();
+
+		await client.signUp.email(
+			{
+				name: "Large Data User",
+				email: "large-chunk-test@example.com",
+				password: "password123",
+				largeField: largeString,
+			} as any,
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+
+		const cache = await getCookieCache(request, {
+			secret: "better-auth.secret",
+		});
+
+		expect(cache).not.toBeNull();
+		expect(cache?.user?.email).toEqual("large-chunk-test@example.com");
+		expect(cache?.user?.largeField).toEqual(largeString);
+	});
+
+	it("should clean up all chunks when deleting session", async () => {
+		const largeString = "z".repeat(2000);
+
+		const { client } = await getTestInstance({
+			secret: "better-auth.secret",
+			user: {
+				additionalFields: {
+					field1: {
+						type: "string",
+						defaultValue: "",
+					},
+					field2: {
+						type: "string",
+						defaultValue: "",
+					},
+				},
+			},
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+
+		const headers = new Headers();
+
+		// Sign up with large data to create chunks
+		await client.signUp.email(
+			{
+				name: "Delete Test User",
+				email: "delete-chunk-test@example.com",
+				password: "password123",
+				field1: largeString,
+				field2: largeString,
+			} as any,
+			{
+				onSuccess(context) {
+					const setCookie = context.response.headers.get("set-cookie");
+					if (setCookie) {
+						const parsed = parseSetCookieHeader(setCookie);
+						parsed.forEach((value, name) => {
+							headers.append("cookie", `${name}=${value.value}`);
+						});
+					}
+				},
+			},
+		);
+
+		// Sign out
+		await client.signOut({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					const setCookie = context.response.headers.get("set-cookie");
+					expect(setCookie).toBeDefined();
+
+					// Should have maxAge=0 for all chunks
+					const parsed = parseSetCookieHeader(setCookie!);
+					let hasCleanupChunks = false;
+
+					parsed.forEach((value, name) => {
+						if (name.includes("session_data")) {
+							expect(value["max-age"]).toBe(0);
+							hasCleanupChunks = true;
+						}
+					});
+
+					expect(hasCleanupChunks).toBe(true);
+				},
+			},
+		});
+	});
+
+	it("should NOT chunk cookies when they are under 4KB", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+
+		const headers = new Headers();
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess(context) {
+					const setCookie = context.response.headers.get("set-cookie");
+					expect(setCookie).toBeDefined();
+
+					const parsed = parseSetCookieHeader(setCookie!);
+					let hasChunks = false;
+					let hasSingleSessionData = false;
+
+					parsed.forEach((value, name) => {
+						if (
+							name.includes("session_data.0") ||
+							name.includes("session_data.1")
+						) {
+							hasChunks = true;
+						}
+						if (name.endsWith("session_data")) {
+							hasSingleSessionData = true;
+						}
+					});
+
+					expect(hasChunks).toBe(false);
+					expect(hasSingleSessionData).toBe(true);
+
+					parsed.forEach((value, name) => {
+						headers.append("cookie", `${name}=${value.value}`);
+					});
+				},
+			},
+		);
+
+		// Verify we can read it back
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+
+		const cache = await getCookieCache(request, {
+			secret: "better-auth.secret",
+		});
+
+		expect(cache).not.toBeNull();
+		expect(cache?.user?.email).toEqual(testUser.email);
 	});
 });

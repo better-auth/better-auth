@@ -1,19 +1,37 @@
 {
-  "compilerOptions": {
-    "strict": true,
-    "target": "esnext",
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "downlevelIteration": true,
-    "baseUrl": ".",
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "verbatimModuleSyntax": true,
-    "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": false,
-    "incremental": true,
-    "noErrorTruncation": true,
-    "types": ["node", "bun"]
-  },
-  "exclude": ["**/dist/**", "**/node_modules/**"]
+  "extends": "./tsconfig.base.json",
+  "include": [
+    // Only include files that are in the root directory. All other files are included by the references.
+    "./*.ts",
+    "./*.js"
+  ],
+  "references": [
+    {
+      "path": "./packages/better-auth/tsconfig.json"
+    },
+    {
+      "path": "./packages/cli/tsconfig.json"
+    },
+    {
+      "path": "./packages/core/tsconfig.json"
+    },
+    {
+      "path": "./packages/expo/tsconfig.json"
+    },
+    {
+      "path": "./packages/passkey/tsconfig.json"
+    },
+    {
+      "path": "./packages/sso/tsconfig.json"
+    },
+    {
+      "path": "./packages/stripe/tsconfig.json"
+    },
+    {
+      "path": "./packages/telemetry/tsconfig.json"
+    },
+    {
+      "path": "./test/tsconfig.json"
+    }
+  ]
 }

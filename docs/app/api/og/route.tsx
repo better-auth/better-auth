@@ -1,11 +1,11 @@
 import { ImageResponse } from "@vercel/og";
-import { z } from "zod";
+import * as z from "zod";
 export const runtime = "edge";
 
 const ogSchema = z.object({
-	heading: z.string(),
-	mode: z.string(),
-	type: z.string(),
+	heading: z.string().default("Better Auth Documentation"),
+	mode: z.string().default("dark"),
+	type: z.string().default("documentation"),
 });
 export async function GET(req: Request) {
 	try {

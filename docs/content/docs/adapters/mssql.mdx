@@ -86,13 +86,31 @@ your database schema based on your Better Auth configuration and plugins.
   </tbody>
 </table>
 
-```bash title="Schema Generation"
+```package-install title="Schema Generation"
 npx @better-auth/cli@latest generate
 ```
 
-```bash title="Schema Migration"
+```package-install title="Schema Migration"
 npx @better-auth/cli@latest migrate
 ```
+
+## Joins (Experimental)
+
+Database joins is useful when Better-Auth needs to fetch related data from multiple tables in a single query.
+Endpoints like `/get-session`, `/get-full-organization` and many others benefit greatly from this feature,
+seeing upwards of 2x to 3x performance improvements depending on database latency.
+
+The Kysely MS SQL dialect supports joins out of the box since version `1.4.0`.
+To enable this feature, you need to set the `experimental.joins` option to `true` in your auth configuration.
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  experimental: { joins: true }
+});
+```
+<Callout type="warn">
+  It's possible that you may need to run migrations after enabling this feature.
+</Callout>
 
 ## Additional Information
 

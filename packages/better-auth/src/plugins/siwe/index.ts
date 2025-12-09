@@ -1,30 +1,37 @@
-import { APIError } from "../../api";
-import { createAuthEndpoint } from "@better-auth/core/api";
-import { setSessionCookie } from "../../cookies";
-import * as z from "zod";
-import type { InferOptionSchema } from "../../types";
 import type { BetterAuthPlugin } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import * as z from "zod";
+import { APIError } from "../../api";
+import { setSessionCookie } from "../../cookies";
+import { mergeSchema } from "../../db/schema";
+import type { InferOptionSchema, User } from "../../types";
+import { toChecksumAddress } from "../../utils/hashing";
+import { getOrigin } from "../../utils/url";
+import { schema } from "./schema";
 import type {
 	ENSLookupArgs,
 	ENSLookupResult,
 	SIWEVerifyMessageArgs,
 	WalletAddress,
 } from "./types";
-import type { User } from "../../types";
-import { schema } from "./schema";
-import { getOrigin } from "../../utils/url";
-import { toChecksumAddress } from "../../utils/hashing";
-import { mergeSchema } from "../../db/schema";
 
 export interface SIWEPluginOptions {
 	domain: string;
-	emailDomainName?: string;
-	anonymous?: boolean;
+	emailDomainName?: string | undefined;
+	anonymous?: boolean | undefined;
 	getNonce: () => Promise<string>;
 	verifyMessage: (args: SIWEVerifyMessageArgs) => Promise<boolean>;
-	ensLookup?: (args: ENSLookupArgs) => Promise<ENSLookupResult>;
-	schema?: InferOptionSchema<typeof schema>;
+	ensLookup?: ((args: ENSLookupArgs) => Promise<ENSLookupResult>) | undefined;
+	schema?: InferOptionSchema<typeof schema> | undefined;
 }
+
+const getSiweNonceBodySchema = z.object({
+	walletAddress: z
+		.string()
+		.regex(/^0[xX][a-fA-F0-9]{40}$/i)
+		.length(42),
+	chainId: z.number().int().positive().max(2147483647).optional().default(1),
+});
 
 export const siwe = (options: SIWEPluginOptions) =>
 	({
@@ -35,19 +42,7 @@ export const siwe = (options: SIWEPluginOptions) =>
 				"/siwe/nonce",
 				{
 					method: "POST",
-					body: z.object({
-						walletAddress: z
-							.string()
-							.regex(/^0[xX][a-fA-F0-9]{40}$/i)
-							.length(42),
-						chainId: z
-							.number()
-							.int()
-							.positive()
-							.max(2147483647)
-							.optional()
-							.default(1), // Default to Ethereum mainnet
-					}),
+					body: getSiweNonceBodySchema,
 				},
 				async (ctx) => {
 					const { walletAddress: rawWalletAddress, chainId } = ctx.body;
@@ -83,7 +78,7 @@ export const siwe = (options: SIWEPluginOptions) =>
 								.max(2147483647)
 								.optional()
 								.default(1),
-							email: z.string().email().optional(),
+							email: z.email().optional(),
 						})
 						.refine((data) => options.anonymous !== false || !!data.email, {
 							message:

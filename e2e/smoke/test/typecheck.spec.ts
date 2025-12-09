@@ -1,19 +1,33 @@
-import { test } from "node:test";
+import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
+import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
 const fixturesDir = fileURLToPath(new URL("./fixtures", import.meta.url));
+
 [
-	"tsconfig-declaration",
-	"tsconfig-exact-optional-property-types",
-	"tsconfig-verbatim-module-syntax-node10",
-	"tsconfig-isolated-module-bundler",
-].forEach((dir) => {
-	test(`typecheck ${dir}`, () => {
-		spawnSync("pnpm", ["run", "typecheck"], {
+	{ dir: "tsconfig-declaration", skip: false },
+	{ dir: "tsconfig-exact-optional-property-types", skip: false },
+	{ dir: "tsconfig-verbatim-module-syntax-node10", skip: false },
+	{ dir: "tsconfig-isolated-module-bundler", skip: false },
+].forEach(({ dir, skip }) => {
+	test(`typecheck ${dir}`, { skip }, () => {
+		const cwd = resolve(fixturesDir, dir);
+		const output = spawnSync("pnpm", ["run", "typecheck"], {
 			stdio: "inherit",
-			cwd: resolve(fixturesDir, dir),
+			cwd,
+			timeout: 10 * 1000, // 10 seconds
 		});
+		assert.equal(
+			output.error,
+			undefined,
+			`Running typecheck in ${cwd} should not throw an error`,
+		);
+		assert.equal(
+			output.status,
+			0,
+			`Running typecheck in ${cwd} should exit with status 0`,
+		);
 	});
 });

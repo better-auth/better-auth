@@ -1,33 +1,42 @@
-import * as z from "zod";
-import { createAuthEndpoint } from "@better-auth/core/api";
-import { createEmailVerificationToken } from "./email-verification";
-import { setSessionCookie } from "../../cookies";
-import { APIError } from "better-call";
-import type { AdditionalUserFieldsInput, User } from "../../types";
 import type { BetterAuthOptions } from "@better-auth/core";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { isDevelopment } from "@better-auth/core/env";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { runWithTransaction } from "@better-auth/core/context";
+import { isDevelopment } from "@better-auth/core/env";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { APIError } from "better-call";
+import * as z from "zod";
+import { setSessionCookie } from "../../cookies";
 import { parseUserInput } from "../../db";
+import { parseUserOutput } from "../../db/schema";
+import type { AdditionalUserFieldsInput, InferUser, User } from "../../types";
+import { createEmailVerificationToken } from "./email-verification";
+
+const signUpEmailBodySchema = z.record(z.string(), z.any());
 
 export const signUpEmail = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
 		"/sign-up/email",
 		{
 			method: "POST",
-			body: z.record(z.string(), z.any()),
+			operationId: "signUpWithEmailAndPassword",
+			body: signUpEmailBodySchema,
 			metadata: {
 				$Infer: {
 					body: {} as {
 						name: string;
 						email: string;
 						password: string;
-						image?: string;
-						callbackURL?: string;
-						rememberMe?: boolean;
+						image?: string | undefined;
+						callbackURL?: string | undefined;
+						rememberMe?: boolean | undefined;
 					} & AdditionalUserFieldsInput<O>,
+					returned: {} as {
+						token: string | null;
+						user: InferUser<O>;
+					},
 				},
 				openapi: {
+					operationId: "signUpWithEmailAndPassword",
 					description: "Sign up a user using email and password",
 					requestBody: {
 						content: {
@@ -164,8 +173,8 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				}
 				const body = ctx.body as any as User & {
 					password: string;
-					callbackURL?: string;
-					rememberMe?: boolean;
+					callbackURL?: string | undefined;
+					rememberMe?: boolean | undefined;
 				} & {
 					[key: string]: any;
 				};
@@ -244,7 +253,6 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					ctx.context.logger?.error("Failed to create user", e);
 					throw new APIError("UNPROCESSABLE_ENTITY", {
 						message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
-						details: e,
 					});
 				}
 				if (!createdUser) {
@@ -305,15 +313,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				) {
 					return ctx.json({
 						token: null,
-						user: {
-							id: createdUser.id,
-							email: createdUser.email,
-							name: createdUser.name,
-							image: createdUser.image,
-							emailVerified: createdUser.emailVerified,
-							createdAt: createdUser.createdAt,
-							updatedAt: createdUser.updatedAt,
-						},
+						user: parseUserOutput(
+							ctx.context.options,
+							createdUser,
+						) as InferUser<O>,
 					});
 				}
 
@@ -336,15 +339,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				);
 				return ctx.json({
 					token: session.token,
-					user: {
-						id: createdUser.id,
-						email: createdUser.email,
-						name: createdUser.name,
-						image: createdUser.image,
-						emailVerified: createdUser.emailVerified,
-						createdAt: createdUser.createdAt,
-						updatedAt: createdUser.updatedAt,
-					},
+					user: parseUserOutput(
+						ctx.context.options,
+						createdUser,
+					) as InferUser<O>,
 				});
 			});
 		},

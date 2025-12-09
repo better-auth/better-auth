@@ -1,7 +1,7 @@
-import { listenKeys } from "nanostores";
+import type { DependencyList } from "@lynx-js/react";
 import { useCallback, useRef, useSyncExternalStore } from "@lynx-js/react";
 import type { Store, StoreValue } from "nanostores";
-import type { DependencyList } from "@lynx-js/react";
+import { listenKeys } from "nanostores";
 
 type StoreKeys<T> = T extends { setKey: (k: infer K, v: any) => unknown }
 	? K
@@ -14,12 +14,12 @@ export interface UseStoreOptions<SomeStore> {
 	 * [store, options.keys]
 	 * ```
 	 */
-	deps?: DependencyList;
+	deps?: DependencyList | undefined;
 
 	/**
 	 * Will re-render components only on specific key changes.
 	 */
-	keys?: StoreKeys<SomeStore>[];
+	keys?: StoreKeys<SomeStore>[] | undefined;
 }
 
 /**

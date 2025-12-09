@@ -1,14 +1,15 @@
+import type { JSONWebKeySet } from "jose";
+import { createLocalJWKSet, jwtVerify } from "jose";
 import { describe, expect, it } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
-import { jwtClient } from "./client";
+import { getTestInstance } from "../../test-utils/test-instance";
 import { jwt } from ".";
-import { createLocalJWKSet, jwtVerify, type JSONWebKeySet } from "jose";
-import type { JwtOptions, JWKOptions } from "./types";
+import { jwtClient } from "./client";
+import type { JWKOptions, Jwk, JwtOptions } from "./types";
 import { generateExportedKeyPair } from "./utils";
 
 describe("jwt", async () => {
-	// Testing the default behaviour
+	// Testing the default behavior
 	const { auth, signInWithTestUser } = await getTestInstance({
 		plugins: [jwt()],
 		logger: {
@@ -100,7 +101,12 @@ describe("jwt", async () => {
 
 	const algorithmsToTest: {
 		keyPairConfig: JWKOptions;
-		expectedOutcome: { ec: string; length: number; crv?: string; alg: string };
+		expectedOutcome: {
+			ec: string;
+			length: number;
+			crv?: string | undefined;
+			alg: string;
+		};
 	}[] = [
 		{
 			keyPairConfig: {
@@ -357,6 +363,12 @@ describe.each([
 		const jwks = await auth.api.getJwks();
 		const localJwks = createLocalJWKSet(jwks);
 		const decoded = await jwtVerify(jwt?.token!, localJwks);
+
+		// Verify the kid from the JWT exists in the JWKS
+		const kidFromJwt = decoded.protectedHeader.kid;
+		const keyExists = jwks.keys.some((key) => key.kid === kidFromJwt);
+		expect(keyExists).toBe(true);
+
 		expect(decoded).toMatchObject({
 			payload: {
 				iss: "https://example.com",
@@ -368,7 +380,7 @@ describe.each([
 			},
 			protectedHeader: {
 				alg: keyPairConfig.alg,
-				kid: jwks.keys[0]!.kid,
+				kid: expect.any(String),
 			},
 		});
 	});
@@ -694,5 +706,73 @@ describe("jwt - remote url", async () => {
 			},
 		});
 		expect(jwtHeader).toBeTruthy();
+	});
+});
+
+describe("jwt - custom adapter", async () => {
+	it("should use custom adapter", async () => {
+		const storage: Jwk[] = [];
+		const { auth } = await getTestInstance({
+			plugins: [
+				jwt({
+					adapter: {
+						getJwks: async () => {
+							return storage;
+						},
+						createJwk: async (data) => {
+							const key = {
+								...data,
+								id: crypto.randomUUID(),
+								createdAt: new Date(),
+							};
+							storage.push(key);
+							return key;
+						},
+					},
+				}),
+			],
+		});
+		const token = await auth.api.signJWT({
+			body: {
+				payload: {
+					sub: "123",
+				},
+			},
+		});
+		expect(token?.token).toBeDefined();
+		expect(storage.length).toBe(1);
+	});
+});
+
+describe("jwt - custom jwksPath", async () => {
+	it("should use custom jwksPath when specified", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				jwt({
+					jwks: {
+						jwksPath: "/.well-known/jwks.json",
+					},
+				}),
+			],
+		});
+
+		const client = createAuthClient({
+			plugins: [jwtClient({ jwks: { jwksPath: "/.well-known/jwks.json" } })],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return auth.handler(new Request(url, init));
+				},
+			},
+		});
+
+		const jwks = await client.jwks();
+		expect(jwks.error).toBeNull();
+		expect(jwks.data?.keys).toBeDefined();
+		expect(jwks.data?.keys.length).toBeGreaterThan(0);
+
+		// Verify old /jwks endpoint is not found
+		const oldJwks = await client.$fetch<JSONWebKeySet>("/jwks");
+		expect(oldJwks.error?.status).toBe(404);
 	});
 });

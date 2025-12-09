@@ -256,6 +256,10 @@ export const auth = betterAuth({
   - `otp`: The OTP to send.
   - `type`: The type of OTP to send. Can be "sign-in", "email-verification", or "forget-password".
 
+  <Callout type="warn">
+  It is recommended to not await the email sending to avoid timing attacks. On serverless platforms, use `waitUntil` or similar to ensure the email is sent.
+  </Callout>
+
 - `otpLength`: The length of the OTP. Defaults to `6`.
 
 - `expiresIn`: The expiry time of the OTP in seconds. Defaults to `300` seconds.
@@ -296,7 +300,7 @@ export const auth = betterAuth({
 
 When the maximum attempts are exceeded, the `verifyOTP`, `signIn.emailOtp`, `verifyEmail`, and `resetPassword` methods will return an error with code `TOO_MANY_ATTEMPTS`.
 
-- `storeOTP`: The method to store the OTP in your database, wether `encrypted`, `hashed` or `plain` text. Default is `plain` text.
+- `storeOTP`: The method to store the OTP in your database, whether `encrypted`, `hashed` or `plain` text. Default is `plain` text.
 
 <Callout>
 Note: This will not affect the OTP sent to the user, it will only affect the OTP stored in your database.
