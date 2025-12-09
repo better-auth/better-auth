@@ -1657,3 +1657,140 @@ export const userHasPermission = <O extends AdminOptions>(opts: O) => {
 		},
 	);
 };
+
+const userHasRoleBodySchema = z.object({
+	userId: z.coerce.string().meta({
+		description: "The user id",
+	}),
+	role: z
+		.union([
+			z.string().meta({
+				description: "The role to check for",
+			}),
+			z.array(
+				z.string().meta({
+					description: "The roles to check for",
+				}),
+			),
+		])
+		.meta({
+			description:
+				"The role to check for, this can be a string or an array of strings. Eg: `admin` or `[admin, user]`",
+		}),
+});
+
+/**
+ * ### Endpoint
+ *
+ * POST `/admin/has-role`
+ *
+ * ### API Methods
+ *
+ * **server:**
+ * `auth.api.userHasRole`
+ *
+ * **client:**
+ * `authClient.admin.hasRole`
+ */
+export const userHasRole = <O extends AdminOptions>(opts: O) => {
+	return createAuthEndpoint(
+		"/admin/has-role",
+		{
+			method: "POST",
+			body: userHasRoleBodySchema,
+			use: [adminMiddleware],
+			metadata: {
+				openapi: {
+					operationId: "userHasRole",
+					summary: "Check if user has role",
+					description: "Check if a user has a specific role",
+					requestBody: {
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										userId: {
+											type: "string",
+											description: "The id of the user",
+										},
+										role: {
+											type: "string",
+											description: "The role to check for",
+										},
+									},
+									required: ["userId", "role"],
+								},
+							},
+						},
+					},
+					responses: {
+						"200": {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											error: {
+												type: "string",
+											},
+											success: {
+												type: "boolean",
+											},
+										},
+										required: ["success"],
+									},
+								},
+							},
+						},
+					},
+				},
+				$Infer: {
+					body: {} as {
+						userId: string;
+						role: InferAdminRolesFromOption<O> | InferAdminRolesFromOption<O>[];
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			if (!ctx.body.role || !ctx.body.userId) {
+				throw new APIError("BAD_REQUEST", {
+					message: "invalid role check. user id and role are required",
+				});
+			}
+
+			const session = await getSessionFromCtx(ctx);
+
+			if (!session && (ctx.request || ctx.headers)) {
+				throw new APIError("UNAUTHORIZED");
+			}
+			const user = (await ctx.context.internalAdapter.findUserById(
+				ctx.body.userId as string,
+			)) as { role?: string | undefined; id: string } | null;
+			if (!user) {
+				throw new APIError("NOT_FOUND", {
+					message: "user not found",
+				});
+			}
+
+			if (user.role === undefined) {
+				throw new APIError("BAD_REQUEST", {
+					message: "user has no role",
+				});
+			}
+
+			const userRoles = user.role.split(",");
+			const roles = Array.isArray(ctx.body.role)
+				? ctx.body.role
+				: [ctx.body.role];
+			const result = roles.every((role) => userRoles.includes(role));
+
+			return ctx.json({
+				error: null,
+				success: result,
+			});
+		},
+	);
+};
