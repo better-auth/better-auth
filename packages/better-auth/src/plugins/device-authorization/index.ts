@@ -18,7 +18,7 @@ const msStringValueSchema = z.custom<MSStringValue>(
 	(val) => {
 		try {
 			ms(val as MSStringValue);
-		} catch (e) {
+		} catch {
 			return false;
 		}
 		return true;

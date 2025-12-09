@@ -96,7 +96,7 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 		if (isLoading) document.getElementById("nd-ai-input")?.focus();
 	}, [isLoading]);
 
-	const { isMobile, ...formProps } = props;
+	const { isMobile: _isMobile, ...formProps } = props;
 
 	return (
 		<div
@@ -305,7 +305,7 @@ function List(
 		return () => container.removeEventListener("scroll", handleScroll);
 	}, []);
 
-	const { messageCount, ...divProps } = props;
+	const { messageCount: _messageCount, ...divProps } = props;
 
 	return (
 		<div
@@ -504,9 +504,6 @@ export function AISearchTrigger() {
 			api: "/api/chat",
 		}),
 	});
-
-	const showSuggestions =
-		chat.messages.length === 0 && chat.status !== "streaming";
 
 	const onKeyPress = (e: KeyboardEvent) => {
 		if (e.key === "Escape" && open) {

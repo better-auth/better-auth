@@ -92,10 +92,10 @@ describe("dynamic access control", async (it) => {
 		},
 	});
 	const {
-		organization: { checkRolePermission, hasPermission, create },
+		organization: { create },
 	} = authClient;
 
-	const { headers, user, session } = await signInWithTestUser();
+	const { headers } = await signInWithTestUser();
 
 	async function createUser({ role }: { role: "admin" | "member" | "owner" }) {
 		const normalUserDetails = {
@@ -157,20 +157,12 @@ describe("dynamic access control", async (it) => {
 	if (!memberInfo) throw new Error("Member info not found");
 
 	// Create an admin user in the org.
-	const {
-		headers: adminHeaders,
-		user: adminUser,
-		member: adminMember,
-	} = await createUser({
+	const { headers: adminHeaders } = await createUser({
 		role: "admin",
 	});
 
 	// Create normal users in the org.
-	const {
-		headers: normalHeaders,
-		user: normalUser,
-		member: normalMember,
-	} = await createUser({
+	const { headers: normalHeaders, member: normalMember } = await createUser({
 		role: "member",
 	});
 
@@ -658,11 +650,7 @@ describe("dynamic access control", async (it) => {
 	 */
 	it("should not allow member to list roles using another member's permissions", async () => {
 		// Create a fresh member for this test to avoid role contamination
-		const {
-			headers: freshMemberHeaders,
-			user: freshMemberUser,
-			member: freshMember,
-		} = await createUser({
+		const { headers: freshMemberHeaders } = await createUser({
 			role: "member",
 		});
 
@@ -696,11 +684,7 @@ describe("dynamic access control", async (it) => {
 
 	it("should not allow member to get role details using another member's permissions", async () => {
 		// Create a fresh member for this test to avoid role contamination
-		const {
-			headers: freshMemberHeaders,
-			user: freshMemberUser,
-			member: freshMember,
-		} = await createUser({
+		const { headers: freshMemberHeaders } = await createUser({
 			role: "member",
 		});
 
@@ -737,11 +721,7 @@ describe("dynamic access control", async (it) => {
 
 	it("should not allow member to update roles without proper permissions (privilege escalation test)", async () => {
 		// Create a fresh member for this test to avoid role contamination
-		const {
-			headers: freshMemberHeaders,
-			user: freshMemberUser,
-			member: freshMember,
-		} = await createUser({
+		const { headers: freshMemberHeaders } = await createUser({
 			role: "member",
 		});
 
@@ -795,11 +775,7 @@ describe("dynamic access control", async (it) => {
 
 	it("should properly identify the correct member when checking permissions", async () => {
 		// Create a fresh member for this test to avoid role contamination
-		const {
-			headers: freshMemberHeaders,
-			user: freshMemberUser,
-			member: freshMember,
-		} = await createUser({
+		const { headers: freshMemberHeaders } = await createUser({
 			role: "member",
 		});
 
@@ -852,11 +828,7 @@ describe("dynamic access control", async (it) => {
 
 	it("should not allow cross-organization privilege escalation", async () => {
 		// Create a fresh member for this test to avoid role contamination
-		const {
-			headers: freshMemberHeaders,
-			user: freshMemberUser,
-			member: freshMember,
-		} = await createUser({
+		const { headers: freshMemberHeaders } = await createUser({
 			role: "member",
 		});
 

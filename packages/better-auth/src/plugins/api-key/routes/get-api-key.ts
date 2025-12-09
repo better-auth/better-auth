@@ -197,7 +197,7 @@ export function getApiKey({
 				apiKey.metadata as never as string,
 			);
 
-			const { key, ...returningApiKey } = apiKey;
+			const { key: _key, ...returningApiKey } = apiKey;
 
 			return ctx.json({
 				...returningApiKey,

@@ -1,5 +1,4 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { getWebcryptoSubtle } from "@better-auth/utils";
 import { exportJWK, generateKeyPair } from "jose";
 import { symmetricEncrypt } from "../../crypto";
 import { joseSecs } from "../../utils/time";
@@ -26,31 +25,6 @@ export function toExpJWT(
 	} else {
 		return iat + joseSecs(expirationTime);
 	}
-}
-
-async function deriveKey(secretKey: string): Promise<CryptoKey> {
-	const enc = new TextEncoder();
-	const subtle = getWebcryptoSubtle();
-	const keyMaterial = await subtle.importKey(
-		"raw",
-		enc.encode(secretKey),
-		{ name: "PBKDF2" },
-		false,
-		["deriveKey"],
-	);
-
-	return subtle.deriveKey(
-		{
-			name: "PBKDF2",
-			salt: enc.encode("encryption_salt"),
-			iterations: 100000,
-			hash: "SHA-256",
-		},
-		keyMaterial,
-		{ name: "AES-GCM", length: 256 },
-		false,
-		["encrypt", "decrypt"],
-	);
 }
 
 export async function generateExportedKeyPair(

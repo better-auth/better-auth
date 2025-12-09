@@ -252,7 +252,7 @@ describe("oauth2", async () => {
 	});
 
 	it("should work with custom redirect uri", async () => {
-		const { customFetchImpl, auth } = await getTestInstance({
+		const { customFetchImpl } = await getTestInstance({
 			plugins: [
 				genericOAuth({
 					config: [
@@ -908,7 +908,7 @@ describe("oauth2", async () => {
 			userInfoResponse.statusCode = 200;
 		});
 
-		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+		const { customFetchImpl, cookieSetter } = await getTestInstance({
 			plugins: [
 				genericOAuth({
 					config: [

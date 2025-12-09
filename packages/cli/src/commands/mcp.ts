@@ -62,7 +62,7 @@ async function handleCursorAction(mcpUrl: string, mcpName: string) {
 
 		execSync(command, { stdio: "inherit" });
 		console.log(chalk.green("\n✓ Cursor MCP installed successfully!"));
-	} catch (error) {
+	} catch {
 		console.log(
 			chalk.yellow(
 				"\n⚠ Could not automatically open Cursor. Please copy the deeplink URL above and open it manually.",
@@ -93,7 +93,7 @@ function handleClaudeCodeAction(mcpUrl: string) {
 	try {
 		execSync(command, { stdio: "inherit" });
 		console.log(chalk.green("\n✓ Claude Code MCP installed successfully!"));
-	} catch (error) {
+	} catch {
 		console.log(
 			chalk.yellow(
 				"\n⚠ Could not automatically add to Claude Code. Please run this command manually:",
@@ -155,7 +155,7 @@ function handleOpenCodeAction(mcpUrl: string) {
 			chalk.green(`\n✓ Open Code configuration written to ${configPath}`),
 		);
 		console.log(chalk.green("✓ Better Auth MCP added successfully!"));
-	} catch (error) {
+	} catch {
 		console.log(
 			chalk.yellow(
 				"\n⚠ Could not automatically write opencode.json. Please add this configuration manually:",
@@ -197,7 +197,7 @@ function handleManualAction(mcpUrl: string, mcpName: string) {
 		fs.writeFileSync(configPath, JSON.stringify(mergedConfig, null, 2));
 		console.log(chalk.green(`\n✓ MCP configuration written to ${configPath}`));
 		console.log(chalk.green("✓ Better Auth MCP added successfully!"));
-	} catch (error) {
+	} catch {
 		console.log(
 			chalk.yellow(
 				"\n⚠ Could not automatically write mcp.json. Please add this configuration manually:",

@@ -99,7 +99,7 @@ export const mongodbAdapter = (
 								if (typeof v === "string") {
 									try {
 										return new ObjectId(v);
-									} catch (e) {
+									} catch {
 										return v;
 									}
 								}
@@ -117,7 +117,7 @@ export const mongodbAdapter = (
 					}
 					try {
 						return new ObjectId(value);
-					} catch (e) {
+					} catch {
 						return value;
 					}
 				}
@@ -613,7 +613,7 @@ export const mongodbAdapter = (
 								try {
 									const oid = new ObjectId(v);
 									return oid;
-								} catch (error) {
+								} catch {
 									return v;
 								}
 							}
@@ -624,7 +624,7 @@ export const mongodbAdapter = (
 						try {
 							const oid = new ObjectId(data);
 							return oid;
-						} catch (error) {
+						} catch {
 							return data;
 						}
 					}

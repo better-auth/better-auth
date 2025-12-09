@@ -18,7 +18,7 @@ function getMethod(
 		| undefined,
 ) {
 	const method = knownPathMethods[path];
-	const { fetchOptions, query, ...body } = args || {};
+	const { fetchOptions, query: _query, ...body } = args || {};
 	if (method) {
 		return method;
 	}

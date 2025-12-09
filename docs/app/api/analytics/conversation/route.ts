@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
 		});
 
 		return NextResponse.json(result);
-	} catch (error) {
+	} catch {
 		return NextResponse.json(
 			{ error: "Failed to log conversation" },
 			{ status: 500 },

@@ -201,7 +201,7 @@ describe("forget password", async (it) => {
 		});
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(1000 * 9);
-		const callbackRes = await client.$fetch("/reset-password/:token", {
+		await client.$fetch("/reset-password/:token", {
 			params: {
 				token,
 			},

@@ -180,7 +180,7 @@ export function listApiKeys({
 			});
 
 			let returningApiKey = apiKeys.map((x) => {
-				const { key, ...returningApiKey } = x;
+				const { key: _key, ...returningApiKey } = x;
 				return {
 					...returningApiKey,
 					permissions: returningApiKey.permissions

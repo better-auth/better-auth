@@ -1,5 +1,4 @@
 "use client";
-import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 function Method({ method }: { method: "POST" | "GET" | "DELETE" | "PUT" }) {
@@ -21,7 +20,6 @@ export function Endpoint({
 	isServerOnly?: boolean;
 	className?: string;
 }) {
-	const [copying, setCopying] = useState(false);
 	return (
 		<div
 			className={cn(

@@ -112,7 +112,7 @@ async function getPostgresSchema(db: Kysely<unknown>): Promise<string> {
 				.filter((s) => !s.startsWith("$"));
 			return schemas[0] || "public";
 		}
-	} catch (error) {
+	} catch {
 		// If query fails, fall back to public schema
 	}
 	return "public";

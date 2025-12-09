@@ -328,7 +328,7 @@ export const linkSocialAccount = createAuthEndpoint(
 					refreshToken: c.body.idToken.refreshToken,
 					scope: c.body.idToken.scopes?.join(","),
 				});
-			} catch (e: any) {
+			} catch {
 				throw new APIError("EXPECTATION_FAILED", {
 					message: "Account not linked - unable to create account",
 				});

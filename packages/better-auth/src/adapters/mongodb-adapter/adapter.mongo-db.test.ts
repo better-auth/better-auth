@@ -15,10 +15,7 @@ const dbClient = async (connectionString: string, dbName: string) => {
 	return { db, client };
 };
 
-const { db, client } = await dbClient(
-	"mongodb://127.0.0.1:27017",
-	"better-auth",
-);
+const { db } = await dbClient("mongodb://127.0.0.1:27017", "better-auth");
 
 const { execute } = await testAdapter({
 	adapter: (options) => {

@@ -331,9 +331,7 @@ export const getNormalTestSuiteTests = (
 			const users: User[] = [];
 			const sessions: Session[] = [];
 			const accounts: Account[] = [];
-			let i = -1;
 			for (const _ of Array.from({ length: 3 })) {
-				i++;
 				const user = await adapter.create<User>({
 					model: "user",
 					data: {
@@ -2401,7 +2399,7 @@ export const getNormalTestSuiteTests = (
 				});
 
 				// Add a member to the organization
-				const member = await adapter.create<Member>({
+				await adapter.create<Member>({
 					model: "member",
 					data: {
 						organizationId: organizationData.id,
@@ -2413,7 +2411,7 @@ export const getNormalTestSuiteTests = (
 				});
 
 				// Create a team for the organization
-				const team = await adapter.create<Team>({
+				await adapter.create<Team>({
 					model: "team",
 					data: {
 						name: "Test Team",

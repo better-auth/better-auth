@@ -179,7 +179,6 @@ describe("call", async () => {
 			],
 		},
 	} satisfies BetterAuthPlugin;
-	let latestOauthStore: Record<string, any> | undefined = {};
 	const options = {
 		baseURL: "http://localhost:3000",
 		plugins: [testPlugin, testPlugin2, bearer()],

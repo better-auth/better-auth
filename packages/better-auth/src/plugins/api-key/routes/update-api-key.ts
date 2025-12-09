@@ -452,7 +452,7 @@ export function updateApiKey({
 				newApiKey.metadata as never as string,
 			);
 
-			const { key, ...returningApiKey } = newApiKey;
+			const { key: _key, ...returningApiKey } = newApiKey;
 
 			return ctx.json({
 				...returningApiKey,

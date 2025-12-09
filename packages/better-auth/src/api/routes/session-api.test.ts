@@ -142,7 +142,7 @@ describe("session", async () => {
 
 	it("should handle 'don't remember me' option", async () => {
 		let headers = new Headers();
-		const res = await client.signIn.email(
+		await client.signIn.email(
 			{
 				email: testUser.email,
 				password: testUser.password,
@@ -221,7 +221,7 @@ describe("session", async () => {
 
 	it("should clear session on sign out", async () => {
 		let headers = new Headers();
-		const res = await client.signIn.email(
+		await client.signIn.email(
 			{
 				email: testUser.email,
 				password: testUser.password,
@@ -275,7 +275,7 @@ describe("session", async () => {
 	it("should revoke session", async () => {
 		const headers = new Headers();
 		const headers2 = new Headers();
-		const res = await client.signIn.email({
+		await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
 			fetchOptions: {
@@ -373,7 +373,7 @@ describe("session", async () => {
 
 describe("session storage", async () => {
 	let store = new Map<string, string>();
-	const { client, signInWithTestUser, db } = await getTestInstance({
+	const { client, signInWithTestUser } = await getTestInstance({
 		secondaryStorage: {
 			set(key, value, ttl) {
 				store.set(key, value);
@@ -454,7 +454,7 @@ describe("session storage", async () => {
 		await runWithUser(async () => {
 			const session = await client.getSession();
 			expect(session.data).not.toBeNull();
-			const res = await client.revokeSession({
+			await client.revokeSession({
 				token: session.data?.session?.token || "",
 			});
 			const revokedSession = await client.getSession();
@@ -1121,7 +1121,6 @@ describe("cookie cache versioning", async () => {
 			client: client1,
 			testUser: testUser1,
 			cookieSetter: cookieSetter1,
-			auth: auth1,
 		} = await getTestInstance({
 			session: {
 				cookieCache: {
@@ -1153,16 +1152,15 @@ describe("cookie cache versioning", async () => {
 		expect(session1.data?.user.email).toBe(testUser1.email);
 
 		// Create new instance with version "2" using same cookies
-		const { client: client2, cookieSetter: cookieSetter2 } =
-			await getTestInstance({
-				session: {
-					cookieCache: {
-						enabled: true,
-						strategy: "jwe",
-						version: "2",
-					},
+		const { client: client2 } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe",
+					version: "2",
 				},
-			});
+			},
+		});
 
 		// Try to get session with old cookies but new version - should invalidate cache
 		const session2 = await client2.getSession({

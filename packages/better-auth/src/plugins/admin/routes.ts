@@ -638,7 +638,7 @@ export const listUsers = (opts: AdminOptions) =>
 					limit: Number(ctx.query?.limit) || undefined,
 					offset: Number(ctx.query?.offset) || undefined,
 				});
-			} catch (e) {
+			} catch {
 				return ctx.json({
 					users: [],
 					total: 0,

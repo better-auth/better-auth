@@ -382,7 +382,7 @@ describe("Social Providers", async (c) => {
 				expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
 			},
 		});
-		const accounts = await client.listAccounts({
+		await client.listAccounts({
 			fetchOptions: { headers },
 		});
 		await client.$fetch("/refresh-token", {

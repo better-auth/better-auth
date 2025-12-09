@@ -326,7 +326,7 @@ describe("Admin plugin", async () => {
 	});
 
 	it("should allow to filter users by role", async () => {
-		const res = await client.admin.listUsers({
+		await client.admin.listUsers({
 			query: {
 				filterValue: "admin",
 				filterField: "role",
@@ -958,46 +958,41 @@ describe("access control", async (it) => {
 		order: ["read"],
 	});
 
-	const {
-		signInWithTestUser,
-		signInWithUser,
-		cookieSetter,
-		auth,
-		customFetchImpl,
-	} = await getTestInstance(
-		{
-			plugins: [
-				admin({
-					ac,
-					roles: {
-						admin: adminAc,
-						user: userAc,
-					},
-				}),
-			],
-			databaseHooks: {
-				user: {
-					create: {
-						before: async (user) => {
-							if (user.name === "Admin") {
-								return {
-									data: {
-										...user,
-										role: "admin",
-									},
-								};
-							}
+	const { signInWithTestUser, cookieSetter, auth, customFetchImpl } =
+		await getTestInstance(
+			{
+				plugins: [
+					admin({
+						ac,
+						roles: {
+							admin: adminAc,
+							user: userAc,
+						},
+					}),
+				],
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => {
+								if (user.name === "Admin") {
+									return {
+										data: {
+											...user,
+											role: "admin",
+										},
+									};
+								}
+							},
 						},
 					},
 				},
 			},
-		},
-		{
-			testUser: {
-				name: "Admin",
+			{
+				testUser: {
+					name: "Admin",
+				},
 			},
-		},
-	);
+		);
 
 	const client = createAuthClient({
 		plugins: [

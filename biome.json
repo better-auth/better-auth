@@ -50,7 +50,8 @@
         "noUselessTypeConstraint": "warn"
       },
       "correctness": {
-        "noUnusedImports": "warn"
+        "noUnusedImports": "warn",
+        "noUnusedVariables": "warn"
       },
       "nursery": {
         "noMisusedPromises": "error",

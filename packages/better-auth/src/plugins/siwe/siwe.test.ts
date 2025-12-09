@@ -508,7 +508,7 @@ describe("siwe", async (it) => {
 			walletAddress: walletAddress.toUpperCase(),
 			chainId,
 		});
-		const { data: data2, error: error2 } = await client.siwe.verify({
+		const { data: data2 } = await client.siwe.verify({
 			message: "valid_message",
 			signature: "valid_signature",
 			walletAddress: walletAddress.toUpperCase(),

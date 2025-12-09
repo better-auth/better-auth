@@ -25,7 +25,7 @@ interface AuthorizePageProps {
 export default async function AuthorizePage({
 	searchParams,
 }: AuthorizePageProps) {
-	const { redirect_uri, scope, client_id, cancel_uri } = await searchParams;
+	const { scope, client_id } = await searchParams;
 	const session = await auth.api.getSession({
 		headers: await headers(),
 	});

@@ -62,7 +62,7 @@ export const bearer = (options?: BearerOptions | undefined) => {
 							if (!isValid) {
 								return;
 							}
-						} catch (e) {
+						} catch {
 							return;
 						}
 						const existingHeaders = (c.request?.headers ||

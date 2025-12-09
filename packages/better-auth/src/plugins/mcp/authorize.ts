@@ -203,7 +203,7 @@ export async function authorizeMCPOAuth(
 			identifier: code,
 			expiresAt,
 		});
-	} catch (e) {
+	} catch {
 		throw ctx.redirect(
 			redirectErrorURL(
 				query.redirect_uri,

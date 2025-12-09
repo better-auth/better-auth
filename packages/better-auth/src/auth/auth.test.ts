@@ -71,7 +71,7 @@ describe("auth type", () => {
 describe("auth with trusted proxy headers", () => {
 	test("shouldn't infer base url from proxy headers if trusted", async () => {
 		let baseURL: string | undefined;
-		const { auth, customFetchImpl } = await getTestInstance({
+		const { customFetchImpl } = await getTestInstance({
 			baseURL: undefined,
 			advanced: {
 				trustedProxyHeaders: true,
@@ -88,7 +88,7 @@ describe("auth with trusted proxy headers", () => {
 			},
 			baseURL: "http://localhost:3000",
 		});
-		const res = await client.$fetch("/ok", {
+		await client.$fetch("/ok", {
 			headers: {
 				"x-forwarded-host": "localhost:3001",
 				"x-forwarded-proto": "http",
@@ -115,7 +115,7 @@ describe("auth with trusted proxy headers", () => {
 			},
 			baseURL: "http://localhost:3000",
 		});
-		const res = await client.$fetch("/ok", {
+		await client.$fetch("/ok", {
 			headers: {
 				"x-forwarded-host": "localhost:3001",
 				"x-forwarded-proto": "http",

@@ -235,8 +235,6 @@ export function CodeBlockTabs({ ref, ...props }: ComponentProps<typeof Tabs>) {
 	);
 }
 export function CodeBlockTabsList(props: ComponentProps<typeof TabsList>) {
-	const { containerRef, nested } = useContext(TabsContext)!;
-
 	return (
 		<TabsList
 			{...props}

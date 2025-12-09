@@ -1,7 +1,6 @@
 "use client";
 
 import { AlertCircle, Loader2 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -22,7 +21,6 @@ export default function RegisterOAuthClient() {
 	const [redirectUri, setRedirectUri] = useState("");
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const router = useRouter();
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -34,7 +32,7 @@ export default function RegisterOAuthClient() {
 			setIsSubmitting(false);
 			return;
 		}
-		const res = await client.oauth2.register({
+		await client.oauth2.register({
 			client_name: name,
 			redirect_uris: [redirectUri],
 		});
@@ -101,13 +99,4 @@ export default function RegisterOAuthClient() {
 			</Card>
 		</div>
 	);
-}
-
-async function convertImageToBase64(file: File): Promise<string> {
-	return new Promise((resolve, reject) => {
-		const reader = new FileReader();
-		reader.onloadend = () => resolve(reader.result as string);
-		reader.onerror = reject;
-		reader.readAsDataURL(file);
-	});
 }

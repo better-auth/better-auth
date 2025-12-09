@@ -37,7 +37,7 @@ export const generateDrizzleSchema = async (
 			if (resolvedPath && typeof resolvedPath === "string" && require?.cache) {
 				delete require.cache[resolvedPath];
 			}
-		} catch (error) {}
+		} catch {}
 		return await import(x);
 	};
 

@@ -55,7 +55,7 @@ afterAll(() => server.close());
 
 describe("oauth-proxy", async () => {
 	it("should redirect to proxy url", async () => {
-		const { client, cookieSetter } = await getTestInstance({
+		const { client } = await getTestInstance({
 			plugins: [
 				oAuthProxy({
 					currentURL: "http://preview-localhost:3000",

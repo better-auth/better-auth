@@ -115,9 +115,6 @@ describe("internal adapter test", async () => {
 		map.clear();
 	});
 	const authContext = await init(opts);
-	const ctx = {
-		context: authContext,
-	} as GenericEndpointContext;
 	const internalAdapter = authContext.internalAdapter;
 
 	it("should create oauth user with custom generate id", async () => {

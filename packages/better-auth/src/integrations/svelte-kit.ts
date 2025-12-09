@@ -85,7 +85,7 @@ export const sveltekitCookies = (
 										domain: ops.domain,
 										maxAge: ops["max-age"],
 									});
-								} catch (e) {
+								} catch {
 									// this will avoid any issue related to already streamed response
 								}
 							}

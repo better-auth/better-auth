@@ -475,7 +475,7 @@ describe("device authorization flow", async () => {
 
 describe("device authorization with custom options", async () => {
 	it("should correctly store interval as milliseconds in database", async () => {
-		const { auth, client, db } = await getTestInstance({
+		const { auth, db } = await getTestInstance({
 			plugins: [
 				deviceAuthorization({
 					interval: "5s",
