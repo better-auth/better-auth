@@ -1,7 +1,5 @@
 import type { AsyncLocalStorage } from "node:async_hooks";
 
-export type { AsyncLocalStorage };
-
 /**
  * Due to the lack of AsyncLocalStorage in some environments (like Convex),
  *
