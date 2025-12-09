@@ -189,7 +189,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					email,
 					password,
 					image,
-					callbackURL,
+					callbackURL: _callbackURL,
 					rememberMe,
 					...rest
 				} = body;

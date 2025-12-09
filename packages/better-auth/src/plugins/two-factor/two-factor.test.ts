@@ -378,7 +378,7 @@ describe("two factor", async () => {
 			},
 		});
 		expect((res.data as any)?.twoFactorRedirect).toBe(true);
-		const otpRes = await client.twoFactor.sendOtp({
+		await client.twoFactor.sendOtp({
 			fetchOptions: {
 				headers,
 				onSuccess(context) {
@@ -650,7 +650,7 @@ describe("two factor auth API", async () => {
 
 describe("view backup codes", async () => {
 	const sendOTP = vi.fn();
-	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+	const { auth, signInWithTestUser, testUser } = await getTestInstance({
 		secret: DEFAULT_SECRET,
 		plugins: [
 			twoFactor({

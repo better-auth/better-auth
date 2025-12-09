@@ -25,7 +25,7 @@ export function getPrismaVersion(cwd?: string): number | null {
 		// Handles versions like "^5.0.0", "~7.1.0", "7.0.0", etc.
 		const match = prismaVersion.match(/(\d+)/);
 		return match ? parseInt(match[1], 10) : null;
-	} catch (error) {
+	} catch {
 		// If package.json doesn't exist or can't be read, return null
 		return null;
 	}

@@ -122,7 +122,7 @@ export function getWithHooks(
 		return updated;
 	}
 
-	async function updateManyWithHooks<T extends Record<string, any>>(
+	async function updateManyWithHooks<_T extends Record<string, any>>(
 		data: any,
 		where: Where[],
 		model: BaseModelNames,
@@ -198,7 +198,7 @@ export function getWithHooks(
 				limit: 1,
 			});
 			entityToDelete = entities[0] || null;
-		} catch (error) {
+		} catch {
 			// If we can't find the entity, we'll still proceed with deletion
 		}
 
@@ -258,7 +258,7 @@ export function getWithHooks(
 				model,
 				where,
 			});
-		} catch (error) {
+		} catch {
 			// If we can't find the entities, we'll still proceed with deletion
 		}
 

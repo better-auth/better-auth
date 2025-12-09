@@ -21,28 +21,27 @@ describe("mcp", async () => {
 	const baseURL = `http://localhost:${port}`;
 	await tempServer.close();
 
-	const { auth, signInWithTestUser, customFetchImpl, testUser, cookieSetter } =
-		await getTestInstance({
-			baseURL,
-			plugins: [
-				mcp({
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL,
+		plugins: [
+			mcp({
+				loginPage: "/login",
+				oidcConfig: {
 					loginPage: "/login",
-					oidcConfig: {
-						loginPage: "/login",
-						consentPage: "/oauth/consent",
-						requirePKCE: true,
+					consentPage: "/oauth/consent",
+					requirePKCE: true,
 
-						getAdditionalUserInfoClaim(user, scopes, client) {
-							return {
-								custom: "custom value",
-								userId: user.id,
-							};
-						},
+					getAdditionalUserInfoClaim(user, scopes, client) {
+						return {
+							custom: "custom value",
+							userId: user.id,
+						};
 					},
-				}),
-				jwt(),
-			],
-		});
+				},
+			}),
+			jwt(),
+		],
+	});
 
 	const signInResult = await signInWithTestUser();
 	const headers = signInResult.headers;
@@ -472,7 +471,7 @@ describe("mcp", async () => {
 		});
 
 		// Perform OAuth flow
-		const data = await client.signIn.oauth2(
+		await client.signIn.oauth2(
 			{
 				providerId: "test-userinfo",
 				callbackURL: "/dashboard",

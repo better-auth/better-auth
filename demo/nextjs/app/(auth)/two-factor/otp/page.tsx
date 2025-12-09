@@ -26,7 +26,7 @@ export default function Component() {
 	const userEmail = "user@example.com";
 
 	const requestOTP = async () => {
-		const res = await client.twoFactor.sendOtp();
+		await client.twoFactor.sendOtp();
 		// In a real app, this would call your backend API to send the OTP
 		setMessage("OTP sent to your email");
 		setIsError(false);

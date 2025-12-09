@@ -1011,7 +1011,7 @@ async function initAction(opts: any) {
 					}
 				}
 			}
-		} catch (error) {
+		} catch {
 			// if fails, ignore, and do not proceed with ENV operations.
 		}
 	}
