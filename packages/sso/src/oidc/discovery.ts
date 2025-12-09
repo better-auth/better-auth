@@ -440,60 +440,33 @@ function parseURL(name: string, endpoint: string, base?: string) {
 /**
  * Select the token endpoint authentication method.
  *
- * Priority:
- * 1. Use existing config value if provided (user override)
- * 2. If IdP doesn't advertise methods, default to client_secret_basic
- * 3. Pick from supported methods (prefer client_secret_basic)
- * 4. Fail fast if IdP only supports methods we don't support
- *
- * Note: Better Auth currently only supports `client_secret_basic` and `client_secret_post`.
- * Other methods like `private_key_jwt` or `tls_client_auth` are rejected during discovery
- * to fail fast rather than producing cryptic errors during token exchange.
- *
  * @param doc - The discovery document
  * @param existing - Existing authentication method from config
  * @returns The selected authentication method
- * @throws DiscoveryError with code `unsupported_token_auth_method` if IdP only advertises unsupported methods
  */
 export function selectTokenEndpointAuthMethod(
 	doc: OIDCDiscoveryDocument,
 	existing?: "client_secret_basic" | "client_secret_post",
 ): "client_secret_basic" | "client_secret_post" {
-	// 1. If user explicitly configured a method, trust it
 	if (existing) {
 		return existing;
 	}
 
 	const supported = doc.token_endpoint_auth_methods_supported;
 
-	// 2. If IdP doesn't advertise anything, default to client_secret_basic
-	// Per OAuth 2.0 spec, client_secret_basic is the default
 	if (!supported || supported.length === 0) {
 		return "client_secret_basic";
 	}
 
-	// 3. Prefer client_secret_basic (OAuth 2.0 default)
 	if (supported.includes("client_secret_basic")) {
 		return "client_secret_basic";
 	}
 
-	// 4. Then client_secret_post
 	if (supported.includes("client_secret_post")) {
 		return "client_secret_post";
 	}
 
-	// 5. IdP only advertises methods we don't currently support (e.g., private_key_jwt)
-	// Fail fast with a clear error instead of silently falling back
-	throw new DiscoveryError(
-		"unsupported_token_auth_method",
-		"The IdP only advertises token endpoint authentication methods that Better Auth does not currently support. " +
-			`Supported by IdP: ${supported.join(", ")}. ` +
-			"Better Auth currently supports: client_secret_basic, client_secret_post.",
-		{
-			supported,
-			betterAuthSupports: ["client_secret_basic", "client_secret_post"],
-		},
-	);
+	return "client_secret_basic";
 }
 
 /**

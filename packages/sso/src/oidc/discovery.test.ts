@@ -306,33 +306,21 @@ describe("OIDC Discovery", () => {
 			expect(selectTokenEndpointAuthMethod(doc)).toBe("client_secret_post");
 		});
 
-		it("should throw unsupported_token_auth_method when only unsupported methods are advertised", () => {
+		it("should default to client_secret_basic when only unsupported methods are advertised", () => {
 			const doc = createMockDiscoveryDocument({
 				token_endpoint_auth_methods_supported: ["private_key_jwt"],
 			});
-			expect(() => selectTokenEndpointAuthMethod(doc)).toThrow(
-				expect.objectContaining({
-					code: "unsupported_token_auth_method",
-					details: expect.objectContaining({
-						supported: ["private_key_jwt"],
-						betterAuthSupports: ["client_secret_basic", "client_secret_post"],
-					}),
-				}),
-			);
+			expect(selectTokenEndpointAuthMethod(doc)).toBe("client_secret_basic");
 		});
 
-		it("should throw unsupported_token_auth_method for tls_client_auth only", () => {
+		it("should default to client_secret_basic for tls_client_auth only", () => {
 			const doc = createMockDiscoveryDocument({
 				token_endpoint_auth_methods_supported: [
 					"tls_client_auth",
 					"private_key_jwt",
 				],
 			});
-			expect(() => selectTokenEndpointAuthMethod(doc)).toThrow(
-				expect.objectContaining({
-					code: "unsupported_token_auth_method",
-				}),
-			);
+			expect(selectTokenEndpointAuthMethod(doc)).toBe("client_secret_basic");
 		});
 
 		it("should default to client_secret_basic if not specified in discovery", () => {
@@ -1032,7 +1020,7 @@ describe("OIDC Discovery", () => {
 			expect(result.scopesSupported).toEqual(["openid", "profile"]);
 		});
 
-		it("should throw unsupported_token_auth_method when IdP only supports methods we don't support", async () => {
+		it("should default to client_secret_basic when IdP only supports methods we don't support", async () => {
 			mockBetterFetch.mockResolvedValueOnce({
 				data: {
 					issuer,
@@ -1044,13 +1032,8 @@ describe("OIDC Discovery", () => {
 				error: null,
 			});
 
-			await expect(
-				discoverOIDCConfig({ issuer, isTrustedOrigin }),
-			).rejects.toThrow(
-				expect.objectContaining({
-					code: "unsupported_token_auth_method",
-				}),
-			);
+			const result = await discoverOIDCConfig({ issuer, isTrustedOrigin });
+			expect(result.tokenEndpointAuthentication).toBe("client_secret_basic");
 		});
 
 		it("should fill missing fields from discovery when existing config is partial", async () => {
