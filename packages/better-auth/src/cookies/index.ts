@@ -307,6 +307,21 @@ export function deleteSessionCookie(
 		maxAge: 0,
 	});
 
+	if (ctx.context.options.account?.storeAccountCookie) {
+		ctx.setCookie(ctx.context.authCookies.accountData.name, "", {
+			...ctx.context.authCookies.accountData.options,
+			maxAge: 0,
+		});
+	}
+
+	if (ctx.context.options.account?.storeStateStrategy === "cookie") {
+		const stateCookie = ctx.context.createAuthCookie("oauth_state");
+		ctx.setCookie(stateCookie.name, "", {
+			...stateCookie.attributes,
+			maxAge: 0,
+		});
+	}
+
 	// Use createSessionStore to clean up all session data chunks
 	const sessionStore = createSessionStore(
 		ctx.context.authCookies.sessionData.name,
