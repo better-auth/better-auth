@@ -200,6 +200,10 @@ type createSCIMUser = {
      * List of emails associated to the user, only a single email can be primary
     */
     emails?: Array<{ value: string, primary?: boolean }> = [{ value: "daniel@email.com", primary: true }]
+    /**
+     * Specifies whether the user is active or not
+    */
+    active?: boolean = true
 }
 ```
 </APIMethod>
@@ -236,6 +240,10 @@ type updateSCIMUser = {
      * List of emails associated to the user, only a single email can be primary
     */
     emails?: Array<{ value: string, primary?: boolean }> = [{ value: "daniel@email.com", primary: true }]
+    /**
+     * Specifies whether the user is active or not
+    */
+    active?: boolean = true
 }
 ```
 </APIMethod>
@@ -332,6 +340,7 @@ By default, the SCIM provisioning will automatically map the following fields:
 
 - `user.email`: User primary email or the first available email if there is not a primary one
 - `user.name`: Derived from `name` (`name.formatted` or `name.givenName` + `name.familyName`) and fallbacks to the user primary email
+- `user.active`: Shows whether the user account is active and defaults to `true`
 - `account.providerId`: Provider associated to the `SCIM` token
 - `account.accountId`: Defaults to `externalId` and fallbacks to `userName`
 - `member.organizationId`: Organization associated to the provider
