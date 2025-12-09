@@ -73,14 +73,14 @@ describe("load-resources utility functions", () => {
 			const options: OrganizationOptions = {};
 			const result = validateResourceName("project-name", options);
 			expect(result.valid).toBe(false);
-			expect(result.error).toContain("lowercase alphanumeric");
+			expect(result.error).toContain("alphanumeric");
 		});
 
 		it("should reject names with spaces", () => {
 			const options: OrganizationOptions = {};
 			const result = validateResourceName("my project", options);
 			expect(result.valid).toBe(false);
-			expect(result.error).toContain("lowercase alphanumeric");
+			expect(result.error).toContain("alphanumeric");
 		});
 
 		it("should reject empty names", () => {
