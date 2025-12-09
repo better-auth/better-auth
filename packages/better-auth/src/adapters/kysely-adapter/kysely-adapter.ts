@@ -141,6 +141,8 @@ export const kyselyAdapter = (
 						);
 						if (foundWhereKey) {
 							let value = foundWhereKey.value;
+							// If it's an `update` operation, and the `values` object contain the same unique field which
+							// was found in the where clause, it means the field is updated and we should use the new value.
 							if (foundWhereKey.field in values) {
 								value = values[foundWhereKey.field];
 							}
