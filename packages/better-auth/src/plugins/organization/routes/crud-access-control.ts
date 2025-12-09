@@ -1497,7 +1497,7 @@ async function validateAndExpandPermissions({
 	// Invalidate cache after updates
 	invalidateResourceCache(organizationId);
 
-	return [];
+	return resourcesToExpand.map((r) => r.resource);
 }
 
 async function checkIfMemberHasPermission({

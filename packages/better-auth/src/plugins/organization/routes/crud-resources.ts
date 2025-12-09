@@ -35,9 +35,13 @@ const getAdditionalFields = <
 	let additionalFields =
 		options?.schema?.organizationResource?.additionalFields || {};
 	if (shouldBePartial) {
-		for (const key in additionalFields) {
-			additionalFields[key]!.required = false;
-		}
+		// Clone the object to avoid mutating the original options
+		additionalFields = Object.fromEntries(
+			Object.entries(additionalFields).map(([key, field]) => [
+				key,
+				{ ...field, required: false },
+			]),
+		);
 	}
 	const additionalFieldsSchema = toZodSchema({
 		fields: additionalFields,
@@ -681,8 +685,11 @@ export const deleteOrgResource = <O extends OrganizationOptions>(
 			});
 
 			const rolesWithResource = rolesUsingResource.filter((role) => {
-				const permissions = safeJSONParse(role.permission) as Record<string, string[]>;
-				return resourceName in permissions;
+				const permissions = safeJSONParse(role.permission) as Record<
+					string,
+					string[]
+				>;
+				return permissions !== null && resourceName in permissions;
 			});
 
 			if (rolesWithResource.length > 0) {
@@ -855,7 +862,7 @@ export const listOrgResources = <O extends OrganizationOptions>(options: O) => {
 
 			const customResourceList = customResources.map((r) => ({
 				...r,
-				permissions: safeJSONParse(r.permissions) as string[],
+				permissions: (safeJSONParse(r.permissions) as string[]) ?? [],
 				isCustom: true,
 				isProtected: false,
 			})) as (OrganizationResource &
@@ -1027,9 +1034,8 @@ export const getOrgResource = <O extends OrganizationOptions>(options: O) => {
 			return ctx.json({
 				resource: {
 					...customResource,
-					permissions: safeJSONParse(
-						customResource.permissions,
-					) as string[],
+					permissions:
+						(safeJSONParse(customResource.permissions) as string[]) ?? [],
 					isCustom: true,
 					isProtected: false,
 				} as OrganizationResource &

@@ -49,9 +49,7 @@ export async function loadCustomResources(
 
 	for (const resource of resources) {
 		const permissions = safeJSONParse(resource.permissions);
-		const result = z
-			.array(z.string())
-			.safeParse(permissions);
+		const result = z.array(z.string()).safeParse(permissions);
 
 		if (!result.success) {
 			ctx.context.logger.error(
@@ -161,7 +159,7 @@ export function getReservedResourceNames(
 
 /**
  * Validate a resource name according to the rules:
- * - Must be lowercase alphanumeric with underscores
+ * - Must be alphanumeric with underscores
  * - Length between 1 and 50 characters
  * - Cannot be a reserved name
  * - Custom validation function if provided
