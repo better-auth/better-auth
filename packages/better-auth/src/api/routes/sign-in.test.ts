@@ -71,7 +71,7 @@ describe("sign-in", async (it) => {
 			}),
 		).rejects.toThrowError(
 			new APIError("FORBIDDEN", {
-				message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
+				message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED.message,
 			}),
 		);
 
@@ -102,7 +102,7 @@ describe("sign-in", async (it) => {
 			}),
 		).rejects.toThrowError(
 			new APIError("FORBIDDEN", {
-				message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
+				message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED.message,
 			}),
 		);
 

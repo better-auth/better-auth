@@ -1,7 +1,7 @@
 import type { AuthContext, BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
-import { APIError } from "better-call";
+import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../api";
 import { shimContext } from "../../utils/shim";
@@ -223,9 +223,10 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 				ctx.body.organizationId ||
 				ctx.context.session.session.activeOrganizationId;
 			if (!activeOrganizationId) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+				);
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const member = await adapter.findMemberByOrgId({
@@ -233,10 +234,10 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 				organizationId: activeOrganizationId,
 			});
 			if (!member) {
-				throw new APIError("UNAUTHORIZED", {
-					message:
-						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
-				});
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+				);
 			}
 			const result = await hasPermission(
 				{
