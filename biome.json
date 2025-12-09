@@ -25,7 +25,14 @@
             }
           },
           "level": "error"
-        }
+        },
+        "useImportType": {
+          "level": "error",
+          "options": {
+            "style": "separatedType"
+          }
+        },
+        "useNodejsImportProtocol": "error"
       },
       "recommended": false,
       "suspicious": {
@@ -74,6 +81,7 @@
     "includes": [
       "**",
       "!**/dist",
+      "!**/coverage",
       "!**/build",
       "!**/.next",
       "!**/.svelte-kit",

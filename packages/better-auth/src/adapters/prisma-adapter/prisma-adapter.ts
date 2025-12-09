@@ -1,16 +1,14 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type {
+	AdapterFactoryCustomizeAdapterCreator,
+	AdapterFactoryOptions,
 	DBAdapter,
 	DBAdapterDebugLogOption,
 	JoinConfig,
 	Where,
 } from "@better-auth/core/db/adapter";
+import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
-import {
-	type AdapterFactoryCustomizeAdapterCreator,
-	type AdapterFactoryOptions,
-	createAdapterFactory,
-} from "../adapter-factory";
 
 export interface PrismaConfig {
 	/**
@@ -150,7 +148,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						const [_foreignKey, foreignKeyAttributes] = foreignKeys[0] as any;
 						// Only check if field is explicitly marked as unique
 						const isUnique = foreignKeyAttributes?.unique === true;
-						return isUnique ? key : `${key}s`;
+						return isUnique || config.usePlural === true ? key : `${key}s`;
 					}
 
 					// Check backwards: does the base model have FKs to the joined model?
@@ -267,22 +265,17 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 
 					// transform join keys to use Prisma expected field names
 					let map = new Map<string, string>();
-					if (join) {
-						for (const [joinModel, value] of Object.entries(join)) {
-							const key = getJoinKeyName(model, joinModel, schema);
-							map.set(key, getModelName(joinModel));
-						}
+					for (const joinModel of Object.keys(join ?? {})) {
+						const key = getJoinKeyName(model, joinModel, schema);
+						map.set(key, getModelName(joinModel));
 					}
 
 					const selects = convertSelect(select, model, join);
 
-					let result = (
-						await db[model]!.findMany({
-							where: whereClause,
-							select: selects,
-							take: 1,
-						})
-					)[0];
+					let result = await db[model]!.findFirst({
+						where: whereClause,
+						select: selects,
+					});
 
 					// transform the resulting `include` items to use better-auth expected field names
 					if (join && result) {
@@ -369,6 +362,11 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					});
 				},
 				async updateMany({ model, where, update }) {
+					if (!db[model]) {
+						throw new BetterAuthError(
+							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
+						);
+					}
 					const whereClause = convertWhereClause(model, where);
 					const result = await db[model]!.updateMany({
 						where: whereClause,
@@ -377,6 +375,11 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					return result ? (result.count as number) : 0;
 				},
 				async delete({ model, where }) {
+					if (!db[model]) {
+						throw new BetterAuthError(
+							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
+						);
+					}
 					const whereClause = convertWhereClause(model, where);
 					try {
 						await db[model]!.delete({
@@ -408,6 +411,10 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
 			supportsUUIDs: config.provider === "postgresql" ? true : false,
+			supportsArrays:
+				config.provider === "postgresql" || config.provider === "mongodb"
+					? true
+					: false,
 			transaction:
 				(config.transaction ?? false)
 					? (cb) =>

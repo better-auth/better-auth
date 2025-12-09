@@ -1,4 +1,5 @@
-import { type AsyncLocalStorage, getAsyncLocalStorage } from "../async_hooks";
+import type { AsyncLocalStorage } from "../async_hooks";
+import { getAsyncLocalStorage } from "../async_hooks";
 
 export type RequestStateWeakMap = WeakMap<object, any>;
 

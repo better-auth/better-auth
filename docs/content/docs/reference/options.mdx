@@ -273,9 +273,10 @@ export const auth = betterAuth({
 		},
 		changeEmail: {
 			enabled: true,
-			sendChangeEmailVerification: async ({ user, newEmail, url, token }) => {
-				// Send change email verification
-			}
+			sendChangeEmailConfirmation: async ({ user, newEmail, url, token }) => {
+				// Send change email confirmation to the old email
+			},
+			updateEmailWithoutVerification: false // Update email without verification if user is not verified
 		},
 		deleteUser: {
 			enabled: true,
@@ -351,6 +352,7 @@ export const auth = betterAuth({
 			userId: "user_id"
 		},
 		encryptOAuthTokens: true, // Encrypt OAuth tokens before storing them in the database
+		storeAccountCookie: true, // Store account data after OAuth flow in a cookie (useful for database-less flows)
 		accountLinking: {
 			enabled: true,
 			trustedProviders: ["google", "github", "email-password"],
@@ -371,6 +373,13 @@ Encrypt OAuth tokens before storing them in the database. Default: `false`.
 
 If enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)
 will be updated on sign in with the latest data from the provider.
+
+### `storeAccountCookie`
+
+Store account data after OAuth flow in a cookie. This is useful for database-less flows where you want to store account information (access tokens, refresh tokens, etc.) in a cookie instead of the database.
+
+- Default: `false`
+- Automatically set to `true` if no database is provided
 
 ### `accountLinking`
 
@@ -465,10 +474,8 @@ export const auth = betterAuth({
 			httpOnly: true,
 			secure: true
 		},
-		oauthConfig: {
-			skipStateCookieCheck: false,
-			storeStateStrategy: "database"
-		},
+		// OAuth state configuration has been moved to account option
+		// Use account.storeStateStrategy and account.skipStateCookieCheck instead
 		cookiePrefix: "myapp",
 		database: {
 			// Use your own custom ID generator,
@@ -495,7 +502,7 @@ export const auth = betterAuth({
 - `defaultCookieAttributes`: Default attributes for all cookies
 - `cookiePrefix`: Prefix for cookies
 - `database`: Database configuration options
-- `oauthConfig`: OAuth configuration options
+- OAuth state configuration options (`storeStateStrategy`, `skipStateCookieCheck`) are now part of the `account` option
 
 ## `logger`
 
@@ -604,7 +611,39 @@ export const auth = betterAuth({
 			// Custom error handling
 			console.error("Auth error:", error);
 		},
-		errorURL: "/auth/error"
+		errorURL: "/auth/error",
+		customizeDefaultErrorPage: {
+			colors: {
+				background: "#ffffff",
+				foreground: "#000000",
+				primary: "#0070f3",
+				primaryForeground: "#ffffff",
+				mutedForeground: "#666666",
+				border: "#e0e0e0",
+				destructive: "#ef4444",
+				titleBorder: "#0070f3",
+				titleColor: "#000000",
+				gridColor: "#f0f0f0",
+				cardBackground: "#ffffff",
+				cornerBorder: "#0070f3"
+			},
+			size: {
+				radiusSm: "0.25rem",
+				radiusMd: "0.5rem",
+				radiusLg: "1rem",
+				textSm: "0.875rem",
+				text2xl: "1.5rem",
+				text4xl: "2.25rem",
+				text6xl: "3.75rem"
+			},
+			font: {
+				defaultFamily: "system-ui, sans-serif",
+				monoFamily: "monospace"
+			},
+			disableTitleBorder: false,
+			disableCornerDecorations: false,
+			disableBackgroundGrid: false
+		}
 	},
 })
 ```
@@ -612,6 +651,34 @@ export const auth = betterAuth({
 - `throw`: Throw an error on API error (default: `false`)
 - `onError`: Custom error handler
 - `errorURL`: URL to redirect to on error (default: `/api/auth/error`)
+- `customizeDefaultErrorPage`: Configure the default error page provided by Better Auth. Start your dev server and go to `/api/auth/error` to see the error page.
+  - `colors`: Customize color scheme for the error page
+    - `background`: Background color
+    - `foreground`: Foreground/text color
+    - `primary`: Primary accent color
+    - `primaryForeground`: Text color on primary background
+    - `mutedForeground`: Muted text color
+    - `border`: Border color
+    - `destructive`: Error/destructive color
+    - `titleBorder`: Border color for the title
+    - `titleColor`: Title text color
+    - `gridColor`: Background grid color
+    - `cardBackground`: Card background color
+    - `cornerBorder`: Corner decoration border color
+  - `size`: Customize sizing and spacing
+    - `radiusSm`: Small border radius
+    - `radiusMd`: Medium border radius
+    - `radiusLg`: Large border radius
+    - `textSm`: Small text size
+    - `text2xl`: 2xl text size
+    - `text4xl`: 4xl text size
+    - `text6xl`: 6xl text size
+  - `font`: Customize font families
+    - `defaultFamily`: Default font family
+    - `monoFamily`: Monospace font family
+  - `disableTitleBorder`: Disable the border around the title (default: `false`)
+  - `disableCornerDecorations`: Disable corner decorations (default: `false`)
+  - `disableBackgroundGrid`: Disable the background grid pattern (default: `false`)
 
 ## `hooks`
 

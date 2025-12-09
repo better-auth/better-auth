@@ -81,7 +81,7 @@ export interface SAMLConfig {
 	mapping?: SAMLMapping | undefined;
 }
 
-export type SSOProvider = {
+type BaseSSOProvider = {
 	issuer: string;
 	oidcConfig?: OIDCConfig | undefined;
 	samlConfig?: SAMLConfig | undefined;
@@ -90,6 +90,13 @@ export type SSOProvider = {
 	organizationId?: string | undefined;
 	domain: string;
 };
+
+export type SSOProvider<O extends SSOOptions> =
+	O["domainVerification"] extends { enabled: true }
+		? {
+				domainVerified: boolean;
+			} & BaseSSOProvider
+		: BaseSSOProvider;
 
 export interface SSOOptions {
 	/**
@@ -112,7 +119,7 @@ export interface SSOOptions {
 				/**
 				 * The SSO provider
 				 */
-				provider: SSOProvider;
+				provider: SSOProvider<SSOOptions>;
 		  }) => Promise<void>)
 		| undefined;
 	/**
@@ -138,7 +145,7 @@ export interface SSOOptions {
 					/**
 					 * The SSO provider
 					 */
-					provider: SSOProvider;
+					provider: SSOProvider<SSOOptions>;
 				}) => Promise<"member" | "admin">;
 		  }
 		| undefined;
@@ -178,6 +185,29 @@ export interface SSOOptions {
 	 */
 	disableImplicitSignUp?: boolean | undefined;
 	/**
+	 * The model name for the SSO provider table. Defaults to "ssoProvider".
+	 */
+	modelName?: string;
+	/**
+	 * Map fields
+	 *
+	 * @example
+	 * ```ts
+	 * {
+	 *  samlConfig: "saml_config"
+	 * }
+	 * ```
+	 */
+	fields?: {
+		issuer?: string | undefined;
+		oidcConfig?: string | undefined;
+		samlConfig?: string | undefined;
+		userId?: string | undefined;
+		providerId?: string | undefined;
+		organizationId?: string | undefined;
+		domain?: string | undefined;
+	};
+	/**
 	 * Configure the maximum number of SSO providers a user can register.
 	 * You can also pass a function that returns a number.
 	 * Set to 0 to disable SSO provider registration.
@@ -202,7 +232,31 @@ export interface SSOOptions {
 	 *
 	 * If you want to allow account linking for specific trusted providers, enable the `accountLinking` option in your auth config and specify those
 	 * providers in the `trustedProviders` list.
+	 *
 	 * @default false
+	 *
+	 * @deprecated This option is discouraged for new projects. Relying on provider-level `email_verified` is a weaker
+	 * trust signal compared to using `trustedProviders` in `accountLinking` or enabling `domainVerification` for SSO.
+	 * Existing configurations will continue to work, but new integrations should use explicit trust mechanisms.
+	 * This option may be removed in a future major version.
 	 */
 	trustEmailVerified?: boolean | undefined;
+	/**
+	 * Enable domain verification on SSO providers
+	 *
+	 * When this option is enabled, new SSO providers will require the associated domain to be verified by the owner
+	 * prior to allowing sign-ins.
+	 */
+	domainVerification?: {
+		/**
+		 * Enables or disables the domain verification feature
+		 */
+		enabled?: boolean;
+		/**
+		 * Prefix used to generate the domain verification token
+		 *
+		 * @default "better-auth-token-"
+		 */
+		tokenPrefix?: string;
+	};
 }

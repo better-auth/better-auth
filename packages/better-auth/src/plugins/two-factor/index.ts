@@ -14,11 +14,8 @@ import { symmetricEncrypt } from "../../crypto";
 import { generateRandomString } from "../../crypto/random";
 import { mergeSchema } from "../../db/schema";
 import { validatePassword } from "../../utils/password";
-import {
-	type BackupCodeOptions,
-	backupCode2fa,
-	generateBackupCodes,
-} from "./backup-codes";
+import type { BackupCodeOptions } from "./backup-codes";
+import { backupCode2fa, generateBackupCodes } from "./backup-codes";
 import {
 	TRUST_DEVICE_COOKIE_MAX_AGE,
 	TRUST_DEVICE_COOKIE_NAME,
@@ -31,6 +28,24 @@ import { totp2fa } from "./totp";
 import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
 
 export * from "./error-code";
+
+const enableTwoFactorBodySchema = z.object({
+	password: z.string().meta({
+		description: "User password",
+	}),
+	issuer: z
+		.string()
+		.meta({
+			description: "Custom issuer for the TOTP URI",
+		})
+		.optional(),
+});
+
+const disableTwoFactorBodySchema = z.object({
+	password: z.string().meta({
+		description: "User password",
+	}),
+});
 
 export const twoFactor = (options?: TwoFactorOptions | undefined) => {
 	const opts = {
@@ -69,17 +84,7 @@ export const twoFactor = (options?: TwoFactorOptions | undefined) => {
 				"/two-factor/enable",
 				{
 					method: "POST",
-					body: z.object({
-						password: z.string().meta({
-							description: "User password",
-						}),
-						issuer: z
-							.string()
-							.meta({
-								description: "Custom issuer for the TOTP URI",
-							})
-							.optional(),
-					}),
+					body: enableTwoFactorBodySchema,
 					use: [sessionMiddleware],
 					metadata: {
 						openapi: {
@@ -205,11 +210,7 @@ export const twoFactor = (options?: TwoFactorOptions | undefined) => {
 				"/two-factor/disable",
 				{
 					method: "POST",
-					body: z.object({
-						password: z.string().meta({
-							description: "User password",
-						}),
-					}),
+					body: disableTwoFactorBodySchema,
 					use: [sessionMiddleware],
 					metadata: {
 						openapi: {

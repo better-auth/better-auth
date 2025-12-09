@@ -1,12 +1,12 @@
 import { ArrowLeftRight, ArrowUpRight, Mail, Users } from "lucide-react";
-import { Metadata } from "next";
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import Image from "next/image";
 import { Logo } from "@/components/logo";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
 import { auth } from "@/lib/auth";
-import { ConsentBtns } from "./concet-buttons";
+import { ConsentBtns } from "./consent-buttons";
 
 export const metadata: Metadata = {
 	title: "Authorize Application",

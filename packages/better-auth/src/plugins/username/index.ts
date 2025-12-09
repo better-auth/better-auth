@@ -12,7 +12,8 @@ import { setSessionCookie } from "../../cookies";
 import { mergeSchema } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
 import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
-import { getSchema, type UsernameSchema } from "./schema";
+import type { UsernameSchema } from "./schema";
+import { getSchema } from "./schema";
 
 export { USERNAME_ERROR_CODES } from "./error-codes";
 
@@ -86,6 +87,29 @@ export type UsernameOptions = {
 function defaultUsernameValidator(username: string) {
 	return /^[a-zA-Z0-9_.]+$/.test(username);
 }
+
+const signInUsernameBodySchema = z.object({
+	username: z.string().meta({ description: "The username of the user" }),
+	password: z.string().meta({ description: "The password of the user" }),
+	rememberMe: z
+		.boolean()
+		.meta({
+			description: "Remember the user session",
+		})
+		.optional(),
+	callbackURL: z
+		.string()
+		.meta({
+			description: "The URL to redirect to after email verification",
+		})
+		.optional(),
+});
+
+const isUsernameAvailableBodySchema = z.object({
+	username: z.string().meta({
+		description: "The username to check",
+	}),
+});
 
 export const username = (options?: UsernameOptions | undefined) => {
 	const normalizer = (username: string) => {
@@ -167,26 +191,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 				"/sign-in/username",
 				{
 					method: "POST",
-					body: z.object({
-						username: z
-							.string()
-							.meta({ description: "The username of the user" }),
-						password: z
-							.string()
-							.meta({ description: "The password of the user" }),
-						rememberMe: z
-							.boolean()
-							.meta({
-								description: "Remember the user session",
-							})
-							.optional(),
-						callbackURL: z
-							.string()
-							.meta({
-								description: "The URL to redirect to after email verification",
-							})
-							.optional(),
-					}),
+					body: signInUsernameBodySchema,
 					metadata: {
 						openapi: {
 							summary: "Sign in with username",
@@ -253,6 +258,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 							username,
 						});
 						throw new APIError("UNPROCESSABLE_ENTITY", {
+							code: "USERNAME_TOO_SHORT",
 							message: ERROR_CODES.USERNAME_TOO_SHORT,
 						});
 					}
@@ -269,7 +275,8 @@ export const username = (options?: UsernameOptions | undefined) => {
 					const validator =
 						options?.usernameValidator || defaultUsernameValidator;
 
-					if (!validator(username)) {
+					const valid = await validator(username);
+					if (!valid) {
 						throw new APIError("UNPROCESSABLE_ENTITY", {
 							message: ERROR_CODES.INVALID_USERNAME,
 						});
@@ -410,11 +417,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 				"/is-username-available",
 				{
 					method: "POST",
-					body: z.object({
-						username: z.string().meta({
-							description: "The username to check",
-						}),
-					}),
+					body: isUsernameAvailableBodySchema,
 				},
 				async (ctx) => {
 					const username = ctx.body.username;
@@ -429,6 +432,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 
 					if (username.length < minUsernameLength) {
 						throw new APIError("UNPROCESSABLE_ENTITY", {
+							code: "USERNAME_TOO_SHORT",
 							message: ERROR_CODES.USERNAME_TOO_SHORT,
 						});
 					}
@@ -442,7 +446,8 @@ export const username = (options?: UsernameOptions | undefined) => {
 					const validator =
 						options?.usernameValidator || defaultUsernameValidator;
 
-					if (!(await validator(username))) {
+					const valid = await validator(username);
+					if (!valid) {
 						throw new APIError("UNPROCESSABLE_ENTITY", {
 							message: ERROR_CODES.INVALID_USERNAME,
 						});
@@ -495,6 +500,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 							const maxUsernameLength = options?.maxUsernameLength || 30;
 							if (username.length < minUsernameLength) {
 								throw new APIError("BAD_REQUEST", {
+									code: "USERNAME_TOO_SHORT",
 									message: ERROR_CODES.USERNAME_TOO_SHORT,
 								});
 							}

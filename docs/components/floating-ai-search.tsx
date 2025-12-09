@@ -1,15 +1,15 @@
 "use client";
 
-import { type UIMessage, type UseChatHelpers, useChat } from "@ai-sdk/react";
+import type { UIMessage, UseChatHelpers } from "@ai-sdk/react";
+import { useChat } from "@ai-sdk/react";
 import { Presence } from "@radix-ui/react-presence";
 import { DefaultChatTransport } from "ai";
 import Link from "fumadocs-core/link";
 import { buttonVariants } from "fumadocs-ui/components/ui/button";
 import { Bot, InfoIcon, Loader2, Send, Trash2, X } from "lucide-react";
+import type { ComponentProps, SyntheticEvent } from "react";
 import {
-	type ComponentProps,
 	createContext,
-	type SyntheticEvent,
 	use,
 	useEffect,
 	useMemo,
@@ -17,7 +17,7 @@ import {
 	useState,
 } from "react";
 import { RemoveScroll } from "react-remove-scroll";
-import * as z from "zod";
+import type * as z from "zod";
 import {
 	Popover,
 	PopoverContent,
@@ -540,13 +540,32 @@ export function AISearchTrigger() {
 		}
 	}, [open]);
 
+	useEffect(() => {
+		const params = new URLSearchParams(window.location.search);
+		const aiQuery = params.get("askai");
+
+		if (aiQuery) {
+			setOpen(true);
+			// Send the message to AI
+			void chat.sendMessage({ text: decodeURIComponent(aiQuery) });
+
+			// Clean up the URL by removing the askai parameter
+			const newParams = new URLSearchParams(window.location.search);
+			newParams.delete("askai");
+			const newUrl = newParams.toString()
+				? `${window.location.pathname}?${newParams.toString()}`
+				: window.location.pathname;
+			window.history.replaceState({}, "", newUrl);
+		}
+	}, []);
+
 	return (
 		<Context value={useMemo(() => ({ chat, open, setOpen }), [chat, open])}>
 			<RemoveScroll enabled={open}>
 				<Presence present={open}>
 					<div
 						className={cn(
-							"absolute inset-0 flex flex-col items-center bg-fd-background/80 backdrop-blur-sm z-30",
+							"fixed inset-0 flex flex-col items-center bg-fd-background/80 backdrop-blur-sm z-30",
 							isMobile
 								? "p-4 pb-40"
 								: "p-2 right-(--removed-body-scroll-bar-size,0) pb-[8.375rem]",
@@ -585,7 +604,7 @@ export function AISearchTrigger() {
 						<List
 							messageCount={chat.messages.length}
 							className={cn(
-								"overscroll-contain",
+								"overscroll-contain flex-1",
 								isMobile
 									? "px-2 pt-6 pb-28 w-full"
 									: "py-10 pr-2 w-[min(800px,90vw)]",
@@ -627,7 +646,7 @@ export function AISearchTrigger() {
 				</Presence>
 				<div
 					className={cn(
-						"fixed bg-transparent transition-[width,height] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] -translate-x-1/2 shadow-xl z-30 border",
+						"fixed bg-transparent transition-[width,height] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] -translate-x-1/2 shadow-md z-30 border",
 						isMobile ? "bottom-4" : "bottom-4",
 						open
 							? isMobile

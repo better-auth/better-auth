@@ -1,6 +1,7 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
-import { type AccessControl, type Role } from "../access";
-import { adminAc, defaultStatements, userAc } from "./access";
+import type { AccessControl, Role } from "../access";
+import type { defaultStatements } from "./access";
+import { adminAc, userAc } from "./access";
 import type { admin } from "./admin";
 import { hasPermission } from "./has-permission";
 
@@ -17,9 +18,8 @@ export const adminClient = <O extends AdminClientOptions>(
 	options?: O | undefined,
 ) => {
 	type DefaultStatements = typeof defaultStatements;
-	type Statements = O["ac"] extends AccessControl<infer S>
-		? S
-		: DefaultStatements;
+	type Statements =
+		O["ac"] extends AccessControl<infer S> ? S : DefaultStatements;
 	type PermissionType = {
 		[key in keyof Statements]?: Array<
 			Statements[key] extends readonly unknown[]
@@ -90,3 +90,5 @@ export const adminClient = <O extends AdminClientOptions>(
 		},
 	} satisfies BetterAuthClientPlugin;
 };
+
+export type * from "./types";

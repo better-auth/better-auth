@@ -3,9 +3,9 @@ import type {
 	ClientAtomListener,
 } from "@better-auth/core";
 import { createFetch } from "@better-fetch/fetch";
-import { type WritableAtom } from "nanostores";
+import type { WritableAtom } from "nanostores";
 import { getBaseURL } from "../utils/url";
-import { redirectPlugin, userAgentPlugin } from "./fetch-plugins";
+import { redirectPlugin } from "./fetch-plugins";
 import { parseJSON } from "./parser";
 import { getSessionAtom } from "./session-atom";
 
@@ -50,7 +50,6 @@ export const getClientConfig = (
 		...restOfFetchOptions,
 		plugins: [
 			lifeCyclePlugin,
-			userAgentPlugin,
 			...(restOfFetchOptions.plugins || []),
 			...(options?.disableDefaultFetchPlugins ? [] : [redirectPlugin]),
 			...pluginsFetchPlugins,

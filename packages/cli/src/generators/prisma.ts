@@ -1,10 +1,12 @@
+import { existsSync } from "node:fs";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { capitalizeFirstLetter } from "@better-auth/core/utils";
 import { produceSchema } from "@mrleebo/prisma-ast";
-import { capitalizeFirstLetter } from "better-auth";
 import { initGetFieldName, initGetModelName } from "better-auth/adapters";
-import { type FieldType, getAuthTables } from "better-auth/db";
-import { existsSync } from "fs";
-import fs from "fs/promises";
-import path from "path";
+import type { FieldType } from "better-auth/db";
+import { getAuthTables } from "better-auth/db";
+import { getPrismaVersion } from "../utils/get-package-info";
 import type { SchemaGenerator } from "./types";
 
 export const generatePrismaSchema: SchemaGenerator = async ({
@@ -12,10 +14,20 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 	options,
 	file,
 }) => {
-	const provider = adapter.options?.provider || "postgresql";
+	const provider: "sqlite" | "postgresql" | "mysql" | "mongodb" =
+		adapter.options?.provider || "postgresql";
 	const tables = getAuthTables(options);
 	const filePath = file || "./prisma/schema.prisma";
 	const schemaPrismaExist = existsSync(path.join(process.cwd(), filePath));
+
+	const getModelName = initGetModelName({
+		schema: getAuthTables(options),
+		usePlural: adapter.options?.adapterConfig?.usePlural,
+	});
+	const getFieldName = initGetFieldName({
+		schema: getAuthTables(options),
+		usePlural: false,
+	});
 
 	let schemaPrisma = "";
 	if (schemaPrismaExist) {
@@ -24,7 +36,25 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 			"utf-8",
 		);
 	} else {
-		schemaPrisma = getNewPrisma(provider);
+		schemaPrisma = getNewPrisma(provider, process.cwd());
+	}
+
+	// Update generator block for Prisma v7+ in existing schemas
+	const prismaVersion = getPrismaVersion(process.cwd());
+	if (prismaVersion && prismaVersion >= 7 && schemaPrismaExist) {
+		schemaPrisma = produceSchema(schemaPrisma, (builder) => {
+			const generator: any = builder.findByType("generator", {
+				name: "client",
+			});
+			if (generator && generator.properties) {
+				const providerProp = generator.properties.find(
+					(prop: any) => prop.type === "assignment" && prop.key === "provider",
+				);
+				if (providerProp && providerProp.value === '"prisma-client-js"') {
+					providerProp.value = '"prisma-client"';
+				}
+			}
+		});
 	}
 
 	const manyToManyRelations = new Map();
@@ -38,7 +68,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				const referencedCustomModel =
 					tables[referencedOriginalModel]?.modelName || referencedOriginalModel;
 				const referencedModelNameCap = capitalizeFirstLetter(
-					referencedCustomModel,
+					getModelName(referencedCustomModel),
 				);
 
 				if (!manyToManyRelations.has(referencedModelNameCap)) {
@@ -46,7 +76,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				}
 
 				const currentCustomModel = tables[table]?.modelName || table;
-				const currentModelNameCap = capitalizeFirstLetter(currentCustomModel);
+				const currentModelNameCap = capitalizeFirstLetter(
+					getModelName(currentCustomModel),
+				);
 
 				manyToManyRelations
 					.get(referencedModelNameCap)
@@ -59,7 +91,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 	for (const table in tables) {
 		const fields = tables[table]?.fields;
 		const customModelName = tables[table]?.modelName || table;
-		const modelName = capitalizeFirstLetter(customModelName);
+		const modelName = capitalizeFirstLetter(getModelName(customModelName));
 		indexedFields.set(modelName, []);
 
 		for (const field in fields) {
@@ -75,7 +107,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 		for (const table in tables) {
 			const originalTableName = table;
 			const customModelName = tables[table]?.modelName || table;
-			const modelName = capitalizeFirstLetter(customModelName);
+			const modelName = capitalizeFirstLetter(getModelName(customModelName));
 			const fields = tables[table]?.fields;
 			function getType({
 				isBigint,
@@ -102,13 +134,26 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					return isOptional ? "DateTime?" : "DateTime";
 				}
 				if (type === "json") {
+					if (provider === "sqlite" || provider === "mysql") {
+						return isOptional ? "String?" : "String";
+					}
 					return isOptional ? "Json?" : "Json";
 				}
 				if (type === "string[]") {
-					return isOptional ? "String[]" : "String[]";
+					// SQLite and MySQL don't support array of strings, so we use string instead
+					// adapter should handle JSON.stringify and JSON.parse conversion for these fields
+					if (provider === "sqlite" || provider === "mysql") {
+						return isOptional ? "String?" : "String";
+					}
+					return "String[]";
 				}
 				if (type === "number[]") {
-					return isOptional ? "Int[]" : "Int[]";
+					// SQLite and MySQL don't support array of numbers, so we use int instead
+					// adapter should handle JSON.stringify and JSON.parse conversion for these fields
+					if (provider === "sqlite" || provider === "mysql") {
+						return "String";
+					}
+					return "Int[]";
 				}
 			}
 
@@ -147,14 +192,6 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					}
 				}
 			}
-			const getModelName = initGetModelName({
-				schema: getAuthTables(options),
-				usePlural: adapter.options?.adapterConfig?.usePlural,
-			});
-			const getFieldName = initGetFieldName({
-				schema: getAuthTables(options),
-				usePlural: false,
-			});
 
 			for (const field in fields) {
 				const attr = fields[field]!;
@@ -352,9 +389,10 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					const [_fieldKey, fkFieldAttr] = fkField || [];
 					const isUnique = fkFieldAttr?.unique === true;
 
-					const fieldName = isUnique
-						? `${relatedModel.toLowerCase()}`
-						: `${relatedModel.toLowerCase()}s`;
+					const fieldName =
+						isUnique || adapter.options?.usePlural === true
+							? `${relatedModel.toLowerCase()}`
+							: `${relatedModel.toLowerCase()}s`;
 					const existingField = builder.findByType("field", {
 						name: fieldName,
 						within: prismaModel?.properties,
@@ -371,6 +409,17 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 			const indexedFieldsForModel = indexedFields.get(modelName);
 			if (indexedFieldsForModel && indexedFieldsForModel.length > 0) {
 				for (const fieldName of indexedFieldsForModel) {
+					if (prismaModel) {
+						const indexExist = prismaModel.properties.some(
+							(v) =>
+								v.type === "attribute" &&
+								v.name === "index" &&
+								JSON.stringify(v.args[0]?.value).includes(fieldName),
+						);
+						if (indexExist) {
+							continue;
+						}
+					}
 					const field = Object.entries(fields!).find(
 						([key, attr]) => (attr.fieldName || key) === fieldName,
 					)?.[1];
@@ -402,7 +451,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					.model(modelName)
 					.blockAttribute(
 						"map",
-						`${hasChanged ? customModelName : originalTableName}`,
+						`${getModelName(hasChanged ? customModelName : originalTableName)}`,
 					);
 			}
 		}
@@ -417,13 +466,20 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 	};
 };
 
-const getNewPrisma = (provider: string) => `generator client {
-    provider = "prisma-client-js"
+const getNewPrisma = (provider: string, cwd?: string) => {
+	const prismaVersion = getPrismaVersion(cwd);
+	// Use "prisma-client" for Prisma v7+, otherwise use "prisma-client-js"
+	const clientProvider =
+		prismaVersion && prismaVersion >= 7 ? "prisma-client" : "prisma-client-js";
+
+	return `generator client {
+    provider = "${clientProvider}"
   }
-  
+
   datasource db {
     provider = "${provider}"
     url      = ${
 			provider === "sqlite" ? `"file:./dev.db"` : `env("DATABASE_URL")`
 		}
   }`;
+};

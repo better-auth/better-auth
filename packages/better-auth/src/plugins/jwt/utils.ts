@@ -1,6 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { getWebcryptoSubtle } from "@better-auth/utils";
-import { base64 } from "@better-auth/utils/base64";
 import { exportJWK, generateKeyPair } from "jose";
 import { symmetricEncrypt } from "../../crypto";
 import { joseSecs } from "../../utils/time";
@@ -52,60 +51,6 @@ async function deriveKey(secretKey: string): Promise<CryptoKey> {
 		false,
 		["encrypt", "decrypt"],
 	);
-}
-
-export async function encryptPrivateKey(
-	privateKey: string,
-	secretKey: string,
-): Promise<{ encryptedPrivateKey: string; iv: string; authTag: string }> {
-	const key = await deriveKey(secretKey); // Derive a 32-byte key from the provided secret
-	const iv = crypto.getRandomValues(new Uint8Array(12)); // 12-byte IV for AES-GCM
-
-	const enc = new TextEncoder();
-	const ciphertext = await getWebcryptoSubtle().encrypt(
-		{
-			name: "AES-GCM",
-			iv: iv,
-		},
-		key,
-		enc.encode(privateKey),
-	);
-
-	const encryptedPrivateKey = base64.encode(ciphertext);
-	const ivBase64 = base64.encode(iv);
-
-	return {
-		encryptedPrivateKey,
-		iv: ivBase64,
-		authTag: encryptedPrivateKey.slice(-16),
-	};
-}
-
-export async function decryptPrivateKey(
-	encryptedPrivate: {
-		encryptedPrivateKey: string;
-		iv: string;
-		authTag: string;
-	},
-	secretKey: string,
-): Promise<string> {
-	const key = await deriveKey(secretKey);
-	const { encryptedPrivateKey, iv } = encryptedPrivate;
-
-	const ivBuffer = base64.decode(iv);
-	const ciphertext = base64.decode(encryptedPrivateKey);
-
-	const decrypted = await getWebcryptoSubtle().decrypt(
-		{
-			name: "AES-GCM",
-			iv: ivBuffer as BufferSource,
-		},
-		key,
-		ciphertext as BufferSource,
-	);
-
-	const dec = new TextDecoder();
-	return dec.decode(decrypted);
 }
 
 export async function generateExportedKeyPair(
@@ -160,6 +105,13 @@ export async function createJwk(
 				)
 			: stringifiedPrivateWebKey,
 		createdAt: new Date(),
+		...(options?.jwks?.rotationInterval
+			? {
+					expiresAt: new Date(
+						Date.now() + options.jwks.rotationInterval * 1000,
+					),
+				}
+			: {}),
 	};
 
 	const adapter = getJwksAdapter(ctx.context.adapter, options);

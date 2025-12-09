@@ -97,6 +97,38 @@ describe("email-otp", async () => {
 		expect(newUser.data?.token).toBeDefined();
 	});
 
+	it("should sign-up with uppercase email", async () => {
+		const testUser2 = {
+			email: "TEST-EMAIL@DOMAIN.COM",
+		};
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser2.email,
+			type: "sign-in",
+		});
+
+		const verifiedUser = await client.signIn.emailOtp({
+			email: testUser2.email,
+			otp,
+		});
+		expect(verifiedUser.data?.token).toBeDefined();
+	});
+
+	it("should sign-up with varying case email", async () => {
+		const testUser2 = {
+			email: "test-email@domain.com",
+		};
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser2.email,
+			type: "sign-in",
+		});
+
+		const verifiedUser = await client.signIn.emailOtp({
+			email: testUser2.email.toUpperCase(),
+			otp,
+		});
+		expect(verifiedUser.data?.token).toBeDefined();
+	});
+
 	it("should send verification otp on sign-up", async () => {
 		const testUser2 = {
 			email: "test8@email.com",
@@ -111,20 +143,18 @@ describe("email-otp", async () => {
 		);
 	});
 
-	it("should send forget password otp", async () => {
+	it("should reset password", async () => {
 		await client.emailOtp.sendVerificationOtp({
 			email: testUser.email,
 			type: "forget-password",
 		});
-	});
-
-	it("should reset password", async () => {
-		await client.emailOtp.resetPassword({
+		const res = await client.emailOtp.resetPassword({
 			email: testUser.email,
 			otp,
 			password: "changed-password",
 		});
-		const { data } = await client.signIn.email({
+
+		const { data, error } = await client.signIn.email({
 			email: testUser.email,
 			password: "changed-password",
 		});
@@ -344,19 +374,72 @@ describe("email-otp-verify", async () => {
 		},
 	);
 
-	it("should return USER_NOT_FOUND error when disableSignUp and user not registered", async () => {
+	it("should prevent user enumeration when disableSignUp is enabled", async () => {
+		// Should return success for non-existent user to prevent enumeration
 		const response = await client.emailOtp.sendVerificationOtp({
 			email: "non-existent@domain.com",
 			type: "email-verification",
 		});
 
-		expect(response.error?.message).toBe("User not found");
-		// Existing user should still succeed
+		expect(response.data?.success).toBe(true);
+		expect(response.error).toBeFalsy();
+
+		// Existing user should also succeed
 		const successRes = await client.emailOtp.sendVerificationOtp({
 			email: testUser.email,
 			type: "email-verification",
 		});
+		expect(successRes.data?.success).toBe(true);
 		expect(successRes.error).toBeFalsy();
+	});
+
+	it("should not send OTP email for non-existent users when disableSignUp is enabled", async () => {
+		const sendOtpSpy = vi.fn();
+		const { client: testClient, testUser: existingUser } =
+			await getTestInstance(
+				{
+					plugins: [
+						emailOTP({
+							async sendVerificationOTP({ email, otp: _otp, type }) {
+								sendOtpSpy(email, _otp, type);
+							},
+							disableSignUp: true,
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [emailOTPClient()],
+					},
+				},
+			);
+
+		sendOtpSpy.mockClear();
+
+		// Try to send OTP to non-existent user
+		const nonExistentResponse = await testClient.emailOtp.sendVerificationOtp({
+			email: "non-existent-user@example.com",
+			type: "sign-in",
+		});
+
+		// Should return success but not actually call sendVerificationOTP
+		expect(nonExistentResponse.data?.success).toBe(true);
+		expect(sendOtpSpy).not.toHaveBeenCalled();
+
+		// Now try with an existing user - should actually send OTP
+		const existingResponse = await testClient.emailOtp.sendVerificationOtp({
+			email: existingUser.email,
+			type: "sign-in",
+		});
+
+		// Should return success AND call sendVerificationOTP
+		expect(existingResponse.data?.success).toBe(true);
+		expect(sendOtpSpy).toHaveBeenCalledTimes(1);
+		expect(sendOtpSpy).toHaveBeenCalledWith(
+			existingUser.email,
+			expect.any(String),
+			"sign-in",
+		);
 	});
 
 	it("should verify email with last otp", async () => {

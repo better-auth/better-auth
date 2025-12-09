@@ -1,14 +1,16 @@
 "use client";
 import { Check, Copy } from "lucide-react";
-import {
+import type {
 	ButtonHTMLAttributes,
-	type ComponentProps,
+	ComponentProps,
+	HTMLAttributes,
+	ReactElement,
+	ReactNode,
+	RefObject,
+} from "react";
+import {
 	createContext,
 	forwardRef,
-	type HTMLAttributes,
-	ReactElement,
-	type ReactNode,
-	type RefObject,
 	useCallback,
 	useContext,
 	useMemo,

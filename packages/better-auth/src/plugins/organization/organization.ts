@@ -5,8 +5,9 @@ import { APIError } from "better-call";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../api";
 import { shimContext } from "../../utils/shim";
-import { type AccessControl } from "../access";
-import { defaultRoles, defaultStatements } from "./access";
+import type { AccessControl } from "../access";
+import type { defaultStatements } from "./access";
+import { defaultRoles } from "./access";
 import { getOrgAdapter } from "./adapter";
 import { orgSessionMiddleware } from "./call";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
@@ -116,11 +117,27 @@ export type OrganizationEndpoints<O extends OrganizationOptions> = {
 	hasPermission: ReturnType<typeof createHasPermission<O>>;
 };
 
+const createHasPermissionBodySchema = z
+	.object({
+		organizationId: z.string().optional(),
+	})
+	.and(
+		z.union([
+			z.object({
+				permission: z.record(z.string(), z.array(z.string())),
+				permissions: z.undefined(),
+			}),
+			z.object({
+				permission: z.undefined(),
+				permissions: z.record(z.string(), z.array(z.string())),
+			}),
+		]),
+	);
+
 const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 	type DefaultStatements = typeof defaultStatements;
-	type Statements = O["ac"] extends AccessControl<infer S>
-		? S
-		: DefaultStatements;
+	type Statements =
+		O["ac"] extends AccessControl<infer S> ? S : DefaultStatements;
 	type PermissionType = {
 		[key in keyof Statements]?: Array<
 			Statements[key] extends readonly unknown[]
@@ -146,22 +163,7 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 		{
 			method: "POST",
 			requireHeaders: true,
-			body: z
-				.object({
-					organizationId: z.string().optional(),
-				})
-				.and(
-					z.union([
-						z.object({
-							permission: z.record(z.string(), z.array(z.string())),
-							permissions: z.undefined(),
-						}),
-						z.object({
-							permission: z.undefined(),
-							permissions: z.record(z.string(), z.array(z.string())),
-						}),
-					]),
-				),
+			body: createHasPermissionBodySchema,
 			use: [orgSessionMiddleware],
 			metadata: {
 				$Infer: {
@@ -1041,6 +1043,7 @@ export function organization<O extends OrganizationOptions>(
 						unique: true,
 						sortable: true,
 						fieldName: options?.schema?.organization?.fields?.slug,
+						index: true,
 					},
 					logo: {
 						type: "string",
