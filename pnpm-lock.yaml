@@ -13,8 +13,8 @@ catalogs:
       specifier: 1.1.5
       version: 1.1.5
     tsdown:
-      specifier: ^0.17.0
-      version: 0.17.0
+      specifier: ^0.17.2
+      version: 0.17.2
     typescript:
       specifier: ^5.9.3
       version: 5.9.3
@@ -1142,7 +1142,7 @@ importers:
         version: 18.6.1
       tsdown:
         specifier: 'catalog:'
-        version: 0.17.0(oxc-resolver@11.15.0)(publint@0.3.15)(synckit@0.11.11)(typescript@5.9.3)
+        version: 0.17.2(oxc-resolver@11.15.0)(publint@0.3.15)(synckit@0.11.11)(typescript@5.9.3)
       type-fest:
         specifier: ^5.2.0
         version: 5.2.0
@@ -1245,7 +1245,7 @@ importers:
         version: 2.6.1
       tsdown:
         specifier: 'catalog:'
-        version: 0.17.0(oxc-resolver@11.15.0)(publint@0.3.15)(synckit@0.11.11)(typescript@5.9.3)
+        version: 0.17.2(oxc-resolver@11.15.0)(publint@0.3.15)(synckit@0.11.11)(typescript@5.9.3)
       tsx:
         specifier: ^4.20.6
         version: 4.20.6
@@ -1285,7 +1285,7 @@ importers:
         version: 1.0.1
       tsdown:
         specifier: 'catalog:'
-        version: 0.17.0(oxc-resolver@11.15.0)(publint@0.3.15)(synckit@0.11.11)(typescript@5.9.3)
+        version: 0.17.2(oxc-resolver@11.15.0)(publint@0.3.15)(synckit@0.11.11)(typescript@5.9.3)
 
   packages/expo:
     dependencies:
@@ -1328,7 +1328,7 @@ importers:
         version: 0.80.2(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.3))(@types/react@19.2.2)(react@19.2.1)
       tsdown:
         specifier: 'catalog:'
-        version: 0.17.0(oxc-resolver@11.15.0)(publint@0.3.15)(synckit@0.11.11)(typescript@5.9.3)
+        version: 0.17.2(oxc-resolver@11.15.0)(publint@0.3.15)(synckit@0.11.11)(typescript@5.9.3)
 
   packages/passkey:
     dependencies:
@@ -1362,7 +1362,7 @@ importers:
         version: link:../better-auth
       tsdown:
         specifier: 'catalog:'
-        version: 0.17.0(oxc-resolver@11.15.0)(publint@0.3.15)(synckit@0.11.11)(typescript@5.9.3)
+        version: 0.17.2(oxc-resolver@11.15.0)(publint@0.3.15)(synckit@0.11.11)(typescript@5.9.3)
 
   packages/scim:
     dependencies:
@@ -1384,7 +1384,7 @@ importers:
         version: link:../sso
       tsdown:
         specifier: 'catalog:'
-        version: 0.17.0(oxc-resolver@11.15.0)(publint@0.3.15)(synckit@0.11.11)(typescript@5.9.3)
+        version: 0.17.2(oxc-resolver@11.15.0)(publint@0.3.15)(synckit@0.11.11)(typescript@5.9.3)
 
   packages/sso:
     dependencies:
@@ -1427,7 +1427,7 @@ importers:
         version: 8.2.0
       tsdown:
         specifier: 'catalog:'
-        version: 0.17.0(oxc-resolver@11.15.0)(publint@0.3.15)(synckit@0.11.11)(typescript@5.9.3)
+        version: 0.17.2(oxc-resolver@11.15.0)(publint@0.3.15)(synckit@0.11.11)(typescript@5.9.3)
 
   packages/stripe:
     dependencies:
@@ -1452,7 +1452,7 @@ importers:
         version: 20.0.0(@types/node@24.10.1)
       tsdown:
         specifier: 'catalog:'
-        version: 0.17.0(oxc-resolver@11.15.0)(publint@0.3.15)(synckit@0.11.11)(typescript@5.9.3)
+        version: 0.17.2(oxc-resolver@11.15.0)(publint@0.3.15)(synckit@0.11.11)(typescript@5.9.3)
 
   packages/telemetry:
     dependencies:
@@ -1468,7 +1468,7 @@ importers:
         version: link:../core
       tsdown:
         specifier: 'catalog:'
-        version: 0.17.0(oxc-resolver@11.15.0)(publint@0.3.15)(synckit@0.11.11)(typescript@5.9.3)
+        version: 0.17.2(oxc-resolver@11.15.0)(publint@0.3.15)(synckit@0.11.11)(typescript@5.9.3)
       type-fest:
         specifier: ^5.2.0
         version: 5.2.0
@@ -4225,10 +4225,6 @@ packages:
   '@oramacloud/client@2.1.4':
     resolution: {integrity: sha512-uNPFs4wq/iOPbggCwTkVNbIr64Vfd7ZS/h+cricXVnzXWocjDTfJ3wLL4lr0qiSu41g8z+eCAGBqJ30RO2O4AA==}
 
-  '@oxc-project/runtime@0.101.0':
-    resolution: {integrity: sha512-t3qpfVZIqSiLQ5Kqt/MC4Ge/WCOGrrcagAdzTcDaggupjiGxUx4nJF2v6wUCXWSzWHn5Ns7XLv13fCJEwCOERQ==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-
   '@oxc-project/types@0.101.0':
     resolution: {integrity: sha512-nuFhqlUzJX+gVIPPfuE6xurd4lST3mdcWOhyK/rZO0B9XWMKm79SuszIQEnSMmmDhq1DC8WWVYGVd+6F93o1gQ==}
 
@@ -4583,8 +4579,8 @@ packages:
     resolution: {integrity: sha512-S+9ANAvUmjutrshV4jZjaiG8XQyuJIZ8a4utWmN/vW1sgQ9IfBnPndwkmQYw53QmouOIytT874u65HEmu6H5jw==}
     engines: {node: '>=18'}
 
-  '@quansync/fs@0.1.6':
-    resolution: {integrity: sha512-zoA8SqQO11qH9H8FCBR7NIbowYARIPmBz3nKjgAaOUDi/xPAAu1uAgebtV7KXHTc6CDZJVRZ1u4wIGvY5CWYaw==}
+  '@quansync/fs@1.0.0':
+    resolution: {integrity: sha512-4TJ3DFtlf1L5LDMaM6CanJ/0lckGNtJcMjQ1NAV6zDmA0tEHKZtxNKin8EgPaVX1YzljbxckyT2tJrpQKAtngQ==}
 
   '@radix-ui/number@1.1.1':
     resolution: {integrity: sha512-MkKCwxlXTgz6CFoJx3pCwn07GKp36+aZyu/u2Ln2VrA5DcdyCZkASEDBTd8x5whTQQL5CiYf4prXKLcgQdv29g==}
@@ -11909,6 +11905,11 @@ packages:
     engines: {node: '>=14'}
     hasBin: true
 
+  prettier@3.7.4:
+    resolution: {integrity: sha512-v6UNi1+3hSlVvv8fSaoUbggEM5VErKmmpGA7Pl3HF8V6uKY7rvClBOJlH6yNwQtfTueNkGVpOv/mtWL9L4bgRA==}
+    engines: {node: '>=14'}
+    hasBin: true
+
   pretty-bytes@5.6.0:
     resolution: {integrity: sha512-FFw039TmrBqFK8ma/7OL3sDz/VytdtJr044/QUJtH0wK9lb9jLq9tJyIxUwtQJHwar2BqtiA4iCWSwo9JLkzFg==}
     engines: {node: '>=6'}
@@ -12025,8 +12026,8 @@ packages:
   quansync@0.2.11:
     resolution: {integrity: sha512-AifT7QEbW9Nri4tAwR5M/uzpBuqfZf+zwaEM/QkzEjj7NBuFD2rBuy0K3dE+8wltbezDV7JMA0WfnCPYRSYbXA==}
 
-  quansync@0.3.0:
-    resolution: {integrity: sha512-dr5GyvHkdDbrAeXyl0MGi/jWKM6+/lZbNFVe+Ff7ivJi4RVry7O091VfXT/wuAVcF3FwNr86nwZVdxx8nELb2w==}
+  quansync@1.0.0:
+    resolution: {integrity: sha512-5xZacEEufv3HSTPQuchrvV6soaiACMFnq1H8wkVioctoH3TRha9Sz66lOxRwPK/qZj7HPiSveih9yAyh98gvqA==}
 
   query-string@7.1.3:
     resolution: {integrity: sha512-hh2WYhq4fi8+b+/2Kg9CEge4fDPvHS534aOOvOZeQ3+Vf2mCFsaFBYj0i+iXcAq6I9Vzp5fjMFBlONvayDC1qg==}
@@ -12546,8 +12547,8 @@ packages:
     deprecated: Rimraf versions prior to v4 are no longer supported
     hasBin: true
 
-  rolldown-plugin-dts@0.18.2:
-    resolution: {integrity: sha512-jRz3SHwr69F/IGEDMHtWjwVjgZwo3PZEadmMt4uA/e3rbIytoLJhvktSKlIAy/4QeWhVL9XeuCJBC66wvBQRwg==}
+  rolldown-plugin-dts@0.18.3:
+    resolution: {integrity: sha512-rd1LZ0Awwfyn89UndUF/HoFF4oH9a5j+2ZeuKSJYM80vmeN/p0gslYMnHTQHBEXPhUlvAlqGA3tVgXB/1qFNDg==}
     engines: {node: '>=20.19.0'}
     peerDependencies:
       '@ts-macro/tsc': ^0.3.6
@@ -13332,13 +13333,13 @@ packages:
   ts-morph@26.0.0:
     resolution: {integrity: sha512-ztMO++owQnz8c/gIENcM9XfCEzgoGphTv+nKpYNM1bgsdOVC/jRZuEBf6N+mLLDNg68Kl+GgUZfOySaRiG1/Ug==}
 
-  tsdown@0.17.0:
-    resolution: {integrity: sha512-NPZRrlC51X9Bb55ZTDwrWges8Dm1niCvNA5AYw7aix6pfnDnB4WR0neG5RPq75xIodg3hqlQUzzyrX7n4dmnJg==}
+  tsdown@0.17.2:
+    resolution: {integrity: sha512-SuU+0CWm/95KfXqojHTVuwcouIsdn7HpYcwDyOdKktJi285NxKwysjFUaxYLxpCNqqPvcFvokXLO4dZThRwzkw==}
     engines: {node: '>=20.19.0'}
     hasBin: true
     peerDependencies:
       '@arethetypeswrong/core': ^0.18.1
-      '@vitejs/devtools': ^0.0.0-alpha.18
+      '@vitejs/devtools': ^0.0.0-alpha.19
       publint: ^0.3.0
       typescript: ^5.0.0
       unplugin-lightningcss: ^0.4.0
@@ -13465,8 +13466,8 @@ packages:
   ultrahtml@1.6.0:
     resolution: {integrity: sha512-R9fBn90VTJrqqLDwyMph+HGne8eqY1iPfYhPzZrvKpIfwkWZbcYlfpsb8B9dTvBfpy1/hqAD7Wi8EKfP9e8zdw==}
 
-  unconfig-core@7.4.1:
-    resolution: {integrity: sha512-Bp/bPZjV2Vl/fofoA2OYLSnw1Z0MOhCX7zHnVCYrazpfZvseBbGhwcNQMxsg185Mqh7VZQqK3C8hFG/Dyng+yA==}
+  unconfig-core@7.4.2:
+    resolution: {integrity: sha512-VgPCvLWugINbXvMQDf8Jh0mlbvNjNC6eSUziHsBCMpxR05OPrNrvDnyatdMjRgcHaaNsCqz+wjNXxNw1kRLHUg==}
 
   uncrypto@0.1.3:
     resolution: {integrity: sha512-Ql87qFHB3s/De2ClA9e0gsnS6zXG27SkTiSJwjCc9MebbfapQfuPzumMIUMi38ezPZVNFcHI9sUIepeQfw8J8Q==}
@@ -13576,8 +13577,8 @@ packages:
     resolution: {integrity: sha512-lkaSIlxceytPyt9yfb1h7L9jDFqwMqvUZeGsKB7Z8QrvAO3xZv2S+xMQQYzxk0AGJHcQhbcvhKEstrMy99jnuQ==}
     engines: {node: '>=18.12.0'}
 
-  unrun@0.2.16:
-    resolution: {integrity: sha512-DBkjUpQv9AQs1464XWnWQ97RuxPCu+CImvQMPmqFeHoL2Bi6C1BGPacMuXVw4VMIfQewNJZWUxPt5envG90oUA==}
+  unrun@0.2.19:
+    resolution: {integrity: sha512-DbwbJ9BvPEb3BeZnIpP9S5tGLO/JIgPQ3JrpMRFIfZMZfMG19f26OlLbC2ml8RRdrI2ZA7z2t+at5tsIHbh6Qw==}
     engines: {node: '>=20.19.0'}
     hasBin: true
     peerDependencies:
@@ -17350,8 +17351,6 @@ snapshots:
       '@orama/orama': 3.1.14
       lodash: 4.17.21
 
-  '@oxc-project/runtime@0.101.0': {}
-
   '@oxc-project/types@0.101.0': {}
 
   '@oxc-resolver/binding-android-arm-eabi@11.15.0':
@@ -17617,9 +17616,9 @@ snapshots:
 
   '@publint/pack@0.1.2': {}
 
-  '@quansync/fs@0.1.6':
+  '@quansync/fs@1.0.0':
     dependencies:
-      quansync: 0.3.0
+      quansync: 1.0.0
 
   '@radix-ui/number@1.1.1': {}
 
@@ -18404,7 +18403,7 @@ snapshots:
   '@react-email/render@1.2.1(react-dom@19.2.1(react@19.2.1))(react@19.2.1)':
     dependencies:
       html-to-text: 9.0.5
-      prettier: 3.6.2
+      prettier: 3.7.4
       react: 19.2.1
       react-dom: 19.2.1(react@19.2.1)
       react-promise-suspense: 0.3.4
@@ -26461,6 +26460,9 @@ snapshots:
 
   prettier@3.6.2: {}
 
+  prettier@3.7.4:
+    optional: true
+
   pretty-bytes@5.6.0: {}
 
   pretty-bytes@6.1.1: {}
@@ -26568,7 +26570,7 @@ snapshots:
 
   quansync@0.2.11: {}
 
-  quansync@0.3.0: {}
+  quansync@1.0.0: {}
 
   query-string@7.1.3:
     dependencies:
@@ -27329,7 +27331,7 @@ snapshots:
     dependencies:
       glob: 7.2.3
 
-  rolldown-plugin-dts@0.18.2(oxc-resolver@11.15.0)(rolldown@1.0.0-beta.53)(typescript@5.9.3):
+  rolldown-plugin-dts@0.18.3(oxc-resolver@11.15.0)(rolldown@1.0.0-beta.53)(typescript@5.9.3):
     dependencies:
       '@babel/generator': 7.28.5
       '@babel/parser': 7.28.5
@@ -28262,7 +28264,7 @@ snapshots:
       '@ts-morph/common': 0.27.0
       code-block-writer: 13.0.3
 
-  tsdown@0.17.0(oxc-resolver@11.15.0)(publint@0.3.15)(synckit@0.11.11)(typescript@5.9.3):
+  tsdown@0.17.2(oxc-resolver@11.15.0)(publint@0.3.15)(synckit@0.11.11)(typescript@5.9.3):
     dependencies:
       ansis: 4.2.0
       cac: 6.7.14
@@ -28271,13 +28273,13 @@ snapshots:
       import-without-cache: 0.2.2
       obug: 2.1.1
       rolldown: 1.0.0-beta.53
-      rolldown-plugin-dts: 0.18.2(oxc-resolver@11.15.0)(rolldown@1.0.0-beta.53)(typescript@5.9.3)
+      rolldown-plugin-dts: 0.18.3(oxc-resolver@11.15.0)(rolldown@1.0.0-beta.53)(typescript@5.9.3)
       semver: 7.7.3
       tinyexec: 1.0.2
       tinyglobby: 0.2.15
       tree-kill: 1.2.2
-      unconfig-core: 7.4.1
-      unrun: 0.2.16(synckit@0.11.11)
+      unconfig-core: 7.4.2
+      unrun: 0.2.19(synckit@0.11.11)
     optionalDependencies:
       publint: 0.3.15
       typescript: 5.9.3
@@ -28382,10 +28384,10 @@ snapshots:
 
   ultrahtml@1.6.0: {}
 
-  unconfig-core@7.4.1:
+  unconfig-core@7.4.2:
     dependencies:
-      '@quansync/fs': 0.1.6
-      quansync: 0.2.11
+      '@quansync/fs': 1.0.0
+      quansync: 1.0.0
 
   uncrypto@0.1.3: {}
 
@@ -28526,9 +28528,8 @@ snapshots:
       picomatch: 4.0.3
       webpack-virtual-modules: 0.6.2
 
-  unrun@0.2.16(synckit@0.11.11):
+  unrun@0.2.19(synckit@0.11.11):
     dependencies:
-      '@oxc-project/runtime': 0.101.0
       rolldown: 1.0.0-beta.53
     optionalDependencies:
       synckit: 0.11.11
