@@ -20,6 +20,7 @@ exports[`base context creation > should match config 1`] = `
         "disableTransformInput": false,
         "disableTransformJoin": false,
         "disableTransformOutput": false,
+        "supportsArrays": false,
         "supportsBooleans": true,
         "supportsDates": true,
         "supportsJSON": false,
@@ -112,6 +113,7 @@ exports[`base context creation > should match config 1`] = `
     "updateUserByEmail": [Function],
     "updateVerificationValue": [Function],
   },
+  "isTrustedOrigin": [Function],
   "logger": {
     "debug": [Function],
     "error": [Function],

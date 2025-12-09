@@ -113,6 +113,14 @@ export interface DBAdapterFactoryConfig<
 	 */
 	supportsBooleans?: boolean | undefined;
 	/**
+	 * If the database doesn't support arrays, set this to `false`.
+	 *
+	 * We will handle the translation between using `array`s, and saving `string`s to the database.
+	 *
+	 * @default false
+	 */
+	supportsArrays?: boolean | undefined;
+	/**
 	 * Execute multiple operations in a transaction.
 	 *
 	 * If the database doesn't support transactions, set this to `false` and operations will be executed sequentially.
@@ -532,3 +540,7 @@ export interface DBAdapterInstance<
 > {
 	(options: BetterAuthOptions): DBAdapter<Options>;
 }
+
+export * from "./factory";
+export * from "./types";
+export * from "./utils";

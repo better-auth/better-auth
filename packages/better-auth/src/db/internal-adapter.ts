@@ -10,11 +10,10 @@ import {
 } from "@better-auth/core/context";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import type { InternalLogger } from "@better-auth/core/env";
+import { generateId, safeJSONParse } from "@better-auth/core/utils";
 import type { Account, Session, User, Verification } from "../types";
-import { generateId } from "../utils";
 import { getDate } from "../utils/date";
 import { getIp } from "../utils/get-request-ip";
-import { safeJSONParse } from "../utils/json";
 import {
 	parseSessionInput,
 	parseSessionOutput,
@@ -224,10 +223,6 @@ export const createInternalAdapter = (
 			return total;
 		},
 		deleteUser: async (userId: string) => {
-			if (secondaryStorage) {
-				await secondaryStorage.delete(`active-sessions-${userId}`);
-			}
-
 			if (!secondaryStorage || options.session?.storeSessionInDatabase) {
 				await deleteManyWithHooks(
 					[
@@ -633,6 +628,9 @@ export const createInternalAdapter = (
 					for (const session of sessions) {
 						await secondaryStorage.delete(session.token);
 					}
+					await secondaryStorage.delete(
+						`active-sessions-${userIdOrSessionTokens}`,
+					);
 				} else {
 					for (const sessionToken of userIdOrSessionTokens) {
 						const session = await secondaryStorage.get(sessionToken);

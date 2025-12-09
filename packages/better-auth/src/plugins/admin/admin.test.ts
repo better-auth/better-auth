@@ -1,3 +1,4 @@
+import { BetterAuthError } from "@better-auth/core/error";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
@@ -653,6 +654,30 @@ describe("Admin plugin", async () => {
 		expect(res.error?.status).toBe(403);
 	});
 
+	it("should not allow to impersonate admins", async () => {
+		const userToImpersonate = await client.signUp.email({
+			email: "impersonate-admin@mail.com",
+			password: "password",
+			name: "Impersonate Admin User",
+		});
+		const userId = userToImpersonate.data?.user.id || "";
+		await client.admin.setRole({
+			userId,
+			role: "admin",
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		const res = await client.admin.impersonateUser(
+			{
+				userId,
+			},
+			{ headers: adminHeaders },
+		);
+
+		expect(res.error?.status).toBe(403);
+	});
+
 	it("should filter impersonated sessions", async () => {
 		const { headers } = await signInWithUser(data.email, data.password);
 		const res = await client.listSessions({
@@ -1303,5 +1328,13 @@ describe("access control", async (it) => {
 			{ userId: createdUser.data?.user.id || "" },
 			{ headers: headers },
 		);
+	});
+
+	it("should throw error when assigning non-existent admin roles", async () => {
+		expect(() =>
+			admin({
+				adminRoles: ["non-existent-role"],
+			}),
+		).toThrowError(BetterAuthError);
 	});
 });

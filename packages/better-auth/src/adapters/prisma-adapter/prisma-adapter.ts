@@ -1,16 +1,14 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type {
+	AdapterFactoryCustomizeAdapterCreator,
+	AdapterFactoryOptions,
 	DBAdapter,
 	DBAdapterDebugLogOption,
 	JoinConfig,
 	Where,
 } from "@better-auth/core/db/adapter";
+import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
-import type {
-	AdapterFactoryCustomizeAdapterCreator,
-	AdapterFactoryOptions,
-} from "../adapter-factory";
-import { createAdapterFactory } from "../adapter-factory";
 
 export interface PrismaConfig {
 	/**
@@ -274,13 +272,10 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 
 					const selects = convertSelect(select, model, join);
 
-					let result = (
-						await db[model]!.findMany({
-							where: whereClause,
-							select: selects,
-							take: 1,
-						})
-					)[0];
+					let result = await db[model]!.findFirst({
+						where: whereClause,
+						select: selects,
+					});
 
 					// transform the resulting `include` items to use better-auth expected field names
 					if (join && result) {
@@ -416,6 +411,10 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
 			supportsUUIDs: config.provider === "postgresql" ? true : false,
+			supportsArrays:
+				config.provider === "postgresql" || config.provider === "mongodb"
+					? true
+					: false,
 			transaction:
 				(config.transaction ?? false)
 					? (cb) =>

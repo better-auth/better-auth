@@ -5,6 +5,7 @@ import type {
 } from "@better-auth/core";
 import { env, isProduction } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
+import { safeJSONParse } from "@better-auth/core/utils";
 import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
@@ -19,10 +20,10 @@ import {
 import { parseUserOutput } from "../db/schema";
 import type { Session, User } from "../types";
 import { getDate } from "../utils/date";
-import { safeJSONParse } from "../utils/json";
 import { getBaseURL } from "../utils/url";
 import { SECURE_COOKIE_PREFIX } from "./cookie-utils";
 import { createSessionStore } from "./session-store";
+import { createAccountStore, createSessionStore } from "./session-store";
 
 export function createCookieGetter(options: BetterAuthOptions) {
 	const secure =
@@ -302,6 +303,35 @@ export function deleteSessionCookie(
 		...ctx.context.authCookies.sessionToken.options,
 		maxAge: 0,
 	});
+
+	ctx.setCookie(ctx.context.authCookies.sessionData.name, "", {
+		...ctx.context.authCookies.sessionData.options,
+		maxAge: 0,
+	});
+
+	if (ctx.context.options.account?.storeAccountCookie) {
+		ctx.setCookie(ctx.context.authCookies.accountData.name, "", {
+			...ctx.context.authCookies.accountData.options,
+			maxAge: 0,
+		});
+
+		//clean up the account data chunks
+		const accountStore = createAccountStore(
+			ctx.context.authCookies.accountData.name,
+			ctx.context.authCookies.accountData.options,
+			ctx,
+		);
+		const cleanCookies = accountStore.clean();
+		accountStore.setCookies(cleanCookies);
+	}
+
+	if (ctx.context.oauthConfig.storeStateStrategy === "cookie") {
+		const stateCookie = ctx.context.createAuthCookie("oauth_state");
+		ctx.setCookie(stateCookie.name, "", {
+			...stateCookie.attributes,
+			maxAge: 0,
+		});
+	}
 
 	// Use createSessionStore to clean up all session data chunks
 	const sessionStore = createSessionStore(

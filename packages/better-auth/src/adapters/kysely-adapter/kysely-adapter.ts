@@ -1,10 +1,13 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type {
+	AdapterFactoryCustomizeAdapterCreator,
+	AdapterFactoryOptions,
 	DBAdapter,
 	DBAdapterDebugLogOption,
 	JoinConfig,
 	Where,
 } from "@better-auth/core/db/adapter";
+import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import type {
 	InsertQueryBuilder,
 	Kysely,
@@ -12,11 +15,6 @@ import type {
 	UpdateQueryBuilder,
 } from "kysely";
 import { sql } from "kysely";
-import type {
-	AdapterFactoryCustomizeAdapterCreator,
-	AdapterFactoryOptions,
-} from "../adapter-factory";
-import { createAdapterFactory } from "../adapter-factory";
 import type { KyselyDatabaseType } from "./types";
 
 interface KyselyAdapterConfig {
@@ -538,8 +536,10 @@ export const kyselyAdapter = (
 					if (or) {
 						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 					}
-					const res = await query.execute();
-					return res.length;
+					const res = (await query.executeTakeFirst()).numUpdatedRows;
+					return res > Number.MAX_SAFE_INTEGER
+						? Number.MAX_SAFE_INTEGER
+						: Number(res);
 				},
 				async count({ model, where }) {
 					const { and, or } = convertWhereClause(model, where);
@@ -583,7 +583,10 @@ export const kyselyAdapter = (
 					if (or) {
 						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 					}
-					return (await query.execute()).length;
+					const res = (await query.executeTakeFirst()).numDeletedRows;
+					return res > Number.MAX_SAFE_INTEGER
+						? Number.MAX_SAFE_INTEGER
+						: Number(res);
 				},
 				options: config,
 			};
@@ -607,7 +610,11 @@ export const kyselyAdapter = (
 				config?.type === "sqlite" || config?.type === "mssql" || !config?.type
 					? false
 					: true,
-			supportsJSON: false,
+			supportsJSON:
+				config?.type === "postgres"
+					? true // even if there is JSON support, only pg supports passing direct json, all others must stringify
+					: false,
+			supportsArrays: false, // Even if field supports JSON, we must pass stringified arrays to the database.
 			supportsUUIDs: config?.type === "postgres" ? true : false,
 			transaction: config?.transaction
 				? (cb) =>

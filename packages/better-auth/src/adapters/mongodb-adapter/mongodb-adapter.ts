@@ -1,16 +1,14 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type {
+	AdapterFactoryCustomizeAdapterCreator,
+	AdapterFactoryOptions,
 	DBAdapter,
 	DBAdapterDebugLogOption,
 	Where,
 } from "@better-auth/core/db/adapter";
+import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import type { ClientSession, Db, MongoClient } from "mongodb";
 import { ObjectId } from "mongodb";
-import type {
-	AdapterFactoryCustomizeAdapterCreator,
-	AdapterFactoryOptions,
-} from "../adapter-factory";
-import { createAdapterFactory } from "../adapter-factory";
 
 export interface MongoDBAdapterConfig {
 	/**
