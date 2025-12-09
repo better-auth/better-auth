@@ -159,7 +159,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						ctx.context.secret,
 					);
 					if (!sessionCookie) {
-						throw new APIError("UNAUTHORIZED", {
+						throw APIError.fromStatus("UNAUTHORIZED", {
 							message: ERROR_CODES.INVALID_SESSION_TOKEN,
 						});
 					}
@@ -170,7 +170,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 							...ctx.context.authCookies.sessionToken.options,
 							maxAge: 0,
 						});
-						throw new APIError("UNAUTHORIZED", {
+						throw APIError.fromStatus("UNAUTHORIZED", {
 							message: ERROR_CODES.INVALID_SESSION_TOKEN,
 						});
 					}
@@ -233,7 +233,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						ctx.context.secret,
 					);
 					if (!sessionCookie) {
-						throw new APIError("UNAUTHORIZED", {
+						throw APIError.fromStatus("UNAUTHORIZED", {
 							message: ERROR_CODES.INVALID_SESSION_TOKEN,
 						});
 					}

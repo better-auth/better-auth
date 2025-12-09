@@ -189,7 +189,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 				ctx.context.logger.error(
 					"send otp isn't configured. Please configure the send otp function on otp options.",
 				);
-				throw new APIError("BAD_REQUEST", {
+				throw APIError.fromStatus("BAD_REQUEST", {
 					message: "otp isn't configured",
 				});
 			}
@@ -299,7 +299,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 						toCheckOtp.id,
 					);
 				}
-				throw new APIError("BAD_REQUEST", {
+				throw APIError.fromStatus("BAD_REQUEST", {
 					message: TWO_FACTOR_ERROR_CODES.OTP_HAS_EXPIRED,
 				});
 			}
@@ -308,7 +308,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 				await ctx.context.internalAdapter.deleteVerificationValue(
 					toCheckOtp.id,
 				);
-				throw new APIError("BAD_REQUEST", {
+				throw APIError.fromStatus("BAD_REQUEST", {
 					message: TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE,
 				});
 			}
@@ -319,7 +319,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			if (isCodeValid) {
 				if (!session.user.twoFactorEnabled) {
 					if (!session.session) {
-						throw new APIError("BAD_REQUEST", {
+						throw APIError.fromStatus("BAD_REQUEST", {
 							message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 						});
 					}

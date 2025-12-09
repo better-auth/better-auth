@@ -13,7 +13,7 @@ import type { UserWithTwoFactor } from "./types";
 
 export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 	const invalid = (errorKey: keyof typeof TWO_FACTOR_ERROR_CODES) => {
-		throw new APIError("UNAUTHORIZED", {
+		throw APIError.fromStatus("UNAUTHORIZED", {
 			message: TWO_FACTOR_ERROR_CODES[errorKey],
 		});
 	};
@@ -26,14 +26,14 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 			ctx.context.secret,
 		);
 		if (!twoFactorCookie) {
-			throw new APIError("UNAUTHORIZED", {
+			throw APIError.fromStatus("UNAUTHORIZED", {
 				message: TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
 			});
 		}
 		const verificationToken =
 			await ctx.context.internalAdapter.findVerificationValue(twoFactorCookie);
 		if (!verificationToken) {
-			throw new APIError("UNAUTHORIZED", {
+			throw APIError.fromStatus("UNAUTHORIZED", {
 				message: TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
 			});
 		}
@@ -41,7 +41,7 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 			verificationToken.value,
 		)) as UserWithTwoFactor;
 		if (!user) {
-			throw new APIError("UNAUTHORIZED", {
+			throw APIError.fromStatus("UNAUTHORIZED", {
 				message: TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
 			});
 		}
@@ -56,7 +56,7 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 					!!dontRememberMe,
 				);
 				if (!session) {
-					throw new APIError("INTERNAL_SERVER_ERROR", {
+					throw APIError.fromStatus("INTERNAL_SERVER_ERROR", {
 						message: "failed to create session",
 					});
 				}

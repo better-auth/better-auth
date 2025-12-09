@@ -3,7 +3,7 @@ import type {
 	BetterAuthPluginDBSchema,
 	DBFieldAttribute,
 } from "@better-auth/core/db";
-import { APIError } from "better-call";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { Account, Session, User } from "../types";
 
 // Cache for parsed schemas to avoid reparsing on every request
@@ -105,9 +105,13 @@ export function parseInputData<T extends Record<string, any>>(
 					}
 				}
 				if (data[key]) {
-					throw new APIError("BAD_REQUEST", {
-						message: `${key} is not allowed to be set`,
-					});
+					throw APIError.from(
+						{
+							...BASE_ERROR_CODES.FIELD_NOT_ALLOWED,
+							message: `${key} is not allowed to be set`,
+						},
+						"BAD_REQUEST",
+					);
 				}
 				continue;
 			}
@@ -116,14 +120,19 @@ export function parseInputData<T extends Record<string, any>>(
 					data[key],
 				);
 				if (result instanceof Promise) {
-					throw new APIError("INTERNAL_SERVER_ERROR", {
-						message: "Async validation is not supported for additional fields",
-					});
+					throw APIError.from(
+						BASE_ERROR_CODES.ASYNC_VALIDATION_NOT_SUPPORTED,
+						"INTERNAL_SERVER_ERROR",
+					);
 				}
 				if ("issues" in result && result.issues) {
-					throw new APIError("BAD_REQUEST", {
-						message: result.issues[0]?.message || "Validation Error",
-					});
+					throw APIError.from(
+						{
+							...BASE_ERROR_CODES.VALIDATION_ERROR,
+							message: result.issues[0]?.message || "Validation Error",
+						},
+						"BAD_REQUEST",
+					);
 				}
 				parsedData[key] = result.value;
 				continue;
@@ -146,9 +155,13 @@ export function parseInputData<T extends Record<string, any>>(
 		}
 
 		if (fields[key]!.required && action === "create") {
-			throw new APIError("BAD_REQUEST", {
-				message: `${key} is required`,
-			});
+			throw APIError.from(
+				{
+					...BASE_ERROR_CODES.MISSING_FIELD,
+					message: `${key} is required`,
+				},
+				"BAD_REQUEST",
+			);
 		}
 	}
 	return parsedData as Partial<T>;

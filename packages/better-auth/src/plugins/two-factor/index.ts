@@ -127,7 +127,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						userId: user.id,
 					});
 					if (!isPasswordValid) {
-						throw new APIError("BAD_REQUEST", {
+						throw APIError.fromStatus("BAD_REQUEST", {
 							message: BASE_ERROR_CODES.INVALID_PASSWORD,
 						});
 					}
@@ -245,7 +245,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						userId: user.id,
 					});
 					if (!isPasswordValid) {
-						throw new APIError("BAD_REQUEST", {
+						throw APIError.fromStatus("BAD_REQUEST", {
 							message: BASE_ERROR_CODES.INVALID_PASSWORD,
 						});
 					}

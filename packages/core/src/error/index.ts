@@ -1,3 +1,5 @@
+import { APIError as BaseAPIError } from "better-call";
+
 export class BetterAuthError extends Error {
 	constructor(message: string, cause?: string | undefined) {
 		super(message);
@@ -9,3 +11,26 @@ export class BetterAuthError extends Error {
 }
 
 export { BASE_ERROR_CODES } from "./codes";
+
+export class APIError extends BaseAPIError {
+	private constructor(...args: ConstructorParameters<typeof BaseAPIError>) {
+		super(...args);
+	}
+
+	static fromStatus(
+		status: ConstructorParameters<typeof BaseAPIError>[0],
+		body?: ConstructorParameters<typeof BaseAPIError>[1],
+	) {
+		return new APIError(status, body);
+	}
+
+	static from(
+		error: { code: string; message: string },
+		status: ConstructorParameters<typeof BaseAPIError>[0],
+	) {
+		return new APIError(status, {
+			message: error.message,
+			code: error.code,
+		});
+	}
+}

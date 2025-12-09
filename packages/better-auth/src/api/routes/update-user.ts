@@ -1,7 +1,6 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { APIError } from "better-call";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
@@ -89,9 +88,10 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 			};
 
 			if (body.email) {
-				throw new APIError("BAD_REQUEST", {
-					message: BASE_ERROR_CODES.EMAIL_CAN_NOT_BE_UPDATED,
-				});
+				throw APIError.from(
+					BASE_ERROR_CODES.EMAIL_CAN_NOT_BE_UPDATED,
+					"BAD_REQUEST",
+				);
 			}
 			const { name, image, ...rest } = body;
 			const session = ctx.context.session;
@@ -105,7 +105,7 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 				name === undefined &&
 				Object.keys(additionalFields).length === 0
 			) {
-				throw new APIError("BAD_REQUEST", {
+				throw APIError.fromStatus("BAD_REQUEST", {
 					message: "No fields to update",
 				});
 			}
@@ -240,18 +240,14 @@ export const changePassword = createAuthEndpoint(
 		const minPasswordLength = ctx.context.password.config.minPasswordLength;
 		if (newPassword.length < minPasswordLength) {
 			ctx.context.logger.error("Password is too short");
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
-			});
+			throw APIError.from(BASE_ERROR_CODES.PASSWORD_TOO_SHORT, "BAD_REQUEST");
 		}
 
 		const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
 
 		if (newPassword.length > maxPasswordLength) {
 			ctx.context.logger.error("Password is too long");
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
-			});
+			throw APIError.from(BASE_ERROR_CODES.PASSWORD_TOO_LONG, "BAD_REQUEST");
 		}
 
 		const accounts = await ctx.context.internalAdapter.findAccounts(
@@ -261,9 +257,10 @@ export const changePassword = createAuthEndpoint(
 			(account) => account.providerId === "credential" && account.password,
 		);
 		if (!account || !account.password) {
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.CREDENTIAL_ACCOUNT_NOT_FOUND,
-			});
+			throw APIError.from(
+				BASE_ERROR_CODES.CREDENTIAL_ACCOUNT_NOT_FOUND,
+				"BAD_REQUEST",
+			);
 		}
 		const passwordHash = await ctx.context.password.hash(newPassword);
 		const verify = await ctx.context.password.verify({
@@ -271,9 +268,7 @@ export const changePassword = createAuthEndpoint(
 			password: currentPassword,
 		});
 		if (!verify) {
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.INVALID_PASSWORD,
-			});
+			throw APIError.from(BASE_ERROR_CODES.INVALID_PASSWORD, "BAD_REQUEST");
 		}
 		await ctx.context.internalAdapter.updateAccount(account.id, {
 			password: passwordHash,
@@ -285,9 +280,10 @@ export const changePassword = createAuthEndpoint(
 				session.user.id,
 			);
 			if (!newSession) {
-				throw new APIError("INTERNAL_SERVER_ERROR", {
-					message: BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
-				});
+				throw APIError.from(
+					BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
+					"INTERNAL_SERVER_ERROR",
+				);
 			}
 			// set the new session cookie
 			await setSessionCookie(ctx, {
@@ -331,18 +327,14 @@ export const setPassword = createAuthEndpoint(
 		const minPasswordLength = ctx.context.password.config.minPasswordLength;
 		if (newPassword.length < minPasswordLength) {
 			ctx.context.logger.error("Password is too short");
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
-			});
+			throw APIError.from(BASE_ERROR_CODES.PASSWORD_TOO_SHORT, "BAD_REQUEST");
 		}
 
 		const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
 
 		if (newPassword.length > maxPasswordLength) {
 			ctx.context.logger.error("Password is too long");
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
-			});
+			throw APIError.from(BASE_ERROR_CODES.PASSWORD_TOO_LONG, "BAD_REQUEST");
 		}
 
 		const accounts = await ctx.context.internalAdapter.findAccounts(
@@ -363,9 +355,13 @@ export const setPassword = createAuthEndpoint(
 				status: true,
 			});
 		}
-		throw new APIError("BAD_REQUEST", {
-			message: "user already has a password",
-		});
+		throw APIError.from(
+			{
+				message: "user already has a password",
+				code: "USER_ALREADY_HAS_PASSWORD",
+			},
+			"BAD_REQUEST",
+		);
 	},
 );
 
@@ -468,7 +464,7 @@ export const deleteUser = createAuthEndpoint(
 			ctx.context.logger.error(
 				"Delete user is disabled. Enable it in the options",
 			);
-			throw new APIError("NOT_FOUND");
+			throw APIError.fromStatus("NOT_FOUND");
 		}
 		const session = ctx.context.session;
 
@@ -480,18 +476,17 @@ export const deleteUser = createAuthEndpoint(
 				(account) => account.providerId === "credential" && account.password,
 			);
 			if (!account || !account.password) {
-				throw new APIError("BAD_REQUEST", {
-					message: BASE_ERROR_CODES.CREDENTIAL_ACCOUNT_NOT_FOUND,
-				});
+				throw APIError.from(
+					BASE_ERROR_CODES.CREDENTIAL_ACCOUNT_NOT_FOUND,
+					"BAD_REQUEST",
+				);
 			}
 			const verify = await ctx.context.password.verify({
 				hash: account.password,
 				password: ctx.body.password,
 			});
 			if (!verify) {
-				throw new APIError("BAD_REQUEST", {
-					message: BASE_ERROR_CODES.INVALID_PASSWORD,
-				});
+				throw APIError.from(BASE_ERROR_CODES.INVALID_PASSWORD, "BAD_REQUEST");
 			}
 		}
 
@@ -545,9 +540,7 @@ export const deleteUser = createAuthEndpoint(
 			const freshAge = ctx.context.sessionConfig.freshAge * 1000;
 			const now = Date.now();
 			if (now - currentAge > freshAge * 1000) {
-				throw new APIError("BAD_REQUEST", {
-					message: BASE_ERROR_CODES.SESSION_EXPIRED,
-				});
+				throw APIError.from(BASE_ERROR_CODES.SESSION_EXPIRED, "BAD_REQUEST");
 			}
 		}
 
@@ -621,26 +614,29 @@ export const deleteUserCallback = createAuthEndpoint(
 			ctx.context.logger.error(
 				"Delete user is disabled. Enable it in the options",
 			);
-			throw new APIError("NOT_FOUND");
+			throw APIError.from(
+				{
+					message: "Not found",
+					code: "NOT_FOUND",
+				},
+				"NOT_FOUND",
+			);
 		}
 		const session = await getSessionFromCtx(ctx);
 		if (!session) {
-			throw new APIError("NOT_FOUND", {
-				message: BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
-			});
+			throw APIError.from(
+				BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
+				"NOT_FOUND",
+			);
 		}
 		const token = await ctx.context.internalAdapter.findVerificationValue(
 			`delete-account-${ctx.query.token}`,
 		);
 		if (!token || token.expiresAt < new Date()) {
-			throw new APIError("NOT_FOUND", {
-				message: BASE_ERROR_CODES.INVALID_TOKEN,
-			});
+			throw APIError.from(BASE_ERROR_CODES.INVALID_TOKEN, "NOT_FOUND");
 		}
 		if (token.value !== session.user.id) {
-			throw new APIError("NOT_FOUND", {
-				message: BASE_ERROR_CODES.INVALID_TOKEN,
-			});
+			throw APIError.from(BASE_ERROR_CODES.INVALID_TOKEN, "NOT_FOUND");
 		}
 		const beforeDelete = ctx.context.options.user.deleteUser?.beforeDelete;
 		if (beforeDelete) {
@@ -737,7 +733,7 @@ export const changeEmail = createAuthEndpoint(
 	async (ctx) => {
 		if (!ctx.context.options.user?.changeEmail?.enabled) {
 			ctx.context.logger.error("Change email is disabled.");
-			throw new APIError("BAD_REQUEST", {
+			throw APIError.fromStatus("BAD_REQUEST", {
 				message: "Change email is disabled",
 			});
 		}
@@ -746,7 +742,7 @@ export const changeEmail = createAuthEndpoint(
 
 		if (newEmail === ctx.context.session.user.email) {
 			ctx.context.logger.error("Email is the same");
-			throw new APIError("BAD_REQUEST", {
+			throw APIError.fromStatus("BAD_REQUEST", {
 				message: "Email is the same",
 			});
 		}
@@ -754,9 +750,10 @@ export const changeEmail = createAuthEndpoint(
 			await ctx.context.internalAdapter.findUserByEmail(newEmail);
 		if (existingUser) {
 			ctx.context.logger.error("Email already exists");
-			throw new APIError("UNPROCESSABLE_ENTITY", {
-				message: BASE_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
-			});
+			throw APIError.from(
+				BASE_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
+				"UNPROCESSABLE_ENTITY",
+			);
 		}
 
 		/**
@@ -851,7 +848,7 @@ export const changeEmail = createAuthEndpoint(
 
 		if (!ctx.context.options.emailVerification?.sendVerificationEmail) {
 			ctx.context.logger.error("Verification email isn't enabled.");
-			throw new APIError("BAD_REQUEST", {
+			throw APIError.fromStatus("BAD_REQUEST", {
 				message: "Verification email isn't enabled",
 			});
 		}

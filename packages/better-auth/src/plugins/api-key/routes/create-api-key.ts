@@ -1,8 +1,9 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { APIError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils";
 import * as z from "zod";
-import { APIError, getSessionFromCtx } from "../../../api";
+import { getSessionFromCtx } from "../../../api";
 import { generateId } from "../../../utils";
 import { getDate } from "../../../utils/date";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
@@ -277,15 +278,11 @@ export function createApiKey({
 					: session?.user || { id: ctx.body.userId };
 
 			if (!user?.id) {
-				throw new APIError("UNAUTHORIZED", {
-					message: ERROR_CODES.UNAUTHORIZED_SESSION,
-				});
+				throw APIError.from(ERROR_CODES.UNAUTHORIZED_SESSION, "UNAUTHORIZED");
 			}
 
 			if (session && ctx.body.userId && session?.user.id !== ctx.body.userId) {
-				throw new APIError("UNAUTHORIZED", {
-					message: ERROR_CODES.UNAUTHORIZED_SESSION,
-				});
+				throw APIError.from(ERROR_CODES.UNAUTHORIZED_SESSION, "UNAUTHORIZED");
 			}
 
 			if (authRequired) {
@@ -300,86 +297,75 @@ export function createApiKey({
 					permissions !== undefined ||
 					remaining !== null
 				) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.SERVER_ONLY_PROPERTY,
-					});
+					throw APIError.from(ERROR_CODES.SERVER_ONLY_PROPERTY, "BAD_REQUEST");
 				}
 			}
 
 			// if metadata is defined, than check that it's an object.
 			if (metadata) {
 				if (opts.enableMetadata === false) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.METADATA_DISABLED,
-					});
+					throw APIError.from(ERROR_CODES.METADATA_DISABLED, "BAD_REQUEST");
 				}
 				if (typeof metadata !== "object") {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.INVALID_METADATA_TYPE,
-					});
+					throw APIError.from(ERROR_CODES.INVALID_METADATA_TYPE, "BAD_REQUEST");
 				}
 			}
 
 			// make sure that if they pass a refill amount, they also pass a refill interval
 			if (refillAmount && !refillInterval) {
-				throw new APIError("BAD_REQUEST", {
-					message: ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
-				});
+				throw APIError.from(
+					ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
+					"BAD_REQUEST",
+				);
 			}
 			// make sure that if they pass a refill interval, they also pass a refill amount
 			if (refillInterval && !refillAmount) {
-				throw new APIError("BAD_REQUEST", {
-					message: ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
-				});
+				throw APIError.from(
+					ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
+					"BAD_REQUEST",
+				);
 			}
 
 			if (expiresIn) {
 				if (opts.keyExpiration.disableCustomExpiresTime === true) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.KEY_DISABLED_EXPIRATION,
-					});
+					throw APIError.from(
+						ERROR_CODES.KEY_DISABLED_EXPIRATION,
+						"BAD_REQUEST",
+					);
 				}
 
 				const expiresIn_in_days = expiresIn / (60 * 60 * 24);
 
 				if (opts.keyExpiration.minExpiresIn > expiresIn_in_days) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
-					});
+					throw APIError.from(
+						ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
+						"BAD_REQUEST",
+					);
 				} else if (opts.keyExpiration.maxExpiresIn < expiresIn_in_days) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
-					});
+					throw APIError.from(
+						ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
+						"BAD_REQUEST",
+					);
 				}
 			}
 			if (prefix) {
 				if (prefix.length < opts.minimumPrefixLength) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.INVALID_PREFIX_LENGTH,
-					});
+					throw APIError.from(ERROR_CODES.INVALID_PREFIX_LENGTH, "BAD_REQUEST");
 				}
 				if (prefix.length > opts.maximumPrefixLength) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.INVALID_PREFIX_LENGTH,
-					});
+					throw APIError.from(ERROR_CODES.INVALID_PREFIX_LENGTH, "BAD_REQUEST");
 				}
 			}
 
 			if (name) {
 				if (name.length < opts.minimumNameLength) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.INVALID_NAME_LENGTH,
-					});
+					throw APIError.from(ERROR_CODES.INVALID_NAME_LENGTH, "BAD_REQUEST");
 				}
 				if (name.length > opts.maximumNameLength) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.INVALID_NAME_LENGTH,
-					});
+					throw APIError.from(ERROR_CODES.INVALID_NAME_LENGTH, "BAD_REQUEST");
 				}
 			} else if (opts.requireName) {
-				throw new APIError("BAD_REQUEST", {
-					message: ERROR_CODES.NAME_REQUIRED,
-				});
+				throw APIError.from(ERROR_CODES.NAME_REQUIRED, "BAD_REQUEST");
 			}
 
 			deleteAllExpiredApiKeys(ctx.context);

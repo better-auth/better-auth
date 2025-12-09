@@ -1,9 +1,9 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { Account } from "@better-auth/core/db";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
-import { APIError } from "better-call";
+
 import * as z from "zod";
 import {
 	getAccountCookie,
@@ -224,9 +224,7 @@ export const linkSocialAccount = createAuthEndpoint(
 					provider: c.body.provider,
 				},
 			);
-			throw new APIError("NOT_FOUND", {
-				message: BASE_ERROR_CODES.PROVIDER_NOT_FOUND,
-			});
+			throw APIError.from(BASE_ERROR_CODES.PROVIDER_NOT_FOUND, "NOT_FOUND");
 		}
 
 		// Handle ID Token flow if provided
@@ -238,9 +236,10 @@ export const linkSocialAccount = createAuthEndpoint(
 						provider: c.body.provider,
 					},
 				);
-				throw new APIError("NOT_FOUND", {
-					message: BASE_ERROR_CODES.ID_TOKEN_NOT_SUPPORTED,
-				});
+				throw APIError.from(
+					BASE_ERROR_CODES.ID_TOKEN_NOT_SUPPORTED,
+					"NOT_FOUND",
+				);
 			}
 
 			const { token, nonce } = c.body.idToken;
@@ -249,9 +248,7 @@ export const linkSocialAccount = createAuthEndpoint(
 				c.context.logger.error("Invalid id token", {
 					provider: c.body.provider,
 				});
-				throw new APIError("UNAUTHORIZED", {
-					message: BASE_ERROR_CODES.INVALID_TOKEN,
-				});
+				throw APIError.from(BASE_ERROR_CODES.INVALID_TOKEN, "UNAUTHORIZED");
 			}
 
 			const linkingUserInfo = await provider.getUserInfo({
@@ -264,9 +261,10 @@ export const linkSocialAccount = createAuthEndpoint(
 				c.context.logger.error("Failed to get user info", {
 					provider: c.body.provider,
 				});
-				throw new APIError("UNAUTHORIZED", {
-					message: BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
-				});
+				throw APIError.from(
+					BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
+					"UNAUTHORIZED",
+				);
 			}
 
 			const linkingUserId = String(linkingUserInfo.user.id);
@@ -275,9 +273,10 @@ export const linkSocialAccount = createAuthEndpoint(
 				c.context.logger.error("User email not found", {
 					provider: c.body.provider,
 				});
-				throw new APIError("UNAUTHORIZED", {
-					message: BASE_ERROR_CODES.USER_EMAIL_NOT_FOUND,
-				});
+				throw APIError.from(
+					BASE_ERROR_CODES.USER_EMAIL_NOT_FOUND,
+					"UNAUTHORIZED",
+				);
 			}
 
 			const existingAccounts = await c.context.internalAdapter.findAccounts(
@@ -304,18 +303,26 @@ export const linkSocialAccount = createAuthEndpoint(
 				(!isTrustedProvider && !linkingUserInfo.user.emailVerified) ||
 				c.context.options.account?.accountLinking?.enabled === false
 			) {
-				throw new APIError("UNAUTHORIZED", {
-					message: "Account not linked - linking not allowed",
-				});
+				throw APIError.from(
+					{
+						message: "Account not linked - linking not allowed",
+						code: "LINKING_NOT_ALLOWED",
+					},
+					"UNAUTHORIZED",
+				);
 			}
 
 			if (
 				linkingUserInfo.user.email !== session.user.email &&
 				c.context.options.account?.accountLinking?.allowDifferentEmails !== true
 			) {
-				throw new APIError("UNAUTHORIZED", {
-					message: "Account not linked - different emails not allowed",
-				});
+				throw APIError.from(
+					{
+						message: "Account not linked - different emails not allowed",
+						code: "LINKING_DIFFERENT_EMAILS_NOT_ALLOWED",
+					},
+					"UNAUTHORIZED",
+				);
 			}
 
 			try {
@@ -328,10 +335,14 @@ export const linkSocialAccount = createAuthEndpoint(
 					refreshToken: c.body.idToken.refreshToken,
 					scope: c.body.idToken.scopes?.join(","),
 				});
-			} catch {
-				throw new APIError("EXPECTATION_FAILED", {
-					message: "Account not linked - unable to create account",
-				});
+			} catch (e: any) {
+				throw APIError.from(
+					{
+            message: "Account not linked - unable to create account",
+						code: "LINKING_FAILED",
+					},
+					"EXPECTATION_FAILED",
+				);
 			}
 
 			if (
@@ -418,9 +429,10 @@ export const unlinkAccount = createAuthEndpoint(
 			accounts.length === 1 &&
 			!ctx.context.options.account?.accountLinking?.allowUnlinkingAll
 		) {
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT,
-			});
+			throw APIError.from(
+				BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT,
+				"BAD_REQUEST",
+			);
 		}
 		const accountExist = accounts.find((account) =>
 			accountId
@@ -428,9 +440,7 @@ export const unlinkAccount = createAuthEndpoint(
 				: account.providerId === providerId,
 		);
 		if (!accountExist) {
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.ACCOUNT_NOT_FOUND,
-			});
+			throw APIError.from(BASE_ERROR_CODES.ACCOUNT_NOT_FOUND, "BAD_REQUEST");
 		}
 		await ctx.context.internalAdapter.deleteAccount(accountExist.id);
 		return ctx.json({
@@ -515,9 +525,13 @@ export const getAccessToken = createAuthEndpoint(
 			throw ctx.error("UNAUTHORIZED");
 		}
 		if (!ctx.context.socialProviders.find((p) => p.id === providerId)) {
-			throw new APIError("BAD_REQUEST", {
-				message: `Provider ${providerId} is not supported.`,
-			});
+			throw APIError.from(
+				{
+					message: `Provider ${providerId} is not supported.`,
+					code: "PROVIDER_NOT_SUPPORTED",
+				},
+				"BAD_REQUEST",
+			);
 		}
 		const accountData = await getAccountCookie(ctx);
 		let account: Account | undefined = undefined;
@@ -538,17 +552,13 @@ export const getAccessToken = createAuthEndpoint(
 		}
 
 		if (!account) {
-			throw new APIError("BAD_REQUEST", {
-				message: "Account not found",
-			});
+			throw APIError.from(BASE_ERROR_CODES.ACCOUNT_NOT_FOUND, "BAD_REQUEST");
 		}
 		const provider = ctx.context.socialProviders.find(
 			(p) => p.id === providerId,
 		);
 		if (!provider) {
-			throw new APIError("BAD_REQUEST", {
-				message: `Provider ${providerId} not found.`,
-			});
+			throw APIError.from(BASE_ERROR_CODES.PROVIDER_NOT_FOUND, "BAD_REQUEST");
 		}
 
 		try {
@@ -597,10 +607,13 @@ export const getAccessToken = createAuthEndpoint(
 			};
 			return ctx.json(tokens);
 		} catch (error) {
-			throw new APIError("BAD_REQUEST", {
-				message: "Failed to get a valid access token",
-				cause: error,
-			});
+			throw APIError.from(
+				{
+					message: "Failed to get a valid access token",
+					code: "FAILED_TO_GET_ACCESS_TOKEN",
+				},
+				"BAD_REQUEST",
+			);
 		}
 	},
 );
@@ -678,22 +691,34 @@ export const refreshToken = createAuthEndpoint(
 		}
 		let resolvedUserId = session?.user?.id || userId;
 		if (!resolvedUserId) {
-			throw new APIError("BAD_REQUEST", {
-				message: `Either userId or session is required`,
-			});
+			throw APIError.from(
+				{
+					message: `Either userId or session is required`,
+					code: "USER_ID_OR_SESSION_REQUIRED",
+				},
+				"BAD_REQUEST",
+			);
 		}
 		const provider = ctx.context.socialProviders.find(
 			(p) => p.id === providerId,
 		);
 		if (!provider) {
-			throw new APIError("BAD_REQUEST", {
-				message: `Provider ${providerId} not found.`,
-			});
+			throw APIError.from(
+				{
+					message: `Provider ${providerId} not found.`,
+					code: "PROVIDER_NOT_FOUND",
+				},
+				"BAD_REQUEST",
+			);
 		}
 		if (!provider.refreshAccessToken) {
-			throw new APIError("BAD_REQUEST", {
-				message: `Provider ${providerId} does not support token refreshing.`,
-			});
+			throw APIError.from(
+				{
+					message: `Provider ${providerId} does not support token refreshing.`,
+					code: "TOKEN_REFRESH_NOT_SUPPORTED",
+				},
+				"BAD_REQUEST",
+			);
 		}
 
 		// Try to read refresh token from cookie first
@@ -715,9 +740,7 @@ export const refreshToken = createAuthEndpoint(
 		}
 
 		if (!account) {
-			throw new APIError("BAD_REQUEST", {
-				message: "Account not found",
-			});
+			throw APIError.from(BASE_ERROR_CODES.ACCOUNT_NOT_FOUND, "BAD_REQUEST");
 		}
 
 		let refreshToken: string | null | undefined = undefined;
@@ -728,9 +751,13 @@ export const refreshToken = createAuthEndpoint(
 		}
 
 		if (!refreshToken) {
-			throw new APIError("BAD_REQUEST", {
-				message: "Refresh token not found",
-			});
+			throw APIError.from(
+				{
+					message: "Refresh token not found",
+					code: "REFRESH_TOKEN_NOT_FOUND",
+				},
+				"BAD_REQUEST",
+			);
 		}
 
 		try {
@@ -782,10 +809,13 @@ export const refreshToken = createAuthEndpoint(
 				accountId: account.accountId,
 			});
 		} catch (error) {
-			throw new APIError("BAD_REQUEST", {
-				message: "Failed to refresh access token",
-				cause: error,
-			});
+			throw APIError.from(
+				{
+					message: "Failed to refresh access token",
+					code: "FAILED_TO_REFRESH_ACCESS_TOKEN",
+				},
+				"BAD_REQUEST",
+			);
 		}
 	},
 );
@@ -875,9 +905,7 @@ export const accountInfo = createAuthEndpoint(
 		}
 
 		if (!account || account.userId !== ctx.context.session.user.id) {
-			throw new APIError("BAD_REQUEST", {
-				message: "Account not found",
-			});
+			throw APIError.from(BASE_ERROR_CODES.ACCOUNT_NOT_FOUND, "BAD_REQUEST");
 		}
 
 		const provider = ctx.context.socialProviders.find(
@@ -885,9 +913,13 @@ export const accountInfo = createAuthEndpoint(
 		);
 
 		if (!provider) {
-			throw new APIError("INTERNAL_SERVER_ERROR", {
-				message: `Provider account provider is ${account.providerId} but it is not configured`,
-			});
+			throw APIError.from(
+				{
+					message: `Provider account provider is ${account.providerId} but it is not configured`,
+					code: "PROVIDER_NOT_CONFIGURED",
+				},
+				"INTERNAL_SERVER_ERROR",
+			);
 		}
 		const tokens = await getAccessToken({
 			...ctx,
@@ -900,9 +932,13 @@ export const accountInfo = createAuthEndpoint(
 			returnStatus: false,
 		});
 		if (!tokens.accessToken) {
-			throw new APIError("BAD_REQUEST", {
-				message: "Access token not found",
-			});
+			throw APIError.from(
+				{
+					message: "Access token not found",
+					code: "ACCESS_TOKEN_NOT_FOUND",
+				},
+				"BAD_REQUEST",
+			);
 		}
 		const info = await provider.getUserInfo({
 			...tokens,

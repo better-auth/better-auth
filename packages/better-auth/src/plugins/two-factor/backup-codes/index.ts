@@ -317,7 +317,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 						],
 					});
 					if (!twoFactor) {
-						throw new APIError("BAD_REQUEST", {
+						throw APIError.fromStatus("BAD_REQUEST", {
 							message: TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
 						});
 					}
@@ -330,7 +330,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 						opts,
 					);
 					if (!validate.status) {
-						throw new APIError("UNAUTHORIZED", {
+						throw APIError.fromStatus("UNAUTHORIZED", {
 							message: TWO_FACTOR_ERROR_CODES.INVALID_BACKUP_CODE,
 						});
 					}
@@ -356,7 +356,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 						],
 					});
 					if (!updated) {
-						throw new APIError("CONFLICT", {
+						throw APIError.fromStatus("CONFLICT", {
 							message: "Failed to verify backup code. Please try again.",
 						});
 					}
@@ -436,7 +436,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 				async (ctx) => {
 					const user = ctx.context.session.user as UserWithTwoFactor;
 					if (!user.twoFactorEnabled) {
-						throw new APIError("BAD_REQUEST", {
+						throw APIError.fromStatus("BAD_REQUEST", {
 							message: TWO_FACTOR_ERROR_CODES.TWO_FACTOR_NOT_ENABLED,
 						});
 					}
@@ -491,7 +491,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 						],
 					});
 					if (!twoFactor) {
-						throw new APIError("BAD_REQUEST", {
+						throw APIError.fromStatus("BAD_REQUEST", {
 							message: TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
 						});
 					}
@@ -502,7 +502,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 					);
 
 					if (!decryptedBackupCodes) {
-						throw new APIError("BAD_REQUEST", {
+						throw APIError.fromStatus("BAD_REQUEST", {
 							message: TWO_FACTOR_ERROR_CODES.INVALID_BACKUP_CODE,
 						});
 					}

@@ -7,10 +7,9 @@ import {
 	validateAuthorizationCode,
 } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
-import { APIError } from "better-call";
 import { decodeJwt } from "jose";
 import * as z from "zod";
-import { sessionMiddleware } from "../../api";
+import { APIError, sessionMiddleware } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState, parseState } from "../../oauth2/state";
@@ -118,7 +117,7 @@ export const signInWithOAuth2 = (options: GenericOAuthOptions) =>
 			const { providerId } = ctx.body;
 			const config = options.config.find((c) => c.providerId === providerId);
 			if (!config) {
-				throw new APIError("BAD_REQUEST", {
+				throw APIError.fromStatus("BAD_REQUEST", {
 					message: `${GENERIC_OAUTH_ERROR_CODES.PROVIDER_CONFIG_NOT_FOUND} ${providerId}`,
 				});
 			}
@@ -158,7 +157,7 @@ export const signInWithOAuth2 = (options: GenericOAuthOptions) =>
 				}
 			}
 			if (!finalAuthUrl || !finalTokenUrl) {
-				throw new APIError("BAD_REQUEST", {
+				throw APIError.fromStatus("BAD_REQUEST", {
 					message: GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
 				});
 			}
@@ -282,7 +281,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 			}
 			const providerId = ctx.params?.providerId;
 			if (!providerId) {
-				throw new APIError("BAD_REQUEST", {
+				throw APIError.fromStatus("BAD_REQUEST", {
 					message: GENERIC_OAUTH_ERROR_CODES.PROVIDER_ID_REQUIRED,
 				});
 			}
@@ -291,7 +290,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 			);
 
 			if (!providerConfig) {
-				throw new APIError("BAD_REQUEST", {
+				throw APIError.fromStatus("BAD_REQUEST", {
 					message: `${GENERIC_OAUTH_ERROR_CODES.PROVIDER_CONFIG_NOT_FOUND} ${providerId}`,
 				});
 			}
@@ -347,7 +346,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 				} else {
 					// Standard token exchange with tokenUrlParams support
 					if (!finalTokenUrl) {
-						throw new APIError("BAD_REQUEST", {
+						throw APIError.fromStatus("BAD_REQUEST", {
 							message: GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIG,
 						});
 					}
@@ -378,7 +377,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 				throw redirectOnError("oauth_code_verification_failed");
 			}
 			if (!tokens) {
-				throw new APIError("BAD_REQUEST", {
+				throw APIError.fromStatus("BAD_REQUEST", {
 					message: GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIG,
 				});
 			}
@@ -596,7 +595,7 @@ export const oAuth2LinkAccount = (options: GenericOAuthOptions) =>
 		async (c: GenericEndpointContext) => {
 			const session = c.context.session;
 			if (!session) {
-				throw new APIError("UNAUTHORIZED", {
+				throw APIError.fromStatus("UNAUTHORIZED", {
 					message: GENERIC_OAUTH_ERROR_CODES.SESSION_REQUIRED,
 				});
 			}
@@ -604,7 +603,7 @@ export const oAuth2LinkAccount = (options: GenericOAuthOptions) =>
 				(p) => p.providerId === c.body.providerId,
 			);
 			if (!provider) {
-				throw new APIError("NOT_FOUND", {
+				throw APIError.fromStatus("NOT_FOUND", {
 					message: BASE_ERROR_CODES.PROVIDER_NOT_FOUND,
 				});
 			}
@@ -625,7 +624,7 @@ export const oAuth2LinkAccount = (options: GenericOAuthOptions) =>
 			let finalAuthUrl = authorizationUrl;
 			if (!finalAuthUrl) {
 				if (!discoveryUrl) {
-					throw new APIError("BAD_REQUEST", {
+					throw APIError.fromStatus("BAD_REQUEST", {
 						message: GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
 					});
 				}
@@ -647,7 +646,7 @@ export const oAuth2LinkAccount = (options: GenericOAuthOptions) =>
 			}
 
 			if (!finalAuthUrl) {
-				throw new APIError("BAD_REQUEST", {
+				throw APIError.fromStatus("BAD_REQUEST", {
 					message: GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
 				});
 			}

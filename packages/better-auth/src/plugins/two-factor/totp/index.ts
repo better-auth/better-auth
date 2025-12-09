@@ -113,7 +113,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				ctx.context.logger.error(
 					"totp isn't configured. please pass totp option on two factor plugin to enable totp",
 				);
-				throw new APIError("BAD_REQUEST", {
+				throw APIError.fromStatus("BAD_REQUEST", {
 					message: "totp isn't configured",
 				});
 			}
@@ -160,7 +160,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				ctx.context.logger.error(
 					"totp isn't configured. please pass totp option on two factor plugin to enable totp",
 				);
-				throw new APIError("BAD_REQUEST", {
+				throw APIError.fromStatus("BAD_REQUEST", {
 					message: "totp isn't configured",
 				});
 			}
@@ -175,7 +175,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				],
 			});
 			if (!twoFactor) {
-				throw new APIError("BAD_REQUEST", {
+				throw APIError.fromStatus("BAD_REQUEST", {
 					message: TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
 				});
 			}
@@ -228,7 +228,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				ctx.context.logger.error(
 					"totp isn't configured. please pass totp option on two factor plugin to enable totp",
 				);
-				throw new APIError("BAD_REQUEST", {
+				throw APIError.fromStatus("BAD_REQUEST", {
 					message: "totp isn't configured",
 				});
 			}
@@ -245,7 +245,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 			});
 
 			if (!twoFactor) {
-				throw new APIError("BAD_REQUEST", {
+				throw APIError.fromStatus("BAD_REQUEST", {
 					message: TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
 				});
 			}
@@ -263,7 +263,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 
 			if (!user.twoFactorEnabled) {
 				if (!session.session) {
-					throw new APIError("BAD_REQUEST", {
+					throw APIError.fromStatus("BAD_REQUEST", {
 						message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 					});
 				}

@@ -1,8 +1,9 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { APIError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils";
 import * as z from "zod";
-import { APIError, sessionMiddleware } from "../../../api";
+import { sessionMiddleware } from "../../../api";
 import { ERROR_CODES } from "..";
 import { getApiKeyById } from "../adapter";
 import type { apiKeySchema } from "../schema";
@@ -185,9 +186,7 @@ export function getApiKey({
 			}
 
 			if (!apiKey) {
-				throw new APIError("NOT_FOUND", {
-					message: ERROR_CODES.KEY_NOT_FOUND,
-				});
+				throw APIError.from(ERROR_CODES.KEY_NOT_FOUND, "NOT_FOUND");
 			}
 
 			deleteAllExpiredApiKeys(ctx.context);
