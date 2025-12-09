@@ -102,75 +102,17 @@ type revokeDeviceSession = {
 
 When a user logs out, the plugin will revoke all active sessions for the user. You can do this by calling the existing `signOut` method, which handles revoking all sessions automatically.
 
-## Options
-
 ### Max Sessions
 
 You can specify the maximum number of sessions a user can have by passing the `maximumSessions` option to the plugin. By default, the plugin allows 5 sessions per device.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { multiSession } from "better-auth/plugins"
 
 export const auth = betterAuth({
     plugins: [
         multiSession({
             maximumSessions: 3
-        })
-    ]
-})
-```
-
-### Additional Fields
-
-You can infer additional fields for the `user` and `session` schema by passing the `schema` option to both plugins.
-
-<Callout type="warning">
-    Note that this only affects type inference and does not modify the actual database schema.
-    Make sure that you [extend the core schema](/docs/concepts/database#extending-core-schema) accordingly.
-</Callout>
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth"
-import { multiSession } from "better-auth/plugins"
-
-export const auth = betterAuth({
-    plugins: [
-        multiSession({
-            schema: {
-                user: {
-                    additionalFields: {
-                        lang: {
-                            type: "string",
-                            required: false,
-                            defaultValue: "en"
-                        }
-                    }
-                }
-            }
-        })
-    ]
-})
-```
-
-```ts title="auth-client.ts"
-import { createAuthClient } from "better-auth/client"
-import { multiSessionClient } from "better-auth/client/plugins"
-
-export const authClient = createAuthClient({
-    plugins: [
-        multiSessionClient({
-            schema: {
-                user: {
-                    additionalFields: {
-                        lang: {
-                            type: "string",
-                            required: false,
-                            defaultValue: "en"
-                        }
-                    }
-                }
-            }
         })
     ]
 })
