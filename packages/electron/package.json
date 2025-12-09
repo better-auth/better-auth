@@ -1,0 +1,89 @@
+{
+  "name": "@better-auth/electron",
+  "version": "1.4.6-beta.3",
+  "type": "module",
+  "description": "Better Auth integration for Electron applications.",
+  "main": "dist/index.mjs",
+  "module": "dist/index.mjs",
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/better-auth/better-auth",
+    "directory": "packages/electron"
+  },
+  "homepage": "https://www.better-auth.com/docs/integrations/electron",
+  "keywords": [
+    "electron",
+    "auth",
+    "better-auth",
+    "typescript"
+  ],
+  "scripts": {
+    "test": "vitest",
+    "coverage": "vitest run --coverage",
+    "lint:package": "publint run --strict",
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "exports": {
+    ".": {
+      "dev-source": "./src/index.ts",
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    },
+    "./client": {
+      "dev-source": "./src/client.ts",
+      "types": "./dist/client.d.mts",
+      "default": "./dist/client.mjs"
+    },
+    "./proxy": {
+      "dev-source": "./src/proxy.ts",
+      "types": "./dist/proxy.d.mts",
+      "default": "./dist/proxy.mjs"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "./dist/index.d.mts"
+      ],
+      "client": [
+        "./dist/client.d.mts"
+      ],
+      "proxy": [
+        "./dist/proxy.d.mts"
+      ]
+    }
+  },
+  "peerDependenciesMeta": {
+    "electron": {
+      "optional": true
+    }
+  },
+  "peerDependencies": {
+    "electron": ">=37.0.0",
+    "@better-auth/core": "workspace:*"
+  },
+  "dependencies": {
+    "@better-fetch/fetch": "catalog:",
+    "better-call": "catalog:",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "electron": "~39.2.6",
+    "@better-auth/core": "workspace:*",
+    "@better-fetch/fetch": "catalog:",
+    "better-auth": "workspace:",
+    "tsdown": "catalog:"
+  },
+  "engines": {
+    "node": ">=22.16.0"
+  },
+  "files": [
+    "dist"
+  ]
+}
