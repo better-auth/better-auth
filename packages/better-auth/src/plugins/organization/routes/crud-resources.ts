@@ -13,6 +13,7 @@ import {
 } from "../load-resources";
 import type { Member, OrganizationResource, OrganizationRole } from "../schema";
 import type { OrganizationOptions } from "../types";
+import { safeJSONParse } from "@better-auth/core/utils";
 
 const DEFAULT_MAXIMUM_RESOURCES_PER_ORGANIZATION = 50;
 
@@ -680,7 +681,7 @@ export const deleteOrgResource = <O extends OrganizationOptions>(
 			});
 
 			const rolesWithResource = rolesUsingResource.filter((role) => {
-				const permissions = JSON.parse(role.permission);
+				const permissions = safeJSONParse(role.permission) as Record<string, string[]>;
 				return resourceName in permissions;
 			});
 
@@ -854,7 +855,7 @@ export const listOrgResources = <O extends OrganizationOptions>(options: O) => {
 
 			const customResourceList = customResources.map((r) => ({
 				...r,
-				permissions: JSON.parse(r.permissions) as string[],
+				permissions: safeJSONParse(r.permissions) as string[],
 				isCustom: true,
 				isProtected: false,
 			})) as (OrganizationResource &
@@ -1026,8 +1027,8 @@ export const getOrgResource = <O extends OrganizationOptions>(options: O) => {
 			return ctx.json({
 				resource: {
 					...customResource,
-					permissions: JSON.parse(
-						customResource.permissions as never as string,
+					permissions: safeJSONParse(
+						customResource.permissions,
 					) as string[],
 					isCustom: true,
 					isProtected: false,
