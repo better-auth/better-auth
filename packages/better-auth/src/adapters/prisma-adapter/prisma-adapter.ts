@@ -329,13 +329,10 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 
 					const selects = convertSelect(select, model, join);
 
-					let result = (
-						await db[model]!.findMany({
-							where: whereClause,
-							select: selects,
-							take: 1,
-						})
-					)[0];
+					let result = await db[model]!.findFirst({
+						where: whereClause,
+						select: selects,
+					});
 
 					// transform the resulting `include` items to use better-auth expected field names
 					if (join && result) {
@@ -495,6 +492,10 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
 			supportsUUIDs: config.provider === "postgresql" ? true : false,
+			supportsArrays:
+				config.provider === "postgresql" || config.provider === "mongodb"
+					? true
+					: false,
 			transaction:
 				(config.transaction ?? false)
 					? (cb) =>

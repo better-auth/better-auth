@@ -68,6 +68,8 @@ This plugin requires skipping the state cookie check. This has security implicat
 
 ## Options
 
-**currentURL**: The application's current URL is automatically determined by the plugin. It first checks for the request URL if invoked by a client, then it checks the base URL from popular hosting providers, and finally falls back to the `baseURL` in your auth config. If the URL isn’t inferred correctly, you can specify it manually here.
+**currentURL**: The application's current URL is automatically determined by the plugin. It first checks for the request URL if invoked by a client, then it checks the base URL from popular hosting providers, and finally falls back to the `baseURL` in your auth config. If the URL isn't inferred correctly, you can specify it manually here.
 
 **productionURL**: If this value matches the `baseURL` in your auth config, requests will not be proxied. Defaults to the `BETTER_AUTH_URL` environment variable.
+
+**maxAge**: Maximum age in seconds for encrypted cookie payloads. Payloads older than this will be rejected to prevent replay attacks. Keep this value short (e.g., 30-60 seconds) to minimize the window for potential replay attacks while still allowing normal OAuth flows. Defaults to `60` seconds.
