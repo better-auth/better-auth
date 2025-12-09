@@ -39,7 +39,7 @@ export const getBlogPost = cache(
 				author: data.author,
 				tags: data.tags,
 			};
-		} catch (error) {
+		} catch {
 			return null;
 		}
 	},
@@ -61,7 +61,7 @@ export const getAllBlogPosts = cache(async (): Promise<BlogPost[]> => {
 		return posts
 			.filter((post): post is BlogPost => post !== null)
 			.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-	} catch (error) {
+	} catch {
 		return [];
 	}
 });
