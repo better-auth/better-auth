@@ -38,8 +38,8 @@ import {
 	signOut,
 	signUpEmail,
 	unlinkAccount,
-	validatePasswordResetToken,
 	updateUser,
+	validatePasswordResetToken,
 	verifyEmail,
 } from "./routes";
 import { toAuthEndpoints } from "./to-auth-endpoints";
