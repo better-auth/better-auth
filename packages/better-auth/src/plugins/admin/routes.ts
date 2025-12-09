@@ -638,7 +638,7 @@ export const listUsers = (opts: AdminOptions) =>
 					limit: Number(ctx.query?.limit) || undefined,
 					offset: Number(ctx.query?.offset) || undefined,
 				});
-			} catch (e) {
+			} catch {
 				return ctx.json({
 					users: [],
 					total: 0,
@@ -1005,13 +1005,33 @@ export const impersonateUser = (opts: AdminOptions) =>
 				});
 			}
 
-			const targetUser = await ctx.context.internalAdapter.findUserById(
+			const targetUser = (await ctx.context.internalAdapter.findUserById(
 				ctx.body.userId,
-			);
+			)) as UserWithRole | null;
 
 			if (!targetUser) {
 				throw new APIError("NOT_FOUND", {
 					message: "User not found",
+				});
+			}
+
+			const adminRoles = (
+				Array.isArray(opts.adminRoles)
+					? opts.adminRoles
+					: opts.adminRoles?.split(",") || []
+			).map((role) => role.trim());
+			const targetUserRole = (
+				targetUser.role ||
+				opts.defaultRole ||
+				"user"
+			).split(",");
+			if (
+				opts.allowImpersonatingAdmins !== true &&
+				(targetUserRole.some((role) => adminRoles.includes(role)) ||
+					opts.adminUserIds?.includes(targetUser.id))
+			) {
+				throw new APIError("FORBIDDEN", {
+					message: ADMIN_ERROR_CODES.YOU_CANNOT_IMPERSONATE_ADMINS,
 				});
 			}
 

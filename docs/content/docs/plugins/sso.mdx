@@ -639,19 +639,22 @@ organizationProvisioning: {
 const auth = betterAuth({
     plugins: [
         sso({
-            defaultSSO: {
-                providerId: "default-saml", // Provider ID for the default provider
-                samlConfig: {
-                    issuer: "https://your-app.com",
-                    entryPoint: "https://idp.example.com/sso",
-                    cert: "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
-                    callbackUrl: "http://localhost:3000/api/auth/sso/saml2/sp/acs",
-                    spMetadata: {
-                        entityID: "http://localhost:3000/api/auth/sso/saml2/sp/metadata",
-                        metadata: "<!-- Your SP Metadata XML -->",
+            defaultSSO: [
+                {
+                    providerId: "default-saml", // Provider ID for the default provider
+                    domain: "http://your-app.com",
+                    samlConfig: {
+                        issuer: "https://your-app.com",
+                        entryPoint: "https://idp.example.com/sso",
+                        cert: "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
+                        callbackUrl: "http://localhost:3000/api/auth/sso/saml2/sp/acs",
+                        spMetadata: {
+                            entityID: "http://localhost:3000/api/auth/sso/saml2/sp/metadata",
+                            metadata: "<!-- Your SP Metadata XML -->",
+                        }
                     }
                 }
-            }
+            ]
         })
     ]
 });
@@ -981,8 +984,6 @@ For a detailed guide on setting up SAML SSO with examples for Okta and testing w
 
 **disableImplicitSignUp**: Disable implicit sign up for new users.
 
-**trustEmailVerified** — Trusts the `email_verified` flag from the provider. ⚠️ Use this with caution — it can lead to account takeover if misused. Only enable it if users **cannot freely register new providers**. You can prevent that by using `disabledPaths` or other safeguards to block provider registration from the client.
-
 If you want to allow account linking for specific trusted providers, enable the `accountLinking` option in your auth config and specify those providers in the `trustedProviders` list.
 
 <TypeTable
@@ -1046,28 +1047,31 @@ If you want to allow account linking for specific trusted providers, enable the 
     },
     defaultSSO: {
         description: "Configure a default SSO provider for testing and development. This provider will be used when no matching provider is found in the database.",
-        type: "object",
-        properties: {
-            domain: {
-                description: "The domain to match for this default provider.",
-                type: "string",
-                required: true,
-            },
-            providerId: {
-                description: "The provider ID to use for the default provider.",
-                type: "string",
-                required: true,
-            },
-            samlConfig: {
-                description: "SAML configuration for the default provider.",
-                type: "SAMLConfig",
-                required: false,
-            },
-            oidcConfig: {
-                description: "OIDC configuration for the default provider.",
-                type: "OIDCConfig",
-                required: false,
-            },
+        type: "array",
+        items: {
+            type: "object",
+            properties: {
+                domain: {
+                    description: "The domain to match for this default provider.",
+                    type: "string",
+                    required: true,
+                },
+                providerId: {
+                    description: "The provider ID to use for the default provider.",
+                    type: "string",
+                    required: true,
+                },
+                samlConfig: {
+                    description: "SAML configuration for the default provider.",
+                    type: "SAMLConfig",
+                    required: false,
+                },
+                oidcConfig: {
+                    description: "OIDC configuration for the default provider.",
+                    type: "OIDCConfig",
+                    required: false,
+                },
+            }
         },
     },
     saml: {

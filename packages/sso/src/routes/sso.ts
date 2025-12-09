@@ -1139,7 +1139,7 @@ export const callbackSSO = (options?: SSOOptions) => {
 			},
 		},
 		async (ctx) => {
-			const { code, state, error, error_description } = ctx.query;
+			const { code, error, error_description } = ctx.query;
 			const stateData = await parseState(ctx);
 			if (!stateData) {
 				const errorURL =

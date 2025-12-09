@@ -233,7 +233,13 @@ export interface SSOOptions {
 	 *
 	 * If you want to allow account linking for specific trusted providers, enable the `accountLinking` option in your auth config and specify those
 	 * providers in the `trustedProviders` list.
+	 *
 	 * @default false
+	 *
+	 * @deprecated This option is discouraged for new projects. Relying on provider-level `email_verified` is a weaker
+	 * trust signal compared to using `trustedProviders` in `accountLinking` or enabling `domainVerification` for SSO.
+	 * Existing configurations will continue to work, but new integrations should use explicit trust mechanisms.
+	 * This option may be removed in a future major version.
 	 */
 	trustEmailVerified?: boolean | undefined;
 	/**

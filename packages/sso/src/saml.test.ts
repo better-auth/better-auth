@@ -448,13 +448,9 @@ const createMockSAMLIdP = (port: number) => {
 		async (req: ExpressRequest, res: ExpressResponse) => {
 			const { SAMLResponse, RelayState } = req.body;
 			try {
-				const parseResult = await sp.parseLoginResponse(
-					idp,
-					saml.Constants.wording.binding.post,
-					{ body: { SAMLResponse } },
-				);
-
-				const { attributes, nameID } = parseResult.extract;
+				await sp.parseLoginResponse(idp, saml.Constants.wording.binding.post, {
+					body: { SAMLResponse },
+				});
 
 				res.redirect(302, RelayState || "http://localhost:3000/dashboard");
 			} catch (error) {
@@ -550,18 +546,6 @@ describe("SAML SSO with defaultSSO array", async () => {
 		plugins: [sso(ssoOptions)],
 	});
 
-	const ctx = await auth.$context;
-
-	const authClient = createAuthClient({
-		baseURL: "http://localhost:3000",
-		plugins: [bearer(), ssoClient()],
-		fetchOptions: {
-			customFetchImpl: async (url, init) => {
-				return auth.handler(new Request(url, init));
-			},
-		},
-	});
-
 	beforeAll(async () => {
 		await mockIdP.start();
 	});
@@ -619,8 +603,6 @@ describe("SAML SSO", async () => {
 		plugins: [sso(ssoOptions)],
 	});
 
-	const ctx = await auth.$context;
-
 	const authClient = createAuthClient({
 		baseURL: "http://localhost:3000",
 		plugins: [bearer(), ssoClient()],
@@ -639,7 +621,7 @@ describe("SAML SSO", async () => {
 
 	beforeAll(async () => {
 		await mockIdP.start();
-		const res = await authClient.signUp.email({
+		await authClient.signUp.email({
 			email: testUser.email,
 			password: testUser.password,
 			name: testUser.name,
@@ -667,7 +649,7 @@ describe("SAML SSO", async () => {
 			password: testUser.password,
 			name: testUser.name,
 		});
-		const res = await authClient.signIn.email(testUser, {
+		await authClient.signIn.email(testUser, {
 			throw: true,
 			onSuccess: setCookieToHeader(headers),
 		});
@@ -676,7 +658,7 @@ describe("SAML SSO", async () => {
 
 	it("should register a new SAML provider", async () => {
 		const headers = await getAuthHeaders();
-		const res = await authClient.signIn.email(testUser, {
+		await authClient.signIn.email(testUser, {
 			throw: true,
 			onSuccess: setCookieToHeader(headers),
 		});
@@ -847,11 +829,11 @@ describe("SAML SSO", async () => {
 	});
 	it("should initiate SAML login and handle response", async () => {
 		const headers = await getAuthHeaders();
-		const res = await authClient.signIn.email(testUser, {
+		await authClient.signIn.email(testUser, {
 			throw: true,
 			onSuccess: setCookieToHeader(headers),
 		});
-		const provider = await auth.api.registerSSOProvider({
+		await auth.api.registerSSOProvider({
 			body: {
 				providerId: "saml-provider-1",
 				issuer: "http://localhost:8081",
@@ -1184,11 +1166,7 @@ describe("SAML SSO", async () => {
 	});
 
 	it("should deny account linking when provider is not trusted and domain is not verified", async () => {
-		const {
-			auth: authUntrusted,
-			signInWithTestUser,
-			client,
-		} = await getTestInstance({
+		const { auth: authUntrusted, signInWithTestUser } = await getTestInstance({
 			account: {
 				accountLinking: {
 					enabled: true,
@@ -1736,7 +1714,7 @@ describe("SAML SSO with custom fields", () => {
 
 	beforeAll(async () => {
 		await mockIdP.start();
-		const res = await authClient.signUp.email({
+		await authClient.signUp.email({
 			email: testUser.email,
 			password: testUser.password,
 			name: testUser.name,

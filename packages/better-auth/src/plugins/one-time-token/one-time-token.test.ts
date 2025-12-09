@@ -73,7 +73,7 @@ describe("One-time token", async () => {
 
 	describe("should work with different storeToken options", () => {
 		describe("hashed", async () => {
-			const { auth, signInWithTestUser, client } = await getTestInstance(
+			const { auth, signInWithTestUser } = await getTestInstance(
 				{
 					plugins: [
 						oneTimeToken({
@@ -117,7 +117,7 @@ describe("One-time token", async () => {
 		});
 
 		describe("custom hasher", async () => {
-			const { auth, signInWithTestUser, client } = await getTestInstance({
+			const { auth, signInWithTestUser } = await getTestInstance({
 				plugins: [
 					oneTimeToken({
 						storeToken: {

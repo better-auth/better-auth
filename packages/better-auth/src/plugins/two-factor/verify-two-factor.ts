@@ -60,9 +60,17 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 						message: "failed to create session",
 					});
 				}
+				// Delete the verification token from the database after successful verification
+				await ctx.context.internalAdapter.deleteVerificationValue(
+					verificationToken.id,
+				);
 				await setSessionCookie(ctx, {
 					session,
 					user,
+				});
+				// Always clear the two factor cookie after successful verification
+				ctx.setCookie(cookieName.name, "", {
+					maxAge: 0,
 				});
 				if (ctx.body.trustDevice) {
 					const trustDeviceCookie = ctx.context.createAuthCookie(
@@ -87,10 +95,6 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 					);
 					// delete the dont remember me cookie
 					ctx.setCookie(ctx.context.authCookies.dontRememberToken.name, "", {
-						maxAge: 0,
-					});
-					// delete the two factor cookie
-					ctx.setCookie(cookieName.name, "", {
 						maxAge: 0,
 					});
 				}

@@ -227,13 +227,12 @@ describe("listMembers", async () => {
 });
 
 describe("updateMemberRole", async () => {
-	const { auth, signInWithTestUser, cookieSetter, customFetchImpl } =
-		await getTestInstance({
-			plugins: [organization()],
-		});
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		plugins: [organization()],
+	});
 
 	it("should update the member role", async () => {
-		const { headers, user } = await signInWithTestUser();
+		const { headers } = await signInWithTestUser();
 		const client = createAuthClient({
 			plugins: [organizationClient()],
 			baseURL: "http://localhost:3000/api/auth",
@@ -291,7 +290,7 @@ describe("updateMemberRole", async () => {
 			},
 		});
 
-		const org = await client.organization.create({
+		await client.organization.create({
 			name: "test",
 			slug: "test",
 			metadata: {
@@ -348,7 +347,7 @@ describe("updateMemberRole", async () => {
 });
 
 describe("activeMemberRole", async () => {
-	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance({
+	const { auth, signInWithTestUser } = await getTestInstance({
 		plugins: [organization()],
 	});
 	const ctx = await auth.$context;
@@ -372,7 +371,7 @@ describe("activeMemberRole", async () => {
 			headers,
 		},
 	});
-	const secondOrg = await client.organization.create({
+	await client.organization.create({
 		name: "test-second",
 		slug: "test-second",
 		metadata: {
