@@ -30,6 +30,8 @@ const spMetadataQuerySchema = z.object({
 	format: z.enum(["xml", "json"]).default("xml"),
 });
 
+type RelayState = Awaited<ReturnType<typeof parseRelayState>>;
+
 export const spMetadata = () => {
 	return createAuthEndpoint(
 		"/sso/saml2/sp/metadata",
@@ -1062,14 +1064,14 @@ export const signInSSO = (options?: SSOOptions) => {
 					});
 				}
 
-				const { state: RelayState } = await generateRelayState(
+				const { state: relayState } = await generateRelayState(
 					ctx,
 					undefined,
 					false,
 				);
 
 				return ctx.json({
-					url: `${loginRequest.context}&RelayState=${encodeURIComponent(RelayState)}`,
+					url: `${loginRequest.context}&RelayState=${encodeURIComponent(relayState)}`,
 					redirect: true,
 				});
 			}
@@ -1492,14 +1494,13 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			},
 		},
 		async (ctx) => {
-			const { SAMLResponse, RelayState: _RelayState } = ctx.body;
-			let RelayState: Awaited<ReturnType<typeof parseRelayState>> | undefined;
-
-			if (_RelayState) {
-				RelayState = await parseRelayState(ctx);
-			}
-
+			const { SAMLResponse } = ctx.body;
 			const { providerId } = ctx.params;
+
+			const relayState: RelayState | null = ctx.body.RelayState
+				? await parseRelayState(ctx)
+				: null;
+
 			let provider: SSOProvider<SSOOptions> | null = null;
 			if (options?.defaultSSO?.length) {
 				const matchingDefault = options.defaultSSO.find(
@@ -1730,7 +1731,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 							validateEmailDomain(userInfo.email, provider.domain));
 					if (!isTrustedProvider) {
 						const redirectUrl =
-							RelayState?.callbackURL ||
+							relayState?.callbackURL ||
 							parsedSamlConfig.callbackUrl ||
 							ctx.context.baseURL;
 						throw ctx.redirect(`${redirectUrl}?error=account_not_linked`);
@@ -1746,7 +1747,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 				user = existingUser;
 			} else {
 				// if implicit sign up is disabled, we should not create a new user nor a new account.
-				if (options?.disableImplicitSignUp) {
+				if (options?.disableImplicitSignUp && !relayState?.requestSignUp) {
 					throw new APIError("UNAUTHORIZED", {
 						message:
 							"User not found and implicit sign up is disabled for this provider",
@@ -1822,7 +1823,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 
 			// Redirect to callback URL
 			const callbackUrl =
-				RelayState?.callbackURL ||
+				relayState?.callbackURL ||
 				parsedSamlConfig.callbackUrl ||
 				ctx.context.baseURL;
 			throw ctx.redirect(callbackUrl);

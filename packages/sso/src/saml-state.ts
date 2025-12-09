@@ -36,7 +36,9 @@ export async function generateRelayState(
 	};
 
 	try {
-		return await generateGenericState(c, stateData);
+		return await generateGenericState(c, stateData, {
+			cookieName: "relay_state",
+		});
 	} catch (error) {
 		c.context.logger.error(
 			"Failed to create verification for relay state",
@@ -57,7 +59,9 @@ export async function parseRelayState(c: GenericEndpointContext) {
 	let parsedData: StateData;
 
 	try {
-		parsedData = await parseGenericState(c, state);
+		parsedData = await parseGenericState(c, state, {
+			cookieName: "relay_state",
+		});
 	} catch (error) {
 		c.context.logger.error("Failed to parse relay state", error);
 		throw new APIError("BAD_REQUEST", {
