@@ -155,7 +155,7 @@ const auth = betterAuth({
 ```
 
 <Callout type="info">
-**Important**: Please note that you must base64 encode your `scimToken` before you try to use as follows: `base64(scimToken:providerId:organizationId?)`.
+**Important**: Please note that you must base64 encode your `scimToken` before you try to use as follows: `base64(scimToken:providerId[:organizationId])`.
 
 In our example above, you would need to encode the `some-scim-token:default-scim:the-org` text to base64, resulting in the following scimToken: `c29tZS1zY2ltLXRva2VuOmRlZmF1bHQtc2NpbTp0aGUtb3Jn`
 </Callout>
