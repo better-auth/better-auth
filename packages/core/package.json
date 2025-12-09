@@ -25,7 +25,10 @@
     "./async_hooks": {
       "dev-source": "./src/async_hooks/index.ts",
       "types": "./dist/async_hooks/index.d.mts",
-      "default": "./dist/async_hooks/index.mjs"
+      "edge": "./dist/async_hooks/pure.index.mjs",
+      "node": "./dist/async_hooks/index.mjs",
+      "workerd": "./dist/async_hooks/index.mjs",
+      "default": "./dist/async_hooks/pure.index.mjs"
     },
     "./context": {
       "dev-source": "./src/context/index.ts",
