@@ -3,7 +3,6 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import type { DBFieldAttribute, Session, User } from "@better-auth/core/db";
 import { defineErrorCodes } from "@better-auth/core/utils";
 import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../api";
@@ -13,7 +12,6 @@ import {
 	parseSetCookieHeader,
 	setSessionCookie,
 } from "../../cookies";
-import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
 
 export interface MultiSessionConfig {
 	/**
@@ -22,20 +20,6 @@ export interface MultiSessionConfig {
 	 * @default 5
 	 */
 	maximumSessions?: number | undefined;
-	schema?:
-		| {
-				user?:
-					| {
-							additionalFields?: Record<string, DBFieldAttribute> | undefined;
-					  }
-					| undefined;
-				session?:
-					| {
-							additionalFields?: Record<string, DBFieldAttribute> | undefined;
-					  }
-					| undefined;
-		  }
-		| undefined;
 }
 
 const ERROR_CODES = defineErrorCodes({
@@ -54,9 +38,7 @@ const revokeDeviceSessionBodySchema = z.object({
 	}),
 });
 
-export const multiSession = <O extends MultiSessionConfig>(
-	options?: O | undefined,
-) => {
+export const multiSession = (options?: MultiSessionConfig | undefined) => {
 	const opts = {
 		maximumSessions: 5,
 		...options,
@@ -119,13 +101,7 @@ export const multiSession = <O extends MultiSessionConfig>(
 						},
 						[] as typeof validSessions,
 					);
-					return ctx.json(
-						uniqueUserSessions as {
-							user: User & InferAdditionalFieldsFromPluginOptions<"user", O>;
-							session: Session &
-								InferAdditionalFieldsFromPluginOptions<"session", O>;
-						}[],
-					);
+					return ctx.json(uniqueUserSessions);
 				},
 			),
 			/**
