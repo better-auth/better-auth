@@ -857,6 +857,7 @@ export const getNormalTestSuiteTests = (
 		},
 		"findMany - should find many models": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
+			console.log("users", users);
 			const result = await adapter.findMany<User>({
 				model: "user",
 			});
@@ -2984,6 +2985,32 @@ export const getNormalTestSuiteTests = (
 				console.log(findResult);
 			},
 		},
+		"create - should not get race-condition issues during concurrent row creations":
+			async () => {
+				// This tests works by creating several concurrent row creations,
+				// then checking that all returned rows are in the correct order.
+				// Databases such as MySQL and potentially others fail at this when
+				// IDs are not generated ahead of time.
+				const count = 20;
+				const promises = [];
+				for (let i = 0; i < count; i++) {
+					const { id: _, ...user } = await generate("user");
+					const email = `${i}@email.com`;
+					promises.push(
+						adapter.create<User>({
+							model: "user",
+							data: { ...user, email },
+						}),
+					);
+				}
+				const results = await Promise.all(promises);
+				expect(results.length).toBe(count);
+				for (let i = 0; i < count; i++) {
+					const result = results[i]!;
+					expect(result.email).toBe(`${i}@email.com`);
+					expect(result.id).toBeDefined();
+				}
+			},
 	};
 };
 
