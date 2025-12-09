@@ -50,7 +50,13 @@ export const authMiddlewareFactory = (opts: SCIMOptions) =>
 		}) as SCIMProvider;
 
 		if (scimProvider) {
-			return { authSCIMToken: scimProvider.scimToken, scimProvider };
+			if (scimProvider.scimToken === scimToken) {
+				return { authSCIMToken: scimProvider.scimToken, scimProvider };
+			} else {
+				throw new SCIMAPIError("UNAUTHORIZED", {
+					detail: "Invalid SCIM token",
+				});
+			}
 		}
 
 		scimProvider = await ctx.context.adapter.findOne<SCIMProvider>({

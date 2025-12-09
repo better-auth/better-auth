@@ -2060,5 +2060,37 @@ describe("SCIM", () => {
 				}),
 			).resolves.toBe(undefined);
 		});
+
+		it("should reject invalid SCIM tokens", async () => {
+			const { auth } = createTestInstance({
+				defaultSCIM: [
+					{
+						providerId: "the-scim-provider",
+						scimToken: "the-scim-token",
+					},
+				],
+			});
+
+			const createUser = () =>
+				auth.api.createSCIMUser({
+					body: {
+						userName: "the-username",
+					},
+					headers: {
+						authorization: `Bearer invalid-scim-token`,
+					},
+				});
+
+			await expect(createUser()).rejects.toThrow(
+				expect.objectContaining({
+					message: "Invalid SCIM token",
+					body: {
+						detail: "Invalid SCIM token",
+						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
+						status: "401",
+					},
+				}),
+			);
+		});
 	});
 });
