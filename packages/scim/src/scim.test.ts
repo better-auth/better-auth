@@ -1995,7 +1995,7 @@ describe("SCIM", () => {
 
 	describe("Default SCIM provider", () => {
 		it("should work with a default SCIM provider", async () => {
-			const scimToken = "dGhlLXNjaW0tdG9rZW46dGhlLXNjaW0tcHJvdmlkZXI="; // base64(providerId:scimToken)
+			const scimToken = "dGhlLXNjaW0tdG9rZW46dGhlLXNjaW0tcHJvdmlkZXI="; // base64(scimToken:providerId)
 			const { auth } = createTestInstance({
 				defaultSCIM: [
 					{
