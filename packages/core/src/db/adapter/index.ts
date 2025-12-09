@@ -424,7 +424,7 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 		where: Where[];
 		update: Record<string, any>;
 	}) => Promise<number>;
-	delete: <T>(data: { model: string; where: Where[] }) => Promise<void>;
+	delete: <_T>(data: { model: string; where: Where[] }) => Promise<void>;
 	deleteMany: (data: { model: string; where: Where[] }) => Promise<number>;
 	/**
 	 * Execute multiple operations in a transaction.

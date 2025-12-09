@@ -20,7 +20,6 @@ import {
 import { parseUserOutput } from "../db/schema";
 import type { Session, User } from "../types";
 import { getDate } from "../utils/date";
-import { getBaseURL } from "../utils/url";
 import { createAccountStore, createSessionStore } from "./session-store";
 
 export function createCookieGetter(options: BetterAuthOptions) {
@@ -379,8 +378,6 @@ export const getSessionCookie = (
 		}
 	}
 	const headers = "headers" in request ? request.headers : request;
-	const req = request instanceof Request ? request : undefined;
-	const url = getBaseURL(req?.url, config?.path, req);
 	const cookies = headers.get("cookie");
 	if (!cookies) {
 		return null;

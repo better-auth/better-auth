@@ -484,16 +484,8 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 						status: 400,
 					});
 				}
-				const {
-					aaguid,
-					// credentialID,
-					// credentialPublicKey,
-					// counter,
-					credentialDeviceType,
-					credentialBackedUp,
-					credential,
-					credentialType,
-				} = registrationInfo;
+				const { aaguid, credentialDeviceType, credentialBackedUp, credential } =
+					registrationInfo;
 				const pubKey = base64.encode(credential.publicKey);
 				const newPasskey: Omit<Passkey, "id"> = {
 					name: ctx.body.name,
