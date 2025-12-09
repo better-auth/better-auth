@@ -1781,7 +1781,7 @@ export const userHasRole = <O extends AdminOptions>(opts: O) => {
 				});
 			}
 
-			const userRoles = user.role.split(",");
+			const userRoles = user.role.split(",").map((role) => role.trim());
 			const roles = Array.isArray(ctx.body.role)
 				? ctx.body.role
 				: [ctx.body.role];
