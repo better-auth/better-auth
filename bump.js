@@ -1,27 +1,35 @@
 #!/usr/bin/env node
-import { exec } from "node:child_process";
+import { exec, execSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
+import { stdin as input, stdout as output } from "node:process";
+import readline from "node:readline/promises";
 import { promisify } from "node:util";
 
 const execAsync = promisify(exec);
-
-const releaseType = process.argv[2] || "prerelease";
 const pkgs = readdirSync("packages").filter((pkg) => !pkg.startsWith("."));
+const _rl = readline.createInterface({ input, output });
 
-async function getPackageVersion(pkg) {
-	return JSON.parse(readFileSync(pkg, "utf-8"));
+function getPackageVersion(pkgPath) {
+	return JSON.parse(readFileSync(pkgPath, "utf-8"));
 }
 
 async function getNextVersion(path = ".") {
 	try {
-		await execAsync(
-			/* cspell:disable-next-line */
-			`cd ${path} && npx bumpp package.json --release ${releaseType} --no-commit --no-tag --push false -y`,
-		);
-		const pkg = await getPackageVersion(`${path}/package.json`);
+		// Prompt user synchronously
+		try {
+			execSync(
+				`cd ${path} && npx bumpp package.json --no-commit --no-tag --push false`,
+				{ stdio: "inherit" },
+			);
+		} catch (error) {
+			console.error(error);
+			process.exit(1);
+		}
+
+		const updatedPkg = getPackageVersion(`${path}/package.json`);
 		return {
-			nextVersion: pkg.version,
-			pkgName: pkg.name,
+			nextVersion: updatedPkg.version,
+			pkgName: updatedPkg.name,
 			pkgPath: path,
 		};
 	} catch (err) {
@@ -32,23 +40,31 @@ async function getNextVersion(path = ".") {
 
 async function main() {
 	const rootVersion = await getNextVersion();
-	// Calculate next versions in parallel
-	const results = await Promise.all(
-		pkgs.map((pkg) => getNextVersion(`packages/${pkg}`)),
-	);
+	const results = [];
+
+	for (const pkg of pkgs) {
+		results.push(await getNextVersion(`packages/${pkg}`));
+	}
+
 	const versions = results.filter(Boolean);
 	console.log(versions);
 
 	// Commit all changes and tag
 	await execAsync(
 		`git add package.json ${versions.map((v) => v.pkgPath + "/package.json").join(" ")}`,
+		{ stdio: "inherit" },
 	);
-	await execAsync(
-		`git commit -m "chore: release ${rootVersion.nextVersion}" ${versions.map((v) => `-m "chore: release ${v.pkgName}@v${v.nextVersion}"`).join(" ")}`,
-	);
-	await execAsync(`git tag ${rootVersion.nextVersion}`);
 
-	console.log("All packages bumped, committed, and tagged!");
+	const commitMessage = [
+		`chore: release ${rootVersion.nextVersion}`,
+		...versions.map((v) => `chore: release ${v.pkgName}@v${v.nextVersion}`),
+	].join(" && ");
+
+	await execAsync(`git commit -m "${commitMessage}"`, { stdio: "inherit" });
+	await execAsync(`git tag v${rootVersion.nextVersion}`, { stdio: "inherit" });
+
+	console.log(`Packages bumped on v${rootVersion.nextVersion}:`);
+	console.log(versions.map((v) => `v${v.nextVersion}\n`));
 }
 
 await main();
