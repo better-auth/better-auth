@@ -1,5 +1,4 @@
 import type { AsyncLocalStorage } from "node:async_hooks";
-import { env } from "../env";
 
 export type { AsyncLocalStorage };
 
@@ -43,9 +42,6 @@ const AsyncLocalStoragePromise: Promise<typeof AsyncLocalStorage | null> =
 			if (typeof window !== "undefined") {
 				return null;
 			}
-			if (env["CONVEX_CLOUD_URL"] || env["CONVEX_SITE_URL"]) {
-				return AsyncLocalStoragePolyfill;
-			}
 			console.warn(
 				"[better-auth] Warning: AsyncLocalStorage is not available in this environment. Some features may not work as expected.",
 			);
@@ -55,7 +51,7 @@ const AsyncLocalStoragePromise: Promise<typeof AsyncLocalStorage | null> =
 			console.warn(
 				"[better-auth] If you are using Cloudflare Workers, please see: https://developers.cloudflare.com/workers/configuration/compatibility-flags/#nodejs-compatibility-flag",
 			);
-			throw err;
+			return AsyncLocalStoragePolyfill;
 		});
 
 export async function getAsyncLocalStorage(): Promise<
