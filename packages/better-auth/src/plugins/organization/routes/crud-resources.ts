@@ -1,4 +1,5 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { safeJSONParse } from "@better-auth/core/utils";
 import * as z from "zod";
 import { APIError } from "../../../api";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
@@ -13,7 +14,6 @@ import {
 } from "../load-resources";
 import type { Member, OrganizationResource, OrganizationRole } from "../schema";
 import type { OrganizationOptions } from "../types";
-import { safeJSONParse } from "@better-auth/core/utils";
 
 const DEFAULT_MAXIMUM_RESOURCES_PER_ORGANIZATION = 50;
 

@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { safeJSONParse } from "@better-auth/core/utils";
 import * as z from "zod";
 import { APIError } from "../../api";
 import type { AccessControl, Statements } from "../access";
@@ -6,7 +7,6 @@ import { createAccessControl } from "../access";
 import { defaultStatements } from "./access/statement";
 import type { OrganizationResource } from "./schema";
 import type { OrganizationOptions } from "./types";
-import { safeJSONParse } from "@better-auth/core/utils";
 
 /**
  * In-memory cache for custom resources per organization
