@@ -1715,7 +1715,10 @@ export const userHasRole = <O extends AdminOptions>(opts: O) => {
 											description: "The id of the user",
 										},
 										role: {
-											type: "string",
+											oneOf: [
+												{ type: "string" },
+												{ type: "array", items: { type: "string" } },
+											],
 											description: "The role to check for",
 										},
 									},
