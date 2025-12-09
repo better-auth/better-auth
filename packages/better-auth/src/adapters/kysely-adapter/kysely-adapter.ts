@@ -143,7 +143,11 @@ export const kyselyAdapter = (
 						return res;
 					}
 
-					const value = field ? values[field] : where[0]?.value;
+					const value = field
+						? values[field]
+						: where[0]
+							? values[where[0]?.field] || where[0]?.value
+							: undefined;
 					if (!value || !field) return null;
 					res = await db
 						.selectFrom(model)
