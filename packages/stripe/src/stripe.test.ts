@@ -239,6 +239,53 @@ describe("stripe", async () => {
 		});
 	});
 
+	it("should pass metadata to subscription when upgrading", async () => {
+		await authClient.signUp.email(
+			{
+				...testUser,
+				email: "metadata-test@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await authClient.signIn.email(
+			{
+				...testUser,
+				email: "metadata-test@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		const customMetadata = {
+			customField: "customValue",
+			organizationId: "org_123",
+			projectId: "proj_456",
+		};
+
+		await authClient.subscription.upgrade({
+			plan: "starter",
+			metadata: customMetadata,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(mockStripe.checkout.sessions.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				subscription_data: expect.objectContaining({
+					metadata: expect.objectContaining(customMetadata),
+				}),
+			}),
+			undefined,
+		);
+	});
+
 	it("should list active subscriptions", async () => {
 		const userRes = await authClient.signUp.email(
 			{
