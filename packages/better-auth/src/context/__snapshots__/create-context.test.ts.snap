@@ -20,6 +20,7 @@ exports[`base context creation > should match config 1`] = `
         "disableTransformInput": false,
         "disableTransformJoin": false,
         "disableTransformOutput": false,
+        "supportsArrays": false,
         "supportsBooleans": true,
         "supportsDates": true,
         "supportsJSON": false,
