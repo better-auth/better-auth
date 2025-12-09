@@ -524,6 +524,10 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						],
 						subscription_data: {
 							...freeTrial,
+							metadata: {
+								...ctx.body.metadata,
+								...params?.params?.subscription_data?.metadata,
+							},
 						},
 						mode: "subscription",
 						client_reference_id: referenceId,
