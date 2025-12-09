@@ -66,7 +66,12 @@ const { execute } = await testAdapter({
 		normalTestSuite(),
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
-		numberIdTestSuite(),
+		numberIdTestSuite({
+			disableTests: {
+				// Mysql + auto-incrementing id + concurrent row creations = race conditions.
+				"create - should not get race-condition issues during concurrent row creations": true,
+			},
+		}),
 		joinsTestSuite(),
 		uuidTestSuite(),
 	],

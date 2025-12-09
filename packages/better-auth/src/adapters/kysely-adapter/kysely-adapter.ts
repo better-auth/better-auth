@@ -120,12 +120,32 @@ export const kyselyAdapter = (
 							return { field: "id", value: values.id };
 						}
 
+						const idWhere = where.find(
+							(x) => x.field === "id" && (x.operator === "eq" || !x.operator),
+						);
+						if (idWhere) {
+							return { field: "id", value: idWhere.value };
+						}
+
 						const allFieldKeys = Object.keys(allFields);
 						const gfa = (f: string) => getFieldAttributes({ model, field: f });
 						const uniqueFields = allFieldKeys
 							.map((field) => ({ attr: gfa(field), key: field }))
 							.filter((field) => field.attr.unique)
 							.map((field) => field.attr.fieldName || field.key);
+
+						const foundWhereKey = where.find(
+							(x) =>
+								uniqueFields.includes(x.field) &&
+								(x.operator === "eq" || !x.operator),
+						);
+						if (foundWhereKey) {
+							let value = foundWhereKey.value;
+							if (foundWhereKey.field in values) {
+								value = values[foundWhereKey.field];
+							}
+							return { field: foundWhereKey.field, value: value };
+						}
 
 						// if any unique fields are found in the values, use that.
 						const foundKey = valueKeys.find((f) => uniqueFields.includes(f));
@@ -135,6 +155,9 @@ export const kyselyAdapter = (
 
 					// If a unique fields exists, use that to find the row.
 					if (uniqueField) {
+						console.log(
+							`has unique field ${uniqueField.field} with value ${uniqueField.value}`,
+						);
 						res = await db
 							.selectFrom(model)
 							.selectAll()
