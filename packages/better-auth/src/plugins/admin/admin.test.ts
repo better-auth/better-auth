@@ -654,6 +654,30 @@ describe("Admin plugin", async () => {
 		expect(res.error?.status).toBe(403);
 	});
 
+	it("should not allow to impersonate admins", async () => {
+		const userToImpersonate = await client.signUp.email({
+			email: "impersonate-admin@mail.com",
+			password: "password",
+			name: "Impersonate Admin User",
+		});
+		const userId = userToImpersonate.data?.user.id || "";
+		await client.admin.setRole({
+			userId,
+			role: "admin",
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		const res = await client.admin.impersonateUser(
+			{
+				userId,
+			},
+			{ headers: adminHeaders },
+		);
+
+		expect(res.error?.status).toBe(403);
+	});
+
 	it("should filter impersonated sessions", async () => {
 		const { headers } = await signInWithUser(data.email, data.password);
 		const res = await client.listSessions({
