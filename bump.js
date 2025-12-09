@@ -46,7 +46,7 @@ async function main() {
 	await execAsync(
 		`git commit -m "chore: release ${rootVersion.nextVersion}" ${versions.map((v) => `-m "chore: release ${v.pkgName}@v${v.nextVersion}"`).join(" ")}`,
 	);
-	await execAsync(`git tag ${rootVersion.nextVersion}`);
+	await execAsync(`git tag v${rootVersion.nextVersion}`);
 
 	console.log("All packages bumped, committed, and tagged!");
 }
