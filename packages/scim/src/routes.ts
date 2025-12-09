@@ -116,7 +116,30 @@ export const generateSCIMToken = (opts: SCIMOptions) =>
 				}
 			}
 
-			const scimProvider = await ctx.context.adapter.findOne<SCIMProvider>({
+			let scimProvider: SCIMProvider | null = opts.defaultSCIM?.find((p) => {
+				if (p.providerId === providerId && !organizationId) {
+					return true;
+				}
+
+				if (
+					p.providerId === providerId &&
+					organizationId &&
+					p.organizationId === organizationId
+				) {
+					return true;
+				}
+
+				return false;
+			}) as SCIMProvider;
+
+			if (scimProvider) {
+				ctx.setStatus(201);
+				return ctx.json({
+					scimToken: scimProvider.scimToken,
+				});
+			}
+
+			scimProvider = await ctx.context.adapter.findOne<SCIMProvider>({
 				model: "scimProvider",
 				where: [
 					{ field: "providerId", value: providerId },

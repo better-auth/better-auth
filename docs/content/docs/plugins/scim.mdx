@@ -134,6 +134,32 @@ scim({
 
 See the [hooks](#hooks) documentation for more details about supported hooks.
 
+#### Default SCIM token
+
+We also provide a way for you to specify a `SCIM` token to use by default. This allows you to test a SCIM connection without setting up providers in the database:
+
+```ts title="auth.ts"
+const auth = betterAuth({
+    plugins: [
+        scim({
+            defaultSCIM: [
+                {
+                    providerId: "default-scim", // ID of the existing provider you want to provision
+                    scimToken: "some-scim-token", // SCIM plain token
+                    organizationId: "the-org" // Optional organization id
+                }
+            ]
+        })
+    ]
+});
+```
+
+<Callout type="info">
+**Important**: Please note that you must base64 encode your `scimToken` before you try to use as follows: `base64(scimToken:providerId:organizationId?)`.
+
+In our example above, you would need to encode the `some-scim-token:default-scim:the-org` text to base64, resulting in the following scimToken: `c29tZS1zY2ltLXRva2VuOmRlZmF1bHQtc2NpbTp0aGUtb3Jn`
+</Callout>
+
 ### SCIM endpoints
 
 The following subset of the specification is currently supported:
@@ -356,6 +382,7 @@ The plugin requires additional fields in the `scimProvider` table to store the p
 
 ### Server
 
+- `defaultSCIM`: Default list of SCIM tokens for testing.
 - `storeSCIMToken`: The method to store the SCIM token in your database, whether `encrypted`, `hashed` or `plain` text. Default is `plain` text.
 
 Alternatively, you can pass a custom encryptor or hasher to store the SCIM token in your database.
