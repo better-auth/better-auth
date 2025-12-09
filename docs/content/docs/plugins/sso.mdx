@@ -642,6 +642,7 @@ const auth = betterAuth({
             defaultSSO: [
                 {
                     providerId: "default-saml", // Provider ID for the default provider
+                    domain: "http://your-app.com",
                     samlConfig: {
                         issuer: "https://your-app.com",
                         entryPoint: "https://idp.example.com/sso",
