@@ -27,6 +27,7 @@ export const electronProxyClient = (options: {
 	const opts = {
 		redirectCookieName: "redirect_client",
 		cookiePrefix: "better-auth",
+		callbackPath: "/auth/callback",
 		...options,
 	};
 	const redirectCookieName = `${opts.cookiePrefix}.${opts.redirectCookieName}`;

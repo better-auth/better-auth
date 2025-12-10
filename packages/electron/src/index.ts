@@ -88,7 +88,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 
 						const identifier = `electron:${generateRandomString(32, "a-z", "A-Z", "0-9")}`;
 						const codeExpiresInMs = opts.codeExpiresIn * 1000;
-						const expiresAt = new Date(Date.now() * codeExpiresInMs);
+						const expiresAt = new Date(Date.now() + codeExpiresInMs);
 						const code =
 							await ctx.context.internalAdapter.createVerificationValue({
 								identifier,
@@ -117,7 +117,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 				{
 					method: "POST",
 					body: z.object({
-						code: z.string().nonempty(),
+						token: z.string().nonempty(),
 					}),
 					metadata: {
 						isAction: false,
@@ -125,10 +125,9 @@ export const electron = (options?: ElectronOptions | undefined) => {
 					},
 				},
 				async (ctx) => {
-					const { code } = ctx.body;
-
-					const token =
-						await ctx.context.internalAdapter.findVerificationValue(code);
+					const token = await ctx.context.internalAdapter.findVerificationValue(
+						`electron:${ctx.body.token}`,
+					);
 					if (!token || token.expiresAt < new Date()) {
 						throw new APIError("NOT_FOUND", {
 							message: "Invalid or expired token.",

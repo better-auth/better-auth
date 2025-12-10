@@ -36,6 +36,11 @@ export function setupCSP(
 	});
 }
 
+/**
+ * Sets up Electron IPC handlers in the main process.
+ *
+ * @internal
+ */
 export function setupIPCMain(
 	{ ipcMain }: { ipcMain: Electron.IpcMain },
 	options: ElectronClientOptions,
@@ -104,18 +109,24 @@ export function registerProtocolScheme(
 		if (!parsedURL) {
 			return;
 		}
-		const { protocol, pathname, searchParams } = parsedURL;
+		if (!url.startsWith(`${options.protocol.scheme}:/`)) {
+			return;
+		}
+		url = url.substring(`${options.protocol.scheme}:/`.length);
+		const { protocol, pathname, searchParams, hostname } = parsedURL;
 		if (protocol !== `${options.protocol.scheme}:`) {
 			return;
 		}
 
-		// TODO: Match proper
-		if (pathname !== options.callbackPath) {
+		const path = "/" + hostname + pathname;
+		const callbackPath = options.callbackPath?.startsWith("/") ? options.callbackPath : `/${options.callbackPath}`;
+
+		if (path !== callbackPath) {
 			return;
 		}
 
-		const code = searchParams.get("code");
-		if (!code) {
+		const token = searchParams.get("token");
+		if (!token) {
 			return;
 		}
 
@@ -123,7 +134,7 @@ export function registerProtocolScheme(
 			$fetch,
 			options,
 			{
-				code,
+				token,
 			},
 			getWindow,
 		);
