@@ -21,7 +21,7 @@ export const tanstackStartCookies = () => {
 							if (!setCookies) return;
 							const parsed = parseSetCookieHeader(setCookies);
 							const { setCookie } = await import(
-								"@tanstack/react-start/server"
+								"@tanstack/start-server-core"
 							);
 							parsed.forEach((value, key) => {
 								if (!key) return;
