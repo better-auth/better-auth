@@ -10,6 +10,7 @@ import {
 import {
 	APIError,
 	createAuthEndpoint,
+	getSessionFromCtx,
 	sessionMiddleware,
 } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
@@ -1498,11 +1499,26 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 		},
 		async (ctx) => {
 			const { providerId } = ctx.params;
+			const errorURL =
+				ctx.context.options.onAPIError?.errorURL ||
+				`${ctx.context.baseURL}/error`;
+			const currentCallbackPath = `${ctx.context.baseURL}/sso/saml2/callback/${providerId}`;
 
 			if (ctx.method === "GET") {
-				throw new APIError("NOT_IMPLEMENTED", {
-					message: "GET handler not yet implemented",
-				});
+				const session = await getSessionFromCtx(ctx);
+
+				if (!session?.session) {
+					throw ctx.redirect(`${errorURL}?error=invalid_request`);
+				}
+
+				const relayState = ctx.query?.RelayState as string | undefined;
+				const redirectUrl = relayState || ctx.context.baseURL;
+				const safeRedirectUrl =
+					redirectUrl === currentCallbackPath
+						? ctx.context.baseURL
+						: redirectUrl;
+
+				throw ctx.redirect(safeRedirectUrl);
 			}
 
 			if (!ctx.body) {
@@ -1836,12 +1852,15 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			);
 			await setSessionCookie(ctx, { session, user });
 
-			// Redirect to callback URL
 			const callbackUrl =
 				relayState?.callbackURL ||
 				parsedSamlConfig.callbackUrl ||
 				ctx.context.baseURL;
-			throw ctx.redirect(callbackUrl);
+			const safeRedirectUrl =
+				callbackUrl === currentCallbackPath
+					? ctx.context.baseURL
+					: callbackUrl;
+			throw ctx.redirect(safeRedirectUrl);
 		},
 	);
 };
