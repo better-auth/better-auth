@@ -23,4 +23,3 @@ export interface SSOAccountData {
 	refreshTokenExpiresAt?: Date;
 	scope?: string;
 }
-

@@ -81,9 +81,7 @@ export function normalizeSAMLProfile(
 		]),
 	);
 
-	const id = String(
-		attributes[mapping.id || "nameID"] || extract.nameID || "",
-	);
+	const id = String(attributes[mapping.id || "nameID"] || extract.nameID || "");
 	const email = String(
 		attributes[mapping.email || "email"] || extract.nameID || "",
 	);
@@ -153,4 +151,3 @@ export function createSAMLAccountData(
 		refreshToken: "",
 	};
 }
-
