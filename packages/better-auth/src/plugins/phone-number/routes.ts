@@ -817,8 +817,8 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					message: PHONE_NUMBER_ERROR_CODES.UNEXPECTED_ERROR,
 				});
 			}
-			const minLength = ctx.context.password?.config.minPasswordLength;
-			const maxLength = ctx.context.password?.config.maxPasswordLength;
+			const minLength = ctx.context.password.config.minPasswordLength;
+			const maxLength = ctx.context.password.config.maxPasswordLength;
 			if (ctx.body.newPassword.length < minLength) {
 				throw new APIError("BAD_REQUEST", {
 					message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
@@ -836,6 +836,11 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			await ctx.context.internalAdapter.deleteVerificationValue(
 				verification.id,
 			);
+
+			if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
+				await ctx.context.internalAdapter.deleteSessions(user.id);
+			}
+
 			return ctx.json({
 				status: true,
 			});
