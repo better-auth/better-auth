@@ -33,8 +33,5 @@ export async function authenticate(
 				ctx.data.user,
 			);
 		},
-		onError: (ctx) => {
-			// TODO: Handle errors gracefully
-		},
 	});
 }

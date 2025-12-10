@@ -13,6 +13,7 @@ import {
 import { isElectronEnv, isProcessType } from "./helper";
 import { registerProtocolScheme, setupCSP, setupIPCMain } from "./setup-main";
 import type { ElectronClientOptions, Storage } from "./types";
+import type { ErrorContext } from "@better-fetch/fetch";
 
 const storageAdapter = async (storage: Storage) => {
 	let safeStorage: Electron.SafeStorage | null = null;
@@ -99,6 +100,17 @@ export const electronClient = (options: ElectronClientOptions) => {
 							const data = context.data;
 							setEncrypted(localCacheName, JSON.stringify(data));
 						}
+					},
+					onError: async (context) => {
+					  let webContents: typeof Electron.WebContents | null = null;
+  					try {
+  					  webContents = (await import("electron")).webContents;
+  					} catch {}
+  					if (!webContents) {
+  					  return;
+  					}
+
+						webContents.getFocusedWebContents()?.send(`${opts.namespace}:error`, context);
 					},
 				},
 				init: async (url, options) => {
@@ -235,6 +247,9 @@ export const electronClient = (options: ElectronClientOptions) => {
 								);
 							},
 						);
+						contextBridge.exposeInMainWorld("onAuthError", (callback: (context: ErrorContext) => unknown) => {
+  						ipcRenderer.on(`${opts.namespace}:error`, (_event, context) => callback(context));
+						})
 					}
 				},
 				$Infer: {} as {
@@ -243,6 +258,7 @@ export const electronClient = (options: ElectronClientOptions) => {
 						onAuthenticated: (
 							callback: (user: User & Record<string, any>) => unknown,
 						) => void;
+						onAuthError: (error: (context: ErrorContext) => unknown) => void;
 					};
 				},
 			};

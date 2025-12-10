@@ -8,7 +8,6 @@ export default defineConfig({
 		"better-auth",
 		"better-call",
 		"@better-fetch/fetch",
-		"@better-auth/utils",
 		"electron",
 	],
 });

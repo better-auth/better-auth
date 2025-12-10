@@ -112,7 +112,6 @@ export function registerProtocolScheme(
 		if (!url.startsWith(`${options.protocol.scheme}:/`)) {
 			return;
 		}
-		url = url.substring(`${options.protocol.scheme}:/`.length);
 		const { protocol, pathname, searchParams, hostname } = parsedURL;
 		if (protocol !== `${options.protocol.scheme}:`) {
 			return;
