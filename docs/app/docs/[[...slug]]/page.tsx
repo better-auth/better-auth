@@ -67,7 +67,7 @@ export default async function Page({
 					<LLMCopyButton />
 					<ViewOptions
 						markdownUrl={`${page.url}.mdx`}
-						githubUrl={`https://github.com/better-auth/better-auth/blob/main/docs/content/docs/${page.file.path}`}
+						githubUrl={`https://github.com/better-auth/better-auth/blob/main/docs/content/docs/${page.path}`}
 					/>
 				</div>
 			)}
@@ -188,7 +188,7 @@ export async function generateMetadata({
 	const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL;
 	const url = new URL(`${baseUrl}/api/og`);
 	const { title, description } = page.data;
-	const pageSlug = page.file.path;
+	const pageSlug = page.path;
 	url.searchParams.set("type", "Documentation");
 	url.searchParams.set("mode", "dark");
 	url.searchParams.set("heading", `${title}`);
