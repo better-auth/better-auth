@@ -14,22 +14,22 @@ import { createBetterAuth } from "./base";
  */
 
 export const betterAuth = <Options extends BetterAuthOptions>(
-  options: Options &
-    // fixme(alex): do we need Record<never, never> here?
-    Record<never, never>,
-  contextInterceptor?: (ctx: AuthContext) => AuthContext,
+	options: Options &
+		// fixme(alex): do we need Record<never, never> here?
+		Record<never, never>,
+	contextInterceptor?: (ctx: AuthContext) => AuthContext,
 ): Auth<Options> => {
-  const isValidInterceptor = typeof contextInterceptor === "function";
-  const interceptor = isValidInterceptor
-    ? contextInterceptor
-    : (ctx: AuthContext) => ctx;
+	const isValidInterceptor = typeof contextInterceptor === "function";
+	const interceptor = isValidInterceptor
+		? contextInterceptor
+		: (ctx: AuthContext) => ctx;
 
-  if (!isValidInterceptor && contextInterceptor !== undefined) {
-    throw new BetterAuthError(
-      "Provided contextInterceptor is not a valid function",
-    );
-  }
+	if (!isValidInterceptor && contextInterceptor !== undefined) {
+		throw new BetterAuthError(
+			"Provided contextInterceptor is not a valid function",
+		);
+	}
 
-  const initFn = (options: Options) => init(options).then(interceptor);
-  return createBetterAuth(options, initFn);
+	const initFn = (options: Options) => init(options).then(interceptor);
+	return createBetterAuth(options, initFn);
 };
