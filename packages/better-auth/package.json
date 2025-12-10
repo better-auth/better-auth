@@ -28,6 +28,7 @@
     "test": "vitest",
     "coverage": "vitest run --coverage",
     "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
     "test:adapters": "vitest run --config vitest.config.adapters.ts",
     "prepare": "prisma generate --schema ./src/adapters/prisma-adapter/test/base.prisma",
     "typecheck": "tsc --project tsconfig.json"

@@ -5,7 +5,8 @@
   "scripts": {
     "test": "vitest",
     "coverage": "vitest run --coverage",
-    "lint:package": "publint run --strict"
+    "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack ."
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
