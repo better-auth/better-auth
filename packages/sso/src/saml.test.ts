@@ -1888,12 +1888,19 @@ describe("SSO Provider Config Parsing", () => {
 			headers,
 		});
 
-		let samlResponse: any;
+		let samlResponse: { samlResponse: string; entityEndpoint?: string } | undefined;
 		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
 			onSuccess: async (context) => {
-				samlResponse = await context.data;
+				samlResponse = context.data as {
+					samlResponse: string;
+					entityEndpoint?: string;
+				};
 			},
 		});
+
+		if (!samlResponse?.samlResponse) {
+			throw new Error("Failed to get SAML response from mock IdP");
+		}
 
 		const postResponse = (await auth.api.callbackSSOSAML({
 			method: "POST",
@@ -1978,12 +1985,19 @@ describe("SSO Provider Config Parsing", () => {
 			headers,
 		});
 
-		let samlResponse: any;
+		let samlResponse: { samlResponse: string; entityEndpoint?: string } | undefined;
 		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
 			onSuccess: async (context) => {
-				samlResponse = await context.data;
+				samlResponse = context.data as {
+					samlResponse: string;
+					entityEndpoint?: string;
+				};
 			},
 		});
+
+		if (!samlResponse?.samlResponse) {
+			throw new Error("Failed to get SAML response from mock IdP");
+		}
 
 		const postResponse = (await auth.api.callbackSSOSAML({
 			method: "POST",
@@ -2029,12 +2043,19 @@ describe("SSO Provider Config Parsing", () => {
 			headers,
 		});
 
-		let samlResponse: any;
+		let samlResponse: { samlResponse: string; entityEndpoint?: string } | undefined;
 		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
 			onSuccess: async (context) => {
-				samlResponse = await context.data;
+				samlResponse = context.data as {
+					samlResponse: string;
+					entityEndpoint?: string;
+				};
 			},
 		});
+
+		if (!samlResponse?.samlResponse) {
+			throw new Error("Failed to get SAML response from mock IdP");
+		}
 
 		const postResponse = (await auth.api.callbackSSOSAML({
 			method: "POST",
