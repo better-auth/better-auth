@@ -265,4 +265,5 @@ export const passkeyClient = () => {
 };
 
 export type * from "@simplewebauthn/server";
+export * from "./error-codes";
 export type * from "./types";

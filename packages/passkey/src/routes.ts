@@ -1,4 +1,5 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { APIError } from "@better-auth/core/error";
 import { base64 } from "@better-auth/utils/base64";
 import type {
 	AuthenticationResponseJSON,
@@ -19,7 +20,6 @@ import {
 } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
-import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
 import { PASSKEY_ERROR_CODES } from "./error-codes";
 import type { Passkey, PasskeyOptions, WebAuthnChallengeValue } from "./types";
@@ -447,7 +447,10 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 				ctx.context.secret,
 			);
 			if (!challengeId) {
-				throw APIError.from(PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND, "BAD_REQUEST");
+				throw APIError.from(
+					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
+					"BAD_REQUEST",
+				);
 			}
 
 			const data =
@@ -575,13 +578,19 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				ctx.context.secret,
 			);
 			if (!challengeId) {
-				throw APIError.from(PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND, "BAD_REQUEST");
+				throw APIError.from(
+					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
+					"BAD_REQUEST",
+				);
 			}
 
 			const data =
 				await ctx.context.internalAdapter.findVerificationValue(challengeId);
 			if (!data) {
-				throw APIError.from(PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND, "BAD_REQUEST");
+				throw APIError.from(
+					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
+					"BAD_REQUEST",
+				);
 			}
 			const { expectedChallenge } = JSON.parse(
 				data.value,
@@ -596,7 +605,10 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				],
 			});
 			if (!passkey) {
-				throw APIError.from(PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND, "UNAUTHORIZED");
+				throw APIError.from(
+					PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND,
+					"UNAUTHORIZED",
+				);
 			}
 			try {
 				const verification = await verifyAuthenticationResponse({

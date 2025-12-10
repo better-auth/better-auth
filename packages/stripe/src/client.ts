@@ -33,3 +33,4 @@ export const stripeClient = <
 		},
 	} satisfies BetterAuthClientPlugin;
 };
+export * from "./error-codes";
