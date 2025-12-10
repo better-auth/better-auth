@@ -488,6 +488,7 @@
     "tsdown": "catalog:",
     "type-fest": "^5.2.0",
     "typescript": "catalog:",
+    "vitest": "^4.0.15",
     "vue": "^3.5.18"
   },
   "peerDependencies": {
@@ -506,6 +507,7 @@
     "react-dom": "^18.0.0 || ^19.0.0",
     "solid-js": "^1.0.0",
     "svelte": "^4.0.0 || ^5.0.0",
+    "vitest": "^4.0.15",
     "vue": "^3.0.0"
   },
   "peerDependenciesMeta": {
@@ -555,6 +557,9 @@
       "optional": true
     },
     "better-sqlite3": {
+      "optional": true
+    },
+    "vitest": {
       "optional": true
     }
   }
