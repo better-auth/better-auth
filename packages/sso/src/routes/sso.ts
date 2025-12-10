@@ -1395,43 +1395,22 @@ export const callbackSSO = (options?: SSOOptions) => {
 					provider,
 				});
 			}
-			if (
-				provider.organizationId &&
-				!options?.organizationProvisioning?.disabled
-			) {
-				const isOrgPluginEnabled = ctx.context.options.plugins?.find(
-					(plugin) => plugin.id === "organization",
-				);
-				if (isOrgPluginEnabled) {
-					const isAlreadyMember = await ctx.context.adapter.findOne({
-						model: "member",
-						where: [
-							{ field: "organizationId", value: provider.organizationId },
-							{ field: "userId", value: user.id },
-						],
-					});
-					if (!isAlreadyMember) {
-						const role = options?.organizationProvisioning?.getRole
-							? await options.organizationProvisioning.getRole({
-									user,
-									userInfo,
-									token: tokenResponse,
-									provider,
-								})
-							: options?.organizationProvisioning?.defaultRole || "member";
-						await ctx.context.adapter.create({
-							model: "member",
-							data: {
-								organizationId: provider.organizationId,
-								userId: user.id,
-								role,
-								createdAt: new Date(),
-								updatedAt: new Date(),
-							},
-						});
-					}
-				}
-			}
+
+			await assignOrganizationFromProvider(ctx as any, {
+				user,
+				profile: {
+					providerType: "oidc",
+					providerId: provider.providerId,
+					accountId: userInfo.id,
+					email: userInfo.email,
+					emailVerified: Boolean(userInfo.emailVerified),
+					rawAttributes: userInfo,
+				},
+				provider,
+				token: tokenResponse,
+				provisioningOptions: options?.organizationProvisioning,
+			});
+
 			await setSessionCookie(ctx, {
 				session,
 				user,
