@@ -32,8 +32,13 @@ export const getClientConfig = (
 			onResponse: options?.fetchOptions?.onResponse,
 		},
 	};
-	const { onSuccess, onError, onRequest, onResponse, ...restOfFetchOptions } =
-		options?.fetchOptions || {};
+	const {
+		onSuccess: _onSuccess,
+		onError: _onError,
+		onRequest: _onRequest,
+		onResponse: _onResponse,
+		...restOfFetchOptions
+	} = options?.fetchOptions || {};
 	const $fetch = createFetch({
 		baseURL,
 		...(isCredentialsSupported ? { credentials: "include" } : {}),

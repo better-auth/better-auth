@@ -278,7 +278,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 							});
 							statePackage =
 								parseJSON<OAuthProxyStatePackage>(decryptedPackage);
-						} catch (e) {
+						} catch {
 							// Not an OAuth proxy state, continue normally
 							return;
 						}

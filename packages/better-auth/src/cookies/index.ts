@@ -20,8 +20,7 @@ import {
 import { parseUserOutput } from "../db/schema";
 import type { Session, User } from "../types";
 import { getDate } from "../utils/date";
-import { getBaseURL } from "../utils/url";
-import { createSessionStore } from "./session-store";
+import { createAccountStore, createSessionStore } from "./session-store";
 
 export function createCookieGetter(options: BetterAuthOptions) {
 	const secure =
@@ -307,6 +306,30 @@ export function deleteSessionCookie(
 		maxAge: 0,
 	});
 
+	if (ctx.context.options.account?.storeAccountCookie) {
+		ctx.setCookie(ctx.context.authCookies.accountData.name, "", {
+			...ctx.context.authCookies.accountData.options,
+			maxAge: 0,
+		});
+
+		//clean up the account data chunks
+		const accountStore = createAccountStore(
+			ctx.context.authCookies.accountData.name,
+			ctx.context.authCookies.accountData.options,
+			ctx,
+		);
+		const cleanCookies = accountStore.clean();
+		accountStore.setCookies(cleanCookies);
+	}
+
+	if (ctx.context.oauthConfig.storeStateStrategy === "cookie") {
+		const stateCookie = ctx.context.createAuthCookie("oauth_state");
+		ctx.setCookie(stateCookie.name, "", {
+			...stateCookie.attributes,
+			maxAge: 0,
+		});
+	}
+
 	// Use createSessionStore to clean up all session data chunks
 	const sessionStore = createSessionStore(
 		ctx.context.authCookies.sessionData.name,
@@ -355,8 +378,6 @@ export const getSessionCookie = (
 		}
 	}
 	const headers = "headers" in request ? request.headers : request;
-	const req = request instanceof Request ? request : undefined;
-	const url = getBaseURL(req?.url, config?.path, req);
 	const cookies = headers.get("cookie");
 	if (!cookies) {
 		return null;

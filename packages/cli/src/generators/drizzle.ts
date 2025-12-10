@@ -385,11 +385,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		}
 
 		// Add relations, deduplicating by relationKey
-		for (const {
-			modelName,
-			hasUnique,
-			hasMany,
-		} of modelRelationsMap.values()) {
+		for (const { modelName, hasMany } of modelRelationsMap.values()) {
 			// Determine relation type: if all are unique, it's "one", otherwise "many"
 			const relationType = hasMany ? "many" : "one";
 			let relationKey = getModelName(modelName);
@@ -431,7 +427,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		const duplicateRelations: Relation[] = [];
 		const singleRelations: Relation[] = [];
 
-		for (const [modelKey, relations] of relationsByModel.entries()) {
+		for (const [_modelKey, relations] of relationsByModel.entries()) {
 			if (relations.length > 1) {
 				// Multiple relations to the same model - these need field-specific naming
 				duplicateRelations.push(...relations);
