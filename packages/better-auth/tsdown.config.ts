@@ -63,5 +63,5 @@ export default defineConfig({
 	sourcemap: true,
 	treeshake: true,
 	clean: true,
-	unbundle: true
+	unbundle: true,
 });
