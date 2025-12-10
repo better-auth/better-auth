@@ -1466,8 +1466,11 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/saml2/callback/:providerId",
 		{
-			method: "POST",
-			body: callbackSSOSAMLBodySchema,
+			method: ["GET", "POST"],
+			body: callbackSSOSAMLBodySchema.optional(),
+			query: z.object({
+				RelayState: z.string().optional(),
+			}).optional(),
 			metadata: {
 				isAction: false,
 				allowedMediaTypes: [
@@ -1478,7 +1481,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 					operationId: "handleSAMLCallback",
 					summary: "Callback URL for SAML provider",
 					description:
-						"This endpoint is used as the callback URL for SAML providers.",
+						"This endpoint is used as the callback URL for SAML providers. Supports both GET and POST methods for IdP-initiated and SP-initiated flows.",
 					responses: {
 						"302": {
 							description: "Redirects to the callback URL",
@@ -1494,13 +1497,25 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			},
 		},
 		async (ctx) => {
-			const { SAMLResponse } = ctx.body;
 			const { providerId } = ctx.params;
+
+			if (ctx.method === "GET") {
+				throw new APIError("NOT_IMPLEMENTED", {
+					message: "GET handler not yet implemented",
+				});
+			}
+
+			if (!ctx.body) {
+				throw new APIError("BAD_REQUEST", {
+					message: "SAMLResponse is required for POST requests",
+				});
+			}
+
+			const { SAMLResponse } = ctx.body;
 
 			const relayState: RelayState | null = ctx.body.RelayState
 				? await parseRelayState(ctx)
 				: null;
-
 			let provider: SSOProvider<SSOOptions> | null = null;
 			if (options?.defaultSSO?.length) {
 				const matchingDefault = options.defaultSSO.find(
