@@ -24,7 +24,7 @@ export function getWithHooks(
 			  }
 			| undefined,
 	) {
-		const context = await getCurrentAuthContext();
+		const context = await getCurrentAuthContext().catch(() => null);
 		let actualData = data;
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.create?.before;
@@ -78,7 +78,7 @@ export function getWithHooks(
 			  }
 			| undefined,
 	) {
-		const context = await getCurrentAuthContext();
+		const context = await getCurrentAuthContext().catch(() => null);
 		let actualData = data;
 
 		for (const hook of hooks || []) {
@@ -122,7 +122,7 @@ export function getWithHooks(
 		return updated;
 	}
 
-	async function updateManyWithHooks<T extends Record<string, any>>(
+	async function updateManyWithHooks<_T extends Record<string, any>>(
 		data: any,
 		where: Where[],
 		model: BaseModelNames,
@@ -133,7 +133,7 @@ export function getWithHooks(
 			  }
 			| undefined,
 	) {
-		const context = await getCurrentAuthContext();
+		const context = await getCurrentAuthContext().catch(() => null);
 		let actualData = data;
 
 		for (const hook of hooks || []) {
@@ -188,7 +188,7 @@ export function getWithHooks(
 			  }
 			| undefined,
 	) {
-		const context = await getCurrentAuthContext();
+		const context = await getCurrentAuthContext().catch(() => null);
 		let entityToDelete: T | null = null;
 
 		try {
@@ -198,7 +198,7 @@ export function getWithHooks(
 				limit: 1,
 			});
 			entityToDelete = entities[0] || null;
-		} catch (error) {
+		} catch {
 			// If we can't find the entity, we'll still proceed with deletion
 		}
 
@@ -250,7 +250,7 @@ export function getWithHooks(
 			  }
 			| undefined,
 	) {
-		const context = await getCurrentAuthContext();
+		const context = await getCurrentAuthContext().catch(() => null);
 		let entitiesToDelete: T[] = [];
 
 		try {
@@ -258,7 +258,7 @@ export function getWithHooks(
 				model,
 				where,
 			});
-		} catch (error) {
+		} catch {
 			// If we can't find the entities, we'll still proceed with deletion
 		}
 

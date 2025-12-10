@@ -33,3 +33,5 @@ giget
 segoe
 conar
 nuxtzzle
+Deel
+WorkOS

@@ -14,6 +14,11 @@ describe("two factor", async () => {
 	const { testUser, customFetchImpl, sessionSetter, db, auth } =
 		await getTestInstance({
 			secret: DEFAULT_SECRET,
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
 			plugins: [
 				twoFactor({
 					otpOptions: {
@@ -149,6 +154,7 @@ describe("two factor", async () => {
 						context.response.headers.get("Set-Cookie") || "",
 					);
 					expect(parsed.get("better-auth.session_token")?.value).toBe("");
+					expect(parsed.get("better-auth.session_data")?.value).toBe("");
 					expect(parsed.get("better-auth.two_factor")?.value).toBeDefined();
 					expect(parsed.get("better-auth.dont_remember")?.value).toBeDefined();
 					headers.append(
@@ -316,10 +322,30 @@ describe("two factor", async () => {
 		expect(currentBackupCodes.backupCodes).toBeDefined();
 		expect(currentBackupCodes.backupCodes).not.toContain(backupCode);
 
+		// Start a new 2FA session to test invalid backup code
+		const headers2 = new Headers();
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				onSuccess(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					headers2.append(
+						"cookie",
+						`better-auth.two_factor=${
+							parsed.get("better-auth.two_factor")?.value
+						}`,
+					);
+				},
+			},
+		});
+
 		const res = await client.twoFactor.verifyBackupCode({
 			code: "invalid-code",
 			fetchOptions: {
-				headers,
+				headers: headers2,
 				onSuccess(context) {
 					const parsed = parseSetCookieHeader(
 						context.response.headers.get("Set-Cookie") || "",
@@ -352,7 +378,7 @@ describe("two factor", async () => {
 			},
 		});
 		expect((res.data as any)?.twoFactorRedirect).toBe(true);
-		const otpRes = await client.twoFactor.sendOtp({
+		await client.twoFactor.sendOtp({
 			fetchOptions: {
 				headers,
 				onSuccess(context) {
@@ -624,7 +650,7 @@ describe("two factor auth API", async () => {
 
 describe("view backup codes", async () => {
 	const sendOTP = vi.fn();
-	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+	const { auth, signInWithTestUser, testUser } = await getTestInstance({
 		secret: DEFAULT_SECRET,
 		plugins: [
 			twoFactor({

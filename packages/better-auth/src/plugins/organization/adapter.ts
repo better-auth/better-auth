@@ -860,11 +860,21 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		listUserInvitations: async (email: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const invitations = await adapter.findMany<InferInvitation<O, false>>({
+			const invitations = await adapter.findMany<
+				InferInvitation<O, false> & {
+					organization: InferOrganization<O, false>;
+				}
+			>({
 				model: "invitation",
 				where: [{ field: "email", value: email.toLowerCase() }],
+				join: {
+					organization: true,
+				},
 			});
-			return invitations;
+			return invitations.map(({ organization, ...inv }) => ({
+				...inv,
+				organizationName: organization.name,
+			}));
 		},
 		createInvitation: async ({
 			invitation,

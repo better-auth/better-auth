@@ -337,3 +337,5 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 		schema,
 	} satisfies BetterAuthPlugin;
 };
+
+export type * from "./types";

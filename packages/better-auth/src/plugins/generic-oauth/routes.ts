@@ -136,7 +136,6 @@ export const signInWithOAuth2 = (options: GenericOAuthOptions) =>
 				accessType,
 				authorizationUrlParams,
 				responseMode,
-				authentication,
 			} = config;
 			let finalAuthUrl = authorizationUrl;
 			let finalTokenUrl = tokenUrl;
