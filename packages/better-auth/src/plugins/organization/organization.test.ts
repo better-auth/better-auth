@@ -1,5 +1,5 @@
-import type { Prettify } from "better-call";
 import { APIError } from "@better-auth/core/error";
+import type { Prettify } from "better-call";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { memoryAdapter } from "../../adapters/memory-adapter";
 import type {

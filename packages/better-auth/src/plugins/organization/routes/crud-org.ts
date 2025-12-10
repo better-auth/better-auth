@@ -461,7 +461,10 @@ export const updateOrganization = <O extends OrganizationOptions>(
 			const organizationId =
 				ctx.body.organizationId || session.session.activeOrganizationId;
 			if (!organizationId) {
-				throw APIError.from(ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND, "BAD_REQUEST");
+				throw APIError.from(
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+					"BAD_REQUEST",
+				);
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const member = await adapter.findMemberByOrgId({
@@ -581,10 +584,13 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 						"`organizationDeletion.disabled` is deprecated. Use `disableOrganizationDeletion` instead",
 					);
 				}
-				throw APIError.from({
-                    message: "Organization deletion is disabled",
-                    code: "ORGANIZATION_DELETION_DISABLED"
-                }, "NOT_FOUND");
+				throw APIError.from(
+					{
+						message: "Organization deletion is disabled",
+						code: "ORGANIZATION_DELETION_DISABLED",
+					},
+					"NOT_FOUND",
+				);
 			}
 			const session = await ctx.context.getSession(ctx);
 			if (!session) {
@@ -733,7 +739,10 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 				membersLimit: ctx.query?.membersLimit,
 			});
 			if (!organization) {
-				throw APIError.from(ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND, "BAD_REQUEST");
+				throw APIError.from(
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+					"BAD_REQUEST",
+				);
 			}
 			const isMember = await adapter.checkMembership({
 				userId: session.user.id,
@@ -743,7 +752,8 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 				await adapter.setActiveOrganization(session.session.token, null, ctx);
 				throw new APIError("FORBIDDEN", {
 					message:
-						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION.message,
+						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION
+							.message,
 				});
 			}
 

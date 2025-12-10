@@ -1,4 +1,5 @@
 import type { AuthContext, BetterAuthPlugin } from "@better-auth/core";
+import { APIError } from "@better-auth/core/error";
 import type { OAuth2Tokens, OAuthProvider } from "@better-auth/core/oauth2";
 import {
 	createAuthorizationURL,
@@ -6,7 +7,6 @@ import {
 	validateAuthorizationCode,
 } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
-import { APIError } from "@better-auth/core/error";
 import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
 import {
 	getUserInfo,
@@ -77,7 +77,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							}
 						}
 						if (!finalAuthUrl) {
-							throw APIError.from(GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION, "BAD_REQUEST");
+							throw APIError.from(
+								GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
+								"BAD_REQUEST",
+							);
 						}
 						return createAuthorizationURL({
 							id: c.providerId,
@@ -120,7 +123,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							}
 						}
 						if (!finalTokenUrl) {
-							throw APIError.from(GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND, "BAD_REQUEST");
+							throw APIError.from(
+								GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
+								"BAD_REQUEST",
+							);
 						}
 						return validateAuthorizationCode({
 							headers: c.authorizationHeaders,
@@ -152,7 +158,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							}
 						}
 						if (!finalTokenUrl) {
-							throw APIError.from(GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND, "BAD_REQUEST");
+							throw APIError.from(
+								GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
+								"BAD_REQUEST",
+							);
 						}
 						return refreshAccessToken({
 							refreshToken,

@@ -43,10 +43,13 @@ async function checkPasswordCompromise(
 		);
 
 		if (found) {
-			throw APIError.from({
-                    message: customMessage || ERROR_CODES.PASSWORD_COMPROMISED.message,
-                    code: ERROR_CODES.PASSWORD_COMPROMISED.code
-                }, "BAD_REQUEST");
+			throw APIError.from(
+				{
+					message: customMessage || ERROR_CODES.PASSWORD_COMPROMISED.message,
+					code: ERROR_CODES.PASSWORD_COMPROMISED.code,
+				},
+				"BAD_REQUEST",
+			);
 		}
 	} catch (error) {
 		if (error instanceof APIError) throw error;

@@ -140,7 +140,10 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 						const key = getter(ctx)!;
 
 						if (typeof key !== "string") {
-							throw APIError.from(ERROR_CODES.INVALID_API_KEY_GETTER_RETURN_TYPE, "BAD_REQUEST");
+							throw APIError.from(
+								ERROR_CODES.INVALID_API_KEY_GETTER_RETURN_TYPE,
+								"BAD_REQUEST",
+							);
 						}
 
 						if (key.length < opts.defaultKeyLength) {
@@ -180,7 +183,10 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 							apiKey.userId,
 						);
 						if (!user) {
-							throw APIError.from(ERROR_CODES.INVALID_USER_ID_FROM_API_KEY, "UNAUTHORIZED");
+							throw APIError.from(
+								ERROR_CODES.INVALID_USER_ID_FROM_API_KEY,
+								"UNAUTHORIZED",
+							);
 						}
 
 						const session = {

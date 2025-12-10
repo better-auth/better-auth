@@ -723,10 +723,13 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 				invitation.expiresAt < new Date() ||
 				invitation.status !== "pending"
 			) {
-				throw APIError.from({
-                    message: "Invitation not found!",
-                    code: "INVITATION_NOT_FOUND"
-                }, "BAD_REQUEST");
+				throw APIError.from(
+					{
+						message: "Invitation not found!",
+						code: "INVITATION_NOT_FOUND",
+					},
+					"BAD_REQUEST",
+				);
 			}
 			if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
 				throw APIError.from(

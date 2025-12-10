@@ -19,7 +19,10 @@ async function getAnonUserEmail(
 	if (customEmail) {
 		const validation = z.email().safeParse(customEmail);
 		if (!validation.success) {
-			throw APIError.from(ANONYMOUS_ERROR_CODES.INVALID_EMAIL_FORMAT, "BAD_REQUEST");
+			throw APIError.from(
+				ANONYMOUS_ERROR_CODES.INVALID_EMAIL_FORMAT,
+				"BAD_REQUEST",
+			);
 		}
 		return customEmail;
 	}
@@ -75,7 +78,10 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						isAnonymous: boolean;
 					}>(ctx, { disableRefresh: true });
 					if (existingSession?.user.isAnonymous) {
-						throw APIError.from(ANONYMOUS_ERROR_CODES.ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY, "BAD_REQUEST");
+						throw APIError.from(
+							ANONYMOUS_ERROR_CODES.ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY,
+							"BAD_REQUEST",
+						);
 					}
 
 					const email = await getAnonUserEmail(options);
@@ -89,7 +95,10 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						updatedAt: new Date(),
 					});
 					if (!newUser) {
-						throw APIError.from(ANONYMOUS_ERROR_CODES.FAILED_TO_CREATE_USER, "INTERNAL_SERVER_ERROR");
+						throw APIError.from(
+							ANONYMOUS_ERROR_CODES.FAILED_TO_CREATE_USER,
+							"INTERNAL_SERVER_ERROR",
+						);
 					}
 					const session = await ctx.context.internalAdapter.createSession(
 						newUser.id,
@@ -169,7 +178,10 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						}
 
 						if (ctx.path === "/sign-in/anonymous" && !ctx.context.newSession) {
-							throw APIError.from(ANONYMOUS_ERROR_CODES.ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY, "BAD_REQUEST");
+							throw APIError.from(
+								ANONYMOUS_ERROR_CODES.ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY,
+								"BAD_REQUEST",
+							);
 						}
 						const newSession = ctx.context.newSession;
 						if (!newSession) {

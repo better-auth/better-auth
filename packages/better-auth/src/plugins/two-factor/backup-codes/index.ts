@@ -1,6 +1,6 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { safeJSONParse } from "@better-auth/core/utils";
 import { APIError } from "@better-auth/core/error";
+import { safeJSONParse } from "@better-auth/core/utils";
 import * as z from "zod";
 import { sessionMiddleware } from "../../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
@@ -317,7 +317,10 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 						],
 					});
 					if (!twoFactor) {
-throw APIError.from(TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED, "BAD_REQUEST");
+						throw APIError.from(
+							TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
+							"BAD_REQUEST",
+						);
 					}
 					const validate = await verifyBackupCode(
 						{
@@ -328,7 +331,10 @@ throw APIError.from(TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED, "BAD_REQUES
 						opts,
 					);
 					if (!validate.status) {
-throw APIError.from(TWO_FACTOR_ERROR_CODES.INVALID_BACKUP_CODE, "UNAUTHORIZED");
+						throw APIError.from(
+							TWO_FACTOR_ERROR_CODES.INVALID_BACKUP_CODE,
+							"UNAUTHORIZED",
+						);
 					}
 					const updatedBackupCodes = await symmetricEncrypt({
 						key: ctx.context.secret,
@@ -432,7 +438,10 @@ throw APIError.from(TWO_FACTOR_ERROR_CODES.INVALID_BACKUP_CODE, "UNAUTHORIZED");
 				async (ctx) => {
 					const user = ctx.context.session.user as UserWithTwoFactor;
 					if (!user.twoFactorEnabled) {
-throw APIError.from(TWO_FACTOR_ERROR_CODES.TWO_FACTOR_NOT_ENABLED, "BAD_REQUEST");
+						throw APIError.from(
+							TWO_FACTOR_ERROR_CODES.TWO_FACTOR_NOT_ENABLED,
+							"BAD_REQUEST",
+						);
 					}
 					await ctx.context.password.checkPassword(user.id, ctx);
 					const backupCodes = await generateBackupCodes(
@@ -485,7 +494,10 @@ throw APIError.from(TWO_FACTOR_ERROR_CODES.TWO_FACTOR_NOT_ENABLED, "BAD_REQUEST"
 						],
 					});
 					if (!twoFactor) {
-throw APIError.from(TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED, "BAD_REQUEST");
+						throw APIError.from(
+							TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
+							"BAD_REQUEST",
+						);
 					}
 					const decryptedBackupCodes = await getBackupCodes(
 						twoFactor.backupCodes,
@@ -494,7 +506,10 @@ throw APIError.from(TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED, "BAD_REQUES
 					);
 
 					if (!decryptedBackupCodes) {
-throw APIError.from(TWO_FACTOR_ERROR_CODES.INVALID_BACKUP_CODE, "BAD_REQUEST");
+						throw APIError.from(
+							TWO_FACTOR_ERROR_CODES.INVALID_BACKUP_CODE,
+							"BAD_REQUEST",
+						);
 					}
 					return ctx.json({
 						status: true,

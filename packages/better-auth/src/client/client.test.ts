@@ -408,7 +408,7 @@ describe("type", () => {
 	});
 
 	it("should infer $ERROR_CODES with multiple plugins", () => {
-		const client = createReactClient({
+		const _client = createReactClient({
 			plugins: [
 				organizationClient(),
 				twoFactorClient(),

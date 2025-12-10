@@ -25,7 +25,15 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	const newUserCallbackURL = body?.newUserCallbackURL;
 	const useCookies = headers?.has("cookie");
 
-	const validateURL = (url: string | undefined, label: string) => {
+	const validateURL = (
+		url: string | undefined,
+		label:
+			| "origin"
+			| "callbackURL"
+			| "redirectURL"
+			| "errorCallbackURL"
+			| "newUserCallbackURL",
+	) => {
 		if (!url) {
 			return;
 		}
