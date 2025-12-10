@@ -93,7 +93,6 @@ export async function assignOrganizationFromProvider(
 			userId: user.id,
 			role,
 			createdAt: new Date(),
-			updatedAt: new Date(),
 		},
 	});
 }
@@ -172,7 +171,6 @@ export async function assignOrganizationByDomain(
 			userId: user.id,
 			role,
 			createdAt: new Date(),
-			updatedAt: new Date(),
 		},
 	});
 }
