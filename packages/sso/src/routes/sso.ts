@@ -1499,9 +1499,10 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 		},
 		async (ctx) => {
 			const { providerId } = ctx.params;
+			const appOrigin = new URL(ctx.context.baseURL).origin;
 			const errorURL =
 				ctx.context.options.onAPIError?.errorURL ||
-				`${ctx.context.baseURL}/error`;
+				`${appOrigin}/error`;
 			const currentCallbackPath = `${ctx.context.baseURL}/sso/saml2/callback/${providerId}`;
 
 			if (ctx.method === "GET") {
@@ -1512,10 +1513,10 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 				}
 
 				const relayState = ctx.query?.RelayState as string | undefined;
-				const redirectUrl = relayState || ctx.context.baseURL;
+				const redirectUrl = relayState || appOrigin;
 				const safeRedirectUrl =
 					redirectUrl === currentCallbackPath
-						? ctx.context.baseURL
+						? appOrigin
 						: redirectUrl;
 
 				throw ctx.redirect(safeRedirectUrl);
@@ -1855,10 +1856,10 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			const callbackUrl =
 				relayState?.callbackURL ||
 				parsedSamlConfig.callbackUrl ||
-				ctx.context.baseURL;
+				appOrigin;
 			const safeRedirectUrl =
 				callbackUrl === currentCallbackPath
-					? ctx.context.baseURL
+					? appOrigin
 					: callbackUrl;
 			throw ctx.redirect(safeRedirectUrl);
 		},
