@@ -1697,7 +1697,9 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			});
 
 			if (result.error) {
-				throw ctx.redirect(`${callbackUrl}?error=${result.error}`);
+				throw ctx.redirect(
+					`${callbackUrl}?error=${result.error.split(" ").join("_")}`,
+				);
 			}
 
 			const { session, user } = result.data!;
@@ -2010,7 +2012,9 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			});
 
 			if (result.error) {
-				throw ctx.redirect(`${callbackUrl}?error=${result.error}`);
+				throw ctx.redirect(
+					`${callbackUrl}?error=${result.error.split(" ").join("_")}`,
+				);
 			}
 
 			const { session, user } = result.data!;
