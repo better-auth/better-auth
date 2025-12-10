@@ -1906,7 +1906,9 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 			headers,
 		});
 
-		let samlResponse: { samlResponse: string; entityEndpoint?: string } | undefined;
+		let samlResponse:
+			| { samlResponse: string; entityEndpoint?: string }
+			| undefined;
 		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
 			onSuccess: async (context) => {
 				samlResponse = context.data as {
@@ -1961,21 +1963,23 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 			plugins: [sso()],
 		});
 
-		const getResponse = await auth.api.callbackSSOSAML({
-			method: "GET",
-			params: {
-				providerId: "test-provider",
-			},
-			asResponse: true,
-		}).catch((e) => {
-			if (e instanceof APIError && e.status === "FOUND") {
-				return new Response(null, {
-					status: e.statusCode,
-					headers: e.headers || new Headers(),
-				});
-			}
-			throw e;
-		});
+		const getResponse = await auth.api
+			.callbackSSOSAML({
+				method: "GET",
+				params: {
+					providerId: "test-provider",
+				},
+				asResponse: true,
+			})
+			.catch((e) => {
+				if (e instanceof APIError && e.status === "FOUND") {
+					return new Response(null, {
+						status: e.statusCode,
+						headers: e.headers || new Headers(),
+					});
+				}
+				throw e;
+			});
 
 		expect(getResponse).toBeInstanceOf(Response);
 		expect(getResponse.status).toBe(302);
@@ -2019,7 +2023,9 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 			headers,
 		});
 
-		let samlResponse: { samlResponse: string; entityEndpoint?: string } | undefined;
+		let samlResponse:
+			| { samlResponse: string; entityEndpoint?: string }
+			| undefined;
 		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
 			onSuccess: async (context) => {
 				samlResponse = context.data as {
@@ -2083,7 +2089,9 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 			headers,
 		});
 
-		let samlResponse: { samlResponse: string; entityEndpoint?: string } | undefined;
+		let samlResponse:
+			| { samlResponse: string; entityEndpoint?: string }
+			| undefined;
 		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
 			onSuccess: async (context) => {
 				samlResponse = context.data as {
@@ -2163,7 +2171,9 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 			headers,
 		});
 
-		let samlResponse: { samlResponse: string; entityEndpoint?: string } | undefined;
+		let samlResponse:
+			| { samlResponse: string; entityEndpoint?: string }
+			| undefined;
 		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
 			onSuccess: async (context) => {
 				samlResponse = context.data as {
@@ -2209,5 +2219,294 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 		expect(getResponse.status).toBe(302);
 		const getRedirectLocation = getResponse.headers.get("location");
 		expect(getRedirectLocation).toBe("http://localhost:3000");
+	});
+
+	it("should prevent open redirect with malicious RelayState URL", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "open-redirect-test-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: mockIdP.metadataUrl.replace("/idp/metadata", "/idp/post"),
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		let samlResponse:
+			| { samlResponse: string; entityEndpoint?: string }
+			| undefined;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = context.data as {
+					samlResponse: string;
+					entityEndpoint?: string;
+				};
+			},
+		});
+
+		if (!samlResponse?.samlResponse) {
+			throw new Error("Failed to get SAML response from mock IdP");
+		}
+
+		// Test POST with malicious RelayState - should redirect to appOrigin instead
+		const postResponse = await auth.api.callbackSSOSAML({
+			method: "POST",
+			body: {
+				SAMLResponse: samlResponse.samlResponse,
+				RelayState: "https://evil.com/phishing",
+			},
+			params: {
+				providerId: "open-redirect-test-provider",
+			},
+			asResponse: true,
+		});
+
+		expect(postResponse).toBeInstanceOf(Response);
+		expect(postResponse.status).toBe(302);
+		const postRedirectLocation = postResponse.headers.get("location");
+		// Should NOT redirect to evil.com, should redirect to appOrigin
+		expect(postRedirectLocation).not.toContain("evil.com");
+		expect(postRedirectLocation).toBe("http://localhost:3000");
+	});
+
+	it("should prevent open redirect via GET with malicious RelayState", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "open-redirect-get-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: mockIdP.metadataUrl.replace("/idp/metadata", "/idp/post"),
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		let samlResponse:
+			| { samlResponse: string; entityEndpoint?: string }
+			| undefined;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = context.data as {
+					samlResponse: string;
+					entityEndpoint?: string;
+				};
+			},
+		});
+
+		if (!samlResponse?.samlResponse) {
+			throw new Error("Failed to get SAML response from mock IdP");
+		}
+
+		// First do POST to establish session
+		const postResponse = await auth.api.callbackSSOSAML({
+			method: "POST",
+			body: {
+				SAMLResponse: samlResponse.samlResponse,
+			},
+			params: {
+				providerId: "open-redirect-get-provider",
+			},
+			asResponse: true,
+		});
+
+		const cookieHeader = postResponse.headers.get("set-cookie");
+
+		// Test GET with malicious RelayState in query params
+		const getResponse = await auth.api.callbackSSOSAML({
+			method: "GET",
+			query: {
+				RelayState: "https://evil.com/steal-cookies",
+			},
+			params: {
+				providerId: "open-redirect-get-provider",
+			},
+			headers: cookieHeader ? { cookie: cookieHeader } : undefined,
+			asResponse: true,
+		});
+
+		expect(getResponse).toBeInstanceOf(Response);
+		expect(getResponse.status).toBe(302);
+		const getRedirectLocation = getResponse.headers.get("location");
+		// Should NOT redirect to evil.com
+		expect(getRedirectLocation).not.toContain("evil.com");
+		expect(getRedirectLocation).toBe("http://localhost:3000");
+	});
+
+	it("should allow relative path redirects", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "relative-path-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: mockIdP.metadataUrl.replace("/idp/metadata", "/idp/post"),
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		let samlResponse:
+			| { samlResponse: string; entityEndpoint?: string }
+			| undefined;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = context.data as {
+					samlResponse: string;
+					entityEndpoint?: string;
+				};
+			},
+		});
+
+		if (!samlResponse?.samlResponse) {
+			throw new Error("Failed to get SAML response from mock IdP");
+		}
+
+		// Test POST with relative path RelayState - should be allowed
+		const postResponse = await auth.api.callbackSSOSAML({
+			method: "POST",
+			body: {
+				SAMLResponse: samlResponse.samlResponse,
+				RelayState: "/dashboard/settings",
+			},
+			params: {
+				providerId: "relative-path-provider",
+			},
+			asResponse: true,
+		});
+
+		expect(postResponse).toBeInstanceOf(Response);
+		expect(postResponse.status).toBe(302);
+		const redirectLocation = postResponse.headers.get("location");
+		// Relative paths should be allowed
+		expect(redirectLocation).toBe("/dashboard/settings");
+	});
+
+	it("should block protocol-relative URL attacks (//evil.com)", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "protocol-relative-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: mockIdP.metadataUrl.replace("/idp/metadata", "/idp/post"),
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		let samlResponse:
+			| { samlResponse: string; entityEndpoint?: string }
+			| undefined;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = context.data as {
+					samlResponse: string;
+					entityEndpoint?: string;
+				};
+			},
+		});
+
+		if (!samlResponse?.samlResponse) {
+			throw new Error("Failed to get SAML response from mock IdP");
+		}
+
+		// Test POST with protocol-relative URL - should be blocked
+		const postResponse = await auth.api.callbackSSOSAML({
+			method: "POST",
+			body: {
+				SAMLResponse: samlResponse.samlResponse,
+				RelayState: "//evil.com/phishing",
+			},
+			params: {
+				providerId: "protocol-relative-provider",
+			},
+			asResponse: true,
+		});
+
+		expect(postResponse).toBeInstanceOf(Response);
+		expect(postResponse.status).toBe(302);
+		const redirectLocation = postResponse.headers.get("location");
+		// Should NOT redirect to evil.com via protocol-relative URL
+		expect(redirectLocation).not.toContain("evil.com");
+		expect(redirectLocation).toBe("http://localhost:3000");
 	});
 });

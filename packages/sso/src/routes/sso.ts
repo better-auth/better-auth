@@ -1463,15 +1463,76 @@ const callbackSSOSAMLBodySchema = z.object({
 	RelayState: z.string().optional(),
 });
 
+/**
+ * Validates and returns a safe redirect URL.
+ * - Prevents open redirect attacks by validating against trusted origins
+ * - Prevents redirect loops by checking if URL points to callback route
+ * - Falls back to appOrigin if URL is invalid or unsafe
+ */
+const getSafeRedirectUrl = (
+	url: string | undefined,
+	callbackPath: string,
+	appOrigin: string,
+	isTrustedOrigin: (
+		url: string,
+		settings?: { allowRelativePaths: boolean },
+	) => boolean,
+): string => {
+	if (!url) {
+		return appOrigin;
+	}
+
+	// Allow relative paths (starting with single /, but not // which is protocol-relative)
+	if (url.startsWith("/") && !url.startsWith("//")) {
+		try {
+			const absoluteUrl = new URL(url, appOrigin);
+			// Verify the resolved URL stays on the same origin
+			if (absoluteUrl.origin !== appOrigin) {
+				return appOrigin;
+			}
+			const callbackPathname = new URL(callbackPath).pathname;
+			if (absoluteUrl.pathname === callbackPathname) {
+				return appOrigin;
+			}
+		} catch {
+			// If URL parsing fails, reject the URL
+			return appOrigin;
+		}
+		return url;
+	}
+
+	// Validate absolute URLs against trusted origins
+	if (!isTrustedOrigin(url, { allowRelativePaths: false })) {
+		return appOrigin;
+	}
+
+	// Check for redirect loop using pathname comparison
+	try {
+		const callbackPathname = new URL(callbackPath).pathname;
+		const urlPathname = new URL(url).pathname;
+		if (urlPathname === callbackPathname) {
+			return appOrigin;
+		}
+	} catch {
+		if (url === callbackPath || url.startsWith(`${callbackPath}?`)) {
+			return appOrigin;
+		}
+	}
+
+	return url;
+};
+
 export const callbackSSOSAML = (options?: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/saml2/callback/:providerId",
 		{
 			method: ["GET", "POST"],
 			body: callbackSSOSAMLBodySchema.optional(),
-			query: z.object({
-				RelayState: z.string().optional(),
-			}).optional(),
+			query: z
+				.object({
+					RelayState: z.string().optional(),
+				})
+				.optional(),
 			metadata: {
 				isAction: false,
 				allowedMediaTypes: [
@@ -1501,8 +1562,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			const { providerId } = ctx.params;
 			const appOrigin = new URL(ctx.context.baseURL).origin;
 			const errorURL =
-				ctx.context.options.onAPIError?.errorURL ||
-				`${appOrigin}/error`;
+				ctx.context.options.onAPIError?.errorURL || `${appOrigin}/error`;
 			const currentCallbackPath = `${ctx.context.baseURL}/sso/saml2/callback/${providerId}`;
 
 			if (ctx.method === "GET") {
@@ -1513,11 +1573,12 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 				}
 
 				const relayState = ctx.query?.RelayState as string | undefined;
-				const redirectUrl = relayState || appOrigin;
-				const safeRedirectUrl =
-					redirectUrl === currentCallbackPath
-						? appOrigin
-						: redirectUrl;
+				const safeRedirectUrl = getSafeRedirectUrl(
+					relayState,
+					currentCallbackPath,
+					appOrigin,
+					ctx.context.isTrustedOrigin,
+				);
 
 				throw ctx.redirect(safeRedirectUrl);
 			}
@@ -1853,14 +1914,12 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			);
 			await setSessionCookie(ctx, { session, user });
 
-			const callbackUrl =
-				relayState?.callbackURL ||
-				parsedSamlConfig.callbackUrl ||
-				appOrigin;
-			const safeRedirectUrl =
-				callbackUrl === currentCallbackPath
-					? appOrigin
-					: callbackUrl;
+			const safeRedirectUrl = getSafeRedirectUrl(
+				relayState?.callbackURL || parsedSamlConfig.callbackUrl,
+				currentCallbackPath,
+				appOrigin,
+				ctx.context.isTrustedOrigin,
+			);
 			throw ctx.redirect(safeRedirectUrl);
 		},
 	);
