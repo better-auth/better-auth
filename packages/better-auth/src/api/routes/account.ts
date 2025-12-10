@@ -335,10 +335,10 @@ export const linkSocialAccount = createAuthEndpoint(
 					refreshToken: c.body.idToken.refreshToken,
 					scope: c.body.idToken.scopes?.join(","),
 				});
-			} catch (e: any) {
+			} catch (_e: any) {
 				throw APIError.from(
 					{
-            message: "Account not linked - unable to create account",
+						message: "Account not linked - unable to create account",
 						code: "LINKING_FAILED",
 					},
 					"EXPECTATION_FAILED",
@@ -606,7 +606,7 @@ export const getAccessToken = createAuthEndpoint(
 				idToken: newTokens?.idToken ?? account.idToken ?? undefined,
 			};
 			return ctx.json(tokens);
-		} catch (error) {
+		} catch (_error) {
 			throw APIError.from(
 				{
 					message: "Failed to get a valid access token",
@@ -808,7 +808,7 @@ export const refreshToken = createAuthEndpoint(
 				providerId: account.providerId,
 				accountId: account.accountId,
 			});
-		} catch (error) {
+		} catch (_error) {
 			throw APIError.from(
 				{
 					message: "Failed to refresh access token",
