@@ -67,6 +67,7 @@
   },
   "peerDependencies": {
     "electron": ">=37.0.0",
+    "better-auth": "workspace:*",
     "@better-auth/core": "workspace:*"
   },
   "dependencies": {
