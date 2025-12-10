@@ -373,57 +373,6 @@ export const setPassword = createAuthEndpoint(
 	},
 );
 
-export const verifyPassword = createAuthEndpoint(
-	"/verify-password",
-	{
-		method: "POST",
-		body: z.object({
-			/**
-			 * The password to verify
-			 */
-			password: z.string().meta({
-				description: "The password to verify",
-			}),
-		}),
-		metadata: {
-			SERVER_ONLY: true,
-		},
-		use: [sensitiveSessionMiddleware],
-	},
-	async (ctx) => {
-		const { password } = ctx.body;
-		const session = ctx.context.session;
-
-		const accounts = await ctx.context.internalAdapter.findAccounts(
-			session.user.id,
-		);
-		const account = accounts.find(
-			(account) => account.providerId === "credential" && account.password,
-		);
-
-		if (!account || !account.password) {
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.CREDENTIAL_ACCOUNT_NOT_FOUND,
-			});
-		}
-
-		const verify = await ctx.context.password.verify({
-			hash: account.password,
-			password: password,
-		});
-
-		if (!verify) {
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.INVALID_PASSWORD,
-			});
-		}
-
-		return ctx.json({
-			status: true,
-		});
-	},
-);
-
 export const deleteUser = createAuthEndpoint(
 	"/delete-user",
 	{

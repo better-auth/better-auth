@@ -5,7 +5,9 @@ import { APIError } from "better-call";
 import * as z from "zod";
 import { generateId } from "../../utils";
 import { getDate } from "../../utils/date";
+import { validatePassword } from "../../utils/password";
 import { originCheck } from "../middlewares";
+import { sensitiveSessionMiddleware } from "./session";
 
 function redirectError(
 	ctx: AuthContext,
@@ -332,6 +334,44 @@ export const resetPassword = createAuthEndpoint(
 		if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
 			await ctx.context.internalAdapter.deleteSessions(userId);
 		}
+		return ctx.json({
+			status: true,
+		});
+	},
+);
+
+export const verifyPassword = createAuthEndpoint(
+	"/verify-password",
+	{
+		method: "POST",
+		body: z.object({
+			/**
+			 * The password to verify
+			 */
+			password: z.string().meta({
+				description: "The password to verify",
+			}),
+		}),
+		metadata: {
+			SERVER_ONLY: true,
+		},
+		use: [sensitiveSessionMiddleware],
+	},
+	async (ctx) => {
+		const { password } = ctx.body;
+		const session = ctx.context.session;
+
+		const isValid = await validatePassword(ctx, {
+			password,
+			userId: session.user.id,
+		});
+
+		if (!isValid) {
+			throw new APIError("BAD_REQUEST", {
+				message: BASE_ERROR_CODES.INVALID_PASSWORD,
+			});
+		}
+
 		return ctx.json({
 			status: true,
 		});
