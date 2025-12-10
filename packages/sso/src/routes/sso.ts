@@ -1941,27 +1941,9 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			// Parse and validate SAML response
 			let parsedResponse: FlowResult;
 			try {
-				let decodedResponse = Buffer.from(SAMLResponse, "base64").toString(
+				const decodedResponse = Buffer.from(SAMLResponse, "base64").toString(
 					"utf-8",
 				);
-
-				// Patch the SAML response if status is missing or not success
-				if (!decodedResponse.includes("StatusCode")) {
-					// Insert a success status if missing
-					const insertPoint = decodedResponse.indexOf("</saml2:Issuer>");
-					if (insertPoint !== -1) {
-						decodedResponse =
-							decodedResponse.slice(0, insertPoint + 14) +
-							'<saml2:Status><saml2:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></saml2:Status>' +
-							decodedResponse.slice(insertPoint + 14);
-					}
-				} else if (!decodedResponse.includes("saml2:Success")) {
-					// Replace existing non-success status with success
-					decodedResponse = decodedResponse.replace(
-						/<saml2:StatusCode Value="[^"]+"/,
-						'<saml2:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"',
-					);
-				}
 
 				try {
 					parsedResponse = await sp.parseLoginResponse(idp, "post", {
