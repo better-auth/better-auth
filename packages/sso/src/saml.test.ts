@@ -1156,6 +1156,7 @@ describe("SAML SSO", async () => {
 
 		let samlRedirectUrl = new URL(signInResponse?.url);
 		const callbackResponse = await auth.api.callbackSSOSAML({
+			method: "POST",
 			body: {
 				SAMLResponse: samlResponse.samlResponse,
 				RelayState: samlRedirectUrl.searchParams.get("RelayState") ?? "",
@@ -1172,7 +1173,7 @@ describe("SAML SSO", async () => {
 		expect(callbackResponse.headers.get("location")).toContain("dashboard");
 	});
 
-	it("should initiate SAML login and fail on invalid RelayState", async () => {
+	it("should initiate SAML login and fallback to callbackUrl on invalid RelayState", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [sso()],
 		});
@@ -1224,24 +1225,24 @@ describe("SAML SSO", async () => {
 			},
 		});
 
-		await expect(
-			auth.api.callbackSSOSAML({
-				body: {
-					SAMLResponse: samlResponse.samlResponse,
-					RelayState: "not-the-right-relay-state",
-				},
-				headers: {
-					Cookie: response.headers.get("set-cookie") ?? "",
-				},
-				params: {
-					providerId: "saml-provider-1",
-				},
-			}),
-		).rejects.toThrow(
-			expect.objectContaining({
-				status: "BAD_REQUEST",
-				message: "State error: failed to validate relay state",
-			}),
+		const callbackResponse = await auth.api.callbackSSOSAML({
+			method: "POST",
+			body: {
+				SAMLResponse: samlResponse.samlResponse,
+				RelayState: "not-the-right-relay-state",
+			},
+			headers: {
+				Cookie: response.headers.get("set-cookie") ?? "",
+			},
+			params: {
+				providerId: "saml-provider-1",
+			},
+			asResponse: true,
+		});
+
+		expect(callbackResponse.status).toBe(302);
+		expect(callbackResponse.headers.get("location")).toBe(
+			"http://localhost:3000/dashboard",
 		);
 	});
 
@@ -1300,6 +1301,7 @@ describe("SAML SSO", async () => {
 
 		let samlRedirectUrl = new URL(signInResponse?.url);
 		const callbackResponse = await auth.api.callbackSSOSAML({
+			method: "POST",
 			body: {
 				SAMLResponse: samlResponse.samlResponse,
 				RelayState: samlRedirectUrl.searchParams.get("RelayState") ?? "",
@@ -2203,7 +2205,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 		expect(postResponse.status).toBe(302);
 		const postRedirectLocation = postResponse.headers.get("location");
 		expect(postRedirectLocation).not.toBe(callbackRouteUrl);
-		expect(postRedirectLocation).toBe("http://localhost:3000");
+		expect(postRedirectLocation).toBe("http://localhost:3000/dashboard");
 
 		const cookieHeader = postResponse.headers.get("set-cookie");
 		const getResponse = await auth.api.callbackSSOSAML({
@@ -2269,7 +2271,8 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 			throw new Error("Failed to get SAML response from mock IdP");
 		}
 
-		// Test POST with malicious RelayState - should redirect to appOrigin instead
+		// Test POST with malicious RelayState - raw RelayState is not trusted
+		// Falls back to parsedSamlConfig.callbackUrl
 		const postResponse = await auth.api.callbackSSOSAML({
 			method: "POST",
 			body: {
@@ -2285,9 +2288,10 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 		expect(postResponse).toBeInstanceOf(Response);
 		expect(postResponse.status).toBe(302);
 		const postRedirectLocation = postResponse.headers.get("location");
-		// Should NOT redirect to evil.com, should redirect to appOrigin
+		// Should NOT redirect to evil.com - raw RelayState is ignored
 		expect(postRedirectLocation).not.toContain("evil.com");
-		expect(postRedirectLocation).toBe("http://localhost:3000");
+		// Falls back to samlConfig.callbackUrl
+		expect(postRedirectLocation).toBe("http://localhost:3000/dashboard");
 	});
 
 	it("should prevent open redirect via GET with malicious RelayState", async () => {
@@ -2421,7 +2425,6 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 			throw new Error("Failed to get SAML response from mock IdP");
 		}
 
-		// Test POST with relative path RelayState - should be allowed
 		const postResponse = await auth.api.callbackSSOSAML({
 			method: "POST",
 			body: {
@@ -2437,8 +2440,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 		expect(postResponse).toBeInstanceOf(Response);
 		expect(postResponse.status).toBe(302);
 		const redirectLocation = postResponse.headers.get("location");
-		// Relative paths should be allowed
-		expect(redirectLocation).toBe("/dashboard/settings");
+		expect(redirectLocation).toBe("http://localhost:3000/dashboard");
 	});
 
 	it("should block protocol-relative URL attacks (//evil.com)", async () => {
@@ -2489,7 +2491,8 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 			throw new Error("Failed to get SAML response from mock IdP");
 		}
 
-		// Test POST with protocol-relative URL - should be blocked
+		// Test POST with protocol-relative URL - raw RelayState is not trusted
+		// Falls back to parsedSamlConfig.callbackUrl
 		const postResponse = await auth.api.callbackSSOSAML({
 			method: "POST",
 			body: {
@@ -2505,8 +2508,9 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 		expect(postResponse).toBeInstanceOf(Response);
 		expect(postResponse.status).toBe(302);
 		const redirectLocation = postResponse.headers.get("location");
-		// Should NOT redirect to evil.com via protocol-relative URL
+		// Should NOT redirect to evil.com - raw RelayState is ignored
 		expect(redirectLocation).not.toContain("evil.com");
-		expect(redirectLocation).toBe("http://localhost:3000");
+		// Falls back to samlConfig.callbackUrl
+		expect(redirectLocation).toBe("http://localhost:3000/dashboard");
 	});
 });

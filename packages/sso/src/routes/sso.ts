@@ -1586,9 +1586,14 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 
 			const { SAMLResponse } = ctx.body;
 
-			const relayState: RelayState | null = ctx.body.RelayState
-				? await parseRelayState(ctx)
-				: null;
+			let relayState: RelayState | null = null;
+			if (ctx.body.RelayState) {
+				try {
+					relayState = await parseRelayState(ctx);
+				} catch {
+					relayState = null;
+				}
+			}
 			let provider: SSOProvider<SSOOptions> | null = null;
 			if (options?.defaultSSO?.length) {
 				const matchingDefault = options.defaultSSO.find(
