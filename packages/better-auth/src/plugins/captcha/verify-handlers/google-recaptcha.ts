@@ -66,6 +66,7 @@ export const googleRecaptcha = async ({
 		(isV3(response.data) && response.data.score < minScore)
 	) {
 		return middlewareResponse({
+			code: "VERIFICATION_FAILED" as const,
 			message: EXTERNAL_ERROR_CODES.VERIFICATION_FAILED,
 			status: 403,
 		});
