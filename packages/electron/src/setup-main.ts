@@ -118,7 +118,9 @@ export function registerProtocolScheme(
 		}
 
 		const path = "/" + hostname + pathname;
-		const callbackPath = options.callbackPath?.startsWith("/") ? options.callbackPath : `/${options.callbackPath}`;
+		const callbackPath = options.callbackPath?.startsWith("/")
+			? options.callbackPath
+			: `/${options.callbackPath}`;
 
 		if (path !== callbackPath) {
 			return;

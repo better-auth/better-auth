@@ -3,6 +3,7 @@
 import type { BetterAuthClientPlugin, ClientStore } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
 import { isDevelopment } from "@better-auth/core/env";
+import type { BetterFetchError } from "@better-fetch/fetch";
 import { requestAuth } from "./authenticate";
 import {
 	getCookie,
@@ -13,7 +14,6 @@ import {
 import { isElectronEnv, isProcessType } from "./helper";
 import { registerProtocolScheme, setupCSP, setupIPCMain } from "./setup-main";
 import type { ElectronClientOptions, Storage } from "./types";
-import type { ErrorContext } from "@better-fetch/fetch";
 
 const storageAdapter = async (storage: Storage) => {
 	let safeStorage: Electron.SafeStorage | null = null;
@@ -102,15 +102,17 @@ export const electronClient = (options: ElectronClientOptions) => {
 						}
 					},
 					onError: async (context) => {
-					  let webContents: typeof Electron.WebContents | null = null;
-  					try {
-  					  webContents = (await import("electron")).webContents;
-  					} catch {}
-  					if (!webContents) {
-  					  return;
-  					}
+						let webContents: typeof Electron.WebContents | null = null;
+						try {
+							webContents = (await import("electron")).webContents;
+						} catch {}
+						if (!webContents) {
+							return;
+						}
 
-						webContents.getFocusedWebContents()?.send(`${opts.namespace}:error`, context);
+						webContents
+							.getFocusedWebContents()
+							?.send(`${opts.namespace}:error`, context.error);
 					},
 				},
 				init: async (url, options) => {
@@ -238,18 +240,21 @@ export const electronClient = (options: ElectronClientOptions) => {
 						);
 						contextBridge.exposeInMainWorld(
 							"onAuthenticated",
-							(
-								callback: (user: User & Record<string, any>) => unknown,
-							) => {
+							(callback: (user: User & Record<string, any>) => unknown) => {
 								ipcRenderer.on(
 									`${opts.namespace}:authenticated`,
 									(_event, user) => callback(user),
 								);
 							},
 						);
-						contextBridge.exposeInMainWorld("onAuthError", (callback: (context: ErrorContext) => unknown) => {
-  						ipcRenderer.on(`${opts.namespace}:error`, (_event, context) => callback(context));
-						})
+						contextBridge.exposeInMainWorld(
+							"onAuthError",
+							(callback: (context: BetterFetchError) => unknown) => {
+								ipcRenderer.on(`${opts.namespace}:error`, (_event, context) =>
+									callback(context),
+								);
+							},
+						);
 					}
 				},
 				$Infer: {} as {
@@ -258,7 +263,9 @@ export const electronClient = (options: ElectronClientOptions) => {
 						onAuthenticated: (
 							callback: (user: User & Record<string, any>) => unknown,
 						) => void;
-						onAuthError: (error: (context: ErrorContext) => unknown) => void;
+						onAuthError: (
+							error: (context: BetterFetchError) => unknown,
+						) => void;
 					};
 				},
 			};
