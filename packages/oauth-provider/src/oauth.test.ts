@@ -558,10 +558,9 @@ describe("oauth - prompt", async () => {
 			throw Error("beforeAll not run properly");
 		}
 
-		const { customFetchImpl: customFetchImplRP, cookieSetter } =
-			await createTestInstance({
-				prompt: "login",
-			});
+		const { customFetchImpl: customFetchImplRP } = await createTestInstance({
+			prompt: "login",
+		});
 		const client = createAuthClient({
 			plugins: [genericOAuthClient()],
 			baseURL: rpBaseUrl,

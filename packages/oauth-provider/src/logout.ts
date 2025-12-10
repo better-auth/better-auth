@@ -43,7 +43,7 @@ export async function rpInitiatedLogoutEndpoint(
 		let decoded: JWTPayload;
 		try {
 			decoded = decodeJwt(id_token_hint);
-		} catch (e) {
+		} catch (_e) {
 			throw new APIError("UNAUTHORIZED", {
 				error_description: "invalid id token",
 				error: "invalid_token",

@@ -232,8 +232,8 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		tos_uri: tos,
 		policy_uri: policy,
 		// Jwks (only one can be used)
-		jwks,
-		jwks_uri: jwksUri,
+		jwks: _jwks,
+		jwks_uri: _jwksUri,
 		// User Software Identifiers
 		software_id: softwareId,
 		software_version: softwareVersion,
@@ -317,7 +317,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		// Recommended client data
 		userId,
 		createdAt,
-		updatedAt,
+		updatedAt: _updatedAt,
 		expiresAt,
 		// UI Metadata
 		name,

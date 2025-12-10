@@ -191,7 +191,7 @@ export async function verifyAccessToken(
 		// Verifies payload using verify options (token valid through introspect)
 		try {
 			const unsecuredJwt = new UnsecuredJWT(introspect).encode();
-			const { audience, ...verifyOptions } = opts.verifyOptions;
+			const { audience: _audience, ...verifyOptions } = opts.verifyOptions;
 			const verify = introspect.aud
 				? UnsecuredJWT.decode(unsecuredJwt, opts.verifyOptions)
 				: UnsecuredJWT.decode(unsecuredJwt, verifyOptions);

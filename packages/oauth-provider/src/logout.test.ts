@@ -24,24 +24,23 @@ describe("oauth logout", async () => {
 	const state = "123";
 	const scopes = ["openid", "email", "profile", "offline_access"];
 
-	const { auth, signInWithTestUser, customFetchImpl, cookieSetter, testUser } =
-		await getTestInstance({
-			baseURL: baseUrl,
-			plugins: [
-				oauthProvider({
-					loginPage: "/login",
-					consentPage: "/consent",
-					allowDynamicClientRegistration: true,
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
-					scopes,
-				}),
-				jwt(),
-			],
-		});
-	let { headers, session } = await signInWithTestUser();
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: baseUrl,
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				allowDynamicClientRegistration: true,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+				scopes,
+			}),
+			jwt(),
+		],
+	});
+	let { headers } = await signInWithTestUser();
 	const client = createAuthClient({
 		plugins: [oauthProviderClient()],
 		baseURL: baseUrl,
@@ -387,25 +386,24 @@ describe("oauth logout - disableJwtPlugin", async () => {
 	const state = "123";
 	const scopes = ["openid", "email", "profile", "offline_access"];
 
-	const { auth, signInWithTestUser, customFetchImpl, cookieSetter, testUser } =
-		await getTestInstance({
-			baseURL: baseUrl,
-			plugins: [
-				oauthProvider({
-					disableJwtPlugin: true,
-					loginPage: "/login",
-					consentPage: "/consent",
-					allowDynamicClientRegistration: true,
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
-					scopes,
-				}),
-				jwt(),
-			],
-		});
-	let { headers, session } = await signInWithTestUser();
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: baseUrl,
+		plugins: [
+			oauthProvider({
+				disableJwtPlugin: true,
+				loginPage: "/login",
+				consentPage: "/consent",
+				allowDynamicClientRegistration: true,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+				scopes,
+			}),
+			jwt(),
+		],
+	});
+	let { headers } = await signInWithTestUser();
 	const client = createAuthClient({
 		plugins: [oauthProviderClient()],
 		baseURL: baseUrl,

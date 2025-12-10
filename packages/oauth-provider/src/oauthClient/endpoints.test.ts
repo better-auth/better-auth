@@ -11,7 +11,7 @@ describe("oauthClient", async () => {
 	const baseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
-	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+	const { signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: baseUrl,
 		plugins: [
 			oauthProvider({
@@ -25,7 +25,7 @@ describe("oauthClient", async () => {
 			jwt(),
 		],
 	});
-	const { headers, user } = await signInWithTestUser();
+	const { headers } = await signInWithTestUser();
 
 	const authClient = createAuthClient({
 		plugins: [oauthProviderClient()],

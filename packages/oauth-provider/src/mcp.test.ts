@@ -97,7 +97,7 @@ describe("mcp - server-client flows", async () => {
 	const state = generateRandomString(32);
 	const scopes = ["openid", "offline_access", "greeting"];
 
-	const { auth, signInWithTestUser, customFetchImpl, cookieSetter, testUser } =
+	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
 		await getTestInstance({
 			baseURL: authServerUrl,
 			plugins: [
@@ -164,7 +164,7 @@ describe("mcp - server-client flows", async () => {
 
 	let authServer: Listener;
 	let apiServer: Listener;
-	let apiClient: OAuthClient;
+	let _apiClient: OAuthClient;
 	let dynamicRegisteredClient: OAuthClient;
 
 	beforeAll(async () => {
@@ -179,7 +179,7 @@ describe("mcp - server-client flows", async () => {
 		expect(response?.user_id).toBeDefined();
 		expect(response?.client_secret).toBeDefined();
 		expect(response?.redirect_uris).toEqual([redirectUri]);
-		apiClient = response;
+		_apiClient = response;
 
 		// Opens an authorization server and api server for testing
 		authServer = await listen(
@@ -418,7 +418,7 @@ describe("mcp - server-client flows", async () => {
 		try {
 			const transport = getClientTransport();
 			await mcpClient.connect(transport);
-		} catch (error) {
+		} catch (_error) {
 			expect.unreachable();
 		}
 	});
@@ -436,7 +436,7 @@ describe("mcp - server-client flows", async () => {
 				uri: "greet://me",
 				text: `Welcome ${sub} to ${dynamicRegisteredClient.client_id}`,
 			});
-		} catch (error) {
+		} catch (_error) {
 			expect.unreachable();
 		}
 	});
