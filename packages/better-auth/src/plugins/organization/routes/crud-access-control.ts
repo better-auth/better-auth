@@ -1363,6 +1363,7 @@ async function planResourceCreation({
 
 /**
  * Plan resource expansion - validates and returns what permissions need to be expanded.
+ * Also identifies ALL custom resources to skip delegation checks for them.
  * Does NOT mutate the database.
  */
 async function planResourceExpansion({
@@ -1391,19 +1392,27 @@ async function planResourceExpansion({
 		invalidPermissions: string[];
 	}> = [];
 
+	// Identify all custom resources in the permission set (for delegation skip)
+	const customResourcesInPermissions: string[] = [];
+
 	// Find resources that need permission expansion
 	for (const [resource, permissions] of Object.entries(permission)) {
 		const validPermissions = orgStatements[resource as keyof Statements];
 		if (!validPermissions) continue;
+
+		// Check if this is a custom resource (not a default one)
+		const isCustomResource = !defaultStatements[resource as keyof Statements];
+
+		// Track all custom resources (even if not expanding)
+		if (isCustomResource) {
+			customResourcesInPermissions.push(resource);
+		}
 
 		const invalidPermissions = permissions.filter(
 			(p) => !validPermissions.includes(p),
 		);
 
 		if (invalidPermissions.length === 0) continue;
-
-		// Check if this is a custom resource (not a default one)
-		const isCustomResource = !defaultStatements[resource as keyof Statements];
 
 		if (
 			!isCustomResource ||
@@ -1430,12 +1439,13 @@ async function planResourceExpansion({
 		});
 	}
 
-	// No resources need expansion
+	// If no resources need expansion but there are custom resources,
+	// still return them for delegation skip
 	if (resourcesToExpand.length === 0) {
 		return {
 			toCreate: [],
 			toExpand: [],
-			resourcesToSkipDelegation: [],
+			resourcesToSkipDelegation: customResourcesInPermissions,
 		};
 	}
 
@@ -1561,14 +1571,9 @@ async function planResourceExpansion({
 	return {
 		toCreate: [],
 		toExpand,
-		resourcesToSkipDelegation: toExpand.map(
-			(r: {
-				resourceName: string;
-				existingPermissions: string[];
-				newPermissions: string[];
-				mergedPermissions: string[];
-			}) => r.resourceName,
-		),
+		// Skip delegation for ALL custom resources, not just those being expanded
+		// This allows users to remove permissions from custom resources without delegation errors
+		resourcesToSkipDelegation: customResourcesInPermissions,
 	};
 }
 
