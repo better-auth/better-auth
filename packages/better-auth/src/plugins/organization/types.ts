@@ -110,22 +110,32 @@ export interface OrganizationOptions {
 				reservedResourceNames?: string[];
 				/**
 				 * Custom validation function for resource names.
+				 * When provided, this COMPLETELY OVERRIDES the default validation rules.
+				 *
+				 * Default rules (only used if this is not provided):
+				 * - Length between 1-50 characters
+				 * - Alphanumeric with underscores only
+				 * - Not a reserved name
 				 *
 				 * @param name - The resource name to validate
-				 * @returns true if valid, false otherwise, or an object with valid flag and error message
+				 * @returns An object with valid flag and optional error message
 				 *
 				 * @example
 				 * ```ts
+				 * // This completely replaces all default validation
 				 * resourceNameValidation: (name) => {
-				 *   if (name.length > 50) {
+				 *   if (name.length > 100) {
 				 *     return { valid: false, error: "Resource name too long" };
 				 *   }
-				 *   return true;
+				 *   if (!/^[a-z-]+$/.test(name)) {
+				 *     return { valid: false, error: "Only lowercase letters and hyphens allowed" };
+				 *   }
+				 *   return { valid: true };
 				 * }
 				 * ```
 				 */
 				resourceNameValidation?:
-					| ((name: string) => boolean | { valid: boolean; error?: string })
+					| ((name: string) => { valid: boolean; error?: string })
 					| undefined;
 				/**
 				 * Roles allowed to create new custom resources.

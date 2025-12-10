@@ -159,16 +159,21 @@ export function getReservedResourceNames(
 
 /**
  * Validate a resource name according to the rules:
- * - Must be alphanumeric with underscores
- * - Length between 1 and 50 characters
- * - Cannot be a reserved name
- * - Custom validation function if provided
+ * - If custom validation is provided, uses ONLY that (full override)
+ * - Otherwise uses default rules:
+ *   - Must be alphanumeric with underscores
+ *   - Length between 1 and 50 characters
+ *   - Cannot be a reserved name
  */
 export function validateResourceName(
 	name: string,
 	options: OrganizationOptions,
 ): { valid: boolean; error?: string } {
-	// Length validation first
+	// Use custom validation if provided
+	if (options.dynamicAccessControl?.resourceNameValidation) {
+		return options.dynamicAccessControl.resourceNameValidation(name);
+	}
+
 	if (name.length < 1 || name.length > 50) {
 		return {
 			valid: false,
@@ -176,7 +181,6 @@ export function validateResourceName(
 		};
 	}
 
-	// Basic format validation
 	if (!/^[a-zA-Z0-9_]+$/.test(name)) {
 		return {
 			valid: false,
@@ -191,18 +195,6 @@ export function validateResourceName(
 			valid: false,
 			error: `Resource name "${name}" is reserved and cannot be used`,
 		};
-	}
-
-	// Custom validation if provided
-	if (options.dynamicAccessControl?.resourceNameValidation) {
-		const customResult =
-			options.dynamicAccessControl.resourceNameValidation(name);
-		if (typeof customResult === "boolean") {
-			return customResult
-				? { valid: true }
-				: { valid: false, error: "Resource name failed custom validation" };
-		}
-		return customResult;
 	}
 
 	return { valid: true };
