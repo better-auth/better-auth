@@ -427,7 +427,7 @@ describe("api-key", async () => {
 	});
 
 	it("should fail to create a key with a custom expiresIn value when customExpiresTime is disabled", async () => {
-		const { client, auth, signInWithTestUser } = await getTestInstance(
+		const { auth, signInWithTestUser } = await getTestInstance(
 			{
 				plugins: [
 					apiKey({
@@ -445,7 +445,7 @@ describe("api-key", async () => {
 			},
 		);
 
-		const { headers, user } = await signInWithTestUser();
+		const { headers } = await signInWithTestUser();
 		let result: { data: ApiKey | null; error: Err | null } = {
 			data: null,
 			error: null,
@@ -758,7 +758,7 @@ describe("api-key", async () => {
 	});
 
 	it("create API key with with metadata when metadata is disabled (should fail)", async () => {
-		const { client, auth, signInWithTestUser } = await getTestInstance(
+		const { auth, signInWithTestUser } = await getTestInstance(
 			{
 				plugins: [
 					apiKey({
@@ -811,7 +811,7 @@ describe("api-key", async () => {
 	});
 
 	it("should have the start property as null if shouldStore is false", async () => {
-		const { client, auth, signInWithTestUser } = await getTestInstance(
+		const { client, signInWithTestUser } = await getTestInstance(
 			{
 				plugins: [
 					apiKey({
@@ -839,7 +839,7 @@ describe("api-key", async () => {
 
 	it("should use the defined charactersLength if provided", async () => {
 		const customLength = 3;
-		const { client, auth, signInWithTestUser } = await getTestInstance(
+		const { client, signInWithTestUser } = await getTestInstance(
 			{
 				plugins: [
 					apiKey({
@@ -2300,7 +2300,7 @@ describe("api-key", async () => {
 		});
 
 		it("should list API keys from secondary storage", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 
 			// Create multiple API keys
 			const { data: key1 } = await client.apiKey.create(
@@ -2323,7 +2323,7 @@ describe("api-key", async () => {
 		});
 
 		it("should update API key in secondary storage", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 			const { data: createdKey } = await client.apiKey.create(
 				{ name: "Original Name" },
 				{ headers: headers },
@@ -2372,7 +2372,7 @@ describe("api-key", async () => {
 		});
 
 		it("should verify API key from secondary storage", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 			const { data: createdKey } = await client.apiKey.create(
 				{},
 				{ headers: headers },
@@ -2392,7 +2392,7 @@ describe("api-key", async () => {
 		});
 
 		it("should set TTL when API key has expiration", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 			const expiresIn = 60 * 60 * 24; // 1 day in seconds
 
 			const { data: createdKey } = await client.apiKey.create(
@@ -2413,7 +2413,7 @@ describe("api-key", async () => {
 		});
 
 		it("should handle metadata in secondary storage", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 			const metadata = { plan: "premium", environment: "production" };
 
 			const { data: createdKey } = await client.apiKey.create(
@@ -2433,7 +2433,7 @@ describe("api-key", async () => {
 		});
 
 		it("should handle rate limiting with secondary storage", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { user } = await signInWithTestUser();
 			const createdKey = await auth.api.createApiKey({
 				body: {
 					rateLimitEnabled: true,
@@ -2471,7 +2471,7 @@ describe("api-key", async () => {
 		});
 
 		it("should handle remaining count with secondary storage", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { user } = await signInWithTestUser();
 			const remaining = 5;
 
 			const createdKey = await auth.api.createApiKey({
@@ -2503,7 +2503,7 @@ describe("api-key", async () => {
 
 		it("should handle expired keys with TTL in secondary storage", async () => {
 			vi.useFakeTimers();
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 			// Use 1 day in seconds (minimum allowed) + 1 second for testing expiration
 			const expiresIn = 60 * 60 * 24 + 1; // 86401 seconds = 1 day + 1 second
 
@@ -2531,7 +2531,7 @@ describe("api-key", async () => {
 		});
 
 		it("should maintain user's API key list in secondary storage", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 
 			// Create multiple API keys for the same user
 			const { data: key1 } = await client.apiKey.create(
@@ -2610,7 +2610,7 @@ describe("api-key", async () => {
 		});
 
 		it("should read from secondary storage first", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 			const { data: createdKey } = await client.apiKey.create(
 				{},
 				{ headers: headers },
@@ -2766,7 +2766,7 @@ describe("api-key", async () => {
 		});
 
 		it("should write to secondary storage only", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 			const { data: createdKey } = await client.apiKey.create(
 				{ name: "Test Key" },
 				{ headers: headers },
@@ -2777,7 +2777,7 @@ describe("api-key", async () => {
 		});
 
 		it("should create in both database and secondary storage when fallbackToDatabase is true", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 			const { data: createdKey } = await client.apiKey.create(
 				{ name: "Fallback Test Key" },
 				{ headers: headers },
@@ -2799,7 +2799,7 @@ describe("api-key", async () => {
 		});
 
 		it("should update both database and secondary storage when fallbackToDatabase is true", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 			const { data: createdKey } = await client.apiKey.create(
 				{ name: "Original Name" },
 				{ headers: headers },
@@ -2834,7 +2834,7 @@ describe("api-key", async () => {
 		});
 
 		it("should delete from both database and secondary storage when fallbackToDatabase is true", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 			const { data: createdKey } = await client.apiKey.create(
 				{},
 				{ headers: headers },
@@ -2882,7 +2882,7 @@ describe("api-key", async () => {
 		let customSetCalled = false;
 		let customDeleteCalled = false;
 
-		const { client, auth, signInWithTestUser } = await getTestInstance(
+		const { client, signInWithTestUser } = await getTestInstance(
 			{
 				// Don't provide global secondaryStorage
 				plugins: [
@@ -2921,7 +2921,7 @@ describe("api-key", async () => {
 		});
 
 		it("should use custom storage methods instead of global secondaryStorage", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 			const { data: createdKey } = await client.apiKey.create(
 				{},
 				{ headers: headers },
@@ -2933,7 +2933,7 @@ describe("api-key", async () => {
 		});
 
 		it("should use custom get method", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 			const { data: createdKey } = await client.apiKey.create(
 				{},
 				{ headers: headers },
@@ -2952,7 +2952,7 @@ describe("api-key", async () => {
 		});
 
 		it("should use custom delete method", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 			const { data: createdKey } = await client.apiKey.create(
 				{},
 				{ headers: headers },

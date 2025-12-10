@@ -50,7 +50,7 @@ describe("cookies", async () => {
 		const { client, testUser } = await getTestInstance({
 			advanced: { useSecureCookies: true },
 		});
-		const res = await client.signIn.email(
+		await client.signIn.email(
 			{
 				email: testUser.email,
 				password: testUser.password,
@@ -223,7 +223,7 @@ describe("cookie-utils stripSecureCookiePrefix", () => {
 
 describe("getSessionCookie", async () => {
 	it("should return the correct session cookie", async () => {
-		const { client, testUser, signInWithTestUser } = await getTestInstance();
+		const { signInWithTestUser } = await getTestInstance();
 		const { headers } = await signInWithTestUser();
 		const request = new Request("http://localhost:3000/api/auth/session", {
 			headers,
@@ -382,7 +382,7 @@ describe("getSessionCookie", async () => {
 	});
 
 	it("should return null if the cookie is invalid", async () => {
-		const { client, testUser, cookieSetter } = await getTestInstance({
+		const { client, testUser } = await getTestInstance({
 			session: {
 				cookieCache: {
 					enabled: true,
@@ -428,7 +428,7 @@ describe("getSessionCookie", async () => {
 	});
 
 	it("should chunk large cookies instead of logging error", async () => {
-		const { client, testUser } = await getTestInstance({
+		const { client } = await getTestInstance({
 			secret: "better-auth.secret",
 			user: {
 				additionalFields: {
@@ -846,16 +846,6 @@ describe("Cookie Cache Field Filtering", () => {
 	});
 
 	it("should return null for invalid JWT token", async () => {
-		const { cookieSetter } = await getTestInstance({
-			secret: "better-auth.secret",
-			session: {
-				cookieCache: {
-					enabled: true,
-					strategy: "jwt",
-				},
-			},
-		});
-
 		const headers = new Headers();
 		// Set an invalid JWT token manually
 		headers.set("cookie", "better-auth.session_data=invalid.jwt.token");
@@ -913,7 +903,7 @@ describe("Cookie Chunking", () => {
 		// Create a large string that will exceed the cookie size limit
 		const largeString = "x".repeat(2000);
 
-		const { client, cookieSetter } = await getTestInstance({
+		const { client } = await getTestInstance({
 			secret: "better-auth.secret",
 			user: {
 				additionalFields: {
@@ -1109,7 +1099,7 @@ describe("Cookie Chunking", () => {
 	});
 
 	it("should NOT chunk cookies when they are under 4KB", async () => {
-		const { client, testUser, cookieSetter } = await getTestInstance({
+		const { client, testUser } = await getTestInstance({
 			secret: "better-auth.secret",
 			session: {
 				cookieCache: {

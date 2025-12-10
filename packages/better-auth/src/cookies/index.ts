@@ -380,8 +380,6 @@ export const getSessionCookie = (
 		}
 	}
 	const headers = "headers" in request ? request.headers : request;
-	const req = request instanceof Request ? request : undefined;
-	const url = getBaseURL(req?.url, config?.path, req);
 	const cookies = headers.get("cookie");
 	if (!cookies) {
 		return null;
