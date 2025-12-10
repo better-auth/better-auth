@@ -442,9 +442,9 @@ export async function POST(req: Request) {
     return auth.handler(req);
 }
 
-export async function GET() {
+export async function GET(req: Request) {
     // Required: IdP-initiated flows redirect to this URL after POST
-    return NextResponse.redirect(new URL("/", process.env.BETTER_AUTH_URL));
+    return NextResponse.redirect(new URL("/", req.url));
 }
 ```
 
