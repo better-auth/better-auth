@@ -25,6 +25,12 @@
     "./async_hooks": {
       "dev-source": "./src/async_hooks/index.ts",
       "types": "./dist/async_hooks/index.d.mts",
+      "node": "./dist/async_hooks/index.mjs",
+      "deno": "./dist/async_hooks/index.mjs",
+      "bun": "./dist/async_hooks/index.mjs",
+      "edge": "./dist/async_hooks/pure.index.mjs",
+      "workerd": "./dist/async_hooks/index.mjs",
+      "browser": "./dist/async_hooks/pure.index.mjs",
       "default": "./dist/async_hooks/index.mjs"
     },
     "./context": {
