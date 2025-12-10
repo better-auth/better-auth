@@ -12,27 +12,6 @@ import type {
 	TeamMember,
 } from "./schema";
 
-/**
- * Result from canCreateRole hook
- * Uses discriminated union for type safety and clear intent
- */
-export type CreateRoleAuthResult =
-	| {
-			allow: true;
-			/**
-			 * Bypass default permission and delegation checks.
-			 * ⚠️ Use with caution - only for trusted roles/scenarios.
-			 */
-			bypass?: boolean;
-	  }
-	| {
-			allow: false;
-			/**
-			 * Custom error message explaining why creation is denied
-			 */
-			message?: string;
-	  };
-
 export interface OrganizationOptions {
 	/**
 	 * Configure whether new users are able to create new organizations.
@@ -149,39 +128,78 @@ export interface OrganizationOptions {
 					| ((name: string) => boolean | { valid: boolean; error?: string })
 					| undefined;
 				/**
-				 * Custom logic to determine if a user can create a role.
+				 * Roles allowed to create new custom resources.
+				 *
+				 * @default ['owner']
+				 *
+				 * @example
+				 * ```ts
+				 * allowedRolesToCreateResources: ['owner', 'admin']
+				 * ```
+				 */
+				allowedRolesToCreateResources?: string[];
+				/**
+				 * Custom logic to determine if a user can create a new resource.
+				 * If provided, overrides the default allowedRolesToCreateResources check.
 				 *
 				 * @returns Authorization result
-				 * - `{ allow: true }` - Allow and continue with default permission/delegation checks
-				 * - `{ allow: true, bypass: true }` - Allow and skip all checks (⚠️ use with caution)
+				 * - `{ allow: true }` - Allow resource creation
 				 * - `{ allow: false, message: "..." }` - Deny with custom error message
 				 *
 				 * @example
 				 * ```ts
-				 * canCreateRole: async ({ member, organizationId }) => {
-				 *   // Check subscription
-				 *   const subscription = await getSubscription(organizationId);
-				 *   if (!subscription.premium) {
-				 *     return { allow: false, message: "Premium required" };
+				 * canCreateResource: async ({ member, organizationId, resourceName }) => {
+				 *   // Check subscription or quota
+				 *   const quota = await checkResourceQuota(organizationId);
+				 *   if (!quota.canCreate) {
+				 *     return { allow: false, message: "Resource quota exceeded" };
 				 *   }
-				 *
-				 *   // Superadmin can bypass all checks
-				 *   if (member.role === "superadmin") {
-				 *     return { allow: true, bypass: true };
-				 *   }
-				 *
-				 *   // Use default logic for others
 				 *   return { allow: true };
 				 * }
 				 * ```
 				 */
-				canCreateRole?: (data: {
+				canCreateResource?: (params: {
 					organizationId: string;
 					userId: string;
 					member: Member & Record<string, any>;
-					permission: Record<string, string[]>;
-					roleName: string;
-				}) => Promise<CreateRoleAuthResult> | CreateRoleAuthResult;
+					resourceName: string;
+					permissions: string[];
+				}) =>
+					| Promise<{ allow: boolean; message?: string }>
+					| { allow: boolean; message?: string };
+				/**
+				 * Optional hook called after a resource is successfully created.
+				 *
+				 * @example
+				 * ```ts
+				 * onResourceCreated: async ({ organizationId, resourceName }) => {
+				 *   await logResourceCreation(organizationId, resourceName);
+				 * }
+				 * ```
+				 */
+				onResourceCreated?: (params: {
+					organizationId: string;
+					resourceName: string;
+					permissions: string[];
+					createdBy: string;
+				}) => Promise<void> | void;
+				/**
+				 * Optional hook called after resource permissions are successfully expanded.
+				 *
+				 * @example
+				 * ```ts
+				 * onResourceExpanded: async ({ organizationId, resourceName, newPermissions }) => {
+				 *   await logPermissionExpansion(organizationId, resourceName, newPermissions);
+				 * }
+				 * ```
+				 */
+				onResourceExpanded?: (params: {
+					organizationId: string;
+					resourceName: string;
+					oldPermissions: string[];
+					newPermissions: string[];
+					expandedBy: string;
+				}) => Promise<void> | void;
 		  }
 		| undefined;
 	/**
