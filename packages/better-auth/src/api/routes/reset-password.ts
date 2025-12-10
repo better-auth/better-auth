@@ -225,11 +225,6 @@ export const requestPasswordResetCallback = createAuthEndpoint(
 	},
 );
 
-/**
- * @deprecated Use requestPasswordResetCallback instead
- */
-export const forgetPasswordCallback = requestPasswordResetCallback;
-
 export const validatePasswordResetToken = createAuthEndpoint(
 	"/validate-reset-password-token",
 	{
