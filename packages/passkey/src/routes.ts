@@ -506,6 +506,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 					model: "passkey",
 					data: newPasskey,
 				});
+				await ctx.context.internalAdapter.deleteVerificationValue(challengeId);
 				return ctx.json(newPasskeyRes, {
 					status: 200,
 				});
