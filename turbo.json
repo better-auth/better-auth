@@ -22,6 +22,9 @@
     },
     "//#format": {},
     "lint": {},
+    "lint:types": {
+      "dependsOn": ["build"]
+    },
     "lint:package": {
       "dependsOn": ["build"]
     },

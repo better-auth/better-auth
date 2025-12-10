@@ -24,7 +24,7 @@ export type GenericEndpointContext<
 };
 
 export interface InternalAdapter<
-	Options extends BetterAuthOptions = BetterAuthOptions,
+	_Options extends BetterAuthOptions = BetterAuthOptions,
 > {
 	createOAuthUser(
 		user: Omit<User, "id" | "createdAt" | "updatedAt">,

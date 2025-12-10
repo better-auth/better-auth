@@ -326,7 +326,7 @@ describe("Admin plugin", async () => {
 	});
 
 	it("should allow to filter users by role", async () => {
-		const res = await client.admin.listUsers({
+		await client.admin.listUsers({
 			query: {
 				filterValue: "admin",
 				filterField: "role",
@@ -654,6 +654,30 @@ describe("Admin plugin", async () => {
 		expect(res.error?.status).toBe(403);
 	});
 
+	it("should not allow to impersonate admins", async () => {
+		const userToImpersonate = await client.signUp.email({
+			email: "impersonate-admin@mail.com",
+			password: "password",
+			name: "Impersonate Admin User",
+		});
+		const userId = userToImpersonate.data?.user.id || "";
+		await client.admin.setRole({
+			userId,
+			role: "admin",
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		const res = await client.admin.impersonateUser(
+			{
+				userId,
+			},
+			{ headers: adminHeaders },
+		);
+
+		expect(res.error?.status).toBe(403);
+	});
+
 	it("should filter impersonated sessions", async () => {
 		const { headers } = await signInWithUser(data.email, data.password);
 		const res = await client.listSessions({
@@ -934,46 +958,41 @@ describe("access control", async (it) => {
 		order: ["read"],
 	});
 
-	const {
-		signInWithTestUser,
-		signInWithUser,
-		cookieSetter,
-		auth,
-		customFetchImpl,
-	} = await getTestInstance(
-		{
-			plugins: [
-				admin({
-					ac,
-					roles: {
-						admin: adminAc,
-						user: userAc,
-					},
-				}),
-			],
-			databaseHooks: {
-				user: {
-					create: {
-						before: async (user) => {
-							if (user.name === "Admin") {
-								return {
-									data: {
-										...user,
-										role: "admin",
-									},
-								};
-							}
+	const { signInWithTestUser, cookieSetter, auth, customFetchImpl } =
+		await getTestInstance(
+			{
+				plugins: [
+					admin({
+						ac,
+						roles: {
+							admin: adminAc,
+							user: userAc,
+						},
+					}),
+				],
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => {
+								if (user.name === "Admin") {
+									return {
+										data: {
+											...user,
+											role: "admin",
+										},
+									};
+								}
+							},
 						},
 					},
 				},
 			},
-		},
-		{
-			testUser: {
-				name: "Admin",
+			{
+				testUser: {
+					name: "Admin",
+				},
 			},
-		},
-	);
+		);
 
 	const client = createAuthClient({
 		plugins: [

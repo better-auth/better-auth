@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/expo",
-  "version": "1.4.6-beta.3",
+  "version": "1.4.6-beta.4",
   "type": "module",
   "description": "Better Auth integration for Expo and React Native applications.",
   "main": "dist/index.mjs",
@@ -15,6 +15,7 @@
   "scripts": {
     "test": "vitest",
     "coverage": "vitest run --coverage",
+    "lint:types": "attw --profile esm-only --pack .",
     "lint:package": "publint run --strict",
     "build": "tsdown",
     "dev": "tsdown --watch",
@@ -30,6 +31,11 @@
       "dev-source": "./src/client.ts",
       "types": "./dist/client.d.mts",
       "default": "./dist/client.mjs"
+    },
+    "./plugins": {
+      "dev-source": "./src/plugins/index.ts",
+      "types": "./dist/plugins/index.d.mts",
+      "default": "./dist/plugins/index.mjs"
     }
   },
   "typesVersions": {
@@ -39,6 +45,9 @@
       ],
       "client": [
         "./dist/client.d.mts"
+      ],
+      "plugins": [
+        "./dist/plugins/index.d.mts"
       ]
     }
   },
