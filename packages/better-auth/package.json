@@ -50,6 +50,11 @@
       "types": "./dist/auth/minimal.d.mts",
       "default": "./dist/auth/minimal.mjs"
     },
+    "./custom": {
+      "dev-source": "./src/auth/custom.ts",
+      "types": "./dist/auth/custom.d.mts",
+      "default": "./dist/auth/custom.mjs"
+    },
     "./social-providers": {
       "dev-source": "./src/social-providers/index.ts",
       "types": "./dist/social-providers/index.d.mts",
