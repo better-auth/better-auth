@@ -309,6 +309,9 @@
       "minimal": [
         "./dist/auth/minimal.d.mts"
       ],
+      "custom": [
+        "./dist/auth/custom.d.mts"
+      ],
       "node": [
         "./dist/integrations/node.d.mts"
       ],
