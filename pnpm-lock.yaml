@@ -1090,7 +1090,7 @@ importers:
         specifier: catalog:react19
         version: 19.2.2
       better-sqlite3:
-        specifier: ^12.2.0
+        specifier: ^12.4.1
         version: 12.4.1
       deepmerge:
         specifier: ^4.3.1
