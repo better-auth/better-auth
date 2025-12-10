@@ -511,7 +511,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 					status: 200,
 				});
 			} catch (e) {
-				console.log(e);
+				ctx.context.logger.error("Failed to verify registration", e);
 				throw new APIError("INTERNAL_SERVER_ERROR", {
 					message: PASSKEY_ERROR_CODES.FAILED_TO_VERIFY_REGISTRATION,
 				});
