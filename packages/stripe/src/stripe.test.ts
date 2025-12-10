@@ -1895,7 +1895,7 @@ describe("stripe", async () => {
 			const response = await testAuth.handler(mockRequest);
 			expect(response.status).toBe(400);
 			const data = await response.json();
-			expect(data.message).toContain("Webhook Error");
+			expect(data.message).toContain("Failed to construct Stripe event");
 		});
 
 		it("should reject webhook request without stripe-signature header", async () => {
@@ -1920,7 +1920,7 @@ describe("stripe", async () => {
 			const response = await testAuth.handler(mockRequest);
 			expect(response.status).toBe(400);
 			const data = await response.json();
-			expect(data.message).toContain("Stripe webhook secret not found");
+			expect(data.message).toContain("Stripe signature not found");
 		});
 
 		it("should handle constructEventAsync returning null/undefined", async () => {
@@ -1958,7 +1958,7 @@ describe("stripe", async () => {
 			const response = await testAuth.handler(mockRequest);
 			expect(response.status).toBe(400);
 			const data = await response.json();
-			expect(data.message).toContain("Failed to construct event");
+			expect(data.message).toContain("Failed to construct Stripe event");
 		});
 
 		it("should handle async errors in webhook event processing", async () => {
