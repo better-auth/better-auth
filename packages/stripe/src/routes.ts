@@ -871,7 +871,11 @@ export const restoreSubscription = (options: StripeOptions) => {
 								(sub) => sub.status === "active" || sub.status === "trialing",
 							),
 						);
-			if (!subscription || !subscription.stripeCustomerId) {
+			if (
+				!subscription ||
+				!subscription.stripeCustomerId ||
+				subscription.referenceId !== referenceId
+			) {
 				throw ctx.error("BAD_REQUEST", {
 					message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 				});

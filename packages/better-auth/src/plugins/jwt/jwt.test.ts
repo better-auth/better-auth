@@ -776,3 +776,159 @@ describe("jwt - custom jwksPath", async () => {
 		expect(oldJwks.error?.status).toBe(404);
 	});
 });
+
+describe("jwt - audience validation", async () => {
+	it("should validate audience claim correctly", async () => {
+		const customAudience = "https://my-app.com";
+		const { auth } = await getTestInstance({
+			plugins: [
+				jwt({
+					jwt: {
+						audience: customAudience,
+					},
+				}),
+			],
+			logger: {
+				level: "error",
+			},
+		});
+
+		// Sign a JWT with the correct audience
+		const validToken = await auth.api.signJWT({
+			body: {
+				payload: {
+					sub: "123",
+					exp: Math.floor(Date.now() / 1000) + 600,
+					iat: Math.floor(Date.now() / 1000),
+					aud: customAudience,
+				},
+			},
+		});
+
+		expect(validToken?.token).toBeDefined();
+
+		// Verify with JWKS - should succeed
+		const jwks = await auth.api.getJwks();
+		const localJwks = createLocalJWKSet(jwks);
+		const decoded = await jwtVerify(validToken?.token!, localJwks, {
+			audience: customAudience,
+		});
+
+		expect(decoded.payload.aud).toBe(customAudience);
+	});
+
+	it("should reject token with wrong audience", async () => {
+		const correctAudience = "https://my-app.com";
+		const wrongAudience = "https://wrong-app.com";
+
+		const { auth } = await getTestInstance({
+			plugins: [
+				jwt({
+					jwt: {
+						audience: correctAudience,
+					},
+				}),
+			],
+			logger: {
+				level: "error",
+			},
+		});
+
+		// Sign a JWT with wrong audience
+		const tokenWithWrongAudience = await auth.api.signJWT({
+			body: {
+				payload: {
+					sub: "123",
+					exp: Math.floor(Date.now() / 1000) + 600,
+					iat: Math.floor(Date.now() / 1000),
+					aud: wrongAudience,
+				},
+			},
+		});
+
+		expect(tokenWithWrongAudience?.token).toBeDefined();
+
+		// Try to verify with correct audience - should fail
+		const jwks = await auth.api.getJwks();
+		const localJwks = createLocalJWKSet(jwks);
+
+		await expect(
+			jwtVerify(tokenWithWrongAudience?.token!, localJwks, {
+				audience: correctAudience,
+			}),
+		).rejects.toThrow();
+	});
+
+	it("should support multiple audiences", async () => {
+		const audiences = ["https://app1.com", "https://app2.com"];
+
+		const { auth } = await getTestInstance({
+			plugins: [
+				jwt({
+					jwt: {
+						audience: audiences,
+					},
+				}),
+			],
+			logger: {
+				level: "error",
+			},
+		});
+
+		// Sign a JWT with one of the valid audiences
+		const token = await auth.api.signJWT({
+			body: {
+				payload: {
+					sub: "123",
+					exp: Math.floor(Date.now() / 1000) + 600,
+					iat: Math.floor(Date.now() / 1000),
+					aud: audiences[0],
+				},
+			},
+		});
+
+		expect(token?.token).toBeDefined();
+
+		// Verify with multiple audiences - should succeed
+		const jwks = await auth.api.getJwks();
+		const localJwks = createLocalJWKSet(jwks);
+		const decoded = await jwtVerify(token?.token!, localJwks, {
+			audience: audiences,
+		});
+
+		expect(decoded.payload.aud).toBe(audiences[0]);
+	});
+
+	it("should use baseURL as default audience", async () => {
+		const baseURL = "http://localhost:3000/api/auth";
+		const { auth } = await getTestInstance({
+			plugins: [jwt()],
+			logger: {
+				level: "error",
+			},
+		});
+
+		// Sign a JWT without explicitly setting audience
+		const token = await auth.api.signJWT({
+			body: {
+				payload: {
+					sub: "123",
+					exp: Math.floor(Date.now() / 1000) + 600,
+					iat: Math.floor(Date.now() / 1000),
+					aud: baseURL,
+				},
+			},
+		});
+
+		expect(token?.token).toBeDefined();
+
+		// Verify with default audience (baseURL)
+		const jwks = await auth.api.getJwks();
+		const localJwks = createLocalJWKSet(jwks);
+		const decoded = await jwtVerify(token?.token!, localJwks, {
+			audience: baseURL,
+		});
+
+		expect(decoded.payload.aud).toBe(baseURL);
+	});
+});
