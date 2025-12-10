@@ -60,6 +60,8 @@ export default defineConfig({
 		"./src/plugins/siwe/index.ts",
 		"./src/test-utils/index.ts",
 	],
+	sourcemap: true,
 	treeshake: true,
 	clean: true,
+	unbundle: true
 });
