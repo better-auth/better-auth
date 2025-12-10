@@ -24,6 +24,7 @@
   "scripts": {
     "test": "vitest",
     "coverage": "vitest run --coverage",
+    "lint:types": "attw --profile esm-only pack .",
     "lint:package": "publint run --strict",
     "build": "tsdown",
     "dev": "tsdown --watch",
@@ -75,6 +76,8 @@
   },
   "devDependencies": {
     "electron": "~39.2.6",
+    "@types/better-sqlite3": "^7.6.13",
+    "better-sqlite3": "^12.2.0",
     "@better-auth/core": "workspace:*",
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:",

@@ -103,10 +103,6 @@ export const electron = (options?: ElectronOptions | undefined) => {
 							maxAge: opts.codeExpiresIn,
 							httpOnly: false,
 						});
-
-						return {
-							context: ctx,
-						};
 					}),
 				},
 			],
