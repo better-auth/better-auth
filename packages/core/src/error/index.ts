@@ -10,7 +10,7 @@ export class BetterAuthError extends Error {
 	}
 }
 
-export { BASE_ERROR_CODES } from "./codes";
+export { type APIErrorCode, BASE_ERROR_CODES } from "./codes";
 
 export class APIError extends BaseAPIError {
 	constructor(...args: ConstructorParameters<typeof BaseAPIError>) {
