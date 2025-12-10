@@ -1,5 +1,4 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { defineErrorCodes } from "@better-auth/core/utils";
 import type { GenericEndpointContext } from "better-auth";
 import {
 	APIError,
@@ -10,6 +9,7 @@ import {
 import type Stripe from "stripe";
 import type { Stripe as StripeType } from "stripe";
 import * as z from "zod/v4";
+import { STRIPE_ERROR_CODES } from "./error-codes";
 import {
 	onCheckoutSessionCompleted,
 	onSubscriptionDeleted,
@@ -23,19 +23,6 @@ import type {
 	SubscriptionOptions,
 } from "./types";
 import { getPlanByName, getPlanByPriceInfo, getPlans } from "./utils";
-
-const STRIPE_ERROR_CODES = defineErrorCodes({
-	SUBSCRIPTION_NOT_FOUND: "Subscription not found",
-	SUBSCRIPTION_PLAN_NOT_FOUND: "Subscription plan not found",
-	ALREADY_SUBSCRIBED_PLAN: "You're already subscribed to this plan",
-	UNABLE_TO_CREATE_CUSTOMER: "Unable to create customer",
-	FAILED_TO_FETCH_PLANS: "Failed to fetch plans",
-	EMAIL_VERIFICATION_REQUIRED:
-		"Email verification is required before you can subscribe to a plan",
-	SUBSCRIPTION_NOT_ACTIVE: "Subscription is not active",
-	SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION:
-		"Subscription is not scheduled for cancellation",
-});
 
 const upgradeSubscriptionBodySchema = z.object({
 	/**
@@ -448,7 +435,9 @@ export const upgradeSubscription = (options: StripeOptions) => {
 
 			if (!subscription) {
 				ctx.context.logger.error("Subscription ID not found");
-				throw new APIError("INTERNAL_SERVER_ERROR");
+				throw new APIError("INTERNAL_SERVER_ERROR", {
+					message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+				});
 			}
 
 			const params = await subscriptionOptions.getCheckoutSessionParams?.(
@@ -1186,7 +1175,7 @@ export const createBillingPortal = (options: StripeOptions) => {
 
 			if (!customerId) {
 				throw new APIError("BAD_REQUEST", {
-					message: "No Stripe customer found for this user",
+					message: STRIPE_ERROR_CODES.CUSTOMER_NOT_FOUND,
 				});
 			}
 
@@ -1207,7 +1196,7 @@ export const createBillingPortal = (options: StripeOptions) => {
 					error,
 				);
 				throw new APIError("BAD_REQUEST", {
-					message: error.message,
+					message: STRIPE_ERROR_CODES.UNABLE_TO_CREATE_BILLING_PORTAL,
 				});
 			}
 		},
@@ -1232,39 +1221,48 @@ export const stripeWebhook = (options: StripeOptions) => {
 		},
 		async (ctx) => {
 			if (!ctx.request?.body) {
-				throw new APIError("INTERNAL_SERVER_ERROR");
+				throw new APIError("BAD_REQUEST", {
+					message: STRIPE_ERROR_CODES.INVALID_REQUEST_BODY,
+				});
 			}
-			const buf = await ctx.request.text();
 			const sig = ctx.request.headers.get("stripe-signature") as string;
+			if (!sig) {
+				throw new APIError("BAD_REQUEST", {
+					message: STRIPE_ERROR_CODES.STRIPE_SIGNATURE_NOT_FOUND,
+				});
+			}
 			const webhookSecret = options.stripeWebhookSecret;
+			if (!webhookSecret) {
+				throw new APIError("BAD_REQUEST", {
+					message: STRIPE_ERROR_CODES.STRIPE_WEBHOOK_SECRET_NOT_FOUND,
+				});
+			}
+
+			const payload = await ctx.request.text();
+
 			let event: Stripe.Event;
 			try {
-				if (!sig || !webhookSecret) {
-					throw new APIError("BAD_REQUEST", {
-						message: "Stripe webhook secret not found",
-					});
-				}
 				// Support both Stripe v18 (constructEvent) and v19+ (constructEventAsync)
 				if (typeof client.webhooks.constructEventAsync === "function") {
 					// Stripe v19+ - use async method
 					event = await client.webhooks.constructEventAsync(
-						buf,
+						payload,
 						sig,
 						webhookSecret,
 					);
 				} else {
 					// Stripe v18 - use sync method
-					event = client.webhooks.constructEvent(buf, sig, webhookSecret);
+					event = client.webhooks.constructEvent(payload, sig, webhookSecret);
 				}
 			} catch (err: any) {
 				ctx.context.logger.error(`${err.message}`);
 				throw new APIError("BAD_REQUEST", {
-					message: `Webhook Error: ${err.message}`,
+					message: STRIPE_ERROR_CODES.FAILED_TO_CONSTRUCT_STRIPE_EVENT,
 				});
 			}
 			if (!event) {
 				throw new APIError("BAD_REQUEST", {
-					message: "Failed to construct event",
+					message: STRIPE_ERROR_CODES.FAILED_TO_CONSTRUCT_STRIPE_EVENT,
 				});
 			}
 			try {
@@ -1288,7 +1286,7 @@ export const stripeWebhook = (options: StripeOptions) => {
 			} catch (e: any) {
 				ctx.context.logger.error(`Stripe webhook failed. Error: ${e.message}`);
 				throw new APIError("BAD_REQUEST", {
-					message: "Webhook error: See server logs for more information.",
+					message: STRIPE_ERROR_CODES.STRIPE_WEBHOOK_ERROR,
 				});
 			}
 			return ctx.json({ success: true });
