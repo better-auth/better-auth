@@ -19,7 +19,7 @@ import {
 } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
-import { APIError } from "better-call";
+import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
 import { PASSKEY_ERROR_CODES } from "./error-codes";
 import type { Passkey, PasskeyOptions, WebAuthnChallengeValue } from "./types";
@@ -447,9 +447,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 				ctx.context.secret,
 			);
 			if (!challengeId) {
-				throw new APIError("BAD_REQUEST", {
-					message: PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
-				});
+				throw APIError.from(PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND, "BAD_REQUEST");
 			}
 
 			const data =
@@ -464,10 +462,10 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 			) as WebAuthnChallengeValue;
 
 			if (userData.id !== ctx.context.session.user.id) {
-				throw new APIError("UNAUTHORIZED", {
-					message:
-						PASSKEY_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY,
-				});
+				throw APIError.from(
+					PASSKEY_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY,
+					"UNAUTHORIZED",
+				);
 			}
 
 			try {
@@ -511,9 +509,10 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 				});
 			} catch (e) {
 				console.log(e);
-				throw new APIError("INTERNAL_SERVER_ERROR", {
-					message: PASSKEY_ERROR_CODES.FAILED_TO_VERIFY_REGISTRATION,
-				});
+				throw APIError.from(
+					PASSKEY_ERROR_CODES.FAILED_TO_VERIFY_REGISTRATION,
+					"INTERNAL_SERVER_ERROR",
+				);
 			}
 		},
 	);
@@ -576,17 +575,13 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				ctx.context.secret,
 			);
 			if (!challengeId) {
-				throw new APIError("BAD_REQUEST", {
-					message: PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
-				});
+				throw APIError.from(PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND, "BAD_REQUEST");
 			}
 
 			const data =
 				await ctx.context.internalAdapter.findVerificationValue(challengeId);
 			if (!data) {
-				throw new APIError("BAD_REQUEST", {
-					message: PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
-				});
+				throw APIError.from(PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND, "BAD_REQUEST");
 			}
 			const { expectedChallenge } = JSON.parse(
 				data.value,
@@ -601,9 +596,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				],
 			});
 			if (!passkey) {
-				throw new APIError("UNAUTHORIZED", {
-					message: PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND,
-				});
+				throw APIError.from(PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND, "UNAUTHORIZED");
 			}
 			try {
 				const verification = await verifyAuthenticationResponse({
@@ -623,9 +616,10 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				});
 				const { verified } = verification;
 				if (!verified)
-					throw new APIError("UNAUTHORIZED", {
-						message: PASSKEY_ERROR_CODES.AUTHENTICATION_FAILED,
-					});
+					throw APIError.from(
+						PASSKEY_ERROR_CODES.AUTHENTICATION_FAILED,
+						"UNAUTHORIZED",
+					);
 
 				await ctx.context.adapter.update<Passkey>({
 					model: "passkey",
@@ -643,9 +637,10 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 					passkey.userId,
 				);
 				if (!s) {
-					throw new APIError("INTERNAL_SERVER_ERROR", {
-						message: PASSKEY_ERROR_CODES.UNABLE_TO_CREATE_SESSION,
-					});
+					throw APIError.from(
+						PASSKEY_ERROR_CODES.UNABLE_TO_CREATE_SESSION,
+						"INTERNAL_SERVER_ERROR",
+					);
 				}
 				const user = await ctx.context.internalAdapter.findUserById(
 					passkey.userId,
@@ -669,9 +664,10 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				);
 			} catch (e) {
 				ctx.context.logger.error("Failed to verify authentication", e);
-				throw new APIError("BAD_REQUEST", {
-					message: PASSKEY_ERROR_CODES.AUTHENTICATION_FAILED,
-				});
+				throw APIError.from(
+					PASSKEY_ERROR_CODES.AUTHENTICATION_FAILED,
+					"BAD_REQUEST",
+				);
 			}
 		},
 	);
@@ -801,9 +797,7 @@ export const deletePasskey = createAuthEndpoint(
 			],
 		});
 		if (!passkey) {
-			throw new APIError("NOT_FOUND", {
-				message: PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND,
-			});
+			throw APIError.from(PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND, "NOT_FOUND");
 		}
 		if (passkey.userId !== ctx.context.session.user.id) {
 			throw new APIError("UNAUTHORIZED");
@@ -884,16 +878,14 @@ export const updatePasskey = createAuthEndpoint(
 		});
 
 		if (!passkey) {
-			throw new APIError("NOT_FOUND", {
-				message: PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND,
-			});
+			throw APIError.from(PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND, "NOT_FOUND");
 		}
 
 		if (passkey.userId !== ctx.context.session.user.id) {
-			throw new APIError("UNAUTHORIZED", {
-				message:
-					PASSKEY_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY,
-			});
+			throw APIError.from(
+				PASSKEY_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY,
+				"UNAUTHORIZED",
+			);
 		}
 
 		const updatedPasskey = await ctx.context.adapter.update<Passkey>({
@@ -910,9 +902,10 @@ export const updatePasskey = createAuthEndpoint(
 		});
 
 		if (!updatedPasskey) {
-			throw new APIError("INTERNAL_SERVER_ERROR", {
-				message: PASSKEY_ERROR_CODES.FAILED_TO_UPDATE_PASSKEY,
-			});
+			throw APIError.from(
+				PASSKEY_ERROR_CODES.FAILED_TO_UPDATE_PASSKEY,
+				"INTERNAL_SERVER_ERROR",
+			);
 		}
 		return ctx.json(
 			{

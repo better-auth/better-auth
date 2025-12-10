@@ -3,11 +3,11 @@ import { defineErrorCodes } from "@better-auth/core/utils";
 import type { GenericEndpointContext } from "better-auth";
 import { HIDE_METADATA } from "better-auth";
 import {
-	APIError,
 	getSessionFromCtx,
 	originCheck,
 	sessionMiddleware,
 } from "better-auth/api";
+import { APIError } from "@better-auth/core/error";
 import type Stripe from "stripe";
 import type { Stripe as StripeType } from "stripe";
 import * as z from "zod/v4";
@@ -171,16 +171,18 @@ export const upgradeSubscription = (options: StripeOptions) => {
 		async (ctx) => {
 			const { user, session } = ctx.context.session;
 			if (!user.emailVerified && subscriptionOptions.requireEmailVerification) {
-				throw new APIError("BAD_REQUEST", {
-					message: STRIPE_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED,
-				});
+				throw APIError.from(
+					STRIPE_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED,
+					"BAD_REQUEST",
+				);
 			}
 			const referenceId = ctx.body.referenceId || user.id;
 			const plan = await getPlanByName(options, ctx.body.plan);
 			if (!plan) {
-				throw new APIError("BAD_REQUEST", {
-					message: STRIPE_ERROR_CODES.SUBSCRIPTION_PLAN_NOT_FOUND,
-				});
+				throw APIError.from(
+					STRIPE_ERROR_CODES.SUBSCRIPTION_PLAN_NOT_FOUND,
+					"BAD_REQUEST",
+				);
 			}
 			let subscriptionToUpdate = ctx.body.subscriptionId
 				? await ctx.context.adapter.findOne<Subscription>({
@@ -214,9 +216,10 @@ export const upgradeSubscription = (options: StripeOptions) => {
 			}
 
 			if (ctx.body.subscriptionId && !subscriptionToUpdate) {
-				throw new APIError("BAD_REQUEST", {
-					message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
-				});
+				throw APIError.from(
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					"BAD_REQUEST",
+				);
 			}
 
 			let customerId =
@@ -260,9 +263,10 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					customerId = stripeCustomer.id;
 				} catch (e: any) {
 					ctx.context.logger.error(e);
-					throw new APIError("BAD_REQUEST", {
-						message: STRIPE_ERROR_CODES.UNABLE_TO_CREATE_CUSTOMER,
-					});
+					throw APIError.from(
+						STRIPE_ERROR_CODES.UNABLE_TO_CREATE_CUSTOMER,
+						"BAD_REQUEST",
+					);
 				}
 			}
 
@@ -321,9 +325,10 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				activeOrTrialingSubscription.plan === ctx.body.plan &&
 				activeOrTrialingSubscription.seats === (ctx.body.seats || 1)
 			) {
-				throw new APIError("BAD_REQUEST", {
-					message: STRIPE_ERROR_CODES.ALREADY_SUBSCRIBED_PLAN,
-				});
+				throw APIError.from(
+					STRIPE_ERROR_CODES.ALREADY_SUBSCRIBED_PLAN,
+					"BAD_REQUEST",
+				);
 			}
 
 			if (activeSubscription && customerId) {
@@ -737,9 +742,10 @@ export const cancelSubscription = (options: StripeOptions) => {
 			}
 
 			if (!subscription || !subscription.stripeCustomerId) {
-				throw ctx.error("BAD_REQUEST", {
-					message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
-				});
+				throw APIError.from(
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					"BAD_REQUEST",
+				);
 			}
 			const activeSubscriptions = await client.subscriptions
 				.list({
@@ -764,17 +770,19 @@ export const cancelSubscription = (options: StripeOptions) => {
 						},
 					],
 				});
-				throw ctx.error("BAD_REQUEST", {
-					message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
-				});
+				throw APIError.from(
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					"BAD_REQUEST",
+				);
 			}
 			const activeSubscription = activeSubscriptions.find(
 				(sub) => sub.id === subscription.stripeSubscriptionId,
 			);
 			if (!activeSubscription) {
-				throw ctx.error("BAD_REQUEST", {
-					message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
-				});
+				throw APIError.from(
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					"BAD_REQUEST",
+				);
 			}
 			const { url } = await client.billingPortal.sessions
 				.create({
@@ -899,23 +907,25 @@ export const restoreSubscription = (options: StripeOptions) => {
 				subscription = undefined;
 			}
 			if (!subscription || !subscription.stripeCustomerId) {
-				throw ctx.error("BAD_REQUEST", {
-					message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
-				});
+				throw APIError.from(
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					"BAD_REQUEST",
+				);
 			}
 			if (
 				subscription.status != "active" &&
 				subscription.status != "trialing"
 			) {
-				throw ctx.error("BAD_REQUEST", {
-					message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_ACTIVE,
-				});
+				throw APIError.from(
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_ACTIVE,
+					"BAD_REQUEST",
+				);
 			}
 			if (!subscription.cancelAtPeriodEnd) {
-				throw ctx.error("BAD_REQUEST", {
-					message:
-						STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION,
-				});
+				throw APIError.from(
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION,
+					"BAD_REQUEST",
+				);
 			}
 
 			const activeSubscription = await client.subscriptions
@@ -929,9 +939,10 @@ export const restoreSubscription = (options: StripeOptions) => {
 						)[0],
 				);
 			if (!activeSubscription) {
-				throw ctx.error("BAD_REQUEST", {
-					message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
-				});
+				throw APIError.from(
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					"BAD_REQUEST",
+				);
 			}
 
 			try {
@@ -959,9 +970,10 @@ export const restoreSubscription = (options: StripeOptions) => {
 				return ctx.json(newSub);
 			} catch (error) {
 				ctx.context.logger.error("Error restoring subscription", error);
-				throw new APIError("BAD_REQUEST", {
-					message: STRIPE_ERROR_CODES.UNABLE_TO_CREATE_CUSTOMER,
-				});
+				throw APIError.from(
+					STRIPE_ERROR_CODES.UNABLE_TO_CREATE_CUSTOMER,
+					"BAD_REQUEST",
+				);
 			}
 		},
 	);
