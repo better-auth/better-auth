@@ -20,7 +20,6 @@ import {
 import { parseUserOutput } from "../db/schema";
 import type { Session, User } from "../types";
 import { getDate } from "../utils/date";
-import { getBaseURL } from "../utils/url";
 import { SECURE_COOKIE_PREFIX } from "./cookie-utils";
 import { createAccountStore, createSessionStore } from "./session-store";
 
