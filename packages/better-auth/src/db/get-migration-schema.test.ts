@@ -217,7 +217,7 @@ describe.runIf(isPostgresAvailable)(
 			};
 			const { runMigrations, compileMigrations } = await getMigrations(config);
 			await runMigrations();
-			const migrations = await compileMigrations();
+			await compileMigrations();
 			const auth = betterAuth(config);
 
 			const user = await auth.api.signUpEmail({

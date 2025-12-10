@@ -112,7 +112,7 @@ describe("additionalFields", async () => {
 				onSuccess: sessionSetter(headers),
 			},
 		);
-		const res = await client.updateUser({
+		await client.updateUser({
 			name: "test",
 			newField: "updated-field",
 			fetchOptions: {
@@ -160,7 +160,7 @@ describe("additionalFields", async () => {
 				onSuccess: sessionSetter(headers),
 			},
 		);
-		const res = await client.updateUser(
+		await client.updateUser(
 			{
 				name: "test",
 				newField: "updated-field",
@@ -256,7 +256,7 @@ describe("additionalFields", async () => {
 	});
 	it("should apply default values with secondary storage", async () => {
 		const store = new Map<string, string>();
-		const { client, auth, signInWithTestUser } = await getTestInstance({
+		const { auth, signInWithTestUser } = await getTestInstance({
 			secondaryStorage: {
 				set(key, value) {
 					store.set(key, value);

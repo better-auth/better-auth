@@ -448,13 +448,9 @@ const createMockSAMLIdP = (port: number) => {
 		async (req: ExpressRequest, res: ExpressResponse) => {
 			const { SAMLResponse, RelayState } = req.body;
 			try {
-				const parseResult = await sp.parseLoginResponse(
-					idp,
-					saml.Constants.wording.binding.post,
-					{ body: { SAMLResponse } },
-				);
-
-				const { attributes, nameID } = parseResult.extract;
+				await sp.parseLoginResponse(idp, saml.Constants.wording.binding.post, {
+					body: { SAMLResponse },
+				});
 
 				res.redirect(302, RelayState || "http://localhost:3000/dashboard");
 			} catch (error) {
@@ -550,18 +546,6 @@ describe("SAML SSO with defaultSSO array", async () => {
 		plugins: [sso(ssoOptions)],
 	});
 
-	const ctx = await auth.$context;
-
-	const authClient = createAuthClient({
-		baseURL: "http://localhost:3000",
-		plugins: [bearer(), ssoClient()],
-		fetchOptions: {
-			customFetchImpl: async (url, init) => {
-				return auth.handler(new Request(url, init));
-			},
-		},
-	});
-
 	beforeAll(async () => {
 		await mockIdP.start();
 	});
@@ -619,8 +603,6 @@ describe("SAML SSO", async () => {
 		plugins: [sso(ssoOptions)],
 	});
 
-	const ctx = await auth.$context;
-
 	const authClient = createAuthClient({
 		baseURL: "http://localhost:3000",
 		plugins: [bearer(), ssoClient()],
@@ -639,7 +621,7 @@ describe("SAML SSO", async () => {
 
 	beforeAll(async () => {
 		await mockIdP.start();
-		const res = await authClient.signUp.email({
+		await authClient.signUp.email({
 			email: testUser.email,
 			password: testUser.password,
 			name: testUser.name,
@@ -667,7 +649,7 @@ describe("SAML SSO", async () => {
 			password: testUser.password,
 			name: testUser.name,
 		});
-		const res = await authClient.signIn.email(testUser, {
+		await authClient.signIn.email(testUser, {
 			throw: true,
 			onSuccess: setCookieToHeader(headers),
 		});
@@ -676,7 +658,7 @@ describe("SAML SSO", async () => {
 
 	it("should register a new SAML provider", async () => {
 		const headers = await getAuthHeaders();
-		const res = await authClient.signIn.email(testUser, {
+		await authClient.signIn.email(testUser, {
 			throw: true,
 			onSuccess: setCookieToHeader(headers),
 		});
@@ -847,11 +829,11 @@ describe("SAML SSO", async () => {
 	});
 	it("should initiate SAML login and handle response", async () => {
 		const headers = await getAuthHeaders();
-		const res = await authClient.signIn.email(testUser, {
+		await authClient.signIn.email(testUser, {
 			throw: true,
 			onSuccess: setCookieToHeader(headers),
 		});
-		const provider = await auth.api.registerSSOProvider({
+		await auth.api.registerSSOProvider({
 			body: {
 				providerId: "saml-provider-1",
 				issuer: "http://localhost:8081",
@@ -1182,6 +1164,167 @@ describe("SAML SSO", async () => {
 			},
 		});
 	});
+
+	it("should deny account linking when provider is not trusted and domain is not verified", async () => {
+		const { auth: authUntrusted, signInWithTestUser } = await getTestInstance({
+			account: {
+				accountLinking: {
+					enabled: true,
+					trustedProviders: [],
+				},
+			},
+			plugins: [sso()],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await authUntrusted.api.registerSSOProvider({
+			body: {
+				providerId: "untrusted-saml-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		const ctx = await authUntrusted.$context;
+		await ctx.adapter.create({
+			model: "user",
+			data: {
+				id: "existing-user-id",
+				email: "test@email.com",
+				name: "Existing User",
+				emailVerified: true,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		let samlResponse: any;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		const response = await authUntrusted.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/callback/untrusted-saml-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse.samlResponse,
+						RelayState: "http://localhost:3000/dashboard",
+					}),
+				},
+			),
+		);
+
+		expect(response.status).toBe(302);
+		const redirectLocation = response.headers.get("location") || "";
+		expect(redirectLocation).toContain("error=account_not_linked");
+	});
+
+	it("should allow account linking when provider is in trustedProviders", async () => {
+		const { auth: authWithTrusted, signInWithTestUser } = await getTestInstance(
+			{
+				account: {
+					accountLinking: {
+						enabled: true,
+						trustedProviders: ["trusted-saml-provider"],
+					},
+				},
+				plugins: [sso()],
+			},
+		);
+
+		const { headers } = await signInWithTestUser();
+
+		await authWithTrusted.api.registerSSOProvider({
+			body: {
+				providerId: "trusted-saml-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		const ctx = await authWithTrusted.$context;
+		await ctx.adapter.create({
+			model: "user",
+			data: {
+				id: "existing-user-id-2",
+				email: "test@email.com",
+				name: "Existing User",
+				emailVerified: true,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		let samlResponse: any;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		const response = await authWithTrusted.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/callback/trusted-saml-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse.samlResponse,
+						RelayState: "http://localhost:3000/dashboard",
+					}),
+				},
+			),
+		);
+
+		expect(response.status).toBe(302);
+		const redirectLocation = response.headers.get("location") || "";
+		expect(redirectLocation).not.toContain("error");
+		expect(redirectLocation).toContain("dashboard");
+	});
 });
 
 describe("SAML SSO with custom fields", () => {
@@ -1236,7 +1379,7 @@ describe("SAML SSO with custom fields", () => {
 
 	beforeAll(async () => {
 		await mockIdP.start();
-		const res = await authClient.signUp.email({
+		await authClient.signUp.email({
 			email: testUser.email,
 			password: testUser.password,
 			name: testUser.name,
@@ -1323,5 +1466,186 @@ describe("SAML SSO with custom fields", () => {
 					"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
 			},
 		});
+	});
+});
+
+import { safeJsonParse } from "./utils";
+
+describe("safeJsonParse", () => {
+	it("returns object as-is when value is already an object", () => {
+		const obj = { a: 1, nested: { b: 2 } };
+		const result = safeJsonParse<typeof obj>(obj);
+		expect(result).toBe(obj); // same reference
+		expect(result).toEqual({ a: 1, nested: { b: 2 } });
+	});
+
+	it("parses stringified JSON when value is a string", () => {
+		const json = '{"a":1,"nested":{"b":2}}';
+		const result = safeJsonParse<{ a: number; nested: { b: number } }>(json);
+		expect(result).toEqual({ a: 1, nested: { b: 2 } });
+	});
+
+	it("returns null for null input", () => {
+		const result = safeJsonParse<{ a: number }>(null);
+		expect(result).toBeNull();
+	});
+
+	it("returns null for undefined input", () => {
+		const result = safeJsonParse<{ a: number }>(undefined);
+		expect(result).toBeNull();
+	});
+
+	it("throws error for invalid JSON string", () => {
+		expect(() => safeJsonParse<{ a: number }>("not valid json")).toThrow(
+			"Failed to parse JSON",
+		);
+	});
+
+	it("handles empty object", () => {
+		const obj = {};
+		const result = safeJsonParse<typeof obj>(obj);
+		expect(result).toBe(obj);
+	});
+
+	it("handles empty string JSON", () => {
+		const result = safeJsonParse<Record<string, never>>("{}");
+		expect(result).toEqual({});
+	});
+});
+
+describe("SSO Provider Config Parsing", () => {
+	it("returns parsed SAML config and avoids [object Object] in response", async () => {
+		const data = {
+			user: [] as any[],
+			session: [] as any[],
+			verification: [] as any[],
+			account: [] as any[],
+			ssoProvider: [] as any[],
+		};
+
+		const memory = memoryAdapter(data);
+
+		const auth = betterAuth({
+			database: memory,
+			baseURL: "http://localhost:3000",
+			emailAndPassword: { enabled: true },
+			plugins: [sso()],
+		});
+
+		const authClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			plugins: [bearer(), ssoClient()],
+			fetchOptions: {
+				customFetchImpl: async (url, init) =>
+					auth.handler(new Request(url, init)),
+			},
+		});
+
+		const headers = new Headers();
+		await authClient.signUp.email({
+			email: "test@example.com",
+			password: "password123",
+			name: "Test User",
+		});
+		await authClient.signIn.email(
+			{ email: "test@example.com", password: "password123" },
+			{ onSuccess: setCookieToHeader(headers) },
+		);
+
+		const provider = await auth.api.registerSSOProvider({
+			body: {
+				providerId: "saml-config-provider",
+				issuer: "http://localhost:8081",
+				domain: "example.com",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/sso",
+					cert: "test-cert",
+					callbackUrl: "http://localhost:3000/callback",
+					spMetadata: {
+						entityID: "test-entity",
+					},
+				},
+			},
+			headers,
+		});
+
+		expect(provider.samlConfig).toBeDefined();
+		expect(typeof provider.samlConfig).toBe("object");
+		expect(provider.samlConfig?.entryPoint).toBe("http://localhost:8081/sso");
+		expect(provider.samlConfig?.cert).toBe("test-cert");
+
+		const serialized = JSON.stringify(provider.samlConfig);
+		expect(serialized).not.toContain("[object Object]");
+
+		expect(provider.samlConfig?.spMetadata?.entityID).toBe("test-entity");
+	});
+
+	it("returns parsed OIDC config and avoids [object Object] in response", async () => {
+		const data = {
+			user: [] as any[],
+			session: [] as any[],
+			verification: [] as any[],
+			account: [] as any[],
+			ssoProvider: [] as any[],
+		};
+
+		const memory = memoryAdapter(data);
+
+		const auth = betterAuth({
+			database: memory,
+			baseURL: "http://localhost:3000",
+			emailAndPassword: { enabled: true },
+			plugins: [sso()],
+		});
+
+		const authClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			plugins: [bearer(), ssoClient()],
+			fetchOptions: {
+				customFetchImpl: async (url, init) =>
+					auth.handler(new Request(url, init)),
+			},
+		});
+
+		const headers = new Headers();
+		await authClient.signUp.email({
+			email: "test@example.com",
+			password: "password123",
+			name: "Test User",
+		});
+		await authClient.signIn.email(
+			{ email: "test@example.com", password: "password123" },
+			{ onSuccess: setCookieToHeader(headers) },
+		);
+
+		const provider = await auth.api.registerSSOProvider({
+			body: {
+				providerId: "oidc-config-provider",
+				issuer: "http://localhost:8080",
+				domain: "example.com",
+				oidcConfig: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					discoveryEndpoint:
+						"http://localhost:8080/.well-known/openid-configuration",
+					mapping: {
+						id: "sub",
+						email: "email",
+						name: "name",
+					},
+				},
+			},
+			headers,
+		});
+
+		expect(provider.oidcConfig).toBeDefined();
+		expect(typeof provider.oidcConfig).toBe("object");
+		expect(provider.oidcConfig?.clientId).toBe("test-client");
+		expect(provider.oidcConfig?.clientSecret).toBe("test-secret");
+
+		const serialized = JSON.stringify(provider.oidcConfig);
+		expect(serialized).not.toContain("[object Object]");
+
+		expect(provider.oidcConfig?.mapping?.id).toBe("sub");
 	});
 });

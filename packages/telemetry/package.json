@@ -1,15 +1,16 @@
 {
   "name": "@better-auth/telemetry",
-  "version": "1.4.6-beta.2",
+  "version": "1.4.7-beta.1",
   "description": "Telemetry package for Better Auth",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "https://github.com/better-auth/better-auth",
+    "url": "git+https://github.com/better-auth/better-auth.git",
     "directory": "packages/telemetry"
   },
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     ".": {
       "dev-source": "./src/index.ts",
@@ -28,6 +29,7 @@
     "build": "tsdown",
     "dev": "tsdown --watch",
     "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
     "typecheck": "tsc --project tsconfig.json"
   },
   "devDependencies": {

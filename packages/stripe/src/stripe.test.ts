@@ -168,18 +168,6 @@ describe("stripe", async () => {
 		vi.clearAllMocks();
 	});
 
-	async function getHeader() {
-		const headers = new Headers();
-		const userRes = await authClient.signIn.email(testUser, {
-			throw: true,
-			onSuccess: setCookieToHeader(headers),
-		});
-		return {
-			headers,
-			response: userRes,
-		};
-	}
-
 	it("should create a customer on sign up", async () => {
 		const userRes = await authClient.signUp.email(testUser, {
 			throw: true,
@@ -642,15 +630,6 @@ describe("stripe", async () => {
 			stripeWebhookSecret: "test_secret",
 		} as unknown as StripeOptions;
 
-		const testAuth = betterAuth({
-			baseURL: "http://localhost:3000",
-			database: memory,
-			emailAndPassword: {
-				enabled: true,
-			},
-			plugins: [stripe(testOptions)],
-		});
-
 		// Test subscription complete handler
 		const completeEvent = {
 			type: "checkout.session.completed",
@@ -1097,7 +1076,7 @@ describe("stripe", async () => {
 	});
 
 	it("should only call Stripe customers.create once for signup and upgrade", async () => {
-		const userRes = await authClient.signUp.email(
+		await authClient.signUp.email(
 			{ ...testUser, email: "single-create@email.com" },
 			{ throw: true },
 		);
@@ -2107,7 +2086,7 @@ describe("stripe", async () => {
 				plugins: [stripe(testOptions)],
 			});
 
-			const { id: subId } = await ctx.adapter.create({
+			await ctx.adapter.create({
 				model: "subscription",
 				data: {
 					referenceId: userId,
@@ -2249,7 +2228,7 @@ describe("stripe", async () => {
 				plugins: [stripe(testOptions)],
 			});
 
-			const { id: subId } = await ctx.adapter.create({
+			await ctx.adapter.create({
 				model: "subscription",
 				data: {
 					referenceId: userId,

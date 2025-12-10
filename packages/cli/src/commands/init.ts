@@ -50,7 +50,7 @@ const supportedDatabases = [
 
 export type SupportedDatabases = (typeof supportedDatabases)[number];
 
-export const supportedPlugins = [
+const supportedPlugins = [
 	{
 		id: "two-factor",
 		name: "twoFactor",
@@ -353,7 +353,7 @@ const optionsSchema = z.object({
 
 const outroText = `🥳 All Done, Happy Hacking!`;
 
-export async function initAction(opts: any) {
+async function initAction(opts: any) {
 	console.log();
 	intro("👋 Initializing Better Auth");
 
@@ -1011,7 +1011,7 @@ export async function initAction(opts: any) {
 					}
 				}
 			}
-		} catch (error) {
+		} catch {
 			// if fails, ignore, and do not proceed with ENV operations.
 		}
 	}

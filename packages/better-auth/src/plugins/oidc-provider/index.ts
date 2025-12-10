@@ -133,6 +133,140 @@ export const getMetadata = (
 	};
 };
 
+const oAuthConsentBodySchema = z.object({
+	accept: z.boolean(),
+	consent_code: z.string().optional().nullish(),
+});
+
+const oAuth2TokenBodySchema = z.record(z.any(), z.any());
+
+const registerOAuthApplicationBodySchema = z.object({
+	redirect_uris: z.array(z.string()).meta({
+		description:
+			'A list of redirect URIs. Eg: ["https://client.example.com/callback"]',
+	}),
+	token_endpoint_auth_method: z
+		.enum(["none", "client_secret_basic", "client_secret_post"])
+		.meta({
+			description:
+				'The authentication method for the token endpoint. Eg: "client_secret_basic"',
+		})
+		.default("client_secret_basic")
+		.optional(),
+	grant_types: z
+		.array(
+			z.enum([
+				"authorization_code",
+				"implicit",
+				"password",
+				"client_credentials",
+				"refresh_token",
+				"urn:ietf:params:oauth:grant-type:jwt-bearer",
+				"urn:ietf:params:oauth:grant-type:saml2-bearer",
+			]),
+		)
+		.meta({
+			description:
+				'The grant types supported by the application. Eg: ["authorization_code"]',
+		})
+		.default(["authorization_code"])
+		.optional(),
+	response_types: z
+		.array(z.enum(["code", "token"]))
+		.meta({
+			description:
+				'The response types supported by the application. Eg: ["code"]',
+		})
+		.default(["code"])
+		.optional(),
+	client_name: z
+		.string()
+		.meta({
+			description: 'The name of the application. Eg: "My App"',
+		})
+		.optional(),
+	client_uri: z
+		.string()
+		.meta({
+			description:
+				'The URI of the application. Eg: "https://client.example.com"',
+		})
+		.optional(),
+	logo_uri: z
+		.string()
+		.meta({
+			description:
+				'The URI of the application logo. Eg: "https://client.example.com/logo.png"',
+		})
+		.optional(),
+	scope: z
+		.string()
+		.meta({
+			description:
+				'The scopes supported by the application. Separated by spaces. Eg: "profile email"',
+		})
+		.optional(),
+	contacts: z
+		.array(z.string())
+		.meta({
+			description:
+				'The contact information for the application. Eg: ["admin@example.com"]',
+		})
+		.optional(),
+	tos_uri: z
+		.string()
+		.meta({
+			description:
+				'The URI of the application terms of service. Eg: "https://client.example.com/tos"',
+		})
+		.optional(),
+	policy_uri: z
+		.string()
+		.meta({
+			description:
+				'The URI of the application privacy policy. Eg: "https://client.example.com/policy"',
+		})
+		.optional(),
+	jwks_uri: z
+		.string()
+		.meta({
+			description:
+				'The URI of the application JWKS. Eg: "https://client.example.com/jwks"',
+		})
+		.optional(),
+	jwks: z
+		.record(z.any(), z.any())
+		.meta({
+			description:
+				'The JWKS of the application. Eg: {"keys": [{"kty": "RSA", "alg": "RS256", "use": "sig", "n": "...", "e": "..."}]}',
+		})
+		.optional(),
+	metadata: z
+		.record(z.any(), z.any())
+		.meta({
+			description: 'The metadata of the application. Eg: {"key": "value"}',
+		})
+		.optional(),
+	software_id: z
+		.string()
+		.meta({
+			description: 'The software ID of the application. Eg: "my-software"',
+		})
+		.optional(),
+	software_version: z
+		.string()
+		.meta({
+			description: 'The software version of the application. Eg: "1.0.0"',
+		})
+		.optional(),
+	software_statement: z
+		.string()
+		.meta({
+			description: "The software statement of the application.",
+		})
+		.optional(),
+});
+
 const DEFAULT_CODE_EXPIRES_IN = 600;
 const DEFAULT_ACCESS_TOKEN_EXPIRES_IN = 3600;
 const DEFAULT_REFRESH_TOKEN_EXPIRES_IN = 604800;
@@ -349,10 +483,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				{
 					method: "POST",
 					operationId: "oauth2Consent",
-					body: z.object({
-						accept: z.boolean(),
-						consent_code: z.string().optional().nullish(),
-					}),
+					body: oAuthConsentBodySchema,
 					use: [sessionMiddleware],
 					metadata: {
 						openapi: {
@@ -507,7 +638,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				{
 					method: "POST",
 					operationId: "oauth2Token",
-					body: z.record(z.any(), z.any()),
+					body: oAuth2TokenBodySchema,
 					metadata: {
 						isAction: false,
 						allowedMediaTypes: [
@@ -560,7 +691,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							}
 							client_id = id;
 							client_secret = secret;
-						} catch (error) {
+						} catch {
 							throw new APIError("UNAUTHORIZED", {
 								error_description: "invalid authorization header format",
 								error: "invalid_client",
@@ -1110,135 +1241,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/register",
 				{
 					method: "POST",
-					body: z.object({
-						redirect_uris: z.array(z.string()).meta({
-							description:
-								'A list of redirect URIs. Eg: ["https://client.example.com/callback"]',
-						}),
-						token_endpoint_auth_method: z
-							.enum(["none", "client_secret_basic", "client_secret_post"])
-							.meta({
-								description:
-									'The authentication method for the token endpoint. Eg: "client_secret_basic"',
-							})
-							.default("client_secret_basic")
-							.optional(),
-						grant_types: z
-							.array(
-								z.enum([
-									"authorization_code",
-									"implicit",
-									"password",
-									"client_credentials",
-									"refresh_token",
-									"urn:ietf:params:oauth:grant-type:jwt-bearer",
-									"urn:ietf:params:oauth:grant-type:saml2-bearer",
-								]),
-							)
-							.meta({
-								description:
-									'The grant types supported by the application. Eg: ["authorization_code"]',
-							})
-							.default(["authorization_code"])
-							.optional(),
-						response_types: z
-							.array(z.enum(["code", "token"]))
-							.meta({
-								description:
-									'The response types supported by the application. Eg: ["code"]',
-							})
-							.default(["code"])
-							.optional(),
-						client_name: z
-							.string()
-							.meta({
-								description: 'The name of the application. Eg: "My App"',
-							})
-							.optional(),
-						client_uri: z
-							.string()
-							.meta({
-								description:
-									'The URI of the application. Eg: "https://client.example.com"',
-							})
-							.optional(),
-						logo_uri: z
-							.string()
-							.meta({
-								description:
-									'The URI of the application logo. Eg: "https://client.example.com/logo.png"',
-							})
-							.optional(),
-						scope: z
-							.string()
-							.meta({
-								description:
-									'The scopes supported by the application. Separated by spaces. Eg: "profile email"',
-							})
-							.optional(),
-						contacts: z
-							.array(z.string())
-							.meta({
-								description:
-									'The contact information for the application. Eg: ["admin@example.com"]',
-							})
-							.optional(),
-						tos_uri: z
-							.string()
-							.meta({
-								description:
-									'The URI of the application terms of service. Eg: "https://client.example.com/tos"',
-							})
-							.optional(),
-						policy_uri: z
-							.string()
-							.meta({
-								description:
-									'The URI of the application privacy policy. Eg: "https://client.example.com/policy"',
-							})
-							.optional(),
-						jwks_uri: z
-							.string()
-							.meta({
-								description:
-									'The URI of the application JWKS. Eg: "https://client.example.com/jwks"',
-							})
-							.optional(),
-						jwks: z
-							.record(z.any(), z.any())
-							.meta({
-								description:
-									'The JWKS of the application. Eg: {"keys": [{"kty": "RSA", "alg": "RS256", "use": "sig", "n": "...", "e": "..."}]}',
-							})
-							.optional(),
-						metadata: z
-							.record(z.any(), z.any())
-							.meta({
-								description:
-									'The metadata of the application. Eg: {"key": "value"}',
-							})
-							.optional(),
-						software_id: z
-							.string()
-							.meta({
-								description:
-									'The software ID of the application. Eg: "my-software"',
-							})
-							.optional(),
-						software_version: z
-							.string()
-							.meta({
-								description:
-									'The software version of the application. Eg: "1.0.0"',
-							})
-							.optional(),
-						software_statement: z
-							.string()
-							.meta({
-								description: "The software statement of the application.",
-							})
-							.optional(),
-					}),
+					body: registerOAuthApplicationBodySchema,
 					metadata: {
 						openapi: {
 							description: "Register an OAuth2 application",
@@ -1604,14 +1607,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 					},
 				},
 				async (ctx) => {
-					const {
-						id_token_hint,
-						logout_hint,
-						client_id,
-						post_logout_redirect_uri,
-						state,
-						ui_locales,
-					} = ctx.query || {};
+					const { id_token_hint, client_id, post_logout_redirect_uri, state } =
+						ctx.query || {};
 
 					let validatedClientId: string | null = null;
 					let validatedUserId: string | null = null;
@@ -1646,13 +1643,13 @@ export const oidcProvider = (options: OIDCOptions) => {
 											);
 											validatedUserId = payload.sub as string;
 											validatedClientId = payload.aud as string;
-										} catch (error) {
+										} catch {
 											// Invalid token, continue with logout but no validation
 										}
 									}
 								}
 							}
-						} catch (error) {
+						} catch {
 							// Invalid id_token_hint, but we continue with logout anyway
 							ctx.context.logger.debug(
 								"Invalid id_token_hint provided to end_session endpoint",
@@ -1744,7 +1741,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 								redirectUrl.searchParams.set("state", state);
 							}
 							return ctx.redirect(redirectUrl.toString());
-						} catch (error) {
+						} catch {
 							throw new APIError("BAD_REQUEST", {
 								error: "invalid_request",
 								error_description: "Invalid post_logout_redirect_uri format",

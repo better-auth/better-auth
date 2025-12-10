@@ -12,6 +12,7 @@ import yoctoSpinner from "yocto-spinner";
 import * as z from "zod/v4";
 import { getConfig } from "../utils/get-config";
 
+/** @internal */
 export async function migrateAction(opts: any) {
 	const options = z
 		.object({

@@ -93,7 +93,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 			statusText: string;
 		}>;
 	}>;
-	function useSession<UseFetch extends <T>(...args: any) => any>(
+	function useSession<UseFetch extends <_T>(...args: any) => any>(
 		useFetch?: UseFetch | undefined,
 	) {
 		if (useFetch) {

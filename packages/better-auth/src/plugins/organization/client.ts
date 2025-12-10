@@ -87,9 +87,8 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 	const $activeMemberRoleSignal = atom<boolean>(false);
 
 	type DefaultStatements = typeof defaultStatements;
-	type Statements = CO["ac"] extends AccessControl<infer S>
-		? S
-		: DefaultStatements;
+	type Statements =
+		CO["ac"] extends AccessControl<infer S> ? S : DefaultStatements;
 	type PermissionType = {
 		[key in keyof Statements]?: Array<
 			Statements[key] extends readonly unknown[]
@@ -304,7 +303,7 @@ export const inferOrgAdditionalFields = <
 	// if we don't remove all other properties we may see assignability issues
 
 	type ExtractClientOnlyFields<T> = {
-		[K in keyof T]: T[K] extends { additionalFields: infer AF }
+		[K in keyof T]: T[K] extends { additionalFields: infer _AF }
 			? T[K]
 			: undefined;
 	};
@@ -320,3 +319,5 @@ export const inferOrgAdditionalFields = <
 		: undefined;
 	return {} as undefined extends S ? Schema : S;
 };
+
+export type * from "./schema";

@@ -70,7 +70,7 @@ describe("phone-number", async (it) => {
 				headers,
 			},
 		});
-		const res = await client.phoneNumber.verify({
+		await client.phoneNumber.verify({
 			phoneNumber: newPhoneNumber,
 			updatePhoneNumber: true,
 			code: otp,
@@ -178,7 +178,7 @@ describe("phone auth flow", async () => {
 
 	const newEmail = "new-email@email.com";
 	it("should set password and update user", async () => {
-		const res = await auth.api.setPassword({
+		await auth.api.setPassword({
 			body: {
 				newPassword: "password",
 			},
@@ -296,7 +296,7 @@ describe("reset password flow attempts", async (it) => {
 	let otp = "";
 	let resetOtp = "";
 
-	const { client, sessionSetter } = await getTestInstance(
+	const { client } = await getTestInstance(
 		{
 			plugins: [
 				phoneNumber({
@@ -513,15 +513,12 @@ describe("updateUser phone number update prevention", async () => {
 
 describe("custom verifyOTP", async () => {
 	const mockVerifyOTP = vi.fn();
-	let sentCode = "";
 
 	const { client, sessionSetter } = await getTestInstance(
 		{
 			plugins: [
 				phoneNumber({
-					async sendOTP({ code }) {
-						sentCode = code;
-					},
+					async sendOTP() {},
 					verifyOTP: mockVerifyOTP,
 					signUpOnVerification: {
 						getTempEmail(phoneNumber) {
