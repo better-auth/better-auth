@@ -140,26 +140,20 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 						const key = getter(ctx)!;
 
 						if (typeof key !== "string") {
-							throw new APIError("BAD_REQUEST", {
-								message: ERROR_CODES.INVALID_API_KEY_GETTER_RETURN_TYPE,
-							});
+							throw APIError.from(ERROR_CODES.INVALID_API_KEY_GETTER_RETURN_TYPE, "BAD_REQUEST");
 						}
 
 						if (key.length < opts.defaultKeyLength) {
 							// if the key is shorter than the default key length, than we know the key is invalid.
 							// we can't check if the key is exactly equal to the default key length, because
 							// a prefix may be added to the key.
-							throw new APIError("FORBIDDEN", {
-								message: ERROR_CODES.INVALID_API_KEY,
-							});
+							throw APIError.from(ERROR_CODES.INVALID_API_KEY, "FORBIDDEN");
 						}
 
 						if (opts.customAPIKeyValidator) {
 							const isValid = await opts.customAPIKeyValidator({ ctx, key });
 							if (!isValid) {
-								throw new APIError("FORBIDDEN", {
-									message: ERROR_CODES.INVALID_API_KEY,
-								});
+								throw APIError.from(ERROR_CODES.INVALID_API_KEY, "FORBIDDEN");
 							}
 						}
 
@@ -186,9 +180,7 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 							apiKey.userId,
 						);
 						if (!user) {
-							throw new APIError("UNAUTHORIZED", {
-								message: ERROR_CODES.INVALID_USER_ID_FROM_API_KEY,
-							});
+							throw APIError.from(ERROR_CODES.INVALID_USER_ID_FROM_API_KEY, "UNAUTHORIZED");
 						}
 
 						const session = {

@@ -159,9 +159,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						ctx.context.secret,
 					);
 					if (!sessionCookie) {
-						throw APIError.fromStatus("UNAUTHORIZED", {
-							message: ERROR_CODES.INVALID_SESSION_TOKEN,
-						});
+						throw APIError.from(ERROR_CODES.INVALID_SESSION_TOKEN, "UNAUTHORIZED");
 					}
 					const session =
 						await ctx.context.internalAdapter.findSession(sessionToken);
@@ -170,9 +168,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 							...ctx.context.authCookies.sessionToken.options,
 							maxAge: 0,
 						});
-						throw APIError.fromStatus("UNAUTHORIZED", {
-							message: ERROR_CODES.INVALID_SESSION_TOKEN,
-						});
+						throw APIError.from(ERROR_CODES.INVALID_SESSION_TOKEN, "UNAUTHORIZED");
 					}
 					await setSessionCookie(ctx, session);
 					return ctx.json(session);
@@ -233,9 +229,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						ctx.context.secret,
 					);
 					if (!sessionCookie) {
-						throw APIError.fromStatus("UNAUTHORIZED", {
-							message: ERROR_CODES.INVALID_SESSION_TOKEN,
-						});
+						throw APIError.from(ERROR_CODES.INVALID_SESSION_TOKEN, "UNAUTHORIZED");
 					}
 
 					await ctx.context.internalAdapter.deleteSession(sessionToken);

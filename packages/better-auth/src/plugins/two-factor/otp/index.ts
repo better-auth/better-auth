@@ -1,7 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { APIError } from "better-call";
+import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
 import { setSessionCookie } from "../../../cookies";
 import {
@@ -189,9 +189,10 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 				ctx.context.logger.error(
 					"send otp isn't configured. Please configure the send otp function on otp options.",
 				);
-				throw APIError.fromStatus("BAD_REQUEST", {
-					message: "otp isn't configured",
-				});
+				throw APIError.from({
+                    message: "otp isn't configured",
+                    code: "OTP_NOT_CONFIGURED"
+                }, "BAD_REQUEST");
 			}
 			const { session, key } = await verifyTwoFactor(ctx);
 			const code = generateRandomString(opts.digits, "0-9");
@@ -299,18 +300,14 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 						toCheckOtp.id,
 					);
 				}
-				throw APIError.fromStatus("BAD_REQUEST", {
-					message: TWO_FACTOR_ERROR_CODES.OTP_HAS_EXPIRED,
-				});
+				throw APIError.from(TWO_FACTOR_ERROR_CODES.OTP_HAS_EXPIRED, "BAD_REQUEST");
 			}
 			const allowedAttempts = options?.allowedAttempts || 5;
 			if (parseInt(counter!) >= allowedAttempts) {
 				await ctx.context.internalAdapter.deleteVerificationValue(
 					toCheckOtp.id,
 				);
-				throw APIError.fromStatus("BAD_REQUEST", {
-					message: TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE,
-				});
+				throw APIError.from(TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE, "BAD_REQUEST");
 			}
 			const isCodeValid = constantTimeEqual(
 				new TextEncoder().encode(decryptedOtp),
@@ -319,9 +316,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			if (isCodeValid) {
 				if (!session.user.twoFactorEnabled) {
 					if (!session.session) {
-						throw APIError.fromStatus("BAD_REQUEST", {
-							message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-						});
+						throw APIError.from(BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION, "BAD_REQUEST");
 					}
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
 						session.user.id,

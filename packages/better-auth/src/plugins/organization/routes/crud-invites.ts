@@ -652,7 +652,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				return ctx.json(null, {
 					status: 400,
 					body: {
-						message: ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
+						message: ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND.message,
 					},
 				});
 			}
@@ -723,9 +723,10 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 				invitation.expiresAt < new Date() ||
 				invitation.status !== "pending"
 			) {
-				throw APIError.fromStatus("BAD_REQUEST", {
-					message: "Invitation not found!",
-				});
+				throw APIError.from({
+                    message: "Invitation not found!",
+                    code: "INVITATION_NOT_FOUND"
+                }, "BAD_REQUEST");
 			}
 			if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
 				throw APIError.from(

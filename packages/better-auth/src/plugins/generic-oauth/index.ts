@@ -6,7 +6,7 @@ import {
 	validateAuthorizationCode,
 } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
-import { APIError } from "better-call";
+import { APIError } from "@better-auth/core/error";
 import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
 import {
 	getUserInfo,
@@ -77,9 +77,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							}
 						}
 						if (!finalAuthUrl) {
-							throw new APIError("BAD_REQUEST", {
-								message: GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
-							});
+							throw APIError.from(GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION, "BAD_REQUEST");
 						}
 						return createAuthorizationURL({
 							id: c.providerId,
@@ -122,9 +120,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							}
 						}
 						if (!finalTokenUrl) {
-							throw new APIError("BAD_REQUEST", {
-								message: GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
-							});
+							throw APIError.from(GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND, "BAD_REQUEST");
 						}
 						return validateAuthorizationCode({
 							headers: c.authorizationHeaders,
@@ -156,9 +152,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							}
 						}
 						if (!finalTokenUrl) {
-							throw new APIError("BAD_REQUEST", {
-								message: GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
-							});
+							throw APIError.from(GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND, "BAD_REQUEST");
 						}
 						return refreshAccessToken({
 							refreshToken,

@@ -1,4 +1,4 @@
-import { APIError } from "better-call";
+import { APIError } from "@better-auth/core/error";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { apiKey, ERROR_CODES } from ".";

@@ -6,7 +6,7 @@ import {
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { createOTP } from "@better-auth/utils/otp";
-import { APIError } from "better-call";
+import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
 import { sessionMiddleware } from "../../api";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
@@ -127,9 +127,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						userId: user.id,
 					});
 					if (!isPasswordValid) {
-						throw APIError.fromStatus("BAD_REQUEST", {
-							message: BASE_ERROR_CODES.INVALID_PASSWORD,
-						});
+						throw APIError.from(BASE_ERROR_CODES.INVALID_PASSWORD, "BAD_REQUEST");
 					}
 					const secret = generateRandomString(32);
 					const encryptedSecret = await symmetricEncrypt({
@@ -245,9 +243,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						userId: user.id,
 					});
 					if (!isPasswordValid) {
-						throw APIError.fromStatus("BAD_REQUEST", {
-							message: BASE_ERROR_CODES.INVALID_PASSWORD,
-						});
+						throw APIError.from(BASE_ERROR_CODES.INVALID_PASSWORD, "BAD_REQUEST");
 					}
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
 						user.id,

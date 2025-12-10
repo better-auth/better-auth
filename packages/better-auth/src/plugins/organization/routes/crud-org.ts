@@ -461,9 +461,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 			const organizationId =
 				ctx.body.organizationId || session.session.activeOrganizationId;
 			if (!organizationId) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-				});
+				throw APIError.from(ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND, "BAD_REQUEST");
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const member = await adapter.findMemberByOrgId({
@@ -583,9 +581,10 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 						"`organizationDeletion.disabled` is deprecated. Use `disableOrganizationDeletion` instead",
 					);
 				}
-				throw APIError.fromStatus("NOT_FOUND", {
-					message: "Organization deletion is disabled",
-				});
+				throw APIError.from({
+                    message: "Organization deletion is disabled",
+                    code: "ORGANIZATION_DELETION_DISABLED"
+                }, "NOT_FOUND");
 			}
 			const session = await ctx.context.getSession(ctx);
 			if (!session) {
@@ -597,7 +596,7 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				return ctx.json(null, {
 					status: 400,
 					body: {
-						message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+						message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND.message,
 					},
 				});
 			}
@@ -734,9 +733,7 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 				membersLimit: ctx.query?.membersLimit,
 			});
 			if (!organization) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-				});
+				throw APIError.from(ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND, "BAD_REQUEST");
 			}
 			const isMember = await adapter.checkMembership({
 				userId: session.user.id,
@@ -746,7 +743,7 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 				await adapter.setActiveOrganization(session.session.token, null, ctx);
 				throw new APIError("FORBIDDEN", {
 					message:
-						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION.message,
 				});
 			}
 

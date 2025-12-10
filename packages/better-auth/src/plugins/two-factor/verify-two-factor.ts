@@ -1,6 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createHMAC } from "@better-auth/utils/hmac";
-import { APIError } from "better-call";
+import { APIError } from "@better-auth/core/error";
 import { getSessionFromCtx } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import {
@@ -13,9 +13,7 @@ import type { UserWithTwoFactor } from "./types";
 
 export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 	const invalid = (errorKey: keyof typeof TWO_FACTOR_ERROR_CODES) => {
-		throw APIError.fromStatus("UNAUTHORIZED", {
-			message: TWO_FACTOR_ERROR_CODES[errorKey],
-		});
+		throw APIError.from(TWO_FACTOR_ERROR_CODES[errorKey], "UNAUTHORIZED");
 	};
 
 	const session = await getSessionFromCtx(ctx);
@@ -26,24 +24,18 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 			ctx.context.secret,
 		);
 		if (!twoFactorCookie) {
-			throw APIError.fromStatus("UNAUTHORIZED", {
-				message: TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
-			});
+			throw APIError.from(TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE, "UNAUTHORIZED");
 		}
 		const verificationToken =
 			await ctx.context.internalAdapter.findVerificationValue(twoFactorCookie);
 		if (!verificationToken) {
-			throw APIError.fromStatus("UNAUTHORIZED", {
-				message: TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
-			});
+			throw APIError.from(TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE, "UNAUTHORIZED");
 		}
 		const user = (await ctx.context.internalAdapter.findUserById(
 			verificationToken.value,
 		)) as UserWithTwoFactor;
 		if (!user) {
-			throw APIError.fromStatus("UNAUTHORIZED", {
-				message: TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
-			});
+			throw APIError.from(TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE, "UNAUTHORIZED");
 		}
 		const dontRememberMe = await ctx.getSignedCookie(
 			ctx.context.authCookies.dontRememberToken.name,
@@ -56,9 +48,10 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 					!!dontRememberMe,
 				);
 				if (!session) {
-					throw APIError.fromStatus("INTERNAL_SERVER_ERROR", {
-						message: "failed to create session",
-					});
+					throw APIError.from({
+                        message: "failed to create session",
+                        code: "FAILED_TO_CREATE_SESSION"
+                    }, "INTERNAL_SERVER_ERROR");
 				}
 				// Delete the verification token from the database after successful verification
 				await ctx.context.internalAdapter.deleteVerificationValue(
