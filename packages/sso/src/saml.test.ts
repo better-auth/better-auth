@@ -1362,6 +1362,7 @@ describe("SAML SSO", async () => {
 		// and disableImplicitSignUp is true
 		await expect(
 			authWithDisabledSignUp.api.callbackSSOSAML({
+				method: "POST",
 				body: {
 					SAMLResponse: samlResponse.samlResponse,
 				},
@@ -1858,5 +1859,209 @@ describe("SSO Provider Config Parsing", () => {
 		expect(serialized).not.toContain("[object Object]");
 
 		expect(provider.oidcConfig?.mapping?.id).toBe("sub");
+	});
+
+	it("should handle IdP-initiated flow with GET after POST redirect", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "idp-initiated-provider",
+				issuer: "http://localhost:8081",
+				domain: "localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+					spMetadata: {},
+				},
+			},
+			headers,
+		});
+
+		let samlResponse: any;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		const postResponse = (await auth.api.callbackSSOSAML({
+			method: "POST",
+			body: {
+				SAMLResponse: samlResponse.samlResponse,
+				RelayState: "http://localhost:3000/dashboard",
+			},
+			params: {
+				providerId: "idp-initiated-provider",
+			},
+		})) as Response;
+
+		expect(postResponse).toBeInstanceOf(Response);
+		expect(postResponse.status).toBe(302);
+		const redirectLocation = postResponse.headers.get("location");
+		expect(redirectLocation).toBe("http://localhost:3000/dashboard");
+
+		const cookieHeader = postResponse.headers.get("set-cookie");
+		const getResponse = (await auth.api.callbackSSOSAML({
+			method: "GET",
+			query: {
+				RelayState: "http://localhost:3000/dashboard",
+			},
+			params: {
+				providerId: "idp-initiated-provider",
+			},
+			headers: cookieHeader ? { cookie: cookieHeader } : undefined,
+		})) as Response;
+
+		expect(getResponse).toBeInstanceOf(Response);
+		expect(getResponse.status).toBe(302);
+		const getRedirectLocation = getResponse.headers.get("location");
+		expect(getRedirectLocation).toBe("http://localhost:3000/dashboard");
+	});
+
+	it("should reject direct GET request without session", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [sso()],
+		});
+
+		const getResponse = (await auth.api.callbackSSOSAML({
+			method: "GET",
+			params: {
+				providerId: "test-provider",
+			},
+		})) as Response;
+
+		expect(getResponse).toBeInstanceOf(Response);
+		expect(getResponse.status).toBe(302);
+		const redirectLocation = getResponse.headers.get("location");
+		expect(redirectLocation).toContain("/error");
+		expect(redirectLocation).toContain("error=invalid_request");
+	});
+
+	it("should prevent redirect loop when callbackUrl points to callback route", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		const callbackRouteUrl =
+			"http://localhost:3000/api/auth/sso/saml2/callback/loop-test-provider";
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "loop-test-provider",
+				issuer: "http://localhost:8081",
+				domain: "localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: callbackRouteUrl,
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+					spMetadata: {},
+				},
+			},
+			headers,
+		});
+
+		let samlResponse: any;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		const postResponse = (await auth.api.callbackSSOSAML({
+			method: "POST",
+			body: {
+				SAMLResponse: samlResponse.samlResponse,
+			},
+			params: {
+				providerId: "loop-test-provider",
+			},
+		})) as Response;
+
+		expect(postResponse).toBeInstanceOf(Response);
+		expect(postResponse.status).toBe(302);
+		const redirectLocation = postResponse.headers.get("location");
+		expect(redirectLocation).not.toBe(callbackRouteUrl);
+		expect(redirectLocation).toBe("http://localhost:3000");
+	});
+
+	it("should handle GET request with RelayState in query", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "relaystate-provider",
+				issuer: "http://localhost:8081",
+				domain: "localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+					spMetadata: {},
+				},
+			},
+			headers,
+		});
+
+		let samlResponse: any;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		const postResponse = (await auth.api.callbackSSOSAML({
+			method: "POST",
+			body: {
+				SAMLResponse: samlResponse.samlResponse,
+				RelayState: "http://localhost:3000/custom-path",
+			},
+			params: {
+				providerId: "relaystate-provider",
+			},
+		})) as Response;
+
+		const cookieHeader = postResponse.headers.get("set-cookie");
+		const getResponse = (await auth.api.callbackSSOSAML({
+			method: "GET",
+			query: {
+				RelayState: "http://localhost:3000/custom-path",
+			},
+			params: {
+				providerId: "relaystate-provider",
+			},
+			headers: cookieHeader ? { cookie: cookieHeader } : undefined,
+		})) as Response;
+
+		expect(getResponse).toBeInstanceOf(Response);
+		expect(getResponse.status).toBe(302);
+		const redirectLocation = getResponse.headers.get("location");
+		expect(redirectLocation).toBe("http://localhost:3000/custom-path");
 	});
 });
