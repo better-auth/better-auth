@@ -817,6 +817,18 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					message: PHONE_NUMBER_ERROR_CODES.UNEXPECTED_ERROR,
 				});
 			}
+			const minLength = ctx.context.password?.config.minPasswordLength;
+			const maxLength = ctx.context.password?.config.maxPasswordLength;
+			if (ctx.body.newPassword.length < minLength) {
+				throw new APIError("BAD_REQUEST", {
+					message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
+				});
+			}
+			if (ctx.body.newPassword.length > maxLength) {
+				throw new APIError("BAD_REQUEST", {
+					message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
+				});
+			}
 			const hashedPassword = await ctx.context.password.hash(
 				ctx.body.newPassword,
 			);
