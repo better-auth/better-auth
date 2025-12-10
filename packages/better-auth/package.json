@@ -493,6 +493,7 @@
   },
   "peerDependencies": {
     "@lynx-js/react": "*",
+    "@prisma/client": "^5.22.0",
     "@sveltejs/kit": "^2.0.0",
     "@tanstack/react-start": "^1.0.0",
     "better-sqlite3": "^12.4.1",
@@ -512,6 +513,9 @@
   },
   "peerDependenciesMeta": {
     "@lynx-js/react": {
+      "optional": true
+    },
+    "@prisma/client": {
       "optional": true
     },
     "@sveltejs/kit": {
