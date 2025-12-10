@@ -18,7 +18,6 @@
     "release:no-build": "pnpm bump && pnpm -r publish --access public --no-git-checks --tag next",
     "release:canary": "turbo build --filter=./packages/* && pnpm bump && pnpm -r publish --access public --tag canary --no-git-checks",
     "bump": "node bump.js",
-    "bumpp": "bumpp",
     "test": "turbo test --continue --filter=./packages/* --filter=./test",
     "coverage": "turbo coverage --filter=./packages/* --filter=./test -- --coverage.reporter=json --coverage.provider=istanbul",
     "postcoverage": "pnpm coverage:collect && pnpm coverage:merge && pnpm coverage:report",
