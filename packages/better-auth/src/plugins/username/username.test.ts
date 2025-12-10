@@ -240,7 +240,8 @@ describe("username", async (it) => {
 			},
 		});
 
-		expect(session?.user.username).toBe("test username");
+		// Spaces in displayUsername are converted to underscores in username
+		expect(session?.user.username).toBe("test_username");
 		expect(session?.user.displayUsername).toBe("Test Username");
 	});
 

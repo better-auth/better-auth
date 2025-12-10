@@ -573,11 +573,87 @@ export const username = (options?: UsernameOptions | undefined) => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
+						const normalizer =
+							options?.usernameNormalization === false
+								? (v: string) => v
+								: options?.usernameNormalization ||
+									((v: string) => v.toLowerCase());
+
 						if (ctx.body.username && !ctx.body.displayUsername) {
 							ctx.body.displayUsername = ctx.body.username;
 						}
 						if (ctx.body.displayUsername && !ctx.body.username) {
-							ctx.body.username = ctx.body.displayUsername;
+							// When copying displayUsername to username, replace spaces with underscores
+							// and apply validation to prevent XSS and other injection attacks
+							let normalizedUsername =
+								typeof ctx.body.displayUsername === "string"
+									? ctx.body.displayUsername.replace(/\s+/g, "_")
+									: ctx.body.displayUsername;
+
+							// Apply username normalization (e.g., toLowerCase)
+							normalizedUsername =
+								typeof normalizedUsername === "string"
+									? normalizer(normalizedUsername)
+									: normalizedUsername;
+
+							if (typeof normalizedUsername === "string") {
+								const minUsernameLength = options?.minUsernameLength || 3;
+								const maxUsernameLength = options?.maxUsernameLength || 30;
+
+								// Length validation
+								if (normalizedUsername.length < minUsernameLength) {
+									throw new APIError("BAD_REQUEST", {
+										code: "USERNAME_TOO_SHORT",
+										message: ERROR_CODES.USERNAME_TOO_SHORT,
+									});
+								}
+
+								if (normalizedUsername.length > maxUsernameLength) {
+									throw new APIError("BAD_REQUEST", {
+										message: ERROR_CODES.USERNAME_TOO_LONG,
+									});
+								}
+
+								// Format validation: Use displayUsernameValidator if configured,
+								// otherwise fall back to username validator to prevent XSS
+								const validator = options?.displayUsernameValidator
+									? options.displayUsernameValidator
+									: options?.usernameValidator || defaultUsernameValidator;
+
+								const valid = await validator(normalizedUsername);
+								if (!valid) {
+									throw new APIError("BAD_REQUEST", {
+										message: options?.displayUsernameValidator
+											? ERROR_CODES.INVALID_DISPLAY_USERNAME
+											: ERROR_CODES.INVALID_USERNAME,
+									});
+								}
+
+								// Uniqueness check
+								const user = await ctx.context.adapter.findOne<User>({
+									model: "user",
+									where: [
+										{
+											field: "username",
+											value: normalizedUsername,
+										},
+									],
+								});
+
+								const blockChangeSignUp = ctx.path === "/sign-up/email" && user;
+								const blockChangeUpdateUser =
+									ctx.path === "/update-user" &&
+									user &&
+									ctx.context.session &&
+									user.id !== ctx.context.session.session.userId;
+								if (blockChangeSignUp || blockChangeUpdateUser) {
+									throw new APIError("BAD_REQUEST", {
+										message: ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
+									});
+								}
+							}
+
+							ctx.body.username = normalizedUsername;
 						}
 					}),
 				},
