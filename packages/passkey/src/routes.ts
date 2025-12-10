@@ -499,7 +499,6 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 					createdAt: new Date(),
 					aaguid: aaguid,
 				};
-<<<<<<< Updated upstream
 				const newPasskeyRes = await ctx.context.adapter.create<
 					Omit<Passkey, "id">,
 					Passkey
@@ -507,23 +506,11 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 					model: "passkey",
 					data: newPasskey,
 				});
+				// Delete the challenge after successful registration to prevent replay attacks
+				await ctx.context.internalAdapter.deleteVerificationValue(challengeId);
 				return ctx.json(newPasskeyRes, {
 					status: 200,
 				});
-=======
-			const newPasskeyRes = await ctx.context.adapter.create<
-				Omit<Passkey, "id">,
-				Passkey
-			>({
-				model: "passkey",
-				data: newPasskey,
-			});
-			// Delete the challenge after successful registration to prevent replay attacks
-			await ctx.context.internalAdapter.deleteVerificationValue(challengeId);
-			return ctx.json(newPasskeyRes, {
-				status: 200,
-			});
->>>>>>> Stashed changes
 			} catch (e) {
 				console.log(e);
 				throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -670,26 +657,26 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 						message: "User not found",
 					});
 				}
-			await setSessionCookie(ctx, {
-				session: s,
-				user,
-			});
-			// Delete the challenge after successful authentication to prevent replay attacks
-			await ctx.context.internalAdapter.deleteVerificationValue(challengeId);
-			return ctx.json(
-				{
+				await setSessionCookie(ctx, {
 					session: s,
-				},
-				{
-					status: 200,
-				},
-			);
-		} catch (e) {
-			ctx.context.logger.error("Failed to verify authentication", e);
-			throw new APIError("BAD_REQUEST", {
-				message: PASSKEY_ERROR_CODES.AUTHENTICATION_FAILED,
-			});
-		}
+					user,
+				});
+				// Delete the challenge after successful authentication to prevent replay attacks
+				await ctx.context.internalAdapter.deleteVerificationValue(challengeId);
+				return ctx.json(
+					{
+						session: s,
+					},
+					{
+						status: 200,
+					},
+				);
+			} catch (e) {
+				ctx.context.logger.error("Failed to verify authentication", e);
+				throw new APIError("BAD_REQUEST", {
+					message: PASSKEY_ERROR_CODES.AUTHENTICATION_FAILED,
+				});
+			}
 		},
 	);
 
