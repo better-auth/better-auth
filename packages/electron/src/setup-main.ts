@@ -36,8 +36,13 @@ export function setupCSP(
 	});
 }
 
-export function setupIPCMain({ ipcMain }: { ipcMain: Electron.IpcMain}, options: ElectronClientOptions) {
-  ipcMain.handle(`${options.namespace || "auth"}:request-auth`, () => requestAuth(options));
+export function setupIPCMain(
+	{ ipcMain }: { ipcMain: Electron.IpcMain },
+	options: ElectronClientOptions,
+) {
+	ipcMain.handle(`${options.namespace || "auth"}:request-auth`, () =>
+		requestAuth(options),
+	);
 }
 
 /**
@@ -86,7 +91,9 @@ export function registerProtocolScheme(
 	}
 
 	if (!hasSetupProtocolClient) {
-	  console.error(`Failed to register protocol ${options.protocol.scheme} as default protocol client.`);
+		console.error(
+			`Failed to register protocol ${options.protocol.scheme} as default protocol client.`,
+		);
 	}
 
 	const handleDeepLink = async (url: string) => {
@@ -102,7 +109,10 @@ export function registerProtocolScheme(
 			return;
 		}
 
-		// TODO: Match specific route
+		// TODO: Match proper
+		if (pathname !== options.callbackPath) {
+			return;
+		}
 
 		const code = searchParams.get("code");
 		if (!code) {

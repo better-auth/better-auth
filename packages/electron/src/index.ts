@@ -1,8 +1,13 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
-import { APIError, createAuthEndpoint, createAuthMiddleware } from "better-auth/api";
+import {
+	APIError,
+	createAuthEndpoint,
+	createAuthMiddleware,
+} from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
-import { parseUserOutput, type User } from "better-auth/db";
+import type { User } from "better-auth/db";
+import { parseUserOutput } from "better-auth/db";
 import * as z from "zod";
 
 export interface ElectronOptions {
@@ -14,14 +19,14 @@ export interface ElectronOptions {
 	codeExpiresIn?: number | undefined;
 	/**
 	 * The name of the cookie used for redirecting after authentication.
-		*
-		* @default "redirect_client"
+	 *
+	 * @default "redirect_client"
 	 */
 	redirectCookieName?: string | undefined;
 	/**
 	 * The prefix to use for cookies set by the plugin.
-		*
-		* @default "better-auth"
+	 *
+	 * @default "better-auth"
 	 */
 	cookiePrefix?: string | undefined;
 	disableOriginOverride?: boolean | undefined;
@@ -75,22 +80,23 @@ export const electron = (options?: ElectronOptions | undefined) => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-					  if (!ctx.context.newSession?.session) {
+						if (!ctx.context.newSession?.session) {
 							return;
 						}
 
-  					const redirectCookieName = `${opts.cookiePrefix}.${opts.redirectCookieName}`;
+						const redirectCookieName = `${opts.cookiePrefix}.${opts.redirectCookieName}`;
 
-            const identifier = `electron:${generateRandomString(32, "a-z", "A-Z", "0-9")}`;
-            const codeExpiresInMs = opts.codeExpiresIn * 1000;
-            const expiresAt = new Date(Date.now() * codeExpiresInMs);
-            const code = await ctx.context.internalAdapter.createVerificationValue({
-              identifier,
-              value: JSON.stringify({
-                userId: ctx.context.newSession.user.id,
-              }),
-              expiresAt,
-            });
+						const identifier = `electron:${generateRandomString(32, "a-z", "A-Z", "0-9")}`;
+						const codeExpiresInMs = opts.codeExpiresIn * 1000;
+						const expiresAt = new Date(Date.now() * codeExpiresInMs);
+						const code =
+							await ctx.context.internalAdapter.createVerificationValue({
+								identifier,
+								value: JSON.stringify({
+									userId: ctx.context.newSession.user.id,
+								}),
+								expiresAt,
+							});
 
 						ctx.setCookie(redirectCookieName, code.identifier, {
 							...ctx.context.authCookies.sessionToken.options,
@@ -111,7 +117,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 				{
 					method: "POST",
 					body: z.object({
-					  code: z.string().nonempty(),
+						code: z.string().nonempty(),
 					}),
 					metadata: {
 						isAction: false,
@@ -119,12 +125,13 @@ export const electron = (options?: ElectronOptions | undefined) => {
 					},
 				},
 				async (ctx) => {
-				  const { code } = ctx.body;
+					const { code } = ctx.body;
 
-					const token = await ctx.context.internalAdapter.findVerificationValue(code);
+					const token =
+						await ctx.context.internalAdapter.findVerificationValue(code);
 					if (!token || token.expiresAt < new Date()) {
-					  throw new APIError("NOT_FOUND", {
-							message: "Invalid or expired token."
+						throw new APIError("NOT_FOUND", {
+							message: "Invalid or expired token.",
 						});
 					}
 
@@ -132,28 +139,33 @@ export const electron = (options?: ElectronOptions | undefined) => {
 
 					await ctx.context.internalAdapter.deleteVerificationValue(token.id);
 
-					const user = await ctx.context.internalAdapter.findUserById(tokenRecord.userId);
+					const user = await ctx.context.internalAdapter.findUserById(
+						tokenRecord.userId,
+					);
 					if (!user) {
-  					throw new APIError("INTERNAL_SERVER_ERROR", {
-    					message: "User not found"
-  					});
+						throw new APIError("INTERNAL_SERVER_ERROR", {
+							message: "User not found",
+						});
 					}
 
-					const session = await ctx.context.internalAdapter.createSession(user.id);
+					const session = await ctx.context.internalAdapter.createSession(
+						user.id,
+					);
 					if (!session) {
-  					throw new APIError("INTERNAL_SERVER_ERROR", {
-  					  message: "Failed to create session",
-  					})
+						throw new APIError("INTERNAL_SERVER_ERROR", {
+							message: "Failed to create session",
+						});
 					}
 
 					await setSessionCookie(ctx, {
-  					session,
-  					user,
+						session,
+						user,
 					});
 
 					return ctx.json({
 						token: session.token,
-					  user: parseUserOutput(ctx.context.options, user) as User & Record<string, any>,
+						user: parseUserOutput(ctx.context.options, user) as User &
+							Record<string, any>,
 					});
 				},
 			),

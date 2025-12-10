@@ -1,5 +1,5 @@
 export interface ElectronClientOptions {
-  redirectURL: string;
+	redirectURL: string;
 	/**
 	 * The protocol scheme to use for deep linking in Electron.
 	 *
@@ -13,11 +13,11 @@ export interface ElectronClientOptions {
 		privileges?: Electron.Privileges | undefined;
 	};
 	/**
-   * The callback path to use for authentication redirects.
-   *
-   * @default "/auth/callback"
-   */
-  callbackPath?: string;
+	 * The callback path to use for authentication redirects.
+	 *
+	 * @default "/auth/callback"
+	 */
+	callbackPath?: string;
 	storage: Storage;
 	/**
 	 * @default "better-auth"

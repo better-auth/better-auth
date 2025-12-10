@@ -11,7 +11,7 @@ export async function requestAuth(options: ElectronClientOptions) {
 		);
 	}
 
-  void shell.openExternal(options.redirectURL, {
+	void shell.openExternal(options.redirectURL, {
 		activate: true,
 	});
 }
@@ -28,10 +28,13 @@ export async function authenticate(
 		method: "POST",
 		body,
 		onSuccess: (ctx) => {
-      getWindow()?.webContents.send(`${options.namespace || "auth"}:authenticated`, ctx.data);
+			getWindow()?.webContents.send(
+				`${options.namespace || "auth"}:authenticated`,
+				ctx.data,
+			);
 		},
 		onError: (ctx) => {
-  		// TODO: Handle errors gracefully
-		}
+			// TODO: Handle errors gracefully
+		},
 	});
 }
