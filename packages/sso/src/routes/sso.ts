@@ -1482,11 +1482,9 @@ const getSafeRedirectUrl = (
 		return appOrigin;
 	}
 
-	// Allow relative paths (starting with single /, but not // which is protocol-relative)
 	if (url.startsWith("/") && !url.startsWith("//")) {
 		try {
 			const absoluteUrl = new URL(url, appOrigin);
-			// Verify the resolved URL stays on the same origin
 			if (absoluteUrl.origin !== appOrigin) {
 				return appOrigin;
 			}
@@ -1495,18 +1493,15 @@ const getSafeRedirectUrl = (
 				return appOrigin;
 			}
 		} catch {
-			// If URL parsing fails, reject the URL
 			return appOrigin;
 		}
 		return url;
 	}
 
-	// Validate absolute URLs against trusted origins
 	if (!isTrustedOrigin(url, { allowRelativePaths: false })) {
 		return appOrigin;
 	}
 
-	// Check for redirect loop using pathname comparison
 	try {
 		const callbackPathname = new URL(callbackPath).pathname;
 		const urlPathname = new URL(url).pathname;
