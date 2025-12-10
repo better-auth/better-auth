@@ -20,6 +20,7 @@ async function getNextVersion(path = ".") {
 			const currentPkg = getPackageVersion(`${path}/package.json`);
 			console.log(`Update ${currentPkg.name}:`);
 			execSync(
+				/* cspell:disable-next-line */
 				`cd ${path} && npx bumpp package.json --no-commit --no-tag --push=false -y`,
 				{ stdio: "inherit" },
 			);
