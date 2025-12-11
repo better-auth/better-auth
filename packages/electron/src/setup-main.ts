@@ -44,10 +44,22 @@ export function setupCSP(
 export function setupIPCMain(
 	{ ipcMain }: { ipcMain: Electron.IpcMain },
 	options: ElectronClientOptions,
+	ctx: {
+		$fetch: BetterFetch;
+		getCookie: () => Promise<string>;
+	},
 ) {
-	ipcMain.handle(`${options.namespace || "auth"}:request-auth`, () =>
-		requestAuth(options),
-	);
+	const namespace = options.namespace || "auth";
+
+	ipcMain.handle(`${namespace}:request-auth`, () => requestAuth(options));
+	ipcMain.handle(`${namespace}:sign-out`, async () => {
+		await ctx.$fetch("/sign-out", {
+  		method: "POST",
+			headers: {
+				cookie: await ctx.getCookie(),
+			},
+		});
+	});
 }
 
 /**

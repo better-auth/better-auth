@@ -67,97 +67,102 @@ export const electronClient = (options: ElectronClientOptions) => {
 
 	return {
 		id: "electron",
-		fetchPlugins: [
-			{
-				id: "electron",
-				name: "Electron",
-				hooks: {
-					onSuccess: async (context) => {
-						const setCookie = context.response.headers.get("set-cookie");
-						const { setEncrypted, getDecrypted } = await storage;
+		fetchPlugins:
+			isElectronEnv() && isProcessType("browser")
+				? [
+						{
+							id: "electron",
+							name: "Electron",
+							hooks: {
+								onSuccess: async (context) => {
+									const setCookie = context.response.headers.get("set-cookie");
+									const { setEncrypted, getDecrypted } = await storage;
 
-						if (setCookie) {
-							if (hasBetterAuthCookies(setCookie, opts.cookiePrefix)) {
-								const prevCookie = getDecrypted(cookieName);
-								const toSetCookie = getSetCookie(
-									setCookie || "{}",
-									prevCookie ?? undefined,
-								);
+									if (setCookie) {
+										if (hasBetterAuthCookies(setCookie, opts.cookiePrefix)) {
+											const prevCookie = getDecrypted(cookieName);
+											const toSetCookie = getSetCookie(
+												setCookie || "{}",
+												prevCookie ?? undefined,
+											);
 
-								if (hasSessionCookieChanged(prevCookie, toSetCookie)) {
-									setEncrypted(cookieName, toSetCookie);
-									store?.notify("$sessionSignal");
-								} else {
-									setEncrypted(cookieName, toSetCookie);
+											if (hasSessionCookieChanged(prevCookie, toSetCookie)) {
+												setEncrypted(cookieName, toSetCookie);
+												store?.notify("$sessionSignal");
+											} else {
+												setEncrypted(cookieName, toSetCookie);
+											}
+										}
+									}
+
+									if (
+										context.request.url.toString().includes("/get-session") &&
+										!opts.disableCache
+									) {
+										const data = context.data;
+										setEncrypted(localCacheName, JSON.stringify(data));
+									}
+								},
+								onError: async (context) => {
+									let webContents: typeof Electron.WebContents | null = null;
+									try {
+										webContents = (await import("electron")).webContents;
+									} catch {}
+									if (!webContents) {
+										return;
+									}
+
+									webContents
+										.getFocusedWebContents()
+										?.send(`${opts.namespace}:error`, context.error);
+								},
+							},
+							init: async (url, options) => {
+								const { setEncrypted, getDecrypted } = await storage;
+
+								const storedCookie = getDecrypted(cookieName);
+								const cookie = getCookie(storedCookie || "{}");
+								options ||= {};
+								options.credentials = "omit";
+								options.headers = {
+									...options.headers,
+									cookie,
+									"electron-origin": `${opts.protocol.scheme}:/`,
+									"x-skip-oauth-proxy": "true",
+								};
+
+								if (url.includes("/sign-out")) {
+									setEncrypted(cookieName, "{}");
+									store?.atoms.session?.set({
+										...store.atoms.session.get(),
+										data: null,
+										error: null,
+										isPending: false,
+									});
+									setEncrypted(localCacheName, "{}");
 								}
-							}
-						}
 
-						if (
-							context.request.url.toString().includes("/get-session") &&
-							!opts.disableCache
-						) {
-							const data = context.data;
-							setEncrypted(localCacheName, JSON.stringify(data));
-						}
-					},
-					onError: async (context) => {
-						let webContents: typeof Electron.WebContents | null = null;
-						try {
-							webContents = (await import("electron")).webContents;
-						} catch {}
-						if (!webContents) {
-							return;
-						}
-
-						webContents
-							.getFocusedWebContents()
-							?.send(`${opts.namespace}:error`, context.error);
-					},
-				},
-				init: async (url, options) => {
-					const { setEncrypted, getDecrypted } = await storage;
-
-					const storedCookie = getDecrypted(cookieName);
-					const cookie = getCookie(storedCookie || "{}");
-					options ||= {};
-					options.credentials = "omit";
-					options.headers = {
-						...options.headers,
-						cookie,
-						"electron-origin": `${opts.protocol.scheme}:/`,
-						"x-skip-oauth-proxy": "true",
-					};
-
-					if (url.includes("/sign-out")) {
-						setEncrypted(cookieName, "{}");
-						store?.atoms.session?.set({
-							...store.atoms.session.get(),
-							data: null,
-							error: null,
-							isPending: false,
-						});
-						setEncrypted(localCacheName, "{}");
-					}
-
-					return {
-						url,
-						options,
-					};
-				},
-			},
-		],
+								return {
+									url,
+									options,
+								};
+							},
+						},
+					]
+				: [],
 		getActions: ($fetch, $store, clientOptions) => {
-			if (isElectronEnv()) {
+			if (isElectronEnv() && isProcessType("browser")) {
 				store = $store;
 			}
 
+			const getCookieFn = async () => {
+				const { getDecrypted } = await storage;
+				const cookie = getDecrypted(cookieName);
+				return getCookie(cookie || "{}");
+			};
+
 			return {
-				getCookie: async () => {
-					const { getDecrypted } = await storage;
-					const cookie = getDecrypted(cookieName);
-					return getCookie(cookie || "{}");
-				},
+				getCookie: getCookieFn,
 				requestAuth: () => requestAuth(opts),
 				/**
 				 * Sets up the Electron main process for authentication.
@@ -220,7 +225,10 @@ export const electronClient = (options: ElectronClientOptions) => {
 
 					registerProtocolScheme(electron, $fetch, opts, ctx);
 					setupCSP(electron, clientOptions);
-					setupIPCMain(electron, opts);
+					setupIPCMain(electron, opts, {
+						$fetch,
+						getCookie: getCookieFn,
+					});
 				},
 				/**
 				 * Sets up Electron IPC handlers for authentication.
@@ -231,7 +239,10 @@ export const electronClient = (options: ElectronClientOptions) => {
 					contextBridge: Electron.ContextBridge;
 				}) => {
 					if (isProcessType("browser") && electron.ipcMain) {
-						setupIPCMain({ ipcMain: electron.ipcMain }, opts);
+						setupIPCMain({ ipcMain: electron.ipcMain }, opts, {
+							$fetch,
+							getCookie: getCookieFn,
+						});
 					} else if (isProcessType("renderer")) {
 						const { contextBridge, ipcRenderer } = electron;
 
@@ -255,6 +266,9 @@ export const electronClient = (options: ElectronClientOptions) => {
 								);
 							},
 						);
+						contextBridge.exposeInMainWorld("signOut", async () =>
+							ipcRenderer.invoke("sign-out"),
+						);
 					}
 				},
 				$Infer: {} as {
@@ -266,6 +280,7 @@ export const electronClient = (options: ElectronClientOptions) => {
 						onAuthError: (
 							error: (context: BetterFetchError) => unknown,
 						) => void;
+						signOut: () => Promise<void>;
 					};
 				},
 			};
