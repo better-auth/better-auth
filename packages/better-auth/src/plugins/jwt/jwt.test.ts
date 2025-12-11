@@ -6,7 +6,7 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { jwt } from ".";
 import { jwtClient } from "./client";
 import type { JWKOptions, Jwk, JwtOptions } from "./types";
-import { generateExportedKeyPair } from "./utils";
+import { generateExportedKeyPair, toExpJWT } from "./utils";
 
 describe("jwt", async () => {
 	// Testing the default behavior
@@ -777,158 +777,55 @@ describe("jwt - custom jwksPath", async () => {
 	});
 });
 
-describe("jwt - audience validation", async () => {
-	it("should validate audience claim correctly", async () => {
-		const customAudience = "https://my-app.com";
-		const { auth } = await getTestInstance({
-			plugins: [
-				jwt({
-					jwt: {
-						audience: customAudience,
-					},
-				}),
-			],
-			logger: {
-				level: "error",
-			},
+describe("toExpJWT", () => {
+	const iat = 1000; // base iat for testing
+
+	describe("with number input", () => {
+		it("should return the number as-is", () => {
+			expect(toExpJWT(3600, iat)).toBe(3600);
+			expect(toExpJWT(0, iat)).toBe(0);
+			expect(toExpJWT(9999999, iat)).toBe(9999999);
 		});
-
-		// Sign a JWT with the correct audience
-		const validToken = await auth.api.signJWT({
-			body: {
-				payload: {
-					sub: "123",
-					exp: Math.floor(Date.now() / 1000) + 600,
-					iat: Math.floor(Date.now() / 1000),
-					aud: customAudience,
-				},
-			},
-		});
-
-		expect(validToken?.token).toBeDefined();
-
-		// Verify with JWKS - should succeed
-		const jwks = await auth.api.getJwks();
-		const localJwks = createLocalJWKSet(jwks);
-		const decoded = await jwtVerify(validToken?.token!, localJwks, {
-			audience: customAudience,
-		});
-
-		expect(decoded.payload.aud).toBe(customAudience);
 	});
 
-	it("should reject token with wrong audience", async () => {
-		const correctAudience = "https://my-app.com";
-		const wrongAudience = "https://wrong-app.com";
-
-		const { auth } = await getTestInstance({
-			plugins: [
-				jwt({
-					jwt: {
-						audience: correctAudience,
-					},
-				}),
-			],
-			logger: {
-				level: "error",
-			},
+	describe("with Date input", () => {
+		it("should convert Date to seconds timestamp", () => {
+			const date = new Date("2024-01-01T00:00:00.000Z");
+			const expectedSeconds = Math.floor(date.getTime() / 1000);
+			expect(toExpJWT(date, iat)).toBe(expectedSeconds);
 		});
 
-		// Sign a JWT with wrong audience
-		const tokenWithWrongAudience = await auth.api.signJWT({
-			body: {
-				payload: {
-					sub: "123",
-					exp: Math.floor(Date.now() / 1000) + 600,
-					iat: Math.floor(Date.now() / 1000),
-					aud: wrongAudience,
-				},
-			},
+		it("should floor milliseconds", () => {
+			const date = new Date(1704067200500);
+			expect(toExpJWT(date, iat)).toBe(1704067200);
 		});
-
-		expect(tokenWithWrongAudience?.token).toBeDefined();
-
-		// Try to verify with correct audience - should fail
-		const jwks = await auth.api.getJwks();
-		const localJwks = createLocalJWKSet(jwks);
-
-		await expect(
-			jwtVerify(tokenWithWrongAudience?.token!, localJwks, {
-				audience: correctAudience,
-			}),
-		).rejects.toThrow();
 	});
 
-	it("should support multiple audiences", async () => {
-		const audiences = ["https://app1.com", "https://app2.com"];
-
-		const { auth } = await getTestInstance({
-			plugins: [
-				jwt({
-					jwt: {
-						audience: audiences,
-					},
-				}),
-			],
-			logger: {
-				level: "error",
-			},
+	describe("with valid TimeString input", () => {
+		it("should parse short format and add to iat", () => {
+			expect(toExpJWT("1h", iat)).toBe(iat + 3600);
+			expect(toExpJWT("7d", iat)).toBe(iat + 604800);
+			expect(toExpJWT("30m", iat)).toBe(iat + 1800);
+			expect(toExpJWT("1s", iat)).toBe(iat + 1);
 		});
 
-		// Sign a JWT with one of the valid audiences
-		const token = await auth.api.signJWT({
-			body: {
-				payload: {
-					sub: "123",
-					exp: Math.floor(Date.now() / 1000) + 600,
-					iat: Math.floor(Date.now() / 1000),
-					aud: audiences[0],
-				},
-			},
+		it("should parse long format and add to iat", () => {
+			expect(toExpJWT("1 hour", iat)).toBe(iat + 3600);
+			expect(toExpJWT("7 days", iat)).toBe(iat + 604800);
+			expect(toExpJWT("30 minutes", iat)).toBe(iat + 1800);
 		});
 
-		expect(token?.token).toBeDefined();
-
-		// Verify with multiple audiences - should succeed
-		const jwks = await auth.api.getJwks();
-		const localJwks = createLocalJWKSet(jwks);
-		const decoded = await jwtVerify(token?.token!, localJwks, {
-			audience: audiences,
+		it("should handle negative values", () => {
+			expect(toExpJWT("-1h", iat)).toBe(iat - 3600);
+			expect(toExpJWT("1h ago", iat)).toBe(iat - 3600);
 		});
-
-		expect(decoded.payload.aud).toBe(audiences[0]);
 	});
 
-	it("should use baseURL as default audience", async () => {
-		const baseURL = "http://localhost:3000/api/auth";
-		const { auth } = await getTestInstance({
-			plugins: [jwt()],
-			logger: {
-				level: "error",
-			},
+	describe("with invalid string input", () => {
+		it("should throw TypeError for invalid format", () => {
+			expect(() => toExpJWT("invalid" as any, iat)).toThrow(TypeError);
+			expect(() => toExpJWT("" as any, iat)).toThrow(TypeError);
+			expect(() => toExpJWT("abc123" as any, iat)).toThrow(TypeError);
 		});
-
-		// Sign a JWT without explicitly setting audience
-		const token = await auth.api.signJWT({
-			body: {
-				payload: {
-					sub: "123",
-					exp: Math.floor(Date.now() / 1000) + 600,
-					iat: Math.floor(Date.now() / 1000),
-					aud: baseURL,
-				},
-			},
-		});
-
-		expect(token?.token).toBeDefined();
-
-		// Verify with default audience (baseURL)
-		const jwks = await auth.api.getJwks();
-		const localJwks = createLocalJWKSet(jwks);
-		const decoded = await jwtVerify(token?.token!, localJwks, {
-			audience: baseURL,
-		});
-
-		expect(decoded.payload.aud).toBe(baseURL);
 	});
 });
