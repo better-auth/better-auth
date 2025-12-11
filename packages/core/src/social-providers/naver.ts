@@ -40,6 +40,7 @@ export interface NaverOptions extends ProviderOptions<NaverProfile> {
 }
 
 export const naver = (options: NaverOptions) => {
+	const tokenEndpoint = "https://nid.naver.com/oauth2.0/token";
 	return {
 		id: "naver",
 		name: "Naver",
@@ -61,7 +62,7 @@ export const naver = (options: NaverOptions) => {
 				code,
 				redirectURI,
 				options,
-				tokenEndpoint: "https://nid.naver.com/oauth2.0/token",
+				tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -74,7 +75,7 @@ export const naver = (options: NaverOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://nid.naver.com/oauth2.0/token",
+						tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {

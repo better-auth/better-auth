@@ -104,7 +104,7 @@ export const github = (options: GithubOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://github.com/login/oauth/access_token",
+						tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {
