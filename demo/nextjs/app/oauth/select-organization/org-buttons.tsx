@@ -35,11 +35,11 @@ export function SelectOrganizationBtn({
 					const { data, error } = await client.oauth2.continue({
 						postLogin: true,
 					});
-					if (error || !data?.redirect_uri) {
+					if (error || !data?.redirect || !data.uri) {
 						toast.error(error?.message ?? "Failed to continue");
 						return;
 					}
-					window.location.href = data.redirect_uri;
+					window.location.href = data.uri;
 				} catch (error) {
 					toast.error(String(error));
 				}
