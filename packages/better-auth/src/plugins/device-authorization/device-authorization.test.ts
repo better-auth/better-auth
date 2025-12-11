@@ -19,16 +19,16 @@ describe("device authorization plugin input validation", () => {
 
 	it("should validate custom options", async () => {
 		const options = deviceAuthorizationOptionsSchema.parse({
-			expiresIn: 60 * 1000,
-			interval: 2 * 1000,
+			expiresIn: "1m",
+			interval: "2s",
 			deviceCodeLength: 50,
 			userCodeLength: 10,
 		});
 		expect(options).toMatchInlineSnapshot(`
 			{
 			  "deviceCodeLength": 50,
-			  "expiresIn": 60000,
-			  "interval": 2000,
+			  "expiresIn": "1m",
+			  "interval": "2s",
 			  "userCodeLength": 10,
 			}
 		`);
