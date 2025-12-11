@@ -1636,31 +1636,12 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 
 			let parsedResponse: FlowResult;
 			try {
-				const decodedResponse = Buffer.from(SAMLResponse, "base64").toString(
-					"utf-8",
-				);
-
-				try {
-					parsedResponse = await sp.parseLoginResponse(idp, "post", {
-						body: {
-							SAMLResponse,
-							RelayState: RelayState || undefined,
-						},
-					});
-				} catch (parseError) {
-					const nameIDMatch = decodedResponse.match(
-						/<saml2:NameID[^>]*>([^<]+)<\/saml2:NameID>/,
-					);
-					if (!nameIDMatch) throw parseError;
-					parsedResponse = {
-						extract: {
-							nameID: nameIDMatch[1],
-							attributes: { nameID: nameIDMatch[1] },
-							sessionIndex: {},
-							conditions: {},
-						},
-					} as FlowResult;
-				}
+				parsedResponse = await sp.parseLoginResponse(idp, "post", {
+					body: {
+						SAMLResponse,
+						RelayState: RelayState || undefined,
+					},
+				});
 
 				if (!parsedResponse?.extract) {
 					throw new Error("Invalid SAML response structure");
@@ -2080,50 +2061,12 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			// Parse and validate SAML response
 			let parsedResponse: FlowResult;
 			try {
-				let decodedResponse = Buffer.from(SAMLResponse, "base64").toString(
-					"utf-8",
-				);
-
-				// Patch the SAML response if status is missing or not success
-				if (!decodedResponse.includes("StatusCode")) {
-					// Insert a success status if missing
-					const insertPoint = decodedResponse.indexOf("</saml2:Issuer>");
-					if (insertPoint !== -1) {
-						decodedResponse =
-							decodedResponse.slice(0, insertPoint + 14) +
-							'<saml2:Status><saml2:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></saml2:Status>' +
-							decodedResponse.slice(insertPoint + 14);
-					}
-				} else if (!decodedResponse.includes("saml2:Success")) {
-					// Replace existing non-success status with success
-					decodedResponse = decodedResponse.replace(
-						/<saml2:StatusCode Value="[^"]+"/,
-						'<saml2:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"',
-					);
-				}
-
-				try {
-					parsedResponse = await sp.parseLoginResponse(idp, "post", {
-						body: {
-							SAMLResponse,
-							RelayState: RelayState || undefined,
-						},
-					});
-				} catch (parseError) {
-					const nameIDMatch = decodedResponse.match(
-						/<saml2:NameID[^>]*>([^<]+)<\/saml2:NameID>/,
-					);
-					// due to different spec. we have to make sure to handle that.
-					if (!nameIDMatch) throw parseError;
-					parsedResponse = {
-						extract: {
-							nameID: nameIDMatch[1],
-							attributes: { nameID: nameIDMatch[1] },
-							sessionIndex: {},
-							conditions: {},
-						},
-					} as FlowResult;
-				}
+				parsedResponse = await sp.parseLoginResponse(idp, "post", {
+					body: {
+						SAMLResponse,
+						RelayState: RelayState || undefined,
+					},
+				});
 
 				if (!parsedResponse?.extract) {
 					throw new Error("Invalid SAML response structure");
