@@ -3,7 +3,6 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import { defineErrorCodes } from "@better-auth/core/utils";
 import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../api";
 import {
@@ -22,9 +21,9 @@ export interface MultiSessionConfig {
 	maximumSessions?: number | undefined;
 }
 
-const ERROR_CODES = defineErrorCodes({
-	INVALID_SESSION_TOKEN: "Invalid session token",
-});
+import { MULTI_SESSION_ERROR_CODES as ERROR_CODES } from "./error-codes";
+
+export { MULTI_SESSION_ERROR_CODES as ERROR_CODES } from "./error-codes";
 
 const setActiveSessionBodySchema = z.object({
 	sessionToken: z.string().meta({

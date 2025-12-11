@@ -1,6 +1,5 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { defineErrorCodes } from "@better-auth/core/utils";
 import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
 import { setCookieCache, setSessionCookie } from "../../cookies";
@@ -19,11 +18,9 @@ type RequiredEmailOTPOptions = WithRequired<
 	"expiresIn" | "generateOTP" | "storeOTP"
 >;
 
-export const ERROR_CODES = defineErrorCodes({
-	OTP_EXPIRED: "OTP expired",
-	INVALID_OTP: "Invalid OTP",
-	TOO_MANY_ATTEMPTS: "Too many attempts",
-});
+import { EMAIL_OTP_ERROR_CODES as ERROR_CODES } from "./error-codes";
+
+export { EMAIL_OTP_ERROR_CODES as ERROR_CODES } from "./error-codes";
 
 const sendVerificationOTPBodySchema = z.object({
 	email: z.string({}).meta({
