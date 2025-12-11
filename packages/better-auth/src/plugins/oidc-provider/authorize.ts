@@ -5,6 +5,7 @@ import { generateRandomString } from "../../crypto";
 import { getClient } from "./index";
 import type { AuthorizationQuery, OIDCOptions } from "./types";
 import { parsePrompt } from "./utils/prompt";
+import { matchesRedirectURI } from "./utils/redirect-uri";
 
 function formatErrorURL(url: string, error: string, description: string) {
 	return `${
@@ -121,11 +122,18 @@ export async function authorize(
 		);
 		throw ctx.redirect(errorURL);
 	}
-	const redirectURI = client.redirectUrls.find(
-		(url) => url === ctx.query.redirect_uri,
+	if (!query.redirect_uri) {
+		throw new APIError("BAD_REQUEST", {
+			message: "Invalid redirect URI",
+		});
+	}
+
+	// Find matching redirect URI (exact or wildcard match)
+	const registeredRedirectURI = client.redirectUrls.find((url) =>
+		matchesRedirectURI(url, query.redirect_uri!),
 	);
 
-	if (!redirectURI || !query.redirect_uri) {
+	if (!registeredRedirectURI) {
 		/**
 		 * show UI error here warning the user that the redirect URI is invalid
 		 */
@@ -133,6 +141,9 @@ export async function authorize(
 			message: "Invalid redirect URI",
 		});
 	}
+
+	// Use the actual requested redirect URI (not the wildcard pattern) for consistency
+	const redirectURI = query.redirect_uri;
 	if (client.disabled) {
 		const errorURL = getErrorURL(ctx, "client_disabled", "client is disabled");
 		throw ctx.redirect(errorURL);
