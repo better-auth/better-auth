@@ -181,7 +181,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					message: STRIPE_ERROR_CODES.SUBSCRIPTION_PLAN_NOT_FOUND,
 				});
 			}
-			const subscriptionToUpdate = ctx.body.subscriptionId
+			let subscriptionToUpdate = ctx.body.subscriptionId
 				? await ctx.context.adapter.findOne<Subscription>({
 						model: "subscription",
 						where: [
@@ -203,6 +203,14 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							where: [{ field: "referenceId", value: referenceId }],
 						})
 					: null;
+
+			if (
+				ctx.body.subscriptionId &&
+				subscriptionToUpdate &&
+				subscriptionToUpdate.referenceId !== referenceId
+			) {
+				subscriptionToUpdate = null;
+			}
 
 			if (ctx.body.subscriptionId && !subscriptionToUpdate) {
 				throw new APIError("BAD_REQUEST", {
@@ -697,7 +705,7 @@ export const cancelSubscription = (options: StripeOptions) => {
 		},
 		async (ctx) => {
 			const referenceId = ctx.body?.referenceId || ctx.context.session.user.id;
-			const subscription = ctx.body.subscriptionId
+			let subscription = ctx.body.subscriptionId
 				? await ctx.context.adapter.findOne<Subscription>({
 						model: "subscription",
 						where: [
@@ -717,6 +725,15 @@ export const cancelSubscription = (options: StripeOptions) => {
 								(sub) => sub.status === "active" || sub.status === "trialing",
 							),
 						);
+
+			// Ensure the specified subscription belongs to the (validated) referenceId.
+			if (
+				ctx.body.subscriptionId &&
+				subscription &&
+				subscription.referenceId !== referenceId
+			) {
+				subscription = undefined;
+			}
 
 			if (!subscription || !subscription.stripeCustomerId) {
 				throw ctx.error("BAD_REQUEST", {
@@ -846,7 +863,7 @@ export const restoreSubscription = (options: StripeOptions) => {
 		async (ctx) => {
 			const referenceId = ctx.body?.referenceId || ctx.context.session.user.id;
 
-			const subscription = ctx.body.subscriptionId
+			let subscription = ctx.body.subscriptionId
 				? await ctx.context.adapter.findOne<Subscription>({
 						model: "subscription",
 						where: [
@@ -871,6 +888,15 @@ export const restoreSubscription = (options: StripeOptions) => {
 								(sub) => sub.status === "active" || sub.status === "trialing",
 							),
 						);
+
+			// Ensure the specified subscription belongs to the (validated) referenceId.
+			if (
+				ctx.body.subscriptionId &&
+				subscription &&
+				subscription.referenceId !== referenceId
+			) {
+				subscription = undefined;
+			}
 			if (!subscription || !subscription.stripeCustomerId) {
 				throw ctx.error("BAD_REQUEST", {
 					message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
