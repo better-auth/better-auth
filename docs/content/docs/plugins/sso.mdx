@@ -430,23 +430,29 @@ await auth.api.registerSSOProvider({
     </Tab>
 </Tabs>
 
-### IdP-Initiated SSO (Next.js)
+### IdP-Initiated SSO
 
-For IdP-initiated flows (e.g., via Okta dashboard), Next.js requires an explicit route handler to manage the redirect. Create this file to prevent 404 errors:
+ For IdP-initiated flows (e.g., via Okta dashboard), your framework may require an explicit route handler to manage the redirect if the default handler doesn't support the `GET` request following the SAML POST.
 
-```ts title="app/api/auth/sso/saml2/callback/[providerId]/route.ts"
-import { auth } from "@/lib/auth";
-import { NextResponse } from "next/server";
+ <Tabs items={["next-js-app-router"]}>
+   <Tab value="next-js-app-router">
+     Create this file to prevent 404 errors:
 
-export async function POST(req: Request) {
-    return auth.handler(req);
-}
+     ```ts title="app/api/auth/sso/saml2/callback/[providerId]/route.ts"
+     import { auth } from "@/lib/auth";
+     import { NextResponse } from "next/server";
 
-export async function GET(req: Request) {
-    // Required: IdP-initiated flows redirect to this URL after POST
-    return NextResponse.redirect(new URL("/", req.url));
-}
-```
+     export async function POST(req: Request) {
+         return auth.handler(req);
+     }
+
+     export async function GET(req: Request) {
+         // Required: IdP-initiated flows redirect to this URL after POST
+         return NextResponse.redirect(new URL("/", req.url));
+     }
+     ```
+   </Tab>
+</Tabs>
 
 ### Get Service Provider Metadata
 
