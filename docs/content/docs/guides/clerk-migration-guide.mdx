@@ -413,13 +413,18 @@ migrateFromClerk()
 
     By default, Better Auth uses the `scrypt` algorithm to hash passwords. Since Clerk uses `bcrypt`, you'll need to configure Better Auth to use bcrypt for password verification.
 
-    An alternative to this step would be to implement a password reset flow to require users with credential logins to reset their password so the pasword is hashed using Better Auth's default `scrypt`
+    An alternative to this step would be to implement a password reset flow to require users with credential logins to reset their password so the password is hashed using Better Auth's default `scrypt`.
 
     First, install bcrypt:
 
     ```bash
     npm install bcrypt
     npm install -D @types/bcrypt
+    ```
+
+    In a cloudflare worker environment you can use `bcryptjs` instead.
+    ```bash
+    npm install bcryptjs
     ```
 
     Then update your auth configuration:
