@@ -1708,9 +1708,8 @@ describe("SAML SSO - Signature Validation Security", () => {
 			</saml2p:Response>
 		`;
 
-		const encodedForgedResponse = Buffer.from(forgedSamlResponse).toString(
-			"base64",
-		);
+		const encodedForgedResponse =
+			Buffer.from(forgedSamlResponse).toString("base64");
 
 		await expect(
 			auth.api.callbackSSOSAML({
@@ -1785,9 +1784,9 @@ describe("SAML SSO - Signature Validation Security", () => {
 			</saml2p:Response>
 		`;
 
-		const encodedBadSigResponse = Buffer.from(responseWithBadSignature).toString(
-			"base64",
-		);
+		const encodedBadSigResponse = Buffer.from(
+			responseWithBadSignature,
+		).toString("base64");
 
 		await expect(
 			auth.api.callbackSSOSAML({
