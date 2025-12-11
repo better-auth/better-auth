@@ -383,9 +383,6 @@ importers:
       lucide-react:
         specifier: ^0.542.0
         version: 0.542.0(react@19.2.1)
-      mini-svg-data-uri:
-        specifier: ^1.4.4
-        version: 1.4.4
       mysql2:
         specifier: ^3.14.4
         version: 3.14.4
