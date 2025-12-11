@@ -1941,32 +1941,12 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			// Parse and validate SAML response
 			let parsedResponse: FlowResult;
 			try {
-				const decodedResponse = Buffer.from(SAMLResponse, "base64").toString(
-					"utf-8",
-				);
-
-				try {
-					parsedResponse = await sp.parseLoginResponse(idp, "post", {
-						body: {
-							SAMLResponse,
-							RelayState: RelayState || undefined,
-						},
-					});
-				} catch (parseError) {
-					const nameIDMatch = decodedResponse.match(
-						/<saml2:NameID[^>]*>([^<]+)<\/saml2:NameID>/,
-					);
-					// due to different spec. we have to make sure to handle that.
-					if (!nameIDMatch) throw parseError;
-					parsedResponse = {
-						extract: {
-							nameID: nameIDMatch[1],
-							attributes: { nameID: nameIDMatch[1] },
-							sessionIndex: {},
-							conditions: {},
-						},
-					} as FlowResult;
-				}
+				parsedResponse = await sp.parseLoginResponse(idp, "post", {
+					body: {
+						SAMLResponse,
+						RelayState: RelayState || undefined,
+					},
+				});
 
 				if (!parsedResponse?.extract) {
 					throw new Error("Invalid SAML response structure");
