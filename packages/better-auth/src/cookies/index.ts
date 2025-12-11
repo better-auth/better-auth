@@ -430,16 +430,24 @@ export const getCookieCache = async <
 	if (!cookies) {
 		return null;
 	}
-	const { cookieName = "session_data", cookiePrefix = "better-auth" } =
-		config || {};
+	const cookieName = config?.cookieName ?? "session_data";
+	const cookiePrefix =
+		config?.cookiePrefix === undefined
+			? "better-auth"
+			: config.cookiePrefix === ""
+				? undefined
+				: config.cookiePrefix;
+	const maybePrefixCookieName = cookiePrefix
+		? `${cookiePrefix}.${cookieName}`
+		: cookieName;
 	const name =
 		config?.isSecure !== undefined
 			? config.isSecure
-				? `__Secure-${cookiePrefix}.${cookieName}`
-				: `${cookiePrefix}.${cookieName}`
+				? `__Secure-${maybePrefixCookieName}`
+				: `${maybePrefixCookieName}`
 			: isProduction
-				? `__Secure-${cookiePrefix}.${cookieName}`
-				: `${cookiePrefix}.${cookieName}`;
+				? `__Secure-${maybePrefixCookieName}`
+				: `${maybePrefixCookieName}`;
 	const parsedCookie = parseCookies(cookies);
 
 	// Check for chunked cookies
