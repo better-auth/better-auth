@@ -86,6 +86,12 @@
 				// type-only dependencies
 				"better-call"
 			]
+		},
+		"packages/electron": {
+			"ignoreDependencies": [
+				// optional peers
+				"electron"
+			]
 		}
 	},
 	"vitest": {
