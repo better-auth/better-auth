@@ -72,6 +72,7 @@
   },
   "dependencies": {
     "@better-fetch/fetch": "catalog:",
+    "@better-auth/utils": "0.3.0",
     "better-call": "catalog:",
     "zod": "^4.1.12"
   },

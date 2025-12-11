@@ -1,5 +1,10 @@
+import { base64Url } from "@better-auth/utils/base64";
+import { createHash } from "@better-auth/utils/hash";
 import type { BetterFetch } from "@better-fetch/fetch";
+import { generateRandomString } from "better-auth/crypto";
 import type { ElectronClientOptions } from "./types";
+
+const kCodeVerifier = Symbol.for("better-auth:code_verifier");
 
 export async function requestAuth(options: ElectronClientOptions) {
 	let shell: Electron.Shell | null = null;
@@ -11,10 +16,21 @@ export async function requestAuth(options: ElectronClientOptions) {
 		);
 	}
 
+	const code_verifier = base64Url.encode(
+		generateRandomString(32, "A-Z", "a-z", "0-9", "-_"),
+	);
+	const code_challenge = base64Url.encode(
+		await createHash("SHA-256").digest(code_verifier),
+	);
+
+	(globalThis as any)[kCodeVerifier] = code_verifier;
+
 	const url = new URL(options.redirectURL);
 	url.searchParams.set("client_id", "electron");
+	url.searchParams.set("code_challenge", code_challenge);
+	url.searchParams.set("code_challenge_method", "S256");
 
-	await shell.openExternal(options.redirectURL, {
+	await shell.openExternal(url.toString(), {
 		activate: true,
 	});
 }
@@ -27,9 +43,18 @@ export async function authenticate(
 	},
 	getWindow: () => Electron.BrowserWindow | null | undefined,
 ) {
+	const code_verifier = (globalThis as any)[kCodeVerifier];
+	if (!code_verifier) {
+		throw new Error("Code verifier not found.");
+	}
+	(globalThis as any)[kCodeVerifier] = undefined;
+
 	await $fetch("/electron/token", {
 		method: "POST",
-		body,
+		body: {
+			...body,
+			code_verifier,
+		},
 		onSuccess: (ctx) => {
 			getWindow()?.webContents.send(
 				`${options.namespace || "auth"}:authenticated`,

@@ -1,4 +1,7 @@
+import { timingSafeEqual } from "node:crypto";
 import type { BetterAuthPlugin } from "@better-auth/core";
+import { base64Url } from "@better-auth/utils/base64";
+import { createHash } from "@better-auth/utils/hash";
 import {
 	APIError,
 	createAuthEndpoint,
@@ -80,25 +83,53 @@ export const electron = (options?: ElectronOptions | undefined) => {
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						if (!ctx.context.newSession?.session) {
-						  if (ctx.query?.client_id === "electron") {
-								ctx.setCookie(`${opts.cookiePrefix}.client_id`, ctx.query.client_id, {
-                  ...ctx.context.authCookies.sessionToken.options,
-                  maxAge: opts.codeExpiresIn,
-                });
-                console.log("Cookie cleared")
+							if (ctx.query?.client_id?.toLowerCase() === "electron") {
+								if (!ctx.query?.code_challenge) {
+									throw new APIError("BAD_REQUEST", {
+										message: "pkce is required",
+									});
+								}
+								await ctx.setSignedCookie(
+									`${opts.cookiePrefix}.transfer_token`,
+									JSON.stringify({
+										client_id: ctx.query.client_id.toLowerCase(),
+										code_challenge: ctx.query.code_challenge,
+										code_challenge_method:
+											ctx.query.code_challenge_method.toLowerCase() ?? "plain",
+									}),
+									ctx.context.secret,
+									{
+										...ctx.context.authCookies.sessionToken.options,
+										maxAge: opts.codeExpiresIn,
+									},
+								);
 							}
 							return;
 						}
 
-						const clientIDCookie = ctx.getCookie(`${opts.cookiePrefix}.client_id`);
-						if (clientIDCookie !== "electron" && ctx.query?.client_id !== "electron") {
-						  return;
+						const transferCookie = await ctx.getSignedCookie(
+							`${opts.cookiePrefix}.transfer_token`,
+							ctx.context.secret,
+						);
+						const {
+							client_id = ctx.query?.client_id?.toLowerCase(),
+							code_challenge = ctx.query?.code_challenge,
+							code_challenge_method = ctx.query?.code_challenge_method?.toLowerCase(),
+						} = JSON.parse(transferCookie || "{}");
+						if (client_id.toLowerCase() !== "electron") {
+							return;
 						}
-						if (clientIDCookie === "electron") {
-  						ctx.setCookie(`${opts.cookiePrefix}.client_id`, "", {
-  						  ...ctx.context.authCookies.sessionToken.options,
-  							maxAge: 0,
-  						});
+						if (!code_challenge) {
+							throw new APIError("BAD_REQUEST", {
+								message: "pkce is required",
+							});
+						}
+
+						if (client_id === "electron") {
+							ctx.setCookie(`${opts.cookiePrefix}.client_id`, "", {
+								...ctx.context.authCookies.sessionToken.options,
+								maxAge: 0,
+							});
 						}
 
 						const redirectCookieName = `${opts.cookiePrefix}.${opts.redirectCookieName}`;
@@ -111,6 +142,8 @@ export const electron = (options?: ElectronOptions | undefined) => {
 								identifier,
 								value: JSON.stringify({
 									userId: ctx.context.newSession.user.id,
+									codeChallenge: code_challenge,
+									codeChallengeMethod: code_challenge_method.toLowerCase(),
 								}),
 								expiresAt,
 							});
@@ -131,6 +164,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 					method: "POST",
 					body: z.object({
 						token: z.string().nonempty(),
+						code_verifier: z.string().nonempty(),
 					}),
 					metadata: {
 						isAction: false,
@@ -150,6 +184,35 @@ export const electron = (options?: ElectronOptions | undefined) => {
 					const tokenRecord = JSON.parse(token.value);
 
 					await ctx.context.internalAdapter.deleteVerificationValue(token.id);
+
+					if (!tokenRecord.codeChallenge) {
+						throw new APIError("BAD_REQUEST", {
+							message: "missing code challenge",
+						});
+					}
+					if (tokenRecord.codeChallengeMethod === "s256") {
+						if (
+							!timingSafeEqual(
+								Buffer.from(tokenRecord.codeChallenge, "utf-8"),
+								Buffer.from(
+									base64Url.encode(
+										await createHash("SHA-256").digest(ctx.body.code_verifier),
+									),
+									"utf-8",
+								),
+							)
+						) {
+							throw new APIError("BAD_REQUEST", {
+								message: "Invalid code verifier",
+							});
+						}
+					} else {
+						if (tokenRecord.codeChallenge !== ctx.body.code_verifier) {
+							throw new APIError("BAD_REQUEST", {
+								message: "Invalid code verifier",
+							});
+						}
+					}
 
 					const user = await ctx.context.internalAdapter.findUserById(
 						tokenRecord.userId,

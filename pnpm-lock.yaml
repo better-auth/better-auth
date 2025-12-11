@@ -1286,6 +1286,9 @@ importers:
 
   packages/electron:
     dependencies:
+      '@better-auth/utils':
+        specifier: 0.3.0
+        version: 0.3.0
       '@better-fetch/fetch':
         specifier: 'catalog:'
         version: 1.1.21

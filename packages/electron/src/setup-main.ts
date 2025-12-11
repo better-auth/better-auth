@@ -54,9 +54,10 @@ export function setupIPCMain(
 	ipcMain.handle(`${namespace}:request-auth`, () => requestAuth(options));
 	ipcMain.handle(`${namespace}:sign-out`, async () => {
 		await ctx.$fetch("/sign-out", {
-  		method: "POST",
+			method: "POST",
 			headers: {
 				cookie: await ctx.getCookie(),
+				"content-type": "application/json",
 			},
 		});
 	});
@@ -85,8 +86,6 @@ export function registerProtocolScheme(
 			privileges: {
 				standard: false,
 				secure: true,
-				corsEnabled: true,
-				supportFetchAPI: true,
 				...(options.protocol.privileges || {}),
 			},
 		},
