@@ -1358,8 +1358,6 @@ describe("stripe", () => {
 			referenceId: orgId,
 			fetchOptions: { headers },
 		});
-		console.log(upgradeRes);
-
 		// It should NOT go through billing portal (which would update the personal sub)
 		expect(mockStripe.billingPortal.sessions.create).not.toHaveBeenCalled();
 		expect(upgradeRes.data?.url).toBeDefined();
