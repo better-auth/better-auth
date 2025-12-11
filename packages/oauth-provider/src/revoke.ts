@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
+import { verifyJwsAccessToken } from "better-auth/oauth2";
 import { APIError } from "better-call";
 import type { JSONWebKeySet } from "jose";
 import { decodeRefreshToken } from "./token";
@@ -15,7 +16,6 @@ import {
 	getStoredToken,
 	validateClientCredentials,
 } from "./utils";
-import { verifyJwsAccessToken } from "./verify";
 
 /**
  * IMPORTANT NOTES:

@@ -1,4 +1,3 @@
-import { logger } from "@better-auth/core/env";
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "better-call";
 import type {
@@ -13,10 +12,59 @@ import {
 	jwtVerify,
 	UnsecuredJWT,
 } from "jose";
+import { logger } from "../env";
 
-/** Last fetched jwks */
-// Never export (used locally in ONLY getJwks)
+/** Last fetched jwks used locally in getJwks @internal */
 let jwks: JSONWebKeySet | undefined;
+
+export interface VerifyAccessTokenRemote {
+	/** Full url of the introspect endpoint. Should end with `/oauth2/introspect` */
+	introspectUrl: string;
+	/** Client Secret */
+	clientId: string;
+	/** Client Secret */
+	clientSecret: string;
+	/**
+	 * Forces remote verification of a token.
+	 * This ensures attached session (if applicable)
+	 * is also still active.
+	 */
+	force?: boolean;
+}
+
+/**
+ * Performs local verification of an access token for your APIs.
+ *
+ * Can also be configured for remote verification.
+ */
+export async function verifyJwsAccessToken(
+	token: string,
+	opts: {
+		/** Jwks url or promise of a Jwks */
+		jwksFetch: string | (() => Promise<JSONWebKeySet | undefined>);
+		/** Verify options */
+		verifyOptions: JWTVerifyOptions &
+			Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
+	},
+) {
+	try {
+		const jwks = await getJwks(token, opts);
+		const jwt = await jwtVerify<JWTPayload>(
+			token,
+			createLocalJWKSet(jwks),
+			opts.verifyOptions,
+		);
+		// Return the JWT payload in introspection format
+		// https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
+		if (jwt.payload.azp) {
+			jwt.payload.client_id = jwt.payload.azp;
+		}
+		return jwt.payload;
+	} catch (error) {
+		if (error instanceof Error) throw error;
+		throw new Error(error as unknown as string);
+	}
+}
 
 export async function getJwks(
 	token: string,
@@ -56,57 +104,6 @@ export async function getJwks(
 	}
 
 	return jwks;
-}
-
-/**
- * Performs local verification of an access token for your APIs.
- *
- * Can also be configured for remote verification.
- *
- * @internal
- */
-export async function verifyJwsAccessToken(
-	token: string,
-	opts: {
-		/** Jwks url or promise of a Jwks */
-		jwksFetch: string | (() => Promise<JSONWebKeySet | undefined>);
-		/** Verify options */
-		verifyOptions: JWTVerifyOptions &
-			Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
-	},
-) {
-	try {
-		const jwks = await getJwks(token, opts);
-		const jwt = await jwtVerify<JWTPayload>(
-			token,
-			createLocalJWKSet(jwks),
-			opts.verifyOptions,
-		);
-		// Return the JWT payload in introspection format
-		// https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
-		if (jwt.payload.azp) {
-			jwt.payload.client_id = jwt.payload.azp;
-		}
-		return jwt.payload;
-	} catch (error) {
-		if (error instanceof Error) throw error;
-		throw new Error(error as unknown as string);
-	}
-}
-
-export interface VerifyAccessTokenRemote {
-	/** Full url of the introspect endpoint. Should end with `/oauth2/introspect` */
-	introspectUrl: string;
-	/** Client Secret */
-	clientId: string;
-	/** Client Secret */
-	clientSecret: string;
-	/**
-	 * Forces remote verification of a token.
-	 * This ensures attached session (if applicable)
-	 * is also still active.
-	 */
-	force?: boolean;
 }
 
 /**

@@ -1,7 +1,7 @@
+import { verifyAccessToken } from "better-auth/oauth2";
 import { APIError } from "better-call";
 import type { JWTPayload } from "jose";
 import type { Awaitable } from "./types/helpers";
-import { verifyAccessToken } from "./verify";
 
 /**
  * A request middleware handler that checks and responds with

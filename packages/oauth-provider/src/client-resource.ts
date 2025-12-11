@@ -1,12 +1,12 @@
 import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
+import { verifyAccessToken } from "better-auth/oauth2";
 import type { Auth, BetterAuthClientPlugin } from "better-auth/types";
 import { APIError } from "better-call";
 import type { JWTPayload, JWTVerifyOptions } from "jose";
 import { handleMcpErrors } from "./mcp";
 import type { ResourceServerMetadata } from "./types/oauth";
 import { getJwtPlugin, getOAuthProviderPlugin } from "./utils";
-import { verifyAccessToken } from "./verify";
 
 export const oauthProviderResourceClient = <T extends Auth | undefined>(
 	auth?: T,
