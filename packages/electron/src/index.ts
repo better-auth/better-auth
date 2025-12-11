@@ -116,7 +116,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 							code_challenge = ctx.query?.code_challenge,
 							code_challenge_method = ctx.query?.code_challenge_method?.toLowerCase(),
 						} = JSON.parse(transferCookie || "{}");
-						if (client_id.toLowerCase() !== "electron") {
+						if (client_id !== "electron") {
 							return;
 						}
 						if (!code_challenge) {

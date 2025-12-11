@@ -1,7 +1,7 @@
+import { randomBytes } from "node:crypto";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import type { BetterFetch } from "@better-fetch/fetch";
-import { generateRandomString } from "better-auth/crypto";
 import type { ElectronClientOptions } from "./types";
 
 const kCodeVerifier = Symbol.for("better-auth:code_verifier");
@@ -16,9 +16,7 @@ export async function requestAuth(options: ElectronClientOptions) {
 		);
 	}
 
-	const code_verifier = base64Url.encode(
-		generateRandomString(32, "A-Z", "a-z", "0-9", "-_"),
-	);
+	const code_verifier = base64Url.encode(randomBytes(32));
 	const code_challenge = base64Url.encode(
 		await createHash("SHA-256").digest(code_verifier),
 	);

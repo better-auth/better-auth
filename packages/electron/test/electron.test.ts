@@ -1,3 +1,6 @@
+import { randomBytes } from "node:crypto";
+import { base64Url } from "@better-auth/utils/base64";
+import { createHash } from "@better-auth/utils/hash";
 import { betterAuth } from "better-auth";
 import { createAuthMiddleware } from "better-auth/api";
 import type { FetchEsque } from "better-auth/client";
@@ -141,7 +144,7 @@ describe("electron", () => {
 		await client.requestAuth();
 
 		expect(mockElectron.shell.openExternal).toHaveBeenCalledWith(
-			options.redirectURL,
+			expect.stringContaining(options.redirectURL),
 			{
 				activate: true,
 			},
@@ -158,6 +161,8 @@ describe("electron", () => {
 			{
 				query: {
 					client_id: "electron",
+					code_challenge: "test-challenge",
+					code_challenge_method: "plain",
 				},
 				onResponse: async (ctx) => {
 					const cookies = parseSetCookieHeader(
@@ -188,6 +193,11 @@ describe("electron", () => {
 				},
 			});
 
+			const codeVerifier = base64Url.encode(randomBytes(32));
+			const codeChallenge = base64Url.encode(
+				await createHash("SHA-256").digest(codeVerifier),
+			);
+
 			const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
 			await (await auth.$context).adapter.create({
 				model: "verification",
@@ -195,6 +205,8 @@ describe("electron", () => {
 					identifier: `electron:${identifier}`,
 					value: JSON.stringify({
 						userId: user.id,
+						codeChallenge,
+						codeChallengeMethod: "s256",
 					}),
 					expiresAt: new Date(Date.now() + 600 * 1000),
 				},
@@ -204,6 +216,7 @@ describe("electron", () => {
 				method: "POST",
 				body: {
 					token: identifier,
+					code_verifier: codeVerifier,
 				},
 				onResponse: async (ctx) => {
 					const cookies = parseSetCookieHeader(
