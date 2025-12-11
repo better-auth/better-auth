@@ -707,6 +707,115 @@ mapping: {
 }
 ```
 
+## SAML Security
+
+The SSO plugin includes optional security features to protect against common SAML vulnerabilities.
+
+### AuthnRequest / InResponseTo Validation
+
+You can enable InResponseTo validation for SP-initiated SAML flows. When enabled, the plugin tracks AuthnRequest IDs and validates the `InResponseTo` attribute in SAML responses. This prevents:
+
+- **Unsolicited responses**: Responses not triggered by a legitimate login request
+- **Replay attacks**: Reusing old SAML responses
+- **Cross-provider injection**: Responses meant for a different provider
+
+<Callout type="info">
+This feature is **opt-in** to ensure backward compatibility. Enable it explicitly for enhanced security.
+</Callout>
+
+#### Enabling Validation (Single Instance)
+
+For single-instance deployments, enable validation with the built-in in-memory store:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
+const auth = betterAuth({
+    plugins: [
+        sso({
+            saml: {
+                // Enable InResponseTo validation
+                enableInResponseToValidation: true,
+                // Optionally reject IdP-initiated SSO (stricter security)
+                allowIdpInitiated: false,
+                // Custom TTL for AuthnRequest validity (default: 5 minutes)
+                requestTTL: 10 * 60 * 1000, // 10 minutes
+            },
+        }),
+    ],
+});
+```
+
+#### Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enableInResponseToValidation` | `boolean` | `false` | Enable InResponseTo validation for SP-initiated flows. |
+| `allowIdpInitiated` | `boolean` | `true` | Allow IdP-initiated SSO (responses without InResponseTo). Set to `false` for stricter security. Only applies when validation is enabled. |
+| `requestTTL` | `number` | `300000` (5 min) | Time-to-live for AuthnRequest records in milliseconds. Requests older than this will be rejected. |
+| `authnRequestStore` | `AuthnRequestStore` | In-memory | Custom store implementation. Providing a custom store automatically enables validation. |
+
+#### Multi-Instance Deployments (Production)
+
+<Callout type="warning">
+For multi-instance deployments (load-balanced servers, serverless, etc.), you **must** provide a shared store like Redis. The default in-memory store only works for single-instance deployments.
+</Callout>
+
+Providing a custom `authnRequestStore` automatically enables InResponseTo validation:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso, type AuthnRequestStore } from "@better-auth/sso";
+
+// Example Redis-backed store
+const redisAuthnRequestStore: AuthnRequestStore = {
+    async save(record) {
+        const ttl = Math.ceil((record.expiresAt - Date.now()) / 1000);
+        await redis.set(
+            `authn:${record.id}`,
+            JSON.stringify(record),
+            "EX",
+            ttl
+        );
+    },
+    async get(id) {
+        const data = await redis.get(`authn:${id}`);
+        if (!data) return null;
+        const record = JSON.parse(data);
+        if (record.expiresAt < Date.now()) {
+            await redis.del(`authn:${id}`);
+            return null;
+        }
+        return record;
+    },
+    async delete(id) {
+        await redis.del(`authn:${id}`);
+    },
+};
+
+const auth = betterAuth({
+    plugins: [
+        sso({
+            saml: {
+                // Providing a store automatically enables validation
+                authnRequestStore: redisAuthnRequestStore,
+                // Optionally configure other options
+                allowIdpInitiated: false,
+            },
+        }),
+    ],
+});
+```
+
+#### Error Handling
+
+When InResponseTo validation fails, users are redirected with an error query parameter:
+
+- `?error=invalid_saml_response&error_description=Unknown+or+expired+request+ID` — The request ID was not found or has expired
+- `?error=invalid_saml_response&error_description=Provider+mismatch` — The response was meant for a different provider
+- `?error=unsolicited_response&error_description=IdP-initiated+SSO+not+allowed` — IdP-initiated SSO is disabled
+
 ## Domain verification
 
 Domain verification allows your application to automatically trust a new SSO provider
@@ -963,6 +1072,32 @@ If you want to allow account linking for specific trusted providers, enable the 
                     required: false,
                 },
             }
+        },
+    },
+    saml: {
+        description: "SAML security options for AuthnRequest/InResponseTo validation.",
+        type: "object",
+        properties: {
+            enableInResponseToValidation: {
+                description: "Enable InResponseTo validation for SP-initiated SAML flows. Opt-in for backward compatibility.",
+                type: "boolean",
+                default: false,
+            },
+            allowIdpInitiated: {
+                description: "Allow IdP-initiated SSO (unsolicited SAML responses). Set to false for stricter security. Only applies when validation is enabled.",
+                type: "boolean",
+                default: true,
+            },
+            requestTTL: {
+                description: "TTL for AuthnRequest records in milliseconds. Only applies when validation is enabled.",
+                type: "number",
+                default: 300000,
+            },
+            authnRequestStore: {
+                description: "Custom AuthnRequest store for multi-instance deployments (e.g., Redis). Providing a store automatically enables validation.",
+                type: "AuthnRequestStore",
+                required: false,
+            },
         },
     },
     modelName: {
