@@ -409,6 +409,40 @@ migrateFromClerk()
   After running the migration, verify that all users have been properly migrated by checking the database.
   </Step>
   <Step>
+    ### Change password hashing algorithm
+
+    By default, Better Auth uses the `scrypt` algorithm to hash passwords. Since Clerk uses `bcrypt`, you'll need to configure Better Auth to use bcrypt for password verification.
+
+    An alternative to this step would be to implement a password reset flow to require users with credential logins to reset their password so the pasword is hashed using Better Auth's default `scrypt`
+
+    First, install bcrypt:
+
+    ```bash
+    npm install bcrypt
+    npm install -D @types/bcrypt
+    ```
+
+    Then update your auth configuration:
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import bcrypt from "bcrypt";
+
+    export const auth = betterAuth({
+        emailAndPassword: {
+            password: {
+                hash: async (password) => {
+                    return await bcrypt.hash(password, 10);
+                },
+                verify: async ({ hash, password }) => {
+                    return await bcrypt.compare(password, hash);
+                }
+            }
+        }
+    })
+    ```
+  </Step>
+  <Step>
   ### Update your components
 
   Now that the data is migrated, you can start updating your components to use Better Auth. Here's an example for the sign-in component:
