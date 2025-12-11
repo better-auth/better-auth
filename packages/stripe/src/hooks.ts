@@ -1,4 +1,4 @@
-import type { GenericEndpointContext } from "better-auth";
+import type { GenericEndpointContext, User, Where } from "better-auth";
 import { logger } from "better-auth";
 import type Stripe from "stripe";
 import type { InputSubscription, StripeOptions, Subscription } from "./types";
@@ -26,11 +26,67 @@ export async function onCheckoutSessionCompleted(
 			priceLookupKey,
 		);
 		if (plan) {
-			const referenceId =
+			let referenceId =
 				checkoutSession?.client_reference_id ||
 				checkoutSession?.metadata?.referenceId;
-			const subscriptionId = checkoutSession?.metadata?.subscriptionId;
+			let subscriptionId = checkoutSession?.metadata?.subscriptionId;
 			const seats = subscription.items.data[0]!.quantity;
+
+			// Support checkout sessions created from payment links
+			if (
+				!referenceId &&
+				!subscriptionId &&
+				checkoutSession.payment_link &&
+				checkoutSession.customer &&
+				checkoutSession.customer_details?.email
+			) {
+				const customerEmail = checkoutSession.customer_details.email;
+				const where: Where[] = [{ field: "email", value: customerEmail }];
+				if (options.subscription?.requireEmailVerification) {
+					where.push({ field: "emailVerified", value: true });
+				}
+				const user = await ctx.context.adapter.findOne<User>({
+					model: "user",
+					where,
+				});
+				if (user) {
+					referenceId = user.id;
+
+					const stripeCustomerId =
+						typeof checkoutSession.customer === "string"
+							? checkoutSession.customer
+							: checkoutSession.customer.id;
+
+					await ctx.context.adapter.update({
+						model: "user",
+						update: {
+							stripeCustomerId,
+						},
+						where: [
+							{
+								field: "id",
+								value: user.id,
+							},
+						],
+					});
+
+					const subscription = await ctx.context.adapter.create<
+						InputSubscription,
+						Subscription
+					>({
+						model: "subscription",
+						data: {
+							plan: plan.name.toLowerCase(),
+							stripeCustomerId,
+							status: "incomplete",
+							referenceId,
+							seats,
+						},
+					});
+					subscriptionId = subscription.id;
+				}
+			}
+
 			if (referenceId && subscriptionId) {
 				const trial =
 					subscription.trial_start && subscription.trial_end
