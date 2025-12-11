@@ -3,6 +3,7 @@ import type { Account, Session, User, Verification } from "better-auth";
 import {
 	createAuthorizationURL,
 	generateState,
+	HIDE_METADATA,
 	parseState,
 	validateAuthorizationCode,
 	validateToken,
@@ -1092,7 +1093,7 @@ export const callbackSSO = (options?: SSOOptions) => {
 				"application/json",
 			],
 			metadata: {
-				isAction: false,
+				...HIDE_METADATA,
 				openapi: {
 					operationId: "handleSSOCallback",
 					summary: "Callback URL for SSO provider",
@@ -1461,7 +1462,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			method: "POST",
 			body: callbackSSOSAMLBodySchema,
 			metadata: {
-				isAction: false,
+				...HIDE_METADATA,
 				allowedMediaTypes: [
 					"application/x-www-form-urlencoded",
 					"application/json",
@@ -1831,7 +1832,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			params: acsEndpointParamsSchema,
 			body: acsEndpointBodySchema,
 			metadata: {
-				isAction: false,
+				...HIDE_METADATA,
 				allowedMediaTypes: [
 					"application/x-www-form-urlencoded",
 					"application/json",
