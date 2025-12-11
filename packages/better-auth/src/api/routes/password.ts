@@ -341,7 +341,6 @@ export const resetPassword = createAuthEndpoint(
 );
 
 export const verifyPassword = createAuthEndpoint(
-	"/verify-password",
 	{
 		method: "POST",
 		body: z.object({
@@ -353,7 +352,7 @@ export const verifyPassword = createAuthEndpoint(
 			}),
 		}),
 		metadata: {
-			SERVER_ONLY: true,
+			scope: "server",
 		},
 		use: [sensitiveSessionMiddleware],
 	},
