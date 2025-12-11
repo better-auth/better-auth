@@ -20,8 +20,6 @@ type RequiredEmailOTPOptions = WithRequired<
 
 import { EMAIL_OTP_ERROR_CODES as ERROR_CODES } from "./error-codes";
 
-export { EMAIL_OTP_ERROR_CODES as ERROR_CODES } from "./error-codes";
-
 const sendVerificationOTPBodySchema = z.object({
 	email: z.string({}).meta({
 		description: "Email address to send the OTP",
