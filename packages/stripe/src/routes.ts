@@ -1,6 +1,7 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { defineErrorCodes } from "@better-auth/core/utils";
 import type { GenericEndpointContext } from "better-auth";
+import { HIDE_METADATA } from "better-auth";
 import {
 	APIError,
 	getSessionFromCtx,
@@ -1221,7 +1222,7 @@ export const stripeWebhook = (options: StripeOptions) => {
 		{
 			method: "POST",
 			metadata: {
-				isAction: false,
+				...HIDE_METADATA,
 				openapi: {
 					operationId: "handleStripeWebhook",
 				},
