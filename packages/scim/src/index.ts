@@ -59,6 +59,15 @@ export const scim = (options?: SCIMOptions) => {
 					},
 				},
 			},
+			user: {
+				fields: {
+					active: {
+						type: "boolean",
+						required: false,
+						defaultValue: true,
+					},
+				},
+			},
 		},
 	} satisfies BetterAuthPlugin;
 };
