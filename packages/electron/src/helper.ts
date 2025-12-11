@@ -3,5 +3,5 @@ export function isProcessType(type: typeof process.type) {
 }
 
 export function isElectronEnv() {
-	return typeof process?.versions.electron !== "string";
+	return typeof process?.versions.electron === "string";
 }

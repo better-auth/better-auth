@@ -67,8 +67,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 				{
 					matcher: (ctx) => {
 						return (
-							(ctx.path.startsWith("/sign-in") &&
-								!ctx.path.startsWith("/sign-in/social")) ||
+							ctx.path.startsWith("/sign-in") ||
 							ctx.path.startsWith("/sign-up") ||
 							ctx.path.startsWith("/callback") ||
 							ctx.path.startsWith("/oauth2/callback") ||
@@ -81,7 +80,25 @@ export const electron = (options?: ElectronOptions | undefined) => {
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						if (!ctx.context.newSession?.session) {
+						  if (ctx.query?.client_id === "electron") {
+								ctx.setCookie(`${opts.cookiePrefix}.client_id`, ctx.query.client_id, {
+                  ...ctx.context.authCookies.sessionToken.options,
+                  maxAge: opts.codeExpiresIn,
+                });
+                console.log("Cookie cleared")
+							}
 							return;
+						}
+
+						const clientIDCookie = ctx.getCookie(`${opts.cookiePrefix}.client_id`);
+						if (clientIDCookie !== "electron" && ctx.query?.client_id !== "electron") {
+						  return;
+						}
+						if (clientIDCookie === "electron") {
+  						ctx.setCookie(`${opts.cookiePrefix}.client_id`, "", {
+  						  ...ctx.context.authCookies.sessionToken.options,
+  							maxAge: 0,
+  						});
 						}
 
 						const redirectCookieName = `${opts.cookiePrefix}.${opts.redirectCookieName}`;

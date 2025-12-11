@@ -11,6 +11,9 @@ export async function requestAuth(options: ElectronClientOptions) {
 		);
 	}
 
+	const url = new URL(options.redirectURL);
+	url.searchParams.set("client_id", "electron");
+
 	await shell.openExternal(options.redirectURL, {
 		activate: true,
 	});
