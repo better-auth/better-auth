@@ -1288,7 +1288,7 @@ importers:
     dependencies:
       '@better-fetch/fetch':
         specifier: 'catalog:'
-        version: 1.1.18
+        version: 1.1.21
       better-call:
         specifier: 'catalog:'
         version: 1.1.5(zod@4.1.13)
