@@ -123,6 +123,112 @@ describe("updateUser", async () => {
 		});
 	});
 
+	it("should properly encode callbackURL in verification email if current email is not verified", async () => {
+		let capturedUrl = "";
+		const { client, db, signInWithTestUser, testUser } = await getTestInstance({
+			trustedOrigins: ["https://example.com"],
+			emailVerification: {
+				async sendVerificationEmail({ user, url, token }) {
+					capturedUrl = url;
+				},
+			},
+			user: {
+				changeEmail: {
+					enabled: true,
+				},
+			},
+		});
+
+		const { runWithUser } = await signInWithTestUser();
+
+		await db.update({
+			model: "user",
+			update: {
+				emailVerified: false,
+			},
+			where: [
+				{
+					field: "email",
+					value: testUser.email,
+				},
+			],
+		});
+
+		const callbackURL =
+			"https://example.com/app?redirect=/dashboard&tab=settings&user=Jane+Doe&email=test%40example.com#main";
+
+		await runWithUser(async () => {
+			await client.changeEmail({
+				newEmail: "newemail@example.com",
+				callbackURL,
+			});
+		});
+
+		expect(capturedUrl).toBeDefined();
+		expect(capturedUrl).not.toBe("");
+
+		const emailUrl = new URL(capturedUrl);
+		const callbackURLParam = emailUrl.searchParams.get("callbackURL");
+
+		expect(callbackURLParam).toBe(callbackURL);
+		expect(callbackURLParam).toContain(
+			"?redirect=/dashboard&tab=settings&user=Jane+Doe&email=test%40example.com#main",
+		);
+	});
+
+	it("should properly encode callbackURL in verification email when current email is verified", async () => {
+		let capturedUrl = "";
+		const { client, db, signInWithTestUser, testUser } = await getTestInstance({
+			trustedOrigins: ["https://example.com"],
+			emailVerification: {
+				async sendVerificationEmail({ user, url, token }) {
+					capturedUrl = url;
+				},
+			},
+			user: {
+				changeEmail: {
+					enabled: true,
+				},
+			},
+		});
+
+		const { runWithUser } = await signInWithTestUser();
+
+		await db.update({
+			model: "user",
+			update: {
+				emailVerified: true,
+			},
+			where: [
+				{
+					field: "email",
+					value: testUser.email,
+				},
+			],
+		});
+
+		const callbackURL =
+			"https://example.com/app?redirect=/dashboard&tab=settings&user=Jane+Doe&email=test%40example.com#main";
+
+		await runWithUser(async () => {
+			await client.changeEmail({
+				newEmail: "newemail@example.com",
+				callbackURL,
+			});
+		});
+
+		expect(capturedUrl).toBeDefined();
+		expect(capturedUrl).not.toBe("");
+
+		const emailUrl = new URL(capturedUrl);
+		const callbackURLParam = emailUrl.searchParams.get("callbackURL");
+
+		expect(callbackURLParam).toBe(callbackURL);
+		expect(callbackURLParam).toContain(
+			"?redirect=/dashboard&tab=settings&user=Jane+Doe&email=test%40example.com#main",
+		);
+	});
+
 	it("should update the user's password", async () => {
 		const newEmail = "new-email@email.com"; // User email is now this
 		await globalRunWithClient(async () => {
@@ -519,6 +625,43 @@ describe("delete user", async () => {
 			const nullSession = await client.getSession();
 			expect(nullSession.data).toBeNull();
 		});
+	});
+
+	it("should properly encode callbackURL in verification email", async () => {
+		let capturedUrl = "";
+		const { client, signInWithTestUser, testUser } = await getTestInstance({
+			trustedOrigins: ["https://example.com"],
+			user: {
+				deleteUser: {
+					enabled: true,
+					async sendDeleteAccountVerification({ user, url, token }) {
+						capturedUrl = url;
+					},
+				},
+			},
+		});
+
+		const { runWithUser } = await signInWithTestUser();
+		const callbackURL =
+			"https://example.com/app?redirect=/dashboard&tab=settings&user=Jane+Doe&email=test%40example.com#main";
+
+		await runWithUser(async () => {
+			await client.deleteUser({
+				password: testUser.password,
+				callbackURL,
+			});
+		});
+
+		expect(capturedUrl).toBeDefined();
+		expect(capturedUrl).not.toBe("");
+
+		const emailUrl = new URL(capturedUrl);
+		const callbackURLParam = emailUrl.searchParams.get("callbackURL");
+
+		expect(callbackURLParam).toBe(callbackURL);
+		expect(callbackURLParam).toContain(
+			"?redirect=/dashboard&tab=settings&user=Jane+Doe&email=test%40example.com#main",
+		);
 	});
 
 	it("should ignore cookie cache for sensitive operations like changePassword", async () => {

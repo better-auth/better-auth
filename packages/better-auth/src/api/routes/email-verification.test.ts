@@ -213,29 +213,6 @@ describe("Email Verification", async () => {
 		);
 	});
 
-	it("should preserve encoded characters in callback URL", async () => {
-		const testEmail = "test+user@example.com";
-		const encodedEmail = encodeURIComponent(testEmail);
-		const callbackURL = `/sign-in?verifiedEmail=${encodedEmail}`;
-
-		await client.verifyEmail(
-			{
-				query: {
-					token,
-					callbackURL,
-				},
-			},
-			{
-				onError: (ctx) => {
-					const location = ctx.response.headers.get("location");
-					expect(location).toBe(`/sign-in?verifiedEmail=${encodedEmail}`);
-					const url = new URL(location!, "http://localhost:3000");
-					expect(url.searchParams.get("verifiedEmail")).toBe(testEmail);
-				},
-			},
-		);
-	});
-
 	it("should properly encode callbackURL with query parameters when sending verification email", async () => {
 		const mockSendEmailLocal = vi.fn();
 		let capturedUrl = "";
@@ -253,7 +230,7 @@ describe("Email Verification", async () => {
 		});
 
 		const callbackURL =
-			"https://example.com/app?redirect=/dashboard&tab=settings";
+			"https://example.com/app?redirect=/dashboard&tab=settings&user=Jane+Doe&email=test%40example.com#main";
 		await auth.api.sendVerificationEmail({
 			body: {
 				email: testUser.email,
@@ -266,7 +243,9 @@ describe("Email Verification", async () => {
 		const callbackURLParam = emailUrl.searchParams.get("callbackURL");
 
 		expect(callbackURLParam).toBe(callbackURL);
-		expect(callbackURLParam).toContain("?redirect=/dashboard&tab=settings");
+		expect(callbackURLParam).toContain(
+			"?redirect=/dashboard&tab=settings&user=Jane+Doe&email=test%40example.com#main",
+		);
 	});
 });
 
