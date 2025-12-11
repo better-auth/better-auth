@@ -167,6 +167,6 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 		},
 		$ERROR_CODES: ADMIN_ERROR_CODES,
 		schema: mergeSchema(schema, opts.schema),
-		options: options as any,
+		options: options as NoInfer<O>,
 	} satisfies BetterAuthPlugin;
 };
