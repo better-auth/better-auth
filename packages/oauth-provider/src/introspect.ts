@@ -280,7 +280,7 @@ async function validateRefreshToken(
 			active: false,
 		};
 	}
-	if (refreshToken.used || refreshToken.revoked) {
+	if (refreshToken.revoked) {
 		return {
 			active: false,
 		};

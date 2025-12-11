@@ -288,7 +288,7 @@ async function createRefreshToken(
 				},
 			],
 			update: {
-				used: new Date(iat * 1000),
+				revoked: new Date(iat * 1000),
 			},
 		});
 	}
@@ -947,7 +947,7 @@ async function handleRefreshTokenGrant(
 		});
 	}
 	// Replay revoke (delete all tokens for that user-client)
-	if (refreshToken.used || refreshToken.revoked) {
+	if (refreshToken.revoked) {
 		await ctx.context.adapter.deleteMany({
 			model: "oauthRefreshToken",
 			where: [

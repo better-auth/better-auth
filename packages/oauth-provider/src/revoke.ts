@@ -158,7 +158,7 @@ async function revokeRefreshToken(
 			error: "invalid_request",
 		});
 	}
-	if (refreshToken.used) {
+	if (refreshToken.revoked) {
 		await ctx.context.adapter.deleteMany({
 			model: "oauthRefreshToken",
 			where: [
@@ -173,7 +173,7 @@ async function revokeRefreshToken(
 			],
 		});
 		throw new APIError("BAD_REQUEST", {
-			error_description: "refresh token used",
+			error_description: "refresh token revoked",
 			error: "invalid_request",
 		});
 	}

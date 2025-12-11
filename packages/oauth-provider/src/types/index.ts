@@ -883,10 +883,6 @@ export interface OAuthRefreshToken<
 	expiresAt: Date;
 	createdAt: Date;
 	/**
-	 * When token was used. If set, token is considered a replay attack.
-	 */
-	used?: Date;
-	/**
 	 * When token was revoked. If set, token is considered a replay attack.
 	 */
 	revoked?: Date;

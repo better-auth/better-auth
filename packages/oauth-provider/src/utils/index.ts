@@ -18,8 +18,6 @@ import type {
 	Scope,
 	StoreTokenType,
 } from "../types";
-export type AuthorizePrompt = "login" | "consent" | "select_account" | "none";
-export type AuthorizePromptSet = ReadonlySet<AuthorizePrompt>;
 
 class TTLCache<K, V extends { expiresAt?: Date }> {
 	private cache = new Map<K, V>();
