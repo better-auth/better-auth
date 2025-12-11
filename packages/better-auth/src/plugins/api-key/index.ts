@@ -22,9 +22,9 @@ export const defaultKeyHasher = async (key: string) => {
 	return hashed;
 };
 
-import { API_KEY_ERROR_CODES as ERROR_CODES } from "./error-codes";
+import { API_KEY_ERROR_CODES } from "./error-codes";
 
-export { API_KEY_ERROR_CODES as ERROR_CODES } from "./error-codes";
+export { API_KEY_ERROR_CODES } from "./error-codes";
 
 export const API_KEY_TABLE_NAME = "apikey";
 
@@ -100,7 +100,7 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 
 	return {
 		id: "api-key",
-		$ERROR_CODES: ERROR_CODES,
+		$ERROR_CODES: API_KEY_ERROR_CODES,
 		hooks: {
 			before: [
 				{
@@ -110,7 +110,7 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 
 						if (typeof key !== "string") {
 							throw APIError.from(
-								ERROR_CODES.INVALID_API_KEY_GETTER_RETURN_TYPE,
+								API_KEY_ERROR_CODES.INVALID_API_KEY_GETTER_RETURN_TYPE,
 								"BAD_REQUEST",
 							);
 						}
@@ -119,13 +119,19 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 							// if the key is shorter than the default key length, than we know the key is invalid.
 							// we can't check if the key is exactly equal to the default key length, because
 							// a prefix may be added to the key.
-							throw APIError.from(ERROR_CODES.INVALID_API_KEY, "FORBIDDEN");
+							throw APIError.from(
+								API_KEY_ERROR_CODES.INVALID_API_KEY,
+								"FORBIDDEN",
+							);
 						}
 
 						if (opts.customAPIKeyValidator) {
 							const isValid = await opts.customAPIKeyValidator({ ctx, key });
 							if (!isValid) {
-								throw APIError.from(ERROR_CODES.INVALID_API_KEY, "FORBIDDEN");
+								throw APIError.from(
+									API_KEY_ERROR_CODES.INVALID_API_KEY,
+									"FORBIDDEN",
+								);
 							}
 						}
 
@@ -153,7 +159,7 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 						);
 						if (!user) {
 							throw APIError.from(
-								ERROR_CODES.INVALID_USER_ID_FROM_API_KEY,
+								API_KEY_ERROR_CODES.INVALID_USER_ID_FROM_API_KEY,
 								"UNAUTHORIZED",
 							);
 						}
