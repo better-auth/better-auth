@@ -2674,3 +2674,155 @@ describe("organization hooks", async (it) => {
 		expect(hooksCalled).toContain("afterCreateInvitation");
 	});
 });
+
+describe("getInvitation access control", async (it) => {
+	const { auth, signInWithUser } = await getTestInstance({
+		plugins: [
+			organization({
+				async sendInvitationEmail(data, request) {},
+			}),
+		],
+	});
+
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
+	it("should allow org owners and admins to get invitations", async () => {
+		const rng = crypto.randomUUID();
+		// Create three users: recipient, regular member, and admin
+		const recipientUser = {
+			email: `recipient-${rng}@email.com`,
+			password: rng,
+			name: `recipient-${rng}`,
+		};
+		const regularMemberUser = {
+			email: `member-${rng}@email.com`,
+			password: rng,
+			name: `member-${rng}`,
+		};
+		const adminUser = {
+			email: `admin-${rng}@email.com`,
+			password: rng,
+			name: `admin-${rng}`,
+		};
+
+		await auth.api.signUpEmail({ body: recipientUser });
+		await auth.api.signUpEmail({ body: regularMemberUser });
+		await auth.api.signUpEmail({ body: adminUser });
+
+		const { headers: recipientHeaders } = await signInWithUser(
+			recipientUser.email,
+			recipientUser.password,
+		);
+		const { headers: memberHeaders } = await signInWithUser(
+			regularMemberUser.email,
+			regularMemberUser.password,
+		);
+		const { headers: adminHeaders } = await signInWithUser(
+			adminUser.email,
+			adminUser.password,
+		);
+
+		// Owner creates organization
+		const ownerUser = {
+			email: `owner-${rng}@email.com`,
+			password: rng,
+			name: `owner-${rng}`,
+		};
+		await auth.api.signUpEmail({ body: ownerUser });
+		const { headers } = await signInWithUser(
+			ownerUser.email,
+			ownerUser.password,
+		);
+
+		const orgRng = crypto.randomUUID();
+		const org = await auth.api.createOrganization({
+			body: {
+				name: `org-${orgRng}`,
+				slug: `org-${orgRng}`,
+			},
+			headers,
+		});
+
+		// Add admin and regular member to the organization
+		await client.organization.inviteMember({
+			organizationId: org?.id,
+			email: adminUser.email,
+			role: "admin",
+			fetchOptions: { headers },
+		});
+		await client.organization.inviteMember({
+			organizationId: org?.id,
+			email: regularMemberUser.email,
+			role: "member",
+			fetchOptions: { headers },
+		});
+
+		// Accept invitations
+		const adminInvites = await client.organization.listUserInvitations({
+			fetchOptions: { headers: adminHeaders },
+		});
+		await client.organization.acceptInvitation({
+			invitationId: adminInvites.data![0]!.id!,
+			fetchOptions: { headers: adminHeaders },
+		});
+
+		const memberInvites = await client.organization.listUserInvitations({
+			fetchOptions: { headers: memberHeaders },
+		});
+		await client.organization.acceptInvitation({
+			invitationId: memberInvites.data![0]!.id!,
+			fetchOptions: { headers: memberHeaders },
+		});
+
+		// Create invitation for recipient
+		const invitation = await client.organization.inviteMember({
+			organizationId: org?.id,
+			email: recipientUser.email,
+			role: "member",
+			fetchOptions: { headers },
+		});
+		const invitationId = invitation.data!.id!;
+
+		// Test 1: Recipient can view their invitation
+		const recipientGet = await client.organization.getInvitation({
+			query: { id: invitationId },
+			fetchOptions: { headers: recipientHeaders },
+		});
+		expect(recipientGet.data?.id).toBe(invitationId);
+		expect(recipientGet.data?.email).toBe(recipientUser.email);
+
+		// Test 2: Owner can view any invitation in their org
+		const ownerGet = await client.organization.getInvitation({
+			query: { id: invitationId },
+			fetchOptions: { headers },
+		});
+		expect(ownerGet.data?.id).toBe(invitationId);
+		expect(ownerGet.data?.email).toBe(recipientUser.email);
+
+		// Test 3: Admin can view any invitation in their org
+		const adminGet = await client.organization.getInvitation({
+			query: { id: invitationId },
+			fetchOptions: { headers: adminHeaders },
+		});
+		expect(adminGet.data?.id).toBe(invitationId);
+		expect(adminGet.data?.email).toBe(recipientUser.email);
+
+		// Test 4: Regular member cannot view invitations they're not the recipient of
+		const memberGet = await client.organization.getInvitation({
+			query: { id: invitationId },
+			fetchOptions: { headers: memberHeaders },
+		});
+		expect(memberGet.error?.status).toBe(403);
+		expect(memberGet.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
+		);
+	});
+});
