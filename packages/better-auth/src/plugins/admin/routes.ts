@@ -482,8 +482,7 @@ export const adminUpdateUser = (opts: AdminOptions) =>
 				for (const role of inputRoles) {
 					if (typeof role !== "string") {
 						throw new APIError("BAD_REQUEST", {
-							message:
-								ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE,
+							message: ADMIN_ERROR_CODES.INVALID_ROLE_TYPE,
 						});
 					}
 					if (opts.roles && !opts.roles[role as keyof typeof opts.roles]) {
