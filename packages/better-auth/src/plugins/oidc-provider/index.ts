@@ -274,6 +274,14 @@ const DEFAULT_CODE_EXPIRES_IN = 600;
 const DEFAULT_ACCESS_TOKEN_EXPIRES_IN = 3600;
 const DEFAULT_REFRESH_TOKEN_EXPIRES_IN = 604800;
 
+/**
+ * OpenID Connect (OIDC) plugin for Better Auth. This plugin implements the
+ * authorization code flow and the token exchange flow. It also implements the
+ * userinfo endpoint.
+ *
+ * @param options - The options for the OIDC plugin.
+ * @returns A Better Auth plugin.
+ */
 export const oidcProvider = (options: OIDCOptions) => {
 	const modelName = {
 		oauthClient: "oauthApplication",
