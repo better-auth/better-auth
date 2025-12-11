@@ -1069,6 +1069,61 @@ describe("access control", async (it) => {
 		expect(res.error?.status).toBe(403);
 	});
 
+	it("should reject non-existent roles via update-user", async () => {
+		const { data: targetUserRes } = await client.signUp.email(
+			{
+				email: "role-target@test.com",
+				password: "password",
+				name: "Role Target",
+			},
+			{
+				onSuccess: cookieSetter(new Headers()),
+			},
+		);
+		const targetUserId = targetUserRes?.user.id || "";
+
+		const res = await client.admin.updateUser(
+			{
+				userId: targetUserId,
+				data: {
+					role: "non-existent-role",
+				},
+			},
+			{
+				headers,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+	});
+
+	it("should allow role updates via update-user for valid roles with user:set-role", async () => {
+		const { data: targetUserRes } = await client.signUp.email(
+			{
+				email: "role-valid-target@test.com",
+				password: "password",
+				name: "Role Valid Target",
+			},
+			{
+				onSuccess: cookieSetter(new Headers()),
+			},
+		);
+		const targetUserId = targetUserRes?.user.id || "";
+
+		const res = await client.admin.updateUser(
+			{
+				userId: targetUserId,
+				data: {
+					role: "support",
+				},
+			},
+			{
+				headers,
+			},
+		);
+		expect(res.error).toBeNull();
+		expect(res.data?.role).toBe("support");
+	});
+
 	it("should validate on the client", async () => {
 		const canCreateOrder = client.admin.checkRolePermission({
 			role: "admin",
