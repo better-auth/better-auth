@@ -697,17 +697,18 @@ export const requestPasswordResetPhoneNumber = (
 					},
 				],
 			});
-			if (!user) {
-				throw new APIError("BAD_REQUEST", {
-					message: PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_NOT_EXIST,
-				});
-			}
 			const code = generateOTP(opts.otpLength);
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: `${code}:0`,
 				identifier: `${ctx.body.phoneNumber}-request-password-reset`,
 				expiresAt: getDate(opts.expiresIn, "sec"),
 			});
+			// to avoid leaking the existence of the phone number
+			if (!user) {
+				return ctx.json({
+					status: true,
+				});
+			}
 			await opts?.sendPasswordResetOTP?.(
 				{
 					phoneNumber: ctx.body.phoneNumber,
