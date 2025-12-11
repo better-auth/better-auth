@@ -1,4 +1,4 @@
-import { oauthQuery } from "@better-auth/core/api";
+import { defineRequestState } from "@better-auth/core/context";
 import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import {
@@ -28,6 +28,10 @@ import type { OAuthOptions, Scope } from "./types";
 import { SafeUrlSchema } from "./types/zod";
 import { userInfoEndpoint } from "./userinfo";
 import { getJwtPlugin } from "./utils";
+
+export const oAuthState = defineRequestState<{ query?: string } | null>(
+	() => null,
+);
 
 /**
  * oAuth 2.1 provider plugin for Better Auth.
@@ -200,8 +204,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							});
 						}
 						queryParams.delete("exp");
-						await oauthQuery.set({
-							query: new URLSearchParams(queryParams),
+						await oAuthState.set({
+							query: new URLSearchParams(queryParams).toString(),
 						});
 
 						// If path starts oauth2 authorize (ie /sign-in/social, /sign-in/oauth2), add to additional data body
@@ -220,15 +224,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				{
 					// Should only capture when session cookie is set (ie after login)
 					matcher(ctx) {
-						return (
-							(ctx.path === "/sign-in/email" ||
-								ctx.path === "/sign-in/social" ||
-								ctx.path.startsWith("/callback") ||
-								ctx.path.startsWith("/oauth2/callback")) &&
-							parseSetCookieHeader(
-								ctx.context.responseHeaders?.get("set-cookie") || "",
-							).has(ctx.context.authCookies.sessionToken.name)
-						);
+						return parseSetCookieHeader(
+							ctx.context.responseHeaders?.get("set-cookie") || "",
+						).has(ctx.context.authCookies.sessionToken.name);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						// Check if session cookie is being set and obtain its session (needed in context)
@@ -238,15 +236,19 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							.get(ctx.context.authCookies.sessionToken.name)
 							?.value.split(".")[0];
 						if (!sessionToken) return;
+						// Continue with authorization request by using the initial prompt
+						// but clearing the login prompt cookie if forced login prompt
+						const _query = (await oAuthState.get())?.query as
+							| string
+							| undefined;
+						if (!_query) return;
+						const query = new URLSearchParams(_query);
+
 						const session =
 							await ctx.context.internalAdapter.findSession(sessionToken);
 						if (!session) return;
 						ctx.context.session = session;
 
-						// Continue with authorization request by using the initial prompt
-						// but clearing the login prompt cookie if forced login prompt
-						const query = (await oauthQuery.get()).query;
-						if (!query) return;
 						let prompts = query.get("prompt")?.split(" ");
 						const foundPrompt = prompts?.findIndex((v) => v === "login") ?? -1;
 						if (ctx.query && foundPrompt >= 0) {
@@ -438,8 +440,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					},
 				},
 				async (ctx) => {
-					(ctx.context as { authorize_only?: boolean }).authorize_only = true;
-					return authorizeEndpoint(ctx, opts);
+					return authorizeEndpoint(ctx, opts, {
+						isAuthorize: true,
+					});
 				},
 			),
 			oauth2Consent: createAuthEndpoint(

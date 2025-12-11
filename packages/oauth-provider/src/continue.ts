@@ -1,7 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { oauthQuery } from "@better-auth/core/api";
 import { APIError } from "better-auth/api";
 import { authorizeEndpoint } from "./authorize";
+import { oAuthState } from "./oauth";
 import type { OAuthOptions, Scope } from "./types";
 
 export async function continueEndpoint(
@@ -25,7 +25,14 @@ async function selected(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	const query = (await oauthQuery.get()).query;
+	const _query = (await oAuthState.get())?.query as string | undefined;
+	if (!_query) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "missing oauth query",
+			error: "invalid_request",
+		});
+	}
+	const query = new URLSearchParams(_query);
 	ctx.headers?.set("accept", "application/json");
 	let prompts = query.get("prompt")?.split(" ");
 	const foundPrompt = prompts?.findIndex((v) => v === "select_account") ?? -1;
@@ -38,7 +45,8 @@ async function selected(
 	ctx.query = Object.fromEntries(query);
 	const { url } = await authorizeEndpoint(ctx, opts);
 	return {
-		redirect_uri: url,
+		redirect: true,
+		uri: url,
 	};
 }
 
@@ -46,12 +54,21 @@ async function postLogin(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	const query = (await oauthQuery.get()).query;
+	const _query = (await oAuthState.get())?.query as string | undefined;
+	if (!_query) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "missing oauth query",
+			error: "invalid_request",
+		});
+	}
+	const query = new URLSearchParams(_query);
 	ctx.headers?.set("accept", "application/json");
-	ctx.context.postLogin = true;
 	ctx.query = Object.fromEntries(query);
-	const { url } = await authorizeEndpoint(ctx, opts);
+	const { url } = await authorizeEndpoint(ctx, opts, {
+		postLogin: true,
+	});
 	return {
-		redirect_uri: url,
+		redirect: true,
+		uri: url,
 	};
 }

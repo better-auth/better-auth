@@ -2,7 +2,6 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { getSessionFromCtx } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
-import { parsePrompt } from "better-auth/plugins/oidc-provider";
 import { APIError } from "better-call";
 import type {
 	OAuthAuthorizationQuery,
@@ -11,7 +10,7 @@ import type {
 	Scope,
 	VerificationValue,
 } from "./types";
-import { getClient, storeToken } from "./utils";
+import { getClient, parsePrompt, storeToken } from "./utils";
 
 /**
  * Formats an error url
@@ -60,6 +59,10 @@ function getErrorURL(
 export async function authorizeEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
+	settings?: {
+		isAuthorize?: boolean;
+		postLogin?: boolean;
+	},
 ) {
 	// Grant type must include authorization_code to use this endpoint
 	if (opts.grantTypes && !opts.grantTypes.includes("authorization_code")) {
@@ -122,7 +125,6 @@ export async function authorizeEndpoint(
 			getErrorURL(ctx, "client_disabled", "client is disabled"),
 		);
 	}
-	client.clientSecret = undefined;
 
 	const redirectUri = client.redirectUris?.find(
 		(url) => url === query.redirect_uri,
@@ -194,13 +196,13 @@ export async function authorizeEndpoint(
 	}
 
 	// Force account selection (eg. multi-session)
-	if (ctx.context.authorize_only && promptSet?.has("select_account")) {
+	if (settings?.isAuthorize && promptSet?.has("select_account")) {
 		return redirectWithPromptCode(ctx, opts, "select_account");
 	}
 
 	if (
 		// Check if account needs selection (only for authorize endpoint)
-		ctx.context.authorize_only &&
+		settings?.isAuthorize &&
 		opts.selectAccount
 	) {
 		const selectedAccountRedirect = await opts.selectAccount.shouldRedirect({
@@ -214,7 +216,7 @@ export async function authorizeEndpoint(
 		}
 	}
 
-	if (!ctx.context.postLogin && opts.postLogin) {
+	if (!settings?.postLogin && opts.postLogin) {
 		const postLoginRedirect = await opts.postLogin.shouldRedirect({
 			headers: ctx.request.headers,
 			user: session.user,
@@ -248,7 +250,7 @@ export async function authorizeEndpoint(
 		});
 	}
 	const consent = await ctx.context.adapter.findOne<OAuthConsent<Scope[]>>({
-		model: opts.schema?.oauthConsent?.modelName ?? "oauthConsent",
+		model: "oauthConsent",
 		where: [
 			{
 				field: "clientId",

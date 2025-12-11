@@ -322,9 +322,12 @@ describe("mcp - server-client flows", async () => {
 					onError(ctx) {
 						cookieSetter(headers)(ctx);
 					},
+					onResponse(ctx) {
+						location = ctx.response.headers.get("Location") || "";
+					},
 				},
 			);
-			const url = new URL(consentRes.data?.redirect_uri ?? "");
+			const url = new URL(consentRes.data?.uri ?? "");
 			const _state = url.searchParams.get("state");
 			if ((state || _state) && state !== _state) {
 				throw new Error("state mismatch");

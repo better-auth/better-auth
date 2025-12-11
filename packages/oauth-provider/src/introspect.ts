@@ -151,7 +151,7 @@ async function validateOpaqueAccessToken(
 	const accessToken = await ctx.context.adapter.findOne<
 		OAuthOpaqueAccessToken<Scope[]>
 	>({
-		model: opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
+		model: "oauthAccessToken",
 		where: [
 			{
 				field: "token",

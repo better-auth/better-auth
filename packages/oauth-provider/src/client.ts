@@ -24,9 +24,13 @@ export const oauthProviderClient = () => {
 				description: "Adds the current page query to oauth requests",
 				hooks: {
 					async onRequest(ctx) {
+						const headers = ctx.headers;
 						const body =
 							typeof ctx.body === "string"
-								? safeJSONParse<Record<string, unknown>>(ctx.body ?? "{}")
+								? headers.get("content-type") ===
+									"application/x-www-form-urlencoded"
+									? Object.fromEntries(new URLSearchParams(ctx.body))
+									: safeJSONParse<Record<string, unknown>>(ctx.body ?? "{}")
 								: ctx.body;
 						if (body?.oauth_query) return;
 						const pathname =

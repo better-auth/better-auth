@@ -245,7 +245,7 @@ async function createOpaqueAccessToken(
 		? await opts.generateOpaqueAccessToken()
 		: generateRandomString(32, "A-Z", "a-z");
 	await ctx.context.adapter.create({
-		model: opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
+		model: "oauthAccessToken",
 		data: {
 			token: await storeToken(opts.storeTokens, token, "access_token"),
 			clientId: client.clientId,
@@ -280,7 +280,7 @@ async function createRefreshToken(
 	// Mark old refresh as stale
 	if (originalRefresh?.id) {
 		await ctx.context.adapter.update({
-			model: opts.schema?.oauthRefreshToken?.modelName ?? "oauthRefreshToken",
+			model: "oauthRefreshToken",
 			where: [
 				{
 					field: "id",
@@ -295,7 +295,7 @@ async function createRefreshToken(
 
 	// Issue new refresh token
 	const refreshToken = await ctx.context.adapter.create({
-		model: opts.schema?.oauthRefreshToken?.modelName ?? "oauthRefreshToken",
+		model: "oauthRefreshToken",
 		data: {
 			token: await storeToken(opts.storeTokens, token, "refresh_token"),
 			clientId: client.clientId,
@@ -914,7 +914,7 @@ async function handleRefreshTokenGrant(
 	const refreshToken = await ctx.context.adapter.findOne<
 		OAuthRefreshToken<Scope[]> & { id: string }
 	>({
-		model: opts.schema?.oauthRefreshToken?.modelName ?? "oauthRefreshToken",
+		model: "oauthRefreshToken",
 		where: [
 			{
 				field: "token",
@@ -949,7 +949,7 @@ async function handleRefreshTokenGrant(
 	// Replay revoke (delete all tokens for that user-client)
 	if (refreshToken.used || refreshToken.revoked) {
 		await ctx.context.adapter.deleteMany({
-			model: opts.schema?.oauthRefreshToken?.modelName ?? "oauthRefreshToken",
+			model: "oauthRefreshToken",
 			where: [
 				{
 					field: "clientId",

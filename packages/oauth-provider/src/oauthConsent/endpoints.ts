@@ -9,7 +9,7 @@ async function getConsent(
 	id: string,
 ) {
 	return await ctx.context.adapter.findOne<OAuthConsent<Scope[]>>({
-		model: opts.schema?.oauthConsent?.modelName ?? "oauthConsent",
+		model: "oauthConsent",
 		where: [
 			{
 				field: "id",
@@ -55,7 +55,7 @@ export async function getConsentsEndpoint(
 	if (!session) throw new APIError("UNAUTHORIZED");
 
 	return await ctx.context.adapter.findMany<OAuthConsent<Scope[]>>({
-		model: opts.schema?.oauthConsent?.modelName ?? "oauthConsent",
+		model: "oauthConsent",
 		where: [
 			{
 				field: "userId",
@@ -90,7 +90,7 @@ export async function deleteConsentEndpoint(
 	if (consent.userId !== session.user.id) throw new APIError("UNAUTHORIZED");
 
 	await ctx.context.adapter.delete({
-		model: opts.schema?.oauthConsent?.modelName ?? "oauthConsent",
+		model: "oauthConsent",
 		where: [
 			{
 				field: "id",
@@ -147,7 +147,7 @@ export async function updateConsentEndpoint(
 
 	const iat = Math.floor(Date.now() / 1000);
 	return await ctx.context.adapter.update<OAuthConsent<Scope[]>>({
-		model: opts.schema?.oauthConsent?.modelName ?? "oauthConsent",
+		model: "oauthConsent",
 		where: [
 			{
 				field: "id",

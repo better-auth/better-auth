@@ -105,7 +105,7 @@ export async function getClientsEndpoint(
 	if (referenceId) {
 		const dbClients = await ctx.context.adapter
 			.findMany<SchemaClient<Scope[]>>({
-				model: opts.schema?.oauthClient?.modelName ?? "oauthClient",
+				model: "oauthClient",
 				where: [{ field: "referenceId", value: referenceId }],
 			})
 			.then((res) => {
@@ -120,7 +120,7 @@ export async function getClientsEndpoint(
 	} else if (session.user.id) {
 		const dbClients = await ctx.context.adapter
 			.findMany<SchemaClient<Scope[]>>({
-				model: opts.schema?.oauthClient?.modelName ?? "oauthClient",
+				model: "oauthClient",
 				where: [{ field: "userId", value: session.user.id }],
 			})
 			.then((res) => {
@@ -185,7 +185,7 @@ export async function deleteClientEndpoint(
 	}
 
 	await ctx.context.adapter.delete({
-		model: opts.schema?.oauthClient?.modelName ?? "oauthClient",
+		model: "oauthClient",
 		where: [
 			{
 				field: "clientId",
@@ -262,7 +262,7 @@ export async function updateClientEndpoint(
 	);
 	const updatedClient = await ctx.context.adapter.update<SchemaClient<Scope[]>>(
 		{
-			model: opts.schema?.oauthClient?.modelName ?? "oauthClient",
+			model: "oauthClient",
 			where: [
 				{
 					field: "clientId",
@@ -343,7 +343,7 @@ export async function rotateClientSecretEndpoint(
 		: undefined;
 	const updatedClient = await ctx.context.adapter.update<SchemaClient<Scope[]>>(
 		{
-			model: opts.schema?.oauthClient?.modelName ?? "oauthClient",
+			model: "oauthClient",
 			where: [
 				{
 					field: "clientId",

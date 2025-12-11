@@ -36,8 +36,6 @@ import type {
 import { defaultClientSecretHasher } from "./utils";
 import { parsePrompt } from "./utils/prompt";
 
-export { parsePrompt } from "./utils/prompt";
-
 const getJwtPlugin = (ctx: GenericEndpointContext) => {
 	return ctx.context.options.plugins?.find(
 		(plugin) => plugin.id === "jwt",

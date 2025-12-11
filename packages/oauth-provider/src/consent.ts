@@ -1,7 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { oauthQuery } from "@better-auth/core/api";
 import { APIError, getSessionFromCtx } from "better-auth/api";
 import { authorizeEndpoint, formatErrorURL } from "./authorize";
+import { oAuthState } from "./oauth";
 import type { OAuthConsent, OAuthOptions, Scope } from "./types";
 
 export async function consentEndpoint(
@@ -9,7 +9,14 @@ export async function consentEndpoint(
 	opts: OAuthOptions<Scope[]>,
 ) {
 	// Obtain oauth query
-	const query = (await oauthQuery.get()).query;
+	const _query = (await oAuthState.get())?.query as string | undefined;
+	if (!_query) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "missing oauth query",
+			error: "invalid_request",
+		});
+	}
+	const query = new URLSearchParams(_query);
 	const originalRequestedScopes = query.get("scope")?.split(" ") ?? [];
 	const clientId = query.get("client_id");
 	if (!clientId) {
@@ -34,7 +41,8 @@ export async function consentEndpoint(
 	const accepted = ctx.body.accept === true;
 	if (!accepted) {
 		return {
-			redirect_uri: formatErrorURL(
+			redirect: true,
+			uri: formatErrorURL(
 				query.get("redirect_uri") ?? "",
 				"access_denied",
 				"User denied access",
@@ -52,7 +60,7 @@ export async function consentEndpoint(
 	});
 	const foundConsent = await ctx.context.adapter.findOne<OAuthConsent<Scope[]>>(
 		{
-			model: opts.schema?.oauthConsent?.modelName ?? "oauthConsent",
+			model: "oauthConsent",
 			where: [
 				{
 					field: "clientId",
@@ -84,7 +92,7 @@ export async function consentEndpoint(
 	};
 	foundConsent?.id
 		? await ctx.context.adapter.update({
-				model: opts.schema?.oauthConsent?.modelName ?? "oauthConsent",
+				model: "oauthConsent",
 				where: [
 					{
 						field: "id",
@@ -97,7 +105,7 @@ export async function consentEndpoint(
 				},
 			})
 		: await ctx.context.adapter.create({
-				model: opts.schema?.oauthConsent?.modelName ?? "oauthConsent",
+				model: "oauthConsent",
 				data: {
 					...consent,
 					scopes: consent.scopes,
@@ -118,6 +126,7 @@ export async function consentEndpoint(
 	ctx.query = Object.fromEntries(query);
 	const { url } = await authorizeEndpoint(ctx, opts);
 	return {
-		redirect_uri: url,
+		redirect: true,
+		uri: url,
 	};
 }

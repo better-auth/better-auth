@@ -98,7 +98,7 @@ async function revokeOpaqueAccessToken(
 		| (OAuthOpaqueAccessToken<Scope[]> & { id?: string })
 		| null = await ctx.context.adapter.findOne<OAuthOpaqueAccessToken<Scope[]>>(
 		{
-			model: opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
+			model: "oauthAccessToken",
 			where: [
 				{
 					field: "token",
@@ -123,11 +123,11 @@ async function revokeOpaqueAccessToken(
 
 	accessToken.id
 		? await ctx.context.adapter.delete({
-				model: opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
+				model: "oauthAccessToken",
 				where: [{ field: "id", value: accessToken.id }],
 			})
 		: await ctx.context.adapter.delete({
-				model: opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
+				model: "oauthAccessToken",
 				where: [{ field: "token", value: accessToken.token }],
 			});
 }
@@ -144,7 +144,7 @@ async function revokeRefreshToken(
 	const refreshToken = await ctx.context.adapter.findOne<
 		OAuthRefreshToken<Scope[]> & { id: string }
 	>({
-		model: opts.schema?.oauthRefreshToken?.modelName ?? "oauthRefreshToken",
+		model: "oauthRefreshToken",
 		where: [
 			{
 				field: "token",
@@ -160,7 +160,7 @@ async function revokeRefreshToken(
 	}
 	if (refreshToken.used) {
 		await ctx.context.adapter.deleteMany({
-			model: opts.schema?.oauthRefreshToken?.modelName ?? "oauthRefreshToken",
+			model: "oauthRefreshToken",
 			where: [
 				{
 					field: "clientId",
@@ -185,12 +185,12 @@ async function revokeRefreshToken(
 	await Promise.allSettled([
 		// Removes all access tokens associated with the refresh token
 		ctx.context.adapter.deleteMany({
-			model: opts.schema?.oauthAccessToken?.modelName ?? "oauthAccessToken",
+			model: "oauthAccessToken",
 			where: [{ field: "refreshId", value: refreshToken.id }],
 		}),
 		// Update the refresh token
 		ctx.context.adapter.update({
-			model: opts.schema?.oauthRefreshToken?.modelName ?? "oauthRefreshToken",
+			model: "oauthRefreshToken",
 			where: [
 				{
 					field: "id",

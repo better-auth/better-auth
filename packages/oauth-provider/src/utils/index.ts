@@ -13,10 +13,13 @@ import { APIError } from "better-call";
 import type { oauthProvider } from "..";
 import type {
 	OAuthOptions,
+	Prompt,
 	SchemaClient,
 	Scope,
 	StoreTokenType,
 } from "../types";
+export type AuthorizePrompt = "login" | "consent" | "select_account" | "none";
+export type AuthorizePromptSet = ReadonlySet<AuthorizePrompt>;
 
 class TTLCache<K, V extends { expiresAt?: Date }> {
 	private cache = new Map<K, V>();
@@ -371,4 +374,25 @@ export async function validateClientCredentials(
 	}
 
 	return client;
+}
+
+/**
+ * Parse space-separated prompt string into a set of prompts
+ *
+ * @param prompt
+ */
+export function parsePrompt(prompt: string) {
+	const prompts = prompt.split(" ").map((p) => p.trim());
+	const set = new Set<Prompt>();
+	for (const p of prompts) {
+		if (
+			p === "login" ||
+			p === "consent" ||
+			p === "select_account" ||
+			p === "none"
+		) {
+			set.add(p);
+		}
+	}
+	return new Set(set);
 }

@@ -4,7 +4,7 @@ import type {
 	StrictEndpoint,
 } from "better-call";
 import { createEndpoint, createMiddleware } from "better-call";
-import { defineRequestState, runWithEndpointContext } from "../context";
+import { runWithEndpointContext } from "../context";
 import type { AuthContext } from "../types";
 
 export const optionsMiddleware = createMiddleware(async () => {
