@@ -87,8 +87,9 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 	const $activeMemberRoleSignal = atom<boolean>(false);
 
 	type DefaultStatements = typeof defaultStatements;
-	type Statements =
-		CO["ac"] extends AccessControl<infer S> ? S : DefaultStatements;
+	type Statements = CO["ac"] extends AccessControl<infer S>
+		? S
+		: DefaultStatements;
 	type PermissionType = {
 		[key in keyof Statements]?: Array<
 			Statements[key] extends readonly unknown[]
