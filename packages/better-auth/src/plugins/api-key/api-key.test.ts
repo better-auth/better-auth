@@ -2628,6 +2628,45 @@ describe("api-key", async () => {
 			expect(retrievedKey?.id).toBe(createdKey?.id);
 		});
 
+		it("verifyApiKey should persist quota updates to the database when fallbackToDatabase is true", async () => {
+			const { headers, user } = await signInWithTestUser();
+
+			const createdKey = await auth.api.createApiKey({
+				body: {
+					remaining: 1,
+					userId: user.id,
+				},
+			});
+
+			const first = await auth.api.verifyApiKey({
+				body: {
+					key: createdKey.key,
+				},
+			});
+
+			expect(first.valid).toBe(true);
+			expect(first.key?.remaining).toBe(0);
+
+			// Ensure the canonical DB row was updated (not just the cache).
+			const dbAfterFirst = await auth.api.getApiKey({
+				query: { id: createdKey.id },
+				headers,
+			});
+			expect(dbAfterFirst.remaining).toBe(0);
+
+			// Simulate cache eviction/deletion and ensure we don't repopulate stale allowances.
+			store.clear();
+
+			const second = await auth.api.verifyApiKey({
+				body: {
+					key: createdKey.key,
+				},
+			});
+
+			expect(second.valid).toBe(false);
+			expect(second.error?.code).toBe("USAGE_EXCEEDED");
+		});
+
 		it("should fallback to database when not found in storage and auto-populate storage", async () => {
 			const { headers, user } = await signInWithTestUser();
 

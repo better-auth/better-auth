@@ -326,6 +326,52 @@ describe("magic link verify", async () => {
 	});
 });
 
+describe("magic link verify origin validation", async () => {
+	it("should reject untrusted callbackURL on verify", async () => {
+		let verificationEmail: VerificationEmail = {
+			email: "",
+			token: "",
+			url: "",
+		};
+
+		const { customFetchImpl, testUser } = await getTestInstance({
+			trustedOrigins: ["http://localhost:3000"],
+			plugins: [
+				magicLink({
+					async sendMagicLink(data) {
+						verificationEmail = data;
+					},
+				}),
+			],
+		});
+
+		const client = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+
+		await client.signIn.magicLink({
+			email: testUser.email,
+		});
+
+		const token =
+			new URL(verificationEmail.url).searchParams.get("token") || "";
+		const res = await client.magicLink.verify({
+			query: {
+				token,
+				callbackURL: "http://malicious.com",
+			},
+		});
+
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.message).toBe("Invalid callbackURL");
+	});
+});
+
 describe("magic link storeToken", async () => {
 	it("should store token in hashed", async () => {
 		let verificationEmail: VerificationEmail = {
