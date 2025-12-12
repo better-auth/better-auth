@@ -266,6 +266,7 @@ export async function createAuthContext(
 				: isTest()
 					? true
 					: false,
+		skipOriginCheckForPaths: [],
 	};
 
 	const initOrPromise = runPluginInit(ctx);
