@@ -1,4 +1,5 @@
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
+import { XMLParser } from "fast-xml-parser";
 import type { Account, Session, User, Verification } from "better-auth";
 import {
 	createAuthorizationURL,
@@ -23,7 +24,13 @@ import type { IdentityProvider } from "samlify/types/src/entity-idp";
 import type { FlowResult } from "samlify/types/src/flow";
 import * as z from "zod/v4";
 import type { AuthnRequestRecord } from "../authn-request-store";
-import { DEFAULT_AUTHN_REQUEST_TTL_MS } from "../authn-request-store";
+import {
+	AUTHN_REQUEST_KEY_PREFIX,
+	DEFAULT_ASSERTION_TTL_MS,
+	DEFAULT_AUTHN_REQUEST_TTL_MS,
+	DEFAULT_CLOCK_SKEW_MS,
+	USED_ASSERTION_KEY_PREFIX,
+} from "../constants";
 import type { HydratedOIDCConfig } from "../oidc";
 import {
 	DiscoveryError,
@@ -33,11 +40,6 @@ import {
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
 
 import { safeJsonParse, validateEmailDomain } from "../utils";
-
-const AUTHN_REQUEST_KEY_PREFIX = "saml-authn-request:";
-
-/** Default clock skew tolerance: 5 minutes */
-export const DEFAULT_CLOCK_SKEW_MS = 5 * 60 * 1000;
 
 export interface TimestampValidationOptions {
 	clockSkew?: number;
@@ -113,6 +115,58 @@ export function validateSAMLTimestamp(
 				details: `Current time is after NotOnOrAfter (with ${clockSkew}ms clock skew tolerance)`,
 			});
 		}
+	}
+}
+
+/**
+ * Extracts the Assertion ID from a SAML response XML.
+ * Returns null if the assertion ID cannot be found.
+ */
+function extractAssertionId(samlContent: string): string | null {
+	try {
+		const parser = new XMLParser({
+			ignoreAttributes: false,
+			attributeNamePrefix: "@_",
+			removeNSPrefix: true,
+		});
+		const parsed = parser.parse(samlContent);
+
+		const response = parsed.Response || parsed["samlp:Response"];
+		if (!response) return null;
+
+		const assertion =
+			response.Assertion ||
+			response["saml:Assertion"] ||
+			(Array.isArray(response.Assertion)
+				? response.Assertion[0]
+				: response.Assertion);
+		if (!assertion) return null;
+
+		return assertion["@_ID"] || null;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Extracts the Response ID from a SAML response XML.
+ * Returns null if the response ID cannot be found.
+ */
+function extractResponseId(samlContent: string): string | null {
+	try {
+		const parser = new XMLParser({
+			ignoreAttributes: false,
+			attributeNamePrefix: "@_",
+			removeNSPrefix: true,
+		});
+		const parsed = parser.parse(samlContent);
+
+		const response = parsed.Response || parsed["samlp:Response"];
+		if (!response) return null;
+
+		return response["@_ID"] || null;
+	} catch {
+		return null;
 	}
 }
 
@@ -1902,6 +1956,80 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 						RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
 					throw ctx.redirect(
 						`${redirectUrl}?error=unsolicited_response&error_description=IdP-initiated+SSO+not+allowed`,
+					);
+				}
+			}
+
+			// Assertion Replay Protection
+			if (options?.saml?.enableReplayProtection !== false) {
+				const samlContent = (parsedResponse as any).samlContent as
+					| string
+					| undefined;
+				const assertionId = samlContent
+					? extractAssertionId(samlContent)
+					: null;
+
+				if (assertionId) {
+					const issuer = idp.entityMeta.getEntityID();
+					const conditions = (extract as any).conditions as
+						| SAMLConditions
+						| undefined;
+					const clockSkew = options?.saml?.clockSkew ?? DEFAULT_CLOCK_SKEW_MS;
+					const expiresAt = conditions?.notOnOrAfter
+						? new Date(conditions.notOnOrAfter).getTime() + clockSkew
+						: Date.now() + DEFAULT_ASSERTION_TTL_MS;
+
+					const existingAssertion =
+						await ctx.context.internalAdapter.findVerificationValue(
+							`${USED_ASSERTION_KEY_PREFIX}${assertionId}`,
+						);
+
+					let isReplay = false;
+					if (existingAssertion) {
+						try {
+							const stored = JSON.parse(existingAssertion.value);
+							if (stored.expiresAt >= Date.now()) {
+								isReplay = true;
+							}
+						} catch (error) {
+							ctx.context.logger.warn(
+								"Failed to parse stored assertion record",
+								{ assertionId, error },
+							);
+						}
+					}
+
+					if (isReplay) {
+						ctx.context.logger.error(
+							"SAML assertion replay detected: assertion ID already used",
+							{
+								assertionId,
+								issuer,
+								providerId: provider.providerId,
+							},
+						);
+						const redirectUrl =
+							RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+						throw ctx.redirect(
+							`${redirectUrl}?error=replay_detected&error_description=SAML+assertion+has+already+been+used`,
+						);
+					}
+
+					await ctx.context.internalAdapter.createVerificationValue({
+						identifier: `${USED_ASSERTION_KEY_PREFIX}${assertionId}`,
+						value: JSON.stringify({
+							assertionId,
+							issuer,
+							providerId: provider.providerId,
+							usedAt: Date.now(),
+							expiresAt,
+						}),
+						expiresAt: new Date(expiresAt),
+					});
+				} else {
+					ctx.context.logger.warn(
+						"Could not extract assertion ID for replay protection",
+						{ providerId: provider.providerId },
 					);
 				}
 			}

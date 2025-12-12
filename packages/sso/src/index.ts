@@ -5,10 +5,7 @@ import type {
 	AuthnRequestRecord,
 	AuthnRequestStore,
 } from "./authn-request-store";
-import {
-	createInMemoryAuthnRequestStore,
-	DEFAULT_AUTHN_REQUEST_TTL_MS,
-} from "./authn-request-store";
+import { createInMemoryAuthnRequestStore } from "./authn-request-store";
 import {
 	requestDomainVerification,
 	verifyDomain,
@@ -23,7 +20,6 @@ import {
 } from "./routes/sso";
 
 export {
-	DEFAULT_CLOCK_SKEW_MS,
 	type SAMLConditions,
 	type TimestampValidationOptions,
 	validateSAMLTimestamp,
@@ -33,7 +29,7 @@ import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "./types";
 
 export type { SAMLConfig, OIDCConfig, SSOOptions, SSOProvider };
 export type { AuthnRequestStore, AuthnRequestRecord };
-export { createInMemoryAuthnRequestStore, DEFAULT_AUTHN_REQUEST_TTL_MS };
+export { createInMemoryAuthnRequestStore };
 
 export {
 	computeDiscoveryUrl,

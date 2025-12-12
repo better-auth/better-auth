@@ -27,10 +27,10 @@ import {
 } from "vitest";
 import {
 	createInMemoryAuthnRequestStore,
-	DEFAULT_CLOCK_SKEW_MS,
 	sso,
 	validateSAMLTimestamp,
 } from ".";
+import { DEFAULT_CLOCK_SKEW_MS } from "./constants";
 import { ssoClient } from "./client";
 
 const spMetadata = `
@@ -495,6 +495,17 @@ const createMockSAMLIdP = (port: number) => {
 	return { start, stop, metadataUrl };
 };
 
+// Shared mock SAML IdP for all tests
+const sharedMockIdP = createMockSAMLIdP(8081);
+
+beforeAll(async () => {
+	await sharedMockIdP.start();
+});
+
+afterAll(async () => {
+	await sharedMockIdP.stop();
+});
+
 describe("SAML SSO with defaultSSO array", async () => {
 	const data = {
 		user: [],
@@ -505,7 +516,6 @@ describe("SAML SSO with defaultSSO array", async () => {
 	};
 
 	const memory = memoryAdapter(data);
-	const mockIdP = createMockSAMLIdP(8081); // Different port from your main app
 
 	const ssoOptions = {
 		defaultSSO: [
@@ -552,14 +562,6 @@ describe("SAML SSO with defaultSSO array", async () => {
 		plugins: [sso(ssoOptions)],
 	});
 
-	beforeAll(async () => {
-		await mockIdP.start();
-	});
-
-	afterAll(async () => {
-		await mockIdP.stop();
-	});
-
 	it("should use default SAML SSO provider from array when no provider found in database", async () => {
 		const signInResponse = await auth.api.signInSSO({
 			body: {
@@ -585,7 +587,6 @@ describe("SAML SSO", async () => {
 	};
 
 	const memory = memoryAdapter(data);
-	const mockIdP = createMockSAMLIdP(8081); // Different port from your main app
 
 	const ssoOptions = {
 		provisionUser: vi
@@ -626,16 +627,11 @@ describe("SAML SSO", async () => {
 	};
 
 	beforeAll(async () => {
-		await mockIdP.start();
 		await authClient.signUp.email({
 			email: testUser.email,
 			password: testUser.password,
 			name: testUser.name,
 		});
-	});
-
-	afterAll(async () => {
-		await mockIdP.stop();
 	});
 
 	beforeEach(() => {
@@ -675,7 +671,7 @@ describe("SAML SSO", async () => {
 				issuer: "http://localhost:8081",
 				domain: "http://localhost:8081",
 				samlConfig: {
-					entryPoint: mockIdP.metadataUrl,
+					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
 					callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
 					wantAssertionsSigned: false,
@@ -708,7 +704,7 @@ describe("SAML SSO", async () => {
 			id: expect.any(String),
 			issuer: "http://localhost:8081",
 			samlConfig: {
-				entryPoint: mockIdP.metadataUrl,
+				entryPoint: sharedMockIdP.metadataUrl,
 				cert: expect.any(String),
 				callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
 				wantAssertionsSigned: false,
@@ -731,7 +727,7 @@ describe("SAML SSO", async () => {
 				issuer: "http://localhost:8081",
 				domain: "http://localhost:8081",
 				samlConfig: {
-					entryPoint: mockIdP.metadataUrl,
+					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
 					callbackUrl: "http://localhost:8081/api/sso/saml2/sp/acs",
 					wantAssertionsSigned: false,
@@ -783,7 +779,7 @@ describe("SAML SSO", async () => {
 				issuer: issuer,
 				domain: issuer,
 				samlConfig: {
-					entryPoint: mockIdP.metadataUrl,
+					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
 					callbackUrl: `${issuer}/api/sso/saml2/sp/acs`,
 					wantAssertionsSigned: false,
@@ -925,7 +921,7 @@ describe("SAML SSO", async () => {
 					issuer: "http://localhost:8081",
 					domain: "http://localhost:8081",
 					samlConfig: {
-						entryPoint: mockIdP.metadataUrl,
+						entryPoint: sharedMockIdP.metadataUrl,
 						cert: certificate,
 						callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
 						wantAssertionsSigned: false,
@@ -956,7 +952,7 @@ describe("SAML SSO", async () => {
 				issuer: "http://localhost:8081",
 				domain: "http://localhost:8081",
 				samlConfig: {
-					entryPoint: mockIdP.metadataUrl,
+					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
 					callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
 					wantAssertionsSigned: false,
@@ -977,7 +973,7 @@ describe("SAML SSO", async () => {
 					issuer: "http://localhost:8081",
 					domain: "http://localhost:8081",
 					samlConfig: {
-						entryPoint: mockIdP.metadataUrl,
+						entryPoint: sharedMockIdP.metadataUrl,
 						cert: certificate,
 						callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
 						wantAssertionsSigned: false,
@@ -1016,7 +1012,7 @@ describe("SAML SSO", async () => {
 				issuer: "http://localhost:8081",
 				domain: "http://localhost:8081",
 				samlConfig: {
-					entryPoint: mockIdP.metadataUrl,
+					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
 					callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
 					wantAssertionsSigned: false,
@@ -1037,7 +1033,7 @@ describe("SAML SSO", async () => {
 					issuer: "http://localhost:8081",
 					domain: "http://localhost:8081",
 					samlConfig: {
-						entryPoint: mockIdP.metadataUrl,
+						entryPoint: sharedMockIdP.metadataUrl,
 						cert: certificate,
 						callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
 						wantAssertionsSigned: false,
@@ -1071,7 +1067,7 @@ describe("SAML SSO", async () => {
 				issuer: "http://localhost:8081",
 				domain: "http://localhost:8081",
 				samlConfig: {
-					entryPoint: mockIdP.metadataUrl,
+					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
 					callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
 					spMetadata: {
@@ -1089,7 +1085,7 @@ describe("SAML SSO", async () => {
 					issuer: "http://localhost:8082",
 					domain: "http://localhost:8082",
 					samlConfig: {
-						entryPoint: mockIdP.metadataUrl,
+						entryPoint: sharedMockIdP.metadataUrl,
 						cert: certificate,
 						callbackUrl: "http://localhost:8082/api/sso/saml2/callback",
 						spMetadata: {
@@ -1691,7 +1687,6 @@ describe("SAML SSO with custom fields", () => {
 	};
 
 	const memory = memoryAdapter(data);
-	const mockIdP = createMockSAMLIdP(8081); // Different port from your main app
 
 	const auth = betterAuth({
 		database: memory,
@@ -1719,16 +1714,11 @@ describe("SAML SSO with custom fields", () => {
 	};
 
 	beforeAll(async () => {
-		await mockIdP.start();
 		await authClient.signUp.email({
 			email: testUser.email,
 			password: testUser.password,
 			name: testUser.name,
 		});
-	});
-
-	afterAll(async () => {
-		await mockIdP.stop();
 	});
 
 	beforeEach(() => {
@@ -1764,7 +1754,7 @@ describe("SAML SSO with custom fields", () => {
 				issuer: "http://localhost:8081",
 				domain: "http://localhost:8081",
 				samlConfig: {
-					entryPoint: mockIdP.metadataUrl,
+					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
 					callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
 					wantAssertionsSigned: false,
@@ -1797,7 +1787,7 @@ describe("SAML SSO with custom fields", () => {
 			id: expect.any(String),
 			issuer: "http://localhost:8081",
 			samlConfig: {
-				entryPoint: mockIdP.metadataUrl,
+				entryPoint: sharedMockIdP.metadataUrl,
 				cert: expect.any(String),
 				callbackUrl: "http://localhost:8081/api/sso/saml2/callback",
 				wantAssertionsSigned: false,
@@ -2380,5 +2370,181 @@ describe("SAML SSO - Timestamp Validation", () => {
 				}),
 			).not.toThrow();
 		});
+	});
+});
+
+describe("SAML SSO - Assertion Replay Protection", () => {
+	it("should reject replayed SAML assertion (same assertion submitted twice)", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				sso({
+					saml: {
+						enableReplayProtection: true,
+					},
+				}),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "replay-test-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		let samlResponse: any;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		// First submission should succeed
+		const firstResponse = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/callback/replay-test-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse.samlResponse,
+						RelayState: "http://localhost:3000/dashboard",
+					}),
+				},
+			),
+		);
+
+		expect(firstResponse.status).toBe(302);
+		const firstLocation = firstResponse.headers.get("location") || "";
+		expect(firstLocation).not.toContain("error");
+
+		// Second submission (replay) should be rejected
+		const replayResponse = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/callback/replay-test-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse.samlResponse,
+						RelayState: "http://localhost:3000/dashboard",
+					}),
+				},
+			),
+		);
+
+		expect(replayResponse.status).toBe(302);
+		const replayLocation = replayResponse.headers.get("location") || "";
+		expect(replayLocation).toContain("error=replay_detected");
+	});
+
+	it("should allow assertion when replay protection is disabled", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				sso({
+					saml: {
+						enableReplayProtection: false,
+					},
+				}),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "no-replay-check-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		let samlResponse: any;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		// First submission
+		const firstResponse = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/callback/no-replay-check-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse.samlResponse,
+						RelayState: "http://localhost:3000/dashboard",
+					}),
+				},
+			),
+		);
+
+		expect(firstResponse.status).toBe(302);
+		expect(firstResponse.headers.get("location")).not.toContain("error");
+
+		// Second submission should also succeed (replay protection disabled)
+		const secondResponse = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/callback/no-replay-check-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse.samlResponse,
+						RelayState: "http://localhost:3000/dashboard",
+					}),
+				},
+			),
+		);
+
+		expect(secondResponse.status).toBe(302);
+		expect(secondResponse.headers.get("location")).not.toContain("error");
 	});
 });
