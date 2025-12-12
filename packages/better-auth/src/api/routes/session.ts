@@ -337,6 +337,11 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				ctx.context.session = session;
 				if (!session || session.session.expiresAt < new Date()) {
 					deleteSessionCookie(ctx);
+					// Also clear any cached session data to prevent stale reads
+					const dataCookie = ctx.context.authCookies.sessionData.name;
+					ctx.setCookie(dataCookie, "", {
+						maxAge: 0,
+					});
 					if (session) {
 						/**
 						 * if session expired clean up the session
