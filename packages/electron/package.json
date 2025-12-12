@@ -5,6 +5,7 @@
   "description": "Better Auth integration for Electron applications.",
   "main": "dist/index.mjs",
   "module": "dist/index.mjs",
+  "types": "dist/index.d.mts",
   "publishConfig": {
     "access": "public"
   },
@@ -24,7 +25,7 @@
   "scripts": {
     "test": "vitest",
     "coverage": "vitest run --coverage",
-    "lint:types": "attw --profile esm-only pack .",
+    "lint:types": "attw --profile esm-only --pack .",
     "lint:package": "publint run --strict",
     "build": "tsdown",
     "dev": "tsdown --watch",
