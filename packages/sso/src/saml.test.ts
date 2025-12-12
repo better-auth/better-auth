@@ -3094,3 +3094,128 @@ describe("SAML SSO - Timestamp Validation", () => {
 		});
 	});
 });
+
+describe("SAML Response Security", () => {
+	const mockIdP = createMockSAMLIdP(8081);
+
+	beforeAll(async () => {
+		await mockIdP.start();
+	});
+
+	afterAll(async () => {
+		await mockIdP.stop();
+	});
+
+	it("should reject forged/unsigned SAML responses", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+		const { headers } = await signInWithTestUser();
+
+		// Register a SAML provider
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "security-test-provider",
+				issuer: "http://localhost:8081",
+				domain: "security-test.com",
+				samlConfig: {
+					entryPoint: mockIdP.metadataUrl,
+					cert: certificate,
+					callbackUrl: "http://localhost:8081/api/auth/sso/saml2/callback",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					spMetadata: {
+						metadata: spMetadata,
+					},
+				},
+			},
+			headers,
+		});
+
+		// Craft a forged SAML response with a fake nameID (no valid signature)
+		const forgedSAMLResponse = `
+			<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">
+				<saml:Assertion>
+					<saml:Subject>
+						<saml2:NameID xmlns:saml2="urn:oasis:names:tc:SAML:2.0:assertion">attacker@evil.com</saml2:NameID>
+					</saml:Subject>
+				</saml:Assertion>
+			</samlp:Response>
+		`;
+
+		// Attempt to use the forged response
+		const callbackRes = await auth.handler(
+			new Request(
+				"http://localhost:8081/api/auth/sso/saml2/callback/security-test-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: Buffer.from(forgedSAMLResponse).toString("base64"),
+						RelayState: "",
+					}).toString(),
+				},
+			),
+		);
+
+		// Should be rejected - NOT allow authentication with forged response
+		expect(callbackRes.status).toBe(400);
+		const body = await callbackRes.json();
+		expect(body.message).toBe("Invalid SAML response");
+	});
+
+	it("should reject SAML response with tampered nameID", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "tamper-test-provider",
+				issuer: "http://localhost:8081",
+				domain: "tamper-test.com",
+				samlConfig: {
+					entryPoint: mockIdP.metadataUrl,
+					cert: certificate,
+					callbackUrl: "http://localhost:8081/api/auth/sso/saml2/callback",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					spMetadata: {
+						metadata: spMetadata,
+					},
+				},
+			},
+			headers,
+		});
+
+		// A minimal but invalid SAML response that might have bypassed old regex fallback
+		const tamperedResponse = `<?xml version="1.0"?>
+			<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol">
+				<saml2:NameID xmlns:saml2="urn:oasis:names:tc:SAML:2.0:assertion">admin@victim.com</saml2:NameID>
+			</samlp:Response>`;
+
+		const callbackRes = await auth.handler(
+			new Request(
+				"http://localhost:8081/api/auth/sso/saml2/callback/tamper-test-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: Buffer.from(tamperedResponse).toString("base64"),
+						RelayState: "",
+					}).toString(),
+				},
+			),
+		);
+
+		// Must reject - signature verification should fail
+		expect(callbackRes.status).toBe(400);
+	});
+});
