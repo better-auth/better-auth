@@ -1038,10 +1038,13 @@ export const oidcProvider = (options: OIDCOptions) => {
 						// If the JWT token is not enabled, create a key and use it to sign
 					} else {
 						if (client.type === "public") {
+							ctx.context.logger.error(
+								"OIDC: Public client (PKCE) detected but JWT plugin is disabled. Public clients require Asymmetric (RS256/EdDSA) signing via the 'jwt' plugin.",
+							);
 							throw new APIError("INTERNAL_SERVER_ERROR", {
 								error_description:
 									"Public clients (PKCE) require the 'jwt' plugin to be enabled. They must use RS256 (Asymmetric) signing because they cannot hold a clientSecret.",
-								error: "server_error",
+								error: "internal_server_error",
 							});
 						}
 						if (!client.clientSecret) {
