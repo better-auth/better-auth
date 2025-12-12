@@ -60,7 +60,7 @@ describe("(cloudflare) simple server", () => {
 		]);
 		for (const content of unexpectedContents) {
 			assert(
-				indexJs.includes(content) === false,
+				!indexJs.includes(content),
 				`index.js should not contain "${content}"`,
 			);
 		}
