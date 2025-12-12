@@ -19,8 +19,8 @@ import {
 import { parseUserOutput } from "../db/schema";
 import type { Session, User } from "../types";
 import { getDate } from "../utils/date";
-import { SECURE_COOKIE_PREFIX } from "./cookie-utils";
 import { sec } from "../utils/time";
+import { SECURE_COOKIE_PREFIX } from "./cookie-utils";
 import { createAccountStore, createSessionStore } from "./session-store";
 
 export function createCookieGetter(options: BetterAuthOptions) {
