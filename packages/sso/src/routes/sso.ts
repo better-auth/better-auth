@@ -25,13 +25,13 @@ import type { FlowResult } from "samlify/types/src/flow";
 import * as z from "zod/v4";
 import type { AuthnRequestRecord } from "../authn-request-store";
 import { DEFAULT_AUTHN_REQUEST_TTL_MS } from "../authn-request-store";
-import { generateRelayState, parseRelayState } from "../saml-state";
 import type { HydratedOIDCConfig } from "../oidc";
 import {
 	DiscoveryError,
 	discoverOIDCConfig,
 	mapDiscoveryErrorToAPIError,
 } from "../oidc";
+import { generateRelayState, parseRelayState } from "../saml-state";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
 
 import { safeJsonParse, validateEmailDomain } from "../utils";
@@ -1888,31 +1888,12 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 
 			let parsedResponse: FlowResult;
 			try {
-				const decodedResponse = Buffer.from(SAMLResponse, "base64").toString(
-					"utf-8",
-				);
-
-				try {
-					parsedResponse = await sp.parseLoginResponse(idp, "post", {
-						body: {
-							SAMLResponse,
-							RelayState: ctx.body.RelayState,
-						},
-					});
-				} catch (parseError) {
-					const nameIDMatch = decodedResponse.match(
-						/<saml2:NameID[^>]*>([^<]+)<\/saml2:NameID>/,
-					);
-					if (!nameIDMatch) throw parseError;
-					parsedResponse = {
-						extract: {
-							nameID: nameIDMatch[1],
-							attributes: { nameID: nameIDMatch[1] },
-							sessionIndex: {},
-							conditions: {},
-						},
-					} as FlowResult;
-				}
+				parsedResponse = await sp.parseLoginResponse(idp, "post", {
+					body: {
+						SAMLResponse,
+						RelayState: ctx.body.RelayState,
+					},
+				});
 
 				if (!parsedResponse?.extract) {
 					throw new Error("Invalid SAML response structure");
