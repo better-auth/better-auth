@@ -1599,7 +1599,6 @@ describe("SAML SSO", async () => {
 					},
 					body: new URLSearchParams({
 						SAMLResponse: samlResponse.samlResponse,
-						RelayState: "http://localhost:3000/dashboard",
 					}),
 				},
 			),
@@ -1666,7 +1665,6 @@ describe("SAML SSO", async () => {
 					},
 					body: new URLSearchParams({
 						SAMLResponse: samlResponse.samlResponse,
-						RelayState: "http://localhost:3000/dashboard",
 					}),
 				},
 			),
@@ -1726,7 +1724,6 @@ describe("SAML SSO", async () => {
 					},
 					body: new URLSearchParams({
 						SAMLResponse: samlResponse.samlResponse,
-						RelayState: "http://localhost:3000/dashboard",
 					}),
 				},
 			),
@@ -1795,7 +1792,6 @@ describe("SAML SSO", async () => {
 					},
 					body: new URLSearchParams({
 						SAMLResponse: samlResponse.samlResponse,
-						RelayState: "http://localhost:3000/dashboard",
 					}),
 				},
 			),
@@ -1866,7 +1862,6 @@ describe("SAML SSO", async () => {
 					},
 					body: new URLSearchParams({
 						SAMLResponse: samlResponse.samlResponse,
-						RelayState: "http://localhost:3000/dashboard",
 					}),
 				},
 			),
