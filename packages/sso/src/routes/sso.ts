@@ -23,9 +23,9 @@ import type { BindingContext } from "samlify/types/src/entity";
 import type { IdentityProvider } from "samlify/types/src/entity-idp";
 import type { FlowResult } from "samlify/types/src/flow";
 import * as z from "zod/v4";
-import { generateRelayState, parseRelayState } from "../saml-state";
 import type { AuthnRequestRecord } from "../authn-request-store";
 import { DEFAULT_AUTHN_REQUEST_TTL_MS } from "../authn-request-store";
+import { generateRelayState, parseRelayState } from "../saml-state";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
 
 import { safeJsonParse, validateEmailDomain } from "../utils";
@@ -1821,7 +1821,9 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 							{ inResponseTo, providerId: provider.providerId },
 						);
 						const redirectUrl =
-							relayState?.callbackURL || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+							relayState?.callbackURL ||
+							parsedSamlConfig.callbackUrl ||
+							ctx.context.baseURL;
 						throw ctx.redirect(
 							`${redirectUrl}?error=invalid_saml_response&error_description=Unknown+or+expired+request+ID`,
 						);
@@ -1845,7 +1847,9 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 							);
 						}
 						const redirectUrl =
-							relayState?.callbackURL || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+							relayState?.callbackURL ||
+							parsedSamlConfig.callbackUrl ||
+							ctx.context.baseURL;
 						throw ctx.redirect(
 							`${redirectUrl}?error=invalid_saml_response&error_description=Provider+mismatch`,
 						);
