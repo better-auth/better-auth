@@ -936,7 +936,7 @@ When a provider's domain is verified, it is also trusted for **automatic account
 
 <Tabs items={["client", "server"]}>
     <Tab value="client">
-```ts title="auth.ts"
+```ts title="auth-client.ts"
 const authClient = createAuthClient({
     plugins: [
         ssoClient({ // [!code highlight]
@@ -950,7 +950,7 @@ const authClient = createAuthClient({
     </Tab>
 
     <Tab value="server">
-```ts title="auth-client.ts"
+```ts title="auth.ts"
 const auth = betterAuth({
     plugins: [
         sso({ // [!code highlight]
