@@ -2,6 +2,7 @@ import type { AuthContext } from "@better-auth/core";
 import { safeJSONParse } from "@better-auth/core/utils";
 import type { RateLimit } from "../../types";
 import { getIp } from "../../utils/get-request-ip";
+import { normalizePathname } from "../../utils/url";
 import { wildcardMatch } from "../../utils/wildcard";
 
 function shouldRateLimit(
@@ -135,9 +136,8 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 	if (!ctx.rateLimit.enabled) {
 		return;
 	}
-	const path = new URL(req.url).pathname
-		.replace(ctx.options.basePath || "/api/auth", "")
-		.replace(/\/+$/, "");
+	const basePath = new URL(ctx.baseURL).pathname;
+	const path = normalizePathname(req.url, basePath);
 	let window = ctx.rateLimit.window;
 	let max = ctx.rateLimit.max;
 	const ip = getIp(req, ctx.options);
