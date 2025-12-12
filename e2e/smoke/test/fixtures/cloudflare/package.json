@@ -13,9 +13,8 @@
     "wrangler": "4.33.2"
   },
   "scripts": {
-    "check": "tsc && wrangler deploy --dry-run",
+    "check": "tsc && wrangler build",
     "dev": "wrangler dev",
-    "build": "wrangler build",
     "migrate:local": "wrangler d1 migrations apply db --local",
     "cf-typegen": "wrangler types --env-interface CloudflareBindings"
   }
