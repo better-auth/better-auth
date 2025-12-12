@@ -128,6 +128,30 @@ describe("crossSubdomainCookies", () => {
 			},
 		);
 	});
+
+	it("should use default top level domain from subdomain baseURL if domain is not provided", async () => {
+		const { testUser, client } = await getTestInstance({
+			baseURL: "https://api.example.com",
+			advanced: {
+				crossSubDomainCookies: {
+					enabled: true,
+				},
+			},
+		});
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onResponse(context) {
+					const setCookie = context.response.headers.get("set-cookie");
+					expect(setCookie).toContain("Domain=example.com");
+				},
+			},
+		);
+	});
 });
 
 describe("cookie configuration", () => {

@@ -36,7 +36,9 @@ export function createCookieGetter(options: BetterAuthOptions) {
 		!!options.advanced?.crossSubDomainCookies?.enabled;
 	const domain = crossSubdomainEnabled
 		? options.advanced?.crossSubDomainCookies?.domain ||
-			(options.baseURL ? new URL(options.baseURL).hostname : undefined)
+			(options.baseURL
+				? new URL(options.baseURL).hostname.split(".").slice(-2).join(".")
+				: undefined)
 		: undefined;
 	if (crossSubdomainEnabled && !domain) {
 		throw new BetterAuthError(
