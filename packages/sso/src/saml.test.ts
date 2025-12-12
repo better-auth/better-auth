@@ -25,9 +25,13 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { createInMemoryAuthnRequestStore, sso } from ".";
+import {
+	createInMemoryAuthnRequestStore,
+	DEFAULT_CLOCK_SKEW_MS,
+	sso,
+	validateSAMLTimestamp,
+} from ".";
 import { ssoClient } from "./client";
-import { DEFAULT_CLOCK_SKEW_MS, validateSAMLTimestamp } from "./routes/sso";
 
 const spMetadata = `
     <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:3001/api/sso/saml2/sp/metadata">
@@ -2221,8 +2225,6 @@ describe("SAML SSO - Timestamp Validation", () => {
 	});
 
 	describe("Boundary conditions (exactly at window edges)", () => {
-		// Use fake timers to avoid flaky tests due to time elapsed between
-		// timestamp creation and validation
 		const FIXED_TIME = new Date("2024-01-15T12:00:00.000Z").getTime();
 
 		beforeEach(() => {

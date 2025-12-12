@@ -329,6 +329,13 @@ export interface SSOOptions {
 		 * When disabled (default), assertions without timestamps are accepted
 		 * but a warning is logged.
 		 *
+		 * **SAML Spec Notes:**
+		 * - SAML 2.0 Core: Timestamps are OPTIONAL
+		 * - SAML2Int (enterprise profile): Timestamps are REQUIRED
+		 *
+		 * **Recommendation:** Enable for enterprise/production deployments
+		 * where your IdP follows SAML2Int (Okta, Azure AD, OneLogin, etc.)
+		 *
 		 * @default false
 		 */
 		requireTimestamps?: boolean;
