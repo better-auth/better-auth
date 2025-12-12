@@ -21,6 +21,14 @@ import {
 	signInSSO,
 	spMetadata,
 } from "./routes/sso";
+
+export {
+	DEFAULT_CLOCK_SKEW_MS,
+	type SAMLConditions,
+	type TimestampValidationOptions,
+	validateSAMLTimestamp,
+} from "./routes/sso";
+
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "./types";
 
 export type { SAMLConfig, OIDCConfig, SSOOptions, SSOProvider };
