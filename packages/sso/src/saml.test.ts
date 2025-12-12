@@ -2151,7 +2151,6 @@ describe("SAML SSO - Signature Validation Security", () => {
 });
 
 describe("SAML SSO - Timestamp Validation", () => {
-
 	describe("Valid assertions within time window", () => {
 		it("should accept assertion with current NotBefore and future NotOnOrAfter", () => {
 			const now = new Date();
