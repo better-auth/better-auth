@@ -3,6 +3,7 @@ import type { Account, Session, User, Verification } from "better-auth";
 import {
 	createAuthorizationURL,
 	generateState,
+	HIDE_METADATA,
 	parseState,
 	validateAuthorizationCode,
 	validateToken,
@@ -21,8 +22,99 @@ import type { BindingContext } from "samlify/types/src/entity";
 import type { IdentityProvider } from "samlify/types/src/entity-idp";
 import type { FlowResult } from "samlify/types/src/flow";
 import * as z from "zod/v4";
+import type { AuthnRequestRecord } from "../authn-request-store";
+import { DEFAULT_AUTHN_REQUEST_TTL_MS } from "../authn-request-store";
+import type { HydratedOIDCConfig } from "../oidc";
+import {
+	DiscoveryError,
+	discoverOIDCConfig,
+	mapDiscoveryErrorToAPIError,
+} from "../oidc";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
+
 import { safeJsonParse, validateEmailDomain } from "../utils";
+
+const AUTHN_REQUEST_KEY_PREFIX = "saml-authn-request:";
+
+/** Default clock skew tolerance: 5 minutes */
+export const DEFAULT_CLOCK_SKEW_MS = 5 * 60 * 1000;
+
+export interface TimestampValidationOptions {
+	clockSkew?: number;
+	requireTimestamps?: boolean;
+	logger?: {
+		warn: (message: string, data?: Record<string, unknown>) => void;
+	};
+}
+
+/** Conditions extracted from SAML assertion */
+export interface SAMLConditions {
+	notBefore?: string;
+	notOnOrAfter?: string;
+}
+
+/**
+ * Validates SAML assertion timestamp conditions (NotBefore/NotOnOrAfter).
+ * Prevents acceptance of expired or future-dated assertions.
+ * @throws {APIError} If timestamps are invalid, expired, or not yet valid
+ */
+export function validateSAMLTimestamp(
+	conditions: SAMLConditions | undefined,
+	options: TimestampValidationOptions = {},
+): void {
+	const clockSkew = options.clockSkew ?? DEFAULT_CLOCK_SKEW_MS;
+	const hasTimestamps = conditions?.notBefore || conditions?.notOnOrAfter;
+
+	if (!hasTimestamps) {
+		if (options.requireTimestamps) {
+			throw new APIError("BAD_REQUEST", {
+				message: "SAML assertion missing required timestamp conditions",
+				details:
+					"Assertions must include NotBefore and/or NotOnOrAfter conditions",
+			});
+		}
+		// Log warning for missing timestamps when not required
+		options.logger?.warn(
+			"SAML assertion accepted without timestamp conditions",
+			{ hasConditions: !!conditions },
+		);
+		return;
+	}
+
+	const now = Date.now();
+
+	if (conditions?.notBefore) {
+		const notBeforeTime = new Date(conditions.notBefore).getTime();
+		if (Number.isNaN(notBeforeTime)) {
+			throw new APIError("BAD_REQUEST", {
+				message: "SAML assertion has invalid NotBefore timestamp",
+				details: `Unable to parse NotBefore value: ${conditions.notBefore}`,
+			});
+		}
+		if (now < notBeforeTime - clockSkew) {
+			throw new APIError("BAD_REQUEST", {
+				message: "SAML assertion is not yet valid",
+				details: `Current time is before NotBefore (with ${clockSkew}ms clock skew tolerance)`,
+			});
+		}
+	}
+
+	if (conditions?.notOnOrAfter) {
+		const notOnOrAfterTime = new Date(conditions.notOnOrAfter).getTime();
+		if (Number.isNaN(notOnOrAfterTime)) {
+			throw new APIError("BAD_REQUEST", {
+				message: "SAML assertion has invalid NotOnOrAfter timestamp",
+				details: `Unable to parse NotOnOrAfter value: ${conditions.notOnOrAfter}`,
+			});
+		}
+		if (now > notOnOrAfterTime + clockSkew) {
+			throw new APIError("BAD_REQUEST", {
+				message: "SAML assertion has expired",
+				details: `Current time is after NotOnOrAfter (with ${clockSkew}ms clock skew tolerance)`,
+			});
+		}
+	}
+}
 
 const spMetadataQuerySchema = z.object({
 	providerId: z.string(),
@@ -149,6 +241,13 @@ const ssoProviderBodySchema = z.object({
 				})
 				.optional(),
 			discoveryEndpoint: z.string().optional(),
+			skipDiscovery: z
+				.boolean()
+				.meta({
+					description:
+						"Skip OIDC discovery during registration. When true, you must provide authorizationEndpoint, tokenEndpoint, and jwksEndpoint manually.",
+				})
+				.optional(),
 			scopes: z
 				.array(z.string(), {})
 				.meta({
@@ -568,6 +667,80 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				});
 			}
 
+			let hydratedOIDCConfig: HydratedOIDCConfig | null = null;
+			if (body.oidcConfig && !body.oidcConfig.skipDiscovery) {
+				try {
+					hydratedOIDCConfig = await discoverOIDCConfig({
+						issuer: body.issuer,
+						existingConfig: {
+							discoveryEndpoint: body.oidcConfig.discoveryEndpoint,
+							authorizationEndpoint: body.oidcConfig.authorizationEndpoint,
+							tokenEndpoint: body.oidcConfig.tokenEndpoint,
+							jwksEndpoint: body.oidcConfig.jwksEndpoint,
+							userInfoEndpoint: body.oidcConfig.userInfoEndpoint,
+							tokenEndpointAuthentication:
+								body.oidcConfig.tokenEndpointAuthentication,
+						},
+					});
+				} catch (error) {
+					if (error instanceof DiscoveryError) {
+						throw mapDiscoveryErrorToAPIError(error);
+					}
+					throw error;
+				}
+			}
+
+			const buildOIDCConfig = () => {
+				if (!body.oidcConfig) return null;
+
+				if (body.oidcConfig.skipDiscovery) {
+					return JSON.stringify({
+						issuer: body.issuer,
+						clientId: body.oidcConfig.clientId,
+						clientSecret: body.oidcConfig.clientSecret,
+						authorizationEndpoint: body.oidcConfig.authorizationEndpoint,
+						tokenEndpoint: body.oidcConfig.tokenEndpoint,
+						tokenEndpointAuthentication:
+							body.oidcConfig.tokenEndpointAuthentication ||
+							"client_secret_basic",
+						jwksEndpoint: body.oidcConfig.jwksEndpoint,
+						pkce: body.oidcConfig.pkce,
+						discoveryEndpoint:
+							body.oidcConfig.discoveryEndpoint ||
+							`${body.issuer}/.well-known/openid-configuration`,
+						mapping: body.oidcConfig.mapping,
+						scopes: body.oidcConfig.scopes,
+						userInfoEndpoint: body.oidcConfig.userInfoEndpoint,
+						overrideUserInfo:
+							ctx.body.overrideUserInfo ||
+							options?.defaultOverrideUserInfo ||
+							false,
+					});
+				}
+
+				if (!hydratedOIDCConfig) return null;
+
+				return JSON.stringify({
+					issuer: hydratedOIDCConfig.issuer,
+					clientId: body.oidcConfig.clientId,
+					clientSecret: body.oidcConfig.clientSecret,
+					authorizationEndpoint: hydratedOIDCConfig.authorizationEndpoint,
+					tokenEndpoint: hydratedOIDCConfig.tokenEndpoint,
+					tokenEndpointAuthentication:
+						hydratedOIDCConfig.tokenEndpointAuthentication,
+					jwksEndpoint: hydratedOIDCConfig.jwksEndpoint,
+					pkce: body.oidcConfig.pkce,
+					discoveryEndpoint: hydratedOIDCConfig.discoveryEndpoint,
+					mapping: body.oidcConfig.mapping,
+					scopes: body.oidcConfig.scopes,
+					userInfoEndpoint: hydratedOIDCConfig.userInfoEndpoint,
+					overrideUserInfo:
+						ctx.body.overrideUserInfo ||
+						options?.defaultOverrideUserInfo ||
+						false,
+				});
+			};
+
 			const provider = await ctx.context.adapter.create<
 				Record<string, any>,
 				SSOProvider<O>
@@ -577,29 +750,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 					issuer: body.issuer,
 					domain: body.domain,
 					domainVerified: false,
-					oidcConfig: body.oidcConfig
-						? JSON.stringify({
-								issuer: body.issuer,
-								clientId: body.oidcConfig.clientId,
-								clientSecret: body.oidcConfig.clientSecret,
-								authorizationEndpoint: body.oidcConfig.authorizationEndpoint,
-								tokenEndpoint: body.oidcConfig.tokenEndpoint,
-								tokenEndpointAuthentication:
-									body.oidcConfig.tokenEndpointAuthentication,
-								jwksEndpoint: body.oidcConfig.jwksEndpoint,
-								pkce: body.oidcConfig.pkce,
-								discoveryEndpoint:
-									body.oidcConfig.discoveryEndpoint ||
-									`${body.issuer}/.well-known/openid-configuration`,
-								mapping: body.oidcConfig.mapping,
-								scopes: body.oidcConfig.scopes,
-								userInfoEndpoint: body.oidcConfig.userInfoEndpoint,
-								overrideUserInfo:
-									ctx.body.overrideUserInfo ||
-									options?.defaultOverrideUserInfo ||
-									false,
-							})
-						: null,
+					oidcConfig: buildOIDCConfig(),
 					samlConfig: body.samlConfig
 						? JSON.stringify({
 								issuer: body.issuer,
@@ -1054,12 +1205,40 @@ export const signInSSO = (options?: SSOOptions) => {
 				const loginRequest = sp.createLoginRequest(
 					idp,
 					"redirect",
-				) as BindingContext & { entityEndpoint: string; type: string };
+				) as BindingContext & {
+					entityEndpoint: string;
+					type: string;
+					id: string;
+				};
 				if (!loginRequest) {
 					throw new APIError("BAD_REQUEST", {
 						message: "Invalid SAML request",
 					});
 				}
+
+				const shouldSaveRequest =
+					loginRequest.id &&
+					(options?.saml?.authnRequestStore ||
+						options?.saml?.enableInResponseToValidation);
+				if (shouldSaveRequest) {
+					const ttl = options?.saml?.requestTTL ?? DEFAULT_AUTHN_REQUEST_TTL_MS;
+					const record: AuthnRequestRecord = {
+						id: loginRequest.id,
+						providerId: provider.providerId,
+						createdAt: Date.now(),
+						expiresAt: Date.now() + ttl,
+					};
+					if (options?.saml?.authnRequestStore) {
+						await options.saml.authnRequestStore.save(record);
+					} else {
+						await ctx.context.internalAdapter.createVerificationValue({
+							identifier: `${AUTHN_REQUEST_KEY_PREFIX}${record.id}`,
+							value: JSON.stringify(record),
+							expiresAt: new Date(record.expiresAt),
+						});
+					}
+				}
+
 				return ctx.json({
 					url: `${loginRequest.context}&RelayState=${encodeURIComponent(
 						body.callbackURL,
@@ -1092,7 +1271,7 @@ export const callbackSSO = (options?: SSOOptions) => {
 				"application/json",
 			],
 			metadata: {
-				isAction: false,
+				...HIDE_METADATA,
 				openapi: {
 					operationId: "handleSSOCallback",
 					summary: "Callback URL for SSO provider",
@@ -1107,7 +1286,7 @@ export const callbackSSO = (options?: SSOOptions) => {
 			},
 		},
 		async (ctx) => {
-			const { code, state, error, error_description } = ctx.query;
+			const { code, error, error_description } = ctx.query;
 			const stateData = await parseState(ctx);
 			if (!stateData) {
 				const errorURL =
@@ -1461,7 +1640,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			method: "POST",
 			body: callbackSSOSAMLBodySchema,
 			metadata: {
-				isAction: false,
+				...HIDE_METADATA,
 				allowedMediaTypes: [
 					"application/x-www-form-urlencoded",
 					"application/json",
@@ -1603,31 +1782,12 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 
 			let parsedResponse: FlowResult;
 			try {
-				const decodedResponse = Buffer.from(SAMLResponse, "base64").toString(
-					"utf-8",
-				);
-
-				try {
-					parsedResponse = await sp.parseLoginResponse(idp, "post", {
-						body: {
-							SAMLResponse,
-							RelayState: RelayState || undefined,
-						},
-					});
-				} catch (parseError) {
-					const nameIDMatch = decodedResponse.match(
-						/<saml2:NameID[^>]*>([^<]+)<\/saml2:NameID>/,
-					);
-					if (!nameIDMatch) throw parseError;
-					parsedResponse = {
-						extract: {
-							nameID: nameIDMatch[1],
-							attributes: { nameID: nameIDMatch[1] },
-							sessionIndex: {},
-							conditions: {},
-						},
-					} as FlowResult;
-				}
+				parsedResponse = await sp.parseLoginResponse(idp, "post", {
+					body: {
+						SAMLResponse,
+						RelayState: RelayState || undefined,
+					},
+				});
 
 				if (!parsedResponse?.extract) {
 					throw new Error("Invalid SAML response structure");
@@ -1646,6 +1806,106 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			}
 
 			const { extract } = parsedResponse!;
+
+			validateSAMLTimestamp((extract as any).conditions, {
+				clockSkew: options?.saml?.clockSkew,
+				requireTimestamps: options?.saml?.requireTimestamps,
+				logger: ctx.context.logger,
+			});
+
+			const inResponseTo = (extract as any).inResponseTo as string | undefined;
+			const shouldValidateInResponseTo =
+				options?.saml?.authnRequestStore ||
+				options?.saml?.enableInResponseToValidation;
+
+			if (shouldValidateInResponseTo) {
+				const allowIdpInitiated = options?.saml?.allowIdpInitiated !== false;
+
+				if (inResponseTo) {
+					let storedRequest: AuthnRequestRecord | null = null;
+
+					if (options?.saml?.authnRequestStore) {
+						storedRequest =
+							await options.saml.authnRequestStore.get(inResponseTo);
+					} else {
+						const verification =
+							await ctx.context.internalAdapter.findVerificationValue(
+								`${AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
+							);
+						if (verification) {
+							try {
+								storedRequest = JSON.parse(
+									verification.value,
+								) as AuthnRequestRecord;
+								// Validate expiration for database-stored records
+								// Note: Cleanup of expired records is handled automatically by
+								// findVerificationValue, but we still need to check expiration
+								// since the record is returned before cleanup runs
+								if (storedRequest && storedRequest.expiresAt < Date.now()) {
+									storedRequest = null;
+								}
+							} catch {
+								storedRequest = null;
+							}
+						}
+					}
+
+					if (!storedRequest) {
+						ctx.context.logger.error(
+							"SAML InResponseTo validation failed: unknown or expired request ID",
+							{ inResponseTo, providerId: provider.providerId },
+						);
+						const redirectUrl =
+							RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+						throw ctx.redirect(
+							`${redirectUrl}?error=invalid_saml_response&error_description=Unknown+or+expired+request+ID`,
+						);
+					}
+
+					if (storedRequest.providerId !== provider.providerId) {
+						ctx.context.logger.error(
+							"SAML InResponseTo validation failed: provider mismatch",
+							{
+								inResponseTo,
+								expectedProvider: storedRequest.providerId,
+								actualProvider: provider.providerId,
+							},
+						);
+
+						if (options?.saml?.authnRequestStore) {
+							await options.saml.authnRequestStore.delete(inResponseTo);
+						} else {
+							await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+								`${AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
+							);
+						}
+						const redirectUrl =
+							RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+						throw ctx.redirect(
+							`${redirectUrl}?error=invalid_saml_response&error_description=Provider+mismatch`,
+						);
+					}
+
+					if (options?.saml?.authnRequestStore) {
+						await options.saml.authnRequestStore.delete(inResponseTo);
+					} else {
+						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+							`${AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
+						);
+					}
+				} else if (!allowIdpInitiated) {
+					ctx.context.logger.error(
+						"SAML IdP-initiated SSO rejected: InResponseTo missing and allowIdpInitiated is false",
+						{ providerId: provider.providerId },
+					);
+					const redirectUrl =
+						RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+					throw ctx.redirect(
+						`${redirectUrl}?error=unsolicited_response&error_description=IdP-initiated+SSO+not+allowed`,
+					);
+				}
+			}
+
 			const attributes = extract.attributes || {};
 			const mapping = parsedSamlConfig.mapping ?? {};
 
@@ -1831,7 +2091,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			params: acsEndpointParamsSchema,
 			body: acsEndpointBodySchema,
 			metadata: {
-				isAction: false,
+				...HIDE_METADATA,
 				allowedMediaTypes: [
 					"application/x-www-form-urlencoded",
 					"application/json",
@@ -1960,50 +2220,12 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			// Parse and validate SAML response
 			let parsedResponse: FlowResult;
 			try {
-				let decodedResponse = Buffer.from(SAMLResponse, "base64").toString(
-					"utf-8",
-				);
-
-				// Patch the SAML response if status is missing or not success
-				if (!decodedResponse.includes("StatusCode")) {
-					// Insert a success status if missing
-					const insertPoint = decodedResponse.indexOf("</saml2:Issuer>");
-					if (insertPoint !== -1) {
-						decodedResponse =
-							decodedResponse.slice(0, insertPoint + 14) +
-							'<saml2:Status><saml2:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></saml2:Status>' +
-							decodedResponse.slice(insertPoint + 14);
-					}
-				} else if (!decodedResponse.includes("saml2:Success")) {
-					// Replace existing non-success status with success
-					decodedResponse = decodedResponse.replace(
-						/<saml2:StatusCode Value="[^"]+"/,
-						'<saml2:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"',
-					);
-				}
-
-				try {
-					parsedResponse = await sp.parseLoginResponse(idp, "post", {
-						body: {
-							SAMLResponse,
-							RelayState: RelayState || undefined,
-						},
-					});
-				} catch (parseError) {
-					const nameIDMatch = decodedResponse.match(
-						/<saml2:NameID[^>]*>([^<]+)<\/saml2:NameID>/,
-					);
-					// due to different spec. we have to make sure to handle that.
-					if (!nameIDMatch) throw parseError;
-					parsedResponse = {
-						extract: {
-							nameID: nameIDMatch[1],
-							attributes: { nameID: nameIDMatch[1] },
-							sessionIndex: {},
-							conditions: {},
-						},
-					} as FlowResult;
-				}
+				parsedResponse = await sp.parseLoginResponse(idp, "post", {
+					body: {
+						SAMLResponse,
+						RelayState: RelayState || undefined,
+					},
+				});
 
 				if (!parsedResponse?.extract) {
 					throw new Error("Invalid SAML response structure");
@@ -2022,6 +2244,103 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			}
 
 			const { extract } = parsedResponse!;
+
+			validateSAMLTimestamp((extract as any).conditions, {
+				clockSkew: options?.saml?.clockSkew,
+				requireTimestamps: options?.saml?.requireTimestamps,
+				logger: ctx.context.logger,
+			});
+
+			const inResponseToAcs = (extract as any).inResponseTo as
+				| string
+				| undefined;
+			const shouldValidateInResponseToAcs =
+				options?.saml?.authnRequestStore ||
+				options?.saml?.enableInResponseToValidation;
+
+			if (shouldValidateInResponseToAcs) {
+				const allowIdpInitiated = options?.saml?.allowIdpInitiated !== false;
+
+				if (inResponseToAcs) {
+					let storedRequest: AuthnRequestRecord | null = null;
+
+					if (options?.saml?.authnRequestStore) {
+						storedRequest =
+							await options.saml.authnRequestStore.get(inResponseToAcs);
+					} else {
+						const verification =
+							await ctx.context.internalAdapter.findVerificationValue(
+								`${AUTHN_REQUEST_KEY_PREFIX}${inResponseToAcs}`,
+							);
+						if (verification) {
+							try {
+								storedRequest = JSON.parse(
+									verification.value,
+								) as AuthnRequestRecord;
+								if (storedRequest && storedRequest.expiresAt < Date.now()) {
+									storedRequest = null;
+								}
+							} catch {
+								storedRequest = null;
+							}
+						}
+					}
+
+					if (!storedRequest) {
+						ctx.context.logger.error(
+							"SAML InResponseTo validation failed: unknown or expired request ID",
+							{ inResponseTo: inResponseToAcs, providerId },
+						);
+						const redirectUrl =
+							RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+						throw ctx.redirect(
+							`${redirectUrl}?error=invalid_saml_response&error_description=Unknown+or+expired+request+ID`,
+						);
+					}
+
+					if (storedRequest.providerId !== providerId) {
+						ctx.context.logger.error(
+							"SAML InResponseTo validation failed: provider mismatch",
+							{
+								inResponseTo: inResponseToAcs,
+								expectedProvider: storedRequest.providerId,
+								actualProvider: providerId,
+							},
+						);
+						if (options?.saml?.authnRequestStore) {
+							await options.saml.authnRequestStore.delete(inResponseToAcs);
+						} else {
+							await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+								`${AUTHN_REQUEST_KEY_PREFIX}${inResponseToAcs}`,
+							);
+						}
+						const redirectUrl =
+							RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+						throw ctx.redirect(
+							`${redirectUrl}?error=invalid_saml_response&error_description=Provider+mismatch`,
+						);
+					}
+
+					if (options?.saml?.authnRequestStore) {
+						await options.saml.authnRequestStore.delete(inResponseToAcs);
+					} else {
+						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+							`${AUTHN_REQUEST_KEY_PREFIX}${inResponseToAcs}`,
+						);
+					}
+				} else if (!allowIdpInitiated) {
+					ctx.context.logger.error(
+						"SAML IdP-initiated SSO rejected: InResponseTo missing and allowIdpInitiated is false",
+						{ providerId },
+					);
+					const redirectUrl =
+						RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+					throw ctx.redirect(
+						`${redirectUrl}?error=unsolicited_response&error_description=IdP-initiated+SSO+not+allowed`,
+					);
+				}
+			}
+
 			const attributes = extract.attributes || {};
 			const mapping = parsedSamlConfig.mapping ?? {};
 

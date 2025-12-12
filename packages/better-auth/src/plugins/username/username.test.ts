@@ -54,7 +54,7 @@ describe("username", async (it) => {
 		expect(res.data?.token).toBeDefined();
 	});
 	it("should update username", async () => {
-		const res = await client.updateUser({
+		await client.updateUser({
 			username: "new_username_2.1",
 			fetchOptions: {
 				headers,
@@ -468,7 +468,7 @@ describe("username with displayUsername validation", async (it) => {
 });
 
 describe("isUsernameAvailable with custom validator", async (it) => {
-	const { client, cookieSetter } = await getTestInstance(
+	const { client } = await getTestInstance(
 		{
 			plugins: [
 				username({

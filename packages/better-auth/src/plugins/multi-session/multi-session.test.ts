@@ -97,7 +97,7 @@ describe("multi-session", async () => {
 			name: "Name",
 		};
 		let token = "";
-		const signUpRes = await client.signUp.email(testUser3, {
+		await client.signUp.email(testUser3, {
 			onSuccess: (ctx) => {
 				const header = ctx.response.headers.get("set-cookie");
 				expect(header).toContain("better-auth.session_token");
@@ -162,15 +162,8 @@ describe("multi-session", async () => {
 		};
 
 		const attackerHeaders = new Headers();
-		let attackerSessionToken = "";
 		await client.signUp.email(attackerUser, {
 			onSuccess: cookieSetter(attackerHeaders),
-			onResponse(context) {
-				const header = context.response.headers.get("set-cookie");
-				const cookies = parseSetCookieHeader(header || "");
-				attackerSessionToken =
-					cookies.get("better-auth.session_token")?.value.split(".")[0] || "";
-			},
 		});
 
 		const victimHeaders = new Headers();

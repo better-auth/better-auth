@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/core",
-  "version": "1.4.6-beta.4",
+  "version": "1.4.7-beta.3",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "repository": {
@@ -25,6 +25,12 @@
     "./async_hooks": {
       "dev-source": "./src/async_hooks/index.ts",
       "types": "./dist/async_hooks/index.d.mts",
+      "node": "./dist/async_hooks/index.mjs",
+      "deno": "./dist/async_hooks/index.mjs",
+      "bun": "./dist/async_hooks/index.mjs",
+      "edge": "./dist/async_hooks/pure.index.mjs",
+      "workerd": "./dist/async_hooks/index.mjs",
+      "browser": "./dist/async_hooks/pure.index.mjs",
       "default": "./dist/async_hooks/index.mjs"
     },
     "./context": {
@@ -109,6 +115,7 @@
     "build": "tsdown",
     "dev": "tsdown --watch",
     "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
     "typecheck": "tsc --project tsconfig.json",
     "test": "vitest",
     "coverage": "vitest run --coverage"

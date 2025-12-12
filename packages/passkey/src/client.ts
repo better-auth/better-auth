@@ -69,7 +69,7 @@ export const getPasskeyActions = (
 			$store.notify("$sessionSignal");
 
 			return verified;
-		} catch (e) {
+		} catch {
 			return {
 				data: null,
 				error: {
