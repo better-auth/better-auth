@@ -29,8 +29,11 @@ export type PredefinedApiKeyOptions = ApiKeyOptions &
 			| "startingCharactersConfig"
 			| "storage"
 			| "fallbackToDatabase"
+			| "deferUpdates"
 		>
 	> & {
+		deferredUpdateHandler?: ApiKeyOptions["deferredUpdateHandler"];
+	} & {
 		keyExpiration: Required<ApiKeyOptions["keyExpiration"]>;
 		startingCharactersConfig: Required<
 			ApiKeyOptions["startingCharactersConfig"]

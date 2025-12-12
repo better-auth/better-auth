@@ -942,6 +942,59 @@ export const auth = betterAuth({
 });
 ```
 
+`deferUpdates` <span className="opacity-70">`boolean`</span>
+
+Defer non-critical updates (rate limiting counters, timestamps, remaining count) to run after the response is sent. This can significantly improve response times on serverless platforms like Cloudflare Workers. Default is `false`.
+
+When enabled, you **must** provide a `deferredUpdateHandler`.
+
+<Callout type="warn">
+  Enabling this introduces potential race conditions where concurrent requests may slightly exceed rate limits or remaining counts. Only enable if your application can tolerate this.
+</Callout>
+
+`deferredUpdateHandler` <span className="opacity-70">`(fn: () => Promise<void>) => void`</span>
+
+Function to schedule deferred updates. Required when `deferUpdates` is `true`.
+
+Use `waitUntil` from `@vercel/functions` on Vercel, or `ctx.waitUntil` on Cloudflare Workers.
+
+<Tabs items={["Vercel", "Cloudflare Workers"]}>
+  <Tab value="Vercel">
+    ```ts
+    import { waitUntil } from "@vercel/functions";
+
+    export const auth = betterAuth({
+      plugins: [
+        apiKey({
+          deferUpdates: true,
+          deferredUpdateHandler: (fn) => waitUntil(fn()),
+        }),
+      ],
+    });
+    ```
+  </Tab>
+  <Tab value="Cloudflare Workers">
+    ```ts
+    import { AsyncLocalStorage } from "node:async_hooks";
+
+    const execCtxStorage = new AsyncLocalStorage<ExecutionContext>();
+
+    export const auth = betterAuth({
+      plugins: [
+        apiKey({
+          deferUpdates: true,
+          deferredUpdateHandler: (fn) => {
+            execCtxStorage.getStore()?.waitUntil(fn());
+          },
+        }),
+      ],
+    });
+
+    // In your request handler, wrap with execCtxStorage.run(ctx, ...)
+    ```
+  </Tab>
+</Tabs>
+
 `permissions` <span className="opacity-70">`{ defaultPermissions?: Statements | ((userId: string, ctx: GenericEndpointContext) => Statements | Promise<Statements>) }`</span>
 
 Permissions for the API key.

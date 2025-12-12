@@ -95,7 +95,16 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 		enableSessionForAPIKeys: options?.enableSessionForAPIKeys ?? false,
 		fallbackToDatabase: options?.fallbackToDatabase ?? false,
 		customStorage: options?.customStorage,
+		deferUpdates: options?.deferUpdates ?? false,
+		deferredUpdateHandler: options?.deferredUpdateHandler,
 	} satisfies ApiKeyOptions;
+
+	if (opts.deferUpdates && !opts.deferredUpdateHandler) {
+		throw new Error(
+			"[better-auth] apiKey plugin: `deferUpdates` is enabled but `deferredUpdateHandler` is not provided. " +
+				"You must provide a handler function to schedule deferred updates.",
+		);
+	}
 
 	const schema = mergeSchema(
 		apiKeySchema({
@@ -174,13 +183,23 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 							schema,
 						});
 
-						//for cleanup purposes
-						deleteAllExpiredApiKeys(ctx.context).catch((err) => {
-							ctx.context.logger.error(
-								"Failed to delete expired API keys:",
-								err,
+						if (opts.deferUpdates && opts.deferredUpdateHandler) {
+							opts.deferredUpdateHandler(() =>
+								deleteAllExpiredApiKeys(ctx.context).catch((err) => {
+									ctx.context.logger.error(
+										"Failed to delete expired API keys:",
+										err,
+									);
+								}),
 							);
-						});
+						} else {
+							deleteAllExpiredApiKeys(ctx.context).catch((err) => {
+								ctx.context.logger.error(
+									"Failed to delete expired API keys:",
+									err,
+								);
+							});
+						}
 
 						const user = await ctx.context.internalAdapter.findUserById(
 							apiKey.userId,
