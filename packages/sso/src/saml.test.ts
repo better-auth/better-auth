@@ -18,6 +18,7 @@ import express from "express";
 import * as saml from "samlify";
 import {
 	afterAll,
+	afterEach,
 	beforeAll,
 	beforeEach,
 	describe,
@@ -25,7 +26,12 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { createInMemoryAuthnRequestStore, sso } from ".";
+import {
+	createInMemoryAuthnRequestStore,
+	DEFAULT_CLOCK_SKEW_MS,
+	sso,
+	validateSAMLTimestamp,
+} from ".";
 import { ssoClient } from "./client";
 
 const spMetadata = `
@@ -2131,72 +2137,81 @@ describe("SSO Provider Config Parsing", () => {
 	});
 
 	it("returns parsed OIDC config and avoids [object Object] in response", async () => {
-		const data = {
-			user: [] as any[],
-			session: [] as any[],
-			verification: [] as any[],
-			account: [] as any[],
-			ssoProvider: [] as any[],
-		};
+		const { OAuth2Server } = await import("oauth2-mock-server");
+		const oidcServer = new OAuth2Server();
 
-		const memory = memoryAdapter(data);
+		await oidcServer.issuer.keys.generate("RS256");
+		await oidcServer.start(8082, "localhost");
 
-		const auth = betterAuth({
-			database: memory,
-			baseURL: "http://localhost:3000",
-			emailAndPassword: { enabled: true },
-			plugins: [sso()],
-		});
+		try {
+			const data = {
+				user: [] as any[],
+				session: [] as any[],
+				verification: [] as any[],
+				account: [] as any[],
+				ssoProvider: [] as any[],
+			};
 
-		const authClient = createAuthClient({
-			baseURL: "http://localhost:3000",
-			plugins: [bearer(), ssoClient()],
-			fetchOptions: {
-				customFetchImpl: async (url, init) =>
-					auth.handler(new Request(url, init)),
-			},
-		});
+			const memory = memoryAdapter(data);
 
-		const headers = new Headers();
-		await authClient.signUp.email({
-			email: "test@example.com",
-			password: "password123",
-			name: "Test User",
-		});
-		await authClient.signIn.email(
-			{ email: "test@example.com", password: "password123" },
-			{ onSuccess: setCookieToHeader(headers) },
-		);
+			const auth = betterAuth({
+				database: memory,
+				baseURL: "http://localhost:3000",
+				emailAndPassword: { enabled: true },
+				plugins: [sso()],
+			});
 
-		const provider = await auth.api.registerSSOProvider({
-			body: {
-				providerId: "oidc-config-provider",
-				issuer: "http://localhost:8080",
-				domain: "example.com",
-				oidcConfig: {
-					clientId: "test-client",
-					clientSecret: "test-secret",
-					discoveryEndpoint:
-						"http://localhost:8080/.well-known/openid-configuration",
-					mapping: {
-						id: "sub",
-						email: "email",
-						name: "name",
+			const authClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				plugins: [bearer(), ssoClient()],
+				fetchOptions: {
+					customFetchImpl: async (url, init) =>
+						auth.handler(new Request(url, init)),
+				},
+			});
+
+			const headers = new Headers();
+			await authClient.signUp.email({
+				email: "test@example.com",
+				password: "password123",
+				name: "Test User",
+			});
+			await authClient.signIn.email(
+				{ email: "test@example.com", password: "password123" },
+				{ onSuccess: setCookieToHeader(headers) },
+			);
+
+			const provider = await auth.api.registerSSOProvider({
+				body: {
+					providerId: "oidc-config-provider",
+					issuer: oidcServer.issuer.url!,
+					domain: "example.com",
+					oidcConfig: {
+						clientId: "test-client",
+						clientSecret: "test-secret",
+						tokenEndpointAuthentication: "client_secret_basic",
+						mapping: {
+							id: "sub",
+							email: "email",
+							name: "name",
+						},
 					},
 				},
-			},
-			headers,
-		});
+				headers,
+			});
 
-		expect(provider.oidcConfig).toBeDefined();
-		expect(typeof provider.oidcConfig).toBe("object");
-		expect(provider.oidcConfig?.clientId).toBe("test-client");
-		expect(provider.oidcConfig?.clientSecret).toBe("test-secret");
+			expect(provider.oidcConfig).toBeDefined();
+			expect(typeof provider.oidcConfig).toBe("object");
+			expect(provider.oidcConfig?.clientId).toBe("test-client");
+			expect(provider.oidcConfig?.clientSecret).toBe("test-secret");
 
-		const serialized = JSON.stringify(provider.oidcConfig);
-		expect(serialized).not.toContain("[object Object]");
+			const serialized = JSON.stringify(provider.oidcConfig);
+			expect(serialized).not.toContain("[object Object]");
 
-		expect(provider.oidcConfig?.mapping?.id).toBe("sub");
+			expect(provider.oidcConfig?.mapping?.id).toBe("sub");
+		} finally {
+			await oidcServer.stop().catch(() => {});
+		}
 	});
 });
 
@@ -2847,5 +2862,234 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 		expect(redirectLocation).not.toContain("evil.com");
 		// Falls back to samlConfig.callbackUrl
 		expect(redirectLocation).toBe("http://localhost:3000/dashboard");
+	});
+});
+
+describe("SAML SSO - Timestamp Validation", () => {
+	describe("Valid assertions within time window", () => {
+		it("should accept assertion with current NotBefore and future NotOnOrAfter", () => {
+			const now = new Date();
+			const fiveMinutesFromNow = new Date(Date.now() + 5 * 60 * 1000);
+			expect(() =>
+				validateSAMLTimestamp({
+					notBefore: now.toISOString(),
+					notOnOrAfter: fiveMinutesFromNow.toISOString(),
+				}),
+			).not.toThrow();
+		});
+
+		it("should accept assertion within clock skew tolerance (expired 2 min ago with 5 min skew)", () => {
+			const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+			expect(() =>
+				validateSAMLTimestamp({ notOnOrAfter: twoMinutesAgo }),
+			).not.toThrow();
+		});
+
+		it("should accept assertion with NotBefore slightly in future (within clock skew)", () => {
+			const twoMinutesFromNow = new Date(
+				Date.now() + 2 * 60 * 1000,
+			).toISOString();
+			expect(() =>
+				validateSAMLTimestamp({ notBefore: twoMinutesFromNow }),
+			).not.toThrow();
+		});
+	});
+
+	describe("NotBefore validation (future-dated assertions)", () => {
+		it("should reject assertion with NotBefore too far in future (beyond clock skew)", () => {
+			const tenMinutesFromNow = new Date(
+				Date.now() + 10 * 60 * 1000,
+			).toISOString();
+			expect(() =>
+				validateSAMLTimestamp({ notBefore: tenMinutesFromNow }),
+			).toThrow("SAML assertion is not yet valid");
+		});
+
+		it("should reject with custom strict clock skew (1 second)", () => {
+			const threeSecondsFromNow = new Date(Date.now() + 3 * 1000).toISOString();
+			expect(() =>
+				validateSAMLTimestamp(
+					{ notBefore: threeSecondsFromNow },
+					{ clockSkew: 1000 },
+				),
+			).toThrow("SAML assertion is not yet valid");
+		});
+	});
+
+	describe("NotOnOrAfter validation (expired assertions)", () => {
+		it("should reject expired assertion (NotOnOrAfter in past beyond clock skew)", () => {
+			const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+			expect(() =>
+				validateSAMLTimestamp({ notOnOrAfter: tenMinutesAgo }),
+			).toThrow("SAML assertion has expired");
+		});
+
+		it("should reject with custom strict clock skew (1 second)", () => {
+			const threeSecondsAgo = new Date(Date.now() - 3 * 1000).toISOString();
+			expect(() =>
+				validateSAMLTimestamp(
+					{ notOnOrAfter: threeSecondsAgo },
+					{ clockSkew: 1000 },
+				),
+			).toThrow("SAML assertion has expired");
+		});
+	});
+
+	describe("Boundary conditions (exactly at window edges)", () => {
+		const FIXED_TIME = new Date("2024-01-15T12:00:00.000Z").getTime();
+
+		beforeEach(() => {
+			vi.useFakeTimers();
+			vi.setSystemTime(FIXED_TIME);
+		});
+
+		afterEach(() => {
+			vi.useRealTimers();
+		});
+
+		it("should accept assertion expiring exactly at clock skew boundary", () => {
+			const exactlyAtBoundary = new Date(
+				FIXED_TIME - DEFAULT_CLOCK_SKEW_MS,
+			).toISOString();
+			expect(() =>
+				validateSAMLTimestamp({ notOnOrAfter: exactlyAtBoundary }),
+			).not.toThrow();
+		});
+
+		it("should reject assertion expiring 1ms beyond clock skew boundary", () => {
+			const justPastBoundary = new Date(
+				FIXED_TIME - DEFAULT_CLOCK_SKEW_MS - 1,
+			).toISOString();
+			expect(() =>
+				validateSAMLTimestamp({ notOnOrAfter: justPastBoundary }),
+			).toThrow("SAML assertion has expired");
+		});
+
+		it("should accept assertion with NotBefore exactly at clock skew boundary", () => {
+			const exactlyAtBoundary = new Date(
+				FIXED_TIME + DEFAULT_CLOCK_SKEW_MS,
+			).toISOString();
+			expect(() =>
+				validateSAMLTimestamp({ notBefore: exactlyAtBoundary }),
+			).not.toThrow();
+		});
+
+		it("should reject assertion with NotBefore 1ms beyond clock skew boundary", () => {
+			const justPastBoundary = new Date(
+				FIXED_TIME + DEFAULT_CLOCK_SKEW_MS + 1,
+			).toISOString();
+			expect(() =>
+				validateSAMLTimestamp({ notBefore: justPastBoundary }),
+			).toThrow("SAML assertion is not yet valid");
+		});
+	});
+
+	describe("Missing timestamps behavior", () => {
+		it("should accept missing timestamps when requireTimestamps is false (default)", () => {
+			expect(() =>
+				validateSAMLTimestamp(undefined, { requireTimestamps: false }),
+			).not.toThrow();
+		});
+
+		it("should accept empty conditions when requireTimestamps is false", () => {
+			expect(() =>
+				validateSAMLTimestamp({}, { requireTimestamps: false }),
+			).not.toThrow();
+		});
+
+		it("should reject missing timestamps when requireTimestamps is true", () => {
+			expect(() =>
+				validateSAMLTimestamp(undefined, { requireTimestamps: true }),
+			).toThrow("SAML assertion missing required timestamp conditions");
+		});
+
+		it("should reject empty conditions when requireTimestamps is true", () => {
+			expect(() =>
+				validateSAMLTimestamp({}, { requireTimestamps: true }),
+			).toThrow("SAML assertion missing required timestamp conditions");
+		});
+
+		it("should accept assertions with only NotBefore (valid)", () => {
+			const now = new Date().toISOString();
+			expect(() => validateSAMLTimestamp({ notBefore: now })).not.toThrow();
+		});
+
+		it("should accept assertions with only NotOnOrAfter (valid, in future)", () => {
+			const future = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+			expect(() =>
+				validateSAMLTimestamp({ notOnOrAfter: future }),
+			).not.toThrow();
+		});
+	});
+
+	describe("Custom clock skew configuration", () => {
+		it("should use custom clockSkew when provided", () => {
+			const twoSecondsAgo = new Date(Date.now() - 2 * 1000).toISOString();
+
+			expect(() =>
+				validateSAMLTimestamp(
+					{ notOnOrAfter: twoSecondsAgo },
+					{ clockSkew: 1000 },
+				),
+			).toThrow("SAML assertion has expired");
+
+			expect(() =>
+				validateSAMLTimestamp(
+					{ notOnOrAfter: twoSecondsAgo },
+					{ clockSkew: 5 * 60 * 1000 },
+				),
+			).not.toThrow();
+		});
+
+		it("should use default 5 minute clock skew when not specified", () => {
+			const fourMinutesAgo = new Date(Date.now() - 4 * 60 * 1000).toISOString();
+			expect(() =>
+				validateSAMLTimestamp({ notOnOrAfter: fourMinutesAgo }),
+			).not.toThrow();
+
+			const sixMinutesAgo = new Date(Date.now() - 6 * 60 * 1000).toISOString();
+			expect(() =>
+				validateSAMLTimestamp({ notOnOrAfter: sixMinutesAgo }),
+			).toThrow("SAML assertion has expired");
+		});
+	});
+
+	describe("Malformed timestamp handling", () => {
+		it("should reject malformed NotBefore timestamp", () => {
+			expect(() =>
+				validateSAMLTimestamp({ notBefore: "not-a-valid-date" }),
+			).toThrow("SAML assertion has invalid NotBefore timestamp");
+		});
+
+		it("should reject malformed NotOnOrAfter timestamp", () => {
+			expect(() =>
+				validateSAMLTimestamp({ notOnOrAfter: "invalid-timestamp" }),
+			).toThrow("SAML assertion has invalid NotOnOrAfter timestamp");
+		});
+
+		it("should treat empty string timestamps as missing (falsy values)", () => {
+			expect(() => validateSAMLTimestamp({ notBefore: "" })).not.toThrow();
+			expect(() => validateSAMLTimestamp({ notOnOrAfter: "" })).not.toThrow();
+		});
+
+		it("should reject garbage data in timestamps", () => {
+			expect(() =>
+				validateSAMLTimestamp({
+					notBefore: "abc123xyz",
+					notOnOrAfter: "!@#$%^&*()",
+				}),
+			).toThrow("SAML assertion has invalid NotBefore timestamp");
+		});
+
+		it("should accept valid ISO 8601 timestamps", () => {
+			const now = new Date();
+			const future = new Date(Date.now() + 10 * 60 * 1000);
+			expect(() =>
+				validateSAMLTimestamp({
+					notBefore: now.toISOString(),
+					notOnOrAfter: future.toISOString(),
+				}),
+			).not.toThrow();
+		});
 	});
 });

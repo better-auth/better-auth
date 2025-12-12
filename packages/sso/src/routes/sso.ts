@@ -26,11 +26,98 @@ import * as z from "zod/v4";
 import type { AuthnRequestRecord } from "../authn-request-store";
 import { DEFAULT_AUTHN_REQUEST_TTL_MS } from "../authn-request-store";
 import { generateRelayState, parseRelayState } from "../saml-state";
+import type { HydratedOIDCConfig } from "../oidc";
+import {
+	DiscoveryError,
+	discoverOIDCConfig,
+	mapDiscoveryErrorToAPIError,
+} from "../oidc";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
 
 import { safeJsonParse, validateEmailDomain } from "../utils";
 
 const AUTHN_REQUEST_KEY_PREFIX = "saml-authn-request:";
+
+/** Default clock skew tolerance: 5 minutes */
+export const DEFAULT_CLOCK_SKEW_MS = 5 * 60 * 1000;
+
+export interface TimestampValidationOptions {
+	clockSkew?: number;
+	requireTimestamps?: boolean;
+	logger?: {
+		warn: (message: string, data?: Record<string, unknown>) => void;
+	};
+}
+
+/** Conditions extracted from SAML assertion */
+export interface SAMLConditions {
+	notBefore?: string;
+	notOnOrAfter?: string;
+}
+
+/**
+ * Validates SAML assertion timestamp conditions (NotBefore/NotOnOrAfter).
+ * Prevents acceptance of expired or future-dated assertions.
+ * @throws {APIError} If timestamps are invalid, expired, or not yet valid
+ */
+export function validateSAMLTimestamp(
+	conditions: SAMLConditions | undefined,
+	options: TimestampValidationOptions = {},
+): void {
+	const clockSkew = options.clockSkew ?? DEFAULT_CLOCK_SKEW_MS;
+	const hasTimestamps = conditions?.notBefore || conditions?.notOnOrAfter;
+
+	if (!hasTimestamps) {
+		if (options.requireTimestamps) {
+			throw new APIError("BAD_REQUEST", {
+				message: "SAML assertion missing required timestamp conditions",
+				details:
+					"Assertions must include NotBefore and/or NotOnOrAfter conditions",
+			});
+		}
+		// Log warning for missing timestamps when not required
+		options.logger?.warn(
+			"SAML assertion accepted without timestamp conditions",
+			{ hasConditions: !!conditions },
+		);
+		return;
+	}
+
+	const now = Date.now();
+
+	if (conditions?.notBefore) {
+		const notBeforeTime = new Date(conditions.notBefore).getTime();
+		if (Number.isNaN(notBeforeTime)) {
+			throw new APIError("BAD_REQUEST", {
+				message: "SAML assertion has invalid NotBefore timestamp",
+				details: `Unable to parse NotBefore value: ${conditions.notBefore}`,
+			});
+		}
+		if (now < notBeforeTime - clockSkew) {
+			throw new APIError("BAD_REQUEST", {
+				message: "SAML assertion is not yet valid",
+				details: `Current time is before NotBefore (with ${clockSkew}ms clock skew tolerance)`,
+			});
+		}
+	}
+
+	if (conditions?.notOnOrAfter) {
+		const notOnOrAfterTime = new Date(conditions.notOnOrAfter).getTime();
+		if (Number.isNaN(notOnOrAfterTime)) {
+			throw new APIError("BAD_REQUEST", {
+				message: "SAML assertion has invalid NotOnOrAfter timestamp",
+				details: `Unable to parse NotOnOrAfter value: ${conditions.notOnOrAfter}`,
+			});
+		}
+		if (now > notOnOrAfterTime + clockSkew) {
+			throw new APIError("BAD_REQUEST", {
+				message: "SAML assertion has expired",
+				details: `Current time is after NotOnOrAfter (with ${clockSkew}ms clock skew tolerance)`,
+			});
+		}
+	}
+}
+
 const spMetadataQuerySchema = z.object({
 	providerId: z.string(),
 	format: z.enum(["xml", "json"]).default("xml"),
@@ -158,6 +245,13 @@ const ssoProviderBodySchema = z.object({
 				})
 				.optional(),
 			discoveryEndpoint: z.string().optional(),
+			skipDiscovery: z
+				.boolean()
+				.meta({
+					description:
+						"Skip OIDC discovery during registration. When true, you must provide authorizationEndpoint, tokenEndpoint, and jwksEndpoint manually.",
+				})
+				.optional(),
 			scopes: z
 				.array(z.string(), {})
 				.meta({
@@ -577,6 +671,80 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				});
 			}
 
+			let hydratedOIDCConfig: HydratedOIDCConfig | null = null;
+			if (body.oidcConfig && !body.oidcConfig.skipDiscovery) {
+				try {
+					hydratedOIDCConfig = await discoverOIDCConfig({
+						issuer: body.issuer,
+						existingConfig: {
+							discoveryEndpoint: body.oidcConfig.discoveryEndpoint,
+							authorizationEndpoint: body.oidcConfig.authorizationEndpoint,
+							tokenEndpoint: body.oidcConfig.tokenEndpoint,
+							jwksEndpoint: body.oidcConfig.jwksEndpoint,
+							userInfoEndpoint: body.oidcConfig.userInfoEndpoint,
+							tokenEndpointAuthentication:
+								body.oidcConfig.tokenEndpointAuthentication,
+						},
+					});
+				} catch (error) {
+					if (error instanceof DiscoveryError) {
+						throw mapDiscoveryErrorToAPIError(error);
+					}
+					throw error;
+				}
+			}
+
+			const buildOIDCConfig = () => {
+				if (!body.oidcConfig) return null;
+
+				if (body.oidcConfig.skipDiscovery) {
+					return JSON.stringify({
+						issuer: body.issuer,
+						clientId: body.oidcConfig.clientId,
+						clientSecret: body.oidcConfig.clientSecret,
+						authorizationEndpoint: body.oidcConfig.authorizationEndpoint,
+						tokenEndpoint: body.oidcConfig.tokenEndpoint,
+						tokenEndpointAuthentication:
+							body.oidcConfig.tokenEndpointAuthentication ||
+							"client_secret_basic",
+						jwksEndpoint: body.oidcConfig.jwksEndpoint,
+						pkce: body.oidcConfig.pkce,
+						discoveryEndpoint:
+							body.oidcConfig.discoveryEndpoint ||
+							`${body.issuer}/.well-known/openid-configuration`,
+						mapping: body.oidcConfig.mapping,
+						scopes: body.oidcConfig.scopes,
+						userInfoEndpoint: body.oidcConfig.userInfoEndpoint,
+						overrideUserInfo:
+							ctx.body.overrideUserInfo ||
+							options?.defaultOverrideUserInfo ||
+							false,
+					});
+				}
+
+				if (!hydratedOIDCConfig) return null;
+
+				return JSON.stringify({
+					issuer: hydratedOIDCConfig.issuer,
+					clientId: body.oidcConfig.clientId,
+					clientSecret: body.oidcConfig.clientSecret,
+					authorizationEndpoint: hydratedOIDCConfig.authorizationEndpoint,
+					tokenEndpoint: hydratedOIDCConfig.tokenEndpoint,
+					tokenEndpointAuthentication:
+						hydratedOIDCConfig.tokenEndpointAuthentication,
+					jwksEndpoint: hydratedOIDCConfig.jwksEndpoint,
+					pkce: body.oidcConfig.pkce,
+					discoveryEndpoint: hydratedOIDCConfig.discoveryEndpoint,
+					mapping: body.oidcConfig.mapping,
+					scopes: body.oidcConfig.scopes,
+					userInfoEndpoint: hydratedOIDCConfig.userInfoEndpoint,
+					overrideUserInfo:
+						ctx.body.overrideUserInfo ||
+						options?.defaultOverrideUserInfo ||
+						false,
+				});
+			};
+
 			const provider = await ctx.context.adapter.create<
 				Record<string, any>,
 				SSOProvider<O>
@@ -586,29 +754,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 					issuer: body.issuer,
 					domain: body.domain,
 					domainVerified: false,
-					oidcConfig: body.oidcConfig
-						? JSON.stringify({
-								issuer: body.issuer,
-								clientId: body.oidcConfig.clientId,
-								clientSecret: body.oidcConfig.clientSecret,
-								authorizationEndpoint: body.oidcConfig.authorizationEndpoint,
-								tokenEndpoint: body.oidcConfig.tokenEndpoint,
-								tokenEndpointAuthentication:
-									body.oidcConfig.tokenEndpointAuthentication,
-								jwksEndpoint: body.oidcConfig.jwksEndpoint,
-								pkce: body.oidcConfig.pkce,
-								discoveryEndpoint:
-									body.oidcConfig.discoveryEndpoint ||
-									`${body.issuer}/.well-known/openid-configuration`,
-								mapping: body.oidcConfig.mapping,
-								scopes: body.oidcConfig.scopes,
-								userInfoEndpoint: body.oidcConfig.userInfoEndpoint,
-								overrideUserInfo:
-									ctx.body.overrideUserInfo ||
-									options?.defaultOverrideUserInfo ||
-									false,
-							})
-						: null,
+					oidcConfig: buildOIDCConfig(),
 					samlConfig: body.samlConfig
 						? JSON.stringify({
 								issuer: body.issuer,
@@ -1785,6 +1931,12 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 
 			const { extract } = parsedResponse!;
 
+			validateSAMLTimestamp((extract as any).conditions, {
+				clockSkew: options?.saml?.clockSkew,
+				requireTimestamps: options?.saml?.requireTimestamps,
+				logger: ctx.context.logger,
+			});
+
 			const inResponseTo = (extract as any).inResponseTo as string | undefined;
 			const shouldValidateInResponseTo =
 				options?.saml?.authnRequestStore ||
@@ -1809,6 +1961,13 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 								storedRequest = JSON.parse(
 									verification.value,
 								) as AuthnRequestRecord;
+								// Validate expiration for database-stored records
+								// Note: Cleanup of expired records is handled automatically by
+								// findVerificationValue, but we still need to check expiration
+								// since the record is returned before cleanup runs
+								if (storedRequest && storedRequest.expiresAt < Date.now()) {
+									storedRequest = null;
+								}
 							} catch {
 								storedRequest = null;
 							}
@@ -2221,6 +2380,12 @@ export const acsEndpoint = (options?: SSOOptions) => {
 
 			const { extract } = parsedResponse!;
 
+			validateSAMLTimestamp((extract as any).conditions, {
+				clockSkew: options?.saml?.clockSkew,
+				requireTimestamps: options?.saml?.requireTimestamps,
+				logger: ctx.context.logger,
+			});
+
 			const inResponseToAcs = (extract as any).inResponseTo as
 				| string
 				| undefined;
@@ -2247,6 +2412,9 @@ export const acsEndpoint = (options?: SSOOptions) => {
 								storedRequest = JSON.parse(
 									verification.value,
 								) as AuthnRequestRecord;
+								if (storedRequest && storedRequest.expiresAt < Date.now()) {
+									storedRequest = null;
+								}
 							} catch {
 								storedRequest = null;
 							}
