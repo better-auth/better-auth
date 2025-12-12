@@ -1,6 +1,27 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError } from "better-call";
+import { normalizePathname } from "../../utils/url";
+
+/**
+ * Checks if a request path should skip origin validation.
+ * Supports prefix matching - a configured path like "/sso/saml2/callback"
+ * will match request paths like "/sso/saml2/callback/provider-name".
+ */
+function shouldSkipOriginCheckForPath(
+	requestUrl: string,
+	basePath: string,
+	skipPaths: string[],
+): boolean {
+	if (skipPaths.length === 0) {
+		return false;
+	}
+	const normalizedPath = normalizePathname(requestUrl, basePath);
+	return skipPaths.some(
+		(skipPath) =>
+			normalizedPath === skipPath || normalizedPath.startsWith(`${skipPath}/`),
+	);
+}
 
 /**
  * A middleware to validate callbackURL and origin against
@@ -42,10 +63,20 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 			throw new APIError("FORBIDDEN", { message: `Invalid ${label}` });
 		}
 	};
+
+	// Check if this path should skip origin validation (e.g., SAML ACS endpoints)
+	const basePath = new URL(ctx.context.baseURL).pathname;
+	const skipOriginForThisPath = shouldSkipOriginCheckForPath(
+		ctx.request.url,
+		basePath,
+		ctx.context.skipOriginCheckForPaths,
+	);
+
 	if (
 		useCookies &&
 		!ctx.context.skipCSRFCheck &&
-		!ctx.context.skipOriginCheck
+		!ctx.context.skipOriginCheck &&
+		!skipOriginForThisPath
 	) {
 		if (!originHeader || originHeader === "null") {
 			throw new APIError("FORBIDDEN", { message: "Missing or null Origin" });

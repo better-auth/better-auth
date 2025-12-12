@@ -276,4 +276,16 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 		 * @default false
 		 */
 		skipCSRFCheck: boolean;
+		/**
+		 * Paths that should skip origin check validation.
+		 * These are normalized paths (without basePath prefix).
+		 * Useful for endpoints that receive POST requests from external
+		 * sources like IdP callbacks.
+		 *
+		 * Paths support prefix matching - a path like "/sso/saml2/callback"
+		 * will match "/sso/saml2/callback/provider-name".
+		 *
+		 * @example ["/sso/saml2/callback", "/sso/saml2/sp/acs"]
+		 */
+		skipOriginCheckForPaths: string[];
 	};
