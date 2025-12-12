@@ -155,7 +155,10 @@ describe("electron", () => {
 	});
 
 	it("should set redirect cookie after signing in", async () => {
-		const { error } = await proxyClient.signUp.email(
+		(globalThis as any)[kCodeVerifier] = "test-challenge";
+		(globalThis as any)[kState] = "abc";
+
+	  const { error } = await proxyClient.signUp.email(
 			{
 				email: "test@test.com",
 				password: "password",

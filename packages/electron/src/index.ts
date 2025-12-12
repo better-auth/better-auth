@@ -82,35 +82,31 @@ export const electron = (options?: ElectronOptions | undefined) => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						if (
+					const querySchema = 	z
+						.object({
+							client_id: z.string(),
+							code_challenge: z.string().nonempty(),
+							code_challenge_method: z.string().optional().default("plain"),
+							state: z.string().nonempty(),
+						})
+					if (
 							ctx.query?.client_id?.toLowerCase() === "electron" &&
 							(ctx.path.startsWith("/sign-in") ||
 								ctx.path.startsWith("/sign-up"))
 						) {
-							const query = z
-								.object({
-									client_id: z.string(),
-									code_challenge: z.string().nonempty(),
-									code_challenge_method: z.string().optional().default("plain"),
-									state: z.string().nonempty(),
-								})
+							const query = querySchema
 								.safeParse(ctx.query);
-							if (!query.success) {
-								return;
+							if (query.success) {
+  							await ctx.setSignedCookie(
+  								`${opts.cookiePrefix}.transfer_token`,
+  								JSON.stringify(query.data),
+  								ctx.context.secret,
+  								{
+  									...ctx.context.authCookies.sessionToken.options,
+  									maxAge: opts.codeExpiresIn,
+  								},
+  							);
 							}
-
-							const cookie = await ctx.setSignedCookie(
-								`${opts.cookiePrefix}.transfer_token`,
-								JSON.stringify(query.data),
-								ctx.context.secret,
-								{
-									...ctx.context.authCookies.sessionToken.options,
-									maxAge: opts.codeExpiresIn,
-								},
-							);
-
-							console.log("I SET IT", ctx.path, cookie);
-							return;
 						}
 
 						if (!ctx.context.newSession?.session) {
@@ -120,12 +116,20 @@ export const electron = (options?: ElectronOptions | undefined) => {
 							`${opts.cookiePrefix}.transfer_token`,
 							ctx.context.secret,
 						);
-						if (!transferCookie) {
-							return;
+						let transferPayload: z.infer<typeof querySchema> | null = null;
+						if (!!transferCookie) {
+  						transferPayload = JSON.parse(transferCookie);
+						} else {
+						  const query = querySchema.safeParse(ctx.query);
+							if (query.success) {
+							  transferPayload = query.data;
+							}
+						}
+						if (!transferPayload) {
+  						return;
 						}
 
-						const { client_id, code_challenge, code_challenge_method, state } =
-							JSON.parse(transferCookie);
+						const { client_id, code_challenge, code_challenge_method, state } = transferPayload;
 						if (client_id !== "electron") {
 							return;
 						}
