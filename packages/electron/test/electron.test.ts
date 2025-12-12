@@ -395,7 +395,7 @@ describe("electron", () => {
 		expect(c).includes("better-auth.session_token");
 	});
 
-	it("should not trigger infinite refetch with non-./src/cookiesokies", () =>
+	it("should not trigger infinite refetch with non-./src/cookies", () =>
 		runInProcess("browser", async () => {
 			const { hasBetterAuthCookies } = await import("../src/cookies");
 
