@@ -942,6 +942,14 @@ Replay protection is **enabled by default**. This is a critical security feature
 3. If it's a new assertion, it's stored in the database until its `NotOnOrAfter` expiration
 4. If it's a duplicate (replay attack), the request is rejected
 
+**Both SAML endpoints are protected:**
+- `/sso/saml2/callback/:providerId`
+- `/sso/saml2/sp/acs/:providerId`
+
+<Callout type="info">
+Unlike InResponseTo validation, replay protection uses the database verification table by default, so it works correctly in multi-instance deployments without additional configuration.
+</Callout>
+
 #### Configuration
 
 ```ts title="auth.ts"
