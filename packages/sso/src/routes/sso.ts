@@ -1821,7 +1821,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 							{ inResponseTo, providerId: provider.providerId },
 						);
 						const redirectUrl =
-							RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+							relayState?.callbackURL || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
 						throw ctx.redirect(
 							`${redirectUrl}?error=invalid_saml_response&error_description=Unknown+or+expired+request+ID`,
 						);
@@ -1845,7 +1845,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 							);
 						}
 						const redirectUrl =
-							RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+							relayState?.callbackURL || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
 						throw ctx.redirect(
 							`${redirectUrl}?error=invalid_saml_response&error_description=Provider+mismatch`,
 						);
@@ -1864,7 +1864,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 						{ providerId: provider.providerId },
 					);
 					const redirectUrl =
-						RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+						relayState?.callbackURL || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
 					throw ctx.redirect(
 						`${redirectUrl}?error=unsolicited_response&error_description=IdP-initiated+SSO+not+allowed`,
 					);
