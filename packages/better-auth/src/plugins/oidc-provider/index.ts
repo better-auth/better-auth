@@ -1037,6 +1037,19 @@ export const oidcProvider = (options: OIDCOptions) => {
 
 						// If the JWT token is not enabled, create a key and use it to sign
 					} else {
+						if (client.type === "public") {
+							throw new APIError("INTERNAL_SERVER_ERROR", {
+								error_description:
+									"Public clients (PKCE) require the 'jwt' plugin to be enabled. They must use RS256 (Asymmetric) signing because they cannot hold a clientSecret.",
+								error: "server_error",
+							});
+						}
+						if (!client.clientSecret) {
+							throw new APIError("INTERNAL_SERVER_ERROR", {
+								error_description: "Missing client_secret for HS256 signing.",
+								error: "server_error",
+							});
+						}
 						idToken = await new SignJWT(payload)
 							.setProtectedHeader({ alg: "HS256" })
 							.setIssuedAt(iat)
