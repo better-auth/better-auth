@@ -88,10 +88,7 @@
 			]
 		},
 		"packages/electron": {
-      "project": [
-       	"src/**/*.ts!",
-       	"!src/authenticate.ts",
-      ],
+			"project": ["src/**/*.ts!", "!src/authenticate.ts"],
 			"ignoreDependencies": [
 				// optional peers
 				"electron"

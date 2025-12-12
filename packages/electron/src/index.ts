@@ -82,30 +82,28 @@ export const electron = (options?: ElectronOptions | undefined) => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-					const querySchema = 	z
-						.object({
+						const querySchema = z.object({
 							client_id: z.string(),
 							code_challenge: z.string().nonempty(),
 							code_challenge_method: z.string().optional().default("plain"),
 							state: z.string().nonempty(),
-						})
-					if (
+						});
+						if (
 							ctx.query?.client_id?.toLowerCase() === "electron" &&
 							(ctx.path.startsWith("/sign-in") ||
 								ctx.path.startsWith("/sign-up"))
 						) {
-							const query = querySchema
-								.safeParse(ctx.query);
+							const query = querySchema.safeParse(ctx.query);
 							if (query.success) {
-  							await ctx.setSignedCookie(
-  								`${opts.cookiePrefix}.transfer_token`,
-  								JSON.stringify(query.data),
-  								ctx.context.secret,
-  								{
-  									...ctx.context.authCookies.sessionToken.options,
-  									maxAge: opts.codeExpiresIn,
-  								},
-  							);
+								await ctx.setSignedCookie(
+									`${opts.cookiePrefix}.transfer_token`,
+									JSON.stringify(query.data),
+									ctx.context.secret,
+									{
+										...ctx.context.authCookies.sessionToken.options,
+										maxAge: opts.codeExpiresIn,
+									},
+								);
 							}
 						}
 
@@ -118,18 +116,19 @@ export const electron = (options?: ElectronOptions | undefined) => {
 						);
 						let transferPayload: z.infer<typeof querySchema> | null = null;
 						if (!!transferCookie) {
-  						transferPayload = JSON.parse(transferCookie);
+							transferPayload = JSON.parse(transferCookie);
 						} else {
-						  const query = querySchema.safeParse(ctx.query);
+							const query = querySchema.safeParse(ctx.query);
 							if (query.success) {
-							  transferPayload = query.data;
+								transferPayload = query.data;
 							}
 						}
 						if (!transferPayload) {
-  						return;
+							return;
 						}
 
-						const { client_id, code_challenge, code_challenge_method, state } = transferPayload;
+						const { client_id, code_challenge, code_challenge_method, state } =
+							transferPayload;
 						if (client_id !== "electron") {
 							return;
 						}
