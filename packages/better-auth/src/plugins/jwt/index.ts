@@ -29,7 +29,7 @@ const verifyJWTBodySchema = z.object({
 	issuer: z.string().optional(),
 });
 
-export const jwt = (options?: JwtOptions | undefined) => {
+export const jwt = <O extends JwtOptions>(options?: O) => {
 	// Remote url must be set when using signing function
 	if (options?.jwt?.sign && !options.jwks?.remoteUrl) {
 		throw new BetterAuthError(
@@ -61,7 +61,7 @@ export const jwt = (options?: JwtOptions | undefined) => {
 
 	return {
 		id: "jwt",
-		options,
+		options: options as NoInfer<O>,
 		endpoints: {
 			getJwks: createAuthEndpoint(
 				jwksPath,
@@ -241,11 +241,9 @@ export const jwt = (options?: JwtOptions | undefined) => {
 				},
 			),
 			signJWT: createAuthEndpoint(
-				"/sign-jwt",
 				{
 					method: "POST",
 					metadata: {
-						SERVER_ONLY: true,
 						$Infer: {
 							body: {} as {
 								payload: JWTPayload;
@@ -267,11 +265,9 @@ export const jwt = (options?: JwtOptions | undefined) => {
 				},
 			),
 			verifyJWT: createAuthEndpoint(
-				"/verify-jwt",
 				{
 					method: "POST",
 					metadata: {
-						SERVER_ONLY: true,
 						$Infer: {
 							body: {} as {
 								token: string;

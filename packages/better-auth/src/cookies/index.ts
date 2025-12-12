@@ -10,7 +10,6 @@ import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
 import type { CookieOptions } from "better-call";
-import { ms } from "ms";
 import {
 	signJWT,
 	symmetricDecodeJWT,
@@ -21,6 +20,7 @@ import { parseUserOutput } from "../db/schema";
 import type { Session, User } from "../types";
 import { getDate } from "../utils/date";
 import { SECURE_COOKIE_PREFIX } from "./cookie-utils";
+import { sec } from "../utils/time";
 import { createAccountStore, createSessionStore } from "./session-store";
 
 export function createCookieGetter(options: BetterAuthOptions) {
@@ -75,7 +75,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 
 export function getCookies(options: BetterAuthOptions) {
 	const createCookie = createCookieGetter(options);
-	const sessionMaxAge = options.session?.expiresIn || ms("7d") / 1000;
+	const sessionMaxAge = options.session?.expiresIn || sec("7d");
 	const sessionToken = createCookie("session_token", {
 		maxAge: sessionMaxAge,
 	});

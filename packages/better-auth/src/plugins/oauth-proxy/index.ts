@@ -55,12 +55,12 @@ const oAuthProxyQuerySchema = z.object({
 	}),
 });
 
-export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
+export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 	const maxAge = opts?.maxAge ?? 60; // Default 60 seconds
 
 	return {
 		id: "oauth-proxy",
-		options: opts,
+		options: opts as NoInfer<O>,
 		endpoints: {
 			oAuthProxy: createAuthEndpoint(
 				"/oauth-proxy-callback",
