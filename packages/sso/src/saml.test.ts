@@ -3094,3 +3094,226 @@ describe("SAML SSO - Timestamp Validation", () => {
 		});
 	});
 });
+
+describe("SAML ACS Origin Check Bypass", () => {
+	const mockIdP = createMockSAMLIdP(8081);
+
+	beforeAll(async () => {
+		await mockIdP.start();
+	});
+
+	afterAll(async () => {
+		await mockIdP.stop();
+	});
+
+	describe("Positive: SAML endpoints allow external IdP origins", () => {
+		it("should allow SAML callback POST from external IdP origin", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [sso()],
+			});
+			const { headers } = await signInWithTestUser();
+
+			// Register SAML provider with full config
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "origin-bypass-callback",
+					issuer: "http://localhost:8081",
+					domain: "origin-bypass.com",
+					samlConfig: {
+						entryPoint: mockIdP.metadataUrl,
+						cert: certificate,
+						callbackUrl: "http://localhost:8081/api/auth/sso/saml2/callback",
+						wantAssertionsSigned: false,
+						signatureAlgorithm: "sha256",
+						digestAlgorithm: "sha256",
+						spMetadata: {
+							metadata: spMetadata,
+						},
+					},
+				},
+				headers,
+			});
+
+			// POST to callback with external Origin header (simulating IdP POST)
+			// Origin check should be bypassed for SAML callback endpoints
+			const callbackRes = await auth.handler(
+				new Request(
+					"http://localhost:8081/api/auth/sso/saml2/callback/origin-bypass-callback",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+							Origin: "http://external-idp.example.com", // External IdP origin - would normally be blocked
+							Cookie: headers.get("cookie") || "",
+						},
+						body: new URLSearchParams({
+							SAMLResponse: Buffer.from("<fake-saml-response/>").toString(
+								"base64",
+							),
+							RelayState: "",
+						}).toString(),
+					},
+				),
+			);
+
+			// Should NOT return 403 Forbidden (origin check bypassed)
+			// May return other errors (400, 500) due to invalid SAML response, but NOT origin rejection
+			expect(callbackRes.status).not.toBe(403);
+		});
+
+		it("should allow ACS endpoint POST from external IdP origin", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [sso()],
+			});
+			const { headers } = await signInWithTestUser();
+
+			// Register SAML provider with full config
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "origin-bypass-acs",
+					issuer: "http://localhost:8081",
+					domain: "origin-bypass-acs.com",
+					samlConfig: {
+						entryPoint: mockIdP.metadataUrl,
+						cert: certificate,
+						callbackUrl: "http://localhost:8081/api/auth/sso/saml2/sp/acs",
+						wantAssertionsSigned: false,
+						signatureAlgorithm: "sha256",
+						digestAlgorithm: "sha256",
+						spMetadata: {
+							metadata: spMetadata,
+						},
+					},
+				},
+				headers,
+			});
+
+			// POST to ACS with external Origin header
+			const acsRes = await auth.handler(
+				new Request(
+					"http://localhost:8081/api/auth/sso/saml2/sp/acs/origin-bypass-acs",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+							Origin: "http://idp.external.com", // External IdP origin
+							Cookie: headers.get("cookie") || "",
+						},
+						body: new URLSearchParams({
+							SAMLResponse: Buffer.from("<fake-saml-response/>").toString(
+								"base64",
+							),
+						}).toString(),
+					},
+				),
+			);
+
+			// Should NOT return 403 Forbidden
+			expect(acsRes.status).not.toBe(403);
+		});
+	});
+
+	describe("Negative: Non-SAML endpoints remain protected", () => {
+		it("should block POST to sign-up with untrusted origin when origin check is enabled", async () => {
+			const { auth } = await getTestInstance({
+				plugins: [sso()],
+				advanced: {
+					disableCSRFCheck: false,
+					disableOriginCheck: false,
+				},
+			});
+
+			// Origin check applies when cookies are present and check is enabled
+			const signUpRes = await auth.handler(
+				new Request("http://localhost:8081/api/auth/sign-up/email", {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						Origin: "http://attacker.com",
+						Cookie: "better-auth.session_token=fake-session",
+					},
+					body: JSON.stringify({
+						email: "victim@example.com",
+						password: "password123",
+						name: "Victim",
+					}),
+				}),
+			);
+
+			expect(signUpRes.status).toBe(403);
+		});
+	});
+
+	describe("Edge cases", () => {
+		it("should allow GET requests to SAML metadata regardless of origin", async () => {
+			const { auth } = await getTestInstance({
+				plugins: [sso()],
+			});
+
+			// GET requests always bypass origin check
+			const metadataRes = await auth.handler(
+				new Request("http://localhost:8081/api/auth/sso/saml2/sp/metadata", {
+					method: "GET",
+					headers: {
+						Origin: "http://any-origin.com",
+					},
+				}),
+			);
+
+			expect(metadataRes.status).not.toBe(403);
+		});
+
+		it("should not redirect to malicious RelayState URLs", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [sso()],
+			});
+			const { headers } = await signInWithTestUser();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "relay-security-test",
+					issuer: "http://localhost:8081",
+					domain: "relay-security.com",
+					samlConfig: {
+						entryPoint: mockIdP.metadataUrl,
+						cert: certificate,
+						callbackUrl: "http://localhost:8081/api/auth/sso/saml2/callback",
+						wantAssertionsSigned: false,
+						signatureAlgorithm: "sha256",
+						digestAlgorithm: "sha256",
+						spMetadata: {
+							metadata: spMetadata,
+						},
+					},
+				},
+				headers,
+			});
+
+			// Even with origin bypass, malicious RelayState should be rejected
+			const callbackRes = await auth.handler(
+				new Request(
+					"http://localhost:8081/api/auth/sso/saml2/callback/relay-security-test",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+							Origin: "http://idp.example.com",
+						},
+						body: new URLSearchParams({
+							SAMLResponse: Buffer.from("<fake-saml-response/>").toString(
+								"base64",
+							),
+							RelayState: "http://malicious-site.com/steal-token",
+						}).toString(),
+					},
+				),
+			);
+
+			// Should NOT redirect to malicious URL
+			if (callbackRes.status === 302) {
+				const location = callbackRes.headers.get("Location");
+				expect(location).not.toContain("malicious-site.com");
+			}
+		});
+	});
+});
