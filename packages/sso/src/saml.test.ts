@@ -2151,7 +2151,6 @@ describe("SAML SSO - Signature Validation Security", () => {
 });
 
 describe("SAML SSO - Timestamp Validation", () => {
-	// Tests use the real exported validateSAMLTimestamp function
 
 	describe("Valid assertions within time window", () => {
 		it("should accept assertion with current NotBefore and future NotOnOrAfter", () => {
