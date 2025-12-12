@@ -1922,72 +1922,81 @@ describe("SSO Provider Config Parsing", () => {
 	});
 
 	it("returns parsed OIDC config and avoids [object Object] in response", async () => {
-		const data = {
-			user: [] as any[],
-			session: [] as any[],
-			verification: [] as any[],
-			account: [] as any[],
-			ssoProvider: [] as any[],
-		};
+		const { OAuth2Server } = await import("oauth2-mock-server");
+		const oidcServer = new OAuth2Server();
 
-		const memory = memoryAdapter(data);
+		await oidcServer.issuer.keys.generate("RS256");
+		await oidcServer.start(8082, "localhost");
 
-		const auth = betterAuth({
-			database: memory,
-			baseURL: "http://localhost:3000",
-			emailAndPassword: { enabled: true },
-			plugins: [sso()],
-		});
+		try {
+			const data = {
+				user: [] as any[],
+				session: [] as any[],
+				verification: [] as any[],
+				account: [] as any[],
+				ssoProvider: [] as any[],
+			};
 
-		const authClient = createAuthClient({
-			baseURL: "http://localhost:3000",
-			plugins: [bearer(), ssoClient()],
-			fetchOptions: {
-				customFetchImpl: async (url, init) =>
-					auth.handler(new Request(url, init)),
-			},
-		});
+			const memory = memoryAdapter(data);
 
-		const headers = new Headers();
-		await authClient.signUp.email({
-			email: "test@example.com",
-			password: "password123",
-			name: "Test User",
-		});
-		await authClient.signIn.email(
-			{ email: "test@example.com", password: "password123" },
-			{ onSuccess: setCookieToHeader(headers) },
-		);
+			const auth = betterAuth({
+				database: memory,
+				baseURL: "http://localhost:3000",
+				emailAndPassword: { enabled: true },
+				plugins: [sso()],
+			});
 
-		const provider = await auth.api.registerSSOProvider({
-			body: {
-				providerId: "oidc-config-provider",
-				issuer: "http://localhost:8080",
-				domain: "example.com",
-				oidcConfig: {
-					clientId: "test-client",
-					clientSecret: "test-secret",
-					discoveryEndpoint:
-						"http://localhost:8080/.well-known/openid-configuration",
-					mapping: {
-						id: "sub",
-						email: "email",
-						name: "name",
+			const authClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				plugins: [bearer(), ssoClient()],
+				fetchOptions: {
+					customFetchImpl: async (url, init) =>
+						auth.handler(new Request(url, init)),
+				},
+			});
+
+			const headers = new Headers();
+			await authClient.signUp.email({
+				email: "test@example.com",
+				password: "password123",
+				name: "Test User",
+			});
+			await authClient.signIn.email(
+				{ email: "test@example.com", password: "password123" },
+				{ onSuccess: setCookieToHeader(headers) },
+			);
+
+			const provider = await auth.api.registerSSOProvider({
+				body: {
+					providerId: "oidc-config-provider",
+					issuer: oidcServer.issuer.url!,
+					domain: "example.com",
+					oidcConfig: {
+						clientId: "test-client",
+						clientSecret: "test-secret",
+						tokenEndpointAuthentication: "client_secret_basic",
+						mapping: {
+							id: "sub",
+							email: "email",
+							name: "name",
+						},
 					},
 				},
-			},
-			headers,
-		});
+				headers,
+			});
 
-		expect(provider.oidcConfig).toBeDefined();
-		expect(typeof provider.oidcConfig).toBe("object");
-		expect(provider.oidcConfig?.clientId).toBe("test-client");
-		expect(provider.oidcConfig?.clientSecret).toBe("test-secret");
+			expect(provider.oidcConfig).toBeDefined();
+			expect(typeof provider.oidcConfig).toBe("object");
+			expect(provider.oidcConfig?.clientId).toBe("test-client");
+			expect(provider.oidcConfig?.clientSecret).toBe("test-secret");
 
-		const serialized = JSON.stringify(provider.oidcConfig);
-		expect(serialized).not.toContain("[object Object]");
+			const serialized = JSON.stringify(provider.oidcConfig);
+			expect(serialized).not.toContain("[object Object]");
 
-		expect(provider.oidcConfig?.mapping?.id).toBe("sub");
+			expect(provider.oidcConfig?.mapping?.id).toBe("sub");
+		} finally {
+			await oidcServer.stop().catch(() => {});
+		}
 	});
 });
 
