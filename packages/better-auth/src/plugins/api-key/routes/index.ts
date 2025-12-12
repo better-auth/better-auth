@@ -32,8 +32,6 @@ export type PredefinedApiKeyOptions = ApiKeyOptions &
 			| "deferUpdates"
 		>
 	> & {
-		deferredUpdateHandler?: ApiKeyOptions["deferredUpdateHandler"];
-	} & {
 		keyExpiration: Required<ApiKeyOptions["keyExpiration"]>;
 		startingCharactersConfig: Required<
 			ApiKeyOptions["startingCharactersConfig"]

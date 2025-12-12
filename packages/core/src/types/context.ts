@@ -276,4 +276,10 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 		 * @default false
 		 */
 		skipCSRFCheck: boolean;
+		/**
+		 * Background task handler for deferred operations.
+		 *
+		 * This is inferred from the `options.advanced?.backgroundTasks?.handler` option.
+		 */
+		runInBackground?: (promise: Promise<void>) => void;
 	};

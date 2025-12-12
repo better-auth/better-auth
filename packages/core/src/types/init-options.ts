@@ -271,6 +271,31 @@ export type BetterAuthAdvancedOptions = {
 	 * used correctly. Please use this with caution.
 	 */
 	trustedProxyHeaders?: boolean | undefined;
+	/**
+	 * Configure background task handling for deferred operations.
+	 *
+	 * Background tasks allow non-critical operations (like cleanup, analytics,
+	 * or timing-attack mitigation) to run after the response is sent.
+	 *
+	 * Use `waitUntil` from `@vercel/functions` on Vercel,
+	 * or `ctx.waitUntil` on Cloudflare Workers.
+	 *
+	 * @example
+	 * // Vercel
+	 * import { waitUntil } from "@vercel/functions";
+	 * advanced: { backgroundTasks: { handler: waitUntil } }
+	 *
+	 * @example
+	 * // Cloudflare Workers (with AsyncLocalStorage)
+	 * advanced: {
+	 *   backgroundTasks: {
+	 *     handler: (p) => execCtxStorage.getStore()?.waitUntil(p)
+	 *   }
+	 * }
+	 */
+	backgroundTasks?: {
+		handler: (promise: Promise<void>) => void;
+	};
 };
 
 export type BetterAuthOptions = {

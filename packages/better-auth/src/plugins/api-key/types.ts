@@ -258,10 +258,9 @@ export interface ApiKeyOptions {
 		| undefined;
 	/**
 	 * Defer non-critical updates (rate limiting counters, timestamps, remaining count)
-	 * to run after the response is sent. This can significantly improve response times
-	 * on serverless platforms.
+	 * to run after the response is sent using the global `advanced.backgroundTasks` handler.
 	 *
-	 * When enabled, you MUST provide a `deferredUpdateHandler`.
+	 * Requires `advanced.backgroundTasks.handler` to be configured in the main auth options.
 	 *
 	 * ⚠️ Warning: Enabling this introduces eventual consistency where the response
 	 * returns optimistic data before the database is updated. If the deferred update
@@ -271,18 +270,6 @@ export interface ApiKeyOptions {
 	 * @default false
 	 */
 	deferUpdates?: boolean | undefined;
-	/**
-	 * Function to schedule deferred updates. Required when `deferUpdates` is true.
-	 *
-	 * Use `waitUntil` from `@vercel/functions` on Vercel, or `ctx.waitUntil`
-	 * on Cloudflare Workers.
-	 *
-	 * @example
-	 * // Vercel
-	 * import { waitUntil } from "@vercel/functions";
-	 * deferredUpdateHandler: (fn) => waitUntil(fn())
-	 */
-	deferredUpdateHandler?: ((fn: () => Promise<void>) => void) | undefined;
 }
 
 export type ApiKey = {

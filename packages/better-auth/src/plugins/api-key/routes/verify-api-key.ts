@@ -13,18 +13,19 @@ import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 
 /**
- * Schedules a function to run deferred or executes it immediately.
+ * Runs a task in the background if deferred updates are enabled,
+ * otherwise executes it immediately.
  *
  * When deferred, errors are logged but not propagated since the response
  * has already been sent. When synchronous, errors propagate to the caller.
  */
-function scheduleOrExecute(
+function runOrDefer(
 	opts: PredefinedApiKeyOptions,
 	fn: () => Promise<void>,
 	ctx: GenericEndpointContext,
 ): Promise<void> | void {
-	if (opts.deferUpdates && opts.deferredUpdateHandler) {
-		opts.deferredUpdateHandler(() =>
+	if (opts.deferUpdates && ctx.context.runInBackground) {
+		ctx.context.runInBackground(
 			fn().catch((error) => {
 				ctx.context.logger.error("Deferred update failed:", error);
 			}),
@@ -83,7 +84,7 @@ export async function validateApiKey({
 				}
 			};
 
-			const deletion = scheduleOrExecute(opts, deleteExpiredKey, ctx);
+			const deletion = runOrDefer(opts, deleteExpiredKey, ctx);
 			if (deletion) await deletion;
 
 			throw new APIError("UNAUTHORIZED", {
@@ -137,7 +138,7 @@ export async function validateApiKey({
 			}
 		};
 
-		const deletion = scheduleOrExecute(opts, deleteExhaustedKey, ctx);
+		const deletion = runOrDefer(opts, deleteExhaustedKey, ctx);
 		if (deletion) await deletion;
 
 		throw new APIError("TOO_MANY_REQUESTS", {
@@ -219,8 +220,8 @@ export async function validateApiKey({
 
 	let newApiKey: ApiKey | null = null;
 
-	if (opts.deferUpdates && opts.deferredUpdateHandler) {
-		opts.deferredUpdateHandler(() =>
+	if (opts.deferUpdates && ctx.context.runInBackground) {
+		ctx.context.runInBackground(
 			performUpdate()
 				.then(() => {})
 				.catch((error) => {
@@ -314,17 +315,13 @@ export function verifyApiKey({
 					schema,
 				});
 
-				if (opts.deferUpdates && opts.deferredUpdateHandler) {
-					opts.deferredUpdateHandler(() =>
-						deleteAllExpiredApiKeys(ctx.context).catch((err) => {
-							ctx.context.logger.error(
-								"Failed to delete expired API keys:",
-								err,
-							);
-						}),
-					);
-				} else {
-					await deleteAllExpiredApiKeys(ctx.context);
+				const cleanupTask = deleteAllExpiredApiKeys(ctx.context).catch(
+					(err) => {
+						ctx.context.logger.error("Failed to delete expired API keys:", err);
+					},
+				);
+				if (opts.deferUpdates && ctx.context.runInBackground) {
+					ctx.context.runInBackground(cleanupTask);
 				}
 			} catch (error) {
 				if (error instanceof APIError) {

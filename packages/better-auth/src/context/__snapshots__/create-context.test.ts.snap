@@ -160,6 +160,7 @@ exports[`base context creation > should match config 1`] = `
     "storage": "memory",
     "window": 10,
   },
+  "runInBackground": undefined,
   "runMigrations": [Function],
   "secondaryStorage": undefined,
   "secret": "better-auth-secret-12345678901234567890",
