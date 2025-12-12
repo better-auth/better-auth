@@ -1,9 +1,9 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "better-call";
-import { ms } from "ms";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../api/routes/session";
 import { generateRandomString } from "../../crypto";
+import { ms } from "../../utils/time";
 import type { DeviceAuthorizationOptions } from ".";
 import { DEVICE_AUTHORIZATION_ERROR_CODES } from "./error-codes";
 import type { DeviceCode } from "./schema";

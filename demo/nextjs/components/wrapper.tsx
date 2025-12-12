@@ -7,19 +7,22 @@ import { ThemeToggle } from "./theme-toggle";
 
 export function Wrapper(props: { children: React.ReactNode }) {
 	return (
-		<div className="min-h-screen w-full dark:bg-black bg-white  dark:bg-grid-small-white/[0.2] bg-grid-small-black/[0.2] relative flex justify-center">
-			<div className="absolute pointer-events-none inset-0 md:flex items-center justify-center dark:bg-black bg-white mask-[radial-gradient(ellipse_at_center,transparent_20%,black)] hidden"></div>
-			<div className="bg-white dark:bg-black border-b py-2 flex justify-between items-center border-border absolute z-50 w-full lg:w-8/12 px-4 md:px-1">
+		<div className="min-h-screen w-full dark:bg-black bg-white relative flex justify-center">
+			<div className="absolute inset-0 bg-grid-small text-black/2 dark:text-white/4 pointer-events-none" />
+			<div className="absolute pointer-events-none inset-0 items-center justify-center bg-white dark:bg-black mask-[radial-gradient(ellipse_at_center,transparent_40%,white)] dark:mask-[radial-gradient(ellipse_at_center,transparent_40%,black)]"></div>
+
+			<div className="bg-white dark:bg-black border-b py-2 flex justify-between items-center border-border absolute z-50 w-full px-4">
 				<Link href="/">
-					<div className="flex gap-2 cursor-pointer">
+					<div className="flex items-center gap-2">
 						<Logo />
-						<p className="dark:text-white text-black">BETTER-AUTH.</p>
+						<p className="select-none">BETTER-AUTH.</p>
 					</div>
 				</Link>
 				<div className="z-50 flex items-center">
 					<ThemeToggle />
 				</div>
 			</div>
+
 			<div className="mt-20 lg:w-7/12 w-full">{props.children}</div>
 		</div>
 	);

@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/telemetry",
-  "version": "1.4.6-beta.4",
+  "version": "1.4.7-beta.2",
   "description": "Telemetry package for Better Auth",
   "type": "module",
   "repository": {
@@ -29,6 +29,7 @@
     "build": "tsdown",
     "dev": "tsdown --watch",
     "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
     "typecheck": "tsc --project tsconfig.json"
   },
   "devDependencies": {

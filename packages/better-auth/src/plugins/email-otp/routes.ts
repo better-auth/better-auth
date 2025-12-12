@@ -157,12 +157,10 @@ const createVerificationOTPBodySchema = z.object({
 
 export const createVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 	createAuthEndpoint(
-		"/email-otp/create-verification-otp",
 		{
 			method: "POST",
 			body: createVerificationOTPBodySchema,
 			metadata: {
-				SERVER_ONLY: true,
 				openapi: {
 					operationId: "createEmailVerificationOTP",
 					description: "Create a verification OTP for an email",
@@ -220,12 +218,10 @@ const getVerificationOTPBodySchema = z.object({
  */
 export const getVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 	createAuthEndpoint(
-		"/email-otp/get-verification-otp",
 		{
 			method: "GET",
 			query: getVerificationOTPBodySchema,
 			metadata: {
-				SERVER_ONLY: true,
 				openapi: {
 					operationId: "getEmailVerificationOTP",
 					description: "Get a verification OTP for an email",

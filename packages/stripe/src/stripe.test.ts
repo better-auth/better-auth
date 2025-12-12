@@ -168,18 +168,6 @@ describe("stripe", async () => {
 		vi.clearAllMocks();
 	});
 
-	async function getHeader() {
-		const headers = new Headers();
-		const userRes = await authClient.signIn.email(testUser, {
-			throw: true,
-			onSuccess: setCookieToHeader(headers),
-		});
-		return {
-			headers,
-			response: userRes,
-		};
-	}
-
 	it("should create a customer on sign up", async () => {
 		const userRes = await authClient.signUp.email(testUser, {
 			throw: true,
@@ -237,6 +225,92 @@ describe("stripe", async () => {
 			trialStart: undefined,
 			trialEnd: undefined,
 		});
+	});
+
+	it("should not allow cross-user subscriptionId operations (upgrade/cancel/restore)", async () => {
+		const userA = {
+			email: "user-a@email.com",
+			password: "password",
+			name: "User A",
+		};
+		const userARes = await authClient.signUp.email(userA, { throw: true });
+
+		const userAHeaders = new Headers();
+		await authClient.signIn.email(userA, {
+			throw: true,
+			onSuccess: setCookieToHeader(userAHeaders),
+		});
+		await authClient.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: { headers: userAHeaders },
+		});
+
+		const userASub = await ctx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "referenceId", value: userARes.user.id }],
+		});
+		expect(userASub).toBeTruthy();
+
+		const userB = {
+			email: "user-b@email.com",
+			password: "password",
+			name: "User B",
+		};
+		await authClient.signUp.email(userB, { throw: true });
+		const userBHeaders = new Headers();
+		await authClient.signIn.email(userB, {
+			throw: true,
+			onSuccess: setCookieToHeader(userBHeaders),
+		});
+
+		mockStripe.checkout.sessions.create.mockClear();
+		mockStripe.billingPortal.sessions.create.mockClear();
+		mockStripe.subscriptions.list.mockClear();
+		mockStripe.subscriptions.update.mockClear();
+
+		const upgradeRes = await authClient.subscription.upgrade({
+			plan: "premium",
+			subscriptionId: userASub!.id,
+			fetchOptions: { headers: userBHeaders },
+		});
+		expect(upgradeRes.error?.message).toContain("Subscription not found");
+		expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
+		expect(mockStripe.billingPortal.sessions.create).not.toHaveBeenCalled();
+
+		const cancelHeaders = new Headers(userBHeaders);
+		cancelHeaders.set("content-type", "application/json");
+		const cancelResponse = await auth.handler(
+			new Request("http://localhost:3000/api/auth/subscription/cancel", {
+				method: "POST",
+				headers: cancelHeaders,
+				body: JSON.stringify({
+					subscriptionId: userASub!.id,
+					returnUrl: "/account",
+				}),
+			}),
+		);
+		expect(cancelResponse.status).toBe(400);
+		expect((await cancelResponse.json()).message).toContain(
+			"Subscription not found",
+		);
+		expect(mockStripe.billingPortal.sessions.create).not.toHaveBeenCalled();
+
+		const restoreHeaders = new Headers(userBHeaders);
+		restoreHeaders.set("content-type", "application/json");
+		const restoreResponse = await auth.handler(
+			new Request("http://localhost:3000/api/auth/subscription/restore", {
+				method: "POST",
+				headers: restoreHeaders,
+				body: JSON.stringify({
+					subscriptionId: userASub!.id,
+				}),
+			}),
+		);
+		expect(restoreResponse.status).toBe(400);
+		expect((await restoreResponse.json()).message).toContain(
+			"Subscription not found",
+		);
+		expect(mockStripe.subscriptions.update).not.toHaveBeenCalled();
 	});
 
 	it("should list active subscriptions", async () => {
@@ -641,15 +715,6 @@ describe("stripe", async () => {
 			},
 			stripeWebhookSecret: "test_secret",
 		} as unknown as StripeOptions;
-
-		const testAuth = betterAuth({
-			baseURL: "http://localhost:3000",
-			database: memory,
-			emailAndPassword: {
-				enabled: true,
-			},
-			plugins: [stripe(testOptions)],
-		});
 
 		// Test subscription complete handler
 		const completeEvent = {
@@ -1097,7 +1162,7 @@ describe("stripe", async () => {
 	});
 
 	it("should only call Stripe customers.create once for signup and upgrade", async () => {
-		const userRes = await authClient.signUp.email(
+		await authClient.signUp.email(
 			{ ...testUser, email: "single-create@email.com" },
 			{ throw: true },
 		);
@@ -2107,7 +2172,7 @@ describe("stripe", async () => {
 				plugins: [stripe(testOptions)],
 			});
 
-			const { id: subId } = await ctx.adapter.create({
+			await ctx.adapter.create({
 				model: "subscription",
 				data: {
 					referenceId: userId,
@@ -2249,7 +2314,7 @@ describe("stripe", async () => {
 				plugins: [stripe(testOptions)],
 			});
 
-			const { id: subId } = await ctx.adapter.create({
+			await ctx.adapter.create({
 				model: "subscription",
 				data: {
 					referenceId: userId,
