@@ -209,10 +209,65 @@ Better Auth fills in the following fields by reading the IdP's discovery documen
 - `discoveryEndpoint`
 - `tokenEndpointAuthentication` (method for token endpoint client authentication)
 
+Following the spec, our discovery process expects all URLs to be valid and to be absolute urls. Relative paths are also supported and resolved relative to the issuer's base URL preserving the path when available.
+
+Example of relative endpoint and issuer without base path:
+
+- `issuer`: `"https://your-org.okta.com"`
+- `token_endpoint`: `"/v1/tokens"`
+- normalized `token_endpoint`: `"https://your-org.okta.com/v1/tokens"`
+
+
+Example of relative endpoint and issuer with base path:
+
+- `issuer`: `"https://your-org.okta.com/v1"`
+- `token_endpoint`: `"/tokens"`
+- normalized `token_endpoint`: `"https://your-org.okta.com/v1/tokens"`
+
 <Callout type="info">
 If you explicitly set these fields in `oidcConfig`, your values override the discovered ones.
 This is useful when you need to override the IdP's advertised metadata or when using incomplete mock servers.
 </Callout>
+
+#### Trusted origins
+
+Both the discovery endpoint as well as any URL resolved through the discovery process are subject to your app's [`trustedOrigins`](/docs/reference/security#trusted-origins) configuration.
+Discovery will fail with the `discovery_untrusted_origin` code unless you explicitly update your `trustedOrigins` configuration:
+
+```ts
+trustedOrigins: ["https://your-org.okta.com"],
+```
+
+If your use-case requires to support multiple arbitrary but known IDPs (e.g Okta), we recommend to:
+
+1. Register a list of well known IDPs ahead of time
+
+```ts
+trustedOrigins: [
+    "https://your-org.okta.com",
+    "https://accounts.google.com",
+    "https://login.microsoftonline.com",
+    "https://auth0.com",
+    "https://idp.example.com"
+],
+```
+
+2. Or dynamically compute the `trustedOrigins` by specifying a callback function:
+
+```ts
+trustedOrigins: async (request: Request) => {
+    // SSO trusted origin list
+    if (request.url.endsWith("/sso/register")) {
+        const trustedOrigins = await fetchOriginList();
+        return trustedOrigins;
+    }
+
+    // Your normal origin list for everything else
+    return [];
+}
+```
+
+See the [`trustedOrigins`](/docs/reference/security#trusted-origins) docs for more information.
 
 #### Why Discovery Can Fail
 
@@ -234,6 +289,7 @@ If the Identity Provider is misconfigured or unreachable, registration will fail
 | `discovery_not_found` | The discovery document endpoint returned 404 |
 | `discovery_timeout` | The IdP did not respond within the timeout window (default: 10 seconds) |
 | `discovery_invalid_url` | The discovery URL is malformed or uses an unsupported protocol |
+| `discovery_untrusted_origin` | The discovery URL or one of the URLs discovered as part of this process was not trusted by your app's trusted origins configuration |
 | `discovery_invalid_json` | The discovery response is empty or not valid JSON |
 | `unsupported_token_auth_method` | The IdP only supports token auth methods that Better Auth doesn't support |
 
