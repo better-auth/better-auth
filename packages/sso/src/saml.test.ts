@@ -2147,3 +2147,226 @@ describe("SAML SSO - Signature Validation Security", () => {
 		});
 	});
 });
+
+describe("SAML SSO - Timestamp Validation (Unit Tests)", () => {
+	const DEFAULT_CLOCK_SKEW_MS = 5 * 60 * 1000; // 5 minutes
+
+	// Recreate the validation logic for unit testing
+	interface ValidateOptions {
+		clockSkew?: number;
+		requireTimestamps?: boolean;
+	}
+
+	const validateTimestamp = (
+		conditions: { notBefore?: string; notOnOrAfter?: string } | undefined,
+		options: ValidateOptions = {},
+	): { valid: boolean; reason?: string; warning?: string } => {
+		const clockSkew = options.clockSkew ?? DEFAULT_CLOCK_SKEW_MS;
+		const hasTimestamps = conditions?.notBefore || conditions?.notOnOrAfter;
+
+		if (!hasTimestamps) {
+			if (options.requireTimestamps) {
+				return { valid: false, reason: "missing required timestamps" };
+			}
+			return { valid: true, warning: "no timestamp conditions present" };
+		}
+
+		const now = Date.now();
+
+		if (conditions?.notBefore) {
+			const notBeforeTime = new Date(conditions.notBefore).getTime();
+			if (now < notBeforeTime - clockSkew) {
+				return { valid: false, reason: "not yet valid" };
+			}
+		}
+
+		if (conditions?.notOnOrAfter) {
+			const notOnOrAfterTime = new Date(conditions.notOnOrAfter).getTime();
+			if (now > notOnOrAfterTime + clockSkew) {
+				return { valid: false, reason: "expired" };
+			}
+		}
+
+		return { valid: true };
+	};
+
+	describe("Valid assertions within time window", () => {
+		it("should accept assertion with current NotBefore and future NotOnOrAfter", () => {
+			const now = new Date();
+			const fiveMinutesFromNow = new Date(Date.now() + 5 * 60 * 1000);
+			const result = validateTimestamp({
+				notBefore: now.toISOString(),
+				notOnOrAfter: fiveMinutesFromNow.toISOString(),
+			});
+			expect(result.valid).toBe(true);
+		});
+
+		it("should accept assertion within clock skew tolerance (expired 2 min ago with 5 min skew)", () => {
+			const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+			const result = validateTimestamp({ notOnOrAfter: twoMinutesAgo });
+			expect(result.valid).toBe(true);
+		});
+
+		it("should accept assertion with NotBefore slightly in future (within clock skew)", () => {
+			const twoMinutesFromNow = new Date(
+				Date.now() + 2 * 60 * 1000,
+			).toISOString();
+			const result = validateTimestamp({ notBefore: twoMinutesFromNow });
+			expect(result.valid).toBe(true);
+		});
+	});
+
+	describe("NotBefore validation (future-dated assertions)", () => {
+		it("should reject assertion with NotBefore too far in future (beyond clock skew)", () => {
+			const tenMinutesFromNow = new Date(
+				Date.now() + 10 * 60 * 1000,
+			).toISOString();
+			const result = validateTimestamp({ notBefore: tenMinutesFromNow });
+			expect(result.valid).toBe(false);
+			expect(result.reason).toBe("not yet valid");
+		});
+
+		it("should reject with custom strict clock skew (1 second)", () => {
+			const threeSecondsFromNow = new Date(Date.now() + 3 * 1000).toISOString();
+			const result = validateTimestamp(
+				{ notBefore: threeSecondsFromNow },
+				{ clockSkew: 1000 },
+			);
+			expect(result.valid).toBe(false);
+			expect(result.reason).toBe("not yet valid");
+		});
+	});
+
+	describe("NotOnOrAfter validation (expired assertions)", () => {
+		it("should reject expired assertion (NotOnOrAfter in past beyond clock skew)", () => {
+			const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+			const result = validateTimestamp({ notOnOrAfter: tenMinutesAgo });
+			expect(result.valid).toBe(false);
+			expect(result.reason).toBe("expired");
+		});
+
+		it("should reject with custom strict clock skew (1 second)", () => {
+			const threeSecondsAgo = new Date(Date.now() - 3 * 1000).toISOString();
+			const result = validateTimestamp(
+				{ notOnOrAfter: threeSecondsAgo },
+				{ clockSkew: 1000 },
+			);
+			expect(result.valid).toBe(false);
+			expect(result.reason).toBe("expired");
+		});
+	});
+
+	describe("Boundary conditions (exactly at window edges)", () => {
+		it("should accept assertion expiring exactly at clock skew boundary", () => {
+			// NotOnOrAfter was exactly 5 minutes ago (at the edge of default clock skew)
+			const exactlyAtBoundary = new Date(
+				Date.now() - DEFAULT_CLOCK_SKEW_MS,
+			).toISOString();
+			const result = validateTimestamp({ notOnOrAfter: exactlyAtBoundary });
+			// At exactly the boundary, now === notOnOrAfter + clockSkew, so should pass
+			expect(result.valid).toBe(true);
+		});
+
+		it("should reject assertion expiring 1ms beyond clock skew boundary", () => {
+			// NotOnOrAfter was 5 minutes + 1ms ago (just past the edge)
+			const justPastBoundary = new Date(
+				Date.now() - DEFAULT_CLOCK_SKEW_MS - 1,
+			).toISOString();
+			const result = validateTimestamp({ notOnOrAfter: justPastBoundary });
+			expect(result.valid).toBe(false);
+			expect(result.reason).toBe("expired");
+		});
+
+		it("should accept assertion with NotBefore exactly at clock skew boundary", () => {
+			// NotBefore is exactly 5 minutes from now (at the edge of clock skew)
+			const exactlyAtBoundary = new Date(
+				Date.now() + DEFAULT_CLOCK_SKEW_MS,
+			).toISOString();
+			const result = validateTimestamp({ notBefore: exactlyAtBoundary });
+			// At exactly the boundary, now === notBefore - clockSkew, so should pass
+			expect(result.valid).toBe(true);
+		});
+
+		it("should reject assertion with NotBefore 1ms beyond clock skew boundary", () => {
+			// NotBefore is 5 minutes + 1ms from now (just past the edge)
+			const justPastBoundary = new Date(
+				Date.now() + DEFAULT_CLOCK_SKEW_MS + 1,
+			).toISOString();
+			const result = validateTimestamp({ notBefore: justPastBoundary });
+			expect(result.valid).toBe(false);
+			expect(result.reason).toBe("not yet valid");
+		});
+	});
+
+	describe("Missing timestamps behavior", () => {
+		it("should accept missing timestamps with warning when requireTimestamps is false (default)", () => {
+			const result = validateTimestamp(undefined, { requireTimestamps: false });
+			expect(result.valid).toBe(true);
+			expect(result.warning).toBe("no timestamp conditions present");
+		});
+
+		it("should accept empty conditions with warning when requireTimestamps is false", () => {
+			const result = validateTimestamp({}, { requireTimestamps: false });
+			expect(result.valid).toBe(true);
+			expect(result.warning).toBe("no timestamp conditions present");
+		});
+
+		it("should reject missing timestamps when requireTimestamps is true", () => {
+			const result = validateTimestamp(undefined, { requireTimestamps: true });
+			expect(result.valid).toBe(false);
+			expect(result.reason).toBe("missing required timestamps");
+		});
+
+		it("should reject empty conditions when requireTimestamps is true", () => {
+			const result = validateTimestamp({}, { requireTimestamps: true });
+			expect(result.valid).toBe(false);
+			expect(result.reason).toBe("missing required timestamps");
+		});
+
+		it("should accept assertions with only NotBefore (valid)", () => {
+			const now = new Date().toISOString();
+			const result = validateTimestamp({ notBefore: now });
+			expect(result.valid).toBe(true);
+			expect(result.warning).toBeUndefined();
+		});
+
+		it("should accept assertions with only NotOnOrAfter (valid, in future)", () => {
+			const future = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+			const result = validateTimestamp({ notOnOrAfter: future });
+			expect(result.valid).toBe(true);
+			expect(result.warning).toBeUndefined();
+		});
+	});
+
+	describe("Custom clock skew configuration", () => {
+		it("should use custom clockSkew when provided", () => {
+			const twoSecondsAgo = new Date(Date.now() - 2 * 1000).toISOString();
+
+			// With 1 second clock skew, should fail
+			const strictResult = validateTimestamp(
+				{ notOnOrAfter: twoSecondsAgo },
+				{ clockSkew: 1000 },
+			);
+			expect(strictResult.valid).toBe(false);
+
+			// With 5 minute clock skew, should pass
+			const lenientResult = validateTimestamp(
+				{ notOnOrAfter: twoSecondsAgo },
+				{ clockSkew: 5 * 60 * 1000 },
+			);
+			expect(lenientResult.valid).toBe(true);
+		});
+
+		it("should use default 5 minute clock skew when not specified", () => {
+			// 4 minutes ago should pass with default 5 min skew
+			const fourMinutesAgo = new Date(Date.now() - 4 * 60 * 1000).toISOString();
+			const result = validateTimestamp({ notOnOrAfter: fourMinutesAgo });
+			expect(result.valid).toBe(true);
+
+			// 6 minutes ago should fail with default 5 min skew
+			const sixMinutesAgo = new Date(Date.now() - 6 * 60 * 1000).toISOString();
+			const failResult = validateTimestamp({ notOnOrAfter: sixMinutesAgo });
+			expect(failResult.valid).toBe(false);
+		});
+	});
+});

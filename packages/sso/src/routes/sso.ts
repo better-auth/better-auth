@@ -35,6 +35,73 @@ import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
 import { safeJsonParse, validateEmailDomain } from "../utils";
 
 const AUTHN_REQUEST_KEY_PREFIX = "saml-authn-request:";
+const DEFAULT_CLOCK_SKEW_MS = 5 * 60 * 1000; // 5 minutes
+
+interface TimestampValidationOptions {
+	clockSkew?: number;
+	requireTimestamps?: boolean;
+	logger?: {
+		warn: (message: string, data?: Record<string, unknown>) => void;
+	};
+}
+
+/**
+ * Validates SAML assertion timestamp conditions (NotBefore/NotOnOrAfter).
+ * Prevents acceptance of expired or future-dated assertions.
+ */
+function validateSAMLTimestamp(
+	extract: FlowResult["extract"],
+	options: TimestampValidationOptions = {},
+): void {
+	const clockSkew = options.clockSkew ?? DEFAULT_CLOCK_SKEW_MS;
+	const conditions = (extract as any).conditions as
+		| {
+				notBefore?: string;
+				notOnOrAfter?: string;
+		  }
+		| undefined;
+
+	const hasTimestamps = conditions?.notBefore || conditions?.notOnOrAfter;
+
+	if (!hasTimestamps) {
+		if (options.requireTimestamps) {
+			throw new APIError("BAD_REQUEST", {
+				message: "SAML assertion missing required timestamp conditions",
+				details:
+					"Assertions must include NotBefore and/or NotOnOrAfter conditions",
+			});
+		}
+		// Log warning for missing timestamps when not required
+		options.logger?.warn(
+			"SAML assertion accepted without timestamp conditions",
+			{ hasConditions: !!conditions },
+		);
+		return;
+	}
+
+	const now = Date.now();
+
+	if (conditions?.notBefore) {
+		const notBeforeTime = new Date(conditions.notBefore).getTime();
+		if (now < notBeforeTime - clockSkew) {
+			throw new APIError("BAD_REQUEST", {
+				message: "SAML assertion is not yet valid",
+				details: `Current time is before NotBefore (with ${clockSkew}ms clock skew tolerance)`,
+			});
+		}
+	}
+
+	if (conditions?.notOnOrAfter) {
+		const notOnOrAfterTime = new Date(conditions.notOnOrAfter).getTime();
+		if (now > notOnOrAfterTime + clockSkew) {
+			throw new APIError("BAD_REQUEST", {
+				message: "SAML assertion has expired",
+				details: `Current time is after NotOnOrAfter (with ${clockSkew}ms clock skew tolerance)`,
+			});
+		}
+	}
+}
+
 const spMetadataQuerySchema = z.object({
 	providerId: z.string(),
 	format: z.enum(["xml", "json"]).default("xml"),
@@ -1726,6 +1793,12 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 
 			const { extract } = parsedResponse!;
 
+			validateSAMLTimestamp(extract, {
+				clockSkew: options?.saml?.clockSkew,
+				requireTimestamps: options?.saml?.requireTimestamps,
+				logger: ctx.context.logger,
+			});
+
 			const inResponseTo = (extract as any).inResponseTo as string | undefined;
 			const shouldValidateInResponseTo =
 				options?.saml?.authnRequestStore ||
@@ -1750,6 +1823,16 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 								storedRequest = JSON.parse(
 									verification.value,
 								) as AuthnRequestRecord;
+								// Validate expiration for database-stored records
+								// Note: Cleanup of expired records is handled automatically by
+								// findVerificationValue, but we still need to check expiration
+								// since the record is returned before cleanup runs
+								if (
+									storedRequest &&
+									storedRequest.expiresAt < Date.now()
+								) {
+									storedRequest = null;
+								}
 							} catch {
 								storedRequest = null;
 							}
@@ -2151,6 +2234,12 @@ export const acsEndpoint = (options?: SSOOptions) => {
 
 			const { extract } = parsedResponse!;
 
+			validateSAMLTimestamp(extract, {
+				clockSkew: options?.saml?.clockSkew,
+				requireTimestamps: options?.saml?.requireTimestamps,
+				logger: ctx.context.logger,
+			});
+
 			const inResponseToAcs = (extract as any).inResponseTo as
 				| string
 				| undefined;
@@ -2177,6 +2266,12 @@ export const acsEndpoint = (options?: SSOOptions) => {
 								storedRequest = JSON.parse(
 									verification.value,
 								) as AuthnRequestRecord;
+								if (
+									storedRequest &&
+									storedRequest.expiresAt < Date.now()
+								) {
+									storedRequest = null;
+								}
 							} catch {
 								storedRequest = null;
 							}
