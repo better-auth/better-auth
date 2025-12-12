@@ -29,6 +29,25 @@ export type { SAMLConfig, OIDCConfig, SSOOptions, SSOProvider };
 export type { AuthnRequestStore, AuthnRequestRecord };
 export { createInMemoryAuthnRequestStore, DEFAULT_AUTHN_REQUEST_TTL_MS };
 
+export {
+	computeDiscoveryUrl,
+	type DiscoverOIDCConfigParams,
+	DiscoveryError,
+	type DiscoveryErrorCode,
+	discoverOIDCConfig,
+	fetchDiscoveryDocument,
+	type HydratedOIDCConfig,
+	needsRuntimeDiscovery,
+	normalizeDiscoveryUrls,
+	normalizeUrl,
+	type OIDCDiscoveryDocument,
+	REQUIRED_DISCOVERY_FIELDS,
+	type RequiredDiscoveryField,
+	selectTokenEndpointAuthMethod,
+	validateDiscoveryDocument,
+	validateDiscoveryUrl,
+} from "./oidc";
+
 const fastValidator = {
 	async validate(xml: string) {
 		const isValid = XMLValidator.validate(xml, {

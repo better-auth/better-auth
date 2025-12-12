@@ -24,6 +24,12 @@ import type { FlowResult } from "samlify/types/src/flow";
 import * as z from "zod/v4";
 import type { AuthnRequestRecord } from "../authn-request-store";
 import { DEFAULT_AUTHN_REQUEST_TTL_MS } from "../authn-request-store";
+import {
+	DiscoveryError,
+	discoverOIDCConfig,
+	mapDiscoveryErrorToAPIError,
+	type HydratedOIDCConfig,
+} from "../oidc";
 import { assignOrganizationFromProvider } from "../linking";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
 
@@ -155,6 +161,13 @@ const ssoProviderBodySchema = z.object({
 				})
 				.optional(),
 			discoveryEndpoint: z.string().optional(),
+			skipDiscovery: z
+				.boolean()
+				.meta({
+					description:
+						"Skip OIDC discovery during registration. When true, you must provide authorizationEndpoint, tokenEndpoint, and jwksEndpoint manually.",
+				})
+				.optional(),
 			scopes: z
 				.array(z.string(), {})
 				.meta({
@@ -574,6 +587,80 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				});
 			}
 
+			let hydratedOIDCConfig: HydratedOIDCConfig | null = null;
+			if (body.oidcConfig && !body.oidcConfig.skipDiscovery) {
+				try {
+					hydratedOIDCConfig = await discoverOIDCConfig({
+						issuer: body.issuer,
+						existingConfig: {
+							discoveryEndpoint: body.oidcConfig.discoveryEndpoint,
+							authorizationEndpoint: body.oidcConfig.authorizationEndpoint,
+							tokenEndpoint: body.oidcConfig.tokenEndpoint,
+							jwksEndpoint: body.oidcConfig.jwksEndpoint,
+							userInfoEndpoint: body.oidcConfig.userInfoEndpoint,
+							tokenEndpointAuthentication:
+								body.oidcConfig.tokenEndpointAuthentication,
+						},
+					});
+				} catch (error) {
+					if (error instanceof DiscoveryError) {
+						throw mapDiscoveryErrorToAPIError(error);
+					}
+					throw error;
+				}
+			}
+
+			const buildOIDCConfig = () => {
+				if (!body.oidcConfig) return null;
+
+				if (body.oidcConfig.skipDiscovery) {
+					return JSON.stringify({
+						issuer: body.issuer,
+						clientId: body.oidcConfig.clientId,
+						clientSecret: body.oidcConfig.clientSecret,
+						authorizationEndpoint: body.oidcConfig.authorizationEndpoint,
+						tokenEndpoint: body.oidcConfig.tokenEndpoint,
+						tokenEndpointAuthentication:
+							body.oidcConfig.tokenEndpointAuthentication ||
+							"client_secret_basic",
+						jwksEndpoint: body.oidcConfig.jwksEndpoint,
+						pkce: body.oidcConfig.pkce,
+						discoveryEndpoint:
+							body.oidcConfig.discoveryEndpoint ||
+							`${body.issuer}/.well-known/openid-configuration`,
+						mapping: body.oidcConfig.mapping,
+						scopes: body.oidcConfig.scopes,
+						userInfoEndpoint: body.oidcConfig.userInfoEndpoint,
+						overrideUserInfo:
+							ctx.body.overrideUserInfo ||
+							options?.defaultOverrideUserInfo ||
+							false,
+					});
+				}
+
+				if (!hydratedOIDCConfig) return null;
+
+				return JSON.stringify({
+					issuer: hydratedOIDCConfig.issuer,
+					clientId: body.oidcConfig.clientId,
+					clientSecret: body.oidcConfig.clientSecret,
+					authorizationEndpoint: hydratedOIDCConfig.authorizationEndpoint,
+					tokenEndpoint: hydratedOIDCConfig.tokenEndpoint,
+					tokenEndpointAuthentication:
+						hydratedOIDCConfig.tokenEndpointAuthentication,
+					jwksEndpoint: hydratedOIDCConfig.jwksEndpoint,
+					pkce: body.oidcConfig.pkce,
+					discoveryEndpoint: hydratedOIDCConfig.discoveryEndpoint,
+					mapping: body.oidcConfig.mapping,
+					scopes: body.oidcConfig.scopes,
+					userInfoEndpoint: hydratedOIDCConfig.userInfoEndpoint,
+					overrideUserInfo:
+						ctx.body.overrideUserInfo ||
+						options?.defaultOverrideUserInfo ||
+						false,
+				});
+			};
+
 			const provider = await ctx.context.adapter.create<
 				Record<string, any>,
 				SSOProvider<O>
@@ -583,29 +670,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 					issuer: body.issuer,
 					domain: body.domain,
 					domainVerified: false,
-					oidcConfig: body.oidcConfig
-						? JSON.stringify({
-								issuer: body.issuer,
-								clientId: body.oidcConfig.clientId,
-								clientSecret: body.oidcConfig.clientSecret,
-								authorizationEndpoint: body.oidcConfig.authorizationEndpoint,
-								tokenEndpoint: body.oidcConfig.tokenEndpoint,
-								tokenEndpointAuthentication:
-									body.oidcConfig.tokenEndpointAuthentication,
-								jwksEndpoint: body.oidcConfig.jwksEndpoint,
-								pkce: body.oidcConfig.pkce,
-								discoveryEndpoint:
-									body.oidcConfig.discoveryEndpoint ||
-									`${body.issuer}/.well-known/openid-configuration`,
-								mapping: body.oidcConfig.mapping,
-								scopes: body.oidcConfig.scopes,
-								userInfoEndpoint: body.oidcConfig.userInfoEndpoint,
-								overrideUserInfo:
-									ctx.body.overrideUserInfo ||
-									options?.defaultOverrideUserInfo ||
-									false,
-							})
-						: null,
+					oidcConfig: buildOIDCConfig(),
 					samlConfig: body.samlConfig
 						? JSON.stringify({
 								issuer: body.issuer,
