@@ -22,7 +22,7 @@ async function main() {
 	let packageInfo: Record<string, any> = {};
 	try {
 		packageInfo = await getPackageInfo();
-	} catch (error) {
+	} catch {
 		// it doesn't matter if we can't read the package.json file, we'll just use an empty object
 	}
 	program

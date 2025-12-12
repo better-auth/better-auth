@@ -1,6 +1,14 @@
 import type { BetterAuthPlugin } from "better-auth";
 import { XMLValidator } from "fast-xml-parser";
 import * as saml from "samlify";
+import type {
+	AuthnRequestRecord,
+	AuthnRequestStore,
+} from "./authn-request-store";
+import {
+	createInMemoryAuthnRequestStore,
+	DEFAULT_AUTHN_REQUEST_TTL_MS,
+} from "./authn-request-store";
 import {
 	requestDomainVerification,
 	verifyDomain,
@@ -16,23 +24,41 @@ import {
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "./types";
 
 export type { SAMLConfig, OIDCConfig, SSOOptions, SSOProvider };
+export type { AuthnRequestStore, AuthnRequestRecord };
+export { createInMemoryAuthnRequestStore, DEFAULT_AUTHN_REQUEST_TTL_MS };
 
 export {
 	computeDiscoveryUrl,
+	computeDiscoveryUrl,
+	type DiscoverOIDCConfigParams,
 	type DiscoverOIDCConfigParams,
 	DiscoveryError,
+	DiscoveryError,
+	type DiscoveryErrorCode,
 	type DiscoveryErrorCode,
 	discoverOIDCConfig,
+	discoverOIDCConfig,
+	fetchDiscoveryDocument,
 	fetchDiscoveryDocument,
 	type HydratedOIDCConfig,
+	type HydratedOIDCConfig,
+	needsRuntimeDiscovery,
 	needsRuntimeDiscovery,
 	normalizeDiscoveryUrls,
+	normalizeDiscoveryUrls,
+	normalizeUrl,
 	normalizeUrl,
 	type OIDCDiscoveryDocument,
+	type OIDCDiscoveryDocument,
+	REQUIRED_DISCOVERY_FIELDS,
 	REQUIRED_DISCOVERY_FIELDS,
 	type RequiredDiscoveryField,
+	type RequiredDiscoveryField,
+	selectTokenEndpointAuthMethod,
 	selectTokenEndpointAuthMethod,
 	validateDiscoveryDocument,
+	validateDiscoveryDocument,
+	validateDiscoveryUrl,
 	validateDiscoveryUrl,
 } from "./oidc";
 
@@ -90,19 +116,21 @@ export function sso<O extends SSOOptions>(
 };
 
 export function sso<O extends SSOOptions>(options?: O | undefined): any {
+	const optionsWithStore = options as O;
+
 	let endpoints = {
 		spMetadata: spMetadata(),
-		registerSSOProvider: registerSSOProvider(options as O),
-		signInSSO: signInSSO(options as O),
-		callbackSSO: callbackSSO(options as O),
-		callbackSSOSAML: callbackSSOSAML(options as O),
-		acsEndpoint: acsEndpoint(options as O),
+		registerSSOProvider: registerSSOProvider(optionsWithStore),
+		signInSSO: signInSSO(optionsWithStore),
+		callbackSSO: callbackSSO(optionsWithStore),
+		callbackSSOSAML: callbackSSOSAML(optionsWithStore),
+		acsEndpoint: acsEndpoint(optionsWithStore),
 	};
 
 	if (options?.domainVerification?.enabled) {
 		const domainVerificationEndpoints = {
-			requestDomainVerification: requestDomainVerification(options as O),
-			verifyDomain: verifyDomain(options as O),
+			requestDomainVerification: requestDomainVerification(optionsWithStore),
+			verifyDomain: verifyDomain(optionsWithStore),
 		};
 
 		endpoints = {

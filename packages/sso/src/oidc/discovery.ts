@@ -387,7 +387,7 @@ export function normalizeUrl(
 ): string {
 	try {
 		return parseURL(name, endpoint).toString();
-	} catch (error) {
+	} catch {
 		// In case of error, endpoint maybe a relative url
 		// So we try to resolve it relative to the issuer
 

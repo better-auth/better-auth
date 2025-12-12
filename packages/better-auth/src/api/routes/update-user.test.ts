@@ -7,28 +7,27 @@ import type { Account, Session } from "../../types";
 describe("updateUser", async () => {
 	const sendChangeEmail = vi.fn();
 	let emailVerificationToken = "";
-	const {
-		client,
-		testUser,
-		sessionSetter,
-		db,
-		customFetchImpl,
-		signInWithTestUser,
-	} = await getTestInstance({
-		emailVerification: {
-			async sendVerificationEmail({ user, url, token }) {
-				emailVerificationToken = token;
-			},
-		},
-		user: {
-			changeEmail: {
-				enabled: true,
-				sendChangeEmailVerification: async ({ user, newEmail, url, token }) => {
-					sendChangeEmail(user, newEmail, url, token);
+	const { client, testUser, sessionSetter, db, signInWithTestUser } =
+		await getTestInstance({
+			emailVerification: {
+				async sendVerificationEmail({ user, url, token }) {
+					emailVerificationToken = token;
 				},
 			},
-		},
-	});
+			user: {
+				changeEmail: {
+					enabled: true,
+					sendChangeEmailVerification: async ({
+						user,
+						newEmail,
+						url,
+						token,
+					}) => {
+						sendChangeEmail(user, newEmail, url, token);
+					},
+				},
+			},
+		});
 	// Sign in once for all tests in this describe block
 	const { runWithUser: globalRunWithClient } = await signInWithTestUser();
 
@@ -46,7 +45,7 @@ describe("updateUser", async () => {
 
 	it("should unset image", async () => {
 		await globalRunWithClient(async () => {
-			const updated = await client.updateUser({
+			await client.updateUser({
 				image: null,
 			});
 			const sessionRes = await client.getSession();
@@ -71,7 +70,7 @@ describe("updateUser", async () => {
 
 		const newEmail = "new-email@email.com";
 		await globalRunWithClient(async () => {
-			const res = await client.changeEmail({
+			await client.changeEmail({
 				newEmail,
 			});
 			const sessionRes = await client.getSession();
@@ -306,7 +305,7 @@ describe("updateUser", async () => {
 		});
 		expect(res?.newField).toBe("new");
 
-		const updated = await client.updateUser({
+		await client.updateUser({
 			name: "newName",
 			fetchOptions: {
 				headers,
