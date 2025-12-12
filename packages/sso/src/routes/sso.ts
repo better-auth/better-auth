@@ -1,5 +1,5 @@
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
-import type { Account, Session, User, Verification } from "better-auth";
+import type { User, Verification } from "better-auth";
 import {
 	createAuthorizationURL,
 	generateState,
@@ -22,9 +22,9 @@ import type { BindingContext } from "samlify/types/src/entity";
 import type { IdentityProvider } from "samlify/types/src/entity-idp";
 import type { FlowResult } from "samlify/types/src/flow";
 import * as z from "zod/v4";
-import { assignOrganizationFromProvider } from "../linking";
 import type { AuthnRequestRecord } from "../authn-request-store";
 import { DEFAULT_AUTHN_REQUEST_TTL_MS } from "../authn-request-store";
+import { assignOrganizationFromProvider } from "../linking";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
 
 import { safeJsonParse, validateEmailDomain } from "../utils";

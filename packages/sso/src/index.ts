@@ -2,7 +2,6 @@ import type { BetterAuthPlugin } from "better-auth";
 import { createAuthMiddleware } from "better-auth/api";
 import { XMLValidator } from "fast-xml-parser";
 import * as saml from "samlify";
-import { assignOrganizationByDomain } from "./linking";
 import type {
 	AuthnRequestRecord,
 	AuthnRequestStore,
@@ -11,6 +10,7 @@ import {
 	createInMemoryAuthnRequestStore,
 	DEFAULT_AUTHN_REQUEST_TTL_MS,
 } from "./authn-request-store";
+import { assignOrganizationByDomain } from "./linking";
 import {
 	requestDomainVerification,
 	verifyDomain,
@@ -113,7 +113,7 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 			after: [
 				{
 					matcher(context) {
-						return context.path.startsWith("/callback/");
+						return context.path?.startsWith("/callback/") ?? false;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const newSession = ctx.context.newSession;
