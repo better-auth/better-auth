@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/expo",
-  "version": "1.4.7-beta.2",
+  "version": "1.4.7-beta.4",
   "type": "module",
   "description": "Better Auth integration for Expo and React Native applications.",
   "main": "dist/index.mjs",
