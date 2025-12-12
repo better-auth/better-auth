@@ -1,7 +1,7 @@
 {
   "name": "@better-auth/sso",
   "author": "Bereket Engida",
-  "version": "1.4.6-beta.4",
+  "version": "1.4.7-beta.3",
   "type": "module",
   "main": "dist/index.mjs",
   "types": "dist/index.d.mts",
@@ -33,6 +33,7 @@
     "test": "vitest",
     "coverage": "vitest run --coverage",
     "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
     "build": "tsdown",
     "dev": "tsdown --watch",
     "typecheck": "tsc --project tsconfig.json"
