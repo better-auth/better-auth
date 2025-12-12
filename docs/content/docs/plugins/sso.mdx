@@ -927,6 +927,62 @@ When InResponseTo validation fails, users are redirected with an error query par
 - `?error=invalid_saml_response&error_description=Provider+mismatch` — The response was meant for a different provider
 - `?error=unsolicited_response&error_description=IdP-initiated+SSO+not+allowed` — IdP-initiated SSO is disabled
 
+### Timestamp Validation
+
+The SSO plugin validates SAML assertion timestamps (`NotBefore` and `NotOnOrAfter`) to prevent acceptance of expired or future-dated assertions. This validation includes a configurable clock skew tolerance to account for time differences between servers.
+
+#### How It Works
+
+For each SAML assertion:
+- **NotBefore**: The assertion is rejected if current time is before `NotBefore - clockSkew`
+- **NotOnOrAfter**: The assertion is rejected if current time is after `NotOnOrAfter + clockSkew`
+
+#### Configuration
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
+const auth = betterAuth({
+    plugins: [
+        sso({
+            saml: {
+                // Clock skew tolerance (default: 5 minutes)
+                clockSkew: 5 * 60 * 1000,
+                // Require timestamps in assertions (default: false)
+                requireTimestamps: false,
+            },
+        }),
+    ],
+});
+```
+
+#### Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `clockSkew` | `number` | `300000` (5 min) | Clock skew tolerance in milliseconds. Allows for time differences between IdP and SP servers. |
+| `requireTimestamps` | `boolean` | `false` | When `true`, assertions without `NotBefore`/`NotOnOrAfter` conditions are rejected. When `false`, they are accepted but a warning is logged. |
+
+#### Stricter Security
+
+For environments requiring stricter security, you can reduce the clock skew and require timestamps:
+
+```ts title="auth.ts"
+sso({
+    saml: {
+        clockSkew: 60 * 1000,      // 1 minute tolerance
+        requireTimestamps: true,   // Reject assertions without timestamps
+    },
+})
+```
+
+#### Error Messages
+
+- **"SAML assertion is not yet valid"** — Current time is before the `NotBefore` timestamp (minus clock skew)
+- **"SAML assertion has expired"** — Current time is after the `NotOnOrAfter` timestamp (plus clock skew)
+- **"SAML assertion missing required timestamp conditions"** — Assertion has no timestamps and `requireTimestamps` is enabled
+
 ## Domain verification
 
 Domain verification allows your application to automatically trust a new SSO provider
@@ -1186,7 +1242,7 @@ If you want to allow account linking for specific trusted providers, enable the 
         },
     },
     saml: {
-        description: "SAML security options for AuthnRequest/InResponseTo validation.",
+        description: "SAML security options for AuthnRequest/InResponseTo validation and timestamp handling.",
         type: "object",
         properties: {
             enableInResponseToValidation: {
@@ -1208,6 +1264,16 @@ If you want to allow account linking for specific trusted providers, enable the 
                 description: "Custom AuthnRequest store for multi-instance deployments (e.g., Redis). Providing a store automatically enables validation.",
                 type: "AuthnRequestStore",
                 required: false,
+            },
+            clockSkew: {
+                description: "Clock skew tolerance for SAML assertion timestamp validation (NotBefore/NotOnOrAfter) in milliseconds. Allows for minor time differences between IdP and SP servers.",
+                type: "number",
+                default: 300000,
+            },
+            requireTimestamps: {
+                description: "Require timestamp conditions (NotBefore/NotOnOrAfter) in SAML assertions. When enabled, assertions without timestamps are rejected. When disabled, they are accepted with a warning logged.",
+                type: "boolean",
+                default: false,
             },
         },
     },
