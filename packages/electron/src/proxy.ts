@@ -47,7 +47,9 @@ export const electronProxyClient = (options: {
 						return false;
 					}
 					document.cookie = `${redirectCookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/`;
-					window.location.href = `${opts.protocol.scheme}:/${opts.callbackPath}?token=${redirectClient.substring("electron:".length)}`;
+					window.location.replace(
+						`${opts.protocol.scheme}:/${opts.callbackPath}#token=${redirectClient.substring("electron:".length)}`,
+					);
 					return true;
 				},
 			};

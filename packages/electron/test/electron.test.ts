@@ -12,7 +12,7 @@ import { oAuthProxy } from "better-auth/plugins";
 import Database from "better-sqlite3";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { electron } from "../src";
-import { authenticate } from "../src/authenticate";
+import { authenticate, kCodeVerifier, kState } from "../src/authenticate";
 import type { ElectronClientOptions } from "../src/client";
 import { electronClient } from "../src/client";
 import { electronProxyClient } from "../src/proxy";
@@ -143,6 +143,9 @@ describe("electron", () => {
 	it("should open external url in default browser", async () => {
 		await client.requestAuth();
 
+		(globalThis as any)[kCodeVerifier] = undefined;
+		(globalThis as any)[kState] = undefined;
+
 		expect(mockElectron.shell.openExternal).toHaveBeenCalledWith(
 			expect.stringContaining(options.redirectURL),
 			{
@@ -163,6 +166,7 @@ describe("electron", () => {
 					client_id: "electron",
 					code_challenge: "test-challenge",
 					code_challenge_method: "plain",
+					state: "abc",
 				},
 				onResponse: async (ctx) => {
 					const cookies = parseSetCookieHeader(
@@ -207,6 +211,7 @@ describe("electron", () => {
 						userId: user.id,
 						codeChallenge,
 						codeChallengeMethod: "s256",
+						state: "abc",
 					}),
 					expiresAt: new Date(Date.now() + 600 * 1000),
 				},
@@ -217,6 +222,7 @@ describe("electron", () => {
 				body: {
 					token: identifier,
 					code_verifier: codeVerifier,
+					state: "abc",
 				},
 				onResponse: async (ctx) => {
 					const cookies = parseSetCookieHeader(
@@ -233,7 +239,55 @@ describe("electron", () => {
 			expect(mockElectron.safeStorage.encryptString).toHaveBeenCalled();
 		}));
 
-	it("should emit authenticated event on success", () => async () => {
+	it("should emit authenticated event on success", async () => {
+		const { user } = await auth.api.signInEmail({
+			body: {
+				email: "test@test.com",
+				password: "password",
+			},
+		});
+
+		(globalThis as any)[kCodeVerifier] = "test-challenge";
+		(globalThis as any)[kState] = "abc";
+
+		const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
+		await (await auth.$context).adapter.create({
+			model: "verification",
+			data: {
+				identifier: `electron:${identifier}`,
+				value: JSON.stringify({
+					userId: user.id,
+					codeChallenge: "test-challenge",
+					codeChallengeMethod: "plain",
+					state: "abc",
+				}),
+				expiresAt: new Date(Date.now() + 600 * 1000),
+			},
+		});
+
+		await expect(
+			runInProcess("browser", () =>
+				authenticate(
+					client.$fetch,
+					options,
+					{
+						token: identifier,
+					},
+					// @ts-expect-error
+					() => mockElectron.BrowserWindow,
+				),
+			),
+		).resolves.toBeUndefined();
+
+		expect(mockElectron.BrowserWindow.webContents.send).toHaveBeenCalledWith(
+			"auth:authenticated",
+			expect.objectContaining({
+				id: user.id,
+			}),
+		);
+	});
+
+	it("should require pkce", async () => {
 		const { user } = await auth.api.signInEmail({
 			body: {
 				email: "test@test.com",
@@ -265,14 +319,46 @@ describe("electron", () => {
 					() => mockElectron.BrowserWindow,
 				),
 			),
-		).resolves.toBeUndefined();
+		).rejects.toThrowError("Code verifier not found.");
+	});
 
-		expect(mockElectron.BrowserWindow.webContents.send).toHaveBeenCalledWith(
-			"auth:authenticated",
-			expect.objectContaining({
-				id: user.id,
-			}),
-		);
+	it("should require a state parameter", async () => {
+		const { user } = await auth.api.signInEmail({
+			body: {
+				email: "test@test.com",
+				password: "password",
+			},
+		});
+
+		(globalThis as any)[kCodeVerifier] = "test-challenge";
+
+		const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
+		await (await auth.$context).adapter.create({
+			model: "verification",
+			data: {
+				identifier: `electron:${identifier}`,
+				value: JSON.stringify({
+					userId: user.id,
+					codeChallenge: "test-challenge",
+					codeChallengeMethod: "plain",
+				}),
+				expiresAt: new Date(Date.now() + 600 * 1000),
+			},
+		});
+
+		await expect(
+			runInProcess("browser", () =>
+				authenticate(
+					client.$fetch,
+					options,
+					{
+						token: identifier,
+					},
+					// @ts-expect-error
+					() => mockElectron.BrowserWindow,
+				),
+			),
+		).rejects.toThrowError("State not found.");
 	});
 
 	it("should emit error event on failure", () =>
@@ -306,7 +392,7 @@ describe("electron", () => {
 		expect(c).includes("better-auth.session_token");
 	});
 
-	it("should not trigger infinite refetch with non-better-auth cookies", () =>
+	it("should not trigger infinite refetch with non-./src/cookiesokies", () =>
 		runInProcess("browser", async () => {
 			const { hasBetterAuthCookies } = await import("../src/cookies");
 

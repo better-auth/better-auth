@@ -123,7 +123,7 @@ export function registerProtocolScheme(
 		if (!url.startsWith(`${options.protocol.scheme}:/`)) {
 			return;
 		}
-		const { protocol, pathname, searchParams, hostname } = parsedURL;
+		const { protocol, pathname, hostname, hash } = parsedURL;
 		if (protocol !== `${options.protocol.scheme}:`) {
 			return;
 		}
@@ -137,10 +137,11 @@ export function registerProtocolScheme(
 			return;
 		}
 
-		const token = searchParams.get("token");
-		if (!token) {
+		if (!hash.startsWith("#token=")) {
 			return;
 		}
+
+		const token = hash.substring("#token=".length);
 
 		await authenticate(
 			$fetch,

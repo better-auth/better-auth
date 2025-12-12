@@ -82,53 +82,61 @@ export const electron = (options?: ElectronOptions | undefined) => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						if (!ctx.context.newSession?.session) {
-							if (ctx.query?.client_id?.toLowerCase() === "electron") {
-								if (!ctx.query?.code_challenge) {
-									throw new APIError("BAD_REQUEST", {
-										message: "pkce is required",
-									});
-								}
-								await ctx.setSignedCookie(
-									`${opts.cookiePrefix}.transfer_token`,
-									JSON.stringify({
-										client_id: ctx.query.client_id.toLowerCase(),
-										code_challenge: ctx.query.code_challenge,
-										code_challenge_method:
-											ctx.query.code_challenge_method.toLowerCase() ?? "plain",
-									}),
-									ctx.context.secret,
-									{
-										...ctx.context.authCookies.sessionToken.options,
-										maxAge: opts.codeExpiresIn,
-									},
-								);
+						if (
+							ctx.query?.client_id?.toLowerCase() === "electron" &&
+							(ctx.path.startsWith("/sign-in") ||
+								ctx.path.startsWith("/sign-up"))
+						) {
+							const query = z
+								.object({
+									client_id: z.string(),
+									code_challenge: z.string().nonempty(),
+									code_challenge_method: z.string().optional().default("plain"),
+									state: z.string().nonempty(),
+								})
+								.safeParse(ctx.query);
+							if (!query.success) {
+								return;
 							}
+
+							const cookie = await ctx.setSignedCookie(
+								`${opts.cookiePrefix}.transfer_token`,
+								JSON.stringify(query.data),
+								ctx.context.secret,
+								{
+									...ctx.context.authCookies.sessionToken.options,
+									maxAge: opts.codeExpiresIn,
+								},
+							);
+
+							console.log("I SET IT", ctx.path, cookie);
 							return;
 						}
 
+						if (!ctx.context.newSession?.session) {
+							return;
+						}
 						const transferCookie = await ctx.getSignedCookie(
 							`${opts.cookiePrefix}.transfer_token`,
 							ctx.context.secret,
 						);
-						const {
-							client_id = ctx.query?.client_id?.toLowerCase(),
-							code_challenge = ctx.query?.code_challenge,
-							code_challenge_method = ctx.query?.code_challenge_method?.toLowerCase(),
-						} = JSON.parse(transferCookie || "{}");
+						if (!transferCookie) {
+							return;
+						}
+
+						const { client_id, code_challenge, code_challenge_method, state } =
+							JSON.parse(transferCookie);
 						if (client_id !== "electron") {
 							return;
+						}
+						if (!state) {
+							throw new APIError("BAD_REQUEST", {
+								message: "state is required",
+							});
 						}
 						if (!code_challenge) {
 							throw new APIError("BAD_REQUEST", {
 								message: "pkce is required",
-							});
-						}
-
-						if (client_id === "electron") {
-							ctx.setCookie(`${opts.cookiePrefix}.client_id`, "", {
-								...ctx.context.authCookies.sessionToken.options,
-								maxAge: 0,
 							});
 						}
 
@@ -144,6 +152,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 									userId: ctx.context.newSession.user.id,
 									codeChallenge: code_challenge,
 									codeChallengeMethod: code_challenge_method.toLowerCase(),
+									state,
 								}),
 								expiresAt,
 							});
@@ -164,6 +173,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 					method: "POST",
 					body: z.object({
 						token: z.string().nonempty(),
+						state: z.string().nonempty(),
 						code_verifier: z.string().nonempty(),
 					}),
 					metadata: {
@@ -184,6 +194,12 @@ export const electron = (options?: ElectronOptions | undefined) => {
 					const tokenRecord = JSON.parse(token.value);
 
 					await ctx.context.internalAdapter.deleteVerificationValue(token.id);
+
+					if (tokenRecord.state !== ctx.body.state) {
+						throw new APIError("BAD_REQUEST", {
+							message: "state mismatch",
+						});
+					}
 
 					if (!tokenRecord.codeChallenge) {
 						throw new APIError("BAD_REQUEST", {
