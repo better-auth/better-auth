@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "better-auth": "workspace:*",
-    "next": "16.0.7",
+    "next": "16.0.9",
     "react": "catalog:react19",
     "react-dom": "catalog:react19"
   },
