@@ -266,6 +266,7 @@ export async function createAuthContext(
 				: isTest()
 					? true
 					: false,
+		runInBackground: options.advanced?.backgroundTasks?.handler,
 	};
 
 	const initOrPromise = runPluginInit(ctx);

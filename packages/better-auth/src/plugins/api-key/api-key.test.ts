@@ -2916,23 +2916,19 @@ describe("api-key", async () => {
 	});
 
 	describe("deferUpdates option", () => {
-		it("should throw error if deferUpdates is true but no handler provided", async () => {
-			expect(() =>
-				apiKey({
-					deferUpdates: true,
-				}),
-			).toThrow("deferredUpdateHandler");
-		});
-
-		it("should defer updates when deferUpdates is enabled", async () => {
-			const deferredFns: Array<() => Promise<void>> = [];
+		it("should defer updates when deferUpdates is enabled with global backgroundTasks", async () => {
+			const deferredPromises: Array<Promise<void>> = [];
 			const { auth, signInWithTestUser } = await getTestInstance({
+				advanced: {
+					backgroundTasks: {
+						handler: (p: Promise<void>) => {
+							deferredPromises.push(p);
+						},
+					},
+				},
 				plugins: [
 					apiKey({
 						deferUpdates: true,
-						deferredUpdateHandler: (fn) => {
-							deferredFns.push(fn);
-						},
 					}),
 				],
 			});
@@ -2949,9 +2945,9 @@ describe("api-key", async () => {
 			});
 
 			expect(result.valid).toBe(true);
-			expect(deferredFns.length).toBeGreaterThan(0);
+			expect(deferredPromises.length).toBeGreaterThan(0);
 
-			await Promise.all(deferredFns.map((fn) => fn()));
+			await Promise.all(deferredPromises);
 
 			const updatedKey = await auth.api.getApiKey({
 				query: { id: key.id },
@@ -2961,14 +2957,18 @@ describe("api-key", async () => {
 		});
 
 		it("should still validate rate limits correctly with deferred updates", async () => {
-			const deferredFns: Array<() => Promise<void>> = [];
+			const deferredPromises: Array<Promise<void>> = [];
 			const { auth, signInWithTestUser } = await getTestInstance({
+				advanced: {
+					backgroundTasks: {
+						handler: (p: Promise<void>) => {
+							deferredPromises.push(p);
+						},
+					},
+				},
 				plugins: [
 					apiKey({
 						deferUpdates: true,
-						deferredUpdateHandler: (fn) => {
-							deferredFns.push(fn);
-						},
 						rateLimit: {
 							enabled: true,
 							maxRequests: 2,
@@ -2988,74 +2988,33 @@ describe("api-key", async () => {
 			const result1 = await auth.api.verifyApiKey({ body: { key: key.key } });
 			expect(result1.valid).toBe(true);
 
-			await Promise.all(deferredFns.map((fn) => fn()));
-			deferredFns.length = 0;
+			await Promise.all(deferredPromises);
+			deferredPromises.length = 0;
 
 			const result2 = await auth.api.verifyApiKey({ body: { key: key.key } });
 			expect(result2.valid).toBe(true);
 
-			await Promise.all(deferredFns.map((fn) => fn()));
-			deferredFns.length = 0;
+			await Promise.all(deferredPromises);
+			deferredPromises.length = 0;
 
 			const result3 = await auth.api.verifyApiKey({ body: { key: key.key } });
 			expect(result3.valid).toBe(false);
 			expect(result3.error?.code).toBe("RATE_LIMITED");
 		});
 
-		it("should handle deferred update failures gracefully", async () => {
-			let failNext = false;
-			const deferredFns: Array<() => Promise<void>> = [];
-			const { auth, signInWithTestUser } = await getTestInstance({
-				plugins: [
-					apiKey({
-						deferUpdates: true,
-						deferredUpdateHandler: (fn) => {
-							if (failNext) {
-								deferredFns.push(async () => {
-									throw new Error("Simulated failure");
-								});
-							} else {
-								deferredFns.push(fn);
-							}
-						},
-					}),
-				],
-			});
-
-			const { headers, user } = await signInWithTestUser();
-
-			const key = await auth.api.createApiKey({
-				body: { userId: user.id },
-				headers,
-			});
-
-			const result = await auth.api.verifyApiKey({
-				body: { key: key.key },
-			});
-			expect(result.valid).toBe(true);
-
-			failNext = true;
-			deferredFns.length = 0;
-
-			const result2 = await auth.api.verifyApiKey({
-				body: { key: key.key },
-			});
-			expect(result2.valid).toBe(true);
-
-			await expect(
-				Promise.all(deferredFns.map((fn) => fn().catch(() => {}))),
-			).resolves.not.toThrow();
-		});
-
 		it("should defer remaining count updates", async () => {
-			const deferredFns: Array<() => Promise<void>> = [];
+			const deferredPromises: Array<Promise<void>> = [];
 			const { auth, signInWithTestUser } = await getTestInstance({
+				advanced: {
+					backgroundTasks: {
+						handler: (p: Promise<void>) => {
+							deferredPromises.push(p);
+						},
+					},
+				},
 				plugins: [
 					apiKey({
 						deferUpdates: true,
-						deferredUpdateHandler: (fn) => {
-							deferredFns.push(fn);
-						},
 					}),
 				],
 			});
@@ -3072,15 +3031,45 @@ describe("api-key", async () => {
 			expect(result.valid).toBe(true);
 			expect(result.key?.remaining).toBe(9);
 
-			expect(deferredFns.length).toBeGreaterThan(0);
+			expect(deferredPromises.length).toBeGreaterThan(0);
 
-			await Promise.all(deferredFns.map((fn) => fn()));
+			await Promise.all(deferredPromises);
 
 			const updatedKey = await auth.api.getApiKey({
 				query: { id: key.id },
 				headers,
 			});
 			expect(updatedKey.remaining).toBe(9);
+		});
+
+		it("should not defer updates when backgroundTasks handler is not configured", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					apiKey({
+						deferUpdates: true,
+					}),
+				],
+			});
+
+			const { headers, user } = await signInWithTestUser();
+
+			const key = await auth.api.createApiKey({
+				body: { userId: user.id },
+				headers,
+			});
+
+			const result = await auth.api.verifyApiKey({
+				body: { key: key.key },
+			});
+
+			expect(result.valid).toBe(true);
+
+			// Without advanced.backgroundTasks handler, updates should happen synchronously
+			const updatedKey = await auth.api.getApiKey({
+				query: { id: key.id },
+				headers,
+			});
+			expect(updatedKey.lastRequest).not.toBeNull();
 		});
 	});
 
