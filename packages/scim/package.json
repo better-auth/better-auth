@@ -1,7 +1,7 @@
 {
   "name": "@better-auth/scim",
   "author": "Jonathan Samines",
-  "version": "1.4.7-beta.3",
+  "version": "1.4.7-beta.4",
   "type": "module",
   "main": "dist/index.mjs",
   "types": "dist/index.d.mts",
