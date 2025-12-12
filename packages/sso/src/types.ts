@@ -307,5 +307,37 @@ export interface SSOOptions {
 		 * verification table fallback) is used automatically.
 		 */
 		authnRequestStore?: AuthnRequestStore;
+		/**
+		 * Clock skew tolerance for SAML assertion timestamp validation in milliseconds.
+		 * Allows for minor time differences between IdP and SP servers.
+		 *
+		 * Defaults to 300000 (5 minutes) to accommodate:
+		 * - Network latency and processing time
+		 * - Clock synchronization differences (NTP drift)
+		 * - Distributed systems across timezones
+		 *
+		 * For stricter security, reduce to 1-2 minutes (60000-120000).
+		 * For highly distributed systems, increase up to 10 minutes (600000).
+		 *
+		 * @default 300000 (5 minutes)
+		 */
+		clockSkew?: number;
+		/**
+		 * Require timestamp conditions (NotBefore/NotOnOrAfter) in SAML assertions.
+		 * When enabled, assertions without timestamp conditions will be rejected.
+		 *
+		 * When disabled (default), assertions without timestamps are accepted
+		 * but a warning is logged.
+		 *
+		 * **SAML Spec Notes:**
+		 * - SAML 2.0 Core: Timestamps are OPTIONAL
+		 * - SAML2Int (enterprise profile): Timestamps are REQUIRED
+		 *
+		 * **Recommendation:** Enable for enterprise/production deployments
+		 * where your IdP follows SAML2Int (Okta, Azure AD, OneLogin, etc.)
+		 *
+		 * @default false
+		 */
+		requireTimestamps?: boolean;
 	};
 }
