@@ -25,13 +25,9 @@ import {
 	it,
 	vi,
 } from "vitest";
-import {
-	createInMemoryAuthnRequestStore,
-	sso,
-	validateSAMLTimestamp,
-} from ".";
-import { DEFAULT_CLOCK_SKEW_MS } from "./constants";
+import { createInMemoryAuthnRequestStore, sso, validateSAMLTimestamp } from ".";
 import { ssoClient } from "./client";
+import { DEFAULT_CLOCK_SKEW_MS } from "./constants";
 
 const spMetadata = `
     <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:3001/api/sso/saml2/sp/metadata">

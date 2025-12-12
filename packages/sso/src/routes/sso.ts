@@ -1,5 +1,4 @@
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
-import { XMLParser } from "fast-xml-parser";
 import type { Account, Session, User, Verification } from "better-auth";
 import {
 	createAuthorizationURL,
@@ -17,6 +16,7 @@ import {
 import { setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { handleOAuthUserInfo } from "better-auth/oauth2";
+import { XMLParser } from "fast-xml-parser";
 import { decodeJwt } from "jose";
 import * as saml from "samlify";
 import type { BindingContext } from "samlify/types/src/entity";
