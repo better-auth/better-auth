@@ -1931,6 +1931,7 @@ describe("SSO Provider Config Parsing", () => {
 
 			const auth = betterAuth({
 				database: memory,
+				trustedOrigins: ["http://localhost:8082"],
 				baseURL: "http://localhost:3000",
 				emailAndPassword: { enabled: true },
 				plugins: [sso()],
