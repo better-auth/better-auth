@@ -1827,10 +1827,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 								// Note: Cleanup of expired records is handled automatically by
 								// findVerificationValue, but we still need to check expiration
 								// since the record is returned before cleanup runs
-								if (
-									storedRequest &&
-									storedRequest.expiresAt < Date.now()
-								) {
+								if (storedRequest && storedRequest.expiresAt < Date.now()) {
 									storedRequest = null;
 								}
 							} catch {
@@ -2266,10 +2263,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 								storedRequest = JSON.parse(
 									verification.value,
 								) as AuthnRequestRecord;
-								if (
-									storedRequest &&
-									storedRequest.expiresAt < Date.now()
-								) {
+								if (storedRequest && storedRequest.expiresAt < Date.now()) {
 									storedRequest = null;
 								}
 							} catch {
