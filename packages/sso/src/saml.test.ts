@@ -2236,7 +2236,6 @@ describe("SAML SSO - Timestamp Validation", () => {
 		});
 
 		it("should accept assertion expiring exactly at clock skew boundary", () => {
-			// NotOnOrAfter was exactly 5 minutes ago (at the edge of default clock skew)
 			const exactlyAtBoundary = new Date(
 				FIXED_TIME - DEFAULT_CLOCK_SKEW_MS,
 			).toISOString();
@@ -2246,7 +2245,6 @@ describe("SAML SSO - Timestamp Validation", () => {
 		});
 
 		it("should reject assertion expiring 1ms beyond clock skew boundary", () => {
-			// NotOnOrAfter was 5 minutes + 1ms ago (just past the edge)
 			const justPastBoundary = new Date(
 				FIXED_TIME - DEFAULT_CLOCK_SKEW_MS - 1,
 			).toISOString();
@@ -2256,7 +2254,6 @@ describe("SAML SSO - Timestamp Validation", () => {
 		});
 
 		it("should accept assertion with NotBefore exactly at clock skew boundary", () => {
-			// NotBefore is exactly 5 minutes from now (at the edge of clock skew)
 			const exactlyAtBoundary = new Date(
 				FIXED_TIME + DEFAULT_CLOCK_SKEW_MS,
 			).toISOString();
@@ -2266,7 +2263,6 @@ describe("SAML SSO - Timestamp Validation", () => {
 		});
 
 		it("should reject assertion with NotBefore 1ms beyond clock skew boundary", () => {
-			// NotBefore is 5 minutes + 1ms from now (just past the edge)
 			const justPastBoundary = new Date(
 				FIXED_TIME + DEFAULT_CLOCK_SKEW_MS + 1,
 			).toISOString();
@@ -2318,7 +2314,6 @@ describe("SAML SSO - Timestamp Validation", () => {
 		it("should use custom clockSkew when provided", () => {
 			const twoSecondsAgo = new Date(Date.now() - 2 * 1000).toISOString();
 
-			// With 1 second clock skew, should fail
 			expect(() =>
 				validateSAMLTimestamp(
 					{ notOnOrAfter: twoSecondsAgo },
@@ -2326,7 +2321,6 @@ describe("SAML SSO - Timestamp Validation", () => {
 				),
 			).toThrow("SAML assertion has expired");
 
-			// With 5 minute clock skew, should pass
 			expect(() =>
 				validateSAMLTimestamp(
 					{ notOnOrAfter: twoSecondsAgo },
@@ -2336,13 +2330,11 @@ describe("SAML SSO - Timestamp Validation", () => {
 		});
 
 		it("should use default 5 minute clock skew when not specified", () => {
-			// 4 minutes ago should pass with default 5 min skew
 			const fourMinutesAgo = new Date(Date.now() - 4 * 60 * 1000).toISOString();
 			expect(() =>
 				validateSAMLTimestamp({ notOnOrAfter: fourMinutesAgo }),
 			).not.toThrow();
 
-			// 6 minutes ago should fail with default 5 min skew
 			const sixMinutesAgo = new Date(Date.now() - 6 * 60 * 1000).toISOString();
 			expect(() =>
 				validateSAMLTimestamp({ notOnOrAfter: sixMinutesAgo }),
@@ -2364,7 +2356,6 @@ describe("SAML SSO - Timestamp Validation", () => {
 		});
 
 		it("should treat empty string timestamps as missing (falsy values)", () => {
-			// Empty strings are falsy, so they're treated as "no timestamp"
 			expect(() => validateSAMLTimestamp({ notBefore: "" })).not.toThrow();
 			expect(() => validateSAMLTimestamp({ notOnOrAfter: "" })).not.toThrow();
 		});
