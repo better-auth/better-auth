@@ -169,7 +169,7 @@ export async function parseGenericState(
 			});
 		}
 
-		parsedData = JSON.parse(data.value);
+		parsedData = stateDataSchema.parse(JSON.parse(data.value));
 
 		const stateCookie = c.context.createAuthCookie(
 			settings?.cookieName ?? "state",

@@ -1891,7 +1891,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 				parsedResponse = await sp.parseLoginResponse(idp, "post", {
 					body: {
 						SAMLResponse,
-						RelayState: ctx.body.RelayState,
+						RelayState: ctx.body.RelayState || undefined,
 					},
 				});
 
