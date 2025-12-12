@@ -48,10 +48,9 @@ describe("(cloudflare) simple server", () => {
 			});
 		});
 
-		// check index.js
 		const indexJs = await fs.readFile(
 			join(fixturesDir, "cloudflare", "dist", "index.js"),
-			"utf-8"
+			"utf-8",
 		);
 
 		const unexpectedContents = new Set([
