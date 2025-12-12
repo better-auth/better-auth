@@ -1,7 +1,8 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { exportJWK, generateKeyPair } from "jose";
 import { symmetricEncrypt } from "../../crypto";
-import { joseSecs } from "../../utils/time";
+import type { TimeString } from "../../utils/time";
+import { sec } from "../../utils/time";
 import { getJwksAdapter } from "./adapter";
 import type { Jwk, JwtOptions } from "./types";
 
@@ -23,7 +24,7 @@ export function toExpJWT(
 	} else if (expirationTime instanceof Date) {
 		return Math.floor(expirationTime.getTime() / 1000);
 	} else {
-		return iat + joseSecs(expirationTime);
+		return iat + sec(expirationTime as TimeString);
 	}
 }
 

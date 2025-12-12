@@ -7,8 +7,8 @@ settings:
 catalogs:
   default:
     '@better-fetch/fetch':
-      specifier: 1.1.18
-      version: 1.1.18
+      specifier: 1.1.21
+      version: 1.1.21
     better-call:
       specifier: 1.1.5
       version: 1.1.5
@@ -386,9 +386,6 @@ importers:
       lucide-react:
         specifier: ^0.542.0
         version: 0.542.0(react@19.2.1)
-      mini-svg-data-uri:
-        specifier: ^1.4.4
-        version: 1.4.4
       mysql2:
         specifier: ^3.14.4
         version: 3.14.4
@@ -586,7 +583,7 @@ importers:
         version: 0.3.0
       '@better-fetch/fetch':
         specifier: 'catalog:'
-        version: 1.1.18
+        version: 1.1.21
       '@hookform/resolvers':
         specifier: ^5.2.1
         version: 5.2.1(react-hook-form@7.62.0(react@19.2.1))
@@ -1033,7 +1030,7 @@ importers:
         version: 0.3.0
       '@better-fetch/fetch':
         specifier: 'catalog:'
-        version: 1.1.18
+        version: 1.1.21
       '@noble/ciphers':
         specifier: ^2.0.0
         version: 2.0.0
@@ -1055,9 +1052,6 @@ importers:
       kysely:
         specifier: ^0.28.5
         version: 0.28.5
-      ms:
-        specifier: 4.0.0-nightly.202508271359
-        version: 4.0.0-nightly.202508271359
       nanostores:
         specifier: ^1.0.1
         version: 1.0.1
@@ -1276,7 +1270,7 @@ importers:
         version: 0.3.0
       '@better-fetch/fetch':
         specifier: 'catalog:'
-        version: 1.1.18
+        version: 1.1.21
       better-call:
         specifier: 'catalog:'
         version: 1.1.5(zod@4.1.13)
@@ -1297,7 +1291,7 @@ importers:
     dependencies:
       '@better-fetch/fetch':
         specifier: 'catalog:'
-        version: 1.1.18
+        version: 1.1.21
       better-call:
         specifier: 'catalog:'
         version: 1.1.5(zod@4.1.13)
@@ -1343,7 +1337,7 @@ importers:
         version: 0.3.0
       '@better-fetch/fetch':
         specifier: 'catalog:'
-        version: 1.1.18
+        version: 1.1.21
       '@simplewebauthn/browser':
         specifier: ^13.1.2
         version: 13.1.2
@@ -1396,7 +1390,7 @@ importers:
     dependencies:
       '@better-fetch/fetch':
         specifier: 'catalog:'
-        version: 1.1.18
+        version: 1.1.21
       fast-xml-parser:
         specifier: ^5.2.5
         version: 5.2.5
@@ -1467,7 +1461,7 @@ importers:
         version: 0.3.0
       '@better-fetch/fetch':
         specifier: 'catalog:'
-        version: 1.1.18
+        version: 1.1.21
     devDependencies:
       '@better-auth/core':
         specifier: workspace:*
@@ -1486,7 +1480,7 @@ importers:
         version: link:../packages/core
       '@better-fetch/fetch':
         specifier: 'catalog:'
-        version: 1.1.18
+        version: 1.1.21
       better-auth:
         specifier: workspace:*
         version: link:../packages/better-auth
@@ -2385,8 +2379,8 @@ packages:
   '@better-auth/utils@0.3.0':
     resolution: {integrity: sha512-W+Adw6ZA6mgvnSnhOki270rwJ42t4XzSK6YWGF//BbVXL6SwCLWfyzBc1lN2m/4RM28KubdBKQ4X5VMoLRNPQw==}
 
-  '@better-fetch/fetch@1.1.18':
-    resolution: {integrity: sha512-rEFOE1MYIsBmoMJtQbl32PGHHXuG2hDxvEd7rUHE0vCBoFQVSDqaVs9hkZEtHCxRoY+CljXKFCOuJ8uxqw1LcA==}
+  '@better-fetch/fetch@1.1.21':
+    resolution: {integrity: sha512-/ImESw0sskqlVR94jB+5+Pxjf+xBwDZF/N5+y2/q4EqD7IARUTSpPfIo8uf39SYpCxyOCtbyYpUrZ3F/k0zT4A==}
 
   '@biomejs/biome@2.3.8':
     resolution: {integrity: sha512-Qjsgoe6FEBxWAUzwFGFrB+1+M8y/y5kwmg5CHac+GSVOdmOIqsAiXM5QMVGZJ1eCUCLlPZtq4aFAQ0eawEUuUA==}
@@ -11250,10 +11244,6 @@ packages:
   ms@2.1.3:
     resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
 
-  ms@4.0.0-nightly.202508271359:
-    resolution: {integrity: sha512-WC/Eo7NzFrOV/RRrTaI0fxKVbNCzEy76j2VqNV8SxDf9D69gSE2Lh0QwYvDlhiYmheBYExAvEAxVf5NoN0cj2A==}
-    engines: {node: '>=20'}
-
   msw@2.12.4:
     resolution: {integrity: sha512-rHNiVfTyKhzc0EjoXUBVGteNKBevdjOlVC6GlIRXpy+/3LHEIGRovnB5WPjcvmNODVQ1TNFnoa7wsGbd0V3epg==}
     engines: {node: '>=18'}
@@ -15558,7 +15548,7 @@ snapshots:
 
   '@better-auth/utils@0.3.0': {}
 
-  '@better-fetch/fetch@1.1.18': {}
+  '@better-fetch/fetch@1.1.21': {}
 
   '@biomejs/biome@2.3.8':
     optionalDependencies:
@@ -18991,9 +18981,7 @@ snapshots:
       metro-runtime: 0.83.3
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
     optional: true
 
   '@react-native/normalize-colors@0.74.89': {}
@@ -21019,7 +21007,7 @@ snapshots:
   better-call@1.1.5(zod@4.1.13):
     dependencies:
       '@better-auth/utils': 0.3.0
-      '@better-fetch/fetch': 1.1.18
+      '@better-fetch/fetch': 1.1.21
       rou3: 0.7.10
       set-cookie-parser: 2.7.2
     optionalDependencies:
@@ -25736,8 +25724,6 @@ snapshots:
   ms@2.0.0: {}
 
   ms@2.1.3: {}
-
-  ms@4.0.0-nightly.202508271359: {}
 
   msw@2.12.4(@types/node@24.10.1)(typescript@5.9.3):
     dependencies:
