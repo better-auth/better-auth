@@ -1868,7 +1868,9 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 						{ providerId: provider.providerId },
 					);
 					const redirectUrl =
-						relayState?.callbackURL || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+						relayState?.callbackURL ||
+						parsedSamlConfig.callbackUrl ||
+						ctx.context.baseURL;
 					throw ctx.redirect(
 						`${redirectUrl}?error=unsolicited_response&error_description=IdP-initiated+SSO+not+allowed`,
 					);
