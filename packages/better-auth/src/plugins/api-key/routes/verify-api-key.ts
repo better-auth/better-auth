@@ -12,6 +12,28 @@ import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 
+/**
+ * Schedules a function to run deferred or executes it immediately.
+ *
+ * When deferred, errors are logged but not propagated since the response
+ * has already been sent. When synchronous, errors propagate to the caller.
+ */
+function scheduleOrExecute(
+	opts: PredefinedApiKeyOptions,
+	fn: () => Promise<void>,
+	ctx: GenericEndpointContext,
+): Promise<void> | void {
+	if (opts.deferUpdates && opts.deferredUpdateHandler) {
+		opts.deferredUpdateHandler(() =>
+			fn().catch((error) => {
+				ctx.context.logger.error("Deferred update failed:", error);
+			}),
+		);
+		return;
+	}
+	return fn();
+}
+
 export async function validateApiKey({
 	hashedKey,
 	ctx,
@@ -44,34 +66,25 @@ export async function validateApiKey({
 		const now = Date.now();
 		const expiresAt = new Date(apiKey.expiresAt).getTime();
 		if (now > expiresAt) {
-			try {
+			const deleteExpiredKey = async () => {
 				if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
 					await deleteApiKey(ctx, apiKey, opts);
 					await ctx.context.adapter.delete({
 						model: API_KEY_TABLE_NAME,
-						where: [
-							{
-								field: "id",
-								value: apiKey.id,
-							},
-						],
+						where: [{ field: "id", value: apiKey.id }],
 					});
 				} else if (opts.storage === "secondary-storage") {
 					await deleteApiKey(ctx, apiKey, opts);
 				} else {
 					await ctx.context.adapter.delete({
 						model: API_KEY_TABLE_NAME,
-						where: [
-							{
-								field: "id",
-								value: apiKey.id,
-							},
-						],
+						where: [{ field: "id", value: apiKey.id }],
 					});
 				}
-			} catch (error) {
-				ctx.context.logger.error(`Failed to delete expired API keys:`, error);
-			}
+			};
+
+			const deletion = scheduleOrExecute(opts, deleteExpiredKey, ctx);
+			if (deletion) await deletion;
 
 			throw new APIError("UNAUTHORIZED", {
 				message: ERROR_CODES.KEY_EXPIRED,
@@ -107,38 +120,25 @@ export async function validateApiKey({
 	let lastRefillAt = apiKey.lastRefillAt;
 
 	if (apiKey.remaining === 0 && apiKey.refillAmount === null) {
-		// if there is no more remaining requests, and there is no refill amount, than the key is revoked
-		try {
+		const deleteExhaustedKey = async () => {
 			if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
-				// Secondary storage with fallback: delete from storage and database
 				await deleteApiKey(ctx, apiKey, opts);
 				await ctx.context.adapter.delete({
 					model: API_KEY_TABLE_NAME,
-					where: [
-						{
-							field: "id",
-							value: apiKey.id,
-						},
-					],
+					where: [{ field: "id", value: apiKey.id }],
 				});
 			} else if (opts.storage === "secondary-storage") {
-				// Secondary storage mode: delete from storage only
 				await deleteApiKey(ctx, apiKey, opts);
 			} else {
-				// Database mode: delete from DB
 				await ctx.context.adapter.delete({
 					model: API_KEY_TABLE_NAME,
-					where: [
-						{
-							field: "id",
-							value: apiKey.id,
-						},
-					],
+					where: [{ field: "id", value: apiKey.id }],
 				});
 			}
-		} catch (error) {
-			ctx.context.logger.error(`Failed to delete expired API keys:`, error);
-		}
+		};
+
+		const deletion = scheduleOrExecute(opts, deleteExhaustedKey, ctx);
+		if (deletion) await deletion;
 
 		throw new APIError("TOO_MANY_REQUESTS", {
 			message: ERROR_CODES.USAGE_EXCEEDED,
@@ -173,56 +173,6 @@ export async function validateApiKey({
 
 	const { message, success, update, tryAgainIn } = isRateLimited(apiKey, opts);
 
-	let newApiKey: ApiKey | null = null;
-	const updated: ApiKey = {
-		...apiKey,
-		...update,
-		remaining,
-		lastRefillAt,
-		updatedAt: new Date(),
-	};
-
-	if (opts.storage === "database") {
-		// Database mode only
-		newApiKey = await ctx.context.adapter.update<ApiKey>({
-			model: API_KEY_TABLE_NAME,
-			where: [
-				{
-					field: "id",
-					value: apiKey.id,
-				},
-			],
-			update: updated,
-		});
-	} else if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
-		// Secondary storage with fallback: update database and then update storage
-		const dbUpdated = await ctx.context.adapter.update<ApiKey>({
-			model: API_KEY_TABLE_NAME,
-			where: [
-				{
-					field: "id",
-					value: apiKey.id,
-				},
-			],
-			update: updated,
-		});
-		if (dbUpdated) {
-			await setApiKey(ctx, dbUpdated, opts);
-			newApiKey = dbUpdated;
-		}
-	} else {
-		// Secondary storage mode: update in storage
-		await setApiKey(ctx, updated, opts);
-		newApiKey = updated;
-	}
-
-	if (!newApiKey) {
-		throw new APIError("INTERNAL_SERVER_ERROR", {
-			message: ERROR_CODES.FAILED_TO_UPDATE_API_KEY,
-			code: "INTERNAL_SERVER_ERROR" as const,
-		});
-	}
-
 	if (success === false) {
 		throw new APIError("UNAUTHORIZED", {
 			message: message ?? undefined,
@@ -231,6 +181,61 @@ export async function validateApiKey({
 				tryAgainIn,
 			},
 		});
+	}
+
+	const updated: ApiKey = {
+		...apiKey,
+		...update,
+		remaining,
+		lastRefillAt,
+		updatedAt: new Date(),
+	};
+
+	const performUpdate = async (): Promise<ApiKey | null> => {
+		if (opts.storage === "database") {
+			return ctx.context.adapter.update<ApiKey>({
+				model: API_KEY_TABLE_NAME,
+				where: [{ field: "id", value: apiKey.id }],
+				update: updated,
+			});
+		} else if (
+			opts.storage === "secondary-storage" &&
+			opts.fallbackToDatabase
+		) {
+			const dbUpdated = await ctx.context.adapter.update<ApiKey>({
+				model: API_KEY_TABLE_NAME,
+				where: [{ field: "id", value: apiKey.id }],
+				update: updated,
+			});
+			if (dbUpdated) {
+				await setApiKey(ctx, dbUpdated, opts);
+			}
+			return dbUpdated;
+		} else {
+			await setApiKey(ctx, updated, opts);
+			return updated;
+		}
+	};
+
+	let newApiKey: ApiKey | null = null;
+
+	if (opts.deferUpdates && opts.deferredUpdateHandler) {
+		opts.deferredUpdateHandler(() =>
+			performUpdate()
+				.then(() => {})
+				.catch((error) => {
+					ctx.context.logger.error("Failed to update API key:", error);
+				}),
+		);
+		newApiKey = updated;
+	} else {
+		newApiKey = await performUpdate();
+		if (!newApiKey) {
+			throw new APIError("INTERNAL_SERVER_ERROR", {
+				message: ERROR_CODES.FAILED_TO_UPDATE_API_KEY,
+				code: "INTERNAL_SERVER_ERROR" as const,
+			});
+		}
 	}
 
 	return newApiKey;
@@ -258,7 +263,7 @@ export function verifyApiKey({
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
 		byPassLastCheckTime?: boolean | undefined,
-	): void;
+	): Promise<void>;
 }) {
 	return createAuthEndpoint(
 		{
@@ -308,7 +313,19 @@ export function verifyApiKey({
 					opts,
 					schema,
 				});
-				await deleteAllExpiredApiKeys(ctx.context);
+
+				if (opts.deferUpdates && opts.deferredUpdateHandler) {
+					opts.deferredUpdateHandler(() =>
+						deleteAllExpiredApiKeys(ctx.context).catch((err) => {
+							ctx.context.logger.error(
+								"Failed to delete expired API keys:",
+								err,
+							);
+						}),
+					);
+				} else {
+					await deleteAllExpiredApiKeys(ctx.context);
+				}
 			} catch (error) {
 				if (error instanceof APIError) {
 					return ctx.json({
