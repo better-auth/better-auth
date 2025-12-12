@@ -35,9 +35,11 @@ import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
 import { safeJsonParse, validateEmailDomain } from "../utils";
 
 const AUTHN_REQUEST_KEY_PREFIX = "saml-authn-request:";
-const DEFAULT_CLOCK_SKEW_MS = 5 * 60 * 1000; // 5 minutes
 
-interface TimestampValidationOptions {
+/** Default clock skew tolerance: 5 minutes */
+export const DEFAULT_CLOCK_SKEW_MS = 5 * 60 * 1000;
+
+export interface TimestampValidationOptions {
 	clockSkew?: number;
 	requireTimestamps?: boolean;
 	logger?: {
@@ -45,22 +47,22 @@ interface TimestampValidationOptions {
 	};
 }
 
+/** Conditions extracted from SAML assertion */
+export interface SAMLConditions {
+	notBefore?: string;
+	notOnOrAfter?: string;
+}
+
 /**
  * Validates SAML assertion timestamp conditions (NotBefore/NotOnOrAfter).
  * Prevents acceptance of expired or future-dated assertions.
+ * @throws {APIError} If timestamps are invalid, expired, or not yet valid
  */
-function validateSAMLTimestamp(
-	extract: FlowResult["extract"],
+export function validateSAMLTimestamp(
+	conditions: SAMLConditions | undefined,
 	options: TimestampValidationOptions = {},
 ): void {
 	const clockSkew = options.clockSkew ?? DEFAULT_CLOCK_SKEW_MS;
-	const conditions = (extract as any).conditions as
-		| {
-				notBefore?: string;
-				notOnOrAfter?: string;
-		  }
-		| undefined;
-
 	const hasTimestamps = conditions?.notBefore || conditions?.notOnOrAfter;
 
 	if (!hasTimestamps) {
@@ -83,6 +85,12 @@ function validateSAMLTimestamp(
 
 	if (conditions?.notBefore) {
 		const notBeforeTime = new Date(conditions.notBefore).getTime();
+		if (Number.isNaN(notBeforeTime)) {
+			throw new APIError("BAD_REQUEST", {
+				message: "SAML assertion has invalid NotBefore timestamp",
+				details: `Unable to parse NotBefore value: ${conditions.notBefore}`,
+			});
+		}
 		if (now < notBeforeTime - clockSkew) {
 			throw new APIError("BAD_REQUEST", {
 				message: "SAML assertion is not yet valid",
@@ -93,6 +101,12 @@ function validateSAMLTimestamp(
 
 	if (conditions?.notOnOrAfter) {
 		const notOnOrAfterTime = new Date(conditions.notOnOrAfter).getTime();
+		if (Number.isNaN(notOnOrAfterTime)) {
+			throw new APIError("BAD_REQUEST", {
+				message: "SAML assertion has invalid NotOnOrAfter timestamp",
+				details: `Unable to parse NotOnOrAfter value: ${conditions.notOnOrAfter}`,
+			});
+		}
 		if (now > notOnOrAfterTime + clockSkew) {
 			throw new APIError("BAD_REQUEST", {
 				message: "SAML assertion has expired",
@@ -1793,7 +1807,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 
 			const { extract } = parsedResponse!;
 
-			validateSAMLTimestamp(extract, {
+			validateSAMLTimestamp((extract as any).conditions, {
 				clockSkew: options?.saml?.clockSkew,
 				requireTimestamps: options?.saml?.requireTimestamps,
 				logger: ctx.context.logger,
@@ -2231,7 +2245,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 
 			const { extract } = parsedResponse!;
 
-			validateSAMLTimestamp(extract, {
+			validateSAMLTimestamp((extract as any).conditions, {
 				clockSkew: options?.saml?.clockSkew,
 				requireTimestamps: options?.saml?.requireTimestamps,
 				logger: ctx.context.logger,

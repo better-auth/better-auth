@@ -17,6 +17,7 @@ import express from "express";
 import * as saml from "samlify";
 import {
 	afterAll,
+	afterEach,
 	beforeAll,
 	beforeEach,
 	describe,
@@ -26,6 +27,7 @@ import {
 } from "vitest";
 import { createInMemoryAuthnRequestStore, sso } from ".";
 import { ssoClient } from "./client";
+import { DEFAULT_CLOCK_SKEW_MS, validateSAMLTimestamp } from "./routes/sso";
 
 const spMetadata = `
     <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:3001/api/sso/saml2/sp/metadata">
@@ -2148,71 +2150,35 @@ describe("SAML SSO - Signature Validation Security", () => {
 	});
 });
 
-describe("SAML SSO - Timestamp Validation (Unit Tests)", () => {
-	const DEFAULT_CLOCK_SKEW_MS = 5 * 60 * 1000; // 5 minutes
-
-	// Recreate the validation logic for unit testing
-	interface ValidateOptions {
-		clockSkew?: number;
-		requireTimestamps?: boolean;
-	}
-
-	const validateTimestamp = (
-		conditions: { notBefore?: string; notOnOrAfter?: string } | undefined,
-		options: ValidateOptions = {},
-	): { valid: boolean; reason?: string; warning?: string } => {
-		const clockSkew = options.clockSkew ?? DEFAULT_CLOCK_SKEW_MS;
-		const hasTimestamps = conditions?.notBefore || conditions?.notOnOrAfter;
-
-		if (!hasTimestamps) {
-			if (options.requireTimestamps) {
-				return { valid: false, reason: "missing required timestamps" };
-			}
-			return { valid: true, warning: "no timestamp conditions present" };
-		}
-
-		const now = Date.now();
-
-		if (conditions?.notBefore) {
-			const notBeforeTime = new Date(conditions.notBefore).getTime();
-			if (now < notBeforeTime - clockSkew) {
-				return { valid: false, reason: "not yet valid" };
-			}
-		}
-
-		if (conditions?.notOnOrAfter) {
-			const notOnOrAfterTime = new Date(conditions.notOnOrAfter).getTime();
-			if (now > notOnOrAfterTime + clockSkew) {
-				return { valid: false, reason: "expired" };
-			}
-		}
-
-		return { valid: true };
-	};
+describe("SAML SSO - Timestamp Validation", () => {
+	// Tests use the real exported validateSAMLTimestamp function
 
 	describe("Valid assertions within time window", () => {
 		it("should accept assertion with current NotBefore and future NotOnOrAfter", () => {
 			const now = new Date();
 			const fiveMinutesFromNow = new Date(Date.now() + 5 * 60 * 1000);
-			const result = validateTimestamp({
-				notBefore: now.toISOString(),
-				notOnOrAfter: fiveMinutesFromNow.toISOString(),
-			});
-			expect(result.valid).toBe(true);
+			expect(() =>
+				validateSAMLTimestamp({
+					notBefore: now.toISOString(),
+					notOnOrAfter: fiveMinutesFromNow.toISOString(),
+				}),
+			).not.toThrow();
 		});
 
 		it("should accept assertion within clock skew tolerance (expired 2 min ago with 5 min skew)", () => {
 			const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
-			const result = validateTimestamp({ notOnOrAfter: twoMinutesAgo });
-			expect(result.valid).toBe(true);
+			expect(() =>
+				validateSAMLTimestamp({ notOnOrAfter: twoMinutesAgo }),
+			).not.toThrow();
 		});
 
 		it("should accept assertion with NotBefore slightly in future (within clock skew)", () => {
 			const twoMinutesFromNow = new Date(
 				Date.now() + 2 * 60 * 1000,
 			).toISOString();
-			const result = validateTimestamp({ notBefore: twoMinutesFromNow });
-			expect(result.valid).toBe(true);
+			expect(() =>
+				validateSAMLTimestamp({ notBefore: twoMinutesFromNow }),
+			).not.toThrow();
 		});
 	});
 
@@ -2221,120 +2187,131 @@ describe("SAML SSO - Timestamp Validation (Unit Tests)", () => {
 			const tenMinutesFromNow = new Date(
 				Date.now() + 10 * 60 * 1000,
 			).toISOString();
-			const result = validateTimestamp({ notBefore: tenMinutesFromNow });
-			expect(result.valid).toBe(false);
-			expect(result.reason).toBe("not yet valid");
+			expect(() =>
+				validateSAMLTimestamp({ notBefore: tenMinutesFromNow }),
+			).toThrow("SAML assertion is not yet valid");
 		});
 
 		it("should reject with custom strict clock skew (1 second)", () => {
 			const threeSecondsFromNow = new Date(Date.now() + 3 * 1000).toISOString();
-			const result = validateTimestamp(
-				{ notBefore: threeSecondsFromNow },
-				{ clockSkew: 1000 },
-			);
-			expect(result.valid).toBe(false);
-			expect(result.reason).toBe("not yet valid");
+			expect(() =>
+				validateSAMLTimestamp(
+					{ notBefore: threeSecondsFromNow },
+					{ clockSkew: 1000 },
+				),
+			).toThrow("SAML assertion is not yet valid");
 		});
 	});
 
 	describe("NotOnOrAfter validation (expired assertions)", () => {
 		it("should reject expired assertion (NotOnOrAfter in past beyond clock skew)", () => {
 			const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-			const result = validateTimestamp({ notOnOrAfter: tenMinutesAgo });
-			expect(result.valid).toBe(false);
-			expect(result.reason).toBe("expired");
+			expect(() =>
+				validateSAMLTimestamp({ notOnOrAfter: tenMinutesAgo }),
+			).toThrow("SAML assertion has expired");
 		});
 
 		it("should reject with custom strict clock skew (1 second)", () => {
 			const threeSecondsAgo = new Date(Date.now() - 3 * 1000).toISOString();
-			const result = validateTimestamp(
-				{ notOnOrAfter: threeSecondsAgo },
-				{ clockSkew: 1000 },
-			);
-			expect(result.valid).toBe(false);
-			expect(result.reason).toBe("expired");
+			expect(() =>
+				validateSAMLTimestamp(
+					{ notOnOrAfter: threeSecondsAgo },
+					{ clockSkew: 1000 },
+				),
+			).toThrow("SAML assertion has expired");
 		});
 	});
 
 	describe("Boundary conditions (exactly at window edges)", () => {
+		// Use fake timers to avoid flaky tests due to time elapsed between
+		// timestamp creation and validation
+		const FIXED_TIME = new Date("2024-01-15T12:00:00.000Z").getTime();
+
+		beforeEach(() => {
+			vi.useFakeTimers();
+			vi.setSystemTime(FIXED_TIME);
+		});
+
+		afterEach(() => {
+			vi.useRealTimers();
+		});
+
 		it("should accept assertion expiring exactly at clock skew boundary", () => {
 			// NotOnOrAfter was exactly 5 minutes ago (at the edge of default clock skew)
 			const exactlyAtBoundary = new Date(
-				Date.now() - DEFAULT_CLOCK_SKEW_MS,
+				FIXED_TIME - DEFAULT_CLOCK_SKEW_MS,
 			).toISOString();
-			const result = validateTimestamp({ notOnOrAfter: exactlyAtBoundary });
-			// At exactly the boundary, now === notOnOrAfter + clockSkew, so should pass
-			expect(result.valid).toBe(true);
+			expect(() =>
+				validateSAMLTimestamp({ notOnOrAfter: exactlyAtBoundary }),
+			).not.toThrow();
 		});
 
 		it("should reject assertion expiring 1ms beyond clock skew boundary", () => {
 			// NotOnOrAfter was 5 minutes + 1ms ago (just past the edge)
 			const justPastBoundary = new Date(
-				Date.now() - DEFAULT_CLOCK_SKEW_MS - 1,
+				FIXED_TIME - DEFAULT_CLOCK_SKEW_MS - 1,
 			).toISOString();
-			const result = validateTimestamp({ notOnOrAfter: justPastBoundary });
-			expect(result.valid).toBe(false);
-			expect(result.reason).toBe("expired");
+			expect(() =>
+				validateSAMLTimestamp({ notOnOrAfter: justPastBoundary }),
+			).toThrow("SAML assertion has expired");
 		});
 
 		it("should accept assertion with NotBefore exactly at clock skew boundary", () => {
 			// NotBefore is exactly 5 minutes from now (at the edge of clock skew)
 			const exactlyAtBoundary = new Date(
-				Date.now() + DEFAULT_CLOCK_SKEW_MS,
+				FIXED_TIME + DEFAULT_CLOCK_SKEW_MS,
 			).toISOString();
-			const result = validateTimestamp({ notBefore: exactlyAtBoundary });
-			// At exactly the boundary, now === notBefore - clockSkew, so should pass
-			expect(result.valid).toBe(true);
+			expect(() =>
+				validateSAMLTimestamp({ notBefore: exactlyAtBoundary }),
+			).not.toThrow();
 		});
 
 		it("should reject assertion with NotBefore 1ms beyond clock skew boundary", () => {
 			// NotBefore is 5 minutes + 1ms from now (just past the edge)
 			const justPastBoundary = new Date(
-				Date.now() + DEFAULT_CLOCK_SKEW_MS + 1,
+				FIXED_TIME + DEFAULT_CLOCK_SKEW_MS + 1,
 			).toISOString();
-			const result = validateTimestamp({ notBefore: justPastBoundary });
-			expect(result.valid).toBe(false);
-			expect(result.reason).toBe("not yet valid");
+			expect(() =>
+				validateSAMLTimestamp({ notBefore: justPastBoundary }),
+			).toThrow("SAML assertion is not yet valid");
 		});
 	});
 
 	describe("Missing timestamps behavior", () => {
-		it("should accept missing timestamps with warning when requireTimestamps is false (default)", () => {
-			const result = validateTimestamp(undefined, { requireTimestamps: false });
-			expect(result.valid).toBe(true);
-			expect(result.warning).toBe("no timestamp conditions present");
+		it("should accept missing timestamps when requireTimestamps is false (default)", () => {
+			expect(() =>
+				validateSAMLTimestamp(undefined, { requireTimestamps: false }),
+			).not.toThrow();
 		});
 
-		it("should accept empty conditions with warning when requireTimestamps is false", () => {
-			const result = validateTimestamp({}, { requireTimestamps: false });
-			expect(result.valid).toBe(true);
-			expect(result.warning).toBe("no timestamp conditions present");
+		it("should accept empty conditions when requireTimestamps is false", () => {
+			expect(() =>
+				validateSAMLTimestamp({}, { requireTimestamps: false }),
+			).not.toThrow();
 		});
 
 		it("should reject missing timestamps when requireTimestamps is true", () => {
-			const result = validateTimestamp(undefined, { requireTimestamps: true });
-			expect(result.valid).toBe(false);
-			expect(result.reason).toBe("missing required timestamps");
+			expect(() =>
+				validateSAMLTimestamp(undefined, { requireTimestamps: true }),
+			).toThrow("SAML assertion missing required timestamp conditions");
 		});
 
 		it("should reject empty conditions when requireTimestamps is true", () => {
-			const result = validateTimestamp({}, { requireTimestamps: true });
-			expect(result.valid).toBe(false);
-			expect(result.reason).toBe("missing required timestamps");
+			expect(() =>
+				validateSAMLTimestamp({}, { requireTimestamps: true }),
+			).toThrow("SAML assertion missing required timestamp conditions");
 		});
 
 		it("should accept assertions with only NotBefore (valid)", () => {
 			const now = new Date().toISOString();
-			const result = validateTimestamp({ notBefore: now });
-			expect(result.valid).toBe(true);
-			expect(result.warning).toBeUndefined();
+			expect(() => validateSAMLTimestamp({ notBefore: now })).not.toThrow();
 		});
 
 		it("should accept assertions with only NotOnOrAfter (valid, in future)", () => {
 			const future = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-			const result = validateTimestamp({ notOnOrAfter: future });
-			expect(result.valid).toBe(true);
-			expect(result.warning).toBeUndefined();
+			expect(() =>
+				validateSAMLTimestamp({ notOnOrAfter: future }),
+			).not.toThrow();
 		});
 	});
 
@@ -2343,30 +2320,74 @@ describe("SAML SSO - Timestamp Validation (Unit Tests)", () => {
 			const twoSecondsAgo = new Date(Date.now() - 2 * 1000).toISOString();
 
 			// With 1 second clock skew, should fail
-			const strictResult = validateTimestamp(
-				{ notOnOrAfter: twoSecondsAgo },
-				{ clockSkew: 1000 },
-			);
-			expect(strictResult.valid).toBe(false);
+			expect(() =>
+				validateSAMLTimestamp(
+					{ notOnOrAfter: twoSecondsAgo },
+					{ clockSkew: 1000 },
+				),
+			).toThrow("SAML assertion has expired");
 
 			// With 5 minute clock skew, should pass
-			const lenientResult = validateTimestamp(
-				{ notOnOrAfter: twoSecondsAgo },
-				{ clockSkew: 5 * 60 * 1000 },
-			);
-			expect(lenientResult.valid).toBe(true);
+			expect(() =>
+				validateSAMLTimestamp(
+					{ notOnOrAfter: twoSecondsAgo },
+					{ clockSkew: 5 * 60 * 1000 },
+				),
+			).not.toThrow();
 		});
 
 		it("should use default 5 minute clock skew when not specified", () => {
 			// 4 minutes ago should pass with default 5 min skew
 			const fourMinutesAgo = new Date(Date.now() - 4 * 60 * 1000).toISOString();
-			const result = validateTimestamp({ notOnOrAfter: fourMinutesAgo });
-			expect(result.valid).toBe(true);
+			expect(() =>
+				validateSAMLTimestamp({ notOnOrAfter: fourMinutesAgo }),
+			).not.toThrow();
 
 			// 6 minutes ago should fail with default 5 min skew
 			const sixMinutesAgo = new Date(Date.now() - 6 * 60 * 1000).toISOString();
-			const failResult = validateTimestamp({ notOnOrAfter: sixMinutesAgo });
-			expect(failResult.valid).toBe(false);
+			expect(() =>
+				validateSAMLTimestamp({ notOnOrAfter: sixMinutesAgo }),
+			).toThrow("SAML assertion has expired");
+		});
+	});
+
+	describe("Malformed timestamp handling", () => {
+		it("should reject malformed NotBefore timestamp", () => {
+			expect(() =>
+				validateSAMLTimestamp({ notBefore: "not-a-valid-date" }),
+			).toThrow("SAML assertion has invalid NotBefore timestamp");
+		});
+
+		it("should reject malformed NotOnOrAfter timestamp", () => {
+			expect(() =>
+				validateSAMLTimestamp({ notOnOrAfter: "invalid-timestamp" }),
+			).toThrow("SAML assertion has invalid NotOnOrAfter timestamp");
+		});
+
+		it("should treat empty string timestamps as missing (falsy values)", () => {
+			// Empty strings are falsy, so they're treated as "no timestamp"
+			expect(() => validateSAMLTimestamp({ notBefore: "" })).not.toThrow();
+			expect(() => validateSAMLTimestamp({ notOnOrAfter: "" })).not.toThrow();
+		});
+
+		it("should reject garbage data in timestamps", () => {
+			expect(() =>
+				validateSAMLTimestamp({
+					notBefore: "abc123xyz",
+					notOnOrAfter: "!@#$%^&*()",
+				}),
+			).toThrow("SAML assertion has invalid NotBefore timestamp");
+		});
+
+		it("should accept valid ISO 8601 timestamps", () => {
+			const now = new Date();
+			const future = new Date(Date.now() + 10 * 60 * 1000);
+			expect(() =>
+				validateSAMLTimestamp({
+					notBefore: now.toISOString(),
+					notOnOrAfter: future.toISOString(),
+				}),
+			).not.toThrow();
 		});
 	});
 });
