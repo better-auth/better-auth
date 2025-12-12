@@ -74,6 +74,10 @@ To register an OIDC provider, use the `registerSSOProvider` endpoint and provide
 
 A redirect URL will be automatically generated using the provider ID. For instance, if the provider ID is `hydra`, the redirect URL would be `{baseURL}/api/auth/sso/callback/hydra`. Note that `/api/auth` may vary depending on your base path configuration.
 
+<Callout type="info">
+When you register an OIDC provider, Better Auth automatically fetches and validates the IdP's [OIDC discovery document](#oidc-discovery). Most endpoint fields are optional — see [OIDC Discovery](#oidc-discovery) for details on auto-discovered fields and possible registration errors.
+</Callout>
+
 #### Example
 
 <Tabs items={["client", "server"]}>
@@ -147,6 +151,113 @@ await auth.api.registerSSOProvider({
     </Tab>
 </Tabs>
 
+### OIDC Discovery
+
+Better Auth automatically fetches and validates the provider's [OpenID Connect Discovery Document](https://openid.net/specs/openid-connect-discovery-1_0.html) from:
+
+```
+{issuer}/.well-known/openid-configuration
+```
+
+This allows most endpoint-related fields in `oidcConfig` to be **optional** — they will be hydrated automatically from the Identity Provider (IdP).
+
+<APIMethod path="/sso/register" method="POST" requireSession note="Minimal OIDC configuration — endpoints are discovered automatically from the issuer.">
+```ts
+type registerSSOProvider = {
+    /**
+     * Unique identifier for the provider
+     */
+    providerId: string = "okta"
+    /**
+     * The OIDC issuer URL. Discovery document is fetched from `{issuer}/.well-known/openid-configuration`
+     */
+    issuer: string = "https://your-org.okta.com"
+    /**
+     * Email domain for this provider
+     */
+    domain: string = "yourcompany.com"
+    /**
+     * OIDC configuration (most fields are auto-discovered)
+     */
+    oidcConfig: {
+        /**
+         * OAuth client ID from your IdP
+         */
+        clientId: string = "your-client-id"
+        /**
+         * OAuth client secret from your IdP
+         */
+        clientSecret: string = "your-client-secret"
+    }
+}
+```
+</APIMethod>
+
+#### Fields Automatically Discovered
+
+Better Auth fills in the following fields by reading the IdP's discovery document (if not explicitly provided):
+
+- `authorizationEndpoint`
+- `tokenEndpoint`
+- `jwksEndpoint`
+- `userInfoEndpoint`
+- `discoveryEndpoint`
+- `tokenEndpointAuthentication` (method for token endpoint client authentication)
+
+<Callout type="info">
+If you explicitly set these fields in `oidcConfig`, your values override the discovered ones.
+This is useful when you need to override the IdP's advertised metadata or when using incomplete mock servers.
+</Callout>
+
+#### Why Discovery Can Fail
+
+Better Auth validates that the IdP's metadata is correct and complete **before** allowing registration. This prevents subtle runtime failures during sign-in or token validation.
+
+<Callout type="info">
+Better Auth does **not** support implicit-only OIDC flows.
+For this reason, `token_endpoint` and `jwks_uri` are required even though the OIDC spec allows implicit-only providers to omit `token_endpoint`.
+</Callout>
+
+#### Discovery Errors
+
+If the Identity Provider is misconfigured or unreachable, registration will fail with a structured error.
+
+| Error Code | Meaning |
+|------------|---------|
+| `issuer_mismatch` | The IdP's discovery document reports a different `issuer` than the one you configured |
+| `discovery_incomplete` | Required fields (`authorization_endpoint`, `token_endpoint`, `jwks_uri`) are missing |
+| `discovery_not_found` | The discovery document endpoint returned 404 |
+| `discovery_timeout` | The IdP did not respond within the timeout window (default: 10 seconds) |
+| `discovery_invalid_url` | The discovery URL is malformed or uses an unsupported protocol |
+| `discovery_invalid_json` | The discovery response is empty or not valid JSON |
+| `unsupported_token_auth_method` | The IdP only supports token auth methods that Better Auth doesn't support |
+
+**Supported token auth methods:**
+- `client_secret_basic`
+- `client_secret_post`
+
+<Callout type="warning">
+If your IdP advertises only unsupported methods (e.g., `private_key_jwt`, `tls_client_auth`, or `"none"` for public clients), you can explicitly override the method:
+
+```ts
+oidcConfig: {
+    clientId: "your-client-id",
+    clientSecret: "your-client-secret",
+    tokenEndpointAuthentication: "client_secret_basic", // Override discovery
+}
+```
+
+This is especially common with mock OIDC servers or development IdPs that only advertise `"none"` as the supported method.
+</Callout>
+
+#### Summary
+
+- Better Auth automatically performs OIDC discovery at registration time
+- Most endpoint settings in `oidcConfig` become optional
+- Explicit user configuration always overrides discovery
+- Registration fails fast if the IdP is misconfigured
+- Discovery errors are structured and well-defined
+- Public-client IdPs or mock servers may require overriding `tokenEndpointAuthentication`
 
 ### Register a SAML Provider
 
