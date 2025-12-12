@@ -24,14 +24,15 @@ const DEFAULT_DISCOVERY_TIMEOUT = 10000;
  *
  * This function:
  * 1. Computes the discovery URL from the issuer
- * 2. Validates the discovery URL (stub for now)
+ * 2. Validates the discovery URL
  * 3. Fetches the discovery document
  * 4. Validates the discovery document (issuer match + required fields)
- * 5. Normalizes URLs (stub for now)
+ * 5. Normalizes URLs
  * 6. Selects token endpoint auth method
  * 7. Merges with existing config (existing values take precedence)
  *
  * @param params - Discovery parameters
+ * @param isTrustedOrigin - Origin verification tester function
  * @returns Hydrated OIDC configuration ready for persistence
  * @throws DiscoveryError on any failure
  */
@@ -49,13 +50,17 @@ export async function discoverOIDCConfig(
 		existingConfig?.discoveryEndpoint ||
 		computeDiscoveryUrl(issuer);
 
-	validateDiscoveryUrl(discoveryUrl);
+	validateDiscoveryUrl(discoveryUrl, params.isTrustedOrigin);
 
 	const discoveryDoc = await fetchDiscoveryDocument(discoveryUrl, timeout);
 
 	validateDiscoveryDocument(discoveryDoc, issuer);
 
-	const normalizedDoc = normalizeDiscoveryUrls(discoveryDoc, issuer);
+	const normalizedDoc = normalizeDiscoveryUrls(
+		discoveryDoc,
+		issuer,
+		params.isTrustedOrigin,
+	);
 
 	const tokenEndpointAuth = selectTokenEndpointAuthMethod(
 		normalizedDoc,
@@ -99,27 +104,20 @@ export function computeDiscoveryUrl(issuer: string): string {
  * Validate a discovery URL before fetching.
  *
  * @param url - The discovery URL to validate
+ * @param isTrustedOrigin - Origin verification tester function
  * @throws DiscoveryError if URL is invalid
  */
-export function validateDiscoveryUrl(url: string): void {
-	try {
-		const parsed = new URL(url);
-		if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-			throw new DiscoveryError(
-				"discovery_invalid_url",
-				`Discovery URL must use HTTP or HTTPS protocol: ${url}`,
-				{ url, protocol: parsed.protocol },
-			);
-		}
-	} catch (error) {
-		if (error instanceof DiscoveryError) {
-			throw error;
-		}
+export function validateDiscoveryUrl(
+	url: string,
+	isTrustedOrigin: DiscoverOIDCConfigParams["isTrustedOrigin"],
+): void {
+	const discoveryEndpoint = parseURL("discoveryEndpoint", url).toString();
+
+	if (!isTrustedOrigin(discoveryEndpoint)) {
 		throw new DiscoveryError(
-			"discovery_invalid_url",
-			`Invalid discovery URL: ${url}`,
-			{ url },
-			{ cause: error },
+			"discovery_untrusted_origin",
+			`The main discovery endpoint "${discoveryEndpoint}" is not trusted by your trusted origins configuration.`,
+			{ url: discoveryEndpoint },
 		);
 	}
 }
@@ -276,26 +274,167 @@ export function validateDiscoveryDocument(
 /**
  * Normalize URLs in the discovery document.
  *
- * @param doc - The discovery document
- * @param _issuerBase - The base issuer URL
+ * @param document - The discovery document
+ * @param issuer - The base issuer URL
+ * @param isTrustedOrigin - Origin verification tester function
  * @returns The normalized discovery document
  */
 export function normalizeDiscoveryUrls(
-	doc: OIDCDiscoveryDocument,
-	_issuerBase: string,
+	document: OIDCDiscoveryDocument,
+	issuer: string,
+	isTrustedOrigin: DiscoverOIDCConfigParams["isTrustedOrigin"],
 ): OIDCDiscoveryDocument {
+	const doc = { ...document };
+
+	doc.token_endpoint = normalizeAndValidateUrl(
+		"token_endpoint",
+		doc.token_endpoint,
+		issuer,
+		isTrustedOrigin,
+	);
+	doc.authorization_endpoint = normalizeAndValidateUrl(
+		"authorization_endpoint",
+		doc.authorization_endpoint,
+		issuer,
+		isTrustedOrigin,
+	);
+
+	doc.jwks_uri = normalizeAndValidateUrl(
+		"jwks_uri",
+		doc.jwks_uri,
+		issuer,
+		isTrustedOrigin,
+	);
+
+	if (doc.userinfo_endpoint) {
+		doc.userinfo_endpoint = normalizeAndValidateUrl(
+			"userinfo_endpoint",
+			doc.userinfo_endpoint,
+			issuer,
+			isTrustedOrigin,
+		);
+	}
+
+	if (doc.revocation_endpoint) {
+		doc.revocation_endpoint = normalizeAndValidateUrl(
+			"revocation_endpoint",
+			doc.revocation_endpoint,
+			issuer,
+			isTrustedOrigin,
+		);
+	}
+
+	if (doc.end_session_endpoint) {
+		doc.end_session_endpoint = normalizeAndValidateUrl(
+			"end_session_endpoint",
+			doc.end_session_endpoint,
+			issuer,
+			isTrustedOrigin,
+		);
+	}
+
+	if (doc.introspection_endpoint) {
+		doc.introspection_endpoint = normalizeAndValidateUrl(
+			"introspection_endpoint",
+			doc.introspection_endpoint,
+			issuer,
+			isTrustedOrigin,
+		);
+	}
+
 	return doc;
+}
+
+/**
+ * Normalizes and validates a single URL endpoint
+ * @param name The url name
+ * @param endpoint The url to validate
+ * @param issuer The issuer base url
+ * @param isTrustedOrigin - Origin verification tester function
+ * @returns
+ */
+function normalizeAndValidateUrl(
+	name: string,
+	endpoint: string,
+	issuer: string,
+	isTrustedOrigin: DiscoverOIDCConfigParams["isTrustedOrigin"],
+): string {
+	const url = normalizeUrl(name, endpoint, issuer);
+
+	if (!isTrustedOrigin(url)) {
+		throw new DiscoveryError(
+			"discovery_untrusted_origin",
+			`The ${name} "${url}" is not trusted by your trusted origins configuration.`,
+			{ endpoint: name, url },
+		);
+	}
+
+	return url;
 }
 
 /**
  * Normalize a single URL endpoint.
  *
+ * @param name - The endpoint name (e.g token_endpoint)
  * @param endpoint - The endpoint URL to normalize
- * @param _issuerBase - The base issuer URL
+ * @param issuer - The base issuer URL
  * @returns The normalized endpoint URL
  */
-export function normalizeUrl(endpoint: string, _issuerBase: string): string {
-	return endpoint;
+export function normalizeUrl(
+	name: string,
+	endpoint: string,
+	issuer: string,
+): string {
+	try {
+		return parseURL(name, endpoint).toString();
+	} catch {
+		// In case of error, endpoint maybe a relative url
+		// So we try to resolve it relative to the issuer
+
+		const issuerURL = parseURL(name, issuer);
+		const basePath = issuerURL.pathname.replace(/\/+$/, "");
+		const endpointPath = endpoint.replace(/^\/+/, "");
+
+		return parseURL(
+			name,
+			basePath + "/" + endpointPath,
+			issuerURL.origin,
+		).toString();
+	}
+}
+
+/**
+ * Parses the given URL or throws in case of invalid or unsupported protocols
+ *
+ * @param name the url name
+ * @param endpoint the endpoint url
+ * @param [base] optional base path
+ * @returns
+ */
+function parseURL(name: string, endpoint: string, base?: string) {
+	let endpointURL: URL | undefined;
+
+	try {
+		endpointURL = new URL(endpoint, base);
+		if (endpointURL.protocol === "http:" || endpointURL.protocol === "https:") {
+			return endpointURL;
+		}
+	} catch (error) {
+		throw new DiscoveryError(
+			"discovery_invalid_url",
+			`The url "${name}" must be valid: ${endpoint}`,
+			{
+				url: endpoint,
+			},
+			{ cause: error },
+		);
+	}
+
+	throw new DiscoveryError(
+		"discovery_invalid_url",
+		`The url "${name}" must use the http or https supported protocols: ${endpoint}`,
+		{ url: endpoint, protocol: endpointURL.protocol },
+	);
 }
 
 /**

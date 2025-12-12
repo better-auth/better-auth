@@ -12,6 +12,7 @@ let server = new OAuth2Server();
 describe("SSO", async () => {
 	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
 		await getTestInstance({
+			trustedOrigins: ["http://localhost:8080"],
 			plugins: [sso(), organization()],
 		});
 
@@ -257,6 +258,7 @@ describe("SSO", async () => {
 describe("SSO disable implicit sign in", async () => {
 	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
 		await getTestInstance({
+			trustedOrigins: ["http://localhost:8080"],
 			plugins: [sso({ disableImplicitSignUp: true }), organization()],
 		});
 
@@ -419,6 +421,7 @@ describe("SSO disable implicit sign in", async () => {
 describe("provisioning", async (ctx) => {
 	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
 		await getTestInstance({
+			trustedOrigins: ["http://localhost:8080"],
 			plugins: [sso(), organization()],
 		});
 
