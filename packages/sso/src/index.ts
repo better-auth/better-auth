@@ -21,11 +21,38 @@ import {
 	signInSSO,
 	spMetadata,
 } from "./routes/sso";
+
+export {
+	DEFAULT_CLOCK_SKEW_MS,
+	type SAMLConditions,
+	type TimestampValidationOptions,
+	validateSAMLTimestamp,
+} from "./routes/sso";
+
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "./types";
 
 export type { SAMLConfig, OIDCConfig, SSOOptions, SSOProvider };
 export type { AuthnRequestStore, AuthnRequestRecord };
 export { createInMemoryAuthnRequestStore, DEFAULT_AUTHN_REQUEST_TTL_MS };
+
+export {
+	computeDiscoveryUrl,
+	type DiscoverOIDCConfigParams,
+	DiscoveryError,
+	type DiscoveryErrorCode,
+	discoverOIDCConfig,
+	fetchDiscoveryDocument,
+	type HydratedOIDCConfig,
+	needsRuntimeDiscovery,
+	normalizeDiscoveryUrls,
+	normalizeUrl,
+	type OIDCDiscoveryDocument,
+	REQUIRED_DISCOVERY_FIELDS,
+	type RequiredDiscoveryField,
+	selectTokenEndpointAuthMethod,
+	validateDiscoveryDocument,
+	validateDiscoveryUrl,
+} from "./oidc";
 
 const fastValidator = {
 	async validate(xml: string) {
