@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { client } from "@/lib/auth-client";
+import { authClient } from "@/lib/auth-client";
 
 export default function Component() {
 	const [totpCode, setTotpCode] = useState("");
@@ -27,7 +27,7 @@ export default function Component() {
 			setError("TOTP code must be 6 digits");
 			return;
 		}
-		client.twoFactor
+		authClient.twoFactor
 			.verifyTotp({
 				code: totpCode,
 			})

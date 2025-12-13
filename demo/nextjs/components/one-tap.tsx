@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { client, signIn } from "@/lib/auth-client";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
 import {
@@ -18,11 +17,12 @@ import {
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { PasswordInput } from "./ui/password-input";
+import { authClient } from "@/lib/auth-client";
 
 export function OneTap() {
 	const [isOpen, setIsOpen] = useState(false);
 	useEffect(() => {
-		client.oneTap({
+		authClient.oneTap({
 			onPromptNotification(notification) {
 				setIsOpen(true);
 			},
@@ -98,7 +98,7 @@ function SignInBox() {
 				className="w-full"
 				disabled={loading}
 				onClick={async () => {
-					await signIn.email(
+					await authClient.signIn.email(
 						{
 							email: email,
 							password: password,
@@ -125,7 +125,7 @@ function SignInBox() {
 				variant="outline"
 				className="gap-2"
 				onClick={async () => {
-					await signIn.social({
+					await authClient.signIn.social({
 						provider: "google",
 						callbackURL: "/dashboard",
 					});
@@ -160,7 +160,7 @@ function SignInBox() {
 				variant="outline"
 				className="gap-2"
 				onClick={async () => {
-					await signIn.passkey({
+					await authClient.signIn.passkey({
 						fetchOptions: {
 							onSuccess(context) {
 								router.push("/dashboard");

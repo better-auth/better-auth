@@ -35,18 +35,14 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import {
-	organization,
-	useListOrganizations,
-	useSession,
-} from "@/lib/auth-client";
-import type { ActiveOrganization, Session } from "@/lib/auth-types";
+import type { ActiveOrganization, Session } from "@/lib/auth";
+import { authClient } from "@/lib/auth-client";
 
 export function OrganizationCard(props: {
 	session: Session | null;
 	activeOrganization: ActiveOrganization | null;
 }) {
-	const organizations = useListOrganizations();
+	const organizations = authClient.useListOrganizations();
 	const [optimisticOrg, setOptimisticOrg] = useState<ActiveOrganization | null>(
 		props.activeOrganization,
 	);
@@ -57,7 +53,7 @@ export function OrganizationCard(props: {
 		exit: { opacity: 0, height: 0 },
 	};
 
-	const { data } = useSession();
+	const { data } = authClient.useSession();
 	const session = data || props.session;
 
 	const currentMember = optimisticOrg?.members.find(
@@ -84,7 +80,7 @@ export function OrganizationCard(props: {
 							<DropdownMenuItem
 								className="py-1"
 								onClick={async () => {
-									organization.setActive({
+									authClient.organization.setActive({
 										organizationId: null,
 									});
 									setOptimisticOrg(null);
@@ -105,7 +101,7 @@ export function OrganizationCard(props: {
 											invitations: [],
 											...org,
 										});
-										const { data } = await organization.setActive({
+										const { data } = await authClient.organization.setActive({
 											organizationId: org.id,
 										});
 										setOptimisticOrg(data);
@@ -174,7 +170,7 @@ export function OrganizationCard(props: {
 												size="sm"
 												variant="destructive"
 												onClick={() => {
-													organization.removeMember({
+													authClient.organization.removeMember({
 														memberIdOrEmail: member.id,
 													});
 												}}
@@ -232,7 +228,7 @@ export function OrganizationCard(props: {
 													size="sm"
 													variant="destructive"
 													onClick={() => {
-														organization.cancelInvitation(
+														authClient.organization.cancelInvitation(
 															{
 																invitationId: invitation.id,
 															},
@@ -410,7 +406,7 @@ function CreateOrganizationDialog() {
 						disabled={loading}
 						onClick={async () => {
 							setLoading(true);
-							await organization.create(
+							await authClient.organization.create(
 								{
 									name: name,
 									slug: slug,
@@ -490,7 +486,7 @@ function InviteMemberDialog({
 					<DialogClose>
 						<Button
 							onClick={async () => {
-								const invite = organization.inviteMember({
+								const invite = authClient.organization.inviteMember({
 									email: email,
 									role: role as "member",
 									fetchOptions: {

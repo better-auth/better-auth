@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { client } from "@/lib/auth-client";
+import { authClient } from "@/lib/auth-client";
 
 export default function Component() {
 	const [otp, setOtp] = useState("");
@@ -26,7 +26,7 @@ export default function Component() {
 	const userEmail = "user@example.com";
 
 	const requestOTP = async () => {
-		await client.twoFactor.sendOtp();
+		await authClient.twoFactor.sendOtp();
 		// In a real app, this would call your backend API to send the OTP
 		setMessage("OTP sent to your email");
 		setIsError(false);
@@ -35,7 +35,7 @@ export default function Component() {
 	const router = useRouter();
 
 	const validateOTP = async () => {
-		const res = await client.twoFactor.verifyOtp({
+		const res = await authClient.twoFactor.verifyOtp({
 			code: otp,
 		});
 		if (res.data) {

@@ -13,8 +13,8 @@ import {
 	CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { client, organization } from "@/lib/auth-client";
 import { InvitationError } from "./invitation-error";
+import { authClient } from "@/lib/auth-client";
 
 export default function InvitationPage() {
 	const params = useParams<{
@@ -26,7 +26,7 @@ export default function InvitationPage() {
 	>("pending");
 
 	const handleAccept = async () => {
-		await organization
+		await authClient.organization
 			.acceptInvitation({
 				invitationId: params.id,
 			})
@@ -41,7 +41,7 @@ export default function InvitationPage() {
 	};
 
 	const handleReject = async () => {
-		await organization
+		await authClient.organization
 			.rejectInvitation({
 				invitationId: params.id,
 			})
@@ -70,7 +70,7 @@ export default function InvitationPage() {
 	const [error, setError] = useState<string | null>(null);
 
 	useEffect(() => {
-		client.organization
+		authClient.organization
 			.getInvitation({
 				query: {
 					id: params.id,
