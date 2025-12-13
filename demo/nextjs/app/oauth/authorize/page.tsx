@@ -1,7 +1,14 @@
-import { ArrowLeftRight, ArrowUpRight, Mail, Users } from "lucide-react";
+import {
+	ArrowLeftRight,
+	ArrowUpRight,
+	Building,
+	Mail,
+	User,
+} from "lucide-react";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import Image from "next/image";
+import { redirect } from "next/navigation";
 import { Logo } from "@/components/logo";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,16 +33,26 @@ export default async function AuthorizePage({
 	searchParams,
 }: AuthorizePageProps) {
 	const { scope, client_id } = await searchParams;
-	const session = await auth.api.getSession({
-		headers: await headers(),
+	const _headers = await headers();
+	const [session, clientDetails] = await Promise.all([
+		auth.api.getSession({
+			headers: _headers,
+		}),
+		auth.api.getOAuthClientPublic({
+			query: {
+				client_id,
+			},
+			headers: _headers,
+		}),
+	]).catch((e) => {
+		throw redirect("/sign-in");
 	});
-	// @ts-expect-error
-	const clientDetails = await auth.api.getOAuthClient({
-		params: {
-			id: client_id,
-		},
-		headers: await headers(),
-	});
+
+	const organization = session?.session?.activeOrganizationId
+		? await auth.api.getFullOrganization({
+				headers: _headers,
+			})
+		: undefined;
 
 	return (
 		<div className="container mx-auto py-10">
@@ -46,9 +63,9 @@ export default async function AuthorizePage({
 				<div className="flex flex-col items-center justify-center max-w-2xl mx-auto px-4">
 					<div className="flex items-center gap-8 mb-8">
 						<div className="w-16 h-16 border rounded-full flex items-center justify-center">
-							{clientDetails.icon ? (
+							{clientDetails.logo_uri ? (
 								<Image
-									src={clientDetails.icon}
+									src={clientDetails.logo_uri}
 									alt="App Logo"
 									className="object-cover"
 									width={64}
@@ -72,7 +89,7 @@ export default async function AuthorizePage({
 					</div>
 
 					<h1 className="text-3xl font-semibold text-center mb-8">
-						{clientDetails.name} is requesting access to your Better Auth
+						{clientDetails.client_name} is requesting access to your Better Auth
 						account
 					</h1>
 
@@ -87,11 +104,12 @@ export default async function AuthorizePage({
 							</div>
 							<div className="flex flex-col gap-1">
 								<div className="text-lg mb-4">
-									Continuing will allow Sign in with {clientDetails.name} to:
+									Continuing will allow Sign in with {clientDetails.client_name}{" "}
+									to:
 								</div>
 								{scope.includes("profile") && (
 									<div className="flex items-center gap-3 text-zinc-300">
-										<Users className="h-5 w-5" />
+										<User className="h-5 w-5" />
 										<span>Read your Better Auth user data.</span>
 									</div>
 								)}
@@ -100,6 +118,15 @@ export default async function AuthorizePage({
 									<div className="flex items-center gap-3 text-zinc-300">
 										<Mail className="h-5 w-5" />
 										<span>Read your email address.</span>
+									</div>
+								)}
+
+								{scope.includes("read:organization") && (
+									<div className="flex items-center gap-3 text-zinc-300">
+										<Building className="h-5 w-5" />
+										<span>
+											Read your organization {organization?.name ?? ""}.
+										</span>
 									</div>
 								)}
 							</div>
