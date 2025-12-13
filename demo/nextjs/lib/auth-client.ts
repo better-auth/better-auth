@@ -3,10 +3,8 @@ import { stripeClient } from "@better-auth/stripe/client";
 import {
 	adminClient,
 	deviceAuthorizationClient,
-	genericOAuthClient,
 	lastLoginMethodClient,
 	multiSessionClient,
-	oidcClient,
 	oneTapClient,
 	organizationClient,
 	twoFactorClient,
@@ -31,8 +29,6 @@ export const authClient = createAuthClient({
 				maxAttempts: 1,
 			},
 		}),
-		oidcClient(),
-		genericOAuthClient(),
 		stripeClient({
 			subscription: true,
 		}),
