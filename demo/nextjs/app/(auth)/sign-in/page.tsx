@@ -6,14 +6,14 @@ import { toast } from "sonner";
 import SignIn from "@/components/sign-in";
 import { SignUp } from "@/components/sign-up";
 import { Tabs } from "@/components/ui/tabs2";
-import { client } from "@/lib/auth-client";
 import { getCallbackURL } from "@/lib/shared";
+import { authClient } from "@/lib/auth-client";
 
 export default function Page() {
 	const router = useRouter();
 	const params = useSearchParams();
 	useEffect(() => {
-		client.oneTap({
+		authClient.oneTap({
 			fetchOptions: {
 				onError: ({ error }) => {
 					toast.error(error.message || "An error occurred");

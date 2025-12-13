@@ -16,8 +16,8 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { signUp } from "@/lib/auth-client";
 import { getCallbackURL } from "@/lib/shared";
+import { authClient } from "@/lib/auth-client";
 
 export function SignUp() {
 	const [firstName, setFirstName] = useState("");
@@ -153,7 +153,7 @@ export function SignUp() {
 						disabled={loading}
 						onClick={async () => {
 							startTransition(async () => {
-								await signUp.email({
+								await authClient.signUp.email({
 									email,
 									password,
 									name: `${firstName} ${lastName}`,

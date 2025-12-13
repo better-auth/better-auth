@@ -351,3 +351,7 @@ export const auth = betterAuth({
 		"https://appleid.apple.com",
 	],
 });
+
+export type Session = typeof auth.$Infer.Session;
+export type ActiveOrganization = typeof auth.$Infer.ActiveOrganization;
+export type Invitation = typeof auth.$Infer.Invitation;

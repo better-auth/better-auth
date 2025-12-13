@@ -17,11 +17,11 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 } from "@/components/ui/popover";
-import { client, useSession } from "@/lib/auth-client";
-import type { Session } from "@/lib/auth-types";
+import { authClient } from "@/lib/auth-client";
+import type { Session } from "@/lib/auth";
 
 export default function AccountSwitcher({ sessions }: { sessions: Session[] }) {
-	const { data: currentUser } = useSession();
+	const { data: currentUser } = authClient.useSession();
 	const [open, setOpen] = useState(false);
 	const router = useRouter();
 	return (
@@ -76,7 +76,7 @@ export default function AccountSwitcher({ sessions }: { sessions: Session[] }) {
 									<CommandItem
 										key={i}
 										onSelect={async () => {
-											await client.multiSession.setActive({
+											await authClient.multiSession.setActive({
 												sessionToken: u.session.token,
 											});
 											setOpen(false);

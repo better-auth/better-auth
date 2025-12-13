@@ -14,7 +14,7 @@ import {
 import { createAuthClient } from "better-auth/react";
 import { toast } from "sonner";
 
-export const client = createAuthClient({
+export const authClient = createAuthClient({
 	plugins: [
 		organizationClient(),
 		twoFactorClient({
@@ -47,15 +47,3 @@ export const client = createAuthClient({
 		},
 	},
 });
-
-export const {
-	signUp,
-	signIn,
-	signOut,
-	useSession,
-	organization,
-	useListOrganizations,
-	useActiveOrganization,
-	useActiveMember,
-	useActiveMemberRole,
-} = client;

@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
-import { client } from "@/lib/auth-client";
+import { authClient } from "@/lib/auth-client";
 
 export default function ResetPassword() {
 	const [password, setPassword] = useState("");
@@ -27,7 +27,7 @@ export default function ResetPassword() {
 		e.preventDefault();
 		setIsSubmitting(true);
 		setError("");
-		const res = await client.resetPassword({
+		const res = await authClient.resetPassword({
 			newPassword: password,
 			token: new URLSearchParams(window.location.search).get("token")!,
 		});

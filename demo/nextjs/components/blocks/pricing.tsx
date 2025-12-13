@@ -9,8 +9,8 @@ import { useEffect, useRef, useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { client } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
+import { authClient } from "@/lib/auth-client";
 
 function useMediaQuery(query: string) {
 	const [matches, setMatches] = useState(false);
@@ -204,7 +204,7 @@ export function Pricing({
 							<hr className="w-full my-4" />
 							<Button
 								onClick={async () => {
-									await client.subscription.upgrade({
+									await authClient.subscription.upgrade({
 										plan: plan.name.toLowerCase(),
 										successUrl: "/dashboard",
 									});

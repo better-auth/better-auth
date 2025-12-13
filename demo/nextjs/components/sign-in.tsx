@@ -17,9 +17,9 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { client, signIn } from "@/lib/auth-client";
 import { getCallbackURL } from "@/lib/shared";
 import { cn } from "@/lib/utils";
+import { authClient } from "@/lib/auth-client";
 
 export default function SignIn() {
 	const [email, setEmail] = useState("");
@@ -96,7 +96,7 @@ export default function SignIn() {
 						disabled={loading}
 						onClick={async () => {
 							startTransition(async () => {
-								await signIn.email(
+								await authClient.signIn.email(
 									{ email, password, rememberMe },
 									{
 										onSuccess(context) {
@@ -117,7 +117,9 @@ export default function SignIn() {
 							) : (
 								"Login"
 							)}
-							{client.isLastUsedLoginMethod("email") && <LastUsedIndicator />}
+							{authClient.isLastUsedLoginMethod("email") && (
+								<LastUsedIndicator />
+							)}
 						</div>
 					</Button>
 
@@ -131,7 +133,7 @@ export default function SignIn() {
 							variant="outline"
 							className={cn("w-full gap-2 flex relative")}
 							onClick={async () => {
-								await signIn.social({
+								await authClient.signIn.social({
 									provider: "apple",
 									callbackURL: "/dashboard",
 								});
@@ -149,13 +151,15 @@ export default function SignIn() {
 								></path>
 							</svg>
 							<span>Sign in with Apple</span>
-							{client.isLastUsedLoginMethod("apple") && <LastUsedIndicator />}
+							{authClient.isLastUsedLoginMethod("apple") && (
+								<LastUsedIndicator />
+							)}
 						</Button>
 						<Button
 							variant="outline"
 							className={cn("w-full gap-2 flex relative")}
 							onClick={async () => {
-								await signIn.social({
+								await authClient.signIn.social({
 									provider: "google",
 									callbackURL: "/dashboard",
 								});
@@ -185,13 +189,15 @@ export default function SignIn() {
 								></path>
 							</svg>
 							<span>Sign in with Google</span>
-							{client.isLastUsedLoginMethod("google") && <LastUsedIndicator />}
+							{authClient.isLastUsedLoginMethod("google") && (
+								<LastUsedIndicator />
+							)}
 						</Button>
 						<Button
 							variant="outline"
 							className={cn("w-full gap-2 flex relative")}
 							onClick={async () => {
-								await signIn.social({
+								await authClient.signIn.social({
 									provider: "vercel",
 									callbackURL: "/dashboard",
 								});
@@ -207,13 +213,15 @@ export default function SignIn() {
 								<path d="m128 0l128 221.705H0z" />
 							</svg>
 							<span>Sign in with Vercel</span>
-							{client.isLastUsedLoginMethod("vercel") && <LastUsedIndicator />}
+							{authClient.isLastUsedLoginMethod("vercel") && (
+								<LastUsedIndicator />
+							)}
 						</Button>
 						<Button
 							variant="outline"
 							className={cn("w-full gap-2 flex items-center relative")}
 							onClick={async () => {
-								await signIn.social({
+								await authClient.signIn.social({
 									provider: "github",
 									callbackURL: "/dashboard",
 								});
@@ -231,13 +239,15 @@ export default function SignIn() {
 								></path>
 							</svg>
 							<span>Sign in with GitHub</span>
-							{client.isLastUsedLoginMethod("github") && <LastUsedIndicator />}
+							{authClient.isLastUsedLoginMethod("github") && (
+								<LastUsedIndicator />
+							)}
 						</Button>
 						<Button
 							variant="outline"
 							className={cn("w-full gap-2 flex items-center relative")}
 							onClick={async () => {
-								await signIn.social({
+								await authClient.signIn.social({
 									provider: "microsoft",
 									callbackURL: "/dashboard",
 								});
@@ -255,7 +265,7 @@ export default function SignIn() {
 								></path>
 							</svg>
 							<span>Sign in with Microsoft</span>
-							{client.isLastUsedLoginMethod("microsoft") && (
+							{authClient.isLastUsedLoginMethod("microsoft") && (
 								<LastUsedIndicator />
 							)}
 						</Button>
@@ -263,7 +273,7 @@ export default function SignIn() {
 							variant="outline"
 							className={cn("w-full gap-2 flex items-center relative")}
 							onClick={async () => {
-								await signIn.passkey({
+								await authClient.signIn.passkey({
 									fetchOptions: {
 										onSuccess() {
 											toast.success("Successfully signed in");
@@ -280,7 +290,9 @@ export default function SignIn() {
 						>
 							<Key size={16} />
 							<span>Sign in with Passkey</span>
-							{client.isLastUsedLoginMethod("passkey") && <LastUsedIndicator />}
+							{authClient.isLastUsedLoginMethod("passkey") && (
+								<LastUsedIndicator />
+							)}
 						</Button>
 					</div>
 				</div>

@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { client } from "@/lib/auth-client";
+import { authClient } from "@/lib/auth-client";
 
 export default function RegisterOAuthClient() {
 	const [name, setName] = useState("");
@@ -32,7 +32,7 @@ export default function RegisterOAuthClient() {
 			setIsSubmitting(false);
 			return;
 		}
-		await client.oauth2.register({
+		await authClient.oauth2.register({
 			client_name: name,
 			redirect_uris: [redirectUri],
 		});

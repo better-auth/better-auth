@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { client } from "@/lib/auth-client";
+import { authClient } from "@/lib/auth-client";
 
 export default function DeviceAuthorizationPage() {
 	const router = useRouter();
@@ -26,7 +26,7 @@ export default function DeviceAuthorizationPage() {
 			try {
 				const finalCode = userCode.trim().replaceAll(/-/g, "").toUpperCase();
 				// Get the device authorization status
-				const response = await client.device({
+				const response = await authClient.device({
 					query: {
 						user_code: finalCode,
 					},
