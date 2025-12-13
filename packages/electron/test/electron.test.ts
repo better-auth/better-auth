@@ -408,8 +408,9 @@ describe("electron", () => {
 					// @ts-expect-error
 					() => mockElectron.BrowserWindow,
 				),
-			).catch((err: Error) => {
-				expect(err.message).toBe("state mismatch");
+			).catch((err: any) => {
+				expect(err.error.message).toBe("state mismatch");
+				throw err;
 			}),
 		).rejects.toThrowError("BAD_REQUEST");
 	});
@@ -453,8 +454,9 @@ describe("electron", () => {
 					// @ts-expect-error
 					() => mockElectron.BrowserWindow,
 				),
-			).catch((err: Error) => {
-				expect(err.message).toBe("state mismatch");
+			).catch((err: any) => {
+				expect(err.error.message).toBe("Invalid or expired token.");
+				throw err;
 			}),
 		).rejects.toThrowError("NOT_FOUND");
 	});
@@ -474,8 +476,9 @@ describe("electron", () => {
 					// @ts-expect-error
 					() => mockElectron.BrowserWindow,
 				),
-			).catch((err: Error) => {
-				expect(err.message).toBe("state mismatch");
+			).catch((err: any) => {
+				expect(err.error.message).toBe("Invalid or expired token.");
+				throw err;
 			}),
 		).rejects.toThrowError("NOT_FOUND");
 	});

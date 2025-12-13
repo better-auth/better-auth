@@ -87,7 +87,7 @@
     "tsdown": "catalog:"
   },
   "engines": {
-    "node": ">=22.16.0"
+    "node": ">=22.0.0"
   },
   "files": [
     "dist"

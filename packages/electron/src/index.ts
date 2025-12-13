@@ -39,6 +39,12 @@ export interface ElectronOptions {
 	 * @default "better-auth"
 	 */
 	cookiePrefix?: string | undefined;
+	/**
+	 * Override the origin for Electron API routes.
+	 * Enable this if you're facing cors origin issues with Electron API routes.
+	 *
+	 * @default false
+	 */
 	disableOriginOverride?: boolean | undefined;
 }
 
@@ -256,13 +262,10 @@ export const electron = (options?: ElectronOptions | undefined) => {
 					}
 					if (tokenRecord.codeChallengeMethod === "s256") {
 						const codeChallenge = Buffer.from(
-							tokenRecord.codeChallenge,
-							"utf-8",
+						  base64Url.decode(tokenRecord.codeChallenge),
 						);
 						const codeVerifier = Buffer.from(
-							base64Url.encode(
-								await createHash("SHA-256").digest(ctx.body.code_verifier),
-							),
+							await createHash("SHA-256").digest(ctx.body.code_verifier),
 						);
 
 						if (codeChallenge.length !== codeVerifier.length) {

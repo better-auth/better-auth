@@ -208,7 +208,17 @@ export function registerProtocolScheme(
 				win.focus();
 			}
 
-			url ??= new URL(commandLine.pop() || "").toString();
+			if (!url) {
+			  const maybeURL = commandLine.pop();
+					if (maybeURL === "string" && maybeURL.trim() !== "") {
+					  try {
+							url = new URL(maybeURL).toString();
+						} catch {
+						  //
+						}
+					}
+			}
+
 			if (process?.platform !== "darwin" && typeof url === "string") {
 				await handleDeepLink(url);
 			}

@@ -8,6 +8,11 @@ import type { ElectronClientOptions } from "./types";
 export const kCodeVerifier = Symbol.for("better-auth:code_verifier");
 export const kState = Symbol.for("better-auth:state");
 
+/**
+ * Opens the system browser to request user authentication.
+ *
+ * @internal
+ */
 export async function requestAuth(options: ElectronClientOptions) {
 	let shell: Electron.Shell | null = null;
 	try {
@@ -24,10 +29,9 @@ export async function requestAuth(options: ElectronClientOptions) {
 	const { randomBytes } = await import("node:crypto");
 
 	const state = generateRandomString(16, "A-Z", "a-z", "0-9");
+
 	const code_verifier = base64Url.encode(randomBytes(32));
-	const code_challenge = base64Url.encode(
-		await createHash("SHA-256").digest(code_verifier),
-	);
+	const code_challenge = base64Url.encode(await createHash("SHA-256").digest(code_verifier));
 
 	(globalThis as any)[kCodeVerifier] = code_verifier;
 	(globalThis as any)[kState] = state;
@@ -43,6 +47,11 @@ export async function requestAuth(options: ElectronClientOptions) {
 	});
 }
 
+/**
+ * Exchanges the authorization code for a session.
+ *
+ * @internal
+ */
 export async function authenticate(
 	$fetch: BetterFetch,
 	options: ElectronClientOptions,

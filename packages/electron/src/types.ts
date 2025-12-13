@@ -25,6 +25,19 @@ export interface ElectronClientOptions {
 	 * @default "/auth/callback"
 	 */
 	callbackPath?: string;
+	/**
+	 * An instance of a storage solution (e.g., `electron-store`)
+	 * to store session and cookie data.
+		*
+		* @example
+		* ```ts
+		* import Store from "electron-store";
+		*
+		* electronClient({
+		*   storage: new Store(),
+		* });
+		* ```
+	 */
 	storage: Storage;
 	/**
 	 * Prefix for local storage keys (e.g., "my-app_cookie", "my-app_session_data")
@@ -49,6 +62,11 @@ export interface ElectronClientOptions {
 	 * @default "better-auth"
 	 */
 	namespace?: string | undefined;
+	/**
+	 * Whether to disable caching the session data locally.
+	 *
+	 * @default false
+	 */
 	disableCache?: boolean | undefined;
 }
 
