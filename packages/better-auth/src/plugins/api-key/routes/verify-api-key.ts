@@ -28,11 +28,11 @@ export async function validateApiKey({
 	const apiKey = await getApiKey(ctx, hashedKey, opts);
 
 	if (!apiKey) {
-		throw APIError.from(ERROR_CODES.INVALID_API_KEY, "UNAUTHORIZED");
+		throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
 	}
 
 	if (apiKey.enabled === false) {
-		throw APIError.from(ERROR_CODES.KEY_DISABLED, "UNAUTHORIZED");
+		throw APIError.from("UNAUTHORIZED", ERROR_CODES.KEY_DISABLED);
 	}
 
 	if (apiKey.expiresAt) {
@@ -68,7 +68,7 @@ export async function validateApiKey({
 				ctx.context.logger.error(`Failed to delete expired API keys:`, error);
 			}
 
-			throw APIError.from(ERROR_CODES.KEY_EXPIRED, "UNAUTHORIZED");
+			throw APIError.from("UNAUTHORIZED", ERROR_CODES.KEY_EXPIRED);
 		}
 	}
 
@@ -80,12 +80,12 @@ export async function validateApiKey({
 			: null;
 
 		if (!apiKeyPermissions) {
-			throw APIError.from(ERROR_CODES.KEY_NOT_FOUND, "UNAUTHORIZED");
+			throw APIError.from("UNAUTHORIZED", ERROR_CODES.KEY_NOT_FOUND);
 		}
 		const r = role(apiKeyPermissions as any);
 		const result = r.authorize(permissions);
 		if (!result.success) {
-			throw APIError.from(ERROR_CODES.KEY_NOT_FOUND, "UNAUTHORIZED");
+			throw APIError.from("UNAUTHORIZED", ERROR_CODES.KEY_NOT_FOUND);
 		}
 	}
 
@@ -126,7 +126,7 @@ export async function validateApiKey({
 			ctx.context.logger.error(`Failed to delete expired API keys:`, error);
 		}
 
-		throw APIError.from(ERROR_CODES.USAGE_EXCEEDED, "TOO_MANY_REQUESTS");
+		throw APIError.from("TOO_MANY_REQUESTS", ERROR_CODES.USAGE_EXCEEDED);
 	} else if (remaining !== null) {
 		let now = Date.now();
 		const refillInterval = apiKey.refillInterval;
@@ -145,7 +145,7 @@ export async function validateApiKey({
 
 		if (remaining === 0) {
 			// if there are no more remaining requests, than the key is invalid
-			throw APIError.from(ERROR_CODES.USAGE_EXCEEDED, "TOO_MANY_REQUESTS");
+			throw APIError.from("TOO_MANY_REQUESTS", ERROR_CODES.USAGE_EXCEEDED);
 		} else {
 			remaining--;
 		}
@@ -198,8 +198,8 @@ export async function validateApiKey({
 
 	if (!newApiKey) {
 		throw APIError.from(
-			ERROR_CODES.FAILED_TO_UPDATE_API_KEY,
 			"INTERNAL_SERVER_ERROR",
+			ERROR_CODES.FAILED_TO_UPDATE_API_KEY,
 		);
 	}
 

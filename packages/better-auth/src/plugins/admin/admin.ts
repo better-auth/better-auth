@@ -113,13 +113,10 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 											);
 										}
 
-										throw APIError.from(
-											{
-												message: opts.bannedUserMessage,
-												code: "BANNED_USER",
-											},
-											"FORBIDDEN",
-										);
+										throw APIError.from("FORBIDDEN", {
+											message: opts.bannedUserMessage,
+											code: "BANNED_USER",
+										});
 									}
 								},
 							},

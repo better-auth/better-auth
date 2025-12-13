@@ -112,13 +112,10 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				ctx.context.logger.error(
 					"totp isn't configured. please pass totp option on two factor plugin to enable totp",
 				);
-				throw APIError.from(
-					{
-						message: "totp isn't configured",
-						code: "TOTP_NOT_CONFIGURED",
-					},
-					"BAD_REQUEST",
-				);
+				throw APIError.from("BAD_REQUEST", {
+					message: "totp isn't configured",
+					code: "TOTP_NOT_CONFIGURED",
+				});
 			}
 			const code = await createOTP(ctx.body.secret, {
 				period: opts.period,
@@ -163,13 +160,10 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				ctx.context.logger.error(
 					"totp isn't configured. please pass totp option on two factor plugin to enable totp",
 				);
-				throw APIError.from(
-					{
-						message: "totp isn't configured",
-						code: "TOTP_NOT_CONFIGURED",
-					},
-					"BAD_REQUEST",
-				);
+				throw APIError.from("BAD_REQUEST", {
+					message: "totp isn't configured",
+					code: "TOTP_NOT_CONFIGURED",
+				});
 			}
 			const user = ctx.context.session.user as UserWithTwoFactor;
 			const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
@@ -183,8 +177,8 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 			});
 			if (!twoFactor) {
 				throw APIError.from(
-					TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
 					"BAD_REQUEST",
+					TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
 				);
 			}
 			const secret = await symmetricDecrypt({
@@ -236,13 +230,10 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				ctx.context.logger.error(
 					"totp isn't configured. please pass totp option on two factor plugin to enable totp",
 				);
-				throw APIError.from(
-					{
-						message: "totp isn't configured",
-						code: "TOTP_NOT_CONFIGURED",
-					},
-					"BAD_REQUEST",
-				);
+				throw APIError.from("BAD_REQUEST", {
+					message: "totp isn't configured",
+					code: "TOTP_NOT_CONFIGURED",
+				});
 			}
 			const { session, valid, invalid } = await verifyTwoFactor(ctx);
 			const user = session.user as UserWithTwoFactor;
@@ -258,8 +249,8 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 
 			if (!twoFactor) {
 				throw APIError.from(
-					TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
 					"BAD_REQUEST",
+					TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
 				);
 			}
 			const decrypted = await symmetricDecrypt({
@@ -277,8 +268,8 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 			if (!user.twoFactorEnabled) {
 				if (!session.session) {
 					throw APIError.from(
-						BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 						"BAD_REQUEST",
+						BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 					);
 				}
 				const updatedUser = await ctx.context.internalAdapter.updateUser(

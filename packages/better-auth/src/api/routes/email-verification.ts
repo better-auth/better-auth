@@ -49,8 +49,8 @@ export async function sendVerificationEmailFn(
 	if (!ctx.context.options.emailVerification?.sendVerificationEmail) {
 		ctx.context.logger.error("Verification email isn't enabled.");
 		throw APIError.from(
-			BASE_ERROR_CODES.VERIFICATION_EMAIL_NOT_ENABLED,
 			"BAD_REQUEST",
+			BASE_ERROR_CODES.VERIFICATION_EMAIL_NOT_ENABLED,
 		);
 	}
 	const token = await createEmailVerificationToken(
@@ -160,8 +160,8 @@ export const sendVerificationEmail = createAuthEndpoint(
 		if (!ctx.context.options.emailVerification?.sendVerificationEmail) {
 			ctx.context.logger.error("Verification email isn't enabled.");
 			throw APIError.from(
-				BASE_ERROR_CODES.VERIFICATION_EMAIL_NOT_ENABLED,
 				"BAD_REQUEST",
+				BASE_ERROR_CODES.VERIFICATION_EMAIL_NOT_ENABLED,
 			);
 		}
 		const { email } = ctx.body;
@@ -187,12 +187,12 @@ export const sendVerificationEmail = createAuthEndpoint(
 		}
 		if (session?.user.emailVerified) {
 			throw APIError.from(
-				BASE_ERROR_CODES.EMAIL_ALREADY_VERIFIED,
 				"BAD_REQUEST",
+				BASE_ERROR_CODES.EMAIL_ALREADY_VERIFIED,
 			);
 		}
 		if (session?.user.email !== email) {
-			throw APIError.from(BASE_ERROR_CODES.EMAIL_MISMATCH, "BAD_REQUEST");
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.EMAIL_MISMATCH);
 		}
 		await sendVerificationEmailFn(ctx, session.user);
 		return ctx.json({
@@ -276,13 +276,10 @@ export const verifyEmail = createAuthEndpoint(
 				}
 				throw ctx.redirect(`${ctx.query.callbackURL}?error=${error}`);
 			}
-			throw APIError.from(
-				{
-					message: error,
-					code: "VERIFICATION_ERROR",
-				},
-				"UNAUTHORIZED",
-			);
+			throw APIError.from("UNAUTHORIZED", {
+				message: error,
+				code: "VERIFICATION_ERROR",
+			});
 		}
 		const { token } = ctx.query;
 		let jwt: JWTVerifyResult<JWTPayload>;
@@ -355,8 +352,8 @@ export const verifyEmail = createAuthEndpoint(
 				);
 				if (!newSession) {
 					throw APIError.from(
-						BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 						"INTERNAL_SERVER_ERROR",
+						BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 					);
 				}
 				session = {
@@ -475,8 +472,8 @@ export const verifyEmail = createAuthEndpoint(
 				);
 				if (!session) {
 					throw APIError.from(
-						BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 						"INTERNAL_SERVER_ERROR",
+						BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 					);
 				}
 				await setSessionCookie(ctx, {

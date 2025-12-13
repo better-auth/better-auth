@@ -318,8 +318,8 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 					});
 					if (!twoFactor) {
 						throw APIError.from(
-							TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
 							"BAD_REQUEST",
+							TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
 						);
 					}
 					const validate = await verifyBackupCode(
@@ -332,8 +332,8 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 					);
 					if (!validate.status) {
 						throw APIError.from(
-							TWO_FACTOR_ERROR_CODES.INVALID_BACKUP_CODE,
 							"UNAUTHORIZED",
+							TWO_FACTOR_ERROR_CODES.INVALID_BACKUP_CODE,
 						);
 					}
 					const updatedBackupCodes = await symmetricEncrypt({
@@ -439,8 +439,8 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 					const user = ctx.context.session.user as UserWithTwoFactor;
 					if (!user.twoFactorEnabled) {
 						throw APIError.from(
-							TWO_FACTOR_ERROR_CODES.TWO_FACTOR_NOT_ENABLED,
 							"BAD_REQUEST",
+							TWO_FACTOR_ERROR_CODES.TWO_FACTOR_NOT_ENABLED,
 						);
 					}
 					await ctx.context.password.checkPassword(user.id, ctx);
@@ -495,8 +495,8 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 					});
 					if (!twoFactor) {
 						throw APIError.from(
-							TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
 							"BAD_REQUEST",
+							TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
 						);
 					}
 					const decryptedBackupCodes = await getBackupCodes(
@@ -507,8 +507,8 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 
 					if (!decryptedBackupCodes) {
 						throw APIError.from(
-							TWO_FACTOR_ERROR_CODES.INVALID_BACKUP_CODE,
 							"BAD_REQUEST",
+							TWO_FACTOR_ERROR_CODES.INVALID_BACKUP_CODE,
 						);
 					}
 					return ctx.json({

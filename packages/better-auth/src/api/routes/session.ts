@@ -440,8 +440,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 			} catch (error) {
 				ctx.context.logger.error("INTERNAL_SERVER_ERROR", error);
 				throw APIError.from(
-					BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
 					"INTERNAL_SERVER_ERROR",
+					BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
 				);
 			}
 		},
@@ -492,13 +492,10 @@ export const getSessionFromCtx = async <
 export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
 	const session = await getSessionFromCtx(ctx);
 	if (!session?.session) {
-		throw APIError.from(
-			{
-				message: "Unauthorized",
-				code: "UNAUTHORIZED",
-			},
-			"UNAUTHORIZED",
-		);
+		throw APIError.from("UNAUTHORIZED", {
+			message: "Unauthorized",
+			code: "UNAUTHORIZED",
+		});
 	}
 	return {
 		session,
@@ -513,13 +510,10 @@ export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
 export const sensitiveSessionMiddleware = createAuthMiddleware(async (ctx) => {
 	const session = await getSessionFromCtx(ctx, { disableCookieCache: true });
 	if (!session?.session) {
-		throw APIError.from(
-			{
-				message: "Unauthorized",
-				code: "UNAUTHORIZED",
-			},
-			"UNAUTHORIZED",
-		);
+		throw APIError.from("UNAUTHORIZED", {
+			message: "Unauthorized",
+			code: "UNAUTHORIZED",
+		});
 	}
 	return {
 		session,
@@ -534,13 +528,10 @@ export const requestOnlySessionMiddleware = createAuthMiddleware(
 	async (ctx) => {
 		const session = await getSessionFromCtx(ctx);
 		if (!session?.session && (ctx.request || ctx.headers)) {
-			throw APIError.from(
-				{
-					message: "Unauthorized",
-					code: "UNAUTHORIZED",
-				},
-				"UNAUTHORIZED",
-			);
+			throw APIError.from("UNAUTHORIZED", {
+				message: "Unauthorized",
+				code: "UNAUTHORIZED",
+			});
 		}
 		return { session };
 	},
@@ -556,13 +547,10 @@ export const requestOnlySessionMiddleware = createAuthMiddleware(
 export const freshSessionMiddleware = createAuthMiddleware(async (ctx) => {
 	const session = await getSessionFromCtx(ctx);
 	if (!session?.session) {
-		throw APIError.from(
-			{
-				message: "Unauthorized",
-				code: "UNAUTHORIZED",
-			},
-			"UNAUTHORIZED",
-		);
+		throw APIError.from("UNAUTHORIZED", {
+			message: "Unauthorized",
+			code: "UNAUTHORIZED",
+		});
 	}
 	if (ctx.context.sessionConfig.freshAge === 0) {
 		return {
@@ -576,7 +564,7 @@ export const freshSessionMiddleware = createAuthMiddleware(async (ctx) => {
 	const now = Date.now();
 	const isFresh = now - lastUpdated < freshAge * 1000;
 	if (!isFresh) {
-		throw APIError.from(BASE_ERROR_CODES.SESSION_NOT_FRESH, "FORBIDDEN");
+		throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.SESSION_NOT_FRESH);
 	}
 	return {
 		session,
@@ -715,13 +703,10 @@ export const revokeSession = createAuthEndpoint(
 						: "",
 					error,
 				);
-				throw APIError.from(
-					{
-						message: "Internal Server Error",
-						code: "INTERNAL_SERVER_ERROR",
-					},
-					"INTERNAL_SERVER_ERROR",
-				);
+				throw APIError.from("INTERNAL_SERVER_ERROR", {
+					message: "Internal Server Error",
+					code: "INTERNAL_SERVER_ERROR",
+				});
 			}
 		}
 		return ctx.json({
@@ -776,13 +761,10 @@ export const revokeSessions = createAuthEndpoint(
 					: "",
 				error,
 			);
-			throw APIError.from(
-				{
-					message: "Internal Server Error",
-					code: "INTERNAL_SERVER_ERROR",
-				},
-				"INTERNAL_SERVER_ERROR",
-			);
+			throw APIError.from("INTERNAL_SERVER_ERROR", {
+				message: "Internal Server Error",
+				code: "INTERNAL_SERVER_ERROR",
+			});
 		}
 		return ctx.json({
 			status: true,
@@ -826,13 +808,10 @@ export const revokeOtherSessions = createAuthEndpoint(
 	async (ctx) => {
 		const session = ctx.context.session;
 		if (!session.user) {
-			throw APIError.from(
-				{
-					message: "Unauthorized",
-					code: "UNAUTHORIZED",
-				},
-				"UNAUTHORIZED",
-			);
+			throw APIError.from("UNAUTHORIZED", {
+				message: "Unauthorized",
+				code: "UNAUTHORIZED",
+			});
 		}
 		const sessions = await ctx.context.internalAdapter.listSessions(
 			session.user.id,

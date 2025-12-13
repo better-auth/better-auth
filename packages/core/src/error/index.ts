@@ -25,8 +25,8 @@ export class APIError extends BaseAPIError {
 	}
 
 	static from(
-		error: { code: string; message: string },
 		status: ConstructorParameters<typeof BaseAPIError>[0],
+		error: { code: string; message: string },
 	) {
 		return new APIError(status, {
 			message: error.message,

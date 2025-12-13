@@ -130,8 +130,8 @@ export const setRole = <O extends AdminOptions>(opts: O) =>
 			});
 			if (!canSetRole) {
 				throw APIError.from(
-					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CHANGE_USERS_ROLE,
 					"FORBIDDEN",
+					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CHANGE_USERS_ROLE,
 				);
 			}
 			const roles = opts.roles;
@@ -142,8 +142,8 @@ export const setRole = <O extends AdminOptions>(opts: O) =>
 				for (const role of inputRoles) {
 					if (!roles[role as keyof typeof roles]) {
 						throw APIError.from(
-							ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE,
 							"BAD_REQUEST",
+							ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE,
 						);
 					}
 				}
@@ -212,15 +212,15 @@ export const getUser = (opts: AdminOptions) =>
 
 			if (!canGetUser) {
 				throw APIError.from(
-					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_GET_USER,
 					"FORBIDDEN",
+					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_GET_USER,
 				);
 			}
 
 			const user = await ctx.context.internalAdapter.findUserById(id);
 
 			if (!user) {
-				throw APIError.from(BASE_ERROR_CODES.USER_NOT_FOUND, "NOT_FOUND");
+				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
 
 			return parseUserOutput(ctx.context.options, user);
@@ -334,8 +334,8 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 				});
 				if (!canCreateUser) {
 					throw APIError.from(
-						ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_USERS,
 						"FORBIDDEN",
+						ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_USERS,
 					);
 				}
 			}
@@ -343,15 +343,15 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 			const email = ctx.body.email.toLowerCase();
 			const isValidEmail = z.email().safeParse(email);
 			if (!isValidEmail.success) {
-				throw APIError.from(BASE_ERROR_CODES.INVALID_EMAIL, "BAD_REQUEST");
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
 
 			const existUser =
 				await ctx.context.internalAdapter.findUserByEmail(email);
 			if (existUser) {
 				throw APIError.from(
-					ADMIN_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 					"BAD_REQUEST",
+					ADMIN_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 				);
 			}
 			const user = await ctx.context.internalAdapter.createUser<UserWithRole>({
@@ -366,8 +366,8 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 
 			if (!user) {
 				throw APIError.from(
-					ADMIN_ERROR_CODES.FAILED_TO_CREATE_USER,
 					"INTERNAL_SERVER_ERROR",
+					ADMIN_ERROR_CODES.FAILED_TO_CREATE_USER,
 				);
 			}
 			const hashedPassword = await ctx.context.password.hash(ctx.body.password);
@@ -450,13 +450,13 @@ export const adminUpdateUser = (opts: AdminOptions) =>
 			});
 			if (!canUpdateUser) {
 				throw APIError.from(
-					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_USERS,
 					"FORBIDDEN",
+					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_USERS,
 				);
 			}
 
 			if (Object.keys(ctx.body.data).length === 0) {
-				throw APIError.from(ADMIN_ERROR_CODES.NO_DATA_TO_UPDATE, "BAD_REQUEST");
+				throw APIError.from("BAD_REQUEST", ADMIN_ERROR_CODES.NO_DATA_TO_UPDATE);
 			}
 
 			// Role changes must be guarded by `user:set-role` and validated against the role allow-list.
@@ -471,8 +471,8 @@ export const adminUpdateUser = (opts: AdminOptions) =>
 				});
 				if (!canSetRole) {
 					throw APIError.from(
-						ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CHANGE_USERS_ROLE,
 						"FORBIDDEN",
+						ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CHANGE_USERS_ROLE,
 					);
 				}
 
@@ -481,14 +481,14 @@ export const adminUpdateUser = (opts: AdminOptions) =>
 				for (const role of inputRoles) {
 					if (typeof role !== "string") {
 						throw APIError.from(
-							ADMIN_ERROR_CODES.INVALID_ROLE_TYPE,
 							"BAD_REQUEST",
+							ADMIN_ERROR_CODES.INVALID_ROLE_TYPE,
 						);
 					}
 					if (opts.roles && !opts.roles[role as keyof typeof opts.roles]) {
 						throw APIError.from(
-							ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE,
 							"BAD_REQUEST",
+							ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE,
 						);
 					}
 				}
@@ -628,8 +628,8 @@ export const listUsers = (opts: AdminOptions) =>
 			});
 			if (!canListUsers) {
 				throw APIError.from(
-					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_USERS,
 					"FORBIDDEN",
+					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_USERS,
 				);
 			}
 
@@ -749,8 +749,8 @@ export const listUserSessions = (opts: AdminOptions) =>
 			});
 			if (!canListSessions) {
 				throw APIError.from(
-					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_USERS_SESSIONS,
 					"FORBIDDEN",
+					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_USERS_SESSIONS,
 				);
 			}
 
@@ -827,8 +827,8 @@ export const unbanUser = (opts: AdminOptions) =>
 			});
 			if (!canBanUser) {
 				throw APIError.from(
-					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_BAN_USERS,
 					"FORBIDDEN",
+					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_BAN_USERS,
 				);
 			}
 
@@ -930,8 +930,8 @@ export const banUser = (opts: AdminOptions) =>
 			});
 			if (!canBanUser) {
 				throw APIError.from(
-					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_BAN_USERS,
 					"FORBIDDEN",
+					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_BAN_USERS,
 				);
 			}
 
@@ -940,13 +940,13 @@ export const banUser = (opts: AdminOptions) =>
 			);
 
 			if (!foundUser) {
-				throw APIError.from(BASE_ERROR_CODES.USER_NOT_FOUND, "NOT_FOUND");
+				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
 
 			if (ctx.body.userId === ctx.context.session.user.id) {
 				throw APIError.from(
-					ADMIN_ERROR_CODES.YOU_CANNOT_BAN_YOURSELF,
 					"BAD_REQUEST",
+					ADMIN_ERROR_CODES.YOU_CANNOT_BAN_YOURSELF,
 				);
 			}
 			const user = await ctx.context.internalAdapter.updateUser(
@@ -1037,8 +1037,8 @@ export const impersonateUser = (opts: AdminOptions) =>
 			});
 			if (!canImpersonateUser) {
 				throw APIError.from(
-					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_IMPERSONATE_USERS,
 					"FORBIDDEN",
+					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_IMPERSONATE_USERS,
 				);
 			}
 
@@ -1047,7 +1047,7 @@ export const impersonateUser = (opts: AdminOptions) =>
 			)) as UserWithRole | null;
 
 			if (!targetUser) {
-				throw APIError.from(BASE_ERROR_CODES.USER_NOT_FOUND, "NOT_FOUND");
+				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
 
 			const adminRoles = (
@@ -1066,8 +1066,8 @@ export const impersonateUser = (opts: AdminOptions) =>
 					opts.adminUserIds?.includes(targetUser.id))
 			) {
 				throw APIError.from(
-					ADMIN_ERROR_CODES.YOU_CANNOT_IMPERSONATE_ADMINS,
 					"FORBIDDEN",
+					ADMIN_ERROR_CODES.YOU_CANNOT_IMPERSONATE_ADMINS,
 				);
 			}
 
@@ -1084,8 +1084,8 @@ export const impersonateUser = (opts: AdminOptions) =>
 			);
 			if (!session) {
 				throw APIError.from(
-					ADMIN_ERROR_CODES.FAILED_TO_CREATE_USER,
 					"INTERNAL_SERVER_ERROR",
+					ADMIN_ERROR_CODES.FAILED_TO_CREATE_USER,
 				);
 			}
 			const authCookies = ctx.context.authCookies;
@@ -1256,8 +1256,8 @@ export const revokeUserSession = (opts: AdminOptions) =>
 			});
 			if (!canRevokeSession) {
 				throw APIError.from(
-					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REVOKE_USERS_SESSIONS,
 					"FORBIDDEN",
+					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REVOKE_USERS_SESSIONS,
 				);
 			}
 
@@ -1332,8 +1332,8 @@ export const revokeUserSessions = (opts: AdminOptions) =>
 			});
 			if (!canRevokeSession) {
 				throw APIError.from(
-					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REVOKE_USERS_SESSIONS,
 					"FORBIDDEN",
+					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REVOKE_USERS_SESSIONS,
 				);
 			}
 
@@ -1410,15 +1410,15 @@ export const removeUser = (opts: AdminOptions) =>
 			});
 			if (!canDeleteUser) {
 				throw APIError.from(
-					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_USERS,
 					"FORBIDDEN",
+					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_USERS,
 				);
 			}
 
 			if (ctx.body.userId === ctx.context.session.user.id) {
 				throw APIError.from(
-					ADMIN_ERROR_CODES.YOU_CANNOT_REMOVE_YOURSELF,
 					"BAD_REQUEST",
+					ADMIN_ERROR_CODES.YOU_CANNOT_REMOVE_YOURSELF,
 				);
 			}
 
@@ -1427,7 +1427,7 @@ export const removeUser = (opts: AdminOptions) =>
 			);
 
 			if (!user) {
-				throw APIError.from(BASE_ERROR_CODES.USER_NOT_FOUND, "NOT_FOUND");
+				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
 
 			await ctx.context.internalAdapter.deleteUser(ctx.body.userId);
@@ -1504,8 +1504,8 @@ export const setUserPassword = (opts: AdminOptions) =>
 			});
 			if (!canSetUserPassword) {
 				throw APIError.from(
-					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_USERS_PASSWORD,
 					"FORBIDDEN",
+					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_USERS_PASSWORD,
 				);
 			}
 
@@ -1513,12 +1513,12 @@ export const setUserPassword = (opts: AdminOptions) =>
 			const minPasswordLength = ctx.context.password.config.minPasswordLength;
 			if (newPassword.length < minPasswordLength) {
 				ctx.context.logger.error("Password is too short");
-				throw APIError.from(BASE_ERROR_CODES.PASSWORD_TOO_SHORT, "BAD_REQUEST");
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
 			}
 			const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
 			if (newPassword.length > maxPasswordLength) {
 				ctx.context.logger.error("Password is too long");
-				throw APIError.from(BASE_ERROR_CODES.PASSWORD_TOO_LONG, "BAD_REQUEST");
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
 			}
 			const hashedPassword = await ctx.context.password.hash(newPassword);
 			await ctx.context.internalAdapter.updatePassword(userId, hashedPassword);

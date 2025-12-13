@@ -110,8 +110,8 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 
 						if (typeof key !== "string") {
 							throw APIError.from(
-								API_KEY_ERROR_CODES.INVALID_API_KEY_GETTER_RETURN_TYPE,
 								"BAD_REQUEST",
+								API_KEY_ERROR_CODES.INVALID_API_KEY_GETTER_RETURN_TYPE,
 							);
 						}
 
@@ -120,8 +120,8 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 							// we can't check if the key is exactly equal to the default key length, because
 							// a prefix may be added to the key.
 							throw APIError.from(
-								API_KEY_ERROR_CODES.INVALID_API_KEY,
 								"FORBIDDEN",
+								API_KEY_ERROR_CODES.INVALID_API_KEY,
 							);
 						}
 
@@ -129,8 +129,8 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 							const isValid = await opts.customAPIKeyValidator({ ctx, key });
 							if (!isValid) {
 								throw APIError.from(
-									API_KEY_ERROR_CODES.INVALID_API_KEY,
 									"FORBIDDEN",
+									API_KEY_ERROR_CODES.INVALID_API_KEY,
 								);
 							}
 						}
@@ -159,8 +159,8 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 						);
 						if (!user) {
 							throw APIError.from(
-								API_KEY_ERROR_CODES.INVALID_USER_ID_FROM_API_KEY,
 								"UNAUTHORIZED",
+								API_KEY_ERROR_CODES.INVALID_USER_ID_FROM_API_KEY,
 							);
 						}
 

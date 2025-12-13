@@ -269,11 +269,11 @@ export function updateApiKey({
 					: session?.user || { id: ctx.body.userId };
 
 			if (!user?.id) {
-				throw APIError.from(ERROR_CODES.UNAUTHORIZED_SESSION, "UNAUTHORIZED");
+				throw APIError.from("UNAUTHORIZED", ERROR_CODES.UNAUTHORIZED_SESSION);
 			}
 
 			if (session && ctx.body.userId && session?.user.id !== ctx.body.userId) {
-				throw APIError.from(ERROR_CODES.UNAUTHORIZED_SESSION, "UNAUTHORIZED");
+				throw APIError.from("UNAUTHORIZED", ERROR_CODES.UNAUTHORIZED_SESSION);
 			}
 
 			if (authRequired) {
@@ -288,7 +288,7 @@ export function updateApiKey({
 					remaining !== undefined ||
 					permissions !== undefined
 				) {
-					throw APIError.from(ERROR_CODES.SERVER_ONLY_PROPERTY, "BAD_REQUEST");
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.SERVER_ONLY_PROPERTY);
 				}
 			}
 
@@ -302,16 +302,16 @@ export function updateApiKey({
 			}
 
 			if (!apiKey) {
-				throw APIError.from(ERROR_CODES.KEY_NOT_FOUND, "NOT_FOUND");
+				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
 			}
 
 			let newValues: Partial<ApiKey> = {};
 
 			if (name !== undefined) {
 				if (name.length < opts.minimumNameLength) {
-					throw APIError.from(ERROR_CODES.INVALID_NAME_LENGTH, "BAD_REQUEST");
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_NAME_LENGTH);
 				} else if (name.length > opts.maximumNameLength) {
-					throw APIError.from(ERROR_CODES.INVALID_NAME_LENGTH, "BAD_REQUEST");
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_NAME_LENGTH);
 				}
 				newValues.name = name;
 			}
@@ -322,8 +322,8 @@ export function updateApiKey({
 			if (expiresIn !== undefined) {
 				if (opts.keyExpiration.disableCustomExpiresTime === true) {
 					throw APIError.from(
-						ERROR_CODES.KEY_DISABLED_EXPIRATION,
 						"BAD_REQUEST",
+						ERROR_CODES.KEY_DISABLED_EXPIRATION,
 					);
 				}
 				if (expiresIn !== null) {
@@ -333,13 +333,13 @@ export function updateApiKey({
 
 					if (expiresIn_in_days < opts.keyExpiration.minExpiresIn) {
 						throw APIError.from(
-							ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
 							"BAD_REQUEST",
+							ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
 						);
 					} else if (expiresIn_in_days > opts.keyExpiration.maxExpiresIn) {
 						throw APIError.from(
-							ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
 							"BAD_REQUEST",
+							ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
 						);
 					}
 				}
@@ -347,7 +347,7 @@ export function updateApiKey({
 			}
 			if (metadata !== undefined) {
 				if (typeof metadata !== "object") {
-					throw APIError.from(ERROR_CODES.INVALID_METADATA_TYPE, "BAD_REQUEST");
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_METADATA_TYPE);
 				}
 				//@ts-expect-error - we need this to be a string to save into DB.
 				newValues.metadata =
@@ -359,13 +359,13 @@ export function updateApiKey({
 			if (refillAmount !== undefined || refillInterval !== undefined) {
 				if (refillAmount !== undefined && refillInterval === undefined) {
 					throw APIError.from(
-						ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
 						"BAD_REQUEST",
+						ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
 					);
 				} else if (refillInterval !== undefined && refillAmount === undefined) {
 					throw APIError.from(
-						ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
 						"BAD_REQUEST",
+						ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
 					);
 				}
 				newValues.refillAmount = refillAmount;
@@ -388,7 +388,7 @@ export function updateApiKey({
 			}
 
 			if (Object.keys(newValues).length === 0) {
-				throw APIError.from(ERROR_CODES.NO_VALUES_TO_UPDATE, "BAD_REQUEST");
+				throw APIError.from("BAD_REQUEST", ERROR_CODES.NO_VALUES_TO_UPDATE);
 			}
 
 			let newApiKey: ApiKey = apiKey;

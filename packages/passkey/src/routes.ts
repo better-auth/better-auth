@@ -448,8 +448,8 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 			);
 			if (!challengeId) {
 				throw APIError.from(
-					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
 					"BAD_REQUEST",
+					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
 				);
 			}
 
@@ -466,8 +466,8 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 
 			if (userData.id !== ctx.context.session.user.id) {
 				throw APIError.from(
-					PASSKEY_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY,
 					"UNAUTHORIZED",
+					PASSKEY_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY,
 				);
 			}
 
@@ -513,8 +513,8 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 			} catch (e) {
 				console.log(e);
 				throw APIError.from(
-					PASSKEY_ERROR_CODES.FAILED_TO_VERIFY_REGISTRATION,
 					"INTERNAL_SERVER_ERROR",
+					PASSKEY_ERROR_CODES.FAILED_TO_VERIFY_REGISTRATION,
 				);
 			}
 		},
@@ -579,8 +579,8 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 			);
 			if (!challengeId) {
 				throw APIError.from(
-					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
 					"BAD_REQUEST",
+					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
 				);
 			}
 
@@ -588,8 +588,8 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				await ctx.context.internalAdapter.findVerificationValue(challengeId);
 			if (!data) {
 				throw APIError.from(
-					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
 					"BAD_REQUEST",
+					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
 				);
 			}
 			const { expectedChallenge } = JSON.parse(
@@ -606,8 +606,8 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 			});
 			if (!passkey) {
 				throw APIError.from(
-					PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND,
 					"UNAUTHORIZED",
+					PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND,
 				);
 			}
 			try {
@@ -629,8 +629,8 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				const { verified } = verification;
 				if (!verified)
 					throw APIError.from(
-						PASSKEY_ERROR_CODES.AUTHENTICATION_FAILED,
 						"UNAUTHORIZED",
+						PASSKEY_ERROR_CODES.AUTHENTICATION_FAILED,
 					);
 
 				await ctx.context.adapter.update<Passkey>({
@@ -650,8 +650,8 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				);
 				if (!s) {
 					throw APIError.from(
-						PASSKEY_ERROR_CODES.UNABLE_TO_CREATE_SESSION,
 						"INTERNAL_SERVER_ERROR",
+						PASSKEY_ERROR_CODES.UNABLE_TO_CREATE_SESSION,
 					);
 				}
 				const user = await ctx.context.internalAdapter.findUserById(
@@ -677,8 +677,8 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 			} catch (e) {
 				ctx.context.logger.error("Failed to verify authentication", e);
 				throw APIError.from(
-					PASSKEY_ERROR_CODES.AUTHENTICATION_FAILED,
 					"BAD_REQUEST",
+					PASSKEY_ERROR_CODES.AUTHENTICATION_FAILED,
 				);
 			}
 		},
@@ -809,7 +809,7 @@ export const deletePasskey = createAuthEndpoint(
 			],
 		});
 		if (!passkey) {
-			throw APIError.from(PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND, "NOT_FOUND");
+			throw APIError.from("NOT_FOUND", PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND);
 		}
 		if (passkey.userId !== ctx.context.session.user.id) {
 			throw new APIError("UNAUTHORIZED");
@@ -890,13 +890,13 @@ export const updatePasskey = createAuthEndpoint(
 		});
 
 		if (!passkey) {
-			throw APIError.from(PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND, "NOT_FOUND");
+			throw APIError.from("NOT_FOUND", PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND);
 		}
 
 		if (passkey.userId !== ctx.context.session.user.id) {
 			throw APIError.from(
-				PASSKEY_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY,
 				"UNAUTHORIZED",
+				PASSKEY_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY,
 			);
 		}
 
@@ -915,8 +915,8 @@ export const updatePasskey = createAuthEndpoint(
 
 		if (!updatedPasskey) {
 			throw APIError.from(
-				PASSKEY_ERROR_CODES.FAILED_TO_UPDATE_PASSKEY,
 				"INTERNAL_SERVER_ERROR",
+				PASSKEY_ERROR_CODES.FAILED_TO_UPDATE_PASSKEY,
 			);
 		}
 		return ctx.json(

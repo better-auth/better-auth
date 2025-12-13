@@ -188,13 +188,10 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 				ctx.context.logger.error(
 					"send otp isn't configured. Please configure the send otp function on otp options.",
 				);
-				throw APIError.from(
-					{
-						message: "otp isn't configured",
-						code: "OTP_NOT_CONFIGURED",
-					},
-					"BAD_REQUEST",
-				);
+				throw APIError.from("BAD_REQUEST", {
+					message: "otp isn't configured",
+					code: "OTP_NOT_CONFIGURED",
+				});
 			}
 			const { session, key } = await verifyTwoFactor(ctx);
 			const code = generateRandomString(opts.digits, "0-9");
@@ -303,8 +300,8 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 					);
 				}
 				throw APIError.from(
-					TWO_FACTOR_ERROR_CODES.OTP_HAS_EXPIRED,
 					"BAD_REQUEST",
+					TWO_FACTOR_ERROR_CODES.OTP_HAS_EXPIRED,
 				);
 			}
 			const allowedAttempts = options?.allowedAttempts || 5;
@@ -313,8 +310,8 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 					toCheckOtp.id,
 				);
 				throw APIError.from(
-					TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE,
 					"BAD_REQUEST",
+					TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE,
 				);
 			}
 			const isCodeValid = constantTimeEqual(
@@ -325,8 +322,8 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 				if (!session.user.twoFactorEnabled) {
 					if (!session.session) {
 						throw APIError.from(
-							BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 							"BAD_REQUEST",
+							BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 						);
 					}
 					const updatedUser = await ctx.context.internalAdapter.updateUser(

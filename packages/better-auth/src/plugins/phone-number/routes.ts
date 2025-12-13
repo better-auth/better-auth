@@ -93,8 +93,8 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				);
 				if (!isValidNumber) {
 					throw APIError.from(
-						PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER,
 						"BAD_REQUEST",
+						PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER,
 					);
 				}
 			}
@@ -110,8 +110,8 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			});
 			if (!user) {
 				throw APIError.from(
-					PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
 					"UNAUTHORIZED",
+					PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
 				);
 			}
 			if (opts.requireVerification) {
@@ -130,8 +130,8 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 						ctx,
 					);
 					throw APIError.from(
-						PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_NOT_VERIFIED,
 						"UNAUTHORIZED",
+						PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_NOT_VERIFIED,
 					);
 				}
 			}
@@ -146,16 +146,16 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					phoneNumber,
 				});
 				throw APIError.from(
-					PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
 					"UNAUTHORIZED",
+					PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
 				);
 			}
 			const currentPassword = credentialAccount?.password;
 			if (!currentPassword) {
 				ctx.context.logger.error("Password not found", { phoneNumber });
 				throw APIError.from(
-					PHONE_NUMBER_ERROR_CODES.UNEXPECTED_ERROR,
 					"UNAUTHORIZED",
+					PHONE_NUMBER_ERROR_CODES.UNEXPECTED_ERROR,
 				);
 			}
 			const validPassword = await ctx.context.password.verify({
@@ -165,8 +165,8 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			if (!validPassword) {
 				ctx.context.logger.error("Invalid password");
 				throw APIError.from(
-					PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
 					"UNAUTHORIZED",
+					PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
 				);
 			}
 			const session = await ctx.context.internalAdapter.createSession(
@@ -176,8 +176,8 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			if (!session) {
 				ctx.context.logger.error("Failed to create session");
 				throw APIError.from(
-					BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 					"UNAUTHORIZED",
+					BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 				);
 			}
 
@@ -261,8 +261,8 @@ export const sendPhoneNumberOTP = (opts: RequiredPhoneNumberOptions) =>
 			if (!opts?.sendOTP) {
 				ctx.context.logger.warn("sendOTP not implemented");
 				throw APIError.from(
-					PHONE_NUMBER_ERROR_CODES.SEND_OTP_NOT_IMPLEMENTED,
 					"NOT_IMPLEMENTED",
+					PHONE_NUMBER_ERROR_CODES.SEND_OTP_NOT_IMPLEMENTED,
 				);
 			}
 
@@ -272,8 +272,8 @@ export const sendPhoneNumberOTP = (opts: RequiredPhoneNumberOptions) =>
 				);
 				if (!isValidNumber) {
 					throw APIError.from(
-						PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER,
 						"BAD_REQUEST",
+						PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER,
 					);
 				}
 			}
@@ -463,8 +463,8 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 
 				if (!isValid) {
 					throw APIError.from(
-						PHONE_NUMBER_ERROR_CODES.INVALID_OTP,
 						"BAD_REQUEST",
+						PHONE_NUMBER_ERROR_CODES.INVALID_OTP,
 					);
 				}
 
@@ -484,13 +484,13 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				if (!otp || otp.expiresAt < new Date()) {
 					if (otp && otp.expiresAt < new Date()) {
 						throw APIError.from(
-							PHONE_NUMBER_ERROR_CODES.OTP_EXPIRED,
 							"BAD_REQUEST",
+							PHONE_NUMBER_ERROR_CODES.OTP_EXPIRED,
 						);
 					}
 					throw APIError.from(
-						PHONE_NUMBER_ERROR_CODES.OTP_NOT_FOUND,
 						"BAD_REQUEST",
+						PHONE_NUMBER_ERROR_CODES.OTP_NOT_FOUND,
 					);
 				}
 				const [otpValue, attempts] = otp.value.split(":");
@@ -498,8 +498,8 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				if (attempts && parseInt(attempts) >= allowedAttempts) {
 					await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
 					throw APIError.from(
-						PHONE_NUMBER_ERROR_CODES.TOO_MANY_ATTEMPTS,
 						"FORBIDDEN",
+						PHONE_NUMBER_ERROR_CODES.TOO_MANY_ATTEMPTS,
 					);
 				}
 				if (otpValue !== ctx.body.code) {
@@ -507,8 +507,8 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 						value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
 					});
 					throw APIError.from(
-						PHONE_NUMBER_ERROR_CODES.INVALID_OTP,
 						"BAD_REQUEST",
+						PHONE_NUMBER_ERROR_CODES.INVALID_OTP,
 					);
 				}
 
@@ -518,7 +518,7 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			if (ctx.body.updatePhoneNumber) {
 				const session = await getSessionFromCtx(ctx);
 				if (!session) {
-					throw APIError.from(BASE_ERROR_CODES.USER_NOT_FOUND, "UNAUTHORIZED");
+					throw APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.USER_NOT_FOUND);
 				}
 				const existingUser =
 					await ctx.context.adapter.findMany<UserWithPhoneNumber>({
@@ -532,8 +532,8 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					});
 				if (existingUser.length) {
 					throw APIError.from(
-						PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_EXIST,
 						"BAD_REQUEST",
+						PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_EXIST,
 					);
 				}
 				let user =
@@ -585,8 +585,8 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 						});
 					if (!user) {
 						throw APIError.from(
-							BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
 							"INTERNAL_SERVER_ERROR",
+							BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
 						);
 					}
 				}
@@ -601,8 +601,8 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			}
 			if (!user) {
 				throw APIError.from(
-					BASE_ERROR_CODES.FAILED_TO_UPDATE_USER,
 					"INTERNAL_SERVER_ERROR",
+					BASE_ERROR_CODES.FAILED_TO_UPDATE_USER,
 				);
 			}
 
@@ -620,8 +620,8 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				);
 				if (!session) {
 					throw APIError.from(
-						BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 						"INTERNAL_SERVER_ERROR",
+						BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 					);
 				}
 				await setSessionCookie(ctx, {
@@ -714,8 +714,8 @@ export const requestPasswordResetPhoneNumber = (
 			});
 			if (!user) {
 				throw APIError.from(
-					PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_NOT_EXIST,
 					"BAD_REQUEST",
+					PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_NOT_EXIST,
 				);
 			}
 			const code = generateOTP(opts.otpLength);
@@ -790,14 +790,14 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				);
 			if (!verification) {
 				throw APIError.from(
-					PHONE_NUMBER_ERROR_CODES.OTP_NOT_FOUND,
 					"BAD_REQUEST",
+					PHONE_NUMBER_ERROR_CODES.OTP_NOT_FOUND,
 				);
 			}
 			if (verification.expiresAt < new Date()) {
 				throw APIError.from(
-					PHONE_NUMBER_ERROR_CODES.OTP_EXPIRED,
 					"BAD_REQUEST",
+					PHONE_NUMBER_ERROR_CODES.OTP_EXPIRED,
 				);
 			}
 			const [otpValue, attempts] = verification.value.split(":");
@@ -807,8 +807,8 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					verification.id,
 				);
 				throw APIError.from(
-					PHONE_NUMBER_ERROR_CODES.TOO_MANY_ATTEMPTS,
 					"FORBIDDEN",
+					PHONE_NUMBER_ERROR_CODES.TOO_MANY_ATTEMPTS,
 				);
 			}
 			if (ctx.body.otp !== otpValue) {
@@ -819,8 +819,8 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					},
 				);
 				throw APIError.from(
-					PHONE_NUMBER_ERROR_CODES.INVALID_OTP,
 					"BAD_REQUEST",
+					PHONE_NUMBER_ERROR_CODES.INVALID_OTP,
 				);
 			}
 			const user = await ctx.context.adapter.findOne<User>({
@@ -834,8 +834,8 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			});
 			if (!user) {
 				throw APIError.from(
-					PHONE_NUMBER_ERROR_CODES.UNEXPECTED_ERROR,
 					"BAD_REQUEST",
+					PHONE_NUMBER_ERROR_CODES.UNEXPECTED_ERROR,
 				);
 			}
 			const hashedPassword = await ctx.context.password.hash(

@@ -13,7 +13,7 @@ import type { UserWithTwoFactor } from "./types";
 
 export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 	const invalid = (errorKey: keyof typeof TWO_FACTOR_ERROR_CODES) => {
-		throw APIError.from(TWO_FACTOR_ERROR_CODES[errorKey], "UNAUTHORIZED");
+		throw APIError.from("UNAUTHORIZED", TWO_FACTOR_ERROR_CODES[errorKey]);
 	};
 
 	const session = await getSessionFromCtx(ctx);
@@ -25,16 +25,16 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 		);
 		if (!twoFactorCookie) {
 			throw APIError.from(
-				TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
 				"UNAUTHORIZED",
+				TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
 			);
 		}
 		const verificationToken =
 			await ctx.context.internalAdapter.findVerificationValue(twoFactorCookie);
 		if (!verificationToken) {
 			throw APIError.from(
-				TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
 				"UNAUTHORIZED",
+				TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
 			);
 		}
 		const user = (await ctx.context.internalAdapter.findUserById(
@@ -42,8 +42,8 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 		)) as UserWithTwoFactor;
 		if (!user) {
 			throw APIError.from(
-				TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
 				"UNAUTHORIZED",
+				TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
 			);
 		}
 		const dontRememberMe = await ctx.getSignedCookie(
@@ -57,13 +57,10 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 					!!dontRememberMe,
 				);
 				if (!session) {
-					throw APIError.from(
-						{
-							message: "failed to create session",
-							code: "FAILED_TO_CREATE_SESSION",
-						},
-						"INTERNAL_SERVER_ERROR",
-					);
+					throw APIError.from("INTERNAL_SERVER_ERROR", {
+						message: "failed to create session",
+						code: "FAILED_TO_CREATE_SESSION",
+					});
 				}
 				// Delete the verification token from the database after successful verification
 				await ctx.context.internalAdapter.deleteVerificationValue(

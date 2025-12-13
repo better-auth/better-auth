@@ -31,8 +31,8 @@ export async function checkPassword(userId: string, c: GenericEndpointContext) {
 	const currentPassword = credentialAccount?.password;
 	if (!credentialAccount || !currentPassword || !c.body.password) {
 		throw APIError.from(
-			BASE_ERROR_CODES.CREDENTIAL_ACCOUNT_NOT_FOUND,
 			"BAD_REQUEST",
+			BASE_ERROR_CODES.CREDENTIAL_ACCOUNT_NOT_FOUND,
 		);
 	}
 	const compare = await c.context.password.verify({
@@ -40,7 +40,7 @@ export async function checkPassword(userId: string, c: GenericEndpointContext) {
 		password: c.body.password,
 	});
 	if (!compare) {
-		throw APIError.from(BASE_ERROR_CODES.INVALID_PASSWORD, "BAD_REQUEST");
+		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
 	}
 	return true;
 }

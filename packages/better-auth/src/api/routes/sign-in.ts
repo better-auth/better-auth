@@ -222,7 +222,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 						provider: c.body.provider,
 					},
 				);
-				throw APIError.from(BASE_ERROR_CODES.PROVIDER_NOT_FOUND, "NOT_FOUND");
+				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.PROVIDER_NOT_FOUND);
 			}
 
 			if (c.body.idToken) {
@@ -234,8 +234,8 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 						},
 					);
 					throw APIError.from(
-						BASE_ERROR_CODES.ID_TOKEN_NOT_SUPPORTED,
 						"NOT_FOUND",
+						BASE_ERROR_CODES.ID_TOKEN_NOT_SUPPORTED,
 					);
 				}
 				const { token, nonce } = c.body.idToken;
@@ -244,7 +244,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					c.context.logger.error("Invalid id token", {
 						provider: c.body.provider,
 					});
-					throw APIError.from(BASE_ERROR_CODES.INVALID_TOKEN, "UNAUTHORIZED");
+					throw APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.INVALID_TOKEN);
 				}
 				const userInfo = await provider.getUserInfo({
 					idToken: token,
@@ -256,8 +256,8 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 						provider: c.body.provider,
 					});
 					throw APIError.from(
-						BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
 						"UNAUTHORIZED",
+						BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
 					);
 				}
 				if (!userInfo.user.email) {
@@ -265,8 +265,8 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 						provider: c.body.provider,
 					});
 					throw APIError.from(
-						BASE_ERROR_CODES.USER_EMAIL_NOT_FOUND,
 						"UNAUTHORIZED",
+						BASE_ERROR_CODES.USER_EMAIL_NOT_FOUND,
 					);
 				}
 				const data = await handleOAuthUserInfo(c, {
@@ -289,13 +289,10 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 						provider.disableSignUp,
 				});
 				if (data.error) {
-					throw APIError.from(
-						{
-							message: data.error,
-							code: "OAUTH_LINK_ERROR",
-						},
-						"UNAUTHORIZED",
-					);
+					throw APIError.from("UNAUTHORIZED", {
+						message: data.error,
+						code: "OAUTH_LINK_ERROR",
+					});
 				}
 				await setSessionCookie(c, data.data!);
 				return c.json({
@@ -439,18 +436,15 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				ctx.context.logger.error(
 					"Email and password is not enabled. Make sure to enable it in the options on you `auth.ts` file. Check `https://better-auth.com/docs/authentication/email-password` for more!",
 				);
-				throw APIError.from(
-					{
-						code: "EMAIL_PASSWORD_DISABLED",
-						message: "Email and password is not enabled",
-					},
-					"BAD_REQUEST",
-				);
+				throw APIError.from("BAD_REQUEST", {
+					code: "EMAIL_PASSWORD_DISABLED",
+					message: "Email and password is not enabled",
+				});
 			}
 			const { email, password } = ctx.body;
 			const isValidEmail = z.email().safeParse(email);
 			if (!isValidEmail.success) {
-				throw APIError.from(BASE_ERROR_CODES.INVALID_EMAIL, "BAD_REQUEST");
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
 			const user = await ctx.context.internalAdapter.findUserByEmail(email, {
 				includeAccounts: true,
@@ -462,8 +456,8 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				await ctx.context.password.hash(password);
 				ctx.context.logger.error("User not found", { email });
 				throw APIError.from(
-					BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
 					"UNAUTHORIZED",
+					BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
 				);
 			}
 
@@ -474,8 +468,8 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				await ctx.context.password.hash(password);
 				ctx.context.logger.error("Credential account not found", { email });
 				throw APIError.from(
-					BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
 					"UNAUTHORIZED",
+					BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
 				);
 			}
 			const currentPassword = credentialAccount?.password;
@@ -483,8 +477,8 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				await ctx.context.password.hash(password);
 				ctx.context.logger.error("Password not found", { email });
 				throw APIError.from(
-					BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
 					"UNAUTHORIZED",
+					BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
 				);
 			}
 			const validPassword = await ctx.context.password.verify({
@@ -494,8 +488,8 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 			if (!validPassword) {
 				ctx.context.logger.error("Invalid password");
 				throw APIError.from(
-					BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
 					"UNAUTHORIZED",
+					BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
 				);
 			}
 
@@ -504,7 +498,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				!user.user.emailVerified
 			) {
 				if (!ctx.context.options?.emailVerification?.sendVerificationEmail) {
-					throw APIError.from(BASE_ERROR_CODES.EMAIL_NOT_VERIFIED, "FORBIDDEN");
+					throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.EMAIL_NOT_VERIFIED);
 				}
 
 				if (ctx.context.options?.emailVerification?.sendOnSignIn) {
@@ -528,7 +522,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 					);
 				}
 
-				throw APIError.from(BASE_ERROR_CODES.EMAIL_NOT_VERIFIED, "FORBIDDEN");
+				throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.EMAIL_NOT_VERIFIED);
 			}
 
 			const session = await ctx.context.internalAdapter.createSession(
@@ -539,8 +533,8 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 			if (!session) {
 				ctx.context.logger.error("Failed to create session");
 				throw APIError.from(
-					BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 					"UNAUTHORIZED",
+					BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 				);
 			}
 

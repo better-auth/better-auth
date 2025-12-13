@@ -158,8 +158,8 @@ export const signInWithOAuth2 = (options: GenericOAuthOptions) =>
 			}
 			if (!finalAuthUrl || !finalTokenUrl) {
 				throw APIError.from(
-					GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
 					"BAD_REQUEST",
+					GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
 				);
 			}
 			if (authorizationUrlParams) {
@@ -283,8 +283,8 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 			const providerId = ctx.params?.providerId;
 			if (!providerId) {
 				throw APIError.from(
-					GENERIC_OAUTH_ERROR_CODES.PROVIDER_ID_REQUIRED,
 					"BAD_REQUEST",
+					GENERIC_OAUTH_ERROR_CODES.PROVIDER_ID_REQUIRED,
 				);
 			}
 			const providerConfig = options.config.find(
@@ -349,8 +349,8 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 					// Standard token exchange with tokenUrlParams support
 					if (!finalTokenUrl) {
 						throw APIError.from(
-							GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIG,
 							"BAD_REQUEST",
+							GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIG,
 						);
 					}
 					const additionalParams =
@@ -381,8 +381,8 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 			}
 			if (!tokens) {
 				throw APIError.from(
-					GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIG,
 					"BAD_REQUEST",
+					GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIG,
 				);
 			}
 			const userInfo: Omit<User, "createdAt" | "updatedAt"> =
@@ -600,15 +600,15 @@ export const oAuth2LinkAccount = (options: GenericOAuthOptions) =>
 			const session = c.context.session;
 			if (!session) {
 				throw APIError.from(
-					GENERIC_OAUTH_ERROR_CODES.SESSION_REQUIRED,
 					"UNAUTHORIZED",
+					GENERIC_OAUTH_ERROR_CODES.SESSION_REQUIRED,
 				);
 			}
 			const provider = options.config.find(
 				(p) => p.providerId === c.body.providerId,
 			);
 			if (!provider) {
-				throw APIError.from(BASE_ERROR_CODES.PROVIDER_NOT_FOUND, "NOT_FOUND");
+				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.PROVIDER_NOT_FOUND);
 			}
 			const {
 				providerId,
@@ -628,8 +628,8 @@ export const oAuth2LinkAccount = (options: GenericOAuthOptions) =>
 			if (!finalAuthUrl) {
 				if (!discoveryUrl) {
 					throw APIError.from(
-						GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
 						"BAD_REQUEST",
+						GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
 					);
 				}
 				const discovery = await betterFetch<{
@@ -651,8 +651,8 @@ export const oAuth2LinkAccount = (options: GenericOAuthOptions) =>
 
 			if (!finalAuthUrl) {
 				throw APIError.from(
-					GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
 					"BAD_REQUEST",
+					GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
 				);
 			}
 

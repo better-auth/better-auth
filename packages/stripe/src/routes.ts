@@ -159,16 +159,16 @@ export const upgradeSubscription = (options: StripeOptions) => {
 			const { user, session } = ctx.context.session;
 			if (!user.emailVerified && subscriptionOptions.requireEmailVerification) {
 				throw APIError.from(
-					STRIPE_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED,
 					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED,
 				);
 			}
 			const referenceId = ctx.body.referenceId || user.id;
 			const plan = await getPlanByName(options, ctx.body.plan);
 			if (!plan) {
 				throw APIError.from(
-					STRIPE_ERROR_CODES.SUBSCRIPTION_PLAN_NOT_FOUND,
 					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.SUBSCRIPTION_PLAN_NOT_FOUND,
 				);
 			}
 			let subscriptionToUpdate = ctx.body.subscriptionId
@@ -204,8 +204,8 @@ export const upgradeSubscription = (options: StripeOptions) => {
 
 			if (ctx.body.subscriptionId && !subscriptionToUpdate) {
 				throw APIError.from(
-					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 				);
 			}
 
@@ -251,8 +251,8 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				} catch (e: any) {
 					ctx.context.logger.error(e);
 					throw APIError.from(
-						STRIPE_ERROR_CODES.UNABLE_TO_CREATE_CUSTOMER,
 						"BAD_REQUEST",
+						STRIPE_ERROR_CODES.UNABLE_TO_CREATE_CUSTOMER,
 					);
 				}
 			}
@@ -313,8 +313,8 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				activeOrTrialingSubscription.seats === (ctx.body.seats || 1)
 			) {
 				throw APIError.from(
-					STRIPE_ERROR_CODES.ALREADY_SUBSCRIBED_PLAN,
 					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.ALREADY_SUBSCRIBED_PLAN,
 				);
 			}
 
@@ -730,8 +730,8 @@ export const cancelSubscription = (options: StripeOptions) => {
 
 			if (!subscription || !subscription.stripeCustomerId) {
 				throw APIError.from(
-					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 				);
 			}
 			const activeSubscriptions = await client.subscriptions
@@ -758,8 +758,8 @@ export const cancelSubscription = (options: StripeOptions) => {
 					],
 				});
 				throw APIError.from(
-					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 				);
 			}
 			const activeSubscription = activeSubscriptions.find(
@@ -767,8 +767,8 @@ export const cancelSubscription = (options: StripeOptions) => {
 			);
 			if (!activeSubscription) {
 				throw APIError.from(
-					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 				);
 			}
 			const { url } = await client.billingPortal.sessions
@@ -895,8 +895,8 @@ export const restoreSubscription = (options: StripeOptions) => {
 			}
 			if (!subscription || !subscription.stripeCustomerId) {
 				throw APIError.from(
-					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 				);
 			}
 			if (
@@ -904,14 +904,14 @@ export const restoreSubscription = (options: StripeOptions) => {
 				subscription.status != "trialing"
 			) {
 				throw APIError.from(
-					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_ACTIVE,
 					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_ACTIVE,
 				);
 			}
 			if (!subscription.cancelAtPeriodEnd) {
 				throw APIError.from(
-					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION,
 					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION,
 				);
 			}
 
@@ -927,8 +927,8 @@ export const restoreSubscription = (options: StripeOptions) => {
 				);
 			if (!activeSubscription) {
 				throw APIError.from(
-					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 				);
 			}
 
@@ -958,8 +958,8 @@ export const restoreSubscription = (options: StripeOptions) => {
 			} catch (error) {
 				ctx.context.logger.error("Error restoring subscription", error);
 				throw APIError.from(
-					STRIPE_ERROR_CODES.UNABLE_TO_CREATE_CUSTOMER,
 					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.UNABLE_TO_CREATE_CUSTOMER,
 				);
 			}
 		},

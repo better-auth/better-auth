@@ -186,7 +186,7 @@ export function getApiKey({
 			}
 
 			if (!apiKey) {
-				throw APIError.from(ERROR_CODES.KEY_NOT_FOUND, "NOT_FOUND");
+				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
 			}
 
 			deleteAllExpiredApiKeys(ctx.context);

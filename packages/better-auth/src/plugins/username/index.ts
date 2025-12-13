@@ -240,8 +240,8 @@ export const username = (options?: UsernameOptions | undefined) => {
 					if (!ctx.body.username || !ctx.body.password) {
 						ctx.context.logger.error("Username or password not found");
 						throw APIError.from(
-							ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 							"UNAUTHORIZED",
+							ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						);
 					}
 
@@ -258,8 +258,8 @@ export const username = (options?: UsernameOptions | undefined) => {
 							username,
 						});
 						throw APIError.from(
-							ERROR_CODES.USERNAME_TOO_SHORT,
 							"UNPROCESSABLE_ENTITY",
+							ERROR_CODES.USERNAME_TOO_SHORT,
 						);
 					}
 
@@ -268,8 +268,8 @@ export const username = (options?: UsernameOptions | undefined) => {
 							username,
 						});
 						throw APIError.from(
-							ERROR_CODES.USERNAME_TOO_LONG,
 							"UNPROCESSABLE_ENTITY",
+							ERROR_CODES.USERNAME_TOO_LONG,
 						);
 					}
 
@@ -279,8 +279,8 @@ export const username = (options?: UsernameOptions | undefined) => {
 					const valid = await validator(username);
 					if (!valid) {
 						throw APIError.from(
-							ERROR_CODES.INVALID_USERNAME,
 							"UNPROCESSABLE_ENTITY",
+							ERROR_CODES.INVALID_USERNAME,
 						);
 					}
 
@@ -303,8 +303,8 @@ export const username = (options?: UsernameOptions | undefined) => {
 							username,
 						});
 						throw APIError.from(
-							ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 							"UNAUTHORIZED",
+							ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						);
 					}
 
@@ -323,8 +323,8 @@ export const username = (options?: UsernameOptions | undefined) => {
 					});
 					if (!account) {
 						throw APIError.from(
-							ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 							"UNAUTHORIZED",
+							ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						);
 					}
 					const currentPassword = account?.password;
@@ -333,8 +333,8 @@ export const username = (options?: UsernameOptions | undefined) => {
 							username,
 						});
 						throw APIError.from(
-							ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 							"UNAUTHORIZED",
+							ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						);
 					}
 					const validPassword = await ctx.context.password.verify({
@@ -344,8 +344,8 @@ export const username = (options?: UsernameOptions | undefined) => {
 					if (!validPassword) {
 						ctx.context.logger.error("Invalid password");
 						throw APIError.from(
-							ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 							"UNAUTHORIZED",
+							ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						);
 					}
 
@@ -356,7 +356,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 						if (
 							!ctx.context.options?.emailVerification?.sendVerificationEmail
 						) {
-							throw APIError.from(ERROR_CODES.EMAIL_NOT_VERIFIED, "FORBIDDEN");
+							throw APIError.from("FORBIDDEN", ERROR_CODES.EMAIL_NOT_VERIFIED);
 						}
 
 						if (ctx.context.options?.emailVerification?.sendOnSignIn) {
@@ -379,7 +379,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 							);
 						}
 
-						throw APIError.from(ERROR_CODES.EMAIL_NOT_VERIFIED, "FORBIDDEN");
+						throw APIError.from("FORBIDDEN", ERROR_CODES.EMAIL_NOT_VERIFIED);
 					}
 
 					const session = await ctx.context.internalAdapter.createSession(
@@ -425,8 +425,8 @@ export const username = (options?: UsernameOptions | undefined) => {
 					const username = ctx.body.username;
 					if (!username) {
 						throw APIError.from(
-							ERROR_CODES.INVALID_USERNAME,
 							"UNPROCESSABLE_ENTITY",
+							ERROR_CODES.INVALID_USERNAME,
 						);
 					}
 
@@ -435,15 +435,15 @@ export const username = (options?: UsernameOptions | undefined) => {
 
 					if (username.length < minUsernameLength) {
 						throw APIError.from(
-							ERROR_CODES.USERNAME_TOO_SHORT,
 							"UNPROCESSABLE_ENTITY",
+							ERROR_CODES.USERNAME_TOO_SHORT,
 						);
 					}
 
 					if (username.length > maxUsernameLength) {
 						throw APIError.from(
-							ERROR_CODES.USERNAME_TOO_LONG,
 							"UNPROCESSABLE_ENTITY",
+							ERROR_CODES.USERNAME_TOO_LONG,
 						);
 					}
 
@@ -453,8 +453,8 @@ export const username = (options?: UsernameOptions | undefined) => {
 					const valid = await validator(username);
 					if (!valid) {
 						throw APIError.from(
-							ERROR_CODES.INVALID_USERNAME,
 							"UNPROCESSABLE_ENTITY",
+							ERROR_CODES.INVALID_USERNAME,
 						);
 					}
 					const user = await ctx.context.adapter.findOne<User>({
@@ -505,15 +505,15 @@ export const username = (options?: UsernameOptions | undefined) => {
 							const maxUsernameLength = options?.maxUsernameLength || 30;
 							if (username.length < minUsernameLength) {
 								throw APIError.from(
-									ERROR_CODES.USERNAME_TOO_SHORT,
 									"BAD_REQUEST",
+									ERROR_CODES.USERNAME_TOO_SHORT,
 								);
 							}
 
 							if (username.length > maxUsernameLength) {
 								throw APIError.from(
-									ERROR_CODES.USERNAME_TOO_LONG,
 									"BAD_REQUEST",
+									ERROR_CODES.USERNAME_TOO_LONG,
 								);
 							}
 
@@ -523,8 +523,8 @@ export const username = (options?: UsernameOptions | undefined) => {
 							const valid = await validator(username);
 							if (!valid) {
 								throw APIError.from(
-									ERROR_CODES.INVALID_USERNAME,
 									"BAD_REQUEST",
+									ERROR_CODES.INVALID_USERNAME,
 								);
 							}
 							const user = await ctx.context.adapter.findOne<User>({
@@ -545,8 +545,8 @@ export const username = (options?: UsernameOptions | undefined) => {
 								user.id !== ctx.context.session.session.userId;
 							if (blockChangeSignUp || blockChangeUpdateUser) {
 								throw APIError.from(
-									ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
 									"BAD_REQUEST",
+									ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
 								);
 							}
 						}
@@ -566,8 +566,8 @@ export const username = (options?: UsernameOptions | undefined) => {
 									await options.displayUsernameValidator(displayUsername);
 								if (!valid) {
 									throw APIError.from(
-										ERROR_CODES.INVALID_DISPLAY_USERNAME,
 										"BAD_REQUEST",
+										ERROR_CODES.INVALID_DISPLAY_USERNAME,
 									);
 								}
 							}

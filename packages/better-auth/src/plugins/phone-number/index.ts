@@ -37,8 +37,8 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 						ctx.path === "/update-user" && "phoneNumber" in ctx.body,
 					handler: createAuthMiddleware(async (_ctx) => {
 						throw APIError.from(
-							PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_CANNOT_BE_UPDATED,
 							"BAD_REQUEST",
+							PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_CANNOT_BE_UPDATED,
 						);
 					}),
 				},

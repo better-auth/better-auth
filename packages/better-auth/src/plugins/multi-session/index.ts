@@ -159,8 +159,8 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 					);
 					if (!sessionCookie) {
 						throw APIError.from(
-							ERROR_CODES.INVALID_SESSION_TOKEN,
 							"UNAUTHORIZED",
+							ERROR_CODES.INVALID_SESSION_TOKEN,
 						);
 					}
 					const session =
@@ -171,8 +171,8 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 							maxAge: 0,
 						});
 						throw APIError.from(
-							ERROR_CODES.INVALID_SESSION_TOKEN,
 							"UNAUTHORIZED",
+							ERROR_CODES.INVALID_SESSION_TOKEN,
 						);
 					}
 					await setSessionCookie(ctx, session);
@@ -235,8 +235,8 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 					);
 					if (!sessionCookie) {
 						throw APIError.from(
-							ERROR_CODES.INVALID_SESSION_TOKEN,
 							"UNAUTHORIZED",
+							ERROR_CODES.INVALID_SESSION_TOKEN,
 						);
 					}
 

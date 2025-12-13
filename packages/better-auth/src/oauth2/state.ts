@@ -20,7 +20,7 @@ export async function generateState(
 ) {
 	const callbackURL = c.body?.callbackURL || c.context.options.baseURL;
 	if (!callbackURL) {
-		throw APIError.from(BASE_ERROR_CODES.CALLBACK_URL_REQUIRED, "BAD_REQUEST");
+		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.CALLBACK_URL_REQUIRED);
 	}
 
 	const codeVerifier = generateRandomString(128);
@@ -85,8 +85,8 @@ export async function generateState(
 			"Unable to create verification. Make sure the database adapter is properly working and there is a verification table in the database",
 		);
 		throw APIError.from(
-			BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
 			"INTERNAL_SERVER_ERROR",
+			BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
 		);
 	}
 	return {
