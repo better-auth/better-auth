@@ -30,6 +30,7 @@ import {
 	discoverOIDCConfig,
 	mapDiscoveryErrorToAPIError,
 } from "../oidc";
+import { generateRelayState, parseRelayState } from "../saml-state";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
 
 import { safeJsonParse, validateEmailDomain } from "../utils";
@@ -120,6 +121,8 @@ const spMetadataQuerySchema = z.object({
 	providerId: z.string(),
 	format: z.enum(["xml", "json"]).default("xml"),
 });
+
+type RelayState = Awaited<ReturnType<typeof parseRelayState>>;
 
 export const spMetadata = () => {
 	return createAuthEndpoint(
@@ -1217,6 +1220,11 @@ export const signInSSO = (options?: SSOOptions) => {
 					});
 				}
 
+				const { state: relayState } = await generateRelayState(
+					ctx,
+					undefined,
+					false,
+				);
 				const shouldSaveRequest =
 					loginRequest.id &&
 					(options?.saml?.authnRequestStore ||
@@ -1241,9 +1249,7 @@ export const signInSSO = (options?: SSOOptions) => {
 				}
 
 				return ctx.json({
-					url: `${loginRequest.context}&RelayState=${encodeURIComponent(
-						body.callbackURL,
-					)}`,
+					url: `${loginRequest.context}&RelayState=${encodeURIComponent(relayState)}`,
 					redirect: true,
 				});
 			}
@@ -1666,8 +1672,13 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			},
 		},
 		async (ctx) => {
-			const { SAMLResponse, RelayState } = ctx.body;
+			const { SAMLResponse } = ctx.body;
 			const { providerId } = ctx.params;
+
+			const relayState: RelayState | null = ctx.body.RelayState
+				? await parseRelayState(ctx)
+				: null;
+
 			let provider: SSOProvider<SSOOptions> | null = null;
 			if (options?.defaultSSO?.length) {
 				const matchingDefault = options.defaultSSO.find(
@@ -1786,7 +1797,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 				parsedResponse = await sp.parseLoginResponse(idp, "post", {
 					body: {
 						SAMLResponse,
-						RelayState: RelayState || undefined,
+						RelayState: ctx.body.RelayState || undefined,
 					},
 				});
 
@@ -1857,7 +1868,9 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 							{ inResponseTo, providerId: provider.providerId },
 						);
 						const redirectUrl =
-							RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+							ctx.body.RelayState ||
+							parsedSamlConfig.callbackUrl ||
+							ctx.context.baseURL;
 						throw ctx.redirect(
 							`${redirectUrl}?error=invalid_saml_response&error_description=Unknown+or+expired+request+ID`,
 						);
@@ -1881,7 +1894,9 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 							);
 						}
 						const redirectUrl =
-							RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+							ctx.body.RelayState ||
+							parsedSamlConfig.callbackUrl ||
+							ctx.context.baseURL;
 						throw ctx.redirect(
 							`${redirectUrl}?error=invalid_saml_response&error_description=Provider+mismatch`,
 						);
@@ -1900,7 +1915,9 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 						{ providerId: provider.providerId },
 					);
 					const redirectUrl =
-						RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+						ctx.body.RelayState ||
+						parsedSamlConfig.callbackUrl ||
+						ctx.context.baseURL;
 					throw ctx.redirect(
 						`${redirectUrl}?error=unsolicited_response&error_description=IdP-initiated+SSO+not+allowed`,
 					);
@@ -1979,7 +1996,9 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 							validateEmailDomain(userInfo.email, provider.domain));
 					if (!isTrustedProvider) {
 						const redirectUrl =
-							RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+							relayState?.callbackURL ||
+							parsedSamlConfig.callbackUrl ||
+							ctx.context.baseURL;
 						throw ctx.redirect(`${redirectUrl}?error=account_not_linked`);
 					}
 					await ctx.context.internalAdapter.createAccount({
@@ -1993,7 +2012,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 				user = existingUser;
 			} else {
 				// if implicit sign up is disabled, we should not create a new user nor a new account.
-				if (options?.disableImplicitSignUp) {
+				if (options?.disableImplicitSignUp && !relayState?.requestSignUp) {
 					throw new APIError("UNAUTHORIZED", {
 						message:
 							"User not found and implicit sign up is disabled for this provider",
@@ -2069,7 +2088,9 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 
 			// Redirect to callback URL
 			const callbackUrl =
-				RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+				relayState?.callbackURL ||
+				parsedSamlConfig.callbackUrl ||
+				ctx.context.baseURL;
 			throw ctx.redirect(callbackUrl);
 		},
 	);
