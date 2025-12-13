@@ -373,7 +373,7 @@ export {
 	createAuthMiddleware,
 	optionsMiddleware,
 } from "@better-auth/core/api";
-export { APIError } from "better-call";
+export { APIError } from "@better-auth/core/error";
 export { getIp } from "../utils/get-request-ip";
 export * from "./middlewares";
 export * from "./routes";

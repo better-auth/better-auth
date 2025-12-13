@@ -254,7 +254,7 @@ describe("dynamic access control", async (it) => {
 		expect(testRole.data).toBeNull();
 		if (!testRole.error) throw new Error("Test role error not found");
 		expect(testRole.error.message).toEqual(
-			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE,
+			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE.message,
 		);
 	});
 
@@ -277,7 +277,7 @@ describe("dynamic access control", async (it) => {
 		if (testRole.data) throw new Error("Test role created");
 		expect(
 			testRole.error.message?.startsWith(
-				ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE,
+				ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE.message,
 			),
 		).toBe(true);
 		expect("missingPermissions" in testRole.error).toBe(true);
@@ -306,7 +306,7 @@ describe("dynamic access control", async (it) => {
 		expect(testRole.data).toBeNull();
 		if (!testRole.error) throw new Error("Test role error not found");
 		expect(testRole.error.message).toEqual(
-			ORGANIZATION_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN,
+			ORGANIZATION_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN.message,
 		);
 
 		const testRole2 = await authClient.organization.createRole(
@@ -326,7 +326,7 @@ describe("dynamic access control", async (it) => {
 		expect(testRole2.data).toBeNull();
 		if (!testRole2.error) throw new Error("Test role error not found");
 		expect(testRole2.error.message).toEqual(
-			ORGANIZATION_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN,
+			ORGANIZATION_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN.message,
 		);
 	});
 
@@ -402,7 +402,7 @@ describe("dynamic access control", async (it) => {
 				headers: normalHeaders,
 			}),
 		).rejects.toThrow(
-			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_A_ROLE,
+			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_A_ROLE.message,
 		);
 	});
 
@@ -416,7 +416,7 @@ describe("dynamic access control", async (it) => {
 		} catch (error: any) {
 			if ("body" in error && "message" in error.body) {
 				expect(error.body.message).toBe(
-					ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+					ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.message,
 				);
 			} else {
 				throw error;
@@ -458,7 +458,7 @@ describe("dynamic access control", async (it) => {
 
 	it("should not be allowed to list roles without necessary permissions", async () => {
 		expect(auth.api.listOrgRoles({ headers: normalHeaders })).rejects.toThrow(
-			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE,
+			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE.message,
 		);
 	});
 
@@ -809,7 +809,7 @@ describe("dynamic access control", async (it) => {
 				headers: freshMemberHeaders,
 			}),
 		).rejects.toThrow(
-			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_A_ROLE,
+			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_A_ROLE.message,
 		);
 
 		// Admin should be able to update (has ac:update)

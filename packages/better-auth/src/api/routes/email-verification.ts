@@ -1,6 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { APIError } from "better-call";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { JWTPayload, JWTVerifyResult } from "jose";
 import { jwtVerify } from "jose";
 import { JWTExpired } from "jose/errors";
@@ -48,9 +48,10 @@ export async function sendVerificationEmailFn(
 ) {
 	if (!ctx.context.options.emailVerification?.sendVerificationEmail) {
 		ctx.context.logger.error("Verification email isn't enabled.");
-		throw new APIError("BAD_REQUEST", {
-			message: "Verification email isn't enabled",
-		});
+		throw APIError.from(
+			"BAD_REQUEST",
+			BASE_ERROR_CODES.VERIFICATION_EMAIL_NOT_ENABLED,
+		);
 	}
 	const token = await createEmailVerificationToken(
 		ctx.context.secret,
@@ -158,9 +159,10 @@ export const sendVerificationEmail = createAuthEndpoint(
 	async (ctx) => {
 		if (!ctx.context.options.emailVerification?.sendVerificationEmail) {
 			ctx.context.logger.error("Verification email isn't enabled.");
-			throw new APIError("BAD_REQUEST", {
-				message: "Verification email isn't enabled",
-			});
+			throw APIError.from(
+				"BAD_REQUEST",
+				BASE_ERROR_CODES.VERIFICATION_EMAIL_NOT_ENABLED,
+			);
 		}
 		const { email } = ctx.body;
 		const session = await getSessionFromCtx(ctx);
@@ -184,15 +186,13 @@ export const sendVerificationEmail = createAuthEndpoint(
 			});
 		}
 		if (session?.user.emailVerified) {
-			throw new APIError("BAD_REQUEST", {
-				message:
-					"You can only send a verification email to an unverified email",
-			});
+			throw APIError.from(
+				"BAD_REQUEST",
+				BASE_ERROR_CODES.EMAIL_ALREADY_VERIFIED,
+			);
 		}
 		if (session?.user.email !== email) {
-			throw new APIError("BAD_REQUEST", {
-				message: "You can only send a verification email to your own email",
-			});
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.EMAIL_MISMATCH);
 		}
 		await sendVerificationEmailFn(ctx, session.user);
 		return ctx.json({
@@ -276,8 +276,9 @@ export const verifyEmail = createAuthEndpoint(
 				}
 				throw ctx.redirect(`${ctx.query.callbackURL}?error=${error}`);
 			}
-			throw new APIError("UNAUTHORIZED", {
+			throw APIError.from("UNAUTHORIZED", {
 				message: error,
+				code: "VERIFICATION_ERROR",
 			});
 		}
 		const { token } = ctx.query;
@@ -350,9 +351,10 @@ export const verifyEmail = createAuthEndpoint(
 					user.user.id,
 				);
 				if (!newSession) {
-					throw new APIError("INTERNAL_SERVER_ERROR", {
-						message: "Failed to create session",
-					});
+					throw APIError.from(
+						"INTERNAL_SERVER_ERROR",
+						BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+					);
 				}
 				session = {
 					session: newSession,
@@ -469,9 +471,10 @@ export const verifyEmail = createAuthEndpoint(
 					user.user.id,
 				);
 				if (!session) {
-					throw new APIError("INTERNAL_SERVER_ERROR", {
-						message: "Failed to create session",
-					});
+					throw APIError.from(
+						"INTERNAL_SERVER_ERROR",
+						BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+					);
 				}
 				await setSessionCookie(ctx, {
 					session,
