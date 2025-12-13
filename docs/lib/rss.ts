@@ -18,8 +18,6 @@ export function getRSS() {
   for (const page of blogs.getPages()) {
     const url = page.url.replace("blogs/", "blog/");
 
-    console.log("author", page.data.author);
-
     feed.addItem({
       id: url,
       title: page.data.title,
