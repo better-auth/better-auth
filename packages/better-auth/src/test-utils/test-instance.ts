@@ -96,7 +96,7 @@ export async function getTestInstance<
 				clientSecret: "test",
 			},
 		},
-		secret: "better-auth.secret",
+		secret: "better-auth-secret-that-is-long-enough-for-validation-test",
 		database:
 			testWith === "postgres"
 				? { db: await getPostgres(), type: "postgres" }
@@ -240,7 +240,7 @@ export async function getTestInstance<
 			headers.set("cookie", `${current || ""}; ${name}=${value}`);
 		};
 		//@ts-expect-error
-		const { data, error } = await client.signIn.email({
+		const { data } = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
 			fetchOptions: {

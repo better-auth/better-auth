@@ -102,7 +102,7 @@ export const facebook = (options: FacebookOptions) => {
 					}
 
 					return !!jwtClaims;
-				} catch (error) {
+				} catch {
 					return false;
 				}
 			}

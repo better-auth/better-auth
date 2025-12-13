@@ -7,6 +7,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { safeJSONParse } from "@better-auth/core/utils";
 import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
@@ -24,7 +25,6 @@ import { parseSessionOutput, parseUserOutput } from "../../db";
 import type { InferSession, InferUser, Session, User } from "../../types";
 import type { Prettify } from "../../types/helper";
 import { getDate } from "../../utils/date";
-import { safeJSONParse } from "../../utils/json";
 
 export const getSession = <Option extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -45,6 +45,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								"application/json": {
 									schema: {
 										type: "object",
+										nullable: true,
 										properties: {
 											session: {
 												$ref: "#/components/schemas/Session",
@@ -596,11 +597,23 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 				const sessions = await ctx.context.internalAdapter.listSessions(
 					ctx.context.session.user.id,
 				);
-				const activeSessions = sessions.filter((session) => {
-					return session.expiresAt > new Date();
-				});
+				const activeSessions = sessions
+					.filter((session) => {
+						return session.expiresAt > new Date();
+					})
+					.map((session) => {
+						return {
+							...session,
+							token: undefined, // we don't need to return the token to the client
+							expiresAt: session.expiresAt.toISOString(),
+							createdAt: session.createdAt.toISOString(),
+							updatedAt: session.updatedAt.toISOString(),
+						};
+					});
 				return ctx.json(
-					activeSessions as unknown as Prettify<InferSession<Option>>[],
+					activeSessions as unknown as Prettify<
+						InferSession<Option> & { token: undefined }
+					>[],
 				);
 			} catch (e: any) {
 				ctx.context.logger.error(e);

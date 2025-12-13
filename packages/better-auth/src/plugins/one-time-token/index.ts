@@ -7,7 +7,7 @@ import * as z from "zod";
 import { sessionMiddleware } from "../../api";
 import { generateRandomString } from "../../crypto";
 import type { Session, User } from "../../types";
-import { defaultKeyHasher } from "..";
+import { defaultKeyHasher } from "./utils";
 
 export interface OneTimeTokenOptions {
 	/**
@@ -46,6 +46,12 @@ export interface OneTimeTokenOptions {
 		  )
 		| undefined;
 }
+
+const verifyOneTimeTokenBodySchema = z.object({
+	token: z.string().meta({
+		description: 'The token to verify. Eg: "some-token"',
+	}),
+});
 
 export const oneTimeToken = (options?: OneTimeTokenOptions | undefined) => {
 	const opts = {
@@ -134,11 +140,7 @@ export const oneTimeToken = (options?: OneTimeTokenOptions | undefined) => {
 				"/one-time-token/verify",
 				{
 					method: "POST",
-					body: z.object({
-						token: z.string().meta({
-							description: 'The token to verify. Eg: "some-token"',
-						}),
-					}),
+					body: verifyOneTimeTokenBodySchema,
 				},
 				async (c) => {
 					const { token } = c.body;

@@ -6,7 +6,7 @@ function checkHasPath(url: string): boolean {
 		const parsedUrl = new URL(url);
 		const pathname = parsedUrl.pathname.replace(/\/+$/, "") || "/";
 		return pathname !== "/";
-	} catch (error) {
+	} catch {
 		throw new BetterAuthError(
 			`Invalid base URL: ${url}. Please provide a valid base URL.`,
 		);
@@ -55,6 +55,7 @@ export function getBaseURL(
 	path?: string,
 	request?: Request,
 	loadEnv?: boolean,
+	trustedProxyHeaders?: boolean | undefined,
 ) {
 	if (url) {
 		return withPath(url, path);
@@ -76,7 +77,7 @@ export function getBaseURL(
 
 	const fromRequest = request?.headers.get("x-forwarded-host");
 	const fromRequestProto = request?.headers.get("x-forwarded-proto");
-	if (fromRequest && fromRequestProto) {
+	if (fromRequest && fromRequestProto && trustedProxyHeaders) {
 		return withPath(`${fromRequestProto}://${fromRequest}`, path);
 	}
 
@@ -102,7 +103,7 @@ export function getOrigin(url: string) {
 		// For custom URL schemes (like exp://), the origin property returns the string "null"
 		// instead of null. We need to handle this case and return null so the fallback logic works.
 		return parsedUrl.origin === "null" ? null : parsedUrl.origin;
-	} catch (error) {
+	} catch {
 		return null;
 	}
 }
@@ -111,7 +112,7 @@ export function getProtocol(url: string) {
 	try {
 		const parsedUrl = new URL(url);
 		return parsedUrl.protocol;
-	} catch (error) {
+	} catch {
 		return null;
 	}
 }
@@ -120,7 +121,7 @@ export function getHost(url: string) {
 	try {
 		const parsedUrl = new URL(url);
 		return parsedUrl.host;
-	} catch (error) {
+	} catch {
 		return null;
 	}
 }

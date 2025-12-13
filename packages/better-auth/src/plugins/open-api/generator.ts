@@ -102,6 +102,7 @@ export type OpenAPIModelSchema = {
 function getFieldSchema(field: DBFieldAttribute) {
 	const schema: FieldSchema = {
 		type: field.type === "date" ? "string" : field.type,
+		...(field.type === "date" && { format: "date-time" }),
 	};
 
 	if (field.defaultValue !== undefined) {
@@ -394,7 +395,7 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 	const paths: Record<string, Path> = {};
 
 	Object.entries(baseEndpoints.api).forEach(([_, value]) => {
-		if (ctx.options.disabledPaths?.includes(value.path)) return;
+		if (!value.path || ctx.options.disabledPaths?.includes(value.path)) return;
 		const options = value.options as EndpointOptions;
 		if (options.metadata?.SERVER_ONLY) return;
 		const path = toOpenApiPath(value.path);
@@ -474,7 +475,8 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 			})
 			.filter((x) => x !== null) as Endpoint[];
 		Object.entries(api).forEach(([key, value]) => {
-			if (ctx.options.disabledPaths?.includes(value.path)) return;
+			if (!value.path || ctx.options.disabledPaths?.includes(value.path))
+				return;
 			const options = value.options as EndpointOptions;
 			if (options.metadata?.SERVER_ONLY) return;
 			const path = toOpenApiPath(value.path);

@@ -15,24 +15,26 @@ import {
 	sessionMiddleware,
 } from "./session";
 
+const updateUserBodySchema = z.record(
+	z.string().meta({
+		description: "Field name must be a string",
+	}),
+	z.any(),
+);
+
 export const updateUser = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
 		"/update-user",
 		{
 			method: "POST",
 			operationId: "updateUser",
-			body: z.record(
-				z.string().meta({
-					description: "Field name must be a string",
-				}),
-				z.any(),
-			),
+			body: updateUserBodySchema,
 			use: [sessionMiddleware],
 			metadata: {
 				$Infer: {
 					body: {} as Partial<AdditionalUserFieldsInput<O>> & {
 						name?: string | undefined;
-						image?: string | undefined;
+						image?: string | undefined | null;
 					},
 				},
 				openapi: {
@@ -51,6 +53,7 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 										image: {
 											type: "string",
 											description: "The image of the user",
+											nullable: true,
 										},
 									},
 								},
@@ -310,7 +313,6 @@ export const changePassword = createAuthEndpoint(
 );
 
 export const setPassword = createAuthEndpoint(
-	"/set-password",
 	{
 		method: "POST",
 		body: z.object({
@@ -321,9 +323,6 @@ export const setPassword = createAuthEndpoint(
 				description: "The new password to set is required",
 			}),
 		}),
-		metadata: {
-			SERVER_ONLY: true,
-		},
 		use: [sensitiveSessionMiddleware],
 	},
 	async (ctx) => {

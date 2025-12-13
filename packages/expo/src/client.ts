@@ -141,7 +141,7 @@ export function getCookie(cookie: string) {
 	let parsed = {} as Record<string, StoredCookie>;
 	try {
 		parsed = JSON.parse(cookie) as Record<string, StoredCookie>;
-	} catch (e) {}
+	} catch {}
 	const toSend = Object.entries(parsed).reduce((acc, [key, value]) => {
 		if (value.expires && new Date(value.expires) < new Date()) {
 			return acc;
@@ -383,6 +383,13 @@ export const expoClient = (opts: ExpoClientOptions) => {
 									},
 								);
 							}
+
+							if (Platform.OS === "android") {
+								try {
+									Browser.dismissAuthSession();
+								} catch {}
+							}
+
 							const proxyURL = `${context.request.baseURL}/expo-authorization-proxy?authorizationURL=${encodeURIComponent(signInURL)}`;
 							const result = await Browser.openAuthSessionAsync(proxyURL, to);
 							if (result.type !== "success") return;

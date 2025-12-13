@@ -1,25 +1,23 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { isDevelopment, logger } from "@better-auth/core/env";
 import { APIError, createEmailVerificationToken } from "../api";
+import { setAccountCookie } from "../cookies/session-store";
 import type { Account, User } from "../types";
 import { setTokenUtil } from "./utils";
 
 export async function handleOAuthUserInfo(
 	c: GenericEndpointContext,
-	{
-		userInfo,
-		account,
-		callbackURL,
-		disableSignUp,
-		overrideUserInfo,
-	}: {
+	opts: {
 		userInfo: Omit<User, "createdAt" | "updatedAt">;
 		account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
 		callbackURL?: string | undefined;
 		disableSignUp?: boolean | undefined;
 		overrideUserInfo?: boolean | undefined;
+		isTrustedProvider?: boolean | undefined;
 	},
 ) {
+	const { userInfo, account, callbackURL, disableSignUp, overrideUserInfo } =
+		opts;
 	const dbUser = await c.context.internalAdapter
 		.findOAuthUser(
 			userInfo.email.toLowerCase(),
@@ -47,9 +45,9 @@ export async function handleOAuthUserInfo(
 		if (!hasBeenLinked) {
 			const trustedProviders =
 				c.context.options.account?.accountLinking?.trustedProviders;
-			const isTrustedProvider = trustedProviders?.includes(
-				account.providerId as "apple",
-			);
+			const isTrustedProvider =
+				opts.isTrustedProvider ||
+				trustedProviders?.includes(account.providerId as "apple");
 			if (
 				(!isTrustedProvider && !userInfo.emailVerified) ||
 				c.context.options.account?.accountLinking?.enabled === false
@@ -106,13 +104,7 @@ export async function handleOAuthUserInfo(
 					}).filter(([_, value]) => value !== undefined),
 				);
 				if (c.context.options.account?.storeAccountCookie) {
-					const accountDataCookie = c.context.authCookies.accountData;
-					await c.setSignedCookie(
-						accountDataCookie.name,
-						JSON.stringify(updateData),
-						c.context.secret,
-						accountDataCookie.options,
-					);
+					await setAccountCookie(c, updateData);
 				}
 
 				if (Object.keys(updateData).length > 0) {
@@ -175,13 +167,7 @@ export async function handleOAuthUserInfo(
 				);
 			user = createdUser;
 			if (c.context.options.account?.storeAccountCookie) {
-				const accountDataCookie = c.context.authCookies.accountData;
-				await c.setSignedCookie(
-					accountDataCookie.name,
-					JSON.stringify(createdAccount),
-					c.context.secret,
-					accountDataCookie.options,
-				);
+				await setAccountCookie(c, createdAccount);
 			}
 			if (
 				!userInfo.emailVerified &&
