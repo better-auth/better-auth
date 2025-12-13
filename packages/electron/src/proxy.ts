@@ -2,9 +2,21 @@ import type { BetterAuthClientPlugin } from "@better-auth/core";
 import { parseCookies } from "better-call";
 
 export const electronProxyClient = (options: {
-	protocol: {
-		scheme: string;
-	};
+	/**
+	 * The protocol scheme to use for deep linking in Electron.
+	 *
+	 * Should follow the reverse domain name notation to ensure uniqueness.
+	 *
+	 * Note that this must match the protocol scheme registered in the server plugin.
+	 *
+	 * @see {@link https://datatracker.ietf.org/doc/html/rfc8252#section-7.1}
+	 * @example "com.example.app"
+	 */
+	protocol:
+		| string
+		| {
+				scheme: string;
+		  };
 	/**
 	 * The callback path to use for authentication redirects.
 	 *
@@ -31,6 +43,8 @@ export const electronProxyClient = (options: {
 		...options,
 	};
 	const redirectCookieName = `${opts.cookiePrefix}.${opts.redirectCookieName}`;
+	const scheme =
+		typeof opts.protocol === "string" ? opts.protocol : opts.protocol.scheme;
 
 	return {
 		id: "electron-proxy",
@@ -48,7 +62,7 @@ export const electronProxyClient = (options: {
 					}
 					document.cookie = `${redirectCookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/`;
 					window.location.replace(
-						`${opts.protocol.scheme}:/${opts.callbackPath}#token=${redirectClient.substring("electron:".length)}`,
+						`${scheme}:/${opts.callbackPath}#token=${redirectClient.substring("electron:".length)}`,
 					);
 					return true;
 				},

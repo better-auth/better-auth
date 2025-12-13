@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
+import { safeJSONParse } from "better-auth";
 import {
 	APIError,
 	createAuthEndpoint,
@@ -17,9 +18,15 @@ export interface ElectronOptions {
 	/**
 	 * The duration (in seconds) for which the authorization code remains valid.
 	 *
-	 * @default 600 (10 minutes)
+	 * @default 300 (5 minutes)
 	 */
 	codeExpiresIn?: number | undefined;
+	/**
+	 * The duration (in seconds) for which the redirect cookie remains valid.
+	 *
+	 * @default 120 (2 minutes)
+	 */
+	redirectCookieExpiresIn?: number | undefined;
 	/**
 	 * The name of the cookie used for redirecting after authentication.
 	 *
@@ -37,7 +44,8 @@ export interface ElectronOptions {
 
 export const electron = (options?: ElectronOptions | undefined) => {
 	const opts = {
-		codeExpiresIn: 600,
+		codeExpiresIn: 300,
+		redirectCookieExpiresIn: 120,
 		redirectCookieName: "redirect_client",
 		cookiePrefix: "better-auth",
 		...(options || {}),
@@ -67,6 +75,31 @@ export const electron = (options?: ElectronOptions | undefined) => {
 		},
 		hooks: {
 			after: [
+				{
+					matcher: () => true,
+					handler: createAuthMiddleware(async (ctx) => {
+						const transferCookie = await ctx.getSignedCookie(
+							`${opts.cookiePrefix}.transfer_token`,
+							ctx.context.secret,
+						);
+						if (!ctx.context.newSession?.session || !transferCookie) {
+							return;
+						}
+
+						// Refresh the transfer cookie to extend its validity
+						// Avoids expiration during multi-step auth flows on active usage
+						// Can still expire when no endpoint is hit within the valid period
+						await ctx.setSignedCookie(
+							`${opts.cookiePrefix}.transfer_token`,
+							transferCookie,
+							ctx.context.secret,
+							{
+								...ctx.context.authCookies.sessionToken.options,
+								maxAge: opts.codeExpiresIn,
+							},
+						);
+					}),
+				},
 				{
 					matcher: (ctx) => {
 						return (
@@ -116,7 +149,16 @@ export const electron = (options?: ElectronOptions | undefined) => {
 						);
 						let transferPayload: z.infer<typeof querySchema> | null = null;
 						if (!!transferCookie) {
-							transferPayload = JSON.parse(transferCookie);
+							transferPayload = safeJSONParse(transferCookie);
+							await ctx.setSignedCookie(
+								`${opts.cookiePrefix}.transfer_token`,
+								"",
+								ctx.context.secret,
+								{
+									...ctx.context.authCookies.sessionToken.options,
+									maxAge: 0,
+								},
+							);
 						} else {
 							const query = querySchema.safeParse(ctx.query);
 							if (query.success) {
@@ -129,7 +171,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 
 						const { client_id, code_challenge, code_challenge_method, state } =
 							transferPayload;
-						if (client_id !== "electron") {
+						if (client_id?.toLowerCase() !== "electron") {
 							return;
 						}
 						if (!state) {
@@ -162,7 +204,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 
 						ctx.setCookie(redirectCookieName, code.identifier, {
 							...ctx.context.authCookies.sessionToken.options,
-							maxAge: opts.codeExpiresIn,
+							maxAge: opts.redirectCookieExpiresIn,
 							httpOnly: false,
 						});
 					}),
@@ -194,9 +236,12 @@ export const electron = (options?: ElectronOptions | undefined) => {
 						});
 					}
 
-					const tokenRecord = JSON.parse(token.value);
-
-					await ctx.context.internalAdapter.deleteVerificationValue(token.id);
+					const tokenRecord = safeJSONParse<Record<string, any>>(token.value);
+					if (!tokenRecord) {
+						throw new APIError("INTERNAL_SERVER_ERROR", {
+							message: "Invalid or expired token.",
+						});
+					}
 
 					if (tokenRecord.state !== ctx.body.state) {
 						throw new APIError("BAD_REQUEST", {
@@ -210,17 +255,23 @@ export const electron = (options?: ElectronOptions | undefined) => {
 						});
 					}
 					if (tokenRecord.codeChallengeMethod === "s256") {
-						if (
-							!timingSafeEqual(
-								Buffer.from(tokenRecord.codeChallenge, "utf-8"),
-								Buffer.from(
-									base64Url.encode(
-										await createHash("SHA-256").digest(ctx.body.code_verifier),
-									),
-									"utf-8",
-								),
-							)
-						) {
+						const codeChallenge = Buffer.from(
+							tokenRecord.codeChallenge,
+							"utf-8",
+						);
+						const codeVerifier = Buffer.from(
+							base64Url.encode(
+								await createHash("SHA-256").digest(ctx.body.code_verifier),
+							),
+						);
+
+						if (codeChallenge.length !== codeVerifier.length) {
+							throw new APIError("BAD_REQUEST", {
+								message: "Invalid code verifier",
+							});
+						}
+
+						if (!timingSafeEqual(codeChallenge, codeVerifier)) {
 							throw new APIError("BAD_REQUEST", {
 								message: "Invalid code verifier",
 							});
@@ -232,6 +283,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 							});
 						}
 					}
+					await ctx.context.internalAdapter.deleteVerificationValue(token.id);
 
 					const user = await ctx.context.internalAdapter.findUserById(
 						tokenRecord.userId,

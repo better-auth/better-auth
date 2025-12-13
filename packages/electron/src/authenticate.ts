@@ -1,8 +1,8 @@
-import { randomBytes } from "node:crypto";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import type { BetterFetch } from "@better-fetch/fetch";
 import { generateRandomString } from "better-auth/crypto";
+import { isProcessType } from "./helper";
 import type { ElectronClientOptions } from "./types";
 
 export const kCodeVerifier = Symbol.for("better-auth:code_verifier");
@@ -17,6 +17,11 @@ export async function requestAuth(options: ElectronClientOptions) {
 			"`requestAuth` can only be called in an Electron environment",
 		);
 	}
+
+	if (!isProcessType("browser")) {
+		throw new Error("`requestAuth` can only be called in the main process");
+	}
+	const { randomBytes } = await import("node:crypto");
 
 	const state = generateRandomString(16, "A-Z", "a-z", "0-9");
 	const code_verifier = base64Url.encode(randomBytes(32));
@@ -71,5 +76,6 @@ export async function authenticate(
 				ctx.data.user,
 			);
 		},
+		throw: true,
 	});
 }

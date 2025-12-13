@@ -3,7 +3,7 @@
 import type { BetterAuthClientPlugin, ClientStore } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
 import { isDevelopment } from "@better-auth/core/env";
-import type { BetterFetchError } from "@better-fetch/fetch";
+import type { ErrorContext } from "@better-fetch/fetch";
 import { requestAuth } from "./authenticate";
 import {
 	getCookie,
@@ -45,10 +45,15 @@ export const electronClient = (options: ElectronClientOptions) => {
 	const opts = {
 		storagePrefix: "better-auth",
 		cookiePrefix: "better-auth",
-		namespace: "auth",
+		namespace: "better-auth",
 		callbackPath: "/auth/callback",
 		...options,
 	};
+
+	const { scheme } =
+		typeof opts.protocol === "string"
+			? { scheme: opts.protocol }
+			: opts.protocol;
 
 	let store: ClientStore | null = null;
 	const cookieName = `${opts.storagePrefix}_cookie`;
@@ -58,10 +63,10 @@ export const electronClient = (options: ElectronClientOptions) => {
 	if (
 		isDevelopment() &&
 		// At least 1 dot, no leading or trailing dot, no consecutive dots
-		/^(?!\.)(?!.*\.\.)(?!.*\.$)[^.]+\.[^.]+$/.test(opts.protocol.scheme)
+		/^(?!\.)(?!.*\.\.)(?!.*\.$)[^.]+\.[^.]+$/.test(scheme)
 	) {
 		console.warn(
-			"The provided scheme does not follow the reverse domain name notation. For example, `app.example.com` becomes `com.example.app`.",
+			"The provided scheme does not follow the reverse domain name notation. For example: `app.example.com` -> `com.example.app`.",
 		);
 	}
 
@@ -112,7 +117,10 @@ export const electronClient = (options: ElectronClientOptions) => {
 
 						webContents
 							.getFocusedWebContents()
-							?.send(`${opts.namespace}:error`, context.error);
+							?.send(`${opts.namespace}:error`, {
+								...context.error,
+								path: context.request.url,
+							});
 					},
 				},
 				init: async (url, options) => {
@@ -131,7 +139,7 @@ export const electronClient = (options: ElectronClientOptions) => {
 					options.headers = {
 						...options.headers,
 						cookie,
-						"electron-origin": `${opts.protocol.scheme}:/`,
+						"electron-origin": `${scheme}:/`,
 						"x-skip-oauth-proxy": "true",
 					};
 
@@ -163,10 +171,60 @@ export const electronClient = (options: ElectronClientOptions) => {
 			};
 
 			return {
+				/**
+				 * Gets the stored cookie.
+				 *
+				 * You can use this to get the cookie stored in
+				 * the device and use it in your fetch requests.
+				 *
+				 * @example
+				 * ```ts
+				 * const cookie = await client.getCookie();
+				 * await fetch("https://api.example.com", {
+				 *   headers: {
+				 *    cookie,
+				 *   },
+				 * });
+				 * ```
+				 */
 				getCookie: getCookieFn,
+				/**
+				 * Initiates the authentication process.
+				 * Opens the system's default browser for user authentication.
+				 */
 				requestAuth: () => requestAuth(opts),
 				/**
 				 * Sets up the Electron main process for authentication.
+				 *
+				 * - Registers a custom protocol scheme.
+				 * - Sets up Content Security Policy (CSP) headers.
+				 * - Configures IPC handlers for communication between the main and renderer processes.
+				 *
+				 * @example
+				 * ```ts
+				 * // main.ts
+				 * import electron, { app, BrowserWindow } from "electron";
+				 * import { resolve } from "node:path";
+				 * import { client } from "./auth-client";
+				 *
+				 * let win: BrowserWindow | null = null;
+				 *
+				 * function createWindow() {
+				 *   win = new BrowserWindow({
+				 *     webPreferences: {
+				 *       preload: path.join(__dirname, 'preload.mjs'),
+				 *       nodeIntegration: true,
+				 *     },
+				 *   });
+				 * }
+				 *
+				 * client.setupMain(electron, {
+				 *   window: () => win,
+				 *   resolve,
+				 * });
+				 *
+				 * app.whenReady().then(createWindow);
+				 * ```
 				 */
 				setupMain: (
 					electron: {
@@ -178,44 +236,10 @@ export const electronClient = (options: ElectronClientOptions) => {
 					ctx: {
 						/**
 						 * Gets the main BrowserWindow instance.
-						 *
-						 * @example
-						 * ```ts
-						 * import * as electron from "electron";
-						 * import { resolve } from "node:path";
-						 *
-						 * let win: Electron.BrowserWindow | null = null;
-						 *
-						 * authClient.setupMain(electron, {
-						 *   window: () => win,
-						 *   resolve,
-						 * });
-						 *
-						 * app.whenReady().then(() => {
-						 *   win = createWindow();
-						 * });
-						 * ```
 						 */
 						window: () => Electron.BrowserWindow | null | undefined;
 						/**
 						 * Resolves a given path relative to the main process file.
-						 *
-						 * @example
-						 * ```ts
-						 * import * as electron from "electron";
-						 * import { resolve } from "node:path";
-						 *
-						 * let win: Electron.BrowserWindow | null = null;
-						 *
-						 * authClient.setupMain(electron, {
-						 *   resolve,
-						 *   window: () => win,
-						 * });
-						 *
-						 * app.whenReady().then(() => {
-						 *   win = createWindow();
-						 * });
-						 * ```
 						 */
 						resolve: (path: string) => string;
 					},
@@ -233,6 +257,15 @@ export const electronClient = (options: ElectronClientOptions) => {
 				},
 				/**
 				 * Sets up Electron IPC handlers for authentication.
+				 *
+				 * @example
+				 * ```ts
+				 * // preload.ts
+				 * import electron from "electron";
+				 * import { client } from "./auth-client";
+				 *
+				 * client.setupIPC(electron);
+				 * ```
 				 */
 				setupIPC: (electron: {
 					ipcMain?: Electron.IpcMain | undefined;
@@ -261,7 +294,7 @@ export const electronClient = (options: ElectronClientOptions) => {
 						);
 						contextBridge.exposeInMainWorld(
 							"onAuthError",
-							(callback: (context: BetterFetchError) => unknown) => {
+							(callback: (context: ErrorContext) => unknown) => {
 								ipcRenderer.on(`${opts.namespace}:error`, (_event, context) =>
 									callback(context),
 								);
@@ -274,13 +307,30 @@ export const electronClient = (options: ElectronClientOptions) => {
 				},
 				$Infer: {} as {
 					Window: {
+						/**
+						 * Initiates the authentication process.
+						 * Opens the system's default browser for user authentication.
+						 */
 						requestAuth: () => Promise<void>;
+						/**
+						 * Registers a callback to be invoked when the user is authenticated.
+						 *
+						 * @param callback - The callback function to be invoked with the authenticated user data.
+						 */
 						onAuthenticated: (
 							callback: (user: User & Record<string, any>) => unknown,
 						) => void;
+						/**
+						 * Registers a callback to be invoked when an error occurs.
+						 *
+						 * @param callback - The callback function to be invoked with the error context.
+						 */
 						onAuthError: (
-							error: (context: BetterFetchError) => unknown,
+							error: (context: ErrorContext & { path: string }) => unknown,
 						) => void;
+						/**
+						 * Signs out the current user.
+						 */
 						signOut: () => Promise<void>;
 					};
 				},

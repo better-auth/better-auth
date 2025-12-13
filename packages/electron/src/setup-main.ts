@@ -20,16 +20,53 @@ export function setupCSP(
 ) {
 	app.whenReady().then(() => {
 		session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+			const origin = new URL(clientOptions?.baseURL || "", "http://localhost")
+				.origin;
+			const cspKey = Object.keys(details.responseHeaders || {}).find(
+				(k) => k.toLowerCase() === "content-security-policy",
+			);
+			if (!cspKey) {
+				return callback({
+					responseHeaders: {
+						...(details.responseHeaders || {}),
+						"content-security-policy": `connect-src 'self' ${origin}`,
+					},
+				});
+			}
+			const policy = details.responseHeaders?.[cspKey]?.toString() || "";
+			const csp = new Map<string, string[]>();
+
+			for (let token of policy.split(";")) {
+				token = token.trim();
+
+				if (!token || !/^[\x00-\x7f]*$/.test(token)) continue;
+
+				const [rawDirectiveName, ...directiveValue] =
+					token.split(/[\t\n\f\r]+/);
+				const directiveName = rawDirectiveName?.toLowerCase();
+				if (!directiveName) continue;
+
+				if (csp.has(directiveName)) continue;
+
+				csp.set(directiveName, directiveValue);
+			}
+
+			if (csp.has("connect-src")) {
+				const values = csp.get("connect-src") || [];
+				if (!values.includes(origin)) {
+					values.push(origin);
+				}
+				csp.set("connect-src", values);
+			} else {
+				csp.set("connect-src", ["'self'", origin]);
+			}
+
 			callback({
 				responseHeaders: {
 					...details.responseHeaders,
-					// TODO: Only append `connect-src` or allow custom config
-					"content-security-policy": [
-						"default-src 'self'",
-						"style-src 'self' 'unsafe-inline'",
-						"script-src 'self' 'unsafe-inline'",
-						`connect-src 'self' ${new URL(clientOptions?.baseURL || "", "http://localhost").origin}`,
-					].join("; "),
+					"content-security-policy": Array.from(csp.entries())
+						.map(([k, v]) => `${k} ${v.join(" ")}`)
+						.join("; "),
 				},
 			});
 		});
@@ -80,13 +117,20 @@ export function registerProtocolScheme(
 		window: () => Electron.BrowserWindow | null | undefined;
 	},
 ) {
+	const { scheme, privileges = {} } =
+		typeof options.protocol === "string"
+			? {
+					scheme: options.protocol,
+				}
+			: options.protocol;
+
 	protocol.registerSchemesAsPrivileged([
 		{
-			scheme: options.protocol.scheme,
+			scheme,
 			privileges: {
 				standard: false,
 				secure: true,
-				...(options.protocol.privileges || {}),
+				...privileges,
 			},
 		},
 	]);
@@ -95,20 +139,18 @@ export function registerProtocolScheme(
 	if (process?.defaultApp) {
 		if (process.argv.length >= 2 && typeof process.argv[1] === "string") {
 			hasSetupProtocolClient = app.setAsDefaultProtocolClient(
-				options.protocol.scheme,
+				scheme,
 				process.execPath,
 				[resolvePath(process.argv[1])],
 			);
 		}
 	} else {
-		hasSetupProtocolClient = app.setAsDefaultProtocolClient(
-			options.protocol.scheme,
-		);
+		hasSetupProtocolClient = app.setAsDefaultProtocolClient(scheme);
 	}
 
 	if (!hasSetupProtocolClient) {
 		console.error(
-			`Failed to register protocol ${options.protocol.scheme} as default protocol client.`,
+			`Failed to register protocol ${scheme} as default protocol client.`,
 		);
 	}
 
@@ -120,11 +162,11 @@ export function registerProtocolScheme(
 		if (!parsedURL) {
 			return;
 		}
-		if (!url.startsWith(`${options.protocol.scheme}:/`)) {
+		if (!url.startsWith(`${scheme}:/`)) {
 			return;
 		}
 		const { protocol, pathname, hostname, hash } = parsedURL;
-		if (protocol !== `${options.protocol.scheme}:`) {
+		if (protocol !== `${scheme}:`) {
 			return;
 		}
 

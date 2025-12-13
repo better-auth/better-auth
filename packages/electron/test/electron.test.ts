@@ -10,7 +10,7 @@ import { generateRandomString } from "better-auth/crypto";
 import { getMigrations } from "better-auth/db";
 import { oAuthProxy } from "better-auth/plugins";
 import Database from "better-sqlite3";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { electron } from "../src";
 import { authenticate, kCodeVerifier, kState } from "../src/authenticate";
 import type { ElectronClientOptions } from "../src/client";
@@ -129,7 +129,7 @@ function testUtils(extraOpts?: Parameters<typeof betterAuth>[0]) {
 		});
 	};
 
-	return { auth, proxyClient, client, options, runInProcess };
+	return { auth, proxyClient, client, options, runInProcess, customFetchImpl };
 }
 
 describe("electron", () => {
@@ -138,20 +138,27 @@ describe("electron", () => {
 	beforeAll(async () => {
 		const { runMigrations } = await getMigrations(auth.options);
 		await runMigrations();
+		vi.useFakeTimers();
+	});
+	afterAll(() => {
+		vi.useRealTimers();
 	});
 
 	it("should open external url in default browser", async () => {
-		await client.requestAuth();
+		await runInProcess("browser", async () => {
+			await client.requestAuth();
 
-		(globalThis as any)[kCodeVerifier] = undefined;
-		(globalThis as any)[kState] = undefined;
+			(globalThis as any)[kCodeVerifier] = undefined;
+			(globalThis as any)[kState] = undefined;
 
-		expect(mockElectron.shell.openExternal).toHaveBeenCalledWith(
-			expect.stringContaining(options.redirectURL),
-			{
-				activate: true,
-			},
-		);
+			expect(mockElectron.shell.openExternal).toHaveBeenCalledWith(
+				expect.stringContaining(options.redirectURL),
+				{
+					activate: true,
+				},
+			);
+		});
+		await expect(client.requestAuth()).rejects.toThrowError();
 	});
 
 	it("should set redirect cookie after signing in", async () => {
@@ -180,7 +187,7 @@ describe("electron", () => {
 					expect(redirectCookie).toBeDefined();
 					expect(redirectCookie?.value.startsWith("electron")).toBe(true);
 					expect(redirectCookie?.httponly).not.toBe(true);
-					expect(redirectCookie?.["max-age"]).toStrictEqual(600);
+					expect(redirectCookie?.["max-age"]).toStrictEqual(120);
 				},
 				customFetchImpl: (url, init) => {
 					const req = new Request(url.toString(), init);
@@ -216,7 +223,7 @@ describe("electron", () => {
 						codeChallengeMethod: "s256",
 						state: "abc",
 					}),
-					expiresAt: new Date(Date.now() + 600 * 1000),
+					expiresAt: new Date(Date.now() + 300 * 1000),
 				},
 			});
 
@@ -264,7 +271,7 @@ describe("electron", () => {
 					codeChallengeMethod: "plain",
 					state: "abc",
 				}),
-				expiresAt: new Date(Date.now() + 600 * 1000),
+				expiresAt: new Date(Date.now() + 300 * 1000),
 			},
 		});
 
@@ -306,7 +313,7 @@ describe("electron", () => {
 				value: JSON.stringify({
 					userId: user.id,
 				}),
-				expiresAt: new Date(Date.now() + 600 * 1000),
+				expiresAt: new Date(Date.now() + 300 * 1000),
 			},
 		});
 
@@ -345,7 +352,7 @@ describe("electron", () => {
 					codeChallenge: "test-challenge",
 					codeChallengeMethod: "plain",
 				}),
-				expiresAt: new Date(Date.now() + 600 * 1000),
+				expiresAt: new Date(Date.now() + 300 * 1000),
 			},
 		});
 
@@ -364,6 +371,115 @@ describe("electron", () => {
 		).rejects.toThrowError("State not found.");
 	});
 
+	it("should verify that state parameter matches", async () => {
+		const { user } = await auth.api.signInEmail({
+			body: {
+				email: "test@test.com",
+				password: "password",
+			},
+		});
+
+		(globalThis as any)[kCodeVerifier] = "test-challenge";
+		(globalThis as any)[kState] = "abc";
+
+		const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
+		await (await auth.$context).adapter.create({
+			model: "verification",
+			data: {
+				identifier: `electron:${identifier}`,
+				value: JSON.stringify({
+					userId: user.id,
+					codeChallenge: "test-challenge",
+					codeChallengeMethod: "plain",
+					state: "def",
+				}),
+				expiresAt: new Date(Date.now() + 300 * 1000),
+			},
+		});
+
+		await expect(
+			runInProcess("browser", () =>
+				authenticate(
+					client.$fetch,
+					options,
+					{
+						token: identifier,
+					},
+					// @ts-expect-error
+					() => mockElectron.BrowserWindow,
+				),
+			).catch((err: Error) => {
+				expect(err.message).toBe("state mismatch");
+			}),
+		).rejects.toThrowError("BAD_REQUEST");
+	});
+
+	it("should reject expired tokens", async () => {
+		const { user } = await auth.api.signInEmail({
+			body: {
+				email: "test@test.com",
+				password: "password",
+			},
+		});
+
+		(globalThis as any)[kCodeVerifier] = "test-challenge";
+		(globalThis as any)[kState] = "abc";
+
+		const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
+		await (await auth.$context).adapter.create({
+			model: "verification",
+			data: {
+				identifier: `electron:${identifier}`,
+				value: JSON.stringify({
+					userId: user.id,
+					codeChallenge: "test-challenge",
+					codeChallengeMethod: "plain",
+					state: "abc",
+				}),
+				expiresAt: new Date(Date.now() + 999),
+			},
+		});
+
+		vi.advanceTimersByTime(1000);
+
+		await expect(
+			runInProcess("browser", () =>
+				authenticate(
+					client.$fetch,
+					options,
+					{
+						token: identifier,
+					},
+					// @ts-expect-error
+					() => mockElectron.BrowserWindow,
+				),
+			).catch((err: Error) => {
+				expect(err.message).toBe("state mismatch");
+			}),
+		).rejects.toThrowError("NOT_FOUND");
+	});
+
+	it("should reject invalid/non-existent tokens", async () => {
+		(globalThis as any)[kCodeVerifier] = "test-challenge";
+		(globalThis as any)[kState] = "abc";
+
+		await expect(
+			runInProcess("browser", () =>
+				authenticate(
+					client.$fetch,
+					options,
+					{
+						token: "non-existent",
+					},
+					// @ts-expect-error
+					() => mockElectron.BrowserWindow,
+				),
+			).catch((err: Error) => {
+				expect(err.message).toBe("state mismatch");
+			}),
+		).rejects.toThrowError("NOT_FOUND");
+	});
+
 	it("should emit error event on failure", () =>
 		runInProcess("browser", async () => {
 			await client.changeEmail({
@@ -372,7 +488,7 @@ describe("electron", () => {
 			});
 
 			expect(mockElectron.BrowserWindow.send).toHaveBeenCalledWith(
-				"auth:error",
+				"better-auth:error",
 				expect.objectContaining({
 					status: 400,
 				}),
@@ -583,4 +699,56 @@ describe("electron", () => {
 				"Requests must be made from the Electron main process",
 			);
 		}));
+
+	it("should allow independent cookiePrefix configuration", async () => {
+		const { hasBetterAuthCookies } = await import("../src/cookies");
+
+		const customCookieHeader = "my-app.session_token=abc; Path=/";
+
+		expect(hasBetterAuthCookies(customCookieHeader, "my-app")).toBe(true);
+
+		expect(hasBetterAuthCookies(customCookieHeader, "better-auth")).toBe(false);
+	});
+
+	it("should support array of cookie prefixes", async () => {
+		const { hasBetterAuthCookies } = await import("../src/cookies");
+
+		// Test with multiple prefixes - should match any of them
+		const betterAuthHeader = "better-auth.session_token=abc; Path=/";
+		expect(
+			hasBetterAuthCookies(betterAuthHeader, ["better-auth", "my-app"]),
+		).toBe(true);
+
+		const myAppHeader = "my-app.session_data=xyz; Path=/";
+		expect(hasBetterAuthCookies(myAppHeader, ["better-auth", "my-app"])).toBe(
+			true,
+		);
+
+		const otherAppHeader = "other-app.session_token=def; Path=/";
+		expect(
+			hasBetterAuthCookies(otherAppHeader, ["better-auth", "my-app"]),
+		).toBe(false);
+
+		// Test with passkey cookies
+		const passkeyHeader1 = "better-auth-passkey=xyz; Path=/";
+		expect(
+			hasBetterAuthCookies(passkeyHeader1, ["better-auth", "my-app"]),
+		).toBe(true);
+
+		const passkeyHeader2 = "my-app-passkey=xyz; Path=/";
+		expect(
+			hasBetterAuthCookies(passkeyHeader2, ["better-auth", "my-app"]),
+		).toBe(true);
+
+		// Test with __Secure- prefix
+		const secureHeader = "__Secure-my-app.session_token=abc; Path=/";
+		expect(hasBetterAuthCookies(secureHeader, ["better-auth", "my-app"])).toBe(
+			true,
+		);
+
+		// Test with empty array (should check for suffixes)
+		const sessionTokenHeader = "session_token=abc; Path=/";
+		expect(hasBetterAuthCookies(sessionTokenHeader, [])).toBe(false);
+		expect(hasBetterAuthCookies(sessionTokenHeader, [""])).toBe(true);
+	});
 });
