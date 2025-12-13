@@ -1,6 +1,7 @@
 import { passkey } from "@better-auth/passkey";
 import { stripe } from "@better-auth/stripe";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
+import type { BetterAuthOptions } from "better-auth";
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 import {
@@ -49,10 +50,8 @@ if (!dialect) {
 	throw new Error("No dialect found");
 }
 
-export const auth = betterAuth({
+const authOptions = {
 	appName: "Better Auth Demo",
-	// If not explicitly set, the system will check the environment variable process.env.BETTER_AUTH_URL
-	// baseURL: process.env.BETTER_AUTH_URL,
 	database: {
 		dialect,
 		type: "sqlite",
@@ -177,15 +176,6 @@ export const auth = betterAuth({
 		}),
 		nextCookies(),
 		oneTap(),
-		customSession(async (session) => {
-			return {
-				...session,
-				user: {
-					...session.user,
-					dd: "test",
-				},
-			};
-		}),
 		stripe({
 			stripeClient: new Stripe(process.env.STRIPE_KEY || "sk_test_"),
 			stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
@@ -243,8 +233,33 @@ export const auth = betterAuth({
 		"exp://",
 		"https://appleid.apple.com",
 	],
+} satisfies BetterAuthOptions;
+
+export const auth = betterAuth({
+	...authOptions,
+	plugins: [
+		...(authOptions.plugins ?? []),
+		customSession(
+			async ({ user, session }) => {
+				return {
+					user: {
+						...user,
+						customField: "customField",
+					},
+					session,
+				};
+			},
+			authOptions,
+			{ shouldMutateListDeviceSessionsEndpoint: true },
+		),
+	],
 });
 
 export type Session = typeof auth.$Infer.Session;
 export type ActiveOrganization = typeof auth.$Infer.ActiveOrganization;
 export type Invitation = typeof auth.$Infer.Invitation;
+
+// should we improve this
+export type DeviceSession = Awaited<
+	ReturnType<typeof auth.api.listDeviceSessions>
+>[number];
