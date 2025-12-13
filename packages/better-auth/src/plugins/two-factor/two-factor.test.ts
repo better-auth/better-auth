@@ -650,19 +650,20 @@ describe("two factor auth API", async () => {
 
 describe("view backup codes", async () => {
 	const sendOTP = vi.fn();
-	const { auth, signInWithTestUser, testUser } = await getTestInstance({
-		secret: DEFAULT_SECRET,
-		plugins: [
-			twoFactor({
-				otpOptions: {
-					sendOTP({ otp }) {
-						sendOTP(otp);
+	const { auth, signInWithTestUser, testUser, customFetchImpl } =
+		await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: {
+						sendOTP({ otp }) {
+							sendOTP(otp);
+						},
 					},
-				},
-				skipVerificationOnEnable: true,
-			}),
-		],
-	});
+					skipVerificationOnEnable: true,
+				}),
+			],
+		});
 	let { headers } = await signInWithTestUser();
 
 	let session = await auth.api.getSession({ headers });
@@ -719,5 +720,19 @@ describe("view backup codes", async () => {
 			expect(code.length).toBeGreaterThan(0);
 		});
 		expect(viewResult.backupCodes).toEqual(generateResult.backupCodes);
+	});
+
+	it("should not expose viewBackupCodes to client", async () => {
+		const response = await customFetchImpl(
+			"http://localhost:3000/api/auth/two-factor/view-backup-codes",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({ userId }),
+			},
+		);
+		expect(response.status).toBe(404);
 	});
 });

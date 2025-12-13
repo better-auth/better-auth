@@ -41,6 +41,7 @@ export async function generateState(
 		 */
 		expiresAt: Date.now() + 10 * 60 * 1000,
 		requestSignUp: c.body?.requestSignUp,
+		state,
 	};
 
 	await setOAuthState(stateData);
@@ -113,10 +114,16 @@ export async function parseState(c: GenericEndpointContext) {
 			})
 			.optional(),
 		requestSignUp: z.boolean().optional(),
+		state: z.string().optional(),
 	});
 
 	let parsedData: z.infer<typeof stateDataSchema>;
-
+	/**
+	 * This is generally cause security issue and should only be used in
+	 * dev or staging environments. It's currently used by the oauth-proxy
+	 * plugin
+	 */
+	const skipStateCookieCheck = c.context.oauthConfig?.skipStateCookieCheck;
 	if (storeStateStrategy === "cookie") {
 		// Retrieve state data from encrypted cookie
 		const stateCookie = c.context.createAuthCookie("oauth_state");
@@ -147,6 +154,21 @@ export async function parseState(c: GenericEndpointContext) {
 			throw c.redirect(`${errorURL}?error=please_restart_the_process`);
 		}
 
+		const skipStateCookieCheck = c.context.oauthConfig?.skipStateCookieCheck;
+		if (
+			!skipStateCookieCheck &&
+			parsedData.state &&
+			parsedData.state !== state
+		) {
+			c.context.logger.error("State Mismatch. State parameter does not match", {
+				expected: parsedData.state,
+				received: state,
+			});
+			const errorURL =
+				c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
+			throw c.redirect(`${errorURL}?error=state_mismatch`);
+		}
+
 		// Clear the cookie after successful parsing
 		c.setCookie(stateCookie.name, "", {
 			maxAge: 0,
@@ -170,12 +192,7 @@ export async function parseState(c: GenericEndpointContext) {
 			stateCookie.name,
 			c.context.secret,
 		);
-		/**
-		 * This is generally cause security issue and should only be used in
-		 * dev or staging environments. It's currently used by the oauth-proxy
-		 * plugin
-		 */
-		const skipStateCookieCheck = c.context.oauthConfig?.skipStateCookieCheck;
+
 		if (
 			!skipStateCookieCheck &&
 			(!stateCookieValue || stateCookieValue !== state)

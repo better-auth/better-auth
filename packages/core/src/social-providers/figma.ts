@@ -100,7 +100,7 @@ export const figma = (options: FigmaOptions) => {
 						name: profile.handle,
 						email: profile.email,
 						image: profile.img_url,
-						emailVerified: !!profile.email,
+						emailVerified: false,
 						...userMap,
 					},
 					data: profile,

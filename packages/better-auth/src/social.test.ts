@@ -782,6 +782,7 @@ describe("signin", async () => {
 			expiresAt: expect.any(Number),
 			invitedBy: "user-123",
 			errorURL: "http://localhost:3000/api/auth/error",
+			state: expect.any(String),
 		});
 	});
 

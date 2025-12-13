@@ -97,7 +97,7 @@ export const notion = (options: NotionOptions) => {
 					name: userProfile.name || "Notion User",
 					email: userProfile.person?.email || null,
 					image: userProfile.avatar_url,
-					emailVerified: !!userProfile.person?.email,
+					emailVerified: false,
 					...userMap,
 				},
 				data: userProfile,

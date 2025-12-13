@@ -345,7 +345,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 								// Only notify $sessionSignal if the session cookie values actually changed
 								// This prevents infinite refetching when the server sends the same cookie with updated expiry
 								if (hasSessionCookieChanged(prevCookie, toSetCookie)) {
-									await storage.setItem(cookieName, toSetCookie);
+									storage.setItem(cookieName, toSetCookie);
 									store?.notify("$sessionSignal");
 								} else {
 									// Still update the storage to refresh expiry times, but don't trigger refetch
