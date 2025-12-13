@@ -151,10 +151,10 @@ Electron is a popular framework for building cross-platform desktop applications
       This plugin is responsible for redirecting back to the Electron application after authentication.
 
       ```ts title="web/lib/auth-client.ts"
-      import { betterAuthClient } from "better-auth/client";
+      import { createAuthClient } from "better-auth/client";
       import { electronProxyClient } from "@better-auth/electron/proxy";
 
-      export const authClient = betterAuthClient({
+      export const authClient = createAuthClient({
         plugins: [
           electronProxyClient({
             protocol: {

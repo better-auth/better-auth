@@ -115,18 +115,20 @@ function testUtils(extraOpts?: Parameters<typeof betterAuth>[0]) {
 			},
 		});
 
-		await cb();
-
-		Object.defineProperties(process, {
-			type: {
-				configurable: true,
-				value: originalType,
-			},
-			versions: {
-				configurable: true,
-				value: originalVersions,
-			},
-		});
+		try {
+			await cb();
+		} finally {
+			Object.defineProperties(process, {
+				type: {
+					configurable: true,
+					value: originalType,
+				},
+				versions: {
+					configurable: true,
+					value: originalVersions,
+				},
+			});
+		}
 	};
 
 	return { auth, proxyClient, client, options, runInProcess, customFetchImpl };

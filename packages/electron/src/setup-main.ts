@@ -41,8 +41,7 @@ export function setupCSP(
 
 				if (!token || !/^[\x00-\x7f]*$/.test(token)) continue;
 
-				const [rawDirectiveName, ...directiveValue] =
-					token.split(/[\t\n\f\r]+/);
+				const [rawDirectiveName, ...directiveValue] = token.split(/\s+/);
 				const directiveName = rawDirectiveName?.toLowerCase();
 				if (!directiveName) continue;
 
@@ -210,7 +209,7 @@ export function registerProtocolScheme(
 
 			if (!url) {
 				const maybeURL = commandLine.pop();
-				if (maybeURL === "string" && maybeURL.trim() !== "") {
+				if (typeof maybeURL === "string" && maybeURL.trim() !== "") {
 					try {
 						url = new URL(maybeURL).toString();
 					} catch {
