@@ -5,7 +5,7 @@ import { auth } from "@/lib/auth";
 import { OrganizationCard } from "./organization-card";
 import UserCard from "./user-card";
 
-export default async function DashboardPage() {
+export default async function Page() {
 	const requestHeaders = await headers();
 
 	const session = await auth.api.getSession({

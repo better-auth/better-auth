@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
 
-export default function DeviceAuthorizationPage() {
+export default function Page() {
 	const router = useRouter();
 	const params = useSearchParams();
 	const user_code = params.get("user_code");

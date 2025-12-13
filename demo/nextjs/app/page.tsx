@@ -41,7 +41,7 @@ const features = [
 	},
 ];
 
-export default async function Home() {
+export default async function Page() {
 	const session = await auth.api.getSession({
 		headers: await headers(),
 	});

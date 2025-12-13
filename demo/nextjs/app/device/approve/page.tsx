@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { authClient } from "@/lib/auth-client";
 
-export default function DeviceApprovalPage() {
+export default function Page() {
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const userCode = searchParams.get("user_code");

@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
 
-export default function Component() {
+export default function Page() {
 	const [otp, setOtp] = useState("");
 	const [isOtpSent, setIsOtpSent] = useState(false);
 	const [message, setMessage] = useState("");
