@@ -49,6 +49,12 @@ Electron is a popular framework for building cross-platform desktop applications
         emailAndPassword: {
           enabled: true, // Enable authentication using email and password.
         },
+        social: {
+          google: {
+            clientId: process.env.GOOGLE_CLIENT_ID!,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+          },
+        },
       });
       ```
     </Step>
