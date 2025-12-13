@@ -353,7 +353,8 @@ export function updateApiKey({
 				}
 				newValues.expiresAt = expiresIn ? getDate(expiresIn, "sec") : null;
 			}
-			if (metadata !== undefined) {
+
+			if (metadata !== undefined && opts.enableMetadata === true) {
 				if (typeof metadata !== "object") {
 					throw new APIError("BAD_REQUEST", {
 						message: ERROR_CODES.INVALID_METADATA_TYPE,
