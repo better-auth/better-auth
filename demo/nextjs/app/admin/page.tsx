@@ -49,7 +49,7 @@ import {
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
-export default function AdminDashboard() {
+export default function Page() {
 	const queryClient = useQueryClient();
 	const router = useRouter();
 	const [isDialogOpen, setIsDialogOpen] = useState(false);

@@ -16,7 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { authClient } from "@/lib/auth-client";
 import { InvitationError } from "./invitation-error";
 
-export default function InvitationPage() {
+export default function Page() {
 	const params = useParams<{
 		id: string;
 	}>();
