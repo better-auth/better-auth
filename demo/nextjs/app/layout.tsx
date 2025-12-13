@@ -2,9 +2,8 @@ import "./globals.css";
 import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
 import type { Metadata } from "next";
-import { ThemeProvider } from "@/components/theme-provider";
-import { Toaster } from "@/components/ui/sonner";
-import { Wrapper, WrapperWithQuery } from "@/components/wrapper";
+import Header from "@/components/header";
+import Providers from "@/components/providers";
 import { createMetadata } from "@/lib/metadata";
 
 export const metadata: Metadata = createMetadata({
@@ -27,12 +26,20 @@ export default function RootLayout({
 				<link rel="icon" href="/favicon/favicon.ico" sizes="any" />
 			</head>
 			<body className={`${GeistSans.variable} ${GeistMono.variable} font-sans`}>
-				<ThemeProvider attribute="class" defaultTheme="dark">
-					<Wrapper>
-						<WrapperWithQuery>{children}</WrapperWithQuery>
-					</Wrapper>
-					<Toaster richColors closeButton />
-				</ThemeProvider>
+				<Providers>
+					<div className="min-h-[calc(100vh-3.5rem)] mt-14 w-full relative">
+						{/* Site Header */}
+						<Header />
+
+						{/* Background Grid */}
+						<div className="absolute inset-0 z-0 bg-grid-small text-black/2 dark:text-white/4 pointer-events-none" />
+
+						{/* Content */}
+						<div className="relative z-10 max-w-4xl w-full p-6 mx-auto">
+							{children}
+						</div>
+					</div>
+				</Providers>
 			</body>
 		</html>
 	);
