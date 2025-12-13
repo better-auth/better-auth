@@ -17,10 +17,14 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 } from "@/components/ui/popover";
-import type { Session } from "@/lib/auth";
+import type { DeviceSession } from "@/lib/auth";
 import { authClient } from "@/lib/auth-client";
 
-export default function AccountSwitcher({ sessions }: { sessions: Session[] }) {
+export default function AccountSwitcher({
+	deviceSessions,
+}: {
+	deviceSessions: DeviceSession[];
+}) {
 	const { data: currentUser } = authClient.useSession();
 	const [open, setOpen] = useState(false);
 	const router = useRouter();
@@ -70,7 +74,7 @@ export default function AccountSwitcher({ sessions }: { sessions: Session[] }) {
 						</CommandGroup>
 						<CommandSeparator />
 						<CommandGroup heading="Switch Account">
-							{sessions
+							{deviceSessions
 								.filter((s) => s.user.id !== currentUser?.user.id)
 								.map((u, i) => (
 									<CommandItem

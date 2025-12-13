@@ -3,7 +3,7 @@
 import { Key, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,19 +21,24 @@ import { authClient } from "@/lib/auth-client";
 import { getCallbackURL } from "@/lib/shared";
 import { cn } from "@/lib/utils";
 
+const LastUsedIndicator = () => (
+	<span className="ml-auto absolute -right-3 px-2 py-1 text-[0.5rem] bg-blue-200 text-blue-900 dark:bg-blue-600 dark:text-blue-100 rounded-md font-medium pointer-events-none">
+		Last Used
+	</span>
+);
+
 export default function SignIn() {
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [loading, startTransition] = useTransition();
 	const [rememberMe, setRememberMe] = useState(false);
+	const [isMounted, setIsMounted] = useState(false);
 	const router = useRouter();
 	const params = useSearchParams();
 
-	const LastUsedIndicator = () => (
-		<span className="ml-auto absolute top-0 right-0 px-2 py-1 text-xs bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 rounded-md font-medium">
-			Last Used
-		</span>
-	);
+	useEffect(() => {
+		setIsMounted(true);
+	}, []);
 
 	return (
 		<Card className="max-w-md rounded-none">
@@ -58,7 +63,6 @@ export default function SignIn() {
 							value={email}
 						/>
 					</div>
-
 					<div className="grid gap-2">
 						<div className="flex items-center">
 							<Label htmlFor="password">Password</Label>
@@ -79,7 +83,6 @@ export default function SignIn() {
 							onChange={(e) => setPassword(e.target.value)}
 						/>
 					</div>
-
 					<div className="flex items-center gap-2">
 						<Checkbox
 							id="remember"
@@ -89,10 +92,9 @@ export default function SignIn() {
 						/>
 						<Label htmlFor="remember">Remember me</Label>
 					</div>
-
 					<Button
 						type="submit"
-						className="w-full flex items-center justify-center"
+						className="w-full flex items-center justify-center relative"
 						disabled={loading}
 						onClick={async () => {
 							startTransition(async () => {
@@ -111,16 +113,10 @@ export default function SignIn() {
 							});
 						}}
 					>
-						<div className="flex items-center justify-center w-full relative">
-							{loading ? (
-								<Loader2 size={16} className="animate-spin" />
-							) : (
-								"Login"
-							)}
-							{authClient.isLastUsedLoginMethod("email") && (
-								<LastUsedIndicator />
-							)}
-						</div>
+						{loading ? <Loader2 size={16} className="animate-spin" /> : "Login"}
+						{isMounted && authClient.isLastUsedLoginMethod("email") && (
+							<LastUsedIndicator />
+						)}
 					</Button>
 
 					<div
@@ -151,7 +147,7 @@ export default function SignIn() {
 								></path>
 							</svg>
 							<span>Sign in with Apple</span>
-							{authClient.isLastUsedLoginMethod("apple") && (
+							{isMounted && authClient.isLastUsedLoginMethod("apple") && (
 								<LastUsedIndicator />
 							)}
 						</Button>
@@ -189,7 +185,7 @@ export default function SignIn() {
 								></path>
 							</svg>
 							<span>Sign in with Google</span>
-							{authClient.isLastUsedLoginMethod("google") && (
+							{isMounted && authClient.isLastUsedLoginMethod("google") && (
 								<LastUsedIndicator />
 							)}
 						</Button>
@@ -213,7 +209,7 @@ export default function SignIn() {
 								<path d="m128 0l128 221.705H0z" />
 							</svg>
 							<span>Sign in with Vercel</span>
-							{authClient.isLastUsedLoginMethod("vercel") && (
+							{isMounted && authClient.isLastUsedLoginMethod("vercel") && (
 								<LastUsedIndicator />
 							)}
 						</Button>
@@ -239,7 +235,7 @@ export default function SignIn() {
 								></path>
 							</svg>
 							<span>Sign in with GitHub</span>
-							{authClient.isLastUsedLoginMethod("github") && (
+							{isMounted && authClient.isLastUsedLoginMethod("github") && (
 								<LastUsedIndicator />
 							)}
 						</Button>
@@ -265,7 +261,7 @@ export default function SignIn() {
 								></path>
 							</svg>
 							<span>Sign in with Microsoft</span>
-							{authClient.isLastUsedLoginMethod("microsoft") && (
+							{isMounted && authClient.isLastUsedLoginMethod("microsoft") && (
 								<LastUsedIndicator />
 							)}
 						</Button>
@@ -290,7 +286,7 @@ export default function SignIn() {
 						>
 							<Key size={16} />
 							<span>Sign in with Passkey</span>
-							{authClient.isLastUsedLoginMethod("passkey") && (
+							{isMounted && authClient.isLastUsedLoginMethod("passkey") && (
 								<LastUsedIndicator />
 							)}
 						</Button>
