@@ -329,6 +329,58 @@ describe("base context creation", () => {
 			});
 		});
 
+		it("should disable cookieRefreshCache and warn when database is configured with refreshCache=true", async () => {
+			const log = vi.fn();
+			const res = await initBase({
+				logger: {
+					level: "warn",
+					log,
+				} as any,
+				database: new Database(":memory:"),
+				session: {
+					cookieCache: {
+						refreshCache: true,
+					},
+				},
+			});
+
+			expect(res.sessionConfig.cookieRefreshCache).toBe(false);
+			expect(log).toHaveBeenCalledWith(
+				"warn",
+				expect.stringContaining(
+					"`session.cookieCache.refreshCache` is enabled while `database` or `secondaryStorage` is configured",
+				),
+			);
+		});
+
+		it("should disable cookieRefreshCache and warn when secondaryStorage is configured with refreshCache=true", async () => {
+			const log = vi.fn();
+			const res = await initBase({
+				logger: {
+					level: "warn",
+					log,
+				} as any,
+				secondaryStorage: {
+					get: vi.fn(),
+					set: vi.fn(),
+					delete: vi.fn(),
+				},
+				session: {
+					cookieCache: {
+						refreshCache: true,
+					},
+				},
+			});
+
+			expect(res.sessionConfig.cookieRefreshCache).toBe(false);
+			expect(log).toHaveBeenCalledWith(
+				"warn",
+				expect.stringContaining(
+					"`session.cookieCache.refreshCache` is enabled while `database` or `secondaryStorage` is configured",
+				),
+			);
+		});
+
 		it("should use default maxAge (300) for 20% calculation", async () => {
 			const res = await initBase({
 				session: {

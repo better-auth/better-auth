@@ -913,7 +913,7 @@ describe("cookie cache refreshCache", async () => {
 		expect(fn).toHaveBeenCalledTimes(1);
 	});
 
-	it("should refresh cache stateless when refreshCache threshold is exceeded", async () => {
+	it("should not perform stateless refresh when a database is configured", async () => {
 		const callsBefore = fn.mock.calls.length;
 
 		vi.useFakeTimers();
@@ -930,9 +930,10 @@ describe("cookie cache refreshCache", async () => {
 		});
 		expect(session.data).not.toBeNull();
 
-		// With stateless refresh, no DB call should be made (it just refreshes the cookie)
+		// With a database configured, `refreshCache` is ignored (a warning is logged),
+		// so no additional DB call should be made here.
 		const callsAfterRefresh = fn.mock.calls.length;
-		expect(callsAfterRefresh).toBe(callsBefore); // No DB call for stateless refresh
+		expect(callsAfterRefresh).toBe(callsBefore);
 
 		await client.getSession({
 			fetchOptions: {
@@ -1057,6 +1058,8 @@ describe("cookie cache refreshCache", async () => {
 
 	it("should work without database when refreshCache threshold is reached", async () => {
 		const { client, testUser, cookieSetter, auth } = await getTestInstance({
+			// True stateless mode: no database configured
+			database: undefined as any,
 			session: {
 				cookieCache: {
 					enabled: true,
