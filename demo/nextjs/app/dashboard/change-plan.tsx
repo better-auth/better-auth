@@ -12,8 +12,8 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { cn } from "@/lib/utils";
 import { authClient } from "@/lib/auth-client";
+import { cn } from "@/lib/utils";
 
 function Component(props: { currentPlan?: string; isTrial?: boolean }) {
 	const [selectedPlan, setSelectedPlan] = useState("plus");

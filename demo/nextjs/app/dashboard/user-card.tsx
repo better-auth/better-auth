@@ -57,9 +57,9 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { Component } from "./change-plan";
 import type { Session } from "@/lib/auth";
 import { authClient } from "@/lib/auth-client";
+import { Component } from "./change-plan";
 
 export default function UserCard(props: {
 	session: Session | null;

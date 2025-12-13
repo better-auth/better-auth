@@ -17,8 +17,8 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 } from "@/components/ui/popover";
-import { authClient } from "@/lib/auth-client";
 import type { Session } from "@/lib/auth";
+import { authClient } from "@/lib/auth-client";
 
 export default function AccountSwitcher({ sessions }: { sessions: Session[] }) {
 	const { data: currentUser } = authClient.useSession();
