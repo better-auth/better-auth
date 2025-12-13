@@ -170,6 +170,13 @@ export const oneTimeToken = (options?: OneTimeTokenOptions | undefined) => {
 							message: "Session not found",
 						});
 					}
+
+					if (session.session.expiresAt < new Date()) {
+						throw c.error("BAD_REQUEST", {
+							message: "Session expired",
+						});
+					}
+
 					return c.json(session);
 				},
 			),
