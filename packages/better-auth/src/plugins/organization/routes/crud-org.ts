@@ -947,6 +947,10 @@ export const listOrganizations = <O extends OrganizationOptions>(options: O) =>
 				}),
 			);
 
-			return ctx.json(updatedOrganizations);
+			return ctx.json(
+				updatedOrganizations as (InferOrganization<O, false> & {
+					role?: string;
+				})[],
+			);
 		},
 	);
