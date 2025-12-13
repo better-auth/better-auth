@@ -19,6 +19,17 @@ export function createMetadata(override: Metadata): Metadata {
 			images: "https://better-auth.com/og.png",
 			...override.twitter,
 		},
+		alternates: {
+		  types: {
+				"application/rss+xml": [
+				  {
+						title: "Better Auth Blog",
+						url: "https://better-auth.com/blog/rss.xml"
+					}
+				],
+			},
+			...override.alternates,
+		}
 	};
 }
 

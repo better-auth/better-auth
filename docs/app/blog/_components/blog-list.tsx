@@ -7,6 +7,7 @@ import { IconLink } from "./changelog-layout";
 import { Glow } from "./default-changelog";
 import { BookIcon, GitHubIcon, XIcon } from "./icons";
 import { StarField } from "./stat-field";
+import { RssIcon } from "lucide-react";
 
 export async function BlogPage() {
 	const posts = blogs.getPages().sort((a, b) => {
@@ -18,7 +19,7 @@ export async function BlogPage() {
 				<StarField className="top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2" />
 				<Glow />
 
-				<div className="flex flex-col md:justify-center max-w-xl mx-auto h-full">
+				<div className="relative flex flex-col md:justify-center max-w-xl mx-auto h-full">
 					<h1 className="mt-14 font-sans font-semibold tracking-tighter text-5xl">
 						Blogs
 					</h1>
@@ -53,6 +54,11 @@ export async function BlogPage() {
 					<p className="flex items-baseline absolute bottom-4 max-md:left-1/2 max-md:-translate-x-1/2 gap-x-2 text-[0.8125rem]/6 text-gray-500">
 						<IconLink href="https://x.com/better_auth" icon={XIcon} compact>
 							BETTER-AUTH.
+						</IconLink>
+					</p>
+					<p className="flex right-0 items-baseline absolute bottom-4 max-md:left-1/2 max-md:-translate-x-1/2 gap-x-2 text-[0.8125rem]/6 text-gray-500">
+						<IconLink href="/blog/rss.xml" icon={RssIcon} compact>
+							RSS
 						</IconLink>
 					</p>
 				</div>
