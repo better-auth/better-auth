@@ -161,16 +161,18 @@ Electron is a popular framework for building cross-platform desktop applications
     </Step>
 
     <Step>
-    ### Enable `nodeIntegration`
-
-    To allow your Electron application to use Better Auth features, ensure that `nodeIntegration` is enabled in your `BrowserWindow` configuration.
+    ### Configure the BrowserWindow
+    
+    Ensure that your `BrowserWindow` is configured with `nodeIntegration` set to `false` and `contextIsolation`
+    set to `true` to ensure NodeJS API aren't exposed to any JavaScript running in the renderer.
 
     ```ts title="electron/main.ts"
     import { BrowserWindow } from "electron";
 
     const win = new BrowserWindow({
       webPreferences: {
-        nodeIntegration: true,
+        nodeIntegration: false,
+        contextIsolation: true,
       },
     });
     ```
@@ -197,7 +199,8 @@ Electron is a popular framework for building cross-platform desktop applications
       win = new BrowserWindow({
         webPreferences: {
           preload: join(__dirname, "preload.mjs"),
-          nodeIntegration: true,
+          nodeIntegration: false,
+          contextIsolation: true,
         },
       });
 
@@ -218,10 +221,10 @@ Electron is a popular framework for building cross-platform desktop applications
     Now, in your preload script, setup the IPC bridges to allow communication between the renderer process and the main process for authentication operations.
 
     ```ts title="electron/preload.ts"
-    import { authClient } from "./auth-client";
+    import { setupIPC } from "@better-auth/electron/client";
     import electron from "electron";
 
-    authClient.setupIPC(electron);
+    setupIPC(electron);
     ```
 
     <Callout type="info">

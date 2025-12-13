@@ -41,6 +41,51 @@ const storageAdapter = async (storage: Storage) => {
 	};
 };
 
+/**
+ * Sets up Electron IPC handlers for authentication.
+ *
+ * @example
+ * ```ts
+ * // preload.ts
+ * import electron from "electron";
+ * import { setupIPC } from "@better-auth/electron/client";
+ *
+ * setupIPC(electron);
+ * ```
+ */
+export const setupIPC = (
+	electron: {
+		contextBridge: Electron.ContextBridge;
+		ipcRenderer: Electron.IpcRenderer;
+	},
+	opts: { namespace?: string | undefined } = {},
+) => {
+	opts.namespace ??= "better-auth";
+	const { contextBridge, ipcRenderer } = electron;
+	contextBridge.exposeInMainWorld("requestAuth", () =>
+		ipcRenderer.invoke(`${opts.namespace}:request-auth`),
+	);
+	contextBridge.exposeInMainWorld(
+		"onAuthenticated",
+		(callback: (user: User & Record<string, any>) => unknown) => {
+			ipcRenderer.on(`${opts.namespace}:authenticated`, (_event, user) =>
+				callback(user),
+			);
+		},
+	);
+	contextBridge.exposeInMainWorld(
+		"onAuthError",
+		(callback: (context: BetterFetchError & { path: string }) => unknown) => {
+			ipcRenderer.on(`${opts.namespace}:error`, (_event, context) =>
+				callback(context),
+			);
+		},
+	);
+	contextBridge.exposeInMainWorld("signOut", async () =>
+		ipcRenderer.invoke(`${opts.namespace}:sign-out`),
+	);
+};
+
 export const electronClient = (options: ElectronClientOptions) => {
 	const opts = {
 		storagePrefix: "better-auth",
@@ -254,60 +299,6 @@ export const electronClient = (options: ElectronClientOptions) => {
 						$fetch,
 						getCookie: getCookieFn,
 					});
-				},
-				/**
-				 * Sets up Electron IPC handlers for authentication.
-				 *
-				 * @example
-				 * ```ts
-				 * // preload.ts
-				 * import electron from "electron";
-				 * import { client } from "./auth-client";
-				 *
-				 * client.setupIPC(electron);
-				 * ```
-				 */
-				setupIPC: (electron: {
-					ipcMain?: Electron.IpcMain | undefined;
-					ipcRenderer: Electron.IpcRenderer;
-					contextBridge: Electron.ContextBridge;
-				}) => {
-					if (isProcessType("browser") && electron.ipcMain) {
-						setupIPCMain({ ipcMain: electron.ipcMain }, opts, {
-							$fetch,
-							getCookie: getCookieFn,
-						});
-					} else if (isProcessType("renderer")) {
-						const { contextBridge, ipcRenderer } = electron;
-
-						contextBridge.exposeInMainWorld("requestAuth", () =>
-							ipcRenderer.invoke(`${opts.namespace}:request-auth`),
-						);
-						contextBridge.exposeInMainWorld(
-							"onAuthenticated",
-							(callback: (user: User & Record<string, any>) => unknown) => {
-								ipcRenderer.on(
-									`${opts.namespace}:authenticated`,
-									(_event, user) => callback(user),
-								);
-							},
-						);
-						contextBridge.exposeInMainWorld(
-							"onAuthError",
-							(
-								callback: (
-									context: BetterFetchError & { path: string },
-								) => unknown,
-							) => {
-								ipcRenderer.on(`${opts.namespace}:error`, (_event, context) =>
-									callback(context),
-								);
-							},
-						);
-						contextBridge.exposeInMainWorld("signOut", async () =>
-							ipcRenderer.invoke(`${opts.namespace}:sign-out`),
-						);
-					}
 				},
 				$Infer: {} as {
 					Window: {
