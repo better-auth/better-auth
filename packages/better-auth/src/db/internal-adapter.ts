@@ -259,7 +259,8 @@ export const createInternalAdapter = (
 				ctx?.context.options ?? options,
 				{},
 			);
-			const data: Omit<Session, "id"> = {
+			const data: Omit<Session, "id" | "createdAt" | "updatedAt"> &
+				Partial<Pick<Session, "createdAt" | "updatedAt">> = {
 				ipAddress:
 					ctx?.request || ctx?.headers
 						? getIp(ctx?.request || ctx?.headers!, ctx?.context.options) || ""
