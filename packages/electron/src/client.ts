@@ -294,7 +294,11 @@ export const electronClient = (options: ElectronClientOptions) => {
 						);
 						contextBridge.exposeInMainWorld(
 							"onAuthError",
-							(callback: (context: BetterFetchError & { path: string }) => unknown) => {
+							(
+								callback: (
+									context: BetterFetchError & { path: string },
+								) => unknown,
+							) => {
 								ipcRenderer.on(`${opts.namespace}:error`, (_event, context) =>
 									callback(context),
 								);
