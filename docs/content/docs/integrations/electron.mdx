@@ -352,7 +352,7 @@ First, create an IPC handler in the main process that uses the `authClient` to p
 import { ipcMain } from "electron";
 import { authClient } from "./auth-client";
 
-ipcMain.handle("customBridge", async (data) => {
+ipcMain.handle("customBridge", async (_event, data) => {
   const cookie = await authClient.getCookie();
   return await authClient.someEndpoint({
     data,

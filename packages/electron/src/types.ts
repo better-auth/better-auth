@@ -28,15 +28,15 @@ export interface ElectronClientOptions {
 	/**
 	 * An instance of a storage solution (e.g., `electron-store`)
 	 * to store session and cookie data.
-		*
-		* @example
-		* ```ts
-		* import Store from "electron-store";
-		*
-		* electronClient({
-		*   storage: new Store(),
-		* });
-		* ```
+	 *
+	 * @example
+	 * ```ts
+	 * import Store from "electron-store";
+	 *
+	 * electronClient({
+	 *   storage: new Store(),
+	 * });
+	 * ```
 	 */
 	storage: Storage;
 	/**

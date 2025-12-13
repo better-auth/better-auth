@@ -209,14 +209,14 @@ export function registerProtocolScheme(
 			}
 
 			if (!url) {
-			  const maybeURL = commandLine.pop();
-					if (maybeURL === "string" && maybeURL.trim() !== "") {
-					  try {
-							url = new URL(maybeURL).toString();
-						} catch {
-						  //
-						}
+				const maybeURL = commandLine.pop();
+				if (maybeURL === "string" && maybeURL.trim() !== "") {
+					try {
+						url = new URL(maybeURL).toString();
+					} catch {
+						//
 					}
+				}
 			}
 
 			if (process?.platform !== "darwin" && typeof url === "string") {

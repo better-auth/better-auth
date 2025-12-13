@@ -262,7 +262,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 					}
 					if (tokenRecord.codeChallengeMethod === "s256") {
 						const codeChallenge = Buffer.from(
-						  base64Url.decode(tokenRecord.codeChallenge),
+							base64Url.decode(tokenRecord.codeChallenge),
 						);
 						const codeVerifier = Buffer.from(
 							await createHash("SHA-256").digest(ctx.body.code_verifier),

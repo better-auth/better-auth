@@ -31,7 +31,9 @@ export async function requestAuth(options: ElectronClientOptions) {
 	const state = generateRandomString(16, "A-Z", "a-z", "0-9");
 
 	const code_verifier = base64Url.encode(randomBytes(32));
-	const code_challenge = base64Url.encode(await createHash("SHA-256").digest(code_verifier));
+	const code_challenge = base64Url.encode(
+		await createHash("SHA-256").digest(code_verifier),
+	);
 
 	(globalThis as any)[kCodeVerifier] = code_verifier;
 	(globalThis as any)[kState] = state;
