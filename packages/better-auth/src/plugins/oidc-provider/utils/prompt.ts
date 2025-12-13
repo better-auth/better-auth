@@ -1,6 +1,11 @@
 import { InvalidRequest } from "../error";
 
-export type AuthorizePrompt = "login" | "consent" | "select_account" | "none";
+export type AuthorizePrompt =
+	| "login"
+	| "consent"
+	| "select_account"
+	| "create"
+	| "none";
 export type AuthorizePromptSet = ReadonlySet<AuthorizePrompt>;
 
 /**
@@ -16,6 +21,7 @@ export function parsePrompt(prompt: string) {
 			p === "login" ||
 			p === "consent" ||
 			p === "select_account" ||
+			p === "create" ||
 			p === "none"
 		) {
 			set.add(p);

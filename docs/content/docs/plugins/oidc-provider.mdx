@@ -349,6 +349,10 @@ export const auth = betterAuth({
 
 You don't need to handle anything from your side; when a new session is created, the plugin will handle continuing the authorization flow.
 
+### Initiating Registration (`prompt=create`)
+
+Better Auth supports the OpenID Connect Prompt Create extension. When an authorization request includes `prompt=create` and the user is not authenticated, Better Auth will redirect the user to `createAccountPage` (if provided) instead of `loginPage`. If `createAccountPage` is not set, the user will be redirected to `loginPage` and you can render a sign-up experience based on the `prompt` query parameter.
+
 ## Configuration
 
 ### OIDC Metadata
@@ -619,6 +623,8 @@ Table Name: `oauthConsent`
 **metadata**: `OIDCMetadata` - Customize the OIDC provider metadata.
 
 **loginPage**: `string` - Path to the custom login page.
+
+**createAccountPage**: `string` - Path to the custom create account (sign-up) page. When an authorization request includes `prompt=create`, unauthenticated users will be redirected here instead of `loginPage`.
 
 **consentPage**: `string` - Path to the custom consent page.
 

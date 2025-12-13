@@ -105,6 +105,7 @@ describe("oidc", async () => {
 		plugins: [
 			oidcProvider({
 				loginPage: "/login",
+				createAccountPage: "/register",
 				consentPage: "/oauth2/authorize",
 				requirePKCE: true,
 				getAdditionalUserInfoClaim(user) {
@@ -497,6 +498,44 @@ describe("oidc", async () => {
 			expect(redirectURI).toContain("error_description=Authentication");
 			expect(redirectURI).toContain("prompt");
 			expect(redirectURI).toContain("none");
+		});
+
+		it("should redirect to createAccountPage when prompt=create and user not authenticated", async ({
+			expect,
+		}) => {
+			const unauthClient = createAuthClient({
+				plugins: [oidcClient()],
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					customFetchImpl,
+				},
+			});
+
+			const authUrl = new URL(
+				"http://localhost:3000/api/auth/oauth2/authorize",
+			);
+			authUrl.searchParams.set("client_id", application.clientId);
+			authUrl.searchParams.set(
+				"redirect_uri",
+				application.redirectUrls[0] || "",
+			);
+			authUrl.searchParams.set("response_type", "code");
+			authUrl.searchParams.set("scope", "openid profile email");
+			authUrl.searchParams.set("state", "test-state");
+			authUrl.searchParams.set("prompt", "create");
+			authUrl.searchParams.set("code_challenge", "test-challenge");
+			authUrl.searchParams.set("code_challenge_method", "S256");
+
+			let redirectURI = "";
+			await unauthClient.$fetch(authUrl.toString(), {
+				method: "GET",
+				onError(context) {
+					redirectURI = context.response.headers.get("Location") || "";
+				},
+			});
+
+			expect(redirectURI).toContain("/register");
+			expect(redirectURI).toContain("prompt=create");
 		});
 
 		it("should return consent_required error when prompt=none and consent needed", async ({
@@ -909,6 +948,27 @@ describe("oidc", async () => {
 			const metadata = response.data || response;
 			expect(metadata.end_session_endpoint).toBe(
 				"http://localhost:3000/api/auth/oauth2/endsession",
+			);
+		});
+
+		it("should return prompt_values_supported in metadata", async ({
+			expect,
+		}) => {
+			const response: any = await serverClient.$fetch(
+				"/.well-known/openid-configuration",
+				{
+					method: "GET",
+				},
+			);
+			const metadata = response.data || response;
+			expect(metadata.prompt_values_supported).toEqual(
+				expect.arrayContaining([
+					"none",
+					"login",
+					"consent",
+					"select_account",
+					"create",
+				]),
 			);
 		});
 
