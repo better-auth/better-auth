@@ -889,8 +889,6 @@ export const restoreSubscription = (options: StripeOptions) => {
 								(sub) => sub.status === "active" || sub.status === "trialing",
 							),
 						);
-
-			// Ensure the specified subscription belongs to the (validated) referenceId.
 			if (
 				ctx.body.subscriptionId &&
 				subscription &&

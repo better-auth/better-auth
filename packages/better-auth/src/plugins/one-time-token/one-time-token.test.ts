@@ -71,6 +71,46 @@ describe("One-time token", async () => {
 		expect(session.data?.session).toBeDefined();
 	});
 
+	it("should reject token when underlying session has expired", async () => {
+		const testInstance = await getTestInstance(
+			{
+				session: {
+					expiresIn: 60,
+					updateAge: 0,
+				},
+				plugins: [oneTimeToken({ expiresIn: 10 })],
+			},
+			{
+				clientOptions: {
+					plugins: [oneTimeTokenClient()],
+				},
+			},
+		);
+
+		const { headers } = await testInstance.signInWithTestUser();
+
+		const response = await testInstance.auth.api.generateOneTimeToken({
+			headers,
+		});
+		expect(response.token).toBeDefined();
+
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(2 * 60 * 1000);
+
+		const shouldFail = await testInstance.auth.api
+			.verifyOneTimeToken({
+				body: {
+					token: response.token,
+				},
+			})
+			.catch((e) => e);
+
+		expect(shouldFail).toBeInstanceOf(APIError);
+		expect(shouldFail.body.message).toBe("Session expired");
+
+		vi.useRealTimers();
+	});
+
 	describe("should work with different storeToken options", () => {
 		describe("hashed", async () => {
 			const { auth, signInWithTestUser } = await getTestInstance(
