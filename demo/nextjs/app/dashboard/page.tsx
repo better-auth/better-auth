@@ -6,44 +6,43 @@ import { OrganizationCard } from "./organization-card";
 import UserCard from "./user-card";
 
 export default async function DashboardPage() {
-	const [session, activeSessions, deviceSessions, organization, subscriptions] =
+	const requestHeaders = await headers();
+
+	const session = await auth.api.getSession({
+		headers: requestHeaders,
+	});
+	if (!session) {
+		redirect("/sign-in");
+	}
+
+	const [activeSessions, deviceSessions, organization, subscriptions] =
 		await Promise.all([
-			auth.api.getSession({
-				headers: await headers(),
-			}),
 			auth.api.listSessions({
-				headers: await headers(),
+				headers: requestHeaders,
 			}),
 			auth.api.listDeviceSessions({
-				headers: await headers(),
+				headers: requestHeaders,
 			}),
 			auth.api.getFullOrganization({
-				headers: await headers(),
+				headers: requestHeaders,
 			}),
 			auth.api.listActiveSubscriptions({
-				headers: await headers(),
+				headers: requestHeaders,
 			}),
-		]).catch((e) => {
-			console.log(e);
-			throw redirect("/sign-in");
-		});
+		]);
+
 	return (
 		<div className="w-full">
 			<div className="flex gap-4 flex-col">
-				<AccountSwitcher
-					sessions={JSON.parse(JSON.stringify(deviceSessions))}
-				/>
+				<AccountSwitcher deviceSessions={deviceSessions} />
 				<UserCard
-					session={JSON.parse(JSON.stringify(session))}
-					activeSessions={JSON.parse(JSON.stringify(activeSessions))}
+					session={session}
+					activeSessions={activeSessions}
 					subscription={subscriptions.find(
 						(sub) => sub.status === "active" || sub.status === "trialing",
 					)}
 				/>
-				<OrganizationCard
-					session={JSON.parse(JSON.stringify(session))}
-					activeOrganization={JSON.parse(JSON.stringify(organization))}
-				/>
+				<OrganizationCard session={session} activeOrganization={organization} />
 			</div>
 		</div>
 	);
