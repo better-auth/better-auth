@@ -3,7 +3,7 @@
 import type { BetterAuthClientPlugin, ClientStore } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
 import { isDevelopment } from "@better-auth/core/env";
-import type { ErrorContext } from "@better-fetch/fetch";
+import type { BetterFetchError } from "@better-fetch/fetch";
 import { requestAuth } from "./authenticate";
 import {
 	getCookie,
@@ -204,7 +204,7 @@ export const electronClient = (options: ElectronClientOptions) => {
 				 * ```ts
 				 * // main.ts
 				 * import electron, { app, BrowserWindow } from "electron";
-				 * import { resolve } from "node:path";
+				 * import { join, resolve } from "node:path";
 				 * import { client } from "./auth-client";
 				 *
 				 * let win: BrowserWindow | null = null;
@@ -212,7 +212,7 @@ export const electronClient = (options: ElectronClientOptions) => {
 				 * function createWindow() {
 				 *   win = new BrowserWindow({
 				 *     webPreferences: {
-				 *       preload: path.join(__dirname, 'preload.mjs'),
+				 *       preload: join(__dirname, 'preload.mjs'),
 				 *       nodeIntegration: true,
 				 *     },
 				 *   });
@@ -294,7 +294,7 @@ export const electronClient = (options: ElectronClientOptions) => {
 						);
 						contextBridge.exposeInMainWorld(
 							"onAuthError",
-							(callback: (context: ErrorContext) => unknown) => {
+							(callback: (context: BetterFetchError & { path: string }) => unknown) => {
 								ipcRenderer.on(`${opts.namespace}:error`, (_event, context) =>
 									callback(context),
 								);
@@ -326,7 +326,7 @@ export const electronClient = (options: ElectronClientOptions) => {
 						 * @param callback - The callback function to be invoked with the error context.
 						 */
 						onAuthError: (
-							error: (context: ErrorContext & { path: string }) => unknown,
+							error: (context: BetterFetchError & { path: string }) => unknown,
 						) => void;
 						/**
 						 * Signs out the current user.

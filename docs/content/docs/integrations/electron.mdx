@@ -1,0 +1,663 @@
+---
+title: Electron Integration
+description: Integrate Better Auth with Electron.
+---
+
+Electron is a popular framework for building cross-platform desktop applications using web technologies.
+
+## Installation
+
+<Steps>
+    <Step>
+        ### Configure A Better Auth Front- and Backend
+        Before integrating Better Auth into your Electron application, make sure you have a Better Auth front- and backend set up.
+       
+        To get started, check out our [installation](/docs/installation) guide for setting up Better Auth.
+    </Step>
+
+    <Step>
+        ### Install Server Dependencies
+
+        Install both the Better Auth package and Electron plugin into your server application.
+
+        ```package-install
+        better-auth @better-auth/electron
+        ```
+    </Step>
+
+    <Step>
+        ### Install Client Dependencies
+
+        You also need to install the Better Auth package and Electron plugin into your Electron application.
+
+        ```package-install
+        better-auth @better-auth/electron
+        ```
+    </Step>
+
+    <Step>
+      ### Add the Electron Plugin on your Web Server
+
+      Add the Electron plugin to your Better Auth server.
+
+      ```ts title="web/lib/auth.ts"
+      import { betterAuth } from "better-auth";
+      import { electron } from "@better-auth/electron";
+
+      export const auth = betterAuth({
+        plugins: [electron()],
+        emailAndPassword: {
+          enabled: true, // Enable authentication using email and password.
+        },
+      });
+      ```
+    </Step>
+
+    <Step>
+        ### Initialize Better Auth Client
+
+        To initialize Better Auth in your Electron app, you need to
+        call `createAuthClient` with the base URL of your Better Auth
+        backend.
+
+        Make sure you have a proper storage solution set up for Electron.
+        This example uses `electron-store` for session and cookie storage.
+
+        <Callout type="info">
+            We're using Electron's `safeStorage` APIs to securely store sensitive data,
+            regardless of the storage solution you choose.
+        </Callout>
+        ```ts title="electron/auth-client.ts"
+        import { createAuthClient } from "better-auth/client";
+        import { electronClient } from "@better-auth/electron/client";
+        import Store from "electron-store";
+
+        const authClient = createAuthClient({
+          baseURL: "http://localhost:8081", // Base URL of your Better Auth backend,
+          plugins: [
+            electronClient({
+              redirectURL: "https://app.example.com/sign-in", // The URL to redirect to for authentication.
+              protocol: {
+                scheme: "com.example.app", // The custom protocol scheme registered by your Electron app.
+              },
+              storage: new Store(),
+            }),
+          ],
+        });
+        ```
+        <Callout type="warning">
+            You should never expose the authClient directly
+            to the renderer process. Instead, [create an IPC bridge](#creating-ipc-bridges) to securely communicate between the main and renderer processes.
+        </Callout>
+    </Step>
+
+    <Step>
+        ### Scheme and Trusted Origins
+
+        Better Auth uses deep links to redirect users back to your app after authentication.
+        To enable this, you need to add your app's scheme to the `trustedOrigins` list in your Better Auth config.
+
+        First make sure you have a scheme registered in your build configuration.
+
+        <Tabs items={["electron-forge", "electron-builder"]}>
+            <Tab value="electron-forge">
+            ```ts title="forge.config.js"
+            module.exports = {
+              packagerConfig: {
+                protocols: [{
+                  name: "MyApp Protocol",
+                  schemes: ["com.example.app"],
+                }],
+              },
+              //... other config options
+            };
+            ```
+            </Tab>
+            <Tab value="electron-builder">
+            ```ts title="electron-builder.json5"
+            {
+              "protocols": [
+                {
+                  "name": "MyApp Protocol",
+                  "schemes": ["com.example.app"]
+                }
+              ]
+              //... other config options
+            }
+            ```
+            </Tab>
+        </Tabs>
+
+        Then, update your Better Auth config to include the scheme in the `trustedOrigins` list.
+
+        ```ts title="web/lib/auth.ts"
+        export const auth = betterAuth({
+          trustedOrigins: ["com.example.app:/"],
+        });
+        ```
+    </Step>
+
+    <Step>
+      ### Add the Proxy Plugin on your Web Client
+
+      Add the proxy plugin to your Better Auth client instance **on your web client**.
+
+      This plugin is responsible for redirecting back to the Electron application after authentication.
+
+      ```ts title="web/lib/auth-client.ts"
+      import { betterAuthClient } from "better-auth/client";
+      import { electronProxyClient } from "@better-auth/electron/proxy";
+
+      export const authClient = betterAuthClient({
+        plugins: [
+          electronProxyClient({
+            protocol: {
+              scheme: "com.example.app",
+            },
+          }),
+        ],
+      });
+      ```
+    </Step>
+
+    <Step>
+    ### Enable `nodeIntegration`
+
+    To allow your Electron application to use Better Auth features, ensure that `nodeIntegration` is enabled in your `BrowserWindow` configuration.
+
+    ```ts title="electron/main.ts"
+    import { BrowserWindow } from "electron";
+
+    const win = new BrowserWindow({
+      webPreferences: {
+        nodeIntegration: true,
+      },
+    });
+    ```
+    </Step>
+
+    <Step>
+    ### Setup the Main Process
+
+    In your Electron main process, set up the necessary handlers to manage authentication flows.
+
+    This will setup:
+    - **IPC handlers** for authentication requests from the renderer process.
+    - **Deep link handling** to process authorization redirects.
+    - **Content-Security-Policy adjustments** to allow loading resources from your Better Auth backend.
+
+    ```ts title="electron/main.ts"
+    import { authClient } from "./auth-client";
+    import electron, { app, BrowserWindow } from "electron";
+    import { resolve, join } from "node:path";
+
+    let win: BrowserWindow | null = null;
+
+    function createWindow() {
+      win = new BrowserWindow({
+        webPreferences: {
+          preload: join(__dirname, "preload.mjs"),
+          nodeIntegration: true,
+        },
+      });
+
+      win.loadURL("file://" + __dirname + "/index.html");
+    }
+
+    authClient.setupMain(electron, {
+      window: () => win,
+      resolve,
+    });
+
+    app.whenReady().then(createWindow);
+    ```
+    </Step>
+    <Step>
+    ### Setup the Renderer Process
+
+    Now, in your preload script, setup the IPC bridges to allow communication between the renderer process and the main process for authentication operations.
+
+    ```ts title="electron/preload.ts"
+    import { authClient } from "./auth-client";
+    import electron from "electron";
+
+    authClient.setupIPC(electron);
+    ```
+
+    <Callout type="info">
+      You can also infer the bridges by using `authClient.$Infer.Window`.
+
+      ```ts title="electron-env.d.ts"
+      type AuthWindow = typeof import("./auth-client")["authClient"]["$Infer"]["Window"];
+      interface Window extends AuthWindow {
+        //... your bridges
+      }
+      ```
+    </Callout>
+    </Step>
+
+</Steps>
+
+## Usage
+
+### Handling Authorization in the Browser
+
+In order to redirect users back to your Electron app after authentication, you need to call the `ensureElectronRedirect` handler on every page on your frontend web application that should handle redirects. Also, make sure to pass all the required query parameters when initiating the sign-in or sign-up.
+
+The following example uses React, but the concept applies to any frontend framework:
+
+```tsx title="web/pages/sign-in.tsx"
+import { useEffect, use } from "react";
+import { authClient } from "../auth-client";
+
+function SignInPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    client_id?: string | undefined;
+    state?: string | undefined;
+    code_challenge?: string | undefined;
+    code_challenge_method?: string | undefined;
+  }>;
+}) {
+  const query = use(searchParams);
+
+  useEffect(() => {
+    authClient.ensureElectronRedirect();
+  }, []);
+
+  return (
+    <button
+      onClick={() => {
+        authClient.signIn.social({
+          provider: "google",
+          fetchOptions: {
+            query,
+          },
+        });
+      }}
+    >
+      Sign in
+    </button>
+  );
+}
+```
+
+### Handling Authentication in Electron
+
+In your Electron renderer process, you can now use the IPC bridges to handle authentication.
+
+The following example uses React, but the concept applies to any frontend framework:
+
+```tsx title="electron/App.tsx"
+function Auth() {
+  useEffect(() => {
+    window.onAuthenticated((session) => {
+      console.log("User authenticated:", session);
+    });
+  }, []);
+
+  return (
+    <button
+      onClick={async () => {
+        await window.requestAuth();
+      }}
+    >
+      Login in Browser
+    </button>
+  );
+}
+```
+
+In the main process, you can call the `requestAuth` method directly on the `authClient` instance:
+
+```ts title="electron/main.ts"
+await authClient.requestAuth();
+```
+
+### Sign Out
+
+To sign out the user, simply call the `signOut` bridge from your renderer process:
+
+```tsx title="electron/App.tsx"
+function SignOut() {
+  return (
+    <button
+      onClick={async () => {
+        await window.signOut();
+      }}
+    >
+      Sign out
+    </button>
+  );
+}
+```
+
+In the main process, you can call the `signOut` method directly on the `authClient` instance:
+
+```ts title="electron/main.ts"
+await authClient.signOut();
+```
+
+### Creating IPC Bridges
+
+You can create custom IPC bridges to extend the functionality of Better Auth in your Electron application.
+
+First, create an IPC handler in the main process that uses the `authClient` to perform the desired action:
+
+```ts title="electron/main.ts"
+import { ipcMain } from "electron";
+import { authClient } from "./auth-client";
+
+ipcMain.handle("customBridge", async (data) => {
+  const cookie = await authClient.getCookie();
+  return await authClient.someEndpoint({
+    data,
+    fetchOptions: {
+      headers: {
+        cookie,
+      },
+    },
+  });
+});
+```
+
+Then, expose the IPC handler to the renderer process using the `contextBridge` in your preload script:
+
+```ts title="electron/preload.ts"
+import { contextBridge, ipcRenderer } from "electron";
+
+contextBridge.exposeInMainWorld("auth", {
+  customBridge: async (data: Record<string, any>) => {
+    return await ipcRenderer.invoke("customBridge", data);
+  },
+});
+```
+
+Now, you can use the custom bridge in your renderer process:
+
+```tsx title="electron/App.tsx"
+import { useEffect } from "react";
+
+function Component() {
+  useEffect(() => {
+    window.auth.customBridge({ foo: "bar" }).then((response) => {
+      console.log("Response from custom bridge:", response);
+    });
+  }, []);
+
+  return null;
+}
+```
+
+<Callout type="info">
+    To infer infer the custom bridges, you can extend the `Window` inside a type declaration file:
+    
+    ```ts title="electron-env.d.ts"
+    type AuthWindow = typeof import("./auth-client")["authClient"]["$Infer"]["Window"];
+    interface Window extends AuthWindow {
+      auth: {
+        customBridge: (data: Record<string, any>) => Promise<any>;
+      };
+    };
+    ```
+</Callout>
+
+### Handling Errors
+
+To listen for errors inside the renderer process, you can use the `onAuthError` bridge:
+
+```tsx title="electron/App.tsx"
+import { useEffect } from "react";
+
+function Component() {
+  useEffect(() => {
+    window.onAuthError((error) => {
+      console.error("Authentication error:", error.statusText);
+    });
+  }, []);
+
+  return null;
+}
+```
+
+## Options
+
+### Server Options
+
+- **codeExpiresIn**: The duration (in seconds) for which the authorization code remains valid. Default is `300` (5 minutes).
+
+```ts title="web/lib/auth.ts"
+import { betterAuth } from "better-auth";
+import { electron } from "@better-auth/electron";
+
+const auth = betterAuth({
+  plugins: [
+    electron({
+      codeExpiresIn: 600,
+      // ...
+    }),
+  ],
+});
+```
+
+- **redirectCookieExpiresIn**: The duration (in seconds) for which the redirect cookie remains valid. Default is `120` (2 minutes).
+
+```ts title="web/lib/auth.ts"
+import { betterAuth } from "better-auth";
+import { electron } from "@better-auth/electron";
+
+const auth = betterAuth({
+  plugins: [
+    electron({
+      redirectCookieExpiresIn: 60,
+      // ...
+    }),
+  ],
+});
+```
+
+- **redirectCookieName**: The name of the cookie used for redirecting after authentication. Default is `redirect_client`.
+
+```ts title="web/lib/auth.ts"
+import { betterAuth } from "better-auth";
+import { electron } from "@better-auth/electron";
+
+const auth = betterAuth({
+  plugins: [
+    electron({
+      redirectCookieName: "redirect",
+      // ...
+    }),
+  ],
+});
+```
+
+- **cookiePrefix**: The prefix to use for cookies set by the plugin.
+
+```ts title="web/lib/auth.ts"
+import { betterAuth } from "better-auth";
+import { electron } from "@better-auth/electron";
+
+const auth = betterAuth({
+  plugins: [
+    electron({
+      cookiePrefix: "my-app",
+      // ...
+    }),
+  ],
+});
+```
+
+- **disableOriginOverride**: Override the origin for Electron API routes. Enable this if you're facing cors origin issues with Electron API routes. Default is `false`.
+
+### Client Options
+
+- **redirectURL**: The URL to which users will be redirected for authentication.
+
+```ts title="electron/auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { electronClient } from "@better-auth/electron/client";
+
+const authClient = createAuthClient({
+  baseURL: "http://localhost:8081",
+  plugins: [
+    electronClient({
+      redirectURL: "https://localhost:3000/sign-in",
+      // ...
+    }),
+  ],
+});
+```
+
+- **protocol**: The protocol scheme to use for deep linking in Electron. Should follow the reverse domain name notation to ensure uniqueness.
+
+```ts title="electron/auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { electronClient } from "@better-auth/electron/client";
+
+const authClient = createAuthClient({
+  baseURL: "http://localhost:8081",
+  plugins: [
+    electronClient({
+      protocol: {
+        scheme: "com.example.app",
+      },
+      // ...
+    }),
+  ],
+});
+```
+
+- **callbackPath**: The callback path to use for authentication redirects. Default is `/auth/callback`.
+
+```ts title="electron/auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { electronClient } from "@better-auth/electron/client";
+
+const authClient = createAuthClient({
+  baseURL: "http://localhost:8081",
+  plugins: [
+    electronClient({
+      callbackPath: "/custom-callback",
+      // ...
+    }),
+  ],
+});
+```
+
+- **storage**: An instance of a storage solution (e.g., `electron-store`) to store session and cookie data.
+
+```ts title="electron/auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { electronClient } from "@better-auth/electron/client";
+import Store from "electron-store";
+
+const authClient = createAuthClient({
+  baseURL: "http://localhost:8081",
+  plugins: [
+    electronClient({
+      storage: new Store(),
+      // ...
+    }),
+  ],
+});
+```
+
+- **storagePrefix**: Prefix for local storage keys to avoid collisions. Default is `better-auth`.
+
+```ts title="electron/auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { electronClient } from "@better-auth/electron/client";
+import Store from "electron-store";
+
+const authClient = createAuthClient({
+  baseURL: "http://localhost:8081",
+  plugins: [
+    electronClient({
+      storage: new Store(),
+      storagePrefix: "my-app",
+      // ...
+    }),
+  ],
+});
+```
+
+- **cookiePrefix**: Prefix(es) for server cookie names to filter. This is used to identify which cookies belong to better-auth to prevent infinite refetching when third-party cookies are set. Default is `better-auth`.
+
+```ts title="electron/auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { electronClient } from "@better-auth/electron/client";
+
+const authClient = createAuthClient({
+  baseURL: "http://localhost:8081",
+  plugins: [
+    electronClient({
+      // Single prefix
+      cookiePrefix: "better-auth",
+      // ...
+    }),
+  ],
+});
+```
+
+You can also provide multiple prefixes to match against:
+
+```ts title="electron/auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { electronClient } from "@better-auth/electron/client";
+
+const authClient = createAuthClient({
+  baseURL: "http://localhost:8081",
+  plugins: [
+    electronClient({
+      // Multiple prefixes
+      cookiePrefix: ["better-auth", "my-app"],
+    }),
+  ],
+});
+```
+
+- **namespace**: A prefix for IPC bridges to avoid naming collisions. Default is `better-auth`.
+
+```ts title="electron/auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { electronClient } from "@better-auth/electron/client";
+
+const authClient = createAuthClient({
+  baseURL: "http://localhost:8081",
+  plugins: [
+    electronClient({
+      namespace: "my-app",
+      // ...
+    }),
+  ],
+});
+```
+
+- **disableCache**: By default, the client will cache the session data in safeStorage. You can disable this behavior by passing the `disableCache` option on the client.
+
+```ts title="electron/auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { electronClient } from "@better-auth/electron/client";
+
+const authClient = createAuthClient({
+  baseURL: "http://localhost:8081",
+  plugins: [
+    electronClient({
+      disableCache: true,
+      // ...
+    }),
+  ],
+});
+```
+
+### Proxy Client Options
+
+- **protocol**: The protocol scheme to use for deep linking in Electron.
+
+- **callbackPath**: The callback path to use for authentication redirects. Default is `/auth/callback`.
+
+- **redirectCookieName**: The name of the cookie used for redirecting after authentication. Default is `redirect_client`.
+
+- **cookiePrefix**: The prefix to use for cookies set by the plugin. Note that this also should include the `__Secure` or `__Host` depending on your configuration.
