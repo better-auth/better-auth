@@ -63,6 +63,12 @@ export interface ElectronClientOptions {
 	 */
 	namespace?: string | undefined;
 	/**
+	 * Client ID to use for identifying the Electron client during authorization.
+	 *
+	 * @default "electron"
+	 */
+	customClientID?: string | undefined;
+	/**
 	 * Whether to disable caching the session data locally.
 	 *
 	 * @default false

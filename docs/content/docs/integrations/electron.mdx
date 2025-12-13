@@ -498,6 +498,8 @@ const auth = betterAuth({
 });
 ```
 
+- **customClientID**: The client ID to use for identifying the Electron client during authorization. Defaults to `electron`.
+
 - **disableOriginOverride**: Override the origin for Electron API routes. Enable this if you're facing cors origin issues with Electron API routes. Default is `false`.
 
 ### Client Options
@@ -661,6 +663,8 @@ const authClient = createAuthClient({
 });
 ```
 
+- **customClientID**: The client ID to use for identifying the Electron client during authorization. Defaults to `electron`.
+
 ### Proxy Client Options
 
 - **protocol**: The protocol scheme to use for deep linking in Electron.
@@ -669,4 +673,6 @@ const authClient = createAuthClient({
 
 - **redirectCookieName**: The name of the cookie used for redirecting after authentication. Default is `redirect_client`.
 
-- **cookiePrefix**: The prefix to use for cookies set by the plugin. Note that this also should include the `__Secure` or `__Host` depending on your configuration.
+- **cookiePrefix**: The prefix to use for cookies set by the plugin. Note that this also should include the `__Secure` or `__Host` prefix depending on your configuration.
+
+- **customClientID**: The client ID to use for identifying the Electron client during authorization. Defaults to `electron`.

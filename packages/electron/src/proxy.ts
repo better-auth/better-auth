@@ -30,6 +30,12 @@ export const electronProxyClient = (options: {
 	 */
 	redirectCookieName?: string | undefined;
 	/**
+	 * Client ID to use for identifying the Electron client during authorization.
+	 *
+	 * @default "electron"
+	 */
+	customClientID?: string | undefined;
+	/**
 	 * The prefix to use for cookies set by the plugin.
 	 *
 	 * @default "better-auth"
@@ -40,6 +46,7 @@ export const electronProxyClient = (options: {
 		redirectCookieName: "redirect_client",
 		cookiePrefix: "better-auth",
 		callbackPath: "/auth/callback",
+		customClientID: "electron",
 		...options,
 	};
 	const redirectCookieName = `${opts.cookiePrefix}.${opts.redirectCookieName}`;
@@ -57,12 +64,12 @@ export const electronProxyClient = (options: {
 					const redirectClient = parseCookies(document.cookie).get(
 						redirectCookieName,
 					);
-					if (!redirectClient?.startsWith("electron:")) {
+					if (!redirectClient?.startsWith(`${opts.customClientID}:`)) {
 						return false;
 					}
 					document.cookie = `${redirectCookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/`;
 					window.location.replace(
-						`${scheme}:/${opts.callbackPath}#token=${redirectClient.substring("electron:".length)}`,
+						`${scheme}:/${opts.callbackPath}#token=${redirectClient.substring(opts.customClientID.length + 1)}`,
 					);
 					return true;
 				},

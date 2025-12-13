@@ -39,7 +39,7 @@ export async function requestAuth(options: ElectronClientOptions) {
 	(globalThis as any)[kState] = state;
 
 	const url = new URL(options.redirectURL);
-	url.searchParams.set("client_id", "electron");
+	url.searchParams.set("client_id", options.customClientID || "electron");
 	url.searchParams.set("code_challenge", code_challenge);
 	url.searchParams.set("code_challenge_method", "S256");
 	url.searchParams.set("state", state);

@@ -40,6 +40,12 @@ export interface ElectronOptions {
 	 */
 	cookiePrefix?: string | undefined;
 	/**
+	 * Client ID to use for identifying the Electron client during authorization.
+	 *
+	 * @default "electron"
+	 */
+	customClientID?: string | undefined;
+	/**
 	 * Override the origin for Electron API routes.
 	 * Enable this if you're facing cors origin issues with Electron API routes.
 	 *
@@ -54,6 +60,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 		redirectCookieExpiresIn: 120,
 		redirectCookieName: "redirect_client",
 		cookiePrefix: "better-auth",
+		customClientID: "electron",
 		...(options || {}),
 	};
 
@@ -128,7 +135,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 							state: z.string().nonempty(),
 						});
 						if (
-							ctx.query?.client_id?.toLowerCase() === "electron" &&
+							ctx.query?.client_id === opts.customClientID &&
 							(ctx.path.startsWith("/sign-in") ||
 								ctx.path.startsWith("/sign-up"))
 						) {
@@ -177,7 +184,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 
 						const { client_id, code_challenge, code_challenge_method, state } =
 							transferPayload;
-						if (client_id?.toLowerCase() !== "electron") {
+						if (client_id !== opts.customClientID) {
 							return;
 						}
 						if (!state) {
@@ -193,22 +200,21 @@ export const electron = (options?: ElectronOptions | undefined) => {
 
 						const redirectCookieName = `${opts.cookiePrefix}.${opts.redirectCookieName}`;
 
-						const identifier = `electron:${generateRandomString(32, "a-z", "A-Z", "0-9")}`;
+						const identifier = generateRandomString(32, "a-z", "A-Z", "0-9");
 						const codeExpiresInMs = opts.codeExpiresIn * 1000;
 						const expiresAt = new Date(Date.now() + codeExpiresInMs);
-						const code =
-							await ctx.context.internalAdapter.createVerificationValue({
-								identifier,
-								value: JSON.stringify({
-									userId: ctx.context.newSession.user.id,
-									codeChallenge: code_challenge,
-									codeChallengeMethod: code_challenge_method.toLowerCase(),
-									state,
-								}),
-								expiresAt,
-							});
+						await ctx.context.internalAdapter.createVerificationValue({
+							identifier: `electron:${identifier}`,
+							value: JSON.stringify({
+								userId: ctx.context.newSession.user.id,
+								codeChallenge: code_challenge,
+								codeChallengeMethod: code_challenge_method.toLowerCase(),
+								state,
+							}),
+							expiresAt,
+						});
 
-						ctx.setCookie(redirectCookieName, code.identifier, {
+						ctx.setCookie(redirectCookieName, `${opts.customClientID}:${identifier}`, {
 							...ctx.context.authCookies.sessionToken.options,
 							maxAge: opts.redirectCookieExpiresIn,
 							httpOnly: false,
