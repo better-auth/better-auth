@@ -506,6 +506,8 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 					model: "passkey",
 					data: newPasskey,
 				});
+				// Delete the challenge after successful registration to prevent replay attacks
+				await ctx.context.internalAdapter.deleteVerificationValue(challengeId);
 				return ctx.json(newPasskeyRes, {
 					status: 200,
 				});
@@ -659,6 +661,8 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 					session: s,
 					user,
 				});
+				// Delete the challenge after successful authentication to prevent replay attacks
+				await ctx.context.internalAdapter.deleteVerificationValue(challengeId);
 				return ctx.json(
 					{
 						session: s,
