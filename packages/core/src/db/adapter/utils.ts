@@ -24,14 +24,6 @@ export function withApplyDefault(
 				}
 				return field.defaultValue;
 			}
-			// If no defaultValue but onUpdate exists, use onUpdate for creation
-			// This handles fields like updatedAt that should be set on both create and update
-			if (field.onUpdate !== undefined) {
-				if (typeof field.onUpdate === "function") {
-					return field.onUpdate();
-				}
-				return field.onUpdate;
-			}
 		}
 	}
 	return value;

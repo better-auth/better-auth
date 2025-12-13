@@ -206,8 +206,7 @@ export const createAdapterFactory =
 					value === undefined &&
 					((fieldAttributes!.defaultValue === undefined &&
 						!fieldAttributes!.transform?.input &&
-						!(action === "update" && fieldAttributes!.onUpdate) &&
-						!(action === "create" && fieldAttributes!.onUpdate)) ||
+						!(action === "update" && fieldAttributes!.onUpdate)) ||
 						(action === "update" && !fieldAttributes!.onUpdate))
 				) {
 					continue;
