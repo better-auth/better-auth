@@ -214,11 +214,15 @@ export const electron = (options?: ElectronOptions | undefined) => {
 							expiresAt,
 						});
 
-						ctx.setCookie(redirectCookieName, `${opts.customClientID}:${identifier}`, {
-							...ctx.context.authCookies.sessionToken.options,
-							maxAge: opts.redirectCookieExpiresIn,
-							httpOnly: false,
-						});
+						ctx.setCookie(
+							redirectCookieName,
+							`${opts.customClientID}:${identifier}`,
+							{
+								...ctx.context.authCookies.sessionToken.options,
+								maxAge: opts.redirectCookieExpiresIn,
+								httpOnly: false,
+							},
+						);
 					}),
 				},
 			],
