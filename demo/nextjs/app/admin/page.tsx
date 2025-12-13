@@ -46,8 +46,8 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
 import { authClient } from "@/lib/auth-client";
+import { cn } from "@/lib/utils";
 
 export default function AdminDashboard() {
 	const queryClient = useQueryClient();

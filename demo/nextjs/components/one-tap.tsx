@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { authClient } from "@/lib/auth-client";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
 import {
@@ -17,7 +18,6 @@ import {
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { PasswordInput } from "./ui/password-input";
-import { authClient } from "@/lib/auth-client";
 
 export function OneTap() {
 	const [isOpen, setIsOpen] = useState(false);

@@ -13,8 +13,8 @@ import {
 	CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { InvitationError } from "./invitation-error";
 import { authClient } from "@/lib/auth-client";
+import { InvitationError } from "./invitation-error";
 
 export default function InvitationPage() {
 	const params = useParams<{

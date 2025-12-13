@@ -6,8 +6,8 @@ import { toast } from "sonner";
 import SignIn from "@/components/sign-in";
 import { SignUp } from "@/components/sign-up";
 import { Tabs } from "@/components/ui/tabs2";
-import { getCallbackURL } from "@/lib/shared";
 import { authClient } from "@/lib/auth-client";
+import { getCallbackURL } from "@/lib/shared";
 
 export default function Page() {
 	const router = useRouter();

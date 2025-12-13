@@ -17,9 +17,9 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { authClient } from "@/lib/auth-client";
 import { getCallbackURL } from "@/lib/shared";
 import { cn } from "@/lib/utils";
-import { authClient } from "@/lib/auth-client";
 
 export default function SignIn() {
 	const [email, setEmail] = useState("");
