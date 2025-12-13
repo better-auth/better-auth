@@ -1,4 +1,4 @@
-import { ERROR_CODES } from ".";
+import { API_KEY_ERROR_CODES as ERROR_CODES } from ".";
 import type { PredefinedApiKeyOptions } from "./routes";
 import type { ApiKey } from "./types";
 

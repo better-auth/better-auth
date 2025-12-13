@@ -4,7 +4,7 @@ import { APIError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils";
 import * as z from "zod";
 import { role } from "../../access";
-import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
+import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
 import { deleteApiKey, getApiKey, setApiKey } from "../adapter";
 import { isRateLimited } from "../rate-limit";

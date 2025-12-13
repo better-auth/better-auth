@@ -58,6 +58,7 @@ export function defineErrorCodes<const T extends Record<string, string>>(
 			{
 				code: key,
 				message: value,
+				toString: () => value,
 			},
 		]),
 	) as any;
