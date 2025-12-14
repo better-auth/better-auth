@@ -195,6 +195,7 @@ type Result = {
   path="/api-key/get"
   method="GET"
   requireSession
+  serverOnlyNote="If you're getting an API key on the server, without access to headers, you can pass the `userId` property instead. This is the ID of the user that the API key belongs to."
 >
 ```ts
 type getApiKey = {
@@ -202,6 +203,11 @@ type getApiKey = {
      * The id of the Api Key.
      */
     id: string = "some-api-key-id"
+    /**
+     * User Id of the user that the Api Key belongs to. server-only.
+     * @serverOnly
+     */
+    userId?: string = "user-id"
 }
 ```
 </APIMethod>
@@ -302,6 +308,7 @@ Otherwise, you'll receive the API Key details, except for the `key` value itself
   path="/api-key/delete"
   method="POST"
   requireSession
+  serverOnlyNote="If you're deleting an API key on the server, without access to headers, you can pass the `userId` property instead. This is the ID of the user that the API key belongs to."
   note="This endpoint is attempting to delete the API key from the perspective of the user. It will check if the user's ID matches the key owner to be able to delete it. If you want to delete a key without these checks, we recommend you use an ORM to directly mutate your DB instead."
 >
 ```ts
@@ -310,6 +317,11 @@ type deleteApiKey = {
      * The id of the Api Key to delete.
      */
     keyId: string = "some-api-key-id"
+    /**
+     * User Id of the user that the Api Key belongs to. server-only.
+     * @serverOnly
+     */
+    userId?: string = "user-id"
 }
 ```
 </APIMethod>
@@ -333,9 +345,15 @@ type Result = {
   path="/api-key/list"
   method="GET"
   requireSession
+  serverOnlyNote="If you're listing API keys on the server, without access to headers, you can pass the `userId` property instead. This is the ID of the user whose API keys you want to list."
 >
 ```ts
 type listApiKeys = {
+    /**
+     * User Id of the user whose API Keys you want to list. server-only.
+     * @serverOnly
+     */
+    userId?: string = "user-id"
 }
 ```
 </APIMethod>

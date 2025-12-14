@@ -2,17 +2,23 @@ import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { safeJSONParse } from "@better-auth/core/utils";
 import * as z from "zod";
-import { APIError, sessionMiddleware } from "../../../api";
+import { APIError, getSessionFromCtx } from "../../../api";
 import { ERROR_CODES } from "..";
 import { getApiKeyById } from "../adapter";
 import type { apiKeySchema } from "../schema";
-import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 
 const getApiKeyQuerySchema = z.object({
 	id: z.string().meta({
 		description: "The id of the Api Key",
 	}),
+	userId: z.coerce
+		.string()
+		.meta({
+			description:
+				'User Id of the user that the Api Key belongs to. server-only. Eg: "user-id"',
+		})
+		.optional(),
 });
 
 export function getApiKey({
@@ -32,7 +38,6 @@ export function getApiKey({
 		{
 			method: "GET",
 			query: getApiKeyQuerySchema,
-			use: [sessionMiddleware],
 			metadata: {
 				openapi: {
 					description: "Retrieve an existing API key by ID",
@@ -173,14 +178,29 @@ export function getApiKey({
 		async (ctx) => {
 			const { id } = ctx.query;
 
-			const session = ctx.context.session;
+			const session = await getSessionFromCtx(ctx);
+			const authRequired = ctx.request || ctx.headers;
+			const user =
+				authRequired && !session
+					? null
+					: session?.user || { id: ctx.query.userId };
 
-			let apiKey: ApiKey | null = null;
+			if (!user?.id) {
+				throw new APIError("UNAUTHORIZED", {
+					message: ERROR_CODES.UNAUTHORIZED_SESSION,
+				});
+			}
 
-			apiKey = await getApiKeyById(ctx, id, opts);
+			if (session && ctx.query.userId) {
+				throw new APIError("UNAUTHORIZED", {
+					message: ERROR_CODES.UNAUTHORIZED_SESSION,
+				});
+			}
+
+			let apiKey = await getApiKeyById(ctx, id, opts);
 
 			// Verify ownership
-			if (apiKey && apiKey.userId !== session.user.id) {
+			if (apiKey && apiKey.userId !== user.id) {
 				apiKey = null;
 			}
 
