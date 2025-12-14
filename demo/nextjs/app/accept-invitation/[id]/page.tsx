@@ -1,6 +1,7 @@
 "use client";
 
-import { CheckIcon, XIcon } from "lucide-react";
+import { AlertCircle, CheckIcon, XIcon } from "lucide-react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useInviteAcceptMutation } from "@/data/organization/invitation-accept-mutation";
 import { useInvitationQuery } from "@/data/organization/invitation-query";
 import { useInviteRejectMutation } from "@/data/organization/invitation-reject-mutation";
-import { InvitationError } from "./invitation-error";
 
 export default function Page() {
 	const params = useParams<{
@@ -166,6 +166,38 @@ function InvitationSkeleton() {
 			</CardContent>
 			<CardFooter className="flex justify-end">
 				<Skeleton className="h-8 w-full" />
+			</CardFooter>
+		</Card>
+	);
+}
+
+function InvitationError() {
+	return (
+		<Card className="w-full max-w-md mx-auto">
+			<CardHeader>
+				<div className="flex items-center space-x-2">
+					<AlertCircle className="w-6 h-6 text-destructive" />
+					<CardTitle className="text-xl text-destructive">
+						Invitation Error
+					</CardTitle>
+				</div>
+				<CardDescription>
+					There was an issue with your invitation.
+				</CardDescription>
+			</CardHeader>
+			<CardContent>
+				<p className="mb-4 text-sm text-muted-foreground">
+					The invitation you're trying to access is either invalid or you don't
+					have the correct permissions. Please check your email for a valid
+					invitation or contact the person who sent it.
+				</p>
+			</CardContent>
+			<CardFooter>
+				<Link href="/" className="w-full">
+					<Button variant="outline" className="w-full">
+						Go back to home
+					</Button>
+				</Link>
 			</CardFooter>
 		</Card>
 	);
