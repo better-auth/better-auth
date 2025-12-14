@@ -600,63 +600,8 @@ export const username = (options?: UsernameOptions | undefined) => {
 								const minUsernameLength = options?.minUsernameLength || 3;
 								const maxUsernameLength = options?.maxUsernameLength || 30;
 
-								// Length validation
-								if (normalizedUsername.length < minUsernameLength) {
-									throw new APIError("BAD_REQUEST", {
-										code: "USERNAME_TOO_SHORT",
-										message: ERROR_CODES.USERNAME_TOO_SHORT,
-									});
-								}
-
-								if (normalizedUsername.length > maxUsernameLength) {
-									throw new APIError("BAD_REQUEST", {
-										message: ERROR_CODES.USERNAME_TOO_LONG,
-									});
-								}
-
-								// Format validation: If displayUsernameValidator is configured, validate the original username input.
-								if (options?.displayUsernameValidator) {
-									const displayValid = await options.displayUsernameValidator(ctx.body.username);
-									if (!displayValid) {
-										throw new APIError("BAD_REQUEST", {
-											message: ERROR_CODES.INVALID_DISPLAY_USERNAME,
-										});
-									}
-								}
-								// Always validate the normalized username with the username validator (or default)
-								const usernameValidator = options?.usernameValidator || defaultUsernameValidator;
-								const usernameValid = await usernameValidator(normalizedUsername);
-								if (!usernameValid) {
-									throw new APIError("BAD_REQUEST", {
-										message: ERROR_CODES.INVALID_USERNAME,
-									});
-								}
-
-								// Uniqueness check
-								const user = await ctx.context.adapter.findOne<User>({
-									model: "user",
-									where: [
-										{
-											field: "username",
-											value: normalizedUsername,
-										},
-									],
-								});
-
-								const blockChangeSignUp = ctx.path === "/sign-up/email" && user;
-								const blockChangeUpdateUser =
-									ctx.path === "/update-user" &&
-									user &&
-									ctx.context.session &&
-									user.id !== ctx.context.session.session.userId;
-								if (blockChangeSignUp || blockChangeUpdateUser) {
-									throw new APIError("BAD_REQUEST", {
-										message: ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
-									});
-								}
+								ctx.body.username = normalizedUsername;
 							}
-
-							ctx.body.username = normalizedUsername;
 						}
 					}),
 				},
