@@ -232,7 +232,6 @@ exports[`base context creation > should match config 1`] = `
           "type": "string",
         },
         "updatedAt": {
-          "defaultValue": [Function],
           "fieldName": "updatedAt",
           "onUpdate": [Function],
           "required": true,
@@ -278,7 +277,6 @@ exports[`base context creation > should match config 1`] = `
           "unique": true,
         },
         "updatedAt": {
-          "defaultValue": [Function],
           "fieldName": "updatedAt",
           "onUpdate": [Function],
           "required": true,
