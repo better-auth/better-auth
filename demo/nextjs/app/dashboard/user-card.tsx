@@ -57,6 +57,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import { useSessionQuery } from "@/data/user/session-query";
 import { useSignOutMutation } from "@/data/user/sign-out-mutation";
 import type { Session } from "@/lib/auth";
 import { authClient } from "@/lib/auth-client";
@@ -69,7 +70,7 @@ export default function UserCard(props: {
 }) {
 	const router = useRouter();
 	const signOutMutation = useSignOutMutation();
-	const { data } = authClient.useSession();
+	const { data } = useSessionQuery();
 	const session = data || props.session;
 	const [isTerminating, setIsTerminating] = useState<string>();
 	const [isPendingTwoFa, setIsPendingTwoFa] = useState<boolean>(false);
@@ -638,7 +639,7 @@ function ChangePassword() {
 }
 
 function EditUserDialog() {
-	const { data } = authClient.useSession();
+	const { data } = useSessionQuery();
 	const [name, setName] = useState<string>();
 	const router = useRouter();
 	const [image, setImage] = useState<File | null>(null);

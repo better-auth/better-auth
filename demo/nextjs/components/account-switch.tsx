@@ -17,6 +17,9 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 } from "@/components/ui/popover";
+import { getQueryClient } from "@/data/query-client";
+import { userKeys } from "@/data/user/keys";
+import { useSessionQuery } from "@/data/user/session-query";
 import type { DeviceSession } from "@/lib/auth";
 import { authClient } from "@/lib/auth-client";
 
@@ -25,9 +28,11 @@ export default function AccountSwitcher({
 }: {
 	deviceSessions: DeviceSession[];
 }) {
-	const { data: currentUser } = authClient.useSession();
+	const queryClient = getQueryClient();
+	const { data: currentUser } = useSessionQuery();
 	const [open, setOpen] = useState(false);
 	const router = useRouter();
+
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger asChild>
@@ -82,6 +87,9 @@ export default function AccountSwitcher({
 										onSelect={async () => {
 											await authClient.multiSession.setActive({
 												sessionToken: u.session.token,
+											});
+											queryClient.invalidateQueries({
+												queryKey: userKeys.all(),
 											});
 											setOpen(false);
 										}}

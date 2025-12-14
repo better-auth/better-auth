@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useSessionQuery } from "@/data/user/session-query";
 import { useSignOutMutation } from "@/data/user/sign-out-mutation";
 import { authClient } from "@/lib/auth-client";
 
@@ -21,10 +22,8 @@ export default function Page() {
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [loading, startTransition] = useTransition();
+	const { data: session, isPending, error } = useSessionQuery();
 	const signOutMutation = useSignOutMutation();
-
-	// Get the session data using the useSession hook
-	const { data: session, isPending, error } = authClient.useSession();
 
 	const handleLogin = async () => {
 		startTransition(async () => {
