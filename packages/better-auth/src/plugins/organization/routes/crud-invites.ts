@@ -6,6 +6,7 @@ import { getSessionFromCtx } from "../../../api/routes";
 import { setSessionCookie } from "../../../cookies";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db";
+import type { User } from "../../../types";
 import { getDate } from "../../../utils/date";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
@@ -475,7 +476,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 			method: "POST",
 			body: acceptInvitationBodySchema,
 			requireHeaders: true,
-			use: [orgMiddleware, orgSessionMiddleware],
+			use: [orgMiddleware], // Removed orgSessionMiddleware to allow accepting without session
 			metadata: {
 				openapi: {
 					description: "Accept an invitation to an organization",
@@ -503,6 +504,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 			},
 		},
 		async (ctx) => {
+			// Session is optional - allow accepting invitations without being logged in
 			const session = ctx.context.session;
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const invitation = await adapter.findInvitationById(
@@ -519,16 +521,40 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
-			if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
-				});
+			// Get user from session or find by email from invitation
+			let user: User;
+			if (session?.user) {
+				user = session.user;
+				// Verify invitation email matches session user email
+				if (
+					invitation.email.toLowerCase() !== session.user.email.toLowerCase()
+				) {
+					throw new APIError("FORBIDDEN", {
+						message:
+							ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
+					});
+				}
+			} else {
+				// No session - find user by invitation email
+				const foundUser = await ctx.context.internalAdapter.findUserByEmail(
+					invitation.email,
+				);
+				if (!foundUser) {
+					throw new APIError("BAD_REQUEST", {
+						message: BASE_ERROR_CODES.USER_NOT_FOUND,
+					});
+				}
+				user = foundUser.user;
 			}
 
+			// Skip email verification check for new signups (users who just registered)
+			// Allow accepting invitation even if emailVerified is false
+			// Only enforce email verification if user has an active session AND option is enabled
+			// This allows new users (without session) to accept invitations before verifying email
 			if (
 				ctx.context.orgOptions.requireEmailVerificationOnInvitation &&
-				!session.user.emailVerified
+				session?.user &&
+				!user.emailVerified
 			) {
 				throw new APIError("FORBIDDEN", {
 					message:
@@ -561,7 +587,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 			if (options?.organizationHooks?.beforeAcceptInvitation) {
 				await options?.organizationHooks.beforeAcceptInvitation({
 					invitation: invitation as unknown as Invitation,
-					user: session.user,
+					user: user,
 					organization,
 				});
 			}
@@ -587,7 +613,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				for (const teamId of teamIds) {
 					await adapter.findOrCreateTeamMember({
 						teamId: teamId,
-						userId: session.user.id,
+						userId: user.id,
 					});
 
 					if (
@@ -595,26 +621,42 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 						"undefined"
 					) {
 						const members = await adapter.countTeamMembers({ teamId });
-
-						const maximumMembersPerTeam =
+						if (
 							typeof ctx.context.orgOptions.teams.maximumMembersPerTeam ===
 							"function"
-								? await ctx.context.orgOptions.teams.maximumMembersPerTeam({
-										teamId,
-										session: session,
-										organizationId: invitation.organizationId,
-									})
-								: ctx.context.orgOptions.teams.maximumMembersPerTeam;
+						) {
+							if (!session) {
+								// Skip team member limit check for users without session
+								// This allows new signups to accept invitations with team assignments
+								continue;
+							}
+							const maximumMembersPerTeam =
+								await ctx.context.orgOptions.teams.maximumMembersPerTeam({
+									teamId,
+									session: session,
+									organizationId: invitation.organizationId,
+								});
 
-						if (members >= maximumMembersPerTeam) {
-							throw new APIError("FORBIDDEN", {
-								message: ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
-							});
+							if (members >= maximumMembersPerTeam) {
+								throw new APIError("FORBIDDEN", {
+									message: ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
+								});
+							}
+						} else {
+							// It's a number, use it directly
+							const maximumMembersPerTeam =
+								ctx.context.orgOptions.teams.maximumMembersPerTeam;
+
+							if (members >= maximumMembersPerTeam) {
+								throw new APIError("FORBIDDEN", {
+									message: ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
+								});
+							}
 						}
 					}
 				}
 
-				if (onlyOne) {
+				if (onlyOne && session?.session) {
 					const teamId = teamIds[0]!;
 					const updatedSession = await adapter.setActiveTeam(
 						session.session.token,
@@ -624,23 +666,26 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 
 					await setSessionCookie(ctx, {
 						session: updatedSession,
-						user: session.user,
+						user: user,
 					});
 				}
 			}
 
 			const member = await adapter.createMember({
 				organizationId: invitation.organizationId,
-				userId: session.user.id,
+				userId: user.id,
 				role: invitation.role,
 				createdAt: new Date(),
 			});
 
-			await adapter.setActiveOrganization(
-				session.session.token,
-				invitation.organizationId,
-				ctx,
-			);
+			// Only set active organization if user has a session
+			if (session?.session) {
+				await adapter.setActiveOrganization(
+					session.session.token,
+					invitation.organizationId,
+					ctx,
+				);
+			}
 			if (!acceptedI) {
 				return ctx.json(null, {
 					status: 400,
@@ -653,7 +698,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				await options?.organizationHooks.afterAcceptInvitation({
 					invitation: acceptedI as unknown as Invitation,
 					member,
-					user: session.user,
+					user: user,
 					organization,
 				});
 			}
