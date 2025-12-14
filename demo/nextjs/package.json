@@ -49,6 +49,7 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@react-email/components": "^1.0.1",
     "@tanstack/react-query": "^5.85.9",
+    "@tanstack/react-query-devtools": "^5.91.1",
     "@types/better-sqlite3": "^7.6.13",
     "better-auth": "workspace:*",
     "better-sqlite3": "^12.2.0",
