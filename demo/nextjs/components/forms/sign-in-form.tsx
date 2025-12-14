@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import * as z from "zod";
@@ -18,6 +18,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { authClient } from "@/lib/auth-client";
+import { LastUsedIndicator } from "../last-used-indicator";
 
 const signInSchema = z.object({
 	email: z.email("Please enter a valid email address."),
@@ -39,6 +40,11 @@ export function SignInForm({
 	showPasswordToggle = false,
 }: SignInFormProps) {
 	const [loading, startTransition] = useTransition();
+	const [isMounted, setIsMounted] = useState(false);
+
+	useEffect(() => {
+		setIsMounted(true);
+	}, []);
 
 	const form = useForm<SignInFormValues>({
 		resolver: zodResolver(signInSchema),
@@ -145,8 +151,11 @@ export function SignInForm({
 					)}
 				/>
 			</FieldGroup>
-			<Button type="submit" className="w-full" disabled={loading}>
+			<Button type="submit" className="w-full relative" disabled={loading}>
 				{loading ? <Loader2 size={16} className="animate-spin" /> : "Login"}
+				{isMounted && authClient.isLastUsedLoginMethod("email") && (
+					<LastUsedIndicator />
+				)}
 			</Button>
 		</form>
 	);

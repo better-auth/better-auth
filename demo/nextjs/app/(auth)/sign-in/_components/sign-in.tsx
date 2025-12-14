@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { SignInForm } from "@/components/forms/sign-in-form";
+import { LastUsedIndicator } from "@/components/last-used-indicator";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -18,12 +19,6 @@ import {
 import { authClient } from "@/lib/auth-client";
 import { getCallbackURL } from "@/lib/shared";
 import { cn } from "@/lib/utils";
-
-const LastUsedIndicator = () => (
-	<span className="ml-auto absolute -right-3 px-2 py-1 text-[0.5rem] bg-blue-200 text-blue-900 dark:bg-blue-600 dark:text-blue-100 rounded-md font-medium pointer-events-none">
-		Last Used
-	</span>
-);
 
 export default function SignIn() {
 	const [isMounted, setIsMounted] = useState(false);
