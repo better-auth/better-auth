@@ -484,16 +484,8 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 						status: 400,
 					});
 				}
-				const {
-					aaguid,
-					// credentialID,
-					// credentialPublicKey,
-					// counter,
-					credentialDeviceType,
-					credentialBackedUp,
-					credential,
-					credentialType,
-				} = registrationInfo;
+				const { aaguid, credentialDeviceType, credentialBackedUp, credential } =
+					registrationInfo;
 				const pubKey = base64.encode(credential.publicKey);
 				const newPasskey: Omit<Passkey, "id"> = {
 					name: ctx.body.name,
@@ -514,11 +506,12 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 					model: "passkey",
 					data: newPasskey,
 				});
+				await ctx.context.internalAdapter.deleteVerificationValue(challengeId);
 				return ctx.json(newPasskeyRes, {
 					status: 200,
 				});
 			} catch (e) {
-				console.log(e);
+				ctx.context.logger.error("Failed to verify registration", e);
 				throw new APIError("INTERNAL_SERVER_ERROR", {
 					message: PASSKEY_ERROR_CODES.FAILED_TO_VERIFY_REGISTRATION,
 				});

@@ -1,8 +1,10 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
+import { BetterAuthError } from "@better-auth/core/error";
 import { APIError } from "../../api";
 import { getEndpointResponse } from "../../utils/plugin-helper";
+import { defaultRoles } from "./access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import {
 	adminUpdateUser,
@@ -68,6 +70,23 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 		getRole: getRole(opts as O),
 		updateRole: updateRole(opts as O),
 	};
+
+	if (options?.adminRoles) {
+		const adminRoles = Array.isArray(options.adminRoles)
+			? options.adminRoles
+			: [...options.adminRoles.split(",")];
+		const invalidRoles = adminRoles.filter(
+			(role) =>
+				!Object.keys(options?.roles || defaultRoles)
+					.map((r) => r.toLowerCase())
+					.includes(role.toLowerCase()),
+		);
+		if (invalidRoles.length > 0) {
+			throw new BetterAuthError(
+				`Invalid admin roles: ${invalidRoles.join(", ")}. Admin roles must be defined in the 'roles' configuration.`,
+			);
+		}
+	}
 
 	return {
 		id: "admin",
@@ -241,6 +260,6 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 					} satisfies BetterAuthPluginDBSchema)
 				: {}),
 		},
-		options: options as O,
+		options: options as NoInfer<O>,
 	} satisfies BetterAuthPlugin;
 };

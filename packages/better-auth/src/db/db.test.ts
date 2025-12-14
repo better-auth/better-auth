@@ -37,7 +37,7 @@ describe("db", async () => {
 
 	it("db hooks", async () => {
 		let callback = false;
-		const { client, db } = await getTestInstance({
+		const { client } = await getTestInstance({
 			databaseHooks: {
 				user: {
 					create: {
@@ -223,7 +223,7 @@ describe("db", async () => {
 					throw: true,
 				},
 			});
-		} catch (error) {
+		} catch {
 			// Expected to fail due to hook returning false
 		}
 

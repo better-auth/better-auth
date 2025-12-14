@@ -117,6 +117,12 @@ export interface AdminOptions {
 	 * By default, the message is "You have been banned from this application"
 	 */
 	bannedUserMessage?: string | undefined;
+	/**
+	 * Whether to allow impersonating other admins
+	 *
+	 * @default false
+	 */
+	allowImpersonatingAdmins?: boolean | undefined;
 }
 
 export type InferAdminRolesFromOption<O extends AdminOptions | undefined> =

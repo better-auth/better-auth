@@ -364,7 +364,7 @@ export const createTestSuite = <
 								model,
 								where: [{ field: "id", value: row.id }],
 							});
-						} catch (error) {
+						} catch {
 							// We ignore any failed attempts to delete the created rows.
 						}
 						if (createdRows[model]!.length === 1) {

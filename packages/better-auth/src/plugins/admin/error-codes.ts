@@ -40,4 +40,6 @@ export const ADMIN_ERROR_CODES = defineErrorCodes({
 	INVALID_RESOURCE: "The provided permission includes an invalid resource",
 	ROLE_NAME_IS_ALREADY_TAKEN: "That role name is already taken",
 	CANNOT_DELETE_A_PRE_DEFINED_ROLE: "Cannot delete a pre-defined role",
+	YOU_CANNOT_IMPERSONATE_ADMINS: "You cannot impersonate admins",
+	INVALID_ROLE_TYPE: "Invalid role type",
 });

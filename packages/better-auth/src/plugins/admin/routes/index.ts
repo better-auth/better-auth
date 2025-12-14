@@ -482,8 +482,41 @@ export const adminUpdateUser = (opts: AdminOptions) =>
 					message: ADMIN_ERROR_CODES.NO_DATA_TO_UPDATE,
 				});
 			}
-			if (ctx.body.data?.role) {
-				ctx.body.data.role = parseRoles(ctx.body.data.role);
+
+			// Role changes must be guarded by `user:set-role` and validated against the role allow-list.
+			if (Object.prototype.hasOwnProperty.call(ctx.body.data, "role")) {
+				const canSetRole = hasPermission({
+					userId: ctx.context.session.user.id,
+					role: ctx.context.session.user.role,
+					options: opts,
+					permissions: {
+						user: ["set-role"],
+					},
+				});
+				if (!canSetRole) {
+					throw new APIError("FORBIDDEN", {
+						message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CHANGE_USERS_ROLE,
+					});
+				}
+
+				const roleValue = (ctx.body.data as Record<string, any>).role;
+				const inputRoles = Array.isArray(roleValue) ? roleValue : [roleValue];
+				for (const role of inputRoles) {
+					if (typeof role !== "string") {
+						throw new APIError("BAD_REQUEST", {
+							message: ADMIN_ERROR_CODES.INVALID_ROLE_TYPE,
+						});
+					}
+					if (opts.roles && !opts.roles[role as keyof typeof opts.roles]) {
+						throw new APIError("BAD_REQUEST", {
+							message:
+								ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE,
+						});
+					}
+				}
+				(ctx.body.data as Record<string, any>).role = parseRoles(
+					inputRoles as string[],
+				);
 			}
 			const updatedUser = await ctx.context.internalAdapter.updateUser(
 				ctx.body.userId,
@@ -663,7 +696,7 @@ export const listUsers = (opts: AdminOptions) =>
 					limit: Number(ctx.query?.limit) || undefined,
 					offset: Number(ctx.query?.offset) || undefined,
 				});
-			} catch (e) {
+			} catch {
 				return ctx.json({
 					users: [],
 					total: 0,
@@ -1042,13 +1075,33 @@ export const impersonateUser = (opts: AdminOptions) =>
 				});
 			}
 
-			const targetUser = await ctx.context.internalAdapter.findUserById(
+			const targetUser = (await ctx.context.internalAdapter.findUserById(
 				ctx.body.userId,
-			);
+			)) as UserWithRole | null;
 
 			if (!targetUser) {
 				throw new APIError("NOT_FOUND", {
 					message: "User not found",
+				});
+			}
+
+			const adminRoles = (
+				Array.isArray(opts.adminRoles)
+					? opts.adminRoles
+					: opts.adminRoles?.split(",") || []
+			).map((role) => role.trim());
+			const targetUserRole = (
+				targetUser.role ||
+				opts.defaultRole ||
+				"user"
+			).split(",");
+			if (
+				opts.allowImpersonatingAdmins !== true &&
+				(targetUserRole.some((role) => adminRoles.includes(role)) ||
+					opts.adminUserIds?.includes(targetUser.id))
+			) {
+				throw new APIError("FORBIDDEN", {
+					message: ADMIN_ERROR_CODES.YOU_CANNOT_IMPERSONATE_ADMINS,
 				});
 			}
 

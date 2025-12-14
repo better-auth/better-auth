@@ -297,7 +297,7 @@ export async function authorize(
 			identifier: code,
 			expiresAt,
 		});
-	} catch (e) {
+	} catch {
 		return handleRedirect(
 			formatErrorURL(
 				query.redirect_uri,
