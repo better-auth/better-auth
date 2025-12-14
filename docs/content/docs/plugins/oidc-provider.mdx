@@ -190,7 +190,7 @@ const auth = betterAuth({
                 clientSecret: "secure-secret-here",
                 name: "Internal Dashboard",
                 type: "web",
-                redirectURLs: ["https://dashboard.company.com/auth/callback"],
+                redirectUrls: ["https://dashboard.company.com/auth/callback"],
                 disabled: false,
                 skipConsent: true, // Skip consent for this trusted client
                 metadata: { internal: true }
@@ -200,7 +200,7 @@ const auth = betterAuth({
                 clientSecret: "mobile-secret", 
                 name: "Company Mobile App",
                 type: "native",
-                redirectURLs: ["com.company.app://auth"],
+                redirectUrls: ["com.company.app://auth"],
                 disabled: false,
                 skipConsent: false, // Still require consent if needed
                 metadata: {}
@@ -450,7 +450,7 @@ Table Name: `oauthApplication`
       isRequired: true
     },
     { 
-      name: "redirectURLs", 
+      name: "redirectUrls",
       type: "string", 
       description: "Comma-separated list of redirect URLs",
       isRequired: true
