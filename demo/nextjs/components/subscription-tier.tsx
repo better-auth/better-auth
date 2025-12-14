@@ -3,8 +3,15 @@ import { cva } from "class-variance-authority";
 import type React from "react";
 import { cn } from "@/lib/utils";
 
+const VALID_TIERS = ["free", "plus", "pro"] as const;
+type Tier = (typeof VALID_TIERS)[number];
+
+const isValidTier = (tier: string | undefined): tier is Tier => {
+	return VALID_TIERS.includes(tier as Tier);
+};
+
 const tierVariants = cva(
-	"inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset transition-all duration-300 ease-in-out",
+	"inline-flex items-center px-3 py-1 text-xs font-semibold ring-1 ring-inset transition-all duration-300 ease-in-out",
 	{
 		variants: {
 			variant: {
@@ -22,17 +29,22 @@ const tierVariants = cva(
 export interface SubscriptionTierLabelProps
 	extends React.HTMLAttributes<HTMLSpanElement>,
 		VariantProps<typeof tierVariants> {
-	tier?: "free" | "plus" | "pro";
+	tier?: string;
 }
 
 export const SubscriptionTierLabel: React.FC<SubscriptionTierLabelProps> = ({
-	tier = "free",
+	tier,
 	className,
 	...props
 }) => {
+	const validTier = isValidTier(tier) ? tier : "free";
+
 	return (
-		<span className={cn(tierVariants({ variant: tier }), className)} {...props}>
-			{tier.charAt(0).toUpperCase() + tier.slice(1)}
+		<span
+			className={cn(tierVariants({ variant: validTier }), className)}
+			{...props}
+		>
+			{validTier.charAt(0).toUpperCase() + validTier.slice(1)}
 		</span>
 	);
 };

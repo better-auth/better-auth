@@ -2,8 +2,9 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import AccountSwitcher from "@/components/account-switch";
 import { auth } from "@/lib/auth";
-import { OrganizationCard } from "./organization-card";
-import UserCard from "./user-card";
+import OrganizationCard from "./_components/organization-card";
+import SubscriptionCard from "./_components/subscription-card";
+import UserCard from "./_components/user-card";
 
 export default async function Page() {
 	const requestHeaders = await headers();
@@ -15,34 +16,28 @@ export default async function Page() {
 		redirect("/sign-in");
 	}
 
-	const [activeSessions, deviceSessions, organization, subscriptions] =
-		await Promise.all([
-			auth.api.listSessions({
-				headers: requestHeaders,
-			}),
-			auth.api.listDeviceSessions({
-				headers: requestHeaders,
-			}),
-			auth.api.getFullOrganization({
-				headers: requestHeaders,
-			}),
-			auth.api.listActiveSubscriptions({
-				headers: requestHeaders,
-			}),
-		]);
+	const [activeSessions, deviceSessions, organization] = await Promise.all([
+		auth.api.listSessions({
+			headers: requestHeaders,
+		}),
+		auth.api.listDeviceSessions({
+			headers: requestHeaders,
+		}),
+		auth.api.getFullOrganization({
+			headers: requestHeaders,
+		}),
+	]);
 
 	return (
 		<div className="w-full">
 			<div className="flex gap-4 flex-col">
-				<AccountSwitcher deviceSessions={deviceSessions} />
-				<UserCard
-					session={session}
-					activeSessions={activeSessions}
-					subscription={subscriptions.find(
-						(sub) => sub.status === "active" || sub.status === "trialing",
-					)}
+				<AccountSwitcher
+					deviceSessions={deviceSessions}
+					initialSession={session}
 				/>
+				<UserCard session={session} activeSessions={activeSessions} />
 				<OrganizationCard session={session} activeOrganization={organization} />
+				<SubscriptionCard />
 			</div>
 		</div>
 	);

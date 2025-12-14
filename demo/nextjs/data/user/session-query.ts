@@ -12,10 +12,11 @@ export async function getSession() {
 }
 export type SessionData = Awaited<ReturnType<typeof getSession>>;
 
-export const useSessionQuery = () => {
+export const useSessionQuery = (initialData?: SessionData) => {
 	return useQuery<SessionData>({
 		queryFn: async () => await getSession(),
 		queryKey: userKeys.session(),
+		initialData,
 		retry: 1,
 	});
 };

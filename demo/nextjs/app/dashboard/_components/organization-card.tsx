@@ -39,10 +39,10 @@ import { useSessionQuery } from "@/data/user/session-query";
 import type { ActiveOrganization, Session } from "@/lib/auth";
 import { authClient } from "@/lib/auth-client";
 
-export function OrganizationCard(props: {
+const OrganizationCard = (props: {
 	session: Session | null;
 	activeOrganization: ActiveOrganization | null;
-}) {
+}) => {
 	const organizations = authClient.useListOrganizations();
 	const [optimisticOrg, setOptimisticOrg] = useState<ActiveOrganization | null>(
 		props.activeOrganization,
@@ -314,7 +314,8 @@ export function OrganizationCard(props: {
 			</CardContent>
 		</Card>
 	);
-}
+};
+export default OrganizationCard;
 
 function CreateOrganizationDialog() {
 	const [name, setName] = useState("");

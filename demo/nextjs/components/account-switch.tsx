@@ -19,17 +19,20 @@ import {
 } from "@/components/ui/popover";
 import { getQueryClient } from "@/data/query-client";
 import { userKeys } from "@/data/user/keys";
+import type { SessionData } from "@/data/user/session-query";
 import { useSessionQuery } from "@/data/user/session-query";
 import type { DeviceSession } from "@/lib/auth";
 import { authClient } from "@/lib/auth-client";
 
 export default function AccountSwitcher({
 	deviceSessions,
+	initialSession,
 }: {
 	deviceSessions: DeviceSession[];
+	initialSession: SessionData;
 }) {
 	const queryClient = getQueryClient();
-	const { data: currentUser } = useSessionQuery();
+	const { data: currentUser } = useSessionQuery(initialSession);
 	const [open, setOpen] = useState(false);
 	const router = useRouter();
 
