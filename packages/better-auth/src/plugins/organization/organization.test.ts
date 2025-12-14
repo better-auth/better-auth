@@ -22,6 +22,7 @@ import type {
 	InferInvitation,
 	InferMember,
 	InferTeam,
+	InferTeamMember,
 	InvitationStatus,
 } from "./schema";
 import type { OrganizationOptions } from "./types";
@@ -1736,6 +1737,9 @@ describe("Additional Fields", async () => {
 		}[],
 		teamMember: [] as {
 			id: string;
+			teamMemberRequiredField: string;
+			teamMemberOptionalField?: string | undefined;
+			teamMemberHiddenField?: string | undefined;
 		}[],
 	};
 
@@ -1785,6 +1789,21 @@ describe("Additional Fields", async () => {
 						type: "string",
 					},
 					teamHiddenField: {
+						type: "string",
+						input: false,
+					},
+				},
+			},
+			teamMember: {
+				additionalFields: {
+					teamMemberRequiredField: {
+						type: "string",
+						required: true,
+					},
+					teamMemberOptionalField: {
+						type: "string",
+					},
+					teamMemberHiddenField: {
 						type: "string",
 						input: false,
 					},
@@ -2138,14 +2157,26 @@ describe("Additional Fields", async () => {
 			teamHiddenField?: string | undefined;
 		}[];
 
+		type ExpectedTeamMembers = {
+			id: string;
+			teamId: string;
+			userId: string;
+			createdAt: Date;
+			teamMemberRequiredField: string;
+			teamMemberOptionalField?: string | undefined;
+			teamMemberHiddenField?: string | undefined;
+		}[];
+
 		type O = typeof orgOptions;
 		type Members = PrettifyDeep<InferMember<O, false>>[];
 		type Invitations = PrettifyDeep<InferInvitation<O, false>>[];
 		type Teams = PrettifyDeep<InferTeam<O, false>>[];
+		type TeamMembers = PrettifyDeep<InferTeamMember<O, false>>[];
 
 		expectTypeOf<Members>().toEqualTypeOf<ExpectedMembers>();
 		expectTypeOf<Invitations>().toEqualTypeOf<ExpectedInvitations>();
 		expectTypeOf<Teams>().toEqualTypeOf<ExpectedTeams>();
+		expectTypeOf<TeamMembers>().toEqualTypeOf<ExpectedTeamMembers>();
 
 		expectTypeOf<NonNullable<Result>>().toEqualTypeOf<{
 			id: string;
@@ -2273,43 +2304,6 @@ describe("Additional Fields", async () => {
 		expect(activeMember?.user.email).toBe(addedMember.user.email);
 		expect(activeMember?.user.name).toBe(addedMember.user.name);
 		expect(activeMember?.user.image).toBe(addedMember.user.image);
-	});
-
-	it("remove member", async () => {
-		const removedMember = await auth.api.removeMember({
-			body: {
-				organizationId: org.id,
-				memberIdOrEmail: addedMember.user.email,
-			},
-			headers,
-		});
-		type Result = PrettifyDeep<typeof removedMember>;
-		type ExpectedResult = {
-			member: {
-				id: string;
-				organizationId: string;
-				role: "member" | "admin" | "owner";
-				createdAt: Date;
-				userId: string;
-				teamId?: string | undefined;
-				user: {
-					id: string;
-					email: string;
-					name: string;
-					image?: string;
-				};
-				memberRequiredField: string;
-				memberOptionalField?: string | undefined;
-				memberHiddenField?: string | undefined;
-			};
-		} | null;
-		expectTypeOf<Result>().toEqualTypeOf<ExpectedResult>();
-		expect(removedMember?.member.user.email).toBe(addedMember.user.email);
-		expect(removedMember?.member.memberRequiredField).toBe("hey");
-		expect(removedMember?.member.memberOptionalField).toBe("hey2");
-		expect(removedMember?.member.memberHiddenField).toBeUndefined();
-		const row = db.member.find((x) => x.id === removedMember?.member.id)!;
-		expect(row).toBeUndefined();
 	});
 
 	let invitation: {
@@ -2559,6 +2553,85 @@ describe("Additional Fields", async () => {
 		expect(row).toBeDefined();
 		expect(row.teamOptionalField).toBe("hey3");
 		expect(row.teamRequiredField).toBe("hey4");
+	});
+
+	let teamMember: {
+		id: string;
+		teamId: string;
+		userId: string;
+		createdAt: Date;
+		teamMemberRequiredField: string;
+		teamMemberOptionalField?: string | undefined;
+		teamMemberHiddenField?: string | undefined;
+	};
+
+	it("add member to team with team member additional fields", async () => {
+		if (!team) throw new Error("Team is null");
+		if (!addedMember) throw new Error("Added member is null");
+		teamMember = await auth.api.addTeamMember({
+			headers,
+			body: {
+				userId: addedMember.user.id,
+				teamId: team.id,
+				teamMemberRequiredField: "hey",
+				teamMemberOptionalField: "hey2",
+			},
+		});
+
+		expect(teamMember?.teamMemberRequiredField).toBe("hey");
+		expectTypeOf<
+			typeof teamMember.teamMemberRequiredField
+		>().toEqualTypeOf<string>();
+		expect(teamMember?.teamMemberOptionalField).toBe("hey2");
+		expectTypeOf<typeof teamMember.teamMemberOptionalField>().toEqualTypeOf<
+			string | undefined
+		>();
+		expectTypeOf<typeof teamMember.teamMemberHiddenField>().toEqualTypeOf<
+			string | undefined
+		>();
+		expect(teamMember.teamMemberHiddenField).toBeUndefined();
+		const row = db.teamMember.find((x) => x.id === teamMember?.id)!;
+		expect(row).toBeDefined();
+		expect(row.teamMemberRequiredField).toBe("hey");
+		expect(row.teamMemberOptionalField).toBe("hey2");
+		expect(row.teamMemberHiddenField).toBeUndefined();
+	});
+
+	it("remove member", async () => {
+		const removedMember = await auth.api.removeMember({
+			body: {
+				organizationId: org.id,
+				memberIdOrEmail: addedMember.user.email,
+			},
+			headers,
+		});
+		type Result = PrettifyDeep<typeof removedMember>;
+		type ExpectedResult = {
+			member: {
+				id: string;
+				organizationId: string;
+				role: "member" | "admin" | "owner";
+				createdAt: Date;
+				userId: string;
+				teamId?: string | undefined;
+				user: {
+					id: string;
+					email: string;
+					name: string;
+					image?: string;
+				};
+				memberRequiredField: string;
+				memberOptionalField?: string | undefined;
+				memberHiddenField?: string | undefined;
+			};
+		} | null;
+		expectTypeOf<Result>().toEqualTypeOf<ExpectedResult>();
+		expect(removedMember?.member.user.email).toBe(addedMember.user.email);
+		expect(removedMember?.member.memberRequiredField).toBe("hey");
+		expect(removedMember?.member.memberOptionalField).toBe("hey2");
+		expect(removedMember?.member.memberHiddenField).toBeUndefined();
+		const row = db.member.find((x) => x.id === removedMember?.member.id)!;
+		expect(row).toBeUndefined();
 	});
 });
 
