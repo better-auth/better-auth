@@ -694,6 +694,25 @@ const canDeleteUserAndRevokeSession = authClient.admin.checkRolePermission({
 });
 ```
 
+**Has Role:**
+
+To check if a user has a specific role, you can use the `hasRole` function provided by the client.
+
+<APIMethod path="/admin/has-role" method="POST">
+```ts
+type userHasRole = {
+    /**
+     * The user id which you want to check the role for. 
+     */
+    userId: string = "user-id"
+    /**
+     * The role to check for. This can be a string or an array of strings. Eg: `admin` or `[admin, user]`.
+     */
+    role: string | string[] = "admin"
+}
+```
+</APIMethod>
+
 ## Schema
 
 This plugin adds the following fields to the `user` table:

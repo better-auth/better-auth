@@ -1444,4 +1444,67 @@ describe("access control", async (it) => {
 			}),
 		).toThrowError(BetterAuthError);
 	});
+
+	it("should check user has role", async () => {
+		const res = await client.admin.hasRole(
+			{
+				role: "admin",
+				userId: user.id,
+			},
+			{
+				headers: headers,
+			},
+		);
+		expect(res.data?.success).toBe(true);
+	});
+
+	it("should return false if user doesn't have role", async () => {
+		const createdUser = await client.admin.createUser(
+			{
+				name: "Test User mr",
+				email: "testmr@test.com",
+				password: "test",
+				role: ["user"],
+			},
+			{
+				headers: headers,
+			},
+		);
+		expect(createdUser.data?.user.role).toBe("user");
+		const res = await client.admin.hasRole(
+			{
+				role: "admin",
+				userId: createdUser.data?.user.id || "",
+			},
+			{
+				headers: headers,
+			},
+		);
+		expect(res.data?.success).toBe(false);
+	});
+
+	it("should return true if user has multiple roles", async () => {
+		const createdUser = await client.admin.createUser(
+			{
+				name: "Test User mr",
+				email: "testmrsdf@test.com",
+				password: "test",
+				role: ["user", "admin"],
+			},
+			{
+				headers: headers,
+			},
+		);
+		expect(createdUser.data?.user.role).toBe("user,admin");
+		const res = await client.admin.hasRole(
+			{
+				role: ["admin", "user"],
+				userId: createdUser.data?.user.id || "",
+			},
+			{
+				headers: headers,
+			},
+		);
+		expect(res.data?.success).toBe(true);
+	});
 });
