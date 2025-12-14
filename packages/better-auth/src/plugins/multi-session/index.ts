@@ -294,27 +294,68 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 					handler: createAuthMiddleware(async (ctx) => {
 						const cookieString = ctx.context.responseHeaders?.get("set-cookie");
 						if (!cookieString) return;
-						const setCookies = parseSetCookieHeader(cookieString);
+						const setCookies = parseSetCookieHeader(cookieString); // Map-like
 						const sessionCookieConfig = ctx.context.authCookies.sessionToken;
 						const sessionToken = ctx.context.newSession?.session.token;
 						if (!sessionToken) return;
-						const cookies = parseCookies(ctx.headers?.get("cookie") || "");
+						const cookies = parseCookies(ctx.headers?.get("cookie") || ""); // Map-like -> entries
 
-						const cookieName = `${
-							sessionCookieConfig.name
-						}_multi-${sessionToken.toLowerCase()}`;
+						const cookieName = `${sessionCookieConfig.name}_multi-${sessionToken.toLowerCase()}`;
 
+						// If exact cookie already being set in response or exists in incoming cookies, skip
 						if (setCookies.get(cookieName) || cookies.get(cookieName)) return;
 
+						// Count current multi-session cookies properly by combining existing request cookies and cookies already being set in this response
+						const existingMultiFromRequest = Object.keys(
+							Object.fromEntries(cookies),
+						).filter(isMultiSessionCookie);
+
+						const existingMultiFromResponse = Array.from(
+							setCookies.keys(),
+						).filter(isMultiSessionCookie);
+
 						const currentMultiSessions =
-							Object.keys(Object.fromEntries(cookies)).filter(
-								isMultiSessionCookie,
-							).length + (cookieString.includes("session_token") ? 1 : 0);
+							existingMultiFromRequest.length +
+							existingMultiFromResponse.length;
 
 						if (currentMultiSessions >= opts.maximumSessions) {
 							return;
 						}
 
+						// ----- NEW: Replace existing multi-session cookie that belongs to the same user -----
+						// Find existing multi-session cookies on request and check whether any belong to the same user.
+						// If found, clear that cookie so browser receives only the new cookie for this user.
+						if (ctx.context.newSession && ctx.context.newSession.user) {
+							for (const mName of existingMultiFromRequest) {
+								try {
+									const existingToken = await ctx.getSignedCookie(
+										mName,
+										ctx.context.secret,
+									);
+									if (!existingToken) continue;
+									const session =
+										await ctx.context.internalAdapter.findSession(
+											existingToken,
+										);
+									if (!session) continue;
+									if (session.user.id === ctx.context.newSession.user.id) {
+										// Clear the old cookie using the same options so the browser removes it.
+										ctx.setCookie(mName, "", {
+											...sessionCookieConfig.options,
+											maxAge: 0,
+										});
+										// Optionally delete the session from adapter if desired:
+										// await ctx.context.internalAdapter.deleteSession(existingToken);
+										// Stop after clearing the first found (replace oldest/first). Change if you want to clear all same-user cookies.
+										break;
+									}
+								} catch (e) {
+									// ignore errors and continue
+								}
+							}
+						}
+
+						// Finally, set the signed cookie for the new session token
 						await ctx.setSignedCookie(
 							cookieName,
 							sessionToken,
@@ -329,27 +370,37 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						const cookieHeader = ctx.headers?.get("cookie");
 						if (!cookieHeader) return;
 						const cookies = Object.fromEntries(parseCookies(cookieHeader));
-						const multiSessionKeys = Object.keys(cookies).filter((key) =>
-							isMultiSessionCookie(key),
-						);
-						const verifiedTokens = (
-							await Promise.all(
-								multiSessionKeys.map(async (key) => {
-									const verifiedToken = await ctx.getSignedCookie(
-										key,
-										ctx.context.secret,
-									);
-									if (verifiedToken) {
-										ctx.setCookie(
-											key.toLowerCase().replace("__secure-", "__Secure-"),
-											"",
-											{
-												...ctx.context.authCookies.sessionToken.options,
-												maxAge: 0,
-											},
-										);
-										return verifiedToken;
+
+						// Verify signed multi-session cookies, clear them, and collect verified tokens
+						const verifiedTokens: string[] = [];
+						for (const key of Object.keys(cookies)) {
+							if (!isMultiSessionCookie(key)) continue;
+							try {
+								const verifiedToken = await ctx.getSignedCookie(
+									key,
+									ctx.context.secret,
+								);
+								if (verifiedToken) {
+									// Clear the cookie using exact name and same options
+									ctx.setCookie(key, "", {
+										...ctx.context.authCookies.sessionToken.options,
+										maxAge: 0,
+									});
+									// Also clear a normalized __Secure- variant if it differs
+									const normalized = key.replace(/^__secure-/i, "__Secure-");
+									if (normalized !== key) {
+										ctx.setCookie(normalized, "", {
+											...ctx.context.authCookies.sessionToken.options,
+											maxAge: 0,
+										});
 									}
+									verifiedTokens.push(verifiedToken);
+								}
+							} catch {
+								// ignore errors and continue
+							}
+						}
+
 									return null;
 								}),
 							)
