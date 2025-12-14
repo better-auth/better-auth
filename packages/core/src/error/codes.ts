@@ -28,4 +28,6 @@ export const BASE_ERROR_CODES = defineErrorCodes({
 	ACCOUNT_NOT_FOUND: "Account not found",
 	USER_ALREADY_HAS_PASSWORD:
 		"User already has a password. Provide that to delete the account.",
+	CROSS_SITE_NAVIGATION_LOGIN_BLOCKED:
+		"Cross-site navigation login blocked. This request appears to be a CSRF attack.",
 });
