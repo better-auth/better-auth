@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-	createInMemoryAuthnRequestStore,
-	DEFAULT_AUTHN_REQUEST_TTL_MS,
-} from "./authn-request-store";
+import { createInMemoryAuthnRequestStore } from "./authn-request-store";
+import { DEFAULT_AUTHN_REQUEST_TTL_MS } from "./constants";
 
 describe("AuthnRequest Store", () => {
 	describe("In-Memory Store", () => {
