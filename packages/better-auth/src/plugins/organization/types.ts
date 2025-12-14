@@ -6,6 +6,7 @@ import type {
 	Invitation,
 	Member,
 	Organization,
+	OrganizationResource,
 	OrganizationRole,
 	Team,
 	TeamMember,
@@ -84,6 +85,131 @@ export interface OrganizationOptions {
 				maximumRolesPerOrganization?:
 					| number
 					| ((organizationId: string) => Promise<number> | number);
+				/**
+				 * Whether to enable custom resources per organization.
+				 *
+				 * When enabled, organizations can define their own resources and permissions
+				 * dynamically alongside the statically defined resources
+				 *
+				 * @default false
+				 */
+				enableCustomResources?: boolean;
+				/**
+				 * The maximum number of custom resources that can be created for an organization.
+				 *
+				 * @default 50
+				 */
+				maximumResourcesPerOrganization?:
+					| number
+					| ((organizationId: string) => Promise<number> | number);
+				/**
+				 * Reserved resource names that cannot be used for custom resources.
+				 *
+				 * @default ["organization", "member", "invitation", "team", "ac"]
+				 */
+				reservedResourceNames?: string[];
+				/**
+				 * Custom validation function for resource names.
+				 * When provided, this COMPLETELY OVERRIDES the default validation rules.
+				 *
+				 * Default rules (only used if this is not provided):
+				 * - Length between 1-50 characters
+				 * - Alphanumeric with underscores only
+				 * - Not a reserved name
+				 *
+				 * @param name - The resource name to validate
+				 * @returns An object with valid flag and optional error message
+				 *
+				 * @example
+				 * ```ts
+				 * // This completely replaces all default validation
+				 * resourceNameValidation: (name) => {
+				 *   if (name.length > 100) {
+				 *     return { valid: false, error: "Resource name too long" };
+				 *   }
+				 *   if (!/^[a-z-]+$/.test(name)) {
+				 *     return { valid: false, error: "Only lowercase letters and hyphens allowed" };
+				 *   }
+				 *   return { valid: true };
+				 * }
+				 * ```
+				 */
+				resourceNameValidation?:
+					| ((name: string) => { valid: boolean; error?: string })
+					| undefined;
+				/**
+				 * Roles allowed to create new custom resources.
+				 *
+				 * @default ['owner']
+				 *
+				 * @example
+				 * ```ts
+				 * allowedRolesToCreateResources: ['owner', 'admin']
+				 * ```
+				 */
+				allowedRolesToCreateResources?: string[];
+				/**
+				 * Custom logic to determine if a user can create a new resource.
+				 * If provided, overrides the default allowedRolesToCreateResources check.
+				 *
+				 * @returns Authorization result
+				 * - `{ allow: true }` - Allow resource creation
+				 * - `{ allow: false, message: "..." }` - Deny with custom error message
+				 *
+				 * @example
+				 * ```ts
+				 * canCreateResource: async ({ member, organizationId, resourceName }) => {
+				 *   // Check subscription or quota
+				 *   const quota = await checkResourceQuota(organizationId);
+				 *   if (!quota.canCreate) {
+				 *     return { allow: false, message: "Resource quota exceeded" };
+				 *   }
+				 *   return { allow: true };
+				 * }
+				 * ```
+				 */
+				canCreateResource?: (params: {
+					organizationId: string;
+					userId: string;
+					member: Member & Record<string, any>;
+					resourceName: string;
+					permissions: string[];
+				}) =>
+					| Promise<{ allow: boolean; message?: string }>
+					| { allow: boolean; message?: string };
+				/**
+				 * Optional hook called after a resource is successfully created.
+				 *
+				 * @example
+				 * ```ts
+				 * onResourceCreated: async ({ organizationId, resourceName }) => {
+				 *   await logResourceCreation(organizationId, resourceName);
+				 * }
+				 * ```
+				 */
+				onResourceCreated?: (params: {
+					organizationId: string;
+					resourceName: string;
+					permissions: string[];
+					createdBy: string;
+				}) => Promise<void> | void;
+				/**
+				 * Optional hook called after resource permissions are successfully expanded.
+				 *
+				 * @example
+				 * ```ts
+				 * onResourceExpanded: async ({ organizationId, resourceName, newPermissions }) => {
+				 *   await logPermissionExpansion(organizationId, resourceName, newPermissions);
+				 * }
+				 * ```
+				 */
+				onResourceExpanded?: (params: {
+					organizationId: string;
+					resourceName: string;
+					oldPermissions: string[];
+					newPermissions: string[];
+					expandedBy: string;
+				}) => Promise<void> | void;
 		  }
 		| undefined;
 	/**
@@ -311,6 +437,15 @@ export interface OrganizationOptions {
 					modelName?: string;
 					fields?: {
 						[key in keyof Omit<OrganizationRole, "id">]?: string;
+					};
+					additionalFields?: {
+						[key in string]: DBFieldAttribute;
+					};
+				};
+				organizationResource?: {
+					modelName?: string;
+					fields?: {
+						[key in keyof Omit<OrganizationResource, "id">]?: string;
 					};
 					additionalFields?: {
 						[key in string]: DBFieldAttribute;
