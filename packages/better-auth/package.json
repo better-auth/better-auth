@@ -507,7 +507,6 @@
     "react-dom": "^18.0.0 || ^19.0.0",
     "solid-js": "^1.0.0",
     "svelte": "^4.0.0 || ^5.0.0",
-    "vitest": "^4.0.15",
     "vue": "^3.0.0"
   },
   "peerDependenciesMeta": {
