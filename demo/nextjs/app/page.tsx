@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import EntryButton from "@/components/entry-button";
 import { auth } from "@/lib/auth";
 
-const features = [
+const features: { name: string; link: string }[] = [
 	{
 		name: "Email & Password",
 		link: "https://www.better-auth.com/docs/authentication/email-password",
@@ -38,6 +38,18 @@ const features = [
 	{
 		name: "Session Management",
 		link: "https://www.better-auth.com/docs/concepts/session-management",
+	},
+	{
+		name: "Multiple Session",
+		link: "https://www.better-auth.com/docs/plugins/multi-session",
+	},
+	{
+		name: "Stripe Integration",
+		link: "https://www.better-auth.com/docs/plugins/stripe",
+	},
+	{
+		name: "Last Login Method",
+		link: "https://www.better-auth.com/docs/plugins/last-login-method",
 	},
 ];
 
