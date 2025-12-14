@@ -614,18 +614,21 @@ export const username = (options?: UsernameOptions | undefined) => {
 									});
 								}
 
-								// Format validation: Use displayUsernameValidator if configured,
-								// otherwise fall back to username validator to prevent XSS
-								const validator = options?.displayUsernameValidator
-									? options.displayUsernameValidator
-									: options?.usernameValidator || defaultUsernameValidator;
-
-								const valid = await validator(normalizedUsername);
-								if (!valid) {
+								// Format validation: If displayUsernameValidator is configured, validate the original username input.
+								if (options?.displayUsernameValidator) {
+									const displayValid = await options.displayUsernameValidator(ctx.body.username);
+									if (!displayValid) {
+										throw new APIError("BAD_REQUEST", {
+											message: ERROR_CODES.INVALID_DISPLAY_USERNAME,
+										});
+									}
+								}
+								// Always validate the normalized username with the username validator (or default)
+								const usernameValidator = options?.usernameValidator || defaultUsernameValidator;
+								const usernameValid = await usernameValidator(normalizedUsername);
+								if (!usernameValid) {
 									throw new APIError("BAD_REQUEST", {
-										message: options?.displayUsernameValidator
-											? ERROR_CODES.INVALID_DISPLAY_USERNAME
-											: ERROR_CODES.INVALID_USERNAME,
+										message: ERROR_CODES.INVALID_USERNAME,
 									});
 								}
 
