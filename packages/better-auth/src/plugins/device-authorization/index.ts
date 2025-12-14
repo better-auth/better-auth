@@ -1,9 +1,9 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
-import type { StringValue as MSStringValue } from "ms";
-import { ms } from "ms";
 import * as z from "zod";
 import { mergeSchema } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
+import type { TimeString } from "../../utils/time";
+import { ms } from "../../utils/time";
 import { DEVICE_AUTHORIZATION_ERROR_CODES } from "./error-codes";
 import {
 	deviceApprove,
@@ -14,14 +14,15 @@ import {
 } from "./routes";
 import { schema } from "./schema";
 
-const msStringValueSchema = z.custom<MSStringValue>(
+const timeStringSchema = z.custom<TimeString>(
 	(val) => {
+		if (typeof val !== "string") return false;
 		try {
-			ms(val as MSStringValue);
+			ms(val as TimeString);
+			return true;
 		} catch {
 			return false;
 		}
-		return true;
 	},
 	{
 		message:
@@ -30,12 +31,12 @@ const msStringValueSchema = z.custom<MSStringValue>(
 );
 
 export const deviceAuthorizationOptionsSchema = z.object({
-	expiresIn: msStringValueSchema
+	expiresIn: timeStringSchema
 		.default("30m")
 		.describe(
 			"Time in seconds until the device code expires. Use formats like '30m', '5s', '1h', etc.",
 		),
-	interval: msStringValueSchema
+	interval: timeStringSchema
 		.default("5s")
 		.describe(
 			"Time in seconds between polling attempts. Use formats like '30m', '5s', '1h', etc.",

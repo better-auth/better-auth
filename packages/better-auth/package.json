@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.4.7-beta.2",
+  "version": "1.4.7-beta.4",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -455,7 +455,6 @@
     "defu": "^6.1.4",
     "jose": "^6.1.0",
     "kysely": "^0.28.5",
-    "ms": "4.0.0-nightly.202508271359",
     "nanostores": "^1.0.1",
     "zod": "^4.1.12"
   },
@@ -476,7 +475,7 @@
     "mongodb": "^6.18.0",
     "msw": "^2.12.4",
     "mysql2": "^3.14.4",
-    "next": "^16.0.1",
+    "next": "^16.0.10",
     "oauth2-mock-server": "^7.2.1",
     "pg": "^8.16.3",
     "prisma": "^5.22.0",

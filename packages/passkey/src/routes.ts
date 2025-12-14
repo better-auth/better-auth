@@ -506,13 +506,12 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 					model: "passkey",
 					data: newPasskey,
 				});
-				// Delete the challenge after successful registration to prevent replay attacks
 				await ctx.context.internalAdapter.deleteVerificationValue(challengeId);
 				return ctx.json(newPasskeyRes, {
 					status: 200,
 				});
 			} catch (e) {
-				console.log(e);
+				ctx.context.logger.error("Failed to verify registration", e);
 				throw new APIError("INTERNAL_SERVER_ERROR", {
 					message: PASSKEY_ERROR_CODES.FAILED_TO_VERIFY_REGISTRATION,
 				});
