@@ -11,6 +11,7 @@ import {
 	numberIdTestSuite,
 	transactionsTestSuite,
 	uuidTestSuite,
+	uuidv7TestSuite,
 } from "../../tests";
 import { kyselyAdapter } from "../kysely-adapter";
 
@@ -212,8 +213,8 @@ const query = async (sql: string, timeoutMs: number = 30000) => {
 };
 
 const showDB = async () => {
-	const tables = await query(`SELECT TABLE_NAME, TABLE_SCHEMA 
-FROM INFORMATION_SCHEMA.TABLES 
+	const tables = await query(`SELECT TABLE_NAME, TABLE_SCHEMA
+FROM INFORMATION_SCHEMA.TABLES
 WHERE TABLE_TYPE = 'BASE TABLE'
 ORDER BY TABLE_SCHEMA, TABLE_NAME;`);
 
@@ -270,8 +271,8 @@ const resetDB = async (retryCount: number = 0) => {
 			`
 			DECLARE @sql NVARCHAR(MAX) = '';
 			SELECT @sql = @sql + 'DROP TABLE [' + TABLE_NAME + '];' + CHAR(13)
-			FROM INFORMATION_SCHEMA.TABLES 
-			WHERE TABLE_TYPE = 'BASE TABLE' 
+			FROM INFORMATION_SCHEMA.TABLES
+			WHERE TABLE_TYPE = 'BASE TABLE'
 			AND TABLE_CATALOG = DB_NAME()
 			AND TABLE_SCHEMA = 'dbo';
 			IF LEN(@sql) > 0
@@ -345,6 +346,7 @@ const { execute } = await testAdapter({
 		numberIdTestSuite(),
 		joinsTestSuite(),
 		uuidTestSuite(),
+		uuidv7TestSuite(),
 	],
 	async onFinish() {
 		kyselyDB.destroy();
