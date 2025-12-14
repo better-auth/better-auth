@@ -958,9 +958,11 @@ Requires `backgroundTasks.handler` to be configured in the main auth options.
     import { waitUntil } from "@vercel/functions";
 
     export const auth = betterAuth({
-      backgroundTasks: {
-        handler: waitUntil,
-      },
+      advanced: { 
+          backgroundTasks: {
+             handler: waitUntil,
+          },
+      }
       plugins: [
         apiKey({
           deferUpdates: true,
