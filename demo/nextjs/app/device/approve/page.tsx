@@ -6,13 +6,13 @@ import { useState, useTransition } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { client, useSession } from "@/lib/auth-client";
+import { authClient } from "@/lib/auth-client";
 
 export default function DeviceApprovalPage() {
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const userCode = searchParams.get("user_code");
-	const { data: session } = useSession();
+	const { data: session } = authClient.useSession();
 	const [isApprovePending, startApproveTransition] = useTransition();
 	const [isDenyPending, startDenyTransition] = useTransition();
 	const [error, setError] = useState<string | null>(null);
@@ -24,7 +24,7 @@ export default function DeviceApprovalPage() {
 
 		startApproveTransition(async () => {
 			try {
-				await client.device.approve({
+				await authClient.device.approve({
 					userCode,
 				});
 				router.push("/device/success");
@@ -41,7 +41,7 @@ export default function DeviceApprovalPage() {
 
 		startDenyTransition(async () => {
 			try {
-				await client.device.deny({
+				await authClient.device.deny({
 					userCode,
 				});
 				router.push("/device/denied");

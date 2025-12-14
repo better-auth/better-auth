@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { client, signIn } from "@/lib/auth-client";
+import { authClient } from "@/lib/auth-client";
 
 export default function ClientTest() {
 	const [email, setEmail] = useState("");
@@ -22,11 +22,11 @@ export default function ClientTest() {
 	const [loading, startTransition] = useTransition();
 
 	// Get the session data using the useSession hook
-	const { data: session, isPending, error } = client.useSession();
+	const { data: session, isPending, error } = authClient.useSession();
 
 	const handleLogin = async () => {
 		startTransition(async () => {
-			await signIn.email(
+			await authClient.signIn.email(
 				{
 					email,
 					password,
@@ -164,7 +164,7 @@ export default function ClientTest() {
 								variant="outline"
 								className="w-full"
 								onClick={() =>
-									client.signOut({
+									authClient.signOut({
 										fetchOptions: {
 											onSuccess: () => {
 												toast.success("Successfully signed out!");

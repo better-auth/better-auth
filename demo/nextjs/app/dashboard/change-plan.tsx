@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { client } from "@/lib/auth-client";
+import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
 function Component(props: { currentPlan?: string; isTrial?: boolean }) {
@@ -139,7 +139,7 @@ function Component(props: { currentPlan?: string; isTrial?: boolean }) {
 								if (selectedPlan === "enterprise") {
 									return;
 								}
-								await client.subscription.upgrade(
+								await authClient.subscription.upgrade(
 									{
 										plan: selectedPlan,
 									},
@@ -169,7 +169,7 @@ function Component(props: { currentPlan?: string; isTrial?: boolean }) {
 								variant="destructive"
 								className="w-full"
 								onClick={async () => {
-									await client.subscription.cancel(
+									await authClient.subscription.cancel(
 										{
 											returnUrl: "/dashboard",
 										},
