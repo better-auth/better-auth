@@ -578,11 +578,16 @@ export const username = (options?: UsernameOptions | undefined) => {
 							ctx.body.displayUsername = ctx.body.username;
 						}
 						if (ctx.body.displayUsername && !ctx.body.username) {
-							// When copying displayUsername to username, replace spaces with underscores
-							// and apply validation to prevent XSS and other injection attacks
+							// When copying displayUsername to username, replace spaces with a configurable character
+							// (default: "_") and apply validation to prevent XSS and other injection attacks.
+							// You can configure the replacement character via the `spaceReplacementChar` option.
+							const spaceReplacementChar =
+								typeof options?.spaceReplacementChar === "string"
+									? options.spaceReplacementChar
+									: "_";
 							let normalizedUsername =
 								typeof ctx.body.displayUsername === "string"
-									? ctx.body.displayUsername.replace(/\s+/g, "_")
+									? ctx.body.displayUsername.replace(/\s+/g, spaceReplacementChar)
 									: ctx.body.displayUsername;
 
 							// Apply username normalization (e.g., toLowerCase)
