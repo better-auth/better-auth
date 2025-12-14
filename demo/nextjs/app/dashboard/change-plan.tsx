@@ -1,3 +1,6 @@
+import { ArrowUpFromLine, CreditCard, RefreshCcw } from "lucide-react";
+import { useId, useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -11,14 +14,8 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { client } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
-import { ArrowUpFromLine, CreditCard, RefreshCcw } from "lucide-react";
-import { useId, useState } from "react";
-import { toast } from "sonner";
 
-function Component(props: {
-	currentPlan?: string;
-	isTrial?: boolean;
-}) {
+function Component(props: { currentPlan?: string; isTrial?: boolean }) {
 	const [selectedPlan, setSelectedPlan] = useState("plus");
 	const id = useId();
 	return (
@@ -30,7 +27,7 @@ function Component(props: {
 					className={cn(
 						"gap-2",
 						!props.currentPlan &&
-							" bg-gradient-to-br from-purple-100 to-stone-300",
+							" bg-linear-to-br from-purple-100 to-stone-300",
 					)}
 				>
 					{props.currentPlan ? (
@@ -70,7 +67,7 @@ function Component(props: {
 						value={selectedPlan}
 						onValueChange={(value) => setSelectedPlan(value)}
 					>
-						<div className="relative flex w-full items-center gap-2 rounded-lg border border-input px-4 py-3 shadow-sm shadow-black/5 has-[[data-state=checked]]:border-ring has-[[data-state=checked]]:bg-accent">
+						<div className="relative flex w-full items-center gap-2 rounded-lg border border-input px-4 py-3 shadow-sm shadow-black/5 has-data-[state=checked]:border-ring has-data-[state=checked]:bg-accent">
 							<RadioGroupItem
 								value="plus"
 								id={`${id}-1`}
@@ -87,7 +84,7 @@ function Component(props: {
 								</p>
 							</div>
 						</div>
-						<div className="relative flex w-full items-center gap-2 rounded-lg border border-input px-4 py-3 shadow-sm shadow-black/5 has-[[data-state=checked]]:border-ring has-[[data-state=checked]]:bg-accent">
+						<div className="relative flex w-full items-center gap-2 rounded-lg border border-input px-4 py-3 shadow-sm shadow-black/5 has-data-[state=checked]:border-ring has-data-[state=checked]:bg-accent">
 							<RadioGroupItem
 								value="pro"
 								id={`${id}-2`}
@@ -104,7 +101,7 @@ function Component(props: {
 								</p>
 							</div>
 						</div>
-						<div className="relative flex w-full items-center gap-2 rounded-lg border border-input px-4 py-3 shadow-sm shadow-black/5 has-[[data-state=checked]]:border-ring has-[[data-state=checked]]:bg-accent">
+						<div className="relative flex w-full items-center gap-2 rounded-lg border border-input px-4 py-3 shadow-sm shadow-black/5 has-data-[state=checked]:border-ring has-data-[state=checked]:bg-accent">
 							<RadioGroupItem
 								value="enterprise"
 								id={`${id}-3`}

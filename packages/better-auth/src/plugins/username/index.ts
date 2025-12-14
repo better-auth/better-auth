@@ -1,48 +1,117 @@
-import * as z from "zod/v4";
-import { createAuthEndpoint, createAuthMiddleware } from "../../api/call";
-import type { BetterAuthPlugin } from "../../types/plugins";
+import type { BetterAuthPlugin } from "@better-auth/core";
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+} from "@better-auth/core/api";
+import type { Account, User } from "@better-auth/core/db";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
-import type { Account, InferOptionSchema, User } from "../../types";
+import * as z from "zod";
+import { createEmailVerificationToken } from "../../api";
 import { setSessionCookie } from "../../cookies";
-import { sendVerificationEmailFn } from "../../api";
-import { BASE_ERROR_CODES } from "../../error/codes";
-import { getSchema, type UsernameSchema } from "./schema";
-import { mergeSchema } from "../../db/schema";
+import { mergeSchema } from "../../db";
+import type { InferOptionSchema } from "../../types/plugins";
 import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
-export * from "./error-codes";
+import type { UsernameSchema } from "./schema";
+import { getSchema } from "./schema";
+
+export { USERNAME_ERROR_CODES } from "./error-codes";
+
 export type UsernameOptions = {
-	schema?: InferOptionSchema<UsernameSchema>;
+	schema?: InferOptionSchema<UsernameSchema> | undefined;
 	/**
 	 * The minimum length of the username
 	 *
 	 * @default 3
 	 */
-	minUsernameLength?: number;
+	minUsernameLength?: number | undefined;
 	/**
 	 * The maximum length of the username
 	 *
 	 * @default 30
 	 */
-	maxUsernameLength?: number;
+	maxUsernameLength?: number | undefined;
 	/**
 	 * A function to validate the username
 	 *
 	 * By default, the username should only contain alphanumeric characters and underscores
 	 */
-	usernameValidator?: (username: string) => boolean | Promise<boolean>;
+	usernameValidator?:
+		| ((username: string) => boolean | Promise<boolean>)
+		| undefined;
+	/**
+	 * A function to validate the display username
+	 *
+	 * By default, no validation is applied to display username
+	 */
+	displayUsernameValidator?:
+		| ((displayUsername: string) => boolean | Promise<boolean>)
+		| undefined;
 	/**
 	 * A function to normalize the username
 	 *
 	 * @default (username) => username.toLowerCase()
 	 */
-	usernameNormalization?: ((username: string) => string) | false;
+	usernameNormalization?: (((username: string) => string) | false) | undefined;
+	/**
+	 * A function to normalize the display username
+	 *
+	 * @default false
+	 */
+	displayUsernameNormalization?:
+		| (((displayUsername: string) => string) | false)
+		| undefined;
+	/**
+	 * The order of validation
+	 *
+	 * @default { username: "pre-normalization", displayUsername: "pre-normalization" }
+	 */
+	validationOrder?:
+		| {
+				/**
+				 * The order of username validation
+				 *
+				 * @default "pre-normalization"
+				 */
+				username?: "pre-normalization" | "post-normalization";
+				/**
+				 * The order of display username validation
+				 *
+				 * @default "pre-normalization"
+				 */
+				displayUsername?: "pre-normalization" | "post-normalization";
+		  }
+		| undefined;
 };
 
 function defaultUsernameValidator(username: string) {
 	return /^[a-zA-Z0-9_.]+$/.test(username);
 }
 
-export const username = (options?: UsernameOptions) => {
+const signInUsernameBodySchema = z.object({
+	username: z.string().meta({ description: "The username of the user" }),
+	password: z.string().meta({ description: "The password of the user" }),
+	rememberMe: z
+		.boolean()
+		.meta({
+			description: "Remember the user session",
+		})
+		.optional(),
+	callbackURL: z
+		.string()
+		.meta({
+			description: "The URL to redirect to after email verification",
+		})
+		.optional(),
+});
+
+const isUsernameAvailableBodySchema = z.object({
+	username: z.string().meta({
+		description: "The username to check",
+	}),
+});
+
+export const username = (options?: UsernameOptions | undefined) => {
 	const normalizer = (username: string) => {
 		if (options?.usernameNormalization === false) {
 			return username;
@@ -53,33 +122,76 @@ export const username = (options?: UsernameOptions) => {
 		return username.toLowerCase();
 	};
 
+	const displayUsernameNormalizer = (displayUsername: string) => {
+		return options?.displayUsernameNormalization
+			? options.displayUsernameNormalization(displayUsername)
+			: displayUsername;
+	};
+
 	return {
 		id: "username",
+		init(ctx) {
+			return {
+				options: {
+					databaseHooks: {
+						user: {
+							create: {
+								async before(user, context) {
+									const username =
+										"username" in user ? (user.username as string) : null;
+									const displayUsername =
+										"displayUsername" in user
+											? (user.displayUsername as string)
+											: null;
+
+									return {
+										data: {
+											...user,
+											...(username ? { username: normalizer(username) } : {}),
+											...(displayUsername
+												? {
+														displayUsername:
+															displayUsernameNormalizer(displayUsername),
+													}
+												: {}),
+										},
+									};
+								},
+							},
+							update: {
+								async before(user, context) {
+									const username =
+										"username" in user ? (user.username as string) : null;
+									const displayUsername =
+										"displayUsername" in user
+											? (user.displayUsername as string)
+											: null;
+
+									return {
+										data: {
+											...user,
+											...(username ? { username: normalizer(username) } : {}),
+											...(displayUsername
+												? {
+														displayUsername:
+															displayUsernameNormalizer(displayUsername),
+													}
+												: {}),
+										},
+									};
+								},
+							},
+						},
+					},
+				},
+			};
+		},
 		endpoints: {
 			signInUsername: createAuthEndpoint(
 				"/sign-in/username",
 				{
 					method: "POST",
-					body: z.object({
-						username: z
-							.string()
-							.meta({ description: "The username of the user" }),
-						password: z
-							.string()
-							.meta({ description: "The password of the user" }),
-						rememberMe: z
-							.boolean()
-							.meta({
-								description: "Remember the user session",
-							})
-							.optional(),
-						callbackURL: z
-							.string()
-							.meta({
-								description: "The URL to redirect to after email verification",
-							})
-							.optional(),
-					}),
+					body: signInUsernameBodySchema,
 					metadata: {
 						openapi: {
 							summary: "Sign in with username",
@@ -106,6 +218,21 @@ export const username = (options?: UsernameOptions) => {
 										},
 									},
 								},
+								422: {
+									description: "Unprocessable Entity. Validation error",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													message: {
+														type: "string",
+													},
+												},
+											},
+										},
+									},
+								},
 							},
 						},
 					},
@@ -118,21 +245,27 @@ export const username = (options?: UsernameOptions) => {
 						});
 					}
 
+					const username =
+						options?.validationOrder?.username === "pre-normalization"
+							? normalizer(ctx.body.username)
+							: ctx.body.username;
+
 					const minUsernameLength = options?.minUsernameLength || 3;
 					const maxUsernameLength = options?.maxUsernameLength || 30;
 
-					if (ctx.body.username.length < minUsernameLength) {
+					if (username.length < minUsernameLength) {
 						ctx.context.logger.error("Username too short", {
-							username: ctx.body.username,
+							username,
 						});
 						throw new APIError("UNPROCESSABLE_ENTITY", {
+							code: "USERNAME_TOO_SHORT",
 							message: ERROR_CODES.USERNAME_TOO_SHORT,
 						});
 					}
 
-					if (ctx.body.username.length > maxUsernameLength) {
+					if (username.length > maxUsernameLength) {
 						ctx.context.logger.error("Username too long", {
-							username: ctx.body.username,
+							username,
 						});
 						throw new APIError("UNPROCESSABLE_ENTITY", {
 							message: ERROR_CODES.USERNAME_TOO_LONG,
@@ -142,20 +275,21 @@ export const username = (options?: UsernameOptions) => {
 					const validator =
 						options?.usernameValidator || defaultUsernameValidator;
 
-					if (!validator(ctx.body.username)) {
+					const valid = await validator(username);
+					if (!valid) {
 						throw new APIError("UNPROCESSABLE_ENTITY", {
 							message: ERROR_CODES.INVALID_USERNAME,
 						});
 					}
 
 					const user = await ctx.context.adapter.findOne<
-						User & { username: string }
+						User & { username: string; displayUsername: string }
 					>({
 						model: "user",
 						where: [
 							{
 								field: "username",
-								value: normalizer(ctx.body.username),
+								value: normalizer(username),
 							},
 						],
 					});
@@ -164,20 +298,10 @@ export const username = (options?: UsernameOptions) => {
 						// By hashing passwords for invalid usernames, we ensure consistent response times
 						await ctx.context.password.hash(ctx.body.password);
 						ctx.context.logger.error("User not found", {
-							username: ctx.body.username,
+							username,
 						});
 						throw new APIError("UNAUTHORIZED", {
 							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
-						});
-					}
-
-					if (
-						!user.emailVerified &&
-						ctx.context.options.emailAndPassword?.requireEmailVerification
-					) {
-						await sendVerificationEmailFn(ctx, user);
-						throw new APIError("FORBIDDEN", {
-							message: ERROR_CODES.EMAIL_NOT_VERIFIED,
 						});
 					}
 
@@ -202,7 +326,7 @@ export const username = (options?: UsernameOptions) => {
 					const currentPassword = account?.password;
 					if (!currentPassword) {
 						ctx.context.logger.error("Password not found", {
-							username: ctx.body.username,
+							username,
 						});
 						throw new APIError("UNAUTHORIZED", {
 							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
@@ -218,9 +342,46 @@ export const username = (options?: UsernameOptions) => {
 							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						});
 					}
+
+					if (
+						ctx.context.options?.emailAndPassword?.requireEmailVerification &&
+						!user.emailVerified
+					) {
+						if (
+							!ctx.context.options?.emailVerification?.sendVerificationEmail
+						) {
+							throw new APIError("FORBIDDEN", {
+								message: ERROR_CODES.EMAIL_NOT_VERIFIED,
+							});
+						}
+
+						if (ctx.context.options?.emailVerification?.sendOnSignIn) {
+							const token = await createEmailVerificationToken(
+								ctx.context.secret,
+								user.email,
+								undefined,
+								ctx.context.options.emailVerification?.expiresIn,
+							);
+							const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${
+								ctx.body.callbackURL || "/"
+							}`;
+							await ctx.context.options.emailVerification.sendVerificationEmail(
+								{
+									user: user,
+									url,
+									token,
+								},
+								ctx.request,
+							);
+						}
+
+						throw new APIError("FORBIDDEN", {
+							message: ERROR_CODES.EMAIL_NOT_VERIFIED,
+						});
+					}
+
 					const session = await ctx.context.internalAdapter.createSession(
 						user.id,
-						ctx,
 						ctx.body.rememberMe === false,
 					);
 					if (!session) {
@@ -243,6 +404,7 @@ export const username = (options?: UsernameOptions) => {
 							email: user.email,
 							emailVerified: user.emailVerified,
 							username: user.username,
+							displayUsername: user.displayUsername,
 							name: user.name,
 							image: user.image,
 							createdAt: user.createdAt,
@@ -255,15 +417,37 @@ export const username = (options?: UsernameOptions) => {
 				"/is-username-available",
 				{
 					method: "POST",
-					body: z.object({
-						username: z.string().meta({
-							description: "The username to check",
-						}),
-					}),
+					body: isUsernameAvailableBodySchema,
 				},
 				async (ctx) => {
 					const username = ctx.body.username;
 					if (!username) {
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: ERROR_CODES.INVALID_USERNAME,
+						});
+					}
+
+					const minUsernameLength = options?.minUsernameLength || 3;
+					const maxUsernameLength = options?.maxUsernameLength || 30;
+
+					if (username.length < minUsernameLength) {
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							code: "USERNAME_TOO_SHORT",
+							message: ERROR_CODES.USERNAME_TOO_SHORT,
+						});
+					}
+
+					if (username.length > maxUsernameLength) {
+						throw new APIError("UNPROCESSABLE_ENTITY", {
+							message: ERROR_CODES.USERNAME_TOO_LONG,
+						});
+					}
+
+					const validator =
+						options?.usernameValidator || defaultUsernameValidator;
+
+					const valid = await validator(username);
+					if (!valid) {
 						throw new APIError("UNPROCESSABLE_ENTITY", {
 							message: ERROR_CODES.INVALID_USERNAME,
 						});
@@ -273,7 +457,7 @@ export const username = (options?: UsernameOptions) => {
 						where: [
 							{
 								field: "username",
-								value: username.toLowerCase(),
+								value: normalizer(username),
 							},
 						],
 					});
@@ -288,7 +472,13 @@ export const username = (options?: UsernameOptions) => {
 				},
 			),
 		},
-		schema: mergeSchema(getSchema(normalizer), options?.schema),
+		schema: mergeSchema(
+			getSchema({
+				username: normalizer,
+				displayUsername: displayUsernameNormalizer,
+			}),
+			options?.schema,
+		),
 		hooks: {
 			before: [
 				{
@@ -299,18 +489,24 @@ export const username = (options?: UsernameOptions) => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const username = ctx.body.username;
+						const username =
+							typeof ctx.body.username === "string" &&
+							options?.validationOrder?.username === "post-normalization"
+								? normalizer(ctx.body.username)
+								: ctx.body.username;
+
 						if (username !== undefined && typeof username === "string") {
 							const minUsernameLength = options?.minUsernameLength || 3;
 							const maxUsernameLength = options?.maxUsernameLength || 30;
 							if (username.length < minUsernameLength) {
-								throw new APIError("UNPROCESSABLE_ENTITY", {
+								throw new APIError("BAD_REQUEST", {
+									code: "USERNAME_TOO_SHORT",
 									message: ERROR_CODES.USERNAME_TOO_SHORT,
 								});
 							}
 
 							if (username.length > maxUsernameLength) {
-								throw new APIError("UNPROCESSABLE_ENTITY", {
+								throw new APIError("BAD_REQUEST", {
 									message: ERROR_CODES.USERNAME_TOO_LONG,
 								});
 							}
@@ -320,7 +516,7 @@ export const username = (options?: UsernameOptions) => {
 
 							const valid = await validator(username);
 							if (!valid) {
-								throw new APIError("UNPROCESSABLE_ENTITY", {
+								throw new APIError("BAD_REQUEST", {
 									message: ERROR_CODES.INVALID_USERNAME,
 								});
 							}
@@ -329,7 +525,7 @@ export const username = (options?: UsernameOptions) => {
 								where: [
 									{
 										field: "username",
-										value: normalizer(username),
+										value: username,
 									},
 								],
 							});
@@ -341,9 +537,30 @@ export const username = (options?: UsernameOptions) => {
 								ctx.context.session &&
 								user.id !== ctx.context.session.session.userId;
 							if (blockChangeSignUp || blockChangeUpdateUser) {
-								throw new APIError("UNPROCESSABLE_ENTITY", {
+								throw new APIError("BAD_REQUEST", {
 									message: ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
 								});
+							}
+						}
+
+						const displayUsername =
+							typeof ctx.body.displayUsername === "string" &&
+							options?.validationOrder?.displayUsername === "post-normalization"
+								? displayUsernameNormalizer(ctx.body.displayUsername)
+								: ctx.body.displayUsername;
+
+						if (
+							displayUsername !== undefined &&
+							typeof displayUsername === "string"
+						) {
+							if (options?.displayUsernameValidator) {
+								const valid =
+									await options.displayUsernameValidator(displayUsername);
+								if (!valid) {
+									throw new APIError("BAD_REQUEST", {
+										message: ERROR_CODES.INVALID_DISPLAY_USERNAME,
+									});
+								}
 							}
 						}
 					}),
@@ -356,9 +573,11 @@ export const username = (options?: UsernameOptions) => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						if (ctx.body.username) {
-							ctx.body.displayUsername ||= ctx.body.username;
-							ctx.body.username = normalizer(ctx.body.username);
+						if (ctx.body.username && !ctx.body.displayUsername) {
+							ctx.body.displayUsername = ctx.body.username;
+						}
+						if (ctx.body.displayUsername && !ctx.body.username) {
+							ctx.body.username = ctx.body.displayUsername;
 						}
 					}),
 				},

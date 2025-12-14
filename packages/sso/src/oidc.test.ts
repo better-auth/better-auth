@@ -1,17 +1,28 @@
+import { betterFetch } from "@better-fetch/fetch";
+import { createAuthClient } from "better-auth/client";
+import { organization } from "better-auth/plugins";
+import { getTestInstance } from "better-auth/test";
+import { OAuth2Server } from "oauth2-mock-server";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sso } from ".";
-import { OAuth2Server } from "oauth2-mock-server";
-import { betterFetch } from "@better-fetch/fetch";
-import { organization } from "better-auth/plugins/organization";
-import { getTestInstanceMemory } from "better-auth/test";
+import { ssoClient } from "./client";
 
 let server = new OAuth2Server();
 
 describe("SSO", async () => {
-	const { auth, signInWithTestUser, customFetchImpl } =
-		await getTestInstanceMemory({
+	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
+		await getTestInstance({
+			trustedOrigins: ["http://localhost:8080"],
 			plugins: [sso(), organization()],
 		});
+
+	const authClient = createAuthClient({
+		plugins: [ssoClient()],
+		baseURL: "http://localhost:3000",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
 
 	beforeAll(async () => {
 		await server.issuer.keys.generate("RS256");
@@ -57,7 +68,7 @@ describe("SSO", async () => {
 		});
 
 		if (!location) throw new Error("No redirect location found");
-
+		const newHeaders = new Headers();
 		let callbackURL = "";
 		await betterFetch(location, {
 			method: "GET",
@@ -65,10 +76,11 @@ describe("SSO", async () => {
 			headers,
 			onError(context) {
 				callbackURL = context.response.headers.get("location") || "";
+				cookieSetter(newHeaders)(context);
 			},
 		});
 
-		return callbackURL;
+		return { callbackURL, headers: newHeaders };
 	}
 
 	it("should register a new SSO provider", async () => {
@@ -84,13 +96,13 @@ describe("SSO", async () => {
 					tokenEndpoint: `${server.issuer.url}/token`,
 					jwksEndpoint: `${server.issuer.url}/jwks`,
 					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
-				},
-				mapping: {
-					id: "sub",
-					email: "email",
-					emailVerified: "email_verified",
-					name: "name",
-					image: "picture",
+					mapping: {
+						id: "sub",
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+						image: "picture",
+					},
 				},
 				providerId: "test",
 			},
@@ -146,61 +158,117 @@ describe("SSO", async () => {
 		}
 	});
 
-	it("should sign in with SSO provider with email matching", async () => {
-		const res = await auth.api.signInSSO({
+	it("should not allow creating a provider with duplicate providerId", async () => {
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
 			body: {
-				email: "my-email@localhost.com",
-				callbackURL: "/dashboard",
+				issuer: server.issuer.url!,
+				domain: "duplicate.com",
+				providerId: "duplicate-oidc-provider",
+				oidcConfig: {
+					clientId: "test",
+					clientSecret: "test",
+				},
+			},
+			headers,
+		});
+
+		await expect(
+			auth.api.registerSSOProvider({
+				body: {
+					issuer: server.issuer.url!,
+					domain: "another-duplicate.com",
+					providerId: "duplicate-oidc-provider",
+					oidcConfig: {
+						clientId: "test2",
+						clientSecret: "test2",
+					},
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "UNPROCESSABLE_ENTITY",
+			body: {
+				message: "SSO provider with this providerId already exists",
+			},
+		});
+	});
+
+	it("should sign in with SSO provider with email matching", async () => {
+		const headers = new Headers();
+		const res = await authClient.signIn.sso({
+			email: "my-email@localhost.com",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(headers),
 			},
 		});
 		expect(res.url).toContain("http://localhost:8080/authorize");
 		expect(res.url).toContain(
 			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Ftest",
 		);
-		const headers = new Headers();
-		const callbackURL = await simulateOAuthFlow(res.url, headers);
+		expect(res.url).toContain("login_hint=my-email%40localhost.com");
+		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
 		expect(callbackURL).toContain("/dashboard");
 	});
 
 	it("should sign in with SSO provider with domain", async () => {
-		const res = await auth.api.signInSSO({
-			body: {
-				email: "my-email@test.com",
-				domain: "localhost.com",
-				callbackURL: "/dashboard",
+		const headers = new Headers();
+		const res = await authClient.signIn.sso({
+			email: "my-email@test.com",
+			domain: "localhost.com",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(headers),
 			},
 		});
 		expect(res.url).toContain("http://localhost:8080/authorize");
 		expect(res.url).toContain(
 			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Ftest",
 		);
-		const headers = new Headers();
-		const callbackURL = await simulateOAuthFlow(res.url, headers);
+		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
 		expect(callbackURL).toContain("/dashboard");
 	});
 
 	it("should sign in with SSO provider with providerId", async () => {
-		const res = await auth.api.signInSSO({
-			body: {
-				providerId: "test",
-				callbackURL: "/dashboard",
+		const headers = new Headers();
+		const res = await authClient.signIn.sso({
+			providerId: "test",
+			loginHint: "user@example.com",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(headers),
 			},
 		});
 		expect(res.url).toContain("http://localhost:8080/authorize");
 		expect(res.url).toContain(
 			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Ftest",
 		);
-		const headers = new Headers();
-		const callbackURL = await simulateOAuthFlow(res.url, headers);
+		expect(res.url).toContain("login_hint=user%40example.com");
+
+		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
 		expect(callbackURL).toContain("/dashboard");
 	});
 });
 
 describe("SSO disable implicit sign in", async () => {
-	const { auth, signInWithTestUser, customFetchImpl } =
-		await getTestInstanceMemory({
+	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
+		await getTestInstance({
+			trustedOrigins: ["http://localhost:8080"],
 			plugins: [sso({ disableImplicitSignUp: true }), organization()],
 		});
+
+	const authClient = createAuthClient({
+		plugins: [ssoClient()],
+		baseURL: "http://localhost:3000",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
 
 	beforeAll(async () => {
 		await server.issuer.keys.generate("RS256");
@@ -246,7 +314,7 @@ describe("SSO disable implicit sign in", async () => {
 		});
 
 		if (!location) throw new Error("No redirect location found");
-
+		const newHeaders = new Headers(headers);
 		let callbackURL = "";
 		await betterFetch(location, {
 			method: "GET",
@@ -254,10 +322,11 @@ describe("SSO disable implicit sign in", async () => {
 			headers,
 			onError(context) {
 				callbackURL = context.response.headers.get("location") || "";
+				cookieSetter(newHeaders)(context);
 			},
 		});
 
-		return callbackURL;
+		return { callbackURL, headers: newHeaders };
 	}
 
 	it("should register a new SSO provider", async () => {
@@ -272,13 +341,14 @@ describe("SSO disable implicit sign in", async () => {
 					authorizationEndpoint: `${server.issuer.url}/authorize`,
 					tokenEndpoint: `${server.issuer.url}/token`,
 					jwksEndpoint: `${server.issuer.url}/jwks`,
-				},
-				mapping: {
-					id: "sub",
-					email: "email",
-					emailVerified: "email_verified",
-					name: "name",
-					image: "picture",
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					mapping: {
+						id: "sub",
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+						image: "picture",
+					},
 				},
 				providerId: "test",
 			},
@@ -307,149 +377,61 @@ describe("SSO disable implicit sign in", async () => {
 			userId: expect.any(String),
 		});
 	});
-	it("should not allow creating a provider if limit is set to 0", async () => {
-		const { auth, signInWithTestUser } = await getTestInstanceMemory({
-			plugins: [sso({ providersLimit: 0 })],
-		});
-		const { headers } = await signInWithTestUser();
-		await expect(
-			auth.api.registerSSOProvider({
-				body: {
-					issuer: server.issuer.url!,
-					domain: "localhost.com",
-					oidcConfig: {
-						clientId: "test",
-						clientSecret: "test",
-					},
-					providerId: "test",
-				},
-				headers,
-			}),
-		).rejects.toMatchObject({
-			status: "FORBIDDEN",
-			body: { message: "SSO provider registration is disabled" },
-		});
-	});
-	it("should not allow creating a provider if limit is reached", async () => {
-		const { auth, signInWithTestUser } = await getTestInstanceMemory({
-			plugins: [sso({ providersLimit: 1 })],
-		});
-		const { headers } = await signInWithTestUser();
 
-		await auth.api.registerSSOProvider({
-			body: {
-				issuer: server.issuer.url!,
-				domain: "localhost.com",
-				oidcConfig: {
-					clientId: "test",
-					clientSecret: "test",
-				},
-				providerId: "test-1",
-			},
-			headers,
-		});
-
-		await expect(
-			auth.api.registerSSOProvider({
-				body: {
-					issuer: server.issuer.url!,
-					domain: "localhost.com",
-					oidcConfig: {
-						clientId: "test",
-						clientSecret: "test",
-					},
-					providerId: "test-2",
-				},
-				headers,
-			}),
-		).rejects.toMatchObject({
-			status: "FORBIDDEN",
-			body: {
-				message: "You have reached the maximum number of SSO providers",
-			},
-		});
-	});
-
-	it("should not allow creating a provider if limit from function is reached", async () => {
-		const { auth, signInWithTestUser } = await getTestInstanceMemory({
-			plugins: [sso({ providersLimit: async () => 1 })],
-		});
-		const { headers } = await signInWithTestUser();
-
-		await auth.api.registerSSOProvider({
-			body: {
-				issuer: server.issuer.url!,
-				domain: "localhost.com",
-				oidcConfig: {
-					clientId: "test",
-					clientSecret: "test",
-				},
-				providerId: "test-1",
-			},
-			headers,
-		});
-
-		await expect(
-			auth.api.registerSSOProvider({
-				body: {
-					issuer: server.issuer.url!,
-					domain: "localhost.com",
-					oidcConfig: {
-						clientId: "test",
-						clientSecret: "test",
-					},
-					providerId: "test-2",
-				},
-				headers,
-			}),
-		).rejects.toMatchObject({
-			status: "FORBIDDEN",
-			body: {
-				message: "You have reached the maximum number of SSO providers",
-			},
-		});
-	});
 	it("should not create user with SSO provider when sign ups are disabled", async () => {
-		const res = await auth.api.signInSSO({
-			body: {
-				email: "my-email@localhost.com",
-				callbackURL: "/dashboard",
+		const headers = new Headers();
+		const res = await authClient.signIn.sso({
+			email: "my-email@localhost.com",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(headers),
 			},
 		});
 		expect(res.url).toContain("http://localhost:8080/authorize");
 		expect(res.url).toContain(
 			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Ftest",
 		);
-		const headers = new Headers();
-		const callbackURL = await simulateOAuthFlow(res.url, headers);
+		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
 		expect(callbackURL).toContain(
 			"/api/auth/error/error?error=signup disabled",
 		);
 	});
 
 	it("should create user with SSO provider when sign ups are disabled but sign up is requested", async () => {
-		const res = await auth.api.signInSSO({
-			body: {
-				email: "my-email@localhost.com",
-				callbackURL: "/dashboard",
-				requestSignUp: true,
+		const headers = new Headers();
+		const res = await authClient.signIn.sso({
+			email: "my-email@localhost.com",
+			callbackURL: "/dashboard",
+			requestSignUp: true,
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(headers),
 			},
 		});
 		expect(res.url).toContain("http://localhost:8080/authorize");
 		expect(res.url).toContain(
 			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Ftest",
 		);
-		const headers = new Headers();
-		const callbackURL = await simulateOAuthFlow(res.url, headers);
+		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
 		expect(callbackURL).toContain("/dashboard");
 	});
 });
 
 describe("provisioning", async (ctx) => {
-	const { auth, signInWithTestUser, customFetchImpl } =
-		await getTestInstanceMemory({
+	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
+		await getTestInstance({
+			trustedOrigins: ["http://localhost:8080"],
 			plugins: [sso(), organization()],
 		});
+
+	const authClient = createAuthClient({
+		plugins: [ssoClient()],
+		baseURL: "http://localhost:3000",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
 
 	beforeAll(async () => {
 		await server.issuer.keys.generate("RS256");
@@ -478,12 +460,14 @@ describe("provisioning", async (ctx) => {
 		if (!location) throw new Error("No redirect location found");
 
 		let callbackURL = "";
+		const newHeaders = new Headers();
 		await betterFetch(location, {
 			method: "GET",
 			customFetchImpl: fetchImpl || customFetchImpl,
 			headers,
 			onError(context) {
 				callbackURL = context.response.headers.get("location") || "";
+				cookieSetter(newHeaders)(context);
 			},
 		});
 
@@ -526,13 +510,14 @@ describe("provisioning", async (ctx) => {
 					authorizationEndpoint: `${server.issuer.url}/authorize`,
 					tokenEndpoint: `${server.issuer.url}/token`,
 					jwksEndpoint: `${server.issuer.url}/jwks`,
-				},
-				mapping: {
-					id: "sub",
-					email: "email",
-					emailVerified: "email_verified",
-					name: "name",
-					image: "picture",
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					mapping: {
+						id: "sub",
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+						image: "picture",
+					},
 				},
 				providerId: "test2",
 				organizationId: organization?.id,
@@ -542,18 +527,20 @@ describe("provisioning", async (ctx) => {
 		expect(provider).toMatchObject({
 			organizationId: organization?.id,
 		});
-
-		const res = await auth.api.signInSSO({
-			body: {
-				email: "my-email@localhost.com",
-				callbackURL: "/dashboard",
+		const newHeaders = new Headers();
+		const res = await authClient.signIn.sso({
+			email: "my-email@localhost.com",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(newHeaders),
+				throw: true,
 			},
 		});
 		expect(res.url).toContain("http://localhost:8080/authorize");
 		expect(res.url).toContain(
 			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Ftest",
 		);
-		const newHeaders = new Headers();
+
 		const callbackURL = await simulateOAuthFlow(res.url, newHeaders);
 		expect(callbackURL).toContain("/dashboard");
 		const org = await auth.api.getFullOrganization({

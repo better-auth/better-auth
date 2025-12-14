@@ -57,8 +57,31 @@ const openAPISchema = await auth.api.generateOpenAPISchema()
 console.log(openAPISchema)
 ```
 
+### Using Scalar with Multiple Sources
+
+If you're using Scalar for your API documentation, you can add Better Auth as an additional source alongside your main API:
+
+When using Hono with Scalar for OpenAPI documentation, you can integrate Better Auth by adding it as a source:
+
+```ts
+app.get("/docs", Scalar({
+  pageTitle: "API Documentation", 
+  sources: [
+    { url: "/api/open-api", title: "API" },
+    // Better Auth schema generation endpoint
+    { url: "/api/auth/open-api/generate-schema", title: "Auth" },
+  ],
+}));
+```
+
 ## Configuration
 
 `path` - The path where the Open API reference is served. Default is `/api/auth/reference`. You can change it to any path you like, but keep in mind that it will be appended to the base path of your auth server.
 
 `disableDefaultReference` - If set to `true`, the default Open API reference UI by Scalar will be disabled. Default is `false`.
+
+This allows you to display both your application's API and Better Auth's authentication endpoints in a unified documentation interface.
+
+`theme` - Allows you to change the theme of the OpenAPI reference page. Default is `default`.
+
+`nonce` - Allows you to pass a nonce string to the inline scripts for Content Security Policy (CSP) compliance. Default is `undefined`.

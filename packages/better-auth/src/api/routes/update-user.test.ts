@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
+import { createAuthClient } from "../../client";
+import { inferAdditionalFields } from "../../client/plugins";
 import { getTestInstance } from "../../test-utils/test-instance";
+import type { Account, Session } from "../../types";
 
 describe("updateUser", async () => {
 	const sendChangeEmail = vi.fn();
 	let emailVerificationToken = "";
-	const { client, testUser, sessionSetter, db, customFetchImpl } =
+	const { client, testUser, sessionSetter, db, signInWithTestUser } =
 		await getTestInstance({
 			emailVerification: {
 				async sendVerificationEmail({ user, url, token }) {
@@ -25,92 +28,33 @@ describe("updateUser", async () => {
 				},
 			},
 		});
-	const headers = new Headers();
-	const session = await client.signIn.email({
-		email: testUser.email,
-		password: testUser.password,
-		fetchOptions: {
-			onSuccess: sessionSetter(headers),
-			onRequest(context) {
-				return context;
-			},
-		},
-	});
-	if (!session) {
-		throw new Error("No session");
-	}
+	// Sign in once for all tests in this describe block
+	const { runWithUser: globalRunWithClient } = await signInWithTestUser();
 
 	it("should update the user's name", async () => {
-		const updated = await client.updateUser({
-			name: "newName",
-			image: "https://example.com/image.jpg",
-			fetchOptions: {
-				headers,
-			},
+		await globalRunWithClient(async () => {
+			const updated = await client.updateUser({
+				name: "newName",
+				image: "https://example.com/image.jpg",
+			});
+			const sessionRes = await client.getSession();
+			expect(updated.data?.status).toBe(true);
+			expect(sessionRes.data?.user.name).toBe("newName");
 		});
-		const session = await client.getSession({
-			fetchOptions: {
-				headers,
-				throw: true,
-			},
-		});
-		expect(updated.data?.status).toBe(true);
-		expect(session?.user.name).toBe("newName");
 	});
 
 	it("should unset image", async () => {
-		const updated = await client.updateUser({
-			image: null,
-			fetchOptions: {
-				headers,
-			},
+		await globalRunWithClient(async () => {
+			await client.updateUser({
+				image: null,
+			});
+			const sessionRes = await client.getSession();
+			expect(sessionRes.data?.user.image).toBeNull();
 		});
-		const session = await client.getSession({
-			fetchOptions: {
-				headers,
-				throw: true,
-			},
-		});
-		expect(session?.user.image).toBeNull();
 	});
 
-	it("should update user email", async () => {
-		const newEmail = "new-email@email.com";
-		const res = await client.changeEmail({
-			newEmail,
-			fetchOptions: {
-				headers: headers,
-			},
-		});
-		const session = await client.getSession({
-			fetchOptions: {
-				headers,
-				throw: true,
-			},
-		});
-		expect(session?.user.email).toBe(newEmail);
-		expect(session?.user.emailVerified).toBe(false);
-	});
-
-	it("should verify email", async () => {
-		await client.verifyEmail({
-			query: {
-				token: emailVerificationToken,
-			},
-			fetchOptions: {
-				headers,
-			},
-		});
-		const session = await client.getSession({
-			fetchOptions: {
-				headers,
-				throw: true,
-			},
-		});
-		expect(session?.user.emailVerified).toBe(true);
-	});
-
-	it("should send email verification before update", async () => {
+	it("should not update user email immediately (default secure flow)", async () => {
+		// Ensure user is verified to trigger the confirmation flow
 		await db.update({
 			model: "user",
 			update: {
@@ -119,47 +63,159 @@ describe("updateUser", async () => {
 			where: [
 				{
 					field: "email",
-					value: "new-email@email.com",
+					value: testUser.email,
 				},
 			],
 		});
-		await client.changeEmail({
-			newEmail: "new-email-2@email.com",
-			fetchOptions: {
-				headers: headers,
-			},
+
+		const newEmail = "new-email@email.com";
+		await globalRunWithClient(async () => {
+			await client.changeEmail({
+				newEmail,
+			});
+			const sessionRes = await client.getSession();
+			// Should NOT update email yet
+			expect(sessionRes.data?.user.email).not.toBe(newEmail);
+			expect(sessionRes.data?.user.email).toBe(testUser.email);
 		});
-		expect(sendChangeEmail).toHaveBeenCalledWith(
-			expect.objectContaining({
-				email: "new-email@email.com",
-			}),
-			"new-email-2@email.com",
-			expect.any(String),
-			expect.any(String),
-		);
+	});
+
+	it("should verify email change (flow with confirmation)", async () => {
+		// The previous test triggered changeEmail.
+		// Since testUser is verified, and sendChangeEmailVerification is provided,
+		// it should have sent a confirmation email to the OLD email.
+
+		expect(sendChangeEmail).toHaveBeenCalled();
+		const call = sendChangeEmail.mock.calls[0];
+		const token = call?.[3]; // token is 4th arg
+		if (!token) throw new Error("Token not found");
+
+		await globalRunWithClient(async () => {
+			// 1. Verify the confirmation token (sent to old email)
+			const res = await client.verifyEmail({
+				query: {
+					token: token,
+				},
+			});
+			expect(res.data?.status).toBe(true);
+
+			// This should trigger sending verification to the NEW email.
+			// emailVerification.sendVerificationEmail should have been called.
+			// We captured this in emailVerificationToken variable in setup.
+			expect(emailVerificationToken).toBeDefined();
+
+			// User email should STILL be old email
+			const sessionRes = await client.getSession();
+			expect(sessionRes.data?.user.email).toBe(testUser.email);
+
+			// 2. Verify the new email token
+			const res2 = await client.verifyEmail({
+				query: {
+					token: emailVerificationToken,
+				},
+			});
+			expect(res2.data?.status).toBe(true);
+
+			// NOW user email should be updated
+			const sessionRes2 = await client.getSession();
+			expect(sessionRes2.data?.user.email).toBe("new-email@email.com");
+			expect(sessionRes2.data?.user.emailVerified).toBe(true);
+		});
 	});
 
 	it("should update the user's password", async () => {
-		const newEmail = "new-email@email.com";
-		const updated = await client.changePassword({
-			newPassword: "newPassword",
-			currentPassword: testUser.password,
-			revokeOtherSessions: true,
-			fetchOptions: {
-				headers: headers,
-			},
+		const newEmail = "new-email@email.com"; // User email is now this
+		await globalRunWithClient(async () => {
+			const updated = await client.changePassword({
+				newPassword: "newPassword",
+				currentPassword: testUser.password,
+				revokeOtherSessions: true,
+			});
+			expect(updated).toBeDefined();
 		});
-		expect(updated).toBeDefined();
 		const signInRes = await client.signIn.email({
 			email: newEmail,
 			password: "newPassword",
 		});
 		expect(signInRes.data?.user).toBeDefined();
 		const signInCurrentPassword = await client.signIn.email({
-			email: testUser.email,
+			email: testUser.email, // Old email
 			password: testUser.password,
 		});
 		expect(signInCurrentPassword.data).toBeNull();
+	});
+
+	it("should update account's updatedAt when changing password", async () => {
+		const newHeaders = new Headers();
+		await client.signUp.email({
+			name: "Test User",
+			email: "test-updated-at@email.com",
+			password: "originalPassword",
+			fetchOptions: {
+				onSuccess: sessionSetter(newHeaders),
+			},
+		});
+
+		// Get the initial account data
+		const initialSession = await client.getSession({
+			fetchOptions: {
+				headers: newHeaders,
+				throw: true,
+			},
+		});
+		const userId = initialSession?.user.id;
+
+		// Get initial account updatedAt
+		const initialAccounts: Account[] = await db.findMany({
+			model: "account",
+			where: [
+				{
+					field: "userId",
+					value: userId!,
+				},
+				{
+					field: "providerId",
+					value: "credential",
+				},
+			],
+		});
+		expect(initialAccounts.length).toBe(1);
+		const initialUpdatedAt = initialAccounts[0]!.updatedAt;
+
+		await new Promise((resolve) => setTimeout(resolve, 100));
+
+		// Change password
+		const updated = await client.changePassword({
+			newPassword: "newPassword123",
+			currentPassword: "originalPassword",
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+		expect(updated.data).toBeDefined();
+
+		// Get updated account data
+		const updatedAccounts: Account[] = await db.findMany({
+			model: "account",
+			where: [
+				{
+					field: "userId",
+					value: userId!,
+				},
+				{
+					field: "providerId",
+					value: "credential",
+				},
+			],
+		});
+		expect(updatedAccounts.length).toBe(1);
+		const newUpdatedAt = updatedAccounts[0]!.updatedAt;
+
+		// Verify updatedAt was refreshed
+		expect(newUpdatedAt).not.toBe(initialUpdatedAt);
+		expect(new Date(newUpdatedAt).getTime()).toBeGreaterThan(
+			new Date(initialUpdatedAt).getTime(),
+		);
 	});
 
 	it("should not update password if current password is wrong", async () => {
@@ -188,25 +244,25 @@ describe("updateUser", async () => {
 	});
 
 	it("should revoke other sessions", async () => {
-		const newHeaders = new Headers();
-		await client.changePassword({
-			newPassword: "newPassword",
-			currentPassword: testUser.password,
-			revokeOtherSessions: true,
-			fetchOptions: {
-				headers: headers,
-				onSuccess: sessionSetter(newHeaders),
-			},
+		await globalRunWithClient(async (headers) => {
+			const newHeaders = new Headers();
+			await client.changePassword({
+				newPassword: "newPassword",
+				currentPassword: testUser.password,
+				revokeOtherSessions: true,
+				fetchOptions: {
+					onSuccess: sessionSetter(newHeaders),
+				},
+			});
+			const cookie = newHeaders.get("cookie");
+			const oldCookie = headers.get("cookie");
+			expect(cookie).not.toBe(oldCookie);
+			// Try to use the old session - it should be revoked
+			const sessionAttempt = await client.getSession();
+			// The old session should still be invalidated even though we're using runWithClient
+			// because revokeOtherSessions should have invalidated it on the server
+			expect(sessionAttempt.data).toBeNull();
 		});
-		const cookie = newHeaders.get("cookie");
-		const oldCookie = headers.get("cookie");
-		expect(cookie).not.toBe(oldCookie);
-		const sessionAttempt = await client.getSession({
-			fetchOptions: {
-				headers: headers,
-			},
-		});
-		expect(sessionAttempt.data).toBeNull();
 	});
 
 	it("shouldn't pass defaults", async () => {
@@ -249,7 +305,7 @@ describe("updateUser", async () => {
 		});
 		expect(res?.newField).toBe("new");
 
-		const updated = await client.updateUser({
+		await client.updateUser({
 			name: "newName",
 			fetchOptions: {
 				headers,
@@ -261,7 +317,7 @@ describe("updateUser", async () => {
 				throw: true,
 			},
 		});
-		// @ts-ignore
+		// @ts-expect-error
 		expect(session?.user.newField).toBe("new");
 	});
 
@@ -309,11 +365,60 @@ describe("updateUser", async () => {
 
 		expect(firstSession?.user.name).toBe("updatedName");
 	});
+
+	it("should not allow updating user with additional fields that are input: false", async () => {
+		const { auth, customFetchImpl, signInWithTestUser } = await getTestInstance(
+			{
+				user: {
+					additionalFields: {
+						newField: {
+							type: "string",
+							defaultValue: "default",
+							input: false,
+						},
+					},
+				},
+			},
+		);
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+			plugins: [inferAdditionalFields<typeof auth>()],
+		});
+		const { headers } = await signInWithTestUser();
+		const res = await client.updateUser(
+			{
+				//@ts-expect-error - newField is not available in the user input
+				newField: "new",
+			},
+			{
+				headers,
+			},
+		);
+		expect(res.error).toBeDefined();
+		expect(res.error?.message).toBe("newField is not allowed to be set");
+	});
 });
 
 describe("delete user", async () => {
+	it("should not delete user if deleteUser is disabled", async () => {
+		const { client, signInWithTestUser } = await getTestInstance({
+			user: {
+				deleteUser: {
+					enabled: false,
+				},
+			},
+		});
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const res = await client.deleteUser();
+			console.log(res);
+		});
+	});
 	it("should delete the user with a fresh session", async () => {
-		const { auth, client, signInWithTestUser } = await getTestInstance({
+		const { client, signInWithTestUser } = await getTestInstance({
 			user: {
 				deleteUser: {
 					enabled: true,
@@ -323,21 +428,63 @@ describe("delete user", async () => {
 				freshAge: 1000,
 			},
 		});
-		const { headers } = await signInWithTestUser();
-		const res = await client.deleteUser({
-			fetchOptions: {
-				headers,
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const res = await client.deleteUser();
+			expect(res.data).toMatchObject({
+				success: true,
+			});
+			const session = await client.getSession();
+			expect(session.data).toBeNull();
+		});
+	});
+
+	it("should delete every session from deleted user", async () => {
+		const store = new Map<string, string>();
+		const { client, signInWithTestUser } = await getTestInstance({
+			user: {
+				deleteUser: {
+					enabled: true,
+				},
+			},
+			secondaryStorage: {
+				set(key, value) {
+					store.set(key, value);
+				},
+				get(key) {
+					return store.get(key) || null;
+				},
+				delete(key) {
+					store.delete(key);
+				},
 			},
 		});
-		expect(res.data).toMatchObject({
-			success: true,
-		});
+
+		// Create a second session
+		const { headers } = await signInWithTestUser();
 		const session = await client.getSession({
 			fetchOptions: {
 				headers,
 			},
 		});
-		expect(session.data).toBeNull();
+
+		// Check if there are multiple sessions
+		const userId = session.data!.session.userId;
+		const sessions = JSON.parse(
+			store.get(`active-sessions-${userId}`)!,
+		) as Array<Session>;
+		expect(sessions.length).toBe(2);
+
+		// Delete user
+		await client.deleteUser({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		// All sessions should be gone now
+		expect(store.get(`active-sessions-${userId}`)).toBeUndefined();
+		expect(store.size).toBe(0);
 	});
 
 	it("should delete with verification flow and password", async () => {
@@ -352,37 +499,87 @@ describe("delete user", async () => {
 				},
 			},
 		});
-		const { headers } = await signInWithTestUser();
-		const res = await client.deleteUser({
-			password: testUser.password,
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const res = await client.deleteUser({
+				password: testUser.password,
+			});
+			expect(res.data).toMatchObject({
+				success: true,
+			});
+			expect(token.length).toBe(32);
+			const session = await client.getSession();
+			expect(session.data).toBeDefined();
+			const deleteCallbackRes = await client.deleteUser({
+				token,
+			});
+			expect(deleteCallbackRes.data).toMatchObject({
+				success: true,
+			});
+			const nullSession = await client.getSession();
+			expect(nullSession.data).toBeNull();
+		});
+	});
+
+	it("should ignore cookie cache for sensitive operations like changePassword", async () => {
+		const { client: cacheClient, sessionSetter: cacheSessionSetter } =
+			await getTestInstance(
+				{
+					session: {
+						cookieCache: {
+							enabled: true,
+							maxAge: 60,
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+		const uniqueEmail = `cache-test-${Date.now()}@test.com`;
+		const testPassword = "testPassword123";
+
+		await cacheClient.signUp.email({
+			email: uniqueEmail,
+			password: testPassword,
+			name: "Cache Test User",
+		});
+
+		const cacheHeaders = new Headers();
+		await cacheClient.signIn.email({
+			email: uniqueEmail,
+			password: testPassword,
 			fetchOptions: {
-				headers,
+				onSuccess: cacheSessionSetter(cacheHeaders),
 			},
 		});
-		expect(res.data).toMatchObject({
-			success: true,
-		});
-		expect(token.length).toBe(32);
-		const session = await client.getSession({
+
+		const initialSession = await cacheClient.getSession({
 			fetchOptions: {
-				headers,
+				headers: cacheHeaders,
+				throw: true,
 			},
 		});
-		expect(session.data).toBeDefined();
-		const deleteCallbackRes = await client.deleteUser({
-			token,
+		expect(initialSession?.user).toBeDefined();
+
+		const changePasswordResult = await cacheClient.changePassword({
+			newPassword: "newSecurePassword123",
+			currentPassword: testPassword,
+			revokeOtherSessions: true,
 			fetchOptions: {
-				headers,
+				headers: cacheHeaders,
 			},
 		});
-		expect(deleteCallbackRes.data).toMatchObject({
-			success: true,
-		});
-		const nullSession = await client.getSession({
+
+		expect(changePasswordResult.data).toBeDefined();
+
+		const sessionAfterPasswordChange = await cacheClient.getSession({
 			fetchOptions: {
-				headers,
+				headers: cacheHeaders,
 			},
 		});
-		expect(nullSession.data).toBeNull();
+
+		expect(sessionAfterPasswordChange.data).toBeNull();
 	});
 });

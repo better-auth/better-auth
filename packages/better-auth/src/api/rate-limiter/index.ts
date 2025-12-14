@@ -1,4 +1,6 @@
-import type { AuthContext, RateLimit } from "../../types";
+import type { AuthContext } from "@better-auth/core";
+import { safeJSONParse } from "@better-auth/core/utils";
+import type { RateLimit } from "../../types";
 import { getIp } from "../../utils/get-request-ip";
 import { wildcardMatch } from "../../utils/wildcard";
 
@@ -51,7 +53,11 @@ function createDBStorage(ctx: AuthContext) {
 
 			return data;
 		},
-		set: async (key: string, value: RateLimit, _update?: boolean) => {
+		set: async (
+			key: string,
+			value: RateLimit,
+			_update?: boolean | undefined,
+		) => {
 			try {
 				if (_update) {
 					await db.updateMany({
@@ -80,28 +86,44 @@ function createDBStorage(ctx: AuthContext) {
 }
 
 const memory = new Map<string, RateLimit>();
-export function getRateLimitStorage(ctx: AuthContext) {
+function getRateLimitStorage(
+	ctx: AuthContext,
+	rateLimitSettings?:
+		| {
+				window?: number;
+		  }
+		| undefined,
+) {
 	if (ctx.options.rateLimit?.customStorage) {
 		return ctx.options.rateLimit.customStorage;
 	}
-	if (ctx.rateLimit.storage === "secondary-storage") {
+	const storage = ctx.rateLimit.storage;
+	if (storage === "secondary-storage") {
 		return {
 			get: async (key: string) => {
-				const stringified = await ctx.options.secondaryStorage?.get(key);
-				return stringified ? (JSON.parse(stringified) as RateLimit) : undefined;
+				const data = await ctx.options.secondaryStorage?.get(key);
+				return data ? safeJSONParse<RateLimit>(data) : undefined;
 			},
-			set: async (key: string, value: RateLimit) => {
-				await ctx.options.secondaryStorage?.set?.(key, JSON.stringify(value));
+			set: async (
+				key: string,
+				value: RateLimit,
+				_update?: boolean | undefined,
+			) => {
+				const ttl =
+					rateLimitSettings?.window ?? ctx.options.rateLimit?.window ?? 10;
+				await ctx.options.secondaryStorage?.set?.(
+					key,
+					JSON.stringify(value),
+					ttl,
+				);
 			},
 		};
-	}
-	const storage = ctx.rateLimit.storage;
-	if (storage === "memory") {
+	} else if (storage === "memory") {
 		return {
 			async get(key: string) {
 				return memory.get(key);
 			},
-			async set(key: string, value: RateLimit, _update?: boolean) {
+			async set(key: string, value: RateLimit, _update?: boolean | undefined) {
 				memory.set(key, value);
 			},
 		};
@@ -113,15 +135,13 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 	if (!ctx.rateLimit.enabled) {
 		return;
 	}
-	const path = new URL(req.url).pathname.replace(
-		ctx.options.basePath || "/api/auth",
-		"",
-	);
+	const path = new URL(req.url).pathname
+		.replace(ctx.options.basePath || "/api/auth", "")
+		.replace(/\/+$/, "");
 	let window = ctx.rateLimit.window;
 	let max = ctx.rateLimit.max;
 	const ip = getIp(req, ctx.options);
 	if (!ip) {
-		console.warn("No IP address found for rate limiting");
 		return;
 	}
 	const key = ip + path;
@@ -162,10 +182,16 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 				window = resolved.window;
 				max = resolved.max;
 			}
+
+			if (resolved === false) {
+				return;
+			}
 		}
 	}
 
-	const storage = getRateLimitStorage(ctx);
+	const storage = getRateLimitStorage(ctx, {
+		window,
+	});
 	const data = await storage.get(key);
 	const now = Date.now();
 

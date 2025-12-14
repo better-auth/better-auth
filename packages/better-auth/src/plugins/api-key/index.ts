@@ -1,15 +1,17 @@
-import { APIError, createAuthMiddleware } from "../../api";
-import type { BetterAuthPlugin } from "../../types/plugins";
-import { mergeSchema } from "../../db";
-import { apiKeySchema } from "./schema";
-import { getIp } from "../../utils/get-request-ip";
-import { getDate } from "../../utils/date";
-import type { ApiKeyOptions } from "./types";
-import { createApiKeyRoutes, deleteAllExpiredApiKeys } from "./routes";
-import type { User } from "../../types";
-import { validateApiKey } from "./routes/verify-api-key";
+import type { BetterAuthPlugin } from "@better-auth/core";
+import { createAuthMiddleware } from "@better-auth/core/api";
+import { defineErrorCodes } from "@better-auth/core/utils";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
+import { APIError } from "../../api";
+import { generateRandomString } from "../../crypto/random";
+import { mergeSchema } from "../../db";
+import { getDate } from "../../utils/date";
+import { getIp } from "../../utils/get-request-ip";
+import { createApiKeyRoutes, deleteAllExpiredApiKeys } from "./routes";
+import { validateApiKey } from "./routes/verify-api-key";
+import { apiKeySchema } from "./schema";
+import type { ApiKeyOptions } from "./types";
 
 export const defaultKeyHasher = async (key: string) => {
 	const hash = await createHash("SHA-256").digest(
@@ -21,7 +23,7 @@ export const defaultKeyHasher = async (key: string) => {
 	return hashed;
 };
 
-export const ERROR_CODES = {
+export const ERROR_CODES = defineErrorCodes({
 	INVALID_METADATA_TYPE: "metadata must be an object or undefined",
 	REFILL_AMOUNT_AND_INTERVAL_REQUIRED:
 		"refillAmount is required when refillInterval is provided",
@@ -53,11 +55,11 @@ export const ERROR_CODES = {
 		"The property you're trying to set can only be set from the server auth instance only.",
 	FAILED_TO_UPDATE_API_KEY: "Failed to update API key",
 	NAME_REQUIRED: "API Key name is required.",
-};
+});
 
 export const API_KEY_TABLE_NAME = "apikey";
 
-export const apiKey = (options?: ApiKeyOptions) => {
+export const apiKey = (options?: ApiKeyOptions | undefined) => {
 	const opts = {
 		...options,
 		apiKeyHeaders: options?.apiKeyHeaders ?? "x-api-key",
@@ -69,6 +71,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 		enableMetadata: options?.enableMetadata ?? false,
 		disableKeyHashing: options?.disableKeyHashing ?? false,
 		requireName: options?.requireName ?? false,
+		storage: options?.storage ?? "database",
 		rateLimit: {
 			enabled:
 				options?.rateLimit?.enabled === undefined
@@ -89,7 +92,9 @@ export const apiKey = (options?: ApiKeyOptions) => {
 			charactersLength:
 				options?.startingCharactersConfig?.charactersLength ?? 6,
 		},
-		disableSessionForAPIKeys: options?.disableSessionForAPIKeys ?? false,
+		enableSessionForAPIKeys: options?.enableSessionForAPIKeys ?? false,
+		fallbackToDatabase: options?.fallbackToDatabase ?? false,
+		customStorage: options?.customStorage,
 	} satisfies ApiKeyOptions;
 
 	const schema = mergeSchema(
@@ -118,14 +123,8 @@ export const apiKey = (options?: ApiKeyOptions) => {
 	const keyGenerator =
 		opts.customKeyGenerator ||
 		(async (options: { length: number; prefix: string | undefined }) => {
-			const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-			let apiKey = `${options.prefix || ""}`;
-			for (let i = 0; i < options.length; i++) {
-				const randomIndex = Math.floor(Math.random() * characters.length);
-				apiKey += characters[randomIndex];
-			}
-
-			return apiKey;
+			const key = generateRandomString(options.length, "a-z", "A-Z");
+			return `${options.prefix || ""}${key}`;
 		});
 
 	const routes = createApiKeyRoutes({ keyGenerator, opts, schema });
@@ -136,8 +135,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 		hooks: {
 			before: [
 				{
-					matcher: (ctx) =>
-						!!getter(ctx) && opts.disableSessionForAPIKeys === false,
+					matcher: (ctx) => !!getter(ctx) && opts.enableSessionForAPIKeys,
 					handler: createAuthMiddleware(async (ctx) => {
 						const key = getter(ctx)!;
 
@@ -176,21 +174,21 @@ export const apiKey = (options?: ApiKeyOptions) => {
 							schema,
 						});
 
-						await deleteAllExpiredApiKeys(ctx.context);
-
-						let user: User;
-						try {
-							const userResult = await ctx.context.internalAdapter.findUserById(
-								apiKey.userId,
+						//for cleanup purposes
+						deleteAllExpiredApiKeys(ctx.context).catch((err) => {
+							ctx.context.logger.error(
+								"Failed to delete expired API keys:",
+								err,
 							);
-							if (!userResult) {
-								throw new APIError("UNAUTHORIZED", {
-									message: ERROR_CODES.INVALID_USER_ID_FROM_API_KEY,
-								});
-							}
-							user = userResult;
-						} catch (error) {
-							throw error;
+						});
+
+						const user = await ctx.context.internalAdapter.findUserById(
+							apiKey.userId,
+						);
+						if (!user) {
+							throw new APIError("UNAUTHORIZED", {
+								message: ERROR_CODES.INVALID_USER_ID_FROM_API_KEY,
+							});
 						}
 
 						const session = {
@@ -198,7 +196,7 @@ export const apiKey = (options?: ApiKeyOptions) => {
 							session: {
 								id: apiKey.id,
 								token: key,
-								userId: user.id,
+								userId: apiKey.userId,
 								userAgent: ctx.request?.headers.get("user-agent") ?? null,
 								ipAddress: ctx.request
 									? getIp(ctx.request, ctx.context.options)
@@ -213,6 +211,8 @@ export const apiKey = (options?: ApiKeyOptions) => {
 									),
 							},
 						};
+
+						// Always set the session context for API key authentication
 						ctx.context.session = session;
 
 						if (ctx.path === "/get-session") {
@@ -337,3 +337,5 @@ export const apiKey = (options?: ApiKeyOptions) => {
 		schema,
 	} satisfies BetterAuthPlugin;
 };
+
+export type * from "./types";

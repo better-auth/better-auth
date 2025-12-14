@@ -1,26 +1,23 @@
+import type { GenericEndpointContext } from "@better-auth/core";
+import { isDevelopment, logger } from "@better-auth/core/env";
 import { APIError, createEmailVerificationToken } from "../api";
-import type { Account } from "../types";
-import type { GenericEndpointContext, User } from "../types";
-import { logger } from "../utils";
-import { isDevelopment } from "../utils/env";
+import { setAccountCookie } from "../cookies/session-store";
+import type { Account, User } from "../types";
 import { setTokenUtil } from "./utils";
 
 export async function handleOAuthUserInfo(
 	c: GenericEndpointContext,
-	{
-		userInfo,
-		account,
-		callbackURL,
-		disableSignUp,
-		overrideUserInfo,
-	}: {
+	opts: {
 		userInfo: Omit<User, "createdAt" | "updatedAt">;
 		account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
-		callbackURL?: string;
-		disableSignUp?: boolean;
-		overrideUserInfo?: boolean;
+		callbackURL?: string | undefined;
+		disableSignUp?: boolean | undefined;
+		overrideUserInfo?: boolean | undefined;
+		isTrustedProvider?: boolean | undefined;
 	},
 ) {
+	const { userInfo, account, callbackURL, disableSignUp, overrideUserInfo } =
+		opts;
 	const dbUser = await c.context.internalAdapter
 		.findOAuthUser(
 			userInfo.email.toLowerCase(),
@@ -48,14 +45,14 @@ export async function handleOAuthUserInfo(
 		if (!hasBeenLinked) {
 			const trustedProviders =
 				c.context.options.account?.accountLinking?.trustedProviders;
-			const isTrustedProvider = trustedProviders?.includes(
-				account.providerId as "apple",
-			);
+			const isTrustedProvider =
+				opts.isTrustedProvider ||
+				trustedProviders?.includes(account.providerId as "apple");
 			if (
 				(!isTrustedProvider && !userInfo.emailVerified) ||
 				c.context.options.account?.accountLinking?.enabled === false
 			) {
-				if (isDevelopment) {
+				if (isDevelopment()) {
 					logger.warn(
 						`User already exist but account isn't linked to ${account.providerId}. To read more about how account linking works in Better Auth see https://www.better-auth.com/docs/concepts/users-accounts#account-linking.`,
 					);
@@ -66,26 +63,33 @@ export async function handleOAuthUserInfo(
 				};
 			}
 			try {
-				await c.context.internalAdapter.linkAccount(
-					{
-						providerId: account.providerId,
-						accountId: userInfo.id.toString(),
-						userId: dbUser.user.id,
-						accessToken: await setTokenUtil(account.accessToken, c.context),
-						refreshToken: await setTokenUtil(account.refreshToken, c.context),
-						idToken: account.idToken,
-						accessTokenExpiresAt: account.accessTokenExpiresAt,
-						refreshTokenExpiresAt: account.refreshTokenExpiresAt,
-						scope: account.scope,
-					},
-					c,
-				);
+				await c.context.internalAdapter.linkAccount({
+					providerId: account.providerId,
+					accountId: userInfo.id.toString(),
+					userId: dbUser.user.id,
+					accessToken: await setTokenUtil(account.accessToken, c.context),
+					refreshToken: await setTokenUtil(account.refreshToken, c.context),
+					idToken: account.idToken,
+					accessTokenExpiresAt: account.accessTokenExpiresAt,
+					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+					scope: account.scope,
+				});
 			} catch (e) {
 				logger.error("Unable to link account", e);
 				return {
 					error: "unable to link account",
 					data: null,
 				};
+			}
+
+			if (
+				userInfo.emailVerified &&
+				!dbUser.user.emailVerified &&
+				userInfo.email.toLowerCase() === dbUser.user.email
+			) {
+				await c.context.internalAdapter.updateUser(dbUser.user.id, {
+					emailVerified: true,
+				});
 			}
 		} else {
 			if (c.context.options.account?.updateAccountOnSignIn !== false) {
@@ -99,20 +103,32 @@ export async function handleOAuthUserInfo(
 						scope: account.scope,
 					}).filter(([_, value]) => value !== undefined),
 				);
+				if (c.context.options.account?.storeAccountCookie) {
+					await setAccountCookie(c, updateData);
+				}
 
 				if (Object.keys(updateData).length > 0) {
 					await c.context.internalAdapter.updateAccount(
 						hasBeenLinked.id,
 						updateData,
-						c,
 					);
 				}
+			}
+
+			if (
+				userInfo.emailVerified &&
+				!dbUser.user.emailVerified &&
+				userInfo.email.toLowerCase() === dbUser.user.email
+			) {
+				await c.context.internalAdapter.updateUser(dbUser.user.id, {
+					emailVerified: true,
+				});
 			}
 		}
 		if (overrideUserInfo) {
 			const { id: _, ...restUserInfo } = userInfo;
 			// update user info from the provider if overrideUserInfo is true
-			await c.context.internalAdapter.updateUser(dbUser.user.id, {
+			user = await c.context.internalAdapter.updateUser(dbUser.user.id, {
 				...restUserInfo,
 				email: userInfo.email.toLowerCase(),
 				emailVerified:
@@ -131,25 +147,28 @@ export async function handleOAuthUserInfo(
 		}
 		try {
 			const { id: _, ...restUserInfo } = userInfo;
-			user = await c.context.internalAdapter
-				.createOAuthUser(
+			const accountData = {
+				accessToken: await setTokenUtil(account.accessToken, c.context),
+				refreshToken: await setTokenUtil(account.refreshToken, c.context),
+				idToken: account.idToken,
+				accessTokenExpiresAt: account.accessTokenExpiresAt,
+				refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+				scope: account.scope,
+				providerId: account.providerId,
+				accountId: userInfo.id.toString(),
+			};
+			const { user: createdUser, account: createdAccount } =
+				await c.context.internalAdapter.createOAuthUser(
 					{
 						...restUserInfo,
 						email: userInfo.email.toLowerCase(),
 					},
-					{
-						accessToken: await setTokenUtil(account.accessToken, c.context),
-						refreshToken: await setTokenUtil(account.refreshToken, c.context),
-						idToken: account.idToken,
-						accessTokenExpiresAt: account.accessTokenExpiresAt,
-						refreshTokenExpiresAt: account.refreshTokenExpiresAt,
-						scope: account.scope,
-						providerId: account.providerId,
-						accountId: userInfo.id.toString(),
-					},
-					c,
-				)
-				.then((res) => res?.user);
+					accountData,
+				);
+			user = createdUser;
+			if (c.context.options.account?.storeAccountCookie) {
+				await setAccountCookie(c, createdAccount);
+			}
 			if (
 				!userInfo.emailVerified &&
 				user &&
@@ -195,7 +214,7 @@ export async function handleOAuthUserInfo(
 		};
 	}
 
-	const session = await c.context.internalAdapter.createSession(user.id, c);
+	const session = await c.context.internalAdapter.createSession(user.id);
 	if (!session) {
 		return {
 			error: "unable to create session",
@@ -203,6 +222,7 @@ export async function handleOAuthUserInfo(
 			isRegister: false,
 		};
 	}
+
 	return {
 		data: {
 			session,

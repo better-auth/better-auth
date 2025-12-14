@@ -1,13 +1,6 @@
-import { parse } from "dotenv";
-import semver from "semver";
-import { format as prettierFormat } from "prettier";
-import { Command } from "commander";
-import * as z from "zod/v4";
-import { existsSync } from "fs";
-import path from "path";
-import fs from "fs/promises";
-import { getPackageInfo } from "../utils/get-package-info";
-import chalk from "chalk";
+import { existsSync } from "node:fs";
+import fs from "node:fs/promises";
+import path from "node:path";
 import {
 	cancel,
 	confirm,
@@ -20,12 +13,19 @@ import {
 	spinner,
 	text,
 } from "@clack/prompts";
-import { installDependencies } from "../utils/install-dependencies";
+import chalk from "chalk";
+import { Command } from "commander";
+import { parse } from "dotenv";
+import { format as prettierFormat } from "prettier";
+import semver from "semver";
+import * as z from "zod/v4";
+import { generateAuthConfig } from "../generators/auth-config";
 import { checkPackageManagers } from "../utils/check-package-managers";
 import { formatMilliseconds } from "../utils/format-ms";
-import { generateSecretHash } from "./secret";
-import { generateAuthConfig } from "../generators/auth-config";
+import { getPackageInfo } from "../utils/get-package-info";
 import { getTsconfigInfo } from "../utils/get-tsconfig-info";
+import { installDependencies } from "../utils/install-dependencies";
+import { generateSecretHash } from "./secret";
 
 /**
  * Should only use any database that is core DBs, and supports the Better Auth CLI generate functionality.
@@ -50,7 +50,7 @@ const supportedDatabases = [
 
 export type SupportedDatabases = (typeof supportedDatabases)[number];
 
-export const supportedPlugins = [
+const supportedPlugins = [
 	{
 		id: "two-factor",
 		name: "twoFactor",
@@ -97,8 +97,8 @@ export const supportedPlugins = [
 		id: "passkey",
 		name: "passkey",
 		clientName: "passkeyClient",
-		path: `better-auth/plugins/passkey`,
-		clientPath: "better-auth/client/plugins",
+		path: `@better-auth/passkey`,
+		clientPath: "@better-auth/passkey/client",
 	},
 	{
 		id: "generic-oauth",
@@ -146,8 +146,8 @@ export const supportedPlugins = [
 		id: "sso",
 		name: "sso",
 		clientName: "ssoClient",
-		path: `better-auth/plugins/sso`,
-		clientPath: "better-auth/client/plugins",
+		path: `@better-auth/sso`,
+		clientPath: "@better-auth/sso/client",
 	},
 	{
 		id: "bearer",
@@ -201,11 +201,7 @@ const defaultFormatOptions = {
 	tabWidth: 4,
 };
 
-const getDefaultAuthConfig = async ({
-	appName,
-}: {
-	appName?: string;
-}) =>
+const getDefaultAuthConfig = async ({ appName }: { appName?: string }) =>
 	await prettierFormat(
 		[
 			"import { betterAuth } from 'better-auth';",
@@ -357,7 +353,7 @@ const optionsSchema = z.object({
 
 const outroText = `🥳 All Done, Happy Hacking!`;
 
-export async function initAction(opts: any) {
+async function initAction(opts: any) {
 	console.log();
 	intro("👋 Initializing Better Auth");
 
@@ -708,7 +704,7 @@ export async function initAction(opts: any) {
 				const { dependencies, envs, generatedCode } = await generateAuthConfig({
 					current_user_config,
 					format,
-					//@ts-ignore
+					//@ts-expect-error
 					s,
 					plugins: add_plugins,
 					database,
@@ -1015,7 +1011,7 @@ export async function initAction(opts: any) {
 					}
 				}
 			}
-		} catch (error) {
+		} catch {
 			// if fails, ignore, and do not proceed with ENV operations.
 		}
 	}

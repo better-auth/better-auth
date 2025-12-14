@@ -1,7 +1,7 @@
+import fs from "node:fs";
+import path from "node:path";
 import type { createAuthEndpoint as BAcreateAuthEndpoint } from "better-auth/api";
-import { z } from "zod";
-import fs from "fs";
-import path from "path";
+import * as z from "zod/v3";
 
 playSound("Hero");
 
@@ -59,7 +59,7 @@ async function generateMDX() {
 	const functionName = Object.keys(exports)[0]! as string;
 
 	const [path, options]: [string, Options] =
-		//@ts-ignore
+		//@ts-expect-error
 		await exports[Object.keys(exports)[0]!];
 	if (!path || !options) return console.error(`No path or options.`);
 
@@ -194,17 +194,17 @@ function parseZodShape(zod: z.ZodAny, path: string[]) {
 		{ description: "some descriptiom" },
 	).shape;
 
-	//@ts-ignore
+	//@ts-expect-error
 	if (zod._def.typeName === "ZodOptional") {
 		isRootOptional = true;
 		const eg = z.optional(z.object({}));
 		const x = zod as never as typeof eg;
-		//@ts-ignore
+		//@ts-expect-error
 		shape = x._def.innerType.shape;
 	} else {
 		const eg = z.object({});
 		const x = zod as never as typeof eg;
-		//@ts-ignore
+		//@ts-expect-error
 		shape = x.shape;
 	}
 
@@ -485,7 +485,7 @@ function pathToDotNotation(input: string): string {
 		.join(".");
 }
 
-async function playSound(name: string = "Ping") {
+function playSound(name: string = "Ping") {
 	const path = `/System/Library/Sounds/${name}.aiff`;
-	await Bun.$`afplay ${path}`;
+	void Bun.$`afplay ${path}`;
 }

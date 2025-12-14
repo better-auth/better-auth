@@ -1,4 +1,4 @@
-import { describe, expect, vi } from "vitest";
+import { afterEach, describe, expect, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 
 describe("sign-up with custom fields", async (it) => {
@@ -21,19 +21,32 @@ describe("sign-up with custom fields", async (it) => {
 						type: "string",
 						required: false,
 					},
+					isAdmin: {
+						type: "boolean",
+						defaultValue: true,
+						input: false,
+					},
+					role: {
+						input: false,
+						type: "string",
+						required: false,
+					},
 				},
 			},
 			emailVerification: {
 				sendOnSignUp: true,
-				sendVerificationEmail: async ({ user, url, token }, request) => {
-					mockFn(user, url);
-				},
+				sendVerificationEmail: mockFn,
 			},
 		},
 		{
 			disableTestUser: true,
 		},
 	);
+
+	afterEach(() => {
+		mockFn.mockReset();
+	});
+
 	it("should work with custom fields on account table", async () => {
 		const res = await auth.api.signUpEmail({
 			body: {
@@ -44,14 +57,25 @@ describe("sign-up with custom fields", async (it) => {
 			},
 		});
 		expect(res.token).toBeDefined();
+		const users = await db.findMany({
+			model: "user",
+		});
 		const accounts = await db.findMany({
 			model: "account",
 		});
 		expect(accounts).toHaveLength(1);
-	});
 
-	it("should send verification email", async () => {
-		expect(mockFn).toHaveBeenCalledWith(expect.any(Object), expect.any(String));
+		expect("isAdmin" in (users[0] as any)).toBe(true);
+		expect((users[0] as any).isAdmin).toBe(true);
+
+		expect(mockFn).toHaveBeenCalledTimes(1);
+		expect(mockFn).toHaveBeenCalledWith(
+			expect.objectContaining({
+				token: expect.any(String),
+				url: expect.any(String),
+				user: expect.any(Object),
+			}),
+		);
 	});
 
 	it("should get the ipAddress and userAgent from headers", async () => {
@@ -71,9 +95,70 @@ describe("sign-up with custom fields", async (it) => {
 				authorization: `Bearer ${res.token}`,
 			}),
 		});
-		expect(session?.session).toMatchObject({
+		expect(session).toBeDefined();
+		expect(session!.session).toMatchObject({
 			userAgent: "test-user-agent",
 			ipAddress: "127.0.0.1",
 		});
+	});
+
+	it("should rollback when session creation fails", async ({ skip }) => {
+		const ctx = await auth.$context;
+		if (!ctx.adapter.options?.adapterConfig.transaction) {
+			skip();
+		}
+		const originalCreateSession = ctx.internalAdapter.createSession;
+		ctx.internalAdapter.createSession = vi
+			.fn()
+			.mockRejectedValue(new Error("Session creation failed"));
+
+		await expect(
+			auth.api.signUpEmail({
+				body: {
+					email: "rollback@test.com",
+					password: "password",
+					name: "Rollback Test",
+				},
+			}),
+		).rejects.toThrow();
+
+		const users = await db.findMany({ model: "user" });
+		const rollbackUser = users.find(
+			(u: any) => u.email === "rollback@test.com",
+		);
+		expect(rollbackUser).toBeUndefined();
+
+		ctx.internalAdapter.createSession = originalCreateSession;
+	});
+
+	it("should not allow user to set the field that is set to input: false", async () => {
+		await expect(
+			auth.api.signUpEmail({
+				body: {
+					email: "input-false@test.com",
+					password: "password",
+					name: "Input False Test",
+					//@ts-expect-error
+					role: "admin",
+				},
+			}),
+		).rejects.toThrow("role is not allowed to be set");
+	});
+
+	it("should throw status code 400 when passing invalid body", async () => {
+		await expect(
+			auth.api.signUpEmail({
+				body: {
+					name: "Test",
+					email: "body-validation@test.com",
+					// @ts-expect-error
+					password: undefined,
+				},
+			}),
+		).rejects.toThrowError(
+			expect.objectContaining({
+				status: 400,
+			}),
+		);
 	});
 });

@@ -1,12 +1,11 @@
-import {
-	BetterFetchError,
-	type BetterFetch,
-	type BetterFetchOption,
-} from "@better-fetch/fetch";
-import { atom, onMount, type PreinitializedWritableAtom } from "nanostores";
+import type { ClientFetchOption } from "@better-auth/core";
+import type { BetterFetch, BetterFetchError } from "@better-fetch/fetch";
+import type { PreinitializedWritableAtom } from "nanostores";
+import { atom, onMount } from "nanostores";
+import type { SessionQueryParams } from "./types";
 
 // SSR detection
-const isServer = typeof window === "undefined";
+const isServer = () => typeof window === "undefined";
 
 export const useAuthQuery = <T>(
 	initializedAtom:
@@ -15,79 +14,102 @@ export const useAuthQuery = <T>(
 	path: string,
 	$fetch: BetterFetch,
 	options?:
-		| ((value: {
-				data: null | T;
-				error: null | BetterFetchError;
-				isPending: boolean;
-		  }) => BetterFetchOption)
-		| BetterFetchOption,
+		| (
+				| ((value: {
+						data: null | T;
+						error: null | BetterFetchError;
+						isPending: boolean;
+				  }) => ClientFetchOption)
+				| ClientFetchOption
+		  )
+		| undefined,
 ) => {
 	const value = atom<{
 		data: null | T;
 		error: null | BetterFetchError;
 		isPending: boolean;
 		isRefetching: boolean;
-		refetch: () => void;
+		refetch: (
+			queryParams?: { query?: SessionQueryParams } | undefined,
+		) => Promise<void>;
 	}>({
 		data: null,
 		error: null,
 		isPending: true,
 		isRefetching: false,
-		refetch: () => {
-			return fn();
-		},
+		refetch: (queryParams) => fn(queryParams),
 	});
 
-	const fn = () => {
-		const opts =
-			typeof options === "function"
-				? options({
-						data: value.get().data,
-						error: value.get().error,
-						isPending: value.get().isPending,
-					})
-				: options;
+	const fn = async (
+		queryParams?: { query?: SessionQueryParams } | undefined,
+	) => {
+		return new Promise<void>((resolve) => {
+			const opts =
+				typeof options === "function"
+					? options({
+							data: value.get().data,
+							error: value.get().error,
+							isPending: value.get().isPending,
+						})
+					: options;
 
-		return $fetch<T>(path, {
-			...opts,
-			async onSuccess(context) {
-				value.set({
-					data: context.data,
-					error: null,
-					isPending: false,
-					isRefetching: false,
-					refetch: value.value.refetch,
+			$fetch<T>(path, {
+				...opts,
+				query: {
+					...opts?.query,
+					...queryParams?.query,
+				},
+				async onSuccess(context) {
+					value.set({
+						data: context.data,
+						error: null,
+						isPending: false,
+						isRefetching: false,
+						refetch: value.value.refetch,
+					});
+					await opts?.onSuccess?.(context);
+				},
+				async onError(context) {
+					const { request } = context;
+					const retryAttempts =
+						typeof request.retry === "number"
+							? request.retry
+							: request.retry?.attempts;
+					const retryAttempt = request.retryAttempt || 0;
+					if (retryAttempts && retryAttempt < retryAttempts) return;
+					value.set({
+						error: context.error,
+						data: null,
+						isPending: false,
+						isRefetching: false,
+						refetch: value.value.refetch,
+					});
+					await opts?.onError?.(context);
+				},
+				async onRequest(context) {
+					const currentValue = value.get();
+					value.set({
+						isPending: currentValue.data === null,
+						data: currentValue.data,
+						error: null,
+						isRefetching: true,
+						refetch: value.value.refetch,
+					});
+					await opts?.onRequest?.(context);
+				},
+			})
+				.catch((error) => {
+					value.set({
+						error,
+						data: null,
+						isPending: false,
+						isRefetching: false,
+						refetch: value.value.refetch,
+					});
+				})
+				.finally(() => {
+					resolve(void 0);
 				});
-				await opts?.onSuccess?.(context);
-			},
-			async onError(context) {
-				const { request } = context;
-				const retryAttempts =
-					typeof request.retry === "number"
-						? request.retry
-						: request.retry?.attempts;
-				const retryAttempt = request.retryAttempt || 0;
-				if (retryAttempts && retryAttempt < retryAttempts) return;
-				value.set({
-					error: context.error,
-					data: null,
-					isPending: false,
-					isRefetching: false,
-					refetch: value.value.refetch,
-				});
-				await opts?.onError?.(context);
-			},
-			async onRequest(context) {
-				const currentValue = value.get();
-				value.set({
-					isPending: currentValue.data === null,
-					data: currentValue.data,
-					error: null,
-					isRefetching: true,
-					refetch: value.value.refetch,
-				});
-				await opts?.onRequest?.(context);
-			},
 		});
 	};
 	initializedAtom = Array.isArray(initializedAtom)
@@ -96,22 +118,25 @@ export const useAuthQuery = <T>(
 	let isMounted = false;
 
 	for (const initAtom of initializedAtom) {
-		initAtom.subscribe(() => {
-			if (isServer) {
+		initAtom.subscribe(async () => {
+			if (isServer()) {
 				// On server, don't trigger fetch
 				return;
 			}
 			if (isMounted) {
-				fn();
+				await fn();
 			} else {
 				onMount(value, () => {
-					setTimeout(() => {
-						fn();
+					const timeoutId = setTimeout(async () => {
+						if (!isMounted) {
+							await fn();
+							isMounted = true;
+						}
 					}, 0);
-					isMounted = true;
 					return () => {
 						value.off();
 						initAtom.off();
+						clearTimeout(timeoutId);
 					};
 				});
 			}

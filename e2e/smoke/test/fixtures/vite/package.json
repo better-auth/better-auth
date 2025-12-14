@@ -1,0 +1,13 @@
+{
+  "name": "fixture-vite",
+  "private": true,
+  "scripts": {
+    "build": "vite build"
+  },
+  "dependencies": {
+    "better-auth": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "^7.2.4"
+  }
+}

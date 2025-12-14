@@ -1,13 +1,97 @@
-import * as z from "zod/v4";
-import { APIError, createAuthEndpoint, getSessionFromCtx } from "../../../api";
-import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
+import type { AuthContext } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { safeJSONParse } from "@better-auth/core/utils";
+import * as z from "zod";
+import { APIError, getSessionFromCtx } from "../../../api";
+import { generateId } from "../../../utils";
 import { getDate } from "../../../utils/date";
-import { apiKeySchema } from "../schema";
-import type { ApiKey } from "../types";
-import type { AuthContext } from "../../../types";
-import type { PredefinedApiKeyOptions } from ".";
-import { safeJSONParse } from "../../../utils/json";
+import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
+import { setApiKey } from "../adapter";
+import type { apiKeySchema } from "../schema";
+import type { ApiKey } from "../types";
+import type { PredefinedApiKeyOptions } from ".";
+
+const createApiKeyBodySchema = z.object({
+	name: z.string().meta({ description: "Name of the Api Key" }).optional(),
+	expiresIn: z
+		.number()
+		.meta({
+			description: "Expiration time of the Api Key in seconds",
+		})
+		.min(1)
+		.optional()
+		.nullable()
+		.default(null),
+
+	userId: z.coerce
+		.string()
+		.meta({
+			description:
+				'User Id of the user that the Api Key belongs to. server-only. Eg: "user-id"',
+		})
+		.optional(),
+	prefix: z
+		.string()
+		.meta({ description: "Prefix of the Api Key" })
+		.regex(/^[a-zA-Z0-9_-]+$/, {
+			message:
+				"Invalid prefix format, must be alphanumeric and contain only underscores and hyphens.",
+		})
+		.optional(),
+	remaining: z
+		.number()
+		.meta({
+			description: "Remaining number of requests. Server side only",
+		})
+		.min(0)
+		.optional()
+		.nullable()
+		.default(null),
+	metadata: z.any().optional(),
+	refillAmount: z
+		.number()
+		.meta({
+			description:
+				"Amount to refill the remaining count of the Api Key. server-only. Eg: 100",
+		})
+		.min(1)
+		.optional(),
+	refillInterval: z
+		.number()
+		.meta({
+			description:
+				"Interval to refill the Api Key in milliseconds. server-only. Eg: 1000",
+		})
+		.optional(),
+	rateLimitTimeWindow: z
+		.number()
+		.meta({
+			description:
+				"The duration in milliseconds where each request is counted. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 1000",
+		})
+		.optional(),
+	rateLimitMax: z
+		.number()
+		.meta({
+			description:
+				"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 100",
+		})
+		.optional(),
+	rateLimitEnabled: z
+		.boolean()
+		.meta({
+			description:
+				"Whether the key has rate limiting enabled. server-only. Eg: true",
+		})
+		.optional(),
+	permissions: z
+		.record(z.string(), z.array(z.string()))
+		.meta({
+			description: "Permissions of the Api Key.",
+		})
+		.optional(),
+});
 
 export function createApiKey({
 	keyGenerator,
@@ -15,103 +99,22 @@ export function createApiKey({
 	schema,
 	deleteAllExpiredApiKeys,
 }: {
-	keyGenerator: (options: { length: number; prefix: string | undefined }) =>
-		| Promise<string>
-		| string;
+	keyGenerator: (options: {
+		length: number;
+		prefix: string | undefined;
+	}) => Promise<string> | string;
 	opts: PredefinedApiKeyOptions;
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
-		byPassLastCheckTime?: boolean,
-	): Promise<number> | undefined;
+		byPassLastCheckTime?: boolean | undefined,
+	): void;
 }) {
 	return createAuthEndpoint(
 		"/api-key/create",
 		{
 			method: "POST",
-			body: z.object({
-				name: z
-					.string()
-					.meta({ description: "Name of the Api Key" })
-					.optional(),
-				expiresIn: z
-					.number()
-					.meta({
-						description: "Expiration time of the Api Key in seconds",
-					})
-					.min(1)
-					.optional()
-					.nullable()
-					.default(null),
-
-				userId: z.coerce
-					.string()
-					.meta({
-						description:
-							'User Id of the user that the Api Key belongs to. server-only. Eg: "user-id"',
-					})
-					.optional(),
-				prefix: z
-					.string()
-					.meta({ description: "Prefix of the Api Key" })
-					.regex(/^[a-zA-Z0-9_-]+$/, {
-						message:
-							"Invalid prefix format, must be alphanumeric and contain only underscores and hyphens.",
-					})
-					.optional(),
-				remaining: z
-					.number()
-					.meta({
-						description: "Remaining number of requests. Server side only",
-					})
-					.min(0)
-					.optional()
-					.nullable()
-					.default(null),
-				metadata: z.any().optional(),
-				refillAmount: z
-					.number()
-					.meta({
-						description:
-							"Amount to refill the remaining count of the Api Key. server-only. Eg: 100",
-					})
-					.min(1)
-					.optional(),
-				refillInterval: z
-					.number()
-					.meta({
-						description:
-							"Interval to refill the Api Key in milliseconds. server-only. Eg: 1000",
-					})
-					.optional(),
-				rateLimitTimeWindow: z
-					.number()
-					.meta({
-						description:
-							"The duration in milliseconds where each request is counted. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 1000",
-					})
-					.optional(),
-				rateLimitMax: z
-					.number()
-					.meta({
-						description:
-							"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 100",
-					})
-					.optional(),
-				rateLimitEnabled: z
-					.boolean()
-					.meta({
-						description:
-							"Whether the key has rate limiting enabled. server-only. Eg: true",
-					})
-					.optional(),
-				permissions: z
-					.record(z.string(), z.array(z.string()))
-					.meta({
-						description: "Permissions of the Api Key.",
-					})
-					.optional(),
-			}),
+			body: createApiKeyBodySchema,
 			metadata: {
 				openapi: {
 					description: "Create a new API key for a user",
@@ -267,10 +270,19 @@ export function createApiKey({
 			} = ctx.body;
 
 			const session = await getSessionFromCtx(ctx);
-			const authRequired = (ctx.request || ctx.headers) && !ctx.body.userId;
+			const authRequired = ctx.request || ctx.headers;
 			const user =
-				session?.user ?? (authRequired ? null : { id: ctx.body.userId });
+				authRequired && !session
+					? null
+					: session?.user || { id: ctx.body.userId };
+
 			if (!user?.id) {
+				throw new APIError("UNAUTHORIZED", {
+					message: ERROR_CODES.UNAUTHORIZED_SESSION,
+				});
+			}
+
+			if (session && ctx.body.userId && session?.user.id !== ctx.body.userId) {
 				throw new APIError("UNAUTHORIZED", {
 					message: ERROR_CODES.UNAUTHORIZED_SESSION,
 				});
@@ -419,15 +431,16 @@ export function createApiKey({
 				rateLimitMax: rateLimitMax ?? opts.rateLimit.maxRequests ?? null,
 				rateLimitTimeWindow:
 					rateLimitTimeWindow ?? opts.rateLimit.timeWindow ?? null,
-				remaining: remaining || refillAmount || null,
+				remaining:
+					remaining === null ? remaining : (remaining ?? refillAmount ?? null),
 				refillAmount: refillAmount ?? null,
 				refillInterval: refillInterval ?? null,
 				rateLimitEnabled:
 					rateLimitEnabled === undefined
-						? opts.rateLimit.enabled ?? true
+						? (opts.rateLimit.enabled ?? true)
 						: rateLimitEnabled,
 				requestCount: 0,
-				//@ts-ignore - we intentionally save the permissions as string on DB.
+				//@ts-expect-error - we intentionally save the permissions as string on DB.
 				permissions: permissionsToApply,
 			};
 
@@ -436,23 +449,37 @@ export function createApiKey({
 				data.metadata = schema.apikey.fields.metadata.transform.input(metadata);
 			}
 
-			const apiKey = await ctx.context.adapter.create<
-				Omit<ApiKey, "id">,
-				ApiKey
-			>({
-				model: API_KEY_TABLE_NAME,
-				data: data,
-			});
+			let apiKey: ApiKey;
+
+			if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
+				apiKey = await ctx.context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
+					model: API_KEY_TABLE_NAME,
+					data: data,
+				});
+				await setApiKey(ctx, apiKey, opts);
+			} else if (opts.storage === "secondary-storage") {
+				const id =
+					ctx.context.generateId({
+						model: API_KEY_TABLE_NAME,
+					}) ?? generateId();
+				apiKey = {
+					...data,
+					id,
+				} as ApiKey;
+				await setApiKey(ctx, apiKey, opts);
+			} else {
+				apiKey = await ctx.context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
+					model: API_KEY_TABLE_NAME,
+					data: data,
+				});
+			}
 
 			return ctx.json({
 				...(apiKey as ApiKey),
 				key: key,
 				metadata: metadata ?? null,
 				permissions: apiKey.permissions
-					? safeJSONParse(
-							//@ts-ignore - from DB, this value is always a string
-							apiKey.permissions,
-						)
+					? safeJSONParse(apiKey.permissions)
 					: null,
 			});
 		},

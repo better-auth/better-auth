@@ -13,7 +13,6 @@ We need to mount the handler to Hono endpoint.
 import { Hono } from "hono";
 import { auth } from "./auth";
 import { serve } from "@hono/node-server";
-import { cors } from "hono/cors";
 
 const app = new Hono();
 
@@ -48,8 +47,14 @@ app.use(
 	}),
 );
 
+app.on(["POST", "GET"], "/api/auth/*", (c) => {
+	return auth.handler(c.req.raw);
+});
+
+serve(app);
 ```
 
+> **Important:** CORS middleware must be registered before your routes. This ensures that cross-origin requests are properly handled before they reach your authentication endpoints.
 
 ### Middleware
 
@@ -74,12 +79,13 @@ app.use("*", async (c, next) => {
   	if (!session) {
     	c.set("user", null);
     	c.set("session", null);
-    	return next();
+    	await next();
+        return;
   	}
 
   	c.set("user", session.user);
   	c.set("session", session.session);
-  	return next();
+  	await next();
 });
 
 app.on(["POST", "GET"], "/api/auth/*", (c) => {
@@ -161,12 +167,9 @@ import { hc } from "hono/client";
 import type { AppType } from "./server"; // Your Hono app type
 
 const client = hc<AppType>("http://localhost:8787/", {
-  fetch: ((input, init) => {
-    return fetch(input, { 
-      ...init, 
-      credentials: "include" // Required for sending cookies cross-origin
-    });
-  }) satisfies typeof fetch,
+  init: {
+    credentials: "include", // Required for sending cookies cross-origin
+  },
 });
 
 // Now your client requests will include credentials

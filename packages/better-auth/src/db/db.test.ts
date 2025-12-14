@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
 
 describe("db", async () => {
@@ -37,7 +37,7 @@ describe("db", async () => {
 
 	it("db hooks", async () => {
 		let callback = false;
-		const { client, db } = await getTestInstance({
+		const { client } = await getTestInstance({
 			databaseHooks: {
 				user: {
 					create: {
@@ -95,5 +95,148 @@ describe("db", async () => {
 			},
 		});
 		expect(session?.user.email).toBe("test@email.com");
+	});
+
+	it("delete hooks", async () => {
+		const hookUserDeleteBefore = vi.fn();
+		const hookUserDeleteAfter = vi.fn();
+		const hookSessionDeleteBefore = vi.fn();
+		const hookSessionDeleteAfter = vi.fn();
+
+		const { client } = await getTestInstance({
+			session: {
+				storeSessionInDatabase: true,
+			},
+			user: {
+				deleteUser: {
+					enabled: true,
+				},
+			},
+			databaseHooks: {
+				user: {
+					delete: {
+						async before(user, context) {
+							hookUserDeleteBefore(user, context);
+							return true;
+						},
+						async after(user, context) {
+							hookUserDeleteAfter(user, context);
+						},
+					},
+				},
+				session: {
+					delete: {
+						async before(session, context) {
+							hookSessionDeleteBefore(session, context);
+							return true;
+						},
+						async after(session, context) {
+							hookSessionDeleteAfter(session, context);
+						},
+					},
+				},
+			},
+		});
+
+		const res = await client.signUp.email({
+			email: "delete-test@email.com",
+			password: "password",
+			name: "Delete Test User",
+		});
+
+		expect(res.data).toBeDefined();
+		const userId = res.data?.user.id;
+
+		await client.deleteUser({
+			fetchOptions: {
+				headers: {
+					Authorization: `Bearer ${res.data?.token}`,
+				},
+				throw: true,
+			},
+		});
+
+		expect(hookUserDeleteBefore).toHaveBeenCalledOnce();
+		expect(hookUserDeleteAfter).toHaveBeenCalledOnce();
+		expect(hookSessionDeleteBefore).toHaveBeenCalledOnce();
+		expect(hookSessionDeleteAfter).toHaveBeenCalledOnce();
+
+		expect(hookUserDeleteBefore).toHaveBeenCalledWith(
+			expect.objectContaining({
+				id: userId,
+				email: "delete-test@email.com",
+				name: "Delete Test User",
+			}),
+			expect.any(Object),
+		);
+
+		expect(hookUserDeleteAfter).toHaveBeenCalledWith(
+			expect.objectContaining({
+				id: userId,
+				email: "delete-test@email.com",
+				name: "Delete Test User",
+			}),
+			expect.any(Object),
+		);
+	});
+
+	it("delete hooks abort", async () => {
+		const hookUserDeleteBefore = vi.fn();
+		const hookUserDeleteAfter = vi.fn();
+
+		const { client } = await getTestInstance({
+			user: {
+				deleteUser: {
+					enabled: true,
+				},
+			},
+			databaseHooks: {
+				user: {
+					delete: {
+						async before(user, context) {
+							hookUserDeleteBefore(user, context);
+							return false;
+						},
+						async after(user, context) {
+							hookUserDeleteAfter(user, context);
+						},
+					},
+				},
+			},
+		});
+
+		const res = await client.signUp.email({
+			email: "abort-delete-test@email.com",
+			password: "password",
+			name: "Abort Delete Test User",
+		});
+
+		expect(res.data).toBeDefined();
+		const userId = res.data?.user.id;
+
+		try {
+			await client.deleteUser({
+				fetchOptions: {
+					headers: {
+						Authorization: `Bearer ${res.data?.token}`,
+					},
+					throw: true,
+				},
+			});
+		} catch {
+			// Expected to fail due to hook returning false
+		}
+
+		expect(hookUserDeleteBefore).toHaveBeenCalledOnce();
+		expect(hookUserDeleteAfter).not.toHaveBeenCalled();
+
+		expect(hookUserDeleteBefore).toHaveBeenCalledWith(
+			expect.objectContaining({
+				id: userId,
+				email: "abort-delete-test@email.com",
+				name: "Abort Delete Test User",
+			}),
+			expect.any(Object),
+		);
 	});
 });

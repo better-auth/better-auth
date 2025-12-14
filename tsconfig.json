@@ -1,19 +1,37 @@
 {
-	"compilerOptions": {
-		"esModuleInterop": true,
-		"skipLibCheck": true,
-		"target": "es2022",
-		"allowJs": true,
-		"resolveJsonModule": true,
-		"module": "Preserve",
-		"noEmit": true,
-		"moduleDetection": "force",
-		"isolatedModules": true,
-		"verbatimModuleSyntax": true,
-		"strict": true,
-		"noUncheckedIndexedAccess": true,
-		"noImplicitOverride": true,
-		"noFallthroughCasesInSwitch": true
-	},
-	"exclude": ["**/dist/**", "**/node_modules/**", "**/examples/**"]
+  "extends": "./tsconfig.base.json",
+  "include": [
+    // Only include files that are in the root directory. All other files are included by the references.
+    "./*.ts",
+    "./*.js"
+  ],
+  "references": [
+    {
+      "path": "./packages/better-auth/tsconfig.json"
+    },
+    {
+      "path": "./packages/cli/tsconfig.json"
+    },
+    {
+      "path": "./packages/core/tsconfig.json"
+    },
+    {
+      "path": "./packages/expo/tsconfig.json"
+    },
+    {
+      "path": "./packages/passkey/tsconfig.json"
+    },
+    {
+      "path": "./packages/sso/tsconfig.json"
+    },
+    {
+      "path": "./packages/stripe/tsconfig.json"
+    },
+    {
+      "path": "./packages/telemetry/tsconfig.json"
+    },
+    {
+      "path": "./test/tsconfig.json"
+    }
+  ]
 }

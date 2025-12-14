@@ -1,12 +1,12 @@
 interface CookieAttributes {
 	value: string;
-	"max-age"?: number;
-	expires?: Date;
-	domain?: string;
-	path?: string;
-	secure?: boolean;
-	httponly?: boolean;
-	samesite?: "strict" | "lax" | "none";
+	"max-age"?: number | undefined;
+	expires?: Date | undefined;
+	domain?: string | undefined;
+	path?: string | undefined;
+	secure?: boolean | undefined;
+	httponly?: boolean | undefined;
+	samesite?: ("strict" | "lax" | "none") | undefined;
 	[key: string]: any;
 }
 
@@ -19,7 +19,7 @@ export function parseSetCookieHeader(
 	cookieArray.forEach((cookieString) => {
 		const parts = cookieString.split(";").map((part) => part.trim());
 		const [nameValue, ...attributes] = parts;
-		const [name, ...valueParts] = nameValue.split("=");
+		const [name, ...valueParts] = (nameValue || "").split("=");
 
 		const value = valueParts.join("=");
 
@@ -30,10 +30,10 @@ export function parseSetCookieHeader(
 		const attrObj: CookieAttributes = { value };
 
 		attributes.forEach((attribute) => {
-			const [attrName, ...attrValueParts] = attribute.split("=");
+			const [attrName, ...attrValueParts] = attribute!.split("=");
 			const attrValue = attrValueParts.join("=");
 
-			const normalizedAttrName = attrName.trim().toLowerCase();
+			const normalizedAttrName = attrName!.trim().toLowerCase();
 
 			switch (normalizedAttrName) {
 				case "max-age":
@@ -75,9 +75,7 @@ export function parseSetCookieHeader(
 }
 
 export function setCookieToHeader(headers: Headers) {
-	return (context: {
-		response: Response;
-	}) => {
+	return (context: { response: Response }) => {
 		const setCookieHeader = context.response.headers.get("set-cookie");
 		if (!setCookieHeader) {
 			return;
@@ -87,7 +85,7 @@ export function setCookieToHeader(headers: Headers) {
 
 		const existingCookiesHeader = headers.get("cookie") || "";
 		existingCookiesHeader.split(";").forEach((cookie) => {
-			const [name, ...rest] = cookie.trim().split("=");
+			const [name, ...rest] = cookie!.trim().split("=");
 			if (name && rest.length > 0) {
 				cookieMap.set(name, rest.join("="));
 			}

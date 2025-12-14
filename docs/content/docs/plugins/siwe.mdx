@@ -52,12 +52,12 @@ The Sign in with Ethereum (SIWE) plugin allows users to authenticate using their
 
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
-            ```bash
+            ```package-install
             npx @better-auth/cli migrate
             ```
             </Tab>
             <Tab value="generate">
-            ```bash
+            ```package-install
             npx @better-auth/cli generate
             ```
             </Tab>
@@ -89,7 +89,7 @@ Before signing a SIWE message, you need to generate a nonce for the wallet addre
 ```ts title="generate-nonce.ts"
 const { data, error } = await authClient.siwe.nonce({
   walletAddress: "0x1234567890abcdef1234567890abcdef12345678",
-  chainId: 1, // optional, defaults to 1 (Ethereum mainnet)
+  chainId: 1, // optional for Ethereum mainnet, required for other chains. Defaults to 1
 });
 
 if (data) {
@@ -106,7 +106,7 @@ const { data, error } = await authClient.siwe.verify({
   message: "Your SIWE message string",
   signature: "0x...", // The signature from the user's wallet
   walletAddress: "0x1234567890abcdef1234567890abcdef12345678",
-  chainId: 1, // optional, defaults to 1
+  chainId: 1, // optional for Ethereum mainnet, required for other chains. Must match Chain ID in SIWE message
   email: "user@example.com", // optional, required if anonymous is false
 });
 
@@ -114,6 +114,54 @@ if (data) {
   console.log("Authentication successful:", data.user);
 }
 ```
+
+### Chain-Specific Examples
+
+Here are examples for different blockchain networks:
+
+```ts title="ethereum-mainnet.ts"
+// Ethereum Mainnet (chainId can be omitted, defaults to 1)
+const { data, error } = await authClient.siwe.verify({
+  message,
+  signature,
+  walletAddress,
+  // chainId: 1 (default)
+});
+```
+
+```ts title="polygon.ts"
+// Polygon (chainId REQUIRED)
+const { data, error } = await authClient.siwe.verify({
+  message,
+  signature,
+  walletAddress,
+  chainId: 137, // Required for Polygon
+});
+```
+
+```ts title="arbitrum.ts"
+// Arbitrum (chainId REQUIRED)
+const { data, error } = await authClient.siwe.verify({
+  message,
+  signature,
+  walletAddress,
+  chainId: 42161, // Required for Arbitrum
+});
+```
+
+```ts title="base.ts"
+// Base (chainId REQUIRED)
+const { data, error } = await authClient.siwe.verify({
+  message,
+  signature,
+  walletAddress,
+  chainId: 8453, // Required for Base
+});
+```
+
+<Callout type="warning">
+  The `chainId` must match the Chain ID specified in your SIWE message. Verification will fail with a 401 error if there's a mismatch between the message's Chain ID and the `chainId` parameter.
+</Callout>
 
 ## Configuration Options
 

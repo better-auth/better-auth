@@ -34,12 +34,12 @@ The Admin plugin provides a set of administrative functions for user management 
 
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
-            ```bash
+            ```package-install
             npx @better-auth/cli migrate
             ```
             </Tab>
             <Tab value="generate">
-            ```bash
+            ```package-install
             npx @better-auth/cli generate
             ```
             </Tab>
@@ -118,46 +118,46 @@ Allows an admin to list all users in the database.
 >
 ```ts
 type listUsers = {
-    /**
-     * The value to search for. 
-     */
-    searchValue?: string = "some name"
-    /**
-     * The field to search in, defaults to email. Can be `email` or `name`. 
-     */
-    searchField?: "email" | "name" = "name"
-    /**
-     * The operator to use for the search. Can be `contains`, `starts_with` or `ends_with`. 
-     */
-    searchOperator?: "contains" | "starts_with" | "ends_with" = "contains"
-    /**
-     * The number of users to return. Defaults to 100.
-     */
-    limit?: string | number = 100
-    /**
-     * The offset to start from. 
-     */
-    offset?: string | number = 100
-    /**
-     * The field to sort by. 
-     */
-    sortBy?: string = "name"
-    /**
-     * The direction to sort by. 
-     */
-    sortDirection?: "asc" | "desc" = "desc"
-    /**
-     * The field to filter by. 
-     */
-    filterField?: string = "email"
-    /**
-     * The value to filter by. 
-     */
-    filterValue?: string | number | boolean = "hello@example.com"
-    /**
-     * The operator to use for the filter. 
-     */
-    filterOperator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" = "eq"
+  /**
+   * The value to search for. 
+   */
+  searchValue?: string = "some name"
+  /**
+   * The field to search in, defaults to email. Can be `email` or `name`. 
+   */
+  searchField?: "email" | "name" = "name"
+  /**
+   * The operator to use for the search. Can be `contains`, `starts_with` or `ends_with`. 
+   */
+  searchOperator?: "contains" | "starts_with" | "ends_with" = "contains"
+  /**
+   * The number of users to return. Defaults to 100.
+   */
+  limit?: string | number = 100
+  /**
+   * The offset to start from. 
+   */
+  offset?: string | number = 100
+  /**
+   * The field to sort by. 
+   */
+  sortBy?: string = "name"
+  /**
+   * The direction to sort by. 
+   */
+  sortDirection?: "asc" | "desc" = "desc"
+  /**
+   * The field to filter by. 
+   */
+  filterField?: string = "email"
+  /**
+   * The value to filter by. 
+   */
+  filterValue?: string | number | boolean = "hello@example.com"
+  /**
+   * The operator to use for the filter. 
+   */
+  filterOperator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" = "eq"
 }
 ```
 </APIMethod>
@@ -205,7 +205,7 @@ const users = await authClient.admin.listUsers({
 });
 
 const totalUsers = users.total;
-const totalPages = Math.ceil(totalUsers / limit)
+const totalPages = Math.ceil(totalUsers / pageSize)
 ```
 
 ### Set User Role
@@ -250,6 +250,29 @@ type setUserPassword = {
      * The user id which you want to set the password for.
      */
     userId: string = 'user-id'
+}
+```
+</APIMethod>
+
+### Update user
+
+Update a user's details.
+
+<APIMethod
+  path="/admin/update-user"
+  method="POST"
+  requireSession
+>
+```ts
+type adminUpdateUser = {
+    /**
+     * The user id which you want to update.
+     */
+    userId: string = "user-id"
+    /**
+     * The data to update.
+     */
+    data: Record<string, any> = { name: "John Doe" }
 }
 ```
 </APIMethod>
@@ -731,7 +754,7 @@ admin({
 ```
 ### Admin Roles
 
-The roles that are considered admin roles. Defaults to `["admin"]`.
+The roles that are considered admin roles when **not** using custom access control. Defaults to `["admin"]`.
 
 ```ts title="auth.ts"
 admin({
@@ -740,8 +763,10 @@ admin({
 ```
 
 <Callout type="warning">
-  Any role that isn't in the `adminRoles` list, even if they have the permission,
-  will not be considered an admin.
+  **Note:** The `adminRoles` option is **not required** when using custom access control (via `ac` and `roles`). When you define custom roles with specific permissions, those roles will have exactly the permissions you grant them through the access control system.  
+  
+  **Warning:** When **not** using custom access control, any role that isn't in the `adminRoles` list will **not** be able to perform admin operations.
+  
 </Callout>
 
 ### Admin userIds
@@ -793,5 +818,15 @@ The message to show when a banned user tries to sign in. Defaults to "You have b
 ```ts title="auth.ts"
 admin({
   bannedUserMessage: "Custom banned user message",
+});
+```
+
+### allowImpersonatingAdmins
+
+Whether to allow impersonating other admin users. Defaults to `false`.
+
+```ts title="auth.ts"
+admin({
+  allowImpersonatingAdmins: true,
 });
 ```

@@ -1,18 +1,30 @@
-import * as z from "zod/v4";
-import { SignJWT } from "jose";
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import {
-	APIError,
 	createAuthEndpoint,
 	createAuthMiddleware,
-	getSessionFromCtx,
-	sessionMiddleware,
-} from "../../api";
-import type { BetterAuthPlugin, GenericEndpointContext } from "../../types";
+} from "@better-auth/core/api";
+import { getCurrentAuthContext } from "@better-auth/core/context";
+import { base64 } from "@better-auth/utils/base64";
+import { createHash } from "@better-auth/utils/hash";
+import type { OpenAPIParameter } from "better-call";
+import { jwtVerify, SignJWT } from "jose";
+import * as z from "zod";
+import { APIError, getSessionFromCtx, sessionMiddleware } from "../../api";
+import { parseSetCookieHeader } from "../../cookies";
 import {
 	generateRandomString,
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "../../crypto";
+import { mergeSchema } from "../../db";
+import { HIDE_METADATA } from "../../utils";
+import type { jwt } from "../jwt";
+import { getJwtToken, verifyJWT } from "../jwt";
+import { authorize } from "./authorize";
+import type { OAuthApplication } from "./schema";
 import { schema } from "./schema";
 import type {
 	Client,
@@ -21,18 +33,13 @@ import type {
 	OIDCMetadata,
 	OIDCOptions,
 } from "./types";
-import { authorize } from "./authorize";
-import { parseSetCookieHeader } from "../../cookies";
-import { createHash } from "@better-auth/utils/hash";
-import { base64 } from "@better-auth/utils/base64";
-import { getJwtToken } from "../jwt/sign";
-import type { JwtOptions } from "../jwt";
 import { defaultClientSecretHasher } from "./utils";
+import { parsePrompt } from "./utils/prompt";
 
 const getJwtPlugin = (ctx: GenericEndpointContext) => {
 	return ctx.context.options.plugins?.find(
 		(plugin) => plugin.id === "jwt",
-	) as Omit<BetterAuthPlugin, "options"> & { options?: JwtOptions };
+	) as ReturnType<typeof jwt>;
 };
 
 /**
@@ -40,37 +47,43 @@ const getJwtPlugin = (ctx: GenericEndpointContext) => {
  */
 export async function getClient(
 	clientId: string,
-	adapter: any,
-	trustedClients: (Client & { skipConsent?: boolean })[] = [],
-): Promise<(Client & { skipConsent?: boolean }) | null> {
+	trustedClients: (Client & { skipConsent?: boolean | undefined })[] = [],
+): Promise<(Client & { skipConsent?: boolean | undefined }) | null> {
+	const {
+		context: { adapter },
+	} = await getCurrentAuthContext();
 	const trustedClient = trustedClients.find(
 		(client) => client.clientId === clientId,
 	);
 	if (trustedClient) {
 		return trustedClient;
 	}
-	const dbClient = await adapter
-		.findOne({
+	return adapter
+		.findOne<OAuthApplication>({
 			model: "oauthApplication",
 			where: [{ field: "clientId", value: clientId }],
 		})
-		.then((res: Record<string, any> | null) => {
+		.then((res) => {
 			if (!res) {
 				return null;
 			}
+			// omit sensitive fields
 			return {
-				...res,
-				redirectURLs: (res.redirectURLs ?? "").split(","),
+				clientId: res.clientId,
+				clientSecret: res.clientSecret,
+				type: res.type,
+				name: res.name,
+				icon: res.icon,
+				disabled: res.disabled,
+				redirectUrls: (res.redirectUrls ?? "").split(","),
 				metadata: res.metadata ? JSON.parse(res.metadata) : {},
-			} as Client;
+			} satisfies Client;
 		});
-
-	return dbClient;
 }
 
 export const getMetadata = (
 	ctx: GenericEndpointContext,
-	options?: OIDCOptions,
+	options?: OIDCOptions | undefined,
 ): OIDCMetadata => {
 	const jwtPlugin = getJwtPlugin(ctx);
 	const issuer =
@@ -88,6 +101,7 @@ export const getMetadata = (
 		userinfo_endpoint: `${baseURL}/oauth2/userinfo`,
 		jwks_uri: `${baseURL}/jwks`,
 		registration_endpoint: `${baseURL}/oauth2/register`,
+		end_session_endpoint: `${baseURL}/oauth2/endsession`,
 		scopes_supported: ["openid", "profile", "email", "offline_access"],
 		response_types_supported: ["code"],
 		response_modes_supported: ["query"],
@@ -120,6 +134,144 @@ export const getMetadata = (
 	};
 };
 
+const oAuthConsentBodySchema = z.object({
+	accept: z.boolean(),
+	consent_code: z.string().optional().nullish(),
+});
+
+const oAuth2TokenBodySchema = z.record(z.any(), z.any());
+
+const registerOAuthApplicationBodySchema = z.object({
+	redirect_uris: z.array(z.string()).meta({
+		description:
+			'A list of redirect URIs. Eg: ["https://client.example.com/callback"]',
+	}),
+	token_endpoint_auth_method: z
+		.enum(["none", "client_secret_basic", "client_secret_post"])
+		.meta({
+			description:
+				'The authentication method for the token endpoint. Eg: "client_secret_basic"',
+		})
+		.default("client_secret_basic")
+		.optional(),
+	grant_types: z
+		.array(
+			z.enum([
+				"authorization_code",
+				"implicit",
+				"password",
+				"client_credentials",
+				"refresh_token",
+				"urn:ietf:params:oauth:grant-type:jwt-bearer",
+				"urn:ietf:params:oauth:grant-type:saml2-bearer",
+			]),
+		)
+		.meta({
+			description:
+				'The grant types supported by the application. Eg: ["authorization_code"]',
+		})
+		.default(["authorization_code"])
+		.optional(),
+	response_types: z
+		.array(z.enum(["code", "token"]))
+		.meta({
+			description:
+				'The response types supported by the application. Eg: ["code"]',
+		})
+		.default(["code"])
+		.optional(),
+	client_name: z
+		.string()
+		.meta({
+			description: 'The name of the application. Eg: "My App"',
+		})
+		.optional(),
+	client_uri: z
+		.string()
+		.meta({
+			description:
+				'The URI of the application. Eg: "https://client.example.com"',
+		})
+		.optional(),
+	logo_uri: z
+		.string()
+		.meta({
+			description:
+				'The URI of the application logo. Eg: "https://client.example.com/logo.png"',
+		})
+		.optional(),
+	scope: z
+		.string()
+		.meta({
+			description:
+				'The scopes supported by the application. Separated by spaces. Eg: "profile email"',
+		})
+		.optional(),
+	contacts: z
+		.array(z.string())
+		.meta({
+			description:
+				'The contact information for the application. Eg: ["admin@example.com"]',
+		})
+		.optional(),
+	tos_uri: z
+		.string()
+		.meta({
+			description:
+				'The URI of the application terms of service. Eg: "https://client.example.com/tos"',
+		})
+		.optional(),
+	policy_uri: z
+		.string()
+		.meta({
+			description:
+				'The URI of the application privacy policy. Eg: "https://client.example.com/policy"',
+		})
+		.optional(),
+	jwks_uri: z
+		.string()
+		.meta({
+			description:
+				'The URI of the application JWKS. Eg: "https://client.example.com/jwks"',
+		})
+		.optional(),
+	jwks: z
+		.record(z.any(), z.any())
+		.meta({
+			description:
+				'The JWKS of the application. Eg: {"keys": [{"kty": "RSA", "alg": "RS256", "use": "sig", "n": "...", "e": "..."}]}',
+		})
+		.optional(),
+	metadata: z
+		.record(z.any(), z.any())
+		.meta({
+			description: 'The metadata of the application. Eg: {"key": "value"}',
+		})
+		.optional(),
+	software_id: z
+		.string()
+		.meta({
+			description: 'The software ID of the application. Eg: "my-software"',
+		})
+		.optional(),
+	software_version: z
+		.string()
+		.meta({
+			description: 'The software version of the application. Eg: "1.0.0"',
+		})
+		.optional(),
+	software_statement: z
+		.string()
+		.meta({
+			description: "The software statement of the application.",
+		})
+		.optional(),
+});
+
+const DEFAULT_CODE_EXPIRES_IN = 600;
+const DEFAULT_ACCESS_TOKEN_EXPIRES_IN = 3600;
+const DEFAULT_REFRESH_TOKEN_EXPIRES_IN = 604800;
+
 /**
  * OpenID Connect (OIDC) plugin for Better Auth. This plugin implements the
  * authorization code flow and the token exchange flow. It also implements the
@@ -136,10 +288,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 	};
 
 	const opts = {
-		codeExpiresIn: 600,
+		codeExpiresIn: DEFAULT_CODE_EXPIRES_IN,
 		defaultScope: "openid",
-		accessTokenExpiresIn: 3600,
-		refreshTokenExpiresIn: 604800,
+		accessTokenExpiresIn: DEFAULT_ACCESS_TOKEN_EXPIRES_IN,
+		refreshTokenExpiresIn: DEFAULT_REFRESH_TOKEN_EXPIRES_IN,
 		allowPlainCodeChallengeMethod: true,
 		storeClientSecret: "plain" as const,
 		...options,
@@ -235,7 +387,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						return true;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const cookie = await ctx.getSignedCookie(
+						const loginPromptCookie = await ctx.getSignedCookie(
 							"oidc_login_prompt",
 							ctx.context.secret,
 						);
@@ -244,24 +396,36 @@ export const oidcProvider = (options: OIDCOptions) => {
 							ctx.context.responseHeaders?.get("set-cookie") || "",
 						);
 						const hasSessionToken = parsedSetCookieHeader.has(cookieName);
-						if (!cookie || !hasSessionToken) {
+						if (!loginPromptCookie || !hasSessionToken) {
 							return;
 						}
 						ctx.setCookie("oidc_login_prompt", "", {
 							maxAge: 0,
 						});
 						const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
-						const sessionToken = sessionCookie?.split(".")[0];
+						const sessionToken = sessionCookie?.split(".")[0]!;
 						if (!sessionToken) {
 							return;
 						}
 						const session =
-							await ctx.context.internalAdapter.findSession(sessionToken);
+							(await ctx.context.internalAdapter.findSession(sessionToken)) ||
+							ctx.context.newSession;
 						if (!session) {
 							return;
 						}
-						ctx.query = JSON.parse(cookie);
-						ctx.query!.prompt = "consent";
+						ctx.query = JSON.parse(loginPromptCookie);
+
+						// Remove "login" from prompt since user just logged in
+						const promptSet = parsePrompt(String(ctx.query?.prompt));
+						if (promptSet.has("login")) {
+							const newPromptSet = new Set(promptSet);
+							newPromptSet.delete("login");
+							ctx.query = {
+								...ctx.query,
+								prompt: Array.from(newPromptSet).join(" "),
+							};
+						}
+
 						ctx.context.session = session;
 						const response = await authorize(ctx, opts);
 						return response;
@@ -274,9 +438,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/.well-known/openid-configuration",
 				{
 					method: "GET",
-					metadata: {
-						isAction: false,
-					},
+					operationId: "getOpenIdConfig",
+					metadata: HIDE_METADATA,
 				},
 				async (ctx) => {
 					const metadata = getMetadata(ctx, options);
@@ -287,6 +450,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/authorize",
 				{
 					method: "GET",
+					operationId: "oauth2Authorize",
 					query: z.record(z.string(), z.any()),
 					metadata: {
 						openapi: {
@@ -317,13 +481,36 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/consent",
 				{
 					method: "POST",
-					body: z.object({
-						accept: z.boolean(),
-					}),
+					operationId: "oauth2Consent",
+					body: oAuthConsentBodySchema,
 					use: [sessionMiddleware],
 					metadata: {
 						openapi: {
-							description: "Handle OAuth2 consent",
+							description:
+								"Handle OAuth2 consent. Supports both URL parameter-based flows (consent_code in body) and cookie-based flows (signed cookie).",
+							requestBody: {
+								required: true,
+								content: {
+									"application/json": {
+										schema: {
+											type: "object",
+											properties: {
+												accept: {
+													type: "boolean",
+													description:
+														"Whether the user accepts or denies the consent request",
+												},
+												consent_code: {
+													type: "string",
+													description:
+														"The consent code from the authorization request. Optional if using cookie-based flow.",
+												},
+											},
+											required: ["accept"],
+										},
+									},
+								},
+							},
 							responses: {
 								"200": {
 									description: "Consent processed successfully",
@@ -349,18 +536,34 @@ export const oidcProvider = (options: OIDCOptions) => {
 					},
 				},
 				async (ctx) => {
-					const storedCode = await ctx.getSignedCookie(
-						"oidc_consent_prompt",
-						ctx.context.secret,
-					);
-					if (!storedCode) {
+					// Support both consent flow methods:
+					// 1. URL parameter-based: consent_code in request body (standard OAuth2 pattern)
+					// 2. Cookie-based: using signed cookie for stateful consent flows
+					let consentCode: string | null = ctx.body.consent_code || null;
+
+					if (!consentCode) {
+						// Check for cookie-based consent flow
+						const cookieValue = await ctx.getSignedCookie(
+							"oidc_consent_prompt",
+							ctx.context.secret,
+						);
+						if (cookieValue) {
+							consentCode = cookieValue;
+						}
+					}
+
+					if (!consentCode) {
 						throw new APIError("UNAUTHORIZED", {
-							error_description: "No consent prompt found",
+							error_description:
+								"consent_code is required (either in body or cookie)",
 							error: "invalid_request",
 						});
 					}
+
 					const verification =
-						await ctx.context.internalAdapter.findVerificationValue(storedCode);
+						await ctx.context.internalAdapter.findVerificationValue(
+							consentCode,
+						);
 					if (!verification) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "Invalid code",
@@ -373,6 +576,12 @@ export const oidcProvider = (options: OIDCOptions) => {
 							error: "invalid_request",
 						});
 					}
+
+					// Clear the cookie
+					ctx.setCookie("oidc_consent_prompt", "", {
+						maxAge: 0,
+					});
+
 					const value = JSON.parse(verification.value) as CodeVerificationValue;
 					if (!value.requireConsent) {
 						throw new APIError("UNAUTHORIZED", {
@@ -390,7 +599,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 					const code = generateRandomString(32, "a-z", "A-Z", "0-9");
-					const codeExpiresInMs = opts.codeExpiresIn * 1000;
+					const codeExpiresInMs =
+						(opts?.codeExpiresIn ?? DEFAULT_CODE_EXPIRES_IN) * 1000;
 					const expiresAt = new Date(Date.now() + codeExpiresInMs);
 					await ctx.context.internalAdapter.updateVerificationValue(
 						verification.id,
@@ -426,9 +636,14 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/token",
 				{
 					method: "POST",
-					body: z.record(z.any(), z.any()),
+					operationId: "oauth2Token",
+					body: oAuth2TokenBodySchema,
 					metadata: {
-						isAction: false,
+						...HIDE_METADATA,
+						allowedMediaTypes: [
+							"application/x-www-form-urlencoded",
+							"application/json",
+						],
 					},
 				},
 				async (ctx) => {
@@ -475,13 +690,23 @@ export const oidcProvider = (options: OIDCOptions) => {
 							}
 							client_id = id;
 							client_secret = secret;
-						} catch (error) {
+						} catch {
 							throw new APIError("UNAUTHORIZED", {
 								error_description: "invalid authorization header format",
 								error: "invalid_client",
 							});
 						}
 					}
+
+					const now = Date.now();
+					const iat = Math.floor(now / 1000);
+					const exp = iat + (opts.accessTokenExpiresIn ?? 3600);
+
+					const accessTokenExpiresAt = new Date(exp * 1000);
+					const refreshTokenExpiresAt = new Date(
+						(iat + (opts.refreshTokenExpiresIn ?? 604800)) * 1000,
+					);
+
 					const {
 						grant_type,
 						code,
@@ -525,12 +750,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						}
 						const accessToken = generateRandomString(32, "a-z", "A-Z");
 						const newRefreshToken = generateRandomString(32, "a-z", "A-Z");
-						const accessTokenExpiresAt = new Date(
-							Date.now() + opts.accessTokenExpiresIn * 1000,
-						);
-						const refreshTokenExpiresAt = new Date(
-							Date.now() + opts.refreshTokenExpiresIn * 1000,
-						);
+
 						await ctx.context.adapter.create({
 							model: modelName.oauthAccessToken,
 							data: {
@@ -541,13 +761,13 @@ export const oidcProvider = (options: OIDCOptions) => {
 								clientId: client_id.toString(),
 								userId: token.userId,
 								scopes: token.scopes,
-								createdAt: new Date(),
-								updatedAt: new Date(),
+								createdAt: new Date(iat * 1000),
+								updatedAt: new Date(iat * 1000),
 							},
 						});
 						return ctx.json({
 							access_token: accessToken,
-							token_type: "bearer",
+							token_type: "Bearer",
 							expires_in: opts.accessTokenExpiresIn,
 							refresh_token: newRefreshToken,
 							scope: token.scopes,
@@ -618,11 +838,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
-					const client = await getClient(
-						client_id.toString(),
-						ctx.context.adapter,
-						trustedClients,
-					);
+					const client = await getClient(client_id.toString(), trustedClients);
 					if (!client) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "invalid client_id",
@@ -707,12 +923,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 					);
 					const accessToken = generateRandomString(32, "a-z", "A-Z");
 					const refreshToken = generateRandomString(32, "A-Z", "a-z");
-					const accessTokenExpiresAt = new Date(
-						Date.now() + opts.accessTokenExpiresIn * 1000,
-					);
-					const refreshTokenExpiresAt = new Date(
-						Date.now() + opts.refreshTokenExpiresIn * 1000,
-					);
 					await ctx.context.adapter.create({
 						model: modelName.oauthAccessToken,
 						data: {
@@ -723,8 +933,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 							clientId: client_id.toString(),
 							userId: value.userId,
 							scopes: requestedScopes.join(" "),
-							createdAt: new Date(),
-							updatedAt: new Date(),
+							createdAt: new Date(iat * 1000),
+							updatedAt: new Date(iat * 1000),
 						},
 					});
 					const user = await ctx.context.internalAdapter.findUserById(
@@ -738,11 +948,11 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 
 					const profile = {
-						given_name: user.name.split(" ")[0],
-						family_name: user.name.split(" ")[1],
+						given_name: user.name.split(" ")[0]!,
+						family_name: user.name.split(" ")[1]!,
 						name: user.name,
 						profile: user.image,
-						updated_at: user.updatedAt.toISOString(),
+						updated_at: new Date(user.updatedAt).toISOString(),
 					};
 					const email = {
 						email: user.email,
@@ -754,21 +964,28 @@ export const oidcProvider = (options: OIDCOptions) => {
 					};
 
 					const additionalUserClaims = options.getAdditionalUserInfoClaim
-						? await options.getAdditionalUserInfoClaim(user, requestedScopes)
+						? await options.getAdditionalUserInfoClaim(
+								user,
+								requestedScopes,
+								client,
+							)
 						: {};
 
 					const payload = {
 						sub: user.id,
 						aud: client_id.toString(),
-						iat: Date.now(),
-						auth_time: ctx.context.session?.session.createdAt.getTime(),
+						iat: iat,
+						auth_time: ctx.context.session
+							? new Date(ctx.context.session.session.createdAt).getTime()
+							: undefined,
 						nonce: value.nonce,
 						acr: "urn:mace:incommon:iap:silver", // default to silver - ⚠︎ this should be configurable and should be validated against the client's metadata
 						...userClaims,
 						...additionalUserClaims,
 					};
 					const expirationTime =
-						Math.floor(Date.now() / 1000) + opts.accessTokenExpiresIn;
+						Math.floor(Date.now() / 1000) +
+						(opts?.accessTokenExpiresIn ?? DEFAULT_ACCESS_TOKEN_EXPIRES_IN);
 
 					let idToken: string;
 
@@ -792,12 +1009,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 									session: {
 										session: {
 											id: generateRandomString(32, "a-z", "A-Z"),
-											createdAt: new Date(),
-											updatedAt: new Date(),
+											createdAt: new Date(iat * 1000),
+											updatedAt: new Date(iat * 1000),
 											userId: user.id,
-											expiresAt: new Date(
-												Date.now() + opts.accessTokenExpiresIn * 1000,
-											),
+											expiresAt: accessTokenExpiresAt,
 											token: accessToken,
 											ipAddress: ctx.request?.headers.get("x-forwarded-for"),
 										},
@@ -811,7 +1026,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 									...jwtPlugin.options?.jwt,
 									getSubject: () => user.id,
 									audience: client_id.toString(),
-									issuer: ctx.context.options.baseURL,
+									issuer:
+										jwtPlugin.options?.jwt?.issuer ??
+										ctx.context.options.baseURL,
 									expirationTime,
 									definePayload: () => payload,
 								},
@@ -822,8 +1039,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 					} else {
 						idToken = await new SignJWT(payload)
 							.setProtectedHeader({ alg: "HS256" })
-							.setIssuedAt()
-							.setExpirationTime(expirationTime)
+							.setIssuedAt(iat)
+							.setExpirationTime(accessTokenExpiresAt)
 							.sign(new TextEncoder().encode(client.clientSecret));
 					}
 
@@ -853,9 +1070,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/userinfo",
 				{
 					method: "GET",
-
+					operationId: "oauth2Userinfo",
 					metadata: {
-						isAction: false,
+						...HIDE_METADATA,
 						openapi: {
 							description: "Get OAuth2 user information",
 							responses: {
@@ -956,6 +1173,14 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
+					const client = await getClient(accessToken.clientId, trustedClients);
+					if (!client) {
+						throw new APIError("UNAUTHORIZED", {
+							error_description: "client not found",
+							error: "invalid_token",
+						});
+					}
+
 					const user = await ctx.context.internalAdapter.findUserById(
 						accessToken.userId,
 					);
@@ -974,17 +1199,21 @@ export const oidcProvider = (options: OIDCOptions) => {
 							? user.image
 							: undefined,
 						given_name: requestedScopes.includes("profile")
-							? user.name.split(" ")[0]
+							? user.name.split(" ")[0]!
 							: undefined,
 						family_name: requestedScopes.includes("profile")
-							? user.name.split(" ")[1]
+							? user.name.split(" ")[1]!
 							: undefined,
 						email_verified: requestedScopes.includes("email")
 							? user.emailVerified
 							: undefined,
 					};
 					const userClaims = options.getAdditionalUserInfoClaim
-						? await options.getAdditionalUserInfoClaim(user, requestedScopes)
+						? await options.getAdditionalUserInfoClaim(
+								user,
+								requestedScopes,
+								client,
+							)
 						: baseUserClaims;
 					return ctx.json({
 						...baseUserClaims,
@@ -1011,135 +1240,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 				"/oauth2/register",
 				{
 					method: "POST",
-					body: z.object({
-						redirect_uris: z.array(z.string()).meta({
-							description:
-								'A list of redirect URIs. Eg: ["https://client.example.com/callback"]',
-						}),
-						token_endpoint_auth_method: z
-							.enum(["none", "client_secret_basic", "client_secret_post"])
-							.meta({
-								description:
-									'The authentication method for the token endpoint. Eg: "client_secret_basic"',
-							})
-							.default("client_secret_basic")
-							.optional(),
-						grant_types: z
-							.array(
-								z.enum([
-									"authorization_code",
-									"implicit",
-									"password",
-									"client_credentials",
-									"refresh_token",
-									"urn:ietf:params:oauth:grant-type:jwt-bearer",
-									"urn:ietf:params:oauth:grant-type:saml2-bearer",
-								]),
-							)
-							.meta({
-								description:
-									'The grant types supported by the application. Eg: ["authorization_code"]',
-							})
-							.default(["authorization_code"])
-							.optional(),
-						response_types: z
-							.array(z.enum(["code", "token"]))
-							.meta({
-								description:
-									'The response types supported by the application. Eg: ["code"]',
-							})
-							.default(["code"])
-							.optional(),
-						client_name: z
-							.string()
-							.meta({
-								description: 'The name of the application. Eg: "My App"',
-							})
-							.optional(),
-						client_uri: z
-							.string()
-							.meta({
-								description:
-									'The URI of the application. Eg: "https://client.example.com"',
-							})
-							.optional(),
-						logo_uri: z
-							.string()
-							.meta({
-								description:
-									'The URI of the application logo. Eg: "https://client.example.com/logo.png"',
-							})
-							.optional(),
-						scope: z
-							.string()
-							.meta({
-								description:
-									'The scopes supported by the application. Separated by spaces. Eg: "profile email"',
-							})
-							.optional(),
-						contacts: z
-							.array(z.string())
-							.meta({
-								description:
-									'The contact information for the application. Eg: ["admin@example.com"]',
-							})
-							.optional(),
-						tos_uri: z
-							.string()
-							.meta({
-								description:
-									'The URI of the application terms of service. Eg: "https://client.example.com/tos"',
-							})
-							.optional(),
-						policy_uri: z
-							.string()
-							.meta({
-								description:
-									'The URI of the application privacy policy. Eg: "https://client.example.com/policy"',
-							})
-							.optional(),
-						jwks_uri: z
-							.string()
-							.meta({
-								description:
-									'The URI of the application JWKS. Eg: "https://client.example.com/jwks"',
-							})
-							.optional(),
-						jwks: z
-							.record(z.any(), z.any())
-							.meta({
-								description:
-									'The JWKS of the application. Eg: {"keys": [{"kty": "RSA", "alg": "RS256", "use": "sig", "n": "...", "e": "..."}]}',
-							})
-							.optional(),
-						metadata: z
-							.record(z.any(), z.any())
-							.meta({
-								description:
-									'The metadata of the application. Eg: {"key": "value"}',
-							})
-							.optional(),
-						software_id: z
-							.string()
-							.meta({
-								description:
-									'The software ID of the application. Eg: "my-software"',
-							})
-							.optional(),
-						software_version: z
-							.string()
-							.meta({
-								description:
-									'The software version of the application. Eg: "1.0.0"',
-							})
-							.optional(),
-						software_statement: z
-							.string()
-							.meta({
-								description: "The software statement of the application.",
-							})
-							.optional(),
-					}),
+					body: registerOAuthApplicationBodySchema,
 					metadata: {
 						openapi: {
 							description: "Register an OAuth2 application",
@@ -1301,7 +1402,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 							metadata: body.metadata ? JSON.stringify(body.metadata) : null,
 							clientId: clientId,
 							clientSecret: storedClientSecret,
-							redirectURLs: body.redirect_uris.join(","),
+							redirectUrls: body.redirect_uris.join(","),
 							type: "web",
 							authenticationScheme:
 								body.token_endpoint_auth_method || "client_secret_basic",
@@ -1392,12 +1493,14 @@ export const oidcProvider = (options: OIDCOptions) => {
 						},
 					},
 				},
-				async (ctx) => {
-					const client = await getClient(
-						ctx.params.id,
-						ctx.context.adapter,
-						trustedClients,
-					);
+				async (
+					ctx,
+				): Promise<{
+					clientId: string;
+					name: string;
+					icon: string | null;
+				}> => {
+					const client = await getClient(ctx.params.id, trustedClients);
 					if (!client) {
 						throw new APIError("NOT_FOUND", {
 							error_description: "client not found",
@@ -1405,14 +1508,257 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 					return ctx.json({
-						clientId: client.clientId as string,
-						name: client.name as string,
-						icon: client.icon as string,
+						clientId: client.clientId,
+						name: client.name,
+						icon: client.icon || null,
+					});
+				},
+			),
+			/**
+			 * ### Endpoint
+			 *
+			 * GET/POST `/oauth2/endsession`
+			 *
+			 * Implements RP-Initiated Logout as per OpenID Connect RP-Initiated Logout 1.0.
+			 * Allows relying parties to request that an OpenID Provider log out the end-user.
+			 *
+			 * @see [OpenID Connect RP-Initiated Logout Spec](https://openid.net/specs/openid-connect-rpinitiated-1_0.html)
+			 */
+			endSession: createAuthEndpoint(
+				"/oauth2/endsession",
+				{
+					method: ["GET", "POST"],
+					query: z
+						.object({
+							id_token_hint: z.string().optional(),
+							logout_hint: z.string().optional(),
+							client_id: z.string().optional(),
+							post_logout_redirect_uri: z.string().optional(),
+							state: z.string().optional(),
+							ui_locales: z.string().optional(),
+						})
+						.optional(),
+					metadata: {
+						...HIDE_METADATA,
+						openapi: {
+							description:
+								"RP-Initiated Logout endpoint. Logs out the end-user and optionally redirects to a post-logout URI.",
+							parameters: [
+								{
+									name: "id_token_hint",
+									in: "query",
+									description:
+										"Previously issued ID Token passed as a hint about the End-User's current authenticated session",
+									required: false,
+									schema: { type: "string" },
+								},
+								{
+									name: "logout_hint",
+									in: "query",
+									description:
+										"Hint to the Authorization Server about the End-User that is logging out",
+									required: false,
+									schema: { type: "string" },
+								},
+								{
+									name: "client_id",
+									in: "query",
+									description:
+										"OAuth 2.0 Client Identifier. Required if post_logout_redirect_uri is used without id_token_hint",
+									required: false,
+									schema: { type: "string" },
+								},
+								{
+									name: "post_logout_redirect_uri",
+									in: "query",
+									description:
+										"URL to which the RP is requesting that the End-User's User Agent be redirected after a logout has been performed",
+									required: false,
+									schema: { type: "string", format: "uri" },
+								},
+								{
+									name: "state",
+									in: "query",
+									description:
+										"Opaque value used by the RP to maintain state between the logout request and the callback",
+									required: false,
+									schema: { type: "string" },
+								},
+								{
+									name: "ui_locales",
+									in: "query",
+									description:
+										"End-User's preferred languages and scripts for the user interface",
+									required: false,
+									schema: { type: "string" },
+								},
+							] as OpenAPIParameter[],
+							responses: {
+								"302": {
+									description:
+										"Redirect to post_logout_redirect_uri or logout confirmation page",
+								},
+								"200": {
+									description: "Logout completed successfully",
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const { id_token_hint, client_id, post_logout_redirect_uri, state } =
+						ctx.query || {};
+
+					let validatedClientId: string | null = null;
+					let validatedUserId: string | null = null;
+
+					// Validate id_token_hint if provided
+					if (id_token_hint) {
+						try {
+							const jwtPlugin = getJwtPlugin(ctx);
+							if (jwtPlugin && jwtPlugin.options && options?.useJWTPlugin) {
+								// For JWT plugin tokens, verify using JWKS
+								const verified = await verifyJWT(
+									id_token_hint,
+									jwtPlugin.options,
+								);
+								if (verified) {
+									validatedUserId = verified.sub;
+									validatedClientId = verified.aud
+										? typeof verified.aud === "string"
+											? verified.aud
+											: verified.aud[0]!
+										: null;
+								}
+							} else {
+								// For HS256 tokens, we need the client_id to verify
+								if (client_id) {
+									const client = await getClient(client_id, trustedClients);
+									if (client && client.clientSecret) {
+										try {
+											const { payload } = await jwtVerify(
+												id_token_hint,
+												new TextEncoder().encode(client.clientSecret),
+											);
+											validatedUserId = payload.sub as string;
+											validatedClientId = payload.aud as string;
+										} catch {
+											// Invalid token, continue with logout but no validation
+										}
+									}
+								}
+							}
+						} catch {
+							// Invalid id_token_hint, but we continue with logout anyway
+							ctx.context.logger.debug(
+								"Invalid id_token_hint provided to end_session endpoint",
+							);
+						}
+					}
+
+					// Validate client_id if provided
+					if (client_id) {
+						const client = await getClient(client_id, trustedClients);
+						if (!client) {
+							throw new APIError("BAD_REQUEST", {
+								error: "invalid_client",
+								error_description: "Invalid client_id",
+							});
+						}
+						// If we have a validated client from the token, ensure they match
+						if (validatedClientId && validatedClientId !== client_id) {
+							throw new APIError("BAD_REQUEST", {
+								error: "invalid_request",
+								error_description:
+									"client_id does not match the ID Token's audience",
+							});
+						}
+						validatedClientId = client_id;
+					}
+
+					// Validate post_logout_redirect_uri if provided
+					if (post_logout_redirect_uri) {
+						if (!validatedClientId) {
+							throw new APIError("BAD_REQUEST", {
+								error: "invalid_request",
+								error_description:
+									"client_id is required when using post_logout_redirect_uri without a valid id_token_hint",
+							});
+						}
+
+						const client = await getClient(validatedClientId, trustedClients);
+						if (!client) {
+							throw new APIError("BAD_REQUEST", {
+								error: "invalid_client",
+								error_description: "Invalid client",
+							});
+						}
+
+						const isValidRedirectUri = client.redirectUrls.some(
+							(registeredUri) => post_logout_redirect_uri === registeredUri,
+						);
+
+						if (!isValidRedirectUri) {
+							throw new APIError("BAD_REQUEST", {
+								error: "invalid_request",
+								error_description:
+									"post_logout_redirect_uri is not registered for this client",
+							});
+						}
+					}
+
+					const session = await getSessionFromCtx(ctx);
+
+					if (validatedUserId || session) {
+						const userId = validatedUserId || session?.user.id;
+						if (userId) {
+							await ctx.context.adapter.deleteMany({
+								model: modelName.oauthAccessToken,
+								where: [{ field: "userId", value: userId }],
+							});
+						}
+					}
+
+					if (session) {
+						await ctx.context.internalAdapter.deleteSession(
+							session.session.token,
+						);
+						ctx.setSignedCookie(
+							ctx.context.authCookies.sessionToken.name,
+							"",
+							ctx.context.secret,
+							{
+								maxAge: 0,
+							},
+						);
+					}
+
+					if (post_logout_redirect_uri) {
+						try {
+							const redirectUrl = new URL(post_logout_redirect_uri);
+							if (state) {
+								redirectUrl.searchParams.set("state", state);
+							}
+							return ctx.redirect(redirectUrl.toString());
+						} catch {
+							throw new APIError("BAD_REQUEST", {
+								error: "invalid_request",
+								error_description: "Invalid post_logout_redirect_uri format",
+							});
+						}
+					}
+
+					return ctx.json({
+						success: true,
+						message: "Logout successful",
 					});
 				},
 			),
 		},
-		schema,
+		schema: mergeSchema(schema, options?.schema),
+		get options() {
+			return opts;
+		},
 	} satisfies BetterAuthPlugin;
 };
 export type * from "./types";

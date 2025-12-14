@@ -1,6 +1,15 @@
+import { Link } from "lucide-react";
+import type { JSX, ReactNode } from "react";
+import { cn } from "@/lib/utils";
+import {
+	ApiMethodTabs,
+	ApiMethodTabsContent,
+	ApiMethodTabsList,
+	ApiMethodTabsTrigger,
+} from "./api-method-tabs";
 import { Endpoint } from "./endpoint";
-// import { Tab, Tabs } from "fumadocs-ui/components/tabs";
-import { DynamicCodeBlock } from "fumadocs-ui/components/dynamic-codeblock";
+import { Button } from "./ui/button";
+import { DynamicCodeBlock } from "./ui/dynamic-code-block";
 import {
 	Table,
 	TableBody,
@@ -9,11 +18,6 @@ import {
 	TableHeader,
 	TableRow,
 } from "./ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import { ReactNode } from "react";
-import { Link } from "lucide-react";
-import { Button } from "./ui/button";
-import { cn } from "@/lib/utils";
 
 type Property = {
 	isOptional: boolean;
@@ -41,19 +45,24 @@ const placeholderProperty: Property = {
 	isClientOnly: false,
 };
 
+const indentationSpace = `    `;
+
 export const APIMethod = ({
 	path,
 	isServerOnly,
 	isClientOnly,
+	isExternalOnly,
 	method,
 	children,
 	noResult,
 	requireSession,
+	requireBearerToken,
 	note,
 	clientOnlyNote,
 	serverOnlyNote,
 	resultVariable = "data",
 	forceAsBody,
+	forceAsParam,
 	forceAsQuery,
 }: {
 	/**
@@ -67,6 +76,12 @@ export const APIMethod = ({
 	 */
 	requireSession?: boolean;
 	/**
+	 *  If enabled, will add a bearer authorization header to the fetch options
+	 *
+	 * @default false
+	 */
+	requireBearerToken?: boolean;
+	/**
 	 * The HTTP method to the endpoint
 	 *
 	 * @default "GET"
@@ -79,11 +94,15 @@ export const APIMethod = ({
 	 */
 	isServerOnly?: boolean;
 	/**
-	 * Wether the code example is client-only, thus maening it's an endpoint.
+	 * Wether the code example is client-only, thus meaning it's an endpoint.
 	 *
 	 * @default false
 	 */
 	isClientOnly?: boolean;
+	/**
+	 * Wether the code example is meant for external consumers
+	 */
+	isExternalOnly?: boolean;
 	/**
 	 * The `ts` codeblock which describes the API method.
 	 * I recommend checking other parts of the Better-Auth docs which is using this component to get an idea of how to
@@ -120,16 +139,30 @@ export const APIMethod = ({
 	 * Force the server auth API to use `query`, rather than auto choosing
 	 */
 	forceAsQuery?: boolean;
+	/**
+	 * Force the server auth api to use `path`, rather than auto choosing
+	 */
+	forceAsParam?: boolean;
 }) => {
 	let { props, functionName, code_prefix, code_suffix } = parseCode(children);
 
 	const authClientMethodPath = pathToDotNotation(path);
-	const clientBody = createClientBody({ props });
+
+	const clientBody = createClientBody({
+		props,
+		method: method ?? "GET",
+		forceAsBody,
+		forceAsQuery,
+		forceAsParam,
+	});
+
 	const serverBody = createServerBody({
 		props,
 		method: method ?? "GET",
 		requireSession: requireSession ?? false,
+		requireBearerToken: requireBearerToken ?? false,
 		forceAsQuery,
+		forceAsParam,
 		forceAsBody,
 	});
 
@@ -139,8 +172,46 @@ export const APIMethod = ({
 				noResult ? "" : `const ${resultVariable} = `
 			}await auth.api.${functionName}(${serverBody});${code_suffix}`}
 			lang="ts"
+			allowCopy={!isClientOnly}
 		/>
 	);
+
+	const serverTabContent = (
+		<>
+			{isClientOnly ? null : (
+				<Endpoint
+					method={method || "GET"}
+					path={path}
+					isServerOnly={isServerOnly ?? false}
+					className=""
+				/>
+			)}
+			{serverOnlyNote || note ? (
+				<Note>
+					{note && tsxifyBackticks(note)}
+					{serverOnlyNote ? (
+						<>
+							{note ? <br /> : null}
+							{tsxifyBackticks(serverOnlyNote)}
+						</>
+					) : null}
+				</Note>
+			) : null}
+			<div className={cn("relative w-full")}>
+				{serverCodeBlock}
+				{isClientOnly ? (
+					<div className="flex absolute inset-0 justify-center items-center w-full h-full rounded-lg border backdrop-brightness-50 backdrop-blur-xs border-border">
+						<span>This is a client-only endpoint</span>
+					</div>
+				) : null}
+			</div>
+			{!isClientOnly ? <TypeTable props={props} isServer /> : null}
+		</>
+	);
+
+	if (isExternalOnly) {
+		return serverTabContent;
+	}
 
 	let pathId = path.replaceAll("/", "-");
 
@@ -153,12 +224,12 @@ export const APIMethod = ({
 					className="absolute invisible -top-[100px]"
 				/>
 			</div>
-			<Tabs
+			<ApiMethodTabs
 				defaultValue={isServerOnly ? "server" : "client"}
-				className="w-full gap-0"
+				className="gap-0 w-full"
 			>
-				<TabsList className="relative flex justify-start w-full p-0 bg-transparent hover:[&>div>a>button]:opacity-100">
-					<TabsTrigger
+				<ApiMethodTabsList className="relative flex justify-start w-full p-0 bg-transparent hover:[&>div>a>button]:opacity-100">
+					<ApiMethodTabsTrigger
 						value="client"
 						className="transition-all duration-150 ease-in-out max-w-[100px] data-[state=active]:bg-border hover:bg-border/50 bg-border/50 border hover:border-primary/15 cursor-pointer data-[state=active]:border-primary/10 rounded-none"
 					>
@@ -179,8 +250,8 @@ export const APIMethod = ({
 							<path fill="none" d="M0 0h36v36H0z" />
 						</svg>
 						<span>Client</span>
-					</TabsTrigger>
-					<TabsTrigger
+					</ApiMethodTabsTrigger>
+					<ApiMethodTabsTrigger
 						value="server"
 						className="transition-all duration-150 ease-in-out max-w-[100px] data-[state=active]:bg-border hover:bg-border/50 bg-border/50 border hover:border-primary/15 cursor-pointer data-[state=active]:border-primary/10 rounded-none"
 					>
@@ -196,20 +267,20 @@ export const APIMethod = ({
 							/>
 						</svg>
 						<span>Server</span>
-					</TabsTrigger>
+					</ApiMethodTabsTrigger>
 					<div className="absolute right-0">
 						<a href={`#api-method${pathId}`}>
 							<Button
 								variant="ghost"
-								className="transition-all duration-150 ease-in-out scale-90 opacity-100 md:opacity-0"
+								className="opacity-100 transition-all duration-150 ease-in-out scale-90 md:opacity-0"
 								size={"icon"}
 							>
 								<Link className="size-4" />
 							</Button>
 						</a>
 					</div>
-				</TabsList>
-				<TabsContent value="client">
+				</ApiMethodTabsList>
+				<ApiMethodTabsContent value="client">
 					{isServerOnly ? null : (
 						<Endpoint
 							method={method || "GET"}
@@ -228,7 +299,7 @@ export const APIMethod = ({
 							) : null}
 						</Note>
 					) : null}
-					<div className={cn("w-full relative")}>
+					<div className={cn("relative w-full")}>
 						<DynamicCodeBlock
 							code={`${code_prefix}${
 								noResult
@@ -238,46 +309,20 @@ export const APIMethod = ({
 										}, error } = `
 							}await authClient.${authClientMethodPath}(${clientBody});${code_suffix}`}
 							lang="ts"
+							allowCopy={!isServerOnly}
 						/>
 						{isServerOnly ? (
-							<div className="absolute inset-0 flex items-center justify-center w-full h-full border rounded-lg backdrop-brightness-50 backdrop-blur-xs border-border">
+							<div className="flex absolute inset-0 justify-center items-center w-full h-full rounded-lg border backdrop-brightness-50 backdrop-blur-xs border-border">
 								<span>This is a server-only endpoint</span>
 							</div>
 						) : null}
 					</div>
 					{!isServerOnly ? <TypeTable props={props} isServer={false} /> : null}
-				</TabsContent>
-				<TabsContent value="server">
-					{isClientOnly ? null : (
-						<Endpoint
-							method={method || "GET"}
-							path={path}
-							isServerOnly={isServerOnly ?? false}
-							className=""
-						/>
-					)}
-					{serverOnlyNote || note ? (
-						<Note>
-							{note && tsxifyBackticks(note)}
-							{serverOnlyNote ? (
-								<>
-									{note ? <br /> : null}
-									{tsxifyBackticks(serverOnlyNote)}
-								</>
-							) : null}
-						</Note>
-					) : null}
-					<div className={cn("w-full relative")}>
-						{serverCodeBlock}
-						{isClientOnly ? (
-							<div className="absolute inset-0 flex items-center justify-center w-full h-full border rounded-lg backdrop-brightness-50 backdrop-blur-xs border-border">
-								<span>This is a client-only endpoint</span>
-							</div>
-						) : null}
-					</div>
-					{!isClientOnly ? <TypeTable props={props} isServer /> : null}
-				</TabsContent>
-			</Tabs>
+				</ApiMethodTabsContent>
+				<ApiMethodTabsContent value="server">
+					{serverTabContent}
+				</ApiMethodTabsContent>
+			</ApiMethodTabs>
 		</>
 	);
 };
@@ -319,13 +364,16 @@ function getChildren(
 function TypeTable({
 	props,
 	isServer,
-}: { props: Property[]; isServer: boolean }) {
+}: {
+	props: Property[];
+	isServer: boolean;
+}) {
 	if (!isServer && !props.filter((x) => !x.isServerOnly).length) return null;
 	if (isServer && !props.filter((x) => !x.isClientOnly).length) return null;
 	if (!props.length) return null;
 
 	return (
-		<Table className="mt-2 mb-0 overflow-hidden">
+		<Table className="overflow-hidden mt-2 mb-0">
 			<TableHeader>
 				<TableRow>
 					<TableHead className="text-primary w-[100px]">Prop</TableHead>
@@ -351,7 +399,7 @@ function TypeTable({
 								) : null}
 							</TableCell>
 							<TableCell className="max-w-[500px] overflow-hidden">
-								<div className="w-full break-words h-fit text-wrap ">
+								<div className="w-full break-words h-fit text-wrap">
 									{tsxifyBackticks(prop.description ?? "")}
 								</div>
 							</TableCell>
@@ -393,7 +441,8 @@ function parseCode(children: JSX.Element) {
 		.map((x: any) =>
 			x === "\n" ? { props: { children: { props: { children: "\n" } } } } : x,
 		)
-		.map((x: any) => x.props.children);
+		.map((x: any) => x.props.children)
+		.filter((x: any) => x != null);
 	const arrayOfCode: string[] = arrayOfJSXCode
 		.flatMap(
 			(
@@ -578,29 +627,80 @@ function parseCode(children: JSX.Element) {
 	};
 }
 
-const indentationSpace = `    `;
+/**
+ * Builds a property line with proper formatting and comments
+ */
+function buildPropertyLine(
+	prop: Property,
+	indentLevel: number,
+	additionalComments: string[] = [],
+): string {
+	const comments: string[] = [...additionalComments];
+	if (!prop.isOptional) comments.push("required");
+	if (prop.comments) comments.push(prop.comments);
+	const addComment = comments.length > 0;
 
-function createClientBody({ props }: { props: Property[] }) {
-	let body = ``;
+	const indent = indentationSpace.repeat(indentLevel);
+	const propValue = prop.exampleValue ? `: ${prop.exampleValue}` : "";
+	const commentText = addComment ? ` // ${comments.join(", ")}` : "";
+
+	if (prop.type === "Object") {
+		// For object types, put comment after the opening brace
+		return `${indent}${prop.propName}${propValue}: {${commentText}\n`;
+	} else {
+		// For non-object types, put comment after the comma
+		return `${indent}${prop.propName}${propValue},${commentText}\n`;
+	}
+}
+
+/**
+ * Determines if the client request should use query parameters
+ *
+ * - GET requests use query params by default, unless `forceAsBody` is true
+ * - Any request can be forced to use query params with `forceAsQuery`
+ */
+function shouldClientUseQueryParams(
+	method: string | undefined,
+	forceAsBody: boolean | undefined,
+	forceAsQuery: boolean | undefined,
+	forceAsParam: boolean | undefined,
+): boolean {
+	if (forceAsQuery) return true;
+	if (forceAsBody) return false;
+	if (forceAsParam) return false;
+	return method === "GET";
+}
+
+function createClientBody({
+	props,
+	method,
+	forceAsBody,
+	forceAsQuery,
+	forceAsParam,
+}: {
+	props: Property[];
+	method?: string;
+	forceAsBody?: boolean;
+	forceAsQuery?: boolean;
+	forceAsParam?: boolean;
+}) {
+	const isQueryParam = shouldClientUseQueryParams(
+		method,
+		forceAsBody,
+		forceAsQuery,
+		forceAsParam,
+	);
+	const baseIndentLevel = isQueryParam ? 2 : 1;
+
+	let params = ``;
 
 	let i = -1;
 	for (const prop of props) {
 		i++;
 		if (prop.isServerOnly) continue;
-		if (body === "") body += "{\n";
+		if (params === "") params += "{\n";
 
-		let addComment = false;
-		let comment: string[] = [];
-		if (!prop.isOptional || prop.comments) addComment = true;
-
-		if (!prop.isOptional) comment.push("required");
-		if (prop.comments) comment.push(prop.comments);
-
-		body += `${indentationSpace.repeat(prop.path.length + 1)}${prop.propName}${
-			prop.exampleValue ? `: ${prop.exampleValue}` : ""
-		}${prop.type === "Object" ? ": {" : ","}${
-			addComment ? ` // ${comment.join(", ")}` : ""
-		}\n`;
+		params += buildPropertyLine(prop, prop.path.length + baseIndentLevel);
 
 		if ((props[i + 1]?.path?.length || 0) < prop.path.length) {
 			const diff = prop.path.length - (props[i + 1]?.path?.length || 0);
@@ -609,46 +709,77 @@ function createClientBody({ props }: { props: Property[] }) {
 				.fill(0)
 				.map((_, i) => i)
 				.reverse()) {
-				body += `${indentationSpace.repeat(index + 1)}},\n`;
+				params += `${indentationSpace.repeat(index + baseIndentLevel)}},\n`;
 			}
 		}
 	}
-	if (body !== "") body += "}";
 
-	return body;
+	if (params !== "") {
+		if (isQueryParam) {
+			// Wrap in query object for GET requests and when forceAsQuery is true
+			params = `{\n    query: ${params}    },\n}`;
+		} else {
+			params += "}";
+		}
+	}
+
+	return params;
+}
+
+/**
+ * Determines if the server request should use query parameters
+ *
+ * - GET requests use query params by default, unless `forceAsBody` is true
+ * - Other methods (POST, PUT, DELETE) use body by default, unless `forceAsQuery` is true
+ */
+function shouldServerUseQueryParams(
+	method: string,
+	forceAsBody: boolean | undefined,
+	forceAsQuery: boolean | undefined,
+	forceAsParam: boolean | undefined,
+): boolean {
+	if (forceAsQuery) return true;
+	if (forceAsBody) return false;
+	if (forceAsParam) return false;
+	return method === "GET";
 }
 
 function createServerBody({
 	props,
 	requireSession,
+	requireBearerToken,
 	method,
 	forceAsBody,
+	forceAsParam,
 	forceAsQuery,
 }: {
 	props: Property[];
 	requireSession: boolean;
+	requireBearerToken: boolean;
 	method: string;
 	forceAsQuery: boolean | undefined;
+	forceAsParam: boolean | undefined;
 	forceAsBody: boolean | undefined;
 }) {
-	let serverBody = "";
+	const isQueryParam = shouldServerUseQueryParams(
+		method,
+		forceAsBody,
+		forceAsQuery,
+		forceAsParam,
+	);
+	const clientOnlyProps = props.filter((x) => !x.isClientOnly);
 
-	let body2 = ``;
-
+	// Build properties content
+	let propertiesContent = ``;
 	let i = -1;
+
 	for (const prop of props) {
 		i++;
 		if (prop.isClientOnly) continue;
-		if (body2 === "") body2 += "{\n";
+		if (propertiesContent === "") propertiesContent += "{\n";
 
-		let addComment = false;
-		let comment: string[] = [];
-
-		if (!prop.isOptional || prop.comments) {
-			addComment = true;
-		}
-
-		if (
+		// Check if this is a server-only nested property
+		const isNestedServerOnlyProp =
 			prop.isServerOnly &&
 			!(
 				prop.path.length &&
@@ -658,19 +789,17 @@ function createServerBody({
 							prop.path.slice(0, prop.path.length - 2).join(".") &&
 						x.propName === prop.path[prop.path.length - 1],
 				)
-			)
-		) {
-			comment.push("server-only");
-			addComment = true;
-		}
-		if (!prop.isOptional) comment.push("required");
-		if (prop.comments) comment.push(prop.comments);
+			);
 
-		body2 += `${indentationSpace.repeat(prop.path.length + 2)}${prop.propName}${
-			prop.exampleValue ? `: ${prop.exampleValue}` : ""
-		}${prop.type === "Object" ? ": {" : ","}${
-			addComment ? ` // ${comment.join(", ")}` : ""
-		}\n`;
+		const additionalComments: string[] = [];
+		if (isNestedServerOnlyProp) additionalComments.push("server-only");
+
+		propertiesContent += buildPropertyLine(
+			prop,
+			prop.path.length + 2,
+			additionalComments,
+		);
+
 		if ((props[i + 1]?.path?.length || 0) < prop.path.length) {
 			const diff = prop.path.length - (props[i + 1]?.path?.length || 0);
 
@@ -678,35 +807,42 @@ function createServerBody({
 				.fill(0)
 				.map((_, i) => i)
 				.reverse()) {
-				body2 += `${indentationSpace.repeat(index + 2)}},\n`;
+				propertiesContent += `${indentationSpace.repeat(index + 2)}},\n`;
 			}
 		}
 	}
-	if (body2 !== "") body2 += "    },";
 
+	if (propertiesContent !== "") propertiesContent += "    },";
+
+	// Build fetch options
 	let fetchOptions = "";
 	if (requireSession) {
 		fetchOptions +=
 			"\n    // This endpoint requires session cookies.\n    headers: await headers(),";
 	}
 
-	if (props.filter((x) => !x.isClientOnly).length > 0) {
-		serverBody += "{\n";
-		if ((method === "POST" || forceAsBody) && !forceAsQuery) {
-			serverBody += `    body: ${body2}${fetchOptions}\n}`;
-		} else {
-			serverBody += `    query: ${body2}${fetchOptions}\n}`;
-		}
-	} else if (fetchOptions.length) {
-		serverBody += `{${fetchOptions}\n}`;
+	if (requireBearerToken) {
+		fetchOptions +=
+			"\n    // This endpoint requires a bearer authentication token.\n    headers: { authorization: 'Bearer <token>' },";
 	}
-	return serverBody;
+
+	// Assemble final result
+	let result = "";
+	if (clientOnlyProps.length > 0) {
+		result += "{\n";
+		const paramType = isQueryParam ? "query" : forceAsParam ? "params" : "body";
+		result += `    ${paramType}: ${propertiesContent}${fetchOptions}\n}`;
+	} else if (fetchOptions.length) {
+		result += `{${fetchOptions}\n}`;
+	}
+
+	return result;
 }
 
 function Note({ children }: { children: ReactNode }) {
 	return (
-		<div className="relative flex flex-col w-full gap-2 p-3 mb-2 break-words border rounded-md text-md text-wrap border-border bg-fd-secondary/50">
-			<span className="w-full -mb-1 text-xs select-none text-muted-foreground">
+		<div className="flex relative flex-col gap-2 p-3 mb-2 w-full break-words rounded-md border text-md text-wrap border-border bg-fd-secondary/50">
+			<span className="-mb-1 w-full text-xs select-none text-muted-foreground">
 				Notes
 			</span>
 			<p className="mt-0 mb-0 text-sm">{children as any}</p>

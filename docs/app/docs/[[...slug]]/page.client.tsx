@@ -1,23 +1,22 @@
 "use client";
-import { useState } from "react";
-import {
-	Check,
-	Copy,
-	ChevronDown,
-	ExternalLink,
-	MessageCircle,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import { buttonVariants } from "@/components/ui/button";
+import { cva } from "class-variance-authority";
+import { useEffectEvent } from "fumadocs-core/utils/use-effect-event";
 import {
 	Popover,
 	PopoverContent,
 	PopoverTrigger,
 } from "fumadocs-ui/components/ui/popover";
-import { cva } from "class-variance-authority";
-
-import { type MouseEventHandler, useEffect, useRef } from "react";
-import { useEffectEvent } from "fumadocs-core/utils/use-effect-event";
+import {
+	Check,
+	ChevronDown,
+	Copy,
+	ExternalLink,
+	MessageCircle,
+} from "lucide-react";
+import type { MouseEventHandler } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export function useCopyButton(
 	onCopy: () => void | Promise<void>,
@@ -50,11 +49,10 @@ export function useCopyButton(
 const cache = new Map<string, string>();
 
 export function LLMCopyButton() {
-	const [isLoading, setLoading] = useState(false);
+	const [isLoading, startTransition] = useTransition();
 	const [checked, onClick] = useCopyButton(async () => {
-		setLoading(true);
-		const url = window.location.pathname + ".mdx";
-		try {
+		startTransition(async () => {
+			const url = window.location.pathname + ".mdx";
 			const cached = cache.get(url);
 
 			if (cached) {
@@ -71,9 +69,7 @@ export function LLMCopyButton() {
 					}),
 				]);
 			}
-		} finally {
-			setLoading(false);
-		}
+		});
 	});
 
 	return (
@@ -102,16 +98,22 @@ export function ViewOptions(props: { markdownUrl: string; githubUrl: string }) {
 	const markdownUrl = new URL(props.markdownUrl, "https://better-auth.com");
 	const q = `Read ${markdownUrl}, I want to ask questions about it.`;
 
-	const claude = `https://claude.ai/new?${new URLSearchParams({
-		q,
-	})}`;
-	const gpt = `https://chatgpt.com/?${new URLSearchParams({
-		hints: "search",
-		q,
-	})}`;
-	const t3 = `https://t3.chat/new?${new URLSearchParams({
-		q,
-	})}`;
+	const claudeUrl = new URL("https://claude.ai/new");
+	claudeUrl.searchParams.set("q", q);
+	const claude = claudeUrl.toString();
+
+	const gptUrl = new URL("https://chatgpt.com/");
+	gptUrl.searchParams.set("hints", "search");
+	gptUrl.searchParams.set("q", q);
+	const gpt = gptUrl.toString();
+
+	const t3Url = new URL("https://t3.chat/new");
+	t3Url.searchParams.set("q", q);
+	const t3 = t3Url.toString();
+
+	const copilotUrl = new URL("https://copilot.microsoft.com/");
+	copilotUrl.searchParams.set("q", q);
+	const copilot = copilotUrl.toString();
 
 	return (
 		<Popover>
@@ -173,6 +175,21 @@ export function ViewOptions(props: { markdownUrl: string; githubUrl: string }) {
 						title: "Open in T3 Chat",
 						href: t3,
 						icon: <MessageCircle />,
+					},
+					{
+						title: "Open in Copilot",
+						href: copilot,
+						icon: (
+							<svg
+								fill="currentColor"
+								role="img"
+								viewBox="0 0 1322.9 1147.5"
+								xmlns="http://www.w3.org/2000/svg"
+							>
+								<title>Microsoft</title>
+								<path d="m711.19 265.2c-27.333 0-46.933 3.07-58.8 9.33 27.067-80.267 47.6-210.13 168-210.13 114.93 0 108.4 138.27 157.87 200.8zm107.33 112.93c-35.467 125.2-70 251.2-110.13 375.33-12.133 36.4-45.733 61.6-84 61.6h-136.27c9.3333-14 16.8-28.933 21.467-45.733 35.467-125.07 70-251.07 110.13-375.33 12.133-36.4 45.733-61.6 84-61.6h136.27c-9.3333 14-16.8 28.934-21.467 45.734m-316.13 704.8c-114.93 0-108.4-138.13-157.87-200.67h267.07c27.467 0 47.067-3.07 58.8-9.33-27.067 80.266-47.6 210-168 210m777.47-758.93h0.93c-32.667-38.266-82.267-57.866-146.67-57.866h-36.4c-34.533-2.8-65.333-26.134-76.533-58.8l-36.4-103.6c-21.463-61.737-80.263-103.74-145.73-103.74h-475.07c-175.6 0-251.2 225.07-292.27 361.33-38.267 127.07-126 341.73-24.267 462.13 46.667 55.067 116.67 57.867 183.07 57.867 34.533 2.8 65.333 26.133 76.533 58.8l36.4 103.6c21.467 61.733 80.267 103.73 145.6 103.73h475.2c175.47 0 251.07-225.07 292.27-361.33 30.8-100.8 68.133-224.93 66.267-324.8 0-50.534-11.2-100-42.933-137.33" />{" "}
+							</svg>
+						),
 					},
 				].map((item) => (
 					<a

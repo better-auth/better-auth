@@ -1,45 +1,54 @@
 {
-	"$schema": "https://turborepo.org/schema.json",
-	"tasks": {
-		"dev": {
-			"cache": false,
-			"persistent": true
-		},
-		"build": {
-			"dependsOn": ["^build"],
-			"outputs": ["dist/**", ".next/*"],
-			"env": [
-				"TURSO_DATABASE_URL",
-				"TURSO_AUTH_TOKEN",
-				"RESEND_API_KEY",
-				"BETTER_AUTH_EMAIL"
-			]
-		},
-		"clean": {},
-		"format": {
-			"dependsOn": ["//#format"]
-		},
-		"//#format": {},
-		"lint": {},
-		"knip": {
-			"cache": true
-		},
-		"test": {
-			"dependsOn": ["build"],
-			"outputs": []
-		},
-		"typecheck": {
-			"outputs": [],
-			"cache": true
-		},
-		"deploy": {
-			"cache": false
-		},
-		"migrate": {
-			"cache": false
-		},
-		"generate": {
-			"cache": false
-		}
-	}
+  "$schema": "./node_modules/turbo/schema.json",
+  "globalDependencies": [
+    "package.json",
+    "tsconfig.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml"
+  ],
+  "tasks": {
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    },
+    "clean": {},
+    "format": {
+      "dependsOn": ["//#format"]
+    },
+    "//#format": {},
+    "lint": {},
+    "lint:types": {
+      "dependsOn": ["build"]
+    },
+    "lint:package": {
+      "dependsOn": ["build"]
+    },
+    "test": {
+      "dependsOn": ["build"]
+    },
+    "coverage": {
+      "dependsOn": ["build"],
+      "outputs": ["coverage"]
+    },
+    "e2e:smoke": {
+      "dependsOn": ["build"]
+    },
+    "e2e:integration": {
+      "dependsOn": ["build"]
+    },
+    "deploy": {
+      "cache": false
+    },
+    "migrate": {
+      "cache": false
+    },
+    "generate": {
+      "cache": false
+    }
+  }
 }

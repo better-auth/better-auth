@@ -1,12 +1,12 @@
-import { Metadata } from "next";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
 import { ArrowLeftRight, ArrowUpRight, Mail, Users } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Logo } from "@/components/logo";
+import type { Metadata } from "next";
+import { headers } from "next/headers";
 import Image from "next/image";
-import { ConsentBtns } from "./concet-buttons";
+import { Logo } from "@/components/logo";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Card, CardContent } from "@/components/ui/card";
+import { auth } from "@/lib/auth";
+import { ConsentBtns } from "./consent-buttons";
 
 export const metadata: Metadata = {
 	title: "Authorize Application",
@@ -25,11 +25,11 @@ interface AuthorizePageProps {
 export default async function AuthorizePage({
 	searchParams,
 }: AuthorizePageProps) {
-	const { redirect_uri, scope, client_id, cancel_uri } = await searchParams;
+	const { scope, client_id } = await searchParams;
 	const session = await auth.api.getSession({
 		headers: await headers(),
 	});
-	// @ts-ignore
+	// @ts-expect-error
 	const clientDetails = await auth.api.getOAuthClient({
 		params: {
 			id: client_id,

@@ -1,10 +1,11 @@
-import { createAuthEndpoint, sessionMiddleware } from "../../../api";
+import type { AuthContext } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { safeJSONParse } from "@better-auth/core/utils";
+import { sessionMiddleware } from "../../../api";
+import { listApiKeys as listApiKeysFromStorage } from "../adapter";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
-import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
-import { safeJSONParse } from "../../../utils/json";
-import { API_KEY_TABLE_NAME } from "..";
 export function listApiKeys({
 	opts,
 	schema,
@@ -14,8 +15,8 @@ export function listApiKeys({
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
-		byPassLastCheckTime?: boolean,
-	): Promise<number> | undefined;
+		byPassLastCheckTime?: boolean | undefined,
+	): void;
 }) {
 	return createAuthEndpoint(
 		"/api-key/list",
@@ -64,7 +65,7 @@ export function listApiKeys({
 													type: "number",
 													nullable: true,
 													description:
-														"The interval in which the `remaining` count is refilled by day. Example: 1 // every day",
+														"The interval in milliseconds between refills of the `remaining` count. Example: 3600000 // refill every hour (3600000ms = 1h)",
 												},
 												refillAmount: {
 													type: "number",
@@ -164,15 +165,9 @@ export function listApiKeys({
 		},
 		async (ctx) => {
 			const session = ctx.context.session;
-			let apiKeys = await ctx.context.adapter.findMany<ApiKey>({
-				model: API_KEY_TABLE_NAME,
-				where: [
-					{
-						field: "userId",
-						value: session.user.id,
-					},
-				],
-			});
+			let apiKeys: ApiKey[];
+
+			apiKeys = await listApiKeysFromStorage(ctx, session.user.id, opts);
 
 			deleteAllExpiredApiKeys(ctx.context);
 			apiKeys = apiKeys.map((apiKey) => {
@@ -185,16 +180,13 @@ export function listApiKeys({
 			});
 
 			let returningApiKey = apiKeys.map((x) => {
-				const { key, ...returningApiKey } = x;
+				const { key: _key, ...returningApiKey } = x;
 				return {
 					...returningApiKey,
 					permissions: returningApiKey.permissions
 						? safeJSONParse<{
 								[key: string]: string[];
-							}>(
-								//@ts-ignore - From DB this is always a string
-								returningApiKey.permissions,
-							)
+							}>(returningApiKey.permissions)
 						: null,
 				};
 			});

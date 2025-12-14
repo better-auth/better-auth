@@ -1,153 +1,138 @@
-type TimeFormat = "ms" | "s" | "m" | "h" | "d" | "w" | "y";
-type Time = `${number}${TimeFormat}`;
+// Time constants (in milliseconds)
+const SEC = 1000;
+const MIN = SEC * 60;
+const HOUR = MIN * 60;
+const DAY = HOUR * 24;
+const WEEK = DAY * 7;
+const MONTH = DAY * 30;
+const YEAR = DAY * 365.25;
 
-interface TimeObject {
-	t: Time;
-	value: number;
-	tFormat: TimeFormat;
-	toMilliseconds: () => number;
-	toSeconds: () => number;
-	toMinutes: () => number;
-	toHours: () => number;
-	toDays: () => number;
-	toWeeks: () => number;
-	toYears: () => number;
-	getDate: () => Date;
-	add: (other: Time | TimeObject) => TimeObject;
-	subtract: (other: Time | TimeObject) => TimeObject;
-	multiply: (factor: number) => TimeObject;
-	divide: (divisor: number) => TimeObject;
-	equals: (other: Time | TimeObject) => boolean;
-	lessThan: (other: Time | TimeObject) => boolean;
-	greaterThan: (other: Time | TimeObject) => boolean;
-	format: (pattern: string) => string;
-	fromNow: () => string;
-	ago: () => string;
+// Unit type definitions
+type Years = "years" | "year" | "yrs" | "yr" | "y";
+type Months = "months" | "month" | "mo";
+type Weeks = "weeks" | "week" | "w";
+type Days = "days" | "day" | "d";
+type Hours = "hours" | "hour" | "hrs" | "hr" | "h";
+type Minutes = "minutes" | "minute" | "mins" | "min" | "m";
+type Seconds = "seconds" | "second" | "secs" | "sec" | "s";
+type Unit = Years | Months | Weeks | Days | Hours | Minutes | Seconds;
+type UnitAnyCase = Capitalize<Unit> | Uppercase<Unit> | Unit;
+type Suffix = " ago" | " from now";
+type Prefix = "+" | "-" | "+ " | "- ";
+
+// Base time string formats
+type BaseTimeString = `${number}${UnitAnyCase}` | `${number} ${UnitAnyCase}`;
+
+/**
+ * A typed string representing a time duration.
+ * Supports formats like "7d", "30m", "1 hour", "2 hours ago", "-5m", etc.
+ */
+export type TimeString =
+	| BaseTimeString
+	| `${BaseTimeString}${Suffix}`
+	| `${Prefix}${BaseTimeString}`;
+
+const REGEX =
+	/^(\+|\-)? ?(\d+|\d+\.\d+) ?(seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w|months?|mo|years?|yrs?|y)(?: (ago|from now))?$/i;
+
+function parse(value: string): number {
+	const match = REGEX.exec(value);
+
+	if (!match || (match[4] && match[1])) {
+		throw new TypeError(
+			`Invalid time string format: "${value}". Use formats like "7d", "30m", "1 hour", etc.`,
+		);
+	}
+
+	const n = parseFloat(match[2]!);
+	const unit = match[3]!.toLowerCase();
+
+	let result: number;
+	switch (unit) {
+		case "years":
+		case "year":
+		case "yrs":
+		case "yr":
+		case "y":
+			result = n * YEAR;
+			break;
+		case "months":
+		case "month":
+		case "mo":
+			result = n * MONTH;
+			break;
+		case "weeks":
+		case "week":
+		case "w":
+			result = n * WEEK;
+			break;
+		case "days":
+		case "day":
+		case "d":
+			result = n * DAY;
+			break;
+		case "hours":
+		case "hour":
+		case "hrs":
+		case "hr":
+		case "h":
+			result = n * HOUR;
+			break;
+		case "minutes":
+		case "minute":
+		case "mins":
+		case "min":
+		case "m":
+			result = n * MIN;
+			break;
+		case "seconds":
+		case "second":
+		case "secs":
+		case "sec":
+		case "s":
+			result = n * SEC;
+			break;
+		default:
+			throw new TypeError(`Unknown time unit: "${unit}"`);
+	}
+
+	if (match[1] === "-" || match[4] === "ago") {
+		return -result;
+	}
+
+	return result;
 }
 
-export const createTime = (value: number, format: TimeFormat): TimeObject => {
-	const toMilliseconds = (): number => {
-		switch (format) {
-			case "ms":
-				return value;
-			case "s":
-				return value * 1000;
-			case "m":
-				return value * 1000 * 60;
-			case "h":
-				return value * 1000 * 60 * 60;
-			case "d":
-				return value * 1000 * 60 * 60 * 24;
-			case "w":
-				return value * 1000 * 60 * 60 * 24 * 7;
-			case "y":
-				return value * 1000 * 60 * 60 * 24 * 365;
-		}
-	};
+/**
+ * Parse a time string and return the value in milliseconds.
+ *
+ * @param value - A time string like "7d", "30m", "1 hour", "2 hours ago"
+ * @returns The parsed value in milliseconds
+ * @throws TypeError if the string format is invalid
+ *
+ * @example
+ * ms("1d")          // 86400000
+ * ms("2 hours")     // 7200000
+ * ms("30s")         // 30000
+ * ms("2 hours ago") // -7200000
+ */
+export function ms(value: TimeString): number {
+	return parse(value);
+}
 
-	const time: TimeObject = {
-		t: `${value}${format}` as Time,
-		value,
-		tFormat: format,
-		toMilliseconds,
-		toSeconds: () => time.toMilliseconds() / 1000,
-		toMinutes: () => time.toSeconds() / 60,
-		toHours: () => time.toMinutes() / 60,
-		toDays: () => time.toHours() / 24,
-		toWeeks: () => time.toDays() / 7,
-		toYears: () => time.toDays() / 365,
-		getDate: () => new Date(Date.now() + time.toMilliseconds()),
-		add: (other: Time | TimeObject) => {
-			const otherMs =
-				typeof other === "string"
-					? parseTime(other).toMilliseconds()
-					: other.toMilliseconds();
-			return createTime(time.toMilliseconds() + otherMs, "ms");
-		},
-		subtract: (other: Time | TimeObject) => {
-			const otherMs =
-				typeof other === "string"
-					? parseTime(other).toMilliseconds()
-					: other.toMilliseconds();
-			return createTime(time.toMilliseconds() - otherMs, "ms");
-		},
-		multiply: (factor: number) =>
-			createTime(time.toMilliseconds() * factor, "ms"),
-		divide: (divisor: number) =>
-			createTime(time.toMilliseconds() / divisor, "ms"),
-		equals: (other: Time | TimeObject) => {
-			const otherMs =
-				typeof other === "string"
-					? parseTime(other).toMilliseconds()
-					: other.toMilliseconds();
-			return time.toMilliseconds() === otherMs;
-		},
-		lessThan: (other: Time | TimeObject) => {
-			const otherMs =
-				typeof other === "string"
-					? parseTime(other).toMilliseconds()
-					: other.toMilliseconds();
-			return time.toMilliseconds() < otherMs;
-		},
-		greaterThan: (other: Time | TimeObject) => {
-			const otherMs =
-				typeof other === "string"
-					? parseTime(other).toMilliseconds()
-					: other.toMilliseconds();
-			return time.toMilliseconds() > otherMs;
-		},
-		format: (pattern: string) => {
-			const date = time.getDate();
-			return pattern.replace(/YYYY|MM|DD|HH|mm|ss/g, (match) => {
-				switch (match) {
-					case "YYYY":
-						return date.getFullYear().toString();
-					case "MM":
-						return (date.getMonth() + 1).toString().padStart(2, "0");
-					case "DD":
-						return date.getDate().toString().padStart(2, "0");
-					case "HH":
-						return date.getHours().toString().padStart(2, "0");
-					case "mm":
-						return date.getMinutes().toString().padStart(2, "0");
-					case "ss":
-						return date.getSeconds().toString().padStart(2, "0");
-					default:
-						return match;
-				}
-			});
-		},
-		fromNow: () => {
-			const ms = time.toMilliseconds();
-			if (ms < 0) return time.ago();
-			if (ms < 1000) return "in a few seconds";
-			if (ms < 60000) return `in ${Math.round(ms / 1000)} seconds`;
-			if (ms < 3600000) return `in ${Math.round(ms / 60000)} minutes`;
-			if (ms < 86400000) return `in ${Math.round(ms / 3600000)} hours`;
-			if (ms < 604800000) return `in ${Math.round(ms / 86400000)} days`;
-			if (ms < 2629800000) return `in ${Math.round(ms / 604800000)} weeks`;
-			if (ms < 31557600000) return `in ${Math.round(ms / 2629800000)} months`;
-			return `in ${Math.round(ms / 31557600000)} years`;
-		},
-		ago: () => {
-			const ms = -time.toMilliseconds();
-			if (ms < 0) return time.fromNow();
-			if (ms < 1000) return "a few seconds ago";
-			if (ms < 60000) return `${Math.round(ms / 1000)} seconds ago`;
-			if (ms < 3600000) return `${Math.round(ms / 60000)} minutes ago`;
-			if (ms < 86400000) return `${Math.round(ms / 3600000)} hours ago`;
-			if (ms < 604800000) return `${Math.round(ms / 86400000)} days ago`;
-			if (ms < 2629800000) return `${Math.round(ms / 604800000)} weeks ago`;
-			if (ms < 31557600000) return `${Math.round(ms / 2629800000)} months ago`;
-			return `${Math.round(ms / 31557600000)} years ago`;
-		},
-	};
-
-	return time;
-};
-
-export const parseTime = (time: Time): TimeObject => {
-	const match = time.match(/^(\d+)(ms|s|m|h|d|w|y)$/);
-	if (!match) throw new Error("Invalid time format");
-	return createTime(parseInt(match[1]), match[2] as TimeFormat);
-};
+/**
+ * Parse a time string and return the value in seconds.
+ *
+ * @param value - A time string like "7d", "30m", "1 hour", "2 hours ago"
+ * @returns The parsed value in seconds (rounded)
+ * @throws TypeError if the string format is invalid
+ *
+ * @example
+ * sec("1d")          // 86400
+ * sec("2 hours")     // 7200
+ * sec("-30s")        // -30
+ * sec("2 hours ago") // -7200
+ */
+export function sec(value: TimeString): number {
+	return Math.round(parse(value) / 1000);
+}

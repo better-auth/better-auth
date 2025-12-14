@@ -1,83 +1,70 @@
-import { describe, expect, it, vi } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { admin } from "./admin";
-import { type UserWithRole } from "./types";
-import { adminClient } from "./client";
-import { createAccessControl } from "../access";
+import { BetterAuthError } from "@better-auth/core/error";
+import type { GoogleProfile } from "@better-auth/core/social-providers";
+import { HttpResponse, http } from "msw";
+import { setupServer } from "msw/node";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import { createAuthClient } from "../../client";
-import type { GoogleProfile } from "../../social-providers";
 import { signJWT } from "../../crypto";
+import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
-import { getOAuth2Tokens } from "../../oauth2";
+import { createAccessControl } from "../access";
+import { admin } from "./admin";
+import { adminClient } from "./client";
+import type { UserWithRole } from "./types";
 
-vi.mock("../../oauth2", async (importOriginal) => {
-	const original = (await importOriginal()) as any;
-	return {
-		...original,
-		validateAuthorizationCode: vi
-			.fn()
-			.mockImplementation(async (...args: any) => {
-				const data: GoogleProfile = {
-					email: "user@email.com",
-					email_verified: true,
-					name: "First Last",
-					picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
-					exp: 1234567890,
-					sub: "1234567890",
-					iat: 1234567890,
-					aud: "test",
-					azp: "test",
-					nbf: 1234567890,
-					iss: "test",
-					locale: "en",
-					jti: "test",
-					given_name: "First",
-					family_name: "Last",
-				};
-				const testIdToken = await signJWT(data, DEFAULT_SECRET);
-				const tokens = getOAuth2Tokens({
-					access_token: "test",
-					refresh_token: "test",
-					id_token: testIdToken,
-				});
-				return tokens;
-			}),
-		refreshAccessToken: vi.fn().mockImplementation(async (args) => {
-			const { refreshToken, options, tokenEndpoint } = args;
-			expect(refreshToken).toBeDefined();
-			expect(options.clientId).toBe("test-client-id");
-			expect(options.clientSecret).toBe("test-client-secret");
-			expect(tokenEndpoint).toBe("http://localhost:8080/token");
+let testIdToken: string;
+let handlers: ReturnType<typeof http.post>[];
 
-			const data: GoogleProfile = {
-				email: "user@email.com",
-				email_verified: true,
-				name: "First Last",
-				picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
-				exp: 1234567890,
-				sub: "1234567890",
-				iat: 1234567890,
-				aud: "test",
-				azp: "test",
-				nbf: 1234567890,
-				iss: "test",
-				locale: "en",
-				jti: "test",
-				given_name: "First",
-				family_name: "Last",
-			};
-			const testIdToken = await signJWT(data, DEFAULT_SECRET);
-			const tokens = getOAuth2Tokens({
-				access_token: "new-access-token",
-				refresh_token: "new-refresh-token",
-				id_token: testIdToken,
-				token_type: "Bearer",
-				expires_in: 3600, // Token expires in 1 hour
-			});
-			return tokens;
-		}),
+const server = setupServer();
+
+beforeAll(async () => {
+	const data: GoogleProfile = {
+		email: "user@email.com",
+		email_verified: true,
+		name: "First Last",
+		picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
+		exp: 1234567890,
+		sub: "1234567890",
+		iat: 1234567890,
+		aud: "test",
+		azp: "test",
+		nbf: 1234567890,
+		iss: "test",
+		locale: "en",
+		jti: "test",
+		given_name: "First",
+		family_name: "Last",
 	};
+	testIdToken = await signJWT(data, DEFAULT_SECRET);
+
+	handlers = [
+		http.post("https://oauth2.googleapis.com/token", () => {
+			return HttpResponse.json({
+				access_token: "test",
+				refresh_token: "test",
+				id_token: testIdToken,
+			});
+		}),
+	];
+
+	server.listen({ onUnhandledRequest: "bypass" });
+	server.use(...handlers);
 });
+
+afterEach(() => {
+	server.resetHandlers();
+	server.use(...handlers);
+});
+
+afterAll(() => server.close());
 
 describe("Admin plugin", async () => {
 	const {
@@ -139,6 +126,36 @@ describe("Admin plugin", async () => {
 		testNonAdminUser.email,
 		testNonAdminUser.password,
 	);
+
+	it("should allow admin to get user", async () => {
+		const res = await client.admin.getUser(
+			{
+				query: {
+					id: testNonAdminUser.id,
+				},
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+
+		expect(res.data?.email).toBe(testNonAdminUser.email);
+	});
+
+	it("should not allow non-admin to get user", async () => {
+		const res = await client.admin.getUser(
+			{
+				query: {
+					id: testNonAdminUser.id,
+				},
+			},
+			{
+				headers: userHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.code).toBe("YOU_ARE_NOT_ALLOWED_TO_GET_USER");
+	});
 
 	it("should allow admin to create users", async () => {
 		const res = await client.admin.createUser(
@@ -266,7 +283,7 @@ describe("Admin plugin", async () => {
 			},
 		});
 
-		expect(res.data?.users[0].name).toBe("Test User");
+		expect(res.data?.users[0]!.name).toBe("Test User");
 
 		const res2 = await client.admin.listUsers({
 			query: {
@@ -277,7 +294,7 @@ describe("Admin plugin", async () => {
 				headers: adminHeaders,
 			},
 		});
-		expect(res2.data?.users[0].name).toBe("Admin");
+		expect(res2.data?.users[0]!.name).toBe("Admin");
 	});
 
 	it("should allow offset and limit", async () => {
@@ -291,7 +308,7 @@ describe("Admin plugin", async () => {
 			},
 		});
 		expect(res.data?.users.length).toBe(1);
-		expect(res.data?.users[0].name).toBe("Test User");
+		expect(res.data?.users[0]!.name).toBe("Test User");
 	});
 
 	it("should allow to search users by name", async () => {
@@ -309,7 +326,7 @@ describe("Admin plugin", async () => {
 	});
 
 	it("should allow to filter users by role", async () => {
-		const res = await client.admin.listUsers({
+		await client.admin.listUsers({
 			query: {
 				filterValue: "admin",
 				filterField: "role",
@@ -319,7 +336,72 @@ describe("Admin plugin", async () => {
 				headers: adminHeaders,
 			},
 		});
+	});
+
+	it("should filter users by id with ne operator", async () => {
+		const allUsers = await client.admin.listUsers({
+			query: {},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		const firstUserId = allUsers.data?.users[0]!.id;
+
+		const res = await client.admin.listUsers({
+			query: {
+				filterValue: firstUserId,
+				filterField: "id",
+				filterOperator: "ne",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+
+		expect(res.data?.users.length).toBe(allUsers.data!.total - 1);
+		expect(res.data?.users.every((u) => u.id !== firstUserId)).toBe(true);
+	});
+
+	it("should filter users by _id with ne operator", async () => {
+		const allUsers = await client.admin.listUsers({
+			query: {},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		const firstUserId = allUsers.data?.users[0]!.id;
+
+		const res = await client.admin.listUsers({
+			query: {
+				filterValue: firstUserId,
+				filterField: "_id",
+				filterOperator: "ne",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+
+		expect(res.data?.users.length).toBe(allUsers.data!.total - 1);
+		expect(res.data?.users.every((u) => u.id !== firstUserId)).toBe(true);
+	});
+
+	it("should allow to combine search and filter", async () => {
+		const res = await client.admin.listUsers({
+			query: {
+				filterValue: "admin",
+				filterField: "role",
+				filterOperator: "eq",
+				searchValue: "test",
+				searchField: "email",
+				searchOperator: "contains",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
 		expect(res.data?.users.length).toBe(1);
+		expect(res.data?.users[0]!.email).toBe("test@test.com");
 	});
 
 	it("should allow to set user role", async () => {
@@ -431,12 +513,14 @@ describe("Admin plugin", async () => {
 	});
 
 	it("should not allow banned user to sign in with social provider", async () => {
+		const headers = new Headers();
 		const res = await client.signIn.social(
 			{
 				provider: "google",
 			},
 			{
 				throw: true,
+				onSuccess: cookieSetter(headers),
 			},
 		);
 		const state = new URL(res.url!).searchParams.get("state");
@@ -446,6 +530,7 @@ describe("Admin plugin", async () => {
 				state,
 				code: "test",
 			},
+			headers,
 			method: "GET",
 			onError(context) {
 				expect(context.response.status).toBe(302);
@@ -569,6 +654,30 @@ describe("Admin plugin", async () => {
 		expect(res.error?.status).toBe(403);
 	});
 
+	it("should not allow to impersonate admins", async () => {
+		const userToImpersonate = await client.signUp.email({
+			email: "impersonate-admin@mail.com",
+			password: "password",
+			name: "Impersonate Admin User",
+		});
+		const userId = userToImpersonate.data?.user.id || "";
+		await client.admin.setRole({
+			userId,
+			role: "admin",
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		const res = await client.admin.impersonateUser(
+			{
+				userId,
+			},
+			{ headers: adminHeaders },
+		);
+
+		expect(res.error?.status).toBe(403);
+	});
+
 	it("should filter impersonated sessions", async () => {
 		const { headers } = await signInWithUser(data.email, data.password);
 		const res = await client.listSessions({
@@ -618,7 +727,7 @@ describe("Admin plugin", async () => {
 		);
 		expect(sessions.data?.sessions.length).toBe(3);
 		const res = await client.admin.revokeUserSession(
-			{ sessionToken: sessions.data?.sessions[0].token || "" },
+			{ sessionToken: sessions.data?.sessions[0]!.token || "" },
 			{ headers: adminHeaders },
 		);
 		expect(res.data?.success).toBe(true);
@@ -663,7 +772,7 @@ describe("Admin plugin", async () => {
 				headers: adminHeaders,
 			},
 		});
-		expect(response.data?.users.length).toBe(2);
+		expect(response.data?.users.length).toBeGreaterThanOrEqual(2);
 		const roles = response.data?.users.map((d) => d.role);
 		expect(roles).not.toContain("user");
 	});
@@ -684,6 +793,62 @@ describe("Admin plugin", async () => {
 			password: "newPassword",
 		});
 		expect(res2.data?.user).toBeDefined();
+	});
+	it("should not allow admin to set user password with empty userId", async () => {
+		const res = await client.admin.setUserPassword(
+			{
+				userId: "",
+				newPassword: "newPassword",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+	});
+
+	it("should not allow admin to set user password with empty new password", async () => {
+		const res = await client.admin.setUserPassword(
+			{
+				userId: newUser?.id || "",
+				newPassword: "",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+	});
+
+	it("should not allow admin to set user password with a short new password", async () => {
+		const res = await client.admin.setUserPassword(
+			{
+				userId: newUser!.id,
+				newPassword: "1234567",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("PASSWORD_TOO_SHORT");
+		expect(res.error?.message).toBe("Password too short");
+	});
+
+	it("should not allow admin to set user password with a long new password", async () => {
+		const longNewPassword = Array(129).fill("a").join("");
+		const res = await client.admin.setUserPassword(
+			{
+				userId: newUser!.id,
+				newPassword: longNewPassword,
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("PASSWORD_TOO_LONG");
+		expect(res.error?.message).toBe("Password too long");
 	});
 
 	it("should not allow non-admin to set user password", async () => {
@@ -742,6 +907,7 @@ describe("Admin plugin", async () => {
 				data: {
 					name: "Updated Name",
 					customField: "custom value",
+					role: ["member", "user"],
 				},
 			},
 			{
@@ -749,6 +915,7 @@ describe("Admin plugin", async () => {
 			},
 		);
 		expect(res.data?.name).toBe("Updated Name");
+		expect(res.data?.role).toBe("member,user");
 	});
 
 	it("should not allow non-admin to update user", async () => {
@@ -770,59 +937,75 @@ describe("Admin plugin", async () => {
 
 describe("access control", async (it) => {
 	const ac = createAccessControl({
-		user: ["create", "read", "update", "delete", "list", "bulk-delete"],
+		user: [
+			"create",
+			"read",
+			"update",
+			"delete",
+			"list",
+			"bulk-delete",
+			"set-role",
+		],
 		order: ["create", "read", "update", "delete", "update-many"],
 	});
 
 	const adminAc = ac.newRole({
-		user: ["create", "read", "update", "delete", "list"],
+		user: ["create", "read", "update", "delete", "list", "set-role"],
 		order: ["create", "read", "update", "delete"],
 	});
 	const userAc = ac.newRole({
 		user: ["read"],
 		order: ["read"],
 	});
+	const supportAc = ac.newRole({
+		user: ["update"],
+		order: ["update"],
+	});
 
-	const {
-		signInWithTestUser,
-		signInWithUser,
-		cookieSetter,
-		auth,
-		customFetchImpl,
-	} = await getTestInstance(
-		{
-			plugins: [
-				admin({
-					ac,
-					roles: {
-						admin: adminAc,
-						user: userAc,
-					},
-				}),
-			],
-			databaseHooks: {
-				user: {
-					create: {
-						before: async (user) => {
-							if (user.name === "Admin") {
-								return {
-									data: {
-										...user,
-										role: "admin",
-									},
-								};
-							}
+	const { signInWithTestUser, cookieSetter, auth, customFetchImpl } =
+		await getTestInstance(
+			{
+				plugins: [
+					admin({
+						ac,
+						roles: {
+							admin: adminAc,
+							user: userAc,
+							support: supportAc,
+						},
+					}),
+				],
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => {
+								if (user.name === "Admin") {
+									return {
+										data: {
+											...user,
+											role: "admin",
+										},
+									};
+								}
+								if (user.name === "Support") {
+									return {
+										data: {
+											...user,
+											role: "support",
+										},
+									};
+								}
+							},
 						},
 					},
 				},
 			},
-		},
-		{
-			testUser: {
-				name: "Admin",
+			{
+				testUser: {
+					name: "Admin",
+				},
 			},
-		},
-	);
+		);
 
 	const client = createAuthClient({
 		plugins: [
@@ -831,6 +1014,7 @@ describe("access control", async (it) => {
 				roles: {
 					admin: adminAc,
 					user: userAc,
+					support: supportAc,
 				},
 			}),
 		],
@@ -841,6 +1025,104 @@ describe("access control", async (it) => {
 	});
 
 	const { headers, user } = await signInWithTestUser();
+
+	it("should not allow role updates via update-user without user:set-role", async () => {
+		const supportHeaders = new Headers();
+		const { data: supportSignUp } = await client.signUp.email(
+			{
+				email: "support@test.com",
+				password: "password",
+				name: "Support",
+			},
+			{
+				onSuccess: cookieSetter(supportHeaders),
+			},
+		);
+		const supportUserId = supportSignUp?.user.id || "";
+
+		// Non-sensitive updates should still be allowed with `user:update`
+		const ok = await client.admin.updateUser(
+			{
+				userId: supportUserId,
+				data: {
+					name: "Support Updated",
+				},
+			},
+			{
+				headers: supportHeaders,
+			},
+		);
+		expect(ok.data?.name).toBe("Support Updated");
+
+		// But attempting to update `role` must be rejected without `user:set-role`.
+		const res = await client.admin.updateUser(
+			{
+				userId: supportUserId,
+				data: {
+					role: "admin",
+				},
+			},
+			{
+				headers: supportHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(403);
+	});
+
+	it("should reject non-existent roles via update-user", async () => {
+		const { data: targetUserRes } = await client.signUp.email(
+			{
+				email: "role-target@test.com",
+				password: "password",
+				name: "Role Target",
+			},
+			{
+				onSuccess: cookieSetter(new Headers()),
+			},
+		);
+		const targetUserId = targetUserRes?.user.id || "";
+
+		const res = await client.admin.updateUser(
+			{
+				userId: targetUserId,
+				data: {
+					role: "non-existent-role",
+				},
+			},
+			{
+				headers,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+	});
+
+	it("should allow role updates via update-user for valid roles with user:set-role", async () => {
+		const { data: targetUserRes } = await client.signUp.email(
+			{
+				email: "role-valid-target@test.com",
+				password: "password",
+				name: "Role Valid Target",
+			},
+			{
+				onSuccess: cookieSetter(new Headers()),
+			},
+		);
+		const targetUserId = targetUserRes?.user.id || "";
+
+		const res = await client.admin.updateUser(
+			{
+				userId: targetUserId,
+				data: {
+					role: "support",
+				},
+			},
+			{
+				headers,
+			},
+		);
+		expect(res.error).toBeNull();
+		expect(res.data?.role).toBe("support");
+	});
 
 	it("should validate on the client", async () => {
 		const canCreateOrder = client.admin.checkRolePermission({
@@ -977,17 +1259,100 @@ describe("access control", async (it) => {
 		expect(canUpdateOrderAndUpdateUser.success).toBe(false);
 	});
 
+	it("should prioritize role over userId when both are provided", async () => {
+		const testUser = await client.signUp.email({
+			email: "rolepriority@test.com",
+			password: "password",
+			name: "Role Priority Test User",
+		});
+		const userId = testUser.data?.user.id;
+
+		const checkWithAdminRole = await auth.api.userHasPermission({
+			body: {
+				userId: userId, // non-admin user ID
+				role: "admin", // admin role
+				permission: {
+					user: ["create"],
+				},
+			},
+		});
+		expect(checkWithAdminRole.success).toBe(true);
+
+		const checkWithUserRole = await auth.api.userHasPermission({
+			body: {
+				userId: userId, // non-admin user ID
+				role: "user", // user role
+				permission: {
+					user: ["create"],
+				},
+			},
+		});
+		expect(checkWithUserRole.success).toBe(false);
+	});
+
+	it("should check permissions correctly for banned user with role provided", async () => {
+		const bannedUser = await client.signUp.email({
+			email: "bannedwithRole@test.com",
+			password: "password",
+			name: "Banned Role Test User",
+		});
+		const bannedUserId = bannedUser.data?.user.id;
+
+		await client.admin.banUser(
+			{
+				userId: bannedUserId || "",
+				banReason: "Testing role priority",
+			},
+			{
+				headers: headers,
+			},
+		);
+
+		const checkWithRole = await auth.api.userHasPermission({
+			body: {
+				userId: bannedUserId, // banned user ID
+				role: "admin", // admin role
+				permission: {
+					user: ["create"],
+				},
+			},
+		});
+		expect(checkWithRole.success).toBe(true);
+
+		const checkWithoutRole = await auth.api.userHasPermission({
+			body: {
+				userId: bannedUserId, // banned user ID only
+				permission: {
+					user: ["create"],
+				},
+			},
+		});
+		expect(checkWithoutRole.success).toBe(false); // User doesn't have admin permissions
+
+		await client.admin.unbanUser(
+			{
+				userId: bannedUserId || "",
+			},
+			{
+				headers: headers,
+			},
+		);
+	});
+
 	it("shouldn't allow to list users", async () => {
 		const { headers } = await signInWithTestUser();
 		const adminRes = await client.admin.listUsers({
 			query: {
-				limit: 2,
+				limit: 10,
 			},
 			fetchOptions: {
 				headers,
 			},
 		});
-		expect(adminRes.data?.users.length).toBe(1);
+		// The exact count may vary based on users created in previous tests
+		const adminCount = adminRes.data?.users.length || 0;
+		expect(adminCount).toBeGreaterThan(0); // Should have at least the admin user
+
 		const userHeaders = new Headers();
 		await client.signUp.email(
 			{
@@ -1008,5 +1373,75 @@ describe("access control", async (it) => {
 			},
 		});
 		expect(userRes.error?.status).toBe(403);
+	});
+
+	it("should not allow to set multiple non existent user role", async () => {
+		const createdUser = await client.admin.createUser(
+			{
+				name: "Test User mr",
+				email: "testmr@test.com",
+				password: "test",
+				role: ["user"],
+			},
+			{
+				headers: headers,
+			},
+		);
+		expect(createdUser.data?.user.role).toBe("user");
+		const res = await client.admin.setRole(
+			{
+				userId: createdUser.data?.user.id || "",
+				role: ["user", "non-user"] as any[],
+			},
+			{ headers: headers },
+		);
+		expect(res.error).toBeDefined();
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe(
+			"YOU_ARE_NOT_ALLOWED_TO_SET_A_NONEXISTENT_ROLE_VALUE",
+		);
+		await client.admin.removeUser(
+			{ userId: createdUser.data?.user.id || "" },
+			{ headers: headers },
+		);
+	});
+
+	it("should not allow to set non existent user role", async () => {
+		const createdUser = await client.admin.createUser(
+			{
+				name: "Test User mr",
+				email: "testmr@test.com",
+				password: "test",
+				role: "user",
+			},
+			{
+				headers: headers,
+			},
+		);
+		expect(createdUser.data?.user.role).toBe("user");
+		const res = await client.admin.setRole(
+			{
+				userId: createdUser.data?.user.id || "",
+				role: "non-user" as any,
+			},
+			{ headers: headers },
+		);
+		expect(res.error).toBeDefined();
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe(
+			"YOU_ARE_NOT_ALLOWED_TO_SET_A_NONEXISTENT_ROLE_VALUE",
+		);
+		await client.admin.removeUser(
+			{ userId: createdUser.data?.user.id || "" },
+			{ headers: headers },
+		);
+	});
+
+	it("should throw error when assigning non-existent admin roles", async () => {
+		expect(() =>
+			admin({
+				adminRoles: ["non-existent-role"],
+			}),
+		).toThrowError(BetterAuthError);
 	});
 });

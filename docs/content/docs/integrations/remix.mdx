@@ -78,7 +78,7 @@ Once you have created the client, you can use it to sign up, sign in, and perfor
 ```ts title="app/routes/signup.tsx"
 import { Form } from "@remix-run/react"
 import { useState } from "react"
-import { authClient } from "~/lib/auth.client"
+import { authClient } from "~/lib/auth-client"
 
 export default function SignUp() {
   const [email, setEmail] = useState("")
@@ -149,7 +149,7 @@ export default function SignUp() {
 ```ts title="app/routes/signin.tsx"
 import { Form } from "@remix-run/react"
 import { useState } from "react"
-import { authClient } from "~/services/auth.client"
+import { authClient } from "~/services/auth-client"
 
 export default function SignIn() {
   const [email, setEmail] = useState("")

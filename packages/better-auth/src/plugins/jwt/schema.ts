@@ -1,5 +1,4 @@
-import type { AuthPluginSchema } from "../../types";
-import * as z from "zod/v4";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 
 export const schema = {
 	jwks: {
@@ -16,15 +15,10 @@ export const schema = {
 				type: "date",
 				required: true,
 			},
+			expiresAt: {
+				type: "date",
+				required: false,
+			},
 		},
 	},
-} satisfies AuthPluginSchema;
-
-export const jwk = z.object({
-	id: z.string(),
-	publicKey: z.string(),
-	privateKey: z.string(),
-	createdAt: z.date(),
-});
-
-export type Jwk = z.infer<typeof jwk>;
+} satisfies BetterAuthPluginDBSchema;

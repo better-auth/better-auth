@@ -1,11 +1,12 @@
-import * as z from "zod/v4";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import type { OAuth2Tokens } from "@better-auth/core/oauth2";
+import { safeJSONParse } from "@better-auth/core/utils";
+import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
-import { setTokenUtil, type OAuth2Tokens } from "../../oauth2";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
+import { setTokenUtil } from "../../oauth2/utils";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
-import { createAuthEndpoint } from "../call";
-import { safeJSONParse } from "../../utils/json";
 
 const schema = z.object({
 	code: z.string().optional(),
@@ -20,14 +21,40 @@ export const callbackOAuth = createAuthEndpoint(
 	"/callback/:id",
 	{
 		method: ["GET", "POST"],
+		operationId: "handleOAuthCallback",
 		body: schema.optional(),
 		query: schema.optional(),
-		metadata: HIDE_METADATA,
+		metadata: {
+			...HIDE_METADATA,
+			allowedMediaTypes: [
+				"application/x-www-form-urlencoded",
+				"application/json",
+			],
+		},
 	},
 	async (c) => {
 		let queryOrBody: z.infer<typeof schema>;
 		const defaultErrorURL =
 			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
+
+		// Handle POST requests by redirecting to GET to ensure cookies are sent
+		if (c.method === "POST") {
+			const postData = c.body ? schema.parse(c.body) : {};
+			const queryData = c.query ? schema.parse(c.query) : {};
+
+			const mergedData = schema.parse({ ...postData, ...queryData });
+			const params = new URLSearchParams();
+
+			for (const [key, value] of Object.entries(mergedData)) {
+				if (value !== undefined && value !== null) {
+					params.set(key, String(value));
+				}
+			}
+
+			const redirectURL = `${c.context.baseURL}/callback/${c.params.id}?${params.toString()}`;
+			throw c.redirect(redirectURL);
+		}
+
 		try {
 			if (c.method === "GET") {
 				queryOrBody = schema.parse(c.query);
@@ -43,16 +70,13 @@ export const callbackOAuth = createAuthEndpoint(
 
 		const { code, error, state, error_description, device_id } = queryOrBody;
 
-		if (error) {
-			throw c.redirect(
-				`${defaultErrorURL}?error=${error}&error_description=${error_description}`,
-			);
-		}
-
 		if (!state) {
 			c.context.logger.error("State not found", error);
-			throw c.redirect(`${defaultErrorURL}?error=state_not_found`);
+			const sep = defaultErrorURL.includes("?") ? "&" : "?";
+			const url = `${defaultErrorURL}${sep}state=state_not_found`;
+			throw c.redirect(url);
 		}
+
 		const {
 			codeVerifier,
 			callbackURL,
@@ -62,14 +86,20 @@ export const callbackOAuth = createAuthEndpoint(
 			requestSignUp,
 		} = await parseState(c);
 
-		function redirectOnError(error: string) {
-			let url = errorURL || defaultErrorURL;
-			if (url.includes("?")) {
-				url = `${url}&error=${error}`;
-			} else {
-				url = `${url}?error=${error}`;
-			}
+		function redirectOnError(error: string, description?: string | undefined) {
+			const baseURL = errorURL ?? defaultErrorURL;
+
+			const params = new URLSearchParams({ error });
+			if (description) params.set("error_description", description);
+
+			const sep = baseURL.includes("?") ? "&" : "?";
+			const url = `${baseURL}${sep}${params.toString()}`;
+
 			throw c.redirect(url);
+		}
+
+		if (error) {
+			redirectOnError(error, error_description);
 		}
 
 		if (!code) {
@@ -132,8 +162,15 @@ export const callbackOAuth = createAuthEndpoint(
 				return redirectOnError("unable_to_link_account");
 			}
 
+			if (
+				userInfo.email !== link.email &&
+				c.context.options.account?.accountLinking?.allowDifferentEmails !== true
+			) {
+				return redirectOnError("email_doesn't_match");
+			}
+
 			const existingAccount = await c.context.internalAdapter.findAccount(
-				userInfo.id,
+				String(userInfo.id),
 			);
 
 			if (existingAccount) {
@@ -155,18 +192,15 @@ export const callbackOAuth = createAuthEndpoint(
 					updateData,
 				);
 			} else {
-				const newAccount = await c.context.internalAdapter.createAccount(
-					{
-						userId: link.userId,
-						providerId: provider.id,
-						accountId: userInfo.id,
-						...tokens,
-						accessToken: await setTokenUtil(tokens.accessToken, c.context),
-						refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
-						scope: tokens.scopes?.join(","),
-					},
-					c,
-				);
+				const newAccount = await c.context.internalAdapter.createAccount({
+					userId: link.userId,
+					providerId: provider.id,
+					accountId: String(userInfo.id),
+					...tokens,
+					accessToken: await setTokenUtil(tokens.accessToken, c.context),
+					refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
+					scope: tokens.scopes?.join(","),
+				});
 				if (!newAccount) {
 					return redirectOnError("unable_to_link_account");
 				}
@@ -187,19 +221,20 @@ export const callbackOAuth = createAuthEndpoint(
 			);
 			return redirectOnError("email_not_found");
 		}
-
+		const accountData = {
+			providerId: provider.id,
+			accountId: String(userInfo.id),
+			...tokens,
+			scope: tokens.scopes?.join(","),
+		};
 		const result = await handleOAuthUserInfo(c, {
 			userInfo: {
 				...userInfo,
+				id: String(userInfo.id),
 				email: userInfo.email,
 				name: userInfo.name || userInfo.email,
 			},
-			account: {
-				providerId: provider.id,
-				accountId: userInfo.id,
-				...tokens,
-				scope: tokens.scopes?.join(","),
-			},
+			account: accountData,
 			callbackURL,
 			disableSignUp:
 				(provider.disableImplicitSignUp && !requestSignUp) ||
@@ -215,6 +250,7 @@ export const callbackOAuth = createAuthEndpoint(
 			session,
 			user,
 		});
+
 		let toRedirectTo: string;
 		try {
 			const url = result.isRegister ? newUserURL || callbackURL : callbackURL;

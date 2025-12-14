@@ -1,5 +1,8 @@
 "use client";
 
+import { AlertCircle, ArrowLeft, CheckCircle2 } from "lucide-react";
+import Link from "next/link";
+import { useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,9 +16,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { client } from "@/lib/auth-client";
-import { AlertCircle, ArrowLeft, CheckCircle2 } from "lucide-react";
-import Link from "next/link";
-import { useState } from "react";
 
 export default function Component() {
 	const [email, setEmail] = useState("");
@@ -34,7 +34,7 @@ export default function Component() {
 				redirectTo: "/reset-password",
 			});
 			setIsSubmitted(true);
-		} catch (err) {
+		} catch {
 			setError("An error occurred. Please try again.");
 		} finally {
 			setIsSubmitting(false);
@@ -76,7 +76,7 @@ export default function Component() {
 	return (
 		<main className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)]">
 			{/* Radial gradient for the container to give a faded look */}
-			<div className="absolute pointer-events-none inset-0 flex items-center justify-center dark:bg-black bg-white [mask-image:radial-gradient(ellipse_at_center,transparent_20%,black)]"></div>
+			<div className="absolute pointer-events-none inset-0 flex items-center justify-center dark:bg-black bg-white mask-[radial-gradient(ellipse_at_center,transparent_20%,black)]"></div>
 			<Card className="w-[350px]">
 				<CardHeader>
 					<CardTitle>Forgot password</CardTitle>

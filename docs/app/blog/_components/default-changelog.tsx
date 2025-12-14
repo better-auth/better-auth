@@ -1,15 +1,14 @@
+import { betterFetch } from "@better-fetch/fetch";
+import { DiscordLogoIcon } from "@radix-ui/react-icons";
+import defaultMdxComponents from "fumadocs-ui/mdx";
 import Link from "next/link";
 import { useId } from "react";
+import Markdown from "react-markdown";
+import rehypeHighlight from "rehype-highlight";
 import { cn } from "@/lib/utils";
 import { IconLink } from "./changelog-layout";
 import { BookIcon, GitHubIcon, XIcon } from "./icons";
-import { DiscordLogoIcon } from "@radix-ui/react-icons";
 import { StarField } from "./stat-field";
-import { betterFetch } from "@better-fetch/fetch";
-import Markdown from "react-markdown";
-import defaultMdxComponents from "fumadocs-ui/mdx";
-import rehypeHighlight from "rehype-highlight";
-import "highlight.js/styles/dark.css";
 
 export const dynamic = "force-static";
 const ChangelogPage = async () => {
@@ -45,19 +44,22 @@ const ChangelogPage = async () => {
 			if (line.startsWith("- ")) {
 				const mainContent = line.split(";")[0];
 				const context = line.split(";")[2];
-				const mentions = context
-					?.split(" ")
-					.filter((word) => word.startsWith("@"))
-					.map((mention) => {
-						const username = mention.replace("@", "");
-						const avatarUrl = `https://github.com/${username}.png`;
-						return `[![${mention}](${avatarUrl})](https://github.com/${username})`;
-					});
-				if (!mentions) {
-					return line;
+				const mentionMatches =
+					(context ?? line)?.match(/@([A-Za-z0-9-]+)/g) ?? [];
+				if (mentionMatches.length === 0) {
+					return (mainContent || line).replace(/&nbsp/g, "");
 				}
+				const mentions = mentionMatches.map((match) => {
+					const username = match.slice(1);
+					const avatarUrl = `https://github.com/${username}.png`;
+					return `[![${match}](${avatarUrl})](https://github.com/${username})`;
+				});
 				// Remove &nbsp
-				return mainContent.replace(/&nbsp/g, "") + " – " + mentions.join(" ");
+				return (
+					(mainContent || line).replace(/&nbsp/g, "") +
+					" – " +
+					mentions.join(" ")
+				);
 			}
 			return line;
 		});
@@ -76,9 +78,9 @@ const ChangelogPage = async () => {
 						<span className="">available here.</span>
 					</h1>
 					<p className="mt-4 text-sm text-gray-600 dark:text-gray-300">
-						Better Auth is comprehensive authentication library for TypeScript
-						that provides a wide range of features to make authentication easier
-						and more secure.
+						Better Auth is the most comprehensive authentication framework for
+						TypeScript that provides a wide range of features to make
+						authentication easier and more secure.
 					</p>
 					<hr className="h-px bg-gray-300 mt-5" />
 					<div className="mt-8 flex flex-wrap text-gray-600 dark:text-gray-300 gap-x-1 gap-y-3 sm:gap-x-2">

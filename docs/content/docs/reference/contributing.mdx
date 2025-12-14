@@ -104,9 +104,9 @@ Once you have an idea of what you want to contribute, you can start making chang
 
         * Make your changes to the codebase.
 
-        * Write tests if needed. (Read more about testing <Link href="/docs/reference/contribute/testing">here</Link>)
+        * Write tests if needed. (Read more about testing <Link href="/docs/reference/contributing#testing">here</Link>)
 
-        * Update documentation.  (Read more about documenting <Link href="/docs/reference/contribute/documenting">here</Link>)
+        * Update documentation.  (Read more about documenting <Link href="/docs/reference/contributing#documentation">here</Link>)
 
     </Step>
 
@@ -149,10 +149,31 @@ import { getTestInstance } from "./test-utils/test-instance";
 
 describe("Feature", () => {
     it("should work as expected", async () => {
-        const { client } = getTestInstance();
+        const { client } = await getTestInstance();
         // Test code here
         expect(result).toBeDefined();
     });
+});
+```
+
+### Using the Test Instance Helper
+
+The test instance helper now includes improved async context support for managing user sessions:
+
+```ts
+const { client, runWithUser, signInWithTestUser } = await getTestInstance();
+
+// Run tests with a specific user context
+await runWithUser("user@example.com", "password", async (headers) => {
+    // All client calls within this block will use the user's session
+    const response = await client.getSession();
+    // headers are automatically applied
+});
+
+// Or use the test user with async context
+const { runWithDefaultUser } = await signInWithTestUser();
+await runWithDefaultUser(async (headers) => {
+    // Code here runs with the test user's session context
 });
 ```
 

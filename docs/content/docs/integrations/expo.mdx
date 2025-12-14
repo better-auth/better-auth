@@ -12,7 +12,7 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         ## Configure A Better Auth Backend
         Before using Better Auth with Expo, make sure you have a Better Auth backend set up. You can either use a separate server or leverage Expo's new [API Routes](https://docs.expo.dev/router/reference/api-routes) feature to host your Better Auth instance.
 
-        To get started, check out our [installation](/docs/installation) guide for setting up Better Auth on your server. If you prefer to check out the full example, you can find it [here](https://github.com/better-auth/better-auth/tree/main/examples/expo-example).
+        To get started, check out our [installation](/docs/installation) guide for setting up Better Auth on your server. If you prefer to check out the full example, you can find it [here](https://github.com/better-auth/examples/tree/main/expo-example).
 
         To use the new API routes feature in Expo to host your Better Auth instance you can create a new API route in your Expo app and mount the Better Auth handler.
 
@@ -149,8 +149,29 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         })
         ```
 
-        <Callout>
-          The wildcard pattern can be particularly useful if your app uses different URL formats for deep linking based on features or screens.
+        ### Development Mode
+
+        During development, Expo uses the `exp://` scheme with your device's local IP address. To support this, you can use wildcards to match common local IP ranges:
+
+        ```ts title="auth.ts"
+        export const auth = betterAuth({
+            trustedOrigins: [
+                "myapp://",
+                
+                // Development mode - Expo's exp:// scheme with local IP ranges
+                ...(process.env.NODE_ENV === "development" ? [
+                    "exp://*/*",                 // Trust all Expo development URLs
+                    "exp://10.0.0.*:*/*",        // Trust 10.0.0.x IP range
+                    "exp://192.168.*.*:*/*",     // Trust 192.168.x.x IP range
+                    "exp://172.*.*.*:*/*",       // Trust 172.x.x.x IP range
+                    "exp://localhost:*/*"        // Trust localhost
+                ] : [])
+            ]
+        })
+        ```
+
+        <Callout type="warn">
+          The wildcard patterns for `exp://` should only be used in development. In production, use your app's specific scheme (e.g., `myapp://`).
         </Callout>
     </Step>
  
@@ -362,7 +383,11 @@ const makeAuthenticatedRequest = async () => {
   const headers = {
     "Cookie": cookies, // [!code highlight]
   };
-  const response = await fetch("http://localhost:8081/api/secure-endpoint", { headers });
+  const response = await fetch("http://localhost:8081/api/secure-endpoint", { 
+    headers,
+    // 'include' can interfere with the cookies we just set manually in the headers
+    credentials: "omit" // [!code highlight]
+  });
   const data = await response.json();
   return data;
 };
@@ -415,11 +440,17 @@ export function TRPCProvider(props: { children: React.ReactNode }) {
 
 ```ts title="lib/auth-client.ts"
 import { createAuthClient } from "better-auth/react";
+import { expoClient } from "@better-auth/expo/client";
 import SecureStorage from "expo-secure-store";
 
 const authClient = createAuthClient({
     baseURL: "http://localhost:8081",
-    storage: SecureStorage
+    plugins: [
+        expoClient({
+            storage: SecureStorage,
+            // ...
+        })
+    ],
 });
 ```
 
@@ -427,10 +458,16 @@ const authClient = createAuthClient({
 
 ```ts title="lib/auth-client.ts"
 import { createAuthClient } from "better-auth/react";
+import { expoClient } from "@better-auth/expo/client";
 
 const authClient = createAuthClient({
     baseURL: "http://localhost:8081",
-    scheme: "myapp"
+    plugins: [
+        expoClient({
+            scheme: "myapp",
+            // ...
+        }),
+    ],
 });
 ```
 
@@ -438,16 +475,60 @@ const authClient = createAuthClient({
 
 ```ts title="lib/auth-client.ts"
 import { createAuthClient } from "better-auth/react";
+import { expoClient } from "@better-auth/expo/client";
 
 const authClient = createAuthClient({
     baseURL: "http://localhost:8081",
-    disableCache: true
+    plugins: [
+        expoClient({
+            disableCache: true,
+            // ...
+        }),
+    ],
 });
 ```
+
+**cookiePrefix**: Prefix(es) for server cookie names to identify which cookies belong to better-auth. This prevents infinite refetching when third-party cookies are set. Can be a single string or an array of strings to match multiple prefixes. Defaults to `"better-auth"`.
+
+```ts title="lib/auth-client.ts"
+import { createAuthClient } from "better-auth/react";
+import { expoClient } from "@better-auth/expo/client";
+import * as SecureStore from "expo-secure-store";
+
+const authClient = createAuthClient({
+    baseURL: "http://localhost:8081",
+    plugins: [
+        expoClient({
+            storage: SecureStore,
+            // Single prefix
+            cookiePrefix: "better-auth"
+        })
+    ]
+});
+```
+
+You can also provide multiple prefixes to match cookies from different authentication systems:
+
+```ts title="lib/auth-client.ts"
+const authClient = createAuthClient({
+    baseURL: "http://localhost:8081",
+    plugins: [
+        expoClient({
+            storage: SecureStore,
+            // Multiple prefixes
+            cookiePrefix: ["better-auth", "my-app", "custom-auth"]
+        })
+    ]
+});
+```
+
+<Callout type="info">
+  **Important:** If you're using plugins like passkey with a custom `webAuthnChallengeCookie` option, make sure to include the cookie prefix in the `cookiePrefix` array. For example, if you set `webAuthnChallengeCookie: "my-app-passkey"`, include `"my-app"` in your `cookiePrefix`. See the [Passkey plugin documentation](/docs/plugins/passkey#expo-integration) for more details.
+</Callout>
 
 
 ### Expo Servers
 
 Server plugin options:
 
-**overrideOrigin**: Override the origin for Expo API routes (default: false). Enable this if you're facing cors origin issues with Expo API routes.
+**disableOriginOverride**: Override the origin for Expo API routes (default: false). Enable this if you're facing cors origin issues with Expo API routes.

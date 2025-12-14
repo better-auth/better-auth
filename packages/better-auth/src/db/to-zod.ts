@@ -1,9 +1,9 @@
-import * as z from "zod/v4";
-import type { ZodSchema } from "zod/v4";
-import type { FieldAttribute } from ".";
+import type { DBFieldAttribute } from "@better-auth/core/db";
+import type { ZodType } from "zod";
+import * as z from "zod";
 
 export function toZodSchema<
-	Fields extends Record<string, FieldAttribute | never>,
+	Fields extends Record<string, DBFieldAttribute | never>,
 	IsClientSide extends boolean,
 >({
 	fields,
@@ -23,19 +23,18 @@ export function toZodSchema<
 		if (isClientSide && field.input === false) {
 			return acc;
 		}
-		if (field.type === "string[]" || field.type === "number[]") {
-			return {
-				...acc,
-				[key]: z.array(field.type === "string[]" ? z.string() : z.number()),
-			};
+
+		let schema: ZodType;
+		if (field.type === "json") {
+			schema = (z as any).json ? (z as any).json() : z.any();
+		} else if (field.type === "string[]" || field.type === "number[]") {
+			schema = z.array(field.type === "string[]" ? z.string() : z.number());
+		} else if (Array.isArray(field.type)) {
+			schema = z.any();
+		} else {
+			schema = z[field.type]();
 		}
-		if (Array.isArray(field.type)) {
-			return {
-				...acc,
-				[key]: z.any(),
-			};
-		}
-		let schema: ZodSchema = z[field.type]();
+
 		if (field?.required === false) {
 			schema = schema.optional();
 		}
@@ -57,14 +56,14 @@ export function toZodSchema<
 }
 
 export type FieldAttributeToSchema<
-	Field extends FieldAttribute | Record<string, never>,
+	Field extends DBFieldAttribute | Record<string, never>,
 	// if it's client side, then field attributes of `input` that are false should be removed
 	isClientSide extends boolean = false,
 > = Field extends { type: any }
 	? GetInput<isClientSide, Field, GetRequired<Field, GetType<Field>>>
 	: Record<string, never>;
 
-type GetType<F extends FieldAttribute> = F extends {
+type GetType<F extends DBFieldAttribute> = F extends {
 	type: "string";
 }
 	? z.ZodString
@@ -77,7 +76,7 @@ type GetType<F extends FieldAttribute> = F extends {
 				: z.ZodAny;
 
 type GetRequired<
-	F extends FieldAttribute,
+	F extends DBFieldAttribute,
 	Schema extends z.core.SomeType,
 > = F extends {
 	required: true;
@@ -87,7 +86,7 @@ type GetRequired<
 
 type GetInput<
 	isClientSide extends boolean,
-	Field extends FieldAttribute,
+	Field extends DBFieldAttribute,
 	Schema extends z.core.SomeType,
 > = Field extends {
 	input: false;

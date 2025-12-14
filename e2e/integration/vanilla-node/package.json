@@ -1,0 +1,19 @@
+{
+  "name": "vanilla-node-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start:client": "vite"
+  },
+  "devDependencies": {
+    "@better-auth/test-utils": "workspace:*",
+    "vite": "^7.2.4"
+  },
+  "dependencies": {
+    "better-auth": "workspace:*",
+    "better-sqlite3": "^12.2.0",
+    "kysely": "^0.28.5",
+    "kysely-postgres-js": "^3.0.0",
+    "postgres": "^3.4.7"
+  }
+}

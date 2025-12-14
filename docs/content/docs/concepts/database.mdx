@@ -5,11 +5,13 @@ description: Learn how to use a database with Better Auth.
 
 ## Adapters
 
-Better Auth requires a database connection to store data. It comes with a query builder called <Link href="https://kysely.dev/">Kysely</Link> to manage and query your database. The database will be used to store data such as users, sessions, and more. Plugins can also define their own database tables to store data.
+Better Auth connects to a database to store data. The database will be used to store data such as users, sessions, and more. Plugins can also define their own database tables to store data.
 
-You can pass a database connection to Better Auth by passing a supported database instance, a dialect instance or a Kysely instance in the database options.
+You can pass a database connection to Better Auth by passing a supported database instance in the database options. You can learn more about supported database adapters in the [Other relational databases](/docs/adapters/other-relational-databases) documentation.
 
-You can learn more about supported Kysely dialects in the [Other relational databases](/docs/adapters/other-relational-databases) documentation. Or if you're using an ORM, you can find our supported ORM adapters in that same category on the documentation sidebar.
+<Callout type="info">
+Better Auth also works without any database. For more details, see [Stateless Session Management](/docs/concepts/session-management#stateless-session-management).
+</Callout>
 
 ## CLI
 
@@ -22,6 +24,10 @@ The cli checks your database and prompts you to add missing tables or update exi
 ```bash
 npx @better-auth/cli migrate
 ```
+
+<Callout type="info">
+For PostgreSQL users: The migrate command supports non-default schemas. It automatically detects your `search_path` configuration and creates tables in the correct schema. See [PostgreSQL adapter](/docs/adapters/postgresql#use-a-non-default-schema) for details.
+</Callout>
 
 ### Generating Schema
 
@@ -49,7 +55,7 @@ To use secondary storage, implement the `SecondaryStorage` interface:
 
 ```typescript
 interface SecondaryStorage {
-  get: (key: string) => Promise<string | null>;
+  get: (key: string) => Promise<unknown>; 
   set: (key: string, value: string, ttl?: number) => Promise<void>;
   delete: (key: string) => Promise<void>;
 }
@@ -81,8 +87,7 @@ export const auth = betterAuth({
 	// ... other options
 	secondaryStorage: {
 		get: async (key) => {
-			const value = await redis.get(key);
-			return value ? value : null;
+			return await redis.get(key);
 		},
 		set: async (key, value, ttl) => {
 			if (ttl) await redis.set(key, value, { EX: ttl });
@@ -474,37 +479,167 @@ export const auth = betterAuth({
 
 ### ID Generation
 
-Better Auth by default will generate unique IDs for users, sessions, and other entities. If you want to customize how IDs are generated, you can configure this in the `advanced.database.generateId` option in your auth config.
+Better Auth by default will generate unique IDs for users, sessions, and other entities.
+You can customize ID generation behavior using the `advanced.database.generateId` option.
 
-You can also disable ID generation by setting the `advanced.database.generateId` option to `false`. This will assume your database will generate the ID automatically.
+#### Option 1: Let Database Generate IDs
 
-**Example: Automatic Database IDs**
+Setting `generateId` to `false` allows your database handle all ID generation: (outside of `generateId` being `serial` and some cases of `generateId` being `uuid`)
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
 import { db } from "./db";
 
 export const auth = betterAuth({
-  database: {
-    db: db,
-  },
+  database: db,
   advanced: {
     database: {
-      generateId: false,
+      generateId: false, // "serial" for auto-incrementing numeric IDs
     },
   },
 });
 ```
 
+#### Option 2: Custom ID Generation Function
+
+Use a function to generate IDs. You can return `false` or `undefined` from the function to let the database generate the ID for specific models:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { db } from "./db";
+
+export const auth = betterAuth({
+  database: db,
+  advanced: {
+    database: {
+      generateId: (options) => {
+        // Let database auto-generate for specific models
+        if (options.model === "user" || options.model === "users") {
+          return false; // Let database generate ID
+        }
+        // Generate UUIDs for other tables
+        return crypto.randomUUID();
+      },
+    },
+  },
+});
+```
+
+<Callout type="info">
+  **Important**: Returning `false` or `undefined` from the `generateId` function lets the database handle ID generation for that specific model. Setting `generateId: false` (without a function) disables ID generation for **all** tables.
+</Callout>
+
+#### Option 3: Consistent Custom ID Generator
+
+Generate the same type of ID for all tables:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { db } from "./db";
+
+export const auth = betterAuth({
+  database: db,
+  advanced: {
+    database: {
+      generateId: () => crypto.randomUUID(),
+    },
+  },
+});
+```
+
+### Numeric IDs
+
+If you prefer auto-incrementing numeric IDs, you can set the `advanced.database.generateId` option to `"serial"`.
+Doing this will disable Better-Auth from generating IDs for any table, and will assume your
+database will generate the numeric ID automatically.
+
+When enabled, the Better-Auth CLI will generate or migrate the schema with the `id` field as a numeric type for your database
+with auto-incrementing attributes associated with it.
+
+```ts
+import { betterAuth } from "better-auth";
+import { db } from "./db";
+
+export const auth = betterAuth({
+  database: db,
+  advanced: {
+    database: {
+      generateId: "serial",
+    },
+  },
+});
+```
+
+<Callout type="info">
+  Better-Auth will continue to infer the type of the `id` field as a `string` for the database, but will
+  automatically convert it to a numeric type when fetching or inserting data from the database.
+
+  It's likely when grabbing `id` values returned from Better-Auth that you'll receive a string version of a number,
+  this is normal. It's also expected that all id values passed to Better-Auth (eg via an endpoint body) is expected to be a string.
+</Callout>
+
+### UUIDs
+
+If you prefer UUIDs for the `id` field, you can set the `advanced.database.generateId` option to `"uuid"`.
+By default, Better-Auth will generate UUIDs for the `id` field for all tables, except adapters that use `PostgreSQL` where we allow the
+database to generate the UUID automatically.
+
+By enabling this option, the Better-Auth CLI will generate or migrate the schema with the `id` field as a UUID type for your database.
+If the `uuid` type is not supported, we will generate a normal `string` type for the `id` field.
+
+### Mixed ID Types
+
+If you need different ID types across tables (e.g., integer IDs for users, UUID strings for sessions/accounts/verification), use a `generateId` callback function.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { db } from "./db";
+
+export const auth = betterAuth({
+  database: db,
+  user: {
+    modelName: "users", // PostgreSQL: id serial primary key
+  },
+  session: {
+    modelName: "session", // PostgreSQL: id text primary key
+  },
+  advanced: {
+    database: {
+      // Do NOT set useNumberId - it's global and affects all tables
+      generateId: (options) => {
+        if (options.model === "user" || options.model === "users") {
+          return false; // Let PostgreSQL serial generate it
+        }
+        return crypto.randomUUID(); // UUIDs for session, account, verification
+      },
+    },
+  },
+});
+```
+
+This configuration allows you to:
+- Use database auto-increment (serial, auto_increment, etc.) for the users table
+- Generate UUIDs for all other tables (session, account, verification)
+- Maintain compatibility with existing schemas that use different ID types
+
+<Callout type="info">
+  **Use Case**: This is particularly useful when migrating from other authentication providers (like Clerk) where you have existing users with integer IDs but want UUID strings for new tables.
+</Callout>
+
 ### Database Hooks
 
 Database hooks allow you to define custom logic that can be executed during the lifecycle of core database operations in Better Auth. You can create hooks for the following models: **user**, **session**, and **account**.
+
+<Callout type="warn">
+  Additional fields are supported, however full type inference for these fields isn't yet supported.
+  Improved type support is planned.
+</Callout>
 
 There are two types of hooks you can define:
 
 #### 1. Before Hook
 
-- **Purpose**: This hook is called before the respective entity (user, session, or account) is created or updated.
+- **Purpose**: This hook is called before the respective entity (user, session, or account) is created, updated, or deleted.
 - **Behavior**: If the hook returns `false`, the operation will be aborted. And If it returns a data object, it'll replace the original payload.
 
 #### 2. After Hook
@@ -525,6 +660,7 @@ export const auth = betterAuth({
           // Modify the user object before it is created
           return {
             data: {
+              // Ensure to return Better-Auth named fields, not the original field names in your database.
               ...user,
               firstName: user.name.split(" ")[0],
               lastName: user.name.split(" ")[1],
@@ -535,10 +671,38 @@ export const auth = betterAuth({
           //perform additional actions, like creating a stripe customer
         },
       },
+      delete: {
+        before: async (user, ctx) => {
+          console.log(`User ${user.email} is being deleted`);
+          if (user.email.includes("admin")) {
+            return false; // Abort deletion
+          }
+          
+          return true; // Allow deletion
+        },
+        after: async (user) => {
+          console.log(`User ${user.email} has been deleted`);
+        },
+      },
+    },
+    session: {
+      delete: {
+        before: async (session, ctx) => {
+          console.log(`Session ${session.token} is being deleted`);
+          if (session.userId === "admin-user-id") {
+            return false; // Abort deletion
+          }
+          return true; // Allow deletion
+        },
+        after: async (session) => {
+          console.log(`Session ${session.token} has been deleted`);
+        },
+      },
     },
   },
 });
 ```
+
 
 #### Throwing Errors
 
@@ -610,3 +774,34 @@ To add new tables and columns to your database, you have two options:
 `Manual Method`: Follow the instructions in the plugin documentation to manually add tables and columns.
 
 Both methods ensure your database schema stays up to date with your plugins' requirements.
+
+
+## Experimental Joins
+
+Since Better-Auth version `1.4` we've introduced experimental database joins support.
+This allows Better-Auth to perform multiple database queries in a single request, reducing the number of database roundtrips.
+Over 50 endpoints support joins, and we're constantly adding more. 
+
+Under the hood, our adapter system supports joins natively, meaning even if you don't enable experimental joins,
+it will still fallback to making multiple database queries and combining the results.
+
+To enable joins, update your auth config with the following:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  experimental: { joins: true }
+});
+```
+
+The Better-Auth `1.4` CLI will generate DrizzleORM and PrismaORM relationships for you so if you do not have those already
+be sure to update your schema by running our migrate or generate CLI commands to be up-to-date with the latest required schema.
+
+It's very important to read the documentation regarding experimental joins for your given adapter:
+
+- [DrizzleORM](/docs/adapters/drizzle#joins-experimental)
+- [PrismaORM](/docs/adapters/prisma#joins-experimental)
+- [SQLite](/docs/adapters/sqlite#joins-experimental)
+- [MySQL](/docs/adapters/mysql#joins-experimental)
+- [PostgreSQL](/docs/adapters/postgresql#joins-experimental)
+- [MSSQL](/docs/adapters/mssql#joins-experimental)
+- [MongoDB](/docs/adapters/mongodb#joins-experimental)

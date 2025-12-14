@@ -1,16 +1,16 @@
 "use client";
 import { ChevronRight, Menu } from "lucide-react";
 import Link from "next/link";
-import { Fragment, createContext, useContext, useState } from "react";
+import { usePathname } from "next/navigation";
+import { createContext, Fragment, useContext, useState } from "react";
 import {
 	Accordion,
 	AccordionContent,
 	AccordionItem,
 	AccordionTrigger,
 } from "@/components/ui/accordion";
-import { contents, examples } from "./sidebar-content";
-import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { contents, examples } from "./sidebar-content";
 
 interface NavbarMobileContextProps {
 	isOpen: boolean;
@@ -33,7 +33,6 @@ export const NavbarProvider = ({ children }: { children: React.ReactNode }) => {
 	const toggleDocsNavbar = () => {
 		setIsDocsOpen((prevIsOpen) => !prevIsOpen);
 	};
-	// @ts-ignore
 	return (
 		<NavbarContext.Provider
 			value={{ isOpen, toggleNavbar, isDocsOpen, toggleDocsNavbar }}
@@ -57,16 +56,15 @@ export const NavbarMobileBtn: React.FC = () => {
 	const { toggleNavbar } = useNavbarMobile();
 
 	return (
-		<div className="flex items-center">
-			<button
-				className="overflow-hidden px-2.5 block md:hidden"
-				onClick={() => {
-					toggleNavbar();
-				}}
-			>
-				<Menu className="size-5" />
-			</button>
-		</div>
+		<button
+			aria-label="Toggle navigation menu"
+			className="flex items-center justify-center size-8 navbar:hidden"
+			onClick={() => {
+				toggleNavbar();
+			}}
+		>
+			<Menu className="size-5" />
+		</button>
 	);
 };
 
@@ -78,7 +76,7 @@ export const NavbarMobile = () => {
 	return (
 		<div
 			className={cn(
-				"fixed top-[50px] inset-x-0 transform-gpu z-[100] bg-background grid grid-rows-[0fr] duration-300 transition-all md:hidden",
+				"fixed top-[50px] inset-x-0 transform-gpu z-[100] bg-background grid grid-rows-[0fr] duration-300 transition-all navbar:hidden",
 				isOpen &&
 					"shadow-lg border-b border-[rgba(255,255,255,.1)] grid-rows-[1fr]",
 			)}
@@ -162,28 +160,40 @@ function DocsNavBarContent() {
 							</div>
 						</AccordionTrigger>
 						<AccordionContent className="pl-5 divide-y">
-							{menu.list.map((child) => (
-								<Link
-									href={child.href}
-									key={child.title}
-									className="block py-2 text-sm border-b first:pt-0 last:pb-0 last:border-0 text-muted-foreground"
-									onClick={toggleNavbar}
-								>
-									{child.group ? (
-										<div className="flex flex-row items-center gap-2 ">
-											<div className="flex-grow h-px bg-gradient-to-r from-stone-800/90 to-stone-800/60" />
-											<p className="text-sm text-transparent bg-gradient-to-tr dark:from-gray-100 dark:to-stone-200 bg-clip-text from-gray-900 to-stone-900">
-												{child.title}
-											</p>
+							{menu.list.map((child, index) =>
+								child.group ? (
+									// Group header rendered as div (just a divider)
+									<div
+										key={child.title}
+										className="block py-2 text-sm text-muted-foreground border-none select-none"
+									>
+										<div className="flex flex-row items-center gap-2">
+											<p className="text-sm text-primary">{child.title}</p>
+											<div className="flex-grow h-px bg-border" />
 										</div>
-									) : (
+									</div>
+								) : (
+									// Regular menu item rendered as Link
+									<Link
+										href={child.href}
+										key={child.title}
+										className={`block py-2 text-sm text-muted-foreground ${
+											// Add border only when not last item
+											// and next item is not a group header
+											index === menu.list.length - 1 ||
+											menu.list[index + 1]?.group
+												? "border-none"
+												: "border-b"
+										}`}
+										onClick={toggleNavbar}
+									>
 										<div className="flex items-center gap-2">
 											<child.icon />
 											{child.title}
 										</div>
-									)}
-								</Link>
-							))}
+									</Link>
+								),
+							)}
 						</AccordionContent>
 					</AccordionItem>
 				</Accordion>
@@ -201,7 +211,7 @@ export const navMenu: {
 	}[];
 }[] = [
 	{
-		name: "_helo",
+		name: "hello_",
 		path: "/",
 	},
 
@@ -224,5 +234,9 @@ export const navMenu: {
 	{
 		name: "community",
 		path: "/community",
+	},
+	{
+		name: "enterprise",
+		path: "/enterprise",
 	},
 ];

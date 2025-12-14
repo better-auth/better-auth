@@ -1,51 +1,49 @@
 "use client";
 
-import { useState } from "react";
-import { signIn, client } from "@/lib/auth-client";
+import { Loader2 } from "lucide-react";
+import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
 	CardContent,
 	CardDescription,
+	CardFooter,
 	CardHeader,
 	CardTitle,
-	CardFooter,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { client, signIn } from "@/lib/auth-client";
 
 export default function ClientTest() {
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
-	const [loading, setLoading] = useState(false);
+	const [loading, startTransition] = useTransition();
 
 	// Get the session data using the useSession hook
 	const { data: session, isPending, error } = client.useSession();
 
 	const handleLogin = async () => {
-		setLoading(true);
-		await signIn.email(
-			{
-				email,
-				password,
-				callbackURL: "/client-test",
-			},
-			{
-				onResponse: () => {
-					setLoading(false);
+		startTransition(async () => {
+			await signIn.email(
+				{
+					email,
+					password,
+					callbackURL: "/client-test",
 				},
-				onError: (ctx) => {
-					toast.error(ctx.error.message);
+				{
+					onError: (ctx) => {
+						toast.error(ctx.error.message);
+					},
+					onSuccess: () => {
+						toast.success("Successfully logged in!");
+						setEmail("");
+						setPassword("");
+					},
 				},
-				onSuccess: () => {
-					toast.success("Successfully logged in!");
-					setEmail("");
-					setPassword("");
-				},
-			},
-		);
+			);
+		});
 	};
 
 	return (

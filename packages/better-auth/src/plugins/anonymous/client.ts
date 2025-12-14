@@ -1,5 +1,5 @@
+import type { BetterAuthClientPlugin } from "@better-auth/core";
 import type { anonymous } from ".";
-import type { BetterAuthClientPlugin } from "../../client/types";
 
 export const anonymousClient = () => {
 	return {
@@ -8,5 +8,14 @@ export const anonymousClient = () => {
 		pathMethods: {
 			"/sign-in/anonymous": "POST",
 		},
+		atomListeners: [
+			{
+				matcher: (path) => path === "/sign-in/anonymous",
+				signal: "$sessionSignal",
+			},
+		],
 	} satisfies BetterAuthClientPlugin;
 };
+
+export type * from "./schema";
+export type * from "./types";

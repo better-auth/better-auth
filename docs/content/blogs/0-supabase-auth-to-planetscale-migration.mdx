@@ -1,0 +1,371 @@
+---
+title: Migrate from Supabase Auth to Better Auth + PlanetScale PostgreSQL
+description: This migration guide aims to guide you move your auth from Supabase Auth to Better Auth on PlanetScale PostgreSQL.
+date: 2025-08-25
+author:
+  name: "Dagmawi Esayas"
+  avatar: ""
+image: "/blogs/supabase-ps.png"
+tags: ["migration", "guides", "supabase", "planetscale"]
+---
+
+import { HomeIcon } from "lucide-react";
+import { Step, Steps } from "fumadocs-ui/components/steps";
+
+# Supabase Auth to Better Auth + PlanetScale PostgreSQL Migration Guide
+
+Recently, [PlanetScale announced](https://planetscale.com/blog/planetscale-for-postgres) support for PostgreSQL. This is exciting news for developers and a big step forward for the database industry.
+
+We’ve noticed that some users are migrating from Supabase to PlanetScale PostgreSQL, but facing challenges because they also rely on Supabase Auth. This guide will help you migrate your authentication from Supabase Auth to Better Auth on PlanetScale PostgreSQL.
+
+## 1. Setup a PlanetScale Database
+
+<Steps>
+<Step>
+  Open the PlanetScale [dashboard](https://app.planetscale.com/)
+</Step>
+<Step>
+  Create a [new database](<[https://app.planetscale.com/new](https://app.planetscale.com/new?org=better-auth)>)
+</Step>
+<Step>
+  Get your connection string (PostgreSQL URI)
+```jsx
+postgresql://<username>:<password>@<host>/postgres?sslmode=verify-full
+```
+</Step>
+<Step>
+  Save the database URL in your `.env` file for later use with Better Auth:
+```txt title=".env"
+DATABASE_URL =
+  postgresql://<username>:<password>@<host>/postgres?sslmode=verify-full
+```
+</Step>
+</Steps>
+
+<Callout>
+  This is what will be in the `database` field of our auth config
+</Callout>
+
+## 2. Install Better Auth
+
+<Steps>
+<Step>
+  Install Better Auth
+```package-install
+npm install better-auth
+```
+</Step>
+
+<Step>
+  Follow and complete the basic setup
+  [here](https://www.better-auth.com/docs/installation)
+</Step>
+</Steps>
+
+<Callout>
+  Make sure to set up all required environment variables as per the docs.
+</Callout>
+
+## 3. Install PostgreSQL Client
+
+Install the `pg` package and its types:
+
+```package-install
+npm install pg
+npm install --save-dev @types/pg
+```
+
+## 4. Generate & Migrate Better Auth Schema
+
+<Steps>
+<Step>
+  Run this cli command to generate all the schema needed to setup Better Auth:
+```bash 
+npx @better-auth/cli generate 
+```
+</Step>
+<Step>
+  Then run this command to apply the generated schema to your PlanetScale
+    database:
+```bash 
+npx @better-auth/cli migrate 
+```
+</Step>
+
+</Steps>
+
+<Callout type="success">
+  You should now have the required auth tables in PlanetScale.
+</Callout>
+
+### 5. Quick Check
+
+Your auth config should be like this:
+
+<Tabs items={["auth.ts", "auth-client.ts"]}>
+  <Tab value="auth.ts">
+    ```ts 
+    import { Pool } from "pg";
+    import { betterAuth } from "better-auth";
+
+    export const auth = betterAuth({
+      baseURL: "http://localhost:3000",
+      database: new Pool({
+        connectionString: process.env.DATABASE_URL,
+      }),
+      emailAndPassword: {
+        enabled: true,
+      },
+    });
+    ```
+    </Tab>
+
+  <Tab value="auth-client.ts">
+    ```ts 
+    import { createAuthClient } from "better-auth/react";
+    export const authClient = createAuthClient({
+      baseURL: "http://localhost:3000",
+    });
+
+    export const { signIn, signUp, useSession } = createAuthClient();
+    ```
+    </Tab>
+
+</Tabs>
+
+### 6. The Fun Part
+
+Now comes the fun part. You are now all setup to move your auth from Supabase Auth to Better Auth and all you have to do is go through the instances you've used Supabase Auth client and replace it with Better Auth client. We are going to see a few examples here.
+
+<Tabs items={["sign up", "sign in", "session"]}>
+  <Tab value="sign up">
+    ```ts 
+    // Supabase Auth
+    await supabase.auth.signUp({
+      email,
+      password,
+    });
+
+    // Better Auth
+    await authClient.signUp.email({
+      email,
+      password,
+      name: "John",
+    });
+    ```
+
+  </Tab>
+
+  <Tab value="sign in">
+    ```ts 
+    // Supabase
+    await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    // Better Auth
+    await authClient.signIn.email({
+      email,
+      password,
+    });
+    ```
+
+  </Tab>
+
+  <Tab value="session">
+    ```ts 
+    // Supabase
+    const { data, error } = await supabase.auth.getClaims();
+
+    // Better Auth
+    const { data, error } = await authClient.useSession();
+    ```
+
+  </Tab>
+
+</Tabs>
+
+### 7. Migrate your users from Supabase Auth
+
+<Callout type="warn">
+  This migration will invalidate all active sessions. While this guide doesn't
+  currently cover migrating two-factor (2FA) or Row Level Security (RLS)
+  configurations, both should be possible with additional steps.
+</Callout>
+<Callout type="info">
+  For a more detailed guide checkout [this
+  guide](https://www.better-auth.com/docs/guides/supabase-migration-guide) we
+  made.
+</Callout>
+
+Essentially you should be able to copy the following code into `migration.ts` and run it.
+
+```ts title="migration.ts"
+import { Pool } from "pg";
+import { auth } from "./lib/auth";
+import { User as SupabaseUser } from "@supabase/supabase-js";
+
+type User = SupabaseUser & {
+  is_super_admin: boolean;
+  raw_user_meta_data: {
+    avatar_url: string;
+  };
+  encrypted_password: string;
+  email_confirmed_at: string;
+  created_at: string;
+  updated_at: string;
+  is_anonymous: boolean;
+  identities: {
+    provider: string;
+    identity_data: {
+      sub: string;
+      email: string;
+    };
+    created_at: string;
+    updated_at: string;
+  };
+};
+
+const migrateFromSupabase = async () => {
+  const ctx = await auth.$context;
+  const db = ctx.options.database as Pool;
+  const users = await db
+    .query(
+      `
+			SELECT 
+				u.*,
+				COALESCE(
+					json_agg(
+						i.* ORDER BY i.id
+					) FILTER (WHERE i.id IS NOT NULL),
+					'[]'::json
+				) as identities
+			FROM auth.users u
+			LEFT JOIN auth.identities i ON u.id = i.user_id
+			GROUP BY u.id
+		`
+    )
+    .then((res) => res.rows as User[]);
+  for (const user of users) {
+    if (!user.email) {
+      continue;
+    }
+    await ctx.adapter
+      .create({
+        model: "user",
+        data: {
+          id: user.id,
+          email: user.email,
+          name: user.email,
+          role: user.is_super_admin ? "admin" : user.role,
+          emailVerified: !!user.email_confirmed_at,
+          image: user.raw_user_meta_data.avatar_url,
+          createdAt: new Date(user.created_at),
+          updatedAt: new Date(user.updated_at),
+          isAnonymous: user.is_anonymous,
+        },
+      })
+      .catch(() => {});
+    for (const identity of user.identities) {
+      const existingAccounts = await ctx.internalAdapter.findAccounts(user.id);
+
+      if (identity.provider === "email") {
+        const hasCredential = existingAccounts.find(
+          (account: { providerId: string }) =>
+            account.providerId === "credential"
+        );
+        if (!hasCredential) {
+          await ctx.adapter
+            .create({
+              model: "account",
+              data: {
+                userId: user.id,
+                providerId: "credential",
+                accountId: user.id,
+                password: user.encrypted_password,
+                createdAt: new Date(user.created_at),
+                updatedAt: new Date(user.updated_at),
+              },
+            })
+            .catch(() => {});
+        }
+      }
+      const supportedProviders = Object.keys(ctx.options.socialProviders || {});
+      if (supportedProviders.includes(identity.provider)) {
+        const hasAccount = existingAccounts.find(
+          (account: { providerId: string }) =>
+            account.providerId === identity.provider
+        );
+        if (!hasAccount) {
+          await ctx.adapter.create({
+            model: "account",
+            data: {
+              userId: user.id,
+              providerId: identity.provider,
+              accountId: identity.identity_data?.sub,
+              createdAt: new Date(identity.created_at ?? user.created_at),
+              updatedAt: new Date(identity.updated_at ?? user.updated_at),
+            },
+          });
+        }
+      }
+    }
+  }
+};
+migrateFromSupabase();
+```
+
+Run the migration script
+
+```bash title="Terminal"
+bun migration.ts # or use node, ts-node, etc.
+```
+
+### 8. Migrate the Rest of Your Data
+
+If you have additional user-related data in Supabase, you can use the [Supabase to PlanetScale migration tool](https://planetscale.com/docs/postgres/imports/supabase).
+
+### 9. Clean up all the Supabase Auth code from your codebase
+
+You now own your auth, you should start removing all the Supabase Auth related code.
+
+### 10. Done! 🎉
+
+You've successfully migrated from Supabase Auth to Better Auth on PlanetScale.
+
+### Tips
+
+- Double-check that all environment variables are set in production.
+- Test all auth flows (sign-up, login, password reset, session refresh) before going live.
+- Remember that this is just the basics and if you've integrated Supabase Auth's auth functions in a lot of placed you'd have to find the suitable Better Auth replacements [here](https://www.better-auth.com/docs).
+- Have fun!
+
+### Learn More!
+
+<Cards>
+  <Card
+    href="https://www.better-auth.com/docs/introduction"
+    title="Better Auth Setup"
+  >
+    Get started with installing Better Auth
+  </Card>
+  <Card
+    href="https://planetscale.com/docs/vitess/tutorials/planetscale-quick-start-guide"
+    title="PlanetScale Quick Start"
+  >
+    Get started on PlanetScale here
+  </Card>
+  <Card
+    href="https://planetscale.com/docs/postgres/imports/postgres-imports"
+    title="PlanetScale Migration Guides"
+  >
+    Use this guide to move your data from Supabase and many more services
+  </Card>
+  <Card
+    href="https://www.better-auth.com/docs/guides/supabase-migration-guide"
+    title="Supabase Auth Migration"
+  >
+    Move your auth from Supabase Auth to your own DB
+  </Card>
+</Cards>

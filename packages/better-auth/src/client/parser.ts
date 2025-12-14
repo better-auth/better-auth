@@ -25,13 +25,13 @@ const ISO_DATE_REGEX =
 
 type ParseOptions = {
 	/** Throw errors instead of returning the original value */
-	strict?: boolean;
+	strict?: boolean | undefined;
 	/** Log warnings when suspicious patterns are detected */
-	warnings?: boolean;
+	warnings?: boolean | undefined;
 	/** Custom reviver function */
-	reviver?: (key: string, value: any) => any;
+	reviver?: ((key: string, value: any) => any) | undefined;
 	/** Automatically convert ISO date strings to Date objects */
-	parseDates?: boolean;
+	parseDates?: boolean | undefined;
 };
 
 function isValidDate(date: Date): boolean {
@@ -58,19 +58,19 @@ function parseISODate(value: string): Date | null {
 
 	let date = new Date(
 		Date.UTC(
-			parseInt(year, 10),
-			parseInt(month, 10) - 1,
-			parseInt(day, 10),
-			parseInt(hour, 10),
-			parseInt(minute, 10),
-			parseInt(second, 10),
+			parseInt(year!, 10),
+			parseInt(month!, 10) - 1,
+			parseInt(day!, 10),
+			parseInt(hour!, 10),
+			parseInt(minute!, 10),
+			parseInt(second!, 10),
 			ms ? parseInt(ms.padEnd(3, "0"), 10) : 0,
 		),
 	);
 
 	if (offsetSign) {
 		const offset =
-			(parseInt(offsetHour, 10) * 60 + parseInt(offsetMinute, 10)) *
+			(parseInt(offsetHour!, 10) * 60 + parseInt(offsetMinute!, 10)) *
 			(offsetSign === "+" ? -1 : 1);
 		date.setUTCMinutes(date.getUTCMinutes() + offset);
 	}
@@ -96,6 +96,7 @@ function betterJSONParse<T = unknown>(
 	const trimmed = value.trim();
 
 	if (
+		trimmed.length > 0 &&
 		trimmed[0] === '"' &&
 		trimmed.endsWith('"') &&
 		!trimmed.slice(1, -1).includes('"')
@@ -175,5 +176,3 @@ export function parseJSON<T = unknown>(
 ): T {
 	return betterJSONParse<T>(value, options);
 }
-
-export default parseJSON;

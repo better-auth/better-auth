@@ -1,9 +1,12 @@
-export const USERNAME_ERROR_CODES = {
-	INVALID_USERNAME_OR_PASSWORD: "invalid username or password",
-	EMAIL_NOT_VERIFIED: "email not verified",
-	UNEXPECTED_ERROR: "unexpected error",
-	USERNAME_IS_ALREADY_TAKEN: "username is already taken. please try another.",
-	USERNAME_TOO_SHORT: "username is too short",
-	USERNAME_TOO_LONG: "username is too long",
-	INVALID_USERNAME: "username is invalid",
-};
+import { defineErrorCodes } from "@better-auth/core/utils";
+
+export const USERNAME_ERROR_CODES = defineErrorCodes({
+	INVALID_USERNAME_OR_PASSWORD: "Invalid username or password",
+	EMAIL_NOT_VERIFIED: "Email not verified",
+	UNEXPECTED_ERROR: "Unexpected error",
+	USERNAME_IS_ALREADY_TAKEN: "Username is already taken. Please try another.",
+	USERNAME_TOO_SHORT: "Username is too short",
+	USERNAME_TOO_LONG: "Username is too long",
+	INVALID_USERNAME: "Username is invalid",
+	INVALID_DISPLAY_USERNAME: "Display username is invalid",
+});

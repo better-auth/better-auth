@@ -50,6 +50,9 @@ import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
   <Step>
     ### Add the Autumn plugin to your `auth` config
 
+    <Tabs items={["User", "Organization", "User & Organization", "Custom"]}>
+    <Tab value="User">
+
     ```ts title="auth.ts"
     import { autumn } from "autumn-js/better-auth";
 
@@ -58,9 +61,68 @@ import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
       plugins: [autumn()],
     });
     ```
+
+    </Tab>
+    <Tab value="Organization">
+
+    ```ts title="auth.ts"
+    import { autumn } from "autumn-js/better-auth";
+    import { organization } from "better-auth/plugins";
+
+    export const auth = betterAuth({
+      // ...
+      plugins: [organization(), autumn({ customerScope: "organization" })],
+    });
+    ```
+
+    </Tab>
+    <Tab value="User & Organization">
+
+    ```ts title="auth.ts"
+    import { autumn } from "autumn-js/better-auth";
+    import { organization } from "better-auth/plugins";
+
+    export const auth = betterAuth({
+      // ...
+      plugins: [
+        organization(),
+        autumn({ customerScope: "user_and_organization" })
+      ],
+    });
+    ```
+
+    </Tab>
+    <Tab value="Custom">
+
+    ```ts title="auth.ts"
+    import { autumn } from "autumn-js/better-auth";
+    import { organization } from "better-auth/plugins";
+
+    export const auth = betterAuth({
+      // ...
+      plugins: [
+        organization(),
+        autumn({
+          identify: async ({ session, organization }) => {
+            return {
+              customerId: "your_customer_id",
+              customerData: {
+                name: "Customer Name",
+                email: "customer@gmail.com",
+              },
+            };
+          },
+        }),
+      ],
+    });
+    ```
+
+    </Tab>
+    </Tabs>
+
   <Callout>
     Autumn will auto-create your customers when they sign up, and assign them any
-    default plans you created (eg your Free plan)
+    default plans you created (eg your Free plan). You can choose who becomes a customer: individual users, organizations, both, or something custom like workspaces.
   </Callout>
   </Step>
 
@@ -182,7 +244,7 @@ import { auth } from "@/lib/auth";
 const { allowed } = await auth.api.check({
   headers: await headers(), // pass the request headers
   body: {
-    feature_id: "messages",
+    featureId: "messages",
   },
 });
 
@@ -192,7 +254,7 @@ const { allowed } = await auth.api.check({
 await auth.api.track({
   headers: await headers(),
   body: {
-    feature_id: "messages",
+    featureId: "messages",
     value: 2,
   },
 });

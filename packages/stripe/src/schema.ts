@@ -1,6 +1,6 @@
-import type { AuthPluginSchema } from "better-auth";
-import type { StripeOptions } from "./types";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import { mergeSchema } from "better-auth/db";
+import type { StripeOptions } from "./types";
 
 export const subscriptions = {
 	subscription: {
@@ -33,6 +33,14 @@ export const subscriptions = {
 				type: "date",
 				required: false,
 			},
+			trialStart: {
+				type: "date",
+				required: false,
+			},
+			trialEnd: {
+				type: "date",
+				required: false,
+			},
 			cancelAtPeriodEnd: {
 				type: "boolean",
 				required: false,
@@ -44,7 +52,7 @@ export const subscriptions = {
 			},
 		},
 	},
-} satisfies AuthPluginSchema;
+} satisfies BetterAuthPluginDBSchema;
 
 export const user = {
 	user: {
@@ -55,21 +63,30 @@ export const user = {
 			},
 		},
 	},
-} satisfies AuthPluginSchema;
+} satisfies BetterAuthPluginDBSchema;
 
 export const getSchema = (options: StripeOptions) => {
+	let baseSchema = {};
+
+	if (options.subscription?.enabled) {
+		baseSchema = {
+			...subscriptions,
+			...user,
+		};
+	} else {
+		baseSchema = {
+			...user,
+		};
+	}
+
 	if (
 		options.schema &&
 		!options.subscription?.enabled &&
 		"subscription" in options.schema
 	) {
-		options.schema.subscription = undefined;
+		const { subscription: _subscription, ...restSchema } = options.schema;
+		return mergeSchema(baseSchema, restSchema);
 	}
-	return mergeSchema(
-		{
-			...(options.subscription?.enabled ? subscriptions : {}),
-			...user,
-		},
-		options.schema,
-	);
+
+	return mergeSchema(baseSchema, options.schema);
 };

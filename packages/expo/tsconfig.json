@@ -1,25 +1,15 @@
 {
-	"compilerOptions": {
-		"declaration": true,
-		"emitDeclarationOnly": true,
-		"declarationMap": true,
-		"outDir": "dist",
-		"noEmit": false,
-		"composite": false,
-		"target": "es2022",
-		"incremental": true,
-		"moduleResolution": "Bundler",
-		"strict": true,
-		"moduleDetection": "force",
-		"module": "Preserve",
-		"skipLibCheck": true,
-		"types": ["node"],
-		"isolatedModules": true,
-		"tsBuildInfoFile": ".tsbuildinfo",
-		"preserveSymlinks": true,
-		"noImplicitOverride": true
-	},
-	"exclude": ["node_modules", "dist"],
-	"references": [],
-	"include": ["src/**/*"]
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["esnext", "dom", "dom.iterable"]
+  },
+  "include": ["./src"],
+  "references": [
+    {
+      "path": "../core/tsconfig.json"
+    },
+    {
+      "path": "./tsconfig.test.json"
+    }
+  ]
 }

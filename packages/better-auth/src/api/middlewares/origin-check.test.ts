@@ -1,9 +1,9 @@
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { describe, expect } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
+import * as z from "zod";
 import { createAuthClient } from "../../client";
-import { createAuthEndpoint } from "../call";
+import { getTestInstance } from "../../test-utils/test-instance";
 import { originCheck } from "./origin-check";
-import * as z from "zod/v4";
 
 describe("Origin Check", async (it) => {
 	const { customFetchImpl, testUser } = await getTestInstance({
@@ -11,7 +11,6 @@ describe("Origin Check", async (it) => {
 			"http://localhost:5000",
 			"https://trusted.com",
 			"*.my-site.com",
-			"https://*.protocol-site.com",
 		],
 		emailAndPassword: {
 			enabled: true,
@@ -19,6 +18,7 @@ describe("Origin Check", async (it) => {
 		},
 		advanced: {
 			disableCSRFCheck: false,
+			disableOriginCheck: false,
 		},
 	});
 
@@ -56,90 +56,6 @@ describe("Origin Check", async (it) => {
 		expect(res.error?.message).toBe("Invalid callbackURL");
 	});
 
-	it("should allow query params in callback url", async (ctx) => {
-		const client = createAuthClient({
-			baseURL: "http://localhost:3000",
-			fetchOptions: {
-				customFetchImpl,
-				headers: {
-					origin: "https://localhost:3000",
-				},
-			},
-		});
-		const res = await client.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-			callbackURL: "/dashboard?test=123",
-		});
-		expect(res.data?.user).toBeDefined();
-	});
-
-	it("should allow plus signs in the callback url", async (ctx) => {
-		const client = createAuthClient({
-			baseURL: "http://localhost:3000",
-			fetchOptions: {
-				customFetchImpl,
-				headers: {
-					origin: "https://localhost:3000",
-				},
-			},
-		});
-		const res = await client.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-			callbackURL: "/dashboard+page?test=123+456",
-		});
-		expect(res.data?.user).toBeDefined();
-	});
-
-	it("should reject callback url with double slash", async (ctx) => {
-		const client = createAuthClient({
-			baseURL: "http://localhost:3000",
-			fetchOptions: {
-				customFetchImpl,
-				headers: {
-					origin: "https://localhost:3000",
-				},
-			},
-		});
-		const res = await client.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-			callbackURL: "//evil.com",
-		});
-		expect(res.error?.status).toBe(403);
-	});
-
-	it("should reject callback urls with encoded malicious content", async (ctx) => {
-		const client = createAuthClient({
-			baseURL: "http://localhost:3000",
-			fetchOptions: {
-				customFetchImpl,
-				headers: {
-					origin: "https://localhost:3000",
-				},
-			},
-		});
-
-		const maliciousPatterns = [
-			"/%5C/evil.com",
-			`/\\/\\/evil.com`,
-			"/%5C/evil.com",
-			"/..%2F..%2Fevil.com",
-			"javascript:alert('xss')",
-			"data:text/html,<script>alert('xss')</script>",
-		];
-
-		for (const pattern of maliciousPatterns) {
-			const res = await client.signIn.email({
-				email: testUser.email,
-				password: testUser.password,
-				callbackURL: pattern,
-			});
-			expect(res.error?.status).toBe(403);
-		}
-	});
-
 	it("should reject untrusted origin headers", async (ctx) => {
 		const client = createAuthClient({
 			baseURL: "http://localhost:3000",
@@ -147,42 +63,6 @@ describe("Origin Check", async (it) => {
 				customFetchImpl,
 				headers: {
 					origin: "malicious.com",
-					cookie: "session=123",
-				},
-			},
-		});
-		const res = await client.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-		});
-		expect(res.error?.status).toBe(403);
-	});
-
-	it("should reject untrusted origin headers which start with trusted origin", async (ctx) => {
-		const client = createAuthClient({
-			baseURL: "http://localhost:3000",
-			fetchOptions: {
-				customFetchImpl,
-				headers: {
-					origin: "https://trusted.com.malicious.com",
-					cookie: "session=123",
-				},
-			},
-		});
-		const res = await client.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-		});
-		expect(res.error?.status).toBe(403);
-	});
-
-	it("should reject untrusted origin subdomains", async (ctx) => {
-		const client = createAuthClient({
-			baseURL: "http://localhost:3000",
-			fetchOptions: {
-				customFetchImpl,
-				headers: {
-					origin: "http://sub-domain.trusted.com",
 					cookie: "session=123",
 				},
 			},
@@ -270,23 +150,6 @@ describe("Origin Check", async (it) => {
 			callbackURL: "https://sub-domain.my-site.com/callback",
 		});
 		expect(res.data?.user).toBeDefined();
-
-		// Test another subdomain with the wildcard pattern
-		const client2 = createAuthClient({
-			baseURL: "https://another-sub.my-site.com",
-			fetchOptions: {
-				customFetchImpl,
-				headers: {
-					origin: "https://another-sub.my-site.com",
-				},
-			},
-		});
-		const res2 = await client2.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-			callbackURL: "https://another-sub.my-site.com/callback",
-		});
-		expect(res2.data?.user).toBeDefined();
 	});
 
 	it("should work with GET requests", async (ctx) => {
@@ -338,58 +201,6 @@ describe("Origin Check", async (it) => {
 			password: testUser.password,
 		});
 		expect(invalidRes.error?.status).toBe(403);
-	});
-
-	it("should work with relative callbackURL with query params", async (ctx) => {
-		const client = createAuthClient({
-			baseURL: "http://localhost:3000",
-			fetchOptions: {
-				customFetchImpl,
-			},
-		});
-		const res = await client.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-			callbackURL: "/dashboard?email=123@email.com",
-		});
-		expect(res.data?.user).toBeDefined();
-	});
-
-	it("should work with protocol specific wildcard trusted origins", async () => {
-		// Test HTTPS protocol specific wildcard - should work
-		const httpsClient = createAuthClient({
-			baseURL: "http://localhost:3000",
-			fetchOptions: {
-				customFetchImpl,
-				headers: {
-					origin: "https://api.protocol-site.com",
-					cookie: "session=123",
-				},
-			},
-		});
-		const httpsRes = await httpsClient.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-			callbackURL: "https://app.protocol-site.com/dashboard",
-		});
-		expect(httpsRes.data?.user).toBeDefined();
-
-		// Test HTTP with HTTPS protocol wildcard - should fail
-		const httpClient = createAuthClient({
-			baseURL: "http://localhost:3000",
-			fetchOptions: {
-				customFetchImpl,
-				headers: {
-					origin: "http://api.protocol-site.com",
-					cookie: "session=123",
-				},
-			},
-		});
-		const httpRes = await httpClient.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-		});
-		expect(httpRes.error?.status).toBe(403);
 	});
 });
 

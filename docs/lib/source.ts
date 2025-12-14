@@ -1,11 +1,14 @@
-import { changelogCollection, docs, blogCollection } from "@/.source";
 import { loader } from "fumadocs-core/source";
 import { createMDXSource } from "fumadocs-mdx";
+import { blogCollection, changelogCollection, docs } from "@/.source";
+import { getPageTree } from "@/components/sidebar-content";
 
-export const source = loader({
+export let source = loader({
 	baseUrl: "/docs",
 	source: docs.toFumadocsSource(),
 });
+
+source = { ...source, pageTree: getPageTree() };
 
 export const changelogs = loader({
 	baseUrl: "/changelogs",

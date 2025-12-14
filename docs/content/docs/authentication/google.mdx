@@ -9,15 +9,31 @@ description: Google provider setup and usage.
         To use Google as a social provider, you need to get your Google credentials. You can get them by creating a new project in the [Google Cloud Console](https://console.cloud.google.com/apis/dashboard).
 
         In the Google Cloud Console > Credentials > Authorized redirect URIs, make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/google` for local development. For production, make sure to set the redirect URL as your application domain, e.g. `https://example.com/api/auth/callback/google`. If you change the base path of the auth routes, you should update the redirect URL accordingly.
+
+        <Callout type="info">
+        **Creating Your Google OAuth Credentials**
+
+        If you haven't created OAuth credentials yet, follow these step-by-step instructions:
+
+        1. Open **Google Cloud Console** → **APIs & Services** → **Credentials**
+        2. Click **Create Credentials** → **OAuth client ID**
+        3. Choose **Web application**
+        4. Add your redirect URIs:
+           - `http://localhost:3000/api/auth/callback/google` (for local development)
+           - `https://your-domain.com/api/auth/callback/google` (for production)
+        5. Copy the **Client ID** and **Client Secret** into your environment variables
+
+        These steps avoid common issues such as `redirect_uri_mismatch`.
+        </Callout>
     </Step>
 
   <Step>
         ### Configure the provider
         To configure the provider, you need to pass the `clientId` and `clientSecret` to `socialProviders.google` in your auth configuration.
 
-        ```ts title="auth.ts"   
+        ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
-        
+
         export const auth = betterAuth({
             socialProviders: {
                 google: { // [!code highlight]
@@ -28,6 +44,7 @@ description: Google provider setup and usage.
         })
         ```
     </Step>
+
 </Steps>
 
 ## Usage
@@ -35,17 +52,18 @@ description: Google provider setup and usage.
 ### Sign In with Google
 
 To sign in with Google, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
+
 - `provider`: The provider to use. It should be set to `google`.
 
 ```ts title="auth-client.ts"  /
-import { createAuthClient } from "better-auth/client"
-const authClient =  createAuthClient()
+import { createAuthClient } from "better-auth/client";
+const authClient = createAuthClient();
 
 const signIn = async () => {
-    const data = await authClient.signIn.social({
-        provider: "google"
-    })
-}
+  const data = await authClient.signIn.social({
+    provider: "google",
+  });
+};
 ```
 
 ### Sign In with Google With ID Token
@@ -55,7 +73,8 @@ To sign in with Google using the ID Token, you can use the `signIn.social` funct
 This is useful when you have the ID Token from Google on the client-side and want to use it to sign in on the server.
 
 <Callout>
- If ID token is provided no redirection will happen, and the user will be signed in directly.
+  If ID token is provided no redirection will happen, and the user will be
+  signed in directly.
 </Callout>
 
 ```ts title="auth-client.ts"
@@ -69,12 +88,13 @@ const data = await authClient.signIn.social({
 ```
 
 <Callout>
-    If you want to use google one tap, you can use the [One Tap Plugin](/docs/plugins/one-tap) guide.
+  If you want to use google one tap, you can use the [One Tap
+  Plugin](/docs/plugins/one-tap) guide.
 </Callout>
 
 ### Always ask to select an account
 
-If you want to always ask the user to select an account, you pass the `prompt` parameter to the provider, setting it to `select_account`.  
+If you want to always ask the user to select an account, you pass the `prompt` parameter to the provider, setting it to `select_account`.
 
 ```ts
 socialProviders: {
@@ -90,31 +110,36 @@ socialProviders: {
 
 If your application needs additional Google scopes after the user has already signed up (e.g., for Google Drive, Gmail, or other Google services), you can request them using the `linkSocial` method with the same Google provider.
 
-```ts title="auth-client.ts"
+```tsx title="auth-client.ts"
 const requestGoogleDriveAccess = async () => {
-    await authClient.linkSocial({
-        provider: "google",
-        scopes: ["https://www.googleapis.com/auth/drive.file"],
-    });
+  await authClient.linkSocial({
+    provider: "google",
+    scopes: ["https://www.googleapis.com/auth/drive.file"],
+  });
 };
 
 // Example usage in a React component
-return <button onClick={requestGoogleDriveAccess}>Add Google Drive Permissions</button>;
+return (
+  <button onClick={requestGoogleDriveAccess}>
+    Add Google Drive Permissions
+  </button>
+);
 ```
 
 This will trigger a new OAuth flow that requests the additional scopes. After completion, your account will have the new scope in the database, and the access token will give you access to the requested Google APIs.
 
 <Callout>
-Ensure you're using Better Auth version 1.2.7 or later to avoid "Social account already linked" errors when requesting additional scopes from the same provider.
+  Ensure you're using Better Auth version 1.2.7 or later to avoid "Social
+  account already linked" errors when requesting additional scopes from the same
+  provider.
 </Callout>
-
 
 ### Always get refresh token
 
 Google only issues a refresh token the first time a user consents to your app.
 If the user has already authorized your app, subsequent OAuth flows will only return an access token, not a refresh token.
 
-To always get a refresh token, you can set the `accessType` to `offline`, and `prompt` to `select_account+consent` in the provider options.
+To always get a refresh token, you can set the `accessType` to `offline`, and `prompt` to `select_account consent` in the provider options.
 
 ```ts
 socialProviders: {
@@ -122,12 +147,13 @@ socialProviders: {
         clientId: process.env.GOOGLE_CLIENT_ID as string,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
         accessType: "offline", // [!code highlight]
-        prompt: "select_account+consent", // [!code highlight]
+        prompt: "select_account consent", // [!code highlight]
     },
 }
 ```
 
 <Callout>
-    **Revoking Access:** If you want to get a new refresh token for a user who has already authorized your app,
-    you must have them revoke your app's access in their Google account settings, then re-authorize.
+  **Revoking Access:** If you want to get a new refresh token for a user who has
+  already authorized your app, you must have them revoke your app's access in
+  their Google account settings, then re-authorize.
 </Callout>

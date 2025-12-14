@@ -1,7 +1,7 @@
 import { describe, expect } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { siwe } from "./index";
 import { siweClient } from "./client";
+import { siwe } from "./index";
 
 describe("siwe", async (it) => {
 	const walletAddress = "0x000000000000000000000000000000000000dEaD";
@@ -129,7 +129,9 @@ describe("siwe", async (it) => {
 		const { error } = await client.siwe.nonce({ walletAddress: "invalid" });
 		expect(error).toBeDefined();
 		expect(error?.status).toBe(400);
-		expect(error?.message).toBe("Invalid body parameters");
+		expect(error?.message).toBe(
+			"[body.walletAddress] Invalid string: must match pattern /^0[xX][a-fA-F0-9]{40}$/i; [body.walletAddress] Too small: expected string to have >=42 characters",
+		);
 	});
 
 	it("should reject verification with invalid signature", async () => {
@@ -259,7 +261,9 @@ describe("siwe", async (it) => {
 		});
 		expect(error).toBeDefined();
 		expect(error?.status).toBe(400);
-		expect(error?.message).toBe("Invalid body parameters");
+		expect(error?.message).toBe(
+			"[body.email] Email is required when the anonymous plugin option is disabled.",
+		);
 	});
 
 	it("should accept verification with email when anonymous is false", async () => {
@@ -333,7 +337,7 @@ describe("siwe", async (it) => {
 		});
 		expect(error).toBeDefined();
 		expect(error?.status).toBe(400);
-		expect(error?.message).toBe("Invalid body parameters");
+		expect(error?.message).toBe("[body.email] Invalid email address");
 	});
 
 	it("should allow verification without email when anonymous is true", async () => {
@@ -449,7 +453,9 @@ describe("siwe", async (it) => {
 		});
 		expect(error).toBeDefined();
 		expect(error?.status).toBe(400);
-		expect(error?.message).toBe("Invalid body parameters");
+		expect(error?.message).toBe(
+			"[body.email] Invalid email address; [body.email] Email is required when the anonymous plugin option is disabled.",
+		);
 	});
 
 	it("should store and return the wallet address in checksum format", async () => {
@@ -502,7 +508,7 @@ describe("siwe", async (it) => {
 			walletAddress: walletAddress.toUpperCase(),
 			chainId,
 		});
-		const { data: data2, error: error2 } = await client.siwe.verify({
+		const { data: data2 } = await client.siwe.verify({
 			message: "valid_message",
 			signature: "valid_signature",
 			walletAddress: walletAddress.toUpperCase(),
@@ -604,6 +610,74 @@ describe("siwe", async (it) => {
 			walletAddressesAfter.some((wa) => wa.userId === user.id),
 		);
 		expect(usersWithTestAddress.length).toBe(1); // Only one user should have this address
+	});
+
+	it("should support custom schema with mergeSchema", async () => {
+		const { client, auth } = await getTestInstance(
+			{
+				logger: {
+					level: "debug",
+				},
+				plugins: [
+					siwe({
+						domain,
+						async getNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifyMessage({ message, signature }) {
+							return (
+								signature === "valid_signature" && message === "valid_message"
+							);
+						},
+						schema: {
+							walletAddress: {
+								modelName: "wallet_address",
+								fields: {
+									userId: "user_id",
+									address: "wallet_address",
+									chainId: "chain_id",
+									isPrimary: "is_primary",
+									createdAt: "created_at",
+								},
+							},
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [siweClient()] } },
+		);
+
+		const testAddress = "0x000000000000000000000000000000000000dEaD";
+		const testChainId = 1;
+
+		// Create account with custom schema
+		await client.siwe.nonce({
+			walletAddress: testAddress,
+			chainId: testChainId,
+		});
+		const result = await client.siwe.verify({
+			message: "valid_message",
+			signature: "valid_signature",
+			walletAddress: testAddress,
+			chainId: testChainId,
+		});
+		expect(result.error).toBeNull();
+		expect(result.data?.success).toBe(true);
+		const context = await auth.$context;
+
+		const walletAddresses: any[] = await context.adapter.findMany({
+			model: "walletAddress",
+			where: [
+				{ field: "address", operator: "eq", value: testAddress },
+				{ field: "chainId", operator: "eq", value: testChainId },
+			],
+		});
+		expect(walletAddresses.length).toBe(1);
+		expect(walletAddresses[0]?.address).toBe(testAddress);
+		expect(walletAddresses[0]?.chainId).toBe(testChainId);
+		expect(walletAddresses[0]?.isPrimary).toBe(true);
+		expect(walletAddresses[0]?.userId).toBeDefined();
+		expect(walletAddresses[0]?.createdAt).toBeDefined();
 	});
 
 	it("should allow same address on different chains for same user", async () => {

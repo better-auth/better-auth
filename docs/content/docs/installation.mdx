@@ -26,7 +26,7 @@ Create a `.env` file in the root of your project and add the following environme
 
 1. **Secret Key**
 
-Random value used by the library for encryption and generating hashes. **You can generate one using the button below** or you can use something like openssl.
+A secret value used for encryption and hashing. It must be at least 32 characters and generated with high entropy. Click the button below to generate one. You can also use `openssl rand -base64 32` to generate one.
 
 ```txt title=".env"
 BETTER_AUTH_SECRET=
@@ -37,7 +37,7 @@ BETTER_AUTH_SECRET=
 2. **Set Base URL**
 
 ```txt title=".env"
-BETTER_AUTH_URL=http://localhost:3000 #Base URL of your app
+BETTER_AUTH_URL=http://localhost:3000 # Base URL of your app
 ```
 
 </Step>
@@ -70,6 +70,10 @@ export const auth = betterAuth({
 
 Better Auth requires a database to store user data.
 You can easily configure Better Auth to use SQLite, PostgreSQL, or MySQL, and more!
+
+<Callout>
+    You can also configure Better Auth to work in a stateless mode if you don't configure a database. See [Stateless Session Management](/docs/concepts/session-management#stateless-session-management) for more information. Note that most plugins will require a database.
+</Callout>
 
 <Tabs items={["sqlite", "postgres", "mysql"]}>
     <Tab value="sqlite">
@@ -131,7 +135,7 @@ Alternatively, if you prefer to use an ORM, you can use one of the built-in adap
         import { betterAuth } from "better-auth";
         import { prismaAdapter } from "better-auth/adapters/prisma";
         // If your Prisma file is located elsewhere, you can change the path
-        import { PrismaClient } from "@/generated/prisma";
+        import { PrismaClient } from "@/generated/prisma/client";
 
         const prisma = new PrismaClient();
         export const auth = betterAuth({
@@ -202,15 +206,12 @@ Configure the authentication methods you want to use. Better Auth comes with bui
 import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-  //...other options
-  emailAndPassword: {
-    // [!code highlight]
+  //...other options // [!code highlight]
+  emailAndPassword: { // [!code highlight]
     enabled: true, // [!code highlight]
   }, // [!code highlight]
-  socialProviders: {
-    // [!code highlight]
-    github: {
-      // [!code highlight]
+  socialProviders: { // [!code highlight]
+    github: { // [!code highlight]
       clientId: process.env.GITHUB_CLIENT_ID as string, // [!code highlight]
       clientSecret: process.env.GITHUB_CLIENT_SECRET as string, // [!code highlight]
     }, // [!code highlight]
@@ -234,13 +235,23 @@ Create a new file or route in your framework's designated catch-all route handle
   objects and offers helper functions for popular frameworks.
 </Callout>
 
-<Tabs items={["next-js", "nuxt", "svelte-kit", "remix", "solid-start", "hono", "express", "elysia", "tanstack-start", "expo"]} defaultValue="react">
-    <Tab value="next-js">
+<Tabs items={["next-js-app-router", "next-js-pages-router", "nuxt", "svelte-kit", "remix", "solid-start", "hono", "cloudflare-workers", "express", "elysia", "tanstack-start", "expo"]} defaultValue="next-js-app-router">
+    <Tab value="next-js-app-router">
         ```ts title="/app/api/auth/[...all]/route.ts"
         import { auth } from "@/lib/auth"; // path to your auth file
         import { toNextJsHandler } from "better-auth/next-js";
 
         export const { POST, GET } = toNextJsHandler(auth);
+        ```
+    </Tab>
+    <Tab value="next-js-pages-router">
+        ```ts title="/pages/api/auth/[...all].ts"
+        import { auth } from "@/lib/auth"; // path to your auth file
+        import { toNodeHandler } from "better-auth/node";
+
+        // Disallow body parsing, we will parse it manually
+        export const config = { api: { bodyParser: false } };
+        export default toNodeHandler(auth.handler);
         ```
     </Tab>
     <Tab value="nuxt">
@@ -294,10 +305,45 @@ Create a new file or route in your framework's designated catch-all route handle
 
     const app = new Hono();
 
-    app.on(["POST", "GET"], "/api/auth/**", (c) => auth.handler(c.req.raw));
+    app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 
     serve(app);
     ```
+    </Tab>
+    <Tab value="cloudflare-workers">
+    ```ts title="src/index.ts"
+    import { auth } from "./auth"; // path to your auth file
+
+    export default {
+        async fetch(request: Request) {
+            const url = new URL(request.url);
+
+            // Handle auth routes
+            if (url.pathname.startsWith("/api/auth")) {
+                return auth.handler(request);
+            }
+
+            // Handle other routes
+            return new Response("Not found", { status: 404 });
+        },
+    };
+    ```
+
+    <Callout type="info">
+    **Node.js AsyncLocalStorage Support**: Better Auth uses AsyncLocalStorage for async context tracking. To enable this in Cloudflare Workers, add the `nodejs_compat` flag to your `wrangler.toml`:
+
+    ```toml title="wrangler.toml"
+    compatibility_flags = ["nodejs_compat"]
+    compatibility_date = "2024-09-23"
+    ```
+
+    Alternatively, if you only need AsyncLocalStorage support:
+    ```toml title="wrangler.toml"
+    compatibility_flags = ["nodejs_als"]
+    ```
+
+    In the next major release, we will assume AsyncLocalStorage support by default, so this configuration will be necessary.
+    </Callout>
     </Tab>
 
     <Tab value="express">
@@ -371,17 +417,21 @@ Create a new file or route in your framework's designated catch-all route handle
     </Tab>
     <Tab value="tanstack-start">
     ```ts title="src/routes/api/auth/$.ts"
-    import { auth } from '~/lib/server/auth'
-    import { createServerFileRoute } from '@tanstack/react-start/server'
+    import { createFileRoute } from '@tanstack/react-router'
+    import { auth } from '@/lib/auth/auth'
 
-    export const ServerRoute = createServerFileRoute('/api/auth/$').methods({
-    GET: ({ request }) => {
-        return auth.handler(request)
+    export const Route = createFileRoute('/api/auth/$')({
+    server: {
+        handlers: {
+            GET: async ({ request }:{ request: Request }) => {
+                return await auth.handler(request)
+            },
+            POST: async ({ request }:{ request: Request }) => {
+                return await auth.handler(request)
+            },
+        },
     },
-    POST: ({ request }) => {
-        return auth.handler(request)
-    },
-    });
+    })
     ```
     </Tab>
     <Tab value="expo">

@@ -1,19 +1,36 @@
 // @vitest-environment happy-dom
+
+import { isProxy } from "node:util/types";
+import type { BetterFetchError } from "@better-fetch/fetch";
+import type { ReadableAtom } from "nanostores";
+import type { Accessor } from "solid-js";
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
-import { createAuthClient as createSolidClient } from "./solid";
+import type { Ref } from "vue";
+import type { Session, SessionQueryParams } from "../types";
+import {
+	adminClient,
+	deviceAuthorizationClient,
+	emailOTPClient,
+	genericOAuthClient,
+	multiSessionClient,
+	oidcClient,
+	organizationClient,
+	twoFactorClient,
+} from "./plugins";
 import { createAuthClient as createReactClient } from "./react";
-import { createAuthClient as createVueClient } from "./vue";
+import { createAuthClient as createSolidClient } from "./solid";
 import { createAuthClient as createSvelteClient } from "./svelte";
 import { testClientPlugin, testClientPlugin2 } from "./test-plugin";
-import type { Accessor } from "solid-js";
-import type { Ref } from "vue";
-import type { ReadableAtom } from "nanostores";
-import type { Session } from "../types";
-import { BetterFetchError } from "@better-fetch/fetch";
-import { twoFactorClient } from "../plugins";
-import { organizationClient, passkeyClient } from "./plugins";
+import { createAuthClient as createVanillaClient } from "./vanilla";
+import { createAuthClient as createVueClient } from "./vue";
 
 describe("run time proxy", async () => {
+	it("atom in proxy should not be proxy", async () => {
+		const client = createVanillaClient();
+		const atom = client.$store.atoms.session;
+		expect(isProxy(atom)).toBe(false);
+	});
+
 	it("proxy api should be called", async () => {
 		let apiCalled = false;
 		const client = createSolidClient({
@@ -50,6 +67,7 @@ describe("run time proxy", async () => {
 	});
 
 	it("should call useSession", async () => {
+		vi.useFakeTimers();
 		let returnNull = false;
 		const client = createSolidClient({
 			plugins: [testClientPlugin()],
@@ -71,8 +89,7 @@ describe("run time proxy", async () => {
 			},
 		});
 		const res = client.useSession();
-		vi.useFakeTimers();
-		await vi.advanceTimersByTimeAsync(1);
+		await vi.runAllTimersAsync();
 		expect(res()).toMatchObject({
 			data: { user: { id: 1, email: "test@email.com" } },
 			error: null,
@@ -83,12 +100,13 @@ describe("run time proxy", async () => {
 		 */
 		returnNull = true;
 		await client.test2.signOut();
-		await vi.advanceTimersByTimeAsync(10);
+		await vi.runAllTimersAsync();
 		expect(res()).toMatchObject({
 			data: null,
 			error: null,
 			isPending: false,
 		});
+		vi.useRealTimers();
 	});
 
 	it("should allow second argument fetch options", async () => {
@@ -112,9 +130,37 @@ describe("run time proxy", async () => {
 		);
 		expect(called).toBe(true);
 	});
+
+	it("should not expose a 'then', 'catch', 'finally' property on the proxy", async () => {
+		const client = createSolidClient({
+			plugins: [testClientPlugin()],
+			fetchOptions: {
+				customFetchImpl: async () => new Response(),
+				baseURL: "http://localhost:3000",
+			},
+		});
+		const proxy = (client as any).test;
+		expect(proxy.then).toBeUndefined();
+		expect(proxy.catch).toBeUndefined();
+		expect(proxy.finally).toBeUndefined();
+	});
 });
 
 describe("type", () => {
+	it("should not infer non-action endpoints", () => {
+		const client = createReactClient({
+			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
+		});
+		expectTypeOf<typeof client>().not.toHaveProperty("testNonAction");
+		expectTypeOf<typeof client>().not.toHaveProperty("testServerScoped");
+		expectTypeOf<typeof client>().not.toHaveProperty("testHttpScoped");
+	});
 	it("should infer session additional fields", () => {
 		const client = createReactClient({
 			plugins: [testClientPlugin()],
@@ -226,7 +272,7 @@ describe("type", () => {
 			},
 		});
 		const $infer = client.$Infer;
-		expectTypeOf($infer.Session).toEqualTypeOf<{
+		expectTypeOf<typeof $infer.Session>().toEqualTypeOf<{
 			session: {
 				id: string;
 				userId: string;
@@ -255,10 +301,10 @@ describe("type", () => {
 
 	it("should infer session react", () => {
 		const client = createReactClient({
-			plugins: [organizationClient(), twoFactorClient(), passkeyClient()],
+			plugins: [organizationClient(), twoFactorClient(), emailOTPClient()],
 		});
 		const $infer = client.$Infer.Session;
-		expectTypeOf($infer.user).toEqualTypeOf<{
+		expectTypeOf<typeof $infer.user>().toEqualTypeOf<{
 			name: string;
 			id: string;
 			email: string;
@@ -305,5 +351,116 @@ describe("type", () => {
 				};
 			} | null>
 		>();
+	});
+
+	it("should infer `error` schema correctly", async () => {
+		const client = createSolidClient({
+			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
+		});
+		const { error } = await client.test();
+		expectTypeOf(error!).toMatchObjectType<{
+			code: number;
+			message: string;
+			test: boolean;
+		}>();
+	});
+
+	it("should support refetch with query parameters", () => {
+		const client = createReactClient({
+			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
+		});
+
+		type UseSessionReturn = ReturnType<typeof client.useSession>;
+		expectTypeOf<UseSessionReturn>().toMatchTypeOf<{
+			data: {
+				user: {
+					id: string;
+					email: string;
+					emailVerified: boolean;
+					name: string;
+					createdAt: Date;
+					updatedAt: Date;
+					image?: string | undefined | null;
+					testField4: string;
+					testField?: string | undefined | null;
+					testField2?: number | undefined | null;
+				};
+				session: Session;
+			} | null;
+			isPending: boolean;
+			error: BetterFetchError | null;
+			refetch: (
+				queryParams?: { query?: SessionQueryParams } | undefined,
+			) => void;
+		}>();
+	});
+
+	it("should infer $ERROR_CODES with multiple plugins", () => {
+		const client = createReactClient({
+			plugins: [
+				organizationClient(),
+				twoFactorClient(),
+				emailOTPClient(),
+				adminClient(),
+				multiSessionClient(),
+				oidcClient(),
+				genericOAuthClient(),
+				deviceAuthorizationClient(),
+				testClientPlugin(),
+				testClientPlugin2(),
+			],
+		});
+
+		// Should have organization error codes
+		expectTypeOf(
+			client.$ERROR_CODES.ORGANIZATION_NOT_FOUND,
+		).toEqualTypeOf<"Organization not found">();
+
+		// Should have two-factor error codes
+		expectTypeOf(
+			client.$ERROR_CODES.OTP_HAS_EXPIRED,
+		).toEqualTypeOf<"OTP has expired">();
+
+		// Should have email-otp error codes
+		expectTypeOf(
+			client.$ERROR_CODES.INVALID_EMAIL,
+		).toEqualTypeOf<"Invalid email">();
+
+		// Should have admin error codes
+		expectTypeOf(
+			client.$ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REVOKE_USERS_SESSIONS,
+		).toEqualTypeOf<"You are not allowed to revoke users sessions">();
+
+		// Should have multi-session error codes
+		expectTypeOf(
+			client.$ERROR_CODES.INVALID_SESSION_TOKEN,
+		).toEqualTypeOf<"Invalid session token">();
+
+		// Should have generic-oauth error codes
+		expectTypeOf(
+			client.$ERROR_CODES.PROVIDER_NOT_FOUND,
+		).toEqualTypeOf<"Provider not found">();
+
+		// Should have device-authorization error codes
+		expectTypeOf(
+			client.$ERROR_CODES.INVALID_DEVICE_CODE,
+		).toEqualTypeOf<"Invalid device code">();
+
+		// Should have base error codes
+		expectTypeOf(
+			client.$ERROR_CODES.USER_NOT_FOUND,
+		).toEqualTypeOf<"User not found">();
 	});
 });

@@ -12,7 +12,7 @@ The Email OTP plugin allows user to sign in, verify their email, or reset their 
   <Step>
     ### Add the plugin to your auth config
 
-    To enable email otp in your app, you need to add the `emailOTP` plugin to your auth config.
+    Add the `emailOTP` plugin to your auth config and implement the `sendVerificationOTP()` method.
 
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth"
@@ -22,9 +22,15 @@ The Email OTP plugin allows user to sign in, verify their email, or reset their 
         // ... other config options
         plugins: [
             emailOTP({ // [!code highlight]
-                    async sendVerificationOTP({ email, otp, type}) { // [!code highlight]
-						// Implement the sendVerificationOTP method to send the OTP to the user's email address // [!code highlight]
-					}, // [!code highlight]
+                async sendVerificationOTP({ email, otp, type }) { // [!code highlight]
+                    if (type === "sign-in") { // [!code highlight]
+                        // Send the OTP for sign in // [!code highlight]
+                    } else if (type === "email-verification") { // [!code highlight]
+                        // Send the OTP for email verification // [!code highlight]
+                    } else { // [!code highlight]
+                        // Send the OTP for password reset // [!code highlight]
+                    } // [!code highlight]
+                }, // [!code highlight]
             }) // [!code highlight]
         ]
     })
@@ -48,9 +54,9 @@ The Email OTP plugin allows user to sign in, verify their email, or reset their 
 
 ## Usage
 
-### Send OTP
+### Send an OTP
 
-First, send an OTP to the user's email address.
+Use the `sendVerificationOtp()` method to send an OTP to the user's email address.
 
 <APIMethod path="/email-otp/send-verification-otp" method="POST">
 ```ts
@@ -67,7 +73,47 @@ type sendVerificationOTP = {
 ```
 </APIMethod>
 
-### Sign in with OTP
+### Check an OTP (optional)
+
+Use the `checkVerificationOtp()` method to check if an OTP is valid.
+
+<APIMethod path="/email-otp/check-verification-otp" method="POST">
+```ts
+type checkVerificationOTP = {
+    /**
+     * Email address to send the OTP. 
+     */
+    email: string = "user@example.com"
+    /**
+     * Type of the OTP. `sign-in`, `email-verification`, or `forget-password`. 
+     */
+    type: "email-verification" | "sign-in" | "forget-password" = "sign-in"
+    /**
+     * OTP sent to the email. 
+     */
+    otp: string = "123456"
+}
+```
+</APIMethod>
+
+### Sign In with OTP
+
+To sign in with OTP, use the `sendVerificationOtp()` method to send a "sign-in" OTP to the user's email address.
+
+<APIMethod path="/email-otp/send-verification-otp" method="POST">
+```ts
+type sendVerificationOTP = {
+    /**
+     * Email address to send the OTP. 
+     */
+    email: string = "user@example.com"
+    /**
+     * Type of the OTP.
+     */
+    type: "sign-in" = "sign-in"
+}
+```
+</APIMethod>
 
 Once the user provides the OTP, you can sign in the user using the `signIn.emailOtp()` method.
 
@@ -87,12 +133,29 @@ type signInEmailOTP = {
 </APIMethod>
 
 <Callout>
-If the user is not registered, they'll be automatically registered. If you want to prevent this, you can pass `disableSignUp` as `true` in the options.
+If the user is not registered, they'll be automatically registered. If you want to prevent this, you can pass `disableSignUp` as `true` in the [options](#options).
 </Callout>
 
-### Verify Email
+### Verify Email with OTP
 
-To verify the user's email address, use the `verifyEmail()` method.
+To verify the user's email address with OTP, use the `sendVerificationOtp()` method to send an "email-verification" OTP to the user's email address.
+
+<APIMethod path="/email-otp/send-verification-otp" method="POST">
+```ts
+type sendVerificationOTP = {
+    /**
+     * Email address to send the OTP. 
+     */
+    email: string = "user@example.com"
+    /**
+     * Type of the OTP.
+     */
+    type: "email-verification" = "email-verification"
+}
+```
+</APIMethod>
+
+Once the user provides the OTP, use the `verifyEmail()` method to complete email verification.
 
 <APIMethod path="/email-otp/verify-email" method="POST">
 ```ts
@@ -109,9 +172,9 @@ type verifyEmailOTP = {
 ```
 </APIMethod>
 
-### Forgot & Reset Password
+### Reset Password with OTP
 
-To reset the user's password, you must use the `forgotPassword` method:
+To reset the user's password with OTP, use the `forgetPassword.emailOTP()` method to send a "forget-password" OTP to the user's email address.
 
 <APIMethod path="/forget-password/email-otp" method="POST">
 ```ts
@@ -124,8 +187,28 @@ type forgetPasswordEmailOTP = {
 ```
 </APIMethod>
 
+Once the user provides the OTP, use the `checkVerificationOtp()` method to check if it's valid (optional).
 
-After that, you may use the `resetPassword()` method to apply the password reset.
+<APIMethod path="/email-otp/check-verification-otp" method="POST">
+```ts
+type checkVerificationOTP = {
+    /**
+     * Email address to send the OTP. 
+     */
+    email: string = "user@example.com"
+    /**
+     * Type of the OTP.
+     */
+    type: "forget-password" = "forget-password"
+    /**
+     * OTP sent to the email. 
+     */
+    otp: string = "123456"
+}
+```
+</APIMethod>
+
+Then, use the `resetPassword()` method to reset the user's password.
 
 <APIMethod path="/email-otp/reset-password" method="POST">
 ```ts
@@ -173,33 +256,12 @@ export const auth = betterAuth({
   - `otp`: The OTP to send.
   - `type`: The type of OTP to send. Can be "sign-in", "email-verification", or "forget-password".
 
-### Example
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth"
-
-export const auth = betterAuth({
-    plugins: [
-        emailOTP({
-            async sendVerificationOTP({
-                email,
-                otp,
-                type
-            }) {
-                if (type === "sign-in") {
-                    // Send the OTP for sign-in
-                } else if (type === "email-verification") {
-                    // Send the OTP for email verification
-                } else {
-                    // Send the OTP for password reset
-                }
-            },
-        })
-    ]
-})
-```
+  <Callout type="warn">
+  It is recommended to not await the email sending to avoid timing attacks. On serverless platforms, use `waitUntil` or similar to ensure the email is sent.
+  </Callout>
 
 - `otpLength`: The length of the OTP. Defaults to `6`.
+
 - `expiresIn`: The expiry time of the OTP in seconds. Defaults to `300` seconds.
 
 ```ts title="auth.ts"
@@ -236,9 +298,9 @@ export const auth = betterAuth({
 })
 ```
 
-When the maximum attempts are exceeded, the `verifyOTP`, `signIn.emailOtp`, `verifyEmail`, and `resetPassword` methods will return an error with code `MAX_ATTEMPTS_EXCEEDED`.
+When the maximum attempts are exceeded, the `verifyOTP`, `signIn.emailOtp`, `verifyEmail`, and `resetPassword` methods will return an error with code `TOO_MANY_ATTEMPTS`.
 
-- `storeOTP`: The method to store the OTP in your database, wether `encrypted`, `hashed` or `plain` text. Default is `plain` text.
+- `storeOTP`: The method to store the OTP in your database, whether `encrypted`, `hashed` or `plain` text. Default is `plain` text.
 
 <Callout>
 Note: This will not affect the OTP sent to the user, it will only affect the OTP stored in your database.

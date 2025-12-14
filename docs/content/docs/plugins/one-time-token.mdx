@@ -7,17 +7,42 @@ The One-Time Token (OTT) plugin provides functionality to generate and verify se
 
 ## Installation
 
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { oneTimeToken } from "better-auth/plugins/one-time-token";
+<Steps>
+  <Step>
+    ### Add the plugin to your auth config
 
-export const auth = betterAuth({
-    plugins: [
-      oneTimeToken()
-    ]
-    // ... other auth config
-});
-```
+    To use the One-Time Token plugin, add it to your auth config.
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import { oneTimeToken } from "better-auth/plugins/one-time-token";
+    
+    export const auth = betterAuth({
+        plugins: [
+          oneTimeToken()
+        ]
+        // ... other auth config
+    });
+    ```
+  </Step>
+
+  <Step>
+    ### Add the client plugin
+
+    Next, include the one-time-token client plugin in your authentication client instance.
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client"
+    import { oneTimeTokenClient } from "better-auth/client/plugins"
+    
+    export const authClient = createAuthClient({
+        plugins: [
+            oneTimeTokenClient()
+        ]
+    })
+    ```
+  </Step>
+</Steps>
 
 ## Usage
 
@@ -67,7 +92,7 @@ oneTimeToken({
     expiresIn: 10 // 10 minutes
 })
 ```
-* **`generateToken`**: A custom token generator function that takes `session` object and a `ctx` as paramters.
+* **`generateToken`**: A custom token generator function that takes `session` object and a `ctx` as parameters.
 
 * **`storeToken`**: Optional. This option allows you to configure how the token is stored in your database.
 

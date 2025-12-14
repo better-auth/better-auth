@@ -2,30 +2,9 @@
 
 Thank you for your interest in contributing to Better Auth. This guide will help you get started with the contribution process.
 
-## Table of Contents
-- [Code of Conduct](#code-of-conduct)
-- [Security Issues](#security-issues)
-- [Project Structure](#project-structure)
-- [Development Guidelines](#development-guidelines)
-- [Getting Started](#getting-started)
-- [Code Formatting with BiomeJS](#code-formatting-with-biomejs)
-- [Development Workflow](#development-workflow)
-- [Testing](#testing)
-- [Pull Request Process](#pull-request-process)
-- [Code Style](#code-style)
-- [Component-Specific Guidelines](#component-specific-guidelines)
-  - [Core Library](#core-library)
-  - [Documentation](#documentation)
-  - [Plugins](#plugins)
-  - [Examples](#examples)
-
 ## Code of Conduct
 
-This project and everyone participating in it is governed by our Code of Conduct. By participating, you are expected to uphold this code.
-
-## Security Issues
-
-For security-related issues, please email security@better-auth.com. Include a detailed description of the vulnerability and steps to reproduce it. All reports will be reviewed and addressed promptly. For more information, see our [security documentation](/docs/reference/security).
+This project and everyone participating in it is governed by our [Code of Conduct](/CODE_OF_CONDUCT.md) By participating, you are expected to uphold this code.
 
 ## Project Structure
 
@@ -35,31 +14,21 @@ The Better Auth monorepo is organized as follows:
 - `/packages/cli` - Command-line interface tools
 - `/packages/expo` - Expo integration
 - `/packages/stripe` - Stripe payment integration
+- `/packages/sso` - SSO plugin with SAML and OIDC support
 - `/docs` - Documentation website
 - `/examples` - Example applications
 - `/demo` - Demo applications
 
 ## Development Guidelines
 
-When contributing to Better Auth, please keep these principles in mind:
+When contributing to Better Auth:
 
-- Provide opinionated, best-practice defaults rather than extensive configurations
-- Maintain a consistent and predictable API across all supported frameworks
-- Ensure all code is type-safe and leverages TypeScript features effectively
-- Write clear, self-documenting code with appropriate comments
-- Follow existing code style and patterns
-- Keep changes focused and well-documented
-
-
-## Prerequisites
-
-Before you start development, ensure you have the following:
-
-- Node.js LTS (latest version recommended)
-- pnpm package manager
-- Git
-- (Optional) Any authentication provider accounts you plan to work with (Google, GitHub, etc.)
-- (Optional) Database server if working with database-related features
+- Keep changes focused. Large PRs are harder to review and unlikely to be accepted. We recommend opening an issue and discussing it with us first.
+- Ensure all code is type-safe and takes full advantage of TypeScript features.
+- Write clear, self-explanatory code. Use comments only when truly necessary.
+- Maintain a consistent and predictable API across all supported frameworks.
+- Follow the existing code style and conventions.
+- We aim for stability, so avoid changes that would require users to run a migration or update their config...
 
 ## Getting Started
 
@@ -70,7 +39,24 @@ Before you start development, ensure you have the following:
    cd better-auth
    ```
 3. Install Node.js (LTS version recommended)
-4. Install pnpm if you haven't already:
+
+   > **Note**: This project is configured to use [nvm](https://github.com/nvm-sh/nvm) to manage the local Node.js version, as such this is simplest way to get you up and running.
+
+   Once installed, use:
+
+   ```bash
+   $ nvm install
+   $ nvm use
+   ```
+
+   Alternatively, see Node.js [installation](https://nodejs.org/en/download) for other supported methods.
+
+4. Install `pnpm` if you haven't already:
+
+   > **Note:** This project is configured to manage [pnpm](https://pnpm.io/) via [corepack](https://github.com/nodejs/corepack). Once installed, upon usage you'll be prompted to install the correct pnpm version
+
+   Alternatively, use `npm` to install it:
+
    ```bash
    npm install -g pnpm
    ```
@@ -133,30 +119,57 @@ pnpm lint:fix
 
 2. Make your changes following the code style guidelines
 3. Add tests for your changes
-4. Run the test suite:
+4. Run database containers (needed for testing database adapters)
+   ```bash
+   docker compose up -d
+   ```
+
+   > Note: On MacOS, the **mssql** container will likely require Rosetta emulation and at least 2GB of RAM of allocated memory. See their [container requirements](https://learn.microsoft.com/en-us/sql/linux/quickstart-install-connect-docker?view=sql-server-ver17&tabs=cli&pivots=cs1-bash#prerequisites).
+
+5. Run the test suite:
    ```bash
    # Run all tests
    pnpm test
    
    # Run tests for a specific package
-   pnpm --filter "{packagename}" test
+   pnpm -F "{package_name}" test
    ```
-5. Ensure all tests pass and the code is properly formatted
-7. If your change is either a bug fix or a feature in the following packages: `better-auth`, `@better-auth/cli`, `@better-auth/expo`,
-   `@better-auth/sso` or `@better-auth/stripe`. Run the following command to create a [changeset](https://github.com/changesets/changesets/tree/main?tab=readme-ov-file#how-do-we-do-that).
+6. Ensure all tests pass and the code is properly formatted
+7. Commit your changes with a descriptive message following this format:
+   For changes that need to be included in the changelog (excluding docs or chore changes), use the `fix` or `feat` format with a specific scope:
    ```
-   pnpm changeset
-   ```
-6. Commit your changes with a descriptive message following the [Conventional Commits](https://www.conventionalcommits.org/) format:
-   ```
-   type(scope): description
+   fix(organization): fix incorrect member role assignment
    
-   [optional body]
-   
-   [optional footer(s)]
+   feat(two-factor): add support for TOTP authentication
    ```
-7. Push your branch to your fork
-8. Open a pull request against the main branch
+
+   For core library changes that don't have a specific plugin or scope, you can use `fix` and `feat` without a scope:
+   ```
+   fix: resolve memory leak in session handling
+   
+   feat: add support for custom error messages
+   ```
+
+   For documentation changes, use `docs`:
+   ```bash
+   docs: improve authentication flow explanation
+   docs: fix typos in API reference
+   ```
+   
+   For changes that refactor or don't change the functionality of the library or docs, use `chore`:
+   ```bash
+   chore(refactor): reorganize authentication middleware
+   chore: update dependencies to latest versions
+   ```
+
+   Each commit message should be clear and descriptive, explaining what the change does. For features and fixes, include context about what was added or resolved.
+8. Push your branch to your fork
+9. Open a pull request against the **canary** branch. In your PR description:
+   - Clearly describe what changes you made and why
+   - Include any relevant context or background
+   - List any breaking changes or deprecations
+   - Add screenshots for UI changes
+   - Reference related issues or discussions
 
 ## Testing
 
@@ -187,15 +200,15 @@ All contributions must include appropriate tests. Follow these guidelines:
 - Add comments for complex logic
 - Update relevant documentation when making API changes
 - Follow the BiomeJS formatting rules
+- Avoid using Classes
 
 ## Component-Specific Guidelines
 
 ### Core Library (`/packages/better-auth`)
-
 - Keep the core library focused on essential authentication functionality
-- Add new authentication methods as plugins when possible
+- Plugins in the core generally are made by core members. If you have a plugin idea consider open sourcing it yourself instead. 
 - Ensure all public APIs are well-documented with JSDoc comments
-- Maintain backward compatibility or provide a clear migration path
+- Maintain backward compatibility. If it's super necessary, provide a clear migration path
 - Follow the existing patterns for error handling and logging
 
 ### Documentation (`/docs`)
@@ -206,19 +219,6 @@ All contributions must include appropriate tests. Follow these guidelines:
 - Document any breaking changes in the migration guide
 - Follow the existing documentation style and structure
 
-### Plugins
+## Security Issues
 
-- Keep plugins focused on a single responsibility
-- Follow the naming convention `@better-auth/plugin-name`
-- Document all configuration options and requirements
-- Include TypeScript type definitions
-- Add tests for all plugin functionality
-- Document any required setup or dependencies
-
-### Examples (`/examples` and `/demo`)
-
-- Keep examples simple and focused
-- Include a README with setup instructions
-- Document any prerequisites or setup steps
-- Keep dependencies up to date
-- Ensure examples follow security best practices
+For security-related issues, please email security@better-auth.com. Include a detailed description of the vulnerability and steps to reproduce it. All reports will be reviewed and addressed promptly. For more information, see our [security documentation](/docs/reference/security).

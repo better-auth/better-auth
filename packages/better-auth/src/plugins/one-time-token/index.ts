@@ -1,36 +1,41 @@
-import { z } from "zod";
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-	defaultKeyHasher,
-	type BetterAuthPlugin,
-} from "..";
+} from "@better-auth/core/api";
+import * as z from "zod";
 import { sessionMiddleware } from "../../api";
-import { generateRandomString } from "../../crypto";
-import type { GenericEndpointContext, Session, User } from "../../types";
 import { setSessionCookie } from "../../cookies";
+import { generateRandomString } from "../../crypto";
+import type { Session, User } from "../../types";
+import { defaultKeyHasher } from "./utils";
 
-interface OneTimeTokenOptions {
+export interface OneTimeTokenOptions {
 	/**
 	 * Expires in minutes
 	 *
 	 * @default 3
 	 */
-	expiresIn?: number;
+	expiresIn?: number | undefined;
 	/**
 	 * Only allow server initiated requests
 	 */
-	disableClientRequest?: boolean;
+	disableClientRequest?: boolean | undefined;
 	/**
 	 * Generate a custom token
 	 */
-	generateToken?: (
-		session: {
-			user: User & Record<string, any>;
-			session: Session & Record<string, any>;
-		},
-		ctx: GenericEndpointContext,
-	) => Promise<string>;
+	generateToken?:
+		| ((
+				session: {
+					user: User & Record<string, any>;
+					session: Session & Record<string, any>;
+				},
+				ctx: GenericEndpointContext,
+		  ) => Promise<string>)
+		| undefined;
 	/**
 	 * Disable setting the session cookie when the token is verified
 	 */
@@ -42,16 +47,25 @@ interface OneTimeTokenOptions {
 	 * @default "plain"
 	 */
 	storeToken?:
-		| "plain"
-		| "hashed"
-		| { type: "custom-hasher"; hash: (token: string) => Promise<string> };
+		| (
+				| "plain"
+				| "hashed"
+				| { type: "custom-hasher"; hash: (token: string) => Promise<string> }
+		  )
+		| undefined;
 	/**
 	 * Set the OTT header on new sessions
 	 */
 	setOttHeaderOnNewSession?: boolean;
 }
 
-export const oneTimeToken = (options?: OneTimeTokenOptions) => {
+const verifyOneTimeTokenBodySchema = z.object({
+	token: z.string().meta({
+		description: 'The token to verify. Eg: "some-token"',
+	}),
+});
+
+export const oneTimeToken = (options?: OneTimeTokenOptions | undefined) => {
 	const opts = {
 		storeToken: "plain",
 		...options,
@@ -147,11 +161,7 @@ export const oneTimeToken = (options?: OneTimeTokenOptions) => {
 				"/one-time-token/verify",
 				{
 					method: "POST",
-					body: z.object({
-						token: z.string().meta({
-							description: 'The token to verify. Eg: "some-token"',
-						}),
-					}),
+					body: verifyOneTimeTokenBodySchema,
 				},
 				async (c) => {
 					const { token } = c.body;
@@ -165,17 +175,14 @@ export const oneTimeToken = (options?: OneTimeTokenOptions) => {
 							message: "Invalid token",
 						});
 					}
+					await c.context.internalAdapter.deleteVerificationValue(
+						verificationValue.id,
+					);
 					if (verificationValue.expiresAt < new Date()) {
-						await c.context.internalAdapter.deleteVerificationValue(
-							verificationValue.id,
-						);
 						throw c.error("BAD_REQUEST", {
 							message: "Token expired",
 						});
 					}
-					await c.context.internalAdapter.deleteVerificationValue(
-						verificationValue.id,
-					);
 					const session = await c.context.internalAdapter.findSession(
 						verificationValue.value,
 					);
@@ -187,6 +194,13 @@ export const oneTimeToken = (options?: OneTimeTokenOptions) => {
 					if (!opts?.disableSetSessionCookie) {
 						await setSessionCookie(c, session);
 					}
+
+					if (session.session.expiresAt < new Date()) {
+						throw c.error("BAD_REQUEST", {
+							message: "Session expired",
+						});
+					}
+
 					return c.json(session);
 				},
 			),
@@ -197,6 +211,9 @@ export const oneTimeToken = (options?: OneTimeTokenOptions) => {
 					matcher: () => true,
 					handler: createAuthMiddleware(async (ctx) => {
 						if (ctx.context.newSession) {
+							if (!opts?.setOttHeaderOnNewSession) {
+								return;
+							}
 							const exposedHeaders =
 								ctx.context.responseHeaders?.get(
 									"access-control-expose-headers",

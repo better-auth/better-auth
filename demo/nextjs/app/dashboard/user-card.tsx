@@ -1,31 +1,8 @@
 "use client";
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import {
-	Card,
-	CardContent,
-	CardFooter,
-	CardHeader,
-	CardTitle,
-} from "@/components/ui/card";
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-	DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { PasswordInput } from "@/components/ui/password-input";
-import { client, signOut, useSession } from "@/lib/auth-client";
-import { Session } from "@/lib/auth-types";
+import type { Subscription } from "@better-auth/stripe";
 import { MobileIcon } from "@radix-ui/react-icons";
+import { useQuery } from "@tanstack/react-query";
 import {
 	Edit,
 	Fingerprint,
@@ -42,9 +19,36 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import QRCode from "react-qr-code";
 import { toast } from "sonner";
 import { UAParser } from "ua-parser-js";
+import { SubscriptionTierLabel } from "@/components/tier-labels";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+	Card,
+	CardContent,
+	CardFooter,
+	CardHeader,
+	CardTitle,
+} from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import CopyButton from "@/components/ui/copy-button";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/password-input";
 import {
 	Table,
 	TableBody,
@@ -53,13 +57,9 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import QRCode from "react-qr-code";
-import CopyButton from "@/components/ui/copy-button";
-import { Badge } from "@/components/ui/badge";
-import { useQuery } from "@tanstack/react-query";
-import { SubscriptionTierLabel } from "@/components/tier-labels";
+import { client, signOut, useSession } from "@/lib/auth-client";
+import type { Session } from "@/lib/auth-types";
 import { Component } from "./change-plan";
-import { Subscription } from "@better-auth/stripe";
 
 export default function UserCard(props: {
 	session: Session | null;
@@ -67,7 +67,7 @@ export default function UserCard(props: {
 	subscription?: Subscription;
 }) {
 	const router = useRouter();
-	const { data, isPending } = useSession();
+	const { data } = useSession();
 	const session = data || props.session;
 	const [isTerminating, setIsTerminating] = useState<string>();
 	const [isPendingTwoFa, setIsPendingTwoFa] = useState<boolean>(false);
@@ -208,10 +208,11 @@ export default function UserCard(props: {
 										) : (
 											<Laptop size={16} />
 										)}
-										{new UAParser(session.userAgent || "").getOS().name},{" "}
-										{new UAParser(session.userAgent || "").getBrowser().name}
+										{new UAParser(session.userAgent || "").getOS().name ||
+											session.userAgent}
+										, {new UAParser(session.userAgent || "").getBrowser().name}
 										<button
-											className="text-red-500 opacity-80  cursor-pointer text-xs border-muted-foreground border-red-600  underline "
+											className="text-red-500 opacity-80  cursor-pointer text-xs border-muted-foreground border-red-600  underline"
 											onClick={async () => {
 												setIsTerminating(session.id);
 												const res = await client.revokeSession({
@@ -391,8 +392,7 @@ export default function UserCard(props: {
 												}
 												setIsPendingTwoFa(true);
 												if (session?.user.twoFactorEnabled) {
-													const res = await client.twoFactor.disable({
-														//@ts-ignore
+													await client.twoFactor.disable({
 														password: twoFaPassword,
 														fetchOptions: {
 															onError(context) {
@@ -425,7 +425,7 @@ export default function UserCard(props: {
 														});
 														return;
 													}
-													const res = await client.twoFactor.enable({
+													await client.twoFactor.enable({
 														password: twoFaPassword,
 														fetchOptions: {
 															onError(context) {
@@ -640,7 +640,7 @@ function ChangePassword() {
 }
 
 function EditUserDialog() {
-	const { data, isPending, error } = useSession();
+	const { data } = useSession();
 	const [name, setName] = useState<string>();
 	const router = useRouter();
 	const [image, setImage] = useState<File | null>(null);
@@ -657,7 +657,7 @@ function EditUserDialog() {
 		}
 	};
 	const [open, setOpen] = useState<boolean>(false);
-	const [isLoading, setIsLoading] = useState<boolean>(false);
+	const [isLoading, startTransition] = useTransition();
 	return (
 		<Dialog open={open} onOpenChange={setOpen}>
 			<DialogTrigger asChild>
@@ -720,25 +720,27 @@ function EditUserDialog() {
 					<Button
 						disabled={isLoading}
 						onClick={async () => {
-							setIsLoading(true);
-							await client.updateUser({
-								image: image ? await convertImageToBase64(image) : undefined,
-								name: name ? name : undefined,
-								fetchOptions: {
-									onSuccess: () => {
-										toast.success("User updated successfully");
+							startTransition(async () => {
+								await client.updateUser({
+									image: image ? await convertImageToBase64(image) : undefined,
+									name: name ? name : undefined,
+									fetchOptions: {
+										onSuccess: () => {
+											toast.success("User updated successfully");
+										},
+										onError: (error) => {
+											toast.error(error.error.message);
+										},
 									},
-									onError: (error) => {
-										toast.error(error.error.message);
-									},
-								},
+								});
+								startTransition(() => {
+									setName("");
+									router.refresh();
+									setImage(null);
+									setImagePreview(null);
+									setOpen(false);
+								});
 							});
-							setName("");
-							router.refresh();
-							setImage(null);
-							setImagePreview(null);
-							setIsLoading(false);
-							setOpen(false);
 						}}
 					>
 						{isLoading ? (
@@ -876,7 +878,7 @@ function ListPasskeys() {
 									<TableCell className="text-right">
 										<button
 											onClick={async () => {
-												const res = await client.passkey.deletePasskey({
+												await client.passkey.deletePasskey({
 													id: passkey.id,
 													fetchOptions: {
 														onRequest: () => {

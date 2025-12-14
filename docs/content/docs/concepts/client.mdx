@@ -84,12 +84,12 @@ await authClient.signIn.email({
 
 ### Hooks
 
-On top of normal methods, the client provides hooks to easily access different reactive data. Every hook is available in the root object of the client and they all start with `use`.
+In addition to the standard methods, the client provides hooks to easily access different reactive data. Every hook is available in the root object of the client and they all start with `use`.
 
 **Example: useSession**
 
 
-<Tabs items={["React", "Vue","Svelte", "Solid"]} defaultValue="React">
+<Tabs items={["React", "Vue","Svelte", "Solid"]} defaultValue="react">
     <Tab value="React">
         ```tsx title="user.tsx"
         //make sure you're using the react client
@@ -145,16 +145,16 @@ On top of normal methods, the client provides hooks to easily access different r
                 style="display: flex; flex-direction: column; gap: 10px; border-radius: 10px; border: 1px solid #4B453F; padding: 20px; margin-top: 10px;"
             >
                 <div>
-                {#if $session}
+                {#if $session.data}
                     <div>
                     <p>
-                        {$session?.data?.user.name}
+                        {$session.data.user.name}
                     </p>
                     <p>
-                        {$session?.data?.user.email}
+                        {$session.data.user.email}
                     </p>
                     <button
-                        on:click={async () => {
+                        onclick={async () => {
                         await authClient.signOut();
                         }}
                     >
@@ -163,7 +163,7 @@ On top of normal methods, the client provides hooks to easily access different r
                     </div>
                 {:else}
                     <button
-                    on:click={async () => {
+                    onclick={async () => {
                         await authClient.signIn.social({
                         provider: "github",
                         });
@@ -240,6 +240,49 @@ await authClient.signIn.email({
 })
 ```
 
+### Disabling Hook Rerenders
+
+Certain endpoints, upon successful response, will trigger atom signals and cause hooks like `useSession` to rerender.
+This is useful for keeping your UI in sync with authentication state changes.
+
+However, there are cases where you might want to make an endpoint call without triggering hook rerenders.
+For example, when updating user preferences that don't affect the session, or when you want to manually control when hooks update.
+
+You can disable hook rerenders for a specific endpoint call by setting `disableSignal: true` in the fetch options:
+
+```ts title="auth-client.ts"
+// As the second argument
+await authClient.updateUser({
+    name: "New Name"
+}, {
+    disableSignal: true
+})
+
+// Or within fetchOptions
+await authClient.updateUser({
+    name: "New Name",
+    fetchOptions: {
+        disableSignal: true
+    }
+})
+```
+
+When `disableSignal` is set to `true`, the endpoint call will complete successfully,
+but hooks like `useSession` won't automatically rerender. You can manually trigger a refetch if needed:
+
+```ts title="auth-client.ts"
+const { refetch } = authClient.useSession()
+
+await authClient.updateUser({
+    name: "New Name"
+}, {
+    disableSignal: true,
+    onSuccess() {
+        // Manually refetch session if needed
+        refetch()
+    }
+})
+```
 
 ### Handling Errors
 
@@ -247,7 +290,7 @@ Most of the client functions return a response object with the following propert
 - `data`: The response data.
 - `error`: The error object if there was an error.
 
-the error object contains the following properties:
+The error object contains the following properties:
 - `message`: The error message. (e.g., "Invalid email or password")
 - `status`: The HTTP status code.
 - `statusText`: The HTTP status text.
@@ -262,7 +305,7 @@ if (error) {
 }
 ```
 
-If the actions accepts a `fetchOptions` option, you can pass `onError` callback to handle errors.
+If the action accepts a `fetchOptions` option, you can pass an `onError` callback to handle errors.
 
 ```ts title="auth-client.ts"
 
@@ -287,7 +330,7 @@ await authClient.signIn.email({
 })
 ```
 
-Hooks like `useSession` also return an error object if there was an error fetching the session. On top of that, they also return a `isPending` property to indicate if the request is still pending.
+Hooks like `useSession` also return an error object if there was an error fetching the session. On top of that, they also return an `isPending` property to indicate if the request is still pending.
 
 ```ts title="auth-client.ts"
 const { data, error, isPending } = useSession()
@@ -316,7 +359,7 @@ type ErrorTypes = Partial<
 const errorCodes = {
 	USER_ALREADY_EXISTS: {
 		en: "user already registered",
-		es: "usuario ya registrada",
+		es: "usuario ya registrado",
 	},
 } satisfies ErrorTypes;
 

@@ -11,7 +11,7 @@ Caching is a powerful technique that can significantly improve the performance o
 
 ### Cookie Cache
 
-Calling your database every time `useSession` or `getSession` invoked isn’t ideal, especially if sessions don’t change frequently. Cookie caching handles this by storing session data in a short-lived, signed cookie similar to how JWT access tokens are used with refresh tokens.
+Calling your database every time `useSession` or `getSession` is invoked isn’t ideal, especially if sessions don’t change frequently. Cookie caching handles this by storing session data in a short-lived, signed cookie similar to how JWT access tokens are used with refresh tokens.
 
 To turn on cookie caching, just set `session.cookieCache` in your auth config:
 
@@ -118,7 +118,7 @@ Here are examples of how you can do caching in different frameworks and environm
 
 ## SSR Optimizations
 
-If you're using a framework that supports server-side rendering, it's usually best to pre-fetch user session on the server and use it as a fallback on the client.
+If you're using a framework that supports server-side rendering, it's usually best to pre-fetch the user session on the server and use it as a fallback on the client.
 
 ```ts
 const session = await auth.api.getSession({
@@ -147,4 +147,65 @@ Optimizing database performance is essential to get the best out of Better Auth.
 
 <Callout>
   We intend to add indexing support in our schema generation tool in the future.
+</Callout>
+
+## Bundle Size Optimization
+
+If you're using custom adapters (like Prisma, Drizzle, or MongoDB), you can reduce your bundle size by using `better-auth/minimal` instead of `better-auth`. This version excludes Kysely, which is only needed when using direct database connections.
+
+### Usage
+
+Simply import from `better-auth/minimal` instead of `better-auth`:
+
+<Tabs items={["Prisma", "Drizzle", "MongoDB"]}>
+  <Tab value="Prisma">
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth/minimal"; // [!code highlight]
+    import { prismaAdapter } from "better-auth/adapters/prisma";
+    import { PrismaClient } from "@prisma/client";
+
+    const prisma = new PrismaClient();
+
+    export const auth = betterAuth({
+      database: prismaAdapter(prisma, {
+        provider: "postgresql", // or "mysql", "sqlite"
+      }),
+    });
+    ```
+  </Tab>
+
+  <Tab value="Drizzle">
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth/minimal"; // [!code highlight]
+    import { drizzleAdapter } from "better-auth/adapters/drizzle";
+    import { db } from "./database";
+
+    export const auth = betterAuth({
+      database: drizzleAdapter(db, {
+        provider: "pg", // or "mysql", "sqlite"
+      }),
+    });
+    ```
+  </Tab>
+
+  <Tab value="MongoDB">
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth/minimal"; // [!code highlight]
+    import { mongodbAdapter } from "better-auth/adapters/mongodb";
+    import { MongoClient } from "mongodb";
+
+    const client = new MongoClient(process.env.DATABASE_URL!);
+    const db = client.db();
+
+    export const auth = betterAuth({
+      database: mongodbAdapter(db),
+    });
+    ```
+  </Tab>
+</Tabs>
+
+<Callout type="warning">
+  **Limitations:**
+  - Direct database connections are not supported (you must use an adapter)
+  - Built-in migrations are not supported. Use external migration tools (or use `better-auth` if you need built-in migration support)
 </Callout>

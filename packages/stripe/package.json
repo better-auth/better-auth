@@ -1,9 +1,17 @@
 {
   "name": "@better-auth/stripe",
   "author": "Bereket Engida",
-  "version": "1.3.4",
-  "main": "dist/index.cjs",
+  "version": "1.4.7-beta.4",
+  "type": "module",
+  "main": "dist/index.mjs",
+  "types": "dist/index.d.mts",
   "license": "MIT",
+  "homepage": "https://www.better-auth.com/docs/plugins/stripe",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/better-auth/better-auth.git",
+    "directory": "packages/stripe"
+  },
   "keywords": [
     "stripe",
     "auth",
@@ -13,47 +21,52 @@
   "description": "Stripe plugin for Better Auth",
   "scripts": {
     "test": "vitest",
-    "build": "unbuild",
-    "typecheck": "tsc --noEmit",
-    "dev": "unbuild --watch"
+    "coverage": "vitest run --coverage",
+    "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --project tsconfig.json"
   },
   "publishConfig": {
     "access": "public"
   },
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.cjs"
+      "dev-source": "./src/index.ts",
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
     },
     "./client": {
-      "types": "./dist/client.d.ts",
-      "import": "./dist/client.mjs",
-      "require": "./dist/client.cjs"
+      "dev-source": "./src/client.ts",
+      "types": "./dist/client.d.mts",
+      "default": "./dist/client.mjs"
     }
   },
   "typesVersions": {
     "*": {
       "*": [
-        "./dist/index.d.ts"
+        "./dist/index.d.mts"
       ],
       "client": [
-        "./dist/client.d.ts"
+        "./dist/client.d.mts"
       ]
     }
   },
   "dependencies": {
-    "better-auth": "workspace:^"
+    "defu": "^6.1.4",
+    "zod": "^4.1.12"
   },
   "peerDependencies": {
-    "zod": "^3.25.0 || ^4.0.0"
+    "@better-auth/core": "workspace:*",
+    "better-auth": "workspace:*",
+    "stripe": "^18 || ^19 || ^20"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.12",
+    "@better-auth/core": "workspace:*",
+    "better-auth": "workspace:*",
     "better-call": "catalog:",
-    "better-sqlite3": "^11.6.0",
-    "stripe": "^18.0.0",
-    "vitest": "^1.6.0",
-    "zod": "^4.0.0"
+    "stripe": "^20.0.0",
+    "tsdown": "catalog:"
   }
 }

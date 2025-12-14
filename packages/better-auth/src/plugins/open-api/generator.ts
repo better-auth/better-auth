@@ -1,101 +1,108 @@
+import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
+import type {
+	DBFieldAttribute,
+	DBFieldAttributeConfig,
+	DBFieldType,
+} from "@better-auth/core/db";
 import type {
 	Endpoint,
 	EndpointOptions,
 	OpenAPIParameter,
 	OpenAPISchemaType,
 } from "better-call";
-import {
-	z,
-	ZodArray,
-	ZodBoolean,
-	ZodNumber,
-	ZodObject,
-	ZodOptional,
-	ZodString,
-	ZodType,
-} from "zod/v4";
+import * as z from "zod";
 import { getEndpoints } from "../../api";
 import { getAuthTables } from "../../db";
-import type { AuthContext, BetterAuthOptions } from "../../types";
-import type { FieldAttribute } from "../../db";
 
 export interface Path {
-	get?: {
-		tags?: string[];
-		operationId?: string;
-		description?: string;
-		security?: [{ bearerAuth: string[] }];
-		parameters?: OpenAPIParameter[];
-		responses?: {
-			[key in string]: {
+	get?:
+		| {
+				tags?: string[];
+				operationId?: string;
 				description?: string;
-				content: {
-					"application/json": {
-						schema: {
-							type?: OpenAPISchemaType;
-							properties?: Record<string, any>;
-							required?: string[];
-							$ref?: string;
+				security?: [{ bearerAuth: string[] }];
+				parameters?: OpenAPIParameter[];
+				responses?: {
+					[key in string]: {
+						description?: string;
+						content: {
+							"application/json": {
+								schema: {
+									type?: OpenAPISchemaType;
+									properties?: Record<string, any>;
+									required?: string[];
+									$ref?: string;
+								};
+							};
 						};
 					};
 				};
-			};
-		};
-	};
-	post?: {
-		tags?: string[];
-		operationId?: string;
-		description?: string;
-		security?: [{ bearerAuth: string[] }];
-		parameters?: OpenAPIParameter[];
-		requestBody?: {
-			content: {
-				"application/json": {
-					schema: {
-						type?: OpenAPISchemaType;
-						properties?: Record<string, any>;
-						required?: string[];
-						$ref?: string;
-					};
-				};
-			};
-		};
-		responses?: {
-			[key in string]: {
+		  }
+		| undefined;
+	post?:
+		| {
+				tags?: string[];
+				operationId?: string;
 				description?: string;
-				content: {
-					"application/json": {
-						schema: {
-							type?: OpenAPISchemaType;
-							properties?: Record<string, any>;
-							required?: string[];
-							$ref?: string;
+				security?: [{ bearerAuth: string[] }];
+				parameters?: OpenAPIParameter[];
+				requestBody?: {
+					content: {
+						"application/json": {
+							schema: {
+								type?: OpenAPISchemaType;
+								properties?: Record<string, any>;
+								required?: string[];
+								$ref?: string;
+							};
 						};
 					};
 				};
-			};
-		};
-	};
+				responses?: {
+					[key in string]: {
+						description?: string;
+						content: {
+							"application/json": {
+								schema: {
+									type?: OpenAPISchemaType;
+									properties?: Record<string, any>;
+									required?: string[];
+									$ref?: string;
+								};
+							};
+						};
+					};
+				};
+		  }
+		| undefined;
 }
 
-function getTypeFromZodType(zodType: ZodType<any>) {
-	if (zodType instanceof ZodString) {
-		return "string";
-	} else if (zodType instanceof ZodNumber) {
-		return "number";
-	} else if (zodType instanceof ZodBoolean) {
-		return "boolean";
-	} else if (zodType instanceof ZodObject) {
-		return "object";
-	} else if (zodType instanceof ZodArray) {
-		return "array";
-	}
-	return "string";
+type AllowedType = "string" | "number" | "boolean" | "array" | "object";
+const allowedType = new Set(["string", "number", "boolean", "array", "object"]);
+function getTypeFromZodType(zodType: z.ZodType<any>) {
+	const type = zodType.type;
+	return allowedType.has(type) ? (type as AllowedType) : "string";
 }
 
-function getFieldSchema(field: FieldAttribute) {
-	const schema: any = {
+export type FieldSchema = {
+	type: DBFieldType;
+	default?:
+		| (DBFieldAttributeConfig["defaultValue"] | "Generated at runtime")
+		| undefined;
+	readOnly?: boolean | undefined;
+	format?: string;
+};
+
+export type OpenAPIModelSchema = {
+	type: "object";
+	properties: Record<string, FieldSchema>;
+	required?: string[] | undefined;
+};
+
+function getFieldSchema(field: DBFieldAttribute) {
+	const schema: FieldSchema = {
 		type: field.type === "date" ? "string" : field.type,
+		...(field.type === "date" && { format: "date-time" }),
 	};
 
 	if (field.defaultValue !== undefined) {
@@ -118,20 +125,19 @@ function getParameters(options: EndpointOptions) {
 		parameters.push(...options.metadata.openapi.parameters);
 		return parameters;
 	}
-	if (options.query instanceof ZodObject) {
+	if (options.query instanceof z.ZodObject) {
 		Object.entries(options.query.shape).forEach(([key, value]) => {
-			if (value instanceof ZodType) {
+			if (value instanceof z.ZodType) {
 				parameters.push({
 					name: key,
 					in: "query",
 					schema: {
-						type: getTypeFromZodType(value as ZodType<any>),
+						...processZodType(value as z.ZodType<any>),
 						...("minLength" in value && (value as any).minLength
 							? {
 									minLength: (value as any).minLength as number,
 								}
 							: {}),
-						description: (value as any).description,
 					},
 				});
 			}
@@ -146,20 +152,17 @@ function getRequestBody(options: EndpointOptions): any {
 	}
 	if (!options.body) return undefined;
 	if (
-		options.body instanceof ZodObject ||
-		options.body instanceof ZodOptional
+		options.body instanceof z.ZodObject ||
+		options.body instanceof z.ZodOptional
 	) {
-		// @ts-ignore
+		// @ts-expect-error
 		const shape = options.body.shape;
 		if (!shape) return undefined;
 		const properties: Record<string, any> = {};
 		const required: string[] = [];
 		Object.entries(shape).forEach(([key, value]) => {
-			if (value instanceof ZodType) {
-				properties[key] = {
-					type: getTypeFromZodType(value as ZodType<any>),
-					description: (value as any).description,
-				};
+			if (value instanceof z.ZodType) {
+				properties[key] = processZodType(value as z.ZodType<any>);
 				if (!(value instanceof z.ZodOptional)) {
 					required.push(key);
 				}
@@ -167,7 +170,7 @@ function getRequestBody(options: EndpointOptions): any {
 		});
 		return {
 			required:
-				options.body instanceof ZodOptional
+				options.body instanceof z.ZodOptional
 					? false
 					: options.body
 						? true
@@ -186,7 +189,49 @@ function getRequestBody(options: EndpointOptions): any {
 	return undefined;
 }
 
-function getResponse(responses?: Record<string, any>) {
+function processZodType(zodType: z.ZodType<any>): any {
+	// optional unwrapping
+	if (zodType instanceof z.ZodOptional) {
+		const innerType = (zodType as any)._def.innerType;
+		const innerSchema = processZodType(innerType);
+		return {
+			...innerSchema,
+			nullable: true,
+		};
+	}
+	// object unwrapping
+	if (zodType instanceof z.ZodObject) {
+		const shape = (zodType as any).shape;
+		if (shape) {
+			const properties: Record<string, any> = {};
+			const required: string[] = [];
+			Object.entries(shape).forEach(([key, value]) => {
+				if (value instanceof z.ZodType) {
+					properties[key] = processZodType(value as z.ZodType<any>);
+					if (!(value instanceof z.ZodOptional)) {
+						required.push(key);
+					}
+				}
+			});
+			return {
+				type: "object",
+				properties,
+				...(required.length > 0 ? { required } : {}),
+				description: (zodType as any).description,
+			};
+		}
+	}
+
+	// For primitive types, get the correct type from the unwrapped ZodType
+	const baseSchema = {
+		type: getTypeFromZodType(zodType),
+		description: (zodType as any).description,
+	};
+
+	return baseSchema;
+}
+
+function getResponse(responses?: Record<string, any> | undefined) {
 	return {
 		"400": {
 			content: {
@@ -303,12 +348,20 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 		plugins: [],
 	});
 
-	const tables = getAuthTables(options);
-	const models = Object.entries(tables).reduce((acc, [key, value]) => {
+	const tables = getAuthTables({
+		...options,
+		session: {
+			...options.session,
+			storeSessionInDatabase: true, // Forcing this to true to return the session table schema
+		},
+	});
+	const models = Object.entries(tables).reduce<
+		Record<string, OpenAPIModelSchema>
+	>((acc, [key, value]) => {
 		const modelName = key.charAt(0).toUpperCase() + key.slice(1);
 		const fields = value.fields;
 		const required: string[] = [];
-		const properties: Record<string, any> = {
+		const properties: Record<string, FieldSchema> = {
 			id: { type: "string" },
 		};
 		Object.entries(fields).forEach(([fieldKey, fieldValue]) => {
@@ -319,11 +372,16 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 			}
 		});
 
-		// @ts-ignore
+		Object.entries(properties).forEach(([key, prop]) => {
+			const field = value.fields[key];
+			if (field && field.type === "date" && prop.type === "string") {
+				prop.format = "date-time";
+			}
+		});
 		acc[modelName] = {
 			type: "object",
 			properties,
-			...(required.length > 0 ? { required } : {}),
+			required,
 		};
 		return acc;
 	}, {});
@@ -337,13 +395,14 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 	const paths: Record<string, Path> = {};
 
 	Object.entries(baseEndpoints.api).forEach(([_, value]) => {
-		if (ctx.options.disabledPaths?.includes(value.path)) return;
+		if (!value.path || ctx.options.disabledPaths?.includes(value.path)) return;
 		const options = value.options as EndpointOptions;
 		if (options.metadata?.SERVER_ONLY) return;
 		const path = toOpenApiPath(value.path);
-		if (options.method === "GET") {
+		if (options.method === "GET" || options.method === "DELETE") {
 			paths[path] = {
-				get: {
+				...paths[path],
+				[options.method.toLowerCase()]: {
 					tags: ["Default", ...(options.metadata?.openapi?.tags || [])],
 					description: options.metadata?.openapi?.description,
 					operationId: options.metadata?.openapi?.operationId,
@@ -358,10 +417,15 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 			};
 		}
 
-		if (options.method === "POST") {
+		if (
+			options.method === "POST" ||
+			options.method === "PATCH" ||
+			options.method === "PUT"
+		) {
 			const body = getRequestBody(options);
 			paths[path] = {
-				post: {
+				...paths[path],
+				[options.method.toLowerCase()]: {
 					tags: ["Default", ...(options.metadata?.openapi?.tags || [])],
 					description: options.metadata?.openapi?.description,
 					operationId: options.metadata?.openapi?.operationId,
@@ -411,13 +475,15 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 			})
 			.filter((x) => x !== null) as Endpoint[];
 		Object.entries(api).forEach(([key, value]) => {
-			if (ctx.options.disabledPaths?.includes(value.path)) return;
+			if (!value.path || ctx.options.disabledPaths?.includes(value.path))
+				return;
 			const options = value.options as EndpointOptions;
 			if (options.metadata?.SERVER_ONLY) return;
 			const path = toOpenApiPath(value.path);
-			if (options.method === "GET") {
+			if (options.method === "GET" || options.method === "DELETE") {
 				paths[path] = {
-					get: {
+					...paths[path],
+					[options.method.toLowerCase()]: {
 						tags: options.metadata?.openapi?.tags || [
 							plugin.id.charAt(0).toUpperCase() + plugin.id.slice(1),
 						],
@@ -433,9 +499,14 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 					},
 				};
 			}
-			if (options.method === "POST") {
+			if (
+				options.method === "POST" ||
+				options.method === "PATCH" ||
+				options.method === "PUT"
+			) {
 				paths[path] = {
-					post: {
+					...paths[path],
+					[options.method.toLowerCase()]: {
 						tags: options.metadata?.openapi?.tags || [
 							plugin.id.charAt(0).toUpperCase() + plugin.id.slice(1),
 						],

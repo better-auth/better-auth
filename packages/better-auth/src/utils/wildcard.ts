@@ -34,7 +34,7 @@ function escapeRegExpChar(char: string) {
 function escapeRegExpString(str: string) {
 	let result = "";
 	for (let i = 0; i < str.length; i++) {
-		result += escapeRegExpChar(str[i]);
+		result += escapeRegExpChar(str[i]!);
 	}
 	return result;
 }
@@ -95,8 +95,8 @@ function transform(
 	let result = "";
 
 	for (let s = 0; s < segments.length; s++) {
-		let segment = segments[s];
-		let nextSegment = segments[s + 1];
+		let segment = segments[s]!;
+		let nextSegment = segments[s + 1]!;
 		let currentSeparator = "";
 
 		if (!segment && s > 0) {
@@ -122,11 +122,11 @@ function transform(
 		}
 
 		for (let c = 0; c < segment.length; c++) {
-			let char = segment[c];
+			let char = segment[c]!;
 
 			if (char === "\\") {
 				if (c < segment.length - 1) {
-					result += escapeRegExpChar(segment[c + 1]);
+					result += escapeRegExpChar(segment[c + 1]!);
 					c++;
 				}
 			} else if (char === "?") {
@@ -143,8 +143,6 @@ function transform(
 
 	return result;
 }
-
-export default transform;
 
 interface WildcardMatchOptions {
 	/** Separator to be used to split patterns and samples into segments */
@@ -245,4 +243,4 @@ function wildcardMatch(
 	return fn;
 }
 
-export { wildcardMatch, isMatch };
+export { wildcardMatch };

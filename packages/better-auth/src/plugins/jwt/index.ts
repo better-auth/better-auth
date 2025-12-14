@@ -1,154 +1,75 @@
-import type {
-	BetterAuthPlugin,
-	InferOptionSchema,
-	Session,
-	User,
-} from "../../types";
-import { type Jwk, schema } from "./schema";
-import { getJwksAdapter } from "./adapter";
-import { getJwtToken } from "./sign";
-import { exportJWK, generateKeyPair, type JWK } from "jose";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
-	sessionMiddleware,
-} from "../../api";
-import { symmetricEncrypt } from "../../crypto";
+} from "@better-auth/core/api";
+import { BetterAuthError } from "@better-auth/core/error";
+import type { JSONWebKeySet, JWTPayload } from "jose";
+import * as z from "zod";
+import { APIError, sessionMiddleware } from "../../api";
 import { mergeSchema } from "../../db/schema";
+import { getJwksAdapter } from "./adapter";
+import { schema } from "./schema";
+import { getJwtToken, signJWT } from "./sign";
+import type { JwtOptions } from "./types";
+import { createJwk } from "./utils";
+import { verifyJWT as verifyJWTHelper } from "./verify";
 
-type JWKOptions =
-	| {
-			alg: "EdDSA"; // EdDSA with either Ed25519 or Ed448 curve
-			crv?: "Ed25519" | "Ed448";
-	  }
-	| {
-			alg: "ES256"; // ECDSA with P-256 curve
-			crv?: never; // Only one valid option, no need for crv
-	  }
-	| {
-			alg: "RS256"; // RSA with SHA-256
-			modulusLength?: number; // Default to 2048 or higher
-	  }
-	| {
-			alg: "PS256"; // RSA-PSS with SHA-256
-			modulusLength?: number; // Default to 2048 or higher
-	  }
-	| {
-			alg: "ECDH-ES"; // Key agreement algorithm with P-256 as default curve
-			crv?: "P-256" | "P-384" | "P-521";
-	  }
-	| {
-			alg: "ES512"; // ECDSA with P-521 curve
-			crv?: never; // Only P-521 for ES512
-	  };
+export type * from "./types";
+export { createJwk, generateExportedKeyPair } from "./utils";
+export { verifyJWT } from "./verify";
 
-export interface JwtOptions {
-	jwks?: {
-		/**
-		 * Key pair configuration
-		 * @description A subset of the options available for the generateKeyPair function
-		 *
-		 * @see https://github.com/panva/jose/blob/main/src/runtime/node/generate.ts
-		 *
-		 * @default { alg: 'EdDSA', crv: 'Ed25519' }
-		 */
-		keyPairConfig?: JWKOptions;
+const signJWTBodySchema = z.object({
+	payload: z.record(z.string(), z.any()),
+	overrideOptions: z.record(z.string(), z.any()).optional(),
+});
 
-		/**
-		 * Disable private key encryption
-		 * @description Disable the encryption of the private key in the database
-		 *
-		 * @default false
-		 */
-		disablePrivateKeyEncryption?: boolean;
-	};
+const verifyJWTBodySchema = z.object({
+	token: z.string(),
+	issuer: z.string().optional(),
+});
 
-	jwt?: {
-		/**
-		 * The issuer of the JWT
-		 */
-		issuer?: string;
-		/**
-		 * The audience of the JWT
-		 */
-		audience?: string;
-		/**
-		 * Set the "exp" (Expiration Time) Claim.
-		 *
-		 * - If a `number` is passed as an argument it is used as the claim directly.
-		 * - If a `Date` instance is passed as an argument it is converted to unix timestamp and used as the
-		 *   claim.
-		 * - If a `string` is passed as an argument it is resolved to a time span, and then added to the
-		 *   current unix timestamp and used as the claim.
-		 *
-		 * Format used for time span should be a number followed by a unit, such as "5 minutes" or "1
-		 * day".
-		 *
-		 * Valid units are: "sec", "secs", "second", "seconds", "s", "minute", "minutes", "min", "mins",
-		 * "m", "hour", "hours", "hr", "hrs", "h", "day", "days", "d", "week", "weeks", "w", "year",
-		 * "years", "yr", "yrs", and "y". It is not possible to specify months. 365.25 days is used as an
-		 * alias for a year.
-		 *
-		 * If the string is suffixed with "ago", or prefixed with a "-", the resulting time span gets
-		 * subtracted from the current unix timestamp. A "from now" suffix can also be used for
-		 * readability when adding to the current unix timestamp.
-		 *
-		 * @default 15m
-		 */
-		expirationTime?: number | string | Date;
-		/**
-		 * A function that is called to define the payload of the JWT
-		 */
-		definePayload?: (session: {
-			user: User & Record<string, any>;
-			session: Session & Record<string, any>;
-		}) => Promise<Record<string, any>> | Record<string, any>;
-		/**
-		 * A function that is called to get the subject of the JWT
-		 *
-		 * @default session.user.id
-		 */
-		getSubject?: (session: {
-			user: User & Record<string, any>;
-			session: Session & Record<string, any>;
-		}) => Promise<string> | string;
-	};
-	/**
-	 * Custom schema for the admin plugin
-	 */
-	schema?: InferOptionSchema<typeof schema>;
-}
+export const jwt = <O extends JwtOptions>(options?: O) => {
+	// Remote url must be set when using signing function
+	if (options?.jwt?.sign && !options.jwks?.remoteUrl) {
+		throw new BetterAuthError(
+			"jwks_config",
+			"jwks.remoteUrl must be set when using jwt.sign",
+		);
+	}
 
-export async function generateExportedKeyPair(
-	options?: JwtOptions,
-): Promise<{ publicWebKey: JWK; privateWebKey: JWK }> {
-	const { alg, ...cfg } = options?.jwks?.keyPairConfig ?? {
-		alg: "EdDSA",
-		crv: "Ed25519",
-	};
-	const keyPairConfig = {
-		...cfg,
-		extractable: true,
-	};
+	// Alg is required to be specified when using remote url (needed in openid metadata)
+	if (options?.jwks?.remoteUrl && !options.jwks?.keyPairConfig?.alg) {
+		throw new BetterAuthError(
+			"jwks_config",
+			"must specify alg when using the oidc plugin and jwks.remoteUrl",
+		);
+	}
 
-	const { publicKey, privateKey } = await generateKeyPair(alg, keyPairConfig);
+	const jwksPath = options?.jwks?.jwksPath ?? "/jwks";
+	if (
+		typeof jwksPath !== "string" ||
+		jwksPath.length === 0 ||
+		!jwksPath.startsWith("/") ||
+		jwksPath.includes("..")
+	) {
+		throw new BetterAuthError(
+			"jwks_config",
+			"jwksPath must be a non-empty string starting with '/' and not contain '..'",
+		);
+	}
 
-	const publicWebKey = await exportJWK(publicKey);
-	const privateWebKey = await exportJWK(privateKey);
-
-	return { publicWebKey, privateWebKey };
-}
-
-export const jwt = (options?: JwtOptions) => {
 	return {
 		id: "jwt",
+		options: options as NoInfer<O>,
 		endpoints: {
 			getJwks: createAuthEndpoint(
-				"/jwks",
+				jwksPath,
 				{
 					method: "GET",
 					metadata: {
 						openapi: {
+							operationId: "getJSONWebKeySet",
 							description: "Get the JSON Web Key Set",
 							responses: {
 								"200": {
@@ -231,62 +152,54 @@ export const jwt = (options?: JwtOptions) => {
 					},
 				},
 				async (ctx) => {
-					const adapter = getJwksAdapter(ctx.context.adapter);
-
-					const keySets = await adapter.getAllKeys();
-
-					if (keySets.length === 0) {
-						const { alg, ...cfg } = options?.jwks?.keyPairConfig ?? {
-							alg: "EdDSA",
-							crv: "Ed25519",
-						};
-						const keyPairConfig = {
-							...cfg,
-							extractable: true,
-						};
-
-						const { publicKey, privateKey } = await generateKeyPair(
-							alg,
-							keyPairConfig,
-						);
-
-						const publicWebKey = await exportJWK(publicKey);
-						const privateWebKey = await exportJWK(privateKey);
-						const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
-						const privateKeyEncryptionEnabled =
-							!options?.jwks?.disablePrivateKeyEncryption;
-						let jwk: Partial<Jwk> = {
-							publicKey: JSON.stringify({ alg, ...publicWebKey }),
-							privateKey: privateKeyEncryptionEnabled
-								? JSON.stringify(
-										await symmetricEncrypt({
-											key: ctx.context.secret,
-											data: stringifiedPrivateWebKey,
-										}),
-									)
-								: stringifiedPrivateWebKey,
-							createdAt: new Date(),
-						};
-
-						await adapter.createJwk(jwk as Jwk);
-
-						return ctx.json({
-							keys: [
-								{
-									...publicWebKey,
-									alg,
-									kid: jwk.id,
-								},
-							],
-						});
+					// Disables endpoint if using remote url strategy
+					if (options?.jwks?.remoteUrl) {
+						throw new APIError("NOT_FOUND");
 					}
 
-					return ctx.json({
-						keys: keySets.map((keySet) => ({
-							...JSON.parse(keySet.publicKey),
-							kid: keySet.id,
-						})),
+					const adapter = getJwksAdapter(ctx.context.adapter, options);
+
+					let keySets = await adapter.getAllKeys(ctx);
+
+					if (!keySets || keySets?.length === 0) {
+						await createJwk(ctx, options);
+						keySets = await adapter.getAllKeys(ctx);
+					}
+
+					if (!keySets?.length) {
+						throw new BetterAuthError(
+							"No key sets found. Make sure you have a key in your database.",
+						);
+					}
+
+					const now = Date.now();
+					const DEFAULT_GRACE_PERIOD = 60 * 60 * 24 * 30;
+					const gracePeriod =
+						(options?.jwks?.gracePeriod ?? DEFAULT_GRACE_PERIOD) * 1000;
+
+					const keys = keySets.filter((key) => {
+						if (!key.expiresAt) {
+							return true;
+						}
+						return key.expiresAt.getTime() + gracePeriod > now;
 					});
+
+					const keyPairConfig = options?.jwks?.keyPairConfig;
+					const defaultCrv = keyPairConfig
+						? "crv" in keyPairConfig
+							? (keyPairConfig as { crv: string }).crv
+							: undefined
+						: undefined;
+					return ctx.json({
+						keys: keys.map((keySet) => {
+							return {
+								alg: keySet.alg ?? options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
+								crv: keySet.crv ?? defaultCrv,
+								...JSON.parse(keySet.publicKey),
+								kid: keySet.id,
+							};
+						}),
+					} satisfies JSONWebKeySet as JSONWebKeySet);
 				},
 			),
 
@@ -298,6 +211,7 @@ export const jwt = (options?: JwtOptions) => {
 					use: [sessionMiddleware],
 					metadata: {
 						openapi: {
+							operationId: "getJSONWebToken",
 							description: "Get a JWT token",
 							responses: {
 								200: {
@@ -326,6 +240,69 @@ export const jwt = (options?: JwtOptions) => {
 					});
 				},
 			),
+			signJWT: createAuthEndpoint(
+				{
+					method: "POST",
+					metadata: {
+						$Infer: {
+							body: {} as {
+								payload: JWTPayload;
+								overrideOptions?: JwtOptions | undefined;
+							},
+						},
+					},
+					body: signJWTBodySchema,
+				},
+				async (c) => {
+					const jwt = await signJWT(c, {
+						options: {
+							...options,
+							...c.body.overrideOptions,
+						},
+						payload: c.body.payload,
+					});
+					return c.json({ token: jwt });
+				},
+			),
+			verifyJWT: createAuthEndpoint(
+				{
+					method: "POST",
+					metadata: {
+						$Infer: {
+							body: {} as {
+								token: string;
+								issuer?: string;
+							},
+							response: {} as {
+								payload: {
+									sub: string;
+									aud: string;
+									[key: string]: any;
+								} | null;
+							},
+						},
+					},
+					body: verifyJWTBodySchema,
+				},
+				async (ctx) => {
+					const overrideOptions = ctx.body.issuer
+						? {
+								...options,
+								jwt: {
+									...options?.jwt,
+									issuer: ctx.body.issuer,
+								},
+							}
+						: options;
+
+					const payload = await verifyJWTHelper(
+						ctx.body.token,
+						overrideOptions,
+					);
+
+					return ctx.json({ payload });
+				},
+			),
 		},
 		hooks: {
 			after: [
@@ -334,6 +311,10 @@ export const jwt = (options?: JwtOptions) => {
 						return context.path === "/get-session";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
+						if (options?.disableSettingJwtHeader) {
+							return;
+						}
+
 						const session = ctx.context.session || ctx.context.newSession;
 						if (session && session.session) {
 							const jwt = await getJwtToken(ctx, options);

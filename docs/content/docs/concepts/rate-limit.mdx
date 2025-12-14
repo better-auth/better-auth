@@ -109,6 +109,21 @@ export const auth = betterAuth({
 })
 ```
 
+If you like to disable rate limiting for a specific path, you can set it to `false` or return `false` from the custom rule function.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    //...other options
+    rateLimit: {
+        customRules: {
+            "/get-session": false,
+        },
+    },
+})
+```
+
 ### Storage
 
 By default, rate limit data is stored in memory, which may not be suitable for many use cases, particularly in serverless environments. To address this, you can use a database, secondary storage, or custom storage for storing rate limit data.

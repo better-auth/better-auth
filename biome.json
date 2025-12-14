@@ -1,58 +1,101 @@
 {
-	"$schema": "https://biomejs.dev/schemas/1.8.3/schema.json",
-	"formatter": {
-		"enabled": true,
-		"indentStyle": "tab"
-	},
-	"organizeImports": {
-		"enabled": false
-	},
-	"linter": {
-		"enabled": true,
-		"rules": {
-			"recommended": false,
-			"suspicious": {
-				"noImplicitAnyLet": "warn",
-				"noDuplicateObjectKeys": "warn"
-			},
-			"performance": {
-				"noDelete": "error"
-			},
-			"complexity": {
-				"noUselessSwitchCase": "warn",
-				"noUselessTypeConstraint": "warn"
-			},
-			"correctness": {
-				"noUnusedImports": "warn"
-			}
-		}
-	},
-	"overrides": [
-		{
-			"include": ["examples/svelte-kit-example/**"],
-			"linter": {
-				"rules": {
-					"correctness": {
-						"noUnusedImports": "off"
-					}
-				}
-			}
-		}
-	],
-	"files": {
-		"ignore": [
-			"dist",
-			"build",
-			".next",
-			".svelte-kit",
-			"package.json",
-			".contentlayer",
-			".turbo",
-			".nuxt",
-			".source",
-			".expo",
-			".cache",
-			"dev/cloudflare/drizzle"
-		]
-	}
+  "root": true,
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "tab"
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "style": {
+        "noRestrictedImports": {
+          "options": {
+            "paths": {
+              "zod": {
+                "importNames": ["z"],
+                "message": "Use `import * as z from \"zod\"` instead of `import { z }`."
+              }
+            }
+          },
+          "level": "error"
+        },
+        "useImportType": {
+          "level": "error",
+          "options": {
+            "style": "separatedType"
+          }
+        },
+        "useNodejsImportProtocol": "error"
+      },
+      "recommended": false,
+      "suspicious": {
+        "noImplicitAnyLet": "warn",
+        "noDuplicateObjectKeys": "warn",
+        "noTsIgnore": "error",
+        "noDebugger": "error"
+      },
+      "performance": {
+        "noDelete": "error"
+      },
+      "complexity": {
+        "useDateNow": "error",
+        "noUselessSwitchCase": "warn",
+        "noUselessTypeConstraint": "warn"
+      },
+      "correctness": {
+        "noUnusedImports": "warn",
+        "noUnusedVariables": "warn"
+      },
+      "nursery": {
+        "noMisusedPromises": "error",
+        "noFloatingPromises": "error"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["**/examples/svelte-kit-example/**"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noUnusedImports": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/*.json"],
+      "formatter": {
+        "indentStyle": "space",
+        "indentWidth": 2
+      }
+    }
+  ],
+  "files": {
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/coverage",
+      "!**/build",
+      "!**/.next",
+      "!**/.svelte-kit",
+      "!**/.contentlayer",
+      "!**/.turbo",
+      "!**/.nuxt",
+      "!**/.source",
+      "!**/.expo",
+      "!**/.cache",
+      "!**/dev/cloudflare/drizzle",
+      "!**/playwright-report",
+      "!**/.output",
+      "!**/.tmp"
+    ]
+  }
 }

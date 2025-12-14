@@ -1,7 +1,7 @@
-import Link from "next/link";
-import { Button } from "./ui/button";
 import { GitHubLogoIcon } from "@radix-ui/react-icons";
 import { ExternalLink } from "lucide-react";
+import Link from "next/link";
+import { Button } from "./ui/button";
 
 export function ForkButton({ url }: { url: string }) {
 	return (

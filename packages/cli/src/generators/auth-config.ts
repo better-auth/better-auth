@@ -1,9 +1,5 @@
-import {
-	type SupportedDatabases,
-	type SupportedPlugin,
-} from "../commands/init";
-import { logger } from "better-auth";
-import { type spinner as clackSpinner } from "@clack/prompts";
+import type { spinner as clackSpinner } from "@clack/prompts";
+import type { SupportedDatabases, SupportedPlugin } from "../commands/init";
 
 export type Import = {
 	path: string;
@@ -132,28 +128,20 @@ export async function generateAuthConfig({
 					insert_content: `${opts.pluginFunctionName}(${opts.pluginContents}),`,
 				});
 			} else {
-				let has_found_comma = false;
-				const str = opts.config
+				const pluginArrayContent = opts.config
 					.slice(start_of_plugins.index, end_of_plugins.index)
-					.split("")
-					.reverse();
-				for (let index = 0; index < str.length; index++) {
-					const char = str[index];
-					if (char === ",") {
-						has_found_comma = true;
-					}
-					if (char === ")") {
-						break;
-					}
-				}
+					.trim();
+				const isPluginArrayEmpty = pluginArrayContent === "";
+				const isPluginArrayEndsWithComma = pluginArrayContent.endsWith(",");
+				const needsComma = !isPluginArrayEmpty && !isPluginArrayEndsWithComma;
 
 				new_content = insertContent({
 					line: end_of_plugins.line,
 					character: end_of_plugins.character,
 					content: opts.config,
-					insert_content: `${!has_found_comma ? "," : ""}${
-						opts.pluginFunctionName
-					}(${opts.pluginContents})`,
+					insert_content: `${needsComma ? "," : ""}${opts.pluginFunctionName}(${
+						opts.pluginContents
+					})`,
 				});
 			}
 
@@ -166,7 +154,7 @@ export async function generateAuthConfig({
 					`Failed to generate new auth config during plugin addition phase.`,
 				);
 			}
-			return { code: await new_content, dependencies: [], envs: [] };
+			return { code: new_content, dependencies: [], envs: [] };
 		},
 		add_import: async (opts: {
 			imports: Import[];
@@ -433,7 +421,7 @@ export async function generateAuthConfig({
 					].join("\n"),
 					imports: [
 						{
-							path: "better-auth/adapters/mongo",
+							path: "better-auth/adapters/mongodb",
 							variables: [
 								{
 									name: "mongodbAdapter",
@@ -556,7 +544,7 @@ export async function generateAuthConfig({
 				`Something went wrong while generating/updating your new auth config file.`,
 				1,
 			);
-			logger.error(error.message);
+			console.error(error.message);
 			process.exit(1);
 		}
 	}
@@ -577,7 +565,7 @@ export async function generateAuthConfig({
 				`Something went wrong while generating/updating your new auth config file.`,
 				1,
 			);
-			logger.error(error.message);
+			console.error(error.message);
 			process.exit(1);
 		}
 	}

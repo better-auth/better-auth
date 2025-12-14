@@ -13,45 +13,35 @@ We need to mount the handler to a TanStack API endpoint/Server Route.
 Create a new file: `/src/routes/api/auth/$.ts`
 
 ```ts title="src/routes/api/auth/$.ts"
-import { auth } from '@/lib/auth' // import your auth instance
-import { createServerFileRoute } from '@tanstack/react-start/server'
+import { auth } from '@/lib/auth'
+import { createFileRoute } from '@tanstack/react-router'
 
-export const ServerRoute = createServerFileRoute('/api/auth/$').methods({
-  GET: ({ request }) => {
-    return auth.handler(request)
-  },
-  POST: ({ request }) => {
-    return auth.handler(request)
+export const Route = createFileRoute('/api/auth/$')({
+  server: {
+    handlers: {
+      GET: ({ request }) => {
+        return auth.handler(request)
+      },
+      POST: ({ request }) => {
+        return auth.handler(request)
+      },
+    },
   },
 })
-```
-
-If you haven't created your server route handler yet, you can do so by creating a file: `/src/server.ts`
-
-```ts title="src/server.ts"
-import {
-  createStartHandler,
-  defaultStreamHandler,
-} from '@tanstack/react-start/server'
-import { createRouter } from './router'
-
-export default createStartHandler({
-  createRouter,
-})(defaultStreamHandler)
 ```
 
 ### Usage tips
 
 - We recommend using the client SDK or `authClient` to handle authentication, rather than server actions with `auth.api`.
-- When you call functions that need to set cookies (like `signInEmail` or `signUpEmail`), you'll need to handle cookie setting for TanStack Start. Better Auth provides a `reactStartCookies` plugin to automatically handle this for you.
+- When you call functions that need to set cookies (like `signInEmail` or `signUpEmail`), you'll need to handle cookie setting for TanStack Start. Better Auth provides a `tanstackStartCookies` plugin to automatically handle this for you.
 
 ```ts title="src/lib/auth.ts"
 import { betterAuth } from "better-auth";
-import { reactStartCookies } from "better-auth/react-start";
+import { tanstackStartCookies } from "better-auth/tanstack-start";
 
 export const auth = betterAuth({
     //...your config
-    plugins: [reactStartCookies()] // make sure this is the last plugin in the array
+    plugins: [tanstackStartCookies()] // make sure this is the last plugin in the array
 })
 ```
 
@@ -69,3 +59,44 @@ const signIn = async () => {
     })
 }
 ```
+
+### Middleware
+
+You can use TanStack Start's middleware to protect routes that require authentication. Create a middleware that checks for a valid session and redirects unauthenticated users to the login page.
+
+```ts title="src/middleware/auth.ts"
+import { redirect } from "@tanstack/react-router";
+import { createMiddleware } from "@tanstack/react-start";
+import { auth } from "./auth";
+
+export const authMiddleware = createMiddleware().server(
+    async ({ next, request }) => {
+        const session = await auth.api.getSession({ headers: request.headers })
+
+        if (!session) {
+            throw redirect({ to: "/login" })
+        }
+
+        return await next()
+    }
+);
+```
+
+You can then use this middleware in your route definitions to protect specific routes:
+
+```tsx title="src/routes/dashboard.tsx"
+import { createFileRoute } from '@tanstack/react-router'
+import { authMiddleware } from '@/lib/middleware'
+
+export const Route = createFileRoute('/dashboard')({
+  component: RouteComponent,
+  server: {
+    middleware: [authMiddleware],
+  },
+})
+
+function RouteComponent() {
+  return <div>Hello "/dashboard"!</div>
+}
+```
+

@@ -1,72 +1,21 @@
-import * as z from "zod/v4";
-import type { FieldAttribute } from ".";
-import type { AuthPluginSchema } from "../types/plugins";
-import type { BetterAuthOptions } from "../types/options";
+import type { BetterAuthOptions } from "@better-auth/core";
+import type {
+	BetterAuthPluginDBSchema,
+	DBFieldAttribute,
+} from "@better-auth/core/db";
 import { APIError } from "better-call";
 import type { Account, Session, User } from "../types";
 
-export const accountSchema = z.object({
-	id: z.string(),
-	providerId: z.string(),
-	accountId: z.string(),
-	userId: z.coerce.string(),
-	accessToken: z.string().nullish(),
-	refreshToken: z.string().nullish(),
-	idToken: z.string().nullish(),
-	/**
-	 * Access token expires at
-	 */
-	accessTokenExpiresAt: z.date().nullish(),
-	/**
-	 * Refresh token expires at
-	 */
-	refreshTokenExpiresAt: z.date().nullish(),
-	/**
-	 * The scopes that the user has authorized
-	 */
-	scope: z.string().nullish(),
-	/**
-	 * Password is only stored in the credential provider
-	 */
-	password: z.string().nullish(),
-	createdAt: z.date().default(() => new Date()),
-	updatedAt: z.date().default(() => new Date()),
-});
+// Cache for parsed schemas to avoid reparsing on every request
+const cache = new WeakMap<
+	BetterAuthOptions,
+	Map<string, Record<string, DBFieldAttribute>>
+>();
 
-export const userSchema = z.object({
-	id: z.string(),
-	email: z.string().transform((val) => val.toLowerCase()),
-	emailVerified: z.boolean().default(false),
-	name: z.string(),
-	image: z.string().nullish(),
-	createdAt: z.date().default(() => new Date()),
-	updatedAt: z.date().default(() => new Date()),
-});
-
-export const sessionSchema = z.object({
-	id: z.string(),
-	userId: z.coerce.string(),
-	expiresAt: z.date(),
-	createdAt: z.date().default(() => new Date()),
-	updatedAt: z.date().default(() => new Date()),
-	token: z.string(),
-	ipAddress: z.string().nullish(),
-	userAgent: z.string().nullish(),
-});
-
-export const verificationSchema = z.object({
-	id: z.string(),
-	value: z.string(),
-	createdAt: z.date().default(() => new Date()),
-	updatedAt: z.date().default(() => new Date()),
-	expiresAt: z.date(),
-	identifier: z.string(),
-});
-
-export function parseOutputData<T extends Record<string, any>>(
+function parseOutputData<T extends Record<string, any>>(
 	data: T,
 	schema: {
-		fields: Record<string, FieldAttribute>;
+		fields: Record<string, DBFieldAttribute>;
 	},
 ) {
 	const fields = schema.fields;
@@ -85,8 +34,15 @@ export function parseOutputData<T extends Record<string, any>>(
 	return parsedData as T;
 }
 
-export function getAllFields(options: BetterAuthOptions, table: string) {
-	let schema: Record<string, FieldAttribute> = {
+function getAllFields(options: BetterAuthOptions, table: string) {
+	if (!cache.has(options)) {
+		cache.set(options, new Map());
+	}
+	const tableCache = cache.get(options)!;
+	if (tableCache.has(table)) {
+		return tableCache.get(table)!;
+	}
+	let schema: Record<string, DBFieldAttribute> = {
 		...(table === "user" ? options.user?.additionalFields : {}),
 		...(table === "session" ? options.session?.additionalFields : {}),
 	};
@@ -98,12 +54,16 @@ export function getAllFields(options: BetterAuthOptions, table: string) {
 			};
 		}
 	}
+	cache.get(options)!.set(table, schema);
 	return schema;
 }
 
 export function parseUserOutput(options: BetterAuthOptions, user: User) {
 	const schema = getAllFields(options, "user");
-	return parseOutputData(user, { fields: schema });
+	return {
+		...parseOutputData(user, { fields: schema }),
+		id: user.id,
+	};
 }
 
 export function parseAccountOutput(
@@ -125,40 +85,67 @@ export function parseSessionOutput(
 export function parseInputData<T extends Record<string, any>>(
 	data: T,
 	schema: {
-		fields: Record<string, FieldAttribute>;
-		action?: "create" | "update";
+		fields: Record<string, DBFieldAttribute>;
+		action?: ("create" | "update") | undefined;
 	},
 ) {
 	const action = schema.action || "create";
 	const fields = schema.fields;
-	const parsedData: Record<string, any> = {};
+	const parsedData: Record<string, any> = Object.assign(
+		Object.create(null),
+		null,
+	);
 	for (const key in fields) {
 		if (key in data) {
-			if (fields[key].input === false) {
-				if (fields[key].defaultValue) {
-					parsedData[key] = fields[key].defaultValue;
-					continue;
+			if (fields[key]!.input === false) {
+				if (fields[key]!.defaultValue !== undefined) {
+					if (action !== "update") {
+						parsedData[key] = fields[key]!.defaultValue;
+						continue;
+					}
+				}
+				if (data[key]) {
+					throw new APIError("BAD_REQUEST", {
+						message: `${key} is not allowed to be set`,
+					});
 				}
 				continue;
 			}
-			if (fields[key].validator?.input && data[key] !== undefined) {
-				parsedData[key] = fields[key].validator.input.parse(data[key]);
+			if (fields[key]!.validator?.input && data[key] !== undefined) {
+				const result = fields[key]!.validator.input["~standard"].validate(
+					data[key],
+				);
+				if (result instanceof Promise) {
+					throw new APIError("INTERNAL_SERVER_ERROR", {
+						message: "Async validation is not supported for additional fields",
+					});
+				}
+				if ("issues" in result && result.issues) {
+					throw new APIError("BAD_REQUEST", {
+						message: result.issues[0]?.message || "Validation Error",
+					});
+				}
+				parsedData[key] = result.value;
 				continue;
 			}
-			if (fields[key].transform?.input && data[key] !== undefined) {
-				parsedData[key] = fields[key].transform?.input(data[key]);
+			if (fields[key]!.transform?.input && data[key] !== undefined) {
+				parsedData[key] = fields[key]!.transform?.input(data[key]);
 				continue;
 			}
 			parsedData[key] = data[key];
 			continue;
 		}
 
-		if (fields[key].defaultValue && action === "create") {
-			parsedData[key] = fields[key].defaultValue;
+		if (fields[key]!.defaultValue !== undefined && action === "create") {
+			if (typeof fields[key]!.defaultValue === "function") {
+				parsedData[key] = fields[key]!.defaultValue();
+				continue;
+			}
+			parsedData[key] = fields[key]!.defaultValue;
 			continue;
 		}
 
-		if (fields[key].required && action === "create") {
+		if (fields[key]!.required && action === "create") {
 			throw new APIError("BAD_REQUEST", {
 				message: `${key} is required`,
 			});
@@ -169,16 +156,16 @@ export function parseInputData<T extends Record<string, any>>(
 
 export function parseUserInput(
 	options: BetterAuthOptions,
-	user?: Record<string, any>,
-	action?: "create" | "update",
+	user: Record<string, any> = {},
+	action: "create" | "update",
 ) {
 	const schema = getAllFields(options, "user");
-	return parseInputData(user || {}, { fields: schema, action });
+	return parseInputData(user, { fields: schema, action });
 }
 
 export function parseAdditionalUserInput(
 	options: BetterAuthOptions,
-	user?: Record<string, any>,
+	user?: Record<string, any> | undefined,
 ) {
 	const schema = getAllFields(options, "user");
 	return parseInputData(user || {}, { fields: schema });
@@ -200,16 +187,22 @@ export function parseSessionInput(
 	return parseInputData(session, { fields: schema });
 }
 
-export function mergeSchema<S extends AuthPluginSchema>(
+export function mergeSchema<S extends BetterAuthPluginDBSchema>(
 	schema: S,
-	newSchema?: {
-		[K in keyof S]?: {
-			modelName?: string;
-			fields?: {
-				[P: string]: string;
-			};
-		};
-	},
+	newSchema?:
+		| {
+				[K in keyof S]?:
+					| {
+							modelName?: string | undefined;
+							fields?:
+								| {
+										[P: string]: string;
+								  }
+								| undefined;
+					  }
+					| undefined;
+		  }
+		| undefined,
 ) {
 	if (!newSchema) {
 		return schema;
@@ -217,14 +210,14 @@ export function mergeSchema<S extends AuthPluginSchema>(
 	for (const table in newSchema) {
 		const newModelName = newSchema[table]?.modelName;
 		if (newModelName) {
-			schema[table].modelName = newModelName;
+			schema[table]!.modelName = newModelName;
 		}
-		for (const field in schema[table].fields) {
+		for (const field in schema[table]!.fields) {
 			const newField = newSchema[table]?.fields?.[field];
 			if (!newField) {
 				continue;
 			}
-			schema[table].fields[field].fieldName = newField;
+			schema[table]!.fields[field]!.fieldName = newField;
 		}
 	}
 	return schema;

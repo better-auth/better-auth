@@ -1,8 +1,15 @@
 "use client";
 
+import { ChevronDownIcon, PlusIcon } from "@radix-ui/react-icons";
+import { AnimatePresence, motion } from "framer-motion";
+import { Loader2, MailPlus } from "lucide-react";
+import Image from "next/image";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import CopyButton from "@/components/ui/copy-button";
 import {
 	Dialog,
 	DialogClose,
@@ -33,14 +40,7 @@ import {
 	useListOrganizations,
 	useSession,
 } from "@/lib/auth-client";
-import { ActiveOrganization, Session } from "@/lib/auth-types";
-import { ChevronDownIcon, PlusIcon } from "@radix-ui/react-icons";
-import { Loader2, MailPlus } from "lucide-react";
-import { useState, useEffect } from "react";
-import { toast } from "sonner";
-import { AnimatePresence, motion } from "framer-motion";
-import CopyButton from "@/components/ui/copy-button";
-import Image from "next/image";
+import type { ActiveOrganization, Session } from "@/lib/auth-types";
 
 export function OrganizationCard(props: {
 	session: Session | null;
@@ -82,7 +82,7 @@ export function OrganizationCard(props: {
 						</DropdownMenuTrigger>
 						<DropdownMenuContent align="start">
 							<DropdownMenuItem
-								className=" py-1"
+								className="py-1"
 								onClick={async () => {
 									organization.setActive({
 										organizationId: null,
@@ -94,7 +94,7 @@ export function OrganizationCard(props: {
 							</DropdownMenuItem>
 							{organizations.data?.map((org) => (
 								<DropdownMenuItem
-									className=" py-1"
+									className="py-1"
 									key={org.id}
 									onClick={async () => {
 										if (org.id === optimisticOrg?.id) {
@@ -140,7 +140,7 @@ export function OrganizationCard(props: {
 			</CardHeader>
 			<CardContent>
 				<div className="flex gap-8 flex-col md:flex-row">
-					<div className="flex flex-col gap-2 flex-grow">
+					<div className="flex flex-col gap-2 grow">
 						<p className="font-medium border-b-2 border-b-foreground/10">
 							Members
 						</p>
@@ -202,7 +202,7 @@ export function OrganizationCard(props: {
 							)}
 						</div>
 					</div>
-					<div className="flex flex-col gap-2 flex-grow">
+					<div className="flex flex-col gap-2 grow">
 						<p className="font-medium border-b-2 border-b-foreground/10">
 							Invites
 						</p>
@@ -451,10 +451,8 @@ function InviteMemberDialog({
 	setOptimisticOrg: (org: ActiveOrganization | null) => void;
 	optimisticOrg: ActiveOrganization | null;
 }) {
-	const [open, setOpen] = useState(false);
 	const [email, setEmail] = useState("");
 	const [role, setRole] = useState("member");
-	const [loading, setLoading] = useState(false);
 	return (
 		<Dialog>
 			<DialogTrigger asChild>
@@ -491,7 +489,6 @@ function InviteMemberDialog({
 				<DialogFooter>
 					<DialogClose>
 						<Button
-							disabled={loading}
 							onClick={async () => {
 								const invite = organization.inviteMember({
 									email: email,

@@ -3,7 +3,7 @@ title: Options
 description: Better Auth configuration options reference.
 ---
 
-List of all the available options for configuring Better Auth. See [Better Auth Options](https://github.com/better-auth/better-auth/blob/main/packages/better-auth/src/types/options.ts#L13).
+List of all the available options for configuring Better Auth. See [Better Auth Options](https://github.com/better-auth/better-auth/blob/main/packages/core/src/types/init-options.ts).
 
 ## `appName`
 
@@ -44,7 +44,11 @@ Default: `/api/auth`
 
 ## `trustedOrigins`
 
-List of trusted origins.
+List of trusted origins. You can provide a static array of origins, a function that returns origins dynamically, or use wildcard patterns to match multiple domains.
+
+### Static Origins
+
+You can provide a static array of origins:
 
 ```ts
 import { betterAuth } from "better-auth";
@@ -52,6 +56,36 @@ export const auth = betterAuth({
 	trustedOrigins: ["http://localhost:3000", "https://example.com"],
 })
 ```
+
+### Dynamic Origins
+
+You can provide a function that returns origins dynamically:
+
+```ts
+export const auth = betterAuth({
+	trustedOrigins: async (request: Request) => {
+		// Return an array of trusted origins based on the request
+		return ["https://dynamic-origin.com"];
+	}
+})
+```
+
+### Wildcard Support
+
+You can use wildcard patterns in trusted origins:
+
+```ts
+export const auth = betterAuth({
+	trustedOrigins: [
+		"https://*.example.com", // trust all HTTPS subdomains of example.com
+		"http://*.dev.example.com" // trust all HTTP subdomains of dev.example.com
+	]
+})
+```
+
+<Callout type="warn">
+  Make sure to provide the protocol prefix when using wildcard patterns. For example, `https://*.example.com` instead of `*.example.com`.
+</Callout>
 
 ## `secret`
 
@@ -189,12 +223,12 @@ export const auth = betterAuth({
 		google: {
 			clientId: "your-client-id",
 			clientSecret: "your-client-secret",
-			redirectUri: "https://example.com/api/auth/callback/google"
+			redirectURI: "https://example.com/api/auth/callback/google"
 		},
 		github: {
 			clientId: "your-client-id",
 			clientSecret: "your-client-secret",
-			redirectUri: "https://example.com/api/auth/callback/github"
+			redirectURI: "https://example.com/api/auth/callback/github"
 		}
 	},
 })
@@ -239,9 +273,10 @@ export const auth = betterAuth({
 		},
 		changeEmail: {
 			enabled: true,
-			sendChangeEmailVerification: async ({ user, newEmail, url, token }) => {
-				// Send change email verification
-			}
+			sendChangeEmailConfirmation: async ({ user, newEmail, url, token }) => {
+				// Send change email confirmation to the old email
+			},
+			updateEmailWithoutVerification: false // Update email without verification if user is not verified
 		},
 		deleteUser: {
 			enabled: true,
@@ -317,6 +352,7 @@ export const auth = betterAuth({
 			userId: "user_id"
 		},
 		encryptOAuthTokens: true, // Encrypt OAuth tokens before storing them in the database
+		storeAccountCookie: true, // Store account data after OAuth flow in a cookie (useful for database-less flows)
 		accountLinking: {
 			enabled: true,
 			trustedProviders: ["google", "github", "email-password"],
@@ -337,6 +373,13 @@ Encrypt OAuth tokens before storing them in the database. Default: `false`.
 
 If enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)
 will be updated on sign in with the latest data from the provider.
+
+### `storeAccountCookie`
+
+Store account data after OAuth flow in a cookie. This is useful for database-less flows where you want to store account information (access tokens, refresh tokens, etc.) in a cookie instead of the database.
+
+- Default: `false`
+- Automatically set to `true` if no database is provided
 
 ### `accountLinking`
 
@@ -431,18 +474,21 @@ export const auth = betterAuth({
 			httpOnly: true,
 			secure: true
 		},
+		// OAuth state configuration has been moved to account option
+		// Use account.storeStateStrategy and account.skipStateCookieCheck instead
 		cookiePrefix: "myapp",
 		database: {
-			// If your DB is using auto-incrementing IDs, set this to true.
-			useNumberId: false,
-			// Use your own custom ID generator, or disable generating IDs as a whole.
+			// Use your own custom ID generator,
+			// disable generating IDS so your database will generate them,
+			// or use "serial" to use your database's auto-incrementing ID, or "uuid" to use a random UUID.
 			generateId: (((options: {
 				model: LiteralUnion<Models, string>;
 				size?: number;
 			}) => {
 				return "my-super-unique-id";
-			})) | false,
+			})) | false | "serial" | "uuid",
 			defaultFindManyLimit: 100,
+			experimentalJoins: false,
 		}
 	},
 })
@@ -455,7 +501,8 @@ export const auth = betterAuth({
 - `cookies`: Customize cookie names and attributes
 - `defaultCookieAttributes`: Default attributes for all cookies
 - `cookiePrefix`: Prefix for cookies
-- `generateId`: Function to generate a unique ID for a model
+- `database`: Database configuration options
+- OAuth state configuration options (`storeStateStrategy`, `skipStateCookieCheck`) are now part of the `account` option
 
 ## `logger`
 
@@ -466,6 +513,7 @@ import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	logger: {
 		disabled: false,
+		disableColors: false,
 		level: "error",
 		log: (level, message, ...args) => {
 			// Custom logging implementation
@@ -478,6 +526,7 @@ export const auth = betterAuth({
 The logger configuration allows you to customize how Better Auth handles logging. It supports the following options:
 
 - `disabled`: Disable all logging when set to `true` (default: `false`)
+- `disableColors`: Disable colors in the default logger implementation (default: determined by the terminal's color support)
 - `level`: Set the minimum log level to display. Available levels are:
   - `"info"`: Show all logs
   - `"warn"`: Show warnings and errors
@@ -562,7 +611,39 @@ export const auth = betterAuth({
 			// Custom error handling
 			console.error("Auth error:", error);
 		},
-		errorURL: "/auth/error"
+		errorURL: "/auth/error",
+		customizeDefaultErrorPage: {
+			colors: {
+				background: "#ffffff",
+				foreground: "#000000",
+				primary: "#0070f3",
+				primaryForeground: "#ffffff",
+				mutedForeground: "#666666",
+				border: "#e0e0e0",
+				destructive: "#ef4444",
+				titleBorder: "#0070f3",
+				titleColor: "#000000",
+				gridColor: "#f0f0f0",
+				cardBackground: "#ffffff",
+				cornerBorder: "#0070f3"
+			},
+			size: {
+				radiusSm: "0.25rem",
+				radiusMd: "0.5rem",
+				radiusLg: "1rem",
+				textSm: "0.875rem",
+				text2xl: "1.5rem",
+				text4xl: "2.25rem",
+				text6xl: "3.75rem"
+			},
+			font: {
+				defaultFamily: "system-ui, sans-serif",
+				monoFamily: "monospace"
+			},
+			disableTitleBorder: false,
+			disableCornerDecorations: false,
+			disableBackgroundGrid: false
+		}
 	},
 })
 ```
@@ -570,6 +651,34 @@ export const auth = betterAuth({
 - `throw`: Throw an error on API error (default: `false`)
 - `onError`: Custom error handler
 - `errorURL`: URL to redirect to on error (default: `/api/auth/error`)
+- `customizeDefaultErrorPage`: Configure the default error page provided by Better Auth. Start your dev server and go to `/api/auth/error` to see the error page.
+  - `colors`: Customize color scheme for the error page
+    - `background`: Background color
+    - `foreground`: Foreground/text color
+    - `primary`: Primary accent color
+    - `primaryForeground`: Text color on primary background
+    - `mutedForeground`: Muted text color
+    - `border`: Border color
+    - `destructive`: Error/destructive color
+    - `titleBorder`: Border color for the title
+    - `titleColor`: Title text color
+    - `gridColor`: Background grid color
+    - `cardBackground`: Card background color
+    - `cornerBorder`: Corner decoration border color
+  - `size`: Customize sizing and spacing
+    - `radiusSm`: Small border radius
+    - `radiusMd`: Medium border radius
+    - `radiusLg`: Large border radius
+    - `textSm`: Small text size
+    - `text2xl`: 2xl text size
+    - `text4xl`: 4xl text size
+    - `text6xl`: 6xl text size
+  - `font`: Customize font families
+    - `defaultFamily`: Default font family
+    - `monoFamily`: Monospace font family
+  - `disableTitleBorder`: Disable the border around the title (default: `false`)
+  - `disableCornerDecorations`: Disable corner decorations (default: `false`)
+  - `disableBackgroundGrid`: Disable the background grid pattern (default: `false`)
 
 ## `hooks`
 
@@ -606,16 +715,15 @@ export const auth = betterAuth({
 })
 ```
 
-## `customPaths`
+## `telemetry`
 
-Customize specific auth paths. This allows you to map any existing route to a custom path.
+Enable or disable Better Auth's telemetry collection. (default: `false`)
 
 ```ts
 import { betterAuth } from "better-auth";
 export const auth = betterAuth({
-	customPaths: {
-		"/ok": "/okay",
-	},
+  telemetry: {
+    enabled: false,
+  }
 })
 ```
-

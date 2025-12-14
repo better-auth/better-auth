@@ -1,10 +1,10 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
+import { KJUR } from "jsrsasign";
+import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
-import { KJUR } from "jsrsasign";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+
 // Zod schema for validation
 const appleJwtSchema = z.object({
 	teamId: z.string().min(1, { message: "Team ID is required." }),
@@ -43,7 +44,7 @@ type AppleJwtFormValues = z.infer<typeof appleJwtSchema>;
 export const GenerateAppleJwt = () => {
 	const [generatedJwt, setGeneratedJwt] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
-	const [isLoading, setIsLoading] = useState(false);
+	const [isLoading, startTransition] = useTransition();
 
 	const form = useForm<AppleJwtFormValues>({
 		resolver: zodResolver(appleJwtSchema),
@@ -56,48 +57,56 @@ export const GenerateAppleJwt = () => {
 	});
 
 	const onSubmit = async (data: AppleJwtFormValues) => {
-		setIsLoading(true);
 		setGeneratedJwt(null);
 		setError(null);
+		startTransition(() => {
+			try {
+				//normalize the private key by replacing \r\n with \n and trimming whitespace just in-case lol
+				const normalizedKey = data.privateKey.replace(/\r\n/g, "\n").trim();
 
-		try {
-			//normalize the private key by replacing \r\n with \n and trimming whitespace just incase lol
-			const normalizedKey = data.privateKey.replace(/\r\n/g, "\n").trim();
+				//since jose is not working with safari, we are using jsrsasign
 
-			//since jose is not working with safari, we are using jsrsasign
+				const header = {
+					alg: "ES256",
+					kid: data.keyId,
+					typ: "JWT",
+				};
 
-			const header = {
-				alg: "ES256",
-				kid: data.keyId,
-				typ: "JWT",
-			};
+				const issuedAtSeconds = Math.floor(Date.now() / 1000);
+				/**
+				 * Apple allows a maximum expiration of 6 months (180 days) for the client secret JWT.
+				 *
+				 * @see {@link https://developer.apple.com/documentation/accountorganizationaldatasharing/creating-a-client-secret}
+				 */
+				const expirationSeconds = issuedAtSeconds + 180 * 24 * 60 * 60; // 180 days. Should we let the user choose this ? MAX is 6 months
 
-			const issuedAtSeconds = Math.floor(Date.now() / 1000);
-			const expirationSeconds = issuedAtSeconds + 180 * 24 * 60 * 60; // 180 days. Should we let the user choose this ? MAX is 6 months
+				const payload = {
+					iss: data.teamId, // Issuer (Team ID)
+					aud: "https://appleid.apple.com", // Audience
+					sub: data.clientId, // Subject (Client ID -> Service ID)
+					iat: issuedAtSeconds, // Issued At timestamp
+					exp: expirationSeconds, // Expiration timestamp
+				};
 
-			const payload = {
-				iss: data.teamId, // Issuer (Team ID)
-				aud: "https://appleid.apple.com", // Audience
-				sub: data.clientId, // Subject (Client ID -> Service ID)
-				iat: issuedAtSeconds, // Issued At timestamp
-				exp: expirationSeconds, // Expiration timestamp
-			};
+				const sHeader = JSON.stringify(header);
+				const sPayload = JSON.stringify(payload);
 
-			const sHeader = JSON.stringify(header);
-			const sPayload = JSON.stringify(payload);
-
-			const jwt = KJUR.jws.JWS.sign("ES256", sHeader, sPayload, normalizedKey);
-			setGeneratedJwt(jwt);
-		} catch (err: any) {
-			console.error("JWT Generation Error:", err);
-			setError(
-				`Failed to generate JWT: ${
-					err.message || "Unknown error"
-				}. Check key format and details.`,
-			);
-		} finally {
-			setIsLoading(false);
-		}
+				const jwt = KJUR.jws.JWS.sign(
+					"ES256",
+					sHeader,
+					sPayload,
+					normalizedKey,
+				);
+				setGeneratedJwt(jwt);
+			} catch (err: any) {
+				console.error("JWT Generation Error:", err);
+				setError(
+					`Failed to generate JWT: ${
+						err.message || "Unknown error"
+					}. Check key format and details.`,
+				);
+			}
+		});
 	};
 
 	const copyToClipboard = () => {

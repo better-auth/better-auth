@@ -2,45 +2,70 @@ name: Release
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - 'v*'
 
 permissions:
-  contents: read
-  # note: no write permissions are needed since the workflow uses GH_ACCESS_TOKEN instead of GITHUB_TOKEN
+  contents: write
+  id-token: write
 
 jobs:
   release:
-    if: ${{ github.repository_owner == 'better-auth' }}
-    name: Create a PR for release workflow
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           fetch-depth: 0
-          # See https://github.com/changesets/action/issues/187
-          token: ${{ secrets.GH_ACCESS_TOKEN }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
         with:
-          node-version: 20.x
-        
-      - uses: pnpm/action-setup@v4
+          node-version: 22.x
+
+      - run: npx changelogithub
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+        with:
+          node-version: 22.x
+          registry-url: 'https://registry.npmjs.org'
 
       - run: pnpm install
-      
+
       - name: Build
         run: pnpm build
 
-      - name: Create Version PR or Publish to NPM
-        id: changesets
-        uses: changesets/action@v1
-        with:
-          commit: "chore(release): version packages"
-          title: "chore(release): version packages"
-          version: node .github/changeset-version.js
-          publish: npx changeset publish
+      - name: Determine npm tag
+        id: determine_npm_tag
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          if [[ "$TAG" =~ -(next|canary|beta|rc) ]]; then
+            # Extract pre-release tag (e.g., beta, rc)
+            NPM_TAG=${BASH_REMATCH[1]}
+          else
+            # Check if the commit is on the main branch or a version branch
+            git fetch origin main
+            CURRENT_BRANCH=$(git branch -r --contains "$GITHUB_SHA" | grep -E 'origin/(main|v[0-9]+\.[0-9]+\.x-latest)' | head -1 | sed 's/.*origin\///')
+
+            if [[ "$CURRENT_BRANCH" == "main" ]]; then
+              NPM_TAG="latest"
+            elif [[ "$CURRENT_BRANCH" =~ ^v[0-9]+\.[0-9]+\.x-latest$ ]]; then
+              # For version branches like v1.3.x-latest, v1.4.x-latest, use "latest" tag
+              NPM_TAG="latest"
+            else
+              echo "The tagged commit is not on the main branch or a version branch (v*.*.x-latest)."
+              echo "::error ::Releases with the 'latest' npm tag must be on the main branch or a version branch."
+              exit 1
+            fi
+          fi
+          echo "npm_tag=$NPM_TAG" >> $GITHUB_OUTPUT
+          echo "Using npm tag: $NPM_TAG"
+
+      - name: Publish to npm
+        run: pnpm -r publish --access public --no-git-checks --tag ${{ steps.determine_npm_tag.outputs.npm_tag }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_ACCESS_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_ACCESS_TOKEN }}
-          NODE_ENV: "production"
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: true

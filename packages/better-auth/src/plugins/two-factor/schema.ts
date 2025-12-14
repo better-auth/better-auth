@@ -1,4 +1,4 @@
-import type { AuthPluginSchema } from "../../types";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 
 export const schema = {
 	user: {
@@ -17,6 +17,7 @@ export const schema = {
 				type: "string",
 				required: true,
 				returned: false,
+				index: true,
 			},
 			backupCodes: {
 				type: "string",
@@ -31,7 +32,8 @@ export const schema = {
 					model: "user",
 					field: "id",
 				},
+				index: true,
 			},
 		},
 	},
-} satisfies AuthPluginSchema;
+} satisfies BetterAuthPluginDBSchema;

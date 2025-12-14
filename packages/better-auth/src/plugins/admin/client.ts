@@ -1,21 +1,25 @@
-import type { BetterAuthClientPlugin } from "../../types";
-import { type AccessControl, type Role } from "../access";
-import { adminAc, defaultStatements, userAc } from "./access";
+import type { BetterAuthClientPlugin } from "@better-auth/core";
+import type { AccessControl, Role } from "../access";
+import type { defaultStatements } from "./access";
+import { adminAc, userAc } from "./access";
 import type { admin } from "./admin";
 import { hasPermission } from "./has-permission";
 
 interface AdminClientOptions {
-	ac?: AccessControl;
-	roles?: {
-		[key in string]: Role;
-	};
+	ac?: AccessControl | undefined;
+	roles?:
+		| {
+				[key in string]: Role;
+		  }
+		| undefined;
 }
 
-export const adminClient = <O extends AdminClientOptions>(options?: O) => {
+export const adminClient = <O extends AdminClientOptions>(
+	options?: O | undefined,
+) => {
 	type DefaultStatements = typeof defaultStatements;
-	type Statements = O["ac"] extends AccessControl<infer S>
-		? S
-		: DefaultStatements;
+	type Statements =
+		O["ac"] extends AccessControl<infer S> ? S : DefaultStatements;
 	type PermissionType = {
 		[key in keyof Statements]?: Array<
 			Statements[key] extends readonly unknown[]
@@ -29,11 +33,11 @@ export const adminClient = <O extends AdminClientOptions>(options?: O) => {
 				 * @deprecated Use `permissions` instead
 				 */
 				permission: PermissionType;
-				permissions?: never;
+				permissions?: never | undefined;
 		  }
 		| {
 				permissions: PermissionType;
-				permission?: never;
+				permission?: never | undefined;
 		  };
 
 	const roles = {
@@ -86,3 +90,5 @@ export const adminClient = <O extends AdminClientOptions>(options?: O) => {
 		},
 	} satisfies BetterAuthClientPlugin;
 };
+
+export type * from "./types";

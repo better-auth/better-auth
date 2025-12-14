@@ -1,13 +1,17 @@
-import type { BetterAuthClientPlugin } from "../../client/types";
-import type { twoFactor as twoFa } from "../../plugins/two-factor";
+import type { BetterAuthClientPlugin } from "@better-auth/core";
+import type { twoFactor as twoFa } from ".";
 
-export const twoFactorClient = (options?: {
-	/**
-	 * a redirect function to call if a user needs to verify
-	 * their two factor
-	 */
-	onTwoFactorRedirect?: () => void | Promise<void>;
-}) => {
+export const twoFactorClient = (
+	options?:
+		| {
+				/**
+				 * a redirect function to call if a user needs to verify
+				 * their two factor
+				 */
+				onTwoFactorRedirect?: () => void | Promise<void>;
+		  }
+		| undefined,
+) => {
 	return {
 		id: "two-factor",
 		$InferServerPlugin: {} as ReturnType<typeof twoFa>,
@@ -40,3 +44,8 @@ export const twoFactorClient = (options?: {
 		],
 	} satisfies BetterAuthClientPlugin;
 };
+
+export type * from "./backup-codes";
+export type * from "./otp";
+export type * from "./totp";
+export type * from "./types";
