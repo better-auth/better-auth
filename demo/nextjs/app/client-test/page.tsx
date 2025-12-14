@@ -14,12 +14,14 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useSignOutMutation } from "@/data/user/sign-out-mutation";
 import { authClient } from "@/lib/auth-client";
 
 export default function Page() {
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [loading, startTransition] = useTransition();
+	const signOutMutation = useSignOutMutation();
 
 	// Get the session data using the useSession hook
 	const { data: session, isPending, error } = authClient.useSession();
@@ -163,17 +165,14 @@ export default function Page() {
 							<Button
 								variant="outline"
 								className="w-full"
-								onClick={() =>
-									authClient.signOut({
-										fetchOptions: {
-											onSuccess: () => {
-												toast.success("Successfully signed out!");
-											},
-										},
-									})
-								}
+								onClick={() => signOutMutation.mutate()}
+								disabled={signOutMutation.isPending}
 							>
-								Sign Out
+								{signOutMutation.isPending ? (
+									<Loader2 className="animate-spin" size={16} />
+								) : (
+									"Sign Out"
+								)}
 							</Button>
 						</CardFooter>
 					)}
