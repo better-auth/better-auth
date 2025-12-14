@@ -36,14 +36,13 @@ export default function Page() {
 							</AlertDescription>
 						</Alert>
 					</CardContent>
-					<CardFooter>
-						<Button
-							variant="outline"
-							className="w-full"
-							onClick={() => setIsSubmitted(false)}
-						>
-							<ArrowLeft className="mr-2 h-4 w-4" /> Back to reset password
-						</Button>
+					<CardFooter className="flex justify-center">
+						<Link href="/sign-in">
+							<Button variant="link" className="px-0 gap-2">
+								<ArrowLeft size={15} />
+								Back to sign in
+							</Button>
+						</Link>
 					</CardFooter>
 				</Card>
 			</main>
@@ -64,7 +63,8 @@ export default function Page() {
 				</CardContent>
 				<CardFooter className="flex justify-center">
 					<Link href="/sign-in">
-						<Button variant="link" className="px-0">
+						<Button variant="link" className="px-0 gap-2">
+							<ArrowLeft size={15} />
 							Back to sign in
 						</Button>
 					</Link>
