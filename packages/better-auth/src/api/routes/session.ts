@@ -607,16 +607,11 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 					.map((session) => {
 						return {
 							...session,
-							token: undefined, // we don't need to return the token to the client
-							expiresAt: session.expiresAt.toISOString(),
-							createdAt: session.createdAt.toISOString(),
-							updatedAt: session.updatedAt.toISOString(),
+							token: "", // we don't need to return the token to the client
 						};
 					});
 				return ctx.json(
-					activeSessions as unknown as Prettify<
-						InferSession<Option> & { token: undefined }
-					>[],
+					activeSessions as unknown as Prettify<InferSession<Option>>[],
 				);
 			} catch (e: any) {
 				ctx.context.logger.error(e);
