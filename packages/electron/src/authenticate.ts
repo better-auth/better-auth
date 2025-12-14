@@ -2,8 +2,8 @@ import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import type { BetterFetch } from "@better-fetch/fetch";
 import { generateRandomString } from "better-auth/crypto";
-import type { ElectronClientOptions } from "./types";
 import { shell } from "electron";
+import type { ElectronClientOptions } from "./types";
 
 export const kCodeVerifier = Symbol.for("better-auth:code_verifier");
 export const kState = Symbol.for("better-auth:state");
@@ -14,7 +14,6 @@ export const kState = Symbol.for("better-auth:state");
 export function isProcessType(type: typeof process.type) {
 	return typeof process !== "undefined" && process.type === type;
 }
-
 
 /**
  * Opens the system browser to request user authentication.

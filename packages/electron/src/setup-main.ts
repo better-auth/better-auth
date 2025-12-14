@@ -1,17 +1,15 @@
 import type { BetterAuthClientOptions } from "@better-auth/core";
 import type { BetterFetch } from "@better-fetch/fetch";
+import { app, ipcMain, protocol, session } from "electron";
 import { authenticate, requestAuth } from "./authenticate";
 import type { ElectronClientOptions } from "./types";
-import { app, session, ipcMain, protocol } from "electron";
 
 /**
  * Sets up Content Security Policy (CSP) for the Electron application.
  *
  * @internal
  */
-export function setupCSP(
-	clientOptions: BetterAuthClientOptions | undefined,
-) {
+export function setupCSP(clientOptions: BetterAuthClientOptions | undefined) {
 	app.whenReady().then(() => {
 		session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
 			const origin = new URL(clientOptions?.baseURL || "", "http://localhost")

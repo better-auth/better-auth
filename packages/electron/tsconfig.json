@@ -2,7 +2,7 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "lib": ["esnext", "dom", "dom.iterable"],
-    "stripInternal": true,
+    "stripInternal": true
   },
   "references": [
     {

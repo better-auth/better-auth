@@ -4,14 +4,14 @@ import type { BetterAuthClientPlugin, ClientStore } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
 import { isDevelopment } from "@better-auth/core/env";
 import type { BetterFetchError } from "@better-fetch/fetch";
-import { requestAuth, isProcessType } from "./authenticate";
+import { contextBridge, ipcRenderer, safeStorage, webContents } from "electron";
+import { isProcessType, requestAuth } from "./authenticate";
 import {
 	getCookie,
 	getSetCookie,
 	hasBetterAuthCookies,
 	hasSessionCookieChanged,
 } from "./cookies";
-import { safeStorage, contextBridge, ipcRenderer, webContents } from "electron";
 import { registerProtocolScheme, setupCSP, setupIPCMain } from "./setup-main";
 import type { ElectronClientOptions, Storage } from "./types";
 
@@ -43,9 +43,7 @@ const storageAdapter = (storage: Storage) => {
  * setupIPC();
  * ```
  */
-export const setupIPC = (
-	opts: { namespace?: string | undefined } = {},
-) => {
+export const setupIPC = (opts: { namespace?: string | undefined } = {}) => {
 	opts.namespace ??= "better-auth";
 	contextBridge.exposeInMainWorld("requestAuth", () =>
 		ipcRenderer.invoke(`${opts.namespace}:request-auth`),
@@ -244,18 +242,16 @@ export const electronClient = (options: ElectronClientOptions) => {
 				 * app.whenReady().then(createWindow);
 				 * ```
 				 */
-				setupMain: (
-					ctx: {
-						/**
-						 * Gets the main BrowserWindow instance.
-						 */
-						window: () => Electron.BrowserWindow | null | undefined;
-						/**
-						 * Resolves a given path relative to the main process file.
-						 */
-						resolve: (path: string) => string;
-					},
-				) => {
+				setupMain: (ctx: {
+					/**
+					 * Gets the main BrowserWindow instance.
+					 */
+					window: () => Electron.BrowserWindow | null | undefined;
+					/**
+					 * Resolves a given path relative to the main process file.
+					 */
+					resolve: (path: string) => string;
+				}) => {
 					if (!isProcessType("browser")) {
 						throw new Error("`setupMain` is not running in the main process");
 					}
