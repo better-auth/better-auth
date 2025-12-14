@@ -57,6 +57,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import { useSignOutMutation } from "@/data/user/sign-out-mutation";
 import type { Session } from "@/lib/auth";
 import { authClient } from "@/lib/auth-client";
 import { Component } from "./change-plan";
@@ -67,6 +68,7 @@ export default function UserCard(props: {
 	subscription?: Subscription;
 }) {
 	const router = useRouter();
+	const signOutMutation = useSignOutMutation();
 	const { data } = authClient.useSession();
 	const session = data || props.session;
 	const [isTerminating, setIsTerminating] = useState<string>();
@@ -488,21 +490,17 @@ export default function UserCard(props: {
 					<Button
 						className="gap-2 z-10"
 						variant="secondary"
-						onClick={async () => {
-							setIsSignOut(true);
-							await authClient.signOut({
-								fetchOptions: {
-									onSuccess() {
-										router.push("/");
-									},
+						onClick={() => {
+							signOutMutation.mutate(undefined, {
+								onSuccess: () => {
+									router.push("/");
 								},
 							});
-							setIsSignOut(false);
 						}}
-						disabled={isSignOut}
+						disabled={signOutMutation.isPending}
 					>
 						<span className="text-sm">
-							{isSignOut ? (
+							{signOutMutation.isPending ? (
 								<Loader2 size={15} className="animate-spin" />
 							) : (
 								<div className="flex items-center gap-2">
