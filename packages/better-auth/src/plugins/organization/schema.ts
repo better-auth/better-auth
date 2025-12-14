@@ -278,7 +278,36 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 									}
 								: {});
 					};
-				};
+				} & (O extends
+					| { keepActiveOrganization: true }
+					| { teams: { enabled: true; keepActiveTeam: true } }
+					? {
+							user: {
+								fields: InferSchema<
+									O["schema"] extends BetterAuthPluginDBSchema
+										? O["schema"]
+										: {},
+									"user",
+									{
+										lastOrganizationId: {
+											type: "string";
+											required: false;
+											input: false;
+										};
+									}
+								>["fields"] &
+									(O extends { teams: { enabled: true; keepActiveTeam: true } }
+										? {
+												lastTeamId: {
+													type: "string";
+													required: false;
+													input: false;
+												};
+											}
+										: {});
+							};
+						}
+					: {});
 
 export const roleSchema = z.string();
 export const invitationStatus = z
