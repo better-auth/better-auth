@@ -6,13 +6,14 @@ import { useState, useTransition } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { useSessionQuery } from "@/data/user/session-query";
 import { authClient } from "@/lib/auth-client";
 
 export default function Page() {
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const userCode = searchParams.get("user_code");
-	const { data: session } = authClient.useSession();
+	const { data: session } = useSessionQuery();
 	const [isApprovePending, startApproveTransition] = useTransition();
 	const [isDenyPending, startDenyTransition] = useTransition();
 	const [error, setError] = useState<string | null>(null);

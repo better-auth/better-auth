@@ -21,7 +21,7 @@ export type InvitationData = Awaited<ReturnType<typeof getInvitation>>;
 export const useInvitationQuery = (invitationId: string) => {
 	return useQuery({
 		queryKey: organizationKeys.invitationDetail(invitationId),
-		queryFn: () => getInvitation({ invitationId }),
+		queryFn: async () => await getInvitation({ invitationId }),
 		enabled: !!invitationId,
 	});
 };

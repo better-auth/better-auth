@@ -35,6 +35,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { useSessionQuery } from "@/data/user/session-query";
 import type { ActiveOrganization, Session } from "@/lib/auth";
 import { authClient } from "@/lib/auth-client";
 
@@ -53,7 +54,7 @@ export function OrganizationCard(props: {
 		exit: { opacity: 0, height: 0 },
 	};
 
-	const { data } = authClient.useSession();
+	const { data } = useSessionQuery();
 	const session = data || props.session;
 
 	const currentMember = optimisticOrg?.members.find(
