@@ -30,17 +30,17 @@ export async function requestAuth(options: ElectronClientOptions) {
 
 	const state = generateRandomString(16, "A-Z", "a-z", "0-9");
 
-	const code_verifier = base64Url.encode(randomBytes(32));
-	const code_challenge = base64Url.encode(
-		await createHash("SHA-256").digest(code_verifier),
+	const codeVerifier = base64Url.encode(randomBytes(32));
+	const codeChallenge = base64Url.encode(
+		await createHash("SHA-256").digest(codeVerifier),
 	);
 
-	(globalThis as any)[kCodeVerifier] = code_verifier;
+	(globalThis as any)[kCodeVerifier] = codeVerifier;
 	(globalThis as any)[kState] = state;
 
 	const url = new URL(options.redirectURL);
 	url.searchParams.set("client_id", options.customClientID || "electron");
-	url.searchParams.set("code_challenge", code_challenge);
+	url.searchParams.set("code_challenge", codeChallenge);
 	url.searchParams.set("code_challenge_method", "S256");
 	url.searchParams.set("state", state);
 
@@ -62,12 +62,12 @@ export async function authenticate(
 	},
 	getWindow: () => Electron.BrowserWindow | null | undefined,
 ) {
-	const code_verifier = (globalThis as any)[kCodeVerifier];
+	const codeVerifier = (globalThis as any)[kCodeVerifier];
 	const state = (globalThis as any)[kState];
 	(globalThis as any)[kCodeVerifier] = undefined;
 	(globalThis as any)[kState] = undefined;
 
-	if (!code_verifier) {
+	if (!codeVerifier) {
 		throw new Error("Code verifier not found.");
 	}
 	if (!state) {
@@ -79,7 +79,7 @@ export async function authenticate(
 		body: {
 			...body,
 			state,
-			code_verifier,
+			code_verifier: codeVerifier,
 		},
 		onSuccess: (ctx) => {
 			getWindow()?.webContents.send(
