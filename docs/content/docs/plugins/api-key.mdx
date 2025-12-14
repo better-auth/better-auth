@@ -978,9 +978,11 @@ Requires `backgroundTasks.handler` to be configured in the main auth options.
     const execCtxStorage = new AsyncLocalStorage<ExecutionContext>();
 
     export const auth = betterAuth({
-      backgroundTasks: {
-        handler: (p) => execCtxStorage.getStore()?.waitUntil(p),
-      },
+      advanced: { 
+          backgroundTasks: {
+             handler: waitUntil,
+          },
+      }
       plugins: [
         apiKey({
           deferUpdates: true,
