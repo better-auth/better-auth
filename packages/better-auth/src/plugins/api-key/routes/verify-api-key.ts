@@ -192,7 +192,7 @@ export async function validateApiKey({
 					value: apiKey.id,
 				},
 			],
-			update: updated,
+			update: { ...updated, id: undefined },
 		});
 	} else if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
 		// Secondary storage with fallback: update database and then update storage
@@ -204,7 +204,7 @@ export async function validateApiKey({
 					value: apiKey.id,
 				},
 			],
-			update: updated,
+			update: { ...updated, id: undefined },
 		});
 		if (dbUpdated) {
 			await setApiKey(ctx, dbUpdated, opts);
