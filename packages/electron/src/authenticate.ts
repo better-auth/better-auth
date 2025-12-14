@@ -2,11 +2,19 @@ import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import type { BetterFetch } from "@better-fetch/fetch";
 import { generateRandomString } from "better-auth/crypto";
-import { isProcessType } from "./helper";
 import type { ElectronClientOptions } from "./types";
+import { shell } from "electron";
 
 export const kCodeVerifier = Symbol.for("better-auth:code_verifier");
 export const kState = Symbol.for("better-auth:state");
+
+/**
+ * @internal
+ */
+export function isProcessType(type: typeof process.type) {
+	return typeof process !== "undefined" && process.type === type;
+}
+
 
 /**
  * Opens the system browser to request user authentication.
@@ -14,15 +22,6 @@ export const kState = Symbol.for("better-auth:state");
  * @internal
  */
 export async function requestAuth(options: ElectronClientOptions) {
-	let shell: Electron.Shell | null = null;
-	try {
-		shell = (await import("electron")).shell;
-	} catch {
-		throw new Error(
-			"`requestAuth` can only be called in an Electron environment",
-		);
-	}
-
 	if (!isProcessType("browser")) {
 		throw new Error("`requestAuth` can only be called in the main process");
 	}

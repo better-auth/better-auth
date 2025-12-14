@@ -2,6 +2,7 @@ import type { BetterAuthClientOptions } from "@better-auth/core";
 import type { BetterFetch } from "@better-fetch/fetch";
 import { authenticate, requestAuth } from "./authenticate";
 import type { ElectronClientOptions } from "./types";
+import { app, session, ipcMain, protocol } from "electron";
 
 /**
  * Sets up Content Security Policy (CSP) for the Electron application.
@@ -9,13 +10,6 @@ import type { ElectronClientOptions } from "./types";
  * @internal
  */
 export function setupCSP(
-	{
-		app,
-		session,
-	}: {
-		app: Electron.App;
-		session: typeof Electron.Session;
-	},
 	clientOptions: BetterAuthClientOptions | undefined,
 ) {
 	app.whenReady().then(() => {
@@ -78,11 +72,10 @@ export function setupCSP(
  * @internal
  */
 export function setupIPCMain(
-	{ ipcMain }: { ipcMain: Electron.IpcMain },
 	options: ElectronClientOptions,
 	ctx: {
 		$fetch: BetterFetch;
-		getCookie: () => Promise<string>;
+		getCookie: () => string;
 	},
 ) {
 	const namespace = options.namespace || "auth";
@@ -92,7 +85,7 @@ export function setupIPCMain(
 		await ctx.$fetch("/sign-out", {
 			method: "POST",
 			headers: {
-				cookie: await ctx.getCookie(),
+				cookie: ctx.getCookie(),
 				"content-type": "application/json",
 			},
 		});
@@ -105,7 +98,6 @@ export function setupIPCMain(
  * @internal
  */
 export function registerProtocolScheme(
-	{ app, protocol }: { app: Electron.App; protocol: Electron.Protocol },
 	$fetch: BetterFetch,
 	options: ElectronClientOptions,
 	{

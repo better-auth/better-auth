@@ -5,6 +5,9 @@ interface StoredCookie {
 	expires: string | null;
 }
 
+/**
+ * @internal
+ */
 export function getSetCookie(header: string, prevCookie?: string | undefined) {
 	const parsed = parseSetCookieHeader(header);
 	let toSetCookie: Record<string, StoredCookie> = {};
@@ -56,6 +59,7 @@ export function getCookie(cookie: string) {
  * @param prevCookie - Previous cookie JSON string
  * @param newCookie - New cookie JSON string
  * @returns true if session cookies have changed, false otherwise
+ * @internal
  */
 export function hasSessionCookieChanged(
 	prevCookie: string | null,
@@ -110,6 +114,7 @@ export function hasSessionCookieChanged(
  * @param setCookieHeader - The Set-Cookie header value
  * @param cookiePrefix - The cookie prefix(es) to check for. Can be a string, array of strings, or empty string.
  * @returns true if the header contains better-auth cookies, false otherwise
+ * @internal
  */
 export function hasBetterAuthCookies(
 	setCookieHeader: string,

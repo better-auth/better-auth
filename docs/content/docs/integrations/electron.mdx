@@ -196,7 +196,7 @@ Electron is a popular framework for building cross-platform desktop applications
 
     ```ts title="electron/main.ts"
     import { authClient } from "./auth-client";
-    import electron, { app, BrowserWindow } from "electron";
+    import { app, BrowserWindow } from "electron";
     import { resolve, join } from "node:path";
 
     let win: BrowserWindow | null = null;
@@ -212,7 +212,7 @@ Electron is a popular framework for building cross-platform desktop applications
       win.loadURL("file://" + __dirname + "/index.html");
     }
 
-    authClient.setupMain(electron, {
+    authClient.setupMain({
       window: () => win,
       resolve,
     });
@@ -227,9 +227,8 @@ Electron is a popular framework for building cross-platform desktop applications
 
     ```ts title="electron/preload.ts"
     import { setupIPC } from "@better-auth/electron/client";
-    import electron from "electron";
 
-    setupIPC(electron);
+    setupIPC();
     ```
 
     <Callout type="info">
@@ -358,7 +357,7 @@ import { ipcMain } from "electron";
 import { authClient } from "./auth-client";
 
 ipcMain.handle("customBridge", async (_event, data) => {
-  const cookie = await authClient.getCookie();
+  const cookie = authClient.getCookie();
   return await authClient.someEndpoint({
     data,
     fetchOptions: {

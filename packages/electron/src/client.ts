@@ -4,27 +4,18 @@ import type { BetterAuthClientPlugin, ClientStore } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
 import { isDevelopment } from "@better-auth/core/env";
 import type { BetterFetchError } from "@better-fetch/fetch";
-import { requestAuth } from "./authenticate";
+import { requestAuth, isProcessType } from "./authenticate";
 import {
 	getCookie,
 	getSetCookie,
 	hasBetterAuthCookies,
 	hasSessionCookieChanged,
 } from "./cookies";
-import { isElectronEnv, isProcessType } from "./helper";
+import { safeStorage, contextBridge, ipcRenderer, webContents } from "electron";
 import { registerProtocolScheme, setupCSP, setupIPCMain } from "./setup-main";
 import type { ElectronClientOptions, Storage } from "./types";
 
-const storageAdapter = async (storage: Storage) => {
-	let safeStorage: Electron.SafeStorage | null = null;
-	try {
-		safeStorage = (await import("electron")).safeStorage;
-	} catch {
-		throw new Error(
-			"Failed to import Electron's safeStorage module. Ensure this code is running in the main process.",
-		);
-	}
-
+const storageAdapter = (storage: Storage) => {
 	return {
 		...storage,
 		getDecrypted: (name: string) => {
@@ -47,21 +38,15 @@ const storageAdapter = async (storage: Storage) => {
  * @example
  * ```ts
  * // preload.ts
- * import electron from "electron";
  * import { setupIPC } from "@better-auth/electron/client";
  *
- * setupIPC(electron);
+ * setupIPC();
  * ```
  */
 export const setupIPC = (
-	electron: {
-		contextBridge: Electron.ContextBridge;
-		ipcRenderer: Electron.IpcRenderer;
-	},
 	opts: { namespace?: string | undefined } = {},
 ) => {
 	opts.namespace ??= "better-auth";
-	const { contextBridge, ipcRenderer } = electron;
 	contextBridge.exposeInMainWorld("requestAuth", () =>
 		ipcRenderer.invoke(`${opts.namespace}:request-auth`),
 	);
@@ -103,7 +88,7 @@ export const electronClient = (options: ElectronClientOptions) => {
 	let store: ClientStore | null = null;
 	const cookieName = `${opts.storagePrefix}_cookie`;
 	const localCacheName = `${opts.storagePrefix}_session_data`;
-	const storage = storageAdapter(opts.storage);
+	const { getDecrypted, setEncrypted } = storageAdapter(opts.storage);
 
 	if (
 		isDevelopment() &&
@@ -124,7 +109,6 @@ export const electronClient = (options: ElectronClientOptions) => {
 				hooks: {
 					onSuccess: async (context) => {
 						const setCookie = context.response.headers.get("set-cookie");
-						const { setEncrypted, getDecrypted } = await storage;
 
 						if (setCookie) {
 							if (hasBetterAuthCookies(setCookie, opts.cookiePrefix)) {
@@ -152,14 +136,6 @@ export const electronClient = (options: ElectronClientOptions) => {
 						}
 					},
 					onError: async (context) => {
-						let webContents: typeof Electron.WebContents | null = null;
-						try {
-							webContents = (await import("electron")).webContents;
-						} catch {}
-						if (!webContents) {
-							return;
-						}
-
 						webContents
 							.getFocusedWebContents()
 							?.send(`${opts.namespace}:error`, {
@@ -169,13 +145,11 @@ export const electronClient = (options: ElectronClientOptions) => {
 					},
 				},
 				init: async (url, options) => {
-					if (!isElectronEnv() || !isProcessType("browser")) {
+					if (!isProcessType("browser")) {
 						throw new Error(
 							"Requests must be made from the Electron main process",
 						);
 					}
-
-					const { setEncrypted, getDecrypted } = await storage;
 
 					const storedCookie = getDecrypted(cookieName);
 					const cookie = getCookie(storedCookie || "{}");
@@ -209,8 +183,7 @@ export const electronClient = (options: ElectronClientOptions) => {
 		getActions: ($fetch, $store, clientOptions) => {
 			store = $store;
 
-			const getCookieFn = async () => {
-				const { getDecrypted } = await storage;
+			const getCookieFn = () => {
 				const cookie = getDecrypted(cookieName);
 				return getCookie(cookie || "{}");
 			};
@@ -224,7 +197,7 @@ export const electronClient = (options: ElectronClientOptions) => {
 				 *
 				 * @example
 				 * ```ts
-				 * const cookie = await client.getCookie();
+				 * const cookie = client.getCookie();
 				 * await fetch("https://api.example.com", {
 				 *   headers: {
 				 *    cookie,
@@ -248,7 +221,7 @@ export const electronClient = (options: ElectronClientOptions) => {
 				 * @example
 				 * ```ts
 				 * // main.ts
-				 * import electron, { app, BrowserWindow } from "electron";
+				 * import { app, BrowserWindow } from "electron";
 				 * import { join, resolve } from "node:path";
 				 * import { client } from "./auth-client";
 				 *
@@ -258,12 +231,12 @@ export const electronClient = (options: ElectronClientOptions) => {
 				 *   win = new BrowserWindow({
 				 *     webPreferences: {
 				 *       preload: join(__dirname, 'preload.mjs'),
-				 *       nodeIntegration: true,
+				 *       contextIsolation: true,
 				 *     },
 				 *   });
 				 * }
 				 *
-				 * client.setupMain(electron, {
+				 * client.setupMain({
 				 *   window: () => win,
 				 *   resolve,
 				 * });
@@ -272,12 +245,6 @@ export const electronClient = (options: ElectronClientOptions) => {
 				 * ```
 				 */
 				setupMain: (
-					electron: {
-						app: Electron.App;
-						protocol: Electron.Protocol;
-						session: typeof Electron.Session;
-						ipcMain: Electron.IpcMain;
-					},
 					ctx: {
 						/**
 						 * Gets the main BrowserWindow instance.
@@ -293,9 +260,9 @@ export const electronClient = (options: ElectronClientOptions) => {
 						throw new Error("`setupMain` is not running in the main process");
 					}
 
-					registerProtocolScheme(electron, $fetch, opts, ctx);
-					setupCSP(electron, clientOptions);
-					setupIPCMain(electron, opts, {
+					registerProtocolScheme($fetch, opts, ctx);
+					setupCSP(clientOptions);
+					setupIPCMain(opts, {
 						$fetch,
 						getCookie: getCookieFn,
 					});
