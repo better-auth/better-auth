@@ -1769,6 +1769,509 @@ export const authClient = createAuthClient({
 })
 ```
 
+### Custom Resources
+
+By default, the organization plugin provides a fixed set of resources (organization, member, invitation, team, ac) with predefined permissions. With custom resources enabled, organizations can define their own resources and permissions that are specific to their business domain.
+
+#### Enabling Custom Resources
+
+To enable custom resources, set `enableCustomResources` to `true` in the `dynamicAccessControl` configuration:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins";
+import { createAccessControl } from "better-auth/plugins/access";
+
+const ac = createAccessControl({
+  organization: ["update", "delete"],
+  member: ["create", "update", "delete"],
+  invitation: ["create", "cancel"],
+  team: ["create", "update", "delete"],
+  ac: ["create", "read", "update", "delete"],
+});
+
+export const auth = betterAuth({
+  plugins: [
+    organization({
+      ac,
+      dynamicAccessControl: {
+        enabled: true,
+        enableCustomResources: true, // [!code highlight]
+        maximumResourcesPerOrganization: 50, // [!code highlight]
+      },
+    }),
+  ],
+});
+```
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { organizationClient } from "better-auth/client/plugins";
+
+export const authClient = createAuthClient({
+  plugins: [
+    organizationClient({
+      dynamicAccessControl: {
+        enabled: true,
+        enableCustomResources: true, // [!code highlight]
+      },
+    }),
+  ],
+});
+```
+
+<Callout>
+  This will require you to run migrations to add the new `organizationResource` table to the database.
+</Callout>
+
+#### How It Works
+
+Custom resources work alongside the default resources defined in your `ac` instance:
+
+1. **Default Resources**: Resources defined in your `ac` instance are always available to all organizations. These are considered "protected" resources and cannot be modified or deleted.
+
+2. **Custom Resources**: Each organization can create additional resources specific to their needs. These resources are stored in the database and are only available to that organization.
+
+3. **Merging**: When checking permissions or creating roles, both default and custom resources are merged together. If a custom resource has the same name as a default resource, the custom one takes precedence.
+
+#### Creating a Resource
+
+To create a custom resource for an organization:
+
+<APIMethod
+  path="/organization/create-resource"
+  method="POST"
+  requireSession
+  noResult
+>
+```ts
+type createOrgResource = {
+    /**
+     * The name of the resource to create.
+     * Must be alphanumeric with underscores only.
+     * Length between 1 and 50 characters.
+     */
+    resource: string = "project"
+    /**
+     * The permissions (actions) available for this resource.
+     * Must be a non-empty array.
+     */
+    permissions: string[] = ["create", "read", "update", "delete", "archive"]
+    /**
+     * The organization ID. Defaults to the active organization.
+     */
+    organizationId?: string = "organization-id"
+}
+```
+</APIMethod>
+
+**Example Usage:**
+
+```ts
+await authClient.organization.createOrgResource({
+  resource: "project",
+  permissions: ["create", "read", "update", "delete", "archive"],
+});
+```
+
+#### Listing Resources
+
+To list all resources (both default and custom) for an organization:
+
+<APIMethod
+  path="/organization/list-resources"
+  method="GET"
+  requireSession
+  resultVariable="resources"
+>
+```ts
+type listOrgResources = {
+    /**
+     * The organization ID to list resources for. Defaults to the active organization.
+     */
+    organizationId?: string = "organization-id"
+}
+```
+</APIMethod>
+
+The response includes metadata for each resource:
+
+```ts
+{
+  resources: [
+    {
+      resource: "organization",
+      permissions: ["update", "delete"],
+      isCustom: false,
+      isProtected: true  // Cannot be modified or deleted
+    },
+    {
+      resource: "project",
+      permissions: ["create", "read", "update", "delete", "archive"],
+      isCustom: true,
+      isProtected: false  // Can be modified or deleted
+    }
+  ]
+}
+```
+
+#### Getting a Specific Resource
+
+To get details about a specific resource:
+
+<APIMethod
+  path="/organization/get-resource"
+  method="GET"
+  requireSession
+  resultVariable="resource"
+>
+```ts
+type getOrgResource = {
+    /**
+     * The name of the resource to retrieve.
+     */
+    resource: string = "project"
+    /**
+     * The organization ID. Defaults to the active organization.
+     */
+    organizationId?: string = "organization-id"
+}
+```
+</APIMethod>
+
+#### Updating a Resource
+
+To update the permissions of a custom resource:
+
+<APIMethod
+  path="/organization/update-resource"
+  method="POST"
+  requireSession
+  resultVariable="resource"
+>
+```ts
+type updateOrgResource = {
+    /**
+     * The name of the resource to update.
+     * Note: Resource names cannot be changed. Only permissions can be updated.
+     */
+    resource: string = "project"
+    /**
+     * The new permissions for this resource.
+     */
+    permissions: string[] = ["read", "write", "delete"]
+    /**
+     * The organization ID. Defaults to the active organization.
+     */
+    organizationId?: string = "organization-id"
+}
+```
+</APIMethod>
+
+<Callout type="info">
+  Resource names cannot be changed after creation. If you need to rename a resource, you must delete it and create a new one.
+</Callout>
+
+#### Deleting a Resource
+
+To delete a custom resource:
+
+<APIMethod
+  path="/organization/delete-resource"
+  method="POST"
+  requireSession
+  noResult
+>
+```ts
+type deleteOrgResource = {
+    /**
+     * The name of the resource to delete.
+     */
+    resource: string = "project"
+    /**
+     * The organization ID. Defaults to the active organization.
+     */
+    organizationId?: string = "organization-id"
+}
+```
+</APIMethod>
+
+<Callout type="warn">
+  Resources that are being used by existing roles cannot be deleted. You must first remove the resource from all roles before deleting it.
+</Callout>
+
+#### Using Custom Resources in Roles
+
+Once you've created custom resources, you can use them when creating or updating roles:
+
+```ts
+// Create a custom resource
+await authClient.organization.createOrgResource({
+  resource: "project",
+  permissions: ["create", "read", "update", "delete", "archive"],
+});
+
+// Create a role that uses the custom resource
+await authClient.organization.createOrgRole({
+  role: "project_manager",
+  permission: {
+    project: ["create", "read", "update", "archive"],
+    member: ["read"],
+  },
+});
+```
+
+#### Auto-Creating Resources with Roles
+
+When custom resources are enabled, you can create roles with resources that don't exist yet, and they will be automatically created:
+
+```ts
+// Create a role with a new resource - the "task" resource will be auto-created
+await authClient.organization.createOrgRole({
+  role: "task_manager",
+  permission: {
+    task: ["create", "read", "update", "complete"],  // "task" resource doesn't exist yet
+    project: ["read"],  // "project" must already exist
+  },
+});
+```
+
+This is particularly useful when:
+- Rapidly prototyping permission models
+- Defining roles and resources together
+- Migrating existing data structures
+
+<Callout type="info">
+  Auto-creation only works when `enableCustomResources` is `true`. The resource names must still pass validation (alphanumeric with underscores, not reserved names).
+</Callout>
+
+#### Resource Name Validation
+
+Resource names must follow these rules:
+
+- Must be alphanumeric with underscores only (uppercase and lowercase allowed)
+- Length between 1 and 50 characters
+- Cannot be a reserved name (organization, member, invitation, team, ac by default)
+
+**Valid names:**
+- `project`
+- `Project`
+- `task_123`
+- `myCustomResource`
+- `MY_RESOURCE`
+
+**Invalid names:**
+- `my-resource` (contains dash)
+- `my resource` (contains space)
+- `organization` (reserved name)
+
+#### Configuration Options
+
+The custom resources feature supports the following configuration options:
+
+##### `enableCustomResources`
+
+Enable or disable custom resources per organization. Default: `false`
+
+```ts
+organization({
+  dynamicAccessControl: {
+    enableCustomResources: true // [!code highlight]
+  }
+})
+```
+
+##### `maximumResourcesPerOrganization`
+
+Limit the number of custom resources that can be created per organization. Default: `50`
+
+```ts
+organization({
+  dynamicAccessControl: {
+    maximumResourcesPerOrganization: 20 // [!code highlight]
+  }
+})
+```
+
+You can also pass a function that returns a number:
+
+```ts
+organization({
+  dynamicAccessControl: {
+    maximumResourcesPerOrganization: async (organizationId) => { // [!code highlight]
+      const org = await getOrganization(organizationId); // [!code highlight]
+      return org.plan === "enterprise" ? 100 : 20; // [!code highlight]
+    } // [!code highlight]
+  }
+})
+```
+
+##### `reservedResourceNames`
+
+Specify custom reserved resource names that cannot be used. Default: `["organization", "member", "invitation", "team", "ac"]`
+
+```ts
+organization({
+  dynamicAccessControl: {
+    reservedResourceNames: ["system", "admin", "root"] // [!code highlight]
+  }
+})
+```
+
+##### `resourceNameValidation`
+
+Provide a custom validation function for resource names:
+
+```ts
+organization({
+  dynamicAccessControl: {
+    resourceNameValidation: (name) => { // [!code highlight]
+      if (name.startsWith("_")) { // [!code highlight]
+        return { valid: false, error: "Resource names cannot start with underscore" }; // [!code highlight]
+      } // [!code highlight]
+      return true; // [!code highlight]
+    } // [!code highlight]
+  }
+})
+```
+
+#### Permissions Required
+
+To manage custom resources, users need the following permissions from the `ac` resource:
+
+- `ac:create` - Create new resources
+- `ac:read` - List and view resources
+- `ac:update` - Update resource permissions
+- `ac:delete` - Delete resources
+
+By default, only organization owners and admins have these permissions.
+
+### Custom Role Creation Logic
+
+You can extend the default permission checking logic for role creation by providing a `canCreateRole` callback:
+
+```ts
+organization({
+  dynamicAccessControl: {
+    enabled: true,
+    canCreateRole: async ({ member, organizationId, permission, roleName }) => {
+      // Check subscription
+      const subscription = await getSubscription(organizationId);
+      if (!subscription.premium) {
+        return { 
+          allow: false, 
+          message: "Premium subscription required to create custom roles" 
+        };
+      }
+      
+      // Custom logic: Only admins can create roles with more than 5 resources
+      if (Object.keys(permission).length > 5 && member.role !== "admin") {
+        return {
+          allow: false,
+          message: "Only admins can create roles with more than 5 resources"
+        };
+      }
+      
+      // Superadmin can bypass all permission checks
+      if (member.role === "superadmin") {
+        return { allow: true, bypass: true };
+      }
+      
+      // Use default permission logic (check ac:create and delegation)
+      return { allow: true };
+    }
+  }
+})
+```
+
+The callback returns a discriminated union:
+- `{ allow: true }` - Allow and continue with default permission/delegation checks
+- `{ allow: true, bypass: true }` - Allow and skip all checks (⚠️ use with caution)
+- `{ allow: false, message: "..." }` - Deny with a custom error message
+
+#### Database Schema
+
+When custom resources are enabled, a new `organizationResource` table is added:
+
+Table Name: `organizationResource`
+
+<DatabaseTable
+  fields={[
+    {
+      name: "id",
+      type: "string",
+      description: "Unique identifier for each resource",
+      isPrimaryKey: true,
+    },
+    {
+      name: "organizationId",
+      type: "string",
+      description: "The ID of the organization",
+      isForeignKey: true,
+    },
+    {
+      name: "resource",
+      type: "string",
+      description: "The name of the resource",
+    },
+    {
+      name: "permissions",
+      type: "string",
+      description: "JSON array of available permissions for this resource",
+    },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the resource was created",
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      isOptional: true,
+      description: "Timestamp of when the resource was last updated",
+    },
+  ]}
+/>
+
+#### Use Cases
+
+Custom resources are particularly useful for:
+
+1. **Multi-tenant SaaS Applications**: Each organization can define resources specific to their workflow
+   ```ts
+   // Marketing Agency
+   resources: { campaign: ["create", "launch", "pause"], lead: ["qualify", "convert"] }
+   
+   // Software Company
+   resources: { project: ["create", "deploy"], sprint: ["start", "close"] }
+   ```
+
+2. **Domain-Specific Permissions**: Model your exact business domain
+   ```ts
+   resources: {
+     invoice: ["create", "send", "void", "refund"],
+     contract: ["draft", "review", "sign", "terminate"]
+   }
+   ```
+
+3. **Flexible Access Control**: Allow organizations to create their own permission models
+   ```ts
+   // Organization A might need
+   resources: { document: ["read", "edit", "approve", "publish"] }
+   
+   // Organization B might need
+   resources: { document: ["view", "comment", "share"] }
+   ```
+
+#### Best Practices
+
+1. **Start with defaults**: Define common resources in your `ac` instance as defaults
+2. **Document permissions**: Clearly document what each permission means for custom resources
+3. **Validate carefully**: Use `resourceNameValidation` to enforce naming conventions
+4. **Plan for growth**: Set appropriate `maximumResourcesPerOrganization` limits
+5. **Clean up unused resources**: Regularly audit and remove resources that are no longer needed
+6. **Test permission changes**: Test roles thoroughly after modifying resource permissions
+
 
 ---
 

@@ -48,6 +48,34 @@ interface OrganizationRoleDefaultFields {
 	};
 }
 
+interface OrganizationResourceDefaultFields {
+	organizationId: {
+		type: "string";
+		required: true;
+		references: {
+			model: "organization";
+			field: "id";
+		};
+	};
+	resource: {
+		type: "string";
+		required: true;
+	};
+	permissions: {
+		type: "string";
+		required: true;
+	};
+	createdAt: {
+		type: "date";
+		required: true;
+		defaultValue: Date;
+	};
+	updatedAt: {
+		type: "date";
+		required: false;
+	};
+}
+
 interface TeamDefaultFields {
 	name: {
 		type: "string";
@@ -207,15 +235,23 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 					"organizationRole",
 					OrganizationRoleDefaultFields
 				>;
-			} & {
-				session: {
-					fields: InferSchema<
-						O["schema"] extends BetterAuthPluginDBSchema ? O["schema"] : {},
-						"session",
-						SessionDefaultFields
-					>["fields"];
-				};
-			}
+			} & (O["dynamicAccessControl"] extends { enableCustomResources: true }
+				? {
+						organizationResource: InferSchema<
+							O["schema"] extends BetterAuthPluginDBSchema ? O["schema"] : {},
+							"organizationResource",
+							OrganizationResourceDefaultFields
+						>;
+					}
+				: {}) & {
+					session: {
+						fields: InferSchema<
+							O["schema"] extends BetterAuthPluginDBSchema ? O["schema"] : {},
+							"session",
+							SessionDefaultFields
+						>["fields"];
+					};
+				}
 		: {} & (O["teams"] extends { enabled: true }
 				? {
 						team: InferSchema<
@@ -341,6 +377,15 @@ export const organizationRoleSchema = z.object({
 	updatedAt: z.date().optional(),
 });
 
+export const organizationResourceSchema = z.object({
+	id: z.string().default(generateId),
+	organizationId: z.string(),
+	resource: z.string(),
+	permissions: z.array(z.string()),
+	createdAt: z.date().default(() => new Date()),
+	updatedAt: z.date().optional(),
+});
+
 export type Organization = z.infer<typeof organizationSchema>;
 export type Member = z.infer<typeof memberSchema>;
 export type TeamMember = z.infer<typeof teamMemberSchema>;
@@ -352,6 +397,7 @@ export type TeamMemberInput = z.input<typeof teamMemberSchema>;
 export type OrganizationInput = z.input<typeof organizationSchema>;
 export type TeamInput = z.infer<typeof teamSchema>;
 export type OrganizationRole = z.infer<typeof organizationRoleSchema>;
+export type OrganizationResource = z.infer<typeof organizationResourceSchema>;
 
 const defaultRoles = ["admin", "member", "owner"] as const;
 export const defaultRolesSchema = z.union([
