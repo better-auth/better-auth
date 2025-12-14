@@ -841,14 +841,10 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			const minLength = ctx.context.password.config.minPasswordLength;
 			const maxLength = ctx.context.password.config.maxPasswordLength;
 			if (ctx.body.newPassword.length < minLength) {
-				throw new APIError("BAD_REQUEST", {
-					message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
-				});
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
 			}
 			if (ctx.body.newPassword.length > maxLength) {
-				throw new APIError("BAD_REQUEST", {
-					message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
-				});
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
 			}
 			const hashedPassword = await ctx.context.password.hash(
 				ctx.body.newPassword,
