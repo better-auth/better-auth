@@ -660,6 +660,8 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 					session: s,
 					user,
 				});
+				// Delete the challenge after successful authentication to prevent replay attacks
+				await ctx.context.internalAdapter.deleteVerificationValue(challengeId);
 				return ctx.json(
 					{
 						session: s,

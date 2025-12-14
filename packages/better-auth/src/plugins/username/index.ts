@@ -573,11 +573,35 @@ export const username = (options?: UsernameOptions | undefined) => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
+
 						if (ctx.body.username && !ctx.body.displayUsername) {
 							ctx.body.displayUsername = ctx.body.username;
 						}
 						if (ctx.body.displayUsername && !ctx.body.username) {
-							ctx.body.username = ctx.body.displayUsername;
+							// When copying displayUsername to username, replace spaces with a configurable character
+							// (default: "_") and apply validation to prevent XSS and other injection attacks.
+							// You can configure the replacement character via the `spaceReplacementChar` option.
+							const spaceReplacementChar =
+								typeof options?.spaceReplacementChar === "string"
+									? options.spaceReplacementChar
+									: "_";
+							let normalizedUsername =
+								typeof ctx.body.displayUsername === "string"
+									? ctx.body.displayUsername.replace(/\s+/g, spaceReplacementChar)
+									: ctx.body.displayUsername;
+
+							// Apply username normalization (e.g., toLowerCase)
+							normalizedUsername =
+								typeof normalizedUsername === "string"
+									? normalizer(normalizedUsername)
+									: normalizedUsername;
+
+							if (typeof normalizedUsername === "string") {
+								const minUsernameLength = options?.minUsernameLength || 3;
+								const maxUsernameLength = options?.maxUsernameLength || 30;
+
+								ctx.body.username = normalizedUsername;
+							}
 						}
 					}),
 				},
