@@ -43,7 +43,13 @@ import { useOrganizationCreateMutation } from "@/data/organization/organization-
 import { useOrganizationDetailQuery } from "@/data/organization/organization-detail-query";
 import { useOrganizationListQuery } from "@/data/organization/organization-list-query";
 import { useSessionQuery } from "@/data/user/session-query";
-import type { Session } from "@/lib/auth";
+import type { OrganizationRole, Session } from "@/lib/auth";
+
+const ORGANIZATION_ROLES = {
+	OWNER: "owner",
+	ADMIN: "admin",
+	MEMBER: "member",
+} as const satisfies Record<string, OrganizationRole>;
 
 const OrganizationCard = (props: { session: Session | null }) => {
 	const { data: sessionData } = useSessionQuery();
@@ -160,9 +166,9 @@ const OrganizationCard = (props: { session: Session | null }) => {
 												</p>
 											</div>
 										</div>
-										{member.role !== "owner" &&
-											(currentMember?.role === "owner" ||
-												currentMember?.role === "admin") && (
+										{member.role !== ORGANIZATION_ROLES.OWNER &&
+											(currentMember?.role === ORGANIZATION_ROLES.OWNER ||
+												currentMember?.role === ORGANIZATION_ROLES.ADMIN) && (
 												<Button
 													size="sm"
 													variant="destructive"
@@ -411,7 +417,7 @@ function CreateOrganizationDialog() {
 
 function InviteMemberDialog() {
 	const [email, setEmail] = useState("");
-	const [role, setRole] = useState("member");
+	const [role, setRole] = useState<OrganizationRole>(ORGANIZATION_ROLES.MEMBER);
 	const inviteMutation = useInviteMemberMutation();
 	return (
 		<Dialog>
@@ -436,13 +442,16 @@ function InviteMemberDialog() {
 						onChange={(e) => setEmail(e.target.value)}
 					/>
 					<Label>Role</Label>
-					<Select value={role} onValueChange={setRole}>
+					<Select
+						value={role}
+						onValueChange={(value) => setRole(value as OrganizationRole)}
+					>
 						<SelectTrigger>
 							<SelectValue placeholder="Select a role" />
 						</SelectTrigger>
 						<SelectContent>
-							<SelectItem value="admin">Admin</SelectItem>
-							<SelectItem value="member">Member</SelectItem>
+							<SelectItem value={ORGANIZATION_ROLES.ADMIN}>Admin</SelectItem>
+							<SelectItem value={ORGANIZATION_ROLES.MEMBER}>Member</SelectItem>
 						</SelectContent>
 					</Select>
 				</div>
@@ -452,7 +461,7 @@ function InviteMemberDialog() {
 							onClick={() => {
 								inviteMutation.mutate({
 									email: email,
-									role: role as "admin" | "member",
+									role: role,
 								});
 							}}
 						>
