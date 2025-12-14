@@ -34,7 +34,6 @@ export type BaseOAuthProviderOptions = Omit<
 		| "disableImplicitSignUp"
 		| "disableSignUp"
 		| "overrideUserInfo"
-		| "refreshAccessToken"
 	>,
 	"clientSecret"
 > & {
