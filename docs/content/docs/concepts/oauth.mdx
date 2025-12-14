@@ -108,7 +108,7 @@ server-side usage:
 
 ```ts
 await auth.api.accountInfo({
-  body: { accountId: "accountId" },
+  query: { accountId: "accountId" },
   headers: // pass headers with authenticated token
 });
 ```
