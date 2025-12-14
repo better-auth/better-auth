@@ -357,6 +357,6 @@ html:not([data-anchor-scrolling]) {
 	animation: stream-pulse 1s ease-in-out infinite;
 }
 
-code {
-    @apply text-pretty break-words;
+code:not(pre code) {
+	@apply break-words;
 }
