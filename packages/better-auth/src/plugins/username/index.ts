@@ -573,11 +573,6 @@ export const username = (options?: UsernameOptions | undefined) => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const normalizer =
-							options?.usernameNormalization === false
-								? (v: string) => v
-								: options?.usernameNormalization ||
-									((v: string) => v.toLowerCase());
 
 						if (ctx.body.username && !ctx.body.displayUsername) {
 							ctx.body.displayUsername = ctx.body.username;
