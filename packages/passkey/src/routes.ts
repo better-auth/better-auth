@@ -660,6 +660,8 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 					session: s,
 					user,
 				});
+				await ctx.context.internalAdapter.deleteVerificationValue(challengeId);
+
 				return ctx.json(
 					{
 						session: s,
