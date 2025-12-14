@@ -194,9 +194,17 @@ function processZodType(zodType: z.ZodType<any>): any {
 	if (zodType instanceof z.ZodOptional) {
 		const innerType = (zodType as any)._def.innerType;
 		const innerSchema = processZodType(innerType);
+		if (innerSchema.type) {
+			const type = Array.isArray(innerSchema.type)
+				? innerSchema.type
+				: [innerSchema.type];
+			return {
+				...innerSchema,
+				type: [...type, "null"],
+			};
+		}
 		return {
-			...innerSchema,
-			nullable: true,
+			anyOf: [innerSchema, { type: "null" }],
 		};
 	}
 	// object unwrapping
