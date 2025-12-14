@@ -1,4 +1,5 @@
 import type { OAuth2Tokens, User } from "better-auth";
+import type { AuthnRequestStore } from "./authn-request-store";
 
 export interface OIDCMapping {
 	id?: string | undefined;
@@ -232,7 +233,13 @@ export interface SSOOptions {
 	 *
 	 * If you want to allow account linking for specific trusted providers, enable the `accountLinking` option in your auth config and specify those
 	 * providers in the `trustedProviders` list.
+	 *
 	 * @default false
+	 *
+	 * @deprecated This option is discouraged for new projects. Relying on provider-level `email_verified` is a weaker
+	 * trust signal compared to using `trustedProviders` in `accountLinking` or enabling `domainVerification` for SSO.
+	 * Existing configurations will continue to work, but new integrations should use explicit trust mechanisms.
+	 * This option may be removed in a future major version.
 	 */
 	trustEmailVerified?: boolean | undefined;
 	/**
@@ -252,5 +259,85 @@ export interface SSOOptions {
 		 * @default "better-auth-token-"
 		 */
 		tokenPrefix?: string;
+	};
+	/**
+	 * SAML security options for AuthnRequest/InResponseTo validation.
+	 * This prevents unsolicited responses, replay attacks, and cross-provider injection.
+	 */
+	saml?: {
+		/**
+		 * Enable InResponseTo validation for SP-initiated SAML flows.
+		 * When enabled, AuthnRequest IDs are tracked and validated against SAML responses.
+		 *
+		 * Storage behavior:
+		 * - Uses `secondaryStorage` (e.g., Redis) if configured in your auth options
+		 * - Falls back to the verification table in the database otherwise
+		 *
+		 * This works correctly in serverless environments without any additional configuration.
+		 *
+		 * @default false
+		 */
+		enableInResponseToValidation?: boolean;
+		/**
+		 * Allow IdP-initiated SSO (unsolicited SAML responses).
+		 * When true, responses without InResponseTo are accepted.
+		 * When false, all responses must correlate to a stored AuthnRequest.
+		 *
+		 * Only applies when InResponseTo validation is enabled.
+		 *
+		 * @default true
+		 */
+		allowIdpInitiated?: boolean;
+		/**
+		 * TTL for AuthnRequest records in milliseconds.
+		 * Requests older than this will be rejected.
+		 *
+		 * Only applies when InResponseTo validation is enabled.
+		 *
+		 * @default 300000 (5 minutes)
+		 */
+		requestTTL?: number;
+		/**
+		 * Custom AuthnRequest store implementation.
+		 * Use this to provide a custom storage backend (e.g., Redis-backed store).
+		 *
+		 * Providing a custom store automatically enables InResponseTo validation.
+		 *
+		 * Note: When not provided, the default storage (secondaryStorage with
+		 * verification table fallback) is used automatically.
+		 */
+		authnRequestStore?: AuthnRequestStore;
+		/**
+		 * Clock skew tolerance for SAML assertion timestamp validation in milliseconds.
+		 * Allows for minor time differences between IdP and SP servers.
+		 *
+		 * Defaults to 300000 (5 minutes) to accommodate:
+		 * - Network latency and processing time
+		 * - Clock synchronization differences (NTP drift)
+		 * - Distributed systems across timezones
+		 *
+		 * For stricter security, reduce to 1-2 minutes (60000-120000).
+		 * For highly distributed systems, increase up to 10 minutes (600000).
+		 *
+		 * @default 300000 (5 minutes)
+		 */
+		clockSkew?: number;
+		/**
+		 * Require timestamp conditions (NotBefore/NotOnOrAfter) in SAML assertions.
+		 * When enabled, assertions without timestamp conditions will be rejected.
+		 *
+		 * When disabled (default), assertions without timestamps are accepted
+		 * but a warning is logged.
+		 *
+		 * **SAML Spec Notes:**
+		 * - SAML 2.0 Core: Timestamps are OPTIONAL
+		 * - SAML2Int (enterprise profile): Timestamps are REQUIRED
+		 *
+		 * **Recommendation:** Enable for enterprise/production deployments
+		 * where your IdP follows SAML2Int (Okta, Azure AD, OneLogin, etc.)
+		 *
+		 * @default false
+		 */
+		requireTimestamps?: boolean;
 	};
 }

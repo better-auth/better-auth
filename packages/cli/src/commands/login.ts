@@ -252,7 +252,7 @@ async function storeToken(token: any): Promise<void> {
 		};
 
 		await fs.writeFile(TOKEN_FILE, JSON.stringify(tokenData, null, 2), "utf-8");
-	} catch (error) {
+	} catch {
 		console.warn("Failed to store authentication token locally");
 	}
 }

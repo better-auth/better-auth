@@ -47,7 +47,7 @@ const disableTwoFactorBodySchema = z.object({
 	}),
 });
 
-export const twoFactor = (options?: TwoFactorOptions | undefined) => {
+export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 	const opts = {
 		twoFactorTable: "twoFactor",
 	};
@@ -284,7 +284,7 @@ export const twoFactor = (options?: TwoFactorOptions | undefined) => {
 				},
 			),
 		},
-		options: options,
+		options: options as NoInfer<O>,
 		hooks: {
 			after: [
 				{

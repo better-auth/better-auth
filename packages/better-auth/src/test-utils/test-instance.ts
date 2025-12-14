@@ -240,7 +240,7 @@ export async function getTestInstance<
 			headers.set("cookie", `${current || ""}; ${name}=${value}`);
 		};
 		//@ts-expect-error
-		const { data, error } = await client.signIn.email({
+		const { data } = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
 			fetchOptions: {

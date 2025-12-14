@@ -11,7 +11,16 @@ import { parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput, InferUser, User } from "../../types";
 import { createEmailVerificationToken } from "./email-verification";
 
-const signUpEmailBodySchema = z.record(z.string(), z.any());
+const signUpEmailBodySchema = z
+	.object({
+		name: z.string().nonempty(),
+		email: z.email(),
+		password: z.string().nonempty(),
+		image: z.string().optional(),
+		callbackURL: z.string().optional(),
+		rememberMe: z.boolean().optional(),
+	})
+	.and(z.record(z.string(), z.any()));
 
 export const signUpEmail = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -183,7 +192,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					email,
 					password,
 					image,
-					callbackURL,
+					callbackURL: _callbackURL,
 					rememberMe,
 					...rest
 				} = body;

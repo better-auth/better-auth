@@ -87,7 +87,7 @@
 }
 
 @theme inline {
-	--breakpoint-navbar: 74rem;
+	--breakpoint-navbar: 64rem;
 	--color-background: var(--background);
 	--color-foreground: var(--foreground);
 	--color-card: var(--card);
@@ -355,4 +355,8 @@ html:not([data-anchor-scrolling]) {
 
 .streaming-cursor {
 	animation: stream-pulse 1s ease-in-out infinite;
+}
+
+code:not(pre code) {
+	@apply break-words;
 }

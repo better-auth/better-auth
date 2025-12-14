@@ -226,9 +226,12 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							maxAge: 0,
 						});
 					} else {
+						const cachedSessionExpiresAt = new Date(
+							session.session.expiresAt as unknown as string | number | Date,
+						);
 						const hasExpired =
 							sessionDataPayload.expiresAt < Date.now() ||
-							session.session.expiresAt < new Date();
+							cachedSessionExpiresAt < new Date();
 
 						if (hasExpired) {
 							// When the session data cookie has expired, delete it;
@@ -597,9 +600,16 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 				const sessions = await ctx.context.internalAdapter.listSessions(
 					ctx.context.session.user.id,
 				);
-				const activeSessions = sessions.filter((session) => {
-					return session.expiresAt > new Date();
-				});
+				const activeSessions = sessions
+					.filter((session) => {
+						return session.expiresAt > new Date();
+					})
+					.map((session) => {
+						return {
+							...session,
+							token: "", // we don't need to return the token to the client
+						};
+					});
 				return ctx.json(
 					activeSessions as unknown as Prettify<InferSession<Option>>[],
 				);

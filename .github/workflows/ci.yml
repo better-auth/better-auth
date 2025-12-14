@@ -62,6 +62,7 @@ jobs:
           TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
           TURBO_CACHE: remote:rw
         run: pnpm lint:dependencies
+
       - name: Lint Packages
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
@@ -75,6 +76,13 @@ jobs:
           TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
           TURBO_CACHE: remote:rw
         run: pnpm lint:spell
+
+      - name: Lint Types
+        env:
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
+          TURBO_CACHE: remote:rw
+        run: pnpm lint:types
 
   typecheck:
     runs-on: ubuntu-latest
@@ -163,7 +171,7 @@ jobs:
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-        run: pnpm test
+        run: pnpm coverage
 
       - name: Stop Docker Containers
         run: docker compose down
