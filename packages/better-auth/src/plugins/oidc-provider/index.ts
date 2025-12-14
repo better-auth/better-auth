@@ -102,6 +102,13 @@ export const getMetadata = (
 		jwks_uri: `${baseURL}/jwks`,
 		registration_endpoint: `${baseURL}/oauth2/register`,
 		end_session_endpoint: `${baseURL}/oauth2/endsession`,
+		prompt_values_supported: [
+			"none",
+			"login",
+			"consent",
+			"select_account",
+			"create",
+		],
 		scopes_supported: ["openid", "profile", "email", "offline_access"],
 		response_types_supported: ["code"],
 		response_modes_supported: ["query"],

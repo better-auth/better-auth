@@ -89,6 +89,13 @@ export interface OIDCOptions {
 	 */
 	loginPage: string;
 	/**
+	 * The URL to the account creation page. This is used if the client requests
+	 * the `create` prompt.
+	 *
+	 * If not provided, the `loginPage` will be used.
+	 */
+	createAccountPage?: string | undefined;
+	/**
 	 * Whether to require PKCE (proof key code exchange) or not
 	 *
 	 * According to OAuth2.1 spec this should be required. But in any
@@ -206,7 +213,7 @@ export interface AuthorizationQuery {
 	 */
 	prompt?:
 		| (string & {})
-		| ("none" | "consent" | "login" | "select_account")
+		| ("none" | "consent" | "login" | "select_account" | "create")
 		| undefined;
 	/**
 	 * The display parameter is used to specify how the authorization server displays the
@@ -452,6 +459,12 @@ export interface OIDCMetadata {
 	 * @default `/oauth2/register`
 	 */
 	registration_endpoint: string;
+	/**
+	 * Supported prompt values.
+	 *
+	 * When defined, it MUST include all prompt values supported by this OP.
+	 */
+	prompt_values_supported?: string[] | undefined;
 	/**
 	 * Supported scopes.
 	 */

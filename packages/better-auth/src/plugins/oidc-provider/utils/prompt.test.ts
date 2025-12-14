@@ -60,10 +60,11 @@ describe("parsePrompt", () => {
 	});
 
 	it("should handle all valid prompt types", () => {
-		const result = parsePrompt("login consent select_account");
+		const result = parsePrompt("login consent select_account create");
 		expect(result.has("login")).toBe(true);
 		expect(result.has("consent")).toBe(true);
 		expect(result.has("select_account")).toBe(true);
-		expect(result.size).toBe(3);
+		expect(result.has("create")).toBe(true);
+		expect(result.size).toBe(4);
 	});
 });

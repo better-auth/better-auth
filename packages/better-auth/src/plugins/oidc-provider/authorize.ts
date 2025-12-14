@@ -12,6 +12,11 @@ function formatErrorURL(url: string, error: string, description: string) {
 	}error=${error}&error_description=${description}`;
 }
 
+function appendQuery(url: string, query: string) {
+	if (!query) return url;
+	return `${url}${url.includes("?") ? "&" : "?"}${query}`;
+}
+
 function getErrorURL(
 	ctx: GenericEndpointContext,
 	error: string,
@@ -86,8 +91,12 @@ export async function authorize(
 				sameSite: "lax",
 			},
 		);
-		const queryFromURL = ctx.request.url?.split("?")[1]!;
-		return handleRedirect(`${options.loginPage}?${queryFromURL}`);
+		const queryFromURL = ctx.request.url?.split("?")[1] || "";
+		const targetPage =
+			promptSet.has("create") && options.createAccountPage
+				? options.createAccountPage
+				: options.loginPage;
+		return handleRedirect(appendQuery(targetPage, queryFromURL));
 	}
 
 	const query = ctx.query as AuthorizationQuery;
