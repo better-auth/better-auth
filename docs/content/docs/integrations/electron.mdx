@@ -170,7 +170,7 @@ Electron is a popular framework for building cross-platform desktop applications
     ### Configure the BrowserWindow
     
     Ensure that your `BrowserWindow` is configured with `nodeIntegration` set to `false` and `contextIsolation`
-    set to `true` to ensure NodeJS API aren't exposed to any JavaScript running in the renderer.
+    set to `true` to ensure NodeJS APIs aren't exposed to any JavaScript running in the renderer.
 
     ```ts title="electron/main.ts"
     import { BrowserWindow } from "electron";
@@ -190,7 +190,7 @@ Electron is a popular framework for building cross-platform desktop applications
     In your Electron main process, set up the necessary handlers to manage authentication flows.
 
     This will setup:
-    - **IPC handlers** for authentication requests from the renderer process.
+    - **IPC bridges** for authentication requests from the renderer process.
     - **Deep link handling** to process authorization redirects.
     - **Content-Security-Policy adjustments** to allow loading resources from your Better Auth backend.
 
@@ -205,7 +205,6 @@ Electron is a popular framework for building cross-platform desktop applications
       win = new BrowserWindow({
         webPreferences: {
           preload: join(__dirname, "preload.mjs"),
-          nodeIntegration: false,
           contextIsolation: true,
         },
       });
