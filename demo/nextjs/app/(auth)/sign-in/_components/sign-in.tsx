@@ -1,10 +1,11 @@
 "use client";
 
-import { Key, Loader2 } from "lucide-react";
+import { Key } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { SignInForm } from "@/components/forms/sign-in-form";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -14,9 +15,6 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
 import { getCallbackURL } from "@/lib/shared";
 import { cn } from "@/lib/utils";
@@ -28,10 +26,6 @@ const LastUsedIndicator = () => (
 );
 
 export default function SignIn() {
-	const [email, setEmail] = useState("");
-	const [password, setPassword] = useState("");
-	const [loading, startTransition] = useTransition();
-	const [rememberMe, setRememberMe] = useState(false);
 	const [isMounted, setIsMounted] = useState(false);
 	const router = useRouter();
 	const params = useSearchParams();
@@ -41,7 +35,7 @@ export default function SignIn() {
 	}, []);
 
 	return (
-		<Card className="max-w-md rounded-none">
+		<Card className="w-full rounded-none">
 			<CardHeader>
 				<CardTitle className="text-lg md:text-xl">Sign In</CardTitle>
 				<CardDescription className="text-xs md:text-sm">
@@ -50,75 +44,12 @@ export default function SignIn() {
 			</CardHeader>
 			<CardContent>
 				<div className="grid gap-4">
-					<div className="grid gap-2">
-						<Label htmlFor="email">Email</Label>
-						<Input
-							id="email"
-							type="email"
-							placeholder="m@example.com"
-							required
-							onChange={(e) => {
-								setEmail(e.target.value);
-							}}
-							value={email}
-						/>
-					</div>
-					<div className="grid gap-2">
-						<div className="flex items-center">
-							<Label htmlFor="password">Password</Label>
-							<Link
-								href="/forget-password"
-								className="ml-auto inline-block text-sm underline"
-							>
-								Forgot your password?
-							</Link>
-						</div>
+					<SignInForm
+						onSuccess={() => router.push(getCallbackURL(params))}
+						callbackURL="/dashboard"
+					/>
 
-						<Input
-							id="password"
-							type="password"
-							placeholder="password"
-							autoComplete="password"
-							value={password}
-							onChange={(e) => setPassword(e.target.value)}
-						/>
-					</div>
-					<div className="flex items-center gap-2">
-						<Checkbox
-							id="remember"
-							onClick={() => {
-								setRememberMe(!rememberMe);
-							}}
-						/>
-						<Label htmlFor="remember">Remember me</Label>
-					</div>
-					<Button
-						type="submit"
-						className="w-full flex items-center justify-center relative"
-						disabled={loading}
-						onClick={async () => {
-							startTransition(async () => {
-								await authClient.signIn.email(
-									{ email, password, rememberMe },
-									{
-										onSuccess(context) {
-											toast.success("Successfully signed in");
-											router.push(getCallbackURL(params));
-										},
-										onError(context) {
-											toast.error(context.error.message);
-										},
-									},
-								);
-							});
-						}}
-					>
-						{loading ? <Loader2 size={16} className="animate-spin" /> : "Login"}
-						{isMounted && authClient.isLastUsedLoginMethod("email") && (
-							<LastUsedIndicator />
-						)}
-					</Button>
-
+					{/* OAuth Buttons */}
 					<div
 						className={cn(
 							"w-full gap-2 flex items-center",
