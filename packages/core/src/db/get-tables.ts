@@ -47,7 +47,8 @@ export const getAuthTables = (
 		},
 	} satisfies BetterAuthDBSchema;
 
-	const { user, session, account, verification, ...pluginTables } = pluginSchema;
+	const { user, session, account, verification, ...pluginTables } =
+		pluginSchema;
 
 	const sessionTable = {
 		session: {
@@ -267,8 +268,8 @@ export const getAuthTables = (
 					onUpdate: () => new Date(),
 					fieldName: options.verification?.fields?.updatedAt || "updatedAt",
 				},
-                ...verification?.fields,
-                ...options.verification?.additionalFields,
+				...verification?.fields,
+				...options.verification?.additionalFields,
 			},
 			order: 4,
 		},
