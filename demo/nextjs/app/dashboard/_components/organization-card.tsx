@@ -35,6 +35,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { useOrganizationListQuery } from "@/data/organization/organization-list-query";
 import { useSessionQuery } from "@/data/user/session-query";
 import type { ActiveOrganization, Session } from "@/lib/auth";
 import { authClient } from "@/lib/auth-client";
@@ -43,7 +44,7 @@ const OrganizationCard = (props: {
 	session: Session | null;
 	activeOrganization: ActiveOrganization | null;
 }) => {
-	const organizations = authClient.useListOrganizations();
+	const { data: organizations } = useOrganizationListQuery();
 	const [optimisticOrg, setOptimisticOrg] = useState<ActiveOrganization | null>(
 		props.activeOrganization,
 	);
@@ -89,7 +90,7 @@ const OrganizationCard = (props: {
 							>
 								<p className="text-sm sm">Personal</p>
 							</DropdownMenuItem>
-							{organizations.data?.map((org) => (
+							{organizations?.map((org) => (
 								<DropdownMenuItem
 									className="py-1"
 									key={org.id}

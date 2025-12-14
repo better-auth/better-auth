@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import QRCode from "react-qr-code";
 import { toast } from "sonner";
 import { UAParser } from "ua-parser-js";
@@ -53,10 +53,15 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import { useChangePasswordMutation } from "@/data/user/change-password-mutation";
+import { useRevokeSessionMutation } from "@/data/user/revoke-session-mutation";
 import { useSessionQuery } from "@/data/user/session-query";
 import { useSignOutMutation } from "@/data/user/sign-out-mutation";
+import { useUpdateUserMutation } from "@/data/user/update-user-mutation";
+import { useImagePreview } from "@/hooks/use-image-preview";
 import type { Session } from "@/lib/auth";
 import { authClient } from "@/lib/auth-client";
+import { convertImageToBase64 } from "@/lib/utils";
 
 const UserCard = (props: {
 	session: Session | null;
@@ -64,9 +69,9 @@ const UserCard = (props: {
 }) => {
 	const router = useRouter();
 	const signOutMutation = useSignOutMutation();
+	const revokeSessionMutation = useRevokeSessionMutation();
 	const { data } = useSessionQuery();
 	const session = data || props.session;
-	const [isTerminating, setIsTerminating] = useState<string>();
 	const [isPendingTwoFa, setIsPendingTwoFa] = useState<boolean>(false);
 	const [twoFaPassword, setTwoFaPassword] = useState<string>("");
 	const [twoFactorDialog, setTwoFactorDialog] = useState<boolean>(false);
@@ -153,6 +158,11 @@ const UserCard = (props: {
 					{activeSessions
 						.filter((session) => session.userAgent)
 						.map((session) => {
+							const isCurrentSession = session.id === props.session?.session.id;
+							const isTerminating =
+								revokeSessionMutation.isPending &&
+								revokeSessionMutation.variables?.token === session.token;
+
 							return (
 								<div key={session.id}>
 									<div className="flex items-center gap-2 text-sm  text-black font-medium dark:text-white">
@@ -167,26 +177,20 @@ const UserCard = (props: {
 										, {new UAParser(session.userAgent || "").getBrowser().name}
 										<button
 											className="text-red-500 opacity-80 cursor-pointer text-xs underline"
-											onClick={async () => {
-												setIsTerminating(session.id);
-												const res = await authClient.revokeSession({
-													token: session.token,
-												});
-
-												if (res.error) {
-													toast.error(res.error.message);
-												} else {
-													toast.success("Session terminated successfully");
-													removeActiveSession(session.id);
-												}
-												if (session.id === props.session?.session.id)
-													router.refresh();
-												setIsTerminating(undefined);
+											onClick={() => {
+												revokeSessionMutation.mutate(
+													{ token: session.token },
+													{
+														onSuccess: () => {
+															removeActiveSession(session.id);
+														},
+													},
+												);
 											}}
 										>
-											{isTerminating === session.id ? (
+											{isTerminating ? (
 												<Loader2 size={15} className="animate-spin" />
-											) : session.id === props.session?.session.id ? (
+											) : isCurrentSession ? (
 												"Sign Out"
 											) : (
 												"Terminate"
@@ -469,22 +473,13 @@ const UserCard = (props: {
 };
 export default UserCard;
 
-async function convertImageToBase64(file: File): Promise<string> {
-	return new Promise((resolve, reject) => {
-		const reader = new FileReader();
-		reader.onloadend = () => resolve(reader.result as string);
-		reader.onerror = reject;
-		reader.readAsDataURL(file);
-	});
-}
-
 function ChangePassword() {
 	const [currentPassword, setCurrentPassword] = useState<string>("");
 	const [newPassword, setNewPassword] = useState<string>("");
 	const [confirmPassword, setConfirmPassword] = useState<string>("");
-	const [loading, setLoading] = useState<boolean>(false);
 	const [open, setOpen] = useState<boolean>(false);
 	const [signOutDevices, setSignOutDevices] = useState<boolean>(false);
+	const changePasswordMutation = useChangePasswordMutation();
 	return (
 		<Dialog open={open} onOpenChange={setOpen}>
 			<DialogTrigger asChild>
@@ -548,7 +543,8 @@ function ChangePassword() {
 				</div>
 				<DialogFooter>
 					<Button
-						onClick={async () => {
+						disabled={changePasswordMutation.isPending}
+						onClick={() => {
 							if (newPassword !== confirmPassword) {
 								toast.error("Passwords do not match");
 								return;
@@ -557,28 +553,24 @@ function ChangePassword() {
 								toast.error("Password must be at least 8 characters");
 								return;
 							}
-							setLoading(true);
-							const res = await authClient.changePassword({
-								newPassword: newPassword,
-								currentPassword: currentPassword,
-								revokeOtherSessions: signOutDevices,
-							});
-							setLoading(false);
-							if (res.error) {
-								toast.error(
-									res.error.message ||
-										"Couldn't change your password! Make sure it's correct",
-								);
-							} else {
-								setOpen(false);
-								toast.success("Password changed successfully");
-								setCurrentPassword("");
-								setNewPassword("");
-								setConfirmPassword("");
-							}
+							changePasswordMutation.mutate(
+								{
+									newPassword,
+									currentPassword,
+									revokeOtherSessions: signOutDevices,
+								},
+								{
+									onSuccess: () => {
+										setOpen(false);
+										setCurrentPassword("");
+										setNewPassword("");
+										setConfirmPassword("");
+									},
+								},
+							);
 						}}
 					>
-						{loading ? (
+						{changePasswordMutation.isPending ? (
 							<Loader2 size={15} className="animate-spin" />
 						) : (
 							"Change Password"
@@ -593,22 +585,11 @@ function ChangePassword() {
 function EditUserDialog() {
 	const { data } = useSessionQuery();
 	const [name, setName] = useState<string>();
-	const router = useRouter();
-	const [image, setImage] = useState<File | null>(null);
-	const [imagePreview, setImagePreview] = useState<string | null>(null);
-	const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		const file = e.target.files?.[0];
-		if (file) {
-			setImage(file);
-			const reader = new FileReader();
-			reader.onloadend = () => {
-				setImagePreview(reader.result as string);
-			};
-			reader.readAsDataURL(file);
-		}
-	};
+	const { image, imagePreview, handleImageChange, clearImage } =
+		useImagePreview();
 	const [open, setOpen] = useState<boolean>(false);
-	const [isLoading, startTransition] = useTransition();
+	const updateUserMutation = useUpdateUserMutation();
+
 	return (
 		<Dialog open={open} onOpenChange={setOpen}>
 			<DialogTrigger asChild>
@@ -655,13 +636,7 @@ function EditUserDialog() {
 									className="w-full text-muted-foreground"
 								/>
 								{imagePreview && (
-									<X
-										className="cursor-pointer"
-										onClick={() => {
-											setImage(null);
-											setImagePreview(null);
-										}}
-									/>
+									<X className="cursor-pointer" onClick={clearImage} />
 								)}
 							</div>
 						</div>
@@ -669,32 +644,24 @@ function EditUserDialog() {
 				</div>
 				<DialogFooter>
 					<Button
-						disabled={isLoading}
+						disabled={updateUserMutation.isPending}
 						onClick={async () => {
-							startTransition(async () => {
-								await authClient.updateUser({
+							updateUserMutation.mutate(
+								{
 									image: image ? await convertImageToBase64(image) : undefined,
-									name: name ? name : undefined,
-									fetchOptions: {
-										onSuccess: () => {
-											toast.success("User updated successfully");
-										},
-										onError: (error) => {
-											toast.error(error.error.message);
-										},
+									name: name || undefined,
+								},
+								{
+									onSuccess: () => {
+										setName("");
+										clearImage();
+										setOpen(false);
 									},
-								});
-								startTransition(() => {
-									setName("");
-									router.refresh();
-									setImage(null);
-									setImagePreview(null);
-									setOpen(false);
-								});
-							});
+								},
+							);
 						}}
 					>
-						{isLoading ? (
+						{updateUserMutation.isPending ? (
 							<Loader2 size={15} className="animate-spin" />
 						) : (
 							"Update"

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useImagePreview } from "@/hooks/use-image-preview";
 import { authClient } from "@/lib/auth-client";
 import { getCallbackURL } from "@/lib/shared";
 import { convertImageToBase64 } from "@/lib/utils";
@@ -26,24 +27,11 @@ export function SignUp() {
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [passwordConfirmation, setPasswordConfirmation] = useState("");
-	const [image, setImage] = useState<File | null>(null);
-	const [imagePreview, setImagePreview] = useState<string | null>(null);
+	const { image, imagePreview, handleImageChange, clearImage } =
+		useImagePreview();
 	const router = useRouter();
 	const params = useSearchParams();
 	const [loading, startTransition] = useTransition();
-
-	const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		const file = e.target.files?.[0];
-		if (file) {
-			setImage(file);
-			setImagePreview((preview) => {
-				if (preview) {
-					URL.revokeObjectURL(preview);
-				}
-				return URL.createObjectURL(file);
-			});
-		}
-	};
 
 	return (
 		<Card className="z-50 rounded-md rounded-t-none max-w-md">
@@ -137,13 +125,7 @@ export function SignUp() {
 									className="w-full"
 								/>
 								{imagePreview && (
-									<X
-										className="cursor-pointer"
-										onClick={() => {
-											setImage(null);
-											setImagePreview(null);
-										}}
-									/>
+									<X className="cursor-pointer" onClick={clearImage} />
 								)}
 							</div>
 						</div>
