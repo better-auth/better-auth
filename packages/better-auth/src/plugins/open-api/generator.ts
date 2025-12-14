@@ -200,7 +200,7 @@ function processZodType(zodType: z.ZodType<any>): any {
 				: [innerSchema.type];
 			return {
 				...innerSchema,
-				type: [...type, "null"],
+				type: Array.from(new Set([...type, "null"])),
 			};
 		}
 		return {
