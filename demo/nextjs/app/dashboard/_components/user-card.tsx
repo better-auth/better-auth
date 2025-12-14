@@ -445,7 +445,7 @@ const UserCard = (props: {
 				) : (
 					<Button
 						className="gap-2 z-10"
-						variant="secondary"
+						variant="outline"
 						onClick={() => {
 							signOutMutation.mutate(undefined, {
 								onSuccess: () => {
@@ -593,7 +593,7 @@ function EditUserDialog() {
 	return (
 		<Dialog open={open} onOpenChange={setOpen}>
 			<DialogTrigger asChild>
-				<Button size="sm" className="gap-2" variant="secondary">
+				<Button size="sm" className="gap-2" variant="default">
 					<Edit size={13} />
 					Edit User
 				</Button>

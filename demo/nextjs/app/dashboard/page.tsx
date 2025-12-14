@@ -16,14 +16,11 @@ export default async function Page() {
 		redirect("/sign-in");
 	}
 
-	const [activeSessions, deviceSessions, organization] = await Promise.all([
+	const [activeSessions, deviceSessions] = await Promise.all([
 		auth.api.listSessions({
 			headers: requestHeaders,
 		}),
 		auth.api.listDeviceSessions({
-			headers: requestHeaders,
-		}),
-		auth.api.getFullOrganization({
 			headers: requestHeaders,
 		}),
 	]);
@@ -36,7 +33,7 @@ export default async function Page() {
 					initialSession={session}
 				/>
 				<UserCard session={session} activeSessions={activeSessions} />
-				<OrganizationCard session={session} activeOrganization={organization} />
+				<OrganizationCard session={session} />
 				<SubscriptionCard />
 			</div>
 		</div>
