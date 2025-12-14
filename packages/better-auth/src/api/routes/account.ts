@@ -579,11 +579,9 @@ export const getAccessToken = createAuthEndpoint(
 						updatedData,
 					);
 				}
-				const storeAccountCookie =
-					ctx.context.options.account?.storeAccountCookie;
-				if (storeAccountCookie && updatedAccount) {
+				if (ctx.context.options.account?.storeAccountCookie) {
 					await setAccountCookie(ctx, {
-						...accountData,
+						...account,
 						...(updatedAccount ?? updatedData),
 					});
 				}

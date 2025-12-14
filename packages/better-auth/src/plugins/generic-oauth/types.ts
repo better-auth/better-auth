@@ -127,6 +127,12 @@ export interface GenericOAuthConfig {
 		  )
 		| undefined;
 	/**
+	 * Custom function to refresh a token
+	 */
+	refreshAccessToken?:
+		| ((refreshToken: string) => Promise<OAuth2Tokens>)
+		| undefined;
+	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
 	 * sign-in need to be called with with requestSignUp as true to create new users.
 	 */
