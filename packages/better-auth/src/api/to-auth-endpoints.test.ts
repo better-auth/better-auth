@@ -486,7 +486,7 @@ describe("disabled paths", async () => {
 				method: "POST",
 			}),
 		);
-		const response2 = await auth.handler(
+		const _response2 = await auth.handler(
 			new Request("http://localhost:3000/api/auth/sign-inemail", {
 				method: "POST",
 			}),
@@ -723,7 +723,10 @@ describe("trustedProxyHeaders security", () => {
 		});
 
 		const malformedHeaders = [
-			{ "x-forwarded-host": "../../../../etc/passwd", "x-forwarded-proto": "http" },
+			{
+				"x-forwarded-host": "../../../../etc/passwd",
+				"x-forwarded-proto": "http",
+			},
 			{ "x-forwarded-host": "evil.com:99999", "x-forwarded-proto": "http" },
 			{ "x-forwarded-host": "evil.com", "x-forwarded-proto": "javascript" },
 			{ "x-forwarded-host": "evil.com", "x-forwarded-proto": "file" },

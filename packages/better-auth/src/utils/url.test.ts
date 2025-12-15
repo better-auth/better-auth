@@ -40,16 +40,16 @@ describe("getBaseURL", () => {
 			expect(result).toBe("http://localhost:3000/auth");
 		});
 
-	it("should reject null bytes in X-Forwarded-Host", () => {
-		expect(() => {
-			new Request("http://localhost:3000/test", {
-				headers: {
-					"x-forwarded-host": "evil.com\u0000.example.com",
-					"x-forwarded-proto": "http",
-				},
-			});
-		}).toThrow();
-	});
+		it("should reject null bytes in X-Forwarded-Host", () => {
+			expect(() => {
+				new Request("http://localhost:3000/test", {
+					headers: {
+						"x-forwarded-host": "evil.com\u0000.example.com",
+						"x-forwarded-proto": "http",
+					},
+				});
+			}).toThrow();
+		});
 
 		it("should reject HTML injection in X-Forwarded-Host", () => {
 			const request = new Request("http://localhost:3000/test", {
@@ -261,4 +261,3 @@ describe("getBaseURL", () => {
 		});
 	});
 });
-

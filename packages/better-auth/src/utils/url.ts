@@ -50,7 +50,6 @@ function withPath(url: string, path = "/api/auth") {
 	return `${trimmedUrl}${path}`;
 }
 
-
 function validateProxyHeader(header: string, type: "host" | "proto"): boolean {
 	if (!header || header.trim() === "") {
 		return false;
@@ -63,37 +62,40 @@ function validateProxyHeader(header: string, type: "host" | "proto"): boolean {
 
 	if (type === "host") {
 		const suspiciousPatterns = [
-			/\.\./,           // Path traversal
-			/\0/,             // Null bytes
-			/[\s]/,           // Whitespace (except legitimate spaces that should be trimmed)
-			/^[.]/,           // Starting with dot
-			/[<>'"]/,         // HTML/script injection characters
-			/javascript:/i,   // Protocol injection
-			/file:/i,         // File protocol
-			/data:/i,         // Data protocol
+			/\.\./, // Path traversal
+			/\0/, // Null bytes
+			/[\s]/, // Whitespace (except legitimate spaces that should be trimmed)
+			/^[.]/, // Starting with dot
+			/[<>'"]/, // HTML/script injection characters
+			/javascript:/i, // Protocol injection
+			/file:/i, // File protocol
+			/data:/i, // Data protocol
 		];
 
-		if (suspiciousPatterns.some(pattern => pattern.test(header))) {
+		if (suspiciousPatterns.some((pattern) => pattern.test(header))) {
 			return false;
 		}
 
 		// Basic hostname validation (allows localhost, IPs, and domains with ports)
 		// This is a simple check, not exhaustive RFC validation
-		const hostnameRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*(:[0-9]{1,5})?$/;
-		
+		const hostnameRegex =
+			/^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*(:[0-9]{1,5})?$/;
+
 		// Also allow IPv4 addresses
 		const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}(:[0-9]{1,5})?$/;
-		
+
 		// Also allow IPv6 addresses in brackets
 		const ipv6Regex = /^\[[0-9a-fA-F:]+\](:[0-9]{1,5})?$/;
-		
+
 		// Allow localhost variations
 		const localhostRegex = /^localhost(:[0-9]{1,5})?$/i;
 
-		return hostnameRegex.test(header) || 
-		       ipv4Regex.test(header) || 
-		       ipv6Regex.test(header) ||
-		       localhostRegex.test(header);
+		return (
+			hostnameRegex.test(header) ||
+			ipv4Regex.test(header) ||
+			ipv6Regex.test(header) ||
+			localhostRegex.test(header)
+		);
 	}
 
 	return false;
@@ -133,8 +135,7 @@ export function getBaseURL(
 		) {
 			try {
 				return withPath(`${fromRequestProto}://${fromRequest}`, path);
-			} catch (error) {
-			}
+			} catch (_error) {}
 		}
 	}
 
