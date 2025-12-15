@@ -1102,3 +1102,92 @@ describe("Cookie Chunking", () => {
 		expect(cache?.user?.email).toEqual(testUser.email);
 	});
 });
+
+describe("getCookieCache prefix handling", () => {
+	it("should use custom cookieName with no prefix when config has empty cookiePrefix", async () => {
+		const { client, testUser } = await getTestInstance({
+			secret: "better-auth.secret",
+			advanced: {
+				cookiePrefix: "some-prefix",
+				cookies: {
+					session_data: {
+						name: "my_session", // betterAuth server ignores prefix when custom name is provided
+					},
+				},
+			},
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+
+		const headers = new Headers();
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess(context) {
+					const setCookie = context.response.headers.get("set-cookie");
+					if (setCookie) {
+						const parsed = parseSetCookieHeader(setCookie);
+						parsed.forEach((value, name) => {
+							headers.append("cookie", `${name}=${value.value}`);
+						});
+					}
+				},
+			},
+		);
+
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+
+		const cache = await getCookieCache(request, {
+			secret: "better-auth.secret",
+			cookieName: "my_session",
+			cookiePrefix: "",
+		});
+
+		expect(cache).not.toBeNull();
+		expect(cache?.user?.email).toEqual(testUser.email);
+	});
+
+	it("should return null when looking for wrong prefix", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+
+		const headers = new Headers();
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+
+		// Looking for wrong prefix - should return null
+		const cache = await getCookieCache(request, {
+			secret: "better-auth.secret",
+			cookiePrefix: "wrong-prefix",
+		});
+
+		expect(cache).toBeNull();
+	});
+});
