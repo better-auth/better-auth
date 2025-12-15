@@ -104,12 +104,10 @@ export async function createAuthContext(
 	const logger = createLogger(options.logger);
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
 
-	let displayError = false;
-	if (!baseURL && !displayError) {
+	if (!baseURL && !options.advanced?.trustedProxyHeaders) {
 		logger.error(
 			`[better-auth] Base URL could not be determined. Please set a valid base URL using the baseURL config option or the BETTER_AUTH_BASE_URL environment variable. Without this, callbacks and redirects may not work correctly.`,
 		);
-		displayError = true;
 	}
 
 	const secret =
