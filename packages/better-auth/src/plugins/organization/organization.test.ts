@@ -841,6 +841,30 @@ describe("organization", async (it) => {
 		);
 	});
 
+	it("should prioritize organizationSlug over organizationId in hasPermission", async () => {
+		const secondOrg = await client.organization.create({
+			name: "second-org-permission-test",
+			slug: "second-org-permission-test",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(secondOrg.data?.id).toBeDefined();
+
+		const hasPermission = await client.organization.hasPermission({
+			permissions: {
+				member: ["update"],
+			},
+			organizationId: organizationId,
+			organizationSlug: secondOrg.data!.slug,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(hasPermission.data?.success).toBe(true);
+	});
+
 	it("should return BAD_REQUEST when non-member tries to delete organization", async () => {
 		// Create an organization first
 		const testOrg = await client.organization.create({
