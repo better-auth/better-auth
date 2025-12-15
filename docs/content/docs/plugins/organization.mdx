@@ -904,6 +904,41 @@ type createInvitation = {
   invitation is sent.
 </Callout>
 
+### Send Multiple Invitations
+
+To invite multiple users to an organization, you can use the `bulkInvite` function provided by the client. The `bulkInvite` function takes an object with the following properties:
+
+<APIMethod path="/organization/invite-members" method="POST" requireSession>
+```ts
+type createInvitation = {
+    /**
+     * The organization ID to invite the user to. Defaults to the active organization.  
+     */
+    organizationId?: string = "org-id"
+    invitations:[
+      /**
+     * The email address of the user to invite.  
+     */
+    email: string = "example@gmail.com"
+    /**
+     * The role(s) to assign to the user. It can be `admin`, `member`, `owner`
+     */
+    role: string | string[] = "member"
+  
+    /**
+     * Resend the invitation email, if the user is already invited.  
+     */
+    resend?: boolean = true
+    /**
+     * The team ID to invite the user to.  
+     */
+    teamId?: string = "team-id"
+    ]
+}
+```
+</APIMethod>
+
+
 ### Accept Invitation
 
 When a user receives an invitation email, they can click on the invitation link to accept the invitation. The invitation link should include the invitation ID, which will be used to accept the invitation.

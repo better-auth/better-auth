@@ -110,6 +110,53 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				},
 			};
 		},
+		findMembersByEmail: async (data: {
+			emails: string[];
+			organizationId: string;
+		}) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const users = await adapter.findMany<User>({
+				model: "user",
+				where: [
+					{
+						field: "email",
+						operator: "in",
+						value: data.emails.map((email) => email.toLowerCase()),
+					},
+				],
+			});
+			const members = await adapter.findMany<InferMember<O, false>>({
+				model: "member",
+				where: [
+					{
+						field: "organizationId",
+						operator: "eq",
+						value: data.organizationId,
+					},
+					{
+						field: "userId",
+						operator: "in",
+						value: users.map((user) => user.id),
+					},
+				],
+			});
+			const result: any[] = [];
+			members.forEach((member) => {
+				const user = users.find((user) => user.id === member.userId);
+				if (user) {
+					result.push({
+						...member,
+						user: {
+							id: user.id,
+							name: user.name,
+							email: user.email,
+							image: user.image,
+						},
+					});
+				}
+			});
+			return result;
+		},
 		listMembers: async (data: {
 			organizationId?: string | undefined;
 			limit?: number | undefined;
@@ -1001,6 +1048,27 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				},
 			});
 			return invitation;
+		},
+
+		updateInvitations: async (data: {
+			invitationId: string[];
+			status: "accepted" | "canceled" | "rejected";
+		}) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const invitations = await adapter.updateMany({
+				model: "invitation",
+				where: [
+					{
+						field: "id",
+						operator: "in",
+						value: data.invitationId.map((id) => id),
+					},
+				],
+				update: {
+					status: data.status,
+				},
+			});
+			return invitations;
 		},
 	};
 };

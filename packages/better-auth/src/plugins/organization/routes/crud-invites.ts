@@ -462,6 +462,521 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 	);
 };
 
+export const createBulkInvitation = <O extends OrganizationOptions>(
+	option: O,
+) => {
+	const additionalFieldsSchema = toZodSchema({
+		fields: option?.schema?.invitation?.additionalFields || {},
+		isClientSide: true,
+	});
+	return createAuthEndpoint(
+		"/organization/invite-members",
+		{
+			method: "POST",
+			requireHeaders: true,
+			use: [orgMiddleware, orgSessionMiddleware],
+			body: z.object({
+				invitations: z.array(
+					z.object({
+						...baseInvitationSchema.shape,
+						...additionalFieldsSchema.shape,
+					}),
+				),
+			}),
+			metadata: {
+				$Infer: {
+					body: {} as {
+						organizationId?: string;
+						invitations: Array<{
+							email: string;
+							role:
+								| InferOrganizationRolesFromOption<O>
+								| InferOrganizationRolesFromOption<O>[];
+							resend?: boolean;
+						}> &
+							(O extends { teams: { enabled: true } }
+								? {
+										teamId?: string | string[];
+									}
+								: {}) &
+							InferAdditionalFieldsFromPluginOptions<"invitation", O, false>;
+					},
+				},
+				openapi: {
+					operationId: "createOrganizationBulkInvitations",
+					description: "Create multiple invitations to an organization",
+					responses: {
+						"200": {
+							description: "Bulk invitation Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											success: {
+												type: "array",
+												properties: {
+													id: {
+														type: "string",
+													},
+													email: {
+														type: "string",
+													},
+													role: {
+														type: "string",
+													},
+													organizationId: {
+														type: "string",
+													},
+													inviterId: {
+														type: "string",
+													},
+													status: {
+														type: "string",
+													},
+													expiresAt: {
+														type: "string",
+													},
+													createdAt: {
+														type: "string",
+													},
+												},
+											},
+											failed: {
+												type: "array",
+												properties: {
+													email: {
+														type: "string",
+													},
+													reason: {
+														type: "string",
+													},
+												},
+											},
+											totalProcessed: {
+												type: "number",
+											},
+											totalSuccessful: {
+												type: "number",
+											},
+											totalFailed: {
+												type: "number",
+											},
+										},
+										required: [
+											"id",
+											"email",
+											"role",
+											"organizationId",
+											"inviterId",
+											"status",
+											"expiresAt",
+											"createdAt",
+										],
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const session = ctx.context.session;
+			const organizationId =
+				ctx.body.organizationId || session.session.activeOrganizationId;
+			if (!organizationId) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+			const adapter = getOrgAdapter<O>(ctx.context, option as O);
+			const member = await adapter.findMemberByOrgId({
+				userId: session.user.id,
+				organizationId: organizationId,
+			});
+			if (!member) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
+				});
+			}
+			const canInvite = await hasPermission(
+				{
+					role: member.role,
+					options: ctx.context.orgOptions,
+					permissions: {
+						invitation: ["create"],
+					},
+					organizationId,
+				},
+				ctx,
+			);
+
+			if (!canInvite) {
+				throw new APIError("FORBIDDEN", {
+					message:
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION,
+				});
+			}
+
+			let validInvitations: any[] = [];
+			let invalidInvitations: { email: string; reason: string }[] = [];
+
+			ctx.body.invitations.forEach((invitation) => {
+				const email = invitation.email.toLowerCase();
+				const isValidEmail = z.email().safeParse(email);
+				if (!isValidEmail.success) {
+					invalidInvitations.push({
+						email: invitation.email,
+						reason: "Invalid email format",
+					});
+				}
+				//filter out the duplicates emails
+				const isEmailDuplicate = ctx.body.invitations
+					.slice(0, ctx.body.invitations.indexOf(invitation))
+					.some((inv) => inv.email.toLowerCase() === email);
+
+				if (isEmailDuplicate) {
+					invalidInvitations.push({
+						email: invitation.email,
+						reason: "Duplicate email in the invitation list",
+					});
+				}
+				if (!isEmailDuplicate && isValidEmail.success) {
+					validInvitations.push(invitation);
+				}
+			});
+			const creatorRole = ctx.context.orgOptions.creatorRole || "owner";
+			const organization = await adapter.findOrganizationById(organizationId);
+			if (!organization) {
+				throw new APIError("BAD_REQUEST", {
+					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				});
+			}
+
+			validInvitations = validInvitations.filter((invitation) => {
+				const roles = parseRoles(invitation.role);
+				if (
+					member.role !== creatorRole &&
+					roles.split(",").includes(creatorRole)
+				) {
+					invalidInvitations.push({
+						email: invitation.email,
+						reason: "You are not allowed to invite a user with this role",
+					});
+					return false; // Remove from validInvitations
+				}
+				return true; // Keep in validInvitations
+			});
+
+			const alreadyMembers = await adapter.findMembersByEmail({
+				emails: validInvitations.map((invitation) =>
+					invitation.email.toLowerCase(),
+				),
+				organizationId: organizationId,
+			});
+			//filter out already members
+			alreadyMembers.forEach((member) => {
+				validInvitations = validInvitations.filter((invitation) => {
+					return (
+						invitation.email.toLowerCase() !== member.user.email.toLowerCase()
+					);
+				});
+				invalidInvitations.push({
+					email: member.user.email,
+					reason: "User is already a member of this organization",
+				});
+			});
+
+			const allAlreadyInvitedMembers = await adapter.findPendingInvitations({
+				organizationId: organizationId,
+			});
+
+			// Map of existing invitations by email
+			const alreadyInvitedMap = new Map<string, InferInvitation<O, false>>();
+			allAlreadyInvitedMembers.forEach((invited) => {
+				alreadyInvitedMap.set(invited.email.toLowerCase(), invited);
+			});
+
+			let invitationSuccess: any[] = [];
+			const invitationsToCancel: string[] = [];
+
+			// Process already invited members
+			for (const invitation of validInvitations) {
+				const existingInvitation = alreadyInvitedMap.get(
+					invitation.email.toLowerCase(),
+				);
+				if (existingInvitation) {
+					if (ctx.context.orgOptions.cancelPendingInvitationsOnReInvite) {
+						// Cancel old invitation, will create new one
+						invitationsToCancel.push(existingInvitation.id);
+					} else if (invitation.resend) {
+						// Resend: update expiration and send email
+						const defaultExpiration = 60 * 60 * 48; // 48 hours in seconds
+						const newExpiresAt = getDate(
+							ctx.context.orgOptions.invitationExpiresIn || defaultExpiration,
+							"sec",
+						);
+
+						await ctx.context.adapter.update({
+							model: "invitation",
+							where: [
+								{
+									field: "id",
+									value: existingInvitation.id,
+								},
+							],
+							update: {
+								expiresAt: newExpiresAt,
+							},
+						});
+
+						const updatedInvitation = {
+							...existingInvitation,
+							expiresAt: newExpiresAt,
+						};
+
+						// Send invitation email
+						await ctx.context.orgOptions.sendInvitationEmail?.(
+							{
+								id: updatedInvitation.id!,
+								role: updatedInvitation.role! as string,
+								email: updatedInvitation.email!.toLowerCase(),
+								organization: organization,
+								inviter: {
+									...member,
+									user: session.user,
+								},
+								invitation: updatedInvitation as unknown as Invitation,
+							},
+							ctx.request,
+						);
+
+						invitationSuccess.push(updatedInvitation);
+						// Remove from validInvitations
+						validInvitations = validInvitations.filter(
+							(inv) =>
+								inv.email.toLowerCase() !== invitation.email.toLowerCase(),
+						);
+					} else {
+						// Already invited and not resending
+						validInvitations = validInvitations.filter(
+							(inv) =>
+								inv.email.toLowerCase() !== invitation.email.toLowerCase(),
+						);
+						invalidInvitations.push({
+							email: invitation.email,
+							reason: "User is already invited to this organization",
+						});
+					}
+				}
+			}
+
+			// Cancel old invitations
+			if (invitationsToCancel.length > 0) {
+				await adapter.updateInvitations({
+					invitationId: invitationsToCancel,
+					status: "canceled",
+				});
+			}
+			const invitationLimit =
+				typeof ctx.context.orgOptions.invitationLimit === "function"
+					? await ctx.context.orgOptions.invitationLimit(
+							{
+								user: session.user,
+								organization,
+								member: member as Member,
+							},
+							ctx.context,
+						)
+					: (ctx.context.orgOptions.invitationLimit ?? 100);
+
+			const pendingInvitations = await adapter.findPendingInvitations({
+				organizationId: organizationId,
+			});
+
+			if (
+				pendingInvitations.length + validInvitations.length >
+				invitationLimit
+			) {
+				throw new APIError("FORBIDDEN", {
+					message: ORGANIZATION_ERROR_CODES.INVITATION_LIMIT_REACHED,
+				});
+			}
+
+			// Check team member limits if teams are enabled
+			if (
+				ctx.context.orgOptions.teams &&
+				ctx.context.orgOptions.teams.enabled &&
+				typeof ctx.context.orgOptions.teams.maximumMembersPerTeam !==
+					"undefined"
+			) {
+				const teamIdsToCheck = new Set<string>();
+				for (const invitation of validInvitations) {
+					if ("teamId" in invitation && invitation.teamId) {
+						const teamIds =
+							typeof invitation.teamId === "string"
+								? [invitation.teamId]
+								: invitation.teamId;
+						teamIds.forEach((id: string) => teamIdsToCheck.add(id));
+					}
+				}
+
+				// Check each team's member limit
+				for (const teamId of teamIdsToCheck) {
+					const team = await adapter.findTeamById({
+						teamId,
+						organizationId: organizationId,
+						includeTeamMembers: true,
+					});
+
+					if (!team) {
+						// Team not found - mark invitations with this teamId as invalid
+						validInvitations = validInvitations.filter((invitation) => {
+							if ("teamId" in invitation && invitation.teamId) {
+								const invTeamIds =
+									typeof invitation.teamId === "string"
+										? [invitation.teamId]
+										: invitation.teamId;
+								if (invTeamIds.includes(teamId)) {
+									invalidInvitations.push({
+										email: invitation.email,
+										reason: ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+									});
+									return false;
+								}
+							}
+							return true;
+						});
+						continue;
+					}
+
+					const maximumMembersPerTeam =
+						typeof ctx.context.orgOptions.teams.maximumMembersPerTeam ===
+						"function"
+							? await ctx.context.orgOptions.teams.maximumMembersPerTeam({
+									teamId,
+									session: session,
+									organizationId: organizationId,
+								})
+							: ctx.context.orgOptions.teams.maximumMembersPerTeam;
+
+					const newInvitationsForTeam = validInvitations.filter(
+						(invitation) => {
+							if ("teamId" in invitation && invitation.teamId) {
+								const invTeamIds =
+									typeof invitation.teamId === "string"
+										? [invitation.teamId]
+										: invitation.teamId;
+								return invTeamIds.includes(teamId);
+							}
+							return false;
+						},
+					).length;
+
+					if (
+						team.members.length + newInvitationsForTeam >
+						maximumMembersPerTeam
+					) {
+						throw new APIError("FORBIDDEN", {
+							message: ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
+						});
+					}
+				}
+			}
+
+			// Create invitations for remaining valid invitations
+			for (const invitation of validInvitations) {
+				const teamIds: string[] =
+					"teamId" in invitation
+						? typeof invitation.teamId === "string"
+							? [invitation.teamId]
+							: (invitation.teamId ?? [])
+						: [];
+
+				const {
+					email: _,
+					role: __,
+					organizationId: ___,
+					resend: ____,
+					teamId: _____,
+					...additionalFields
+				} = invitation;
+
+				const roles = parseRoles(invitation.role);
+				let invitationData = {
+					role: roles,
+					email: invitation.email.toLowerCase(),
+					organizationId: organizationId,
+					teamIds,
+					...(additionalFields ? additionalFields : {}),
+				};
+
+				// Run beforeCreateInvitation hook
+				if (option?.organizationHooks?.beforeCreateInvitation) {
+					const response =
+						await option?.organizationHooks.beforeCreateInvitation({
+							invitation: {
+								...invitationData,
+								inviterId: session.user.id,
+								teamId: teamIds.length > 0 ? teamIds[0] : undefined,
+							},
+							inviter: session.user,
+							organization,
+						});
+					if (response && typeof response === "object" && "data" in response) {
+						invitationData = {
+							...invitationData,
+							...response.data,
+						};
+					}
+				}
+
+				// Create invitation
+				const createdInvitation = await adapter.createInvitation({
+					invitation: invitationData,
+					user: session.user,
+				});
+
+				// Send invitation email
+				await ctx.context.orgOptions.sendInvitationEmail?.(
+					{
+						id: createdInvitation.id,
+						role: createdInvitation.role,
+						email: createdInvitation.email.toLowerCase(),
+						organization: organization,
+						inviter: {
+							...(member as Member),
+							user: session.user,
+						},
+						invitation: createdInvitation,
+					},
+					ctx.request,
+				);
+
+				// Run afterCreateInvitation hook
+				if (option?.organizationHooks?.afterCreateInvitation) {
+					await option?.organizationHooks.afterCreateInvitation({
+						invitation: createdInvitation as unknown as Invitation,
+						inviter: session.user,
+						organization,
+					});
+				}
+
+				invitationSuccess.push(createdInvitation);
+			}
+
+			return ctx.json({
+				success: invitationSuccess,
+				failed: invalidInvitations,
+				totalProcessed: ctx.body.invitations.length,
+				totalSuccessful: invitationSuccess.length,
+				totalFailed: invalidInvitations.length,
+			});
+		},
+	);
+};
+
 const acceptInvitationBodySchema = z.object({
 	invitationId: z.string().meta({
 		description: "The ID of the invitation to accept",
