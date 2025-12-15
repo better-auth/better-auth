@@ -5,6 +5,5 @@ export {
 	DigestAlgorithm,
 	KeyEncryptionAlgorithm,
 	SignatureAlgorithm,
-	validateConfigAlgorithms,
 	validateSAMLAlgorithms,
 } from "./algorithms";

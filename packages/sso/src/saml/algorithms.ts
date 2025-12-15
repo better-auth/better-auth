@@ -38,8 +38,6 @@ const DEPRECATED_SIGNATURE_ALGORITHMS: readonly string[] = [
 	SignatureAlgorithm.RSA_SHA1,
 ];
 
-const DEPRECATED_DIGEST_ALGORITHMS: readonly string[] = [DigestAlgorithm.SHA1];
-
 const DEPRECATED_KEY_ENCRYPTION_ALGORITHMS: readonly string[] = [
 	KeyEncryptionAlgorithm.RSA_1_5,
 ];
@@ -65,29 +63,6 @@ export interface AlgorithmValidationOptions {
 	allowedDigestAlgorithms?: string[];
 	allowedKeyEncryptionAlgorithms?: string[];
 	allowedDataEncryptionAlgorithms?: string[];
-}
-
-function normalizeAlgorithm(algorithm: string): string {
-	const normalized = algorithm.trim().toLowerCase();
-
-	const signatureMap: Record<string, string> = {
-		"rsa-sha1": SignatureAlgorithm.RSA_SHA1,
-		"rsa-sha256": SignatureAlgorithm.RSA_SHA256,
-		"rsa-sha384": SignatureAlgorithm.RSA_SHA384,
-		"rsa-sha512": SignatureAlgorithm.RSA_SHA512,
-		"ecdsa-sha256": SignatureAlgorithm.ECDSA_SHA256,
-		"ecdsa-sha384": SignatureAlgorithm.ECDSA_SHA384,
-		"ecdsa-sha512": SignatureAlgorithm.ECDSA_SHA512,
-	};
-
-	const digestMap: Record<string, string> = {
-		sha1: DigestAlgorithm.SHA1,
-		sha256: DigestAlgorithm.SHA256,
-		sha384: DigestAlgorithm.SHA384,
-		sha512: DigestAlgorithm.SHA512,
-	};
-
-	return signatureMap[normalized] || digestMap[normalized] || algorithm;
 }
 
 const xmlParser = new XMLParser({
@@ -120,7 +95,7 @@ function findNode(obj: unknown, nodeName: string): unknown {
 	return null;
 }
 
-export function extractEncryptionAlgorithms(xml: string): {
+function extractEncryptionAlgorithms(xml: string): {
 	keyEncryption: string | null;
 	dataEncryption: string | null;
 } {
@@ -159,7 +134,7 @@ export function extractEncryptionAlgorithms(xml: string): {
 	}
 }
 
-export function hasEncryptedAssertion(xml: string): boolean {
+function hasEncryptedAssertion(xml: string): boolean {
 	try {
 		const parsed = xmlParser.parse(xml);
 		return findNode(parsed, "EncryptedAssertion") !== null;
@@ -187,7 +162,7 @@ function handleDeprecatedAlgorithm(
 	}
 }
 
-export function validateSignatureAlgorithm(
+function validateSignatureAlgorithm(
 	algorithm: string | null | undefined,
 	options: AlgorithmValidationOptions = {},
 ): void {
@@ -224,7 +199,7 @@ export function validateSignatureAlgorithm(
 	}
 }
 
-export function validateEncryptionAlgorithms(
+function validateEncryptionAlgorithms(
 	algorithms: { keyEncryption: string | null; dataEncryption: string | null },
 	options: AlgorithmValidationOptions = {},
 ): void {
@@ -280,40 +255,5 @@ export function validateSAMLAlgorithms(
 	if (hasEncryptedAssertion(response.samlContent)) {
 		const encAlgs = extractEncryptionAlgorithms(response.samlContent);
 		validateEncryptionAlgorithms(encAlgs, options);
-	}
-}
-
-export function validateConfigAlgorithms(
-	config: {
-		signatureAlgorithm?: string;
-		digestAlgorithm?: string;
-	},
-	options: AlgorithmValidationOptions = {},
-): void {
-	const { signatureAlgorithm, digestAlgorithm } = config;
-	const { onDeprecated = "warn" } = options;
-
-	if (signatureAlgorithm) {
-		const normalized = normalizeAlgorithm(signatureAlgorithm);
-
-		if (DEPRECATED_SIGNATURE_ALGORITHMS.includes(normalized)) {
-			handleDeprecatedAlgorithm(
-				`SAML config uses deprecated signature algorithm: ${signatureAlgorithm}. Consider using SHA-256 or stronger.`,
-				onDeprecated,
-				"SAML_DEPRECATED_CONFIG_ALGORITHM",
-			);
-		}
-	}
-
-	if (digestAlgorithm) {
-		const normalized = normalizeAlgorithm(digestAlgorithm);
-
-		if (DEPRECATED_DIGEST_ALGORITHMS.includes(normalized)) {
-			handleDeprecatedAlgorithm(
-				`SAML config uses deprecated digest algorithm: ${digestAlgorithm}. Consider using SHA-256 or stronger.`,
-				onDeprecated,
-				"SAML_DEPRECATED_CONFIG_ALGORITHM",
-			);
-		}
 	}
 }
