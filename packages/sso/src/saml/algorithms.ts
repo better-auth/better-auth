@@ -271,6 +271,18 @@ export function validateEncryptionAlgorithms(
 	}
 }
 
+export function validateSAMLAlgorithms(
+	response: { sigAlg?: string | null; samlContent: string },
+	options?: AlgorithmValidationOptions,
+): void {
+	validateSignatureAlgorithm(response.sigAlg, options);
+
+	if (hasEncryptedAssertion(response.samlContent)) {
+		const encAlgs = extractEncryptionAlgorithms(response.samlContent);
+		validateEncryptionAlgorithms(encAlgs, options);
+	}
+}
+
 export function validateConfigAlgorithms(
 	config: {
 		signatureAlgorithm?: string;
