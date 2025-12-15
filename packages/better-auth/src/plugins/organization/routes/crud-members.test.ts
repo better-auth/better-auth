@@ -444,7 +444,7 @@ describe("activeMemberRole", async () => {
 });
 
 describe("inviteMember role validation", async () => {
-	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+	const { signInWithTestUser, customFetchImpl } = await getTestInstance({
 		plugins: [organization()],
 	});
 
@@ -479,9 +479,7 @@ describe("inviteMember role validation", async () => {
 
 		expect(error).toBeTruthy();
 		expect(error?.status).toBe(400);
-		expect(error?.message).toContain(
-			ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND || "Role not found",
-		);
+		expect(error?.message).toContain(ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND);
 	});
 
 	it("should succeed when inviting with a valid default role", async () => {
