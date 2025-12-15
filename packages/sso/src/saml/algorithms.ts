@@ -289,7 +289,10 @@ export function validateConfigAlgorithms(
 		allowedDigestAlgorithms,
 	} = options;
 
-	if (config.signatureAlgorithm && isFullAlgorithmUri(config.signatureAlgorithm)) {
+	if (
+		config.signatureAlgorithm &&
+		isFullAlgorithmUri(config.signatureAlgorithm)
+	) {
 		if (allowedSignatureAlgorithms) {
 			if (!allowedSignatureAlgorithms.includes(config.signatureAlgorithm)) {
 				throw new APIError("BAD_REQUEST", {
