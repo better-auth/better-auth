@@ -50,6 +50,55 @@ function withPath(url: string, path = "/api/auth") {
 	return `${trimmedUrl}${path}`;
 }
 
+
+function validateProxyHeader(header: string, type: "host" | "proto"): boolean {
+	if (!header || header.trim() === "") {
+		return false;
+	}
+
+	if (type === "proto") {
+		// Only allow http and https protocols
+		return header === "http" || header === "https";
+	}
+
+	if (type === "host") {
+		const suspiciousPatterns = [
+			/\.\./,           // Path traversal
+			/\0/,             // Null bytes
+			/[\s]/,           // Whitespace (except legitimate spaces that should be trimmed)
+			/^[.]/,           // Starting with dot
+			/[<>'"]/,         // HTML/script injection characters
+			/javascript:/i,   // Protocol injection
+			/file:/i,         // File protocol
+			/data:/i,         // Data protocol
+		];
+
+		if (suspiciousPatterns.some(pattern => pattern.test(header))) {
+			return false;
+		}
+
+		// Basic hostname validation (allows localhost, IPs, and domains with ports)
+		// This is a simple check, not exhaustive RFC validation
+		const hostnameRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*(:[0-9]{1,5})?$/;
+		
+		// Also allow IPv4 addresses
+		const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}(:[0-9]{1,5})?$/;
+		
+		// Also allow IPv6 addresses in brackets
+		const ipv6Regex = /^\[[0-9a-fA-F:]+\](:[0-9]{1,5})?$/;
+		
+		// Allow localhost variations
+		const localhostRegex = /^localhost(:[0-9]{1,5})?$/i;
+
+		return hostnameRegex.test(header) || 
+		       ipv4Regex.test(header) || 
+		       ipv6Regex.test(header) ||
+		       localhostRegex.test(header);
+	}
+
+	return false;
+}
+
 export function getBaseURL(
 	url?: string,
 	path?: string,
@@ -78,7 +127,18 @@ export function getBaseURL(
 	const fromRequest = request?.headers.get("x-forwarded-host");
 	const fromRequestProto = request?.headers.get("x-forwarded-proto");
 	if (fromRequest && fromRequestProto && trustedProxyHeaders) {
-		return withPath(`${fromRequestProto}://${fromRequest}`, path);
+		// Validate proxy headers before using them
+		if (
+			validateProxyHeader(fromRequestProto, "proto") &&
+			validateProxyHeader(fromRequest, "host")
+		) {
+			try {
+				return withPath(`${fromRequestProto}://${fromRequest}`, path);
+			} catch (error) {
+				// If construction fails, fall through to use request URL
+			}
+		}
+		// If validation fails, fall through to use the actual request URL
 	}
 
 	if (request) {
