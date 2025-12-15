@@ -421,7 +421,7 @@ describe("after hook", async () => {
 	});
 });
 
-describe.only("disabled paths", async () => {
+describe("disabled paths", async () => {
 	it("should return 404 for disabled paths", async () => {
 		const { client } = await getTestInstance({
 			disabledPaths: ["/sign-in/email"],
@@ -463,23 +463,17 @@ describe.only("disabled paths", async () => {
 		});
 
 		const response = await auth.handler(
-			new Request("http://localhost:3000/api/auth/sign-in%2Femail", {
-				method: "POST",
-			}),
-		);
-		const response2 = await auth.handler(
 			new Request("http://localhost:3000/api/auth/sign-in/email%2F", {
 				method: "POST",
 			}),
 		);
-		const response3 = await auth.handler(
+		const response2 = await auth.handler(
 			new Request("http://localhost:3000/api/auth/sign-inemail", {
 				method: "POST",
 			}),
 		);
 		expect(response.status).toBe(404);
 		expect(response2.status).toBe(404);
-		expect(response3.status).toBe(404);
 	});
 
 	it("should return 404 for encoded paths", async () => {
