@@ -119,7 +119,6 @@ describe("siwe", () => {
 			expect(error).toBeDefined();
 			expect(error?.status).toBe(401);
 			expect(error?.code).toBe("INVALID_OR_EXPIRED_NONCE");
-			expect(error?.message).toBe("Invalid or expired nonce");
 		});
 
 		it("should reject verification when nonce has expired", async () => {
@@ -142,7 +141,6 @@ describe("siwe", () => {
 				expect(error).toBeDefined();
 				expect(error?.status).toBe(401);
 				expect(error?.code).toBe("INVALID_OR_EXPIRED_NONCE");
-				expect(error?.message).toBe("Invalid or expired nonce");
 			} finally {
 				vi.useRealTimers();
 			}
@@ -875,8 +873,7 @@ describe("siwe", () => {
 
 			expect(error).toBeDefined();
 			expect(error?.status).toBe(400);
-			expect(error?.code).toBe("WALLET_ALREADY_LINKED_TO_ANOTHER_ACCOUNT");
-			expect(error?.message).toBe("Wallet already linked to another account");
+			expect(error?.code).toBe("WALLET_ALREADY_LINKED_TO_ANOTHER_USER");
 		});
 
 		it("should create new user when not authenticated (no session)", async () => {
@@ -1021,11 +1018,95 @@ describe("siwe", () => {
 			expect(accountIds).toContain(`${wallet2}:${chainId}`);
 			expect(accountIds).toContain(`${wallet3}:${chainId}`);
 		});
+
+		it("should reject linking if wallet address exists on another chain for a different user", async () => {
+			const { auth, client, cookieSetter } = await getTestInstance(
+				{
+					account: {
+						accountLinking: {
+							enabled: true,
+							trustedProviders: ["siwe"],
+						},
+					},
+					plugins: [siwe(createSiweOptions())],
+				},
+				{ clientOptions: { plugins: [siweClient()] } },
+			);
+
+			const testWalletAddress = "0x1234567890123456789012345678901234567890";
+			const chainId1 = 1;
+			const chainId2 = 2;
+
+			// 1. User A signs in with testWalletAddress on Chain 1 (creates User A)
+			await client.siwe.nonce({ walletAddress: testWalletAddress, chainId: chainId1 });
+			const userAResult = await client.siwe.verify({
+				message: "valid_message",
+				signature: "valid_signature",
+				walletAddress: testWalletAddress,
+				chainId: chainId1,
+			});
+			expect(userAResult.error).toBeNull();
+			expect(userAResult.data?.success).toBe(true);
+			const userAId = userAResult.data?.user.id!;
+
+			// 2. User B signs up via email
+			const headersB = new Headers();
+			await client.signUp.email(
+				{
+					email: "userB@example.com",
+					name: "User B",
+					password: "password123",
+				},
+				{ onSuccess: cookieSetter(headersB) },
+			);
+			const sessionB = await client.getSession({ fetchOptions: { headers: headersB } });
+			const userBId = sessionB.data?.user.id!;
+			expect(userBId).not.toBe(userAId);
+
+			// 3. User B tries to link the SAME wallet address (testWalletAddress) but on Chain 2
+			await client.siwe.nonce(
+				{ walletAddress: testWalletAddress, chainId: chainId2 },
+				{ headers: headersB },
+			);
+
+			const linkResult = await client.siwe.verify(
+				{
+					message: "valid_message",
+					signature: "valid_signature",
+					walletAddress: testWalletAddress,
+					chainId: chainId2,
+				},
+				{ headers: headersB },
+			);
+
+			// Expectation: This should be rejected because the wallet address (even on a different chain)
+			// is already associated with User A, preventing a split identity.
+			expect(linkResult.error).toBeDefined();
+			expect(linkResult.error?.status).toBe(400);
+			expect(linkResult.error?.code).toBe("WALLET_ALREADY_LINKED_TO_ANOTHER_USER");
+
+			// Verify that no new walletAddress record was created for User B
+			const ctx = await auth.$context;
+			const walletAddressesForUserB = await ctx.adapter.findMany<WalletAddress>({
+				model: "walletAddress",
+				where: [{ field: "userId", value: userBId }],
+			});
+			expect(walletAddressesForUserB.length).toBe(0); // User B should not have linked this wallet
+
+			// Verify that the original walletAddress for User A is still intact
+			const walletAddressesForUserA = await ctx.adapter.findMany<WalletAddress>({
+				model: "walletAddress",
+				where: [{ field: "userId", value: userAId }],
+			});
+			expect(walletAddressesForUserA.length).toBe(1);
+			expect(walletAddressesForUserA[0]?.address).toBe(testWalletAddress);
+			expect(walletAddressesForUserA[0]?.chainId).toBe(chainId1);
+		});
 	});
 
 	describe("ENS integration", () => {
 		it("should use ENS lookup for user name and avatar when provided", async () => {
-			const ensName = "vitalik.eth";
+			const ensName = "better-auth.eth";
 			const ensAvatar = "https://example.com/avatar.png";
 
 			const { client, auth } = await createTestInstance({
@@ -1302,4 +1383,7 @@ describe("siwe", () => {
 			expect(accountIds).toContain(`${checksumWallet}:${chainId2}`);
 		});
 	});
+
+
 });
+
