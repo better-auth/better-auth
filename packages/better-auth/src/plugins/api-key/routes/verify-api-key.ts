@@ -192,31 +192,31 @@ export async function validateApiKey({
 		updatedAt: new Date(),
 	};
 
-	const performUpdate = async (): Promise<ApiKey | null> => {
-		if (opts.storage === "database") {
-			return ctx.context.adapter.update<ApiKey>({
-				model: API_KEY_TABLE_NAME,
-				where: [{ field: "id", value: apiKey.id }],
-				update: updated,
-			});
-		} else if (
-			opts.storage === "secondary-storage" &&
-			opts.fallbackToDatabase
-		) {
-			const dbUpdated = await ctx.context.adapter.update<ApiKey>({
-				model: API_KEY_TABLE_NAME,
-				where: [{ field: "id", value: apiKey.id }],
-				update: updated,
-			});
-			if (dbUpdated) {
-				await setApiKey(ctx, dbUpdated, opts);
-			}
-			return dbUpdated;
-		} else {
-			await setApiKey(ctx, updated, opts);
-			return updated;
-		}
-	};
+  const performUpdate = async (): Promise<ApiKey | null> => {
+    if (opts.storage === "database") {
+      return ctx.context.adapter.update<ApiKey>({
+        model: API_KEY_TABLE_NAME,
+        where: [{ field: "id", value: apiKey.id }],
+        update: { ...updated, id: undefined },
+      });
+    } else if (
+      opts.storage === "secondary-storage" &&
+      opts.fallbackToDatabase
+    ) {
+      const dbUpdated = await ctx.context.adapter.update<ApiKey>({
+        model: API_KEY_TABLE_NAME,
+        where: [{ field: "id", value: apiKey.id }],
+        update: { ...updated, id: undefined },
+      });
+      if (dbUpdated) {
+        await setApiKey(ctx, dbUpdated, opts);
+      }
+      return dbUpdated;
+    } else {
+      await setApiKey(ctx, updated, opts);
+      return updated;
+    }
+  };
 
 	let newApiKey: ApiKey | null = null;
 
