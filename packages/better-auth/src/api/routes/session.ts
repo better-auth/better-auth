@@ -600,16 +600,9 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 				const sessions = await ctx.context.internalAdapter.listSessions(
 					ctx.context.session.user.id,
 				);
-				const activeSessions = sessions
-					.filter((session) => {
-						return session.expiresAt > new Date();
-					})
-					.map((session) => {
-						return {
-							...session,
-							token: "", // we don't need to return the token to the client
-						};
-					});
+				const activeSessions = sessions.filter((session) => {
+					return session.expiresAt > new Date();
+				});
 				return ctx.json(
 					activeSessions as unknown as Prettify<InferSession<Option>>[],
 				);
