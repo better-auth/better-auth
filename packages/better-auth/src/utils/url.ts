@@ -127,7 +127,6 @@ export function getBaseURL(
 	const fromRequest = request?.headers.get("x-forwarded-host");
 	const fromRequestProto = request?.headers.get("x-forwarded-proto");
 	if (fromRequest && fromRequestProto && trustedProxyHeaders) {
-		// Validate proxy headers before using them
 		if (
 			validateProxyHeader(fromRequestProto, "proto") &&
 			validateProxyHeader(fromRequest, "host")
@@ -135,10 +134,8 @@ export function getBaseURL(
 			try {
 				return withPath(`${fromRequestProto}://${fromRequest}`, path);
 			} catch (error) {
-				// If construction fails, fall through to use request URL
 			}
 		}
-		// If validation fails, fall through to use the actual request URL
 	}
 
 	if (request) {

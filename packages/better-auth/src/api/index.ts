@@ -273,24 +273,6 @@ export const router = <Option extends BetterAuthOptions>(
 			const disabledPaths = ctx.options.disabledPaths || [];
 			const pathname = new URL(req.url).pathname.replace(/\/+$/, "") || "/";
 			
-			try {
-				// Check for double-encoding bypass attempts
-				const decodedOnce = decodeURIComponent(pathname);
-				const decodedTwice = decodeURIComponent(decodedOnce);
-				if (decodedOnce !== decodedTwice) {
-					const normalizedDoubleDecoded =
-						basePath === "/"
-							? decodedTwice
-							: decodedTwice.startsWith(basePath)
-								? decodedTwice.slice(basePath.length).replace(/\/+$/, "") || "/"
-								: decodedTwice;
-					if (disabledPaths.includes(normalizedDoubleDecoded)) {
-						return new Response("Not Found", { status: 404 });
-					}
-				}
-			} catch {
-			}
-			
 			const normalizedPath =
 				basePath === "/"
 					? pathname

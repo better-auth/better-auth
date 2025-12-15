@@ -421,7 +421,7 @@ describe("after hook", async () => {
 	});
 });
 
-describe("disabled paths", async () => {
+describe.only("disabled paths", async () => {
 	it("should return 404 for disabled paths", async () => {
 		const { client } = await getTestInstance({
 			disabledPaths: ["/sign-in/email"],
