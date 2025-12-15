@@ -30,7 +30,7 @@ import {
 	discoverOIDCConfig,
 	mapDiscoveryErrorToAPIError,
 } from "../oidc";
-import { validateSAMLAlgorithms } from "../saml";
+import { validateConfigAlgorithms, validateSAMLAlgorithms } from "../saml";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
 import { safeJsonParse, validateEmailDomain } from "../utils";
 
@@ -741,6 +741,16 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 						false,
 				});
 			};
+
+			if (body.samlConfig) {
+				validateConfigAlgorithms(
+					{
+						signatureAlgorithm: body.samlConfig.signatureAlgorithm,
+						digestAlgorithm: body.samlConfig.digestAlgorithm,
+					},
+					options?.saml?.algorithms,
+				);
+			}
 
 			const provider = await ctx.context.adapter.create<
 				Record<string, any>,
