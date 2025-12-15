@@ -804,6 +804,43 @@ describe("organization", async (it) => {
 		expect(hasMultiplePermissions.data?.success).toBe(true);
 	});
 
+	it("should validate permissions using organizationSlug", async () => {
+		const org = await client.organization.getFullOrganization({
+			query: {
+				organizationId,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(org.data?.slug).toBeDefined();
+
+		const hasPermission = await client.organization.hasPermission({
+			permissions: {
+				member: ["update"],
+			},
+			organizationSlug: org.data!.slug,
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(hasPermission.data?.success).toBe(true);
+
+		const invalidSlug = await client.organization.hasPermission({
+			permissions: {
+				member: ["update"],
+			},
+			organizationSlug: "non-existent-slug",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(invalidSlug.error?.status).toBe(400);
+		expect(invalidSlug.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+		);
+	});
+
 	it("should return BAD_REQUEST when non-member tries to delete organization", async () => {
 		// Create an organization first
 		const testOrg = await client.organization.create({

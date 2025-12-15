@@ -119,7 +119,20 @@ export type OrganizationEndpoints<O extends OrganizationOptions> = {
 
 const createHasPermissionBodySchema = z
 	.object({
-		organizationId: z.string().optional(),
+		organizationId: z
+			.string()
+			.meta({
+				description:
+					'The organization ID to check permission for. If not provided, will default to the user\'s active organization. Eg: "organization-id"',
+			})
+			.optional(),
+		organizationSlug: z
+			.string()
+			.meta({
+				description:
+					'The organization slug to check permission for. If not provided, will default to the user\'s active organization. Eg: "organization-slug"',
+			})
+			.optional(),
 	})
 	.and(
 		z.union([
@@ -169,6 +182,7 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 				$Infer: {
 					body: {} as PermissionExclusive & {
 						organizationId?: string | undefined;
+						organizationSlug?: string | undefined;
 					},
 				},
 				openapi: {
@@ -179,6 +193,16 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 								schema: {
 									type: "object",
 									properties: {
+										organizationId: {
+											type: "string",
+											description:
+												"The organization ID to check permission for",
+										},
+										organizationSlug: {
+											type: "string",
+											description:
+												"The organization slug to check permission for",
+										},
 										permission: {
 											type: "object",
 											description: "The permission to check",
@@ -219,15 +243,29 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 			},
 		},
 		async (ctx) => {
-			const activeOrganizationId =
+			const adapter = getOrgAdapter<O>(ctx.context, options);
+			let activeOrganizationId =
 				ctx.body.organizationId ||
 				ctx.context.session.session.activeOrganizationId;
+
+			if (ctx.body.organizationSlug) {
+				const organization = await adapter.findOrganizationBySlug(
+					ctx.body.organizationSlug,
+				);
+				if (!organization) {
+					throw new APIError("BAD_REQUEST", {
+						message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+					});
+				}
+				activeOrganizationId = organization.id;
+			}
+
 			if (!activeOrganizationId) {
 				throw new APIError("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
 				});
 			}
-			const adapter = getOrgAdapter<O>(ctx.context, options);
+
 			const member = await adapter.findMemberByOrgId({
 				userId: ctx.context.session.user.id,
 				organizationId: activeOrganizationId,
