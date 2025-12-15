@@ -30,8 +30,8 @@ import {
 	discoverOIDCConfig,
 	mapDiscoveryErrorToAPIError,
 } from "../oidc";
+import { validateSAMLAlgorithms } from "../saml";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
-
 import { safeJsonParse, validateEmailDomain } from "../utils";
 
 const AUTHN_REQUEST_KEY_PREFIX = "saml-authn-request:";
@@ -1808,6 +1808,8 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 
 			const { extract } = parsedResponse!;
 
+			validateSAMLAlgorithms(parsedResponse, options?.saml?.algorithms);
+
 			validateSAMLTimestamp((extract as any).conditions, {
 				clockSkew: options?.saml?.clockSkew,
 				requireTimestamps: options?.saml?.requireTimestamps,
@@ -2245,6 +2247,8 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			}
 
 			const { extract } = parsedResponse!;
+
+			validateSAMLAlgorithms(parsedResponse, options?.saml?.algorithms);
 
 			validateSAMLTimestamp((extract as any).conditions, {
 				clockSkew: options?.saml?.clockSkew,

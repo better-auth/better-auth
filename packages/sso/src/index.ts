@@ -29,6 +29,15 @@ export {
 	validateSAMLTimestamp,
 } from "./routes/sso";
 
+export {
+	type AlgorithmValidationOptions,
+	DataEncryptionAlgorithm,
+	type DeprecatedAlgorithmBehavior,
+	DigestAlgorithm,
+	KeyEncryptionAlgorithm,
+	SignatureAlgorithm,
+} from "./saml";
+
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "./types";
 
 export type { SAMLConfig, OIDCConfig, SSOOptions, SSOProvider };
