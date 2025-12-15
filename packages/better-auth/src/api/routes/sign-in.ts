@@ -5,11 +5,12 @@ import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 import { APIError } from "better-call";
 import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
-import { parseUserOutput } from "../../db/schema";
+import { parseUserOutput } from "../../db";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import type { InferUser } from "../../types";
 import { generateState } from "../../utils";
 import { createEmailVerificationToken } from "./email-verification";
+import { originCheck } from "../middlewares";
 
 const socialSignInBodySchema = z.object({
 	/**
@@ -157,8 +158,23 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 		"/sign-in/social",
 		{
 			method: "POST",
-			operationId: "socialSignIn",
 			body: socialSignInBodySchema,
+			use: [
+				originCheck((ctx) => {
+					const items = [
+						ctx.body.callbackURL,
+						ctx.body.errorCallbackURL,
+						ctx.body.newUserCallbackURL,
+					].filter(Boolean) as string[];
+					return items.map((v) => {
+						try {
+							return decodeURIComponent(v);
+						} catch {
+							return v;
+						}
+					});
+				}),
+			],
 			metadata: {
 				$Infer: {
 					body: {} as z.infer<typeof socialSignInBodySchema>,
@@ -236,7 +252,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 							provider: c.body.provider,
 						},
 					);
-					throw new APIError("NOT_FOUND", {
+					throw new APIError("BAD_REQUEST", {
 						message: BASE_ERROR_CODES.ID_TOKEN_NOT_SUPPORTED,
 					});
 				}
@@ -310,7 +326,12 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 			const { codeVerifier, state } = await generateState(
 				c,
 				undefined,
-				c.body.additionalData,
+				{
+					...c.body.additionalData,
+					callbackURL: c.body.callbackURL,
+					newUserCallbackURL: c.body.newUserCallbackURL,
+					errorCallbackURL: c.body.errorCallbackURL,
+				},
 			);
 			const url = await provider.createAuthorizationURL({
 				state,
@@ -332,7 +353,6 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 		"/sign-in/email",
 		{
 			method: "POST",
-			operationId: "signInEmail",
 			body: z.object({
 				/**
 				 * Email of the user
@@ -370,6 +390,17 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 					.default(true)
 					.optional(),
 			}),
+			use: [
+				originCheck((ctx) => {
+					const v = ctx.body.callbackURL;
+					if (!v) return "";
+					try {
+						return decodeURIComponent(v);
+					} catch {
+						return v;
+					}
+				}),
+			],
 			metadata: {
 				$Infer: {
 					body: {} as {

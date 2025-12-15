@@ -39,8 +39,11 @@ const VerifyQuery = z.object({
 });
 
 const JwtPayloadSchema = z.object({
-	email: z.string().email(),
+	email: z.email(),
 	updateTo: z.string().optional(),
+	requestType: z
+		.enum(["change-email-confirmation", "change-email-verification"])
+		.optional(),
 });
 
 /**
