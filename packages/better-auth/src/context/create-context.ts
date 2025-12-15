@@ -277,7 +277,11 @@ export async function createAuthContext(
 				: isTest()
 					? true
 					: false,
-		runInBackground: options.advanced?.backgroundTasks?.handler,
+		runInBackground:
+			options.advanced?.backgroundTasks?.handler ??
+			((p) => {
+				p.catch(() => {});
+			}),
 	};
 
 	const initOrPromise = runPluginInit(ctx);

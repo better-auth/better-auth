@@ -183,7 +183,7 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 								);
 							},
 						);
-						if (opts.deferUpdates && ctx.context.runInBackground) {
+						if (opts.deferUpdates) {
 							ctx.context.runInBackground(cleanupTask);
 						}
 

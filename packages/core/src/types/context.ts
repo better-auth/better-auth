@@ -280,6 +280,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 		 * Background task handler for deferred operations.
 		 *
 		 * This is inferred from the `options.advanced?.backgroundTasks?.handler` option.
+		 * Defaults to a no-op that just runs the promise.
 		 */
-		runInBackground?: (promise: Promise<void>) => void;
+		runInBackground: (promise: Promise<void>) => void;
 	};
