@@ -1,3 +1,4 @@
+/* cspell:ignore xenc */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as alg from "./algorithms";
 
