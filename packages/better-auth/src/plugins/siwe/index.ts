@@ -188,6 +188,23 @@ export const siwe = (options: SIWEPluginOptions) =>
 							});
 						}
 
+						// Check if this wallet address exists on any other chain (same wallet, different network)
+						// This prevents different users from linking the same wallet address on different chains,
+						// while still allowing the same user to link their wallet on multiple chains.
+						const walletOnOtherChain =
+							await ctx.context.adapter.findOne<WalletAddress>({
+								model: "walletAddress",
+								where: [
+									{ field: "address", operator: "eq", value: walletAddress },
+								],
+							});
+
+						if (walletOnOtherChain && walletOnOtherChain.userId !== sessionUser.id) {
+							throw new APIError("BAD_REQUEST", {
+								message: SIWE_ERROR_CODES.WALLET_ALREADY_LINKED,
+							});
+						}
+
 						await ctx.context.adapter.create({
 							model: "walletAddress",
 							data: {
