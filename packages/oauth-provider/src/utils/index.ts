@@ -386,6 +386,7 @@ export function parsePrompt(prompt: string) {
 		if (
 			p === "login" ||
 			p === "consent" ||
+			p === "create" ||
 			p === "select_account" ||
 			p === "none"
 		) {
@@ -393,4 +394,22 @@ export function parsePrompt(prompt: string) {
 		}
 	}
 	return new Set(set);
+}
+
+/**
+ * Deletes a prompt value
+ *
+ * @param ctx
+ * @param prompt - the prompt value to delete
+ */
+export function deleteFromPrompt(query: URLSearchParams, prompt: Prompt) {
+	let prompts = query.get("prompt")?.split(" ");
+	const foundPrompt = prompts?.findIndex((v) => v === prompt) ?? -1;
+	if (foundPrompt >= 0) {
+		prompts?.splice(foundPrompt, 1);
+		prompts?.length
+			? query.set("prompt", prompts.join(" "))
+			: query.delete("prompt");
+	}
+	return Object.fromEntries(query);
 }

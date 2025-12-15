@@ -190,9 +190,12 @@ export async function authorizeEndpoint(
 
 	// Check for session
 	const session = await getSessionFromCtx(ctx);
-	if (!session || promptSet?.has("login")) {
-		const queryParams = await signParams(ctx, opts);
-		return handleRedirect(ctx, `${opts.loginPage}?${queryParams}`);
+	if (!session || promptSet?.has("login") || promptSet?.has("create")) {
+		return redirectWithPromptCode(
+			ctx,
+			opts,
+			promptSet?.has("create") ? "create" : "login",
+		);
 	}
 
 	// Force account selection (eg. multi-session)
@@ -213,6 +216,24 @@ export async function authorizeEndpoint(
 		});
 		if (selectedAccountRedirect) {
 			return redirectWithPromptCode(ctx, opts, "select_account");
+		}
+	}
+
+	// Redirect to complete registration steps
+	if (opts.signup?.shouldRedirect) {
+		const signupRedirect = await opts.signup.shouldRedirect({
+			headers: ctx.request.headers,
+			user: session.user,
+			session: session.session,
+			scopes: requestedScopes,
+		});
+		if (signupRedirect) {
+			return redirectWithPromptCode(
+				ctx,
+				opts,
+				"create",
+				typeof signupRedirect === "string" ? signupRedirect : undefined,
+			);
 		}
 	}
 
@@ -339,16 +360,25 @@ async function redirectWithAuthorizationCode(
 async function redirectWithPromptCode(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-	type: "consent" | "select_account" | "post_login",
+	type: "login" | "create" | "consent" | "select_account" | "post_login",
+	page?: string,
 ) {
 	const queryParams = await signParams(ctx, opts);
-	const path =
-		type === "select_account"
-			? (opts.selectAccount?.page ?? opts.loginPage)
-			: type === "post_login"
-				? opts.postLogin?.page
-				: opts.consentPage;
-	return handleRedirect(ctx, `${path}?${queryParams}`);
+	let path = opts.loginPage;
+	if (type === "select_account") {
+		path = opts.selectAccount?.page ?? opts.loginPage;
+	} else if (type === "post_login") {
+		if (!opts.postLogin?.page)
+			throw new APIError("INTERNAL_SERVER_ERROR", {
+				error_description: "postLogin should have been defined",
+			});
+		path = opts.postLogin?.page;
+	} else if (type === "consent") {
+		path = opts.consentPage;
+	} else if (type === "create") {
+		path = opts.signup?.page ?? opts.loginPage;
+	}
+	return handleRedirect(ctx, `${page ?? path}?${queryParams}`);
 }
 
 async function signParams(

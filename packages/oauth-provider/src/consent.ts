@@ -3,6 +3,7 @@ import { APIError, getSessionFromCtx } from "better-auth/api";
 import { authorizeEndpoint, formatErrorURL } from "./authorize";
 import { oAuthState } from "./oauth";
 import type { OAuthConsent, OAuthOptions, Scope } from "./types";
+import { deleteFromPrompt } from "./utils";
 
 export async function consentEndpoint(
 	ctx: GenericEndpointContext,
@@ -114,16 +115,8 @@ export async function consentEndpoint(
 
 	// Return authorization code
 	ctx?.headers?.set("accept", "application/json");
-	let prompts = query.get("prompt")?.split(" ");
-	const foundPrompt = prompts?.findIndex((v) => v === "consent") ?? -1;
-	if (foundPrompt >= 0) {
-		prompts?.splice(foundPrompt, 1);
-		prompts?.length
-			? query.set("prompt", prompts.join(" "))
-			: query.delete("prompt");
-	}
+	ctx.query = deleteFromPrompt(query, "consent");
 	ctx.context.postLogin = true;
-	ctx.query = Object.fromEntries(query);
 	const { url } = await authorizeEndpoint(ctx, opts);
 	return {
 		redirect: true,

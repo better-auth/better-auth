@@ -1,4 +1,5 @@
 import type { JWSAlgorithms } from "better-auth/plugins/jwt";
+import type { Prompt } from ".";
 
 /**
  * Supported grant types of the token endpoint
@@ -234,6 +235,12 @@ export interface OIDCMetadata extends AuthServerMetadata {
 	 * @see https://openid.net/specs/openid-connect-rpinitiated-1_0.html
 	 */
 	end_session_endpoint: string;
+	/**
+	 * Prompt values supported by this OIDC server
+	 *
+	 * @see https://openid.net/specs/openid-connect-prompt-create-1_0.html#OpenID.Discovery
+	 */
+	prompt_values_supported: Prompt[];
 }
 
 /**

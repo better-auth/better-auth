@@ -28,7 +28,7 @@ import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
 import { SafeUrlSchema } from "./types/zod";
 import { userInfoEndpoint } from "./userinfo";
-import { getJwtPlugin } from "./utils";
+import { deleteFromPrompt, getJwtPlugin } from "./utils";
 
 export const oAuthState = defineRequestState<{ query?: string } | null>(
 	() => null,
@@ -250,15 +250,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						if (!session) return;
 						ctx.context.session = session;
 
-						let prompts = query.get("prompt")?.split(" ");
-						const foundPrompt = prompts?.findIndex((v) => v === "login") ?? -1;
-						if (ctx.query && foundPrompt >= 0) {
-							prompts?.splice(foundPrompt, 1);
-							prompts?.length
-								? query.set("prompt", prompts.join(" "))
-								: query.delete("prompt");
-						}
-						ctx.query = Object.fromEntries(query);
+						ctx.query = deleteFromPrompt(query, "login");
 						return await authorizeEndpoint(ctx, opts);
 					}),
 				},
@@ -336,6 +328,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							.enum([
 								"consent",
 								"login",
+								"create",
 								"select_account",
 								"login consent",
 								"select_account consent",
@@ -502,6 +495,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						selected: z.boolean().optional().meta({
 							description:
 								"Confirms an account has been selected and authorization can proceed.",
+						}),
+						created: z.boolean().optional().meta({
+							description: "Confirms an account was registered",
 						}),
 						postLogin: z.boolean().optional().meta({
 							description: "Confirms organization and/or team selection.",

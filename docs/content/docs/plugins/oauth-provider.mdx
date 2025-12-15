@@ -482,7 +482,9 @@ type oauth2Consent = {
 
 ### Continue Endpoint
 
-Account selection must [configured](#select-account-screen) to perform account selection.
+Sign up registration pages must be [configured](#sign-up-account-screen) to perform account registration steps.
+Account selection must be [configured](#select-account-screen) to perform account selection.
+Post login must be [configured](#post-login-screen) to perform post login selection.
 
 <APIMethod path="/oauth2/continue" method="POST">
 ```ts
@@ -490,11 +492,15 @@ type oauth2Continue = {
   /**
    * Confirms an account was selected.
    */
-  selected: boolean,
+  selected?: boolean,
+  /**
+   * Confirms an account was registered
+   */
+  created?: boolean,
   /**
    * Confirms completion of post login activity
    */
-  postLogin: boolean,
+  postLogin?: boolean,
 }
 ```
 </APIMethod>
@@ -740,6 +746,35 @@ const res = await client.oauth2.consent({
   // optional scopes accepted (if not sent, accepted scopes matches the original request)
   scope: "openid profile email"
 });
+```
+
+
+#### Sign Up Account Screen
+
+To direct users from the client to a sign up page using `prompt: create`, use `signup`.
+
+```ts title="auth.ts"
+oauthProvider({
+  signUp: {
+    page: "/sign-up", // [!code highlight]
+  }
+})
+```
+
+To stop sign in process to complete registration forms, use the `shouldRedirect` function.
+
+```ts title="auth.ts"
+import { userRegistered } from "@lib";
+
+oauthProvider({
+  signUp: {
+    page: "/sign-up",
+    shouldRedirect: async ({ headers }) => { // [!code highlight]
+      const isUserRegistered = await userRegistered(headers);
+      return isUserRegistered ? false : "/setup";
+    },
+  }
+})
 ```
 
 

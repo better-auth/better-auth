@@ -67,6 +67,7 @@ export interface GenericOAuthConfig {
 		| (
 				| "none"
 				| "login"
+				| "create"
 				| "consent"
 				| "select_account"
 				| "select_account consent"

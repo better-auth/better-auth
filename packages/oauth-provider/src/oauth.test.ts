@@ -363,6 +363,7 @@ describe("oauth - prompt", async () => {
 	const scopes = ["openid", "profile", "email", "offline_access", "read:posts"];
 	let enableSelectAccount = false;
 	let enablePostLogin = false;
+	let isUserRegistered = true;
 	const {
 		auth: authorizationServer,
 		customFetchImpl,
@@ -377,6 +378,12 @@ describe("oauth - prompt", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
+				signup: {
+					page: "/signup",
+					shouldRedirect() {
+						return isUserRegistered ? false : "/setup";
+					},
+				},
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
@@ -597,6 +604,102 @@ describe("oauth - prompt", async () => {
 		expect(loginRedirectUri).toContain(
 			`redirect_uri=${encodeURIComponent(oauthClient?.redirect_uris?.at(0)!)}`,
 		);
+	});
+
+	it("create - should always redirect to signup", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const { customFetchImpl: customFetchImplRP } = await createTestInstance({
+			prompt: "create",
+		});
+		const client = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: rpBaseUrl,
+			fetchOptions: {
+				customFetchImpl: customFetchImplRP,
+			},
+		});
+
+		// Generate authorize url
+		const data = await client.signIn.oauth2(
+			{
+				providerId,
+				callbackURL: "/success",
+			},
+			{
+				throw: true,
+			},
+		);
+		expect(data.url).toContain(
+			`${authServerBaseUrl}/api/auth/oauth2/authorize`,
+		);
+		expect(data.url).toContain(`client_id=${oauthClient.client_id}`);
+
+		// Check for redirection to /signup
+		let signupRedirectUri = "";
+		await serverClient.$fetch(data.url, {
+			method: "GET",
+			onError(context) {
+				signupRedirectUri = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(signupRedirectUri).toContain("/signup");
+		expect(signupRedirectUri).toContain(`client_id=${oauthClient.client_id}`);
+		expect(signupRedirectUri).toContain(
+			`redirect_uri=${encodeURIComponent(oauthClient?.redirect_uris?.at(0)!)}`,
+		);
+	});
+
+	it("create - should redirect to setup page", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		isUserRegistered = false;
+
+		const { customFetchImpl: customFetchImplRP, cookieSetter } =
+			await createTestInstance();
+		const client = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: rpBaseUrl,
+			fetchOptions: {
+				customFetchImpl: customFetchImplRP,
+			},
+		});
+
+		// Generate authorize url
+		const oauthHeaders = new Headers();
+		const data = await client.signIn.oauth2(
+			{
+				providerId,
+				callbackURL: "/success",
+			},
+			{
+				throw: true,
+				onSuccess: cookieSetter(oauthHeaders),
+			},
+		);
+		expect(data.url).toContain(
+			`${authServerBaseUrl}/api/auth/oauth2/authorize`,
+		);
+		expect(data.url).toContain(`client_id=${oauthClient.client_id}`);
+
+		// Check for redirection to /setup
+		let setupRedirectUri = "";
+		await serverClient.$fetch(data.url, {
+			method: "GET",
+			headers,
+			onError(context) {
+				setupRedirectUri = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(setupRedirectUri).toContain("/setup");
+		expect(setupRedirectUri).toContain(`client_id=${oauthClient.client_id}`);
+		expect(setupRedirectUri).toContain(
+			`redirect_uri=${encodeURIComponent(oauthClient?.redirect_uris?.at(0)!)}`,
+		);
+		isUserRegistered = true;
 	});
 
 	it("consent - should sign in", async () => {

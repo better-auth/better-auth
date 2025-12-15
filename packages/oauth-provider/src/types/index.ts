@@ -23,7 +23,7 @@ type InternallySupportedScopes =
 	| "email"
 	| "offline_access";
 export type Scope = LiteralString | InternallySupportedScopes;
-export type Prompt = "none" | "consent" | "login" | "select_account";
+export type Prompt = "none" | "consent" | "login" | "create" | "select_account";
 export type AuthorizePrompt =
 	| Prompt
 	| "login consent"
@@ -253,6 +253,41 @@ export interface OAuthOptions<
 	 */
 	consentPage: string;
 	/**
+	 * Sign Up page settings associated with `prompt: "create"`
+	 * @see https://openid.net/specs/openid-connect-prompt-create-1_0.html
+	 */
+	signup?: {
+		/**
+		 * A URL to the Sign Up page where the user will be redirected
+		 * to continue a signup flow.
+		 *
+		 * Upon completion of signup, you need to call the `/oauth2/continue`
+		 * with `created: true` to continue the login flow.
+		 *
+		 * @default loginPage
+		 * @example `/sign-up`
+		 */
+		page?: string;
+		/**
+		 * To add registration steps, specify the page(s) to redirect to.
+		 *
+		 * Note: the account would need to be logged in (or selected)
+		 * to specify steps.
+		 *
+		 * If true, user with redirect to `page`.
+		 * If string, user with redirect to the page specified by string.
+		 * If false, user has completed registration and will continue auth flow.
+		 *
+		 * @param context
+		 */
+		shouldRedirect?: (context: {
+			headers: Headers;
+			user: User & Record<string, unknown>;
+			session: Session & Record<string, unknown>;
+			scopes: Scopes;
+		}) => Awaitable<boolean | string>;
+	};
+	/**
 	 * Select Account page settings associated with `prompt: "select_account"`
 	 */
 	selectAccount?: {
@@ -261,7 +296,7 @@ export interface OAuthOptions<
 		 * the user must select an account (eg. multi-session).
 		 *
 		 * Once the user selects an account, you need to call the `/oauth2/continue`
-		 * to continue the login flow.
+		 * with `selected: true` to continue the login flow.
 		 *
 		 * @default loginPage
 		 */
@@ -305,7 +340,8 @@ export interface OAuthOptions<
 		 * select an additional choice for `/oauth2/authorize`.
 		 * For example, allow selection of an organization or team.
 		 *
-		 * Upon selection of a specific account, use `/oauth2/continue`.
+		 * Upon selection of a specific account, use `/oauth2/continue`
+		 * with `postLogin: true` to continue the login flow.
 		 *
 		 * @returns
 		 * - `true`: account is not selected and needs selection
