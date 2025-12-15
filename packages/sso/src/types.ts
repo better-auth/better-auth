@@ -1,5 +1,6 @@
 import type { OAuth2Tokens, User } from "better-auth";
 import type { AuthnRequestStore } from "./authn-request-store";
+import type { AlgorithmValidationOptions } from "./saml/algorithms";
 
 export interface OIDCMapping {
 	id?: string | undefined;
@@ -333,5 +334,19 @@ export interface SSOOptions {
 		 * @default false
 		 */
 		requireTimestamps?: boolean;
+		/**
+		 * Algorithm validation options for SAML responses.
+		 *
+		 * Controls behavior when deprecated algorithms (SHA-1, RSA1_5, 3DES)
+		 * are detected in SAML responses.
+		 *
+		 * @example
+		 * ```ts
+		 * algorithms: {
+		 *   onDeprecated: "reject" // Reject deprecated algorithms
+		 * }
+		 * ```
+		 */
+		algorithms?: AlgorithmValidationOptions;
 	};
 }
