@@ -274,6 +274,14 @@ describe("validateConfigAlgorithms", () => {
 		it("should pass undefined signatureAlgorithm without error", () => {
 			expect(() => alg.validateConfigAlgorithms({})).not.toThrow();
 		});
+
+		it("should skip validation for short-form algorithm names", () => {
+			expect(() =>
+				alg.validateConfigAlgorithms({
+					signatureAlgorithm: "sha256",
+				}),
+			).not.toThrow();
+		});
 	});
 
 	describe("digest algorithm validation", () => {
@@ -323,6 +331,14 @@ describe("validateConfigAlgorithms", () => {
 					digestAlgorithm: "http://example.com/unknown-digest",
 				}),
 			).toThrow(/not recognized/i);
+		});
+
+		it("should skip validation for short-form digest names", () => {
+			expect(() =>
+				alg.validateConfigAlgorithms({
+					digestAlgorithm: "sha256",
+				}),
+			).not.toThrow();
 		});
 	});
 

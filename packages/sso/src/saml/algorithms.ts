@@ -272,6 +272,10 @@ export interface ConfigAlgorithmValidationOptions {
 	allowedDigestAlgorithms?: string[];
 }
 
+function isFullAlgorithmUri(value: string): boolean {
+	return value.startsWith("http://") || value.startsWith("https://");
+}
+
 export function validateConfigAlgorithms(
 	config: {
 		signatureAlgorithm?: string | undefined;
@@ -285,7 +289,7 @@ export function validateConfigAlgorithms(
 		allowedDigestAlgorithms,
 	} = options;
 
-	if (config.signatureAlgorithm) {
+	if (config.signatureAlgorithm && isFullAlgorithmUri(config.signatureAlgorithm)) {
 		if (allowedSignatureAlgorithms) {
 			if (!allowedSignatureAlgorithms.includes(config.signatureAlgorithm)) {
 				throw new APIError("BAD_REQUEST", {
@@ -311,7 +315,7 @@ export function validateConfigAlgorithms(
 		}
 	}
 
-	if (config.digestAlgorithm) {
+	if (config.digestAlgorithm && isFullAlgorithmUri(config.digestAlgorithm)) {
 		if (allowedDigestAlgorithms) {
 			if (!allowedDigestAlgorithms.includes(config.digestAlgorithm)) {
 				throw new APIError("BAD_REQUEST", {
