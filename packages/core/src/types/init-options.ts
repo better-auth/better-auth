@@ -955,6 +955,12 @@ export type BetterAuthOptions = {
 				 */
 				fields?: Partial<Record<keyof OmitId<Verification>, string>>;
 				/**
+				 * Additional fields for the verification
+				 */
+				additionalFields?: {
+					[key: string]: DBFieldAttribute;
+				};
+				/**
 				 * disable cleaning up expired values when a verification value is
 				 * fetched
 				 */
