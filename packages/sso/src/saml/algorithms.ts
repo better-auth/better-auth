@@ -46,6 +46,8 @@ const DEPRECATED_DATA_ENCRYPTION_ALGORITHMS: readonly string[] = [
 	DataEncryptionAlgorithm.TRIPLEDES_CBC,
 ];
 
+const DEPRECATED_DIGEST_ALGORITHMS: readonly string[] = [DigestAlgorithm.SHA1];
+
 const SECURE_SIGNATURE_ALGORITHMS: readonly string[] = [
 	SignatureAlgorithm.RSA_SHA256,
 	SignatureAlgorithm.RSA_SHA384,
@@ -53,6 +55,12 @@ const SECURE_SIGNATURE_ALGORITHMS: readonly string[] = [
 	SignatureAlgorithm.ECDSA_SHA256,
 	SignatureAlgorithm.ECDSA_SHA384,
 	SignatureAlgorithm.ECDSA_SHA512,
+];
+
+const SECURE_DIGEST_ALGORITHMS: readonly string[] = [
+	DigestAlgorithm.SHA256,
+	DigestAlgorithm.SHA384,
+	DigestAlgorithm.SHA512,
 ];
 
 export type DeprecatedAlgorithmBehavior = "reject" | "warn" | "allow";
@@ -255,5 +263,73 @@ export function validateSAMLAlgorithms(
 	if (hasEncryptedAssertion(response.samlContent)) {
 		const encAlgs = extractEncryptionAlgorithms(response.samlContent);
 		validateEncryptionAlgorithms(encAlgs, options);
+	}
+}
+
+export interface ConfigAlgorithmValidationOptions {
+	onDeprecated?: DeprecatedAlgorithmBehavior;
+	allowedSignatureAlgorithms?: string[];
+	allowedDigestAlgorithms?: string[];
+}
+
+export function validateConfigAlgorithms(
+	config: {
+		signatureAlgorithm?: string | undefined;
+		digestAlgorithm?: string | undefined;
+	},
+	options: ConfigAlgorithmValidationOptions = {},
+): void {
+	const {
+		onDeprecated = "warn",
+		allowedSignatureAlgorithms,
+		allowedDigestAlgorithms,
+	} = options;
+
+	if (config.signatureAlgorithm) {
+		if (allowedSignatureAlgorithms) {
+			if (!allowedSignatureAlgorithms.includes(config.signatureAlgorithm)) {
+				throw new APIError("BAD_REQUEST", {
+					message: `SAML signature algorithm not in allow-list: ${config.signatureAlgorithm}`,
+					code: "SAML_ALGORITHM_NOT_ALLOWED",
+				});
+			}
+		} else if (
+			DEPRECATED_SIGNATURE_ALGORITHMS.includes(config.signatureAlgorithm)
+		) {
+			handleDeprecatedAlgorithm(
+				`SAML config uses deprecated signature algorithm: ${config.signatureAlgorithm}. Consider using SHA-256 or stronger.`,
+				onDeprecated,
+				"SAML_DEPRECATED_CONFIG_ALGORITHM",
+			);
+		} else if (
+			!SECURE_SIGNATURE_ALGORITHMS.includes(config.signatureAlgorithm)
+		) {
+			throw new APIError("BAD_REQUEST", {
+				message: `SAML signature algorithm not recognized: ${config.signatureAlgorithm}`,
+				code: "SAML_UNKNOWN_ALGORITHM",
+			});
+		}
+	}
+
+	if (config.digestAlgorithm) {
+		if (allowedDigestAlgorithms) {
+			if (!allowedDigestAlgorithms.includes(config.digestAlgorithm)) {
+				throw new APIError("BAD_REQUEST", {
+					message: `SAML digest algorithm not in allow-list: ${config.digestAlgorithm}`,
+					code: "SAML_ALGORITHM_NOT_ALLOWED",
+				});
+			}
+		} else if (DEPRECATED_DIGEST_ALGORITHMS.includes(config.digestAlgorithm)) {
+			handleDeprecatedAlgorithm(
+				`SAML config uses deprecated digest algorithm: ${config.digestAlgorithm}. Consider using SHA-256 or stronger.`,
+				onDeprecated,
+				"SAML_DEPRECATED_CONFIG_ALGORITHM",
+			);
+		} else if (!SECURE_DIGEST_ALGORITHMS.includes(config.digestAlgorithm)) {
+			throw new APIError("BAD_REQUEST", {
+				message: `SAML digest algorithm not recognized: ${config.digestAlgorithm}`,
+				code: "SAML_UNKNOWN_ALGORITHM",
+			});
+		}
 	}
 }
