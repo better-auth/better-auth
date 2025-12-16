@@ -170,33 +170,38 @@ export const google = (options: GoogleOptions) => {
 			// Verify JWT integrity
 			// See https://developers.google.com/identity/sign-in/web/backend-auth#verify-the-integrity-of-the-id-token
 
-			const { kid, alg: jwtAlg } = decodeProtectedHeader(token);
-			if (!kid || !jwtAlg) return false;
+			try {
+				const { kid, alg: jwtAlg } = decodeProtectedHeader(token);
+				if (!kid || !jwtAlg) return false;
 
-			const publicKey = await getGooglePublicKey(kid);
-			
-			// Handle multiple client IDs - if array, verify audience manually
-			const clientIds = Array.isArray(options.clientId)
-				? options.clientId
-				: [options.clientId];
-			
-			const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
-				algorithms: [jwtAlg],
-				issuer: ["https://accounts.google.com", "accounts.google.com"],
-				audience: clientIds.length === 1 ? clientIds[0] : clientIds,
-				maxTokenAge: "1h",
-			});
+				const publicKey = await getGooglePublicKey(kid);
 
-			if (nonce && jwtClaims.nonce !== nonce) {
+				// Handle multiple client IDs - if array, verify audience manually
+				const clientIds = Array.isArray(options.clientId)
+					? options.clientId
+					: [options.clientId];
+
+				const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
+					algorithms: [jwtAlg],
+					issuer: ["https://accounts.google.com", "accounts.google.com"],
+					audience: clientIds.length === 1 ? clientIds[0] : clientIds,
+					maxTokenAge: "1h",
+				});
+
+				if (nonce && jwtClaims.nonce !== nonce) {
+					return false;
+				}
+
+				// Check if the token's audience matches any of the configured client IDs
+				const isValid =
+					clientIds.includes(jwtClaims.aud as string) &&
+					(jwtClaims.iss === "https://accounts.google.com" ||
+						jwtClaims.iss === "accounts.google.com");
+				return isValid;
+			} catch {
+				// Return false for any errors (invalid token format, verification failure, etc.)
 				return false;
 			}
-
-			// Check if the token's audience matches any of the configured client IDs
-			const isValid =
-				clientIds.includes(jwtClaims.aud as string) &&
-				(jwtClaims.iss === "https://accounts.google.com" ||
-					jwtClaims.iss === "accounts.google.com");
-			return isValid;
 		},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
