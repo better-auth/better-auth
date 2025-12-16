@@ -19,6 +19,7 @@ const stateDataSchema = z.looseObject({
 		})
 		.optional(),
 	requestSignUp: z.boolean().optional(),
+	state: z.string().optional(),
 });
 
 export type StateData = z.infer<typeof stateDataSchema>;
@@ -49,7 +50,7 @@ export async function generateGenericState(
 	stateData: StateData,
 	settings?: { cookieName: string },
 ) {
-	const state = generateRandomString(32);
+	const state = stateData.state ?? generateRandomString(32);
 	const storeStateStrategy = c.context.oauthConfig.storeStateStrategy;
 
 	if (storeStateStrategy === "cookie") {
@@ -70,7 +71,7 @@ export async function generateGenericState(
 		c.setCookie(stateCookie.name, encryptedData, stateCookie.attributes);
 
 		return {
-			state,
+			state: state,
 			codeVerifier: stateData.codeVerifier,
 		};
 	}
@@ -123,6 +124,13 @@ export async function parseGenericState(
 	const storeStateStrategy = c.context.oauthConfig.storeStateStrategy;
 	let parsedData: StateData;
 
+	/**
+	 * This is generally cause security issue and should only be used in
+	 * dev or staging environments. It's currently used by the oauth-proxy
+	 * plugin
+	 */
+	const skipStateCookieCheck = c.context.oauthConfig?.skipStateCookieCheck;
+
 	if (storeStateStrategy === "cookie") {
 		// Retrieve state data from encrypted cookie
 		const stateCookie = c.context.createAuthCookie(
@@ -155,6 +163,17 @@ export async function parseGenericState(
 			);
 		}
 
+		if (
+			!skipStateCookieCheck &&
+			parsedData.state &&
+			parsedData.state !== state
+		) {
+			throw new StateError("State mismatch: State not persisted correctly", {
+				code: "state_security_mismatch",
+				details: { state },
+			});
+		}
+
 		// Clear the cookie after successful parsing
 		c.setCookie(stateCookie.name, "", {
 			maxAge: 0,
@@ -180,12 +199,6 @@ export async function parseGenericState(
 			c.context.secret,
 		);
 
-		/**
-		 * This is generally cause security issue and should only be used in
-		 * dev or staging environments. It's currently used by the oauth-proxy
-		 * plugin
-		 */
-		const skipStateCookieCheck = c.context.oauthConfig.skipStateCookieCheck;
 		if (
 			!skipStateCookieCheck &&
 			(!stateCookieValue || stateCookieValue !== state)

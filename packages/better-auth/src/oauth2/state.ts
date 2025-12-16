@@ -22,6 +22,8 @@ export async function generateState(
 		});
 	}
 
+	
+	const state = generateRandomString(32);
 	const codeVerifier = generateRandomString(128);
 
 	const stateData: StateData = {
@@ -36,6 +38,7 @@ export async function generateState(
 		 */
 		expiresAt: Date.now() + 10 * 60 * 1000,
 		requestSignUp: c.body?.requestSignUp,
+		state,
 	};
 
 	await setOAuthState(stateData);
