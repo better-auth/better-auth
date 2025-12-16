@@ -256,17 +256,18 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			payload: Record<string, any>;
 		}) => Promise<void>;
 		/**
-		 * This skips the origin check for all requests.
+		 * Skip origin check for requests.
 		 *
-		 * set to true by default for `test` environments and `false`
-		 * for other environments.
+		 * - `true`: Skip for ALL requests (DANGEROUS - disables CSRF protection)
+		 * - `string[]`: Skip only for specific paths (e.g., SAML callbacks)
+		 * - `false`: Enable origin check (default)
 		 *
-		 * It's inferred from the `options.advanced?.disableCSRFCheck`
-		 * option or `options.advanced?.disableOriginCheck` option.
+		 * Paths support prefix matching (e.g., "/sso/saml2/callback" matches
+		 * "/sso/saml2/callback/provider-name").
 		 *
-		 * @default false
+		 * @default false (true in test environments)
 		 */
-		skipOriginCheck: boolean;
+		skipOriginCheck: boolean | string[];
 		/**
 		 * This skips the CSRF check for all requests.
 		 *
@@ -276,16 +277,4 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 		 * @default false
 		 */
 		skipCSRFCheck: boolean;
-		/**
-		 * Paths that should skip origin check validation.
-		 * These are normalized paths (without basePath prefix).
-		 * Useful for endpoints that receive POST requests from external
-		 * sources like IdP callbacks.
-		 *
-		 * Paths support prefix matching - a path like "/sso/saml2/callback"
-		 * will match "/sso/saml2/callback/provider-name".
-		 *
-		 * @example ["/sso/saml2/callback", "/sso/saml2/sp/acs"]
-		 */
-		skipOriginCheckForPaths: string[];
 	};

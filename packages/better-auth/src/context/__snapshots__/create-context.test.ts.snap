@@ -176,7 +176,6 @@ exports[`base context creation > should match config 1`] = `
   "setNewSession": [Function],
   "skipCSRFCheck": false,
   "skipOriginCheck": true,
-  "skipOriginCheckForPaths": [],
   "socialProviders": [],
   "tables": {
     "account": {

@@ -143,13 +143,15 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 
 	return {
 		id: "sso",
-		init(ctx: { skipOriginCheckForPaths?: string[] }) {
+		init(ctx: { skipOriginCheck?: boolean | string[] }) {
+			const existing = ctx.skipOriginCheck;
+			if (existing === true) {
+				return {};
+			}
+			const existingPaths = Array.isArray(existing) ? existing : [];
 			return {
 				context: {
-					skipOriginCheckForPaths: [
-						...(ctx.skipOriginCheckForPaths ?? []),
-						...SAML_SKIP_ORIGIN_CHECK_PATHS,
-					],
+					skipOriginCheck: [...existingPaths, ...SAML_SKIP_ORIGIN_CHECK_PATHS],
 				},
 			};
 		},

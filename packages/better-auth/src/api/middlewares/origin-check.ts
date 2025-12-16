@@ -64,19 +64,17 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 		}
 	};
 
-	// Check if this path should skip origin validation (e.g., SAML ACS endpoints)
+	const skipOriginCheck = ctx.context.skipOriginCheck;
 	const basePath = new URL(ctx.context.baseURL).pathname;
-	const skipOriginForThisPath = shouldSkipOriginCheckForPath(
-		ctx.request.url,
-		basePath,
-		ctx.context.skipOriginCheckForPaths,
-	);
+	const shouldSkipOrigin =
+		skipOriginCheck === true ||
+		(Array.isArray(skipOriginCheck) &&
+			shouldSkipOriginCheckForPath(ctx.request.url, basePath, skipOriginCheck));
 
 	if (
 		useCookies &&
 		!ctx.context.skipCSRFCheck &&
-		!ctx.context.skipOriginCheck &&
-		!skipOriginForThisPath
+		!shouldSkipOrigin
 	) {
 		if (!originHeader || originHeader === "null") {
 			throw new APIError("FORBIDDEN", { message: "Missing or null Origin" });
