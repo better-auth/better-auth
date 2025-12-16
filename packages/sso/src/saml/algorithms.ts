@@ -69,6 +69,7 @@ const xmlParser = new XMLParser({
 	ignoreAttributes: false,
 	attributeNamePrefix: "@_",
 	removeNSPrefix: true,
+	processEntities: false,
 });
 
 function findNode(obj: unknown, nodeName: string): unknown {
