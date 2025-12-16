@@ -43,7 +43,7 @@ export const testAdapter = async ({
 	/**
 	 * A function that will run the database migrations.
 	 */
-	runMigrations: (betterAuthOptions: BetterAuthOptions) => Awaitable<void>;
+	runMigrations: (betterAuthOptions: BetterAuthOptions) => Promise<void> | void;
 	/**
 	 * Any potential better-auth options overrides.
 	 */
@@ -56,7 +56,7 @@ export const testAdapter = async ({
 	 *
 	 * Such as deleting a DB file that could had been created.
 	 */
-	additionalCleanups?: () => Awaitable<void>;
+	additionalCleanups?: () => Promise<void> | void;
 	/**
 	 * A test suite to run.
 	 */
@@ -68,7 +68,7 @@ export const testAdapter = async ({
 	/**
 	 * Upon finish of the tests, this function will be called.
 	 */
-	onFinish?: () => Awaitable<void>;
+	onFinish?: () => Promise<void> | void;
 	/**
 	 * Custom ID generator function to be used by the helper functions. (such as `insertRandom`)
 	 */
