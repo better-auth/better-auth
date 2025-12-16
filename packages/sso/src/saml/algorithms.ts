@@ -63,6 +63,24 @@ const SECURE_DIGEST_ALGORITHMS: readonly string[] = [
 	DigestAlgorithm.SHA512,
 ];
 
+const SHORT_FORM_TO_URI: Record<string, string> = {
+	sha1: DigestAlgorithm.SHA1,
+	sha256: DigestAlgorithm.SHA256,
+	sha384: DigestAlgorithm.SHA384,
+	sha512: DigestAlgorithm.SHA512,
+	"rsa-sha1": SignatureAlgorithm.RSA_SHA1,
+	"rsa-sha256": SignatureAlgorithm.RSA_SHA256,
+	"rsa-sha384": SignatureAlgorithm.RSA_SHA384,
+	"rsa-sha512": SignatureAlgorithm.RSA_SHA512,
+	"ecdsa-sha256": SignatureAlgorithm.ECDSA_SHA256,
+	"ecdsa-sha384": SignatureAlgorithm.ECDSA_SHA384,
+	"ecdsa-sha512": SignatureAlgorithm.ECDSA_SHA512,
+};
+
+function normalizeAlgorithm(alg: string): string {
+	return SHORT_FORM_TO_URI[alg.toLowerCase()] ?? alg;
+}
+
 export type DeprecatedAlgorithmBehavior = "reject" | "warn" | "allow";
 
 export interface AlgorithmValidationOptions {
