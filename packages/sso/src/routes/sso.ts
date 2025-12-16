@@ -40,6 +40,9 @@ const AUTHN_REQUEST_KEY_PREFIX = "saml-authn-request:";
 /** Default clock skew tolerance: 5 minutes */
 export const DEFAULT_CLOCK_SKEW_MS = 5 * 60 * 1000;
 
+export const DEFAULT_MAX_SAML_RESPONSE_SIZE = 256 * 1024;
+export const DEFAULT_MAX_SAML_METADATA_SIZE = 100 * 1024;
+
 export interface TimestampValidationOptions {
 	clockSkew?: number;
 	requireTimestamps?: boolean;
