@@ -1066,6 +1066,39 @@ sso({
 - **"SAML assertion has expired"** — Current time is after the `NotOnOrAfter` timestamp (plus clock skew)
 - **"SAML assertion missing required timestamp conditions"** — Assertion has no timestamps and `requireTimestamps` is enabled
 
+### Algorithm Validation
+
+Better Auth validates SAML cryptographic algorithms and warns about deprecated ones (SHA-1, RSA 1.5, 3DES) by default.
+
+```ts title="auth.ts"
+sso({
+    saml: {
+        algorithms: {
+            // "warn" (default) | "reject" | "allow"
+            onDeprecated: "warn",
+        },
+    },
+})
+```
+
+| Value | Behavior |
+|-------|----------|
+| `"warn"` | Log warning, allow authentication (default) |
+| `"reject"` | Throw error, block authentication |
+| `"allow"` | Silent, no validation |
+
+For strict security (production):
+
+```ts title="auth.ts"
+sso({
+    saml: {
+        algorithms: {
+            onDeprecated: "reject",
+        },
+    },
+})
+```
+
 ## Domain verification
 
 Domain verification allows your application to automatically trust a new SSO provider
@@ -1075,7 +1108,7 @@ When a provider's domain is verified, it is also trusted for **automatic account
 
 <Tabs items={["client", "server"]}>
     <Tab value="client">
-```ts title="auth.ts"
+```ts title="auth-client.ts"
 const authClient = createAuthClient({
     plugins: [
         ssoClient({ // [!code highlight]
@@ -1089,7 +1122,7 @@ const authClient = createAuthClient({
     </Tab>
 
     <Tab value="server">
-```ts title="auth-client.ts"
+```ts title="auth.ts"
 const auth = betterAuth({
     plugins: [
         sso({ // [!code highlight]
@@ -1357,6 +1390,18 @@ If you want to allow account linking for specific trusted providers, enable the 
                 description: "Require timestamp conditions (NotBefore/NotOnOrAfter) in SAML assertions. When enabled, assertions without timestamps are rejected. When disabled, they are accepted with a warning logged.",
                 type: "boolean",
                 default: false,
+            },
+            algorithms: {
+                description: "Algorithm validation options.",
+                type: "object",
+                properties: {
+                    onDeprecated: {
+                        description: "Behavior for deprecated algorithms (SHA-1, RSA 1.5, 3DES).",
+                        type: "string",
+                        enum: ["reject", "warn", "allow"],
+                        default: "warn",
+                    },
+                },
             },
         },
     },

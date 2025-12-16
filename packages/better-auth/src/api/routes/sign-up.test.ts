@@ -145,6 +145,23 @@ describe("sign-up with custom fields", async (it) => {
 			}),
 		).rejects.toThrow("role is not allowed to be set");
 	});
+
+	it("should throw status code 400 when passing invalid body", async () => {
+		await expect(
+			auth.api.signUpEmail({
+				body: {
+					name: "Test",
+					email: "body-validation@test.com",
+					// @ts-expect-error
+					password: undefined,
+				},
+			}),
+		).rejects.toThrowError(
+			expect.objectContaining({
+				status: 400,
+			}),
+		);
+	});
 });
 
 describe("sign-up CSRF protection", async (it) => {
