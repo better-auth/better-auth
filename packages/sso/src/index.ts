@@ -1,4 +1,5 @@
 import type { BetterAuthPlugin } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
 import { XMLValidator } from "fast-xml-parser";
 import * as saml from "samlify";
 import type {
@@ -6,6 +7,7 @@ import type {
 	AuthnRequestStore,
 } from "./authn-request-store";
 import { createInMemoryAuthnRequestStore } from "./authn-request-store";
+import { assignOrganizationByDomain } from "./linking";
 import {
 	requestDomainVerification,
 	verifyDomain,
@@ -24,6 +26,15 @@ export {
 	type TimestampValidationOptions,
 	validateSAMLTimestamp,
 } from "./routes/sso";
+
+export {
+	type AlgorithmValidationOptions,
+	DataEncryptionAlgorithm,
+	type DeprecatedAlgorithmBehavior,
+	DigestAlgorithm,
+	KeyEncryptionAlgorithm,
+	SignatureAlgorithm,
+} from "./saml";
 
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "./types";
 
@@ -130,6 +141,33 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 	return {
 		id: "sso",
 		endpoints,
+		hooks: {
+			after: [
+				{
+					matcher(context) {
+						return context.path?.startsWith("/callback/") ?? false;
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						const newSession = ctx.context.newSession;
+						if (!newSession?.user) {
+							return;
+						}
+
+						const isOrgPluginEnabled = ctx.context.options.plugins?.find(
+							(plugin: { id: string }) => plugin.id === "organization",
+						);
+						if (!isOrgPluginEnabled) {
+							return;
+						}
+
+						await assignOrganizationByDomain(ctx, {
+							user: newSession.user,
+							provisioningOptions: options?.organizationProvisioning,
+						});
+					}),
+				},
+			],
+		},
 		schema: {
 			ssoProvider: {
 				modelName: options?.modelName ?? "ssoProvider",

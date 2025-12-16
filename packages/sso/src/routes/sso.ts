@@ -1,5 +1,5 @@
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
-import type { Account, Session, User, Verification } from "better-auth";
+import type { User, Verification } from "better-auth";
 import {
 	createAuthorizationURL,
 	generateState,
@@ -31,14 +31,15 @@ import {
 	DEFAULT_CLOCK_SKEW_MS,
 	USED_ASSERTION_KEY_PREFIX,
 } from "../constants";
+import { assignOrganizationFromProvider } from "../linking";
 import type { HydratedOIDCConfig } from "../oidc";
 import {
 	DiscoveryError,
 	discoverOIDCConfig,
 	mapDiscoveryErrorToAPIError,
 } from "../oidc";
+import { validateSAMLAlgorithms } from "../saml";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
-
 import { safeJsonParse, validateEmailDomain } from "../utils";
 
 export interface TimestampValidationOptions {
@@ -1604,43 +1605,22 @@ export const callbackSSO = (options?: SSOOptions) => {
 					provider,
 				});
 			}
-			if (
-				provider.organizationId &&
-				!options?.organizationProvisioning?.disabled
-			) {
-				const isOrgPluginEnabled = ctx.context.options.plugins?.find(
-					(plugin) => plugin.id === "organization",
-				);
-				if (isOrgPluginEnabled) {
-					const isAlreadyMember = await ctx.context.adapter.findOne({
-						model: "member",
-						where: [
-							{ field: "organizationId", value: provider.organizationId },
-							{ field: "userId", value: user.id },
-						],
-					});
-					if (!isAlreadyMember) {
-						const role = options?.organizationProvisioning?.getRole
-							? await options.organizationProvisioning.getRole({
-									user,
-									userInfo,
-									token: tokenResponse,
-									provider,
-								})
-							: options?.organizationProvisioning?.defaultRole || "member";
-						await ctx.context.adapter.create({
-							model: "member",
-							data: {
-								organizationId: provider.organizationId,
-								userId: user.id,
-								role,
-								createdAt: new Date(),
-								updatedAt: new Date(),
-							},
-						});
-					}
-				}
-			}
+
+			await assignOrganizationFromProvider(ctx as any, {
+				user,
+				profile: {
+					providerType: "oidc",
+					providerId: provider.providerId,
+					accountId: userInfo.id,
+					email: userInfo.email,
+					emailVerified: Boolean(userInfo.emailVerified),
+					rawAttributes: userInfo,
+				},
+				provider,
+				token: tokenResponse,
+				provisioningOptions: options?.organizationProvisioning,
+			});
+
 			await setSessionCookie(ctx, {
 				session,
 				user,
@@ -1837,6 +1817,8 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			}
 
 			const { extract } = parsedResponse!;
+
+			validateSAMLAlgorithms(parsedResponse, options?.saml?.algorithms);
 
 			validateSAMLTimestamp((extract as any).conditions, {
 				clockSkew: options?.saml?.clockSkew,
@@ -2052,73 +2034,43 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 				});
 			}
 
-			// Find or create user
-			let user: User;
-			const existingUser = await ctx.context.adapter.findOne<User>({
-				model: "user",
-				where: [
-					{
-						field: "email",
-						value: userInfo.email,
-					},
-				],
-			});
+			const isTrustedProvider: boolean =
+				!!ctx.context.options.account?.accountLinking?.trustedProviders?.includes(
+					provider.providerId,
+				) ||
+				("domainVerified" in provider &&
+					!!(provider as { domainVerified?: boolean }).domainVerified &&
+					validateEmailDomain(userInfo.email as string, provider.domain));
 
-			if (existingUser) {
-				const account = await ctx.context.adapter.findOne<Account>({
-					model: "account",
-					where: [
-						{ field: "userId", value: existingUser.id },
-						{ field: "providerId", value: provider.providerId },
-						{ field: "accountId", value: userInfo.id },
-					],
-				});
-				if (!account) {
-					const isTrustedProvider =
-						ctx.context.options.account?.accountLinking?.trustedProviders?.includes(
-							provider.providerId,
-						) ||
-						("domainVerified" in provider &&
-							provider.domainVerified &&
-							validateEmailDomain(userInfo.email, provider.domain));
-					if (!isTrustedProvider) {
-						const redirectUrl =
-							RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
-						throw ctx.redirect(`${redirectUrl}?error=account_not_linked`);
-					}
-					await ctx.context.internalAdapter.createAccount({
-						userId: existingUser.id,
-						providerId: provider.providerId,
-						accountId: userInfo.id,
-						accessToken: "",
-						refreshToken: "",
-					});
-				}
-				user = existingUser;
-			} else {
-				// if implicit sign up is disabled, we should not create a new user nor a new account.
-				if (options?.disableImplicitSignUp) {
-					throw new APIError("UNAUTHORIZED", {
-						message:
-							"User not found and implicit sign up is disabled for this provider",
-					});
-				}
+			const callbackUrl =
+				RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
 
-				user = await ctx.context.internalAdapter.createUser({
-					email: userInfo.email,
-					name: userInfo.name,
-					emailVerified: userInfo.emailVerified,
-				});
-				await ctx.context.internalAdapter.createAccount({
-					userId: user.id,
+			const result = await handleOAuthUserInfo(ctx, {
+				userInfo: {
+					email: userInfo.email as string,
+					name: (userInfo.name || userInfo.email) as string,
+					id: userInfo.id as string,
+					emailVerified: Boolean(userInfo.emailVerified),
+				},
+				account: {
 					providerId: provider.providerId,
-					accountId: userInfo.id,
+					accountId: userInfo.id as string,
 					accessToken: "",
 					refreshToken: "",
-				});
+				},
+				callbackURL: callbackUrl,
+				disableSignUp: options?.disableImplicitSignUp,
+				isTrustedProvider,
+			});
+
+			if (result.error) {
+				throw ctx.redirect(
+					`${callbackUrl}?error=${result.error.split(" ").join("_")}`,
+				);
 			}
 
-			// Run provision hooks
+			const { session, user } = result.data!;
+
 			if (options?.provisionUser) {
 				await options.provisionUser({
 					user: user as User & Record<string, any>,
@@ -2127,53 +2079,21 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 				});
 			}
 
-			// Handle organization provisioning
-			if (
-				provider.organizationId &&
-				!options?.organizationProvisioning?.disabled
-			) {
-				const isOrgPluginEnabled = ctx.context.options.plugins?.find(
-					(plugin) => plugin.id === "organization",
-				);
-				if (isOrgPluginEnabled) {
-					const isAlreadyMember = await ctx.context.adapter.findOne({
-						model: "member",
-						where: [
-							{ field: "organizationId", value: provider.organizationId },
-							{ field: "userId", value: user.id },
-						],
-					});
-					if (!isAlreadyMember) {
-						const role = options?.organizationProvisioning?.getRole
-							? await options.organizationProvisioning.getRole({
-									user,
-									userInfo,
-									provider,
-								})
-							: options?.organizationProvisioning?.defaultRole || "member";
-						await ctx.context.adapter.create({
-							model: "member",
-							data: {
-								organizationId: provider.organizationId,
-								userId: user.id,
-								role,
-								createdAt: new Date(),
-								updatedAt: new Date(),
-							},
-						});
-					}
-				}
-			}
+			await assignOrganizationFromProvider(ctx as any, {
+				user,
+				profile: {
+					providerType: "saml",
+					providerId: provider.providerId,
+					accountId: userInfo.id as string,
+					email: userInfo.email as string,
+					emailVerified: Boolean(userInfo.emailVerified),
+					rawAttributes: attributes,
+				},
+				provider,
+				provisioningOptions: options?.organizationProvisioning,
+			});
 
-			// Create session and set cookie
-			let session: Session = await ctx.context.internalAdapter.createSession(
-				user.id,
-			);
 			await setSessionCookie(ctx, { session, user });
-
-			// Redirect to callback URL
-			const callbackUrl =
-				RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
 			throw ctx.redirect(callbackUrl);
 		},
 	);
@@ -2349,6 +2269,8 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			}
 
 			const { extract } = parsedResponse!;
+
+			validateSAMLAlgorithms(parsedResponse, options?.saml?.algorithms);
 
 			validateSAMLTimestamp((extract as any).conditions, {
 				clockSkew: options?.saml?.clockSkew,
@@ -2560,68 +2482,42 @@ export const acsEndpoint = (options?: SSOOptions) => {
 				});
 			}
 
-			// Find or create user
-			let user: User;
-			const existingUser = await ctx.context.adapter.findOne<User>({
-				model: "user",
-				where: [
-					{
-						field: "email",
-						value: userInfo.email,
-					},
-				],
-			});
+			const isTrustedProvider: boolean =
+				!!ctx.context.options.account?.accountLinking?.trustedProviders?.includes(
+					provider.providerId,
+				) ||
+				("domainVerified" in provider &&
+					!!(provider as { domainVerified?: boolean }).domainVerified &&
+					validateEmailDomain(userInfo.email as string, provider.domain));
 
-			if (existingUser) {
-				const account = await ctx.context.adapter.findOne<Account>({
-					model: "account",
-					where: [
-						{ field: "userId", value: existingUser.id },
-						{ field: "providerId", value: provider.providerId },
-						{ field: "accountId", value: userInfo.id },
-					],
-				});
-				if (!account) {
-					const isTrustedProvider =
-						ctx.context.options.account?.accountLinking?.trustedProviders?.includes(
-							provider.providerId,
-						) ||
-						("domainVerified" in provider &&
-							provider.domainVerified &&
-							validateEmailDomain(userInfo.email, provider.domain));
-					if (!isTrustedProvider) {
-						throw ctx.redirect(
-							`${parsedSamlConfig.callbackUrl}?error=account_not_found`,
-						);
-					}
-					await ctx.context.internalAdapter.createAccount({
-						userId: existingUser.id,
-						providerId: provider.providerId,
-						accountId: userInfo.id,
-						accessToken: "",
-						refreshToken: "",
-					});
-				}
-				user = existingUser;
-			} else {
-				user = await ctx.context.internalAdapter.createUser({
-					email: userInfo.email,
-					name: userInfo.name,
-					emailVerified: options?.trustEmailVerified
-						? userInfo.emailVerified || false
-						: false,
-				});
-				await ctx.context.internalAdapter.createAccount({
-					userId: user.id,
+			const callbackUrl =
+				RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+
+			const result = await handleOAuthUserInfo(ctx, {
+				userInfo: {
+					email: userInfo.email as string,
+					name: (userInfo.name || userInfo.email) as string,
+					id: userInfo.id as string,
+					emailVerified: Boolean(userInfo.emailVerified),
+				},
+				account: {
 					providerId: provider.providerId,
-					accountId: userInfo.id,
+					accountId: userInfo.id as string,
 					accessToken: "",
 					refreshToken: "",
-					accessTokenExpiresAt: new Date(),
-					refreshTokenExpiresAt: new Date(),
-					scope: "",
-				});
+				},
+				callbackURL: callbackUrl,
+				disableSignUp: options?.disableImplicitSignUp,
+				isTrustedProvider,
+			});
+
+			if (result.error) {
+				throw ctx.redirect(
+					`${callbackUrl}?error=${result.error.split(" ").join("_")}`,
+				);
 			}
+
+			const { session, user } = result.data!;
 
 			if (options?.provisionUser) {
 				await options.provisionUser({
@@ -2631,50 +2527,21 @@ export const acsEndpoint = (options?: SSOOptions) => {
 				});
 			}
 
-			if (
-				provider.organizationId &&
-				!options?.organizationProvisioning?.disabled
-			) {
-				const isOrgPluginEnabled = ctx.context.options.plugins?.find(
-					(plugin) => plugin.id === "organization",
-				);
-				if (isOrgPluginEnabled) {
-					const isAlreadyMember = await ctx.context.adapter.findOne({
-						model: "member",
-						where: [
-							{ field: "organizationId", value: provider.organizationId },
-							{ field: "userId", value: user.id },
-						],
-					});
-					if (!isAlreadyMember) {
-						const role = options?.organizationProvisioning?.getRole
-							? await options.organizationProvisioning.getRole({
-									user,
-									userInfo,
-									provider,
-								})
-							: options?.organizationProvisioning?.defaultRole || "member";
-						await ctx.context.adapter.create({
-							model: "member",
-							data: {
-								organizationId: provider.organizationId,
-								userId: user.id,
-								role,
-								createdAt: new Date(),
-								updatedAt: new Date(),
-							},
-						});
-					}
-				}
-			}
+			await assignOrganizationFromProvider(ctx as any, {
+				user,
+				profile: {
+					providerType: "saml",
+					providerId: provider.providerId,
+					accountId: userInfo.id as string,
+					email: userInfo.email as string,
+					emailVerified: Boolean(userInfo.emailVerified),
+					rawAttributes: attributes,
+				},
+				provider,
+				provisioningOptions: options?.organizationProvisioning,
+			});
 
-			let session: Session = await ctx.context.internalAdapter.createSession(
-				user.id,
-			);
 			await setSessionCookie(ctx, { session, user });
-
-			const callbackUrl =
-				RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
 			throw ctx.redirect(callbackUrl);
 		},
 	);
