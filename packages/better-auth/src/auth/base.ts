@@ -1,6 +1,5 @@
 import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
 import { runWithAdapter } from "@better-auth/core/context";
-import { env } from "@better-auth/core/env";
 import { BASE_ERROR_CODES, BetterAuthError } from "@better-auth/core/error";
 import { getEndpoints, router } from "../api";
 import type { Auth } from "../types";
@@ -46,12 +45,9 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 			}
 
 			if (typeof options.trustedOrigins === "function") {
-				const dynamicOrigins = await options.trustedOrigins(request);
-				const envTrustedOrigins = env.BETTER_AUTH_TRUSTED_ORIGINS;
 				ctx.trustedOrigins = [
-					ctx.options.baseURL!,
-					...dynamicOrigins,
-					...(envTrustedOrigins ? envTrustedOrigins.split(",") : []),
+					...ctx.trustedOrigins,
+					...(await options.trustedOrigins(request)),
 				];
 			}
 			const { handler } = router(ctx, options);
