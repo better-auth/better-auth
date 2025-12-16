@@ -63,7 +63,7 @@ export interface JwtOptions {
 				/**
 				 * The audience of the JWT
 				 */
-				audience?: string | undefined;
+				audience?: string | string[] | undefined;
 				/**
 				 * Set the "exp" (Expiration Time) Claim.
 				 *

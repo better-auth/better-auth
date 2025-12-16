@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/cli",
-  "version": "1.4.6-beta.4",
+  "version": "1.4.7",
   "type": "module",
   "description": "The CLI for Better Auth",
   "module": "dist/index.mjs",
@@ -15,6 +15,7 @@
     "build": "tsdown",
     "start": "node ./dist/index.mjs",
     "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
     "dev": "tsx ./src/index.ts",
     "test": "vitest",
     "coverage": "vitest run --coverage",
