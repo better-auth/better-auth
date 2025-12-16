@@ -1,5 +1,7 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import type { Account } from "@better-auth/core/db";
+
 import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
 import { setSessionCookie } from "../../cookies";
@@ -48,10 +50,47 @@ const getSiweNonceBodySchema = z.object({
 const createWalletAccountId = (walletAddress: string, chainId: number) =>
 	`${walletAddress}:${chainId}`;
 
+
 export const siwe = (options: SIWEPluginOptions) =>
 	({
 		id: "siwe",
 		schema: mergeSchema(schema, options?.schema),
+		init(ctx) {
+			return {
+				options: {
+					databaseHooks: {
+						account: {
+							delete: {
+								async after(account: Account) {
+									// Only handle SIWE account deletions
+									if (account.providerId !== "siwe" || !account.accountId) {
+										return;
+									}
+
+									// Parse the accountId format: "address:chainId"
+									const [address, chainIdStr] = account.accountId.split(":");
+									const chainId = parseInt(chainIdStr ?? "", 10);
+
+									if (!address || isNaN(chainId)) {
+										return;
+									}
+
+									// Cascade delete the corresponding walletAddress record
+									await ctx.adapter.deleteMany({
+										model: "walletAddress",
+										where: [
+											{ field: "address", value: address },
+											{ field: "chainId", value: chainId },
+											{ field: "userId", value: account.userId },
+										],
+									});
+								},
+							},
+						},
+					},
+				},
+			};
+		},
 		endpoints: {
 			getSiweNonce: createAuthEndpoint(
 				"/siwe/nonce",
