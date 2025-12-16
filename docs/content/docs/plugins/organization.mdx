@@ -912,27 +912,31 @@ To invite multiple users to an organization, you can use the `inviteMembers` fun
 ```ts
 type createInvitation = {
     /**
-     * The organization ID to invite the user to. Defaults to the active organization.  
+     * The organization ID to invite the user to. Defaults to the active organization.
+     * @example "org-id"
      */
-    organizationId?: string = "org-id"
-    invitations:[
+    organizationId?: string
+    invitations: [
       /**
-     * The email address of the user to invite.  
-     */
-    email: string = "example@gmail.com"
-    /**
-     * The role(s) to assign to the user. It can be `admin`, `member`, `owner`
-     */
-    role: string | string[] = "member"
-  
-    /**
-     * Resend the invitation email, if the user is already invited.  
-     */
-    resend?: boolean = true
-    /**
-     * The team ID to invite the user to.  
-     */
-    teamId?: string = "team-id"
+       * The email address of the user to invite.
+       * @example "example@gmail.com"
+       */
+      email: string
+      /**
+       * The role(s) to assign to the user. It can be `admin`, `member`, `owner`
+       * @example "member"
+       */
+      role: string | string[]
+      /**
+       * Resend the invitation email, if the user is already invited.
+       * @example true
+       */
+      resend?: boolean
+      /**
+       * The team ID to invite the user to.
+       * @example "team-id"
+       */
+      teamId?: string
     ]
 }
 ```
