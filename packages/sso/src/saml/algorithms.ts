@@ -317,8 +317,9 @@ export function validateConfigAlgorithms(
 	if (config.signatureAlgorithm) {
 		const normalized = normalizeSignatureAlgorithm(config.signatureAlgorithm);
 		if (allowedSignatureAlgorithms) {
-			const normalizedAllowList =
-				allowedSignatureAlgorithms.map(normalizeSignatureAlgorithm);
+			const normalizedAllowList = allowedSignatureAlgorithms.map(
+				normalizeSignatureAlgorithm,
+			);
 			if (!normalizedAllowList.includes(normalized)) {
 				throw new APIError("BAD_REQUEST", {
 					message: `SAML signature algorithm not in allow-list: ${config.signatureAlgorithm}`,
@@ -342,8 +343,9 @@ export function validateConfigAlgorithms(
 	if (config.digestAlgorithm) {
 		const normalized = normalizeDigestAlgorithm(config.digestAlgorithm);
 		if (allowedDigestAlgorithms) {
-			const normalizedAllowList =
-				allowedDigestAlgorithms.map(normalizeDigestAlgorithm);
+			const normalizedAllowList = allowedDigestAlgorithms.map(
+				normalizeDigestAlgorithm,
+			);
 			if (!normalizedAllowList.includes(normalized)) {
 				throw new APIError("BAD_REQUEST", {
 					message: `SAML digest algorithm not in allow-list: ${config.digestAlgorithm}`,
