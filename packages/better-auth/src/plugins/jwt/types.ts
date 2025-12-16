@@ -94,7 +94,7 @@ export interface JwtOptions {
 				definePayload?: (session: {
 					user: User & Record<string, any>;
 					session: Session & Record<string, any>;
-				}) => Promise<Record<string, any>> | Record<string, any> | undefined;
+				}) => Awaitable<Record<string, any>> | undefined;
 				/**
 				 * A function that is called to get the subject of the JWT
 				 *
@@ -103,7 +103,7 @@ export interface JwtOptions {
 				getSubject?: (session: {
 					user: User & Record<string, any>;
 					session: Session & Record<string, any>;
-				}) => Promise<string> | string | undefined;
+				}) => Awaitable<string> | undefined;
 				/**
 				 * A custom function to remote sign the jwt payload.
 				 *

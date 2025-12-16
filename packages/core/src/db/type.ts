@@ -1,5 +1,5 @@
 import type { StandardSchemaV1 } from "@standard-schema/spec";
-import type { LiteralString } from "../types";
+import type { Awaitable, LiteralString } from "../types";
 
 export type BaseModelNames = "user" | "account" | "session" | "verification";
 
@@ -63,8 +63,8 @@ export type DBFieldAttributeConfig = {
 	 */
 	transform?:
 		| {
-				input?: (value: DBPrimitive) => DBPrimitive | Promise<DBPrimitive>;
-				output?: (value: DBPrimitive) => DBPrimitive | Promise<DBPrimitive>;
+				input?: (value: DBPrimitive) => Awaitable<DBPrimitive>;
+				output?: (value: DBPrimitive) => Awaitable<DBPrimitive>;
 		  }
 		| undefined;
 	/**
@@ -157,7 +157,7 @@ export interface SecondaryStorage {
 	 * @param key - Key to get
 	 * @returns - Value of the key
 	 */
-	get: (key: string) => Promise<unknown> | unknown;
+	get: (key: string) => Awaitable<unknown>;
 	set: (
 		/**
 		 * Key to store
@@ -171,10 +171,10 @@ export interface SecondaryStorage {
 		 * Time to live in seconds
 		 */
 		ttl?: number | undefined,
-	) => Promise<void | null | unknown> | void;
+	) => Awaitable<void | null | unknown>;
 	/**
 	 *
 	 * @param key - Key to delete
 	 */
-	delete: (key: string) => Promise<void | null | string> | void;
+	delete: (key: string) => Awaitable<void | null | string>;
 }

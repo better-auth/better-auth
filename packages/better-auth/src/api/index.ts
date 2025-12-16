@@ -7,7 +7,7 @@ import type { InternalLogger } from "@better-auth/core/env";
 import { logger } from "@better-auth/core/env";
 import type { Endpoint, Middleware } from "better-call";
 import { APIError, createRouter } from "better-call";
-import type { UnionToIntersection } from "../types/helper";
+import type { Awaitable, UnionToIntersection } from "../types/helper";
 import { originCheckMiddleware } from "./middlewares";
 import { onRequestRateLimit } from "./rate-limiter";
 import {
@@ -159,7 +159,7 @@ To resolve this, you can:
 }
 
 export function getEndpoints<Option extends BetterAuthOptions>(
-	ctx: Promise<AuthContext> | AuthContext,
+	ctx: Awaitable<AuthContext>,
 	options: Option,
 ) {
 	const pluginEndpoints =

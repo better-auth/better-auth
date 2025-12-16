@@ -1,6 +1,6 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
-import type { Session, User } from "../../types";
+import type { Awaitable, Session, User } from "../../types";
 import type { AccessControl, Role } from "../access";
 import type {
 	Invitation,
@@ -26,10 +26,7 @@ export interface OrganizationOptions {
 	 * @default true
 	 */
 	allowUserToCreateOrganization?:
-		| (
-				| boolean
-				| ((user: User & Record<string, any>) => Promise<boolean> | boolean)
-		  )
+		| (boolean | ((user: User & Record<string, any>) => Awaitable<boolean>))
 		| undefined;
 	/**
 	 * The maximum number of organizations a user can create.
@@ -37,7 +34,7 @@ export interface OrganizationOptions {
 	 * You can also pass a function that returns a boolean
 	 */
 	organizationLimit?:
-		| (number | ((user: User) => Promise<boolean> | boolean))
+		| (number | ((user: User) => Awaitable<boolean>))
 		| undefined;
 	/**
 	 * The role that is assigned to the creator of the
@@ -83,7 +80,7 @@ export interface OrganizationOptions {
 				 */
 				maximumRolesPerOrganization?:
 					| number
-					| ((organizationId: string) => Promise<number> | number);
+					| ((organizationId: string) => Awaitable<number>);
 		  }
 		| undefined;
 	/**
@@ -133,7 +130,7 @@ export interface OrganizationOptions {
 						} | null;
 					},
 					ctx?: GenericEndpointContext,
-			  ) => number | Promise<number>)
+			  ) => Awaitable<number>)
 			| number;
 
 		/**
@@ -149,7 +146,7 @@ export interface OrganizationOptions {
 					teamId: string;
 					session: { user: User; session: Session };
 					organizationId: string;
-			  }) => Promise<number> | number)
+			  }) => Awaitable<number>)
 			| undefined;
 		/**
 		 * By default, if an organization does only have one team, they'll not be able to remove it.
@@ -180,7 +177,7 @@ export interface OrganizationOptions {
 					member: Member & Record<string, any>;
 				},
 				ctx: AuthContext,
-		  ) => Promise<number> | number)
+		  ) => Awaitable<number>)
 		| undefined;
 	/**
 	 * Cancel pending invitations on re-invite.

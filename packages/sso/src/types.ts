@@ -1,4 +1,4 @@
-import type { OAuth2Tokens, User } from "better-auth";
+import type { Awaitable, OAuth2Tokens, User } from "better-auth";
 import type { AuthnRequestStore } from "./authn-request-store";
 
 export interface OIDCMapping {
@@ -121,7 +121,7 @@ export interface SSOOptions {
 				 * The SSO provider
 				 */
 				provider: SSOProvider<SSOOptions>;
-		  }) => Promise<void>)
+		  }) => Awaitable<void>)
 		| undefined;
 	/**
 	 * Organization provisioning options
@@ -147,7 +147,7 @@ export interface SSOOptions {
 					 * The SSO provider
 					 */
 					provider: SSOProvider<SSOOptions>;
-				}) => Promise<"member" | "admin">;
+				}) => Awaitable<"member" | "admin">;
 		  }
 		| undefined;
 	/**
@@ -222,9 +222,7 @@ export interface SSOOptions {
 	 * ```
 	 * @default 10
 	 */
-	providersLimit?:
-		| (number | ((user: User) => Promise<number> | number))
-		| undefined;
+	providersLimit?: (number | ((user: User) => Awaitable<number>)) | undefined;
 	/**
 	 * Trust the email verified flag from the provider.
 	 *

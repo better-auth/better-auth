@@ -11,7 +11,7 @@ import { createAuthClient } from "../client";
 import { parseSetCookieHeader, setCookieToHeader } from "../cookies";
 import { getAdapter, getMigrations } from "../db";
 import { bearer } from "../plugins";
-import type { Session, User } from "../types";
+import type { Awaitable, Session, User } from "../types";
 import { getBaseURL } from "../utils/url";
 
 const cleanupSet = new Set<Function>();
@@ -192,6 +192,7 @@ export async function getTestInstance<
 	const customFetchImpl = async (
 		url: string | URL | Request,
 		init?: RequestInit | undefined,
+		customIdGenerator?: () => any | Awaitable<any> | undefined,
 	) => {
 		const headers = init?.headers || {};
 		const storageHeaders = currentUserContextStorage.getStore()?.headers;
@@ -314,7 +315,7 @@ export async function getTestInstance<
 		runWithUser: async (
 			email: string,
 			password: string,
-			fn: (headers: Headers) => Promise<void> | void,
+			fn: (headers: Headers) => Awaitable<void>,
 		) => {
 			const { headers } = await signInWithUser(email, password);
 			return currentUserContextStorage.run({ headers }, async () => {

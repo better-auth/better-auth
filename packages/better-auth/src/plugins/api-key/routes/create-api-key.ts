@@ -3,6 +3,7 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { safeJSONParse } from "@better-auth/core/utils";
 import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../../api";
+import type { Awaitable } from "../../../types";
 import { generateId } from "../../../utils";
 import { getDate } from "../../../utils/date";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
@@ -102,7 +103,7 @@ export function createApiKey({
 	keyGenerator: (options: {
 		length: number;
 		prefix: string | undefined;
-	}) => Promise<string> | string;
+	}) => Awaitable<string>;
 	opts: PredefinedApiKeyOptions;
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(

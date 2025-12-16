@@ -4,6 +4,7 @@ import { deepmerge, initGetModelName } from "@better-auth/core/db/adapter";
 import { TTY_COLORS } from "@better-auth/core/env";
 import { afterAll, beforeAll, describe } from "vitest";
 import { getAuthTables } from "../db";
+import type { Awaitable } from "../types";
 import type { createTestSuite, TestSuiteStats } from "./create-test-suite";
 
 export type Logger = {
@@ -38,13 +39,11 @@ export const testAdapter = async ({
 	 */
 	adapter: (
 		options: BetterAuthOptions,
-	) =>
-		| Promise<(options: BetterAuthOptions) => DBAdapter<BetterAuthOptions>>
-		| ((options: BetterAuthOptions) => DBAdapter<BetterAuthOptions>);
+	) => Awaitable<(options: BetterAuthOptions) => DBAdapter<BetterAuthOptions>>;
 	/**
 	 * A function that will run the database migrations.
 	 */
-	runMigrations: (betterAuthOptions: BetterAuthOptions) => Promise<void> | void;
+	runMigrations: (betterAuthOptions: BetterAuthOptions) => Awaitable<void>;
 	/**
 	 * Any potential better-auth options overrides.
 	 */
@@ -57,7 +56,7 @@ export const testAdapter = async ({
 	 *
 	 * Such as deleting a DB file that could had been created.
 	 */
-	additionalCleanups?: () => Promise<void> | void;
+	additionalCleanups?: () => Awaitable<void>;
 	/**
 	 * A test suite to run.
 	 */
@@ -69,7 +68,7 @@ export const testAdapter = async ({
 	/**
 	 * Upon finish of the tests, this function will be called.
 	 */
-	onFinish?: () => Promise<void> | void;
+	onFinish?: () => Awaitable<void>;
 	/**
 	 * Custom ID generator function to be used by the helper functions. (such as `insertRandom`)
 	 */

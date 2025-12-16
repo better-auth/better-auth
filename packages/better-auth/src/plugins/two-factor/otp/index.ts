@@ -10,6 +10,7 @@ import {
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "../../../crypto";
+import type { Awaitable } from "../../../types";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import type { TwoFactorProvider, UserWithTwoFactor } from "../types";
 import { defaultKeyHasher } from "../utils";
@@ -52,7 +53,7 @@ export interface OTPOptions {
 				 * The request object
 				 */
 				ctx?: GenericEndpointContext,
-		  ) => Promise<void> | void)
+		  ) => Awaitable<void>)
 		| undefined;
 	/**
 	 * The number of allowed attempts for the OTP

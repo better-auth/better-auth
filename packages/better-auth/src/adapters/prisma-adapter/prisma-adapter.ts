@@ -9,6 +9,7 @@ import type {
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
+import type { Awaitable } from "../../types";
 
 export interface PrismaConfig {
 	/**
@@ -50,7 +51,7 @@ interface PrismaClient {}
 
 type PrismaClientInternal = {
 	$transaction: (
-		callback: (db: PrismaClient) => Promise<any> | any,
+		callback: (db: PrismaClient) => Awaitable<any>,
 	) => Promise<any>;
 } & {
 	[model: string]: {
