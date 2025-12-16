@@ -1,4 +1,5 @@
 import type { BetterAuthPlugin } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
 import { XMLValidator } from "fast-xml-parser";
 import * as saml from "samlify";
 import type {
@@ -9,6 +10,7 @@ import {
 	createInMemoryAuthnRequestStore,
 	DEFAULT_AUTHN_REQUEST_TTL_MS,
 } from "./authn-request-store";
+import { assignOrganizationByDomain } from "./linking";
 import {
 	requestDomainVerification,
 	verifyDomain,
@@ -143,6 +145,33 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 	return {
 		id: "sso",
 		endpoints,
+		hooks: {
+			after: [
+				{
+					matcher(context) {
+						return context.path?.startsWith("/callback/") ?? false;
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						const newSession = ctx.context.newSession;
+						if (!newSession?.user) {
+							return;
+						}
+
+						const isOrgPluginEnabled = ctx.context.options.plugins?.find(
+							(plugin: { id: string }) => plugin.id === "organization",
+						);
+						if (!isOrgPluginEnabled) {
+							return;
+						}
+
+						await assignOrganizationByDomain(ctx as any, {
+							user: newSession.user,
+							provisioningOptions: options?.organizationProvisioning,
+						});
+					}),
+				},
+			],
+		},
 		schema: {
 			ssoProvider: {
 				modelName: options?.modelName ?? "ssoProvider",
