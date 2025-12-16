@@ -2444,3 +2444,13 @@ describe("SAML SSO - Timestamp Validation", () => {
 		});
 	});
 });
+
+describe("SAML SSO - Size Limit Validation", () => {
+	it("should export default size limit constants", async () => {
+		const { DEFAULT_MAX_SAML_RESPONSE_SIZE, DEFAULT_MAX_SAML_METADATA_SIZE } =
+			await import("./routes/sso");
+
+		expect(DEFAULT_MAX_SAML_RESPONSE_SIZE).toBe(256 * 1024);
+		expect(DEFAULT_MAX_SAML_METADATA_SIZE).toBe(100 * 1024);
+	});
+});
