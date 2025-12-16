@@ -109,8 +109,20 @@ export async function validateApiKey({
 	if (apiKey.remaining === 0 && apiKey.refillAmount === null) {
 		// if there is no more remaining requests, and there is no refill amount, than the key is revoked
 		try {
-			if (opts.storage === "secondary-storage") {
-				// Secondary storage mode: delete from storage
+			if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
+				// Secondary storage with fallback: delete from storage and database
+				await deleteApiKey(ctx, apiKey, opts);
+				await ctx.context.adapter.delete({
+					model: API_KEY_TABLE_NAME,
+					where: [
+						{
+							field: "id",
+							value: apiKey.id,
+						},
+					],
+				});
+			} else if (opts.storage === "secondary-storage") {
+				// Secondary storage mode: delete from storage only
 				await deleteApiKey(ctx, apiKey, opts);
 			} else {
 				// Database mode: delete from DB
@@ -180,8 +192,24 @@ export async function validateApiKey({
 					value: apiKey.id,
 				},
 			],
-			update: updated,
+			update: { ...updated, id: undefined },
 		});
+	} else if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
+		// Secondary storage with fallback: update database and then update storage
+		const dbUpdated = await ctx.context.adapter.update<ApiKey>({
+			model: API_KEY_TABLE_NAME,
+			where: [
+				{
+					field: "id",
+					value: apiKey.id,
+				},
+			],
+			update: { ...updated, id: undefined },
+		});
+		if (dbUpdated) {
+			await setApiKey(ctx, dbUpdated, opts);
+			newApiKey = dbUpdated;
+		}
 	} else {
 		// Secondary storage mode: update in storage
 		await setApiKey(ctx, updated, opts);
@@ -233,13 +261,9 @@ export function verifyApiKey({
 	): void;
 }) {
 	return createAuthEndpoint(
-		"/api-key/verify",
 		{
 			method: "POST",
 			body: verifyApiKeyBodySchema,
-			metadata: {
-				SERVER_ONLY: true,
-			},
 		},
 		async (ctx) => {
 			const { key } = ctx.body;

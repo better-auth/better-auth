@@ -1,6 +1,16 @@
 import type { BetterAuthPlugin } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
 import { XMLValidator } from "fast-xml-parser";
 import * as saml from "samlify";
+import type {
+	AuthnRequestRecord,
+	AuthnRequestStore,
+} from "./authn-request-store";
+import {
+	createInMemoryAuthnRequestStore,
+	DEFAULT_AUTHN_REQUEST_TTL_MS,
+} from "./authn-request-store";
+import { assignOrganizationByDomain } from "./linking";
 import {
 	requestDomainVerification,
 	verifyDomain,
@@ -13,9 +23,47 @@ import {
 	signInSSO,
 	spMetadata,
 } from "./routes/sso";
+
+export {
+	DEFAULT_CLOCK_SKEW_MS,
+	type SAMLConditions,
+	type TimestampValidationOptions,
+	validateSAMLTimestamp,
+} from "./routes/sso";
+
+export {
+	type AlgorithmValidationOptions,
+	DataEncryptionAlgorithm,
+	type DeprecatedAlgorithmBehavior,
+	DigestAlgorithm,
+	KeyEncryptionAlgorithm,
+	SignatureAlgorithm,
+} from "./saml";
+
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "./types";
 
 export type { SAMLConfig, OIDCConfig, SSOOptions, SSOProvider };
+export type { AuthnRequestStore, AuthnRequestRecord };
+export { createInMemoryAuthnRequestStore, DEFAULT_AUTHN_REQUEST_TTL_MS };
+
+export {
+	computeDiscoveryUrl,
+	type DiscoverOIDCConfigParams,
+	DiscoveryError,
+	type DiscoveryErrorCode,
+	discoverOIDCConfig,
+	fetchDiscoveryDocument,
+	type HydratedOIDCConfig,
+	needsRuntimeDiscovery,
+	normalizeDiscoveryUrls,
+	normalizeUrl,
+	type OIDCDiscoveryDocument,
+	REQUIRED_DISCOVERY_FIELDS,
+	type RequiredDiscoveryField,
+	selectTokenEndpointAuthMethod,
+	validateDiscoveryDocument,
+	validateDiscoveryUrl,
+} from "./oidc";
 
 const fastValidator = {
 	async validate(xml: string) {
@@ -71,19 +119,21 @@ export function sso<O extends SSOOptions>(
 };
 
 export function sso<O extends SSOOptions>(options?: O | undefined): any {
+	const optionsWithStore = options as O;
+
 	let endpoints = {
 		spMetadata: spMetadata(),
-		registerSSOProvider: registerSSOProvider(options as O),
-		signInSSO: signInSSO(options as O),
-		callbackSSO: callbackSSO(options as O),
-		callbackSSOSAML: callbackSSOSAML(options as O),
-		acsEndpoint: acsEndpoint(options as O),
+		registerSSOProvider: registerSSOProvider(optionsWithStore),
+		signInSSO: signInSSO(optionsWithStore),
+		callbackSSO: callbackSSO(optionsWithStore),
+		callbackSSOSAML: callbackSSOSAML(optionsWithStore),
+		acsEndpoint: acsEndpoint(optionsWithStore),
 	};
 
 	if (options?.domainVerification?.enabled) {
 		const domainVerificationEndpoints = {
-			requestDomainVerification: requestDomainVerification(options as O),
-			verifyDomain: verifyDomain(options as O),
+			requestDomainVerification: requestDomainVerification(optionsWithStore),
+			verifyDomain: verifyDomain(optionsWithStore),
 		};
 
 		endpoints = {
@@ -95,6 +145,33 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 	return {
 		id: "sso",
 		endpoints,
+		hooks: {
+			after: [
+				{
+					matcher(context) {
+						return context.path?.startsWith("/callback/") ?? false;
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						const newSession = ctx.context.newSession;
+						if (!newSession?.user) {
+							return;
+						}
+
+						const isOrgPluginEnabled = ctx.context.options.plugins?.find(
+							(plugin: { id: string }) => plugin.id === "organization",
+						);
+						if (!isOrgPluginEnabled) {
+							return;
+						}
+
+						await assignOrganizationByDomain(ctx, {
+							user: newSession.user,
+							provisioningOptions: options?.organizationProvisioning,
+						});
+					}),
+				},
+			],
+		},
 		schema: {
 			ssoProvider: {
 				modelName: options?.modelName ?? "ssoProvider",
