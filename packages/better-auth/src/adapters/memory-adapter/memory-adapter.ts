@@ -15,6 +15,20 @@ export interface MemoryAdapterConfig {
 	debugLogs?: DBAdapterDebugLogOption | undefined;
 }
 
+class MemoryAdapterError extends Error {
+	constructor(
+		public code:
+			| "MODEL_NOT_FOUND"
+			| "INVALID_OPERATOR_VALUE"
+			| "JOIN_MODEL_NOT_FOUND",
+		message: string,
+	) {
+		super(message);
+		this.name = "MemoryAdapterError";
+	}
+}
+
+
 export const memoryAdapter = (
 	db: MemoryDB,
 	config?: MemoryAdapterConfig | undefined,
