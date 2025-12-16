@@ -275,11 +275,42 @@ describe("validateConfigAlgorithms", () => {
 			expect(() => alg.validateConfigAlgorithms({})).not.toThrow();
 		});
 
-		it("should skip validation for short-form algorithm names", () => {
+		it("should accept short-form signature algorithm names", () => {
 			expect(() =>
 				alg.validateConfigAlgorithms({
-					signatureAlgorithm: "sha256",
+					signatureAlgorithm: "rsa-sha256",
 				}),
+			).not.toThrow();
+		});
+
+		it("should reject typos in short-form signature algorithm names", () => {
+			expect(() =>
+				alg.validateConfigAlgorithms({
+					signatureAlgorithm: "rsa-sha257",
+				}),
+			).toThrow(/not recognized/i);
+		});
+
+		it("should warn for deprecated short-form signature algorithms", () => {
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+			expect(() =>
+				alg.validateConfigAlgorithms({
+					signatureAlgorithm: "rsa-sha1",
+				}),
+			).not.toThrow();
+
+			expect(warnSpy).toHaveBeenCalledWith(
+				expect.stringContaining("SAML Security Warning"),
+			);
+		});
+
+		it("should support short-form names in signature allow-list", () => {
+			expect(() =>
+				alg.validateConfigAlgorithms(
+					{ signatureAlgorithm: "rsa-sha256" },
+					{ allowedSignatureAlgorithms: ["rsa-sha256", "rsa-sha512"] },
+				),
 			).not.toThrow();
 		});
 	});
@@ -333,11 +364,42 @@ describe("validateConfigAlgorithms", () => {
 			).toThrow(/not recognized/i);
 		});
 
-		it("should skip validation for short-form digest names", () => {
+		it("should accept short-form digest algorithm names", () => {
 			expect(() =>
 				alg.validateConfigAlgorithms({
 					digestAlgorithm: "sha256",
 				}),
+			).not.toThrow();
+		});
+
+		it("should reject typos in short-form digest algorithm names", () => {
+			expect(() =>
+				alg.validateConfigAlgorithms({
+					digestAlgorithm: "sha257",
+				}),
+			).toThrow(/not recognized/i);
+		});
+
+		it("should warn for deprecated short-form digest algorithms", () => {
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+			expect(() =>
+				alg.validateConfigAlgorithms({
+					digestAlgorithm: "sha1",
+				}),
+			).not.toThrow();
+
+			expect(warnSpy).toHaveBeenCalledWith(
+				expect.stringContaining("SAML Security Warning"),
+			);
+		});
+
+		it("should support short-form names in digest allow-list", () => {
+			expect(() =>
+				alg.validateConfigAlgorithms(
+					{ digestAlgorithm: "sha256" },
+					{ allowedDigestAlgorithms: ["sha256", "sha512"] },
+				),
 			).not.toThrow();
 		});
 	});
