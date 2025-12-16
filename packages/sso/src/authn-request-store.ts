@@ -17,7 +17,7 @@ export interface AuthnRequestRecord {
 }
 
 export interface AuthnRequestStore {
-	save(record: AuthnRequestRecord): Promise<void>;
+	set(record: AuthnRequestRecord): Promise<void>;
 	get(id: string): Promise<AuthnRequestRecord | null>;
 	delete(id: string): Promise<void>;
 }
@@ -47,7 +47,7 @@ export function createInMemoryAuthnRequestStore(): AuthnRequestStore {
 	}
 
 	return {
-		async save(record: AuthnRequestRecord): Promise<void> {
+		async set(record: AuthnRequestRecord): Promise<void> {
 			store.set(record.id, record);
 		},
 

@@ -14,7 +14,7 @@ describe("AuthnRequest Store", () => {
 				expiresAt: Date.now() + DEFAULT_AUTHN_REQUEST_TTL_MS,
 			};
 
-			await store.save(record);
+			await store.set(record);
 			const retrieved = await store.get(record.id);
 
 			expect(retrieved).toEqual(record);
@@ -38,7 +38,7 @@ describe("AuthnRequest Store", () => {
 				expiresAt: Date.now() - 1000, // Already expired
 			};
 
-			await store.save(record);
+			await store.set(record);
 			const retrieved = await store.get(record.id);
 
 			expect(retrieved).toBeNull();
@@ -54,7 +54,7 @@ describe("AuthnRequest Store", () => {
 				expiresAt: Date.now() + DEFAULT_AUTHN_REQUEST_TTL_MS,
 			};
 
-			await store.save(record);
+			await store.set(record);
 			await store.delete(record.id);
 
 			const retrieved = await store.get(record.id);
@@ -78,8 +78,8 @@ describe("AuthnRequest Store", () => {
 				expiresAt: Date.now() + DEFAULT_AUTHN_REQUEST_TTL_MS,
 			};
 
-			await store.save(record1);
-			await store.save(record2);
+			await store.set(record1);
+			await store.set(record2);
 
 			const retrieved1 = await store.get(record1.id);
 			const retrieved2 = await store.get(record2.id);

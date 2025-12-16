@@ -1261,7 +1261,7 @@ export const signInSSO = (options?: SSOOptions) => {
 						expiresAt: Date.now() + ttl,
 					};
 					if (options?.saml?.authnRequestStore) {
-						await options.saml.authnRequestStore.save(record);
+						await options.saml.authnRequestStore.set(record);
 					} else {
 						await ctx.context.internalAdapter.createVerificationValue({
 							identifier: `${AUTHN_REQUEST_KEY_PREFIX}${record.id}`,

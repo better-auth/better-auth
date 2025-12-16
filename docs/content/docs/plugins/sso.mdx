@@ -937,7 +937,7 @@ import { sso, type AuthnRequestStore } from "@better-auth/sso";
 
 // Example Redis-backed store
 const redisAuthnRequestStore: AuthnRequestStore = {
-    async save(record) {
+    async set(record) {
         const ttl = Math.ceil((record.expiresAt - Date.now()) / 1000);
         await redis.set(
             `authn:${record.id}`,
