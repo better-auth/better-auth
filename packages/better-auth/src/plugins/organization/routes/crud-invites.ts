@@ -515,6 +515,7 @@ export const createBulkInvitation = <O extends OrganizationOptions>(
 			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 			body: z.object({
+				organizationId: z.string().optional(),
 				invitations: z.array(
 					z.object({
 						...baseInvitationSchema.shape,
