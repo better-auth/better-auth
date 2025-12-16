@@ -259,7 +259,9 @@ const OrganizationCard = (props: { session: Session | null }) => {
 										);
 									})}
 							</AnimatePresence>
-							{activeOrganization?.invitations?.length === 0 && (
+							{activeOrganization?.invitations?.filter(
+								(invitation) => invitation.status === "pending",
+							).length === 0 && (
 								<motion.p
 									className="text-sm text-muted-foreground"
 									initial={{ opacity: 0 }}
