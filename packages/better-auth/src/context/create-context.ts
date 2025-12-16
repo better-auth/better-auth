@@ -104,6 +104,12 @@ export async function createAuthContext(
 	const logger = createLogger(options.logger);
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
 
+	if (!options.baseURL) {
+		logger.warn(
+			"[better-auth] Warning: No baseURL was provided. Falling back to inferred values may cause incorrect redirect URIs, especially in production or multi-domain environments. Set baseURL explicitly for reliable behavior.",
+		);
+	}
+
 	const secret =
 		options.secret ||
 		env.BETTER_AUTH_SECRET ||
