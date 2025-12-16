@@ -16,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useOrganizationCreateMutation } from "@/data/organization/organization-create-mutation";
 import { useImagePreview } from "@/hooks/use-image-preview";
+import { convertImageToBase64 } from "@/lib/utils";
 
 const createOrganizationSchema = z.object({
 	name: z
@@ -75,22 +76,30 @@ export function CreateOrganizationForm({
 		}
 	}, [nameValue, dirtyFields.slug, setValue]);
 
-	const onSubmit = (values: CreateOrganizationFormValues) => {
-		createMutation.mutate(
-			{
-				name: values.name,
-				slug: values.slug,
-				logo: image && imagePreview ? imagePreview : undefined,
-			},
-			{
-				onSuccess: () => {
-					onSuccess?.();
+	const onSubmit = async (values: CreateOrganizationFormValues) => {
+		try {
+			const logoBase64 = image ? await convertImageToBase64(image) : undefined;
+
+			createMutation.mutate(
+				{
+					name: values.name,
+					slug: values.slug,
+					logo: logoBase64,
 				},
-				onError: (error) => {
-					onError?.(error.message);
+				{
+					onSuccess: () => {
+						onSuccess?.();
+					},
+					onError: (error) => {
+						onError?.(error.message);
+					},
 				},
-			},
-		);
+			);
+		} catch (error) {
+			onError?.(
+				error instanceof Error ? error.message : "Failed to process image",
+			);
+		}
 	};
 
 	return (
