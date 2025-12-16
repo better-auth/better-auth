@@ -35,7 +35,7 @@ export interface OrganizationOptions {
 	/**
 	 * The maximum number of organizations a user can create.
 	 *
-	 * You can also pass a function that returns a boolean
+	 * You can also pass a function that returns a boolean. The function should return `true` if the user has reached their organization limit, and `false` otherwise.
 	 *
 	 * @default unlimited
 	 * @example
