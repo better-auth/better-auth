@@ -259,8 +259,6 @@ export type Session = typeof auth.$Infer.Session;
 export type ActiveOrganization = typeof auth.$Infer.ActiveOrganization;
 export type OrganizationRole = ActiveOrganization["members"][number]["role"];
 export type Invitation = typeof auth.$Infer.Invitation;
-
-// should we improve this
 export type DeviceSession = Awaited<
 	ReturnType<typeof auth.api.listDeviceSessions>
 >[number];
