@@ -1108,8 +1108,6 @@ Better Auth enforces size limits on SAML payloads to protect against denial-of-s
 | `maxResponseSize` | 256KB | Maximum SAML response size in bytes |
 | `maxMetadataSize` | 100KB | Maximum IdP metadata size in bytes |
 
-These defaults are based on industry standards (Ruby SAML: 250KB, AWS: 128KB, EZproxy: 256KB).
-
 #### Customizing Limits
 
 ```ts title="auth.ts"
