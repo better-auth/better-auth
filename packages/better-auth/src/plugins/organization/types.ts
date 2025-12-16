@@ -36,9 +36,18 @@ export interface OrganizationOptions {
 	 * The maximum number of organizations a user can create.
 	 *
 	 * You can also pass a function that returns a boolean
+	 *
+	 * @default unlimited
+	 * @example
+	 * ```ts
+	 * organizationLimit: async (user) => {
+	 *   const plan = await getUserPlan(user);
+	 *   return plan.name === "pro" ? 10 : 1;
+	 * }
+	 * ```
 	 */
 	organizationLimit?:
-		| (number | ((user: User) => Awaitable<boolean>))
+		| (number | ((user: User & Record<string, any>) => Awaitable<boolean>))
 		| undefined;
 	/**
 	 * The role that is assigned to the creator of the
