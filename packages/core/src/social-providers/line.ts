@@ -118,9 +118,9 @@ export const line = (options: LineOptions) => {
 			if (error || !data) {
 				return false;
 			}
-			// aud must match clientId; nonce (if provided) must also match
+			// aud must match clientId; nonce (if provided) must also match nonce
 			if (data.aud !== options.clientId) return false;
-			if (nonce && data.nonce && data.nonce !== nonce) return false;
+			if (data.nonce && data.nonce !== nonce) return false;
 			return true;
 		},
 		async getUserInfo(token) {
