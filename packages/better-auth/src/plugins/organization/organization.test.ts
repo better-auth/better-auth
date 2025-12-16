@@ -2283,7 +2283,7 @@ describe("Additional Fields", async () => {
 			},
 			headers,
 		});
-		type Result = PrettifyDeep<typeof removedMember>;
+		type Result = typeof removedMember extends infer U | null ? U : never;
 		type ExpectedResult = {
 			member: {
 				id: string;
@@ -2296,14 +2296,14 @@ describe("Additional Fields", async () => {
 					id: string;
 					email: string;
 					name: string;
-					image?: string;
+					image?: string | undefined;
 				};
 				memberRequiredField: string;
 				memberOptionalField?: string | undefined;
 				memberHiddenField?: string | undefined;
 			};
-		} | null;
-		// expectTypeOf<Result>().toEqualTypeOf<ExpectedResult>();
+		};
+		expectTypeOf<Result>().toMatchObjectType<ExpectedResult>();
 		expect(removedMember?.member.user.email).toBe(addedMember.user.email);
 		expect(removedMember?.member.memberRequiredField).toBe("hey");
 		expect(removedMember?.member.memberOptionalField).toBe("hey2");
