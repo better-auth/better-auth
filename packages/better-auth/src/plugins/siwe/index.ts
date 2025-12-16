@@ -49,7 +49,6 @@ const getSiweNonceBodySchema = z.object({
 const createWalletAccountId = (walletAddress: string, chainId: number) =>
 	`${walletAddress}:${chainId}`;
 
-
 export const siwe = (options: SIWEPluginOptions) =>
 	({
 		id: "siwe",
@@ -237,7 +236,10 @@ export const siwe = (options: SIWEPluginOptions) =>
 								],
 							});
 
-						if (walletOnOtherChain && walletOnOtherChain.userId !== sessionUser.id) {
+						if (
+							walletOnOtherChain &&
+							walletOnOtherChain.userId !== sessionUser.id
+						) {
 							throw new APIError("BAD_REQUEST", {
 								message: SIWE_ERROR_CODES.WALLET_ALREADY_LINKED,
 							});
