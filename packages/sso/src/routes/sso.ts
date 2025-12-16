@@ -1923,9 +1923,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			const samlContent = (parsedResponse as any).samlContent as
 				| string
 				| undefined;
-			const assertionId = samlContent
-				? extractAssertionId(samlContent)
-				: null;
+			const assertionId = samlContent ? extractAssertionId(samlContent) : null;
 
 			if (assertionId) {
 				const issuer = idp.entityMeta.getEntityID();
@@ -1950,10 +1948,10 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 							isReplay = true;
 						}
 					} catch (error) {
-						ctx.context.logger.warn(
-							"Failed to parse stored assertion record",
-							{ assertionId, error },
-						);
+						ctx.context.logger.warn("Failed to parse stored assertion record", {
+							assertionId,
+							error,
+						});
 					}
 				}
 
@@ -2395,10 +2393,10 @@ export const acsEndpoint = (options?: SSOOptions) => {
 							isReplay = true;
 						}
 					} catch (error) {
-						ctx.context.logger.warn(
-							"Failed to parse stored assertion record",
-							{ assertionId: assertionIdAcs, error },
-						);
+						ctx.context.logger.warn("Failed to parse stored assertion record", {
+							assertionId: assertionIdAcs,
+							error,
+						});
 					}
 				}
 
