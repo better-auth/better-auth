@@ -290,10 +290,6 @@ export interface ConfigAlgorithmValidationOptions {
 	allowedDigestAlgorithms?: string[];
 }
 
-function isFullAlgorithmUri(value: string): boolean {
-	return value.startsWith("http://") || value.startsWith("https://");
-}
-
 export function validateConfigAlgorithms(
 	config: {
 		signatureAlgorithm?: string | undefined;
@@ -307,28 +303,23 @@ export function validateConfigAlgorithms(
 		allowedDigestAlgorithms,
 	} = options;
 
-	if (
-		config.signatureAlgorithm &&
-		isFullAlgorithmUri(config.signatureAlgorithm)
-	) {
+	if (config.signatureAlgorithm) {
+		const normalized = normalizeAlgorithm(config.signatureAlgorithm);
 		if (allowedSignatureAlgorithms) {
-			if (!allowedSignatureAlgorithms.includes(config.signatureAlgorithm)) {
+			const normalizedAllowList = allowedSignatureAlgorithms.map(normalizeAlgorithm);
+			if (!normalizedAllowList.includes(normalized)) {
 				throw new APIError("BAD_REQUEST", {
 					message: `SAML signature algorithm not in allow-list: ${config.signatureAlgorithm}`,
 					code: "SAML_ALGORITHM_NOT_ALLOWED",
 				});
 			}
-		} else if (
-			DEPRECATED_SIGNATURE_ALGORITHMS.includes(config.signatureAlgorithm)
-		) {
+		} else if (DEPRECATED_SIGNATURE_ALGORITHMS.includes(normalized)) {
 			handleDeprecatedAlgorithm(
 				`SAML config uses deprecated signature algorithm: ${config.signatureAlgorithm}. Consider using SHA-256 or stronger.`,
 				onDeprecated,
 				"SAML_DEPRECATED_CONFIG_ALGORITHM",
 			);
-		} else if (
-			!SECURE_SIGNATURE_ALGORITHMS.includes(config.signatureAlgorithm)
-		) {
+		} else if (!SECURE_SIGNATURE_ALGORITHMS.includes(normalized)) {
 			throw new APIError("BAD_REQUEST", {
 				message: `SAML signature algorithm not recognized: ${config.signatureAlgorithm}`,
 				code: "SAML_UNKNOWN_ALGORITHM",
@@ -336,21 +327,23 @@ export function validateConfigAlgorithms(
 		}
 	}
 
-	if (config.digestAlgorithm && isFullAlgorithmUri(config.digestAlgorithm)) {
+	if (config.digestAlgorithm) {
+		const normalized = normalizeAlgorithm(config.digestAlgorithm);
 		if (allowedDigestAlgorithms) {
-			if (!allowedDigestAlgorithms.includes(config.digestAlgorithm)) {
+			const normalizedAllowList = allowedDigestAlgorithms.map(normalizeAlgorithm);
+			if (!normalizedAllowList.includes(normalized)) {
 				throw new APIError("BAD_REQUEST", {
 					message: `SAML digest algorithm not in allow-list: ${config.digestAlgorithm}`,
 					code: "SAML_ALGORITHM_NOT_ALLOWED",
 				});
 			}
-		} else if (DEPRECATED_DIGEST_ALGORITHMS.includes(config.digestAlgorithm)) {
+		} else if (DEPRECATED_DIGEST_ALGORITHMS.includes(normalized)) {
 			handleDeprecatedAlgorithm(
 				`SAML config uses deprecated digest algorithm: ${config.digestAlgorithm}. Consider using SHA-256 or stronger.`,
 				onDeprecated,
 				"SAML_DEPRECATED_CONFIG_ALGORITHM",
 			);
-		} else if (!SECURE_DIGEST_ALGORITHMS.includes(config.digestAlgorithm)) {
+		} else if (!SECURE_DIGEST_ALGORITHMS.includes(normalized)) {
 			throw new APIError("BAD_REQUEST", {
 				message: `SAML digest algorithm not recognized: ${config.digestAlgorithm}`,
 				code: "SAML_UNKNOWN_ALGORITHM",
