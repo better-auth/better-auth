@@ -1,5 +1,4 @@
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { APIError } from "better-call";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { describe, expect, vi } from "vitest";
 import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -70,9 +69,7 @@ describe("sign-in", async (it) => {
 				},
 			}),
 		).rejects.toThrowError(
-			new APIError("FORBIDDEN", {
-				message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED.message,
-			}),
+			APIError.from("FORBIDDEN", BASE_ERROR_CODES.EMAIL_NOT_VERIFIED),
 		);
 
 		expect(sendVerificationEmail).toHaveBeenCalledTimes(2);
@@ -101,9 +98,7 @@ describe("sign-in", async (it) => {
 				},
 			}),
 		).rejects.toThrowError(
-			new APIError("FORBIDDEN", {
-				message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED.message,
-			}),
+			APIError.from("FORBIDDEN", BASE_ERROR_CODES.EMAIL_NOT_VERIFIED),
 		);
 
 		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
