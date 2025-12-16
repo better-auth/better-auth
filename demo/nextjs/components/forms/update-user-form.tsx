@@ -57,22 +57,30 @@ export function UpdateUserForm({
 	});
 
 	const onSubmit = async (values: UpdateUserFormValues) => {
-		updateUserMutation.mutate(
-			{
-				image: image ? await convertImageToBase64(image) : undefined,
-				name: values.name || undefined,
-			},
-			{
-				onSuccess: () => {
-					reset();
-					clearImage();
-					onSuccess?.();
+		try {
+			const imageBase64 = image ? await convertImageToBase64(image) : undefined;
+
+			updateUserMutation.mutate(
+				{
+					image: imageBase64,
+					name: values.name || undefined,
 				},
-				onError: (error) => {
-					onError?.(error.message);
+				{
+					onSuccess: () => {
+						reset();
+						clearImage();
+						onSuccess?.();
+					},
+					onError: (error) => {
+						onError?.(error.message);
+					},
 				},
-			},
-		);
+			);
+		} catch (error) {
+			onError?.(
+				error instanceof Error ? error.message : "Failed to process image",
+			);
+		}
 	};
 
 	const nameValue = watch("name");
