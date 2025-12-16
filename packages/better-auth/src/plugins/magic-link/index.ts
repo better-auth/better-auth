@@ -1,4 +1,5 @@
 import type {
+	Awaitable,
 	BetterAuthPlugin,
 	GenericEndpointContext,
 } from "@better-auth/core";
@@ -25,7 +26,7 @@ export interface MagicLinkOptions {
 			token: string;
 		},
 		ctx?: GenericEndpointContext | undefined,
-	) => Promise<void> | void;
+	) => Awaitable<void>;
 	/**
 	 * Disable sign up if user is not found.
 	 *
@@ -49,7 +50,7 @@ export interface MagicLinkOptions {
 	/**
 	 * Custom function to generate a token
 	 */
-	generateToken?: ((email: string) => Promise<string> | string) | undefined;
+	generateToken?: ((email: string) => Awaitable<string>) | undefined;
 
 	/**
 	 * This option allows you to configure how the token is stored in your database.

@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type {
+	Awaitable,
 	BetterAuthClientOptions,
 	BetterAuthOptions,
 } from "@better-auth/core";
@@ -314,7 +315,7 @@ export async function getTestInstance<
 		runWithUser: async (
 			email: string,
 			password: string,
-			fn: (headers: Headers) => Promise<void> | void,
+			fn: (headers: Headers) => Awaitable<void>,
 		) => {
 			const { headers } = await signInWithUser(email, password);
 			return currentUserContextStorage.run({ headers }, async () => {

@@ -1,10 +1,10 @@
-import type { BetterAuthClientPlugin } from "@better-auth/core";
+import type { Awaitable, BetterAuthClientPlugin } from "@better-auth/core";
 
 export interface LastLoginMethodClientConfig {
 	storage: {
 		setItem: (key: string, value: string) => any;
 		getItem: (key: string) => string | null;
-		deleteItemAsync: (key: string) => Promise<void>;
+		deleteItemAsync: (key: string) => Awaitable<void>;
 	};
 	/**
 	 * Prefix for local storage keys (e.g., "my-app_last_login_method")
@@ -15,9 +15,7 @@ export interface LastLoginMethodClientConfig {
 	 * Custom resolve method for retrieving the last login method
 	 */
 	customResolveMethod?:
-		| ((
-				url: string | URL,
-		  ) => Promise<string | undefined | null> | string | undefined | null)
+		| ((url: string | URL) => Awaitable<string | undefined | null>)
 		| undefined;
 }
 

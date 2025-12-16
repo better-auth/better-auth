@@ -1,4 +1,4 @@
-import type { LiteralString } from "../../types/helper";
+import type { LiteralString } from "@better-auth/core";
 import type { AuthorizeResponse, createAccessControl } from "./access";
 
 export type SubArray<T extends unknown[] | readonly unknown[] | any[]> =

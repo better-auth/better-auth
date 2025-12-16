@@ -4,7 +4,6 @@ import type {
 	DBFieldAttribute,
 	DBFieldAttributeConfig,
 	DBFieldType,
-	DBPrimitive,
 } from "./type";
 
 export type { BetterAuthPluginDBSchema } from "./plugin";
@@ -41,10 +40,6 @@ export type FieldAttributeConfig = DBFieldAttributeConfig;
  * @deprecated Backport for 1.3.x, we will remove this in 1.4.x
  */
 export type FieldType = DBFieldType;
-/**
- * @deprecated Backport for 1.3.x, we will remove this in 1.4.x
- */
-export type Primitive = DBPrimitive;
 /**
  * @deprecated Backport for 1.3.x, we will remove this in 1.4.x
  */

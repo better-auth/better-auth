@@ -8,10 +8,9 @@ import type { Migration } from "kysely";
 import type { AuthMiddleware } from "../api";
 import type { BetterAuthPluginDBSchema } from "../db";
 import type { AuthContext } from "./context";
-import type { LiteralString } from "./helper";
+import type { Awaitable, LiteralString } from "./helper";
 import type { BetterAuthOptions } from "./init-options";
 
-type Awaitable<T> = T | Promise<T>;
 type DeepPartial<T> = T extends Function
 	? T
 	: T extends object
@@ -153,6 +152,6 @@ export type BetterAuthPlugin = {
 	 * This will override the default database operations
 	 */
 	adapter?: {
-		[key: string]: (...args: any[]) => Promise<any> | any;
+		[key: string]: (...args: any[]) => Awaitable<any>;
 	};
 };

@@ -1,6 +1,5 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
+import type { BetterAuthPlugin, LiteralString } from "@better-auth/core";
 import type { InferOptionSchema, User } from "../../types";
-import type { LiteralString } from "../../types/helper";
 import type { BackupCodeOptions } from "./backup-codes";
 import type { OTPOptions } from "./otp";
 import type { schema } from "./schema";

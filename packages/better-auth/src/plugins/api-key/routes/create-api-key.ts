@@ -1,4 +1,4 @@
-import type { AuthContext } from "@better-auth/core";
+import type { AuthContext, Awaitable } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { safeJSONParse } from "@better-auth/core/utils";
 import * as z from "zod";
@@ -102,7 +102,7 @@ export function createApiKey({
 	keyGenerator: (options: {
 		length: number;
 		prefix: string | undefined;
-	}) => Promise<string> | string;
+	}) => Awaitable<string>;
 	opts: PredefinedApiKeyOptions;
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(

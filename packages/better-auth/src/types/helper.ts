@@ -1,15 +1,7 @@
-export type Primitive =
-	| string
-	| number
-	| symbol
-	| bigint
-	| boolean
-	| null
-	| undefined;
-export type LiteralString = "" | (string & Record<never, never>);
+import type { Primitive } from "@better-auth/core";
+
 export type LiteralNumber = 0 | (number & Record<never, never>);
 
-export type Awaitable<T> = Promise<T> | T;
 export type OmitId<T extends { id: unknown }> = Omit<T, "id">;
 
 export type Prettify<T> = Omit<T, never>;

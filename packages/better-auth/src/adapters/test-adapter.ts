@@ -1,4 +1,4 @@
-import type { BetterAuthOptions } from "@better-auth/core";
+import type { Awaitable, BetterAuthOptions } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { deepmerge, initGetModelName } from "@better-auth/core/db/adapter";
 import { TTY_COLORS } from "@better-auth/core/env";
@@ -38,9 +38,7 @@ export const testAdapter = async ({
 	 */
 	adapter: (
 		options: BetterAuthOptions,
-	) =>
-		| Promise<(options: BetterAuthOptions) => DBAdapter<BetterAuthOptions>>
-		| ((options: BetterAuthOptions) => DBAdapter<BetterAuthOptions>);
+	) => Awaitable<(options: BetterAuthOptions) => DBAdapter<BetterAuthOptions>>;
 	/**
 	 * A function that will run the database migrations.
 	 */

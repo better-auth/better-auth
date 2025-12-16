@@ -1,4 +1,4 @@
-import type { GenericEndpointContext } from "@better-auth/core";
+import type { Awaitable, GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
@@ -52,7 +52,7 @@ export interface OTPOptions {
 				 * The request object
 				 */
 				ctx?: GenericEndpointContext,
-		  ) => Promise<void> | void)
+		  ) => Awaitable<void>)
 		| undefined;
 	/**
 	 * The number of allowed attempts for the OTP
