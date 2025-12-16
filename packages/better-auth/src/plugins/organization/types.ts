@@ -42,7 +42,8 @@ export interface OrganizationOptions {
 	 * ```ts
 	 * organizationLimit: async (user) => {
 	 *   const plan = await getUserPlan(user);
-	 *   return plan.name === "pro" ? 10 : 1;
+	 *   // Return true if the user has reached their organization limit, false otherwise
+	 *   return plan.name === "pro";
 	 * }
 	 * ```
 	 */
