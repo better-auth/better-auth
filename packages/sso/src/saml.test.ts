@@ -2434,13 +2434,7 @@ describe("SAML SSO - Timestamp Validation", () => {
 describe("SAML SSO - Assertion Replay Protection", () => {
 	it("should reject replayed SAML assertion (same assertion submitted twice)", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [
-				sso({
-					saml: {
-						enableReplayProtection: true,
-					},
-				}),
-			],
+			plugins: [sso()],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -2520,101 +2514,9 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 		expect(replayLocation).toContain("error=replay_detected");
 	});
 
-	it("should allow assertion when replay protection is disabled", async () => {
-		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [
-				sso({
-					saml: {
-						enableReplayProtection: false,
-					},
-				}),
-			],
-		});
-
-		const { headers } = await signInWithTestUser();
-
-		await auth.api.registerSSOProvider({
-			body: {
-				providerId: "no-replay-check-provider",
-				issuer: "http://localhost:8081",
-				domain: "http://localhost:8081",
-				samlConfig: {
-					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
-					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
-					wantAssertionsSigned: false,
-					signatureAlgorithm: "sha256",
-					digestAlgorithm: "sha256",
-					idpMetadata: {
-						metadata: idpMetadata,
-					},
-					spMetadata: {
-						metadata: spMetadata,
-					},
-					identifierFormat:
-						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
-				},
-			},
-			headers,
-		});
-
-		let samlResponse: any;
-		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
-			onSuccess: async (context) => {
-				samlResponse = await context.data;
-			},
-		});
-
-		// First submission
-		const firstResponse = await auth.handler(
-			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/no-replay-check-provider",
-				{
-					method: "POST",
-					headers: {
-						"Content-Type": "application/x-www-form-urlencoded",
-					},
-					body: new URLSearchParams({
-						SAMLResponse: samlResponse.samlResponse,
-						RelayState: "http://localhost:3000/dashboard",
-					}),
-				},
-			),
-		);
-
-		expect(firstResponse.status).toBe(302);
-		expect(firstResponse.headers.get("location")).not.toContain("error");
-
-		// Second submission should also succeed (replay protection disabled)
-		const secondResponse = await auth.handler(
-			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/no-replay-check-provider",
-				{
-					method: "POST",
-					headers: {
-						"Content-Type": "application/x-www-form-urlencoded",
-					},
-					body: new URLSearchParams({
-						SAMLResponse: samlResponse.samlResponse,
-						RelayState: "http://localhost:3000/dashboard",
-					}),
-				},
-			),
-		);
-
-		expect(secondResponse.status).toBe(302);
-		expect(secondResponse.headers.get("location")).not.toContain("error");
-	});
-
 	it("should reject replayed SAML assertion on ACS endpoint", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [
-				sso({
-					saml: {
-						enableReplayProtection: true,
-					},
-				}),
-			],
+			plugins: [sso()],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -2694,101 +2596,9 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 		expect(replayLocation).toContain("error=replay_detected");
 	});
 
-	it("should allow assertion on ACS endpoint when replay protection is disabled", async () => {
-		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [
-				sso({
-					saml: {
-						enableReplayProtection: false,
-					},
-				}),
-			],
-		});
-
-		const { headers } = await signInWithTestUser();
-
-		await auth.api.registerSSOProvider({
-			body: {
-				providerId: "acs-no-replay-check-provider",
-				issuer: "http://localhost:8081",
-				domain: "http://localhost:8081",
-				samlConfig: {
-					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
-					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
-					wantAssertionsSigned: false,
-					signatureAlgorithm: "sha256",
-					digestAlgorithm: "sha256",
-					idpMetadata: {
-						metadata: idpMetadata,
-					},
-					spMetadata: {
-						metadata: spMetadata,
-					},
-					identifierFormat:
-						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
-				},
-			},
-			headers,
-		});
-
-		let samlResponse: any;
-		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
-			onSuccess: async (context) => {
-				samlResponse = await context.data;
-			},
-		});
-
-		// First submission should succeed
-		const firstResponse = await auth.handler(
-			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/sp/acs/acs-no-replay-check-provider",
-				{
-					method: "POST",
-					headers: {
-						"Content-Type": "application/x-www-form-urlencoded",
-					},
-					body: new URLSearchParams({
-						SAMLResponse: samlResponse.samlResponse,
-						RelayState: "http://localhost:3000/dashboard",
-					}),
-				},
-			),
-		);
-
-		expect(firstResponse.status).toBe(302);
-		expect(firstResponse.headers.get("location")).not.toContain("error");
-
-		// Second submission should also succeed (replay protection disabled)
-		const secondResponse = await auth.handler(
-			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/sp/acs/acs-no-replay-check-provider",
-				{
-					method: "POST",
-					headers: {
-						"Content-Type": "application/x-www-form-urlencoded",
-					},
-					body: new URLSearchParams({
-						SAMLResponse: samlResponse.samlResponse,
-						RelayState: "http://localhost:3000/dashboard",
-					}),
-				},
-			),
-		);
-
-		expect(secondResponse.status).toBe(302);
-		expect(secondResponse.headers.get("location")).not.toContain("error");
-	});
-
 	it("should reject cross-endpoint replay (callback → ACS)", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [
-				sso({
-					saml: {
-						enableReplayProtection: true,
-					},
-				}),
-			],
+			plugins: [sso()],
 		});
 
 		const { headers } = await signInWithTestUser();

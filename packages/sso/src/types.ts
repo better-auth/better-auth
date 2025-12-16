@@ -339,19 +339,6 @@ export interface SSOOptions {
 		 */
 		requireTimestamps?: boolean;
 		/**
-		 * Enable assertion replay protection.
-		 * When enabled, each SAML Assertion ID is tracked and rejected if reused.
-		 *
-		 * This prevents replay attacks where an attacker captures a valid
-		 * SAMLResponse and resubmits it to gain unauthorized access.
-		 *
-		 * Storage: Uses the verification table in the database.
-		 * Assertions are tracked until their NotOnOrAfter expiration time.
-		 *
-		 * @default true
-		 */
-		enableReplayProtection?: boolean;
-		/**
 		 * Algorithm validation options for SAML responses.
 		 *
 		 * Controls behavior when deprecated algorithms (SHA-1, RSA1_5, 3DES)

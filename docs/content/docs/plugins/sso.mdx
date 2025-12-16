@@ -985,10 +985,10 @@ When InResponseTo validation fails, users are redirected with an error query par
 
 ### Assertion Replay Protection
 
-The SSO plugin includes assertion replay protection to prevent attackers from capturing and resubmitting valid SAML responses. When enabled (default), each SAML Assertion ID is tracked and rejected if reused.
+The SSO plugin includes assertion replay protection to prevent attackers from capturing and resubmitting valid SAML responses. Each SAML Assertion ID is tracked and rejected if reused.
 
 <Callout type="info">
-Replay protection is **enabled by default**. This is a critical security feature that prevents attackers from reusing intercepted SAML responses.
+Replay protection is **always enabled**. This is a critical security feature that prevents attackers from reusing intercepted SAML responses.
 </Callout>
 
 #### How It Works
@@ -1003,43 +1003,14 @@ Replay protection is **enabled by default**. This is a critical security feature
 - `/sso/saml2/sp/acs/:providerId`
 
 <Callout type="info">
-Unlike InResponseTo validation, replay protection uses the database verification table by default, so it works correctly in multi-instance deployments without additional configuration.
+Replay protection uses the database verification table, so it works correctly in multi-instance deployments without additional configuration.
 </Callout>
-
-#### Configuration
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { sso } from "@better-auth/sso";
-
-const auth = betterAuth({
-    plugins: [
-        sso({
-            saml: {
-                // Replay protection is enabled by default
-                // Set to false only if you have a specific reason
-                enableReplayProtection: true,
-            },
-        }),
-    ],
-});
-```
-
-#### Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `enableReplayProtection` | `boolean` | `true` | Track assertion IDs to prevent replay attacks. Disable only if you have a specific requirement. |
 
 #### Error Handling
 
 When a replay attack is detected, users are redirected with an error:
 
 - `?error=replay_detected&error_description=SAML+assertion+has+already+been+used` — The assertion ID was already used
-
-<Callout type="warning">
-Disabling replay protection (`enableReplayProtection: false`) is **not recommended** as it leaves your application vulnerable to replay attacks where attackers can reuse captured SAML responses.
-</Callout>
 
 ### Timestamp Validation
 
@@ -1448,11 +1419,6 @@ If you want to allow account linking for specific trusted providers, enable the 
                 description: "Require timestamp conditions (NotBefore/NotOnOrAfter) in SAML assertions. When enabled, assertions without timestamps are rejected. When disabled, they are accepted with a warning logged.",
                 type: "boolean",
                 default: false,
-            },
-            enableReplayProtection: {
-                description: "Enable assertion replay protection. When enabled, each SAML Assertion ID is tracked and rejected if reused. This prevents replay attacks where attackers resubmit captured SAML responses.",
-                type: "boolean",
-                default: true,
             },
             algorithms: {
                 description: "Algorithm validation options.",

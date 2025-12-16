@@ -1920,77 +1920,75 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			}
 
 			// Assertion Replay Protection
-			if (options?.saml?.enableReplayProtection !== false) {
-				const samlContent = (parsedResponse as any).samlContent as
-					| string
+			const samlContent = (parsedResponse as any).samlContent as
+				| string
+				| undefined;
+			const assertionId = samlContent
+				? extractAssertionId(samlContent)
+				: null;
+
+			if (assertionId) {
+				const issuer = idp.entityMeta.getEntityID();
+				const conditions = (extract as any).conditions as
+					| SAMLConditions
 					| undefined;
-				const assertionId = samlContent
-					? extractAssertionId(samlContent)
-					: null;
+				const clockSkew = options?.saml?.clockSkew ?? DEFAULT_CLOCK_SKEW_MS;
+				const expiresAt = conditions?.notOnOrAfter
+					? new Date(conditions.notOnOrAfter).getTime() + clockSkew
+					: Date.now() + DEFAULT_ASSERTION_TTL_MS;
 
-				if (assertionId) {
-					const issuer = idp.entityMeta.getEntityID();
-					const conditions = (extract as any).conditions as
-						| SAMLConditions
-						| undefined;
-					const clockSkew = options?.saml?.clockSkew ?? DEFAULT_CLOCK_SKEW_MS;
-					const expiresAt = conditions?.notOnOrAfter
-						? new Date(conditions.notOnOrAfter).getTime() + clockSkew
-						: Date.now() + DEFAULT_ASSERTION_TTL_MS;
+				const existingAssertion =
+					await ctx.context.internalAdapter.findVerificationValue(
+						`${USED_ASSERTION_KEY_PREFIX}${assertionId}`,
+					);
 
-					const existingAssertion =
-						await ctx.context.internalAdapter.findVerificationValue(
-							`${USED_ASSERTION_KEY_PREFIX}${assertionId}`,
-						);
-
-					let isReplay = false;
-					if (existingAssertion) {
-						try {
-							const stored = JSON.parse(existingAssertion.value);
-							if (stored.expiresAt >= Date.now()) {
-								isReplay = true;
-							}
-						} catch (error) {
-							ctx.context.logger.warn(
-								"Failed to parse stored assertion record",
-								{ assertionId, error },
-							);
+				let isReplay = false;
+				if (existingAssertion) {
+					try {
+						const stored = JSON.parse(existingAssertion.value);
+						if (stored.expiresAt >= Date.now()) {
+							isReplay = true;
 						}
-					}
-
-					if (isReplay) {
-						ctx.context.logger.error(
-							"SAML assertion replay detected: assertion ID already used",
-							{
-								assertionId,
-								issuer,
-								providerId: provider.providerId,
-							},
-						);
-						const redirectUrl =
-							RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
-						throw ctx.redirect(
-							`${redirectUrl}?error=replay_detected&error_description=SAML+assertion+has+already+been+used`,
+					} catch (error) {
+						ctx.context.logger.warn(
+							"Failed to parse stored assertion record",
+							{ assertionId, error },
 						);
 					}
+				}
 
-					await ctx.context.internalAdapter.createVerificationValue({
-						identifier: `${USED_ASSERTION_KEY_PREFIX}${assertionId}`,
-						value: JSON.stringify({
+				if (isReplay) {
+					ctx.context.logger.error(
+						"SAML assertion replay detected: assertion ID already used",
+						{
 							assertionId,
 							issuer,
 							providerId: provider.providerId,
-							usedAt: Date.now(),
-							expiresAt,
-						}),
-						expiresAt: new Date(expiresAt),
-					});
-				} else {
-					ctx.context.logger.warn(
-						"Could not extract assertion ID for replay protection",
-						{ providerId: provider.providerId },
+						},
+					);
+					const redirectUrl =
+						RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+					throw ctx.redirect(
+						`${redirectUrl}?error=replay_detected&error_description=SAML+assertion+has+already+been+used`,
 					);
 				}
+
+				await ctx.context.internalAdapter.createVerificationValue({
+					identifier: `${USED_ASSERTION_KEY_PREFIX}${assertionId}`,
+					value: JSON.stringify({
+						assertionId,
+						issuer,
+						providerId: provider.providerId,
+						usedAt: Date.now(),
+						expiresAt,
+					}),
+					expiresAt: new Date(expiresAt),
+				});
+			} else {
+				ctx.context.logger.warn(
+					"Could not extract assertion ID for replay protection",
+					{ providerId: provider.providerId },
+				);
 			}
 
 			const attributes = extract.attributes || {};
@@ -2369,75 +2367,73 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			}
 
 			// Assertion Replay Protection
-			if (options?.saml?.enableReplayProtection !== false) {
-				const samlContent = Buffer.from(SAMLResponse, "base64").toString(
-					"utf-8",
-				);
-				const assertionId = extractAssertionId(samlContent);
+			const samlContentAcs = Buffer.from(SAMLResponse, "base64").toString(
+				"utf-8",
+			);
+			const assertionIdAcs = extractAssertionId(samlContentAcs);
 
-				if (assertionId) {
-					const issuer = idp.entityMeta.getEntityID();
-					const conditions = (extract as any).conditions as
-						| SAMLConditions
-						| undefined;
-					const clockSkew = options?.saml?.clockSkew ?? DEFAULT_CLOCK_SKEW_MS;
-					const expiresAt = conditions?.notOnOrAfter
-						? new Date(conditions.notOnOrAfter).getTime() + clockSkew
-						: Date.now() + DEFAULT_ASSERTION_TTL_MS;
+			if (assertionIdAcs) {
+				const issuer = idp.entityMeta.getEntityID();
+				const conditions = (extract as any).conditions as
+					| SAMLConditions
+					| undefined;
+				const clockSkew = options?.saml?.clockSkew ?? DEFAULT_CLOCK_SKEW_MS;
+				const expiresAt = conditions?.notOnOrAfter
+					? new Date(conditions.notOnOrAfter).getTime() + clockSkew
+					: Date.now() + DEFAULT_ASSERTION_TTL_MS;
 
-					const existingAssertion =
-						await ctx.context.internalAdapter.findVerificationValue(
-							`${USED_ASSERTION_KEY_PREFIX}${assertionId}`,
-						);
+				const existingAssertion =
+					await ctx.context.internalAdapter.findVerificationValue(
+						`${USED_ASSERTION_KEY_PREFIX}${assertionIdAcs}`,
+					);
 
-					let isReplay = false;
-					if (existingAssertion) {
-						try {
-							const stored = JSON.parse(existingAssertion.value);
-							if (stored.expiresAt >= Date.now()) {
-								isReplay = true;
-							}
-						} catch (error) {
-							ctx.context.logger.warn(
-								"Failed to parse stored assertion record",
-								{ assertionId, error },
-							);
+				let isReplay = false;
+				if (existingAssertion) {
+					try {
+						const stored = JSON.parse(existingAssertion.value);
+						if (stored.expiresAt >= Date.now()) {
+							isReplay = true;
 						}
-					}
-
-					if (isReplay) {
-						ctx.context.logger.error(
-							"SAML assertion replay detected: assertion ID already used",
-							{
-								assertionId,
-								issuer,
-								providerId,
-							},
-						);
-						const redirectUrl =
-							RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
-						throw ctx.redirect(
-							`${redirectUrl}?error=replay_detected&error_description=SAML+assertion+has+already+been+used`,
+					} catch (error) {
+						ctx.context.logger.warn(
+							"Failed to parse stored assertion record",
+							{ assertionId: assertionIdAcs, error },
 						);
 					}
+				}
 
-					await ctx.context.internalAdapter.createVerificationValue({
-						identifier: `${USED_ASSERTION_KEY_PREFIX}${assertionId}`,
-						value: JSON.stringify({
-							assertionId,
+				if (isReplay) {
+					ctx.context.logger.error(
+						"SAML assertion replay detected: assertion ID already used",
+						{
+							assertionId: assertionIdAcs,
 							issuer,
 							providerId,
-							usedAt: Date.now(),
-							expiresAt,
-						}),
-						expiresAt: new Date(expiresAt),
-					});
-				} else {
-					ctx.context.logger.warn(
-						"Could not extract assertion ID for replay protection",
-						{ providerId },
+						},
+					);
+					const redirectUrl =
+						RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+					throw ctx.redirect(
+						`${redirectUrl}?error=replay_detected&error_description=SAML+assertion+has+already+been+used`,
 					);
 				}
+
+				await ctx.context.internalAdapter.createVerificationValue({
+					identifier: `${USED_ASSERTION_KEY_PREFIX}${assertionIdAcs}`,
+					value: JSON.stringify({
+						assertionId: assertionIdAcs,
+						issuer,
+						providerId,
+						usedAt: Date.now(),
+						expiresAt,
+					}),
+					expiresAt: new Date(expiresAt),
+				});
+			} else {
+				ctx.context.logger.warn(
+					"Could not extract assertion ID for replay protection",
+					{ providerId },
+				);
 			}
 
 			const attributes = extract.attributes || {};
