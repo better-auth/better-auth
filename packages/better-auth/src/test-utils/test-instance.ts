@@ -192,7 +192,6 @@ export async function getTestInstance<
 	const customFetchImpl = async (
 		url: string | URL | Request,
 		init?: RequestInit | undefined,
-		customIdGenerator?: () => any | Awaitable<any> | undefined,
 	) => {
 		const headers = init?.headers || {};
 		const storageHeaders = currentUserContextStorage.getStore()?.headers;
