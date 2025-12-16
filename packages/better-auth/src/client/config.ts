@@ -5,7 +5,7 @@ import type {
 import { createFetch } from "@better-fetch/fetch";
 import type { WritableAtom } from "nanostores";
 import { getBaseURL } from "../utils/url";
-import { redirectPlugin } from "./fetch-plugins";
+import { translationClientPlugin, redirectPlugin } from "./fetch-plugins";
 import { parseJSON } from "./parser";
 import { getSessionAtom } from "./session-atom";
 
@@ -57,6 +57,7 @@ export const getClientConfig = (
 			lifeCyclePlugin,
 			...(restOfFetchOptions.plugins || []),
 			...(options?.disableDefaultFetchPlugins ? [] : [redirectPlugin]),
+			translationClientPlugin(options?.translations as Record<string, string>),
 			...pluginsFetchPlugins,
 		],
 	});
