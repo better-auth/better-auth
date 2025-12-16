@@ -1,5 +1,6 @@
 import type {
 	AuthContext,
+	Awaitable,
 	BetterAuthOptions,
 	BetterAuthPlugin,
 } from "@better-auth/core";
@@ -55,7 +56,11 @@ export function checkEndpointConflicts(
 	options.plugins?.forEach((plugin) => {
 		if (plugin.endpoints) {
 			for (const [key, endpoint] of Object.entries(plugin.endpoints)) {
-				if (endpoint && "path" in endpoint) {
+				if (
+					endpoint &&
+					"path" in endpoint &&
+					typeof endpoint.path === "string"
+				) {
 					const path = endpoint.path;
 					let methods: string[] = [];
 					if (endpoint.options && "method" in endpoint.options) {
@@ -155,7 +160,7 @@ To resolve this, you can:
 }
 
 export function getEndpoints<Option extends BetterAuthOptions>(
-	ctx: Promise<AuthContext> | AuthContext,
+	ctx: Awaitable<AuthContext>,
 	options: Option,
 ) {
 	const pluginEndpoints =

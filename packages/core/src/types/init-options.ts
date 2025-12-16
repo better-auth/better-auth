@@ -23,7 +23,7 @@ import type { DBAdapterDebugLogOption, DBAdapterInstance } from "../db/adapter";
 import type { Logger } from "../env";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { AuthContext, GenericEndpointContext } from "./context";
-import type { LiteralUnion } from "./helper";
+import type { Awaitable, LiteralUnion } from "./helper";
 import type { BetterAuthPlugin } from "./plugin";
 
 type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
@@ -966,6 +966,12 @@ export type BetterAuthOptions = {
 				 */
 				fields?: Partial<Record<keyof OmitId<Verification>, string>>;
 				/**
+				 * Additional fields for the verification
+				 */
+				additionalFields?: {
+					[key: string]: DBFieldAttribute;
+				};
+				/**
 				 * disable cleaning up expired values when a verification value is
 				 * fetched
 				 */
@@ -976,7 +982,7 @@ export type BetterAuthOptions = {
 	 * List of trusted origins.
 	 */
 	trustedOrigins?:
-		| (string[] | ((request: Request) => string[] | Promise<string[]>))
+		| (string[] | ((request: Request) => Awaitable<string[]>))
 		| undefined;
 	/**
 	 * Rate limiting configuration
