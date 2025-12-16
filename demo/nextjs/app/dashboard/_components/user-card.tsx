@@ -13,16 +13,16 @@ import {
 	ShieldOff,
 	StopCircle,
 	Trash,
-	X,
 } from "lucide-react";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { UAParser } from "ua-parser-js";
+import { ChangePasswordForm } from "@/components/forms/change-password-form";
 import { TwoFactorDisableForm } from "@/components/forms/two-factor-disable-form";
 import { TwoFactorEnableForm } from "@/components/forms/two-factor-enable-form";
 import { TwoFactorQrForm } from "@/components/forms/two-factor-qr-form";
+import { UpdateUserForm } from "@/components/forms/update-user-form";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -33,7 +33,6 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
 	Dialog,
 	DialogContent,
@@ -45,7 +44,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PasswordInput } from "@/components/ui/password-input";
 import {
 	Table,
 	TableBody,
@@ -54,15 +52,11 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { useChangePasswordMutation } from "@/data/user/change-password-mutation";
 import { useRevokeSessionMutation } from "@/data/user/revoke-session-mutation";
 import { useSessionQuery } from "@/data/user/session-query";
 import { useSignOutMutation } from "@/data/user/sign-out-mutation";
-import { useUpdateUserMutation } from "@/data/user/update-user-mutation";
-import { useImagePreview } from "@/hooks/use-image-preview";
 import type { Session } from "@/lib/auth";
 import { authClient } from "@/lib/auth-client";
-import { convertImageToBase64 } from "@/lib/utils";
 
 const UserCard = (props: {
 	session: Session | null;
@@ -335,12 +329,8 @@ const UserCard = (props: {
 export default UserCard;
 
 function ChangePassword() {
-	const [currentPassword, setCurrentPassword] = useState<string>("");
-	const [newPassword, setNewPassword] = useState<string>("");
-	const [confirmPassword, setConfirmPassword] = useState<string>("");
 	const [open, setOpen] = useState<boolean>(false);
-	const [signOutDevices, setSignOutDevices] = useState<boolean>(false);
-	const changePasswordMutation = useChangePasswordMutation();
+
 	return (
 		<Dialog open={open} onOpenChange={setOpen}>
 			<DialogTrigger asChild>
@@ -364,80 +354,7 @@ function ChangePassword() {
 					<DialogTitle>Change Password</DialogTitle>
 					<DialogDescription>Change your password</DialogDescription>
 				</DialogHeader>
-				<div className="grid gap-2">
-					<Label htmlFor="current-password">Current Password</Label>
-					<PasswordInput
-						id="current-password"
-						value={currentPassword}
-						onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-							setCurrentPassword(e.target.value)
-						}
-						autoComplete="new-password"
-						placeholder="Password"
-					/>
-					<Label htmlFor="new-password">New Password</Label>
-					<PasswordInput
-						value={newPassword}
-						onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-							setNewPassword(e.target.value)
-						}
-						autoComplete="new-password"
-						placeholder="New Password"
-					/>
-					<Label htmlFor="password">Confirm Password</Label>
-					<PasswordInput
-						value={confirmPassword}
-						onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-							setConfirmPassword(e.target.value)
-						}
-						autoComplete="new-password"
-						placeholder="Confirm Password"
-					/>
-					<div className="flex gap-2 items-center">
-						<Checkbox
-							onCheckedChange={(checked) =>
-								checked ? setSignOutDevices(true) : setSignOutDevices(false)
-							}
-						/>
-						<p className="text-sm">Sign out from other devices</p>
-					</div>
-				</div>
-				<DialogFooter>
-					<Button
-						disabled={changePasswordMutation.isPending}
-						onClick={() => {
-							if (newPassword !== confirmPassword) {
-								toast.error("Passwords do not match");
-								return;
-							}
-							if (newPassword.length < 8) {
-								toast.error("Password must be at least 8 characters");
-								return;
-							}
-							changePasswordMutation.mutate(
-								{
-									newPassword,
-									currentPassword,
-									revokeOtherSessions: signOutDevices,
-								},
-								{
-									onSuccess: () => {
-										setOpen(false);
-										setCurrentPassword("");
-										setNewPassword("");
-										setConfirmPassword("");
-									},
-								},
-							);
-						}}
-					>
-						{changePasswordMutation.isPending ? (
-							<Loader2 size={15} className="animate-spin" />
-						) : (
-							"Change Password"
-						)}
-					</Button>
-				</DialogFooter>
+				<ChangePasswordForm onSuccess={() => setOpen(false)} />
 			</DialogContent>
 		</Dialog>
 	);
@@ -445,11 +362,7 @@ function ChangePassword() {
 
 function EditUserDialog() {
 	const { data } = useSessionQuery();
-	const [name, setName] = useState<string>();
-	const { image, imagePreview, handleImageChange, clearImage } =
-		useImagePreview();
 	const [open, setOpen] = useState<boolean>(false);
-	const updateUserMutation = useUpdateUserMutation();
 
 	return (
 		<Dialog open={open} onOpenChange={setOpen}>
@@ -464,71 +377,10 @@ function EditUserDialog() {
 					<DialogTitle>Edit User</DialogTitle>
 					<DialogDescription>Edit user information</DialogDescription>
 				</DialogHeader>
-				<div className="grid gap-2">
-					<Label htmlFor="name">Full Name</Label>
-					<Input
-						id="name"
-						type="name"
-						placeholder={data?.user.name}
-						required
-						onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-							setName(e.target.value);
-						}}
-					/>
-					<div className="grid gap-2">
-						<Label htmlFor="image">Profile Image</Label>
-						<div className="flex items-end gap-4">
-							{imagePreview && (
-								<div className="relative w-16 h-16 rounded-sm overflow-hidden">
-									<Image
-										src={imagePreview}
-										alt="Profile preview"
-										layout="fill"
-										objectFit="cover"
-									/>
-								</div>
-							)}
-							<div className="flex items-center gap-2 w-full">
-								<Input
-									id="image"
-									type="file"
-									accept="image/*"
-									onChange={handleImageChange}
-									className="w-full text-muted-foreground"
-								/>
-								{imagePreview && (
-									<X className="cursor-pointer" onClick={clearImage} />
-								)}
-							</div>
-						</div>
-					</div>
-				</div>
-				<DialogFooter>
-					<Button
-						disabled={updateUserMutation.isPending}
-						onClick={async () => {
-							updateUserMutation.mutate(
-								{
-									image: image ? await convertImageToBase64(image) : undefined,
-									name: name || undefined,
-								},
-								{
-									onSuccess: () => {
-										setName("");
-										clearImage();
-										setOpen(false);
-									},
-								},
-							);
-						}}
-					>
-						{updateUserMutation.isPending ? (
-							<Loader2 size={15} className="animate-spin" />
-						) : (
-							"Update"
-						)}
-					</Button>
-				</DialogFooter>
+				<UpdateUserForm
+					currentName={data?.user.name}
+					onSuccess={() => setOpen(false)}
+				/>
 			</DialogContent>
 		</Dialog>
 	);
