@@ -3,18 +3,17 @@
 import { ChevronDownIcon, PlusIcon } from "@radix-ui/react-icons";
 import { AnimatePresence, motion } from "framer-motion";
 import { Loader2, MailPlus } from "lucide-react";
-import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { CreateOrganizationForm } from "@/components/forms/create-organization-form";
+import { InviteMemberForm } from "@/components/forms/invite-member-form";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import CopyButton from "@/components/ui/copy-button";
 import {
 	Dialog,
-	DialogClose,
 	DialogContent,
 	DialogDescription,
-	DialogFooter,
 	DialogHeader,
 	DialogTitle,
 	DialogTrigger,
@@ -25,21 +24,11 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useInvitationCancelMutation } from "@/data/organization/invitation-cancel-mutation";
-import { useInviteMemberMutation } from "@/data/organization/invitation-member-mutation";
 import { useMemberRemoveMutation } from "@/data/organization/member-remove-mutation";
 import { useOrganizationActiveMutation } from "@/data/organization/organization-active-mutation";
-import { useOrganizationCreateMutation } from "@/data/organization/organization-create-mutation";
 import { useOrganizationDetailQuery } from "@/data/organization/organization-detail-query";
 import { useOrganizationListQuery } from "@/data/organization/organization-list-query";
 import { useSessionQuery } from "@/data/user/session-query";
@@ -300,39 +289,7 @@ const OrganizationCard = (props: { session: Session | null }) => {
 export default OrganizationCard;
 
 function CreateOrganizationDialog() {
-	const [name, setName] = useState("");
-	const [slug, setSlug] = useState("");
 	const [open, setOpen] = useState(false);
-	const [isSlugEdited, setIsSlugEdited] = useState(false);
-	const [logo, setLogo] = useState<string | null>(null);
-	const createMutation = useOrganizationCreateMutation();
-
-	useEffect(() => {
-		if (!isSlugEdited) {
-			const generatedSlug = name.trim().toLowerCase().replace(/\s+/g, "-");
-			setSlug(generatedSlug);
-		}
-	}, [name, isSlugEdited]);
-
-	useEffect(() => {
-		if (open) {
-			setName("");
-			setSlug("");
-			setIsSlugEdited(false);
-			setLogo(null);
-		}
-	}, [open]);
-
-	const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		if (e.target.files && e.target.files[0]) {
-			const file = e.target.files[0];
-			const reader = new FileReader();
-			reader.onloadend = () => {
-				setLogo(reader.result as string);
-			};
-			reader.readAsDataURL(file);
-		}
-	};
 
 	return (
 		<Dialog open={open} onOpenChange={setOpen}>
@@ -349,78 +306,17 @@ function CreateOrganizationDialog() {
 						Create a new organization to collaborate with your team.
 					</DialogDescription>
 				</DialogHeader>
-				<div className="flex flex-col gap-4">
-					<div className="flex flex-col gap-2">
-						<Label>Organization Name</Label>
-						<Input
-							placeholder="Name"
-							value={name}
-							onChange={(e) => setName(e.target.value)}
-						/>
-					</div>
-					<div className="flex flex-col gap-2">
-						<Label>Organization Slug</Label>
-						<Input
-							value={slug}
-							onChange={(e) => {
-								setSlug(e.target.value);
-								setIsSlugEdited(true);
-							}}
-							placeholder="Slug"
-						/>
-					</div>
-					<div className="flex flex-col gap-2">
-						<Label>Logo</Label>
-						<Input type="file" accept="image/*" onChange={handleLogoChange} />
-						{logo && (
-							<div className="mt-2">
-								<Image
-									src={logo}
-									alt="Logo preview"
-									className="w-16 h-16 object-cover"
-									width={16}
-									height={16}
-								/>
-							</div>
-						)}
-					</div>
-				</div>
-				<DialogFooter>
-					<Button
-						disabled={createMutation.isPending}
-						onClick={() => {
-							createMutation.mutate(
-								{
-									name: name,
-									slug: slug,
-									logo: logo || undefined,
-								},
-								{
-									onSuccess: () => {
-										setOpen(false);
-									},
-								},
-							);
-						}}
-					>
-						{createMutation.isPending ? (
-							<Loader2 className="animate-spin" size={16} />
-						) : (
-							"Create"
-						)}
-					</Button>
-				</DialogFooter>
+				<CreateOrganizationForm onSuccess={() => setOpen(false)} />
 			</DialogContent>
 		</Dialog>
 	);
 }
 
 function InviteMemberDialog() {
-	const [email, setEmail] = useState("");
-	const [role, setRole] = useState<OrganizationRole>(ORGANIZATION_ROLES.MEMBER);
-	const inviteMutation = useInviteMemberMutation();
+	const [open, setOpen] = useState(false);
+
 	return (
-		<Dialog>
+		<Dialog open={open} onOpenChange={setOpen}>
 			<DialogTrigger asChild>
 				<Button size="sm" className="w-full gap-2" variant="outline">
 					<MailPlus size={16} />
@@ -434,41 +330,7 @@ function InviteMemberDialog() {
 						Invite a member to your organization.
 					</DialogDescription>
 				</DialogHeader>
-				<div className="flex flex-col gap-2">
-					<Label>Email</Label>
-					<Input
-						placeholder="Email"
-						value={email}
-						onChange={(e) => setEmail(e.target.value)}
-					/>
-					<Label>Role</Label>
-					<Select
-						value={role}
-						onValueChange={(value) => setRole(value as OrganizationRole)}
-					>
-						<SelectTrigger>
-							<SelectValue placeholder="Select a role" />
-						</SelectTrigger>
-						<SelectContent>
-							<SelectItem value={ORGANIZATION_ROLES.ADMIN}>Admin</SelectItem>
-							<SelectItem value={ORGANIZATION_ROLES.MEMBER}>Member</SelectItem>
-						</SelectContent>
-					</Select>
-				</div>
-				<DialogFooter>
-					<DialogClose>
-						<Button
-							onClick={() => {
-								inviteMutation.mutate({
-									email: email,
-									role: role,
-								});
-							}}
-						>
-							Invite
-						</Button>
-					</DialogClose>
-				</DialogFooter>
+				<InviteMemberForm onSuccess={() => setOpen(false)} />
 			</DialogContent>
 		</Dialog>
 	);
