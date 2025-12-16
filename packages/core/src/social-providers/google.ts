@@ -176,15 +176,24 @@ export const google = (options: GoogleOptions) => {
 
 				const publicKey = await getGooglePublicKey(kid);
 
-				// Handle multiple client IDs - if array, verify audience manually
-				const clientIds = Array.isArray(options.clientId)
+				// Handle multiple client IDs - normalize to array for comparison
+				const allowedAudiences = Array.isArray(options.clientId)
 					? options.clientId
 					: [options.clientId];
 
+				// Accept both issuer formats
+				const allowedIssuers = [
+					"accounts.google.com",
+					"https://accounts.google.com",
+				];
+
 				const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
 					algorithms: [jwtAlg],
-					issuer: ["https://accounts.google.com", "accounts.google.com"],
-					audience: clientIds.length === 1 ? clientIds[0] : clientIds,
+					issuer: allowedIssuers,
+					audience:
+						allowedAudiences.length === 1
+							? allowedAudiences[0]
+							: allowedAudiences,
 					maxTokenAge: "1h",
 				});
 
@@ -192,12 +201,8 @@ export const google = (options: GoogleOptions) => {
 					return false;
 				}
 
-				// Check if the token's audience matches any of the configured client IDs
-				const isValid =
-					clientIds.includes(jwtClaims.aud as string) &&
-					(jwtClaims.iss === "https://accounts.google.com" ||
-						jwtClaims.iss === "accounts.google.com");
-				return isValid;
+				// jwtVerify already validates audience and issuer, so if we get here, the token is valid
+				return true;
 			} catch {
 				// Return false for any errors (invalid token format, verification failure, etc.)
 				return false;

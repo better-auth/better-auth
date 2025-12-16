@@ -1,15 +1,44 @@
 import { google } from "@better-auth/core/social-providers";
 import { betterFetch } from "@better-fetch/fetch";
+import { decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Mock betterFetch
+// Mock betterFetch and jose
 vi.mock("@better-fetch/fetch");
+vi.mock("jose", async () => {
+	const actual = await vi.importActual("jose");
+	return {
+		...actual,
+		decodeProtectedHeader: vi.fn(),
+		importJWK: vi.fn(),
+		jwtVerify: vi.fn(),
+	};
+});
 
 describe("Google Provider - Multiple Client IDs", () => {
 	const mockBetterFetch = vi.mocked(betterFetch);
+	const mockDecodeProtectedHeader = vi.mocked(decodeProtectedHeader);
+	const mockImportJWK = vi.mocked(importJWK);
+	const mockJwtVerify = vi.mocked(jwtVerify);
 
 	beforeEach(() => {
 		vi.clearAllMocks();
+		// Mock getGooglePublicKey to return a mock key
+		mockBetterFetch.mockResolvedValue({
+			data: {
+				keys: [
+					{
+						kid: "test-kid",
+						alg: "RS256",
+						kty: "RSA",
+						use: "sig",
+						n: "test-n",
+						e: "AQAB",
+					},
+				],
+			},
+		} as any);
+		mockImportJWK.mockResolvedValue({} as any);
 	});
 
 	describe("verifyIdToken with multiple client IDs", () => {
@@ -19,24 +48,23 @@ describe("Google Provider - Multiple Client IDs", () => {
 				clientSecret: "test-secret",
 			});
 
-			const mockTokenInfo = {
-				aud: "single-client-id",
-				iss: "https://accounts.google.com",
-				email: "test@example.com",
-				email_verified: true,
-				name: "Test User",
-				picture: "https://example.com/picture.jpg",
-				sub: "123456789",
-			};
+			mockDecodeProtectedHeader.mockReturnValue({
+				kid: "test-kid",
+				alg: "RS256",
+			} as any);
 
-			mockBetterFetch.mockResolvedValue({
-				data: mockTokenInfo,
+			mockJwtVerify.mockResolvedValue({
+				payload: {
+					aud: "single-client-id",
+					iss: "https://accounts.google.com",
+					nonce: "test-nonce",
+				},
 			} as any);
 
 			const result = await provider.verifyIdToken("test-token", "test-nonce");
 			expect(result).toBe(true);
 			expect(mockBetterFetch).toHaveBeenCalledWith(
-				"https://www.googleapis.com/oauth2/v3/tokeninfo?id_token=test-token",
+				"https://www.googleapis.com/oauth2/v3/certs",
 			);
 		});
 
@@ -46,18 +74,17 @@ describe("Google Provider - Multiple Client IDs", () => {
 				clientSecret: "test-secret",
 			});
 
-			const mockTokenInfo = {
-				aud: "ios-client-id",
-				iss: "https://accounts.google.com",
-				email: "test@example.com",
-				email_verified: true,
-				name: "Test User",
-				picture: "https://example.com/picture.jpg",
-				sub: "123456789",
-			};
+			mockDecodeProtectedHeader.mockReturnValue({
+				kid: "test-kid",
+				alg: "RS256",
+			} as any);
 
-			mockBetterFetch.mockResolvedValue({
-				data: mockTokenInfo,
+			mockJwtVerify.mockResolvedValue({
+				payload: {
+					aud: "ios-client-id",
+					iss: "https://accounts.google.com",
+					nonce: "test-nonce",
+				},
 			} as any);
 
 			const result = await provider.verifyIdToken("test-token", "test-nonce");
@@ -70,18 +97,17 @@ describe("Google Provider - Multiple Client IDs", () => {
 				clientSecret: "test-secret",
 			});
 
-			const mockTokenInfo = {
-				aud: "android-client-id",
-				iss: "https://accounts.google.com",
-				email: "test@example.com",
-				email_verified: true,
-				name: "Test User",
-				picture: "https://example.com/picture.jpg",
-				sub: "123456789",
-			};
+			mockDecodeProtectedHeader.mockReturnValue({
+				kid: "test-kid",
+				alg: "RS256",
+			} as any);
 
-			mockBetterFetch.mockResolvedValue({
-				data: mockTokenInfo,
+			mockJwtVerify.mockResolvedValue({
+				payload: {
+					aud: "android-client-id",
+					iss: "https://accounts.google.com",
+					nonce: "test-nonce",
+				},
 			} as any);
 
 			const result = await provider.verifyIdToken("test-token", "test-nonce");
@@ -94,18 +120,17 @@ describe("Google Provider - Multiple Client IDs", () => {
 				clientSecret: "test-secret",
 			});
 
-			const mockTokenInfo = {
-				aud: "web-client-id",
-				iss: "https://accounts.google.com",
-				email: "test@example.com",
-				email_verified: true,
-				name: "Test User",
-				picture: "https://example.com/picture.jpg",
-				sub: "123456789",
-			};
+			mockDecodeProtectedHeader.mockReturnValue({
+				kid: "test-kid",
+				alg: "RS256",
+			} as any);
 
-			mockBetterFetch.mockResolvedValue({
-				data: mockTokenInfo,
+			mockJwtVerify.mockResolvedValue({
+				payload: {
+					aud: "web-client-id",
+					iss: "https://accounts.google.com",
+					nonce: "test-nonce",
+				},
 			} as any);
 
 			const result = await provider.verifyIdToken("test-token", "test-nonce");
@@ -118,19 +143,13 @@ describe("Google Provider - Multiple Client IDs", () => {
 				clientSecret: "test-secret",
 			});
 
-			const mockTokenInfo = {
-				aud: "unknown-client-id",
-				iss: "https://accounts.google.com",
-				email: "test@example.com",
-				email_verified: true,
-				name: "Test User",
-				picture: "https://example.com/picture.jpg",
-				sub: "123456789",
-			};
-
-			mockBetterFetch.mockResolvedValue({
-				data: mockTokenInfo,
+			mockDecodeProtectedHeader.mockReturnValue({
+				kid: "test-kid",
+				alg: "RS256",
 			} as any);
+
+			// jwtVerify will throw an error when audience doesn't match
+			mockJwtVerify.mockRejectedValue(new Error("Invalid audience"));
 
 			const result = await provider.verifyIdToken("test-token", "test-nonce");
 			expect(result).toBe(false);
@@ -142,19 +161,13 @@ describe("Google Provider - Multiple Client IDs", () => {
 				clientSecret: "test-secret",
 			});
 
-			const mockTokenInfo = {
-				aud: "ios-client-id",
-				iss: "https://invalid-issuer.com",
-				email: "test@example.com",
-				email_verified: true,
-				name: "Test User",
-				picture: "https://example.com/picture.jpg",
-				sub: "123456789",
-			};
-
-			mockBetterFetch.mockResolvedValue({
-				data: mockTokenInfo,
+			mockDecodeProtectedHeader.mockReturnValue({
+				kid: "test-kid",
+				alg: "RS256",
 			} as any);
+
+			// jwtVerify will throw an error when issuer doesn't match
+			mockJwtVerify.mockRejectedValue(new Error("Invalid issuer"));
 
 			const result = await provider.verifyIdToken("test-token", "test-nonce");
 			expect(result).toBe(false);
@@ -166,18 +179,17 @@ describe("Google Provider - Multiple Client IDs", () => {
 				clientSecret: "test-secret",
 			});
 
-			const mockTokenInfo = {
-				aud: "ios-client-id",
-				iss: "accounts.google.com",
-				email: "test@example.com",
-				email_verified: true,
-				name: "Test User",
-				picture: "https://example.com/picture.jpg",
-				sub: "123456789",
-			};
+			mockDecodeProtectedHeader.mockReturnValue({
+				kid: "test-kid",
+				alg: "RS256",
+			} as any);
 
-			mockBetterFetch.mockResolvedValue({
-				data: mockTokenInfo,
+			mockJwtVerify.mockResolvedValue({
+				payload: {
+					aud: "ios-client-id",
+					iss: "accounts.google.com",
+					nonce: "test-nonce",
+				},
 			} as any);
 
 			const result = await provider.verifyIdToken("test-token", "test-nonce");
@@ -190,6 +202,12 @@ describe("Google Provider - Multiple Client IDs", () => {
 				clientSecret: "test-secret",
 			});
 
+			mockDecodeProtectedHeader.mockReturnValue({
+				kid: "test-kid",
+				alg: "RS256",
+			} as any);
+
+			// Mock getGooglePublicKey to return null (no keys found)
 			mockBetterFetch.mockResolvedValue({
 				data: null,
 			} as any);
