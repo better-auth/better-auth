@@ -1367,25 +1367,86 @@ describe("SAML SSO", async () => {
 			},
 		});
 
-		// Attempt to complete SAML callback - should fail because test@email.com doesn't exist
-		// and disableImplicitSignUp is true
-		await expect(
-			authWithDisabledSignUp.api.callbackSSOSAML({
-				method: "POST",
-				body: {
-					SAMLResponse: samlResponse.samlResponse,
+		const response = await authWithDisabledSignUp.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/callback/saml-test-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse.samlResponse,
+						RelayState: "http://localhost:3000/dashboard",
+					}),
 				},
-				params: {
-					providerId: "saml-test-provider",
-				},
-			}),
-		).rejects.toMatchObject({
-			status: "UNAUTHORIZED",
+			),
+		);
+
+		expect(response.status).toBe(302);
+		const redirectLocation = response.headers.get("location") || "";
+		expect(redirectLocation).toContain("error=signup_disabled");
+	});
+
+	it("should reject SAML ACS (IdP-initiated) when disableImplicitSignUp is true and user doesn't exist", async () => {
+		const { auth: authWithDisabledSignUp, signInWithTestUser } =
+			await getTestInstance({
+				plugins: [sso({ disableImplicitSignUp: true })],
+			});
+
+		const { headers } = await signInWithTestUser();
+
+		await authWithDisabledSignUp.api.registerSSOProvider({
 			body: {
-				message:
-					"User not found and implicit sign up is disabled for this provider",
+				providerId: "saml-acs-test-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers: headers,
+		});
+
+		let samlResponse: any;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
 			},
 		});
+
+		const response = await authWithDisabledSignUp.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/saml-acs-test-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse.samlResponse,
+						RelayState: "http://localhost:3000/dashboard",
+					}),
+				},
+			),
+		);
+
+		expect(response.status).toBe(302);
+		const redirectLocation = response.headers.get("location") || "";
+		expect(redirectLocation).toContain("error=signup_disabled");
 	});
 
 	it("should deny account linking when provider is not trusted and domain is not verified", async () => {

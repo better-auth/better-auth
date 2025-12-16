@@ -36,6 +36,7 @@ export async function generateState(
 		 */
 		expiresAt: Date.now() + 10 * 60 * 1000,
 		requestSignUp: c.body?.requestSignUp,
+		state,
 	};
 
 	await setOAuthState(stateData);
