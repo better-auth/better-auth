@@ -147,7 +147,7 @@ export interface SSOOptions {
 					 * The SSO provider
 					 */
 					provider: SSOProvider<SSOOptions>;
-				}) => Awaitable<"member" | "admin">;
+				}) => Promise<"member" | "admin">;
 		  }
 		| undefined;
 	/**
