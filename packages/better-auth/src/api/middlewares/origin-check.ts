@@ -71,11 +71,7 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 		(Array.isArray(skipOriginCheck) &&
 			shouldSkipOriginCheckForPath(ctx.request.url, basePath, skipOriginCheck));
 
-	if (
-		useCookies &&
-		!ctx.context.skipCSRFCheck &&
-		!shouldSkipOrigin
-	) {
+	if (useCookies && !ctx.context.skipCSRFCheck && !shouldSkipOrigin) {
 		if (!originHeader || originHeader === "null") {
 			throw new APIError("FORBIDDEN", { message: "Missing or null Origin" });
 		}
