@@ -283,6 +283,14 @@ describe("validateConfigAlgorithms", () => {
 			).not.toThrow();
 		});
 
+		it("should accept digest-style short-form for signature (backward compat)", () => {
+			expect(() =>
+				alg.validateConfigAlgorithms({
+					signatureAlgorithm: "sha256",
+				}),
+			).not.toThrow();
+		});
+
 		it("should reject typos in short-form signature algorithm names", () => {
 			expect(() =>
 				alg.validateConfigAlgorithms({

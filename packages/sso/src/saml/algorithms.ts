@@ -63,11 +63,11 @@ const SECURE_DIGEST_ALGORITHMS: readonly string[] = [
 	DigestAlgorithm.SHA512,
 ];
 
-const SHORT_FORM_TO_URI: Record<string, string> = {
-	sha1: DigestAlgorithm.SHA1,
-	sha256: DigestAlgorithm.SHA256,
-	sha384: DigestAlgorithm.SHA384,
-	sha512: DigestAlgorithm.SHA512,
+const SHORT_FORM_SIGNATURE_TO_URI: Record<string, string> = {
+	sha1: SignatureAlgorithm.RSA_SHA1,
+	sha256: SignatureAlgorithm.RSA_SHA256,
+	sha384: SignatureAlgorithm.RSA_SHA384,
+	sha512: SignatureAlgorithm.RSA_SHA512,
 	"rsa-sha1": SignatureAlgorithm.RSA_SHA1,
 	"rsa-sha256": SignatureAlgorithm.RSA_SHA256,
 	"rsa-sha384": SignatureAlgorithm.RSA_SHA384,
@@ -77,8 +77,19 @@ const SHORT_FORM_TO_URI: Record<string, string> = {
 	"ecdsa-sha512": SignatureAlgorithm.ECDSA_SHA512,
 };
 
-function normalizeAlgorithm(alg: string): string {
-	return SHORT_FORM_TO_URI[alg.toLowerCase()] ?? alg;
+const SHORT_FORM_DIGEST_TO_URI: Record<string, string> = {
+	sha1: DigestAlgorithm.SHA1,
+	sha256: DigestAlgorithm.SHA256,
+	sha384: DigestAlgorithm.SHA384,
+	sha512: DigestAlgorithm.SHA512,
+};
+
+function normalizeSignatureAlgorithm(alg: string): string {
+	return SHORT_FORM_SIGNATURE_TO_URI[alg.toLowerCase()] ?? alg;
+}
+
+function normalizeDigestAlgorithm(alg: string): string {
+	return SHORT_FORM_DIGEST_TO_URI[alg.toLowerCase()] ?? alg;
 }
 
 export type DeprecatedAlgorithmBehavior = "reject" | "warn" | "allow";
@@ -304,9 +315,10 @@ export function validateConfigAlgorithms(
 	} = options;
 
 	if (config.signatureAlgorithm) {
-		const normalized = normalizeAlgorithm(config.signatureAlgorithm);
+		const normalized = normalizeSignatureAlgorithm(config.signatureAlgorithm);
 		if (allowedSignatureAlgorithms) {
-			const normalizedAllowList = allowedSignatureAlgorithms.map(normalizeAlgorithm);
+			const normalizedAllowList =
+				allowedSignatureAlgorithms.map(normalizeSignatureAlgorithm);
 			if (!normalizedAllowList.includes(normalized)) {
 				throw new APIError("BAD_REQUEST", {
 					message: `SAML signature algorithm not in allow-list: ${config.signatureAlgorithm}`,
@@ -328,9 +340,10 @@ export function validateConfigAlgorithms(
 	}
 
 	if (config.digestAlgorithm) {
-		const normalized = normalizeAlgorithm(config.digestAlgorithm);
+		const normalized = normalizeDigestAlgorithm(config.digestAlgorithm);
 		if (allowedDigestAlgorithms) {
-			const normalizedAllowList = allowedDigestAlgorithms.map(normalizeAlgorithm);
+			const normalizedAllowList =
+				allowedDigestAlgorithms.map(normalizeDigestAlgorithm);
 			if (!normalizedAllowList.includes(normalized)) {
 				throw new APIError("BAD_REQUEST", {
 					message: `SAML digest algorithm not in allow-list: ${config.digestAlgorithm}`,
