@@ -1038,7 +1038,10 @@ describe("siwe", () => {
 			const chainId2 = 2;
 
 			// 1. User A signs in with testWalletAddress on Chain 1 (creates User A)
-			await client.siwe.nonce({ walletAddress: testWalletAddress, chainId: chainId1 });
+			await client.siwe.nonce({
+				walletAddress: testWalletAddress,
+				chainId: chainId1,
+			});
 			const userAResult = await client.siwe.verify({
 				message: "valid_message",
 				signature: "valid_signature",
@@ -1059,7 +1062,9 @@ describe("siwe", () => {
 				},
 				{ onSuccess: cookieSetter(headersB) },
 			);
-			const sessionB = await client.getSession({ fetchOptions: { headers: headersB } });
+			const sessionB = await client.getSession({
+				fetchOptions: { headers: headersB },
+			});
 			const userBId = sessionB.data?.user.id!;
 			expect(userBId).not.toBe(userAId);
 
@@ -1083,21 +1088,27 @@ describe("siwe", () => {
 			// is already associated with User A, preventing a split identity.
 			expect(linkResult.error).toBeDefined();
 			expect(linkResult.error?.status).toBe(400);
-			expect(linkResult.error?.code).toBe("WALLET_ALREADY_LINKED_TO_ANOTHER_USER");
+			expect(linkResult.error?.code).toBe(
+				"WALLET_ALREADY_LINKED_TO_ANOTHER_USER",
+			);
 
 			// Verify that no new walletAddress record was created for User B
 			const ctx = await auth.$context;
-			const walletAddressesForUserB = await ctx.adapter.findMany<WalletAddress>({
-				model: "walletAddress",
-				where: [{ field: "userId", value: userBId }],
-			});
+			const walletAddressesForUserB = await ctx.adapter.findMany<WalletAddress>(
+				{
+					model: "walletAddress",
+					where: [{ field: "userId", value: userBId }],
+				},
+			);
 			expect(walletAddressesForUserB.length).toBe(0); // User B should not have linked this wallet
 
 			// Verify that the original walletAddress for User A is still intact
-			const walletAddressesForUserA = await ctx.adapter.findMany<WalletAddress>({
-				model: "walletAddress",
-				where: [{ field: "userId", value: userAId }],
-			});
+			const walletAddressesForUserA = await ctx.adapter.findMany<WalletAddress>(
+				{
+					model: "walletAddress",
+					where: [{ field: "userId", value: userAId }],
+				},
+			);
 			expect(walletAddressesForUserA.length).toBe(1);
 			expect(walletAddressesForUserA[0]?.address).toBe(testWalletAddress);
 			expect(walletAddressesForUserA[0]?.chainId).toBe(chainId1);
@@ -1331,13 +1342,23 @@ describe("siwe", () => {
 
 			await client.siwe.nonce({ walletAddress: wallet1, chainId }, { headers });
 			await client.siwe.verify(
-				{ message: "valid_message", signature: "valid_signature", walletAddress: wallet1, chainId },
+				{
+					message: "valid_message",
+					signature: "valid_signature",
+					walletAddress: wallet1,
+					chainId,
+				},
 				{ headers },
 			);
 
 			await client.siwe.nonce({ walletAddress: wallet2, chainId }, { headers });
 			await client.siwe.verify(
-				{ message: "valid_message", signature: "valid_signature", walletAddress: wallet2, chainId },
+				{
+					message: "valid_message",
+					signature: "valid_signature",
+					walletAddress: wallet2,
+					chainId,
+				},
 				{ headers },
 			);
 
@@ -1349,11 +1370,19 @@ describe("siwe", () => {
 			expect(accounts.length).toBe(2);
 
 			// Unlink wallet1
-			const wallet1Account = accounts.find((a) => a.accountId?.startsWith(wallet1));
-			await client.unlinkAccount({ providerId: "siwe", accountId: wallet1Account!.accountId! }, { headers });
+			const wallet1Account = accounts.find((a) =>
+				a.accountId?.startsWith(wallet1),
+			);
+			await client.unlinkAccount(
+				{ providerId: "siwe", accountId: wallet1Account!.accountId! },
+				{ headers },
+			);
 
 			// wallet1 should be gone, wallet2 should remain
-			const remainingWallets = await ctx.adapter.findMany<WalletAddress>({ model: "walletAddress", where: [] });
+			const remainingWallets = await ctx.adapter.findMany<WalletAddress>({
+				model: "walletAddress",
+				where: [],
+			});
 			expect(remainingWallets.length).toBe(1);
 			expect(remainingWallets[0]?.address).toBe(wallet2);
 		});
@@ -1371,16 +1400,35 @@ describe("siwe", () => {
 			await client.siwe.nonce({ walletAddress: testWallet, chainId });
 			const headers = new Headers();
 			await client.siwe.verify(
-				{ message: "valid_message", signature: "valid_signature", walletAddress: testWallet, chainId },
+				{
+					message: "valid_message",
+					signature: "valid_signature",
+					walletAddress: testWallet,
+					chainId,
+				},
 				{ onSuccess: cookieSetter(headers) },
 			);
 
 			const ctx = await auth.$context;
-			expect((await ctx.adapter.findMany<WalletAddress>({ model: "walletAddress", where: [{ field: "address", value: testWallet }] })).length).toBe(1);
+			expect(
+				(
+					await ctx.adapter.findMany<WalletAddress>({
+						model: "walletAddress",
+						where: [{ field: "address", value: testWallet }],
+					})
+				).length,
+			).toBe(1);
 
 			await client.deleteUser({ fetchOptions: { headers } });
 
-			expect((await ctx.adapter.findMany<WalletAddress>({ model: "walletAddress", where: [{ field: "address", value: testWallet }] })).length).toBe(0);
+			expect(
+				(
+					await ctx.adapter.findMany<WalletAddress>({
+						model: "walletAddress",
+						where: [{ field: "address", value: testWallet }],
+					})
+				).length,
+			).toBe(0);
 		});
 	});
 
@@ -1457,7 +1505,4 @@ describe("siwe", () => {
 			expect(accountIds).toContain(`${checksumWallet}:${chainId2}`);
 		});
 	});
-
-
 });
-
