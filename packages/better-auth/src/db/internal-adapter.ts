@@ -586,15 +586,12 @@ export const createInternalAdapter = (
 					return;
 				}
 			}
-			await (await getCurrentAdapter(adapter)).delete<Session>({
-				model: "session",
-				where: [
-					{
-						field: "token",
-						value: token,
-					},
-				],
-			});
+
+			await deleteWithHooks(
+				[{ field: "token", value: token }],
+				"session",
+				undefined,
+			);
 		},
 		deleteAccounts: async (userId: string) => {
 			await deleteManyWithHooks(
