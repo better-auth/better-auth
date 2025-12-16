@@ -1,6 +1,10 @@
-import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
+import type {
+	AuthContext,
+	Awaitable,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
-import type { Awaitable, Session, User } from "../../types";
+import type { Session, User } from "../../types";
 import type { AccessControl, Role } from "../access";
 import type {
 	Invitation,

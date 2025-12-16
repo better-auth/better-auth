@@ -1,6 +1,10 @@
-import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
+import type {
+	AuthContext,
+	Awaitable,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import type { EndpointContext } from "better-call";
-import type { Awaitable, InferOptionSchema, Session, User } from "../../types";
+import type { InferOptionSchema, Session, User } from "../../types";
 import type { schema } from "./schema";
 
 export interface UserWithAnonymous extends User {

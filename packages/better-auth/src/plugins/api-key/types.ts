@@ -1,8 +1,10 @@
 import type {
+	Awaitable,
 	GenericEndpointContext,
 	HookEndpointContext,
 } from "@better-auth/core";
-import type { Awaitable, InferOptionSchema } from "../../types";
+
+import type { InferOptionSchema } from "../../types";
 import type { Statements } from "../access";
 import type { apiKeySchema } from "./schema";
 export interface ApiKeyOptions {

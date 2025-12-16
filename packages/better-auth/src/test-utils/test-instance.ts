@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type {
+	Awaitable,
 	BetterAuthClientOptions,
 	BetterAuthOptions,
 } from "@better-auth/core";
@@ -11,7 +12,7 @@ import { createAuthClient } from "../client";
 import { parseSetCookieHeader, setCookieToHeader } from "../cookies";
 import { getAdapter, getMigrations } from "../db";
 import { bearer } from "../plugins";
-import type { Awaitable, Session, User } from "../types";
+import type { Session, User } from "../types";
 import { getBaseURL } from "../utils/url";
 
 const cleanupSet = new Set<Function>();

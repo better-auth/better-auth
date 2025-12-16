@@ -1,5 +1,4 @@
-import type { AuthContext } from "@better-auth/core";
-import type { Awaitable } from "../../../types";
+import type { AuthContext, Awaitable } from "@better-auth/core";
 import { API_KEY_TABLE_NAME } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey, ApiKeyOptions } from "../types";

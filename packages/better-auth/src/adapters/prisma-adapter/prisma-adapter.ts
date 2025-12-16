@@ -1,4 +1,4 @@
-import type { BetterAuthOptions } from "@better-auth/core";
+import type { Awaitable, BetterAuthOptions } from "@better-auth/core";
 import type {
 	AdapterFactoryCustomizeAdapterCreator,
 	AdapterFactoryOptions,
@@ -9,7 +9,6 @@ import type {
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
-import type { Awaitable } from "../../types";
 
 export interface PrismaConfig {
 	/**

@@ -1,10 +1,9 @@
-import type { BetterAuthOptions } from "@better-auth/core";
+import type { Awaitable, BetterAuthOptions } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { deepmerge, initGetModelName } from "@better-auth/core/db/adapter";
 import { TTY_COLORS } from "@better-auth/core/env";
 import { afterAll, beforeAll, describe } from "vitest";
 import { getAuthTables } from "../db";
-import type { Awaitable } from "../types";
 import type { createTestSuite, TestSuiteStats } from "./create-test-suite";
 
 export type Logger = {

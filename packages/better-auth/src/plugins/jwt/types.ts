@@ -1,7 +1,7 @@
+import type { Awaitable } from "@better-auth/core";
 import type { JWTPayload } from "jose";
 import type { GenericEndpointContext } from "../..";
 import type { InferOptionSchema, Session, User } from "../../types";
-import type { Awaitable } from "../../types/helper";
 import type { schema } from "./schema";
 
 export interface JwtOptions {

@@ -1,4 +1,5 @@
 import type {
+	Awaitable,
 	BetterAuthPlugin,
 	GenericEndpointContext,
 } from "@better-auth/core";
@@ -7,7 +8,6 @@ import * as z from "zod";
 import { originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
-import type { Awaitable } from "../../types";
 import { defaultKeyHasher } from "./utils";
 
 export interface MagicLinkOptions {
