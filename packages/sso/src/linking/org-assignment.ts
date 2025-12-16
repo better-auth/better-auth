@@ -1,24 +1,6 @@
-import type { OAuth2Tokens, User } from "better-auth";
+import type { GenericEndpointContext, OAuth2Tokens, User } from "better-auth";
 import type { SSOOptions, SSOProvider } from "../types";
 import type { NormalizedSSOProfile } from "./types";
-
-interface EndpointContext {
-	context: {
-		options: {
-			plugins?: Array<{ id: string }>;
-		};
-		adapter: {
-			findOne: <T>(options: {
-				model: string;
-				where: Array<{ field: string; value: unknown }>;
-			}) => Promise<T | null>;
-			create: (options: {
-				model: string;
-				data: Record<string, unknown>;
-			}) => Promise<unknown>;
-		};
-	};
-}
 
 export interface OrganizationProvisioningOptions {
 	disabled?: boolean;
@@ -44,7 +26,7 @@ export interface AssignOrganizationFromProviderOptions {
  * Used in SSO flows (OIDC, SAML) where the provider is already linked to an org.
  */
 export async function assignOrganizationFromProvider(
-	ctx: EndpointContext,
+	ctx: GenericEndpointContext,
 	options: AssignOrganizationFromProviderOptions,
 ): Promise<void> {
 	const { user, profile, provider, token, provisioningOptions } = options;
@@ -111,7 +93,7 @@ export interface AssignOrganizationByDomainOptions {
  * (e.g., Google OAuth with @acme.com email gets added to Acme's org).
  */
 export async function assignOrganizationByDomain(
-	ctx: EndpointContext,
+	ctx: GenericEndpointContext,
 	options: AssignOrganizationByDomainOptions,
 ): Promise<void> {
 	const { user, provisioningOptions } = options;
