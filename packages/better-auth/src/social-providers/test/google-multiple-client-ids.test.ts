@@ -33,6 +33,7 @@ describe("Google Provider - Multiple Client IDs", () => {
 						kty: "RSA",
 						use: "sig",
 						n: "test-n",
+						// cspell:ignore AQAB
 						e: "AQAB",
 					},
 				],
