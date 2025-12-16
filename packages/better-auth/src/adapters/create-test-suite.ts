@@ -10,7 +10,7 @@ import { TTY_COLORS } from "@better-auth/core/env";
 import { generateId } from "@better-auth/core/utils";
 import { test } from "vitest";
 import { betterAuth } from "../auth";
-import type { Account, Awaitable, Session, User, Verification } from "../types";
+import type { Account, Session, User, Verification } from "../types";
 import type { Logger } from "./test-adapter";
 
 /**
@@ -23,7 +23,7 @@ export type TestEntry =
 				(note?: string | undefined): never;
 				(condition: boolean, note?: string | undefined): void;
 			};
-	  }) => Awaitable<void>)
+	  }) => Promise<void>)
 	| {
 			migrateBetterAuth?: BetterAuthOptions;
 			test: (context: {
@@ -31,7 +31,7 @@ export type TestEntry =
 					(note?: string | undefined): never;
 					(condition: boolean, note?: string | undefined): void;
 				};
-			}) => Awaitable<void>;
+			}) => Promise<void>;
 	  };
 
 /**
@@ -169,7 +169,7 @@ export const createTestSuite = <
 		 */
 		alwaysMigrate?: boolean | undefined;
 		prefixTests?: string | undefined;
-		customIdGenerator?: () => any | Awaitable<any> | undefined;
+		customIdGenerator?: () => any | Promise<any> | undefined;
 	},
 	tests: (
 		helpers: {
@@ -180,11 +180,11 @@ export const createTestSuite = <
 			/**
 			 * A light cleanup function that will only delete rows it knows about.
 			 */
-			cleanup: () => Awaitable<void>;
+			cleanup: () => Promise<void>;
 			/**
 			 * A hard cleanup function that will delete all rows from the database.
 			 */
-			hardCleanup: () => Awaitable<void>;
+			hardCleanup: () => Promise<void>;
 			modifyBetterAuthOptions: (
 				options: BetterAuthOptions,
 				shouldRunMigrations: boolean,
@@ -202,7 +202,7 @@ export const createTestSuite = <
 			})[];
 			getAuth: () => Promise<ReturnType<typeof betterAuth>>;
 			tryCatch<T, E = Error>(promise: Promise<T>): Promise<Result<T, E>>;
-			customIdGenerator?: () => any | Awaitable<any> | undefined;
+			customIdGenerator?: () => any | Promise<any> | undefined;
 			transformIdOutput?: (id: any) => string | undefined;
 			/**
 			 * Some adapters may change the ID type, this function allows you to pass the entire model
@@ -231,18 +231,18 @@ export const createTestSuite = <
 			| undefined,
 	) => {
 		return async (helpers: {
-			adapter: () => Awaitable<DBAdapter<BetterAuthOptions>>;
+			adapter: () => Promise<DBAdapter<BetterAuthOptions>>;
 			log: Logger;
 			adapterDisplayName: string;
 			getBetterAuthOptions: () => BetterAuthOptions;
 			modifyBetterAuthOptions: (
 				options: BetterAuthOptions,
 			) => Promise<BetterAuthOptions>;
-			cleanup: () => Awaitable<void>;
-			runMigrations: () => Awaitable<void>;
+			cleanup: () => Promise<void>;
+			runMigrations: () => Promise<void>;
 			prefixTests?: string | undefined;
-			onTestFinish: (stats: TestSuiteStats) => Awaitable<void>;
-			customIdGenerator?: () => any | Awaitable<any> | undefined;
+			onTestFinish: (stats: TestSuiteStats) => Promise<void>;
+			customIdGenerator?: () => any | Promise<any> | undefined;
 			transformIdOutput?: (id: any) => string | undefined;
 		}) => {
 			const createdRows: Record<string, any[]> = {};
@@ -672,7 +672,7 @@ export const createTestSuite = <
 						(note?: string | undefined): never;
 						(condition: boolean, note?: string | undefined): void;
 					};
-				}) => Awaitable<void>;
+				}) => Promise<void>;
 				migrateBetterAuth?: BetterAuthOptions;
 			} => {
 				if (typeof entry === "function") {
