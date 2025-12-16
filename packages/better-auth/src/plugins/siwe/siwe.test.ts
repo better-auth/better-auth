@@ -1310,6 +1310,80 @@ describe("siwe", () => {
 		});
 	});
 
+	describe("cleanup on deletion", () => {
+		it("should delete a walletAddress when the associated account is unlinked", async () => {
+			const { auth, client, cookieSetter } = await getTestInstance(
+				{
+					plugins: [siwe(createSiweOptions())],
+				},
+				{ clientOptions: { plugins: [siweClient()] } },
+			);
+
+			const headers = new Headers();
+			await client.signUp.email(
+				{ email: "unlink@example.com", name: "Test", password: "password123" },
+				{ onSuccess: cookieSetter(headers) },
+			);
+
+			// Link two wallets
+			const wallet1 = "0x4444444444444444444444444444444444444444";
+			const wallet2 = "0x5555555555555555555555555555555555555555";
+
+			await client.siwe.nonce({ walletAddress: wallet1, chainId }, { headers });
+			await client.siwe.verify(
+				{ message: "valid_message", signature: "valid_signature", walletAddress: wallet1, chainId },
+				{ headers },
+			);
+
+			await client.siwe.nonce({ walletAddress: wallet2, chainId }, { headers });
+			await client.siwe.verify(
+				{ message: "valid_message", signature: "valid_signature", walletAddress: wallet2, chainId },
+				{ headers },
+			);
+
+			const ctx = await auth.$context;
+			const accounts = await ctx.adapter.findMany<Account>({
+				model: "account",
+				where: [{ field: "providerId", value: "siwe" }],
+			});
+			expect(accounts.length).toBe(2);
+
+			// Unlink wallet1
+			const wallet1Account = accounts.find((a) => a.accountId?.startsWith(wallet1));
+			await client.unlinkAccount({ providerId: "siwe", accountId: wallet1Account!.accountId! }, { headers });
+
+			// wallet1 should be gone, wallet2 should remain
+			const remainingWallets = await ctx.adapter.findMany<WalletAddress>({ model: "walletAddress", where: [] });
+			expect(remainingWallets.length).toBe(1);
+			expect(remainingWallets[0]?.address).toBe(wallet2);
+		});
+
+		it("should delete walletAddress when user is deleted", async () => {
+			const { auth, client, cookieSetter } = await getTestInstance(
+				{
+					user: { deleteUser: { enabled: true } },
+					plugins: [siwe(createSiweOptions())],
+				},
+				{ clientOptions: { plugins: [siweClient()] } },
+			);
+
+			const testWallet = "0x5555555555555555555555555555555555555555";
+			await client.siwe.nonce({ walletAddress: testWallet, chainId });
+			const headers = new Headers();
+			await client.siwe.verify(
+				{ message: "valid_message", signature: "valid_signature", walletAddress: testWallet, chainId },
+				{ onSuccess: cookieSetter(headers) },
+			);
+
+			const ctx = await auth.$context;
+			expect((await ctx.adapter.findMany<WalletAddress>({ model: "walletAddress", where: [{ field: "address", value: testWallet }] })).length).toBe(1);
+
+			await client.deleteUser({ fetchOptions: { headers } });
+
+			expect((await ctx.adapter.findMany<WalletAddress>({ model: "walletAddress", where: [{ field: "address", value: testWallet }] })).length).toBe(0);
+		});
+	});
+
 	describe("account record creation", () => {
 		it("should create account record with correct providerId and accountId", async () => {
 			const { client, auth } = await createTestInstance();
