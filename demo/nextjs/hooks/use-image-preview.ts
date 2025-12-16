@@ -1,8 +1,23 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export function useImagePreview() {
 	const [image, setImage] = useState<File | null>(null);
 	const [imagePreview, setImagePreview] = useState<string | null>(null);
+	const imagePreviewRef = useRef<string | null>(null);
+
+	// Keep ref in sync with state for cleanup
+	useEffect(() => {
+		imagePreviewRef.current = imagePreview;
+	}, [imagePreview]);
+
+	// Cleanup on unmount
+	useEffect(() => {
+		return () => {
+			if (imagePreviewRef.current) {
+				URL.revokeObjectURL(imagePreviewRef.current);
+			}
+		};
+	}, []);
 
 	const handleImageChange = useCallback(
 		(e: React.ChangeEvent<HTMLInputElement>) => {
