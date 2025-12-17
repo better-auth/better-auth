@@ -921,59 +921,12 @@ const auth = betterAuth({
 | `enableInResponseToValidation` | `boolean` | `false` | Enable InResponseTo validation for SP-initiated flows. |
 | `allowIdpInitiated` | `boolean` | `true` | Allow IdP-initiated SSO (responses without InResponseTo). Set to `false` for stricter security. Only applies when validation is enabled. |
 | `requestTTL` | `number` | `300000` (5 min) | Time-to-live for AuthnRequest records in milliseconds. Requests older than this will be rejected. |
-| `authnRequestStore` | `AuthnRequestStore` | In-memory | Custom store implementation. Providing a custom store automatically enables validation. |
 
-#### Multi-Instance Deployments (Production)
+#### Multi-Instance Deployments
 
-<Callout type="warning">
-For multi-instance deployments (load-balanced servers, serverless, etc.), you **must** provide a shared store like Redis. The default in-memory store only works for single-instance deployments.
-</Callout>
+InResponseTo validation uses the verification table by default, which works correctly in multi-instance deployments (load-balanced servers, serverless, etc.) without additional configuration.
 
-Providing a custom `authnRequestStore` automatically enables InResponseTo validation:
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { sso, type AuthnRequestStore } from "@better-auth/sso";
-
-// Example Redis-backed store
-const redisAuthnRequestStore: AuthnRequestStore = {
-    async set(record) {
-        const ttl = Math.ceil((record.expiresAt - Date.now()) / 1000);
-        await redis.set(
-            `authn:${record.id}`,
-            JSON.stringify(record),
-            "EX",
-            ttl
-        );
-    },
-    async get(id) {
-        const data = await redis.get(`authn:${id}`);
-        if (!data) return null;
-        const record = JSON.parse(data);
-        if (record.expiresAt < Date.now()) {
-            await redis.del(`authn:${id}`);
-            return null;
-        }
-        return record;
-    },
-    async delete(id) {
-        await redis.del(`authn:${id}`);
-    },
-};
-
-const auth = betterAuth({
-    plugins: [
-        sso({
-            saml: {
-                // Providing a store automatically enables validation
-                authnRequestStore: redisAuthnRequestStore,
-                // Optionally configure other options
-                allowIdpInitiated: false,
-            },
-        }),
-    ],
-});
-```
+For high-volume environments, you can configure `secondaryStorage` in Better Auth to use Redis, which the verification table will automatically use.
 
 #### Error Handling
 
@@ -1404,11 +1357,6 @@ If you want to allow account linking for specific trusted providers, enable the 
                 description: "TTL for AuthnRequest records in milliseconds. Only applies when validation is enabled.",
                 type: "number",
                 default: 300000,
-            },
-            authnRequestStore: {
-                description: "Custom AuthnRequest store for multi-instance deployments (e.g., Redis). Providing a store automatically enables validation.",
-                type: "AuthnRequestStore",
-                required: false,
             },
             clockSkew: {
                 description: "Clock skew tolerance for SAML assertion timestamp validation (NotBefore/NotOnOrAfter) in milliseconds. Allows for minor time differences between IdP and SP servers.",
