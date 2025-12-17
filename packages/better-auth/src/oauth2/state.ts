@@ -22,7 +22,6 @@ export async function generateState(
 		});
 	}
 
-	
 	const state = generateRandomString(32);
 	const codeVerifier = generateRandomString(128);
 
