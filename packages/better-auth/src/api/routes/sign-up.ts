@@ -8,6 +8,7 @@ import { setSessionCookie } from "../../cookies";
 import { parseUserInput } from "../../db";
 import { parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput, InferUser, User } from "../../types";
+import { isAPIError } from "../../utils/is-api-error";
 import { createEmailVerificationToken } from "./email-verification";
 
 const signUpEmailBodySchema = z
@@ -258,7 +259,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					if (isDevelopment()) {
 						ctx.context.logger.error("Failed to create user", e);
 					}
-					if (e instanceof APIError) {
+					if (isAPIError(e)) {
 						throw e;
 					}
 					ctx.context.logger?.error("Failed to create user", e);

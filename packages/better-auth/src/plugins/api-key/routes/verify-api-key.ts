@@ -3,6 +3,7 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils";
 import * as z from "zod";
+import { isAPIError } from "../../../utils/is-api-error";
 import { role } from "../../access";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
@@ -290,7 +291,7 @@ export function verifyApiKey({
 				});
 				await deleteAllExpiredApiKeys(ctx.context);
 			} catch (error) {
-				if (error instanceof APIError) {
+				if (isAPIError(error)) {
 					return ctx.json({
 						valid: false,
 						error: {

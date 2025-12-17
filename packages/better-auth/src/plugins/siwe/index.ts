@@ -6,6 +6,7 @@ import { setSessionCookie } from "../../cookies";
 import { mergeSchema } from "../../db/schema";
 import type { InferOptionSchema, User } from "../../types";
 import { toChecksumAddress } from "../../utils/hashing";
+import { isAPIError } from "../../utils/is-api-error";
 import { getOrigin } from "../../utils/url";
 import { schema } from "./schema";
 import type {
@@ -288,7 +289,7 @@ export const siwe = (options: SIWEPluginOptions) =>
 							},
 						});
 					} catch (error: unknown) {
-						if (error instanceof APIError) throw error;
+						if (isAPIError(error)) throw error;
 						throw APIError.fromStatus("UNAUTHORIZED", {
 							message: "Something went wrong. Please try again later.",
 							error: error instanceof Error ? error.message : "Unknown error",

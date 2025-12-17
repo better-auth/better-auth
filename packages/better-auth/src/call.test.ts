@@ -10,6 +10,7 @@ import { getEndpoints, router } from "./api";
 import { createAuthClient } from "./client";
 import { init } from "./context/init";
 import { bearer } from "./plugins";
+import { isAPIError } from "./utils/is-api-error";
 
 describe("call", async () => {
 	const q = z.optional(
@@ -184,7 +185,7 @@ describe("call", async () => {
 								message: "from chained hook 1",
 							});
 						}
-						if (ctx.context.returned instanceof APIError) {
+						if (isAPIError(ctx.context.returned)) {
 							throw ctx.error("BAD_REQUEST", {
 								message: "from after hook",
 							});
@@ -199,7 +200,7 @@ describe("call", async () => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						if (ctx.context.returned instanceof APIError) {
+						if (isAPIError(ctx.context.returned)) {
 							const returned = ctx.context.returned;
 							const message = returned.message;
 							throw new APIError("BAD_REQUEST", {

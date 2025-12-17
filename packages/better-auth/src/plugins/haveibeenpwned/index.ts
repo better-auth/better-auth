@@ -4,6 +4,7 @@ import { defineErrorCodes } from "@better-auth/core/utils";
 import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "../../api";
+import { isAPIError } from "../../utils/is-api-error";
 
 const ERROR_CODES = defineErrorCodes({
 	PASSWORD_COMPROMISED:
@@ -49,7 +50,7 @@ async function checkPasswordCompromise(
 			});
 		}
 	} catch (error) {
-		if (error instanceof APIError) throw error;
+		if (isAPIError(error)) throw error;
 		throw new APIError("INTERNAL_SERVER_ERROR", {
 			message: "Failed to check password. Please try again later.",
 		});

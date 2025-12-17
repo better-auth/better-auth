@@ -1,6 +1,7 @@
-import { APIError } from "@better-auth/core/error";
+import type { APIError } from "@better-auth/core/error";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { isAPIError } from "../../utils/is-api-error";
 import { apiKey, API_KEY_ERROR_CODES as ERROR_CODES } from ".";
 import { apiKeyClient } from "./client";
 import type { ApiKey } from "./types";
@@ -1146,7 +1147,7 @@ describe("api-key", async () => {
 				headers,
 			})
 			.catch((e) => {
-				if (e instanceof APIError) {
+				if (isAPIError(e)) {
 					error = e;
 					expect(error?.status).toEqual("BAD_REQUEST");
 					expect(error?.body?.message).toEqual(
@@ -1168,7 +1169,7 @@ describe("api-key", async () => {
 				headers,
 			})
 			.catch((e) => {
-				if (e instanceof APIError) {
+				if (isAPIError(e)) {
 					error = e;
 					expect(error?.status).toEqual("BAD_REQUEST");
 					expect(error?.body?.message).toEqual(
@@ -1189,7 +1190,7 @@ describe("api-key", async () => {
 				headers,
 			})
 			.catch((e) => {
-				if (e instanceof APIError) {
+				if (isAPIError(e)) {
 					error = e;
 					expect(error?.status).toEqual("BAD_REQUEST");
 					expect(error?.body?.message).toEqual(
