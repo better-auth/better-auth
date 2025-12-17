@@ -1605,3 +1605,219 @@ describe("oidc-jwt", async () => {
 		expect(decoded.alg).toBe(expected);
 	});
 });
+
+describe("oidc public clients", async () => {
+	const {
+		auth: authorizationServer,
+		signInWithTestUser,
+		customFetchImpl,
+	} = await getTestInstance({
+		baseURL: "http://localhost:3000",
+		plugins: [
+			oidcProvider({
+				loginPage: "/login",
+				consentPage: "/oauth2/authorize",
+				requirePKCE: false,
+				trustedClients: [
+					{
+						clientId: "public-test-client",
+						type: "public",
+						redirectUrls: [
+							"http://localhost:3000/api/auth/oauth2/callback/public",
+						],
+						metadata: {},
+						disabled: false,
+						name: "Public Test Client",
+						skipConsent: true,
+					},
+				],
+			}),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	let server: Listener;
+
+	beforeAll(async () => {
+		server = await listen(toNodeHandler(authorizationServer.handler), {
+			port: 3000,
+		});
+	});
+
+	afterAll(async () => {
+		await server.close();
+	});
+
+	it("should handle public client with PKCE flow", async ({ expect }) => {
+		const codeVerifier = "test_code_verifier_that_is_long_enough_for_PKCE_flow";
+		const codeChallenge = Buffer.from(
+			await crypto.subtle.digest(
+				"SHA-256",
+				new TextEncoder().encode(codeVerifier),
+			),
+		)
+			.toString("base64url")
+			.replace(/=/g, "");
+
+		const publicClient: Client = {
+			clientId: "public-test-client",
+			type: "public",
+			redirectUrls: ["http://localhost:3000/api/auth/oauth2/callback/public"],
+			metadata: {},
+			disabled: false,
+			name: "Public Test Client",
+		};
+
+		const authorizeParams = new URLSearchParams({
+			client_id: publicClient.clientId,
+			redirect_uri: publicClient.redirectUrls[0]!,
+			response_type: "code",
+			scope: "openid email profile",
+			state: "test_state",
+			code_challenge: codeChallenge,
+			code_challenge_method: "S256",
+		});
+
+		const authorizeResponse = await customFetchImpl(
+			`http://localhost:3000/api/auth/oauth2/authorize?${authorizeParams.toString()}`,
+			{
+				method: "GET",
+				headers,
+				redirect: "manual",
+			},
+		);
+
+		expect(authorizeResponse.status).toBe(302);
+		const redirectLocation = authorizeResponse.headers.get("location");
+		expect(redirectLocation).toContain("code=");
+		const redirectUrl = new URL(redirectLocation!, "http://localhost:3000");
+		const code = redirectUrl.searchParams.get("code");
+		expect(code).toBeDefined();
+
+		const tokenResponse = await fetch(
+			"http://localhost:3000/api/auth/oauth2/token",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					grant_type: "authorization_code",
+					code: code!,
+					redirect_uri: publicClient.redirectUrls[0]!,
+					client_id: publicClient.clientId,
+					code_verifier: codeVerifier,
+				}).toString(),
+			},
+		);
+
+		expect(tokenResponse.status).toBe(200);
+		const tokenData = await tokenResponse.json();
+		expect(tokenData).toHaveProperty("access_token");
+		expect(tokenData).toHaveProperty("id_token");
+		expect(tokenData).toHaveProperty("token_type", "Bearer");
+
+		const idToken = tokenData.id_token;
+		const decoded = decodeProtectedHeader(idToken);
+		expect(decoded.alg).toBe("HS256");
+
+		const [header, payload, signature] = idToken.split(".");
+		expect(header).toBeDefined();
+		expect(payload).toBeDefined();
+		expect(signature).toBeDefined();
+	});
+
+	it("should invalidate authorization code after any use attempt", async ({
+		expect,
+	}) => {
+		const codeVerifier = "test_code_verifier_that_is_long_enough_for_PKCE_flow";
+		const codeChallenge = Buffer.from(
+			await crypto.subtle.digest(
+				"SHA-256",
+				new TextEncoder().encode(codeVerifier),
+			),
+		)
+			.toString("base64url")
+			.replace(/=/g, "");
+
+		const publicClient: Client = {
+			clientId: "public-test-client",
+			type: "public",
+			redirectUrls: ["http://localhost:3000/api/auth/oauth2/callback/public"],
+			metadata: {},
+			disabled: false,
+			name: "Public Test Client",
+		};
+
+		const authorizeParams = new URLSearchParams({
+			client_id: publicClient.clientId,
+			redirect_uri: publicClient.redirectUrls[0]!,
+			response_type: "code",
+			scope: "openid email profile",
+			state: "test_state",
+			code_challenge: codeChallenge,
+			code_challenge_method: "S256",
+		});
+
+		const authorizeResponse = await customFetchImpl(
+			`http://localhost:3000/api/auth/oauth2/authorize?${authorizeParams.toString()}`,
+			{
+				method: "GET",
+				headers,
+				redirect: "manual",
+			},
+		);
+
+		expect(authorizeResponse.status).toBe(302);
+		const redirectLocation = authorizeResponse.headers.get("location");
+		expect(redirectLocation).toBeDefined();
+		const redirectUrl = new URL(redirectLocation!, "http://localhost:3000");
+		const code = redirectUrl.searchParams.get("code");
+		expect(code).toBeDefined();
+
+		// First attempt with wrong client_id
+		const invalidTokenResponse = await fetch(
+			"http://localhost:3000/api/auth/oauth2/token",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					grant_type: "authorization_code",
+					code: code!,
+					redirect_uri: publicClient.redirectUrls[0]!,
+					client_id: "invalid-client-id",
+					code_verifier: codeVerifier,
+				}).toString(),
+			},
+		);
+
+		expect(invalidTokenResponse.status).toBe(401);
+		const errorData = await invalidTokenResponse.json();
+		expect(errorData.error).toBe("invalid_client");
+
+		// Second attempt with correct client_id should fail because code was already used
+		const reusedTokenResponse = await fetch(
+			"http://localhost:3000/api/auth/oauth2/token",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					grant_type: "authorization_code",
+					code: code!,
+					redirect_uri: publicClient.redirectUrls[0]!,
+					client_id: publicClient.clientId,
+					code_verifier: codeVerifier,
+				}).toString(),
+			},
+		);
+
+		// Code should be invalid now (already used)
+		expect(reusedTokenResponse.status).toBe(401);
+		const reusedErrorData = await reusedTokenResponse.json();
+		expect(reusedErrorData.error).toBe("invalid_grant");
+		expect(reusedErrorData.error_description).toContain("invalid code");
+	});
+});

@@ -809,9 +809,14 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
+					const value = JSON.parse(
+						verificationValue.value,
+					) as CodeVerificationValue;
+
 					await ctx.context.internalAdapter.deleteVerificationValue(
 						verificationValue.id,
 					);
+
 					if (!client_id) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "client_id is required",
@@ -852,9 +857,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
-					const value = JSON.parse(
-						verificationValue.value,
-					) as CodeVerificationValue;
 					if (value.clientId !== client_id.toString()) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "invalid client_id",
@@ -918,25 +920,31 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 
 					const requestedScopes = value.scope;
-					await ctx.context.internalAdapter.deleteVerificationValue(
-						verificationValue.id,
-					);
 					const accessToken = generateRandomString(32, "a-z", "A-Z");
 					const refreshToken = generateRandomString(32, "A-Z", "a-z");
-					await ctx.context.adapter.create({
-						model: modelName.oauthAccessToken,
-						data: {
-							accessToken,
-							refreshToken,
-							accessTokenExpiresAt,
-							refreshTokenExpiresAt,
-							clientId: client_id.toString(),
-							userId: value.userId,
-							scopes: requestedScopes.join(" "),
-							createdAt: new Date(iat * 1000),
-							updatedAt: new Date(iat * 1000),
-						},
-					});
+
+					// Check if this is a trusted client (not in database)
+					const isTrustedClient = trustedClients.some(
+						(tc) => tc.clientId === client_id.toString(),
+					);
+
+					// Only create database record for non-trusted clients
+					if (!isTrustedClient) {
+						await ctx.context.adapter.create({
+							model: modelName.oauthAccessToken,
+							data: {
+								accessToken,
+								refreshToken,
+								accessTokenExpiresAt,
+								refreshTokenExpiresAt,
+								clientId: client_id.toString(),
+								userId: value.userId,
+								scopes: requestedScopes.join(" "),
+								createdAt: new Date(iat * 1000),
+								updatedAt: new Date(iat * 1000),
+							},
+						});
+					}
 					const user = await ctx.context.internalAdapter.findUserById(
 						value.userId,
 					);
@@ -1037,11 +1045,16 @@ export const oidcProvider = (options: OIDCOptions) => {
 
 						// If the JWT token is not enabled, create a key and use it to sign
 					} else {
+						const signingKey =
+							client.type === "public" || !client.clientSecret
+								? ctx.context.secret
+								: client.clientSecret;
+
 						idToken = await new SignJWT(payload)
 							.setProtectedHeader({ alg: "HS256" })
 							.setIssuedAt(iat)
 							.setExpirationTime(accessTokenExpiresAt)
-							.sign(new TextEncoder().encode(client.clientSecret));
+							.sign(new TextEncoder().encode(signingKey));
 					}
 
 					return ctx.json(
