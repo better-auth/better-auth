@@ -2,11 +2,6 @@ import type { BetterAuthPlugin } from "better-auth";
 import { createAuthMiddleware } from "better-auth/api";
 import { XMLValidator } from "fast-xml-parser";
 import * as saml from "samlify";
-import type {
-	AuthnRequestRecord,
-	AuthnRequestStore,
-} from "./authn-request-store";
-import { createInMemoryAuthnRequestStore } from "./authn-request-store";
 import { assignOrganizationByDomain } from "./linking";
 import {
 	requestDomainVerification,
@@ -39,8 +34,6 @@ export {
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "./types";
 
 export type { SAMLConfig, OIDCConfig, SSOOptions, SSOProvider };
-export type { AuthnRequestStore, AuthnRequestRecord };
-export { createInMemoryAuthnRequestStore };
 
 export {
 	computeDiscoveryUrl,

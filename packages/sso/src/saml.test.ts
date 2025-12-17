@@ -25,7 +25,7 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { createInMemoryAuthnRequestStore, sso, validateSAMLTimestamp } from ".";
+import { sso, validateSAMLTimestamp } from ".";
 import { ssoClient } from "./client";
 import { DEFAULT_CLOCK_SKEW_MS } from "./constants";
 
@@ -1579,78 +1579,7 @@ describe("SAML SSO", async () => {
 		expect(redirectLocation).not.toContain("error=");
 	});
 
-	it("should enable validation automatically when custom authnRequestStore is provided", async () => {
-		const customStore = createInMemoryAuthnRequestStore();
-
-		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [
-				sso({
-					saml: {
-						authnRequestStore: customStore,
-						allowIdpInitiated: false,
-					},
-				}),
-			],
-		});
-
-		const { headers } = await signInWithTestUser();
-
-		await auth.api.registerSSOProvider({
-			body: {
-				providerId: "custom-store-provider",
-				issuer: "http://localhost:8081",
-				domain: "http://localhost:8081",
-				samlConfig: {
-					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
-					cert: certificate,
-					callbackUrl: "http://localhost:3000/dashboard",
-					wantAssertionsSigned: false,
-					signatureAlgorithm: "sha256",
-					digestAlgorithm: "sha256",
-					idpMetadata: {
-						metadata: idpMetadata,
-					},
-					spMetadata: {
-						metadata: spMetadata,
-					},
-					identifierFormat:
-						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
-				},
-			},
-			headers,
-		});
-
-		let samlResponse: any;
-		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
-			onSuccess: async (context) => {
-				samlResponse = await context.data;
-			},
-		});
-
-		const response = await auth.handler(
-			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/callback/custom-store-provider",
-				{
-					method: "POST",
-					headers: {
-						"Content-Type": "application/x-www-form-urlencoded",
-					},
-					body: new URLSearchParams({
-						SAMLResponse: samlResponse.samlResponse,
-						RelayState: "http://localhost:3000/dashboard",
-					}),
-				},
-			),
-		);
-
-		expect(response.status).toBe(302);
-		const redirectLocation = response.headers.get("location") || "";
-		expect(redirectLocation).toContain("error=unsolicited_response");
-	});
-
-	it("should use verification table for InResponseTo validation when no custom store is provided", async () => {
-		// When enableInResponseToValidation is true and no custom authnRequestStore is provided,
-		// the plugin uses the verification table (database) for storing AuthnRequest IDs
+	it("should use verification table for InResponseTo validation", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [
 				sso({
