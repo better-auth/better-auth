@@ -610,7 +610,7 @@ describe("SAML SSO", async () => {
 		baseURL: "http://localhost:3000",
 		plugins: [bearer(), ssoClient()],
 		fetchOptions: {
-			customFetchImpl: async (url, init) => {
+			customFetchImpl: async (url: string | URL | Request, init?: RequestInit) => {
 				return auth.handler(new Request(url, init));
 			},
 		},
@@ -755,7 +755,7 @@ describe("SAML SSO", async () => {
 
 		const spMetadataRes = await auth.api.spMetadata({
 			query: {
-				providerId: provider.providerId,
+				providerId: (provider as unknown as { providerId: string }).providerId,
 			},
 		});
 		const spMetadataResResValue = await spMetadataRes.text();
@@ -806,7 +806,7 @@ describe("SAML SSO", async () => {
 
 		const spMetadataRes = await auth.api.spMetadata({
 			query: {
-				providerId: provider.providerId,
+				providerId: (provider as unknown as { providerId: string }).providerId,
 			},
 		});
 		const spMetadataResResValue = await spMetadataRes.text();
@@ -1097,6 +1097,222 @@ describe("SAML SSO", async () => {
 				message: "SSO provider with this providerId already exists",
 			},
 		});
+	});
+
+	it("should initiate SAML login and validate RelayState", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "saml-provider-1",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		const response = await auth.api.signInSSO({
+			body: {
+				providerId: "saml-provider-1",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+			returnHeaders: true,
+		});
+
+		const signInResponse = (response as unknown as { response: { url: string; redirect: boolean } }).response;
+		expect(signInResponse).toEqual({
+			url: expect.stringContaining("http://localhost:8081"),
+			redirect: true,
+		});
+
+		let samlResponse: any;
+		await betterFetch(signInResponse?.url, {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		let samlRedirectUrl = new URL(signInResponse?.url);
+		const callbackResponse = await auth.api.callbackSSOSAML({
+			method: "POST",
+			body: {
+				SAMLResponse: samlResponse.samlResponse,
+				RelayState: samlRedirectUrl.searchParams.get("RelayState") ?? "",
+			},
+			headers: {
+				Cookie: response.headers.get("set-cookie") ?? "",
+			},
+			params: {
+				providerId: "saml-provider-1",
+			},
+			asResponse: true,
+		});
+
+		expect(callbackResponse.headers.get("location")).toContain("dashboard");
+	});
+
+	it("should initiate SAML login and fallback to callbackUrl on invalid RelayState", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "saml-provider-1",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		const response = await auth.api.signInSSO({
+			body: {
+				providerId: "saml-provider-1",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+			returnHeaders: true,
+		});
+
+		const signInResponse = (response as unknown as { response: { url: string; redirect: boolean } }).response;
+		expect(signInResponse).toEqual({
+			url: expect.stringContaining("http://localhost:8081"),
+			redirect: true,
+		});
+
+		let samlResponse: any;
+		await betterFetch(signInResponse?.url, {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		const callbackResponse = await auth.api.callbackSSOSAML({
+			method: "POST",
+			body: {
+				SAMLResponse: samlResponse.samlResponse,
+				RelayState: "not-the-right-relay-state",
+			},
+			headers: {
+				Cookie: response.headers.get("set-cookie") ?? "",
+			},
+			params: {
+				providerId: "saml-provider-1",
+			},
+			asResponse: true,
+		});
+
+		expect(callbackResponse.status).toBe(302);
+		expect(callbackResponse.headers.get("location")).toBe(
+			"http://localhost:3000/dashboard",
+		);
+	});
+
+	it("should initiate SAML login and signup user when disableImplicitSignUp is true but requestSignup is explicitly enabled", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso({ disableImplicitSignUp: true })],
+		});
+
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "saml-provider-1",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		const response = await auth.api.signInSSO({
+			body: {
+				providerId: "saml-provider-1",
+				callbackURL: "http://localhost:3000/dashboard",
+				requestSignUp: true,
+			},
+			returnHeaders: true,
+		});
+
+		const signInResponse = (response as unknown as { response: { url: string; redirect: boolean } }).response;
+		expect(signInResponse).toEqual({
+			url: expect.stringContaining("http://localhost:8081"),
+			redirect: true,
+		});
+
+		let samlResponse: any;
+		await betterFetch(signInResponse?.url, {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		let samlRedirectUrl = new URL(signInResponse?.url);
+		const callbackResponse = await auth.api.callbackSSOSAML({
+			method: "POST",
+			body: {
+				SAMLResponse: samlResponse.samlResponse,
+				RelayState: samlRedirectUrl.searchParams.get("RelayState") ?? "",
+			},
+			headers: {
+				Cookie: response.headers.get("set-cookie") ?? "",
+			},
+			params: {
+				providerId: "saml-provider-1",
+			},
+			asResponse: true,
+		});
+
+		expect(callbackResponse.headers.get("location")).toContain("dashboard");
 	});
 
 	it("should reject SAML sign-in when disableImplicitSignUp is true and user doesn't exist", async () => {
@@ -1687,7 +1903,7 @@ describe("SAML SSO with custom fields", () => {
 		baseURL: "http://localhost:3000",
 		plugins: [bearer(), ssoClient()],
 		fetchOptions: {
-			customFetchImpl: async (url, init) => {
+			customFetchImpl: async (url: string | URL | Request, init?: RequestInit) => {
 				return auth.handler(new Request(url, init));
 			},
 		},
@@ -1853,7 +2069,7 @@ describe("SSO Provider Config Parsing", () => {
 			baseURL: "http://localhost:3000",
 			plugins: [bearer(), ssoClient()],
 			fetchOptions: {
-				customFetchImpl: async (url, init) =>
+				customFetchImpl: async (url: string | URL | Request, init?: RequestInit) =>
 					auth.handler(new Request(url, init)),
 			},
 		});
@@ -1869,7 +2085,7 @@ describe("SSO Provider Config Parsing", () => {
 			{ onSuccess: setCookieToHeader(headers) },
 		);
 
-		const provider = await auth.api.registerSSOProvider({
+		const provider = (await auth.api.registerSSOProvider({
 			body: {
 				providerId: "saml-config-provider",
 				issuer: "http://localhost:8081",
@@ -1884,7 +2100,7 @@ describe("SSO Provider Config Parsing", () => {
 				},
 			},
 			headers,
-		});
+		})) as unknown as { samlConfig: { entryPoint: string; cert: string; spMetadata?: { entityID: string } } };
 
 		expect(provider.samlConfig).toBeDefined();
 		expect(typeof provider.samlConfig).toBe("object");
@@ -1927,7 +2143,7 @@ describe("SSO Provider Config Parsing", () => {
 				baseURL: "http://localhost:3000",
 				plugins: [bearer(), ssoClient()],
 				fetchOptions: {
-					customFetchImpl: async (url, init) =>
+					customFetchImpl: async (url: string | URL | Request, init?: RequestInit) =>
 						auth.handler(new Request(url, init)),
 				},
 			});
@@ -1943,7 +2159,7 @@ describe("SSO Provider Config Parsing", () => {
 				{ onSuccess: setCookieToHeader(headers) },
 			);
 
-			const provider = await auth.api.registerSSOProvider({
+			const provider = (await auth.api.registerSSOProvider({
 				body: {
 					providerId: "oidc-config-provider",
 					issuer: oidcServer.issuer.url!,
@@ -1960,7 +2176,7 @@ describe("SSO Provider Config Parsing", () => {
 					},
 				},
 				headers,
-			});
+			})) as unknown as { oidcConfig: { clientId: string; clientSecret: string; mapping?: { id: string } } };
 
 			expect(provider.oidcConfig).toBeDefined();
 			expect(typeof provider.oidcConfig).toBe("object");
