@@ -924,9 +924,7 @@ const auth = betterAuth({
 
 #### Multi-Instance Deployments
 
-InResponseTo validation uses the verification table by default, which works correctly in multi-instance deployments (load-balanced servers, serverless, etc.) without additional configuration.
-
-For high-volume environments, you can configure `secondaryStorage` in Better Auth to use Redis, which the verification table will automatically use.
+InResponseTo validation uses the verification table, which works correctly in multi-instance deployments (load-balanced servers, serverless, etc.) without additional configuration.
 
 #### Error Handling
 
