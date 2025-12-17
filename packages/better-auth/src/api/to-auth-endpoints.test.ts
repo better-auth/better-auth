@@ -2,7 +2,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import { APIError } from "better-call";
+import { APIError } from "@better-auth/core/error";
 import { describe, expect, it } from "vitest";
 import * as z from "zod";
 import { init } from "../context/init";

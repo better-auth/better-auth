@@ -6,8 +6,9 @@ import type {
 } from "@better-auth/core";
 import type { InternalLogger } from "@better-auth/core/env";
 import { logger } from "@better-auth/core/env";
+import { APIError } from "@better-auth/core/error";
 import type { Endpoint, Middleware } from "better-call";
-import { APIError, createRouter } from "better-call";
+import { createRouter } from "better-call";
 import type { UnionToIntersection } from "../types/helper";
 import { originCheckMiddleware } from "./middlewares";
 import { onRequestRateLimit } from "./rate-limiter";
