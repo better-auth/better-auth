@@ -7,6 +7,7 @@ export interface AssertionCounts {
 	total: number;
 }
 
+/** @knip used in tests */
 export function countAssertions(xml: string): AssertionCounts {
 	let parsed: unknown;
 	try {

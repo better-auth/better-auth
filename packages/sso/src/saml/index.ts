@@ -8,8 +8,4 @@ export {
 	validateSAMLAlgorithms,
 } from "./algorithms";
 
-export {
-	type AssertionCounts,
-	countAssertions,
-	validateSingleAssertion,
-} from "./assertions";
+export { validateSingleAssertion } from "./assertions";
