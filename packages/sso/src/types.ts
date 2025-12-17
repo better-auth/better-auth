@@ -1,5 +1,4 @@
 import type { Awaitable, OAuth2Tokens, User } from "better-auth";
-import type { AuthnRequestStore } from "./authn-request-store";
 import type { AlgorithmValidationOptions } from "./saml/algorithms";
 
 export interface OIDCMapping {
@@ -290,16 +289,6 @@ export interface SSOOptions {
 		 * @default 300000 (5 minutes)
 		 */
 		requestTTL?: number;
-		/**
-		 * Custom AuthnRequest store implementation.
-		 * Use this to provide a custom storage backend (e.g., Redis-backed store).
-		 *
-		 * Providing a custom store automatically enables InResponseTo validation.
-		 *
-		 * Note: When not provided, the default storage (secondaryStorage with
-		 * verification table fallback) is used automatically.
-		 */
-		authnRequestStore?: AuthnRequestStore;
 		/**
 		 * Clock skew tolerance for SAML assertion timestamp validation in milliseconds.
 		 * Allows for minor time differences between IdP and SP servers.
