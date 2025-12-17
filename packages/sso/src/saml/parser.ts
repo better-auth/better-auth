@@ -4,6 +4,7 @@ export const xmlParser = new XMLParser({
 	ignoreAttributes: false,
 	attributeNamePrefix: "@_",
 	removeNSPrefix: true,
+	processEntities: false,
 });
 
 export function findNode(obj: unknown, nodeName: string): unknown {

@@ -8,7 +8,15 @@ export interface AssertionCounts {
 }
 
 export function countAssertions(xml: string): AssertionCounts {
-	const parsed = xmlParser.parse(xml);
+	let parsed: unknown;
+	try {
+		parsed = xmlParser.parse(xml);
+	} catch {
+		throw new APIError("BAD_REQUEST", {
+			message: "Failed to parse SAML response XML",
+			code: "SAML_INVALID_XML",
+		});
+	}
 
 	const assertions = countAllNodes(parsed, "Assertion");
 	const encryptedAssertions = countAllNodes(parsed, "EncryptedAssertion");
@@ -21,7 +29,19 @@ export function countAssertions(xml: string): AssertionCounts {
 }
 
 export function validateSingleAssertion(samlResponse: string): void {
-	const xml = Buffer.from(samlResponse, "base64").toString("utf-8");
+	let xml: string;
+	try {
+		xml = Buffer.from(samlResponse, "base64").toString("utf-8");
+		if (!xml.includes("<")) {
+			throw new Error("Not XML");
+		}
+	} catch {
+		throw new APIError("BAD_REQUEST", {
+			message: "Invalid base64-encoded SAML response",
+			code: "SAML_INVALID_ENCODING",
+		});
+	}
+
 	const counts = countAssertions(xml);
 
 	if (counts.total === 0) {

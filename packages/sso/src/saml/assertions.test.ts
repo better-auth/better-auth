@@ -220,3 +220,20 @@ describe("countAssertions", () => {
 		expect(counts.total).toBe(0);
 	});
 });
+
+describe("error handling", () => {
+	const encode = (str: string) => Buffer.from(str).toString("base64");
+
+	it("should reject invalid base64 input", () => {
+		expect(() => validateSingleAssertion("not-valid-base64!!!")).toThrow(
+			"Invalid base64-encoded SAML response",
+		);
+	});
+
+	it("should reject non-XML content", () => {
+		const notXml = encode("this is not xml at all");
+		expect(() => validateSingleAssertion(notXml)).toThrow(
+			"Invalid base64-encoded SAML response",
+		);
+	});
+});
