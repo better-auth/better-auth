@@ -7,6 +7,19 @@ import type {
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { logger } from "@better-auth/core/env";
 
+class MemoryAdapterError extends Error {
+	constructor(
+		public code:
+			| "MODEL_NOT_FOUND"
+			| "INVALID_OPERATOR_VALUE"
+			| "JOIN_MODEL_NOT_FOUND",
+		message: string,
+	) {
+		super(message);
+		this.name = "MemoryAdapterError";
+	}
+}
+
 export interface MemoryDB {
 	[key: string]: any[];
 }
@@ -49,27 +62,62 @@ export const memoryAdapter = (
 				}
 			},
 		},
-		adapter: ({ getFieldName, options, getModelName }) => {
-			const applySortToRecords = (
-				records: any[],
-				sortBy: { field: string; direction: "asc" | "desc" } | undefined,
-				model: string,
-			) => {
-				if (!sortBy) return records;
-				return records.sort((a: any, b: any) => {
-					const field = getFieldName({ model, field: sortBy.field });
-					const aValue = a[field];
-					const bValue = b[field];
+		adapter: ({ getFieldName, options, debugLog }) => {
+			function convertWhereClause(where: CleanedWhere[], model: string) {
+				const table = db[model];
+				if (!table) {
+					logger.error(
+						`[MemoryAdapter] Model ${model} not found in the DB`,
+						Object.keys(db),
+					);
+					throw new MemoryAdapterError(
+						"MODEL_NOT_FOUND",
+						`Model ${model} not found`,
+					);
 
-					let comparison = 0;
+				}
 
-					// Handle null/undefined values
-					if (aValue == null && bValue == null) {
-						comparison = 0;
-					} else if (aValue == null) {
-						comparison = -1;
-					} else if (bValue == null) {
-						comparison = 1;
+				const evalClause = (record: any, clause: CleanedWhere): boolean => {
+					const { field, value, operator } = clause;
+					switch (operator) {
+						case "in":
+							if (!Array.isArray(value)) {
+								throw new MemoryAdapterError(
+									"INVALID_OPERATOR_VALUE",
+									`Operator "${operator}" expects an array value`,
+								);
+
+							}
+							// @ts-expect-error
+							return value.includes(record[field]);
+						case "not_in":
+							if (!Array.isArray(value)) {
+								throw new MemoryAdapterError(
+									"INVALID_OPERATOR_VALUE",
+									`Operator "${operator}" expects an array value`,
+								);
+
+							}
+							// @ts-expect-error
+							return !value.includes(record[field]);
+						case "contains":
+							return record[field].includes(value);
+						case "starts_with":
+							return record[field].startsWith(value);
+						case "ends_with":
+							return record[field].endsWith(value);
+						case "ne":
+							return record[field] !== value;
+						case "gt":
+							return value != null && Boolean(record[field] > value);
+						case "gte":
+							return value != null && Boolean(record[field] >= value);
+						case "lt":
+							return value != null && Boolean(record[field] < value);
+						case "lte":
+							return value != null && Boolean(record[field] <= value);
+						default:
+							return record[field] === value;
 					}
 					// Handle string comparison
 					else if (typeof aValue === "string" && typeof bValue === "string") {
@@ -306,6 +354,12 @@ export const memoryAdapter = (
 					return table || [];
 				},
 				count: async ({ model, where }) => {
+					if (!db[model]) {
+						throw new MemoryAdapterError(
+							"MODEL_NOT_FOUND",
+							`Model ${model} not found`,
+						);
+					}
 					if (where) {
 						const filteredRecords = convertWhereClause(where, model);
 						return filteredRecords.length;
