@@ -38,4 +38,3 @@ export function validateSingleAssertion(samlResponse: string): void {
 		});
 	}
 }
-

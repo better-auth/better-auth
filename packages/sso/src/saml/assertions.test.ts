@@ -220,4 +220,3 @@ describe("countAssertions", () => {
 		expect(counts.total).toBe(0);
 	});
 });
-

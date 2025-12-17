@@ -53,4 +53,3 @@ export function countAllNodes(obj: unknown, nodeName: string): number {
 
 	return count;
 }
-
