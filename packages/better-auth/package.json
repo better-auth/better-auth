@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.4.6-beta.3",
+  "version": "1.4.7",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -26,7 +26,9 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest",
+    "coverage": "vitest run --coverage",
     "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
     "test:adapters": "vitest run --config vitest.config.adapters.ts",
     "typecheck": "tsc --project tsconfig.json"
   },
@@ -452,7 +454,6 @@
     "defu": "^6.1.4",
     "jose": "^6.1.0",
     "kysely": "^0.28.5",
-    "ms": "4.0.0-nightly.202508271359",
     "nanostores": "^1.0.1",
     "zod": "^4.1.12"
   },
@@ -463,7 +464,7 @@
     "@types/bun": "^1.3.3",
     "@types/pg": "^8.15.5",
     "@types/react": "catalog:react19",
-    "better-sqlite3": "^12.2.0",
+    "better-sqlite3": "^12.4.1",
     "deepmerge": "^4.3.1",
     "drizzle-kit": "^0.31.4",
     "drizzle-orm": "^0.41.0",
@@ -472,7 +473,7 @@
     "mongodb": "^6.18.0",
     "msw": "^2.12.4",
     "mysql2": "^3.14.4",
-    "next": "^16.0.1",
+    "next": "^16.0.10",
     "oauth2-mock-server": "^7.2.1",
     "pg": "^8.16.3",
     "react": "catalog:react19",
@@ -483,21 +484,34 @@
     "tsdown": "catalog:",
     "type-fest": "^5.2.0",
     "typescript": "catalog:",
+    "vitest": "^4.0.15",
     "vue": "^3.5.18"
   },
   "peerDependencies": {
     "@lynx-js/react": "*",
+    "@prisma/client": "^5.0.0 || ^6.0.0 || ^7.0.0",
     "@sveltejs/kit": "^2.0.0",
     "@tanstack/react-start": "^1.0.0",
+    "better-sqlite3": "^12.4.1",
+    "drizzle-kit": ">=0.31.4",
+    "drizzle-orm": ">=0.41.0",
+    "mongodb": "^6.18.0",
+    "mysql2": "^3.14.4",
     "next": "^14.0.0 || ^15.0.0 || ^16.0.0",
+    "pg": "^8.16.3",
+    "prisma": "^5.0.0 || ^6.0.0 || ^7.0.0",
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0",
     "solid-js": "^1.0.0",
     "svelte": "^4.0.0 || ^5.0.0",
+    "vitest": "^2.0.0 || ^3.0.0 || ^4.0.0",
     "vue": "^3.0.0"
   },
   "peerDependenciesMeta": {
     "@lynx-js/react": {
+      "optional": true
+    },
+    "@prisma/client": {
       "optional": true
     },
     "@sveltejs/kit": {
@@ -522,6 +536,30 @@
       "optional": true
     },
     "vue": {
+      "optional": true
+    },
+    "drizzle-kit": {
+      "optional": true
+    },
+    "drizzle-orm": {
+      "optional": true
+    },
+    "mongodb": {
+      "optional": true
+    },
+    "mysql2": {
+      "optional": true
+    },
+    "pg": {
+      "optional": true
+    },
+    "prisma": {
+      "optional": true
+    },
+    "better-sqlite3": {
+      "optional": true
+    },
+    "vitest": {
       "optional": true
     }
   }

@@ -328,7 +328,7 @@ export const linkSocialAccount = createAuthEndpoint(
 					refreshToken: c.body.idToken.refreshToken,
 					scope: c.body.idToken.scopes?.join(","),
 				});
-			} catch (e: any) {
+			} catch {
 				throw new APIError("EXPECTATION_FAILED", {
 					message: "Account not linked - unable to create account",
 				});
@@ -566,22 +566,24 @@ export const getAccessToken = createAuthEndpoint(
 					ctx.context,
 				);
 				newTokens = await provider.refreshAccessToken(refreshToken);
-				const updatedAccount = await ctx.context.internalAdapter.updateAccount(
-					account.id,
-					{
-						accessToken: await setTokenUtil(newTokens.accessToken, ctx.context),
-						accessTokenExpiresAt: newTokens.accessTokenExpiresAt,
-						refreshToken: await setTokenUtil(
-							newTokens.refreshToken,
-							ctx.context,
-						),
-						refreshTokenExpiresAt: newTokens.refreshTokenExpiresAt,
-					},
-				);
-				const storeAccountCookie =
-					ctx.context.options.account?.storeAccountCookie;
-				if (storeAccountCookie && updatedAccount) {
-					await setAccountCookie(ctx, updatedAccount);
+				const updatedData = {
+					accessToken: await setTokenUtil(newTokens.accessToken, ctx.context),
+					accessTokenExpiresAt: newTokens.accessTokenExpiresAt,
+					refreshToken: await setTokenUtil(newTokens.refreshToken, ctx.context),
+					refreshTokenExpiresAt: newTokens.refreshTokenExpiresAt,
+				};
+				let updatedAccount: Record<string, any> | null = null;
+				if (account.id) {
+					updatedAccount = await ctx.context.internalAdapter.updateAccount(
+						account.id,
+						updatedData,
+					);
+				}
+				if (ctx.context.options.account?.storeAccountCookie) {
+					await setAccountCookie(ctx, {
+						...account,
+						...(updatedAccount ?? updatedData),
+					});
 				}
 			}
 			const tokens = {

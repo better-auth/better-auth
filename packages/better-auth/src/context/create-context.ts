@@ -170,7 +170,9 @@ export async function createAuthContext(
 		socialProviders: providers,
 		options,
 		oauthConfig: {
-			storeStateStrategy: options.account?.storeStateStrategy || "database",
+			storeStateStrategy:
+				options.account?.storeStateStrategy ||
+				(options.database ? "database" : "cookie"),
 			skipStateCookieCheck: !!options.account?.skipStateCookieCheck,
 		},
 		tables,
@@ -194,6 +196,17 @@ export async function createAuthContext(
 			cookieRefreshCache: (() => {
 				const refreshCache = options.session?.cookieCache?.refreshCache;
 				const maxAge = options.session?.cookieCache?.maxAge || 60 * 5;
+
+				// `refreshCache` is intended for fully stateless / DB-less setups.
+				// If a server-side store is configured, prefer fetching/refreshing from that source
+				// and disable stateless refresh behavior to avoid confusing/unsafe configurations.
+				const isStateful = !!options.database || !!options.secondaryStorage;
+				if (isStateful && refreshCache) {
+					logger.warn(
+						"[better-auth] `session.cookieCache.refreshCache` is enabled while `database` or `secondaryStorage` is configured. `refreshCache` is meant for stateless (DB-less) setups. Disabling `refreshCache` — remove it from your config to silence this warning.",
+					);
+					return false;
+				}
 
 				if (refreshCache === false || refreshCache === undefined) {
 					return false;

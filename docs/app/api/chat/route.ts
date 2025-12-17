@@ -77,7 +77,7 @@ export async function POST(req: Request) {
 						model: "inkeep-qa-sonnet-4",
 					},
 				});
-			} catch (error) {
+			} catch {
 				// Don't fail the request if analytics logging fails
 			}
 		},

@@ -136,7 +136,7 @@ describe.runIf(nodeSqliteSupported)("node-sqlite-dialect", async () => {
 					// Force an error
 					throw new Error("Test error");
 				});
-			} catch (error) {
+			} catch {
 				// Expected error
 			}
 

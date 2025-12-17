@@ -1,4 +1,4 @@
-import type { BetterAuthOptions } from "@better-auth/core";
+import type { Awaitable, BetterAuthOptions } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { generateId } from "@better-auth/core/utils";
@@ -7,7 +7,7 @@ import { beforeAll, describe, expect, test } from "vitest";
 interface AdapterTestOptions {
 	getAdapter: (
 		customOptions?: Omit<BetterAuthOptions, "database">,
-	) => Promise<DBAdapter<BetterAuthOptions>> | DBAdapter<BetterAuthOptions>;
+	) => Awaitable<DBAdapter<BetterAuthOptions>>;
 	disableTests?: Partial<Record<keyof typeof adapterTests, boolean>>;
 	testPrefix?: string;
 }
