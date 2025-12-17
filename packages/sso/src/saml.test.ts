@@ -2661,7 +2661,9 @@ describe("SAML SSO - Single Assertion Validation", () => {
 			</saml2p:Response>
 		`;
 
-		const encodedResponse = Buffer.from(multiAssertionResponse).toString("base64");
+		const encodedResponse = Buffer.from(multiAssertionResponse).toString(
+			"base64",
+		);
 
 		await expect(
 			auth.api.callbackSSOSAML({
@@ -2733,7 +2735,9 @@ describe("SAML SSO - Single Assertion Validation", () => {
 			</saml2p:Response>
 		`;
 
-		const encodedResponse = Buffer.from(multiAssertionResponse).toString("base64");
+		const encodedResponse = Buffer.from(multiAssertionResponse).toString(
+			"base64",
+		);
 
 		const response = await auth.handler(
 			new Request(
@@ -2871,7 +2875,8 @@ describe("SAML SSO - Single Assertion Validation", () => {
 			</saml2p:Response>
 		`;
 
-		const encodedResponse = Buffer.from(xswInjectionResponse).toString("base64");
+		const encodedResponse =
+			Buffer.from(xswInjectionResponse).toString("base64");
 
 		await expect(
 			auth.api.callbackSSOSAML({
