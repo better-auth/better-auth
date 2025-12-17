@@ -635,7 +635,10 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 			if (body.samlConfig?.idpMetadata?.metadata) {
 				const maxMetadataSize =
 					options?.saml?.maxMetadataSize ?? DEFAULT_MAX_SAML_METADATA_SIZE;
-				if (body.samlConfig.idpMetadata.metadata.length > maxMetadataSize) {
+				if (
+					Buffer.byteLength(body.samlConfig.idpMetadata.metadata, "utf8") >
+					maxMetadataSize
+				) {
 					throw new APIError("BAD_REQUEST", {
 						message: `IdP metadata exceeds maximum allowed size (${maxMetadataSize} bytes)`,
 					});
@@ -1665,7 +1668,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 
 			const maxResponseSize =
 				options?.saml?.maxResponseSize ?? DEFAULT_MAX_SAML_RESPONSE_SIZE;
-			if (SAMLResponse.length > maxResponseSize) {
+			if (Buffer.byteLength(SAMLResponse, "utf8") > maxResponseSize) {
 				throw new APIError("BAD_REQUEST", {
 					message: `SAML response exceeds maximum allowed size (${maxResponseSize} bytes)`,
 				});
@@ -2060,7 +2063,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 
 			const maxResponseSize =
 				options?.saml?.maxResponseSize ?? DEFAULT_MAX_SAML_RESPONSE_SIZE;
-			if (SAMLResponse.length > maxResponseSize) {
+			if (Buffer.byteLength(SAMLResponse, "utf8") > maxResponseSize) {
 				throw new APIError("BAD_REQUEST", {
 					message: `SAML response exceeds maximum allowed size (${maxResponseSize} bytes)`,
 				});
