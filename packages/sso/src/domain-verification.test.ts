@@ -92,6 +92,7 @@ describe("Domain verification", async () => {
 					body: {
 						userId: response.data.user.id,
 						role: "member",
+						organizationId,
 					},
 					headers,
 				});
