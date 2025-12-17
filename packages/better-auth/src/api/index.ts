@@ -1,5 +1,6 @@
 import type {
 	AuthContext,
+	Awaitable,
 	BetterAuthOptions,
 	BetterAuthPlugin,
 } from "@better-auth/core";
@@ -159,7 +160,7 @@ To resolve this, you can:
 }
 
 export function getEndpoints<Option extends BetterAuthOptions>(
-	ctx: Promise<AuthContext> | AuthContext,
+	ctx: Awaitable<AuthContext>,
 	options: Option,
 ) {
 	const pluginEndpoints =
