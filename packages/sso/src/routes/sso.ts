@@ -2223,7 +2223,22 @@ export const acsEndpoint = (options?: SSOOptions) => {
 						metadata: idpData.metadata,
 					});
 
-			validateSingleAssertion(SAMLResponse);
+			try {
+				validateSingleAssertion(SAMLResponse);
+			} catch (error) {
+				if (error instanceof APIError) {
+					const redirectUrl =
+						RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+					const errorCode =
+						error.body?.code === "SAML_MULTIPLE_ASSERTIONS"
+							? "multiple_assertions"
+							: "no_assertion";
+					throw ctx.redirect(
+						`${redirectUrl}?error=${errorCode}&error_description=${encodeURIComponent(error.message)}`,
+					);
+				}
+				throw error;
+			}
 
 			// Parse and validate SAML response
 			let parsedResponse: FlowResult;

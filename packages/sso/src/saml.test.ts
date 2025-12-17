@@ -2606,3 +2606,346 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 		expect(acsLocation).toContain("error=replay_detected");
 	});
 });
+
+describe("SAML SSO - Single Assertion Validation", () => {
+	it("should reject SAML response with multiple assertions on callback endpoint", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "multi-assertion-callback-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		const multiAssertionResponse = `
+			<saml2p:Response xmlns:saml2p="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml2="urn:oasis:names:tc:SAML:2.0:assertion">
+				<saml2:Issuer>http://localhost:8081</saml2:Issuer>
+				<saml2p:Status>
+					<saml2p:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/>
+				</saml2p:Status>
+				<saml2:Assertion ID="assertion-1">
+					<saml2:Issuer>http://localhost:8081</saml2:Issuer>
+					<saml2:Subject>
+						<saml2:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">legitimate@example.com</saml2:NameID>
+					</saml2:Subject>
+				</saml2:Assertion>
+				<saml2:Assertion ID="assertion-2">
+					<saml2:Issuer>http://localhost:8081</saml2:Issuer>
+					<saml2:Subject>
+						<saml2:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">attacker@evil.com</saml2:NameID>
+					</saml2:Subject>
+				</saml2:Assertion>
+			</saml2p:Response>
+		`;
+
+		const encodedResponse = Buffer.from(multiAssertionResponse).toString("base64");
+
+		await expect(
+			auth.api.callbackSSOSAML({
+				body: {
+					SAMLResponse: encodedResponse,
+					RelayState: "http://localhost:3000/dashboard",
+				},
+				params: {
+					providerId: "multi-assertion-callback-provider",
+				},
+			}),
+		).rejects.toMatchObject({
+			body: {
+				code: "SAML_MULTIPLE_ASSERTIONS",
+			},
+		});
+	});
+
+	it("should reject SAML response with multiple assertions on ACS endpoint", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "multi-assertion-acs-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		const multiAssertionResponse = `
+			<saml2p:Response xmlns:saml2p="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml2="urn:oasis:names:tc:SAML:2.0:assertion">
+				<saml2:Issuer>http://localhost:8081</saml2:Issuer>
+				<saml2p:Status>
+					<saml2p:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/>
+				</saml2p:Status>
+				<saml2:Assertion ID="assertion-1">
+					<saml2:Issuer>http://localhost:8081</saml2:Issuer>
+					<saml2:Subject>
+						<saml2:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">legitimate@example.com</saml2:NameID>
+					</saml2:Subject>
+				</saml2:Assertion>
+				<saml2:Assertion ID="assertion-2">
+					<saml2:Issuer>http://localhost:8081</saml2:Issuer>
+					<saml2:Subject>
+						<saml2:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">attacker@evil.com</saml2:NameID>
+					</saml2:Subject>
+				</saml2:Assertion>
+			</saml2p:Response>
+		`;
+
+		const encodedResponse = Buffer.from(multiAssertionResponse).toString("base64");
+
+		const response = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/multi-assertion-acs-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: encodedResponse,
+						RelayState: "http://localhost:3000/dashboard",
+					}),
+				},
+			),
+		);
+
+		expect(response.status).toBe(302);
+		const location = response.headers.get("location") || "";
+		expect(location).toContain("error=multiple_assertions");
+	});
+
+	it("should reject SAML response with no assertions", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "no-assertion-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		const noAssertionResponse = `
+			<saml2p:Response xmlns:saml2p="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml2="urn:oasis:names:tc:SAML:2.0:assertion">
+				<saml2:Issuer>http://localhost:8081</saml2:Issuer>
+				<saml2p:Status>
+					<saml2p:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/>
+				</saml2p:Status>
+			</saml2p:Response>
+		`;
+
+		const encodedResponse = Buffer.from(noAssertionResponse).toString("base64");
+
+		await expect(
+			auth.api.callbackSSOSAML({
+				body: {
+					SAMLResponse: encodedResponse,
+					RelayState: "http://localhost:3000/dashboard",
+				},
+				params: {
+					providerId: "no-assertion-provider",
+				},
+			}),
+		).rejects.toMatchObject({
+			body: {
+				code: "SAML_NO_ASSERTION",
+			},
+		});
+	});
+
+	it("should reject SAML response with XSW-style assertion injection in Extensions", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "xsw-injection-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		const xswInjectionResponse = `
+			<saml2p:Response xmlns:saml2p="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml2="urn:oasis:names:tc:SAML:2.0:assertion">
+				<saml2:Issuer>http://localhost:8081</saml2:Issuer>
+				<saml2p:Status>
+					<saml2p:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/>
+				</saml2p:Status>
+				<saml2p:Extensions>
+					<saml2:Assertion ID="injected-assertion">
+						<saml2:Issuer>http://localhost:8081</saml2:Issuer>
+						<saml2:Subject>
+							<saml2:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">attacker@evil.com</saml2:NameID>
+						</saml2:Subject>
+					</saml2:Assertion>
+				</saml2p:Extensions>
+				<saml2:Assertion ID="legitimate-assertion">
+					<saml2:Issuer>http://localhost:8081</saml2:Issuer>
+					<saml2:Subject>
+						<saml2:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">user@example.com</saml2:NameID>
+					</saml2:Subject>
+				</saml2:Assertion>
+			</saml2p:Response>
+		`;
+
+		const encodedResponse = Buffer.from(xswInjectionResponse).toString("base64");
+
+		await expect(
+			auth.api.callbackSSOSAML({
+				body: {
+					SAMLResponse: encodedResponse,
+					RelayState: "http://localhost:3000/dashboard",
+				},
+				params: {
+					providerId: "xsw-injection-provider",
+				},
+			}),
+		).rejects.toMatchObject({
+			body: {
+				code: "SAML_MULTIPLE_ASSERTIONS",
+			},
+		});
+	});
+
+	it("should accept valid SAML response with exactly one assertion", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "single-assertion-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		let samlResponse: any;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		const response = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/callback/single-assertion-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse.samlResponse,
+						RelayState: "http://localhost:3000/dashboard",
+					}),
+				},
+			),
+		);
+
+		expect(response.status).toBe(302);
+		expect(response.headers.get("location")).not.toContain("error");
+	});
+});
