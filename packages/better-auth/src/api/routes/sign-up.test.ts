@@ -158,7 +158,7 @@ describe("sign-up with custom fields", async (it) => {
 			}),
 		).rejects.toThrowError(
 			expect.objectContaining({
-				status: 400,
+				statusCode: 400,
 			}),
 		);
 	});
