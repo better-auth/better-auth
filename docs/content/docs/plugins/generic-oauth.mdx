@@ -138,12 +138,13 @@ Better Auth provides pre-configured helper functions for popular OAuth providers
 - **Microsoft Entra ID (Azure AD)** - `microsoftEntraId(options)`
 - **Okta** - `okta(options)`
 - **Slack** - `slack(options)`
+- **Patreon** - `patreon(options)`
 
 ### Example: Using Pre-configured Providers
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { genericOAuth, auth0, hubspot, keycloak, line, microsoftEntraId, okta, slack } from "better-auth/plugins"
+import { genericOAuth, auth0, hubspot, keycloak, line, microsoftEntraId, okta, slack, patreon } from "better-auth/plugins"
 
 export const auth = betterAuth({
   plugins: [
@@ -189,6 +190,10 @@ export const auth = betterAuth({
           clientId: process.env.SLACK_CLIENT_ID,
           clientSecret: process.env.SLACK_CLIENT_SECRET,
         }),
+        patreon({
+          clientId: process.env.PATREON_CLIENT_ID,
+          clientSecret: process.env.PATREON_CLIENT_SECRET,
+        }),
       ],
     }),
   ],
@@ -204,6 +209,7 @@ Each provider helper accepts common OAuth options (extending `BaseOAuthProviderO
 - **Microsoft Entra ID**: Requires `tenantId` (can be a GUID, `"common"`, `"organizations"`, or `"consumers"`)
 - **Okta**: Requires `issuer` (e.g., `https://dev-xxxxx.okta.com/oauth2/default`)
 - **Slack**: No additional required fields
+- **Patreon**: No additional required fields
 
 All providers support the same optional fields:
 - `scopes?: string[]` - Array of OAuth scopes to request
