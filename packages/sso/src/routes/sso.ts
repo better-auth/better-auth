@@ -45,7 +45,7 @@ import {
 	discoverOIDCConfig,
 	mapDiscoveryErrorToAPIError,
 } from "../oidc";
-import { validateSAMLAlgorithms } from "../saml";
+import { validateSAMLAlgorithms, validateSingleAssertion } from "../saml";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
 import { safeJsonParse, validateEmailDomain } from "../utils";
 
@@ -1792,6 +1792,8 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 					: undefined,
 			});
 
+			validateSingleAssertion(SAMLResponse);
+
 			let parsedResponse: FlowResult;
 			try {
 				parsedResponse = await sp.parseLoginResponse(idp, "post", {
@@ -2220,6 +2222,8 @@ export const acsEndpoint = (options?: SSOOptions) => {
 				: saml.IdentityProvider({
 						metadata: idpData.metadata,
 					});
+
+			validateSingleAssertion(SAMLResponse);
 
 			// Parse and validate SAML response
 			let parsedResponse: FlowResult;
