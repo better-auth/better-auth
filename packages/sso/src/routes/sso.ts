@@ -23,12 +23,14 @@ import type { BindingContext } from "samlify/types/src/entity";
 import type { IdentityProvider } from "samlify/types/src/entity-idp";
 import type { FlowResult } from "samlify/types/src/flow";
 import * as z from "zod/v4";
+
 interface AuthnRequestRecord {
 	id: string;
 	providerId: string;
 	createdAt: number;
 	expiresAt: number;
 }
+
 import {
 	AUTHN_REQUEST_KEY_PREFIX,
 	DEFAULT_ASSERTION_TTL_MS,
