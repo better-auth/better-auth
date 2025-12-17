@@ -515,7 +515,7 @@ export const createBulkInvitation = <O extends OrganizationOptions>(
 										properties: {
 											success: {
 												type: "array",
-												properties: {
+												items: {
 													id: {
 														type: "string",
 													},
@@ -544,7 +544,7 @@ export const createBulkInvitation = <O extends OrganizationOptions>(
 											},
 											failed: {
 												type: "array",
-												properties: {
+												items: {
 													email: {
 														type: "string",
 													},
@@ -564,14 +564,11 @@ export const createBulkInvitation = <O extends OrganizationOptions>(
 											},
 										},
 										required: [
-											"id",
-											"email",
-											"role",
-											"organizationId",
-											"inviterId",
-											"status",
-											"expiresAt",
-											"createdAt",
+											"success",
+											"failed",
+											"totalProcessed",
+											"totalSuccessful",
+											"totalFailed",
 										],
 									},
 								},
@@ -621,6 +618,7 @@ export const createBulkInvitation = <O extends OrganizationOptions>(
 
 			let validInvitations: any[] = [];
 			let invalidInvitations: { email: string; reason: string }[] = [];
+			let seenEmails = new Set<string>();
 
 			ctx.body.invitations.forEach((invitation) => {
 				const email = invitation.email.toLowerCase();
@@ -632,10 +630,10 @@ export const createBulkInvitation = <O extends OrganizationOptions>(
 					});
 				}
 				//filter out the duplicates emails
-				const isEmailDuplicate = ctx.body.invitations
-					.slice(0, ctx.body.invitations.indexOf(invitation))
-					.some((inv) => inv.email.toLowerCase() === email);
-
+				// const isEmailDuplicate = ctx.body.invitations
+				// 	.slice(0, ctx.body.invitations.indexOf(invitation))
+				// 	.some((inv) => inv.email.toLowerCase() === email);
+				const isEmailDuplicate = seenEmails.has(email);
 				if (isEmailDuplicate) {
 					invalidInvitations.push({
 						email: invitation.email,
@@ -644,6 +642,7 @@ export const createBulkInvitation = <O extends OrganizationOptions>(
 				}
 				if (!isEmailDuplicate && isValidEmail.success) {
 					validInvitations.push(invitation);
+					seenEmails.add(email);
 				}
 			});
 			const creatorRole = ctx.context.orgOptions.creatorRole || "owner";
@@ -775,7 +774,7 @@ export const createBulkInvitation = <O extends OrganizationOptions>(
 			// Cancel old invitations
 			if (invitationsToCancel.length > 0) {
 				await adapter.updateInvitations({
-					invitationId: invitationsToCancel,
+					invitationIds: invitationsToCancel,
 					status: "canceled",
 				});
 			}
@@ -886,6 +885,17 @@ export const createBulkInvitation = <O extends OrganizationOptions>(
 			}
 
 			// Create invitations for remaining valid invitations
+			// Step 1: Prepare all invitation data and run beforeCreateInvitation hooks
+			const preparedInvitations: Array<{
+				invitationData: {
+					role: string;
+					email: string;
+					organizationId: string;
+					teamIds: string[];
+				} & Record<string, any>;
+				originalInvitation: (typeof validInvitations)[0];
+			}> = [];
+
 			for (const invitation of validInvitations) {
 				const teamIds: string[] =
 					"teamId" in invitation
@@ -932,39 +942,67 @@ export const createBulkInvitation = <O extends OrganizationOptions>(
 					}
 				}
 
-				// Create invitation
-				const createdInvitation = await adapter.createInvitation({
-					invitation: invitationData,
-					user: session.user,
+				preparedInvitations.push({
+					invitationData,
+					originalInvitation: invitation,
 				});
+			}
 
-				// Send invitation email
-				await ctx.context.orgOptions.sendInvitationEmail?.(
-					{
-						id: createdInvitation.id,
-						role: createdInvitation.role,
-						email: createdInvitation.email.toLowerCase(),
-						organization: organization,
-						inviter: {
-							...(member as Member),
-							user: session.user,
-						},
-						invitation: createdInvitation,
-					},
-					ctx.request,
-				);
-
-				// Run afterCreateInvitation hook
-				if (option?.organizationHooks?.afterCreateInvitation) {
-					await option?.organizationHooks.afterCreateInvitation({
-						invitation: createdInvitation as unknown as Invitation,
-						inviter: session.user,
-						organization,
+			// Step 2: Create all invitations
+			const createdInvitations: InferInvitation<O, false>[] = [];
+			for (const { invitationData } of preparedInvitations) {
+				try {
+					const createdInvitation = await adapter.createInvitation({
+						invitation: invitationData,
+						user: session.user,
+					});
+					createdInvitations.push(createdInvitation);
+				} catch (error) {
+					// If creation fails, add to invalidInvitations
+					invalidInvitations.push({
+						email: invitationData.email,
+						reason:
+							error instanceof Error
+								? error.message
+								: "Failed to create invitation",
 					});
 				}
-
-				invitationSuccess.push(createdInvitation);
 			}
+
+			// Step 3: Send all emails in parallel
+			await Promise.allSettled(
+				createdInvitations.map((createdInvitation) =>
+					ctx.context.orgOptions.sendInvitationEmail?.(
+						{
+							id: createdInvitation.id,
+							role: createdInvitation.role,
+							email: createdInvitation.email.toLowerCase(),
+							organization: organization,
+							inviter: {
+								...(member as Member),
+								user: session.user,
+							},
+							invitation: createdInvitation,
+						},
+						ctx.request,
+					),
+				),
+			);
+
+			// Step 4: Run afterCreateInvitation hooks in parallel
+			if (option?.organizationHooks?.afterCreateInvitation) {
+				await Promise.allSettled(
+					createdInvitations.map((createdInvitation) =>
+						option.organizationHooks?.afterCreateInvitation?.({
+							invitation: createdInvitation as unknown as Invitation,
+							inviter: session.user,
+							organization: organization,
+						}),
+					),
+				);
+			}
+
+			invitationSuccess.push(...createdInvitations);
 
 			return ctx.json({
 				success: invitationSuccess,

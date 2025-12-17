@@ -906,37 +906,242 @@ type createInvitation = {
 
 ### Send Multiple Invitations
 
-To invite multiple users to an organization, you can use the `bulkInvite` function provided by the client. The `bulkInvite` function takes an object with the following properties:
+To invite multiple users to an organization at once, you can use the `inviteMembers` function provided by the client. This allows you to send invitations to multiple users in a single API call, with detailed success and failure reporting.
 
 <APIMethod path="/organization/invite-members" method="POST" requireSession>
 ```ts
-type createInvitation = {
+type createBulkInvitation = {
     /**
-     * The organization ID to invite the user to. Defaults to the active organization.  
+     * The organization ID to invite users to. Defaults to the active organization.  
      */
     organizationId?: string = "org-id"
-    invitations:[
+    /**
+     * Array of invitations to send.
+     */
+    invitations: Array<{
       /**
-     * The email address of the user to invite.  
-     */
-    email: string = "example@gmail.com"
-    /**
-     * The role(s) to assign to the user. It can be `admin`, `member`, `owner`
-     */
-    role: string | string[] = "member"
-  
-    /**
-     * Resend the invitation email, if the user is already invited.  
-     */
-    resend?: boolean = true
-    /**
-     * The team ID to invite the user to.  
-     */
-    teamId?: string = "team-id"
-    ]
+       * The email address of the user to invite.  
+       */
+      email: string = "example@gmail.com"
+      /**
+       * The role(s) to assign to the user. It can be `admin`, `member`, `owner`
+       */
+      role: string | string[] = "member"
+      /**
+       * Resend the invitation email, if the user is already invited.  
+       */
+      resend?: boolean = true
+      /**
+       * The team ID(s) to invite the user to. Can be a string or array of strings.
+       */
+      teamId?: string | string[] = "team-id"
+    }>
+}
+```
+
+**Response:**
+```ts
+{
+  success: Array<{
+    id: string
+    email: string
+    role: string
+    organizationId: string
+    inviterId: string
+    status: string
+    expiresAt: Date
+    createdAt: Date
+  }>
+  failed: Array<{
+    email: string
+    reason: string
+  }>
+  totalProcessed: number
+  totalSuccessful: number
+  totalFailed: number
 }
 ```
 </APIMethod>
+
+<Callout>
+  **Bulk Invitation Behavior:**
+  
+  - **Duplicate emails** within the request are automatically filtered out
+  - **Invalid emails** are skipped and reported in the `failed` array
+  - **Already members** are skipped and reported in the `failed` array
+  - **Already invited** users are handled based on the `resend` flag:
+    - If `resend: true`, the invitation expiration is updated and email is resent
+    - If `resend: false` or not set, the invitation is skipped and reported in `failed`
+  - If `cancelPendingInvitationsOnReInvite` is enabled, old invitations are canceled before creating new ones
+  - **Role validation** is performed - users without permission to invite certain roles will have those invitations marked as failed
+  - **Invitation limit** is checked against the total number of valid invitations
+  - **Team member limits** are validated if teams are enabled
+  - Each successful invitation triggers the `beforeCreateInvitation` and `afterCreateInvitation` hooks
+  - Each invitation email is sent individually via `sendInvitationEmail`
+</Callout>
+
+**Example Usage:**
+
+<Tabs items={["Client-side", "Server-side", "React Component"]}>
+<Tab value="Client-side">
+```ts
+// Invite multiple users from the client
+const result = await authClient.organization.inviteMembers({
+  invitations: [
+    { email: "user1@example.com", role: "member" },
+    { email: "user2@example.com", role: "admin" },
+    { email: "user3@example.com", role: "member", teamId: "team-123" },
+    { email: "user4@example.com", role: "member", resend: true }, // Resend if already invited
+  ],
+});
+
+// Handle results
+if (result.totalSuccessful > 0) {
+  console.log(`✅ Successfully invited ${result.totalSuccessful} users`);
+  result.success.forEach((invitation) => {
+    console.log(`  - ${invitation.email} (${invitation.role})`);
+  });
+}
+
+if (result.totalFailed > 0) {
+  console.log(`❌ Failed to invite ${result.totalFailed} users`);
+  result.failed.forEach((failure) => {
+    console.log(`  - ${failure.email}: ${failure.reason}`);
+  });
+}
+```
+</Tab>
+
+<Tab value="Server-side">
+```ts
+// Server-side API route example (Next.js)
+import { auth } from "@/auth";
+import { headers } from "next/headers";
+
+export async function POST(request: Request) {
+  const body = await request.json();
+  
+  const result = await auth.api.createBulkInvitation({
+    headers: await headers(),
+    body: {
+      organizationId: body.organizationId, // Optional, defaults to active org
+      invitations: [
+        { email: "user1@example.com", role: "member" },
+        { email: "user2@example.com", role: "admin" },
+        { email: "user3@example.com", role: ["member", "admin"] }, // Multiple roles
+        { email: "user4@example.com", role: "member", teamId: ["team-1", "team-2"] }, // Multiple teams
+      ],
+    },
+  });
+
+  return Response.json({
+    success: result.totalSuccessful,
+    failed: result.totalFailed,
+    details: result,
+  });
+}
+```
+</Tab>
+
+<Tab value="React Component">
+```tsx
+// React component example with form handling
+import { useState } from "react";
+import { authClient } from "@/lib/auth-client";
+
+export function BulkInviteForm({ organizationId }: { organizationId: string }) {
+  const [emails, setEmails] = useState("");
+  const [role, setRole] = useState("member");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    
+    // Parse emails from textarea (one per line or comma-separated)
+    const emailList = emails
+      .split(/[,\n]/)
+      .map((email) => email.trim())
+      .filter((email) => email.length > 0);
+
+    try {
+      const response = await authClient.organization.inviteMembers({
+        organizationId,
+        invitations: emailList.map((email) => ({
+          email,
+          role,
+        })),
+      });
+
+      setResult(response);
+      
+      if (response.totalSuccessful > 0) {
+        alert(`Successfully invited ${response.totalSuccessful} users!`);
+      }
+      
+      if (response.totalFailed > 0) {
+        console.warn("Some invitations failed:", response.failed);
+      }
+    } catch (error) {
+      console.error("Failed to send invitations:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <div>
+        <label>
+          Email addresses (one per line or comma-separated):
+          <textarea
+            value={emails}
+            onChange={(e) => setEmails(e.target.value)}
+            rows={5}
+            placeholder="user1@example.com&#10;user2@example.com&#10;user3@example.com"
+          />
+        </label>
+      </div>
+      
+      <div>
+        <label>
+          Role:
+          <select value={role} onChange={(e) => setRole(e.target.value)}>
+            <option value="member">Member</option>
+            <option value="admin">Admin</option>
+            <option value="owner">Owner</option>
+          </select>
+        </label>
+      </div>
+
+      <button type="submit" disabled={loading || !emails.trim()}>
+        {loading ? "Sending..." : "Send Invitations"}
+      </button>
+
+      {result && (
+        <div>
+          <p>✅ Successfully invited: {result.totalSuccessful}</p>
+          {result.totalFailed > 0 && (
+            <div>
+              <p>❌ Failed: {result.totalFailed}</p>
+              <ul>
+                {result.failed.map((failure: any, idx: number) => (
+                  <li key={idx}>
+                    {failure.email}: {failure.reason}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </form>
+  );
+}
+```
+</Tab>
+</Tabs>
 
 
 ### Accept Invitation

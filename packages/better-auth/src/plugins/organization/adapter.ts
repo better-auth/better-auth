@@ -140,9 +140,10 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					},
 				],
 			});
+			const userMap = new Map(users.map((user) => [user.id, user]));
 			const result: any[] = [];
 			members.forEach((member) => {
-				const user = users.find((user) => user.id === member.userId);
+				const user = userMap.get(member.userId);
 				if (user) {
 					result.push({
 						...member,
@@ -959,6 +960,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 
 			return invite;
 		},
+
 		findInvitationById: async (id: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const invitation = await adapter.findOne<InferInvitation<O, false>>({
@@ -1051,7 +1053,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 
 		updateInvitations: async (data: {
-			invitationId: string[];
+			invitationIds: string[];
 			status: "accepted" | "canceled" | "rejected";
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
@@ -1061,7 +1063,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					{
 						field: "id",
 						operator: "in",
-						value: data.invitationId.map((id) => id),
+						value: data.invitationIds,
 					},
 				],
 				update: {
