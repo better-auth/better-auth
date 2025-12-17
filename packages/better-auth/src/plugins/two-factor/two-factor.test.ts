@@ -256,7 +256,9 @@ describe("two factor", async () => {
 				headers,
 			},
 		});
-		expect(res.error?.message).toBe(TWO_FACTOR_ERROR_CODES.INVALID_CODE.message);
+		expect(res.error?.message).toBe(
+			TWO_FACTOR_ERROR_CODES.INVALID_CODE.message,
+		);
 	});
 
 	let backupCodes: string[] = [];

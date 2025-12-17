@@ -144,7 +144,9 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(existingSlug.error?.status).toBe(400);
-		expect(existingSlug.error?.message).toBe("slug is taken");
+		expect(existingSlug.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.ORGANIZATION_SLUG_ALREADY_TAKEN.message,
+		);
 	});
 
 	it("should prevent creating organization with empty slug", async () => {
@@ -455,7 +457,8 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(inviteAgain.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION,
+			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION
+				.message,
 		);
 
 		const inviteAgainUpper = await client.organization.inviteMember({
@@ -467,7 +470,8 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(inviteAgainUpper.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION,
+			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION
+				.message,
 		);
 
 		await client.signUp.email({
@@ -496,7 +500,8 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(inviteMemberAgain.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION,
+			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION
+				.message,
 		);
 
 		const inviteMemberAgainUpper = await client.organization.inviteMember({
@@ -508,7 +513,8 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(inviteMemberAgainUpper.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION,
+			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION
+				.message,
 		);
 	});
 
@@ -642,7 +648,8 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(invite.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE,
+			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE
+				.message,
 		);
 	});
 
@@ -837,7 +844,7 @@ describe("organization", async (it) => {
 
 		expect(deleteResult.error?.status).toBe(400);
 		expect(deleteResult.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+			ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION.message,
 		);
 	});
 
@@ -1043,7 +1050,7 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(invitation.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
+			ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED.message,
 		);
 
 		const getFullOrganization = await client.organization.getFullOrganization({
@@ -1336,7 +1343,7 @@ describe("invitation limit", async () => {
 		});
 		expect(invite.error?.status).toBe(403);
 		expect(invite.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.INVITATION_LIMIT_REACHED,
+			ORGANIZATION_ERROR_CODES.INVITATION_LIMIT_REACHED.message,
 		);
 	});
 
@@ -1369,7 +1376,7 @@ describe("invitation limit", async () => {
 			})
 			.catch((e: APIError) => {
 				expect(e.message).toBe(
-					ORGANIZATION_ERROR_CODES.INVITATION_LIMIT_REACHED,
+					ORGANIZATION_ERROR_CODES.INVITATION_LIMIT_REACHED.message,
 				);
 			});
 	});
