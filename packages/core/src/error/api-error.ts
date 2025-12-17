@@ -28,6 +28,7 @@ function hideInternalStackFrames(stack: string): string {
  */
 function makeErrorForHideStackFrame<B extends new (...args: any[]) => Error>(
 	Base: B,
+	// cspell:ignore clazz
 	clazz: any,
 ): {
 	new (
@@ -64,6 +65,7 @@ function makeErrorForHideStackFrame<B extends new (...args: any[]) => Error>(
 	// constructor has a `name` property of the base class.
 	Object.defineProperty(HideStackFramesError.prototype, "constructor", {
 		get() {
+			// cspell:ignore clazz
 			return clazz;
 		},
 		enumerable: false,
