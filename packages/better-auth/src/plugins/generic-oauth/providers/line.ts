@@ -76,7 +76,6 @@ export function line(options: LineOptions): GenericOAuthConfig {
 	const authorizationUrl = "https://access.line.me/oauth2/v2.1/authorize";
 	const tokenUrl = "https://api.line.me/oauth2/v2.1/token";
 	const userInfoUrl = "https://api.line.me/oauth2/v2.1/userinfo";
-	const verifyIdTokenUrl = "https://api.line.me/oauth2/v2.1/verify";
 
 	const getUserInfo = async (
 		tokens: OAuth2Tokens,

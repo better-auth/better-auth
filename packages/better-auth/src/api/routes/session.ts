@@ -45,6 +45,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								"application/json": {
 									schema: {
 										type: "object",
+										nullable: true,
 										properties: {
 											session: {
 												$ref: "#/components/schemas/Session",
@@ -225,9 +226,12 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							maxAge: 0,
 						});
 					} else {
+						const cachedSessionExpiresAt = new Date(
+							session.session.expiresAt as unknown as string | number | Date,
+						);
 						const hasExpired =
 							sessionDataPayload.expiresAt < Date.now() ||
-							session.session.expiresAt < new Date();
+							cachedSessionExpiresAt < new Date();
 
 						if (hasExpired) {
 							// When the session data cookie has expired, delete it;

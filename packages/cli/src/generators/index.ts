@@ -45,9 +45,3 @@ export const generateSchema = (opts: {
 	);
 	process.exit(1);
 };
-
-/**
- * @deprecated getGenerator is a misnomer as this function gets a generator AND uses it to generate
- * and return the schema. Use generateSchema instead
- */
-export const getGenerator = generateSchema;

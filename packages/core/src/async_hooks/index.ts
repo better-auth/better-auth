@@ -1,9 +1,5 @@
-/**
- * AsyncLocalStorage will be import directly in 1.5.x
- */
 import type { AsyncLocalStorage } from "node:async_hooks";
 
-// We only export the type here to avoid issues in environments where AsyncLocalStorage is not available.
 export type { AsyncLocalStorage };
 
 const AsyncLocalStoragePromise: Promise<typeof AsyncLocalStorage | null> =

@@ -312,7 +312,7 @@ describe("organization hooks", async () => {
 			],
 		});
 		const { headers } = await signInWithTestUser();
-		const result = await auth.api.createOrganization({
+		await auth.api.createOrganization({
 			body: {
 				name: "test",
 				slug: "test",

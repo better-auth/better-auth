@@ -15,7 +15,7 @@ const CLIENT_ID = "better-auth-cli";
 const CONFIG_DIR = path.join(os.homedir(), ".better-auth");
 const TOKEN_FILE = path.join(CONFIG_DIR, "token.json");
 
-export async function loginAction(opts: any) {
+async function loginAction(opts: any) {
 	const options = z
 		.object({
 			serverUrl: z.string().optional(),
@@ -252,7 +252,7 @@ async function storeToken(token: any): Promise<void> {
 		};
 
 		await fs.writeFile(TOKEN_FILE, JSON.stringify(tokenData, null, 2), "utf-8");
-	} catch (error) {
+	} catch {
 		console.warn("Failed to store authentication token locally");
 	}
 }

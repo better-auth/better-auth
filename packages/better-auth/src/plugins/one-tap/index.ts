@@ -88,7 +88,7 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 							},
 						);
 						payload = verifiedPayload;
-					} catch (error) {
+					} catch {
 						throw new APIError("BAD_REQUEST", {
 							message: "invalid id token",
 						});

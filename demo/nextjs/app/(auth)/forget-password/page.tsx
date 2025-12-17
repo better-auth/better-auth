@@ -34,7 +34,7 @@ export default function Component() {
 				redirectTo: "/reset-password",
 			});
 			setIsSubmitted(true);
-		} catch (err) {
+		} catch {
 			setError("An error occurred. Please try again.");
 		} finally {
 			setIsSubmitting(false);
