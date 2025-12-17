@@ -171,7 +171,7 @@ export const auth = betterAuth({
     organization({
       organizationHooks: {
         // Organization creation hooks
-        beforeCreateOrganization: async ({ organization, user }) => {
+        beforeCreateOrganization: async ({ organization, user }, ctx) => {
           // Run custom logic before organization is created
           // Optionally modify the organization data
           return {
@@ -184,14 +184,14 @@ export const auth = betterAuth({
           };
         },
 
-        afterCreateOrganization: async ({ organization, member, user }) => {
+        afterCreateOrganization: async ({ organization, member, user }, ctx) => {
           // Run custom logic after organization is created
           // e.g., create default resources, send notifications
           await setupDefaultResources(organization.id);
         },
 
         // Organization update hooks
-        beforeUpdateOrganization: async ({ organization, user, member }) => {
+        beforeUpdateOrganization: async ({ organization, user, member }, ctx) => {
           // Validate updates, apply business rules
           return {
             data: {
@@ -201,7 +201,7 @@ export const auth = betterAuth({
           };
         },
 
-        afterUpdateOrganization: async ({ organization, user, member }) => {
+        afterUpdateOrganization: async ({ organization, user, member }, ctx) => {
           // Sync changes to external systems
           await syncOrganizationToExternalSystems(organization);
         },
@@ -230,7 +230,7 @@ export const auth = betterAuth({
     organization({
       organizationHooks: {
         // Before a member is added to an organization
-        beforeAddMember: async ({ member, user, organization }) => {
+        beforeAddMember: async ({ member, user, organization }, ctx) => {
           // Custom validation or modification
           console.log(`Adding ${user.email} to ${organization.name}`);
 
@@ -244,19 +244,19 @@ export const auth = betterAuth({
         },
 
         // After a member is added
-        afterAddMember: async ({ member, user, organization }) => {
+        afterAddMember: async ({ member, user, organization }, ctx) => {
           // Send welcome email, create default resources, etc.
           await sendWelcomeEmail(user.email, organization.name);
         },
 
         // Before a member is removed
-        beforeRemoveMember: async ({ member, user, organization }) => {
+        beforeRemoveMember: async ({ member, user, organization }, ctx) => {
           // Cleanup user's resources, send notification, etc.
           await cleanupUserResources(user.id, organization.id);
         },
 
         // After a member is removed
-        afterRemoveMember: async ({ member, user, organization }) => {
+        afterRemoveMember: async ({ member, user, organization }, ctx) => {
           await logMemberRemoval(user.id, organization.id);
         },
 
@@ -266,7 +266,7 @@ export const auth = betterAuth({
           newRole,
           user,
           organization,
-        }) => {
+        }, ctx) => {
           // Validate role change permissions
           if (newRole === "owner" && !hasOwnerUpgradePermission(user)) {
             throw new Error("Cannot upgrade to owner role");
@@ -286,7 +286,7 @@ export const auth = betterAuth({
           previousRole,
           user,
           organization,
-        }) => {
+        }, ctx) => {
           await logRoleChange(user.id, previousRole, member.role);
         },
       },
@@ -309,7 +309,7 @@ export const auth = betterAuth({
           invitation,
           inviter,
           organization,
-        }) => {
+        }, ctx) => {
           // Custom validation or expiration logic
           const customExpiration = new Date(
             Date.now() + 1000 * 60 * 60 * 24 * 7
@@ -328,13 +328,13 @@ export const auth = betterAuth({
           invitation,
           inviter,
           organization,
-        }) => {
+        }, ctx) => {
           // Send custom invitation email, track metrics, etc.
           await sendCustomInvitationEmail(invitation, organization);
         },
 
         // Before accepting an invitation
-        beforeAcceptInvitation: async ({ invitation, user, organization }) => {
+        beforeAcceptInvitation: async ({ invitation, user, organization }, ctx) => {
           // Additional validation before acceptance
           await validateUserEligibility(user, organization);
         },
@@ -345,17 +345,17 @@ export const auth = betterAuth({
           member,
           user,
           organization,
-        }) => {
+        }, ctx) => {
           // Setup user account, assign default resources
           await setupNewMemberResources(user, organization);
         },
 
         // Before/after rejecting invitations
-        beforeRejectInvitation: async ({ invitation, user, organization }) => {
+        beforeRejectInvitation: async ({ invitation, user, organization }, ctx) => {
           // Log rejection reason, send notification to inviter
         },
 
-        afterRejectInvitation: async ({ invitation, user, organization }) => {
+        afterRejectInvitation: async ({ invitation, user, organization }, ctx) => {
           await notifyInviterOfRejection(invitation.inviterId, user.email);
         },
 
@@ -364,7 +364,7 @@ export const auth = betterAuth({
           invitation,
           cancelledBy,
           organization,
-        }) => {
+        }, ctx) => {
           // Verify cancellation permissions
         },
 
@@ -372,7 +372,7 @@ export const auth = betterAuth({
           invitation,
           cancelledBy,
           organization,
-        }) => {
+        }, ctx) => {
           await logInvitationCancellation(invitation.id, cancelledBy.id);
         },
       },
@@ -392,7 +392,7 @@ export const auth = betterAuth({
       teams: { enabled: true },
       organizationHooks: {
         // Before creating a team
-        beforeCreateTeam: async ({ team, user, organization }) => {
+        beforeCreateTeam: async ({ team, user, organization }, ctx) => {
           // Validate team name, apply naming conventions
           return {
             data: {
@@ -403,13 +403,13 @@ export const auth = betterAuth({
         },
 
         // After creating a team
-        afterCreateTeam: async ({ team, user, organization }) => {
+        afterCreateTeam: async ({ team, user, organization }, ctx) => {
           // Create default team resources, channels, etc.
           await createDefaultTeamResources(team.id);
         },
 
         // Before updating a team
-        beforeUpdateTeam: async ({ team, updates, user, organization }) => {
+        beforeUpdateTeam: async ({ team, updates, user, organization }, ctx) => {
           // Validate updates, apply business rules
           return {
             data: {
@@ -420,18 +420,18 @@ export const auth = betterAuth({
         },
 
         // After updating a team
-        afterUpdateTeam: async ({ team, user, organization }) => {
+        afterUpdateTeam: async ({ team, user, organization }, ctx) => {
           await syncTeamChangesToExternalSystems(team);
         },
 
         // Before deleting a team
-        beforeDeleteTeam: async ({ team, user, organization }) => {
+        beforeDeleteTeam: async ({ team, user, organization }, ctx) => {
           // Backup team data, notify members
           await backupTeamData(team.id);
         },
 
         // After deleting a team
-        afterDeleteTeam: async ({ team, user, organization }) => {
+        afterDeleteTeam: async ({ team, user, organization }, ctx) => {
           await cleanupTeamResources(team.id);
         },
 
@@ -441,7 +441,7 @@ export const auth = betterAuth({
           team,
           user,
           organization,
-        }) => {
+        }, ctx) => {
           // Validate team membership limits, permissions
           const memberCount = await getTeamMemberCount(team.id);
           if (memberCount >= 10) {
@@ -454,7 +454,7 @@ export const auth = betterAuth({
           team,
           user,
           organization,
-        }) => {
+        }, ctx) => {
           await grantTeamAccess(user.id, team.id);
         },
 
@@ -463,7 +463,7 @@ export const auth = betterAuth({
           team,
           user,
           organization,
-        }) => {
+        }, ctx) => {
           // Backup user's team-specific data
           await backupTeamMemberData(user.id, team.id);
         },
@@ -473,7 +473,7 @@ export const auth = betterAuth({
           team,
           user,
           organization,
-        }) => {
+        }, ctx) => {
           await revokeTeamAccess(user.id, team.id);
         },
       },
@@ -493,7 +493,7 @@ export const auth = betterAuth({
   plugins: [
     organization({
       organizationHooks: {
-        beforeAddMember: async ({ member, user, organization }) => {
+        beforeAddMember: async ({ member, user, organization }, ctx) => {
           // Check if user has pending violations
           const violations = await checkUserViolations(user.id);
           if (violations.length > 0) {
@@ -504,7 +504,7 @@ export const auth = betterAuth({
           }
         },
 
-        beforeCreateTeam: async ({ team, user, organization }) => {
+        beforeCreateTeam: async ({ team, user, organization }, ctx) => {
           // Validate team name uniqueness
           const existingTeam = await findTeamByName(team.name, organization.id);
           if (existingTeam) {
@@ -820,10 +820,10 @@ const auth = betterAuth({
     organization({
       disableOrganizationDeletion: true, //to disable it altogether
       organizationHooks: {
-        beforeDeleteOrganization: async (data, request) => {
+        beforeDeleteOrganization: async (data, ctx) => {
           // a callback to run before deleting org
         },
-        afterDeleteOrganization: async (data, request) => {
+        afterDeleteOrganization: async (data, ctx) => {
           // a callback to run after deleting org
         },
       },

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../../client";
 import { getTestInstance } from "../../../test-utils/test-instance";
 import { organizationClient } from "../client";
@@ -227,8 +227,26 @@ describe("listMembers", async () => {
 });
 
 describe("updateMemberRole", async () => {
+	const beforeUpdateMemberRoleSpy = vi.fn();
+	const afterUpdateMemberRoleSpy = vi.fn();
+
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
-		plugins: [organization()],
+		plugins: [
+			organization({
+				organizationHooks: {
+					async beforeUpdateMemberRole(data, ctx) {
+						beforeUpdateMemberRoleSpy(data, ctx);
+					},
+					async afterUpdateMemberRole(data, ctx) {
+						afterUpdateMemberRoleSpy(data, ctx);
+					},
+				},
+			}),
+		],
+	});
+
+	afterEach(() => {
+		vi.clearAllMocks();
 	});
 
 	it("should update the member role", async () => {
@@ -278,6 +296,25 @@ describe("updateMemberRole", async () => {
 			},
 		);
 		expect(updatedMember.data?.role).toBe("admin");
+		expect(beforeUpdateMemberRoleSpy).toHaveBeenCalledWith(
+			expect.objectContaining({
+				member: expect.any(Object),
+				user: expect.any(Object),
+				organization: expect.any(Object),
+				newRole: expect.any(String),
+			}),
+			expect.any(Object),
+		);
+
+		expect(afterUpdateMemberRoleSpy).toHaveBeenCalledWith(
+			expect.objectContaining({
+				member: expect.any(Object),
+				user: expect.any(Object),
+				organization: expect.any(Object),
+				previousRole: expect.any(String),
+			}),
+			expect.any(Object),
+		);
 	});
 
 	it("should not update the member role if the member updating is not a member	", async () => {
@@ -444,8 +481,22 @@ describe("activeMemberRole", async () => {
 });
 
 describe("inviteMember role validation", async () => {
+	const beforeCreateInvitationSpy = vi.fn();
+	const afterCreateInvitationSpy = vi.fn();
+
 	const { signInWithTestUser, customFetchImpl } = await getTestInstance({
-		plugins: [organization()],
+		plugins: [
+			organization({
+				organizationHooks: {
+					async beforeCreateInvitation(data, ctx) {
+						beforeCreateInvitationSpy(data, ctx);
+					},
+					async afterCreateInvitation(data, ctx) {
+						afterCreateInvitationSpy(data, ctx);
+					},
+				},
+			}),
+		],
 	});
 
 	it("should fail when inviting with a non-existent role", async () => {
@@ -511,5 +562,23 @@ describe("inviteMember role validation", async () => {
 
 		expect(error).toBeNull();
 		expect(data).toBeDefined();
+
+		expect(beforeCreateInvitationSpy).toHaveBeenCalledWith(
+			expect.objectContaining({
+				invitation: expect.any(Object),
+				inviter: expect.any(Object),
+				organization: expect.any(Object),
+			}),
+			expect.any(Object),
+		);
+
+		expect(afterCreateInvitationSpy).toHaveBeenCalledWith(
+			expect.objectContaining({
+				invitation: expect.any(Object),
+				inviter: expect.any(Object),
+				organization: expect.any(Object),
+			}),
+			expect.any(Object),
+		);
 	});
 });

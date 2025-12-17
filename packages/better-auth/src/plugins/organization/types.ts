@@ -428,26 +428,32 @@ export interface OrganizationOptions {
 				 * 	});
 				 * }
 				 */
-				beforeCreateOrganization?: (data: {
-					organization: {
-						name?: string;
-						slug?: string;
-						logo?: string;
-						metadata?: Record<string, any>;
-						[key: string]: any;
-					};
-					user: User & Record<string, any>;
-				}) => Promise<void | {
+				beforeCreateOrganization?: (
+					data: {
+						organization: {
+							name?: string;
+							slug?: string;
+							logo?: string;
+							metadata?: Record<string, any>;
+							[key: string]: any;
+						};
+						user: User & Record<string, any>;
+					},
+					context: GenericEndpointContext,
+				) => Promise<void | {
 					data: Record<string, any>;
 				}>;
 				/**
 				 * A callback that runs after the organization is created
 				 */
-				afterCreateOrganization?: (data: {
-					organization: Organization & Record<string, any>;
-					member: Member & Record<string, any>;
-					user: User & Record<string, any>;
-				}) => Promise<void>;
+				afterCreateOrganization?: (
+					data: {
+						organization: Organization & Record<string, any>;
+						member: Member & Record<string, any>;
+						user: User & Record<string, any>;
+					},
+					context: GenericEndpointContext,
+				) => Promise<void>;
 				/**
 				 * A callback that runs before the organization is updated
 				 *
@@ -459,17 +465,20 @@ export interface OrganizationOptions {
 				 * 	return { data: { ...data.organization } };
 				 * }
 				 */
-				beforeUpdateOrganization?: (data: {
-					organization: {
-						name?: string;
-						slug?: string;
-						logo?: string;
-						metadata?: Record<string, any>;
-						[key: string]: any;
-					};
-					user: User & Record<string, any>;
-					member: Member & Record<string, any>;
-				}) => Promise<void | {
+				beforeUpdateOrganization?: (
+					data: {
+						organization: {
+							name?: string;
+							slug?: string;
+							logo?: string;
+							metadata?: Record<string, any>;
+							[key: string]: any;
+						};
+						user: User & Record<string, any>;
+						member: Member & Record<string, any>;
+					},
+					context: GenericEndpointContext,
+				) => Promise<void | {
 					data: {
 						name?: string;
 						slug?: string;
@@ -488,30 +497,39 @@ export interface OrganizationOptions {
 				 * }
 				 * ```
 				 */
-				afterUpdateOrganization?: (data: {
-					/**
-					 * Updated organization object
-					 *
-					 * This could be `null` if an adapter doesn't return updated organization.
-					 */
-					organization: (Organization & Record<string, any>) | null;
-					user: User & Record<string, any>;
-					member: Member & Record<string, any>;
-				}) => Promise<void>;
+				afterUpdateOrganization?: (
+					data: {
+						/**
+						 * Updated organization object
+						 *
+						 * This could be `null` if an adapter doesn't return updated organization.
+						 */
+						organization: (Organization & Record<string, any>) | null;
+						user: User & Record<string, any>;
+						member: Member & Record<string, any>;
+					},
+					context: GenericEndpointContext,
+				) => Promise<void>;
 				/**
 				 * A callback that runs before the organization is deleted
 				 */
-				beforeDeleteOrganization?: (data: {
-					organization: Organization & Record<string, any>;
-					user: User & Record<string, any>;
-				}) => Promise<void>;
+				beforeDeleteOrganization?: (
+					data: {
+						organization: Organization & Record<string, any>;
+						user: User & Record<string, any>;
+					},
+					context: GenericEndpointContext,
+				) => Promise<void>;
 				/**
 				 * A callback that runs after the organization is deleted
 				 */
-				afterDeleteOrganization?: (data: {
-					organization: Organization & Record<string, any>;
-					user: User & Record<string, any>;
-				}) => Promise<void>;
+				afterDeleteOrganization?: (
+					data: {
+						organization: Organization & Record<string, any>;
+						user: User & Record<string, any>;
+					},
+					context: GenericEndpointContext,
+				) => Promise<void>;
 				/**
 				 * Member hooks
 				 */
@@ -533,57 +551,72 @@ export interface OrganizationOptions {
 				 * }
 				 * ```
 				 */
-				beforeAddMember?: (data: {
-					member: {
-						userId: string;
-						organizationId: string;
-						role: string;
-						[key: string]: any;
-					};
-					user: User & Record<string, any>;
-					organization: Organization & Record<string, any>;
-				}) => Promise<void | {
+				beforeAddMember?: (
+					data: {
+						member: {
+							userId: string;
+							organizationId: string;
+							role: string;
+							[key: string]: any;
+						};
+						user: User & Record<string, any>;
+						organization: Organization & Record<string, any>;
+					},
+					context: GenericEndpointContext,
+				) => Promise<void | {
 					data: Record<string, any>;
 				}>;
 
 				/**
 				 * A callback that runs after a member is added to an organization
 				 */
-				afterAddMember?: (data: {
-					member: Member & Record<string, any>;
-					user: User & Record<string, any>;
-					organization: Organization & Record<string, any>;
-				}) => Promise<void>;
+				afterAddMember?: (
+					data: {
+						member: Member & Record<string, any>;
+						user: User & Record<string, any>;
+						organization: Organization & Record<string, any>;
+					},
+					context: GenericEndpointContext,
+				) => Promise<void>;
 
 				/**
 				 * A callback that runs before a member is removed from an organization
 				 */
-				beforeRemoveMember?: (data: {
-					member: Member & Record<string, any>;
-					user: User & Record<string, any>;
-					organization: Organization & Record<string, any>;
-				}) => Promise<void>;
+				beforeRemoveMember?: (
+					data: {
+						member: Member & Record<string, any>;
+						user: User & Record<string, any>;
+						organization: Organization & Record<string, any>;
+					},
+					context: GenericEndpointContext,
+				) => Promise<void>;
 
 				/**
 				 * A callback that runs after a member is removed from an organization
 				 */
-				afterRemoveMember?: (data: {
-					member: Member & Record<string, any>;
-					user: User & Record<string, any>;
-					organization: Organization & Record<string, any>;
-				}) => Promise<void>;
+				afterRemoveMember?: (
+					data: {
+						member: Member & Record<string, any>;
+						user: User & Record<string, any>;
+						organization: Organization & Record<string, any>;
+					},
+					context: GenericEndpointContext,
+				) => Promise<void>;
 
 				/**
 				 * A callback that runs before a member's role is updated
 				 *
 				 * You can return a `data` object to override the default data.
 				 */
-				beforeUpdateMemberRole?: (data: {
-					member: Member & Record<string, any>;
-					newRole: string;
-					user: User & Record<string, any>;
-					organization: Organization & Record<string, any>;
-				}) => Promise<void | {
+				beforeUpdateMemberRole?: (
+					data: {
+						member: Member & Record<string, any>;
+						newRole: string;
+						user: User & Record<string, any>;
+						organization: Organization & Record<string, any>;
+					},
+					context: GenericEndpointContext,
+				) => Promise<void | {
 					data: {
 						role: string;
 						[key: string]: any;
@@ -593,12 +626,15 @@ export interface OrganizationOptions {
 				/**
 				 * A callback that runs after a member's role is updated
 				 */
-				afterUpdateMemberRole?: (data: {
-					member: Member & Record<string, any>;
-					previousRole: string;
-					user: User & Record<string, any>;
-					organization: Organization & Record<string, any>;
-				}) => Promise<void>;
+				afterUpdateMemberRole?: (
+					data: {
+						member: Member & Record<string, any>;
+						previousRole: string;
+						user: User & Record<string, any>;
+						organization: Organization & Record<string, any>;
+					},
+					context: GenericEndpointContext,
+				) => Promise<void>;
 
 				/**
 				 * Invitation hooks
@@ -621,84 +657,108 @@ export interface OrganizationOptions {
 				 * }
 				 * ```
 				 */
-				beforeCreateInvitation?: (data: {
-					invitation: {
-						email: string;
-						role: string;
-						organizationId: string;
-						inviterId: string;
-						teamId?: string;
-						[key: string]: any;
-					};
-					inviter: User & Record<string, any>;
-					organization: Organization & Record<string, any>;
-				}) => Promise<void | {
+				beforeCreateInvitation?: (
+					data: {
+						invitation: {
+							email: string;
+							role: string;
+							organizationId: string;
+							inviterId: string;
+							teamId?: string;
+							[key: string]: any;
+						};
+						inviter: User & Record<string, any>;
+						organization: Organization & Record<string, any>;
+					},
+					context: GenericEndpointContext,
+				) => Promise<void | {
 					data: Record<string, any>;
 				}>;
 
 				/**
 				 * A callback that runs after an invitation is created
 				 */
-				afterCreateInvitation?: (data: {
-					invitation: Invitation & Record<string, any>;
-					inviter: User & Record<string, any>;
-					organization: Organization & Record<string, any>;
-				}) => Promise<void>;
+				afterCreateInvitation?: (
+					data: {
+						invitation: Invitation & Record<string, any>;
+						inviter: User & Record<string, any>;
+						organization: Organization & Record<string, any>;
+					},
+					context: GenericEndpointContext,
+				) => Promise<void>;
 
 				/**
 				 * A callback that runs before an invitation is accepted
 				 */
-				beforeAcceptInvitation?: (data: {
-					invitation: Invitation & Record<string, any>;
-					user: User & Record<string, any>;
-					organization: Organization & Record<string, any>;
-				}) => Promise<void>;
+				beforeAcceptInvitation?: (
+					data: {
+						invitation: Invitation & Record<string, any>;
+						user: User & Record<string, any>;
+						organization: Organization & Record<string, any>;
+					},
+					context: GenericEndpointContext,
+				) => Promise<void>;
 
 				/**
 				 * A callback that runs after an invitation is accepted
 				 */
-				afterAcceptInvitation?: (data: {
-					invitation: Invitation & Record<string, any>;
-					member: Member & Record<string, any>;
-					user: User & Record<string, any>;
-					organization: Organization & Record<string, any>;
-				}) => Promise<void>;
+				afterAcceptInvitation?: (
+					data: {
+						invitation: Invitation & Record<string, any>;
+						member: Member & Record<string, any>;
+						user: User & Record<string, any>;
+						organization: Organization & Record<string, any>;
+					},
+					context: GenericEndpointContext,
+				) => Promise<void>;
 
 				/**
 				 * A callback that runs before an invitation is rejected
 				 */
-				beforeRejectInvitation?: (data: {
-					invitation: Invitation & Record<string, any>;
-					user: User & Record<string, any>;
-					organization: Organization & Record<string, any>;
-				}) => Promise<void>;
+				beforeRejectInvitation?: (
+					data: {
+						invitation: Invitation & Record<string, any>;
+						user: User & Record<string, any>;
+						organization: Organization & Record<string, any>;
+					},
+					context: GenericEndpointContext,
+				) => Promise<void>;
 
 				/**
 				 * A callback that runs after an invitation is rejected
 				 */
-				afterRejectInvitation?: (data: {
-					invitation: Invitation & Record<string, any>;
-					user: User & Record<string, any>;
-					organization: Organization & Record<string, any>;
-				}) => Promise<void>;
+				afterRejectInvitation?: (
+					data: {
+						invitation: Invitation & Record<string, any>;
+						user: User & Record<string, any>;
+						organization: Organization & Record<string, any>;
+					},
+					context: GenericEndpointContext,
+				) => Promise<void>;
 
 				/**
 				 * A callback that runs before an invitation is cancelled
 				 */
-				beforeCancelInvitation?: (data: {
-					invitation: Invitation & Record<string, any>;
-					cancelledBy: User & Record<string, any>;
-					organization: Organization & Record<string, any>;
-				}) => Promise<void>;
+				beforeCancelInvitation?: (
+					data: {
+						invitation: Invitation & Record<string, any>;
+						cancelledBy: User & Record<string, any>;
+						organization: Organization & Record<string, any>;
+					},
+					context: GenericEndpointContext,
+				) => Promise<void>;
 
 				/**
 				 * A callback that runs after an invitation is cancelled
 				 */
-				afterCancelInvitation?: (data: {
-					invitation: Invitation & Record<string, any>;
-					cancelledBy: User & Record<string, any>;
-					organization: Organization & Record<string, any>;
-				}) => Promise<void>;
+				afterCancelInvitation?: (
+					data: {
+						invitation: Invitation & Record<string, any>;
+						cancelledBy: User & Record<string, any>;
+						organization: Organization & Record<string, any>;
+					},
+					context: GenericEndpointContext,
+				) => Promise<void>;
 
 				/**
 				 * Team hooks (when teams are enabled)
@@ -709,116 +769,146 @@ export interface OrganizationOptions {
 				 *
 				 * You can return a `data` object to override the default data.
 				 */
-				beforeCreateTeam?: (data: {
-					team: {
-						name: string;
-						organizationId: string;
-						[key: string]: any;
-					};
-					user?: User & Record<string, any>;
-					organization: Organization & Record<string, any>;
-				}) => Promise<void | {
+				beforeCreateTeam?: (
+					data: {
+						team: {
+							name: string;
+							organizationId: string;
+							[key: string]: any;
+						};
+						user?: User & Record<string, any>;
+						organization: Organization & Record<string, any>;
+					},
+					context: GenericEndpointContext,
+				) => Promise<void | {
 					data: Record<string, any>;
 				}>;
 
 				/**
 				 * A callback that runs after a team is created
 				 */
-				afterCreateTeam?: (data: {
-					team: Team & Record<string, any>;
-					user?: User & Record<string, any>;
-					organization: Organization & Record<string, any>;
-				}) => Promise<void>;
+				afterCreateTeam?: (
+					data: {
+						team: Team & Record<string, any>;
+						user?: User & Record<string, any>;
+						organization: Organization & Record<string, any>;
+					},
+					context: GenericEndpointContext,
+				) => Promise<void>;
 
 				/**
 				 * A callback that runs before a team is updated
 				 *
 				 * You can return a `data` object to override the default data.
 				 */
-				beforeUpdateTeam?: (data: {
-					team: Team & Record<string, any>;
-					updates: {
-						name?: string;
-						[key: string]: any;
-					};
-					user: User & Record<string, any>;
-					organization: Organization & Record<string, any>;
-				}) => Promise<void | {
+				beforeUpdateTeam?: (
+					data: {
+						team: Team & Record<string, any>;
+						updates: {
+							name?: string;
+							[key: string]: any;
+						};
+						user: User & Record<string, any>;
+						organization: Organization & Record<string, any>;
+					},
+					context: GenericEndpointContext,
+				) => Promise<void | {
 					data: Record<string, any>;
 				}>;
 
 				/**
 				 * A callback that runs after a team is updated
 				 */
-				afterUpdateTeam?: (data: {
-					team: (Team & Record<string, any>) | null;
-					user: User & Record<string, any>;
-					organization: Organization & Record<string, any>;
-				}) => Promise<void>;
+				afterUpdateTeam?: (
+					data: {
+						team: (Team & Record<string, any>) | null;
+						user: User & Record<string, any>;
+						organization: Organization & Record<string, any>;
+					},
+					context: GenericEndpointContext,
+				) => Promise<void>;
 
 				/**
 				 * A callback that runs before a team is deleted
 				 */
-				beforeDeleteTeam?: (data: {
-					team: Team & Record<string, any>;
-					user?: User & Record<string, any>;
-					organization: Organization & Record<string, any>;
-				}) => Promise<void>;
+				beforeDeleteTeam?: (
+					data: {
+						team: Team & Record<string, any>;
+						user?: User & Record<string, any>;
+						organization: Organization & Record<string, any>;
+					},
+					context: GenericEndpointContext,
+				) => Promise<void>;
 
 				/**
 				 * A callback that runs after a team is deleted
 				 */
-				afterDeleteTeam?: (data: {
-					team: Team & Record<string, any>;
-					user?: User & Record<string, any>;
-					organization: Organization & Record<string, any>;
-				}) => Promise<void>;
+				afterDeleteTeam?: (
+					data: {
+						team: Team & Record<string, any>;
+						user?: User & Record<string, any>;
+						organization: Organization & Record<string, any>;
+					},
+					context: GenericEndpointContext,
+				) => Promise<void>;
 
 				/**
 				 * A callback that runs before a member is added to a team
 				 */
-				beforeAddTeamMember?: (data: {
-					teamMember: {
-						teamId: string;
-						userId: string;
-						[key: string]: any;
-					};
-					team: Team & Record<string, any>;
-					user: User & Record<string, any>;
-					organization: Organization & Record<string, any>;
-				}) => Promise<void | {
+				beforeAddTeamMember?: (
+					data: {
+						teamMember: {
+							teamId: string;
+							userId: string;
+							[key: string]: any;
+						};
+						team: Team & Record<string, any>;
+						user: User & Record<string, any>;
+						organization: Organization & Record<string, any>;
+					},
+					context: GenericEndpointContext,
+				) => Promise<void | {
 					data: Record<string, any>;
 				}>;
 
 				/**
 				 * A callback that runs after a member is added to a team
 				 */
-				afterAddTeamMember?: (data: {
-					teamMember: TeamMember & Record<string, any>;
-					team: Team & Record<string, any>;
-					user: User & Record<string, any>;
-					organization: Organization & Record<string, any>;
-				}) => Promise<void>;
+				afterAddTeamMember?: (
+					data: {
+						teamMember: TeamMember & Record<string, any>;
+						team: Team & Record<string, any>;
+						user: User & Record<string, any>;
+						organization: Organization & Record<string, any>;
+					},
+					context: GenericEndpointContext,
+				) => Promise<void>;
 
 				/**
 				 * A callback that runs before a member is removed from a team
 				 */
-				beforeRemoveTeamMember?: (data: {
-					teamMember: TeamMember & Record<string, any>;
-					team: Team & Record<string, any>;
-					user: User & Record<string, any>;
-					organization: Organization & Record<string, any>;
-				}) => Promise<void>;
+				beforeRemoveTeamMember?: (
+					data: {
+						teamMember: TeamMember & Record<string, any>;
+						team: Team & Record<string, any>;
+						user: User & Record<string, any>;
+						organization: Organization & Record<string, any>;
+					},
+					context: GenericEndpointContext,
+				) => Promise<void>;
 
 				/**
 				 * A callback that runs after a member is removed from a team
 				 */
-				afterRemoveTeamMember?: (data: {
-					teamMember: TeamMember & Record<string, any>;
-					team: Team & Record<string, any>;
-					user: User & Record<string, any>;
-					organization: Organization & Record<string, any>;
-				}) => Promise<void>;
+				afterRemoveTeamMember?: (
+					data: {
+						teamMember: TeamMember & Record<string, any>;
+						team: Team & Record<string, any>;
+						user: User & Record<string, any>;
+						organization: Organization & Record<string, any>;
+					},
+					context: GenericEndpointContext,
+				) => Promise<void>;
 		  }
 		| undefined;
 }

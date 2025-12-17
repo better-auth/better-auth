@@ -172,16 +172,19 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 
 			// Run beforeAddMember hook
 			if (option?.organizationHooks?.beforeAddMember) {
-				const response = await option?.organizationHooks.beforeAddMember({
-					member: {
-						userId: user.id,
-						organizationId: orgId,
-						role: parseRoles(ctx.body.role as string | string[]),
-						...additionalFields,
+				const response = await option?.organizationHooks.beforeAddMember(
+					{
+						member: {
+							userId: user.id,
+							organizationId: orgId,
+							role: parseRoles(ctx.body.role as string | string[]),
+							...additionalFields,
+						},
+						user,
+						organization,
 					},
-					user,
-					organization,
-				});
+					ctx,
+				);
 				if (response && typeof response === "object" && "data" in response) {
 					memberData = {
 						...memberData,
@@ -201,11 +204,14 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 
 			// Run afterAddMember hook
 			if (option?.organizationHooks?.afterAddMember) {
-				await option?.organizationHooks.afterAddMember({
-					member: createdMember,
-					user,
-					organization,
-				});
+				await option?.organizationHooks.afterAddMember(
+					{
+						member: createdMember,
+						user,
+						organization,
+					},
+					ctx,
+				);
 			}
 
 			return ctx.json(createdMember);
@@ -384,11 +390,14 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 
 			// Run beforeRemoveMember hook
 			if (options?.organizationHooks?.beforeRemoveMember) {
-				await options?.organizationHooks.beforeRemoveMember({
-					member: toBeRemovedMember,
-					user: userBeingRemoved,
-					organization,
-				});
+				await options?.organizationHooks.beforeRemoveMember(
+					{
+						member: toBeRemovedMember,
+						user: userBeingRemoved,
+						organization,
+					},
+					ctx,
+				);
 			}
 			await adapter.deleteMember({
 				memberId: toBeRemovedMember.id,
@@ -405,11 +414,14 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 
 			// Run afterRemoveMember hook
 			if (options?.organizationHooks?.afterRemoveMember) {
-				await options?.organizationHooks.afterRemoveMember({
-					member: toBeRemovedMember,
-					user: userBeingRemoved,
-					organization,
-				});
+				await options?.organizationHooks.afterRemoveMember(
+					{
+						member: toBeRemovedMember,
+						user: userBeingRemoved,
+						organization,
+					},
+					ctx,
+				);
 			}
 
 			return ctx.json({
@@ -644,6 +656,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 						user: userBeingUpdated,
 						organization,
 					},
+					ctx,
 				);
 				if (response && typeof response === "object" && "data" in response) {
 					// Allow the hook to modify the role
@@ -659,12 +672,15 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 
 					// Run afterUpdateMemberRole hook
 					if (option?.organizationHooks?.afterUpdateMemberRole) {
-						await option?.organizationHooks.afterUpdateMemberRole({
-							member: updatedMember,
-							previousRole,
-							user: userBeingUpdated,
-							organization,
-						});
+						await option?.organizationHooks.afterUpdateMemberRole(
+							{
+								member: updatedMember,
+								previousRole,
+								user: userBeingUpdated,
+								organization,
+							},
+							ctx,
+						);
 					}
 
 					return ctx.json(updatedMember);
@@ -683,12 +699,15 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 
 			// Run afterUpdateMemberRole hook
 			if (option?.organizationHooks?.afterUpdateMemberRole) {
-				await option?.organizationHooks.afterUpdateMemberRole({
-					member: updatedMember,
-					previousRole,
-					user: userBeingUpdated,
-					organization,
-				});
+				await option?.organizationHooks.afterUpdateMemberRole(
+					{
+						member: updatedMember,
+						previousRole,
+						user: userBeingUpdated,
+						organization,
+					},
+					ctx,
+				);
 			}
 
 			return ctx.json(updatedMember);

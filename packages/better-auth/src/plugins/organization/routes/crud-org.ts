@@ -182,10 +182,13 @@ export const createOrganization = <O extends OrganizationOptions>(
 
 			if (options?.organizationHooks?.beforeCreateOrganization) {
 				const response =
-					await options?.organizationHooks.beforeCreateOrganization({
-						organization: orgData,
-						user,
-					});
+					await options?.organizationHooks.beforeCreateOrganization(
+						{
+							organization: orgData,
+							user,
+						},
+						ctx,
+					);
 				if (response && typeof response === "object" && "data" in response) {
 					orgData = {
 						...ctx.body,
@@ -211,15 +214,18 @@ export const createOrganization = <O extends OrganizationOptions>(
 				role: ctx.context.orgOptions.creatorRole || "owner",
 			};
 			if (options?.organizationHooks?.beforeAddMember) {
-				const response = await options?.organizationHooks.beforeAddMember({
-					member: {
-						userId: user.id,
-						organizationId: organization.id,
-						role: ctx.context.orgOptions.creatorRole || "owner",
+				const response = await options?.organizationHooks.beforeAddMember(
+					{
+						member: {
+							userId: user.id,
+							organizationId: organization.id,
+							role: ctx.context.orgOptions.creatorRole || "owner",
+						},
+						user,
+						organization,
 					},
-					user,
-					organization,
-				});
+					ctx,
+				);
 				if (response && typeof response === "object" && "data" in response) {
 					data = {
 						...data,
@@ -229,11 +235,14 @@ export const createOrganization = <O extends OrganizationOptions>(
 			}
 			member = await adapter.createMember(data);
 			if (options?.organizationHooks?.afterAddMember) {
-				await options?.organizationHooks.afterAddMember({
-					member,
-					user,
-					organization,
-				});
+				await options?.organizationHooks.afterAddMember(
+					{
+						member,
+						user,
+						organization,
+					},
+					ctx,
+				);
 			}
 			if (
 				options?.teams?.enabled &&
@@ -245,14 +254,17 @@ export const createOrganization = <O extends OrganizationOptions>(
 					createdAt: new Date(),
 				};
 				if (options?.organizationHooks?.beforeCreateTeam) {
-					const response = await options?.organizationHooks.beforeCreateTeam({
-						team: {
-							organizationId: organization.id,
-							name: `${organization.name}`,
+					const response = await options?.organizationHooks.beforeCreateTeam(
+						{
+							team: {
+								organizationId: organization.id,
+								name: `${organization.name}`,
+							},
+							user,
+							organization,
 						},
-						user,
-						organization,
-					});
+						ctx,
+					);
 					if (response && typeof response === "object" && "data" in response) {
 						teamData = {
 							...teamData,
@@ -272,11 +284,14 @@ export const createOrganization = <O extends OrganizationOptions>(
 				});
 
 				if (options?.organizationHooks?.afterCreateTeam) {
-					await options?.organizationHooks.afterCreateTeam({
-						team: defaultTeam,
-						user,
-						organization,
-					});
+					await options?.organizationHooks.afterCreateTeam(
+						{
+							team: defaultTeam,
+							user,
+							organization,
+						},
+						ctx,
+					);
 				}
 			}
 
@@ -292,11 +307,14 @@ export const createOrganization = <O extends OrganizationOptions>(
 			}
 
 			if (options?.organizationHooks?.afterCreateOrganization) {
-				await options?.organizationHooks.afterCreateOrganization({
-					organization,
-					user,
-					member,
-				});
+				await options?.organizationHooks.afterCreateOrganization(
+					{
+						organization,
+						user,
+						member,
+					},
+					ctx,
+				);
 			}
 
 			if (ctx.context.session && !ctx.body.keepCurrentActiveOrganization) {
@@ -507,11 +525,14 @@ export const updateOrganization = <O extends OrganizationOptions>(
 			}
 			if (options?.organizationHooks?.beforeUpdateOrganization) {
 				const response =
-					await options.organizationHooks.beforeUpdateOrganization({
-						organization: ctx.body.data,
-						user: session.user,
-						member,
-					});
+					await options.organizationHooks.beforeUpdateOrganization(
+						{
+							organization: ctx.body.data,
+							user: session.user,
+							member,
+						},
+						ctx,
+					);
 				if (response && typeof response === "object" && "data" in response) {
 					ctx.body.data = {
 						...ctx.body.data,
@@ -524,11 +545,14 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				ctx.body.data,
 			);
 			if (options?.organizationHooks?.afterUpdateOrganization) {
-				await options.organizationHooks.afterUpdateOrganization({
-					organization: updatedOrg,
-					user: session.user,
-					member,
-				});
+				await options.organizationHooks.afterUpdateOrganization(
+					{
+						organization: updatedOrg,
+						user: session.user,
+						member,
+					},
+					ctx,
+				);
 			}
 			return ctx.json(updatedOrg);
 		},
@@ -638,17 +662,23 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				throw new APIError("BAD_REQUEST");
 			}
 			if (options?.organizationHooks?.beforeDeleteOrganization) {
-				await options.organizationHooks.beforeDeleteOrganization({
-					organization: org,
-					user: session.user,
-				});
+				await options.organizationHooks.beforeDeleteOrganization(
+					{
+						organization: org,
+						user: session.user,
+					},
+					ctx,
+				);
 			}
 			await adapter.deleteOrganization(organizationId);
 			if (options?.organizationHooks?.afterDeleteOrganization) {
-				await options.organizationHooks.afterDeleteOrganization({
-					organization: org,
-					user: session.user,
-				});
+				await options.organizationHooks.afterDeleteOrganization(
+					{
+						organization: org,
+						user: session.user,
+					},
+					ctx,
+				);
 			}
 			return ctx.json(org);
 		},

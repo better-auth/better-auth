@@ -177,15 +177,18 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 
 			// Run beforeCreateTeam hook
 			if (options?.organizationHooks?.beforeCreateTeam) {
-				const response = await options?.organizationHooks.beforeCreateTeam({
-					team: {
-						name,
-						organizationId,
-						...additionalFields,
+				const response = await options?.organizationHooks.beforeCreateTeam(
+					{
+						team: {
+							name,
+							organizationId,
+							...additionalFields,
+						},
+						user: session?.user,
+						organization,
 					},
-					user: session?.user,
-					organization,
-				});
+					ctx,
+				);
 				if (response && typeof response === "object" && "data" in response) {
 					teamData = {
 						...teamData,
@@ -198,11 +201,14 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 
 			// Run afterCreateTeam hook
 			if (options?.organizationHooks?.afterCreateTeam) {
-				await options?.organizationHooks.afterCreateTeam({
-					team: createdTeam,
-					user: session?.user,
-					organization,
-				});
+				await options?.organizationHooks.afterCreateTeam(
+					{
+						team: createdTeam,
+						user: session?.user,
+						organization,
+					},
+					ctx,
+				);
 			}
 
 			return ctx.json(createdTeam);
@@ -332,22 +338,28 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 
 			// Run beforeDeleteTeam hook
 			if (options?.organizationHooks?.beforeDeleteTeam) {
-				await options?.organizationHooks.beforeDeleteTeam({
-					team,
-					user: session?.user,
-					organization,
-				});
+				await options?.organizationHooks.beforeDeleteTeam(
+					{
+						team,
+						user: session?.user,
+						organization,
+					},
+					ctx,
+				);
 			}
 
 			await adapter.deleteTeam(team.id);
 
 			// Run afterDeleteTeam hook
 			if (options?.organizationHooks?.afterDeleteTeam) {
-				await options?.organizationHooks.afterDeleteTeam({
-					team,
-					user: session?.user,
-					organization,
-				});
+				await options?.organizationHooks.afterDeleteTeam(
+					{
+						team,
+						user: session?.user,
+						organization,
+					},
+					ctx,
+				);
 			}
 
 			return ctx.json({ message: "Team removed successfully." });
@@ -509,12 +521,15 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 
 			// Run beforeUpdateTeam hook
 			if (options?.organizationHooks?.beforeUpdateTeam) {
-				const response = await options?.organizationHooks.beforeUpdateTeam({
-					team,
-					updates,
-					user: session.user,
-					organization,
-				});
+				const response = await options?.organizationHooks.beforeUpdateTeam(
+					{
+						team,
+						updates,
+						user: session.user,
+						organization,
+					},
+					ctx,
+				);
 				if (response && typeof response === "object" && "data" in response) {
 					// Allow the hook to modify the updates
 					const modifiedUpdates = response.data;
@@ -525,11 +540,14 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 
 					// Run afterUpdateTeam hook
 					if (options?.organizationHooks?.afterUpdateTeam) {
-						await options?.organizationHooks.afterUpdateTeam({
-							team: updatedTeam,
-							user: session.user,
-							organization,
-						});
+						await options?.organizationHooks.afterUpdateTeam(
+							{
+								team: updatedTeam,
+								user: session.user,
+								organization,
+							},
+							ctx,
+						);
 					}
 
 					return ctx.json(updatedTeam);
@@ -540,11 +558,14 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 
 			// Run afterUpdateTeam hook
 			if (options?.organizationHooks?.afterUpdateTeam) {
-				await options?.organizationHooks.afterUpdateTeam({
-					team: updatedTeam,
-					user: session.user,
-					organization,
-				});
+				await options?.organizationHooks.afterUpdateTeam(
+					{
+						team: updatedTeam,
+						user: session.user,
+						organization,
+					},
+					ctx,
+				);
 			}
 
 			return ctx.json(updatedTeam);
@@ -1039,15 +1060,18 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 
 			// Run beforeAddTeamMember hook
 			if (options?.organizationHooks?.beforeAddTeamMember) {
-				const response = await options?.organizationHooks.beforeAddTeamMember({
-					teamMember: {
-						teamId: ctx.body.teamId,
-						userId: ctx.body.userId,
+				const response = await options?.organizationHooks.beforeAddTeamMember(
+					{
+						teamMember: {
+							teamId: ctx.body.teamId,
+							userId: ctx.body.userId,
+						},
+						team,
+						user: userBeingAdded,
+						organization,
 					},
-					team,
-					user: userBeingAdded,
-					organization,
-				});
+					ctx,
+				);
 				if (response && typeof response === "object" && "data" in response) {
 					// Allow the hook to modify the data
 				}
@@ -1060,12 +1084,15 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 
 			// Run afterAddTeamMember hook
 			if (options?.organizationHooks?.afterAddTeamMember) {
-				await options?.organizationHooks.afterAddTeamMember({
-					teamMember,
-					team,
-					user: userBeingAdded,
-					organization,
-				});
+				await options?.organizationHooks.afterAddTeamMember(
+					{
+						teamMember,
+						team,
+						user: userBeingAdded,
+						organization,
+					},
+					ctx,
+				);
 			}
 
 			return ctx.json(teamMember);
@@ -1212,12 +1239,15 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 
 			// Run beforeRemoveTeamMember hook
 			if (options?.organizationHooks?.beforeRemoveTeamMember) {
-				await options?.organizationHooks.beforeRemoveTeamMember({
-					teamMember,
-					team,
-					user: userBeingRemoved,
-					organization,
-				});
+				await options?.organizationHooks.beforeRemoveTeamMember(
+					{
+						teamMember,
+						team,
+						user: userBeingRemoved,
+						organization,
+					},
+					ctx,
+				);
 			}
 
 			await adapter.removeTeamMember({
@@ -1227,12 +1257,15 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 
 			// Run afterRemoveTeamMember hook
 			if (options?.organizationHooks?.afterRemoveTeamMember) {
-				await options?.organizationHooks.afterRemoveTeamMember({
-					teamMember,
-					team,
-					user: userBeingRemoved,
-					organization,
-				});
+				await options?.organizationHooks.afterRemoveTeamMember(
+					{
+						teamMember,
+						team,
+						user: userBeingRemoved,
+						organization,
+					},
+					ctx,
+				);
 			}
 
 			return ctx.json({ message: "Team member removed successfully." });

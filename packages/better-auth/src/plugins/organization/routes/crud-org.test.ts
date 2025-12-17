@@ -261,8 +261,8 @@ describe("organization hooks", async () => {
 				plugins: [
 					organization({
 						organizationHooks: {
-							beforeCreateOrganization: async (data) => {
-								beforeCreateOrganization();
+							beforeCreateOrganization: async (data, ctx) => {
+								beforeCreateOrganization(data, ctx);
 								return {
 									data: {
 										...data.organization,
@@ -291,7 +291,13 @@ describe("organization hooks", async () => {
 			},
 			headers,
 		});
-		expect(beforeCreateOrganization).toHaveBeenCalled();
+		expect(beforeCreateOrganization).toHaveBeenCalledWith(
+			expect.objectContaining({
+				user: expect.any(Object),
+				organization: expect.any(Object),
+			}),
+			expect.any(Object),
+		);
 		expect(result?.name).toBe("changed-name");
 		expect(result?.metadata).toEqual({
 			hookCalled: true,
@@ -304,8 +310,8 @@ describe("organization hooks", async () => {
 			plugins: [
 				organization({
 					organizationHooks: {
-						afterCreateOrganization: async (data) => {
-							afterCreateOrganization();
+						afterCreateOrganization: async (data, ctx) => {
+							afterCreateOrganization(data, ctx);
 						},
 					},
 				}),
@@ -319,7 +325,14 @@ describe("organization hooks", async () => {
 			},
 			headers,
 		});
-		expect(afterCreateOrganization).toHaveBeenCalled();
+		expect(afterCreateOrganization).toHaveBeenCalledWith(
+			expect.objectContaining({
+				user: expect.any(Object),
+				member: expect.any(Object),
+				organization: expect.any(Object),
+			}),
+			expect.any(Object),
+		);
 	});
 
 	it("should apply beforeAddMember hook", async () => {
@@ -328,8 +341,8 @@ describe("organization hooks", async () => {
 			plugins: [
 				organization({
 					organizationHooks: {
-						beforeAddMember: async (data) => {
-							beforeAddMember();
+						beforeAddMember: async (data, ctx) => {
+							beforeAddMember(data, ctx);
 							return {
 								data: {
 									role: "changed-role",
@@ -348,7 +361,14 @@ describe("organization hooks", async () => {
 			},
 			headers,
 		});
-		expect(beforeAddMember).toHaveBeenCalled();
+		expect(beforeAddMember).toHaveBeenCalledWith(
+			expect.objectContaining({
+				user: expect.any(Object),
+				member: expect.any(Object),
+				organization: expect.any(Object),
+			}),
+			expect.any(Object),
+		);
 		const member = await auth.api.getActiveMember({
 			headers,
 		});
@@ -361,8 +381,8 @@ describe("organization hooks", async () => {
 			plugins: [
 				organization({
 					organizationHooks: {
-						afterAddMember: async (data) => {
-							afterAddMember();
+						afterAddMember: async (data, ctx) => {
+							afterAddMember(data, ctx);
 						},
 					},
 				}),
@@ -376,7 +396,14 @@ describe("organization hooks", async () => {
 			},
 			headers,
 		});
-		expect(afterAddMember).toHaveBeenCalled();
+		expect(afterAddMember).toHaveBeenCalledWith(
+			expect.objectContaining({
+				user: expect.any(Object),
+				member: expect.any(Object),
+				organization: expect.any(Object),
+			}),
+			expect.any(Object),
+		);
 	});
 
 	it("should apply beforeCreateTeam hook", async () => {
@@ -388,8 +415,8 @@ describe("organization hooks", async () => {
 						enabled: true,
 					},
 					organizationHooks: {
-						beforeCreateTeam: async (data) => {
-							beforeCreateTeam();
+						beforeCreateTeam: async (data, ctx) => {
+							beforeCreateTeam(data, ctx);
 							return {
 								data: {
 									name: "changed-name",
@@ -408,7 +435,14 @@ describe("organization hooks", async () => {
 			},
 			headers,
 		});
-		expect(beforeCreateTeam).toHaveBeenCalled();
+		expect(beforeCreateTeam).toHaveBeenCalledWith(
+			expect.objectContaining({
+				user: expect.any(Object),
+				team: expect.any(Object),
+				organization: expect.any(Object),
+			}),
+			expect.any(Object),
+		);
 		const team = await auth.api.listOrganizationTeams({
 			headers,
 			query: {
@@ -427,8 +461,8 @@ describe("organization hooks", async () => {
 						enabled: true,
 					},
 					organizationHooks: {
-						afterCreateTeam: async (data) => {
-							afterCreateTeam();
+						afterCreateTeam: async (data, ctx) => {
+							afterCreateTeam(data, ctx);
 						},
 					},
 				}),
@@ -442,6 +476,13 @@ describe("organization hooks", async () => {
 			},
 			headers,
 		});
-		expect(afterCreateTeam).toHaveBeenCalled();
+		expect(afterCreateTeam).toHaveBeenCalledWith(
+			expect.objectContaining({
+				user: expect.any(Object),
+				team: expect.any(Object),
+				organization: expect.any(Object),
+			}),
+			expect.any(Object),
+		);
 	});
 });
