@@ -28,6 +28,16 @@ import {
 import { sso, validateSAMLTimestamp } from ".";
 import { ssoClient } from "./client";
 import { DEFAULT_CLOCK_SKEW_MS } from "./constants";
+import type { SSOProvider, SAMLConfig, OIDCConfig } from "./types";
+
+type SSOProviderResponse = SSOProvider<{}> & {
+	samlConfig?: SAMLConfig;
+	oidcConfig?: OIDCConfig;
+};
+
+function asSSOProvider<T>(response: T): SSOProviderResponse {
+	return response as SSOProviderResponse;
+}
 
 const spMetadata = `
     <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:3001/api/sso/saml2/sp/metadata">
@@ -755,7 +765,7 @@ describe("SAML SSO", async () => {
 
 		const spMetadataRes = await auth.api.spMetadata({
 			query: {
-				providerId: (provider as unknown as { providerId: string }).providerId,
+				providerId: asSSOProvider(provider).providerId,
 			},
 		});
 		const spMetadataResResValue = await spMetadataRes.text();
@@ -806,7 +816,7 @@ describe("SAML SSO", async () => {
 
 		const spMetadataRes = await auth.api.spMetadata({
 			query: {
-				providerId: (provider as unknown as { providerId: string }).providerId,
+				providerId: asSSOProvider(provider).providerId,
 			},
 		});
 		const spMetadataResResValue = await spMetadataRes.text();
@@ -1869,7 +1879,7 @@ describe("SSO Provider Config Parsing", () => {
 			{ onSuccess: setCookieToHeader(headers) },
 		);
 
-		const provider = (await auth.api.registerSSOProvider({
+		const provider = asSSOProvider(await auth.api.registerSSOProvider({
 			body: {
 				providerId: "saml-config-provider",
 				issuer: "http://localhost:8081",
@@ -1884,7 +1894,7 @@ describe("SSO Provider Config Parsing", () => {
 				},
 			},
 			headers,
-		})) as unknown as { samlConfig: { entryPoint: string; cert: string; spMetadata?: { entityID: string } } };
+		}));
 
 		expect(provider.samlConfig).toBeDefined();
 		expect(typeof provider.samlConfig).toBe("object");
@@ -1943,7 +1953,7 @@ describe("SSO Provider Config Parsing", () => {
 				{ onSuccess: setCookieToHeader(headers) },
 			);
 
-			const provider = (await auth.api.registerSSOProvider({
+			const provider = asSSOProvider(await auth.api.registerSSOProvider({
 				body: {
 					providerId: "oidc-config-provider",
 					issuer: oidcServer.issuer.url!,
@@ -1960,7 +1970,7 @@ describe("SSO Provider Config Parsing", () => {
 					},
 				},
 				headers,
-			})) as unknown as { oidcConfig: { clientId: string; clientSecret: string; mapping?: { id: string } } };
+			}));
 
 			expect(provider.oidcConfig).toBeDefined();
 			expect(typeof provider.oidcConfig).toBe("object");
