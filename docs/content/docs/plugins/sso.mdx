@@ -922,10 +922,6 @@ const auth = betterAuth({
 | `allowIdpInitiated` | `boolean` | `true` | Allow IdP-initiated SSO (responses without InResponseTo). Set to `false` for stricter security. Only applies when validation is enabled. |
 | `requestTTL` | `number` | `300000` (5 min) | Time-to-live for AuthnRequest records in milliseconds. Requests older than this will be rejected. |
 
-#### Multi-Instance Deployments
-
-InResponseTo validation uses the verification table, which works correctly in multi-instance deployments (load-balanced servers, serverless, etc.) without additional configuration.
-
 #### Error Handling
 
 When InResponseTo validation fails, users are redirected with an error query parameter:
