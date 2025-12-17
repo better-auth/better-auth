@@ -1,6 +1,6 @@
-import { APIError } from "@better-auth/core/error";
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { isAPIError } from "../../utils/is-api-error";
 import { oneTimeToken } from ".";
 import { oneTimeTokenClient } from "./client";
 import { defaultKeyHasher } from "./utils";
@@ -35,7 +35,7 @@ describe("One-time token", async () => {
 				},
 			})
 			.catch((e) => e);
-		expect(shouldFail).toBeInstanceOf(APIError);
+		expect(isAPIError(shouldFail)).toBeTruthy();
 	});
 
 	it("should expire", async () => {
@@ -52,7 +52,7 @@ describe("One-time token", async () => {
 				},
 			})
 			.catch((e) => e);
-		expect(shouldFail).toBeInstanceOf(APIError);
+		expect(isAPIError(shouldFail)).toBeTruthy();
 		vi.useRealTimers();
 	});
 
@@ -105,7 +105,7 @@ describe("One-time token", async () => {
 			})
 			.catch((e) => e);
 
-		expect(shouldFail).toBeInstanceOf(APIError);
+		expect(isAPIError(shouldFail)).toBeTruthy();
 		expect(shouldFail.body.message).toBe("Session expired");
 
 		vi.useRealTimers();

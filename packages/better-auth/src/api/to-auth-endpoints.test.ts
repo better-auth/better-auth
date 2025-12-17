@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import * as z from "zod";
 import { init } from "../context/init";
 import { getTestInstance } from "../test-utils/test-instance";
+import { isAPIError } from "../utils/is-api-error";
 import { toAuthEndpoints } from "./to-auth-endpoints";
 
 describe("before hook", async () => {
@@ -337,7 +338,7 @@ describe("after hook", async () => {
 					},
 				})
 				.catch((e) => {
-					expect(e).toBeInstanceOf(APIError);
+					expect(isAPIError(e)).toBeTruthy();
 					expect(e?.message).toBe("from after hook");
 				});
 		});
@@ -494,7 +495,7 @@ describe("debug mode stack trace", () => {
 		try {
 			await api.testEndpoint({});
 		} catch (error: any) {
-			expect(error).toBeInstanceOf(APIError);
+			expect(isAPIError(error)).toBeTruthy();
 			expect(error.stack).toBeDefined();
 			expect(error.stack).toMatch(/ErrorWithStack:|Error:|APIError:/);
 			expect(error.stack).toMatch(/at\s+/);
@@ -523,7 +524,7 @@ describe("debug mode stack trace", () => {
 		try {
 			await api.testEndpoint({});
 		} catch (error: any) {
-			expect(error).toBeInstanceOf(APIError);
+			expect(isAPIError(error)).toBeTruthy();
 			// Stack should exist but may be minimal when not in debug mode
 			expect(error.stack).toBeDefined();
 		}
@@ -553,7 +554,7 @@ describe("debug mode stack trace", () => {
 		try {
 			await api.testEndpoint({});
 		} catch (error: any) {
-			expect(error).toBeInstanceOf(APIError);
+			expect(isAPIError(error)).toBeTruthy();
 			expect(error.stack).toBeDefined();
 			// Check for stack trace format
 			expect(error.stack).toMatch(/at\s+.*\(.*\)/); // Match "at functionName (file:line:col)"
@@ -588,7 +589,7 @@ describe("debug mode stack trace", () => {
 		try {
 			await api.testEndpoint({});
 		} catch (error: any) {
-			expect(error).toBeInstanceOf(APIError);
+			expect(isAPIError(error)).toBeTruthy();
 			expect(error.stack).toBeDefined();
 			expect(error.stack).toMatch(/ErrorWithStack:|Error:|APIError:/);
 			expect(error.stack).toMatch(/at\s+/);
@@ -625,7 +626,7 @@ describe("debug mode stack trace", () => {
 		try {
 			await api.testEndpoint({ asResponse: false });
 		} catch (error: any) {
-			expect(error).toBeInstanceOf(APIError);
+			expect(isAPIError(error)).toBeTruthy();
 			expect(error.stack).toBeDefined();
 			expect(error.stack).toMatch(/ErrorWithStack:|Error:|APIError:/);
 		}

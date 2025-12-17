@@ -1,4 +1,4 @@
-import { APIError } from "@better-auth/core/error";
+import type { APIError } from "@better-auth/core/error";
 import type { Prettify } from "better-call";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { memoryAdapter } from "../../adapters/memory-adapter";
@@ -12,6 +12,7 @@ import { nextCookies } from "../../integrations/next-js";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { User } from "../../types";
 import type { PrettifyDeep } from "../../types/helper";
+import { isAPIError } from "../../utils/is-api-error";
 import { createAccessControl } from "../access";
 import { admin } from "../admin";
 import { adminAc, defaultStatements, memberAc, ownerAc } from "./access";
@@ -1008,7 +1009,7 @@ describe("organization", async (it) => {
 			})
 			.catch((e: APIError) => {
 				expect(e).not.toBeNull();
-				expect(e).toBeInstanceOf(APIError);
+				expect(isAPIError(e)).toBeTruthy();
 				expect(e.message).toBe(
 					ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
 				);

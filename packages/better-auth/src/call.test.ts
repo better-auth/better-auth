@@ -377,7 +377,7 @@ describe("call", async () => {
 				},
 			})
 			.catch((e) => {
-				expect(e).toBeInstanceOf(APIError);
+				expect(isAPIError(e)).toBeTruthy();
 
 				expect(e.status).toBe("FOUND");
 				expect(e.headers.get("Location")).toBe("/test");
@@ -392,7 +392,7 @@ describe("call", async () => {
 				},
 			})
 			.catch((e) => {
-				expect(e).toBeInstanceOf(APIError);
+				expect(isAPIError(e)).toBeTruthy();
 				expect(e.status).toBe("FOUND");
 				expect(e.headers.get("Location")).toBe("/test");
 				expect(e.headers.get("key")).toBe("value");
@@ -407,7 +407,7 @@ describe("call", async () => {
 				},
 			})
 			.catch((e) => {
-				expect(e).toBeInstanceOf(APIError);
+				expect(isAPIError(e)).toBeTruthy();
 				expect(e.status).toBe("BAD_REQUEST");
 				expect(e.message).toContain("from after hook");
 			});
@@ -421,7 +421,7 @@ describe("call", async () => {
 				},
 			})
 			.catch((e) => {
-				expect(e).toBeInstanceOf(APIError);
+				expect(isAPIError(e)).toBeTruthy();
 				expect(e.status).toBe("BAD_REQUEST");
 				expect(e.message).toContain("from chained hook 2");
 			});
