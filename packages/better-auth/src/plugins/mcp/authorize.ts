@@ -217,7 +217,9 @@ export async function authorizeMCPOAuth(
 	if (query.prompt !== "consent") {
 		const redirectURIWithCode = new URL(redirectURI);
 		redirectURIWithCode.searchParams.set("code", code);
-		redirectURIWithCode.searchParams.set("state", ctx.query.state);
+		if(ctx.query.state){
+			redirectURIWithCode.searchParams.set("state", ctx.query.state);
+		}
 		throw ctx.redirect(redirectURIWithCode.toString());
 	}
 
@@ -243,6 +245,8 @@ export async function authorizeMCPOAuth(
 	// No consent page configured - fall back to direct redirect with code
 	const redirectURIWithCode = new URL(redirectURI);
 	redirectURIWithCode.searchParams.set("code", code);
-	redirectURIWithCode.searchParams.set("state", ctx.query.state);
+	if(ctx.query.state){
+		redirectURIWithCode.searchParams.set("state", ctx.query.state);
+	}
 	throw ctx.redirect(redirectURIWithCode.toString());
 }
