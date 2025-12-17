@@ -2202,7 +2202,10 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 				issuer: "http://localhost:8081",
 				domain: "http://localhost:8081",
 				samlConfig: {
-					entryPoint: sharedMockIdP.metadataUrl.replace("/idp/metadata", "/idp/post"),
+					entryPoint: sharedMockIdP.metadataUrl.replace(
+						"/idp/metadata",
+						"/idp/post",
+					),
 					cert: certificate,
 					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
@@ -2319,7 +2322,10 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 				issuer: "http://localhost:8081",
 				domain: "http://localhost:8081",
 				samlConfig: {
-					entryPoint: sharedMockIdP.metadataUrl.replace("/idp/metadata", "/idp/post"),
+					entryPoint: sharedMockIdP.metadataUrl.replace(
+						"/idp/metadata",
+						"/idp/post",
+					),
 					cert: certificate,
 					callbackUrl: callbackRouteUrl,
 					wantAssertionsSigned: false,
@@ -2385,7 +2391,10 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 				issuer: "http://localhost:8081",
 				domain: "http://localhost:8081",
 				samlConfig: {
-					entryPoint: sharedMockIdP.metadataUrl.replace("/idp/metadata", "/idp/post"),
+					entryPoint: sharedMockIdP.metadataUrl.replace(
+						"/idp/metadata",
+						"/idp/post",
+					),
 					cert: certificate,
 					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
@@ -2467,7 +2476,10 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 				issuer: "http://localhost:8081",
 				domain: "http://localhost:8081",
 				samlConfig: {
-					entryPoint: sharedMockIdP.metadataUrl.replace("/idp/metadata", "/idp/post"),
+					entryPoint: sharedMockIdP.metadataUrl.replace(
+						"/idp/metadata",
+						"/idp/post",
+					),
 					cert: certificate,
 					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
@@ -2549,7 +2561,10 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 				issuer: "http://localhost:8081",
 				domain: "http://localhost:8081",
 				samlConfig: {
-					entryPoint: sharedMockIdP.metadataUrl.replace("/idp/metadata", "/idp/post"),
+					entryPoint: sharedMockIdP.metadataUrl.replace(
+						"/idp/metadata",
+						"/idp/post",
+					),
 					cert: certificate,
 					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
@@ -2620,7 +2635,10 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 				issuer: "http://localhost:8081",
 				domain: "http://localhost:8081",
 				samlConfig: {
-					entryPoint: sharedMockIdP.metadataUrl.replace("/idp/metadata", "/idp/post"),
+					entryPoint: sharedMockIdP.metadataUrl.replace(
+						"/idp/metadata",
+						"/idp/post",
+					),
 					cert: certificate,
 					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
@@ -2703,7 +2721,10 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 				issuer: "http://localhost:8081",
 				domain: "http://localhost:8081",
 				samlConfig: {
-					entryPoint: sharedMockIdP.metadataUrl.replace("/idp/metadata", "/idp/post"),
+					entryPoint: sharedMockIdP.metadataUrl.replace(
+						"/idp/metadata",
+						"/idp/post",
+					),
 					cert: certificate,
 					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
@@ -2769,7 +2790,10 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 				issuer: "http://localhost:8081",
 				domain: "http://localhost:8081",
 				samlConfig: {
-					entryPoint: sharedMockIdP.metadataUrl.replace("/idp/metadata", "/idp/post"),
+					entryPoint: sharedMockIdP.metadataUrl.replace(
+						"/idp/metadata",
+						"/idp/post",
+					),
 					cert: certificate,
 					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
