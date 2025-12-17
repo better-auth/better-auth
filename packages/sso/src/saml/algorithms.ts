@@ -1,5 +1,5 @@
 import { APIError } from "better-auth/api";
-import { XMLParser } from "fast-xml-parser";
+import { findNode, xmlParser } from "./parser";
 
 export const SignatureAlgorithm = {
 	RSA_SHA1: "http://www.w3.org/2000/09/xmldsig#rsa-sha1",
@@ -63,36 +63,6 @@ export interface AlgorithmValidationOptions {
 	allowedDigestAlgorithms?: string[];
 	allowedKeyEncryptionAlgorithms?: string[];
 	allowedDataEncryptionAlgorithms?: string[];
-}
-
-const xmlParser = new XMLParser({
-	ignoreAttributes: false,
-	attributeNamePrefix: "@_",
-	removeNSPrefix: true,
-});
-
-function findNode(obj: unknown, nodeName: string): unknown {
-	if (!obj || typeof obj !== "object") return null;
-
-	const record = obj as Record<string, unknown>;
-
-	if (nodeName in record) {
-		return record[nodeName];
-	}
-
-	for (const value of Object.values(record)) {
-		if (Array.isArray(value)) {
-			for (const item of value) {
-				const found = findNode(item, nodeName);
-				if (found) return found;
-			}
-		} else if (typeof value === "object" && value !== null) {
-			const found = findNode(value, nodeName);
-			if (found) return found;
-		}
-	}
-
-	return null;
 }
 
 function extractEncryptionAlgorithms(xml: string): {

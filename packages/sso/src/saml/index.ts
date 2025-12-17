@@ -7,3 +7,9 @@ export {
 	SignatureAlgorithm,
 	validateSAMLAlgorithms,
 } from "./algorithms";
+
+export {
+	type AssertionCounts,
+	countAssertions,
+	validateSingleAssertion,
+} from "./assertions";
