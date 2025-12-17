@@ -29,6 +29,6 @@
     "drizzle-orm": "^0.30.0",
     "tsdown": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:vitest"
   }
 }

@@ -31,6 +31,6 @@
     "prisma": "^5.0.0",
     "tsdown": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:vitest"
   }
 }

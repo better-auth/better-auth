@@ -33,6 +33,6 @@
     "kysely": "^0.28.5",
     "tsdown": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:vitest"
   }
 }
