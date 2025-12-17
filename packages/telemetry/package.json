@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/telemetry",
-  "version": "1.4.7-beta.2",
+  "version": "1.4.7",
   "description": "Telemetry package for Better Auth",
   "type": "module",
   "repository": {
