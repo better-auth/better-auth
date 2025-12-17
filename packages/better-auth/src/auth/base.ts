@@ -44,14 +44,12 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 				}
 			}
 
-			ctx.trustedOrigins = [
-				...(options.trustedOrigins
-					? Array.isArray(options.trustedOrigins)
-						? options.trustedOrigins
-						: await options.trustedOrigins(request)
-					: []),
-				ctx.options.baseURL!,
-			];
+			if (typeof options.trustedOrigins === "function") {
+				ctx.trustedOrigins = [
+					...ctx.trustedOrigins,
+					...(await options.trustedOrigins(request)),
+				];
+			}
 			const { handler } = router(ctx, options);
 			return runWithAdapter(ctx.adapter, () => handler(request));
 		},
