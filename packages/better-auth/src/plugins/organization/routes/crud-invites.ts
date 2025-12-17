@@ -7,6 +7,7 @@ import { setSessionCookie } from "../../../cookies";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db";
 import { getDate } from "../../../utils/date";
+import { defaultRoles } from "../access/statement";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
@@ -223,6 +224,44 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			const creatorRole = ctx.context.orgOptions.creatorRole || "owner";
 
 			const roles = parseRoles(ctx.body.role);
+
+			const rolesArray = roles
+				.split(",")
+				.map((r) => r.trim())
+				.filter(Boolean);
+			const defaults = Object.keys(defaultRoles);
+			const customRoles = Object.keys(ctx.context.orgOptions.roles || {});
+			const validStaticRoles = new Set([...defaults, ...customRoles]);
+
+			const unknownRoles = rolesArray.filter(
+				(role) => !validStaticRoles.has(role),
+			);
+
+			if (unknownRoles.length > 0) {
+				if (ctx.context.orgOptions.dynamicAccessControl?.enabled) {
+					const foundRoles = await ctx.context.adapter.findMany({
+						model: "organizationRole",
+						where: [
+							{ field: "organizationId", value: organizationId },
+							{ field: "role", value: unknownRoles, operator: "in" },
+						],
+					});
+					const foundRoleNames = foundRoles.map((r: any) => r.role);
+					const stillInvalid = unknownRoles.filter(
+						(r) => !foundRoleNames.includes(r),
+					);
+
+					if (stillInvalid.length > 0) {
+						throw new APIError("BAD_REQUEST", {
+							message: `${ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND}: ${stillInvalid.join(", ")}`,
+						});
+					}
+				} else {
+					throw new APIError("BAD_REQUEST", {
+						message: `${ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND}: ${unknownRoles.join(", ")}`,
+					});
+				}
+			}
 
 			if (
 				member.role !== creatorRole &&
@@ -476,6 +515,7 @@ export const createBulkInvitation = <O extends OrganizationOptions>(
 			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 			body: z.object({
+				organizationId: z.string().optional(),
 				invitations: z.array(
 					z.object({
 						...baseInvitationSchema.shape,
