@@ -45,8 +45,8 @@
     },
     "./error": {
       "dev-source": "./src/error/index.ts",
-      "types": "./dist/error.d.mts",
-      "default": "./dist/error.mjs"
+      "types": "./dist/error/index.d.mts",
+      "default": "./dist/error/index.mjs"
     },
     "./utils": {
       "dev-source": "./src/utils/index.ts",
