@@ -13,7 +13,7 @@ function isErrorStackTraceLimitWritable() {
 /**
  * Hide internal stack frames from the error stack trace.
  */
-export function hideInternalStackFrames(stack: string): string {
+function hideInternalStackFrames(stack: string): string {
 	const lines = stack.split("\n    at ");
 	if (lines.length <= 1) {
 		return stack;
@@ -26,11 +26,7 @@ export function hideInternalStackFrames(stack: string): string {
 /**
  * Creates a custom error class that hides stack frames.
  */
-export function makeErrorForHideStackFrame<
-	B extends new (
-		...args: any[]
-	) => Error,
->(
+function makeErrorForHideStackFrame<B extends new (...args: any[]) => Error>(
 	Base: B,
 	clazz: any,
 ): {
@@ -77,7 +73,7 @@ export function makeErrorForHideStackFrame<
 	return HideStackFramesError as any;
 }
 
-export const statusCodes = {
+const statusCodes = {
 	OK: 200,
 	CREATED: 201,
 	ACCEPTED: 202,
