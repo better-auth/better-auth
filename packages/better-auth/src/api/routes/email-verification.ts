@@ -269,17 +269,14 @@ export const verifyEmail = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		function redirectOnError(error: string) {
+		function redirectOnError(error: { code: string; message: string }) {
 			if (ctx.query.callbackURL) {
 				if (ctx.query.callbackURL.includes("?")) {
-					throw ctx.redirect(`${ctx.query.callbackURL}&error=${error}`);
+					throw ctx.redirect(`${ctx.query.callbackURL}&error=${error.code}`);
 				}
-				throw ctx.redirect(`${ctx.query.callbackURL}?error=${error}`);
+				throw ctx.redirect(`${ctx.query.callbackURL}?error=${error.code}`);
 			}
-			throw APIError.from("UNAUTHORIZED", {
-				message: error,
-				code: "VERIFICATION_ERROR",
-			});
+			throw APIError.from("UNAUTHORIZED", error);
 		}
 		const { token } = ctx.query;
 		let jwt: JWTVerifyResult<JWTPayload>;
@@ -293,9 +290,9 @@ export const verifyEmail = createAuthEndpoint(
 			);
 		} catch (e) {
 			if (e instanceof JWTExpired) {
-				return redirectOnError("token_expired");
+				return redirectOnError(BASE_ERROR_CODES.TOKEN_EXPIRED);
 			}
-			return redirectOnError("invalid_token");
+			return redirectOnError(BASE_ERROR_CODES.INVALID_TOKEN);
 		}
 		const schema = z.object({
 			email: z.email(),
@@ -307,12 +304,12 @@ export const verifyEmail = createAuthEndpoint(
 			parsed.email,
 		);
 		if (!user) {
-			return redirectOnError("user_not_found");
+			return redirectOnError(BASE_ERROR_CODES.USER_NOT_FOUND);
 		}
 		if (parsed.updateTo) {
 			let session = await getSessionFromCtx(ctx);
 			if (session && session.user.email !== parsed.email) {
-				return redirectOnError("unauthorized");
+				return redirectOnError(BASE_ERROR_CODES.INVALID_USER);
 			}
 			if (parsed.requestType === "change-email-confirmation") {
 				const newToken = await createEmailVerificationToken(
