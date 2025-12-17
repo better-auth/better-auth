@@ -6,6 +6,19 @@ import type {
 import { logger } from "@better-auth/core/env";
 import { createAdapterFactory } from "../adapter-factory";
 
+class MemoryAdapterError extends Error {
+	constructor(
+		public code:
+			| "MODEL_NOT_FOUND"
+			| "INVALID_OPERATOR_VALUE"
+			| "JOIN_MODEL_NOT_FOUND",
+		message: string,
+	) {
+		super(message);
+		this.name = "MemoryAdapterError";
+	}
+}
+
 export interface MemoryDB {
 	[key: string]: any[];
 }
@@ -57,7 +70,11 @@ export const memoryAdapter = (
 						`[MemoryAdapter] Model ${model} not found in the DB`,
 						Object.keys(db),
 					);
-					throw new Error(`Model ${model} not found`);
+					throw new MemoryAdapterError(
+						"MODEL_NOT_FOUND",
+						`Model ${model} not found`,
+					);
+
 				}
 
 				const evalClause = (record: any, clause: CleanedWhere): boolean => {
@@ -65,13 +82,21 @@ export const memoryAdapter = (
 					switch (operator) {
 						case "in":
 							if (!Array.isArray(value)) {
-								throw new Error("Value must be an array");
+								throw new MemoryAdapterError(
+									"INVALID_OPERATOR_VALUE",
+									`Operator "${operator}" expects an array value`,
+								);
+
 							}
 							// @ts-expect-error
 							return value.includes(record[field]);
 						case "not_in":
 							if (!Array.isArray(value)) {
-								throw new Error("Value must be an array");
+								throw new MemoryAdapterError(
+									"INVALID_OPERATOR_VALUE",
+									`Operator "${operator}" expects an array value`,
+								);
+
 							}
 							// @ts-expect-error
 							return !value.includes(record[field]);
@@ -195,6 +220,12 @@ export const memoryAdapter = (
 					return table || [];
 				},
 				count: async ({ model, where }) => {
+					if (!db[model]) {
+						throw new MemoryAdapterError(
+							"MODEL_NOT_FOUND",
+							`Model ${model} not found`,
+						);
+					}
 					if (where) {
 						const filteredRecords = convertWhereClause(where, model);
 						return filteredRecords.length;
