@@ -898,6 +898,9 @@ importers:
       '@prisma/client':
         specifier: ^5.22.0
         version: 5.22.0(prisma@5.22.0)
+      '@types/pg':
+        specifier: ^8.15.5
+        version: 8.15.5
       better-auth:
         specifier: workspace:*
         version: link:../../packages/better-auth

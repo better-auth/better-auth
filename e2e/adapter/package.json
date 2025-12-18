@@ -13,6 +13,7 @@
     "@better-auth/mongo-adapter": "workspace:*",
     "@better-auth/prisma-adapter": "workspace:*",
     "@prisma/client": "^5.22.0",
+    "@types/pg": "^8.15.5",
     "better-auth": "workspace:*",
     "better-sqlite3": "^12.5.0",
     "drizzle-orm": "^0.45.1",
