@@ -14,7 +14,13 @@
     "@better-auth/prisma-adapter": "workspace:*",
     "@prisma/client": "^5.22.0",
     "better-auth": "workspace:*",
-    "prisma": "^5.22.0"
+    "better-sqlite3": "^12.5.0",
+    "drizzle-orm": "^0.45.1",
+    "mongodb": "^7.0.0",
+    "mysql2": "^3.14.4",
+    "pg": "^8.16.3",
+    "prisma": "^5.22.0",
+    "tarn": "^3.0.2"
   },
   "dependencies": {
     "deepmerge": "^4.3.1",

@@ -1,4 +1,5 @@
 import type { BetterAuthOptions } from "@better-auth/core";
+import type { User } from "@better-auth/core/db";
 import type {
 	AdapterFactoryConfig,
 	AdapterFactoryCustomizeAdapterCreator,
@@ -6,9 +7,8 @@ import type {
 	Where,
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import { betterAuth } from "better-auth";
 import { describe, expect, test } from "vitest";
-import { betterAuth } from "../../auth";
-import type { User } from "../../types";
 
 /*
 
