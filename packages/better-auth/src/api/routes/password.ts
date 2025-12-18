@@ -354,6 +354,27 @@ export const verifyPassword = createAuthEndpoint(
 		}),
 		metadata: {
 			scope: "server",
+			openapi: {
+				operationId: "verifyPassword",
+				description: "Verify the current user's password",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										status: {
+											type: "boolean",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		use: [sensitiveSessionMiddleware],
 	},
