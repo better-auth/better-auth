@@ -53,9 +53,9 @@ export const getMCPProviderMetadata = (
 				"issuer or baseURL is not set. If you're the app developer, please make sure to set the `baseURL` in your auth config.",
 		});
 	}
-	// Auto-detect if JWT Plugin is used: check both flag AND plugin existence
 	const jwtPlugin = getJwtPlugin(ctx);
 	const useJwtPlugin = options?.useJWTPlugin && !!jwtPlugin;
+
 	const defaultJwksUri = useJwtPlugin
 		? `${baseURL}/jwks`
 		: `${baseURL}/mcp/jwks`;
