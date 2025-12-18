@@ -296,7 +296,7 @@ describe("reset password flow attempts", async (it) => {
 	let otp = "";
 	let resetOtp = "";
 
-	const { client } = await getTestInstance(
+	const { client, db } = await getTestInstance(
 		{
 			plugins: [
 				phoneNumber({
@@ -371,6 +371,37 @@ describe("reset password flow attempts", async (it) => {
 
 		expect(resetPasswordRes.error).toBe(null);
 		expect(resetPasswordRes.data?.status).toBe(true);
+	});
+
+	it("should reset password and create credential account", async () => {
+  	const testUser2 = {
+      email: "test-user2@email.com",
+  	  phoneNumber: "+2519111213142",
+  	}
+	  await client.phoneNumber.sendOtp({
+			phoneNumber: testUser2.phoneNumber,
+		});
+		await db.create({
+  		model: "user",
+  		data: {
+  		  name: "Test User",
+  			email: testUser2.email,
+  		  phoneNumber: testUser2.phoneNumber,
+  		},
+		});
+		await client.phoneNumber.requestPasswordReset({
+  		phoneNumber: testUser2.phoneNumber,
+		});
+		await client.phoneNumber.resetPassword({
+  		phoneNumber: testUser2.phoneNumber,
+  		otp: resetOtp,
+  		newPassword: "password",
+		});
+		const res = await client.signIn.email({
+  		email: testUser2.email,
+  		password: "password",
+		});
+		expect(res.data?.token).toBeDefined();
 	});
 
 	it("shouldn't allow to re-use the same OTP code", async () => {

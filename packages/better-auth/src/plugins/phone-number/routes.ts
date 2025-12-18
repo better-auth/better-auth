@@ -5,7 +5,7 @@ import * as z from "zod";
 import { getSessionFromCtx } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto/random";
-import type { User } from "../../types";
+import type { Account, User } from "../../types";
 import { getDate } from "../../utils/date";
 import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
 import type { PhoneNumberOptions, UserWithPhoneNumber } from "./types";
@@ -804,7 +804,7 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					message: PHONE_NUMBER_ERROR_CODES.INVALID_OTP,
 				});
 			}
-			const user = await ctx.context.adapter.findOne<User>({
+			const userRes = await ctx.context.adapter.findOne<User & { account: Account[] | undefined }>({
 				model: "user",
 				where: [
 					{
@@ -812,12 +812,16 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 						value: ctx.body.phoneNumber,
 					},
 				],
+				join: {
+				  account: true,
+				}
 			});
-			if (!user) {
+			if (!userRes) {
 				throw new APIError("BAD_REQUEST", {
 					message: PHONE_NUMBER_ERROR_CODES.UNEXPECTED_ERROR,
 				});
 			}
+			const { account: accounts = [], ...user } = userRes;
 			const minLength = ctx.context.password.config.minPasswordLength;
 			const maxLength = ctx.context.password.config.maxPasswordLength;
 			if (ctx.body.newPassword.length < minLength) {
@@ -833,7 +837,17 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			const hashedPassword = await ctx.context.password.hash(
 				ctx.body.newPassword,
 			);
-			await ctx.context.internalAdapter.updatePassword(user.id, hashedPassword);
+			const account = accounts.find((account) => account.providerId === "credential");
+			if (!account) {
+			  await ctx.context.internalAdapter.createAccount({
+					  userId: user.id,
+						providerId: "credential",
+						accountId: user.id,
+						password: hashedPassword,
+					});
+			} else {
+  			await ctx.context.internalAdapter.updatePassword(user.id, hashedPassword);
+			}
 			await ctx.context.internalAdapter.deleteVerificationValue(
 				verification.id,
 			);
