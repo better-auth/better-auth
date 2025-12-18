@@ -23,6 +23,10 @@ describe("internal adapter test", async () => {
 	let id = 1;
 	const hookUserCreateBefore = vi.fn();
 	const hookUserCreateAfter = vi.fn();
+	const hookVerificationCreateBefore = vi.fn();
+	const hookVerificationCreateAfter = vi.fn();
+	const hookVerificationDeleteBefore = vi.fn();
+	const hookVerificationDeleteAfter = vi.fn();
 	const pluginHookUserCreateBefore = vi.fn();
 	const pluginHookUserCreateAfter = vi.fn();
 	const opts = {
@@ -65,6 +69,28 @@ describe("internal adapter test", async () => {
 					},
 					async after(user, context) {
 						hookUserCreateAfter(user, context);
+						return;
+					},
+				},
+			},
+			verification: {
+				create: {
+					async before(verification, context) {
+						hookVerificationCreateBefore(verification, context);
+						return { data: verification };
+					},
+					async after(verification, context) {
+						hookVerificationCreateAfter(verification, context);
+						return;
+					},
+				},
+				delete: {
+					async before(verification, context) {
+						hookVerificationDeleteBefore(verification, context);
+						return;
+					},
+					async after(verification, context) {
+						hookVerificationDeleteAfter(verification, context);
 						return;
 					},
 				},
@@ -183,10 +209,16 @@ describe("internal adapter test", async () => {
 			value: "test-id-1",
 			expiresAt: new Date(Date.now() - 1000),
 		});
+		expect(hookVerificationCreateBefore).toHaveBeenCalledOnce();
+		expect(hookVerificationCreateAfter).toHaveBeenCalledOnce();
+
 		const value = await internalAdapter.findVerificationValue("test-id-1");
 		expect(value).toMatchObject({
 			identifier: "test-id-1",
 		});
+		expect(hookVerificationDeleteBefore).toHaveBeenCalledOnce();
+		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
+
 		const value2 = await internalAdapter.findVerificationValue("test-id-1");
 		expect(value2).toBe(undefined);
 		await internalAdapter.createVerificationValue({
@@ -202,6 +234,32 @@ describe("internal adapter test", async () => {
 		expect(value4).toMatchObject({
 			identifier: "test-id-1",
 		});
+	});
+
+	it("should delete verification by value with hooks", async () => {
+		const verification = await internalAdapter.createVerificationValue({
+			identifier: `test-id-1`,
+			value: "test-id-1",
+			expiresAt: new Date(Date.now() + 1000),
+		});
+
+		await internalAdapter.deleteVerificationValue(verification.id);
+		expect(hookVerificationDeleteBefore).toHaveBeenCalledOnce();
+		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
+	});
+
+	it("should delete verification by identifier with hooks", async () => {
+		const verification = await internalAdapter.createVerificationValue({
+			identifier: `test-id-1`,
+			value: "test-id-1",
+			expiresAt: new Date(Date.now() + 1000),
+		});
+
+		await internalAdapter.deleteVerificationByIdentifier(
+			verification.identifier,
+		);
+		expect(hookVerificationDeleteBefore).toHaveBeenCalledOnce();
+		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
 	});
 
 	it("runs the after hook after adding user to db", async () => {
