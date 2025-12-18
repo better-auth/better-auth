@@ -436,6 +436,7 @@ describe("mcp", async () => {
 				jwks_uri: `${jwtTestBaseURL}/api/auth/jwks`, // ← Should be /jwks, NOT /mcp/jwks
 				registration_endpoint: `${jwtTestBaseURL}/api/auth/mcp/register`,
 			});
+
 		} finally {
 			// Clean up
 			await jwtTestServer.close();
