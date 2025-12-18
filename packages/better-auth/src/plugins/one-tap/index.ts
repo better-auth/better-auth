@@ -188,4 +188,5 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 				},
 			),
 		},
+		options,
 	}) satisfies BetterAuthPlugin;

@@ -123,5 +123,6 @@ export const bearer = (options?: BearerOptions | undefined) => {
 				},
 			],
 		},
+		options,
 	} satisfies BetterAuthPlugin;
 };
