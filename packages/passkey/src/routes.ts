@@ -506,7 +506,9 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 					model: "passkey",
 					data: newPasskey,
 				});
-				await ctx.context.internalAdapter.deleteVerificationValue(challengeId);
+        await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+          challengeId,
+        );
 				return ctx.json(newPasskeyRes, {
 					status: 200,
 				});
@@ -582,8 +584,9 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				});
 			}
 
-			const data =
-				await ctx.context.internalAdapter.findVerificationValue(challengeId);
+			const data = await ctx.context.internalAdapter.findVerificationValue(
+        challengeId,
+      );
 			if (!data) {
 				throw new APIError("BAD_REQUEST", {
 					message: PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
@@ -660,7 +663,9 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 					session: s,
 					user,
 				});
-				await ctx.context.internalAdapter.deleteVerificationValue(challengeId);
+        await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+          challengeId,
+        );
 
 				return ctx.json(
 					{
