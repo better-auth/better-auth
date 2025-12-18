@@ -437,7 +437,6 @@ describe("mcp", async () => {
 				registration_endpoint: `${jwtTestBaseURL}/api/auth/mcp/register`,
 			});
 
-			
 		} finally {
 			// Clean up
 			await jwtTestServer.close();
