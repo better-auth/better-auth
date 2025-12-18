@@ -928,6 +928,9 @@ importers:
       tarn:
         specifier: ^3.0.2
         version: 3.0.2
+      tedious:
+        specifier: ^18.6.1
+        version: 18.6.1
 
   e2e/integration:
     dependencies:
@@ -19395,9 +19398,7 @@ snapshots:
       metro-runtime: 0.83.3
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
     optional: true
 
   '@react-native/normalize-colors@0.74.89': {}
