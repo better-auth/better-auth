@@ -42,7 +42,10 @@ export const generateDrizzleSchema = async (
 	};
 
 	const { generateSchema } = (await i(
-		join(import.meta.dirname, "./../../../packages/cli/src/generators/index"),
+		join(
+			import.meta.dirname,
+			"./../../../../packages/cli/src/generators/index",
+		),
 	)) as {
 		generateSchema: (opts: {
 			adapter: DBAdapter<BetterAuthOptions>;
