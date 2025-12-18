@@ -843,6 +843,9 @@ importers:
       '@tailwindcss/postcss':
         specifier: ^4.1.13
         version: 4.1.13
+      '@types/hast':
+        specifier: ^3.0.4
+        version: 3.0.4
       '@types/jsrsasign':
         specifier: ^10.5.15
         version: 10.5.15
