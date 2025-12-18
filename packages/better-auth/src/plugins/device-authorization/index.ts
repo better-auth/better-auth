@@ -136,3 +136,5 @@ export const deviceAuthorization = (
 		options,
 	} satisfies BetterAuthPlugin;
 };
+
+export type * from "../../utils/time";
