@@ -61,6 +61,7 @@
     }
   },
   "dependencies": {
+    "@better-auth/utils": "0.3.0",
     "@better-fetch/fetch": "catalog:",
     "fast-xml-parser": "^5.2.5",
     "jose": "^6.1.0",

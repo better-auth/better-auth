@@ -1,3 +1,4 @@
+import { base64 } from "@better-auth/utils/base64";
 import { APIError } from "better-auth/api";
 import { countAllNodes, xmlParser } from "./parser";
 
@@ -32,7 +33,7 @@ export function countAssertions(xml: string): AssertionCounts {
 export function validateSingleAssertion(samlResponse: string): void {
 	let xml: string;
 	try {
-		xml = Buffer.from(samlResponse, "base64").toString("utf-8");
+		xml = new TextDecoder().decode(base64.decode(samlResponse));
 		if (!xml.includes("<")) {
 			throw new Error("Not XML");
 		}
