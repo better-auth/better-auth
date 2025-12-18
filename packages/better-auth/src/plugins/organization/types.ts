@@ -409,7 +409,7 @@ export interface OrganizationOptions {
 				 *
 				 * @example
 				 * ```ts
-				 * beforeCreateOrganization: async (data) => {
+				 * beforeCreateOrganization: async (data, ctx) => {
 				 * 	return {
 				 * 		data: {
 				 * 			...data.organization,
@@ -422,7 +422,7 @@ export interface OrganizationOptions {
 				 *
 				 * @example
 				 * ```ts
-				 * beforeCreateOrganization: async (data) => {
+				 * beforeCreateOrganization: async (data, ctx) => {
 				 * 	throw new APIError("BAD_REQUEST", {
 				 * 		message: "Organization creation is disabled",
 				 * 	});
@@ -461,7 +461,7 @@ export interface OrganizationOptions {
 				 *
 				 * @example
 				 * ```ts
-				 * beforeUpdateOrganization: async (data) => {
+				 * beforeUpdateOrganization: async (data, ctx) => {
 				 * 	return { data: { ...data.organization } };
 				 * }
 				 */
@@ -492,7 +492,7 @@ export interface OrganizationOptions {
 				 *
 				 * @example
 				 * ```ts
-				 * afterUpdateOrganization: async (data) => {
+				 * afterUpdateOrganization: async (data, ctx) => {
 				 * 	console.log(data.organization);
 				 * }
 				 * ```
@@ -541,7 +541,7 @@ export interface OrganizationOptions {
 				 *
 				 * @example
 				 * ```ts
-				 * beforeAddMember: async (data) => {
+				 * beforeAddMember: async (data, ctx) => {
 				 * 	return {
 				 * 		data: {
 				 * 			...data.member,
@@ -647,7 +647,7 @@ export interface OrganizationOptions {
 				 *
 				 * @example
 				 * ```ts
-				 * beforeCreateInvitation: async (data) => {
+				 * beforeCreateInvitation: async (data, ctx) => {
 				 * 	return {
 				 * 		data: {
 				 * 			...data.invitation,
