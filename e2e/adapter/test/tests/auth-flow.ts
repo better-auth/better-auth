@@ -1,6 +1,6 @@
+import type { Session, User } from "@better-auth/core/db";
+import { setCookieToHeader } from "better-auth/cookies";
 import { expect } from "vitest";
-import { setCookieToHeader } from "../../cookies";
-import type { Session, User } from "../../types";
 import { createTestSuite } from "../create-test-suite";
 
 /**
