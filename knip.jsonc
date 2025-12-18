@@ -25,7 +25,6 @@
 				"drizzle-kit",
 				"drizzle-orm",
 				"mongodb",
-				"@prisma/client",
 				"prisma",
 
 				// implicit test-instance dependencies
