@@ -36,6 +36,10 @@ interface MCPOptions {
 	oidcConfig?: OIDCOptions | undefined;
 }
 
+const getJwtPlugin = (ctx: GenericEndpointContext) => {
+	return ctx.context.options.plugins?.find((plugin) => plugin.id === "jwt");
+};
+
 export const getMCPProviderMetadata = (
 	ctx: GenericEndpointContext,
 	options?: OIDCOptions | undefined,
@@ -49,12 +53,19 @@ export const getMCPProviderMetadata = (
 				"issuer or baseURL is not set. If you're the app developer, please make sure to set the `baseURL` in your auth config.",
 		});
 	}
+	// Auto-detect if JWT Plugin is used: check both flag AND plugin existence
+	const jwtPlugin = getJwtPlugin(ctx);
+	const useJwtPlugin = options?.useJWTPlugin && !!jwtPlugin;
+	const defaultJwksUri = useJwtPlugin
+		? `${baseURL}/jwks`
+		: `${baseURL}/mcp/jwks`;
+	const { jwks_uri: _, ...restMetadata } = options?.metadata ?? {};
 	return {
 		issuer,
 		authorization_endpoint: `${baseURL}/mcp/authorize`,
 		token_endpoint: `${baseURL}/mcp/token`,
 		userinfo_endpoint: `${baseURL}/mcp/userinfo`,
-		jwks_uri: `${baseURL}/mcp/jwks`,
+		jwks_uri: options?.metadata?.jwks_uri ?? defaultJwksUri,
 		registration_endpoint: `${baseURL}/mcp/register`,
 		scopes_supported: ["openid", "profile", "email", "offline_access"],
 		response_types_supported: ["code"],
@@ -84,7 +95,7 @@ export const getMCPProviderMetadata = (
 			"email_verified",
 			"name",
 		],
-		...options?.metadata,
+		...restMetadata,
 	};
 };
 
@@ -94,11 +105,16 @@ export const getMCPProtectedResourceMetadata = (
 ) => {
 	const baseURL = ctx.context.baseURL;
 	const origin = new URL(baseURL).origin;
-
+	// Auto-detect if JWT Plugin is used: check both flag AND plugin existence
+	const jwtPlugin = getJwtPlugin(ctx);
+	const useJwtPlugin = options?.oidcConfig?.useJWTPlugin && !!jwtPlugin;
+	const defaultJwksUri = useJwtPlugin
+		? `${baseURL}/jwks`
+		: `${baseURL}/mcp/jwks`;
 	return {
 		resource: options?.resource ?? origin,
 		authorization_servers: [origin],
-		jwks_uri: options?.oidcConfig?.metadata?.jwks_uri ?? `${baseURL}/mcp/jwks`,
+		jwks_uri: options?.oidcConfig?.metadata?.jwks_uri ?? defaultJwksUri,
 		scopes_supported: options?.oidcConfig?.metadata?.scopes_supported ?? [
 			"openid",
 			"profile",
@@ -237,7 +253,7 @@ export const mcp = (options: MCPOptions) => {
 				},
 				async (c) => {
 					try {
-						const metadata = getMCPProviderMetadata(c, options);
+						const metadata = getMCPProviderMetadata(c, options.oidcConfig);
 						return c.json(metadata);
 					} catch (e) {
 						console.log(e);

@@ -379,6 +379,71 @@ describe("mcp", async () => {
 		});
 	});
 
+	it("should expose OAuth authorization server metadata with JWT plugin when useJWTPlugin is enabled", async ({
+		expect,
+	}) => {
+		// Create a separate test instance with useJWTPlugin: true
+		const tempServerForJwt = await listen(
+			toNodeHandler(async () => new Response("temp")),
+			{
+				port: 0,
+			},
+		);
+		const jwtTestPort = tempServerForJwt.address?.port || 3003;
+		const jwtTestBaseURL = `http://localhost:${jwtTestPort}`;
+		await tempServerForJwt.close();
+
+		const { auth: jwtAuth, customFetchImpl: jwtCustomFetch } =
+			await getTestInstance({
+				baseURL: jwtTestBaseURL,
+				plugins: [
+					mcp({
+						loginPage: "/login",
+						oidcConfig: {
+							loginPage: "/login",
+							consentPage: "/oauth/consent",
+							useJWTPlugin: true, // ← Enable JWT plugin integration
+						},
+					}),
+					jwt(), // ← Include JWT plugin
+				],
+			});
+
+		// Create a client for this new instance
+		const jwtTestClient = createAuthClient({
+			baseURL: jwtTestBaseURL,
+			fetchOptions: {
+				customFetchImpl: jwtCustomFetch,
+			},
+		});
+
+		// Start server for this instance
+		const jwtTestServer = await listen(toNodeHandler(jwtAuth.handler), {
+			port: jwtTestPort,
+		});
+
+		try {
+			// Test authorization server metadata
+			const metadata = await jwtTestClient.$fetch(
+				"/.well-known/oauth-authorization-server",
+			);
+
+			expect(metadata.data).toMatchObject({
+				issuer: jwtTestBaseURL,
+				authorization_endpoint: `${jwtTestBaseURL}/api/auth/mcp/authorize`,
+				token_endpoint: `${jwtTestBaseURL}/api/auth/mcp/token`,
+				userinfo_endpoint: `${jwtTestBaseURL}/api/auth/mcp/userinfo`,
+				jwks_uri: `${jwtTestBaseURL}/api/auth/jwks`, // ← Should be /jwks, NOT /mcp/jwks
+				registration_endpoint: `${jwtTestBaseURL}/api/auth/mcp/register`,
+			});
+
+			
+		} finally {
+			// Clean up
+			await jwtTestServer.close();
+		}
+	});
+
 	it("should handle token refresh flow", async ({ expect }) => {
 		// Create a confidential client for easier testing (avoids PKCE complexity)
 		const createdClient = await serverClient.$fetch("/mcp/register", {
