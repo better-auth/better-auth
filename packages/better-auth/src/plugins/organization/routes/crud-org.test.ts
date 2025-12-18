@@ -444,4 +444,32 @@ describe("organization hooks", async () => {
 		});
 		expect(afterCreateTeam).toHaveBeenCalled();
 	});
+
+	it("should allow internal organization creation when disabled for users", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				organization({
+					allowUserToCreateOrganization: false,
+				}),
+			],
+		});
+
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: "internal@test.com",
+				password: "password",
+				name: "Internal User",
+			},
+		});
+
+		const internalOrg = await auth.api.createOrganization({
+			body: {
+				name: "Internal Org",
+				slug: "internal-org",
+				userId: newUser.user.id,
+			},
+		});
+		expect(internalOrg).toBeDefined();
+		expect(internalOrg?.name).toBe("Internal Org");
+	});
 });
