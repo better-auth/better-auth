@@ -804,7 +804,9 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					message: PHONE_NUMBER_ERROR_CODES.INVALID_OTP,
 				});
 			}
-			const userRes = await ctx.context.adapter.findOne<User & { account: Account[] | undefined }>({
+			const userRes = await ctx.context.adapter.findOne<
+				User & { account: Account[] | undefined }
+			>({
 				model: "user",
 				where: [
 					{
@@ -813,8 +815,8 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					},
 				],
 				join: {
-				  account: true,
-				}
+					account: true,
+				},
 			});
 			if (!userRes) {
 				throw new APIError("BAD_REQUEST", {
@@ -837,16 +839,21 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			const hashedPassword = await ctx.context.password.hash(
 				ctx.body.newPassword,
 			);
-			const account = accounts.find((account) => account.providerId === "credential");
+			const account = accounts.find(
+				(account) => account.providerId === "credential",
+			);
 			if (!account) {
-			  await ctx.context.internalAdapter.createAccount({
-					  userId: user.id,
-						providerId: "credential",
-						accountId: user.id,
-						password: hashedPassword,
-					});
+				await ctx.context.internalAdapter.createAccount({
+					userId: user.id,
+					providerId: "credential",
+					accountId: user.id,
+					password: hashedPassword,
+				});
 			} else {
-  			await ctx.context.internalAdapter.updatePassword(user.id, hashedPassword);
+				await ctx.context.internalAdapter.updatePassword(
+					user.id,
+					hashedPassword,
+				);
 			}
 			await ctx.context.internalAdapter.deleteVerificationValue(
 				verification.id,
