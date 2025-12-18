@@ -119,7 +119,10 @@ export async function assignOrganizationByDomain(
 		SSOProvider<SSOOptions>
 	>({
 		model: "ssoProvider",
-		where: [{ field: "domain", value: domain }],
+		where: [
+			{ field: "domain", value: domain },
+			{ field: "domainVerified", value: true },
+		],
 	});
 
 	if (!ssoProvider || !ssoProvider.organizationId) {
