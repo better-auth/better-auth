@@ -113,7 +113,10 @@ describe("assignOrganizationByDomain", () => {
 		data.user.push(user);
 
 		const ctx = (await createContext()) as GenericEndpointContext;
-		await assignOrganizationByDomain(ctx, { user });
+		await assignOrganizationByDomain(ctx, {
+			user,
+			domainVerification: { enabled: true },
+		});
 
 		const members = data.member.filter((m) => m.userId === user.id);
 		expect(members).toHaveLength(0);
@@ -132,7 +135,10 @@ describe("assignOrganizationByDomain", () => {
 		data.user.push(user);
 
 		const ctx = (await createContext()) as GenericEndpointContext;
-		await assignOrganizationByDomain(ctx, { user });
+		await assignOrganizationByDomain(ctx, {
+			user,
+			domainVerification: { enabled: true },
+		});
 
 		const members = data.member.filter((m) => m.userId === user.id);
 		expect(members).toHaveLength(1);
@@ -150,7 +156,10 @@ describe("assignOrganizationByDomain", () => {
 		data.user.push(user);
 
 		const ctx = (await createContext()) as GenericEndpointContext;
-		await assignOrganizationByDomain(ctx, { user });
+		await assignOrganizationByDomain(ctx, {
+			user,
+			domainVerification: { enabled: true },
+		});
 
 		const members = data.member.filter((m) => m.userId === user.id);
 		expect(members).toHaveLength(0);
@@ -167,13 +176,16 @@ describe("assignOrganizationByDomain", () => {
 		data.user.push(user);
 
 		const ctx = (await createContext()) as GenericEndpointContext;
-		await assignOrganizationByDomain(ctx, { user });
+		await assignOrganizationByDomain(ctx, {
+			user,
+			domainVerification: { enabled: true },
+		});
 
 		const members = data.member.filter((m) => m.userId === user.id);
 		expect(members).toHaveLength(0);
 	});
 
-	it("should NOT assign user when provider has no domainVerified field", async () => {
+	it("should NOT assign user when provider has no domainVerified field (verification enabled)", async () => {
 		const { data, createContext } = createTestContext();
 
 		const org = createOrg();
@@ -200,10 +212,36 @@ describe("assignOrganizationByDomain", () => {
 		data.user.push(user);
 
 		const ctx = (await createContext()) as GenericEndpointContext;
-		await assignOrganizationByDomain(ctx, { user });
+		await assignOrganizationByDomain(ctx, {
+			user,
+			domainVerification: { enabled: true },
+		});
 
 		const members = data.member.filter((m) => m.userId === user.id);
 		expect(members).toHaveLength(0);
+	});
+
+	it("should assign user when verification is disabled (no domainVerified check)", async () => {
+		const { data, createContext } = createTestContext();
+
+		const org = createOrg();
+		data.organization.push(org);
+		data.ssoProvider.push(
+			createProvider({ domainVerified: false, organizationId: org.id }),
+		);
+
+		const user = createUser();
+		data.user.push(user);
+
+		const ctx = (await createContext()) as GenericEndpointContext;
+		await assignOrganizationByDomain(ctx, {
+			user,
+			domainVerification: { enabled: false },
+		});
+
+		const members = data.member.filter((m) => m.userId === user.id);
+		expect(members).toHaveLength(1);
+		expect(members[0]?.organizationId).toBe(org.id);
 	});
 
 	it("should NOT assign user when already a member of the org", async () => {
@@ -227,7 +265,10 @@ describe("assignOrganizationByDomain", () => {
 		});
 
 		const ctx = (await createContext()) as GenericEndpointContext;
-		await assignOrganizationByDomain(ctx, { user });
+		await assignOrganizationByDomain(ctx, {
+			user,
+			domainVerification: { enabled: true },
+		});
 
 		const members = data.member.filter((m) => m.userId === user.id);
 		expect(members).toHaveLength(1);
@@ -272,7 +313,10 @@ describe("assignOrganizationByDomain", () => {
 		data.user.push(user);
 
 		const ctx = (await createContext()) as GenericEndpointContext;
-		await assignOrganizationByDomain(ctx, { user });
+		await assignOrganizationByDomain(ctx, {
+			user,
+			domainVerification: { enabled: true },
+		});
 
 		const members = data.member.filter((m) => m.userId === user.id);
 		expect(members).toHaveLength(1);
