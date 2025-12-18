@@ -73,6 +73,43 @@ function createProcessor(): Processor {
 	};
 }
 
+/**
+ * Fixes inconsistent indentation in the AI response.
+ */
+function reindent(code: string): string {
+	const lines = code.split("\n");
+	let level = 0;
+	const result: string[] = [];
+
+	for (const line of lines) {
+		const trimmed = line.trim();
+		if (trimmed.length === 0) {
+			result.push("");
+			continue;
+		}
+
+		const withoutStrings = trimmed
+			.replace(/"(?:[^"\\]|\\.)*"/g, '""')
+			.replace(/'(?:[^'\\]|\\.)*'/g, "''")
+			.replace(/`(?:[^`\\]|\\.)*`/g, "``")
+			.replace(/\/\/.*$/g, "")
+			.replace(/\/\*[\s\S]*?\*\//g, "");
+
+		const opens = (withoutStrings.match(/[{\[\(]/g) || []).length;
+		const closes = (withoutStrings.match(/[}\]\)]/g) || []).length;
+
+		let currentLineLevel = level;
+		if (withoutStrings.match(/^[}\]\)]/)) {
+			currentLineLevel = Math.max(0, level - 1);
+		}
+
+		result.push("  ".repeat(currentLineLevel) + trimmed);
+		level = Math.max(0, level + opens - closes);
+	}
+
+	return result.join("\n");
+}
+
 function Pre(props: ComponentProps<"pre">) {
 	const code = Children.only(props.children) as ReactElement;
 	const codeProps = code.props as ComponentProps<"code">;
@@ -87,7 +124,7 @@ function Pre(props: ComponentProps<"pre">) {
 
 	if (lang === "mdx") lang = "md";
 
-	return <DynamicCodeBlock lang={lang} code={content.trimEnd()} />;
+	return <DynamicCodeBlock lang={lang} code={reindent(content.trimEnd())} />;
 }
 
 const processor = createProcessor();
