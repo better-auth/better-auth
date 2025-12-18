@@ -869,7 +869,7 @@ export type BetterAuthOptions = {
 					/**
 					 * Enable account linking
 					 *
-					 * @default true
+					 * @default false
 					 */
 					enabled?: boolean;
 					/**

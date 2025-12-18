@@ -156,7 +156,7 @@ export const callbackOAuth = createAuthEndpoint(
 			);
 			if (
 				(!isTrustedProvider && !userInfo.emailVerified) ||
-				c.context.options.account?.accountLinking?.enabled === false
+				c.context.options.account?.accountLinking?.enabled !== true
 			) {
 				c.context.logger.error("Unable to link account - untrusted provider");
 				return redirectOnError("unable_to_link_account");

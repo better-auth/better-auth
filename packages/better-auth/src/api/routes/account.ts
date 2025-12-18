@@ -302,7 +302,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			const isTrustedProvider = trustedProviders?.includes(provider.id);
 			if (
 				(!isTrustedProvider && !linkingUserInfo.user.emailVerified) ||
-				c.context.options.account?.accountLinking?.enabled === false
+				c.context.options.account?.accountLinking?.enabled !== true
 			) {
 				throw new APIError("UNAUTHORIZED", {
 					message: "Account not linked - linking not allowed",

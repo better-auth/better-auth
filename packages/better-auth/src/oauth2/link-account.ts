@@ -50,7 +50,7 @@ export async function handleOAuthUserInfo(
 				trustedProviders?.includes(account.providerId as "apple");
 			if (
 				(!isTrustedProvider && !userInfo.emailVerified) ||
-				c.context.options.account?.accountLinking?.enabled === false
+				c.context.options.account?.accountLinking?.enabled !== true
 			) {
 				if (isDevelopment()) {
 					logger.warn(
