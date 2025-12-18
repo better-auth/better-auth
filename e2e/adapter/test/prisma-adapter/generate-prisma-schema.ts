@@ -13,7 +13,7 @@ export async function generatePrismaSchema(
 ) {
 	const i = async (x: string) => await import(x);
 	const { generateSchema } = (await i(
-		join(import.meta.dirname, "./../../../../../cli/src/generators/index"),
+		join(import.meta.dirname, "./../../../packages/cli/src/generators/index"),
 	)) as {
 		generateSchema: (opts: {
 			adapter: DBAdapter<BetterAuthOptions>;
