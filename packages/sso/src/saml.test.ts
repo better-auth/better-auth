@@ -28,17 +28,6 @@ import {
 import { sso, validateSAMLTimestamp } from ".";
 import { ssoClient } from "./client";
 import { DEFAULT_CLOCK_SKEW_MS } from "./constants";
-import type { OIDCConfig, SAMLConfig, SSOProvider } from "./types";
-
-type SSOProviderResponse = SSOProvider<{}> & {
-	samlConfig?: SAMLConfig;
-	oidcConfig?: OIDCConfig;
-};
-
-function asSSOProvider<T>(response: T): SSOProviderResponse {
-	return response as SSOProviderResponse;
-}
-
 const spMetadata = `
     <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:3001/api/sso/saml2/sp/metadata">
     <md:SPSSODescriptor AuthnRequestsSigned="false" WantAssertionsSigned="false" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
@@ -620,12 +609,9 @@ describe("SAML SSO", async () => {
 		baseURL: "http://localhost:3000",
 		plugins: [bearer(), ssoClient()],
 		fetchOptions: {
-			customFetchImpl: async (
-				url: string | URL | Request,
-				init?: RequestInit,
-			) => {
-				return auth.handler(new Request(url, init));
-			},
+		customFetchImpl: async (url, init) => {
+			return auth.handler(new Request(url, init));
+		},
 		},
 	});
 
@@ -768,7 +754,7 @@ describe("SAML SSO", async () => {
 
 		const spMetadataRes = await auth.api.spMetadata({
 			query: {
-				providerId: asSSOProvider(provider).providerId,
+				providerId: provider.providerId,
 			},
 		});
 		const spMetadataResResValue = await spMetadataRes.text();
@@ -819,7 +805,7 @@ describe("SAML SSO", async () => {
 
 		const spMetadataRes = await auth.api.spMetadata({
 			query: {
-				providerId: asSSOProvider(provider).providerId,
+				providerId: provider.providerId,
 			},
 		});
 		const spMetadataResResValue = await spMetadataRes.text();
@@ -1700,12 +1686,9 @@ describe("SAML SSO with custom fields", () => {
 		baseURL: "http://localhost:3000",
 		plugins: [bearer(), ssoClient()],
 		fetchOptions: {
-			customFetchImpl: async (
-				url: string | URL | Request,
-				init?: RequestInit,
-			) => {
-				return auth.handler(new Request(url, init));
-			},
+		customFetchImpl: async (url, init) => {
+			return auth.handler(new Request(url, init));
+		},
 		},
 	});
 
@@ -1869,10 +1852,7 @@ describe("SSO Provider Config Parsing", () => {
 			baseURL: "http://localhost:3000",
 			plugins: [bearer(), ssoClient()],
 			fetchOptions: {
-				customFetchImpl: async (
-					url: string | URL | Request,
-					init?: RequestInit,
-				) => auth.handler(new Request(url, init)),
+			customFetchImpl: async (url, init) => auth.handler(new Request(url, init)),
 			},
 		});
 
@@ -1887,24 +1867,22 @@ describe("SSO Provider Config Parsing", () => {
 			{ onSuccess: setCookieToHeader(headers) },
 		);
 
-		const provider = asSSOProvider(
-			await auth.api.registerSSOProvider({
-				body: {
-					providerId: "saml-config-provider",
-					issuer: "http://localhost:8081",
-					domain: "example.com",
-					samlConfig: {
-						entryPoint: "http://localhost:8081/sso",
-						cert: "test-cert",
-						callbackUrl: "http://localhost:3000/callback",
-						spMetadata: {
-							entityID: "test-entity",
-						},
+		const provider = await auth.api.registerSSOProvider({
+			body: {
+				providerId: "saml-config-provider",
+				issuer: "http://localhost:8081",
+				domain: "example.com",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/sso",
+					cert: "test-cert",
+					callbackUrl: "http://localhost:3000/callback",
+					spMetadata: {
+						entityID: "test-entity",
 					},
 				},
-				headers,
-			}),
-		);
+			},
+			headers,
+		});
 
 		expect(provider.samlConfig).toBeDefined();
 		expect(typeof provider.samlConfig).toBe("object");
@@ -1947,10 +1925,7 @@ describe("SSO Provider Config Parsing", () => {
 				baseURL: "http://localhost:3000",
 				plugins: [bearer(), ssoClient()],
 				fetchOptions: {
-					customFetchImpl: async (
-						url: string | URL | Request,
-						init?: RequestInit,
-					) => auth.handler(new Request(url, init)),
+			customFetchImpl: async (url, init) => auth.handler(new Request(url, init)),
 				},
 			});
 
@@ -1965,26 +1940,24 @@ describe("SSO Provider Config Parsing", () => {
 				{ onSuccess: setCookieToHeader(headers) },
 			);
 
-			const provider = asSSOProvider(
-				await auth.api.registerSSOProvider({
-					body: {
-						providerId: "oidc-config-provider",
-						issuer: oidcServer.issuer.url!,
-						domain: "example.com",
-						oidcConfig: {
-							clientId: "test-client",
-							clientSecret: "test-secret",
-							tokenEndpointAuthentication: "client_secret_basic",
-							mapping: {
-								id: "sub",
-								email: "email",
-								name: "name",
-							},
+			const provider = await auth.api.registerSSOProvider({
+				body: {
+					providerId: "oidc-config-provider",
+					issuer: oidcServer.issuer.url!,
+					domain: "example.com",
+					oidcConfig: {
+						clientId: "test-client",
+						clientSecret: "test-secret",
+						tokenEndpointAuthentication: "client_secret_basic",
+						mapping: {
+							id: "sub",
+							email: "email",
+							name: "name",
 						},
 					},
-					headers,
-				}),
-			);
+				},
+				headers,
+			});
 
 			expect(provider.oidcConfig).toBeDefined();
 			expect(typeof provider.oidcConfig).toBe("object");
