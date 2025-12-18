@@ -28,6 +28,7 @@ import {
 import { sso, validateSAMLTimestamp } from ".";
 import { ssoClient } from "./client";
 import { DEFAULT_CLOCK_SKEW_MS } from "./constants";
+
 const spMetadata = `
     <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:3001/api/sso/saml2/sp/metadata">
     <md:SPSSODescriptor AuthnRequestsSigned="false" WantAssertionsSigned="false" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
@@ -609,9 +610,9 @@ describe("SAML SSO", async () => {
 		baseURL: "http://localhost:3000",
 		plugins: [bearer(), ssoClient()],
 		fetchOptions: {
-		customFetchImpl: async (url, init) => {
-			return auth.handler(new Request(url, init));
-		},
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
 		},
 	});
 
@@ -1686,9 +1687,9 @@ describe("SAML SSO with custom fields", () => {
 		baseURL: "http://localhost:3000",
 		plugins: [bearer(), ssoClient()],
 		fetchOptions: {
-		customFetchImpl: async (url, init) => {
-			return auth.handler(new Request(url, init));
-		},
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
 		},
 	});
 
@@ -1852,7 +1853,8 @@ describe("SSO Provider Config Parsing", () => {
 			baseURL: "http://localhost:3000",
 			plugins: [bearer(), ssoClient()],
 			fetchOptions: {
-			customFetchImpl: async (url, init) => auth.handler(new Request(url, init)),
+				customFetchImpl: async (url, init) =>
+					auth.handler(new Request(url, init)),
 			},
 		});
 
@@ -1925,7 +1927,8 @@ describe("SSO Provider Config Parsing", () => {
 				baseURL: "http://localhost:3000",
 				plugins: [bearer(), ssoClient()],
 				fetchOptions: {
-			customFetchImpl: async (url, init) => auth.handler(new Request(url, init)),
+					customFetchImpl: async (url, init) =>
+						auth.handler(new Request(url, init)),
 				},
 			});
 
