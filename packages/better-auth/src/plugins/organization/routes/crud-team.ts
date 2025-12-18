@@ -13,35 +13,36 @@ import { hasPermission } from "../has-permission";
 import { teamSchema } from "../schema";
 import type { OrganizationOptions } from "../types";
 
+const teamBaseSchema = z.object({
+	name: z.string().meta({
+		description: 'The name of the team. Eg: "my-team"',
+	}),
+	organizationId: z
+		.string()
+		.meta({
+			description:
+				'The organization ID which the team will be created in. Defaults to the active organization. Eg: "organization-id"',
+		})
+		.optional(),
+});
+
 export const createTeam = <O extends OrganizationOptions>(options: O) => {
 	const additionalFieldsSchema = toZodSchema({
 		fields: options?.schema?.team?.additionalFields ?? {},
 		isClientSide: true,
-	});
-	const baseSchema = z.object({
-		name: z.string().meta({
-			description: 'The name of the team. Eg: "my-team"',
-		}),
-		organizationId: z
-			.string()
-			.meta({
-				description:
-					'The organization ID which the team will be created in. Defaults to the active organization. Eg: "organization-id"',
-			})
-			.optional(),
 	});
 	return createAuthEndpoint(
 		"/organization/create-team",
 		{
 			method: "POST",
 			body: z.object({
-				...baseSchema.shape,
+				...teamBaseSchema.shape,
 				...additionalFieldsSchema.shape,
 			}),
 			use: [orgMiddleware],
 			metadata: {
 				$Infer: {
-					body: {} as z.infer<typeof baseSchema> &
+					body: {} as z.infer<typeof teamBaseSchema> &
 						InferAdditionalFieldsFromPluginOptions<"team", O>,
 				},
 				openapi: {
@@ -209,22 +210,24 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 	);
 };
 
+const removeTeamBodySchema = z.object({
+	teamId: z.string().meta({
+		description: `The team ID of the team to remove. Eg: "team-id"`,
+	}),
+	organizationId: z
+		.string()
+		.meta({
+			description: `The organization ID which the team falls under. If not provided, it will default to the user's active organization. Eg: "organization-id"`,
+		})
+		.optional(),
+});
+
 export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 	createAuthEndpoint(
 		"/organization/remove-team",
 		{
 			method: "POST",
-			body: z.object({
-				teamId: z.string().meta({
-					description: `The team ID of the team to remove. Eg: "team-id"`,
-				}),
-				organizationId: z
-					.string()
-					.meta({
-						description: `The organization ID which the team falls under. If not provided, it will default to the user's active organization. Eg: "organization-id"`,
-					})
-					.optional(),
-			}),
+			body: removeTeamBodySchema,
 			use: [orgMiddleware],
 			metadata: {
 				openapi: {
@@ -549,6 +552,17 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 	);
 };
 
+const listOrganizationTeamsQuerySchema = z.optional(
+	z.object({
+		organizationId: z
+			.string()
+			.meta({
+				description: `The organization ID which the teams are under to list. Defaults to the users active organization. Eg: "organization-id"`,
+			})
+			.optional(),
+	}),
+);
+
 export const listOrganizationTeams = <O extends OrganizationOptions>(
 	options: O,
 ) =>
@@ -556,16 +570,7 @@ export const listOrganizationTeams = <O extends OrganizationOptions>(
 		"/organization/list-teams",
 		{
 			method: "GET",
-			query: z.optional(
-				z.object({
-					organizationId: z
-						.string()
-						.meta({
-							description: `The organization ID which the teams are under to list. Defaults to the users active organization. Eg: "organziation-id"`,
-						})
-						.optional(),
-				}),
-			),
+			query: listOrganizationTeamsQuerySchema,
 			metadata: {
 				openapi: {
 					description: "List all teams in an organization",
@@ -649,21 +654,23 @@ export const listOrganizationTeams = <O extends OrganizationOptions>(
 		},
 	);
 
+const setActiveTeamBodySchema = z.object({
+	teamId: z
+		.string()
+		.meta({
+			description:
+				"The team id to set as active. It can be null to unset the active team",
+		})
+		.nullable()
+		.optional(),
+});
+
 export const setActiveTeam = <O extends OrganizationOptions>(options: O) =>
 	createAuthEndpoint(
 		"/organization/set-active-team",
 		{
 			method: "POST",
-			body: z.object({
-				teamId: z
-					.string()
-					.meta({
-						description:
-							"The team id to set as active. It can be null to unset the active team",
-					})
-					.nullable()
-					.optional(),
-			}),
+			body: setActiveTeamBodySchema,
 			requireHeaders: true,
 			use: [orgSessionMiddleware, orgMiddleware],
 			metadata: {
@@ -800,19 +807,21 @@ export const listUserTeams = <O extends OrganizationOptions>(options: O) =>
 		},
 	);
 
+const listTeamMembersQuerySchema = z.optional(
+	z.object({
+		teamId: z.string().optional().meta({
+			description:
+				"The team whose members we should return. If this is not provided the members of the current active team get returned.",
+		}),
+	}),
+);
+
 export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 	createAuthEndpoint(
 		"/organization/list-team-members",
 		{
 			method: "GET",
-			query: z.optional(
-				z.object({
-					teamId: z.string().optional().meta({
-						description:
-							"The team whose members we should return. If this is not provided the members of the current active team get returned.",
-					}),
-				}),
-			),
+			query: listTeamMembersQuerySchema,
 			metadata: {
 				openapi: {
 					description: "List the members of the given team.",
@@ -886,21 +895,23 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 		},
 	);
 
+const addTeamMemberBodySchema = z.object({
+	teamId: z.string().meta({
+		description: "The team the user should be a member of.",
+	}),
+
+	userId: z.coerce.string().meta({
+		description:
+			"The user Id which represents the user to be added as a member.",
+	}),
+});
+
 export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 	createAuthEndpoint(
 		"/organization/add-team-member",
 		{
 			method: "POST",
-			body: z.object({
-				teamId: z.string().meta({
-					description: "The team the user should be a member of.",
-				}),
-
-				userId: z.coerce.string().meta({
-					description:
-						"The user Id which represents the user to be added as a member.",
-				}),
-			}),
+			body: addTeamMemberBodySchema,
 			metadata: {
 				openapi: {
 					description: "The newly created member",
@@ -1061,20 +1072,22 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 		},
 	);
 
+const removeTeamMemberBodySchema = z.object({
+	teamId: z.string().meta({
+		description: "The team the user should be removed from.",
+	}),
+
+	userId: z.coerce.string().meta({
+		description: "The user which should be removed from the team.",
+	}),
+});
+
 export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 	createAuthEndpoint(
 		"/organization/remove-team-member",
 		{
 			method: "POST",
-			body: z.object({
-				teamId: z.string().meta({
-					description: "The team the user should be removed from.",
-				}),
-
-				userId: z.coerce.string().meta({
-					description: "The user which should be removed from the team.",
-				}),
-			}),
+			body: removeTeamMemberBodySchema,
 			metadata: {
 				openapi: {
 					description: "Remove a member from a team",

@@ -158,6 +158,8 @@ describe("type", () => {
 			},
 		});
 		expectTypeOf<typeof client>().not.toHaveProperty("testNonAction");
+		expectTypeOf<typeof client>().not.toHaveProperty("testServerScoped");
+		expectTypeOf<typeof client>().not.toHaveProperty("testHttpScoped");
 	});
 	it("should infer session additional fields", () => {
 		const client = createReactClient({

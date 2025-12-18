@@ -95,7 +95,7 @@ export async function detectSystemInfo() {
 					? (process as any).stdout.isTTY
 					: null,
 		};
-	} catch (e) {
+	} catch {
 		return {
 			systemPlatform: null,
 			systemRelease: null,

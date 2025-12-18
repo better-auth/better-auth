@@ -128,11 +128,7 @@ export const requestPasswordReset = createAuthEndpoint(
 		});
 		const callbackURL = redirectTo ? encodeURIComponent(redirectTo) : "";
 		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${callbackURL}`;
-		/**
-		 * We send the email in the background to prevent timing attacks.
-		 * This is to ensure that the response time is consistent regardless of whether the email was sent or not.
-		 */
-		void ctx.context.options.emailAndPassword
+		await ctx.context.options.emailAndPassword
 			.sendResetPassword(
 				{
 					user: user.user,

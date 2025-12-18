@@ -3,10 +3,7 @@ import { runWithAdapter } from "@better-auth/core/context";
 import { BASE_ERROR_CODES, BetterAuthError } from "@better-auth/core/error";
 import { getEndpoints, router } from "../api";
 import type { Auth } from "../types";
-import type { Expand } from "../types/helper";
 import { getBaseURL, getOrigin } from "../utils/url";
-
-export type WithJsDoc<T, D> = Expand<T & D>;
 
 export const createBetterAuth = <Options extends BetterAuthOptions>(
 	options: Options &
@@ -47,14 +44,12 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 				}
 			}
 
-			ctx.trustedOrigins = [
-				...(options.trustedOrigins
-					? Array.isArray(options.trustedOrigins)
-						? options.trustedOrigins
-						: await options.trustedOrigins(request)
-					: []),
-				ctx.options.baseURL!,
-			];
+			if (typeof options.trustedOrigins === "function") {
+				ctx.trustedOrigins = [
+					...ctx.trustedOrigins,
+					...(await options.trustedOrigins(request)),
+				];
+			}
 			const { handler } = router(ctx, options);
 			return runWithAdapter(ctx.adapter, () => handler(request));
 		},

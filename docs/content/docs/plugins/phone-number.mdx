@@ -33,12 +33,12 @@ The phone number plugin extends the authentication system by allowing users to s
 
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
-            ```bash
+            ```package-install
             npx @better-auth/cli migrate
             ```
             </Tab>
             <Tab value="generate">
-            ```bash
+            ```package-install
             npx @better-auth/cli generate
             ```
             </Tab>
@@ -133,6 +133,10 @@ export const auth = betterAuth({
     ]
 })
 ```
+
+<Callout>
+We highly recommend not awaiting the `sendOTP` function. If you await it, it'll slow down the request and could cause timing attacks. For serverless platforms, you can use `waitUntil` to ensure the OTP is sent.
+</Callout>
 
 ### Sign In with Phone Number
 

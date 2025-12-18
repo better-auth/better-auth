@@ -1,4 +1,4 @@
-import type { GenericEndpointContext } from "@better-auth/core";
+import type { Awaitable, GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
@@ -52,7 +52,7 @@ export interface OTPOptions {
 				 * The request object
 				 */
 				ctx?: GenericEndpointContext,
-		  ) => Promise<void> | void)
+		  ) => Awaitable<void>)
 		| undefined;
 	/**
 	 * The number of allowed attempts for the OTP
@@ -73,6 +73,35 @@ export interface OTPOptions {
 		  )
 		| undefined;
 }
+
+const verifyOTPBodySchema = z.object({
+	code: z.string().meta({
+		description: 'The otp code to verify. Eg: "012345"',
+	}),
+	/**
+	 * if true, the device will be trusted
+	 * for 30 days. It'll be refreshed on
+	 * every sign in request within this time.
+	 */
+	trustDevice: z.boolean().optional().meta({
+		description:
+			"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
+	}),
+});
+
+const send2FaOTPBodySchema = z
+	.object({
+		/**
+		 * if true, the device will be trusted
+		 * for 30 days. It'll be refreshed on
+		 * every sign in request within this time.
+		 */
+		trustDevice: z.boolean().optional().meta({
+			description:
+				"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
+		}),
+	})
+	.optional();
 
 /**
  * The otp adapter is created from the totp adapter.
@@ -130,19 +159,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 		"/two-factor/send-otp",
 		{
 			method: "POST",
-			body: z
-				.object({
-					/**
-					 * if true, the device will be trusted
-					 * for 30 days. It'll be refreshed on
-					 * every sign in request within this time.
-					 */
-					trustDevice: z.boolean().optional().meta({
-						description:
-							"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
-					}),
-				})
-				.optional(),
+			body: send2FaOTPBodySchema,
 			metadata: {
 				openapi: {
 					summary: "Send two factor OTP",
@@ -196,20 +213,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 		"/two-factor/verify-otp",
 		{
 			method: "POST",
-			body: z.object({
-				code: z.string().meta({
-					description: 'The otp code to verify. Eg: "012345"',
-				}),
-				/**
-				 * if true, the device will be trusted
-				 * for 30 days. It'll be refreshed on
-				 * every sign in request within this time.
-				 */
-				trustDevice: z.boolean().optional().meta({
-					description:
-						"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
-				}),
-			}),
+			body: verifyOTPBodySchema,
 			metadata: {
 				openapi: {
 					summary: "Verify two factor OTP",

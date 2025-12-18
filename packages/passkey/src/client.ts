@@ -69,7 +69,7 @@ export const getPasskeyActions = (
 			$store.notify("$sessionSignal");
 
 			return verified;
-		} catch (e) {
+		} catch {
 			return {
 				data: null,
 				error: {
@@ -263,3 +263,6 @@ export const passkeyClient = () => {
 		],
 	} satisfies BetterAuthClientPlugin;
 };
+
+export type * from "@simplewebauthn/server";
+export type * from "./types";

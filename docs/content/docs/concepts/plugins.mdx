@@ -79,7 +79,7 @@ export const myPlugin = () => {
 }
 ```
 <Callout>
-    You don't have to make the plugin a function, but it's recommended to do so. This way, you can pass options to the plugi,n and it's consistent with the built-in plugins.
+    You don't have to make the plugin a function, but it's recommended to do so. This way, you can pass options to the plugin and it's consistent with the built-in plugins.
 </Callout>
 
 ### Endpoints
@@ -125,6 +125,8 @@ Create Auth endpoints wraps around `createEndpoint` from Better Call. Inside the
 - `adapter`: This is the same as db but it give you `orm` like functions to interact with the database. (we recommend using this over `db` unless you need raw sql queries or for performance reasons)
 - `internalAdapter`: These are internal db calls that are used by Better Auth. For example, you can use these calls to create a session instead of using `adapter` directly. `internalAdapter.createSession(userId)`
 - `createAuthCookie`: This is a helper function that lets you get a cookie `name` and `options` for either to `set` or `get` cookies. It implements things like `__Secure-` prefix for cookies based on whether the connection is secure (HTTPS) or the application is running in production mode.
+- `trustedOrigins`: This is the list of trusted origins that you specified via `options.trustedOrigins`.
+- `isTrustedOrigin`: This is a helper function that allows you to quickly check whether a given url or path is trusted based on the trusted origins configuration.
 
 For other properties, you can check the <Link href="https://github.com/bekacru/better-call">Better Call</Link> documentation and the <Link href="https://github.com/better-auth/better-auth/blob/main/packages/better-auth/src/init.ts">source code </Link>.
 
@@ -354,6 +356,46 @@ const myPlugin = () => {
     } satisfies BetterAuthPlugin
 }
 ```
+
+### Trusted origins
+
+If you're building custom plugins or endpoints, you can use the `isTrustedOrigin()` method available on the auth context to validate URLs against your trusted origins configuration.
+This ensures your custom endpoints respect the same security settings as Better Auth's built-in endpoints.
+
+```ts title="plugin.ts"
+import { createAuthEndpoint, APIError } from "better-auth/api";
+import * as z from "zod"
+
+const myPlugin = () => {
+    return {
+        id: "my-plugin",
+        trustedOrigins: [
+            "http://trusted.com"
+        ],
+        endpoints: {
+            getTrustedHelloWorld: createAuthEndpoint("/my-plugin/hello-world", {
+                method: "GET",
+                query: z.object({
+                    url: z.string()
+                }),
+            }, async (ctx) => {
+                // The allowRelativePaths option can be used to either allow or disallow relative paths
+                if (!ctx.context.isTrustedOrigin(ctx.query.url, { allowRelativePaths: false })) {
+                    throw new APIError("FORBIDDEN", {
+                        message: "origin is not trusted."
+                    });
+                }
+
+                return ctx.json({
+                    message: "Hello World"
+                })
+            })
+        }
+    } satisfies BetterAuthPlugin
+}
+```
+
+See the [trusted origins and security](/docs/reference/security#trusted-origins) docs for more info.
 
 ### Server-plugin helper functions
 

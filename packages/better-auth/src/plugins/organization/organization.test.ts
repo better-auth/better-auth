@@ -299,7 +299,7 @@ describe("organization", async (it) => {
 	});
 	it("should allow activating organization by slug", async () => {
 		const { headers } = await signInWithTestUser();
-		const organization = await client.organization.setActive({
+		await client.organization.setActive({
 			organizationSlug: "test2",
 			fetchOptions: {
 				headers,
@@ -531,7 +531,7 @@ describe("organization", async (it) => {
 	});
 
 	it("should allow updating member", async () => {
-		const { headers, user } = await signInWithTestUser();
+		const { headers } = await signInWithTestUser();
 		const org = await client.organization.getFullOrganization({
 			query: {
 				organizationId,
@@ -656,7 +656,7 @@ describe("organization", async (it) => {
 		const res = await client.signUp.email(newUser, {
 			onSuccess: cookieSetter(headers),
 		});
-		const member = await auth.api.addMember({
+		await auth.api.addMember({
 			body: {
 				organizationId,
 				userId: res.data?.user.id!,
@@ -756,7 +756,7 @@ describe("organization", async (it) => {
 
 		expect(removedOwner.error?.status).toBe(400);
 
-		const res = await client.organization.updateMemberRole({
+		await client.organization.updateMemberRole({
 			organizationId: organizationId,
 			role: ["owner", "admin"],
 			memberId: org.data?.members.find((m) => m.role === "owner")?.id!,
@@ -847,7 +847,7 @@ describe("organization", async (it) => {
 			adminUser.password,
 		);
 
-		const r = await client.organization.delete({
+		await client.organization.delete({
 			organizationId,
 			fetchOptions: {
 				headers: adminHeaders,
@@ -1088,11 +1088,11 @@ describe("organization", async (it) => {
 		await auth.api.signUpEmail({
 			body: orgAdminUser,
 		});
-		const { headers: headers2, res: session } = await signInWithUser(
+		const { headers: headers2 } = await signInWithUser(
 			user.email,
 			user.password,
 		);
-		const { headers: adminHeaders, res: adminSession } = await signInWithUser(
+		const { headers: adminHeaders } = await signInWithUser(
 			orgAdminUser.email,
 			orgAdminUser.password,
 		);
@@ -1118,6 +1118,7 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(userInvitations.data?.[0]!.id).toBe(invitation.data?.id);
+		expect(userInvitations.data?.[0]!.organizationName).toBe(orgRng);
 		expect(userInvitations.data?.length).toBe(1);
 	});
 
@@ -1177,7 +1178,7 @@ describe("access control", async (it) => {
 		sales: ["read"],
 		...memberAc.statements,
 	});
-	const { auth, customFetchImpl, sessionSetter, signInWithTestUser } =
+	const { customFetchImpl, sessionSetter, signInWithTestUser } =
 		await getTestInstance({
 			plugins: [
 				organization({
@@ -1217,7 +1218,7 @@ describe("access control", async (it) => {
 		organization: { checkRolePermission, hasPermission, create },
 	} = authClient;
 
-	const { headers, user, session } = await signInWithTestUser();
+	const { headers } = await signInWithTestUser();
 
 	const org = await create(
 		{
@@ -2343,7 +2344,7 @@ describe("Additional Fields", async () => {
 			headers.set("cookie", `${current || ""}; ${name}=${value}`);
 		};
 
-		const { data, error } = await client.signUp.email({
+		const { data } = await client.signUp.email({
 			email: testUser.email,
 			password: testUser.password,
 			name: testUser.name,

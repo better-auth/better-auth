@@ -113,6 +113,14 @@ export interface DBAdapterFactoryConfig<
 	 */
 	supportsBooleans?: boolean | undefined;
 	/**
+	 * If the database doesn't support arrays, set this to `false`.
+	 *
+	 * We will handle the translation between using `array`s, and saving `string`s to the database.
+	 *
+	 * @default false
+	 */
+	supportsArrays?: boolean | undefined;
+	/**
 	 * Execute multiple operations in a transaction.
 	 *
 	 * If the database doesn't support transactions, set this to `false` and operations will be executed sequentially.
@@ -350,7 +358,7 @@ export type JoinConfig = {
 		 */
 		limit?: number;
 		/**
-		 * The relation type. Determines the ouput joined model data.
+		 * The relation type. Determines the output joined model data.
 		 *
 		 * `one-to-one` would have a single object in the output.
 		 * `one-to-many` would have an array of objects in the output.
@@ -416,7 +424,7 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 		where: Where[];
 		update: Record<string, any>;
 	}) => Promise<number>;
-	delete: <T>(data: { model: string; where: Where[] }) => Promise<void>;
+	delete: <_T>(data: { model: string; where: Where[] }) => Promise<void>;
 	deleteMany: (data: { model: string; where: Where[] }) => Promise<number>;
 	/**
 	 * Execute multiple operations in a transaction.
@@ -532,3 +540,7 @@ export interface DBAdapterInstance<
 > {
 	(options: BetterAuthOptions): DBAdapter<Options>;
 }
+
+export * from "./factory";
+export * from "./types";
+export * from "./utils";
