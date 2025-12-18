@@ -173,6 +173,39 @@ describe("assignOrganizationByDomain", () => {
 		expect(members).toHaveLength(0);
 	});
 
+	it("should NOT assign user when provider has no domainVerified field", async () => {
+		const { data, createContext } = createTestContext();
+
+		const org = createOrg();
+		data.organization.push(org);
+
+		data.ssoProvider.push({
+			id: "provider-1",
+			providerId: "test-provider",
+			issuer: "https://idp.example.com",
+			domain: "example.com",
+			organizationId: org.id,
+			userId: "user-1",
+		} as {
+			id: string;
+			providerId: string;
+			issuer: string;
+			domain: string;
+			domainVerified: boolean;
+			organizationId: string | null;
+			userId: string;
+		});
+
+		const user = createUser();
+		data.user.push(user);
+
+		const ctx = (await createContext()) as GenericEndpointContext;
+		await assignOrganizationByDomain(ctx, { user });
+
+		const members = data.member.filter((m) => m.userId === user.id);
+		expect(members).toHaveLength(0);
+	});
+
 	it("should NOT assign user when already a member of the org", async () => {
 		const { data, createContext } = createTestContext();
 
