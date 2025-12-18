@@ -6,7 +6,7 @@ import { APIError } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { toBoolean } from "../../utils/boolean";
 
-interface OneTapOptions {
+export interface OneTapOptions {
 	/**
 	 * Disable the signup flow
 	 *

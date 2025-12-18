@@ -4,7 +4,7 @@ import { createHMAC } from "@better-auth/utils/hmac";
 import { serializeSignedCookie } from "better-call";
 import { parseSetCookieHeader } from "../../cookies";
 
-interface BearerOptions {
+export interface BearerOptions {
 	/**
 	 * If true, only signed tokens
 	 * will be converted to session
