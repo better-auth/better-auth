@@ -2,7 +2,6 @@ import * as z from "zod";
 
 export const APIUserSchema = z.object({
 	userName: z.string().lowercase(),
-	active: z.boolean().optional(),
 	externalId: z.string().optional(),
 	name: z
 		.object({

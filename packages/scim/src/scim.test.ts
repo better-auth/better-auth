@@ -1335,7 +1335,6 @@ describe("SCIM", () => {
 			expect(user.userName).toBe("primary-email@test.com");
 			expect(user.name.formatted).toBe("Juan Perez");
 			expect(user.emails[0]?.value).toBe("primary-email@test.com");
-			expect(user.active).toBe(true);
 
 			await auth.api.patchSCIMUser({
 				params: {
@@ -1412,7 +1411,6 @@ describe("SCIM", () => {
 			expect(user.userName).toBe("primary-email@test.com");
 			expect(user.name.formatted).toBe("Juan Perez");
 			expect(user.emails[0]?.value).toBe("primary-email@test.com");
-			expect(user.active).toBe(true);
 
 			await auth.api.patchSCIMUser({
 				params: {
@@ -1424,7 +1422,6 @@ describe("SCIM", () => {
 						{ op: "add", path: "/externalId", value: "external-username" },
 						{ op: "replace", path: "/userName", value: "other-username" },
 						{ op: "add", path: "/name/formatted", value: "Daniel Lopez" },
-						{ op: "add", path: "/active", value: false },
 					],
 				},
 				headers: {
@@ -1442,7 +1439,7 @@ describe("SCIM", () => {
 			});
 
 			expect(updatedUser).toMatchObject({
-				active: false,
+				active: true,
 				displayName: "Daniel Lopez",
 				emails: [
 					{
@@ -1486,8 +1483,6 @@ describe("SCIM", () => {
 					authorization: `Bearer ${scimToken}`,
 				},
 			});
-
-			expect(user.active).toBe(true);
 
 			await auth.api.patchSCIMUser({
 				params: { userId: user.id },
@@ -1594,7 +1589,7 @@ describe("SCIM", () => {
 							op: op,
 							value: {
 								name: { formatted: "No Path Name" },
-								active: false,
+								userName: "Username",
 							},
 						},
 					],
@@ -1612,7 +1607,7 @@ describe("SCIM", () => {
 			});
 
 			expect(updatedUser.name.formatted).toBe("No Path Name");
-			expect(updatedUser.active).toBe(false);
+			expect(updatedUser.userName).toBe("username");
 		});
 
 		it("should support dot notation in paths", async () => {
@@ -1629,8 +1624,6 @@ describe("SCIM", () => {
 				},
 			});
 
-			expect(user.active).toBe(true);
-
 			await auth.api.patchSCIMUser({
 				params: { userId: user.id },
 				body: {
@@ -1638,7 +1631,7 @@ describe("SCIM", () => {
 					Operations: [
 						{ op: "replace", path: "name.familyName", value: "Dot" },
 						{ op: "add", path: "name.givenName", value: "User" },
-						{ op: "add", path: "active", value: false },
+						{ op: "add", path: "userName", value: "Username" },
 					],
 				},
 				headers: {
@@ -1654,7 +1647,7 @@ describe("SCIM", () => {
 			});
 
 			expect(updatedUser.name.formatted).toBe("User Dot");
-			expect(updatedUser.active).toBe(false);
+			expect(updatedUser.userName).toBe("username");
 		});
 
 		it.each([
@@ -1802,7 +1795,9 @@ describe("SCIM", () => {
 					params: { userId: user.id },
 					body: {
 						schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
-						Operations: [{ op: "update", path: "active", value: "Some Value" }],
+						Operations: [
+							{ op: "update", path: "userName", value: "Some Value" },
+						],
 					},
 					headers: {
 						authorization: `Bearer ${scimToken}`,

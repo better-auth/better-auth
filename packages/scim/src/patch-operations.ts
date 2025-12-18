@@ -63,7 +63,6 @@ const userPatchMappings: Record<string, Mapping> = {
 		map: identity,
 	},
 	"/userName": { resource: "user", target: "email", map: lowerCase },
-	"/active": { resource: "user", target: "active", map: identity },
 };
 
 const normalizePath = (path: string): string => {

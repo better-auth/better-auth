@@ -1,11 +1,10 @@
-import type { Account } from "better-auth";
-import type { UserWithActive } from "./types";
+import type { Account, User } from "better-auth";
 import { SCIMUserResourceSchema } from "./user-schemas";
 import { getResourceURL } from "./utils";
 
 export const createUserResource = (
 	baseURL: string,
-	user: UserWithActive,
+	user: User,
 	account?: Account | null,
 ) => {
 	return {
@@ -29,7 +28,7 @@ export const createUserResource = (
 			formatted: user.name,
 		},
 		displayName: user.name,
-		active: user.active ?? true,
+		active: true,
 		emails: [{ primary: true, value: user.email }],
 		schemas: [SCIMUserResourceSchema.id],
 	};

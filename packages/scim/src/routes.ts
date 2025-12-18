@@ -241,7 +241,6 @@ export const createSCIMUser = (authMiddleware: AuthMiddleware) =>
 				ctx.context.internalAdapter.createUser({
 					email,
 					name,
-					active: body.active,
 				});
 
 			const createOrgMembership = async (userId: string) => {
@@ -360,7 +359,6 @@ export const updateSCIMUser = (authMiddleware: AuthMiddleware) =>
 							{
 								email,
 								name,
-								active: body.active,
 								updatedAt: new Date(),
 							},
 						);
