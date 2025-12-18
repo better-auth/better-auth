@@ -1219,7 +1219,7 @@ By default, there are three roles in the organization:
 
 `admin`: Users with the admin role have full control over the organization except for deleting the organization or changing the owner.
 
-`member`: Users with the member role have limited control over the organization. They can create projects, invite users, and manage projects they have created.
+`member`: Users with the member role have limited control over the organization. They can only read organization data and have no permissions to create, update, or delete resources.
 
 <Callout>
   A user can have multiple roles. Multiple roles are stored as string separated
@@ -1510,12 +1510,6 @@ To create a new role for an organization at runtime, you can use the `createRole
 Only users with roles which contain the `ac` resource with the `create` permission can create a new role.
 By default, only the `admin` and `owner` roles have this permission. You also cannot add permissions that your
 current role in that organization can't already access.
-
-<Callout>
-  TIP: You can validate role names by using the `dynamicAccessControl.validateRoleName` option in the organization plugin config.
-  Learn more [here](#validaterolename).
-</Callout>
-
 
 <APIMethod
   path="/organization/create-role"
@@ -2293,6 +2287,46 @@ You need to add two more fields to the session table to store the active organiz
       type: "string",
       description: "The ID of the active team",
       isOptional: true,
+    },
+  ]}
+/>
+
+### Organization Role (optional)
+
+Table Name: `organizationRole`
+
+<DatabaseTable
+  fields={[
+    {
+      name: "id",
+      type: "string",
+      description: "Unique identifier for each organization role",
+    },
+    {
+      name: "organizationId",
+      type: "string",
+      description: "The ID of the organization",
+      isForeignKey: true,
+    },
+    {
+      name: "role",
+      type: "string",
+      description: "The name of the role",
+    },
+    {
+      name: "permission",
+      type: "string",
+      description: "The permission of the role",
+    },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the organization role was created",
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "Timestamp of when the organization role was updated",
     },
   ]}
 />

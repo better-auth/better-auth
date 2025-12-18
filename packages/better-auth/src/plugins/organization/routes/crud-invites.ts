@@ -7,6 +7,7 @@ import { setSessionCookie } from "../../../cookies";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db";
 import { getDate } from "../../../utils/date";
+import { defaultRoles } from "../access/statement";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
@@ -223,6 +224,44 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			const creatorRole = ctx.context.orgOptions.creatorRole || "owner";
 
 			const roles = parseRoles(ctx.body.role);
+
+			const rolesArray = roles
+				.split(",")
+				.map((r) => r.trim())
+				.filter(Boolean);
+			const defaults = Object.keys(defaultRoles);
+			const customRoles = Object.keys(ctx.context.orgOptions.roles || {});
+			const validStaticRoles = new Set([...defaults, ...customRoles]);
+
+			const unknownRoles = rolesArray.filter(
+				(role) => !validStaticRoles.has(role),
+			);
+
+			if (unknownRoles.length > 0) {
+				if (ctx.context.orgOptions.dynamicAccessControl?.enabled) {
+					const foundRoles = await ctx.context.adapter.findMany({
+						model: "organizationRole",
+						where: [
+							{ field: "organizationId", value: organizationId },
+							{ field: "role", value: unknownRoles, operator: "in" },
+						],
+					});
+					const foundRoleNames = foundRoles.map((r: any) => r.role);
+					const stillInvalid = unknownRoles.filter(
+						(r) => !foundRoleNames.includes(r),
+					);
+
+					if (stillInvalid.length > 0) {
+						throw new APIError("BAD_REQUEST", {
+							message: `${ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND}: ${stillInvalid.join(", ")}`,
+						});
+					}
+				} else {
+					throw new APIError("BAD_REQUEST", {
+						message: `${ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND}: ${unknownRoles.join(", ")}`,
+					});
+				}
+			}
 
 			if (
 				member.role !== creatorRole &&
@@ -1088,6 +1127,74 @@ export const listUserInvitations = <O extends OrganizationOptions>(
 						.optional(),
 				})
 				.optional(),
+			metadata: {
+				openapi: {
+					description: "List all invitations a user has received",
+					responses: {
+						"200": {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "array",
+										items: {
+											type: "object",
+											properties: {
+												id: {
+													type: "string",
+												},
+												email: {
+													type: "string",
+												},
+												role: {
+													type: "string",
+												},
+												organizationId: {
+													type: "string",
+												},
+												organizationName: {
+													type: "string",
+												},
+												inviterId: {
+													type: "string",
+													description:
+														"The ID of the user who created the invitation",
+												},
+												teamId: {
+													type: "string",
+													description:
+														"The ID of the team associated with the invitation",
+													nullable: true,
+												},
+												status: {
+													type: "string",
+												},
+												expiresAt: {
+													type: "string",
+												},
+												createdAt: {
+													type: "string",
+												},
+											},
+											required: [
+												"id",
+												"email",
+												"role",
+												"organizationId",
+												"organizationName",
+												"inviterId",
+												"status",
+												"expiresAt",
+												"createdAt",
+											],
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		async (ctx) => {
 			const session = await getSessionFromCtx(ctx);

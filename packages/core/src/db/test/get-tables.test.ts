@@ -59,4 +59,25 @@ describe("getAuthTables", () => {
 		expect(refreshTokenExpiresAtField.fieldName).toBe("refreshTokenExpiresAt");
 		expect(accessTokenExpiresAtField.fieldName).toBe("accessTokenExpiresAt");
 	});
+
+	it("should merge additionalFields into verification table metadata", () => {
+		const tables = getAuthTables({
+			verification: {
+				additionalFields: {
+					newField: {
+						fieldName: "new_field",
+						type: "string",
+					},
+				},
+			},
+		});
+
+		const verificationTable = tables.verification;
+		const newField = verificationTable!.fields.newField!;
+
+		console.log(newField);
+		expect(newField).not.toBeUndefined();
+		expect(newField.fieldName).toBe("new_field");
+		expect(newField.type).toBe("string");
+	});
 });

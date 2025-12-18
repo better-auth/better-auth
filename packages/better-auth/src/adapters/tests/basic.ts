@@ -331,9 +331,7 @@ export const getNormalTestSuiteTests = (
 			const users: User[] = [];
 			const sessions: Session[] = [];
 			const accounts: Account[] = [];
-			let i = -1;
 			for (const _ of Array.from({ length: 3 })) {
-				i++;
 				const user = await adapter.create<User>({
 					model: "user",
 					data: {
@@ -2401,7 +2399,7 @@ export const getNormalTestSuiteTests = (
 				});
 
 				// Add a member to the organization
-				const member = await adapter.create<Member>({
+				await adapter.create<Member>({
 					model: "member",
 					data: {
 						organizationId: organizationData.id,
@@ -2413,7 +2411,7 @@ export const getNormalTestSuiteTests = (
 				});
 
 				// Create a team for the organization
-				const team = await adapter.create<Team>({
+				await adapter.create<Team>({
 					model: "team",
 					data: {
 						name: "Test Team",
@@ -2899,6 +2897,91 @@ export const getNormalTestSuiteTests = (
 				expect(Array.isArray(result4?.session)).toBe(true);
 				expect(result4?.session).toHaveLength(0);
 			},
+		"create - should support arrays": {
+			migrateBetterAuth: {
+				plugins: [
+					{
+						id: "string-arrays-test",
+						schema: {
+							testModel: {
+								fields: {
+									stringArray: {
+										type: "string[]",
+										required: true,
+									},
+									numberArray: {
+										type: "number[]",
+										required: true,
+									},
+								},
+							},
+						},
+					} satisfies BetterAuthPlugin,
+				],
+			},
+			test: async () => {
+				const result = await adapter.create<{
+					id: string;
+					stringArray: string[];
+					numberArray: number[];
+				}>({
+					model: "testModel",
+					data: { stringArray: ["1", "2", "3"], numberArray: [1, 2, 3] },
+				});
+				expect(result.stringArray).toEqual(["1", "2", "3"]);
+				expect(result.numberArray).toEqual([1, 2, 3]);
+
+				const findResult = await adapter.findOne<{
+					stringArray: string[];
+					numberArray: number[];
+				}>({
+					model: "testModel",
+					where: [{ field: "id", value: result.id }],
+				});
+				expect(findResult).toEqual(result);
+				expect(findResult?.stringArray).toEqual(["1", "2", "3"]);
+				expect(findResult?.numberArray).toEqual([1, 2, 3]);
+			},
+		},
+		"create - should support json": {
+			migrateBetterAuth: {
+				plugins: [
+					{
+						id: "json-test",
+						schema: {
+							testModel: {
+								fields: {
+									json: {
+										type: "json",
+										required: true,
+									},
+								},
+							},
+						},
+					} satisfies BetterAuthPlugin,
+				],
+			},
+			test: async () => {
+				const result = await adapter.create<{
+					id: string;
+					json: Record<string, any>;
+				}>({
+					model: "testModel",
+					data: { json: { foo: "bar" } },
+				});
+				expect(result.json).toEqual({ foo: "bar" });
+
+				const findResult = await adapter.findOne<{
+					json: Record<string, any>;
+				}>({
+					model: "testModel",
+					where: [{ field: "id", value: result.id }],
+				});
+				expect(findResult).toEqual(result);
+				expect(findResult?.json).toEqual({ foo: "bar" });
+				console.log(findResult);
+			},
+		},
 	};
 };
 
