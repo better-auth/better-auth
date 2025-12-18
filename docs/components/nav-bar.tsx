@@ -3,7 +3,7 @@ import { MobileSearchIcon } from "@/components/mobile-search-icon";
 import { ThemeToggle } from "@/components/theme-toggle";
 import DarkPng from "../public/branding/better-auth-logo-dark.png";
 import WhitePng from "../public/branding/better-auth-logo-light.png";
-import { Logo } from "./logo";
+import ChristmasLogo from "./christmas/logo";
 import LogoContextMenu from "./logo-context-menu";
 import { NavLink } from "./nav-link";
 import { NavbarMobile, NavbarMobileBtn } from "./nav-mobile";
@@ -90,9 +90,13 @@ export const Navbar = () => {
 					<div className="flex flex-col gap-2 w-full">
 						<LogoContextMenu
 							logo={
-								<div className="flex items-center gap-2">
-									<Logo />
-									<p className="select-none">BETTER-AUTH.</p>
+								// <div className="flex items-center gap-2">
+								// 	<Logo />
+								// 	<p className="select-none">BETTER-AUTH.</p>
+								// </div>
+
+								<div className="flex items-center h-6">
+									<ChristmasLogo />
 								</div>
 							}
 							logoAssets={logoAssets}
