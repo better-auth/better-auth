@@ -197,6 +197,7 @@ describe("oidc", async () => {
 			await getTestInstance({
 				account: {
 					accountLinking: {
+						enabled: true,
 						trustedProviders: ["test"],
 					},
 				},
@@ -283,6 +284,7 @@ describe("oidc", async () => {
 			await getTestInstance({
 				account: {
 					accountLinking: {
+						enabled: true,
 						trustedProviders: ["test"],
 					},
 				},
@@ -372,6 +374,7 @@ describe("oidc", async () => {
 			await getTestInstance({
 				account: {
 					accountLinking: {
+						enabled: true,
 						trustedProviders: ["test"],
 					},
 				},
@@ -1094,6 +1097,7 @@ describe("oidc storage", async () => {
 			await getTestInstance({
 				account: {
 					accountLinking: {
+						enabled: true,
 						trustedProviders: ["test"],
 					},
 				},
@@ -1474,6 +1478,7 @@ describe("oidc-jwt", async () => {
 			await getTestInstance({
 				account: {
 					accountLinking: {
+						enabled: true,
 						trustedProviders: ["test"],
 					},
 				},

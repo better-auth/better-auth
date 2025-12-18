@@ -74,6 +74,7 @@ describe("account", async () => {
 		},
 		account: {
 			accountLinking: {
+				enabled: true,
 				allowDifferentEmails: true,
 			},
 			encryptOAuthTokens: true,

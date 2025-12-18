@@ -75,6 +75,11 @@ describe("Admin plugin", async () => {
 		customFetchImpl,
 	} = await getTestInstance(
 		{
+			account: {
+				accountLinking: {
+					enabled: true,
+				},
+			},
 			plugins: [
 				admin({
 					bannedUserMessage: "Custom banned user message",

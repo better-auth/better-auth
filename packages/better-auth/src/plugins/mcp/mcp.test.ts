@@ -165,6 +165,7 @@ describe("mcp", async () => {
 			await getTestInstance({
 				account: {
 					accountLinking: {
+						enabled: true,
 						trustedProviders: ["test-public"],
 					},
 				},
@@ -261,6 +262,7 @@ describe("mcp", async () => {
 			await getTestInstance({
 				account: {
 					accountLinking: {
+						enabled: true,
 						trustedProviders: ["test-confidential"],
 					},
 				},
@@ -442,6 +444,7 @@ describe("mcp", async () => {
 		const { customFetchImpl: customFetchImplRP } = await getTestInstance({
 			account: {
 				accountLinking: {
+					enabled: true,
 					trustedProviders: ["test-userinfo"],
 				},
 			},

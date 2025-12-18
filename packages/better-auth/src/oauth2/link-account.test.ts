@@ -486,3 +486,89 @@ describe("oauth2 - override user info on sign-in", async () => {
 		expect(session.data?.user.name).toBe("Updated Name");
 	});
 });
+
+describe("oauth2 - account linking disabled by default", async () => {
+	const { auth, client, cookieSetter } = await getTestInstance({
+		socialProviders: {
+			google: {
+				clientId: "test",
+				clientSecret: "test",
+				enabled: true,
+			},
+		},
+		emailAndPassword: {
+			enabled: true,
+		},
+		// accountLinking is NOT specified - should default to disabled
+	});
+
+	const ctx = await auth.$context;
+
+	it("should NOT link accounts unless accountLinking is explicitly enabled", async () => {
+		const testEmail = "default-disabled@example.com";
+
+		await ctx.adapter.create({
+			model: "user",
+			data: {
+				id: "existing-user-default",
+				email: testEmail,
+				name: "Existing User",
+				emailVerified: true,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile = {
+					email: testEmail,
+					email_verified: true,
+					name: "Test User",
+					sub: "google_default_disabled_789",
+					iat: 1234567890,
+					exp: 1234567890,
+					aud: "test",
+					iss: "test",
+				};
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "test_access_token",
+					refresh_token: "test_refresh_token",
+					id_token: idToken,
+				});
+			}),
+		);
+
+		const oAuthHeaders = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/",
+			fetchOptions: {
+				onSuccess: cookieSetter(oAuthHeaders),
+			},
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		let redirectLocation = "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers: oAuthHeaders,
+			onError(context) {
+				redirectLocation = context.response.headers.get("location") || "";
+			},
+		});
+
+		// Should receive error because account linking is disabled by default
+		expect(redirectLocation).toContain("error=account_not_linked");
+
+		// Verify no google account was linked
+		const accounts = await ctx.adapter.findMany<{ providerId: string }>({
+			model: "account",
+			where: [{ field: "userId", value: "existing-user-default" }],
+		});
+		const googleAccount = accounts.find((a) => a.providerId === "google");
+		expect(googleAccount).toBeUndefined();
+	});
+});

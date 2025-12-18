@@ -27,6 +27,11 @@ describe("oauth2", async () => {
 	});
 
 	const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+		account: {
+			accountLinking: {
+				enabled: true,
+			},
+		},
 		plugins: [
 			genericOAuth({
 				config: [
