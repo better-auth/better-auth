@@ -4,12 +4,78 @@ import { APIError } from "better-call";
 import type { JWTPayload, JWTVerifyResult } from "jose";
 import { jwtVerify } from "jose";
 import { JWTExpired } from "jose/errors";
-import * as z from "zod";
+import { z } from "zod/v4";
 import { setSessionCookie } from "../../cookies";
 import { signJWT } from "../../crypto/jwt";
 import type { User } from "../../types";
 import { originCheck } from "../middlewares";
 import { getSessionFromCtx } from "./session";
+
+/**
+ * Schemas
+ */
+const SendVerificationBody = z.object({
+	email: z.email().meta({
+		description: "The email to send the verification email to",
+	}),
+	callbackURL: z
+		.string()
+		.meta({
+			description: "The URL to use for email verification callback",
+		})
+		.optional(),
+});
+
+const VerifyQuery = z.object({
+	token: z.string().meta({
+		description: "The token to verify the email",
+	}),
+	callbackURL: z
+		.string()
+		.meta({
+			description: "The URL to redirect to after email verification",
+		})
+		.optional(),
+});
+
+const JwtPayloadSchema = z.object({
+	email: z.email(),
+	updateTo: z.string().optional(),
+	requestType: z
+		.enum(["change-email-confirmation", "change-email-verification"])
+		.optional(),
+});
+
+/**
+ * Build verification URL with safely encoded callbackURL
+ */
+function buildVerificationUrl(
+	ctx: GenericEndpointContext,
+	token: string,
+	callbackURL?: string,
+) {
+	const cb = callbackURL
+		? encodeURIComponent(callbackURL)
+		: encodeURIComponent("/");
+	return `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${cb}`;
+}
+
+/**
+ * Ensure email verification is enabled in options and return the object
+ */
+function ensureEmailVerificationEnabled(ctx: GenericEndpointContext) {
+	const emailVerification =
+		ctx.context.options.emailVerification as
+			| { sendVerificationEmail: (...args: any[]) => any }
+			| undefined;
+	if (!emailVerification?.sendVerificationEmail) {
+		ctx.context.logger.error("Verification email isn't enabled.");
+		throw new APIError("BAD_REQUEST", {
+			message: "Verification email isn't enabled",
+		});
+	}
+	return emailVerification;
+}
 
 export async function createEmailVerificationToken(
 	secret: string,
@@ -46,23 +112,15 @@ export async function sendVerificationEmailFn(
 	ctx: GenericEndpointContext,
 	user: User,
 ) {
-	if (!ctx.context.options.emailVerification?.sendVerificationEmail) {
-		ctx.context.logger.error("Verification email isn't enabled.");
-		throw new APIError("BAD_REQUEST", {
-			message: "Verification email isn't enabled",
-		});
-	}
+	const emailVerification = ensureEmailVerificationEnabled(ctx);
 	const token = await createEmailVerificationToken(
 		ctx.context.secret,
 		user.email,
 		undefined,
 		ctx.context.options.emailVerification?.expiresIn,
 	);
-	const callbackURL = ctx.body.callbackURL
-		? encodeURIComponent(ctx.body.callbackURL)
-		: encodeURIComponent("/");
-	const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
-	await ctx.context.options.emailVerification.sendVerificationEmail(
+	const url = buildVerificationUrl(ctx, token, ctx.body.callbackURL);
+	await emailVerification.sendVerificationEmail(
 		{
 			user: user,
 			url,
@@ -75,18 +133,7 @@ export const sendVerificationEmail = createAuthEndpoint(
 	"/send-verification-email",
 	{
 		method: "POST",
-		operationId: "sendVerificationEmail",
-		body: z.object({
-			email: z.email().meta({
-				description: "The email to send the verification email to",
-			}),
-			callbackURL: z
-				.string()
-				.meta({
-					description: "The URL to use for email verification callback",
-				})
-				.optional(),
-		}),
+		body: SendVerificationBody,
 		metadata: {
 			openapi: {
 				operationId: "sendVerificationEmail",
@@ -156,12 +203,7 @@ export const sendVerificationEmail = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		if (!ctx.context.options.emailVerification?.sendVerificationEmail) {
-			ctx.context.logger.error("Verification email isn't enabled.");
-			throw new APIError("BAD_REQUEST", {
-				message: "Verification email isn't enabled",
-			});
-		}
+		ensureEmailVerificationEnabled(ctx);
 		const { email } = ctx.body;
 		const session = await getSessionFromCtx(ctx);
 		if (!session) {
@@ -205,18 +247,7 @@ export const verifyEmail = createAuthEndpoint(
 	"/verify-email",
 	{
 		method: "GET",
-		operationId: "verifyEmail",
-		query: z.object({
-			token: z.string().meta({
-				description: "The token to verify the email",
-			}),
-			callbackURL: z
-				.string()
-				.meta({
-					description: "The URL to redirect to after email verification",
-				})
-				.optional(),
-		}),
+		query: VerifyQuery,
 		use: [originCheck((ctx) => ctx.query.callbackURL)],
 		metadata: {
 			openapi: {
@@ -296,12 +327,7 @@ export const verifyEmail = createAuthEndpoint(
 			}
 			return redirectOnError("invalid_token");
 		}
-		const schema = z.object({
-			email: z.email(),
-			updateTo: z.string().optional(),
-			requestType: z.string().optional(),
-		});
-		const parsed = schema.parse(jwt.payload);
+		const parsed = JwtPayloadSchema.parse(jwt.payload);
 		const user = await ctx.context.internalAdapter.findUserByEmail(
 			parsed.email,
 		);
@@ -398,13 +424,11 @@ export const verifyEmail = createAuthEndpoint(
 			);
 
 			//send verification email to the new email
-			const updateCallbackURL = ctx.query.callbackURL
-				? encodeURIComponent(ctx.query.callbackURL)
-				: encodeURIComponent("/");
-			await ctx.context.options.emailVerification?.sendVerificationEmail?.(
+			const emailVerification = ensureEmailVerificationEnabled(ctx);
+			await emailVerification.sendVerificationEmail(
 				{
 					user: updatedUser,
-					url: `${ctx.context.baseURL}/verify-email?token=${newToken}&callbackURL=${updateCallbackURL}`,
+					url: buildVerificationUrl(ctx, newToken, ctx.query.callbackURL),
 					token: newToken,
 				},
 				ctx.request,
