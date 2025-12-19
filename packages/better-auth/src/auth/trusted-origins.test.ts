@@ -262,6 +262,7 @@ describe("trusted origins", () => {
 		it("should allow dynamically computed trusted origins", async () => {
 			const { isTrustedOrigin } = await createAuthTestInstance({
 				trustedOrigins: async (request) => {
+					if (!request) return [];
 					const url = new URL(
 						new URL(request.url).searchParams.get("url") ?? "unknown",
 					);
