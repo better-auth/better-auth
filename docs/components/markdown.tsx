@@ -111,23 +111,26 @@ function reindent(code: string): string {
 	return result.join("\n");
 }
 
-function Pre(props: ComponentProps<"pre">) {
-	const code = Children.only(props.children) as ReactElement;
-	const codeProps = code.props as ComponentProps<"code">;
-	const content = codeProps.children;
-	if (typeof content !== "string") return null;
-
-	let lang =
-		codeProps.className
+function CodeBlock({
+	content,
+	className,
+}: {
+	content: string;
+	className?: string;
+}) {
+	const lang =
+		className
 			?.split(" ")
 			.find((v) => v.startsWith("language-"))
 			?.slice("language-".length) ?? "text";
 
-	if (lang === "mdx") lang = "md";
+	const displayLang = lang === "mdx" ? "md" : lang;
 
 	const formattedCode = useMemo(() => {
 		if (
-			["ts", "tsx", "typescript", "js", "javascript", "json"].includes(lang)
+			["ts", "tsx", "typescript", "js", "javascript", "json"].includes(
+				displayLang,
+			)
 		) {
 			return js_beautify(content, {
 				indent_size: 2,
@@ -136,13 +139,23 @@ function Pre(props: ComponentProps<"pre">) {
 			}).trim();
 		}
 		return reindent(content.trimEnd());
-	}, [content, lang]);
+	}, [content, displayLang]);
 
 	return (
 		<div style={{ tabSize: 2 }}>
-			<DynamicCodeBlock lang={lang} code={formattedCode} />
+			<DynamicCodeBlock lang={displayLang} code={formattedCode} />
 		</div>
 	);
+}
+
+function Pre(props: ComponentProps<"pre">) {
+	const code = Children.only(props.children) as ReactElement;
+	const codeProps = code.props as ComponentProps<"code">;
+	const content = codeProps.children;
+
+	if (typeof content !== "string") return null;
+
+	return <CodeBlock content={content} className={codeProps.className} />;
 }
 
 const processor = createProcessor();
