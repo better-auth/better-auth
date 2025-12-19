@@ -27,7 +27,11 @@ export const auth = betterAuth({
 })
 ```
 
-If not explicitly set, the system will check for the environment variable `process.env.BETTER_AUTH_URL`
+If not explicitly set, the system will check for the environment variable `BETTER_AUTH_URL`. If that's also not set, it will be inferred from the incoming request.
+
+<Callout type="warn">
+Relying on request inference is not recommended. For security and stability, always set `baseURL` explicitly in your config or via the `BETTER_AUTH_URL` environment variable.
+</Callout>
 
 ## `basePath`
 

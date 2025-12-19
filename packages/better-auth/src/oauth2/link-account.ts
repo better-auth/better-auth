@@ -104,7 +104,10 @@ export async function handleOAuthUserInfo(
 					}).filter(([_, value]) => value !== undefined),
 				);
 				if (c.context.options.account?.storeAccountCookie) {
-					await setAccountCookie(c, updateData);
+					await setAccountCookie(c, {
+						...account,
+						...updateData,
+					});
 				}
 
 				if (Object.keys(updateData).length > 0) {

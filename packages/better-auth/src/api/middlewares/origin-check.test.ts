@@ -1,5 +1,5 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { describe, expect } from "vitest";
+import { describe, expect, vi } from "vitest";
 import * as z from "zod";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -244,5 +244,193 @@ describe("origin check middleware", async (it) => {
 			"/verify-email?callbackURL=https://malicious-site.com&token=xyz",
 		);
 		expect(sampleInternalEndpointInvalid.error?.status).toBe(403);
+	});
+});
+
+describe("trusted origins with baseURL inferred from request", async (it) => {
+	it("should respect trustedOrigins array when baseURL is NOT in config", async () => {
+		const { customFetchImpl, testUser } = await getTestInstance({
+			trustedOrigins: ["http://my-frontend.com"],
+			emailAndPassword: {
+				enabled: true,
+			},
+			advanced: {
+				disableCSRFCheck: false,
+				disableOriginCheck: false,
+			},
+		});
+
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "http://my-frontend.com",
+					cookie: "session=test",
+				},
+			},
+		});
+
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			callbackURL: "http://my-frontend.com/dashboard",
+		});
+
+		expect(res.data?.user).toBeDefined();
+	});
+
+	it("should reject untrusted origins even when baseURL is inferred", async () => {
+		const { customFetchImpl, testUser } = await getTestInstance({
+			trustedOrigins: ["http://my-frontend.com"],
+			emailAndPassword: {
+				enabled: true,
+			},
+			advanced: {
+				disableCSRFCheck: false,
+				disableOriginCheck: false,
+			},
+		});
+
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "http://evil-site.com",
+					cookie: "session=test",
+				},
+			},
+		});
+
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+
+		expect(res.error?.status).toBe(403);
+	});
+
+	it("should respect BETTER_AUTH_TRUSTED_ORIGINS env when baseURL is NOT in config", async () => {
+		vi.stubEnv("BETTER_AUTH_TRUSTED_ORIGINS", "http://env-frontend.com");
+
+		try {
+			const { customFetchImpl, testUser } = await getTestInstance({
+				emailAndPassword: {
+					enabled: true,
+				},
+				advanced: {
+					disableCSRFCheck: false,
+					disableOriginCheck: false,
+				},
+			});
+
+			const client = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					customFetchImpl,
+					headers: {
+						origin: "http://env-frontend.com",
+						cookie: "session=test",
+					},
+				},
+			});
+
+			const res = await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				callbackURL: "http://env-frontend.com/dashboard",
+			});
+
+			expect(res.data?.user).toBeDefined();
+		} finally {
+			vi.unstubAllEnvs();
+		}
+	});
+
+	it("should allow requests from inferred baseURL origin", async () => {
+		const { customFetchImpl, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			advanced: {
+				disableCSRFCheck: false,
+				disableOriginCheck: false,
+			},
+		});
+
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "http://localhost:3000",
+					cookie: "session=test",
+				},
+			},
+		});
+
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			callbackURL: "http://localhost:3000/dashboard",
+		});
+
+		expect(res.data?.user).toBeDefined();
+	});
+
+	it("should support both config array and env var together when baseURL is inferred", async () => {
+		vi.stubEnv("BETTER_AUTH_TRUSTED_ORIGINS", "http://env-origin.com");
+
+		try {
+			const { customFetchImpl, testUser } = await getTestInstance({
+				trustedOrigins: ["http://config-origin.com"],
+				emailAndPassword: {
+					enabled: true,
+				},
+				advanced: {
+					disableCSRFCheck: false,
+					disableOriginCheck: false,
+				},
+			});
+
+			const client = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					customFetchImpl,
+					headers: {
+						origin: "http://config-origin.com",
+						cookie: "session=test",
+					},
+				},
+			});
+
+			const res1 = await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				callbackURL: "http://config-origin.com/dashboard",
+			});
+			expect(res1.data?.user).toBeDefined();
+
+			const client2 = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					customFetchImpl,
+					headers: {
+						origin: "http://env-origin.com",
+						cookie: "session=test",
+					},
+				},
+			});
+
+			const res2 = await client2.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				callbackURL: "http://env-origin.com/dashboard",
+			});
+			expect(res2.data?.user).toBeDefined();
+		} finally {
+			vi.unstubAllEnvs();
+		}
 	});
 });

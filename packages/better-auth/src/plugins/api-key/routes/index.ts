@@ -1,4 +1,4 @@
-import type { AuthContext } from "@better-auth/core";
+import type { AuthContext, Awaitable } from "@better-auth/core";
 import { API_KEY_TABLE_NAME } from "..";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey, ApiKeyOptions } from "../types";
@@ -81,7 +81,7 @@ export function createApiKeyRoutes({
 	keyGenerator: (options: {
 		length: number;
 		prefix: string | undefined;
-	}) => Promise<string> | string;
+	}) => Awaitable<string>;
 	opts: PredefinedApiKeyOptions;
 	schema: ReturnType<typeof apiKeySchema>;
 }) {

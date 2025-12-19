@@ -340,6 +340,7 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 			deleteAllExpiredApiKeys: routes.deleteAllExpiredApiKeys,
 		},
 		schema,
+		options,
 	} satisfies BetterAuthPlugin;
 };
 
