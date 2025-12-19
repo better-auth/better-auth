@@ -3,6 +3,24 @@ import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError } from "better-call";
 
 /**
+ * Get the origin header from the request
+ */
+function getOriginHeader(headers: Headers | undefined): string {
+	if (!headers) return "";
+
+	const origin = headers.get("origin");
+	if (origin) return origin;
+
+	const referer = headers.get("referer");
+	if (referer) return referer;
+
+	const expoOrigin = headers.get("expo-origin");
+	if (expoOrigin) return expoOrigin;
+
+	return "";
+}
+
+/**
  * A middleware to validate callbackURL and origin against
  * trustedOrigins.
  */
@@ -18,7 +36,7 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	}
 	const headers = ctx.request?.headers;
 	const { body, query } = ctx;
-	const originHeader = headers?.get("origin") || headers?.get("referer") || "";
+	const originHeader = getOriginHeader(headers);
 	const callbackURL = body?.callbackURL || query?.callbackURL;
 	const redirectURL = body?.redirectTo;
 	const errorCallbackURL = body?.errorCallbackURL;
