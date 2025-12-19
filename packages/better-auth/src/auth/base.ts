@@ -2,6 +2,7 @@ import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
 import { runWithAdapter } from "@better-auth/core/context";
 import { BASE_ERROR_CODES, BetterAuthError } from "@better-auth/core/error";
 import { getEndpoints, router } from "../api";
+import { getTrustedOrigins } from "../context/helpers";
 import type { Auth } from "../types";
 import { getBaseURL, getOrigin } from "../utils/url";
 
@@ -37,13 +38,13 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 				if (baseURL) {
 					ctx.baseURL = baseURL;
 					ctx.options.baseURL = getOrigin(ctx.baseURL) || undefined;
+					ctx.trustedOrigins = getTrustedOrigins(ctx.options);
 				} else {
 					throw new BetterAuthError(
 						"Could not get base URL from request. Please provide a valid base URL.",
 					);
 				}
 			}
-
 			if (typeof options.trustedOrigins === "function") {
 				ctx.trustedOrigins = [
 					...ctx.trustedOrigins,
