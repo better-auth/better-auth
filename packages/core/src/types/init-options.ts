@@ -723,6 +723,14 @@ export type BetterAuthOptions = {
 				 */
 				disableSessionRefresh?: boolean;
 				/**
+				 * Defer session refresh writes to POST requests.
+				 * When enabled, GET is read-only and POST performs refresh.
+				 * Useful for read-replica database setups.
+				 *
+				 * @default false
+				 */
+				deferSessionRefresh?: boolean;
+				/**
 				 * Additional fields for the session
 				 */
 				additionalFields?: {
