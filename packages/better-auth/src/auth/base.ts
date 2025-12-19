@@ -1,5 +1,6 @@
 import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
 import { runWithAdapter } from "@better-auth/core/context";
+import { env } from "@better-auth/core/env";
 import { BASE_ERROR_CODES, BetterAuthError } from "@better-auth/core/error";
 import { getEndpoints, router } from "../api";
 import type { Auth } from "../types";
@@ -26,7 +27,8 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 		handler: async (request: Request) => {
 			const ctx = await authContext;
 			const basePath = ctx.options.basePath || "/api/auth";
-			if (!ctx.options.baseURL) {
+			const baseURLWasInferred = !ctx.options.baseURL;
+			if (baseURLWasInferred) {
 				const baseURL = getBaseURL(
 					undefined,
 					basePath,
@@ -44,6 +46,27 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 				}
 			}
 
+			// Rebuild trustedOrigins if baseURL was inferred from request.
+			// getTrustedOrigins() returns [] when baseURL is not set at init time,
+			// so we need to rebuild it here with all configured origins.
+			// See: https://github.com/better-auth/better-auth/issues/6798
+			if (baseURLWasInferred && ctx.options.baseURL) {
+				const baseOrigin = getOrigin(ctx.options.baseURL);
+				if (baseOrigin) {
+					ctx.trustedOrigins = [baseOrigin];
+				}
+				// Add array-based trustedOrigins from config
+				if (options.trustedOrigins && Array.isArray(options.trustedOrigins)) {
+					ctx.trustedOrigins.push(...options.trustedOrigins);
+				}
+				// Add env-based trustedOrigins
+				const envTrustedOrigins = env.BETTER_AUTH_TRUSTED_ORIGINS;
+				if (envTrustedOrigins) {
+					ctx.trustedOrigins.push(...envTrustedOrigins.split(","));
+				}
+			}
+
+			// Handle function-based trustedOrigins (dynamic at request time)
 			if (typeof options.trustedOrigins === "function") {
 				ctx.trustedOrigins = [
 					...ctx.trustedOrigins,

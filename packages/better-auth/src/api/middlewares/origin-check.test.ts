@@ -247,9 +247,28 @@ describe("origin check middleware", async (it) => {
 	});
 });
 
-describe("trustedOrigins regression tests", async (it) => {
-	it("should respect trustedOrigins from config array through full request flow", async () => {
+/**
+ * Regression tests for trustedOrigins when baseURL is NOT provided in config.
+ *
+ * Issue: https://github.com/better-auth/better-auth/issues/6798
+ *
+ * When baseURL is not in the auth config, it gets inferred from the first request.
+ * However, getTrustedOrigins() is called at init time BEFORE the first request,
+ * so it returns [] (empty array) because it can't determine the baseURL yet.
+ *
+ * This caused trustedOrigins from config (array or env var) to be ignored,
+ * resulting in "Invalid origin" errors even for properly configured origins.
+ *
+ * The fix rebuilds trustedOrigins when baseURL is inferred from the request,
+ * ensuring all configured origins are respected.
+ */
+describe("trustedOrigins regression tests (baseURL inferred from request)", async (it) => {
+	it("should respect trustedOrigins array when baseURL is NOT in config", async () => {
+		// NOTE: We intentionally do NOT pass baseURL to the auth config.
+		// This simulates the common SvelteKit/Next.js setup where baseURL
+		// is inferred from the incoming request.
 		const { customFetchImpl, testUser } = await getTestInstance({
+			// baseURL is NOT set - will be inferred from request
 			trustedOrigins: ["http://my-frontend.com"],
 			emailAndPassword: {
 				enabled: true,
@@ -271,6 +290,7 @@ describe("trustedOrigins regression tests", async (it) => {
 			},
 		});
 
+		// This should succeed because http://my-frontend.com is in trustedOrigins
 		const res = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
@@ -280,8 +300,9 @@ describe("trustedOrigins regression tests", async (it) => {
 		expect(res.data?.user).toBeDefined();
 	});
 
-	it("should reject origins not in trustedOrigins config", async () => {
+	it("should reject untrusted origins even when baseURL is inferred", async () => {
 		const { customFetchImpl, testUser } = await getTestInstance({
+			// baseURL is NOT set - will be inferred from request
 			trustedOrigins: ["http://my-frontend.com"],
 			emailAndPassword: {
 				enabled: true,
@@ -297,12 +318,13 @@ describe("trustedOrigins regression tests", async (it) => {
 			fetchOptions: {
 				customFetchImpl,
 				headers: {
-					origin: "http://evil-site.com",
+					origin: "http://evil-site.com", // NOT in trustedOrigins
 					cookie: "session=test",
 				},
 			},
 		});
 
+		// This should fail because http://evil-site.com is NOT in trustedOrigins
 		const res = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
@@ -311,11 +333,13 @@ describe("trustedOrigins regression tests", async (it) => {
 		expect(res.error?.status).toBe(403);
 	});
 
-	it("should respect BETTER_AUTH_TRUSTED_ORIGINS env variable through full request flow", async () => {
+	it("should respect BETTER_AUTH_TRUSTED_ORIGINS env when baseURL is NOT in config", async () => {
 		vi.stubEnv("BETTER_AUTH_TRUSTED_ORIGINS", "http://env-frontend.com");
 
 		try {
 			const { customFetchImpl, testUser } = await getTestInstance({
+				// baseURL is NOT set - will be inferred from request
+				// trustedOrigins is NOT set - should come from env var
 				emailAndPassword: {
 					enabled: true,
 				},
@@ -336,6 +360,7 @@ describe("trustedOrigins regression tests", async (it) => {
 				},
 			});
 
+			// This should succeed because http://env-frontend.com is in BETTER_AUTH_TRUSTED_ORIGINS
 			const res = await client.signIn.email({
 				email: testUser.email,
 				password: testUser.password,
@@ -343,6 +368,99 @@ describe("trustedOrigins regression tests", async (it) => {
 			});
 
 			expect(res.data?.user).toBeDefined();
+		} finally {
+			vi.unstubAllEnvs();
+		}
+	});
+
+	it("should allow requests from inferred baseURL origin", async () => {
+		// When baseURL is inferred, it should automatically be trusted
+		const { customFetchImpl, testUser } = await getTestInstance({
+			// baseURL is NOT set - will be inferred as http://localhost:3000
+			// trustedOrigins is NOT set
+			emailAndPassword: {
+				enabled: true,
+			},
+			advanced: {
+				disableCSRFCheck: false,
+				disableOriginCheck: false,
+			},
+		});
+
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "http://localhost:3000", // Same as inferred baseURL
+					cookie: "session=test",
+				},
+			},
+		});
+
+		// This should succeed because the origin matches the inferred baseURL
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			callbackURL: "http://localhost:3000/dashboard",
+		});
+
+		expect(res.data?.user).toBeDefined();
+	});
+
+	it("should support both config array and env var together when baseURL is inferred", async () => {
+		vi.stubEnv("BETTER_AUTH_TRUSTED_ORIGINS", "http://env-origin.com");
+
+		try {
+			const { customFetchImpl, testUser } = await getTestInstance({
+				// baseURL is NOT set - will be inferred from request
+				trustedOrigins: ["http://config-origin.com"],
+				emailAndPassword: {
+					enabled: true,
+				},
+				advanced: {
+					disableCSRFCheck: false,
+					disableOriginCheck: false,
+				},
+			});
+
+			const client = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					customFetchImpl,
+					headers: {
+						origin: "http://config-origin.com",
+						cookie: "session=test",
+					},
+				},
+			});
+
+			// Config origin should work
+			const res1 = await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				callbackURL: "http://config-origin.com/dashboard",
+			});
+			expect(res1.data?.user).toBeDefined();
+
+			// Env origin should also work
+			const client2 = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					customFetchImpl,
+					headers: {
+						origin: "http://env-origin.com",
+						cookie: "session=test",
+					},
+				},
+			});
+
+			const res2 = await client2.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				callbackURL: "http://env-origin.com/dashboard",
+			});
+			expect(res2.data?.user).toBeDefined();
 		} finally {
 			vi.unstubAllEnvs();
 		}
