@@ -2,8 +2,9 @@ import { DynamicCodeBlock } from "fumadocs-ui/components/dynamic-codeblock";
 import defaultMdxComponents from "fumadocs-ui/mdx";
 import type { ElementContent, Root, RootContent } from "hast";
 import { toJsxRuntime } from "hast-util-to-jsx-runtime";
+import { js_beautify } from "js-beautify";
 import type { ComponentProps, ReactElement, ReactNode } from "react";
-import { Children, Suspense, use, useDeferredValue } from "react";
+import { Children, Suspense, use, useDeferredValue, useMemo } from "react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 import { remark } from "remark";
 import remarkGfm from "remark-gfm";
@@ -103,7 +104,7 @@ function reindent(code: string): string {
 			currentLineLevel = Math.max(0, level - 1);
 		}
 
-		result.push("  ".repeat(currentLineLevel) + trimmed);
+		result.push("\t".repeat(currentLineLevel) + trimmed);
 		level = Math.max(0, level + opens - closes);
 	}
 
@@ -124,7 +125,24 @@ function Pre(props: ComponentProps<"pre">) {
 
 	if (lang === "mdx") lang = "md";
 
-	return <DynamicCodeBlock lang={lang} code={reindent(content.trimEnd())} />;
+	const formattedCode = useMemo(() => {
+		if (
+			["ts", "tsx", "typescript", "js", "javascript", "json"].includes(lang)
+		) {
+			return js_beautify(content, {
+				indent_size: 2,
+				indent_with_tabs: true,
+				brace_style: "preserve-inline",
+			}).trim();
+		}
+		return reindent(content.trimEnd());
+	}, [content, lang]);
+
+	return (
+		<div style={{ tabSize: 2 }}>
+			<DynamicCodeBlock lang={lang} code={formattedCode} />
+		</div>
+	);
 }
 
 const processor = createProcessor();
