@@ -35,6 +35,7 @@ description: Google provider setup and usage.
         import { betterAuth } from "better-auth"
 
         export const auth = betterAuth({
+            baseURL: process.env.BETTER_AUTH_URL, // [!code highlight]
             socialProviders: {
                 google: { // [!code highlight]
                     clientId: process.env.GOOGLE_CLIENT_ID as string, // [!code highlight]
@@ -43,6 +44,23 @@ description: Google provider setup and usage.
             },
         })
         ```
+        <Callout type="warn">
+        **Important: Set Your Base URL**
+
+        You must configure the `baseURL` to avoid `redirect_uri_mismatch` errors. Better Auth uses this to construct the OAuth callback URL sent to Google.
+
+        **Option 1: Environment Variable (Recommended)**
+
+        Add to your `.env` file:
+        ```env
+        BETTER_AUTH_URL=https://your-domain.com
+        ```
+
+        **Option 2: Explicit Configuration**
+
+        Pass `baseURL` directly in the auth config as shown above.
+        Without this, the callback URL may default to `localhost`, causing Google OAuth to fail in production.
+        </Callout>
     </Step>
 
 </Steps>
