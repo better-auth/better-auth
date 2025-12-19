@@ -156,6 +156,7 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 						await assignOrganizationByDomain(ctx as any, {
 							user: newSession.user,
 							provisioningOptions: options?.organizationProvisioning,
+							domainVerification: options?.domainVerification,
 						});
 					}),
 				},

@@ -100,6 +100,9 @@ export async function assignOrganizationFromProvider(
 export interface AssignOrganizationByDomainOptions {
 	user: User;
 	provisioningOptions?: OrganizationProvisioningOptions;
+	domainVerification?: {
+		enabled?: boolean;
+	};
 }
 
 /**
@@ -114,7 +117,7 @@ export async function assignOrganizationByDomain(
 	ctx: EndpointContext,
 	options: AssignOrganizationByDomainOptions,
 ): Promise<void> {
-	const { user, provisioningOptions } = options;
+	const { user, provisioningOptions, domainVerification } = options;
 
 	if (provisioningOptions?.disabled) {
 		return;
@@ -133,11 +136,19 @@ export async function assignOrganizationByDomain(
 		return;
 	}
 
+	const whereClause: { field: string; value: string | boolean }[] = [
+		{ field: "domain", value: domain },
+	];
+
+	if (domainVerification?.enabled) {
+		whereClause.push({ field: "domainVerified", value: true });
+	}
+
 	const ssoProvider = await ctx.context.adapter.findOne<
 		SSOProvider<SSOOptions>
 	>({
 		model: "ssoProvider",
-		where: [{ field: "domain", value: domain }],
+		where: whereClause,
 	});
 
 	if (!ssoProvider || !ssoProvider.organizationId) {
