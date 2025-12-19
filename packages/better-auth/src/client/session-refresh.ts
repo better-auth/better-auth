@@ -72,35 +72,35 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 
 		const currentSession = sessionAtom.get();
 
-	const fetchSessionWithRefresh = () => {
-		state.lastSessionRequest = now();
-		$fetch("/get-session")
-			.then(async (res) => {
-				const data = res.data as SessionResponse | null;
-				if (data?.needsRefresh) {
-					const refreshRes = await $fetch("/get-session", { method: "POST" });
-					sessionAtom.set({
-						...currentSession,
-						data: refreshRes.data,
-						error: refreshRes.error || null,
-					});
-				} else {
-					sessionAtom.set({
-						...currentSession,
-						data: res.data,
-						error: res.error || null,
-					});
-				}
-				state.lastSync = now();
-				sessionSignal.set(!sessionSignal.get());
-			})
-			.catch(() => {});
-	};
+		const fetchSessionWithRefresh = () => {
+			state.lastSessionRequest = now();
+			$fetch("/get-session")
+				.then(async (res) => {
+					const data = res.data as SessionResponse | null;
+					if (data?.needsRefresh) {
+						const refreshRes = await $fetch("/get-session", { method: "POST" });
+						sessionAtom.set({
+							...currentSession,
+							data: refreshRes.data,
+							error: refreshRes.error || null,
+						});
+					} else {
+						sessionAtom.set({
+							...currentSession,
+							data: res.data,
+							error: res.error || null,
+						});
+					}
+					state.lastSync = now();
+					sessionSignal.set(!sessionSignal.get());
+				})
+				.catch(() => {});
+		};
 
-	if (event?.event === "poll") {
-		fetchSessionWithRefresh();
-		return;
-	}
+		if (event?.event === "poll") {
+			fetchSessionWithRefresh();
+			return;
+		}
 
 		// Rate limit: don't refetch on focus if a session request was made recently
 		if (event?.event === "visibilitychange") {
@@ -114,15 +114,15 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 			}
 		}
 
-	if (event?.event === "visibilitychange") {
-		fetchSessionWithRefresh();
-		return;
-	}
+		if (event?.event === "visibilitychange") {
+			fetchSessionWithRefresh();
+			return;
+		}
 
-	if (currentSession?.data === null || currentSession?.data === undefined) {
-		state.lastSync = now();
-		sessionSignal.set(!sessionSignal.get());
-	}
+		if (currentSession?.data === null || currentSession?.data === undefined) {
+			state.lastSync = now();
+			sessionSignal.set(!sessionSignal.get());
+		}
 	};
 
 	const broadcastSessionUpdate = (

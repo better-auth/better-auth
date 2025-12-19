@@ -422,22 +422,24 @@ describe("session-refresh", () => {
 			session: { id: "session-1", expiresAt: new Date() },
 		};
 
-		const mockFetch = vi.fn(async (url: string, options?: { method?: string }) => {
-			if (options?.method === "POST") {
+		const mockFetch = vi.fn(
+			async (url: string, options?: { method?: string }) => {
+				if (options?.method === "POST") {
+					return {
+						data: refreshedSessionData,
+						error: null,
+					};
+				}
 				return {
-					data: refreshedSessionData,
+					data: {
+						user: { id: "1", email: "test@test.com" },
+						session: { id: "session-1" },
+						needsRefresh: true,
+					},
 					error: null,
 				};
-			}
-			return {
-				data: {
-					user: { id: "1", email: "test@test.com" },
-					session: { id: "session-1" },
-					needsRefresh: true,
-				},
-				error: null,
-			};
-		});
+			},
+		);
 
 		const manager = createSessionRefreshManager({
 			sessionAtom,
@@ -570,22 +572,24 @@ describe("session-refresh", () => {
 			session: { id: "session-1", expiresAt: new Date() },
 		};
 
-		const mockFetch = vi.fn(async (url: string, options?: { method?: string }) => {
-			if (options?.method === "POST") {
+		const mockFetch = vi.fn(
+			async (url: string, options?: { method?: string }) => {
+				if (options?.method === "POST") {
+					return {
+						data: refreshedSessionData,
+						error: null,
+					};
+				}
 				return {
-					data: refreshedSessionData,
+					data: {
+						user: { id: "1", email: "test@test.com" },
+						session: { id: "session-1" },
+						needsRefresh: true,
+					},
 					error: null,
 				};
-			}
-			return {
-				data: {
-					user: { id: "1", email: "test@test.com" },
-					session: { id: "session-1" },
-					needsRefresh: true,
-				},
-				error: null,
-			};
-		});
+			},
+		);
 
 		const manager = createSessionRefreshManager({
 			sessionAtom,

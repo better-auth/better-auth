@@ -1418,7 +1418,7 @@ describe("cookie cache versioning", async () => {
 
 describe("deferSessionRefresh", async () => {
 	it("should return needsRefresh flag on GET when enabled", async () => {
-		const { auth, testUser, cookieSetter } = await getTestInstance({
+		const { auth, testUser } = await getTestInstance({
 			session: {
 				deferSessionRefresh: true,
 				updateAge: 0,
