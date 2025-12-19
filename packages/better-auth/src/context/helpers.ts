@@ -71,7 +71,7 @@ export async function getTrustedOrigins(
 		if (Array.isArray(options.trustedOrigins)) {
 			trustedOrigins.push(...options.trustedOrigins);
 		}
-		if (typeof options.trustedOrigins === "function" && request) {
+		if (typeof options.trustedOrigins === "function") {
 			trustedOrigins.push(...(await options.trustedOrigins(request)));
 		}
 	}
