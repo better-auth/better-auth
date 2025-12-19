@@ -39,12 +39,12 @@ The passkey plugin implementation is powered by [SimpleWebAuthn](https://simplew
 
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
-            ```bash
+            ```package-install
             npx @better-auth/cli migrate
             ```
             </Tab>
             <Tab value="generate">
-            ```bash
+            ```package-install
             npx @better-auth/cli generate
             ```
             </Tab>
@@ -341,3 +341,63 @@ until it hits an effective TLD. So `www.example.com` can use the RP IDs `www.exa
 **advanced**: Advanced options
 
 - `webAuthnChallengeCookie`: Cookie name for storing WebAuthn challenge ID during authentication flow (Default: `better-auth-passkey`)
+
+## Expo Integration
+
+When using the passkey plugin with Expo, you need to configure the `cookiePrefix` option in the Expo client to ensure passkey cookies are properly detected and stored.
+
+By default, the passkey plugin uses `"better-auth-passkey"` as the challenge cookie name. Since this starts with `"better-auth"`, it will work with the default Expo client configuration. However, if you customize the `webAuthnChallengeCookie` option, you must also update the `cookiePrefix` in your Expo client configuration.
+
+### Example Configuration
+
+If you're using a custom cookie name:
+
+```ts title="Server: auth.ts"
+import { betterAuth } from "better-auth";
+import { passkey } from "@better-auth/passkey";
+
+export const auth = betterAuth({
+    plugins: [
+        passkey({
+            advanced: {
+                webAuthnChallengeCookie: "my-app-passkey" // Custom cookie name
+            }
+        })
+    ]
+});
+```
+
+Make sure to configure your Expo client with the matching prefix:
+
+```ts title="Client: auth-client.ts"
+import { createAuthClient } from "better-auth/react";
+import { expoClient } from "@better-auth/expo/client";
+import { passkeyClient } from "@better-auth/passkey/client";
+import * as SecureStore from "expo-secure-store";
+
+export const authClient = createAuthClient({
+    baseURL: "http://localhost:8081",
+    plugins: [
+        expoClient({
+            storage: SecureStore,
+            cookiePrefix: "my-app" // Must match the prefix of your custom cookie name
+        }),
+        passkeyClient()
+    ]
+});
+```
+
+If you're using multiple authentication systems or custom cookie names, you can provide an array of prefixes:
+
+```ts title="Client: auth-client.ts"
+expoClient({
+    storage: SecureStore,
+    cookiePrefix: ["better-auth", "my-app", "custom-auth"]
+})
+```
+
+<Callout type="warn">
+  If the `cookiePrefix` doesn't match the prefix of your `webAuthnChallengeCookie`, the passkey authentication flow will fail because the challenge cookie won't be stored and sent back to the server during verification.
+</Callout>
+
+For more information on Expo integration, see the [Expo documentation](/docs/integrations/expo).

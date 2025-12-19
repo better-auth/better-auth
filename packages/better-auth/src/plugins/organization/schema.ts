@@ -207,6 +207,14 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 					"organizationRole",
 					OrganizationRoleDefaultFields
 				>;
+			} & {
+				session: {
+					fields: InferSchema<
+						O["schema"] extends BetterAuthPluginDBSchema ? O["schema"] : {},
+						"session",
+						SessionDefaultFields
+					>["fields"];
+				};
 			}
 		: {} & (O["teams"] extends { enabled: true }
 				? {

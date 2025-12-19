@@ -1,15 +1,13 @@
 import type {
 	AuthContext,
+	Awaitable,
 	BetterAuthOptions,
 	BetterAuthPlugin,
 } from "@better-auth/core";
-import { type InternalLogger, logger } from "@better-auth/core/env";
-import {
-	APIError,
-	createRouter,
-	type Endpoint,
-	type Middleware,
-} from "better-call";
+import type { InternalLogger } from "@better-auth/core/env";
+import { logger } from "@better-auth/core/env";
+import type { Endpoint, Middleware } from "better-call";
+import { APIError, createRouter } from "better-call";
 import type { UnionToIntersection } from "../types/helper";
 import { originCheckMiddleware } from "./middlewares";
 import { onRequestRateLimit } from "./rate-limiter";
@@ -58,7 +56,11 @@ export function checkEndpointConflicts(
 	options.plugins?.forEach((plugin) => {
 		if (plugin.endpoints) {
 			for (const [key, endpoint] of Object.entries(plugin.endpoints)) {
-				if (endpoint && "path" in endpoint) {
+				if (
+					endpoint &&
+					"path" in endpoint &&
+					typeof endpoint.path === "string"
+				) {
 					const path = endpoint.path;
 					let methods: string[] = [];
 					if (endpoint.options && "method" in endpoint.options) {
@@ -158,7 +160,7 @@ To resolve this, you can:
 }
 
 export function getEndpoints<Option extends BetterAuthOptions>(
-	ctx: Promise<AuthContext> | AuthContext,
+	ctx: Awaitable<AuthContext>,
 	options: Option,
 ) {
 	const pluginEndpoints =
@@ -206,12 +208,12 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 			.flat() || [];
 
 	const baseEndpoints = {
-		signInSocial,
+		signInSocial: signInSocial<Option>(),
 		callbackOAuth,
 		getSession: getSession<Option>(),
 		signOut,
 		signUpEmail: signUpEmail<Option>(),
-		signInEmail,
+		signInEmail: signInEmail<Option>(),
 		resetPassword,
 		verifyEmail,
 		sendVerificationEmail,
@@ -266,11 +268,19 @@ export const router = <Option extends BetterAuthOptions>(
 			},
 			...middlewares,
 		],
+		allowedMediaTypes: ["application/json"],
 		async onRequest(req) {
 			//handle disabled paths
 			const disabledPaths = ctx.options.disabledPaths || [];
-			const path = new URL(req.url).pathname.replace(basePath, "");
-			if (disabledPaths.includes(path)) {
+			const pathname = new URL(req.url).pathname.replace(/\/+$/, "") || "/";
+
+			const normalizedPath =
+				basePath === "/"
+					? pathname
+					: pathname.startsWith(basePath)
+						? pathname.slice(basePath.length).replace(/\/+$/, "") || "/"
+						: pathname;
+			if (disabledPaths.includes(normalizedPath)) {
 				return new Response("Not Found", { status: 404 });
 			}
 			for (const plugin of ctx.options.plugins || []) {

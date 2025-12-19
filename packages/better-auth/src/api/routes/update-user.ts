@@ -15,24 +15,26 @@ import {
 	sessionMiddleware,
 } from "./session";
 
+const updateUserBodySchema = z.record(
+	z.string().meta({
+		description: "Field name must be a string",
+	}),
+	z.any(),
+);
+
 export const updateUser = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
 		"/update-user",
 		{
 			method: "POST",
 			operationId: "updateUser",
-			body: z.record(
-				z.string().meta({
-					description: "Field name must be a string",
-				}),
-				z.any(),
-			),
+			body: updateUserBodySchema,
 			use: [sessionMiddleware],
 			metadata: {
 				$Infer: {
 					body: {} as Partial<AdditionalUserFieldsInput<O>> & {
 						name?: string | undefined;
-						image?: string | undefined;
+						image?: string | undefined | null;
 					},
 				},
 				openapi: {
@@ -51,6 +53,7 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 										image: {
 											type: "string",
 											description: "The image of the user",
+											nullable: true,
 										},
 									},
 								},
@@ -310,7 +313,6 @@ export const changePassword = createAuthEndpoint(
 );
 
 export const setPassword = createAuthEndpoint(
-	"/set-password",
 	{
 		method: "POST",
 		body: z.object({
@@ -321,9 +323,6 @@ export const setPassword = createAuthEndpoint(
 				description: "The new password to set is required",
 			}),
 		}),
-		metadata: {
-			SERVER_ONLY: true,
-		},
 		use: [sensitiveSessionMiddleware],
 	},
 	async (ctx) => {
@@ -759,10 +758,14 @@ export const changeEmail = createAuthEndpoint(
 				message: BASE_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 			});
 		}
+
 		/**
-		 * If the email is not verified, we can update the email
+		 * If the email is not verified, we can update the email if the option is enabled
 		 */
-		if (ctx.context.session.user.emailVerified !== true) {
+		if (
+			ctx.context.session.user.emailVerified !== true &&
+			ctx.context.options.user.changeEmail.updateEmailWithoutVerification
+		) {
 			await ctx.context.internalAdapter.updateUserByEmail(
 				ctx.context.session.user.email,
 				{
@@ -809,7 +812,44 @@ export const changeEmail = createAuthEndpoint(
 		/**
 		 * If the email is verified, we need to send a verification email
 		 */
-		if (!ctx.context.options.user.changeEmail.sendChangeEmailVerification) {
+		const sendConfirmationToOldEmail =
+			ctx.context.session.user.emailVerified &&
+			(ctx.context.options.user.changeEmail.sendChangeEmailConfirmation ||
+				ctx.context.options.user.changeEmail.sendChangeEmailVerification);
+
+		if (sendConfirmationToOldEmail) {
+			const token = await createEmailVerificationToken(
+				ctx.context.secret,
+				ctx.context.session.user.email,
+				newEmail,
+				ctx.context.options.emailVerification?.expiresIn,
+				{
+					requestType: "change-email-confirmation",
+				},
+			);
+			const url = `${
+				ctx.context.baseURL
+			}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
+			const sendFn =
+				ctx.context.options.user.changeEmail.sendChangeEmailConfirmation ||
+				ctx.context.options.user.changeEmail.sendChangeEmailVerification;
+			if (sendFn) {
+				await sendFn(
+					{
+						user: ctx.context.session.user,
+						newEmail: newEmail,
+						url,
+						token,
+					},
+					ctx.request,
+				);
+			}
+			return ctx.json({
+				status: true,
+			});
+		}
+
+		if (!ctx.context.options.emailVerification?.sendVerificationEmail) {
 			ctx.context.logger.error("Verification email isn't enabled.");
 			throw new APIError("BAD_REQUEST", {
 				message: "Verification email isn't enabled",
@@ -821,14 +861,19 @@ export const changeEmail = createAuthEndpoint(
 			ctx.context.session.user.email,
 			newEmail,
 			ctx.context.options.emailVerification?.expiresIn,
+			{
+				requestType: "change-email-verification",
+			},
 		);
 		const url = `${
 			ctx.context.baseURL
 		}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
-		await ctx.context.options.user.changeEmail.sendChangeEmailVerification(
+		await ctx.context.options.emailVerification.sendVerificationEmail(
 			{
-				user: ctx.context.session.user,
-				newEmail: newEmail,
+				user: {
+					...ctx.context.session.user,
+					email: newEmail,
+				},
 				url,
 				token,
 			},

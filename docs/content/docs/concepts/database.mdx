@@ -5,9 +5,13 @@ description: Learn how to use a database with Better Auth.
 
 ## Adapters
 
-Better Auth requires a database connection to store data. The database will be used to store data such as users, sessions, and more. Plugins can also define their own database tables to store data.
+Better Auth connects to a database to store data. The database will be used to store data such as users, sessions, and more. Plugins can also define their own database tables to store data.
 
 You can pass a database connection to Better Auth by passing a supported database instance in the database options. You can learn more about supported database adapters in the [Other relational databases](/docs/adapters/other-relational-databases) documentation.
+
+<Callout type="info">
+Better Auth also works without any database. For more details, see [Stateless Session Management](/docs/concepts/session-management#stateless-session-management).
+</Callout>
 
 ## CLI
 
@@ -402,7 +406,7 @@ export const auth = betterAuth({
   user: {
     additionalFields: {
       role: {
-        type: "string",
+        type: ["user", "admin"],
         required: false,
         defaultValue: "user",
         input: false, // don't allow user to set role

@@ -40,7 +40,7 @@ import {
 	useListOrganizations,
 	useSession,
 } from "@/lib/auth-client";
-import { ActiveOrganization, Session } from "@/lib/auth-types";
+import type { ActiveOrganization, Session } from "@/lib/auth-types";
 
 export function OrganizationCard(props: {
 	session: Session | null;
@@ -451,10 +451,8 @@ function InviteMemberDialog({
 	setOptimisticOrg: (org: ActiveOrganization | null) => void;
 	optimisticOrg: ActiveOrganization | null;
 }) {
-	const [open, setOpen] = useState(false);
 	const [email, setEmail] = useState("");
 	const [role, setRole] = useState("member");
-	const [loading, setLoading] = useState(false);
 	return (
 		<Dialog>
 			<DialogTrigger asChild>
@@ -491,7 +489,6 @@ function InviteMemberDialog({
 				<DialogFooter>
 					<DialogClose>
 						<Button
-							disabled={loading}
 							onClick={async () => {
 								const invite = organization.inviteMember({
 									email: email,

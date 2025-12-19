@@ -26,9 +26,9 @@ See the [session management](/docs/concepts/session-management) for more details
 
 Better Auth includes multiple safeguards to prevent Cross-Site Request Forgery (CSRF) attacks:
 
-1. **Non-Simple Headers**
-   POST requests must either have a non-simple header or a `Content-Type` header of `application/json`. Non-simple headers are headers that are not included in the [simple headers](https://developer.mozilla.org/en-US/docs/Glossary/Simple_header) list.
-
+1. **Avoid simple requests**
+   See [Avoiding simple requests](https://developer.mozilla.org/en-US/docs/Web/Security/Attacks/CSRF#avoiding_simple_requests) for more details. Better Auth only allows requests with a non-simple header or a `Content-Type` header of `application/json`.
+   
 2. **Origin Validation**
    Each request’s `Origin` header is verified to confirm it comes from your application or another explicitly trusted source. Requests from untrusted origins are rejected. By default, Better Auth trusts the base URL of your app, but you can specify additional trusted origins via the `trustedOrigins` configuration option.
 
@@ -100,7 +100,12 @@ You can configure the IP address header in your Better Auth configuration:
 
 This ensures that Better Auth only accepts IP addresses from your trusted proxy's header, making it more difficult for attackers to bypass rate limiting or other IP-based security measures by spoofing headers.
 
-> **Important**: When setting a custom IP address header, ensure that your proxy or load balancer is properly configured to set this header, and that it cannot be set by end users directly.
+<Callout type="info">
+**Important**
+
+- When setting a custom IP address header, ensure that your proxy or load balancer is properly configured to set this header, and that it cannot be set by end users directly.
+- In dev/test environments, if the IP cannot be retrieved from headers, 127.0.0.1 is used as a fallback.
+</Callout>
 
 ## Trusted Origins
 
@@ -120,7 +125,7 @@ The most basic usage is to specify exact origins:
 }
 ```
 
-### Wildcard Domains
+### Wildcard Origins
 
 Better Auth supports wildcard patterns in trusted origins, which allows you to trust multiple subdomains with a single entry:
 
@@ -161,6 +166,23 @@ Trusted origins also support custom schemes for mobile apps and browser extensio
   ]
 }
 ```
+
+### Dynamic origin list
+
+You can also dynamically set the list of trusted origins by providing a function that returns it:
+
+```typescript
+{
+  trustedOrigins: async (request) => {
+    const trustedOrigins = await queryTrustedDomains();
+    return trustedOrigins;
+  }
+}
+```
+
+<Callout>
+**Important**: This function will be invoked per incoming request, so be careful if you decide to dynamically fetch your list of trusted domains.
+</Callout>
 
 ## Reporting Vulnerabilities
 

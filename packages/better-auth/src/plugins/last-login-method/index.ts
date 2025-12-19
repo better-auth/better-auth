@@ -52,15 +52,19 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 ) => {
 	const paths = [
 		"/callback/:id",
-		"/oauth2/callback/:id",
+		"/oauth2/callback/:providerId",
 		"/sign-in/email",
 		"/sign-up/email",
 	];
 
 	const defaultResolveMethod = (ctx: GenericEndpointContext) => {
 		if (paths.includes(ctx.path)) {
-			return ctx.params?.id ? ctx.params.id : ctx.path.split("/").pop();
+			return (
+				ctx.params?.id || ctx.params?.providerId || ctx.path.split("/").pop()
+			);
 		}
+		if (ctx.path.includes("siwe")) return "siwe";
+		if (ctx.path.includes("/passkey/verify-authentication")) return "passkey";
 		return null;
 	};
 
@@ -184,5 +188,6 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 					};
 				}
 			: undefined,
+		options: userConfig as NoInfer<O>,
 	} satisfies BetterAuthPlugin;
 };

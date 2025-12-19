@@ -1,26 +1,22 @@
 import type { TableOfContents } from "fumadocs-core/server";
-import { AnchorProvider, type AnchorProviderProps } from "fumadocs-core/toc";
+import type { AnchorProviderProps } from "fumadocs-core/toc";
+import { AnchorProvider } from "fumadocs-core/toc";
 import { I18nLabel } from "fumadocs-ui/provider";
 import { Edit, Text } from "lucide-react";
-import {
-	type AnchorHTMLAttributes,
-	forwardRef,
-	type HTMLAttributes,
-	type ReactNode,
-} from "react";
+import type { AnchorHTMLAttributes, HTMLAttributes, ReactNode } from "react";
+import { forwardRef } from "react";
 import { cn } from "../../lib/utils";
+import type { TOCProps } from "./layout/toc";
 import {
 	TOCItems,
-	type TOCProps,
 	TOCScrollArea,
 	Toc,
 	TocPopoverContent,
 	TocPopoverTrigger,
 } from "./layout/toc";
+import type { BreadcrumbProps, FooterProps } from "./page.client";
 import {
-	type BreadcrumbProps,
 	Footer,
-	type FooterProps,
 	LastUpdate,
 	PageArticle,
 	PageBody,

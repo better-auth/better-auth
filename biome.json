@@ -1,6 +1,6 @@
 {
   "root": true,
-  "$schema": "https://biomejs.dev/schemas/2.3.5/schema.json",
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "formatter": {
     "enabled": true,
     "indentStyle": "tab"
@@ -25,7 +25,14 @@
             }
           },
           "level": "error"
-        }
+        },
+        "useImportType": {
+          "level": "error",
+          "options": {
+            "style": "separatedType"
+          }
+        },
+        "useNodejsImportProtocol": "error"
       },
       "recommended": false,
       "suspicious": {
@@ -43,7 +50,8 @@
         "noUselessTypeConstraint": "warn"
       },
       "correctness": {
-        "noUnusedImports": "warn"
+        "noUnusedImports": "warn",
+        "noUnusedVariables": "warn"
       },
       "nursery": {
         "noMisusedPromises": "error",
@@ -74,6 +82,7 @@
     "includes": [
       "**",
       "!**/dist",
+      "!**/coverage",
       "!**/build",
       "!**/.next",
       "!**/.svelte-kit",

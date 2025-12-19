@@ -14,6 +14,7 @@ export interface PolarProfile {
 	github_username?: string | undefined;
 	account_id?: string | undefined;
 	public_name?: string | undefined;
+	email_verified?: boolean | undefined;
 	profile_settings?:
 		| {
 				profile_settings_enabled?: boolean;
@@ -90,13 +91,15 @@ export const polar = (options: PolarOptions) => {
 				return null;
 			}
 			const userMap = await options.mapProfileToUser?.(profile);
+			// Polar may provide email_verified claim, but it's not guaranteed.
+			// We check for it first, then default to false for security consistency.
 			return {
 				user: {
 					id: profile.id,
 					name: profile.public_name || profile.username,
 					email: profile.email,
 					image: profile.avatar_url,
-					emailVerified: true,
+					emailVerified: profile.email_verified ?? false,
 					...userMap,
 				},
 				data: profile,

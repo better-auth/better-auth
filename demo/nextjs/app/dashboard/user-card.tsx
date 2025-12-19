@@ -1,6 +1,6 @@
 "use client";
 
-import { Subscription } from "@better-auth/stripe";
+import type { Subscription } from "@better-auth/stripe";
 import { MobileIcon } from "@radix-ui/react-icons";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -58,7 +58,7 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { client, signOut, useSession } from "@/lib/auth-client";
-import { Session } from "@/lib/auth-types";
+import type { Session } from "@/lib/auth-types";
 import { Component } from "./change-plan";
 
 export default function UserCard(props: {
@@ -67,7 +67,7 @@ export default function UserCard(props: {
 	subscription?: Subscription;
 }) {
 	const router = useRouter();
-	const { data, isPending } = useSession();
+	const { data } = useSession();
 	const session = data || props.session;
 	const [isTerminating, setIsTerminating] = useState<string>();
 	const [isPendingTwoFa, setIsPendingTwoFa] = useState<boolean>(false);
@@ -392,7 +392,7 @@ export default function UserCard(props: {
 												}
 												setIsPendingTwoFa(true);
 												if (session?.user.twoFactorEnabled) {
-													const res = await client.twoFactor.disable({
+													await client.twoFactor.disable({
 														password: twoFaPassword,
 														fetchOptions: {
 															onError(context) {
@@ -425,7 +425,7 @@ export default function UserCard(props: {
 														});
 														return;
 													}
-													const res = await client.twoFactor.enable({
+													await client.twoFactor.enable({
 														password: twoFaPassword,
 														fetchOptions: {
 															onError(context) {
@@ -640,7 +640,7 @@ function ChangePassword() {
 }
 
 function EditUserDialog() {
-	const { data, isPending, error } = useSession();
+	const { data } = useSession();
 	const [name, setName] = useState<string>();
 	const router = useRouter();
 	const [image, setImage] = useState<File | null>(null);
@@ -878,7 +878,7 @@ function ListPasskeys() {
 									<TableCell className="text-right">
 										<button
 											onClick={async () => {
-												const res = await client.passkey.deletePasskey({
+												await client.passkey.deletePasskey({
 													id: passkey.id,
 													fetchOptions: {
 														onRequest: () => {

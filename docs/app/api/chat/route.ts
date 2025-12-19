@@ -1,10 +1,8 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { convertToModelMessages, streamText } from "ai";
 import { ProvideLinksToolSchema } from "@/lib/chat/inkeep-qa-schema";
-import {
-	type InkeepMessage,
-	logConversationToAnalytics,
-} from "@/lib/inkeep-analytics";
+import type { InkeepMessage } from "@/lib/inkeep-analytics";
+import { logConversationToAnalytics } from "@/lib/inkeep-analytics";
 
 export const runtime = "edge";
 
@@ -79,7 +77,7 @@ export async function POST(req: Request) {
 						model: "inkeep-qa-sonnet-4",
 					},
 				});
-			} catch (error) {
+			} catch {
 				// Don't fail the request if analytics logging fails
 			}
 		},

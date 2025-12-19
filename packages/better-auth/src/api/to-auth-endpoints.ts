@@ -6,13 +6,12 @@ import {
 	runWithRequestState,
 } from "@better-auth/core/context";
 import { shouldPublishLog } from "@better-auth/core/env";
-import {
-	APIError,
-	type EndpointContext,
-	type EndpointOptions,
-	type InputContext,
-	toResponse,
+import type {
+	EndpointContext,
+	EndpointOptions,
+	InputContext,
 } from "better-call";
+import { APIError, toResponse } from "better-call";
 import { createDefu } from "defu";
 
 type InternalContext = Partial<
@@ -39,7 +38,10 @@ type UserInputContext = Partial<
 >;
 
 export function toAuthEndpoints<
-	const E extends Record<string, Omit<AuthEndpoint, "wrap">>,
+	const E extends Record<
+		string,
+		Omit<AuthEndpoint<string, EndpointOptions, any>, "wrap">
+	>,
 >(endpoints: E, ctx: AuthContext | Promise<AuthContext>): E {
 	const api: Record<
 		string,

@@ -7,6 +7,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { safeJSONParse } from "@better-auth/core/utils";
 import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
@@ -24,7 +25,6 @@ import { parseSessionOutput, parseUserOutput } from "../../db";
 import type { InferSession, InferUser, Session, User } from "../../types";
 import type { Prettify } from "../../types/helper";
 import { getDate } from "../../utils/date";
-import { safeJSONParse } from "../../utils/json";
 
 export const getSession = <Option extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -45,6 +45,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								"application/json": {
 									schema: {
 										type: "object",
+										nullable: true,
 										properties: {
 											session: {
 												$ref: "#/components/schemas/Session",
@@ -225,9 +226,12 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							maxAge: 0,
 						});
 					} else {
+						const cachedSessionExpiresAt = new Date(
+							session.session.expiresAt as unknown as string | number | Date,
+						);
 						const hasExpired =
 							sessionDataPayload.expiresAt < Date.now() ||
-							session.session.expiresAt < new Date();
+							cachedSessionExpiresAt < new Date();
 
 						if (hasExpired) {
 							// When the session data cookie has expired, delete it;
@@ -544,8 +548,9 @@ export const freshSessionMiddleware = createAuthMiddleware(async (ctx) => {
 		};
 	}
 	const freshAge = ctx.context.sessionConfig.freshAge;
-	const lastUpdated =
-		session.session.updatedAt?.valueOf() || session.session.createdAt.valueOf();
+	const lastUpdated = new Date(
+		session.session.updatedAt || session.session.createdAt,
+	).getTime();
 	const now = Date.now();
 	const isFresh = now - lastUpdated < freshAge * 1000;
 	if (!isFresh) {
@@ -666,25 +671,20 @@ export const revokeSession = createAuthEndpoint(
 	},
 	async (ctx) => {
 		const token = ctx.body.token;
-		const findSession = await ctx.context.internalAdapter.findSession(token);
-		if (!findSession) {
-			throw new APIError("BAD_REQUEST", {
-				message: "Session not found",
-			});
-		}
-		if (findSession.session.userId !== ctx.context.session.user.id) {
-			throw new APIError("UNAUTHORIZED");
-		}
-		try {
-			await ctx.context.internalAdapter.deleteSession(token);
-		} catch (error) {
-			ctx.context.logger.error(
-				error && typeof error === "object" && "name" in error
-					? (error.name as string)
-					: "",
-				error,
-			);
-			throw new APIError("INTERNAL_SERVER_ERROR");
+		const session = await ctx.context.internalAdapter.findSession(token);
+
+		if (session?.session.userId === ctx.context.session.user.id) {
+			try {
+				await ctx.context.internalAdapter.deleteSession(token);
+			} catch (error) {
+				ctx.context.logger.error(
+					error && typeof error === "object" && "name" in error
+						? (error.name as string)
+						: "",
+					error,
+				);
+				throw new APIError("INTERNAL_SERVER_ERROR");
+			}
 		}
 		return ctx.json({
 			status: true,

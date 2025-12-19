@@ -1,25 +1,23 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { isDevelopment, logger } from "@better-auth/core/env";
 import { APIError, createEmailVerificationToken } from "../api";
+import { setAccountCookie } from "../cookies/session-store";
 import type { Account, User } from "../types";
 import { setTokenUtil } from "./utils";
 
 export async function handleOAuthUserInfo(
 	c: GenericEndpointContext,
-	{
-		userInfo,
-		account,
-		callbackURL,
-		disableSignUp,
-		overrideUserInfo,
-	}: {
+	opts: {
 		userInfo: Omit<User, "createdAt" | "updatedAt">;
 		account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
 		callbackURL?: string | undefined;
 		disableSignUp?: boolean | undefined;
 		overrideUserInfo?: boolean | undefined;
+		isTrustedProvider?: boolean | undefined;
 	},
 ) {
+	const { userInfo, account, callbackURL, disableSignUp, overrideUserInfo } =
+		opts;
 	const dbUser = await c.context.internalAdapter
 		.findOAuthUser(
 			userInfo.email.toLowerCase(),
@@ -47,9 +45,9 @@ export async function handleOAuthUserInfo(
 		if (!hasBeenLinked) {
 			const trustedProviders =
 				c.context.options.account?.accountLinking?.trustedProviders;
-			const isTrustedProvider = trustedProviders?.includes(
-				account.providerId as "apple",
-			);
+			const isTrustedProvider =
+				opts.isTrustedProvider ||
+				trustedProviders?.includes(account.providerId as "apple");
 			if (
 				(!isTrustedProvider && !userInfo.emailVerified) ||
 				c.context.options.account?.accountLinking?.enabled === false
@@ -105,6 +103,12 @@ export async function handleOAuthUserInfo(
 						scope: account.scope,
 					}).filter(([_, value]) => value !== undefined),
 				);
+				if (c.context.options.account?.storeAccountCookie) {
+					await setAccountCookie(c, {
+						...account,
+						...updateData,
+					});
+				}
 
 				if (Object.keys(updateData).length > 0) {
 					await c.context.internalAdapter.updateAccount(
@@ -146,24 +150,28 @@ export async function handleOAuthUserInfo(
 		}
 		try {
 			const { id: _, ...restUserInfo } = userInfo;
-			user = await c.context.internalAdapter
-				.createOAuthUser(
+			const accountData = {
+				accessToken: await setTokenUtil(account.accessToken, c.context),
+				refreshToken: await setTokenUtil(account.refreshToken, c.context),
+				idToken: account.idToken,
+				accessTokenExpiresAt: account.accessTokenExpiresAt,
+				refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+				scope: account.scope,
+				providerId: account.providerId,
+				accountId: userInfo.id.toString(),
+			};
+			const { user: createdUser, account: createdAccount } =
+				await c.context.internalAdapter.createOAuthUser(
 					{
 						...restUserInfo,
 						email: userInfo.email.toLowerCase(),
 					},
-					{
-						accessToken: await setTokenUtil(account.accessToken, c.context),
-						refreshToken: await setTokenUtil(account.refreshToken, c.context),
-						idToken: account.idToken,
-						accessTokenExpiresAt: account.accessTokenExpiresAt,
-						refreshTokenExpiresAt: account.refreshTokenExpiresAt,
-						scope: account.scope,
-						providerId: account.providerId,
-						accountId: userInfo.id.toString(),
-					},
-				)
-				.then((res) => res?.user);
+					accountData,
+				);
+			user = createdUser;
+			if (c.context.options.account?.storeAccountCookie) {
+				await setAccountCookie(c, createdAccount);
+			}
 			if (
 				!userInfo.emailVerified &&
 				user &&
@@ -217,6 +225,7 @@ export async function handleOAuthUserInfo(
 			isRegister: false,
 		};
 	}
+
 	return {
 		data: {
 			session,
