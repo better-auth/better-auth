@@ -1,6 +1,7 @@
 import type { BetterAuthClientOptions } from "@better-auth/core";
 import type { BetterFetch } from "@better-fetch/fetch";
 import type { WritableAtom } from "nanostores";
+import type { Session, User } from "../types";
 import { getGlobalBroadcastChannel } from "./broadcast-channel";
 import { getGlobalFocusManager } from "./focus-manager";
 import { getGlobalOnlineManager } from "./online-manager";
@@ -27,6 +28,12 @@ interface SessionRefreshState {
 	unsubscribeBroadcast?: (() => void) | undefined;
 	unsubscribeFocus?: (() => void) | undefined;
 	unsubscribeOnline?: (() => void) | undefined;
+}
+
+interface SessionResponse {
+	session: Session | null;
+	user: User | null;
+	needsRefresh?: boolean;
 }
 
 export function createSessionRefreshManager(opts: SessionRefreshOptions) {
@@ -65,21 +72,35 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 
 		const currentSession = sessionAtom.get();
 
-		if (event?.event === "poll") {
-			state.lastSessionRequest = now();
-			$fetch("/get-session")
-				.then((res) => {
+	const fetchSessionWithRefresh = () => {
+		state.lastSessionRequest = now();
+		$fetch("/get-session")
+			.then(async (res) => {
+				const data = res.data as SessionResponse | null;
+				if (data?.needsRefresh) {
+					const refreshRes = await $fetch("/get-session", { method: "POST" });
+					sessionAtom.set({
+						...currentSession,
+						data: refreshRes.data,
+						error: refreshRes.error || null,
+					});
+				} else {
 					sessionAtom.set({
 						...currentSession,
 						data: res.data,
 						error: res.error || null,
 					});
-					state.lastSync = now();
-					sessionSignal.set(!sessionSignal.get());
-				})
-				.catch(() => {});
-			return;
-		}
+				}
+				state.lastSync = now();
+				sessionSignal.set(!sessionSignal.get());
+			})
+			.catch(() => {});
+	};
+
+	if (event?.event === "poll") {
+		fetchSessionWithRefresh();
+		return;
+	}
 
 		// Rate limit: don't refetch on focus if a session request was made recently
 		if (event?.event === "visibilitychange") {
@@ -93,17 +114,15 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 			}
 		}
 
-		if (
-			currentSession?.data === null ||
-			currentSession?.data === undefined ||
-			event?.event === "visibilitychange"
-		) {
-			if (event?.event === "visibilitychange") {
-				state.lastSessionRequest = now();
-			}
-			state.lastSync = now();
-			sessionSignal.set(!sessionSignal.get());
-		}
+	if (event?.event === "visibilitychange") {
+		fetchSessionWithRefresh();
+		return;
+	}
+
+	if (currentSession?.data === null || currentSession?.data === undefined) {
+		state.lastSync = now();
+		sessionSignal.set(!sessionSignal.get());
+	}
 	};
 
 	const broadcastSessionUpdate = (
