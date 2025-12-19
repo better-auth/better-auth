@@ -119,7 +119,7 @@ export interface TiktokProfile extends Record<string, any> {
 		| undefined;
 }
 
-export interface TiktokOptions extends ProviderOptions {
+export interface TiktokOptions extends Omit<ProviderOptions, "clientId"> {
 	// Client ID is not used in TikTok, we delete it from the options
 	clientId?: never | undefined;
 	clientSecret: string;

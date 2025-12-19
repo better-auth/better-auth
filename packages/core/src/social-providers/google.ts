@@ -37,8 +37,13 @@ export interface GoogleProfile {
 	sub: string;
 }
 
-export interface GoogleOptions extends ProviderOptions<GoogleProfile> {
-	clientId: string;
+export interface GoogleOptions
+	extends Omit<ProviderOptions<GoogleProfile>, "clientId"> {
+	/**
+	 * The client ID(s) of your application
+	 * Can be a single client ID string or an array of client IDs for cross-platform support
+	 */
+	clientId: string | string[];
 	/**
 	 * The access type to use for the authorization code request
 	 */
@@ -74,6 +79,16 @@ export const google = (options: GoogleOptions) => {
 			if (!codeVerifier) {
 				throw new BetterAuthError("codeVerifier is required for Google");
 			}
+
+			// Use the first client ID for authorization URL creation
+			const primaryClientId = Array.isArray(options.clientId)
+				? options.clientId[0] ||
+					(() => {
+						logger.error("Google clientId array cannot be empty");
+						throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
+					})()
+				: options.clientId;
+
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["email", "profile", "openid"];
@@ -81,7 +96,10 @@ export const google = (options: GoogleOptions) => {
 			if (scopes) _scopes.push(...scopes);
 			const url = await createAuthorizationURL({
 				id: "google",
-				options,
+				options: {
+					...options,
+					clientId: primaryClientId,
+				},
 				authorizationEndpoint: "https://accounts.google.com/o/oauth2/auth",
 				scopes: _scopes,
 				state,
@@ -99,21 +117,42 @@ export const google = (options: GoogleOptions) => {
 			return url;
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
+			// Use the first client ID for token exchange
+			const primaryClientId = Array.isArray(options.clientId)
+				? options.clientId[0] ||
+					(() => {
+						logger.error("Google clientId array cannot be empty");
+						throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
+					})()
+				: options.clientId;
+
 			return validateAuthorizationCode({
 				code,
 				codeVerifier,
 				redirectURI,
-				options,
+				options: {
+					...options,
+					clientId: primaryClientId,
+				},
 				tokenEndpoint: "https://oauth2.googleapis.com/token",
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
 			? options.refreshAccessToken
 			: async (refreshToken) => {
+					// Use the first client ID for token refresh
+					const primaryClientId = Array.isArray(options.clientId)
+						? options.clientId[0] ||
+							(() => {
+								logger.error("Google clientId array cannot be empty");
+								throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
+							})()
+						: options.clientId;
+
 					return refreshAccessToken({
 						refreshToken,
 						options: {
-							clientId: options.clientId,
+							clientId: primaryClientId,
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
@@ -131,22 +170,43 @@ export const google = (options: GoogleOptions) => {
 			// Verify JWT integrity
 			// See https://developers.google.com/identity/sign-in/web/backend-auth#verify-the-integrity-of-the-id-token
 
-			const { kid, alg: jwtAlg } = decodeProtectedHeader(token);
-			if (!kid || !jwtAlg) return false;
+			try {
+				const { kid, alg: jwtAlg } = decodeProtectedHeader(token);
+				if (!kid || !jwtAlg) return false;
 
-			const publicKey = await getGooglePublicKey(kid);
-			const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
-				algorithms: [jwtAlg],
-				issuer: ["https://accounts.google.com", "accounts.google.com"],
-				audience: options.clientId,
-				maxTokenAge: "1h",
-			});
+				const publicKey = await getGooglePublicKey(kid);
 
-			if (nonce && jwtClaims.nonce !== nonce) {
+				// Handle multiple client IDs - normalize to array for comparison
+				const allowedAudiences = Array.isArray(options.clientId)
+					? options.clientId
+					: [options.clientId];
+
+				// Accept both issuer formats
+				const allowedIssuers = [
+					"accounts.google.com",
+					"https://accounts.google.com",
+				];
+
+				const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
+					algorithms: [jwtAlg],
+					issuer: allowedIssuers,
+					audience:
+						allowedAudiences.length === 1
+							? allowedAudiences[0]
+							: allowedAudiences,
+					maxTokenAge: "1h",
+				});
+
+				if (nonce && jwtClaims.nonce !== nonce) {
+					return false;
+				}
+
+				// jwtVerify already validates audience and issuer, so if we get here, the token is valid
+				return true;
+			} catch {
+				// Return false for any errors (invalid token format, verification failure, etc.)
 				return false;
 			}
-
-			return true;
 		},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
@@ -169,7 +229,7 @@ export const google = (options: GoogleOptions) => {
 				data: user,
 			};
 		},
-		options,
+		options: options as any,
 	} satisfies OAuthProvider<GoogleProfile>;
 };
 
