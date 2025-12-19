@@ -17,6 +17,11 @@ import type {
 
 export interface OrganizationOptions {
 	/**
+	 * When the admin plugin is enabled, allow users with a super admin role
+	 * to modify, create, and delete organizations as if they are members.
+	 */
+	allowSuperAdmin?: boolean;
+	/**
 	 * Configure whether new users are able to create new organizations.
 	 * You can also pass a function that returns a boolean.
 	 *
@@ -390,7 +395,7 @@ export interface OrganizationOptions {
 				afterCreate?: (
 					data: {
 						organization: Organization & Record<string, any>;
-						member: Member & Record<string, any>;
+						member: (Member & Record<string, any>) | undefined;
 						user: User & Record<string, any>;
 					},
 					request?: Request,
@@ -445,7 +450,7 @@ export interface OrganizationOptions {
 				 */
 				afterCreateOrganization?: (data: {
 					organization: Organization & Record<string, any>;
-					member: Member & Record<string, any>;
+					member: (Member & Record<string, any>) | undefined;
 					user: User & Record<string, any>;
 				}) => Promise<void>;
 				/**
@@ -468,7 +473,7 @@ export interface OrganizationOptions {
 						[key: string]: any;
 					};
 					user: User & Record<string, any>;
-					member: Member & Record<string, any>;
+					member: (Member & Record<string, any>) | null;
 				}) => Promise<void | {
 					data: {
 						name?: string;
@@ -496,7 +501,7 @@ export interface OrganizationOptions {
 					 */
 					organization: (Organization & Record<string, any>) | null;
 					user: User & Record<string, any>;
-					member: Member & Record<string, any>;
+					member: (Member & Record<string, any>) | null;
 				}) => Promise<void>;
 				/**
 				 * A callback that runs before the organization is deleted

@@ -98,7 +98,6 @@ describe("organization", async (it) => {
 		expect(organizationIndex).not.toBe(-1);
 		expect(organizationRoleIndex).not.toBe(-1);
 	});
-
 	let organizationId: string;
 	let organization2Id: string;
 	it("create organization", async () => {

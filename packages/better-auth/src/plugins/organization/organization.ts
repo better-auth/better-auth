@@ -9,6 +9,7 @@ import type { AccessControl } from "../access";
 import type { defaultStatements } from "./access";
 import { defaultRoles } from "./access";
 import { getOrgAdapter } from "./adapter";
+import { isSuperAdmin } from "./admin";
 import { orgSessionMiddleware } from "./call";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { hasPermission } from "./has-permission";
@@ -42,6 +43,7 @@ import {
 	createOrganization,
 	deleteOrganization,
 	getFullOrganization,
+	listAllOrganizations,
 	listOrganizations,
 	setActiveOrganization,
 	updateOrganization,
@@ -115,6 +117,7 @@ export type OrganizationEndpoints<O extends OrganizationOptions> = {
 	listMembers: ReturnType<typeof listMembers<O>>;
 	getActiveMemberRole: ReturnType<typeof getActiveMemberRole<O>>;
 	hasPermission: ReturnType<typeof createHasPermission<O>>;
+	listAllOrganizations: ReturnType<typeof listAllOrganizations<O>>;
 };
 
 const createHasPermissionBodySchema = z
@@ -232,7 +235,7 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 				userId: ctx.context.session.user.id,
 				organizationId: activeOrganizationId,
 			});
-			if (!member) {
+			if ((!member && !isSuperAdmin(options, ctx)) || member === null) {
 				throw new APIError("UNAUTHORIZED", {
 					message:
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
@@ -503,6 +506,22 @@ export function organization<O extends OrganizationOptions>(
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-full-organization)
 		 */
 		getFullOrganization: getFullOrganization(options as O),
+		/**
+		 * ### Endpoint
+		 *
+		 * GET `/organization/list-all`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.listAllOrganizations`
+		 *
+		 * **client:**
+		 * `authClient.organization.listAll`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-list)
+		 */
+		listAllOrganizations: listAllOrganizations(options as O),
 		/**
 		 * ### Endpoint
 		 *

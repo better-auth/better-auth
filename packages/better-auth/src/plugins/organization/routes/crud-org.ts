@@ -6,6 +6,7 @@ import { setSessionCookie } from "../../../cookies";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db";
 import { getOrgAdapter } from "../adapter";
+import { isSuperAdmin } from "../admin";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
@@ -212,30 +213,32 @@ export const createOrganization = <O extends OrganizationOptions>(
 				organizationId: organization.id,
 				role: ctx.context.orgOptions.creatorRole || "owner",
 			};
-			if (options?.organizationHooks?.beforeAddMember) {
-				const response = await options?.organizationHooks.beforeAddMember({
-					member: {
-						userId: user.id,
-						organizationId: organization.id,
-						role: ctx.context.orgOptions.creatorRole || "owner",
-					},
-					user,
-					organization,
-				});
-				if (response && typeof response === "object" && "data" in response) {
-					data = {
-						...data,
-						...response.data,
-					};
+			if (!isSuperAdmin(options, ctx)) {
+				if (options?.organizationHooks?.beforeAddMember) {
+					const response = await options?.organizationHooks.beforeAddMember({
+						member: {
+							userId: user.id,
+							organizationId: organization.id,
+							role: ctx.context.orgOptions.creatorRole || "owner",
+						},
+						user,
+						organization,
+					});
+					if (response && typeof response === "object" && "data" in response) {
+						data = {
+							...data,
+							...response.data,
+						};
+					}
 				}
-			}
-			member = await adapter.createMember(data);
-			if (options?.organizationHooks?.afterAddMember) {
-				await options?.organizationHooks.afterAddMember({
-					member,
-					user,
-					organization,
-				});
+				member = await adapter.createMember(data);
+				if (options?.organizationHooks?.afterAddMember) {
+					await options?.organizationHooks.afterAddMember({
+						member,
+						user,
+						organization,
+					});
+				}
 			}
 			if (
 				options?.teams?.enabled &&
@@ -268,10 +271,12 @@ export const createOrganization = <O extends OrganizationOptions>(
 						ctx,
 					)) || (await adapter.createTeam(teamData));
 
-				teamMember = await adapter.findOrCreateTeamMember({
-					teamId: defaultTeam.id,
-					userId: user.id,
-				});
+				if (!isSuperAdmin(options, ctx)) {
+					teamMember = await adapter.findOrCreateTeamMember({
+						teamId: defaultTeam.id,
+						userId: user.id,
+					});
+				}
 
 				if (options?.organizationHooks?.afterCreateTeam) {
 					await options?.organizationHooks.afterCreateTeam({
@@ -470,23 +475,26 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				userId: session.user.id,
 				organizationId: organizationId,
 			});
-			if (!member) {
+			if (!member && options && !isSuperAdmin(options, ctx)) {
 				throw new APIError("BAD_REQUEST", {
 					message:
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				});
 			}
-			const canUpdateOrg = await hasPermission(
-				{
-					permissions: {
-						organization: ["update"],
-					},
-					role: member.role,
-					options: ctx.context.orgOptions,
-					organizationId,
-				},
-				ctx,
-			);
+			const canUpdateOrg =
+				(options && isSuperAdmin(options, ctx)) ||
+				(member &&
+					(await hasPermission(
+						{
+							permissions: {
+								organization: ["update"],
+							},
+							role: member.role,
+							options: ctx.context.orgOptions,
+							organizationId,
+						},
+						ctx,
+					)));
 			if (!canUpdateOrg) {
 				throw new APIError("FORBIDDEN", {
 					message:
@@ -512,7 +520,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 					await options.organizationHooks.beforeUpdateOrganization({
 						organization: ctx.body.data,
 						user: session.user,
-						member,
+						member: member,
 					});
 				if (response && typeof response === "object" && "data" in response) {
 					ctx.body.data = {
@@ -529,7 +537,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				await options.organizationHooks.afterUpdateOrganization({
 					organization: updatedOrg,
 					user: session.user,
-					member,
+					member: member,
 				});
 			}
 			return ctx.json(updatedOrg);
@@ -605,28 +613,30 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				userId: session.user.id,
 				organizationId: organizationId,
 			});
-			if (!member) {
+			if (!member && !isSuperAdmin(options, ctx)) {
 				throw new APIError("BAD_REQUEST", {
 					message:
 						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				});
 			}
-			const canDeleteOrg = await hasPermission(
-				{
-					role: member.role,
-					permissions: {
-						organization: ["delete"],
+			if (member && !isSuperAdmin(options, ctx)) {
+				const canDeleteOrg = await hasPermission(
+					{
+						role: member.role,
+						permissions: {
+							organization: ["delete"],
+						},
+						organizationId,
+						options: ctx.context.orgOptions,
 					},
-					organizationId,
-					options: ctx.context.orgOptions,
-				},
-				ctx,
-			);
-			if (!canDeleteOrg) {
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_ORGANIZATION,
-				});
+					ctx,
+				);
+				if (!canDeleteOrg) {
+					throw new APIError("FORBIDDEN", {
+						message:
+							ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_ORGANIZATION,
+					});
+				}
 			}
 			if (organizationId === session.session.activeOrganizationId) {
 				/**
@@ -741,7 +751,7 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 				userId: session.user.id,
 				organizationId: organization.id,
 			});
-			if (!isMember) {
+			if (!isMember && !isSuperAdmin(options, ctx)) {
 				await adapter.setActiveOrganization(session.session.token, null, ctx);
 				throw new APIError("FORBIDDEN", {
 					message:
@@ -935,6 +945,48 @@ export const listOrganizations = <O extends OrganizationOptions>(options: O) =>
 			const organizations = await adapter.listOrganizations(
 				ctx.context.session.user.id,
 			);
+			return ctx.json(organizations);
+		},
+	);
+
+export const listAllOrganizations = <O extends OrganizationOptions>(
+	options: O,
+) =>
+	createAuthEndpoint(
+		"/organization/list-all",
+		{
+			method: "GET",
+			use: [orgMiddleware, orgSessionMiddleware],
+			metadata: {
+				openapi: {
+					description:
+						"List all organizations. This endpoint is only available to super admins",
+					responses: {
+						"200": {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "array",
+										items: {
+											$ref: "#/components/schemas/Organization",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			if (!isSuperAdmin(options, ctx)) {
+				throw new APIError("UNAUTHORIZED", {
+					message: "Only super admins may list all organizations.",
+				});
+			}
+			const adapter = getOrgAdapter<O>(ctx.context, options);
+			const organizations = await adapter.listAllOrganizations();
 			return ctx.json(organizations);
 		},
 	);
