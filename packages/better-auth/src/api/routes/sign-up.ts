@@ -4,7 +4,7 @@ import { runWithTransaction } from "@better-auth/core/context";
 import { isDevelopment } from "@better-auth/core/env";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
-import * as z from "zod";
+import * as z from "zod/v4";
 import { setSessionCookie } from "../../cookies";
 import { parseUserInput } from "../../db";
 import { parseUserOutput } from "../../db";
@@ -31,12 +31,13 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			body: signUpEmailBodySchema,
 			use: [
 				originCheck((ctx) => {
-					const v = (ctx.body as any)?.callbackURL as string | undefined;
-					if (!v) return "";
+					const rawCallbackURL = (ctx.body as any)
+						?.callbackURL as string | undefined;
+					if (!rawCallbackURL) return "";
 					try {
-						return decodeURIComponent(v);
+						return decodeURIComponent(rawCallbackURL);
 					} catch {
-						return v;
+						return rawCallbackURL;
 					}
 				}),
 			],
