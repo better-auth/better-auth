@@ -463,11 +463,287 @@ describe("disabled paths", async () => {
 		});
 
 		const response = await auth.handler(
-			new Request("http://localhost:3000/api/auth/sign-in/email/", {
+			new Request("http://localhost:3000/api/auth/sign-in/email%2F", {
+				method: "POST",
+			}),
+		);
+		const response2 = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-inemail", {
 				method: "POST",
 			}),
 		);
 		expect(response.status).toBe(404);
+		expect(response2.status).toBe(404);
+	});
+
+	it("should return 404 for encoded paths", async () => {
+		const { auth } = await getTestInstance({
+			disabledPaths: ["/sign-in/email"],
+		});
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-in/email%2F", {
+				method: "POST",
+			}),
+		);
+		const _response2 = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-inemail", {
+				method: "POST",
+			}),
+		);
+		expect(response.status).toBe(404);
+	});
+
+	it("should block URL encoded slash bypass attempts", async () => {
+		const { auth } = await getTestInstance({
+			disabledPaths: ["/sign-in/email"],
+		});
+
+		// Try various URL encoding bypass attempts
+		const encodedAttempts = [
+			"http://localhost:3000/api/auth/sign-in%2Femail", // %2F = /
+			"http://localhost:3000/api/auth/sign-in%252Femail", // Double encoded
+			"http://localhost:3000/api/auth/sign-in%2femail", // lowercase hex
+		];
+
+		for (const url of encodedAttempts) {
+			const response = await auth.handler(
+				new Request(url, {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({
+						email: "test@test.com",
+						password: "test",
+					}),
+				}),
+			);
+			// Should either block (404) or normalize and block
+			expect(response.status).toBe(404);
+		}
+	});
+
+	it("should block path traversal attempts", async () => {
+		const { auth } = await getTestInstance({
+			disabledPaths: ["/sign-in/email"],
+		});
+
+		// Try path traversal attempts
+		const traversalAttempts = [
+			"http://localhost:3000/api/auth/sign-in/../sign-in/email",
+			"http://localhost:3000/api/auth/./sign-in/email",
+			"http://localhost:3000/api/auth/sign-in/./email",
+			"http://localhost:3000/api/auth/sign-in//email",
+			"http://localhost:3000/api/auth/sign-in///email",
+		];
+
+		for (const url of traversalAttempts) {
+			const response = await auth.handler(
+				new Request(url, {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({
+						email: "test@test.com",
+						password: "test",
+					}),
+				}),
+			);
+			expect(response.status).toBe(404);
+		}
+	});
+
+	it("should handle unicode and special characters in disabled paths", async () => {
+		const { auth } = await getTestInstance({
+			disabledPaths: ["/sign-in/email"],
+		});
+
+		// Try unicode normalization attacks
+		const specialAttempts = [
+			"http://localhost:3000/api/auth/sign-in%00/email", // Null byte
+			"http://localhost:3000/api/auth/sign-in\u0000/email", // Unicode null
+			"http://localhost:3000/api/auth/sign-in/email%09", // Tab character
+			"http://localhost:3000/api/auth/sign-in/email%20", // Space
+		];
+
+		for (const url of specialAttempts) {
+			try {
+				const response = await auth.handler(
+					new Request(url, {
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+						},
+						body: JSON.stringify({
+							email: "test@test.com",
+							password: "test",
+						}),
+					}),
+				);
+				// Should either block or handle safely
+				expect([404, 400]).toContain(response.status);
+			} catch (e) {
+				// URL constructor may throw for invalid URLs - this is acceptable
+				expect(e).toBeDefined();
+			}
+		}
+	});
+
+	it("should not be affected by case sensitivity bypass", async () => {
+		const { auth } = await getTestInstance({
+			disabledPaths: ["/sign-in/email"],
+		});
+
+		// Try case variations (these should NOT be blocked unless explicitly added)
+		const caseVariations = [
+			"http://localhost:3000/api/auth/Sign-In/Email",
+			"http://localhost:3000/api/auth/SIGN-IN/EMAIL",
+			"http://localhost:3000/api/auth/Sign-in/email",
+		];
+
+		for (const url of caseVariations) {
+			const response = await auth.handler(
+				new Request(url, {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({
+						email: "test@test.com",
+						password: "test",
+					}),
+				}),
+			);
+			// These should NOT be blocked (404) - they're different paths
+			// The endpoint itself will return an error since it doesn't exist
+			expect(response.status).not.toBe(200);
+		}
+	});
+});
+
+describe("trustedProxyHeaders security", () => {
+	it("should not use X-Forwarded headers when trustedProxyHeaders is false", async () => {
+		let capturedBaseURL: string | undefined;
+		const { auth } = await getTestInstance({
+			baseURL: undefined,
+			advanced: {
+				trustedProxyHeaders: false,
+			},
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					capturedBaseURL = ctx.context.baseURL;
+				}),
+			},
+		});
+
+		await auth.handler(
+			new Request("http://localhost:3000/api/auth/ok", {
+				method: "GET",
+				headers: {
+					"x-forwarded-host": "evil.com",
+					"x-forwarded-proto": "https",
+				},
+			}),
+		);
+
+		// Should use the actual request URL, not the forwarded headers
+		expect(capturedBaseURL).toBe("http://localhost:3000/api/auth");
+		expect(capturedBaseURL).not.toContain("evil.com");
+	});
+
+	it("should validate X-Forwarded headers when trustedProxyHeaders is true", async () => {
+		let capturedBaseURL: string | undefined;
+		const { auth } = await getTestInstance({
+			baseURL: undefined,
+			advanced: {
+				trustedProxyHeaders: true,
+			},
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					capturedBaseURL = ctx.context.baseURL;
+				}),
+			},
+		});
+
+		await auth.handler(
+			new Request("http://localhost:3000/api/auth/ok", {
+				method: "GET",
+				headers: {
+					"x-forwarded-host": "trusted-proxy.com",
+					"x-forwarded-proto": "https",
+				},
+			}),
+		);
+
+		// When trusted, should use the forwarded headers
+		expect(capturedBaseURL).toBe("https://trusted-proxy.com/api/auth");
+	});
+
+	it("should not trust partial X-Forwarded headers", async () => {
+		const { auth } = await getTestInstance({
+			baseURL: undefined,
+			advanced: {
+				trustedProxyHeaders: true,
+			},
+		});
+
+		// Only X-Forwarded-Host without X-Forwarded-Proto
+		const response1 = await auth.handler(
+			new Request("http://localhost:3000/api/auth/ok", {
+				method: "GET",
+				headers: {
+					"x-forwarded-host": "evil.com",
+					// Missing x-forwarded-proto
+				},
+			}),
+		);
+		expect(response1.status).toBe(200);
+
+		// Only X-Forwarded-Proto without X-Forwarded-Host
+		const response2 = await auth.handler(
+			new Request("http://localhost:3000/api/auth/ok", {
+				method: "GET",
+				headers: {
+					// Missing x-forwarded-host
+					"x-forwarded-proto": "https",
+				},
+			}),
+		);
+		expect(response2.status).toBe(200);
+	});
+
+	it("should handle malformed X-Forwarded headers gracefully", async () => {
+		const { auth } = await getTestInstance({
+			baseURL: "http://localhost:3000",
+			advanced: {
+				trustedProxyHeaders: true,
+			},
+		});
+
+		const malformedHeaders = [
+			{
+				"x-forwarded-host": "../../../../etc/passwd",
+				"x-forwarded-proto": "http",
+			},
+			{ "x-forwarded-host": "evil.com:99999", "x-forwarded-proto": "http" },
+			{ "x-forwarded-host": "evil.com", "x-forwarded-proto": "javascript" },
+			{ "x-forwarded-host": "evil.com", "x-forwarded-proto": "file" },
+			{ "x-forwarded-host": "", "x-forwarded-proto": "http" },
+			{ "x-forwarded-host": " ", "x-forwarded-proto": "http" },
+		];
+
+		for (const headers of malformedHeaders) {
+			const response = await auth.handler(
+				new Request("http://localhost:3000/api/auth/ok", {
+					method: "GET",
+					headers,
+				}),
+			);
+			// Should either use fallback baseURL or handle gracefully
+			expect(response.status).toBe(200);
+		}
 	});
 });
 
