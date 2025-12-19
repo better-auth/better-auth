@@ -311,9 +311,18 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 								},
 							];
 
-					await ctx.context.options.emailVerification?.sendVerificationEmail?.(
-						...args,
-					);
+					if (ctx.context.options.emailVerification?.sendVerificationEmail) {
+						await ctx.context.runInBackgroundOrAwait(
+							ctx.context.options.emailVerification
+								.sendVerificationEmail(...args)
+								.catch((e) => {
+									ctx.context.logger.error(
+										"Failed to send verification email",
+										e,
+									);
+								}),
+						);
+					}
 				}
 
 				if (

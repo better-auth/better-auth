@@ -282,6 +282,17 @@ export async function createAuthContext(
 			((p) => {
 				p.catch(() => {});
 			}),
+		async runInBackgroundOrAwait(
+			promise: Promise<unknown> | Promise<void> | void | unknown,
+		) {
+			if (options.advanced?.backgroundTasks?.handler) {
+				if (promise instanceof Promise) {
+					options.advanced.backgroundTasks.handler(promise);
+				}
+			} else {
+				await promise;
+			}
+		},
 	};
 
 	const initOrPromise = runPluginInit(ctx);

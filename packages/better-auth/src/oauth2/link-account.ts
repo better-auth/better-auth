@@ -172,7 +172,8 @@ export async function handleOAuthUserInfo(
 			if (
 				!userInfo.emailVerified &&
 				user &&
-				c.context.options.emailVerification?.sendOnSignUp
+				c.context.options.emailVerification?.sendOnSignUp &&
+				c.context.options.emailVerification?.sendVerificationEmail
 			) {
 				const token = await createEmailVerificationToken(
 					c.context.secret,
@@ -181,13 +182,15 @@ export async function handleOAuthUserInfo(
 					c.context.options.emailVerification?.expiresIn,
 				);
 				const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
-				await c.context.options.emailVerification?.sendVerificationEmail?.(
-					{
-						user,
-						url,
-						token,
-					},
-					c.request,
+				await c.context.runInBackgroundOrAwait(
+					c.context.options.emailVerification.sendVerificationEmail(
+						{
+							user,
+							url,
+							token,
+						},
+						c.request,
+					),
 				);
 			}
 		} catch (e: any) {
