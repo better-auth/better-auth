@@ -4,6 +4,7 @@ import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
 import * as z from "zod";
 import { getSessionFromCtx, sessionMiddleware } from "../../../api";
+import { setSessionCookie } from "../../../cookies";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db/to-zod";
 import { getOrgAdapter } from "../adapter";
@@ -400,7 +401,16 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				session.session.activeOrganizationId ===
 					toBeRemovedMember.organizationId
 			) {
-				await adapter.setActiveOrganization(session.session.token, null, ctx);
+				const updatedSession = await adapter.setActiveOrganization(
+					session.session.token,
+					null,
+					ctx,
+				);
+
+				await setSessionCookie(ctx, {
+					session: updatedSession,
+					user: session.user,
+				});
 			}
 
 			// Run afterRemoveMember hook
@@ -820,7 +830,16 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 				userId: session.user.id,
 			});
 			if (session.session.activeOrganizationId === ctx.body.organizationId) {
-				await adapter.setActiveOrganization(session.session.token, null, ctx);
+				const updatedSession = await adapter.setActiveOrganization(
+					session.session.token,
+					null,
+					ctx,
+				);
+
+				await setSessionCookie(ctx, {
+					session: updatedSession,
+					user: session.user,
+				});
 			}
 			return ctx.json(member);
 		},
