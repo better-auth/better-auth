@@ -95,21 +95,14 @@ export const emailOTP = (options: EmailOTPOptions) => {
 								expiresAt: getDate(opts.expiresIn, "sec"),
 							});
 							await ctx.context.runInBackgroundOrAwait(
-								options
-									.sendVerificationOTP(
-										{
-											email,
-											otp,
-											type: "email-verification",
-										},
-										ctx,
-									)
-									.catch((e) => {
-										ctx.context.logger.error(
-											"Failed to send verification OTP",
-											e,
-										);
-									}),
+								options.sendVerificationOTP(
+									{
+										email,
+										otp,
+										type: "email-verification",
+									},
+									ctx,
+								),
 							);
 						}
 					}),

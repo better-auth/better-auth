@@ -439,24 +439,20 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 
 			if (ctx.context.orgOptions.sendInvitationEmail) {
 				await ctx.context.runInBackgroundOrAwait(
-					ctx.context.orgOptions
-						.sendInvitationEmail(
-							{
-								id: invitation.id,
-								role: invitation.role,
-								email: invitation.email.toLowerCase(),
-								organization: organization,
-								inviter: {
-									...(member as Member),
-									user: session.user,
-								},
-								invitation,
+					ctx.context.orgOptions.sendInvitationEmail(
+						{
+							id: invitation.id,
+							role: invitation.role,
+							email: invitation.email.toLowerCase(),
+							organization: organization,
+							inviter: {
+								...(member as Member),
+								user: session.user,
 							},
-							ctx.request,
-						)
-						.catch((e) => {
-							ctx.context.logger.error("Failed to send invitation email", e);
-						}),
+							invitation,
+						},
+						ctx.request,
+					),
 				);
 			}
 

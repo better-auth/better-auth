@@ -794,21 +794,17 @@ export const changeEmail = createAuthEndpoint(
 					ctx.body.callbackURL || "/"
 				}`;
 				await ctx.context.runInBackgroundOrAwait(
-					ctx.context.options.emailVerification
-						.sendVerificationEmail(
-							{
-								user: {
-									...ctx.context.session.user,
-									email: newEmail,
-								},
-								url,
-								token,
+					ctx.context.options.emailVerification.sendVerificationEmail(
+						{
+							user: {
+								...ctx.context.session.user,
+								email: newEmail,
 							},
-							ctx.request,
-						)
-						.catch((e) => {
-							ctx.context.logger.error("Failed to send verification email", e);
-						}),
+							url,
+							token,
+						},
+						ctx.request,
+					),
 				);
 			}
 
@@ -851,12 +847,7 @@ export const changeEmail = createAuthEndpoint(
 							token,
 						},
 						ctx.request,
-					).catch((e) => {
-						ctx.context.logger.error(
-							"Failed to send change email confirmation",
-							e,
-						);
-					}),
+					),
 				);
 			}
 			return ctx.json({
@@ -884,21 +875,17 @@ export const changeEmail = createAuthEndpoint(
 			ctx.context.baseURL
 		}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
 		await ctx.context.runInBackgroundOrAwait(
-			ctx.context.options.emailVerification
-				.sendVerificationEmail(
-					{
-						user: {
-							...ctx.context.session.user,
-							email: newEmail,
-						},
-						url,
-						token,
+			ctx.context.options.emailVerification.sendVerificationEmail(
+				{
+					user: {
+						...ctx.context.session.user,
+						email: newEmail,
 					},
-					ctx.request,
-				)
-				.catch((e) => {
-					ctx.context.logger.error("Failed to send verification email", e);
-				}),
+					url,
+					token,
+				},
+				ctx.request,
+			),
 		);
 		return ctx.json({
 			status: true,

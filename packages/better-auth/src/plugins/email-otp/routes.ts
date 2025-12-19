@@ -837,18 +837,14 @@ export const forgetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				});
 			}
 			await ctx.context.runInBackgroundOrAwait(
-				opts
-					.sendVerificationOTP(
-						{
-							email,
-							otp,
-							type: "forget-password",
-						},
-						ctx,
-					)
-					.catch((e) => {
-						ctx.context.logger.error("Failed to send OTP", e);
-					}),
+				opts.sendVerificationOTP(
+					{
+						email,
+						otp,
+						type: "forget-password",
+					},
+					ctx,
+				),
 			);
 			return ctx.json({
 				success: true,

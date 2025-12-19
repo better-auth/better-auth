@@ -331,24 +331,17 @@ export const verifyEmail = createAuthEndpoint(
 				const url = `${ctx.context.baseURL}/verify-email?token=${newToken}&callbackURL=${updateCallbackURL}`;
 				if (ctx.context.options.emailVerification?.sendVerificationEmail) {
 					await ctx.context.runInBackgroundOrAwait(
-						ctx.context.options.emailVerification
-							.sendVerificationEmail(
-								{
-									user: {
-										...user.user,
-										email: parsed.updateTo,
-									},
-									url,
-									token: newToken,
+						ctx.context.options.emailVerification.sendVerificationEmail(
+							{
+								user: {
+									...user.user,
+									email: parsed.updateTo,
 								},
-								ctx.request,
-							)
-							.catch((e) => {
-								ctx.context.logger.error(
-									"Failed to send verification email",
-									e,
-								);
-							}),
+								url,
+								token: newToken,
+							},
+							ctx.request,
+						),
 					);
 				}
 				if (ctx.query.callbackURL) {

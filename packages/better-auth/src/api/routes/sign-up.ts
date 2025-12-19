@@ -290,11 +290,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						: encodeURIComponent("/");
 					const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
 
-					const args: Parameters<
-						Required<
-							Required<BetterAuthOptions>["emailVerification"]
-						>["sendVerificationEmail"]
-					> = ctx.request
+					ctx.request
 						? [
 								{
 									user: createdUser,
@@ -313,14 +309,14 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 
 					if (ctx.context.options.emailVerification?.sendVerificationEmail) {
 						await ctx.context.runInBackgroundOrAwait(
-							ctx.context.options.emailVerification
-								.sendVerificationEmail(...args)
-								.catch((e) => {
-									ctx.context.logger.error(
-										"Failed to send verification email",
-										e,
-									);
-								}),
+							ctx.context.options.emailVerification.sendVerificationEmail(
+								{
+									user: createdUser,
+									url,
+									token,
+								},
+								ctx.request,
+							),
 						);
 					}
 				}
