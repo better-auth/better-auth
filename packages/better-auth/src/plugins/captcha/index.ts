@@ -81,4 +81,5 @@ export const captcha = (options: CaptchaOptions) =>
 				});
 			}
 		},
+		options,
 	}) satisfies BetterAuthPlugin;
