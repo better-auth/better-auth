@@ -60,5 +60,6 @@ export const scim = (options?: SCIMOptions) => {
 				},
 			},
 		},
+		options,
 	} satisfies BetterAuthPlugin;
 };

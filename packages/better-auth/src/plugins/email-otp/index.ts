@@ -136,5 +136,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				max: 3,
 			},
 		],
+		options,
 	} satisfies BetterAuthPlugin;
 };

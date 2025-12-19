@@ -943,6 +943,7 @@ export const mcp = (options: MCPOptions) => {
 			),
 		},
 		schema,
+		options,
 	} satisfies BetterAuthPlugin;
 };
 

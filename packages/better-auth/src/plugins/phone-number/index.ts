@@ -66,6 +66,7 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 				max: 10,
 			},
 		],
+		options,
 		$ERROR_CODES: PHONE_NUMBER_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };

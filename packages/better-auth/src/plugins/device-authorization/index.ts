@@ -133,5 +133,8 @@ export const deviceAuthorization = (
 			deviceDeny,
 		},
 		$ERROR_CODES: DEVICE_AUTHORIZATION_ERROR_CODES,
+		options,
 	} satisfies BetterAuthPlugin;
 };
+
+export type * from "../../utils/time";

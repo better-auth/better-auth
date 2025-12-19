@@ -83,5 +83,6 @@ export const expo = (options?: ExpoOptions | undefined) => {
 		endpoints: {
 			expoAuthorizationProxy,
 		},
+		options,
 	} satisfies BetterAuthPlugin;
 };
