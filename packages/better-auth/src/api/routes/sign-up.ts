@@ -7,19 +7,39 @@ import { APIError } from "better-call";
 import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
 import { parseUserInput } from "../../db";
-import { parseUserOutput } from "../../db/schema";
+import { parseUserOutput } from "../../db";
 import type { AdditionalUserFieldsInput, InferUser, User } from "../../types";
 import { createEmailVerificationToken } from "./email-verification";
+import { originCheck } from "../middlewares";
 
-const signUpEmailBodySchema = z.record(z.string(), z.any());
+const signUpEmailBodySchema = z
+	.object({
+		name: z.string(),
+		email: z.email(),
+		password: z.string(),
+		image: z.string().optional(),
+		callbackURL: z.string().optional(),
+		rememberMe: z.boolean().default(true).optional(),
+	})
+	.passthrough();
 
 export const signUpEmail = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
 		"/sign-up/email",
 		{
 			method: "POST",
-			operationId: "signUpWithEmailAndPassword",
 			body: signUpEmailBodySchema,
+			use: [
+				originCheck((ctx) => {
+					const v = (ctx.body as any)?.callbackURL as string | undefined;
+					if (!v) return "";
+					try {
+						return decodeURIComponent(v);
+					} catch {
+						return v;
+					}
+				}),
+			],
 			metadata: {
 				$Infer: {
 					body: {} as {
@@ -194,6 +214,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						message: BASE_ERROR_CODES.INVALID_EMAIL,
 					});
 				}
+				const emailLower = email.toLowerCase();
 
 				const minPasswordLength = ctx.context.password.config.minPasswordLength;
 				if (password.length < minPasswordLength) {
@@ -210,7 +231,9 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
 					});
 				}
-				const dbUser = await ctx.context.internalAdapter.findUserByEmail(email);
+				const dbUser = await ctx.context.internalAdapter.findUserByEmail(
+					emailLower,
+				);
 				if (dbUser?.user) {
 					ctx.context.logger.info(
 						`Sign-up attempt for existing email: ${email}`,
@@ -232,7 +255,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				try {
 					const data = parseUserInput(ctx.context.options, rest, "create");
 					createdUser = await ctx.context.internalAdapter.createUser({
-						email: email.toLowerCase(),
+						email: emailLower,
 						name,
 						image,
 						...data,
@@ -272,7 +295,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				) {
 					const token = await createEmailVerificationToken(
 						ctx.context.secret,
-						createdUser.email,
+						emailLower,
 						undefined,
 						ctx.context.options.emailVerification?.expiresIn,
 					);
