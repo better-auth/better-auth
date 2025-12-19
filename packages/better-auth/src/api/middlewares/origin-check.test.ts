@@ -247,28 +247,9 @@ describe("origin check middleware", async (it) => {
 	});
 });
 
-/**
- * Regression tests for trustedOrigins when baseURL is NOT provided in config.
- *
- * Issue: https://github.com/better-auth/better-auth/issues/6798
- *
- * When baseURL is not in the auth config, it gets inferred from the first request.
- * However, getTrustedOrigins() is called at init time BEFORE the first request,
- * so it returns [] (empty array) because it can't determine the baseURL yet.
- *
- * This caused trustedOrigins from config (array or env var) to be ignored,
- * resulting in "Invalid origin" errors even for properly configured origins.
- *
- * The fix rebuilds trustedOrigins when baseURL is inferred from the request,
- * ensuring all configured origins are respected.
- */
-describe("trustedOrigins regression tests (baseURL inferred from request)", async (it) => {
+describe("trusted origins with baseURL inferred from request", async (it) => {
 	it("should respect trustedOrigins array when baseURL is NOT in config", async () => {
-		// NOTE: We intentionally do NOT pass baseURL to the auth config.
-		// This simulates the common SvelteKit/Next.js setup where baseURL
-		// is inferred from the incoming request.
 		const { customFetchImpl, testUser } = await getTestInstance({
-			// baseURL is NOT set - will be inferred from request
 			trustedOrigins: ["http://my-frontend.com"],
 			emailAndPassword: {
 				enabled: true,
@@ -290,7 +271,6 @@ describe("trustedOrigins regression tests (baseURL inferred from request)", asyn
 			},
 		});
 
-		// This should succeed because http://my-frontend.com is in trustedOrigins
 		const res = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
@@ -302,7 +282,6 @@ describe("trustedOrigins regression tests (baseURL inferred from request)", asyn
 
 	it("should reject untrusted origins even when baseURL is inferred", async () => {
 		const { customFetchImpl, testUser } = await getTestInstance({
-			// baseURL is NOT set - will be inferred from request
 			trustedOrigins: ["http://my-frontend.com"],
 			emailAndPassword: {
 				enabled: true,
@@ -318,13 +297,12 @@ describe("trustedOrigins regression tests (baseURL inferred from request)", asyn
 			fetchOptions: {
 				customFetchImpl,
 				headers: {
-					origin: "http://evil-site.com", // NOT in trustedOrigins
+					origin: "http://evil-site.com",
 					cookie: "session=test",
 				},
 			},
 		});
 
-		// This should fail because http://evil-site.com is NOT in trustedOrigins
 		const res = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
@@ -338,8 +316,6 @@ describe("trustedOrigins regression tests (baseURL inferred from request)", asyn
 
 		try {
 			const { customFetchImpl, testUser } = await getTestInstance({
-				// baseURL is NOT set - will be inferred from request
-				// trustedOrigins is NOT set - should come from env var
 				emailAndPassword: {
 					enabled: true,
 				},
@@ -360,7 +336,6 @@ describe("trustedOrigins regression tests (baseURL inferred from request)", asyn
 				},
 			});
 
-			// This should succeed because http://env-frontend.com is in BETTER_AUTH_TRUSTED_ORIGINS
 			const res = await client.signIn.email({
 				email: testUser.email,
 				password: testUser.password,
@@ -374,10 +349,7 @@ describe("trustedOrigins regression tests (baseURL inferred from request)", asyn
 	});
 
 	it("should allow requests from inferred baseURL origin", async () => {
-		// When baseURL is inferred, it should automatically be trusted
 		const { customFetchImpl, testUser } = await getTestInstance({
-			// baseURL is NOT set - will be inferred as http://localhost:3000
-			// trustedOrigins is NOT set
 			emailAndPassword: {
 				enabled: true,
 			},
@@ -392,13 +364,12 @@ describe("trustedOrigins regression tests (baseURL inferred from request)", asyn
 			fetchOptions: {
 				customFetchImpl,
 				headers: {
-					origin: "http://localhost:3000", // Same as inferred baseURL
+					origin: "http://localhost:3000",
 					cookie: "session=test",
 				},
 			},
 		});
 
-		// This should succeed because the origin matches the inferred baseURL
 		const res = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
@@ -413,7 +384,6 @@ describe("trustedOrigins regression tests (baseURL inferred from request)", asyn
 
 		try {
 			const { customFetchImpl, testUser } = await getTestInstance({
-				// baseURL is NOT set - will be inferred from request
 				trustedOrigins: ["http://config-origin.com"],
 				emailAndPassword: {
 					enabled: true,
@@ -435,7 +405,6 @@ describe("trustedOrigins regression tests (baseURL inferred from request)", asyn
 				},
 			});
 
-			// Config origin should work
 			const res1 = await client.signIn.email({
 				email: testUser.email,
 				password: testUser.password,
@@ -443,7 +412,6 @@ describe("trustedOrigins regression tests (baseURL inferred from request)", asyn
 			});
 			expect(res1.data?.user).toBeDefined();
 
-			// Env origin should also work
 			const client2 = createAuthClient({
 				baseURL: "http://localhost:3000",
 				fetchOptions: {
