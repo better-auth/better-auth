@@ -51,6 +51,7 @@ export async function verifyJWT<T extends JWTPayload = JWTPayload>(
 
 		const { payload } = await jwtVerify(token, cryptoKey, {
 			issuer: options?.jwt?.issuer ?? ctx.context.options.baseURL,
+			audience: options?.jwt?.audience ?? ctx.context.options.baseURL,
 		});
 
 		if (!payload.sub || !payload.aud) {

@@ -353,7 +353,7 @@ export function parseCookies(cookieHeader: string) {
 	const cookieMap = new Map<string, string>();
 
 	cookies.forEach((cookie) => {
-		const [name, value] = cookie.split("=");
+		const [name, value] = cookie.split(/=(.*)/s);
 		cookieMap.set(name!, value!);
 	});
 	return cookieMap;

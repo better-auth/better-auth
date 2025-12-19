@@ -134,6 +134,10 @@ export const auth = betterAuth({
 })
 ```
 
+<Callout>
+We highly recommend not awaiting the `sendOTP` function. If you await it, it'll slow down the request and could cause timing attacks. For serverless platforms, you can use `waitUntil` to ensure the OTP is sent.
+</Callout>
+
 ### Sign In with Phone Number
 
 In addition to signing in a user using send-verify flow, you can also use phone number as an identifier and sign in a user using phone number and password.
