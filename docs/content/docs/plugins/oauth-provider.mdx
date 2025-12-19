@@ -7,13 +7,10 @@ An **OAuth 2.1 Provider Plugin** that allows you to turn your authentication ser
 
 The plugin has a secured configuration by default providing ease to users unfamiliar with the details of OAuth.
 
-<Callout type="warn">
-This plugin is in active development and may not be suitable for production use. Please report any issues or bugs on [GitHub](https://github.com/better-auth/better-auth).
-</Callout>
-
 **Key Features**:
 
 - **OAuth 2.1**: Restricted security practices to [OAuth 2.1](https://oauth.net/2.1/)
+- **MCP Enabled**: Support with [MCP authentication](#mcp)
 - **OIDC compatibility**: [OIDC](https://openid.net/specs/openid-connect-core-1_0.html)-compliant with the `openid` scope
   - **UserInfo**: Endpoint providing current user details
   - **id_token**: JWT-signed user information
@@ -38,6 +35,9 @@ This plugin is in active development and may not be suitable for production use.
 - **refresh_token**: Issue refresh tokens and handle access token renewal using `offline_access` scope.
 - **client_credentials**: Machine to Machine tokens for API communication.
 
+<Callout type="warn">
+This plugin is in active development and may not be suitable for production use. Please report any issues or bugs on [GitHub](https://github.com/better-auth/better-auth).
+</Callout>
 
 ## Installation
 
@@ -165,7 +165,7 @@ In OAuth there are two types of clients:
 
 To obtain client information owned by a specific user or organization use the following endpoint:
 
-<APIMethod path="/oauth2/get-client" method="GET">
+<APIMethod path="/oauth2/get-client" method="GET" requireSession>
 ```ts
 type getOAuthClient = {
   /**
@@ -180,7 +180,7 @@ type getOAuthClient = {
 
 To obtain public client fields to display on login flow pages such as consent, use the following endpoint. Note: the user must be signed in to use this endpoint.:
 
-<APIMethod path="/oauth2/public-client" method="GET">
+<APIMethod path="/oauth2/public-client" method="GET" requireSession>
 ```ts
 type getOAuthClientPublic = {
   /**
@@ -195,9 +195,10 @@ type getOAuthClientPublic = {
 
 To obtain a list of clients owned by a specific user or organization, use the following endpoint:
 
-<APIMethod path="/oauth2/get-clients" method="GET">
+<APIMethod path="/oauth2/get-clients" method="GET" requireSession>
 ```ts
-type getOAuthClients = {}
+type getOAuthClients = {
+}
 ```
 </APIMethod>
 
@@ -229,7 +230,7 @@ await auth.api.adminCreateOAuthClient({
 
 To update an oauth client tied to a specific user or organization, use the `/oauth2/update-client` endpoint (eg. `updateOAuthClient`). The parameters are equivalent to the registration endpoint described by [RFC7591](https://datatracker.ietf.org/doc/html/rfc7591).
 
-<APIMethod path="/oauth2/update-client" method="POST">
+<APIMethod path="/oauth2/update-client" method="POST" requireSession>
 ```ts
 type updateOAuthClient = {
   /**
@@ -270,7 +271,7 @@ The current implementation rotates the client secret immediately and the previou
 
 To rotate a client secret, you must use the following endpoint:
 
-<APIMethod path="/oauth2/client/rotate-secret" method="POST">
+<APIMethod path="/oauth2/client/rotate-secret" method="POST" requireSession>
 ```ts
 type rotateClientSecret = {
   /**
@@ -285,7 +286,7 @@ type rotateClientSecret = {
 
 To delete a user or organization's client, use the following endpoint:
 
-<APIMethod path="/oauth2/delete-client" method="POST">
+<APIMethod path="/oauth2/delete-client" method="POST" requireSession>
 ```ts
 type deleteOAuthClient = {
   /**
@@ -305,7 +306,7 @@ Consent is required on all non-trusted clients, specifically those without `skip
 
 To obtain details of a specific consent, use the following endpoint:
 
-<APIMethod path="/oauth2/get-consent" method="GET">
+<APIMethod path="/oauth2/get-consent" method="GET" requireSession>
 ```ts
 type getOAuthConsent = {
   /**
@@ -320,9 +321,10 @@ type getOAuthConsent = {
 
 To obtain a list of user consents, use the following endpoint:
 
-<APIMethod path="/oauth2/get-consents" method="GET">
+<APIMethod path="/oauth2/get-consents" method="GET" requireSession>
 ```ts
-type getOAuthConsents = {}
+type getOAuthConsents = {
+}
 ```
 </APIMethod>
 
@@ -330,7 +332,7 @@ type getOAuthConsents = {}
 
 To update a specific consent, use the following endpoint:
 
-<APIMethod path="/oauth2/update-consent" method="POST">
+<APIMethod path="/oauth2/update-consent" method="POST" requireSession>
 ```ts
 type updateOAuthClient = {
   /**
@@ -349,7 +351,7 @@ type updateOAuthClient = {
 
 Revokes a user's consent for a specific client.
 
-<APIMethod path="/oauth2/delete-consent" method="POST">
+<APIMethod path="/oauth2/delete-consent" method="POST" requireSession>
 ```ts
 type deleteOAuthConsent = {
   /**
@@ -465,7 +467,7 @@ This implementation currently issues a new refresh token for every refresh reque
 
 Accept or deny user consent for a set of scopes. Note that when denying scopes, the consent cancels and pre-existing consent remains. To remove consent, delete that user's "oauthConsent" for that client.
 
-<APIMethod path="/oauth2/consent" method="POST">
+<APIMethod path="/oauth2/consent" method="POST" requireSession>
 ```ts
 type oauth2Consent = {
   /**
@@ -486,7 +488,7 @@ Sign up registration pages must be [configured](#sign-up-account-screen) to perf
 Account selection must be [configured](#select-account-screen) to perform account selection.
 Post login must be [configured](#post-login-screen) to perform post login selection.
 
-<APIMethod path="/oauth2/continue" method="POST">
+<APIMethod path="/oauth2/continue" method="POST" requireSession>
 ```ts
 type oauth2Continue = {
   /**
@@ -738,7 +740,7 @@ oauthProvider({
 })
 ```
 
-The plugin will redirect the user to the specified path with `client_id` and `scope` query parameters. You can use this information to display a custom consent screen. Once the user consents, you can call `oauth2.consent` to complete the authorization. Note the consent code is automatically stored in a signed cookie.
+The plugin will redirect the user to the specified path with `client_id` and `scope` query parameters. You can use this information to display a custom consent screen. Once the user consents, you can call `oauth2.consent` to complete the authorization.
 
 ```ts title="consent-page.ts"
 const res = await client.oauth2.consent({
@@ -832,7 +834,7 @@ oauthProvider({
         organizations.length === 1 && organizations.at(0)?.id === session.activeOrganizationId
       )
     },
-    consentReferenceId: ({ session, scopes }) => {
+    consentReferenceId: ({ session, scopes }) => { // [!code highlight]
       if (scopes.includes("read:organization")) {
         const activeOrganizationId = (session?.activeOrganizationId ?? undefined) as string | undefined;
         if (!activeOrganizationId) {
@@ -850,7 +852,7 @@ oauthProvider({
 })
 ```
 
-The plugin will redirect the user to the `postLoginPage`. This page should prompt for account selection and upon completion of selection, should call `oauth2Continue`.
+The plugin will redirect the user to the `postLogin.page` to provide a prompt for account selection. Upon completion, you should call `oauth2Continue`.
 
 ```ts title="select-organization.ts"
 await authClient.organization.setActive({
@@ -868,7 +870,6 @@ For first-party applications and internal services, you can cache trusted client
 
 ```ts title="auth.ts"
 oauthProvider({
-  loginPage: "/sign-in",
   // List of clientIds of the clients
   cachedTrustedClients: new Set([
     "internal-dashboard",
@@ -921,14 +922,13 @@ Pro tip: these functions can may also throw errors such as a user is no longer a
 ```ts title="auth.ts"
 oauthProvider({
   // Attach claims to id tokens
-  customIdTokenClaims: ({ user, scopes, referenceId, metadata }) => {
+  customIdTokenClaims: ({ user, scopes, metadata }) => {
     return {
       locale: "en-GB",
-      "https://example.com/org": referenceId,
     };
   },
   // Attach claims to access tokens
-  customAccessTokenClaims: ({ user, scopes, referenceId, metadata }) => {
+  customAccessTokenClaims: ({ user, scopes, referenceId, resource, metadata }) => {
     return {
       "https://example.com/org": referenceId,
       "https://example.com/roles": ["editor"],
@@ -938,7 +938,6 @@ oauthProvider({
   customUserInfoClaims: ({ user, scopes, jwt }) => {
     return {
       locale: "en-GB",
-      "https://example.com/org": jwt["https://example.com/org"],
     };
   },
 })
@@ -986,6 +985,10 @@ oauthProvider({
   allowUnauthenticatedClientRegistration: true, // [!code highlight]
 })
 ```
+
+<Callout type="warn">
+Support for `allowUnauthenticatedClientRegistration` **will be deprecated** when the MCP protocol standardizes unauthenticated dynamic client registration. As of writing, both [Client ID Metadata Documents](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/991) and [`software_statement` and `jwks_uri`](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1032) are under debate.
+</Callout>
 
 #### Dynamic Client Registration Expiration
 
@@ -1037,13 +1040,13 @@ To set user-specific permissions and roles on tokens see [Claims](#claims).
 
 ### Client CRUD Privileges
 
-To determine whether a logged in has the ability to perform specific action in client creation, you can utilize the `clientPrivileges` configuration setting. By default, CRUD actions are allowed for users with matching `userId` or through `clientReference`.
+To determine whether a logged in user has the ability to perform specific actions in client creation, you can utilize the `clientPrivileges` configuration setting. By default, CRUD actions are allowed for users with matching `userId` or `clientReference`.
 
 The following is a basic example that allows all OAuth Client CRUD actions for organization owners assuming ordinary users cannot create clients:
 
 ```ts title="auth.ts"
 oauthProvider({
-  clientPrivileges: ({ action, headers, session }) => {
+  clientPrivileges: async ({ action, headers, user, session }) => {
     if (!session?.activeOrganizationId) return false;
     const { data: member } = await auth.api.getActiveMember({
       headers,
@@ -1197,6 +1200,7 @@ If you are using "openid" and confidential MCP clients, you cannot disable the J
     import { auth } from "@/lib/auth"; // optional
     import { createAuthClient } from "better-auth/client";
     import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client"
+
     const authClient = createAuthClient({
       plugins: [oauthProviderResourceClient(auth)],
     });
@@ -1214,6 +1218,7 @@ If you are using "openid" and confidential MCP clients, you cannot disable the J
         resource: "https://api.example.com", // `aud` claim
         authorization_servers: ["https://auth.example.com"],
       })
+
       return new Response(JSON.stringify(metadata), {
         headers: {
           "Content-Type": "application/json",
@@ -1382,6 +1387,18 @@ Table Name: `oauthClient`
       name: "disabled",
       type: "boolean",
       description: "Field that indicates if the current application is disabled",
+      isOptional: true,
+    },
+    {
+      name: "skipConsent",
+      type: "boolean",
+      description: "Field that indicates if the application can skip consent. You may choose to enable this for trusted applications.",
+      isOptional: true,
+    },
+    {
+      name: "enableEndSession",
+      type: "boolean",
+      description: "Field that indicates if the application can logout via an id_token. You may choose to enable this for trusted applications.",
       isOptional: true,
     },
     {
@@ -1557,16 +1574,17 @@ Table Name: `oauthRefreshToken`
       references: { model: "user", field: "id" },
     },
     {
+      name: "referenceId",
+      type: "string",
+      description: "ID of the consented reference",
+      isOptional: true,
+      isForeignKey: true,
+    },
+    {
       name: "scopes",
       type: "string[]",
       description: "Array of granted scopes",
       isRequired: true,
-    },
-    {
-      name: "used",
-      type: "Date",
-      description: "Timestamp when the token was used",
-      isOptional: true,
     },
     {
       name: "revoked",
@@ -1630,6 +1648,21 @@ Table Name: `oauthAccessToken`
       references: { model: "oauthRefreshToken", field: "id" },
     },
     {
+      name: "userId",
+      type: "string",
+      description: "ID of the user associated with the token",
+      isForeignKey: true,
+      isRequired: true,
+      references: { model: "user", field: "id" },
+    },
+    {
+      name: "referenceId",
+      type: "string",
+      description: "ID of the consented reference",
+      isOptional: true,
+      isForeignKey: true,
+    },
+    {
       name: "scopes",
       type: "string[]",
       description: "Array of granted scopes",
@@ -1675,15 +1708,16 @@ Table Name: `oauthConsent`
       references: { model: "oauthClient", field: "clientId" }
     },
     {
+      name: "referenceId",
+      type: "string",
+      description: "ID of the consented reference",
+      isOptional: true,
+      isForeignKey: true,
+    },
+    {
       name: "scopes",
       type: "string",
       description: "Comma-separated list of scopes consented to",
-      isRequired: true
-    },
-    {
-      name: "consentGiven",
-      type: "boolean",
-      description: "Indicates if consent was given",
       isRequired: true
     },
     {
@@ -1714,7 +1748,7 @@ The following are available under the `prefix` configuration setting:
 
 ## Optimizations
 
-To improve lookup performance, map the field `client_id` on the table `oauthClient` to `id` through your database adapter.
+To improve lookup performance, database adapters may map the field `client_id` on the table `oauthClient` to `id`. Note that `id` should support strings formatted like UUIDs and urls.
 
 ## Migrations
 
@@ -1794,33 +1828,3 @@ The MCP endpoints moved from `/mcp` to the `/oauth2` equivalent.
 - `/oauth2/register` (previously `/mcp/register`)
 - `/mcp/get-session` removed as not OAuth 2 compliant, use `/oauth2/introspect` instead
 - `/.well-known/oauth-protected-resource` removed, use the helper `mcpHandler` (or manually with the server `api.oAuth2introspectVerify` or the resource client `verifyAccessToken`)
-
-
-### From [API Key Plugin](/docs/plugins/api-key)
-
-This OAuth plugin provides additional security benefits over API Keys such as short-lived access tokens, key rotation, and centralized revocation.
-
-While we are currently unable to fully migrate the API Key schema and its functionality at this time, here are some implementation tips to assist in migration:
-
-#### Database
-  - API `permissions` should convert into `scopes`. See [Scopes Vs Permissions](#scopes-vs-permissions) on how to implement this in more detail.
-    - NOTE: the following `scopes` are reserved: 'openid', 'profile', 'name', 'email', 'phone', 'address'.
-
-#### Setup
-  - Register an OAuth client with `scopes`.
-  - Store the `client_id` and `client_secret`(previously `api_key`) in your client's environment.
-
-#### Client
-For user-scoped data:
-  - Request authorization using the `authorization_code` with PKCE flow.
-    - Authorize first at `/oauth2/authorize`.
-    - At the callback, exchange the `code` for `tokens`
-  - Access token can be used to perform scoped actions
-  - If requested with a `offline_access` scope, you use the `refresh_token` to obtain new tokens. Save this in your database alongside the user that authorized it.
-    - Request a new token whenever the `access_token` expires using the `refresh_token` grant at the `/oauth2/token` endpoint
-    - To obtain a JWT-formatted token, you must request using the `resource` parameter again.
-
-For machine-to-machine communication:
-  - Request a token using the `client_credentials` grant at the `/oauth2/token` endpoint
-  - Store the token in memory
-    - Request a new token whenever token expires
