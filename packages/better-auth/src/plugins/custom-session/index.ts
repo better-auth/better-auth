@@ -136,5 +136,6 @@ export const customSession = <
 		$Infer: {
 			Session: {} as Awaited<ReturnType<typeof fn>>,
 		},
+		options: pluginOptions,
 	} satisfies BetterAuthPlugin;
 };
