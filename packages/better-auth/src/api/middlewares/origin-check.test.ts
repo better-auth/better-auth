@@ -348,3 +348,100 @@ describe("trustedOrigins regression tests", async (it) => {
 		}
 	});
 });
+
+describe("expo-origin header support", async (it) => {
+	it("should use expo-origin header when origin header is missing", async () => {
+		const { customFetchImpl, testUser } = await getTestInstance({
+			trustedOrigins: ["exp://10.0.0.29:8081"],
+			emailAndPassword: {
+				enabled: true,
+			},
+			advanced: {
+				disableCSRFCheck: false,
+				disableOriginCheck: false,
+			},
+		});
+
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					// No origin header
+					"expo-origin": "exp://10.0.0.29:8081",
+					cookie: "session=test",
+				},
+			},
+		});
+
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+
+		expect(res.data?.user).toBeDefined();
+	});
+
+	it("should prefer origin header over expo-origin when both are present", async () => {
+		const { customFetchImpl, testUser } = await getTestInstance({
+			trustedOrigins: ["http://localhost:5000"],
+			emailAndPassword: {
+				enabled: true,
+			},
+			advanced: {
+				disableCSRFCheck: false,
+				disableOriginCheck: false,
+			},
+		});
+
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "http://localhost:5000",
+					"expo-origin": "exp://untrusted:8081",
+					cookie: "session=test",
+				},
+			},
+		});
+
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+
+		expect(res.data?.user).toBeDefined();
+	});
+
+	it("should reject request when expo-origin is not in trustedOrigins", async () => {
+		const { customFetchImpl, testUser } = await getTestInstance({
+			trustedOrigins: ["exp://10.0.0.1:8081"],
+			emailAndPassword: {
+				enabled: true,
+			},
+			advanced: {
+				disableCSRFCheck: false,
+				disableOriginCheck: false,
+			},
+		});
+
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					"expo-origin": "exp://10.0.0.29:8081", // Different IP
+					cookie: "session=test",
+				},
+			},
+		});
+
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+
+		expect(res.error?.status).toBe(403);
+	});
+});
