@@ -104,6 +104,8 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.13",
+    "@types/hast": "^3.0.4",
+    "@types/js-beautify": "^1.14.3",
     "@types/jsrsasign": "^10.5.15",
     "@types/mdx": "^2.0.13",
     "@types/react": "catalog:react19",
