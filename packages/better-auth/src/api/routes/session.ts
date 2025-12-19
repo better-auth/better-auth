@@ -30,7 +30,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 	createAuthEndpoint(
 		"/get-session",
 		{
-			method: "GET",
+			method: ["GET", "POST"],
 			operationId: "getSession",
 			query: getSessionQuerySchema,
 			requireHeaders: true,
@@ -69,6 +69,17 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 			session: InferSession<Option>;
 			user: InferUser<Option>;
 		} | null> => {
+			const deferSessionRefresh =
+				ctx.context.options.session?.deferSessionRefresh;
+			const isPostRequest = ctx.method === "POST";
+
+			if (isPostRequest && !deferSessionRefresh) {
+				throw new APIError("METHOD_NOT_ALLOWED", {
+					message:
+						"POST method requires deferSessionRefresh to be enabled in session config",
+				});
+			}
+
 			try {
 				const sessionCookieToken = await ctx.getSignedCookie(
 					ctx.context.authCookies.sessionToken.name,
