@@ -734,12 +734,12 @@ export const refreshToken = createAuthEndpoint(
 		}
 
 		try {
-			const refreshToken = await decryptOAuthToken(
-				account.refreshToken as string,
+			const decryptedRefreshToken = await decryptOAuthToken(
+				refreshToken as string,
 				ctx.context,
 			);
 			const tokens: OAuth2Tokens = await provider.refreshAccessToken(
-				refreshToken,
+				decryptedRefreshToken,
 			);
 
 			if (account.id) {
