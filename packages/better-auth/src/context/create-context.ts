@@ -104,16 +104,10 @@ export async function createAuthContext(
 	const logger = createLogger(options.logger);
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
 
-	let showBaseURLWarning = false;
-	if (
-		!baseURL &&
-		!options.advanced?.trustedProxyHeaders &&
-		!showBaseURLWarning
-	) {
-		logger.error(
+	if (!baseURL) {
+		logger.warn(
 			`[better-auth] Base URL could not be determined. Please set a valid base URL using the baseURL config option or the BETTER_AUTH_BASE_URL environment variable. Without this, callbacks and redirects may not work correctly.`,
 		);
-		showBaseURLWarning = true;
 	}
 
 	const secret =
@@ -188,8 +182,13 @@ export async function createAuthContext(
 			skipStateCookieCheck: !!options.account?.skipStateCookieCheck,
 		},
 		tables,
-		trustedOrigins: getTrustedOrigins(options),
-		isTrustedOrigin(url: string, settings?: { allowRelativePaths: boolean }) {
+		trustedOrigins: await getTrustedOrigins(options),
+		isTrustedOrigin(
+			url: string,
+			settings?: {
+				allowRelativePaths: boolean;
+			},
+		) {
 			return ctx.trustedOrigins.some((origin) =>
 				matchesOriginPattern(url, origin, settings),
 			);

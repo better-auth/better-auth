@@ -38,19 +38,13 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 				if (baseURL) {
 					ctx.baseURL = baseURL;
 					ctx.options.baseURL = getOrigin(ctx.baseURL) || undefined;
-					ctx.trustedOrigins = getTrustedOrigins(ctx.options);
 				} else {
 					throw new BetterAuthError(
 						"Could not get base URL from request. Please provide a valid base URL.",
 					);
 				}
 			}
-			if (typeof options.trustedOrigins === "function") {
-				ctx.trustedOrigins = [
-					...ctx.trustedOrigins,
-					...(await options.trustedOrigins(request)),
-				];
-			}
+			ctx.trustedOrigins = await getTrustedOrigins(ctx.options, request);
 			const { handler } = router(ctx, options);
 			return runWithAdapter(ctx.adapter, () => handler(request));
 		},
