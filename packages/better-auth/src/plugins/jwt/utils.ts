@@ -175,12 +175,17 @@ export async function createJwk(
 	return key;
 }
 
+/** Default cooldown between key rotations (5 minutes in milliseconds) */
+const DEFAULT_ROTATION_COOLDOWN_MS = 5 * 60 * 1000;
+
 /**
  * Rotates the JWT signing key if needed.
  *
  * Rotation occurs when:
+ * - Force flag is set, OR
  * - No key exists, OR
- * - Latest key is expired AND was created more than the cooldown period ago
+ * - Latest key is expired AND cooldown period has passed since key creation, OR
+ * - Manual rotation with explicit cooldown AND cooldown period has passed
  *
  * @param ctx - The endpoint context
  * @param options - JWT plugin options
@@ -208,27 +213,34 @@ export async function rotateJwk(
 	const adapter = getJwksAdapter(ctx.context.adapter, options);
 	const latestKey = await adapter.getLatestKey(ctx);
 
-	const ROTATION_COOLDOWN = config?.cooldown ?? 5 * 60 * 1000; // 5 minutes default
+	const rotationCooldown = config?.cooldown ?? DEFAULT_ROTATION_COOLDOWN_MS;
 	const now = Date.now();
 
-	let shouldRotate = false;
-
+	// Determine if rotation should occur
 	if (config?.force) {
-		shouldRotate = true;
-	} else if (!latestKey) {
-		shouldRotate = true;
-	} else if (latestKey.expiresAt && latestKey.expiresAt < new Date()) {
-		// Key is expired - rotate if cooldown has passed since key creation
-		shouldRotate = now - latestKey.createdAt.getTime() >= ROTATION_COOLDOWN;
-	} else if (config?.cooldown !== undefined) {
-		// Manual rotation with explicit cooldown - rotate if cooldown has passed
-		shouldRotate = now - latestKey.createdAt.getTime() >= ROTATION_COOLDOWN;
-	}
-
-	if (shouldRotate) {
 		const key = await createJwk(ctx, options);
 		return { key, rotated: true };
 	}
 
-	return { key: latestKey!, rotated: false };
+	if (!latestKey) {
+		const key = await createJwk(ctx, options);
+		return { key, rotated: true };
+	}
+
+	const timeSinceCreation = now - latestKey.createdAt.getTime();
+	const cooldownPassed = timeSinceCreation >= rotationCooldown;
+
+	// Key is expired - rotate if cooldown has passed
+	if (latestKey.expiresAt && latestKey.expiresAt < new Date() && cooldownPassed) {
+		const key = await createJwk(ctx, options);
+		return { key, rotated: true };
+	}
+
+	// Manual rotation with explicit cooldown - rotate if cooldown has passed
+	if (config?.cooldown !== undefined && cooldownPassed) {
+		const key = await createJwk(ctx, options);
+		return { key, rotated: true };
+	}
+
+	return { key: latestKey, rotated: false };
 }
