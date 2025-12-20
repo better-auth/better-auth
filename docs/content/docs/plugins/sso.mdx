@@ -250,7 +250,12 @@ trustedOrigins: [
 2. Or dynamically compute the `trustedOrigins` by specifying a callback function:
 
 ```ts
-trustedOrigins: async (request: Request) => {
+trustedOrigins: async (request) => {
+    // request is undefined during initialization and auth.api calls
+    if (!request) {
+        return ["https://my-frontend.com"];
+    }
+
     // SSO trusted origin list
     if (request.url.endsWith("/sso/register")) {
         const trustedOrigins = await fetchOriginList();
@@ -921,59 +926,6 @@ const auth = betterAuth({
 | `enableInResponseToValidation` | `boolean` | `false` | Enable InResponseTo validation for SP-initiated flows. |
 | `allowIdpInitiated` | `boolean` | `true` | Allow IdP-initiated SSO (responses without InResponseTo). Set to `false` for stricter security. Only applies when validation is enabled. |
 | `requestTTL` | `number` | `300000` (5 min) | Time-to-live for AuthnRequest records in milliseconds. Requests older than this will be rejected. |
-| `authnRequestStore` | `AuthnRequestStore` | In-memory | Custom store implementation. Providing a custom store automatically enables validation. |
-
-#### Multi-Instance Deployments (Production)
-
-<Callout type="warning">
-For multi-instance deployments (load-balanced servers, serverless, etc.), you **must** provide a shared store like Redis. The default in-memory store only works for single-instance deployments.
-</Callout>
-
-Providing a custom `authnRequestStore` automatically enables InResponseTo validation:
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { sso, type AuthnRequestStore } from "@better-auth/sso";
-
-// Example Redis-backed store
-const redisAuthnRequestStore: AuthnRequestStore = {
-    async save(record) {
-        const ttl = Math.ceil((record.expiresAt - Date.now()) / 1000);
-        await redis.set(
-            `authn:${record.id}`,
-            JSON.stringify(record),
-            "EX",
-            ttl
-        );
-    },
-    async get(id) {
-        const data = await redis.get(`authn:${id}`);
-        if (!data) return null;
-        const record = JSON.parse(data);
-        if (record.expiresAt < Date.now()) {
-            await redis.del(`authn:${id}`);
-            return null;
-        }
-        return record;
-    },
-    async delete(id) {
-        await redis.del(`authn:${id}`);
-    },
-};
-
-const auth = betterAuth({
-    plugins: [
-        sso({
-            saml: {
-                // Providing a store automatically enables validation
-                authnRequestStore: redisAuthnRequestStore,
-                // Optionally configure other options
-                allowIdpInitiated: false,
-            },
-        }),
-    ],
-});
-```
 
 #### Error Handling
 
@@ -982,6 +934,35 @@ When InResponseTo validation fails, users are redirected with an error query par
 - `?error=invalid_saml_response&error_description=Unknown+or+expired+request+ID` — The request ID was not found or has expired
 - `?error=invalid_saml_response&error_description=Provider+mismatch` — The response was meant for a different provider
 - `?error=unsolicited_response&error_description=IdP-initiated+SSO+not+allowed` — IdP-initiated SSO is disabled
+
+### Assertion Replay Protection
+
+The SSO plugin includes assertion replay protection to prevent attackers from capturing and resubmitting valid SAML responses. Each SAML Assertion ID is tracked and rejected if reused.
+
+<Callout type="info">
+Replay protection is **always enabled**. This is a critical security feature that prevents attackers from reusing intercepted SAML responses.
+</Callout>
+
+#### How It Works
+
+1. When a SAML response is received, the Assertion ID is extracted from the XML
+2. The system checks if this Assertion ID has been seen before
+3. If it's a new assertion, it's stored in the database until its `NotOnOrAfter` expiration
+4. If it's a duplicate (replay attack), the request is rejected
+
+**Both SAML endpoints are protected:**
+- `/sso/saml2/callback/:providerId`
+- `/sso/saml2/sp/acs/:providerId`
+
+<Callout type="info">
+Replay protection uses the database verification table, so it works correctly in multi-instance deployments without additional configuration.
+</Callout>
+
+#### Error Handling
+
+When a replay attack is detected, users are redirected with an error:
+
+- `?error=replay_detected&error_description=SAML+assertion+has+already+been+used` — The assertion ID was already used
 
 ### Timestamp Validation
 
@@ -1358,7 +1339,7 @@ If you want to allow account linking for specific trusted providers, enable the 
         },
     },
     saml: {
-        description: "SAML security options for AuthnRequest/InResponseTo validation and timestamp handling.",
+        description: "SAML security options for AuthnRequest/InResponseTo validation, replay protection, and timestamp handling.",
         type: "object",
         properties: {
             enableInResponseToValidation: {
@@ -1375,11 +1356,6 @@ If you want to allow account linking for specific trusted providers, enable the 
                 description: "TTL for AuthnRequest records in milliseconds. Only applies when validation is enabled.",
                 type: "number",
                 default: 300000,
-            },
-            authnRequestStore: {
-                description: "Custom AuthnRequest store for multi-instance deployments (e.g., Redis). Providing a store automatically enables validation.",
-                type: "AuthnRequestStore",
-                required: false,
             },
             clockSkew: {
                 description: "Clock skew tolerance for SAML assertion timestamp validation (NotBefore/NotOnOrAfter) in milliseconds. Allows for minor time differences between IdP and SP servers.",
