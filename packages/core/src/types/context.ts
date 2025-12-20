@@ -282,7 +282,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 		 * This is inferred from the `options.advanced?.backgroundTasks?.handler` option.
 		 * Defaults to a no-op that just runs the promise.
 		 */
-		runInBackground?: (promise: Promise<void>) => void;
+		runInBackground: (promise: Promise<void>) => void;
 		/**
 		 * Runs a task in the background if `runInBackground` is configured,
 		 * otherwise awaits the task directly.

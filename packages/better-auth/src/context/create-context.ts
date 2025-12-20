@@ -293,7 +293,11 @@ export async function createAuthContext(
 		) {
 			if (options.advanced?.backgroundTasks?.handler) {
 				if (promise instanceof Promise) {
-					options.advanced.backgroundTasks.handler(promise);
+					options.advanced.backgroundTasks.handler(
+						promise.catch((e) => {
+							logger.error("Failed to run background task:", e);
+						}),
+					);
 				}
 			} else {
 				await promise;
