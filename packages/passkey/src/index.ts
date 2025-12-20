@@ -48,6 +48,7 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 		},
 		schema: mergeSchema(schema, options?.schema),
 		$ERROR_CODES: PASSKEY_ERROR_CODES,
+		options,
 	} satisfies BetterAuthPlugin;
 };
 
