@@ -218,6 +218,10 @@ export async function rotateJwk(
 	} else if (!latestKey) {
 		shouldRotate = true;
 	} else if (latestKey.expiresAt && latestKey.expiresAt < new Date()) {
+		// Key is expired - rotate if cooldown has passed since key creation
+		shouldRotate = now - latestKey.createdAt.getTime() >= ROTATION_COOLDOWN;
+	} else if (config?.cooldown !== undefined) {
+		// Manual rotation with explicit cooldown - rotate if cooldown has passed
 		shouldRotate = now - latestKey.createdAt.getTime() >= ROTATION_COOLDOWN;
 	}
 
@@ -226,10 +230,5 @@ export async function rotateJwk(
 		return { key, rotated: true };
 	}
 
-	if (!latestKey) {
-		const key = await createJwk(ctx, options);
-		return { key, rotated: true };
-	}
-
-	return { key: latestKey, rotated: false };
+	return { key: latestKey!, rotated: false };
 }

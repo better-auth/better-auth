@@ -21,16 +21,16 @@ export const getJwksAdapter = (
 		getLatestKey: async (ctx: GenericEndpointContext) => {
 			if (options?.adapter?.getJwks) {
 				const keys = await options.adapter.getJwks(ctx);
-				return keys?.sort(
-					(a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
-				)[0];
+				return keys
+					?.slice()
+					.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
 			}
 			const keys = await adapter.findMany<Jwk>({
 				model: "jwks",
 			});
-			return keys?.sort(
-				(a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
-			)[0];
+			return keys
+				?.slice()
+				.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
 		},
 		createJwk: async (ctx: GenericEndpointContext, webKey: Omit<Jwk, "id">) => {
 			if (options?.adapter?.createJwk) {

@@ -98,257 +98,257 @@ describe("jwt rotation", async () => {
 		expect(jwksAfterGrace.keys.length).toBe(1); // First key should be gone
 		expect(jwksAfterGrace.keys[0]?.kid).toBe(storage[1]!.id);
 
-	vi.useRealTimers();
-});
+		vi.useRealTimers();
+	});
 
-it("should respect cooldown period and prevent rapid rotation", async () => {
-	vi.useFakeTimers();
-	const storage: Jwk[] = [];
-	const rotationInterval = 1; // 1 second
+	it("should respect cooldown period and prevent rapid rotation", async () => {
+		vi.useFakeTimers();
+		const storage: Jwk[] = [];
+		const rotationInterval = 1; // 1 second
 
-	const { auth } = await getTestInstance({
-		plugins: [
-			jwt({
-				jwks: {
-					rotationInterval,
-				},
-				adapter: {
-					getJwks: async () => storage,
-					createJwk: async (data) => {
-						const key = {
-							...data,
-							id: crypto.randomUUID(),
-						};
-						storage.push(key);
-						return key;
+		const { auth } = await getTestInstance({
+			plugins: [
+				jwt({
+					jwks: {
+						rotationInterval,
 					},
-				},
-			}),
-		],
-	});
-
-	// Create first key
-	await auth.api.signJWT({ body: { payload: { sub: "user1" } } });
-	expect(storage.length).toBe(1);
-
-	// Advance time past rotation interval (and cooldown)
-	vi.advanceTimersByTime(5 * 60 * 1000 + 100);
-
-	// Trigger rotation
-	await auth.api.signJWT({ body: { payload: { sub: "user1" } } });
-	expect(storage.length).toBe(2);
-
-	// Advance time by 1 second (less than 5 minute cooldown)
-	vi.advanceTimersByTime(1000);
-
-	// Try to rotate again - should be blocked by cooldown
-	await auth.api.signJWT({ body: { payload: { sub: "user1" } } });
-	expect(storage.length).toBe(2); // No new key created
-
-	// Advance time past cooldown (5 minutes + 1 second)
-	vi.advanceTimersByTime(5 * 60 * 1000 + 1000);
-
-	// Now rotation should work
-	await auth.api.signJWT({ body: { payload: { sub: "user1" } } });
-	expect(storage.length).toBe(3);
-
-	vi.useRealTimers();
-});
-
-it("should not rotate when automatic rotation is disabled", async () => {
-	vi.useFakeTimers();
-	const storage: Jwk[] = [];
-
-	const { auth } = await getTestInstance({
-		plugins: [
-			jwt({
-				jwks: {
-					rotationInterval: 1, // 1 second
-					disableAutomaticRotation: true,
-				},
-				adapter: {
-					getJwks: async () => storage,
-					createJwk: async (data) => {
-						const key = {
-							...data,
-							id: crypto.randomUUID(),
-						};
-						storage.push(key);
-						return key;
+					adapter: {
+						getJwks: async () => storage,
+						createJwk: async (data) => {
+							const key = {
+								...data,
+								id: crypto.randomUUID(),
+							};
+							storage.push(key);
+							return key;
+						},
 					},
-				},
-			}),
-		],
+				}),
+			],
+		});
+
+		// Create first key
+		await auth.api.signJWT({ body: { payload: { sub: "user1" } } });
+		expect(storage.length).toBe(1);
+
+		// Advance time past rotation interval (and cooldown)
+		vi.advanceTimersByTime(5 * 60 * 1000 + 100);
+
+		// Trigger rotation
+		await auth.api.signJWT({ body: { payload: { sub: "user1" } } });
+		expect(storage.length).toBe(2);
+
+		// Advance time by 1 second (less than 5 minute cooldown)
+		vi.advanceTimersByTime(1000);
+
+		// Try to rotate again - should be blocked by cooldown
+		await auth.api.signJWT({ body: { payload: { sub: "user1" } } });
+		expect(storage.length).toBe(2); // No new key created
+
+		// Advance time past cooldown (5 minutes + 1 second)
+		vi.advanceTimersByTime(5 * 60 * 1000 + 1000);
+
+		// Now rotation should work
+		await auth.api.signJWT({ body: { payload: { sub: "user1" } } });
+		expect(storage.length).toBe(3);
+
+		vi.useRealTimers();
 	});
 
-	// Create initial key manually
-	await auth.api.rotateKey({ body: { force: true } });
-	expect(storage.length).toBe(1);
+	it("should not rotate when automatic rotation is disabled", async () => {
+		vi.useFakeTimers();
+		const storage: Jwk[] = [];
 
-	// Advance time past rotation interval
-	vi.advanceTimersByTime(1100);
-
-	// Try to sign - should use existing key, not rotate
-	await auth.api.signJWT({ body: { payload: { sub: "user1" } } });
-	expect(storage.length).toBe(1); // No rotation
-
-	// Check JWKS endpoint - should also not rotate
-	await auth.api.getJwks();
-	expect(storage.length).toBe(1);
-
-	vi.useRealTimers();
-});
-
-it("should allow manual rotation via rotateKey endpoint", async () => {
-	vi.useFakeTimers();
-	const storage: Jwk[] = [];
-
-	const { auth } = await getTestInstance({
-		plugins: [
-			jwt({
-				jwks: {
-					disableAutomaticRotation: true,
-				},
-				adapter: {
-					getJwks: async () => storage,
-					createJwk: async (data) => {
-						const key = {
-							...data,
-							id: crypto.randomUUID(),
-						};
-						storage.push(key);
-						return key;
+		const { auth } = await getTestInstance({
+			plugins: [
+				jwt({
+					jwks: {
+						rotationInterval: 1, // 1 second
+						disableAutomaticRotation: true,
 					},
-				},
-			}),
-		],
-	});
-
-	// Create initial key manually
-	const initialResult = await auth.api.rotateKey({ body: { force: true } });
-	expect(storage.length).toBe(1);
-	const firstKeyId = initialResult.keyId;
-
-	// Manually trigger rotation with force
-	const result = await auth.api.rotateKey({
-		body: { force: true },
-	});
-
-	expect(result.rotated).toBe(true);
-	expect(result.keyId).not.toBe(firstKeyId);
-	expect(storage.length).toBe(2);
-
-	vi.useRealTimers();
-});
-
-it("should respect custom cooldown in manual rotation", async () => {
-	vi.useFakeTimers();
-	const storage: Jwk[] = [];
-
-	const { auth } = await getTestInstance({
-		plugins: [
-			jwt({
-				adapter: {
-					getJwks: async () => storage,
-					createJwk: async (data) => {
-						const key = {
-							...data,
-							id: crypto.randomUUID(),
-						};
-						storage.push(key);
-						return key;
+					adapter: {
+						getJwks: async () => storage,
+						createJwk: async (data) => {
+							const key = {
+								...data,
+								id: crypto.randomUUID(),
+							};
+							storage.push(key);
+							return key;
+						},
 					},
-				},
-			}),
-		],
+				}),
+			],
+		});
+
+		// Create initial key manually
+		await auth.api.rotateKey({ body: { force: true } });
+		expect(storage.length).toBe(1);
+
+		// Advance time past rotation interval
+		vi.advanceTimersByTime(1100);
+
+		// Try to sign - should use existing key, not rotate
+		await auth.api.signJWT({ body: { payload: { sub: "user1" } } });
+		expect(storage.length).toBe(1); // No rotation
+
+		// Check JWKS endpoint - should also not rotate
+		await auth.api.getJwks();
+		expect(storage.length).toBe(1);
+
+		vi.useRealTimers();
 	});
 
-	// Create initial key
-	await auth.api.signJWT({ body: { payload: { sub: "user1" } } });
-	expect(storage.length).toBe(1);
+	it("should allow manual rotation via rotateKey endpoint", async () => {
+		vi.useFakeTimers();
+		const storage: Jwk[] = [];
 
-	// Advance time slightly to differentiate keys
-	vi.advanceTimersByTime(100);
-
-	// Force first rotation
-	const firstRotate = await auth.api.rotateKey({
-		body: { force: true },
-	});
-	expect(firstRotate.rotated).toBe(true);
-	expect(storage.length).toBe(2);
-
-	// Advance time slightly (less than cooldown)
-	vi.advanceTimersByTime(100);
-
-	// Try to rotate again with custom cooldown - should not rotate (within cooldown)
-	const secondRotate = await auth.api.rotateKey({
-		body: { cooldown: 10000 }, // 10 seconds
-	});
-	expect(secondRotate.rotated).toBe(false);
-	expect(secondRotate.keyId).toBe(firstRotate.keyId);
-	expect(storage.length).toBe(2);
-
-	// Advance past custom cooldown
-	vi.advanceTimersByTime(10100);
-
-	// Now rotation should work
-	const thirdRotate = await auth.api.rotateKey({
-		body: { cooldown: 10000 },
-	});
-	expect(thirdRotate.rotated).toBe(true);
-	expect(thirdRotate.keyId).not.toBe(firstRotate.keyId);
-	expect(storage.length).toBe(3);
-
-	vi.useRealTimers();
-});
-
-it("should force rotation bypassing cooldown", async () => {
-	vi.useFakeTimers();
-	const storage: Jwk[] = [];
-
-	const { auth } = await getTestInstance({
-		plugins: [
-			jwt({
-				adapter: {
-					getJwks: async () => storage,
-					createJwk: async (data) => {
-						const key = {
-							...data,
-							id: crypto.randomUUID(),
-						};
-						storage.push(key);
-						return key;
+		const { auth } = await getTestInstance({
+			plugins: [
+				jwt({
+					jwks: {
+						disableAutomaticRotation: true,
 					},
-				},
-			}),
-		],
+					adapter: {
+						getJwks: async () => storage,
+						createJwk: async (data) => {
+							const key = {
+								...data,
+								id: crypto.randomUUID(),
+							};
+							storage.push(key);
+							return key;
+						},
+					},
+				}),
+			],
+		});
+
+		// Create initial key manually
+		const initialResult = await auth.api.rotateKey({ body: { force: true } });
+		expect(storage.length).toBe(1);
+		const firstKeyId = initialResult.keyId;
+
+		// Manually trigger rotation with force
+		const result = await auth.api.rotateKey({
+			body: { force: true },
+		});
+
+		expect(result.rotated).toBe(true);
+		expect(result.keyId).not.toBe(firstKeyId);
+		expect(storage.length).toBe(2);
+
+		vi.useRealTimers();
 	});
 
-	// Create initial key
-	await auth.api.signJWT({ body: { payload: { sub: "user1" } } });
-	expect(storage.length).toBe(1);
+	it("should respect custom cooldown in manual rotation", async () => {
+		vi.useFakeTimers();
+		const storage: Jwk[] = [];
 
-	// Force rotate multiple times rapidly
-	const firstRotate = await auth.api.rotateKey({
-		body: { force: true },
+		const { auth } = await getTestInstance({
+			plugins: [
+				jwt({
+					adapter: {
+						getJwks: async () => storage,
+						createJwk: async (data) => {
+							const key = {
+								...data,
+								id: crypto.randomUUID(),
+							};
+							storage.push(key);
+							return key;
+						},
+					},
+				}),
+			],
+		});
+
+		// Create initial key
+		await auth.api.signJWT({ body: { payload: { sub: "user1" } } });
+		expect(storage.length).toBe(1);
+
+		// Advance time slightly to differentiate keys
+		vi.advanceTimersByTime(100);
+
+		// Force first rotation
+		const firstRotate = await auth.api.rotateKey({
+			body: { force: true },
+		});
+		expect(firstRotate.rotated).toBe(true);
+		expect(storage.length).toBe(2);
+
+		// Advance time slightly (less than cooldown)
+		vi.advanceTimersByTime(100);
+
+		// Try to rotate again with custom cooldown - should not rotate (within cooldown)
+		const secondRotate = await auth.api.rotateKey({
+			body: { cooldown: 10000 }, // 10 seconds
+		});
+		expect(secondRotate.rotated).toBe(false);
+		expect(secondRotate.keyId).toBe(firstRotate.keyId);
+		expect(storage.length).toBe(2);
+
+		// Advance past custom cooldown
+		vi.advanceTimersByTime(10100);
+
+		// Now rotation should work
+		const thirdRotate = await auth.api.rotateKey({
+			body: { cooldown: 10000 },
+		});
+		expect(thirdRotate.rotated).toBe(true);
+		expect(thirdRotate.keyId).not.toBe(firstRotate.keyId);
+		expect(storage.length).toBe(3);
+
+		vi.useRealTimers();
 	});
-	expect(firstRotate.rotated).toBe(true);
 
-	const secondRotate = await auth.api.rotateKey({
-		body: { force: true },
+	it("should force rotation bypassing cooldown", async () => {
+		vi.useFakeTimers();
+		const storage: Jwk[] = [];
+
+		const { auth } = await getTestInstance({
+			plugins: [
+				jwt({
+					adapter: {
+						getJwks: async () => storage,
+						createJwk: async (data) => {
+							const key = {
+								...data,
+								id: crypto.randomUUID(),
+							};
+							storage.push(key);
+							return key;
+						},
+					},
+				}),
+			],
+		});
+
+		// Create initial key
+		await auth.api.signJWT({ body: { payload: { sub: "user1" } } });
+		expect(storage.length).toBe(1);
+
+		// Force rotate multiple times rapidly
+		const firstRotate = await auth.api.rotateKey({
+			body: { force: true },
+		});
+		expect(firstRotate.rotated).toBe(true);
+
+		const secondRotate = await auth.api.rotateKey({
+			body: { force: true },
+		});
+		expect(secondRotate.rotated).toBe(true);
+		expect(secondRotate.keyId).not.toBe(firstRotate.keyId);
+
+		const thirdRotate = await auth.api.rotateKey({
+			body: { force: true },
+		});
+		expect(thirdRotate.rotated).toBe(true);
+		expect(thirdRotate.keyId).not.toBe(secondRotate.keyId);
+
+		// Should have created 4 keys total (1 initial + 3 forced rotations)
+		expect(storage.length).toBe(4);
+
+		vi.useRealTimers();
 	});
-	expect(secondRotate.rotated).toBe(true);
-	expect(secondRotate.keyId).not.toBe(firstRotate.keyId);
-
-	const thirdRotate = await auth.api.rotateKey({
-		body: { force: true },
-	});
-	expect(thirdRotate.rotated).toBe(true);
-	expect(thirdRotate.keyId).not.toBe(secondRotate.keyId);
-
-	// Should have created 4 keys total (1 initial + 3 forced rotations)
-	expect(storage.length).toBe(4);
-
-	vi.useRealTimers();
-});
 });
