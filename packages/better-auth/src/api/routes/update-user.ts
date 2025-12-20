@@ -125,8 +125,8 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 			);
 			const updatedUser = user ?? {
 				...session.user,
-				name,
-				image,
+				...(name !== undefined && { name }),
+				...(image !== undefined && { image }),
 				...additionalFields,
 			};
 			/**
