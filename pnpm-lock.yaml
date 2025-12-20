@@ -435,9 +435,6 @@ importers:
       resend:
         specifier: ^6.0.2
         version: 6.0.2(@react-email/render@1.2.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3))
-      server-only:
-        specifier: ^0.0.1
-        version: 0.0.1
       sonner:
         specifier: ^2.0.7
         version: 2.0.7(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
