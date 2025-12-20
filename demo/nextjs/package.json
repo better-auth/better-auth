@@ -84,13 +84,13 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.1.13",
+    "@tailwindcss/postcss": "catalog:tailwind",
     "@types/canvas-confetti": "^1.9.0",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
     "@types/ua-parser-js": "^0.7.39",
     "postcss": "^8.5.6",
-    "tailwindcss": "^4.1.13",
+    "tailwindcss": "catalog:tailwind",
     "tw-animate-css": "^1.3.8"
   }
 }

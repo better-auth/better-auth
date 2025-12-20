@@ -27,11 +27,11 @@
     "wouter": "^3.7.1"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.1.13",
+    "@tailwindcss/vite": "catalog:tailwind",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
     "@vitejs/plugin-react-swc": "^4.0.0",
-    "tailwindcss": "^4.1.13",
+    "tailwindcss": "catalog:tailwind",
     "typescript": "^5.9.3",
     "vite": "^7.2.4"
   }
