@@ -414,11 +414,13 @@ export type BetterAuthOptions = {
 					 * @param url the URL to send the verification email to
 					 * it contains the token as well
 					 * @param token the token to send the verification email to
+					 * @param otp the OTP code to include in the email (if includeOTP is enabled)
 					 */
 					data: {
 						user: User;
 						url: string;
 						token: string;
+						otp?: string;
 					},
 					/**
 					 * The request object
@@ -449,6 +451,21 @@ export type BetterAuthOptions = {
 				 * @default 3600 seconds (1 hour)
 				 */
 				expiresIn?: number;
+				/**
+				 * Include an OTP in the verification email
+				 * When enabled, the sendVerificationEmail callback will receive
+				 * an OTP that can be included alongside the verification URL.
+				 * Users can either click the link or enter the OTP manually.
+				 *
+				 * @default false
+				 */
+				includeOTP?: boolean;
+				/**
+				 * Length of the OTP code
+				 *
+				 * @default 6
+				 */
+				otpLength?: number;
 				/**
 				 * A function that is called when a user verifies their email
 				 * @param user the user that verified their email

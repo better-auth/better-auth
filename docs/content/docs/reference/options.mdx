@@ -166,21 +166,39 @@ Email verification configuration.
 import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	emailVerification: {
-		sendVerificationEmail: async ({ user, url, token }) => {
+		sendVerificationEmail: async ({ user, url, token, otp }) => {
 			// Send verification email to user
+			// otp is only available when includeOTP is enabled
 		},
 		sendOnSignUp: true,
 		autoSignInAfterVerification: true,
-		expiresIn: 3600 // 1 hour
 	},
 })
 ```
 
-- `sendVerificationEmail`: Function to send verification email
-- `sendOnSignUp`: Send verification email automatically after sign up (default: `false`)
-- `sendOnSignIn`: Send verification email automatically on sign in when the user's email is not verified (default: `false`)
-- `autoSignInAfterVerification`: Auto sign in the user after they verify their email
-- `expiresIn`: Number of seconds the verification token is valid for (default: `3600` seconds)
+**Configuration Options:**
+
+- `sendVerificationEmail`: Function to send verification email. Receives:
+  - `user` - The user object
+  - `url` - Verification link
+  - `token` - JWT token (for custom implementations)
+  - `otp` - One-time code (only when `includeOTP` is `true`)
+
+- `sendOnSignUp`: Automatically send verification email after sign up (default: `false`)
+
+- `sendOnSignIn`: Automatically send verification email on sign in when email is not verified (default: `false`)
+
+- `autoSignInAfterVerification`: Auto sign in the user after email verification (default: `false`)
+
+- `expiresIn`: Verification expiry time in seconds (default: `3600` - 1 hour)
+
+- `includeOTP`: Enable OTP alongside verification link. When enabled, users can verify either by clicking the link or entering the OTP code (default: `false`)
+
+- `otpLength`: OTP code length (default: `6`)
+
+- `onEmailVerification`: Callback triggered when a user successfully verifies their email (after token/OTP validation, before the database update)
+
+- `afterEmailVerification`: Callback triggered after email verification completes and the database has been updated
 
 ## `emailAndPassword`
 

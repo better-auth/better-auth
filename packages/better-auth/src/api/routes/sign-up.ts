@@ -6,6 +6,7 @@ import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
 import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
+import { generateRandomString } from "../../crypto";
 import { parseUserInput } from "../../db";
 import { parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput, InferUser, User } from "../../types";
@@ -290,6 +291,23 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						: encodeURIComponent("/");
 					const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
 
+					let otp: string | undefined;
+					// Generate and store OTP if includeOTP is enabled
+					if (ctx.context.options.emailVerification?.includeOTP) {
+						const otpLength =
+							ctx.context.options.emailVerification?.otpLength || 6;
+						otp = generateRandomString(otpLength, "0-9");
+
+						// Store OTP in verification values table
+						const expiresIn =
+							ctx.context.options.emailVerification?.expiresIn || 3600;
+						await ctx.context.internalAdapter.createVerificationValue({
+							identifier: `email-verification-otp-${createdUser.email}`,
+							value: otp,
+							expiresAt: new Date(Date.now() + expiresIn * 1000),
+						});
+					}
+
 					const args: Parameters<
 						Required<
 							Required<BetterAuthOptions>["emailVerification"]
@@ -300,6 +318,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 									user: createdUser,
 									url,
 									token,
+									otp,
 								},
 								ctx.request,
 							]
@@ -308,6 +327,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 									user: createdUser,
 									url,
 									token,
+									otp,
 								},
 							];
 
