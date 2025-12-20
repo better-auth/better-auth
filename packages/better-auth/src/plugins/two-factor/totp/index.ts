@@ -289,7 +289,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 			// Delete the two factor record upon successful verification
 			// Otherwise if left there, and the user uses the TOTP flow again, it will have more than one two factor record
 			// Which leads to the findOne to catch only one of them, which leads to an `invalid code` error
-			
+
 			await ctx.context.adapter.deleteMany({
 				model: twoFactorTable,
 				where: [
@@ -298,7 +298,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 						value: user.id,
 					},
 				],
-			})
+			});
 			return valid(ctx);
 		},
 	);
