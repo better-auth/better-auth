@@ -2521,7 +2521,7 @@ await client.organization.create({
 
 **allowUserToCreateOrganization**: `boolean` | `((user: User) => Promise<boolean> | boolean)` - A function that determines whether a user can create an organization. By default, it's `true`. You can set it to `false` to restrict users from creating organizations.
 
-**organizationLimit**: `number` | `((user: User) => Promise<boolean> | boolean)` - The maximum number of organizations allowed for a user. By default, it's `5`. You can set it to any number you want or a function that returns a boolean.
+**organizationLimit**: `number` | `((user: User) => Promise<boolean> | boolean)` - The maximum number of organizations allowed for a user. By default, it's `unlimited`. You can set it to any number you want, or a function that returns a boolean. **If you provide a function, it should return `true` if the user has reached their organization limit (blocking further creation), or `false` if they have not reached their limit (allowing further creation).**
 
 **creatorRole**: `admin | owner` - The role of the user who creates the organization. By default, it's `owner`. You can set it to `admin`.
 
