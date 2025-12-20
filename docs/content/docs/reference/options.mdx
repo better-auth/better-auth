@@ -95,8 +95,31 @@ export const auth = betterAuth({
 })
 ```
 
-<Callout type="warn">
-  Make sure to provide the protocol prefix when using wildcard patterns. For example, `https://*.example.com` instead of `*.example.com`.
+#### Pattern Syntax
+
+| Pattern | Description |
+|---------|-------------|
+| `?` | Matches exactly one character (except `/`) |
+| `*` | Matches zero or more characters that don't cross `/` |
+| `**` | Matches zero or more characters including `/` |
+
+#### Pattern Examples
+
+| Pattern | Matches | Does Not Match |
+|---------|---------|----------------|
+| `http://*.example.com` | `http://api.example.com`<br/>`http://app.example.com`<br/>`http://api.app.example.com` | `https://api.example.com`<br/>`http://example.com` |
+| `https://**.example.com` | `https://api.example.com`<br/>`https://api.app.example.com` | `http://api.example.com` |
+| `https://example.com` | `https://example.com`<br/>`https://example.com/path` | `https://api.example.com`<br/>`http://example.com` |
+| `exp://192.168.*.*:*/**` | `exp://192.168.1.100:8081/path`<br/>`exp://192.168.50.200:19000/auth/callback` | `exp://10.0.0.29:8081/path` |
+| `myapp://` | All URLs starting with `myapp://` | - |
+
+
+<Callout type="info">
+**Notes**
+
+- For `http://` and `https://` URLs, patterns match the full origin (protocol + host + port). Paths and query strings are ignored.
+- For custom schemes (like `exp://` or `myapp://`), patterns match against the full URL including paths when wildcards are present, or use prefix matching when no wildcards exist.
+- The separator is `/` (forward slash). This means `http://*.example.com` matches both `http://api.example.com` and `http://api.app.example.com`.
 </Callout>
 
 ## `secret`
