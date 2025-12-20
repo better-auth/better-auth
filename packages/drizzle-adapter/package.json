@@ -1,0 +1,72 @@
+{
+  "name": "@better-auth/drizzle-adapter",
+  "version": "1.4.8-beta.4",
+  "description": "Drizzle adapter for Better Auth.",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://better-auth.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/better-auth/better-auth.git",
+    "directory": "packages/drizzle-adapter"
+  },
+  "keywords": [
+    "auth",
+    "drizzle",
+    "adapter",
+    "typescript",
+    "better-auth"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest",
+    "coverage": "vitest run --coverage",
+    "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "dev-source": "./src/index.ts",
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "./dist/index.d.mts"
+      ]
+    }
+  },
+  "dependencies": {
+    "@better-auth/core": "workspace:*",
+    "better-auth": "workspace:*",
+    "prettier": "^3.7.4"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/pg": "^8.15.5",
+    "better-sqlite3": "^12.5.0",
+    "drizzle-kit": "^0.31.8",
+    "drizzle-orm": "^1.0.0-beta.2",
+    "mysql2": "^3.14.4",
+    "pg": "^8.16.3",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "^4.0.15"
+  },
+  "peerDependencies": {
+    "drizzle-kit": ">=0.31.8",
+    "drizzle-orm": ">=1.0.0-beta.2"
+  }
+}

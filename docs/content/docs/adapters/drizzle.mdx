@@ -150,6 +150,40 @@ export const auth = betterAuth({
 });
 ```
 
+## Drizzle Relations v2
+
+The current Drizzle adapter (imported from `better-auth/adapters/drizzle`) uses Drizzle Relations v1.
+To use Drizzle Relations v2, you need to install the `@better-auth/drizzle-adapter` package:
+
+```package-install
+npm install @better-auth/drizzle-adapter
+```
+
+After installing, update your imports:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { drizzleAdapter } from "@better-auth/drizzle-adapter"; // [!code highlight]
+import { db } from "./database.ts";
+
+export const auth = betterAuth({
+  database: drizzleAdapter(db, {
+    provider: "sqlite", // or "pg" or "mysql"
+  }),
+  //... the rest of your config
+});
+```
+
+Then regenerate your schema using the Better Auth CLI:
+
+```package-install
+npx @better-auth/cli generate
+```
+
+<Callout type="info">
+  You do not need to run database migrations when upgrading to Relations v2. The database structure remains the same - only the relation definitions change. The schema generator will output the new v2 format automatically.
+</Callout>
+
 ## Additional Information
 
 - If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.

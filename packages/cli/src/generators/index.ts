@@ -10,22 +10,15 @@ export const adapters = {
 	kysely: generateMigrations,
 };
 
-export const generateSchema = (opts: {
+export const generateSchema = async (opts: {
 	adapter: DBAdapter;
 	file?: string;
 	options: BetterAuthOptions;
 }) => {
 	const adapter = opts.adapter;
-	const generator =
-		adapter.id in adapters
-			? adapters[adapter.id as keyof typeof adapters]
-			: null;
-	if (generator) {
-		// generator from the built-in list above
-		return generator(opts);
-	}
+
+	// use the custom adapter's createSchema method if it exists
 	if (adapter.createSchema) {
-		// use the custom adapter's createSchema method
 		return adapter
 			.createSchema(opts.options, opts.file)
 			.then(({ code, path: fileName, overwrite }) => ({
@@ -33,6 +26,15 @@ export const generateSchema = (opts: {
 				fileName,
 				overwrite,
 			}));
+	}
+
+	const generator =
+		adapter.id in adapters
+			? adapters[adapter.id as keyof typeof adapters]
+			: null;
+	if (generator) {
+		// generator from the built-in list above
+		return await generator(opts);
 	}
 
 	console.error(
