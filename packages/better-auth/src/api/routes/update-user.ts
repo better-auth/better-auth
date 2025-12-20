@@ -88,6 +88,12 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 				[key: string]: any;
 			};
 
+			if (typeof body !== "object" || Array.isArray(body)) {
+				throw new APIError("BAD_REQUEST", {
+					message: "Body must be an object",
+				});
+			}
+
 			if (body.email) {
 				throw new APIError("BAD_REQUEST", {
 					message: BASE_ERROR_CODES.EMAIL_CAN_NOT_BE_UPDATED,
@@ -117,12 +123,18 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 					...additionalFields,
 				},
 			);
+			const updatedUser = user ?? {
+				...session.user,
+				name,
+				image,
+				...additionalFields,
+			};
 			/**
 			 * Update the session cookie with the new user data
 			 */
 			await setSessionCookie(ctx, {
 				session: session.session,
-				user,
+				user: updatedUser,
 			});
 			return ctx.json({
 				status: true,
