@@ -63,17 +63,23 @@ const UserCard = (props: {
 	activeSessions: Session["session"][];
 }) => {
 	const router = useRouter();
+	const { data: sessionData } = useSessionQuery();
 	const signOutMutation = useSignOutMutation();
 	const revokeSessionMutation = useRevokeSessionMutation();
-	const { data } = useSessionQuery();
-	const session = data || props.session;
-	const [twoFactorDialog, setTwoFactorDialog] = useState<boolean>(false);
+
 	const [isSignOut, setIsSignOut] = useState<boolean>(false);
+	const [activeSessions, setActiveSessions] = useState(props.activeSessions);
+	const [twoFactorDialog, setTwoFactorDialog] = useState<boolean>(false);
 	const [emailVerificationPending, setEmailVerificationPending] =
 		useState<boolean>(false);
-	const [activeSessions, setActiveSessions] = useState(props.activeSessions);
+
 	const removeActiveSession = (id: string) =>
 		setActiveSessions(activeSessions.filter((session) => session.id !== id));
+
+	const session = sessionData || props.session;
+	if (!sessionData) {
+		router.push("/");
+	}
 
 	return (
 		<Card>
