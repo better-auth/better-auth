@@ -34,7 +34,10 @@
     "typescript",
     "better-auth"
   ],
-  "exports": "./dist/index.mjs",
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./generators": "./dist/generators/index.mjs"
+  },
   "bin": {
     "better-auth": "./dist/index.mjs"
   },
@@ -42,7 +45,7 @@
     "@better-auth/passkey": "workspace:*",
     "@types/better-sqlite3": "^7.6.13",
     "@types/prompts": "^2.4.9",
-    "@types/semver": "^7.7.1",
+    "ts-morph": "^27.0.2",
     "jiti": "^2.6.0",
     "tsdown": "catalog:",
     "tsx": "^4.20.6",
@@ -71,7 +74,6 @@
     "pg": "^8.16.3",
     "prettier": "^3.6.2",
     "prompts": "^2.4.2",
-    "semver": "^7.7.2",
     "yocto-spinner": "^0.2.3",
     "zod": "^4.1.12"
   },

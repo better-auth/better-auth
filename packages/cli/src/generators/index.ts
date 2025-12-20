@@ -4,6 +4,11 @@ import { generateDrizzleSchema } from "./drizzle";
 import { generateMigrations } from "./kysely";
 import { generatePrismaSchema } from "./prisma";
 
+// Export individual generators for use by other packages
+export { generateDrizzleSchema } from "./drizzle";
+export { generateMigrations } from "./kysely";
+export { generatePrismaSchema } from "./prisma";
+
 export const adapters = {
 	prisma: generatePrismaSchema,
 	drizzle: generateDrizzleSchema,

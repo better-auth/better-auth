@@ -44,7 +44,7 @@ export interface OneTimeTokenOptions {
 	 * This option allows you to configure how the token is stored in your database.
 	 * Note: This will not affect the token that's sent, it will only affect the token stored in your database.
 	 *
-	 * @default "plain"
+	 * @default plain
 	 */
 	storeToken?:
 		| (

@@ -42,6 +42,8 @@ possiblePaths = [
 	...possiblePaths.map((it) => `app/${it}`),
 ];
 
+export const possibleAuthConfigPaths = possiblePaths;
+
 function resolveReferencePath(configDir: string, refPath: string): string {
 	const resolvedPath = path.resolve(configDir, refPath);
 

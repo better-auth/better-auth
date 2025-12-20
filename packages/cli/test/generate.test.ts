@@ -7,8 +7,6 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { organization, twoFactor, username } from "better-auth/plugins";
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
-import type { SupportedPlugin } from "../src/commands/init";
-import { generateAuthConfig } from "../src/generators/auth-config";
 import { generateDrizzleSchema } from "../src/generators/drizzle";
 import { generateMigrations } from "../src/generators/kysely";
 import { generatePrismaSchema } from "../src/generators/prisma";
@@ -405,35 +403,6 @@ describe("generate", async () => {
 				adapter: {} as any,
 			}),
 		).rejects.toThrow(/Unsupported field type/);
-	});
-
-	it("should add plugin to empty plugins array without leading comma", async () => {
-		const initialConfig = `export const auth = betterAuth({
-			plugins: []
-		});`;
-
-		const mockFormat = (code: string) => Promise.resolve(code);
-		const mockSpinner = { stop: () => {} };
-		const plugins: SupportedPlugin[] = [
-			{
-				id: "next-cookies",
-				name: "nextCookies",
-				path: "better-auth/next-js",
-				clientName: undefined,
-				clientPath: undefined,
-			},
-		];
-
-		const result = await generateAuthConfig({
-			format: mockFormat,
-			current_user_config: initialConfig,
-			spinner: mockSpinner as any,
-			plugins,
-			database: null,
-		});
-
-		expect(result.generatedCode).toContain(`plugins: [nextCookies()]`);
-		expect(result.generatedCode).not.toContain(`plugins: [, nextCookies()]`);
 	});
 });
 

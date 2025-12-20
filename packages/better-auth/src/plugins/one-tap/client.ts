@@ -22,14 +22,19 @@ declare global {
 export interface GoogleOneTapOptions {
 	/**
 	 * Google client ID
+	 *
 	 */
 	clientId: string;
 	/**
 	 * Auto select the account if the user is already signed in
+	 *
+	 * @default false
 	 */
 	autoSelect?: boolean | undefined;
 	/**
 	 * Cancel the flow when the user taps outside the prompt
+	 *
+	 * @default true
 	 */
 	cancelOnTapOutside?: boolean | undefined;
 	/**
@@ -54,6 +59,7 @@ export interface GoogleOneTapOptions {
 	additionalOptions?: Record<string, any> | undefined;
 	/**
 	 * Configuration options for the prompt and exponential backoff behavior.
+	 *
 	 */
 	promptOptions?:
 		| {

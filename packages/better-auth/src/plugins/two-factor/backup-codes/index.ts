@@ -16,13 +16,11 @@ import { verifyTwoFactor } from "../verify-two-factor";
 export interface BackupCodeOptions {
 	/**
 	 * The amount of backup codes to generate
-	 *
 	 * @default 10
 	 */
 	amount?: number | undefined;
 	/**
 	 * The length of the backup codes
-	 *
 	 * @default 10
 	 */
 	length?: number | undefined;

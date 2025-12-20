@@ -12,8 +12,8 @@ import { defaultKeyHasher } from "./utils";
 
 export interface MagicLinkOptions {
 	/**
-	 * Time in seconds until the magic link expires.
-	 * @default (60 * 5) // 5 minutes
+	 * Time in seconds until the magic link expires. Default is (60 * 5) 5 minutes
+	 * @default 300
 	 */
 	expiresIn?: number | undefined;
 	/**
@@ -34,16 +34,19 @@ export interface MagicLinkOptions {
 	 */
 	disableSignUp?: boolean | undefined;
 	/**
-	 * Rate limit configuration.
-	 *
-	 * @default {
-	 *  window: 60,
-	 *  max: 5,
-	 * }
+	 * Rate limit configuration. Default window is 60 seconds and max is 5 requests.
 	 */
 	rateLimit?:
 		| {
+				/**
+				 * Window in seconds. Default is 60 seconds.
+				 * @default 60
+				 */
 				window: number;
+				/**
+				 * Max requests. Default is 5 requests.
+				 * @default 5
+				 */
 				max: number;
 		  }
 		| undefined;

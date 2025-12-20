@@ -36,6 +36,7 @@ export interface OrganizationOptions {
 	 * The maximum number of organizations a user can create.
 	 *
 	 * You can also pass a function that returns a boolean
+	 *
 	 */
 	organizationLimit?:
 		| (number | ((user: User) => Awaitable<boolean>))
@@ -89,10 +90,12 @@ export interface OrganizationOptions {
 		| undefined;
 	/**
 	 * Support for team.
+	 *
 	 */
 	teams?: {
 		/**
 		 * Enable team features.
+		 *
 		 */
 		enabled: boolean;
 		/**
@@ -116,13 +119,8 @@ export interface OrganizationOptions {
 		/**
 		 * Maximum number of teams an organization can have.
 		 *
-		 * You can pass a number or a function that returns a number
+		 * You can pass a number or a function that returns a number.
 		 *
-		 * @default "unlimited"
-		 *
-		 * @param organization
-		 * @param request
-		 * @returns
 		 */
 		maximumTeams?:
 			| ((
@@ -142,7 +140,6 @@ export interface OrganizationOptions {
 		 *
 		 * if `undefined`, there is no limit.
 		 *
-		 * @default undefined
 		 */
 		maximumMembersPerTeam?:
 			| number
@@ -162,9 +159,9 @@ export interface OrganizationOptions {
 		allowRemovingAllTeams?: boolean;
 	};
 	/**
-	 * The expiration time for the invitation link.
+	 * The expiration time for the invitation link. In hours.
 	 *
-	 * @default 48 hours
+	 * @default 48
 	 */
 	invitationExpiresIn?: number | undefined;
 	/**

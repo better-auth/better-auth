@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["esnext", "dom", "dom.iterable"],
+    "paths": {
+      "@better-auth/cli/src/generators": ["../cli/src/generators/index.ts"]
+    }
+  },
+  "references": [
+    {
+      "path": "../better-auth/tsconfig.json"
+    },
+    {
+      "path": "../cli/tsconfig.json"
+    }
+  ]
+}
