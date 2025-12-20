@@ -330,20 +330,24 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					expiresAt: newExpiresAt,
 				};
 
-				await ctx.context.orgOptions.sendInvitationEmail?.(
-					{
-						id: updatedInvitation.id!,
-						role: updatedInvitation.role! as string,
-						email: updatedInvitation.email!.toLowerCase(),
-						organization: organization,
-						inviter: {
-							...member,
-							user: session.user,
-						},
-						invitation: updatedInvitation as unknown as Invitation,
-					},
-					ctx.request,
-				);
+				if (ctx.context.orgOptions.sendInvitationEmail) {
+					await ctx.context.runInBackgroundOrAwait(
+						ctx.context.orgOptions.sendInvitationEmail(
+							{
+								id: updatedInvitation.id!,
+								role: updatedInvitation.role! as string,
+								email: updatedInvitation.email!.toLowerCase(),
+								organization: organization,
+								inviter: {
+									...member,
+									user: session.user,
+								},
+								invitation: updatedInvitation as unknown as Invitation,
+							},
+							ctx.request,
+						),
+					);
+				}
 
 				return ctx.json(updatedInvitation as InferInvitation<O, false>);
 			}
@@ -472,20 +476,24 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				user: session.user,
 			});
 
-			await ctx.context.orgOptions.sendInvitationEmail?.(
-				{
-					id: invitation.id,
-					role: invitation.role,
-					email: invitation.email.toLowerCase(),
-					organization: organization,
-					inviter: {
-						...(member as Member),
-						user: session.user,
-					},
-					invitation,
-				},
-				ctx.request,
-			);
+			if (ctx.context.orgOptions.sendInvitationEmail) {
+				await ctx.context.runInBackgroundOrAwait(
+					ctx.context.orgOptions.sendInvitationEmail(
+						{
+							id: invitation.id,
+							role: invitation.role,
+							email: invitation.email.toLowerCase(),
+							organization: organization,
+							inviter: {
+								...(member as Member),
+								user: session.user,
+							},
+							invitation,
+						},
+						ctx.request,
+					),
+				);
+			}
 
 			// Run afterCreateInvitation hook
 			if (option?.organizationHooks?.afterCreateInvitation) {

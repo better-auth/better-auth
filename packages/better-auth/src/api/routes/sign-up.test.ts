@@ -75,6 +75,7 @@ describe("sign-up with custom fields", async (it) => {
 				url: expect.any(String),
 				user: expect.any(Object),
 			}),
+			undefined,
 		);
 	});
 

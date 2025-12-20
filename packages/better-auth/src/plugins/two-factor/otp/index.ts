@@ -201,10 +201,17 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 				identifier: `2fa-otp-${key}`,
 				expiresAt: new Date(Date.now() + opts.period),
 			});
-			await options.sendOTP(
+			const sendOTPResult = options.sendOTP(
 				{ user: session.user as UserWithTwoFactor, otp: code },
 				ctx,
 			);
+			if (sendOTPResult instanceof Promise) {
+				await ctx.context.runInBackgroundOrAwait(
+					sendOTPResult.catch((e: unknown) => {
+						ctx.context.logger.error("Failed to send two-factor OTP", e);
+					}),
+				);
+			}
 			return ctx.json({ status: true });
 		},
 	);
