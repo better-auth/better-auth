@@ -103,7 +103,7 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.1.13",
+    "@tailwindcss/postcss": "^4.1.17",
     "@types/hast": "^3.0.4",
     "@types/js-beautify": "^1.14.3",
     "@types/jsrsasign": "^10.5.15",
@@ -112,7 +112,7 @@
     "@types/react-dom": "catalog:react19",
     "mini-svg-data-uri": "^1.4.4",
     "postcss": "^8.5.6",
-    "tailwindcss": "^4.1.13",
+    "tailwindcss": "^4.1.17",
     "typescript": "catalog:"
   }
 }
