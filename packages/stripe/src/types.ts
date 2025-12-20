@@ -337,6 +337,39 @@ export interface StripeOptions {
 		  ) => Promise<Partial<Stripe.CustomerCreateParams>>)
 		| undefined;
 	/**
+	 * Filter function to select the appropriate existing Stripe customer
+	 * when multiple customers may exist with the same email.
+	 *
+	 * This is useful for multi-app Stripe accounts where each app stamps
+	 * customers with metadata (e.g., app_id).
+	 *
+	 * @param data - Contains the list of customers and the user being processed
+	 * @param ctx - The endpoint context
+	 * @returns The customer to use, or undefined to create a new one
+	 *
+	 * @example
+	 * ```ts
+	 * customerLookupFilter: async ({ customers, user }, ctx) => {
+	 *   return customers.find(c => c.metadata?.app_id === 'my-app');
+	 * }
+	 * ```
+	 */
+	customerLookupFilter?:
+		| ((
+				data: {
+					/**
+					 * List of Stripe customers matching the user's email
+					 */
+					customers: Stripe.Customer[];
+					/**
+					 * The user being processed (signup or upgrade)
+					 */
+					user: User & Record<string, any>;
+				},
+				ctx: GenericEndpointContext,
+		  ) => Promise<Stripe.Customer | undefined> | Stripe.Customer | undefined)
+		| undefined;
+	/**
 	 * Subscriptions
 	 */
 	subscription?:

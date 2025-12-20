@@ -2595,4 +2595,240 @@ describe("stripe", async () => {
 			expect(user?.stripeCustomerId).toBeDefined();
 		});
 	});
+
+	describe("customerLookupFilter", () => {
+		it("should filter customers by metadata when filter is provided", async () => {
+			const testEmail = "filter-test@example.com";
+			const correctCustomerId = "cus_correct_app";
+			const wrongCustomerId = "cus_wrong_app";
+
+			// Return multiple customers with different metadata
+			mockStripe.customers.list.mockResolvedValueOnce({
+				data: [
+					{
+						id: wrongCustomerId,
+						email: testEmail,
+						metadata: { app_id: "other-app" },
+					},
+					{
+						id: correctCustomerId,
+						email: testEmail,
+						metadata: { app_id: "my-app" },
+					},
+				],
+			});
+
+			const customerLookupFilterMock = vi
+				.fn()
+				.mockImplementation(({ customers }) => {
+					return customers.find(
+						(c: { metadata?: { app_id?: string } }) =>
+							c.metadata?.app_id === "my-app",
+					);
+				});
+
+			const testOptionsWithFilter = {
+				...stripeOptions,
+				createCustomerOnSignUp: true,
+				customerLookupFilter: customerLookupFilterMock,
+			} satisfies StripeOptions;
+
+			const testAuth = betterAuth({
+				database: memory,
+				baseURL: "http://localhost:3000",
+				emailAndPassword: { enabled: true },
+				plugins: [stripe(testOptionsWithFilter)],
+			});
+
+			const testAuthClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				plugins: [bearer(), stripeClient({ subscription: true })],
+				fetchOptions: {
+					customFetchImpl: async (url, init) =>
+						testAuth.handler(new Request(url, init)),
+				},
+			});
+
+			vi.clearAllMocks();
+
+			// Re-mock after clear
+			mockStripe.customers.list.mockResolvedValueOnce({
+				data: [
+					{
+						id: wrongCustomerId,
+						email: testEmail,
+						metadata: { app_id: "other-app" },
+					},
+					{
+						id: correctCustomerId,
+						email: testEmail,
+						metadata: { app_id: "my-app" },
+					},
+				],
+			});
+
+			const userRes = await testAuthClient.signUp.email(
+				{
+					email: testEmail,
+					password: "password",
+					name: "Filter Test User",
+				},
+				{ throw: true },
+			);
+
+			// Should request more customers when filter is provided
+			expect(mockStripe.customers.list).toHaveBeenCalledWith({
+				email: testEmail,
+				limit: 25,
+			});
+
+			// Should call filter with all customers
+			expect(customerLookupFilterMock).toHaveBeenCalled();
+
+			// Should NOT create new customer since filter found one
+			expect(mockStripe.customers.create).not.toHaveBeenCalled();
+
+			// User should have the correct customer ID
+			const user = await ctx.adapter.findOne<
+				User & { stripeCustomerId?: string }
+			>({
+				model: "user",
+				where: [{ field: "id", value: userRes.user.id }],
+			});
+			expect(user?.stripeCustomerId).toBe(correctCustomerId);
+		});
+
+		it("should create new customer when filter returns undefined", async () => {
+			const testEmail = "filter-undefined@example.com";
+			const newCustomerId = "cus_new_for_my_app";
+
+			// Reset mocks for this test
+			mockStripe.customers.list.mockReset();
+			mockStripe.customers.create.mockReset();
+
+			// Set up mocks - customers exist but none match filter
+			mockStripe.customers.list.mockResolvedValueOnce({
+				data: [
+					{
+						id: "cus_other_app",
+						email: testEmail,
+						metadata: { app_id: "other-app" },
+					},
+				],
+			});
+
+			mockStripe.customers.create.mockResolvedValueOnce({
+				id: newCustomerId,
+				email: testEmail,
+			});
+
+			// Filter that returns undefined (no matching customer)
+			const customerLookupFilterMock = vi
+				.fn()
+				.mockImplementation(({ customers }) => {
+					return customers.find(
+						(c: { metadata?: { app_id?: string } }) =>
+							c.metadata?.app_id === "my-app",
+					);
+				});
+
+			const testOptionsWithFilter = {
+				...stripeOptions,
+				createCustomerOnSignUp: true,
+				customerLookupFilter: customerLookupFilterMock,
+			} satisfies StripeOptions;
+
+			const testAuth = betterAuth({
+				database: memory,
+				baseURL: "http://localhost:3000",
+				emailAndPassword: { enabled: true },
+				plugins: [stripe(testOptionsWithFilter)],
+			});
+
+			const testAuthClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				plugins: [bearer(), stripeClient({ subscription: true })],
+				fetchOptions: {
+					customFetchImpl: async (url, init) =>
+						testAuth.handler(new Request(url, init)),
+				},
+			});
+
+			const userRes = await testAuthClient.signUp.email(
+				{
+					email: testEmail,
+					password: "password",
+					name: "No Match User",
+				},
+				{ throw: true },
+			);
+
+			// Filter was called
+			expect(customerLookupFilterMock).toHaveBeenCalled();
+
+			// Should create new customer since filter returned undefined
+			expect(mockStripe.customers.create).toHaveBeenCalled();
+
+			// User should have the new customer ID
+			const user = await ctx.adapter.findOne<
+				User & { stripeCustomerId?: string }
+			>({
+				model: "user",
+				where: [{ field: "id", value: userRes.user.id }],
+			});
+			expect(user?.stripeCustomerId).toBe(newCustomerId);
+		});
+
+		it("should use limit: 1 when no filter is provided (backward compatibility)", async () => {
+			const testEmail = "no-filter@example.com";
+			const firstCustomerId = "cus_first";
+
+			mockStripe.customers.list.mockResolvedValueOnce({
+				data: [{ id: firstCustomerId, email: testEmail }],
+			});
+
+			// No customerLookupFilter
+			const testOptionsNoFilter = {
+				...stripeOptions,
+				createCustomerOnSignUp: true,
+			} satisfies StripeOptions;
+
+			const testAuth = betterAuth({
+				database: memory,
+				baseURL: "http://localhost:3000",
+				emailAndPassword: { enabled: true },
+				plugins: [stripe(testOptionsNoFilter)],
+			});
+
+			const testAuthClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				plugins: [bearer(), stripeClient({ subscription: true })],
+				fetchOptions: {
+					customFetchImpl: async (url, init) =>
+						testAuth.handler(new Request(url, init)),
+				},
+			});
+
+			vi.clearAllMocks();
+
+			mockStripe.customers.list.mockResolvedValueOnce({
+				data: [{ id: firstCustomerId, email: testEmail }],
+			});
+
+			await testAuthClient.signUp.email(
+				{
+					email: testEmail,
+					password: "password",
+					name: "No Filter User",
+				},
+				{ throw: true },
+			);
+
+			// Should use limit: 1 (default behavior)
+			expect(mockStripe.customers.list).toHaveBeenCalledWith({
+				email: testEmail,
+				limit: 1,
+			});
+		});
+	});
 });

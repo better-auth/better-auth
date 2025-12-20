@@ -13,6 +13,7 @@ import {
 	upgradeSubscription,
 } from "./routes";
 import { getSchema } from "./schema";
+import { findExistingStripeCustomer } from "./utils";
 import type {
 	StripeOptions,
 	StripePlan,
@@ -76,12 +77,13 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 										if (userWithStripe.stripeCustomerId) return;
 
 										// Check if customer already exists in Stripe by email
-										const existingCustomers = await client.customers.list({
-											email: user.email,
-											limit: 1,
-										});
-
-										let stripeCustomer = existingCustomers.data[0];
+										// Uses customerLookupFilter if provided for multi-app scenarios
+										let stripeCustomer = await findExistingStripeCustomer(
+											client,
+											user,
+											options,
+											ctx,
+										);
 
 										// If customer exists, link it to prevent duplicate creation
 										if (stripeCustomer) {
