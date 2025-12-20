@@ -77,20 +77,24 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 			$fetch("/get-session")
 				.then(async (res) => {
 					const data = res.data as SessionResponse | null;
+					let finalData = res.data;
+					let finalError = res.error || null;
+
 					if (data?.needsRefresh) {
-						const refreshRes = await $fetch("/get-session", { method: "POST" });
-						sessionAtom.set({
-							...currentSession,
-							data: refreshRes.data,
-							error: refreshRes.error || null,
-						});
-					} else {
-						sessionAtom.set({
-							...currentSession,
-							data: res.data,
-							error: res.error || null,
-						});
+						try {
+							const refreshRes = await $fetch("/get-session", {
+								method: "POST",
+							});
+							finalData = refreshRes.data;
+							finalError = refreshRes.error || null;
+						} catch {}
 					}
+
+					sessionAtom.set({
+						...currentSession,
+						data: finalData,
+						error: finalError,
+					});
 					state.lastSync = now();
 					sessionSignal.set(!sessionSignal.get());
 				})
