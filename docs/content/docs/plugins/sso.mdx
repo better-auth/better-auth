@@ -250,7 +250,12 @@ trustedOrigins: [
 2. Or dynamically compute the `trustedOrigins` by specifying a callback function:
 
 ```ts
-trustedOrigins: async (request: Request) => {
+trustedOrigins: async (request) => {
+    // request is undefined during initialization and auth.api calls
+    if (!request) {
+        return ["https://my-frontend.com"];
+    }
+
     // SSO trusted origin list
     if (request.url.endsWith("/sso/register")) {
         const trustedOrigins = await fetchOriginList();

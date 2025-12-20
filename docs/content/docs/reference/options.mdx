@@ -67,12 +67,20 @@ You can provide a function that returns origins dynamically:
 
 ```ts
 export const auth = betterAuth({
-	trustedOrigins: async (request: Request) => {
-		// Return an array of trusted origins based on the request
+	trustedOrigins: async (request) => {
+		// request is undefined during initialization and auth.api calls
+		if (!request) {
+			return ["https://my-frontend.com"];
+		}
+		// Dynamic logic based on the request
 		return ["https://dynamic-origin.com"];
 	}
 })
 ```
+
+<Callout type="info">
+  The `request` parameter is `undefined` during initialization and when calling `auth.api` directly. Make sure to handle this case by returning default trusted origins.
+</Callout>
 
 ### Wildcard Support
 
