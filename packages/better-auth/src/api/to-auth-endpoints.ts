@@ -198,12 +198,27 @@ async function runBeforeHooks(
 	hooks: {
 		matcher: (context: HookEndpointContext) => boolean;
 		handler: AuthMiddleware;
+		source: `user` | `plugin:${string}`;
 	}[],
 ) {
 	let modifiedContext: Partial<InternalContext> = {};
 
 	for (const hook of hooks) {
-		if (hook.matcher(context)) {
+		let matched = false;
+		try {
+			matched = hook.matcher(context);
+		} catch (error) {
+			// manually handle unexpected errors during hook matcher execution to prevent accidental exposure of internal details
+			// Also provides debug information about which plugin the hook failed and error info
+			context.context.logger.error(
+				`An error occured during ${hook.source} hook matcher execution:`,
+				error,
+			);
+			throw new APIError("INTERNAL_SERVER_ERROR", {
+				message: `An error occured during hook matcher execution. Check the logs for more details.`,
+			});
+		}
+		if (matched) {
 			const result = await hook
 				.handler({
 					...context,
@@ -299,27 +314,34 @@ function getHooks(authContext: AuthContext) {
 	const beforeHooks: {
 		matcher: (context: HookEndpointContext) => boolean;
 		handler: AuthMiddleware;
+		source: `user` | `plugin:${string}`;
 	}[] = [];
 	const afterHooks: {
 		matcher: (context: HookEndpointContext) => boolean;
 		handler: AuthMiddleware;
+		source: `user` | `plugin:${string}`;
 	}[] = [];
 	if (authContext.options.hooks?.before) {
 		beforeHooks.push({
 			matcher: () => true,
 			handler: authContext.options.hooks.before,
+			source: "user",
 		});
 	}
 	if (authContext.options.hooks?.after) {
 		afterHooks.push({
 			matcher: () => true,
 			handler: authContext.options.hooks.after,
+			source: "user",
 		});
 	}
 	const pluginBeforeHooks = plugins
 		.map((plugin) => {
 			if (plugin.hooks?.before) {
-				return plugin.hooks.before;
+				return plugin.hooks.before.map((hook) => ({
+					...hook,
+					source: `plugin:${plugin.id}` as const,
+				}));
 			}
 		})
 		.filter((plugin) => plugin !== undefined)
@@ -327,7 +349,10 @@ function getHooks(authContext: AuthContext) {
 	const pluginAfterHooks = plugins
 		.map((plugin) => {
 			if (plugin.hooks?.after) {
-				return plugin.hooks.after;
+				return plugin.hooks.after.map((hook) => ({
+					...hook,
+					source: `plugin:${plugin.id}` as const,
+				}));
 			}
 		})
 		.filter((plugin) => plugin !== undefined)
