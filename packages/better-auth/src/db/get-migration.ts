@@ -93,14 +93,109 @@ export function matchType(
 }
 
 /**
+ * Topological sort helper:
+ * - Inspects table.fields for attr.references.model (or attr.references.table)
+ * - Respects explicit numeric `order` values (missing => Infinity)
+ * - Throws an error describing remaining tables when a cycle is detected
+ */
+
+type TableMeta = {
+	table: string;
+	fields: Record<string, any>;
+	order?: number;
+};
+
+function getFKsFromFields(fields: Record<string, any>): string[] {
+	const fks = new Set<string>();
+	for (const f in fields) {
+		const attr = fields[f];
+		if (!attr) continue;
+		// support .references.model or .references.table
+		const ref = attr.references?.model || attr.references?.table;
+		if (typeof ref === "string") fks.add(ref);
+	}
+	return Array.from(fks);
+}
+
+function sortTablesByDependencies(tables: TableMeta[]) {
+	const nameMap = new Map<string, TableMeta>();
+	for (const t of tables) nameMap.set(t.table, t);
+
+	const adj = new Map<string, Set<string>>();
+	const indegree = new Map<string, number>();
+	for (const t of tables) {
+		indegree.set(t.table, 0);
+		adj.set(t.table, new Set());
+	}
+
+	for (const t of tables) {
+		const fks = getFKsFromFields(t.fields);
+		for (const ref of fks) {
+			if (!nameMap.has(ref)) {
+				// reference to an external table (e.g., core table); ignore for ordering
+				continue;
+			}
+			// edge: ref -> t.table (ref must be created before t.table)
+			adj.get(ref)!.add(t.table);
+			indegree.set(t.table, (indegree.get(t.table) ?? 0) + 1);
+		}
+	}
+
+	const orderVal = (name: string) => {
+		const o = nameMap.get(name)?.order;
+		return typeof o === "number" ? o : Number.POSITIVE_INFINITY;
+	};
+
+	const available = Array.from(indegree.entries())
+		.filter(([_, deg]) => deg === 0)
+		.map(([name]) => name)
+		.sort((a, b) => {
+			const oa = orderVal(a),
+				ob = orderVal(b);
+			if (oa !== ob) return oa - ob;
+			return a.localeCompare(b);
+		});
+
+	const result: string[] = [];
+	while (available.length) {
+		const n = available.shift()!;
+		result.push(n);
+
+		for (const dep of adj.get(n) ?? []) {
+			indegree.set(dep, indegree.get(dep)! - 1);
+			if (indegree.get(dep) === 0) {
+				// insert preserving orderVal then name
+				let i = 0;
+				while (i < available.length) {
+					const cur = available[i];
+					const cmp = (orderVal(dep) - orderVal(cur)) || dep.localeCompare(cur);
+					if (cmp < 0) break;
+					i++;
+				}
+				available.splice(i, 0, dep);
+			}
+		}
+	}
+
+	if (result.length !== tables.length) {
+		const remaining = tables.map((t) => t.table).filter((n) => !result.includes(n));
+		throw new Error(
+			`Cycle or unresolved references detected among tables: ${remaining.join(
+				", ",
+			)}. Add explicit 'order' overrides or break the FK cycle.`,
+		);
+	}
+
+	return result.map((n) => nameMap.get(n)!);
+}
+
+/**
  * Get the current PostgreSQL schema (search_path) for the database connection
  * Returns the first schema in the search_path, defaulting to 'public' if not found
  */
 async function getPostgresSchema(db: Kysely<unknown>): Promise<string> {
 	try {
-		const result = await sql<{ search_path: string }>`SHOW search_path`.execute(
-			db,
-		);
+		const result = await sql<{ search_path: string }>`SHOW search_path`.execute(db);
 		if (result.rows[0]?.search_path) {
 			// search_path can be a comma-separated list like "$user, public" or '"$user", public'
 			// We want the first non-variable schema
@@ -193,7 +288,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 			);
 
 			logger.debug(
-				`Found ${tableMetadata.length} table(s) in schema '${currentSchema}': ${tableMetadata.map((t) => t.name).join(", ") || "(none)"}`,
+				`Found ${tableMetadata.length} table(s) in schema '${currentSchema}': ${tableMetadata.map((t) => t.name).join(", ") || "(none)"}`
 			);
 		} catch (error) {
 			logger.warn(
@@ -202,6 +297,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 			// Fall back to using all tables if schema filtering fails
 		}
 	}
+
 	const toBeCreated: {
 		table: string;
 		fields: Record<string, DBFieldAttribute>;
@@ -264,6 +360,25 @@ export async function getMigrations(config: BetterAuthOptions) {
 				order: value.order || Infinity,
 			});
 		}
+	}
+
+	// --- NEW: sort toBeCreated by dependencies (topological sort) while respecting numeric order ---
+	try {
+		if (toBeCreated.length > 1) {
+			const sorted = sortTablesByDependencies(
+				toBeCreated.map((t) => ({ table: t.table, fields: t.fields, order: t.order })),
+			);
+			// replace toBeCreated with sorted results
+			toBeCreated.length = 0;
+			for (const s of sorted) toBeCreated.push(s);
+		}
+	} catch (err) {
+		// If sort fails (cycle), warn and fall back to numeric order (existing behavior).
+		logger.warn(
+			`Could not fully sort tables by foreign-key dependencies: ${
+				err instanceof Error ? err.message : String(err)
+			}. Falling back to numeric 'order' sorting for creation order.`,
+		);
 	}
 
 	const migrations: (
@@ -346,7 +461,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 				mssql: useNumberId
 					? "integer"
 					: useUUIDs
-						? "varchar(36)"
+						? "varchar(36)" /* Should be using `UNIQUEIDENTIFIER` but Kysely doesn't support it */
 						: "varchar(36)",
 				sqlite: useNumberId ? "integer" : "text",
 			},
@@ -360,7 +475,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 				mssql: useNumberId
 					? "integer"
 					: useUUIDs
-						? "varchar(36)" /* Should be using `UNIQUEIDENTIFIER` but Kysely doesn't support it */
+						? "varchar(36)"
 						: "varchar(36)",
 				sqlite: useNumberId ? "integer" : "text",
 			},
@@ -415,59 +530,8 @@ export async function getMigrations(config: BetterAuthOptions) {
 		}
 	}
 
-	if (toBeAdded.length) {
-		for (const table of toBeAdded) {
-			for (const [fieldName, field] of Object.entries(table.fields)) {
-				const type = getType(field, fieldName);
-				let builder = db.schema.alterTable(table.table);
-
-				if (field.index) {
-					const index = db.schema
-						.alterTable(table.table)
-						.addIndex(`${table.table}_${fieldName}_idx`);
-					migrations.push(index);
-				}
-
-				let built = builder.addColumn(fieldName, type, (col) => {
-					col = field.required !== false ? col.notNull() : col;
-					if (field.references) {
-						col = col
-							.references(
-								getReferencePath(
-									field.references.model,
-									field.references.field,
-								),
-							)
-							.onDelete(field.references.onDelete || "cascade");
-					}
-					if (field.unique) {
-						col = col.unique();
-					}
-					if (
-						field.type === "date" &&
-						typeof field.defaultValue === "function" &&
-						(dbType === "postgres" || dbType === "mysql" || dbType === "mssql")
-					) {
-						if (dbType === "mysql") {
-							col = col.defaultTo(sql`CURRENT_TIMESTAMP(3)`);
-						} else {
-							col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
-						}
-					}
-					return col;
-				});
-				migrations.push(built);
-			}
-		}
-	}
-
+	// --- Build CREATE TABLE migrations first (respecting dependency order) ---
 	let toBeIndexed: CreateIndexBuilder[] = [];
-
-	if (config.advanced?.database?.useNumberId) {
-		logger.warn(
-			"`useNumberId` is deprecated. Please use `generateId` with `serial` instead.",
-		);
-	}
 
 	if (toBeCreated.length) {
 		for (const table of toBeCreated) {
@@ -544,8 +608,54 @@ export async function getMigrations(config: BetterAuthOptions) {
 		}
 	}
 
-	// instead of adding the index straight to `migrations`,
-	// we do this at the end so that indexes are created after the table is created
+	// --- THEN build ALTER TABLE (toBeAdded) migrations ---
+	if (toBeAdded.length) {
+		for (const table of toBeAdded) {
+			for (const [fieldName, field] of Object.entries(table.fields)) {
+				const type = getType(field, fieldName);
+				let builder = db.schema.alterTable(table.table);
+
+				if (field.index) {
+					const index = db.schema
+						.alterTable(table.table)
+						.addIndex(`${table.table}_${fieldName}_idx`);
+					migrations.push(index);
+				}
+
+				let built = builder.addColumn(fieldName, type, (col) => {
+					col = field.required !== false ? col.notNull() : col;
+					if (field.references) {
+						col = col
+							.references(
+								getReferencePath(
+									field.references.model,
+									field.references.field,
+								),
+							)
+							.onDelete(field.references.onDelete || "cascade");
+					}
+					if (field.unique) {
+						col = col.unique();
+					}
+					if (
+						field.type === "date" &&
+						typeof field.defaultValue === "function" &&
+						(dbType === "postgres" || dbType === "mysql" || dbType === "mssql")
+					) {
+						if (dbType === "mysql") {
+							col = col.defaultTo(sql`CURRENT_TIMESTAMP(3)`);
+						} else {
+							col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
+						}
+					}
+					return col;
+				});
+				migrations.push(built);
+			}
+		}
+	}
+
+	// Add indexes after create/alter to ensure columns exist
 	if (toBeIndexed.length) {
 		for (const index of toBeIndexed) {
 			migrations.push(index);

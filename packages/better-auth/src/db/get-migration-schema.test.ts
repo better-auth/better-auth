@@ -3,6 +3,37 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { betterAuth } from "../auth";
 import { getMigrations } from "./get-migration";
+import { sortTablesByDependencies } from "../utils";
+
+
+describe("Migration table dependency sorting (unit)", () => {
+	it("sorts organization before team", () => {
+		const schema = [
+			{
+				table: "team",
+				fields: {
+					organizationId: {
+						references: { model: "organization", field: "id" },
+					},
+				},
+				order: Infinity,
+			},
+			{
+				table: "organization",
+				fields: { name: { type: "string" } },
+				order: Infinity,
+			},
+		];
+
+		const sorted = sortTablesByDependencies(schema as any);
+
+		expect(sorted.map((s) => s.table)).toEqual([
+			"organization",
+			"team",
+		]);
+	});
+});
+
 
 const CONNECTION_STRING = "postgres://user:password@localhost:5433/better_auth";
 // Check if PostgreSQL is available
