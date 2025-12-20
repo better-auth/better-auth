@@ -37,8 +37,6 @@ npx convex dev
 </Step>
 </Steps>
 
-
-
 ## Installation of Convex + Better Auth
 
 The following documentation assumes you're using Next.js.
@@ -55,15 +53,10 @@ If you're not using Next.js, support for other frameworks is documented in the [
     <Step>
         #### Install packages
 
-        Install the component, a pinned version of Better Auth, and ensure the latest version of Convex.
-
-
-        <Callout>
-            This component requires Convex `1.25.0` or later.
-        </Callout>
+        Install the component and Better Auth. Ensure you use version `1.25.0` or later of Convex.
 
         ```package-install
-        npm install better-auth@1.4.7 --save-exact
+        npm install better-auth
         npm install convex@latest @convex-dev/better-auth
         ```
     </Step>
@@ -154,7 +147,7 @@ If you're not using Next.js, support for other frameworks is documented in the [
         import { DataModel } from "./_generated/dataModel";
         import { query } from "./_generated/server";
         import { betterAuth } from "better-auth";
-        import { authConfig } from "./auth.config";
+        import authConfig from "./auth.config";
 
         const siteUrl = process.env.SITE_URL!;
 

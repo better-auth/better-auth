@@ -124,6 +124,7 @@ export const openAPI = <O extends OpenAPIOptions>(options?: O | undefined) => {
 				},
 			),
 		},
+		options: options as NoInfer<O>,
 	} satisfies BetterAuthPlugin;
 };
 

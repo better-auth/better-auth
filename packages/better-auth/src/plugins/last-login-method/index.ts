@@ -188,5 +188,6 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 					};
 				}
 			: undefined,
+		options: userConfig as NoInfer<O>,
 	} satisfies BetterAuthPlugin;
 };

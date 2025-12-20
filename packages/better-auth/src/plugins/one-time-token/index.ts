@@ -236,5 +236,6 @@ export const oneTimeToken = (options?: OneTimeTokenOptions | undefined) => {
 				},
 			],
 		},
+		options,
 	} satisfies BetterAuthPlugin;
 };

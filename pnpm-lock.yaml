@@ -10,8 +10,8 @@ catalogs:
       specifier: 1.1.21
       version: 1.1.21
     better-call:
-      specifier: 1.1.5
-      version: 1.1.5
+      specifier: 1.1.7
+      version: 1.1.7
     tsdown:
       specifier: ^0.17.2
       version: 0.17.2
@@ -843,6 +843,12 @@ importers:
       '@tailwindcss/postcss':
         specifier: ^4.1.13
         version: 4.1.13
+      '@types/hast':
+        specifier: ^3.0.4
+        version: 3.0.4
+      '@types/js-beautify':
+        specifier: ^1.14.3
+        version: 1.14.3
       '@types/jsrsasign':
         specifier: ^10.5.15
         version: 10.5.15
@@ -1088,7 +1094,7 @@ importers:
         version: 1.139.8(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vite@7.2.6(@types/node@24.10.1)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.30.2)(sass@1.90.0)(terser@5.44.0)(tsx@4.20.6)(yaml@2.8.2))
       better-call:
         specifier: 'catalog:'
-        version: 1.1.5(zod@4.1.13)
+        version: 1.1.7(zod@4.1.13)
       defu:
         specifier: ^6.1.4
         version: 6.1.4
@@ -1316,7 +1322,7 @@ importers:
         version: 1.1.21
       better-call:
         specifier: 'catalog:'
-        version: 1.1.5(zod@4.1.13)
+        version: 1.1.7(zod@4.1.13)
       jose:
         specifier: ^6.1.0
         version: 6.1.0
@@ -1337,7 +1343,7 @@ importers:
         version: 1.1.21
       better-call:
         specifier: 'catalog:'
-        version: 1.1.5(zod@4.1.13)
+        version: 1.1.7(zod@4.1.13)
       zod:
         specifier: ^4.1.12
         version: 4.1.13
@@ -1389,7 +1395,7 @@ importers:
         version: 13.1.2
       better-call:
         specifier: 'catalog:'
-        version: 1.1.5(zod@4.1.13)
+        version: 1.1.7(zod@4.1.13)
       nanostores:
         specifier: ^1.0.1
         version: 1.0.1
@@ -1417,7 +1423,7 @@ importers:
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.1.5(zod@4.1.13)
+        version: 1.1.7(zod@4.1.13)
       zod:
         specifier: ^4.1.5
         version: 4.1.13
@@ -1458,7 +1464,7 @@ importers:
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.1.5(zod@4.1.13)
+        version: 1.1.7(zod@4.1.13)
       body-parser:
         specifier: ^2.2.1
         version: 2.2.1
@@ -1489,7 +1495,7 @@ importers:
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.1.5(zod@4.1.13)
+        version: 1.1.7(zod@4.1.13)
       stripe:
         specifier: ^20.0.0
         version: 20.0.0(@types/node@24.10.1)
@@ -6791,6 +6797,9 @@ packages:
   '@types/istanbul-reports@3.0.4':
     resolution: {integrity: sha512-pk2B1NWalF9toCRu6gjBzR69syFjP4Od8WRAX+0mmf9lAjCRicLOWc+ZrxZHx/0XRjotgkF9t6iaMJ+aXcOdZQ==}
 
+  '@types/js-beautify@1.14.3':
+    resolution: {integrity: sha512-FMbQHz+qd9DoGvgLHxeqqVPaNRffpIu5ZjozwV8hf9JAGpIOzuAf4wGbRSo8LNITHqGjmmVjaMggTT5P4v4IHg==}
+
   '@types/jsrsasign@10.5.15':
     resolution: {integrity: sha512-3stUTaSRtN09PPzVWR6aySD9gNnuymz+WviNHoTb85dKu+BjaV4uBbWWGykBBJkfwPtcNZVfTn2lbX00U+yhpQ==}
 
@@ -7451,8 +7460,8 @@ packages:
     peerDependencies:
       better-auth: ^1.0.3
 
-  better-call@1.1.5:
-    resolution: {integrity: sha512-nQJ3S87v6wApbDwbZ++FrQiSiVxWvZdjaO+2v6lZJAG2WWggkB2CziUDjPciz3eAt9TqfRursIQMZIcpkBnvlw==}
+  better-call@1.1.7:
+    resolution: {integrity: sha512-6gaJe1bBIEgVebQu/7q9saahVzvBsGaByEnE8aDVncZEDiJO7sdNB28ot9I6iXSbR25egGmmZ6aIURXyQHRraQ==}
     peerDependencies:
       zod: ^4.0.0
     peerDependenciesMeta:
@@ -20406,6 +20415,8 @@ snapshots:
     dependencies:
       '@types/istanbul-lib-report': 3.0.3
 
+  '@types/js-beautify@1.14.3': {}
+
   '@types/jsrsasign@10.5.15': {}
 
   '@types/mdast@4.0.4':
@@ -21228,7 +21239,7 @@ snapshots:
       mailchecker: 6.0.18
       validator: 13.15.15
 
-  better-call@1.1.5(zod@4.1.13):
+  better-call@1.1.7(zod@4.1.13):
     dependencies:
       '@better-auth/utils': 0.3.0
       '@better-fetch/fetch': 1.1.21

@@ -98,6 +98,7 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
 				},
 			};
 		},
+		options,
 		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
