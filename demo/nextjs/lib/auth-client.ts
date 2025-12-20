@@ -2,19 +2,19 @@ import { passkeyClient } from "@better-auth/passkey/client";
 import { stripeClient } from "@better-auth/stripe/client";
 import {
 	adminClient,
+	customSessionClient,
 	deviceAuthorizationClient,
-	genericOAuthClient,
 	lastLoginMethodClient,
 	multiSessionClient,
-	oidcClient,
 	oneTapClient,
 	organizationClient,
 	twoFactorClient,
 } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 import { toast } from "sonner";
+import type { auth } from "./auth";
 
-export const client = createAuthClient({
+export const authClient = createAuthClient({
 	plugins: [
 		organizationClient(),
 		twoFactorClient({
@@ -31,11 +31,10 @@ export const client = createAuthClient({
 				maxAttempts: 1,
 			},
 		}),
-		oidcClient(),
-		genericOAuthClient(),
 		stripeClient({
 			subscription: true,
 		}),
+		customSessionClient<typeof auth>(),
 		deviceAuthorizationClient(),
 		lastLoginMethodClient(),
 	],
@@ -47,15 +46,3 @@ export const client = createAuthClient({
 		},
 	},
 });
-
-export const {
-	signUp,
-	signIn,
-	signOut,
-	useSession,
-	organization,
-	useListOrganizations,
-	useActiveOrganization,
-	useActiveMember,
-	useActiveMemberRole,
-} = client;
