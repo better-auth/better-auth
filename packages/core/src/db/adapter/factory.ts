@@ -562,6 +562,17 @@ export const createAdapterFactory =
 					}
 				}
 
+				if (config.customTransformInput) {
+					newValue = config.customTransformInput({
+						data: newValue,
+						fieldAttributes: fieldAttr,
+						field: fieldName,
+						model: getModelName(model),
+						schema,
+						options,
+					});
+				}
+
 				return {
 					operator,
 					connector,
