@@ -25,6 +25,14 @@ export interface SIWEPluginOptions {
 	schema?: InferOptionSchema<typeof schema> | undefined;
 }
 
+const getSiweNonceBodySchema = z.object({
+	walletAddress: z
+		.string()
+		.regex(/^0[xX][a-fA-F0-9]{40}$/i)
+		.length(42),
+	chainId: z.number().int().positive().max(2147483647).optional().default(1),
+});
+
 export const siwe = (options: SIWEPluginOptions) =>
 	({
 		id: "siwe",
@@ -34,19 +42,7 @@ export const siwe = (options: SIWEPluginOptions) =>
 				"/siwe/nonce",
 				{
 					method: "POST",
-					body: z.object({
-						walletAddress: z
-							.string()
-							.regex(/^0[xX][a-fA-F0-9]{40}$/i)
-							.length(42),
-						chainId: z
-							.number()
-							.int()
-							.positive()
-							.max(2147483647)
-							.optional()
-							.default(1), // Default to Ethereum mainnet
-					}),
+					body: getSiweNonceBodySchema,
 				},
 				async (ctx) => {
 					const { walletAddress: rawWalletAddress, chainId } = ctx.body;
@@ -302,4 +298,5 @@ export const siwe = (options: SIWEPluginOptions) =>
 				},
 			),
 		},
+		options,
 	}) satisfies BetterAuthPlugin;

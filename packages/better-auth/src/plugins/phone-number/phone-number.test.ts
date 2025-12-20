@@ -70,7 +70,7 @@ describe("phone-number", async (it) => {
 				headers,
 			},
 		});
-		const res = await client.phoneNumber.verify({
+		await client.phoneNumber.verify({
 			phoneNumber: newPhoneNumber,
 			updatePhoneNumber: true,
 			code: otp,
@@ -122,6 +122,7 @@ describe("phone auth flow", async () => {
 			user: {
 				changeEmail: {
 					enabled: true,
+					updateEmailWithoutVerification: true,
 				},
 			},
 		},
@@ -177,7 +178,7 @@ describe("phone auth flow", async () => {
 
 	const newEmail = "new-email@email.com";
 	it("should set password and update user", async () => {
-		const res = await auth.api.setPassword({
+		await auth.api.setPassword({
 			body: {
 				newPassword: "password",
 			},
@@ -206,6 +207,7 @@ describe("phone auth flow", async () => {
 			email: newEmail,
 			password: "password",
 		});
+		console.log(res);
 		expect(res.error).toBe(null);
 	});
 });
@@ -294,7 +296,7 @@ describe("reset password flow attempts", async (it) => {
 	let otp = "";
 	let resetOtp = "";
 
-	const { client, sessionSetter } = await getTestInstance(
+	const { client } = await getTestInstance(
 		{
 			plugins: [
 				phoneNumber({
@@ -378,6 +380,89 @@ describe("reset password flow attempts", async (it) => {
 			newPassword: "password",
 		});
 		expect(res.error?.status).toBe(400);
+	});
+});
+
+describe("reset password session revocation", async (it) => {
+	let otp = "";
+	let resetOtp = "";
+
+	const { client, sessionSetter } = await getTestInstance(
+		{
+			emailAndPassword: {
+				enabled: true,
+				revokeSessionsOnPasswordReset: true,
+			},
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
+					},
+					sendPasswordResetOTP(data, request) {
+						resetOtp = data.code;
+					},
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}`;
+						},
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
+
+	const testPhoneNumber = "+251911000000";
+
+	it("should revoke all sessions after password reset when configured", async () => {
+		const headers = new Headers();
+
+		await client.phoneNumber.sendOtp({
+			phoneNumber: testPhoneNumber,
+		});
+
+		const verifyRes = await client.phoneNumber.verify(
+			{
+				phoneNumber: testPhoneNumber,
+				code: otp,
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		expect(verifyRes.error).toBe(null);
+
+		const sessionBefore = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(sessionBefore.data?.user).toBeTruthy();
+
+		await client.phoneNumber.requestPasswordReset({
+			phoneNumber: testPhoneNumber,
+		});
+
+		const resetRes = await client.phoneNumber.resetPassword({
+			phoneNumber: testPhoneNumber,
+			otp: resetOtp,
+			newPassword: "new-secure-password",
+		});
+
+		expect(resetRes.error).toBe(null);
+		expect(resetRes.data?.status).toBe(true);
+
+		const sessionAfter = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(sessionAfter.data).toBe(null);
 	});
 });
 
@@ -511,15 +596,12 @@ describe("updateUser phone number update prevention", async () => {
 
 describe("custom verifyOTP", async () => {
 	const mockVerifyOTP = vi.fn();
-	let sentCode = "";
 
 	const { client, sessionSetter } = await getTestInstance(
 		{
 			plugins: [
 				phoneNumber({
-					async sendOTP({ code }) {
-						sentCode = code;
-					},
+					async sendOTP() {},
 					verifyOTP: mockVerifyOTP,
 					signUpOnVerification: {
 						getTempEmail(phoneNumber) {

@@ -34,12 +34,12 @@ The Admin plugin provides a set of administrative functions for user management 
 
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
-            ```bash
+            ```package-install
             npx @better-auth/cli migrate
             ```
             </Tab>
             <Tab value="generate">
-            ```bash
+            ```package-install
             npx @better-auth/cli generate
             ```
             </Tab>
@@ -818,5 +818,15 @@ The message to show when a banned user tries to sign in. Defaults to "You have b
 ```ts title="auth.ts"
 admin({
   bannedUserMessage: "Custom banned user message",
+});
+```
+
+### allowImpersonatingAdmins
+
+Whether to allow impersonating other admin users. Defaults to `false`.
+
+```ts title="auth.ts"
+admin({
+  allowImpersonatingAdmins: true,
 });
 ```

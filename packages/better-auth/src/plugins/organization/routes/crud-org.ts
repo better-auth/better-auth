@@ -49,6 +49,41 @@ async function checkGlobalOrganizationAccess(
 	return false;
 }
 
+const baseOrganizationSchema = z.object({
+	name: z.string().min(1).meta({
+		description: "The name of the organization",
+	}),
+	slug: z.string().min(1).meta({
+		description: "The slug of the organization",
+	}),
+	userId: z.coerce
+		.string()
+		.meta({
+			description:
+				'The user id of the organization creator. If not provided, the current user will be used. Should only be used by admins or when called by the server. server-only. Eg: "user-id"',
+		})
+		.optional(),
+	logo: z
+		.string()
+		.meta({
+			description: "The logo of the organization",
+		})
+		.optional(),
+	metadata: z
+		.record(z.string(), z.any())
+		.meta({
+			description: "The metadata of the organization",
+		})
+		.optional(),
+	keepCurrentActiveOrganization: z
+		.boolean()
+		.meta({
+			description:
+				"Whether to keep the current active organization active after creating a new one. Eg: true",
+		})
+		.optional(),
+});
+
 export const createOrganization = <O extends OrganizationOptions>(
 	options?: O | undefined,
 ) => {
@@ -56,50 +91,16 @@ export const createOrganization = <O extends OrganizationOptions>(
 		fields: options?.schema?.organization?.additionalFields || {},
 		isClientSide: true,
 	});
-	const baseSchema = z.object({
-		name: z.string().min(1).meta({
-			description: "The name of the organization",
-		}),
-		slug: z.string().min(1).meta({
-			description: "The slug of the organization",
-		}),
-		userId: z.coerce
-			.string()
-			.meta({
-				description:
-					'The user id of the organization creator. If not provided, the current user will be used. Should only be used by admins or when called by the server. server-only. Eg: "user-id"',
-			})
-			.optional(),
-		logo: z
-			.string()
-			.meta({
-				description: "The logo of the organization",
-			})
-			.optional(),
-		metadata: z
-			.record(z.string(), z.any())
-			.meta({
-				description: "The metadata of the organization",
-			})
-			.optional(),
-		keepCurrentActiveOrganization: z
-			.boolean()
-			.meta({
-				description:
-					"Whether to keep the current active organization active after creating a new one. Eg: true",
-			})
-			.optional(),
-	});
 
 	type Body = InferAdditionalFieldsFromPluginOptions<"organization", O> &
-		z.infer<typeof baseSchema>;
+		z.infer<typeof baseOrganizationSchema>;
 
 	return createAuthEndpoint(
 		"/organization/create",
 		{
 			method: "POST",
 			body: z.object({
-				...baseSchema.shape,
+				...baseOrganizationSchema.shape,
 				...additionalFieldsSchema.shape,
 			}),
 			use: [orgMiddleware],
@@ -152,7 +153,9 @@ export const createOrganization = <O extends OrganizationOptions>(
 						? true
 						: options.allowUserToCreateOrganization;
 
-			if (!canCreateOrg) {
+			const isSystemAction = !session && ctx.body.userId;
+
+			if (!canCreateOrg && !isSystemAction) {
 				throw new APIError("FORBIDDEN", {
 					message:
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_ORGANIZATION,
@@ -360,6 +363,12 @@ export const createOrganization = <O extends OrganizationOptions>(
 	);
 };
 
+const checkOrganizationSlugBodySchema = z.object({
+	slug: z.string().meta({
+		description: 'The organization slug to check. Eg: "my-org"',
+	}),
+});
+
 export const checkOrganizationSlug = <O extends OrganizationOptions>(
 	options: O,
 ) =>
@@ -367,11 +376,7 @@ export const checkOrganizationSlug = <O extends OrganizationOptions>(
 		"/organization/check-slug",
 		{
 			method: "POST",
-			body: z.object({
-				slug: z.string().meta({
-					description: 'The organization slug to check. Eg: "my-org"',
-				}),
-			}),
+			body: checkOrganizationSlugBodySchema,
 			use: [requestOnlySessionMiddleware, orgMiddleware],
 		},
 		async (ctx) => {
@@ -387,6 +392,35 @@ export const checkOrganizationSlug = <O extends OrganizationOptions>(
 			});
 		},
 	);
+
+const baseUpdateOrganizationSchema = z.object({
+	name: z
+		.string()
+		.min(1)
+		.meta({
+			description: "The name of the organization",
+		})
+		.optional(),
+	slug: z
+		.string()
+		.min(1)
+		.meta({
+			description: "The slug of the organization",
+		})
+		.optional(),
+	logo: z
+		.string()
+		.meta({
+			description: "The logo of the organization",
+		})
+		.optional(),
+	metadata: z
+		.record(z.string(), z.any())
+		.meta({
+			description: "The metadata of the organization",
+		})
+		.optional(),
+});
 
 export const updateOrganization = <O extends OrganizationOptions>(
 	options?: O | undefined,
@@ -412,32 +446,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				data: z
 					.object({
 						...additionalFieldsSchema.shape,
-						name: z
-							.string()
-							.min(1)
-							.meta({
-								description: "The name of the organization",
-							})
-							.optional(),
-						slug: z
-							.string()
-							.min(1)
-							.meta({
-								description: "The slug of the organization",
-							})
-							.optional(),
-						logo: z
-							.string()
-							.meta({
-								description: "The logo of the organization",
-							})
-							.optional(),
-						metadata: z
-							.record(z.string(), z.any())
-							.meta({
-								description: "The metadata of the organization",
-							})
-							.optional(),
+						...baseUpdateOrganizationSchema.shape,
 					})
 					.partial(),
 				organizationId: z
@@ -578,6 +587,12 @@ export const updateOrganization = <O extends OrganizationOptions>(
 	);
 };
 
+const deleteOrganizationBodySchema = z.object({
+	organizationId: z.string().meta({
+		description: "The organization id to delete",
+	}),
+});
+
 export const deleteOrganization = <O extends OrganizationOptions>(
 	options: O,
 ) => {
@@ -585,11 +600,7 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 		"/organization/delete",
 		{
 			method: "POST",
-			body: z.object({
-				organizationId: z.string().meta({
-					description: "The organization id to delete",
-				}),
-			}),
+			body: deleteOrganizationBodySchema,
 			requireHeaders: true,
 			use: [orgMiddleware],
 			metadata: {
@@ -706,6 +717,32 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 		},
 	);
 };
+
+const getFullOrganizationQuerySchema = z.optional(
+	z.object({
+		organizationId: z
+			.string()
+			.meta({
+				description: "The organization id to get",
+			})
+			.optional(),
+		organizationSlug: z
+			.string()
+			.meta({
+				description: "The organization slug to get",
+			})
+			.optional(),
+		membersLimit: z
+			.number()
+			.or(z.string().transform((val) => parseInt(val)))
+			.meta({
+				description:
+					"The limit of members to get. By default, it uses the membershipLimit option which defaults to 100.",
+			})
+			.optional(),
+	}),
+);
+
 export const getFullOrganization = <O extends OrganizationOptions>(
 	options: O,
 ) =>
@@ -713,30 +750,7 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 		"/organization/get-full-organization",
 		{
 			method: "GET",
-			query: z.optional(
-				z.object({
-					organizationId: z
-						.string()
-						.meta({
-							description: "The organization id to get",
-						})
-						.optional(),
-					organizationSlug: z
-						.string()
-						.meta({
-							description: "The organization slug to get",
-						})
-						.optional(),
-					membersLimit: z
-						.number()
-						.or(z.string().transform((val) => parseInt(val)))
-						.meta({
-							description:
-								"The limit of members to get. By default, it uses the membershipLimit option which defaults to 100.",
-						})
-						.optional(),
-				}),
-			),
+			query: getFullOrganizationQuerySchema,
 			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
@@ -810,6 +824,24 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 		},
 	);
 
+const setActiveOrganizationBodySchema = z.object({
+	organizationId: z
+		.string()
+		.meta({
+			description:
+				'The organization id to set as active. It can be null to unset the active organization. Eg: "org-id"',
+		})
+		.nullable()
+		.optional(),
+	organizationSlug: z
+		.string()
+		.meta({
+			description:
+				'The organization slug to set as active. It can be null to unset the active organization if organizationId is not provided. Eg: "org-slug"',
+		})
+		.optional(),
+});
+
 export const setActiveOrganization = <O extends OrganizationOptions>(
 	options: O,
 ) => {
@@ -817,24 +849,9 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 		"/organization/set-active",
 		{
 			method: "POST",
-			body: z.object({
-				organizationId: z
-					.string()
-					.meta({
-						description:
-							'The organization id to set as active. It can be null to unset the active organization. Eg: "org-id"',
-					})
-					.nullable()
-					.optional(),
-				organizationSlug: z
-					.string()
-					.meta({
-						description:
-							'The organization slug to set as active. It can be null to unset the active organization if organizationId is not provided. Eg: "org-slug"',
-					})
-					.optional(),
-			}),
+			body: setActiveOrganizationBodySchema,
 			use: [orgSessionMiddleware, orgMiddleware],
+			requireHeaders: true,
 			metadata: {
 				openapi: {
 					operationId: "setActiveOrganization",
@@ -952,6 +969,7 @@ export const listOrganizations = <O extends OrganizationOptions>(options: O) =>
 		{
 			method: "GET",
 			use: [orgMiddleware, orgSessionMiddleware],
+			requireHeaders: true,
 			metadata: {
 				openapi: {
 					description: "List all organizations",

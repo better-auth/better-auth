@@ -54,7 +54,7 @@ describe("username", async (it) => {
 		expect(res.data?.token).toBeDefined();
 	});
 	it("should update username", async () => {
-		const res = await client.updateUser({
+		await client.updateUser({
 			username: "new_username_2.1",
 			fetchOptions: {
 				headers,
@@ -498,6 +498,26 @@ describe("isUsernameAvailable with custom validator", async (it) => {
 		});
 		expect(res.error?.status).toBe(422);
 		expect(res.error?.code).toBe("USERNAME_IS_INVALID");
+	});
+
+	it("should reject username that doesn't match custom validator during sign-up/sign-in", async () => {
+		const signUpRes = await client.signUp.email({
+			email: "test-user@test.com",
+			password: "password1234",
+			name: "Test user",
+			username: "invalid_user",
+		});
+
+		expect(signUpRes.error).toBeDefined();
+		expect(signUpRes.error?.code).toBe("USERNAME_IS_INVALID");
+
+		const signInRes = await client.signIn.username({
+			username: "invalid_user",
+			password: "password1234",
+		});
+
+		expect(signInRes.error).toBeDefined();
+		expect(signInRes.error?.code).toBe("USERNAME_IS_INVALID");
 	});
 });
 

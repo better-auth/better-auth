@@ -5,7 +5,7 @@ import type {
 import { createFetch } from "@better-fetch/fetch";
 import type { WritableAtom } from "nanostores";
 import { getBaseURL } from "../utils/url";
-import { redirectPlugin, userAgentPlugin } from "./fetch-plugins";
+import { redirectPlugin } from "./fetch-plugins";
 import { parseJSON } from "./parser";
 import { getSessionAtom } from "./session-atom";
 
@@ -32,8 +32,13 @@ export const getClientConfig = (
 			onResponse: options?.fetchOptions?.onResponse,
 		},
 	};
-	const { onSuccess, onError, onRequest, onResponse, ...restOfFetchOptions } =
-		options?.fetchOptions || {};
+	const {
+		onSuccess: _onSuccess,
+		onError: _onError,
+		onRequest: _onRequest,
+		onResponse: _onResponse,
+		...restOfFetchOptions
+	} = options?.fetchOptions || {};
 	const $fetch = createFetch({
 		baseURL,
 		...(isCredentialsSupported ? { credentials: "include" } : {}),
@@ -51,9 +56,7 @@ export const getClientConfig = (
 		plugins: [
 			lifeCyclePlugin,
 			...(restOfFetchOptions.plugins || []),
-			...(options?.disableDefaultFetchPlugins
-				? []
-				: [userAgentPlugin, redirectPlugin]),
+			...(options?.disableDefaultFetchPlugins ? [] : [redirectPlugin]),
 			...pluginsFetchPlugins,
 		],
 	});

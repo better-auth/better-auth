@@ -1,4 +1,4 @@
-import type { LiteralString } from "../types";
+import type { Awaitable, LiteralString } from "../types";
 
 export interface OAuth2Tokens {
 	tokenType?: string | undefined;
@@ -8,6 +8,11 @@ export interface OAuth2Tokens {
 	refreshTokenExpiresAt?: Date | undefined;
 	scopes?: string[] | undefined;
 	idToken?: string | undefined;
+	/**
+	 * Raw token response from the provider.
+	 * Preserves provider-specific fields that are not part of the standard OAuth2 token response.
+	 */
+	raw?: Record<string, unknown> | undefined;
 }
 
 export type OAuth2UserInfo = {
@@ -30,7 +35,7 @@ export interface OAuthProvider<
 		redirectURI: string;
 		display?: string | undefined;
 		loginHint?: string | undefined;
-	}) => Promise<URL> | URL;
+	}) => Awaitable<URL>;
 	name: string;
 	validateAuthorizationCode: (data: {
 		code: string;
@@ -145,7 +150,7 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 					[key: string]: any;
 				};
 				data: any;
-		  }>)
+		  } | null>)
 		| undefined;
 	/**
 	 * Custom function to refresh a token

@@ -27,7 +27,11 @@ export const auth = betterAuth({
 })
 ```
 
-If not explicitly set, the system will check for the environment variable `process.env.BETTER_AUTH_URL`
+If not explicitly set, the system will check for the environment variable `BETTER_AUTH_URL`. If that's also not set, it will be inferred from the incoming request.
+
+<Callout type="warn">
+Relying on request inference is not recommended. For security and stability, always set `baseURL` explicitly in your config or via the `BETTER_AUTH_URL` environment variable.
+</Callout>
 
 ## `basePath`
 
@@ -63,12 +67,20 @@ You can provide a function that returns origins dynamically:
 
 ```ts
 export const auth = betterAuth({
-	trustedOrigins: async (request: Request) => {
-		// Return an array of trusted origins based on the request
+	trustedOrigins: async (request) => {
+		// request is undefined during initialization and auth.api calls
+		if (!request) {
+			return ["https://my-frontend.com"];
+		}
+		// Dynamic logic based on the request
 		return ["https://dynamic-origin.com"];
 	}
 })
 ```
+
+<Callout type="info">
+  The `request` parameter is `undefined` during initialization and when calling `auth.api` directly. Make sure to handle this case by returning default trusted origins.
+</Callout>
 
 ### Wildcard Support
 
@@ -273,9 +285,10 @@ export const auth = betterAuth({
 		},
 		changeEmail: {
 			enabled: true,
-			sendChangeEmailVerification: async ({ user, newEmail, url, token }) => {
-				// Send change email verification
-			}
+			sendChangeEmailConfirmation: async ({ user, newEmail, url, token }) => {
+				// Send change email confirmation to the old email
+			},
+			updateEmailWithoutVerification: false // Update email without verification if user is not verified
 		},
 		deleteUser: {
 			enabled: true,
@@ -351,6 +364,7 @@ export const auth = betterAuth({
 			userId: "user_id"
 		},
 		encryptOAuthTokens: true, // Encrypt OAuth tokens before storing them in the database
+		storeAccountCookie: true, // Store account data after OAuth flow in a cookie (useful for database-less flows)
 		accountLinking: {
 			enabled: true,
 			trustedProviders: ["google", "github", "email-password"],
@@ -371,6 +385,13 @@ Encrypt OAuth tokens before storing them in the database. Default: `false`.
 
 If enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)
 will be updated on sign in with the latest data from the provider.
+
+### `storeAccountCookie`
+
+Store account data after OAuth flow in a cookie. This is useful for database-less flows where you want to store account information (access tokens, refresh tokens, etc.) in a cookie instead of the database.
+
+- Default: `false`
+- Automatically set to `true` if no database is provided
 
 ### `accountLinking`
 
@@ -465,10 +486,8 @@ export const auth = betterAuth({
 			httpOnly: true,
 			secure: true
 		},
-		oauthConfig: {
-			skipStateCookieCheck: false,
-			storeStateStrategy: "database"
-		},
+		// OAuth state configuration has been moved to account option
+		// Use account.storeStateStrategy and account.skipStateCookieCheck instead
 		cookiePrefix: "myapp",
 		database: {
 			// Use your own custom ID generator,
@@ -495,7 +514,7 @@ export const auth = betterAuth({
 - `defaultCookieAttributes`: Default attributes for all cookies
 - `cookiePrefix`: Prefix for cookies
 - `database`: Database configuration options
-- `oauthConfig`: OAuth configuration options
+- OAuth state configuration options (`storeStateStrategy`, `skipStateCookieCheck`) are now part of the `account` option
 
 ## `logger`
 

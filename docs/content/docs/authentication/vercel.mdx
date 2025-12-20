@@ -1,0 +1,89 @@
+---
+title: Vercel
+description: Vercel provider setup and usage.
+---
+
+<Steps>
+    <Step>
+        ### Get your Vercel credentials
+        To use Sign in with Vercel, you need a client ID and client secret. You can get them from the [Vercel Dashboard](https://vercel.com/dashboard) by [creating a Vercel App](https://vercel.com/docs/sign-in-with-vercel/manage-from-dashboard).
+
+        Make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/vercel` for local development. For production, you should set it to the URL of your application. If you change the base path of the auth routes, you should update the redirect URL accordingly.
+
+        <Callout type="info">
+            Vercel requires PKCE (Proof Key for Code Exchange) for enhanced security. This is automatically handled by Better Auth.
+        </Callout>
+    </Step>
+
+  <Step>
+        ### Configure the provider
+        To configure the provider, you need to import the provider and pass it to the `socialProviders` option of the auth instance.
+
+        ```ts title="auth.ts" 
+        import { betterAuth } from "better-auth"
+
+        export const auth = betterAuth({ 
+            socialProviders: {
+                vercel: { // [!code highlight]
+                    clientId: process.env.VERCEL_CLIENT_ID as string, // [!code highlight]
+                    clientSecret: process.env.VERCEL_CLIENT_SECRET as string, // [!code highlight]
+                }, // [!code highlight]
+            },
+        })
+        ```
+    </Step>
+</Steps>
+
+## Usage
+
+### Sign in with Vercel 
+
+To sign in with Vercel, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
+
+- `provider`: The provider to use. It should be set to `vercel`.
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+const authClient = createAuthClient()
+
+const signIn = async () => {
+    const data = await authClient.signIn.social({
+        provider: "vercel"
+    })
+}
+```
+
+## Options
+
+For the full list of options supported by all social providers, check the [Provider Options](/docs/concepts/oauth#provider-options).
+
+### Available Scopes
+
+Vercel supports the following OpenID Connect scopes:
+
+- `openid` (default): Returns the user's unique identifier in the ID token
+- `email`: Returns the user's email address
+- `profile`: Returns the user's profile information (name, picture)
+- `offline_access`: Returns a refresh token for offline access
+
+Scopes are configured on the Vercel App, and so it is not necessary to pass a `scope` parameter to the provider and it is more convenient to omit it.
+
+If you do pass a `scope` parameter, it has the effect of requesting a subset of the configured scopes:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    socialProviders: {
+        vercel: {
+            clientId: process.env.VERCEL_CLIENT_ID as string,
+            clientSecret: process.env.VERCEL_CLIENT_SECRET as string,
+            scope: ["openid", "email", "profile"], // [!code highlight]
+        },
+    },
+})
+```
+
+<Callout type="info">
+    For more information about Vercel's scopes and API capabilities, refer to the [official Vercel documentation](https://vercel.com/docs/sign-in-with-vercel).
+</Callout>

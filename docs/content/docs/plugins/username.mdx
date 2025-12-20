@@ -32,12 +32,12 @@ The username plugin is a lightweight plugin that adds username support to the em
 
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
-            ```bash
+            ```package-install
             npx @better-auth/cli migrate
             ```
             </Tab>
             <Tab value="generate">
-            ```bash
+            ```package-install
             npx @better-auth/cli generate
             ```
             </Tab>
@@ -85,7 +85,7 @@ type signUpEmail = {
     /**
      * The username of the user.
     */
-    username: string = "test"
+    username?: string = "test"
     /**
      * An optional display username of the user.
     */
@@ -312,6 +312,25 @@ const auth = betterAuth({
                 displayUsername: "post-normalization",
             }
         })
+    ]
+})
+```
+
+### Disable Is Username Available
+
+By default, the plugin exposes an endpoint `/is-username-available` to check if a username is available. You can disable this endpoint by providing `disablePaths` option to the better-auth configuration. This is useful if you want to protect usernames from being enumerated.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
+
+const auth = betterAuth({
+    emailAndPassword: {
+        enabled: true,
+    },
+    disablePaths: ["/is-username-available"],
+    plugins: [
+        username()
     ]
 })
 ```

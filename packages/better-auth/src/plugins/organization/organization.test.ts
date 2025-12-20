@@ -299,7 +299,7 @@ describe("organization", async (it) => {
 	});
 	it("should allow activating organization by slug", async () => {
 		const { headers } = await signInWithTestUser();
-		const organization = await client.organization.setActive({
+		await client.organization.setActive({
 			organizationSlug: "test2",
 			fetchOptions: {
 				headers,
@@ -531,7 +531,7 @@ describe("organization", async (it) => {
 	});
 
 	it("should allow updating member", async () => {
-		const { headers, user } = await signInWithTestUser();
+		const { headers } = await signInWithTestUser();
 		const org = await client.organization.getFullOrganization({
 			query: {
 				organizationId,
@@ -541,10 +541,11 @@ describe("organization", async (it) => {
 			},
 		});
 		if (!org.data) throw new Error("Organization not found");
-		expect(org.data.members[3]!.role).toBe("member");
+		const memberUser = org.data.members.find((x: any) => x.role === "member");
+		if (!memberUser) throw new Error("Member not found");
 		const member = await client.organization.updateMemberRole({
 			organizationId: org.data!.id,
-			memberId: org.data!.members[3]!.id,
+			memberId: memberUser!.id,
 			role: "admin",
 			fetchOptions: {
 				headers,
@@ -566,7 +567,7 @@ describe("organization", async (it) => {
 		const c = await client.organization.updateMemberRole({
 			organizationId: org.data!.id,
 			role: ["member", "admin"],
-			memberId: org.data!.members[1]!.id,
+			memberId: org.data!.members.find((m) => m.role === "member")!.id,
 			fetchOptions: {
 				headers,
 			},
@@ -585,10 +586,10 @@ describe("organization", async (it) => {
 			},
 		});
 
-		const activeMember = org?.data?.members.find((m) => m.userId === user.id);
-
-		expect(activeMember?.role).toBe("owner");
-
+		const activeMember = org?.data?.members.find(
+			(m) => m.userId === user.id && m.role === "owner",
+		);
+		if (!activeMember) throw new Error("Active member not found");
 		const c1 = await client.organization.updateMemberRole({
 			organizationId: org.data?.id as string,
 			role: ["owner", "admin"],
@@ -610,6 +611,15 @@ describe("organization", async (it) => {
 		});
 
 		expect(c2.data?.role).toBe("owner");
+
+		await client.organization.updateMemberRole({
+			organizationId: org.data?.id as string,
+			role: ["admin"],
+			memberId: activeMember!.id as string,
+			fetchOptions: {
+				headers,
+			},
+		});
 	});
 
 	const adminUser = {
@@ -646,7 +656,7 @@ describe("organization", async (it) => {
 		const res = await client.signUp.email(newUser, {
 			onSuccess: cookieSetter(headers),
 		});
-		const member = await auth.api.addMember({
+		await auth.api.addMember({
 			body: {
 				organizationId,
 				userId: res.data?.user.id!,
@@ -735,16 +745,18 @@ describe("organization", async (it) => {
 		});
 
 		if (!org.data) throw new Error("Organization not found");
+		const owner = org.data?.members.find((m) => m.role === "owner")!;
 		const removedOwner = await client.organization.removeMember({
 			organizationId: org.data.id,
-			memberIdOrEmail: org.data?.members.find((m) => m.role === "owner")!.id,
+			memberIdOrEmail: owner.id,
 			fetchOptions: {
 				headers,
 			},
 		});
+
 		expect(removedOwner.error?.status).toBe(400);
 
-		const res = await client.organization.updateMemberRole({
+		await client.organization.updateMemberRole({
 			organizationId: organizationId,
 			role: ["owner", "admin"],
 			memberId: org.data?.members.find((m) => m.role === "owner")?.id!,
@@ -1096,11 +1108,11 @@ describe("organization", async (it) => {
 		await auth.api.signUpEmail({
 			body: orgAdminUser,
 		});
-		const { headers: headers2, res: session } = await signInWithUser(
+		const { headers: headers2 } = await signInWithUser(
 			user.email,
 			user.password,
 		);
-		const { headers: adminHeaders, res: adminSession } = await signInWithUser(
+		const { headers: adminHeaders } = await signInWithUser(
 			orgAdminUser.email,
 			orgAdminUser.password,
 		);
@@ -1126,6 +1138,7 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(userInvitations.data?.[0]!.id).toBe(invitation.data?.id);
+		expect(userInvitations.data?.[0]!.organizationName).toBe(orgRng);
 		expect(userInvitations.data?.length).toBe(1);
 	});
 
@@ -1185,7 +1198,7 @@ describe("access control", async (it) => {
 		sales: ["read"],
 		...memberAc.statements,
 	});
-	const { auth, customFetchImpl, sessionSetter, signInWithTestUser } =
+	const { customFetchImpl, sessionSetter, signInWithTestUser } =
 		await getTestInstance({
 			plugins: [
 				organization({
@@ -1225,7 +1238,7 @@ describe("access control", async (it) => {
 		organization: { checkRolePermission, hasPermission, create },
 	} = authClient;
 
-	const { headers, user, session } = await signInWithTestUser();
+	const { headers } = await signInWithTestUser();
 
 	const org = await create(
 		{
@@ -2351,7 +2364,7 @@ describe("Additional Fields", async () => {
 			headers.set("cookie", `${current || ""}; ${name}=${value}`);
 		};
 
-		const { data, error } = await client.signUp.email({
+		const { data } = await client.signUp.email({
 			email: testUser.email,
 			password: testUser.password,
 			name: testUser.name,
