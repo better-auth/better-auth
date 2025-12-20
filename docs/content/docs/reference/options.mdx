@@ -117,7 +117,7 @@ export const auth = betterAuth({
 <Callout type="info">
 **Notes**
 
-- For `http://` and `https://` URLs, patterns match the full origin (protocol + host + port). Paths and query strings are ignored.
+- For `http://` and `https://` URLs, patterns match the full origin. Paths and query strings are ignored.
 - For custom schemes (like `exp://` or `myapp://`), patterns match against the full URL including paths when wildcards are present, or use prefix matching when no wildcards exist.
 - The separator is `/` (forward slash). This means `http://*.example.com` matches both `http://api.example.com` and `http://api.app.example.com`.
 </Callout>
