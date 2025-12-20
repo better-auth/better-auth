@@ -288,6 +288,30 @@ export async function createAuthContext(
 				: isTest()
 					? true
 					: false,
+		runInBackground:
+			options.advanced?.backgroundTasks?.handler ??
+			((p) => {
+				p.catch(() => {});
+			}),
+		async runInBackgroundOrAwait(
+			promise: Promise<unknown> | Promise<void> | void | unknown,
+		) {
+			try {
+				if (options.advanced?.backgroundTasks?.handler) {
+					if (promise instanceof Promise) {
+						options.advanced.backgroundTasks.handler(
+							promise.catch((e) => {
+								logger.error("Failed to run background task:", e);
+							}),
+						);
+					}
+				} else {
+					await promise;
+				}
+			} catch (e) {
+				logger.error("Failed to run background task:", e);
+			}
+		},
 	};
 
 	const initOrPromise = runPluginInit(ctx);

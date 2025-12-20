@@ -130,18 +130,16 @@ export const requestPasswordReset = createAuthEndpoint(
 		});
 		const callbackURL = redirectTo ? encodeURIComponent(redirectTo) : "";
 		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${callbackURL}`;
-		await ctx.context.options.emailAndPassword
-			.sendResetPassword(
+		await ctx.context.runInBackgroundOrAwait(
+			ctx.context.options.emailAndPassword.sendResetPassword(
 				{
 					user: user.user,
 					url,
 					token: verificationToken,
 				},
 				ctx.request,
-			)
-			.catch((e) => {
-				ctx.context.logger.error("Failed to send reset password email", e);
-			});
+			),
+		);
 		return ctx.json({
 			status: true,
 			message:
