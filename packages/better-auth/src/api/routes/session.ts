@@ -505,6 +505,7 @@ export const getSessionFromCtx = async <
 
 	const session = await getSession()({
 		...ctx,
+		method: "GET",
 		asResponse: false,
 		headers: ctx.headers!,
 		returnHeaders: false,
