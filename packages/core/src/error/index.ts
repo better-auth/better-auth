@@ -1,4 +1,4 @@
-import { APIError as BaseAPIError } from "./api-error";
+import { APIError as BaseAPIError } from "better-call/error";
 
 export class BetterAuthError extends Error {
 	constructor(message: string, cause?: string | undefined) {
