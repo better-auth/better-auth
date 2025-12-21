@@ -132,17 +132,17 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 						{ field: "organizationId", value: data.organizationId },
 						...(data.filter?.field
 							? [
-								{
-									field: data.filter?.field,
-									value: data.filter?.value,
-									...(data.filter.operator
-										? { operator: data.filter.operator }
-										: {}),
-								},
-							]
-						: []),
-				],
-				limit: data.limit || options?.membershipLimit || 100,
+									{
+										field: data.filter?.field,
+										value: data.filter?.value,
+										...(data.filter.operator
+											? { operator: data.filter.operator }
+											: {}),
+									},
+								]
+							: []),
+					],
+					limit: data.limit || options?.membershipLimit || 100,
 					offset: data.offset || 0,
 					sortBy: data.sortBy
 						? { field: data.sortBy, direction: data.sortOrder || "asc" }
@@ -154,19 +154,19 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 						{ field: "organizationId", value: data.organizationId },
 						...(data.filter?.field
 							? [
-								{
-									field: data.filter?.field,
-									value: data.filter?.value,
-									...(data.filter.operator
-										? { operator: data.filter.operator }
-										: {}),
-								},
-							]
-						: []),
-				],
-			}),
-		]);
-		const users = await adapter.findMany<User>({
+									{
+										field: data.filter?.field,
+										value: data.filter?.value,
+										...(data.filter.operator
+											? { operator: data.filter.operator }
+											: {}),
+									},
+								]
+							: []),
+					],
+				}),
+			]);
+			const users = await adapter.findMany<User>({
 				model: "user",
 				where: [
 					{
