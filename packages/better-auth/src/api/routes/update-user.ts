@@ -2,10 +2,10 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
-import * as z from "zod";
+import * as z from "zod/v4";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
-import { parseUserInput } from "../../db/schema";
+import { parseUserInput } from "../../db";
 import type { AdditionalUserFieldsInput } from "../../types";
 import { originCheck } from "../middlewares";
 import { createEmailVerificationToken } from "./email-verification";
@@ -27,7 +27,6 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 		"/update-user",
 		{
 			method: "POST",
-			operationId: "updateUser",
 			body: updateUserBodySchema,
 			use: [sessionMiddleware],
 			metadata: {
@@ -84,17 +83,45 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 		async (ctx) => {
 			const body = ctx.body as {
 				name?: string | undefined;
-				image?: string | undefined;
+				image?: string | undefined | null;
 				[key: string]: any;
 			};
 
+			// Disallow updates to restricted fields
 			if (body.email) {
 				throw new APIError("BAD_REQUEST", {
 					message: BASE_ERROR_CODES.EMAIL_CAN_NOT_BE_UPDATED,
 				});
 			}
+			for (const forbidden of ["id", "createdAt", "updatedAt", "emailVerified"]) {
+				if (forbidden in body) {
+					throw new APIError("BAD_REQUEST", {
+						message: `Field ${forbidden} cannot be updated`,
+					});
+				}
+			}
 			const { name, image, ...rest } = body;
 			const session = ctx.context.session;
+
+			// Lightweight validation for user-provided fields
+			if (typeof name === "string" && name.length > 128) {
+				throw new APIError("BAD_REQUEST", {
+					message: "Name is too long",
+				});
+			}
+			if (image !== undefined && image !== null) {
+				try {
+					// Validate absolute/relative URL; URL will throw on invalid absolute.
+					// Relative will fail in URL(), so only enforce basic length limit.
+					new URL(image);
+				} catch {
+					if (image.length > 2048) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Image URL is too long",
+						});
+					}
+				}
+			}
 			const additionalFields = parseUserInput(
 				ctx.context.options,
 				rest,
@@ -134,7 +161,6 @@ export const changePassword = createAuthEndpoint(
 	"/change-password",
 	{
 		method: "POST",
-		operationId: "changePassword",
 		body: z.object({
 			/**
 			 * The new password to set
@@ -373,7 +399,18 @@ export const deleteUser = createAuthEndpoint(
 	"/delete-user",
 	{
 		method: "POST",
-		use: [sensitiveSessionMiddleware],
+		use: [
+			sensitiveSessionMiddleware,
+			originCheck((ctx) => {
+				const v = ctx.body.callbackURL as string | undefined;
+				if (!v) return "";
+				try {
+					return decodeURIComponent(v);
+				} catch {
+					return v;
+				}
+			}),
+		],
 		body: z.object({
 			/**
 			 * The callback URL to redirect to after the user is deleted
@@ -521,11 +558,9 @@ export const deleteUser = createAuthEndpoint(
 							1000,
 				),
 			});
-			const url = `${
-				ctx.context.baseURL
-			}/delete-user/callback?token=${token}&callbackURL=${
-				ctx.body.callbackURL || "/"
-			}`;
+			const url = `${ctx.context.baseURL}/delete-user/callback?token=${token}&callbackURL=${encodeURIComponent(
+				ctx.body.callbackURL || "/",
+			)}`;
 			await ctx.context.options.user.deleteUser.sendDeleteAccountVerification(
 				{
 					user: session.user,
@@ -544,7 +579,7 @@ export const deleteUser = createAuthEndpoint(
 			const currentAge = new Date(session.session.createdAt).getTime();
 			const freshAge = ctx.context.sessionConfig.freshAge * 1000;
 			const now = Date.now();
-			if (now - currentAge > freshAge * 1000) {
+			if (now - currentAge > freshAge) {
 				throw new APIError("BAD_REQUEST", {
 					message: BASE_ERROR_CODES.SESSION_EXPIRED,
 				});
@@ -683,7 +718,18 @@ export const changeEmail = createAuthEndpoint(
 				})
 				.optional(),
 		}),
-		use: [sensitiveSessionMiddleware],
+		use: [
+			sensitiveSessionMiddleware,
+			originCheck((ctx) => {
+				const v = ctx.body.callbackURL as string | undefined;
+				if (!v) return "";
+				try {
+					return decodeURIComponent(v);
+				} catch {
+					return v;
+				}
+			}),
+		],
 		metadata: {
 			openapi: {
 				operationId: "changeEmail",
@@ -786,11 +832,9 @@ export const changeEmail = createAuthEndpoint(
 					undefined,
 					ctx.context.options.emailVerification?.expiresIn,
 				);
-				const url = `${
-					ctx.context.baseURL
-				}/verify-email?token=${token}&callbackURL=${
-					ctx.body.callbackURL || "/"
-				}`;
+				const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
+					ctx.body.callbackURL || "/",
+				)}`;
 				await ctx.context.options.emailVerification.sendVerificationEmail(
 					{
 						user: {
@@ -827,9 +871,9 @@ export const changeEmail = createAuthEndpoint(
 					requestType: "change-email-confirmation",
 				},
 			);
-			const url = `${
-				ctx.context.baseURL
-			}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
+			const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
+				ctx.body.callbackURL || "/",
+			)}`;
 			const sendFn =
 				ctx.context.options.user.changeEmail.sendChangeEmailConfirmation ||
 				ctx.context.options.user.changeEmail.sendChangeEmailVerification;
@@ -865,9 +909,9 @@ export const changeEmail = createAuthEndpoint(
 				requestType: "change-email-verification",
 			},
 		);
-		const url = `${
-			ctx.context.baseURL
-		}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
+		const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
+			ctx.body.callbackURL || "/",
+		)}`;
 		await ctx.context.options.emailVerification.sendVerificationEmail(
 			{
 				user: {
