@@ -110,16 +110,17 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 				});
 			}
 			if (image !== undefined && image !== null) {
+				// Enforce length limit regardless of absolute/relative validity
+				if (image.length > 2048) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Image URL is too long",
+					});
+				}
+				// Best-effort absolute URL validation (relative may throw and is allowed)
 				try {
-					// Validate absolute/relative URL; URL will throw on invalid absolute.
-					// Relative will fail in URL(), so only enforce basic length limit.
 					new URL(image);
 				} catch {
-					if (image.length > 2048) {
-						throw new APIError("BAD_REQUEST", {
-							message: "Image URL is too long",
-						});
-					}
+					// ignore - relative URLs are allowed
 				}
 			}
 			const additionalFields = parseUserInput(
