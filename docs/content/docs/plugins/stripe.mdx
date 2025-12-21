@@ -117,6 +117,7 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
         
         Make sure to select at least these events:
         - `checkout.session.completed`
+        - `customer.subscription.created`
         - `customer.subscription.updated`
         - `customer.subscription.deleted`
 
@@ -508,6 +509,7 @@ subscription: {
 The plugin automatically handles common webhook events:
 
 - `checkout.session.completed`: Updates subscription status after checkout
+- `customer.subscription.created`: Creates a subscription when created outside the checkout flow
 - `customer.subscription.updated`: Updates subscription details when changed
 - `customer.subscription.deleted`: Marks subscription as canceled
 
@@ -538,8 +540,12 @@ You can hook into various subscription lifecycle events:
 subscription: {
     // ... other options
     onSubscriptionComplete: async ({ event, subscription, stripeSubscription, plan }) => {
-        // Called when a subscription is successfully created
+        // Called when a subscription is successfully created via checkout
         await sendWelcomeEmail(subscription.referenceId, plan.name);
+    },
+    onSubscriptionCreated: async ({ event, subscription, stripeSubscription, plan }) => {
+        // Called when a subscription is created outside the checkout flow (e.g. Stripe dashboard)
+        await sendSubscriptionCreatedEmail(subscription.referenceId, plan.name);
     },
     onSubscriptionUpdate: async ({ event, subscription }) => {
         // Called when a subscription is updated
