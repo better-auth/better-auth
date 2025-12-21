@@ -236,7 +236,7 @@ const authOptions = {
 		}),
 		oauthProvider({
 			loginPage: "/sign-in",
-			consentPage: "/oauth/authorize",
+			consentPage: "/oauth/consent",
 			allowDynamicClientRegistration: true,
 			allowUnauthenticatedClientRegistration: true,
 			scopes: [
