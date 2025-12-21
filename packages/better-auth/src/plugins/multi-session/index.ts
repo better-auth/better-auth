@@ -363,6 +363,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 				},
 			],
 		},
+		options,
 		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };

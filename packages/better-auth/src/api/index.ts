@@ -274,6 +274,7 @@ export const router = <Option extends BetterAuthOptions>(
 			//handle disabled paths
 			const disabledPaths = ctx.options.disabledPaths || [];
 			const pathname = new URL(req.url).pathname.replace(/\/+$/, "") || "/";
+
 			const normalizedPath =
 				basePath === "/"
 					? pathname

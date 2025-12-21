@@ -205,6 +205,7 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 				},
 			],
 		},
+		options,
 		schema: mergeSchema(schema, options?.schema),
 		$ERROR_CODES: ANONYMOUS_ERROR_CODES,
 	} satisfies BetterAuthPlugin;

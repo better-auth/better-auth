@@ -512,13 +512,15 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 						? encodeURIComponent(ctx.body.callbackURL)
 						: encodeURIComponent("/");
 					const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
-					await ctx.context.options.emailVerification.sendVerificationEmail(
-						{
-							user: user.user,
-							url,
-							token,
-						},
-						ctx.request,
+					await ctx.context.runInBackgroundOrAwait(
+						ctx.context.options.emailVerification.sendVerificationEmail(
+							{
+								user: user.user,
+								url,
+								token,
+							},
+							ctx.request,
+						),
 					);
 				}
 

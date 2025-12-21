@@ -369,13 +369,15 @@ export const username = (options?: UsernameOptions | undefined) => {
 							const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${
 								ctx.body.callbackURL || "/"
 							}`;
-							await ctx.context.options.emailVerification.sendVerificationEmail(
-								{
-									user: user,
-									url,
-									token,
-								},
-								ctx.request,
+							await ctx.context.runInBackgroundOrAwait(
+								ctx.context.options.emailVerification.sendVerificationEmail(
+									{
+										user: user,
+										url,
+										token,
+									},
+									ctx.request,
+								),
 							);
 						}
 
@@ -592,6 +594,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 				},
 			],
 		},
+		options,
 		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };

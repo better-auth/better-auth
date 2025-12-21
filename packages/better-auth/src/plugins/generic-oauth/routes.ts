@@ -13,6 +13,7 @@ import { APIError, sessionMiddleware } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState, parseState } from "../../oauth2/state";
+import { setTokenUtil } from "../../oauth2/utils";
 import type { User } from "../../types";
 import { HIDE_METADATA } from "../../utils";
 import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
@@ -438,9 +439,12 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 					}
 					const updateData = Object.fromEntries(
 						Object.entries({
-							accessToken: tokens.accessToken,
+							accessToken: await setTokenUtil(tokens.accessToken, ctx.context),
 							idToken: tokens.idToken,
-							refreshToken: tokens.refreshToken,
+							refreshToken: await setTokenUtil(
+								tokens.refreshToken,
+								ctx.context,
+							),
 							accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 							refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
 							scope: tokens.scopes?.join(","),
@@ -455,11 +459,11 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 						userId: link.userId,
 						providerId: providerConfig.providerId,
 						accountId: userInfo.id,
-						accessToken: tokens.accessToken,
+						accessToken: await setTokenUtil(tokens.accessToken, ctx.context),
 						accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 						refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
 						scope: tokens.scopes?.join(","),
-						refreshToken: tokens.refreshToken,
+						refreshToken: await setTokenUtil(tokens.refreshToken, ctx.context),
 						idToken: tokens.idToken,
 					});
 					if (!newAccount) {

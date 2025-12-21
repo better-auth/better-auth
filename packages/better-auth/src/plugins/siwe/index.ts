@@ -299,4 +299,5 @@ export const siwe = (options: SIWEPluginOptions) =>
 				},
 			),
 		},
+		options,
 	}) satisfies BetterAuthPlugin;

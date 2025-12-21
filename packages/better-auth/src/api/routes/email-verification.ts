@@ -63,13 +63,15 @@ export async function sendVerificationEmailFn(
 		? encodeURIComponent(ctx.body.callbackURL)
 		: encodeURIComponent("/");
 	const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
-	await ctx.context.options.emailVerification.sendVerificationEmail(
-		{
-			user: user,
-			url,
-			token,
-		},
-		ctx.request,
+	await ctx.context.runInBackgroundOrAwait(
+		ctx.context.options.emailVerification.sendVerificationEmail(
+			{
+				user: user,
+				url,
+				token,
+			},
+			ctx.request,
+		),
 	);
 }
 export const sendVerificationEmail = createAuthEndpoint(
@@ -325,17 +327,21 @@ export const verifyEmail = createAuthEndpoint(
 					? encodeURIComponent(ctx.query.callbackURL)
 					: encodeURIComponent("/");
 				const url = `${ctx.context.baseURL}/verify-email?token=${newToken}&callbackURL=${updateCallbackURL}`;
-				await ctx.context.options.emailVerification?.sendVerificationEmail?.(
-					{
-						user: {
-							...user.user,
-							email: parsed.updateTo,
-						},
-						url,
-						token: newToken,
-					},
-					ctx.request,
-				);
+				if (ctx.context.options.emailVerification?.sendVerificationEmail) {
+					await ctx.context.runInBackgroundOrAwait(
+						ctx.context.options.emailVerification.sendVerificationEmail(
+							{
+								user: {
+									...user.user,
+									email: parsed.updateTo,
+								},
+								url,
+								token: newToken,
+							},
+							ctx.request,
+						),
+					);
+				}
 				if (ctx.query.callbackURL) {
 					throw ctx.redirect(ctx.query.callbackURL);
 				}
@@ -400,14 +406,18 @@ export const verifyEmail = createAuthEndpoint(
 			const updateCallbackURL = ctx.query.callbackURL
 				? encodeURIComponent(ctx.query.callbackURL)
 				: encodeURIComponent("/");
-			await ctx.context.options.emailVerification?.sendVerificationEmail?.(
-				{
-					user: updatedUser,
-					url: `${ctx.context.baseURL}/verify-email?token=${newToken}&callbackURL=${updateCallbackURL}`,
-					token: newToken,
-				},
-				ctx.request,
-			);
+			if (ctx.context.options.emailVerification?.sendVerificationEmail) {
+				await ctx.context.runInBackgroundOrAwait(
+					ctx.context.options.emailVerification.sendVerificationEmail(
+						{
+							user: updatedUser,
+							url: `${ctx.context.baseURL}/verify-email?token=${newToken}&callbackURL=${updateCallbackURL}`,
+							token: newToken,
+						},
+						ctx.request,
+					),
+				);
+			}
 
 			await setSessionCookie(ctx, {
 				session: session.session,

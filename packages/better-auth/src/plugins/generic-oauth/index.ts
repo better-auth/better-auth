@@ -211,6 +211,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 			oAuth2Callback: oAuth2Callback(options),
 			oAuth2LinkAccount: oAuth2LinkAccount(options),
 		},
+		options,
 		$ERROR_CODES: GENERIC_OAUTH_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };

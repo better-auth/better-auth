@@ -122,17 +122,21 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 						identifier: phoneNumber,
 						expiresAt: getDate(opts.expiresIn, "sec"),
 					});
-					await opts.sendOTP?.(
-						{
-							phoneNumber,
-							code: otp,
-						},
-						ctx,
-					);
-					throw APIError.from(
-						"UNAUTHORIZED",
-						PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_NOT_VERIFIED,
-					);
+					if (opts.sendOTP) {
+						await ctx.context.runInBackgroundOrAwait(
+							opts.sendOTP(
+								{
+									phoneNumber,
+									code: otp,
+								},
+								ctx,
+							),
+						);
+					}
+          throw APIError.from(
+            "UNAUTHORIZED",
+            PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_NOT_VERIFIED,
+          );
 				}
 			}
 			const accounts = await ctx.context.internalAdapter.findAccountByUserId(
@@ -284,12 +288,14 @@ export const sendPhoneNumberOTP = (opts: RequiredPhoneNumberOptions) =>
 				identifier: ctx.body.phoneNumber,
 				expiresAt: getDate(opts.expiresIn, "sec"),
 			});
-			await opts.sendOTP(
-				{
-					phoneNumber: ctx.body.phoneNumber,
-					code,
-				},
-				ctx,
+			await ctx.context.runInBackgroundOrAwait(
+				opts.sendOTP(
+					{
+						phoneNumber: ctx.body.phoneNumber,
+						code,
+					},
+					ctx,
+				),
 			);
 			return ctx.json({ message: "code sent" });
 		},
@@ -724,13 +730,17 @@ export const requestPasswordResetPhoneNumber = (
 					status: true,
 				});
 			}
-			await opts?.sendPasswordResetOTP?.(
-				{
-					phoneNumber: ctx.body.phoneNumber,
-					code,
-				},
-				ctx,
-			);
+			if (opts.sendPasswordResetOTP) {
+				await ctx.context.runInBackgroundOrAwait(
+					opts.sendPasswordResetOTP(
+						{
+							phoneNumber: ctx.body.phoneNumber,
+							code,
+						},
+						ctx,
+					),
+				);
+			}
 			return ctx.json({
 				status: true,
 			});

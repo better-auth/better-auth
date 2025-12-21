@@ -123,11 +123,13 @@ export const createOrganization = <O extends OrganizationOptions>(
 						? true
 						: options.allowUserToCreateOrganization;
 
-			if (!canCreateOrg) {
-				throw APIError.from(
-					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_ORGANIZATION,
-				);
+			const isSystemAction = !session && ctx.body.userId;
+
+			if (!canCreateOrg && !isSystemAction) {
+        throw APIError.from(
+          "FORBIDDEN",
+          ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_ORGANIZATION,
+        );
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options as O);
 
