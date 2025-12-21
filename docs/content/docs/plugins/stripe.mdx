@@ -733,6 +733,18 @@ stripe({
 
 **authorizeReference**: `(data: { user: User, session: Session, referenceId: string, action: "upgrade-subscription" | "list-subscription" | "cancel-subscription" | "restore-subscription"}, ctx: GenericEndpointContext) => Promise<boolean>` - A function to authorize reference IDs.
 
+**getCheckoutSessionParams**: `(data: { user: User, session: Session, plan: Plan, subscription?: Subscription }, ctx: GenericEndpointContext) => Promise<{ params?: Stripe.Checkout.SessionCreateParams, options?: Stripe.RequestOptions }>` - A function to customize Stripe Checkout session parameters.
+
+**onSubscriptionComplete**: `(data: { event: Stripe.Event, subscription: Subscription, stripeSubscription: Stripe.Subscription, plan: Plan }, ctx: GenericEndpointContext) => Promise<void>` - Called when a subscription is successfully created via checkout.
+
+**onSubscriptionCreated**: `(data: { event: Stripe.Event, subscription: Subscription, stripeSubscription: Stripe.Subscription, plan: Plan }) => Promise<void>` - Called when a subscription is created outside the checkout flow.
+
+**onSubscriptionUpdate**: `(data: { event: Stripe.Event, subscription: Subscription }, ctx: GenericEndpointContext) => Promise<void>` - Called when a subscription is updated.
+
+**onSubscriptionCancel**: `(data: { event: Stripe.Event, subscription: Subscription, stripeSubscription: Stripe.Subscription, cancellationDetails: any }, ctx: GenericEndpointContext) => Promise<void>` - Called when a subscription is canceled.
+
+**onSubscriptionDeleted**: `(data: { event: Stripe.Event, subscription: Subscription, stripeSubscription: Stripe.Subscription }, ctx: GenericEndpointContext) => Promise<void>` - Called when a subscription is deleted.
+
 ### Plan Configuration
 
 Each plan can have the following properties:
