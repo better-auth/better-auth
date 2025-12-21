@@ -13,6 +13,7 @@ import type { Stripe as StripeType } from "stripe";
 import * as z from "zod/v4";
 import {
 	onCheckoutSessionCompleted,
+	onSubscriptionCreated,
 	onSubscriptionDeleted,
 	onSubscriptionUpdated,
 } from "./hooks";
@@ -1292,6 +1293,10 @@ export const stripeWebhook = (options: StripeOptions) => {
 				switch (event.type) {
 					case "checkout.session.completed":
 						await onCheckoutSessionCompleted(ctx, options, event);
+						await options.onEvent?.(event);
+						break;
+					case "customer.subscription.created":
+						await onSubscriptionCreated(ctx, options, event);
 						await options.onEvent?.(event);
 						break;
 					case "customer.subscription.updated":

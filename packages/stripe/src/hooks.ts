@@ -97,6 +97,123 @@ export async function onCheckoutSessionCompleted(
 	}
 }
 
+export async function onSubscriptionCreated(
+	ctx: GenericEndpointContext,
+	options: StripeOptions,
+	event: Stripe.Event,
+) {
+	try {
+		if (!options.subscription?.enabled) {
+			return;
+		}
+
+		const subscriptionCreated = event.data.object as Stripe.Subscription;
+		const stripeCustomerId = subscriptionCreated.customer?.toString();
+		if (!stripeCustomerId) {
+			logger.warn(
+				`Stripe webhook warning: customer.subscription.created event received without customer ID`,
+			);
+			return;
+		}
+
+		// Check if subscription already exists in database
+		const existingSubscription =
+			await ctx.context.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: [
+					{
+						field: "stripeSubscriptionId",
+						value: subscriptionCreated.id,
+					},
+				],
+			});
+		if (existingSubscription) {
+			logger.info(
+				`Stripe webhook: Subscription ${subscriptionCreated.id} already exists in database, skipping creation`,
+			);
+			return;
+		}
+
+		// Find user by stripeCustomerId
+		const user = await ctx.context.adapter.findOne<{ id: string }>({
+			model: "user",
+			where: [
+				{
+					field: "stripeCustomerId",
+					value: stripeCustomerId,
+				},
+			],
+		});
+		if (!user) {
+			logger.warn(
+				`Stripe webhook warning: No user found with stripeCustomerId: ${stripeCustomerId}`,
+			);
+			return;
+		}
+
+		const subscriptionItem = subscriptionCreated.items.data[0];
+		if (!subscriptionItem) {
+			logger.warn(
+				`Stripe webhook warning: Subscription ${subscriptionCreated.id} has no items`,
+			);
+			return;
+		}
+
+		const priceId = subscriptionItem.price.id;
+		const priceLookupKey = subscriptionItem.price.lookup_key || null;
+		const plan = await getPlanByPriceInfo(options, priceId, priceLookupKey);
+		if (!plan) {
+			logger.warn(
+				`Stripe webhook warning: No matching plan found for priceId: ${priceId}`,
+			);
+			return;
+		}
+
+		const seats = subscriptionItem.quantity || 1;
+		const periodStart = new Date(subscriptionItem.current_period_start * 1000);
+		const periodEnd = new Date(subscriptionItem.current_period_end * 1000);
+
+		const trial =
+			subscriptionCreated.trial_start && subscriptionCreated.trial_end
+				? {
+						trialStart: new Date(subscriptionCreated.trial_start * 1000),
+						trialEnd: new Date(subscriptionCreated.trial_end * 1000),
+					}
+				: {};
+
+		// Create the subscription in the database
+		const newSubscription = await ctx.context.adapter.create<Subscription>({
+			model: "subscription",
+			data: {
+				referenceId: user.id,
+				stripeCustomerId: stripeCustomerId,
+				stripeSubscriptionId: subscriptionCreated.id,
+				status: subscriptionCreated.status,
+				plan: plan.name.toLowerCase(),
+				periodStart,
+				periodEnd,
+				cancelAtPeriodEnd: subscriptionCreated.cancel_at_period_end,
+				seats,
+				...(plan.limits ? { limits: plan.limits } : {}),
+				...trial,
+			},
+		});
+
+		logger.info(
+			`Stripe webhook: Created subscription ${subscriptionCreated.id} for user ${user.id} from dashboard`,
+		);
+
+		await options.subscription?.onSubscriptionCreated?.({
+			event,
+			subscription: newSubscription,
+			stripeSubscription: subscriptionCreated,
+			plan,
+		});
+	} catch (error: any) {
+		logger.error(`Stripe webhook failed. Error: ${error}`);
+	}
+}
+
 export async function onSubscriptionUpdated(
 	ctx: GenericEndpointContext,
 	options: StripeOptions,
