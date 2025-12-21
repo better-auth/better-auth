@@ -1414,4 +1414,63 @@ describe("cookie cache versioning", async () => {
 		const s2 = session2.data?.session as Record<string, any>;
 		expect(s2.role).toBe(s1.role);
 	});
+
+	it("should return null when adapter returns session without user join data", async () => {
+		const { setCookieToHeader } = await import("../../cookies");
+
+		const memoryDB: MemoryDB = {
+			user: [],
+			account: [],
+			session: [],
+			verification: [],
+		};
+
+		// Create wrapper that returns a broken adapter
+		const brokenAdapter = (options: any) => {
+			const adapter = memoryAdapter(memoryDB)(options);
+			const originalFindOne = adapter.findOne.bind(adapter);
+
+			// Override findOne to return session without user join
+			adapter.findOne = async (data: any) => {
+				const result = await originalFindOne(data);
+				// If this is a session query with join, return session without user
+				if (data.model === "session" && data.join?.user && result) {
+					return {
+						...result,
+						user: null, // Simulate broken join implementation
+					};
+				}
+				return result;
+			};
+
+			return adapter;
+		};
+
+		// Create test instance with broken adapter
+		const { testUser, client } = await getTestInstance({
+			database: brokenAdapter as any,
+		});
+
+		// Sign in to create a real session
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: setCookieToHeader(headers),
+			},
+		);
+
+		// Try to get session - should return null because adapter returns session without user
+		const response = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		// Should return null when user join data is missing
+		expect(response.data).toBeNull();
+	});
 });
