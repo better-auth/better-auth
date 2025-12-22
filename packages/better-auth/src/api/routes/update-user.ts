@@ -795,7 +795,7 @@ export const changeEmail = createAuthEndpoint(
 			});
 			if (ctx.context.options.emailVerification?.sendVerificationEmail) {
 				const token = await createEmailVerificationToken(
-					ctx.context.secret,
+					ctx,
 					newEmail,
 					undefined,
 					ctx.context.options.emailVerification?.expiresIn,
@@ -835,7 +835,7 @@ export const changeEmail = createAuthEndpoint(
 
 		if (sendConfirmationToOldEmail) {
 			const token = await createEmailVerificationToken(
-				ctx.context.secret,
+				ctx,
 				ctx.context.session.user.email,
 				newEmail,
 				ctx.context.options.emailVerification?.expiresIn,
@@ -875,7 +875,7 @@ export const changeEmail = createAuthEndpoint(
 		}
 
 		const token = await createEmailVerificationToken(
-			ctx.context.secret,
+			ctx,
 			ctx.context.session.user.email,
 			newEmail,
 			ctx.context.options.emailVerification?.expiresIn,

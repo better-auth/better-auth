@@ -48,6 +48,12 @@ describe("Email Verification", async () => {
 	});
 
 	it("should redirect to callback", async () => {
+		await auth.api.sendVerificationEmail({
+			body: {
+				email: testUser.email,
+			},
+		});
+
 		await client.verifyEmail(
 			{
 				query: {
@@ -214,6 +220,11 @@ describe("Email Verification", async () => {
 	});
 
 	it("should preserve encoded characters in callback URL", async () => {
+		await auth.api.sendVerificationEmail({
+			body: {
+				email: testUser.email,
+			},
+		});
 		const testEmail = "test+user@example.com";
 		const encodedEmail = encodeURIComponent(testEmail);
 		const callbackURL = `/sign-in?verifiedEmail=${encodedEmail}`;
