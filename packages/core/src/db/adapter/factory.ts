@@ -474,9 +474,19 @@ export const createAdapterFactory =
 		const transformWhereClause = <W extends Where[] | undefined>({
 			model,
 			where,
+			action,
 		}: {
 			where: W;
 			model: string;
+			action:
+				| "create"
+				| "update"
+				| "findOne"
+				| "findMany"
+				| "updateMany"
+				| "delete"
+				| "deleteMany"
+				| "count";
 		}): W extends undefined ? undefined : CleanedWhere[] => {
 			if (!where) return undefined as any;
 			const newMappedKeys = config.mapKeysTransformInput ?? {};
@@ -560,6 +570,18 @@ export const createAdapterFactory =
 							{ cause: error },
 						);
 					}
+				}
+
+				if (config.customTransformInput) {
+					newValue = config.customTransformInput({
+						data: newValue,
+						fieldAttributes: fieldAttr,
+						field: fieldName,
+						model: getModelName(model),
+						schema,
+						options,
+						action,
+					});
 				}
 
 				return {
@@ -727,6 +749,7 @@ export const createAdapterFactory =
 						connector: "AND",
 					},
 				],
+				action: "findOne",
 			});
 			try {
 				if (joinConfig.relation === "one-to-one") {
@@ -886,6 +909,7 @@ export const createAdapterFactory =
 				const where = transformWhereClause({
 					model: unsafeModel,
 					where: unsafeWhere,
+					action: "update",
 				});
 				debugLog(
 					{ method: "update" },
@@ -946,6 +970,7 @@ export const createAdapterFactory =
 				const where = transformWhereClause({
 					model: unsafeModel,
 					where: unsafeWhere,
+					action: "updateMany",
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
@@ -1001,6 +1026,7 @@ export const createAdapterFactory =
 				const where = transformWhereClause({
 					model: unsafeModel,
 					where: unsafeWhere,
+					action: "findOne",
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
 				let join: JoinConfig | undefined;
@@ -1078,6 +1104,7 @@ export const createAdapterFactory =
 				const where = transformWhereClause({
 					model: unsafeModel,
 					where: unsafeWhere,
+					action: "findMany",
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
 				let join: JoinConfig | undefined;
@@ -1151,6 +1178,7 @@ export const createAdapterFactory =
 				const where = transformWhereClause({
 					model: unsafeModel,
 					where: unsafeWhere,
+					action: "delete",
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
@@ -1183,6 +1211,7 @@ export const createAdapterFactory =
 				const where = transformWhereClause({
 					model: unsafeModel,
 					where: unsafeWhere,
+					action: "deleteMany",
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
@@ -1216,6 +1245,7 @@ export const createAdapterFactory =
 				const where = transformWhereClause({
 					model: unsafeModel,
 					where: unsafeWhere,
+					action: "count",
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
