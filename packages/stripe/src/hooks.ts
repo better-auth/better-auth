@@ -168,7 +168,7 @@ export async function onSubscriptionCreated(
 			return;
 		}
 
-		const seats = subscriptionItem.quantity || 1;
+		const seats = subscriptionItem.quantity;
 		const periodStart = new Date(subscriptionItem.current_period_start * 1000);
 		const periodEnd = new Date(subscriptionItem.current_period_end * 1000);
 
