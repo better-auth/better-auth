@@ -403,7 +403,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					});
 				return ctx.json({
 					url,
-					redirect: true,
+					redirect: !ctx.body.disableRedirect,
 				});
 			}
 
@@ -676,6 +676,16 @@ const cancelSubscriptionBodySchema = z.object({
 		description:
 			'URL to take customers to when they click on the billing portal\'s link to return to your website. Eg: "/account"',
 	}),
+	/**
+	 * Disable Redirect
+	 */
+	disableRedirect: z
+		.boolean()
+		.meta({
+			description:
+				"Disable redirect after successful subscription cancellation. Eg: true",
+		})
+		.default(false),
 });
 
 /**
@@ -830,10 +840,10 @@ export const cancelSubscription = (options: StripeOptions) => {
 						code: e.code,
 					});
 				});
-			return {
+			return ctx.json({
 				url,
-				redirect: true,
-			};
+				redirect: !ctx.body.disableRedirect,
+			});
 		},
 	);
 };
@@ -1178,6 +1188,16 @@ const createBillingPortalBodySchema = z.object({
 		.optional(),
 	referenceId: z.string().optional(),
 	returnUrl: z.string().default("/"),
+	/**
+	 * Disable Redirect
+	 */
+	disableRedirect: z
+		.boolean()
+		.meta({
+			description:
+				"Disable redirect after creating billing portal session. Eg: true",
+		})
+		.default(false),
 });
 
 export const createBillingPortal = (options: StripeOptions) => {
@@ -1236,7 +1256,7 @@ export const createBillingPortal = (options: StripeOptions) => {
 
 				return ctx.json({
 					url,
-					redirect: true,
+					redirect: !ctx.body.disableRedirect,
 				});
 			} catch (error: any) {
 				ctx.context.logger.error(
