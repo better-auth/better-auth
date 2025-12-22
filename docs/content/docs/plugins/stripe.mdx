@@ -711,63 +711,54 @@ stripe({
 
 ### Main Options
 
-**stripeClient**: `Stripe` - The Stripe client instance. Required.
-
-**stripeWebhookSecret**: `string` - The webhook signing secret from Stripe. Required.
-
-**createCustomerOnSignUp**: `boolean` - Whether to automatically create a Stripe customer when a user signs up. Default: `false`.
-
-**onCustomerCreate**: `(data: { stripeCustomer: Stripe.Customer, user: User }, ctx: GenericEndpointContext) => Promise<void>` - A function called after a customer is created.
-
-**getCustomerCreateParams**: `(user: User, ctx: GenericEndpointContext) => Promise<{}>` - A function to customize the Stripe customer creation parameters.
-
-**onEvent**: `(event: Stripe.Event) => Promise<void>` - A function called for any Stripe webhook event.
+| Option                    | Type       | Description                                                                                   |
+| ------------------------- | ---------- | --------------------------------------------------------------------------------------------- |
+| `stripeClient`            | `Stripe`   | The Stripe client instance. **Required.**                                                     |
+| `stripeWebhookSecret`     | `string`   | The webhook signing secret from Stripe. **Required.**                                         |
+| `createCustomerOnSignUp`  | `boolean`  | Whether to automatically create a Stripe customer when a user signs up. Default: `false`.     |
+| `onCustomerCreate`        | `function` | Callback called after a customer is created. Receives `{ stripeCustomer, user }` and context. |
+| `getCustomerCreateParams` | `function` | Customize Stripe customer creation parameters. Receives `user` and context.                   |
+| `onEvent`                 | `function` | Callback called for any Stripe webhook event. Receives `Stripe.Event`.                        |
+| `subscription`            | `object`   | Subscription configuration. See [below](#subscription-options).                               |
+| `schema`                  | `object`   | Customize the database schema for the Stripe plugin.                                          |
 
 ### Subscription Options
 
-**enabled**: `boolean` - Whether to enable subscription functionality. Required.
-
-**plans**: `Plan[] | (() => Promise<Plan[]>)` - An array of subscription plans or a function that returns plans. Required if subscriptions are enabled.
-
-**requireEmailVerification**: `boolean` - Whether to require email verification before allowing subscription upgrades. Default: `false`.
-
-**authorizeReference**: `(data: { user: User, session: Session, referenceId: string, action: "upgrade-subscription" | "list-subscription" | "cancel-subscription" | "restore-subscription"}, ctx: GenericEndpointContext) => Promise<boolean>` - A function to authorize reference IDs.
-
-**getCheckoutSessionParams**: `(data: { user: User, session: Session, plan: Plan, subscription?: Subscription }, ctx: GenericEndpointContext) => Promise<{ params?: Stripe.Checkout.SessionCreateParams, options?: Stripe.RequestOptions }>` - A function to customize Stripe Checkout session parameters.
-
-**onSubscriptionComplete**: `(data: { event: Stripe.Event, subscription: Subscription, stripeSubscription: Stripe.Subscription, plan: Plan }, ctx: GenericEndpointContext) => Promise<void>` - Called when a subscription is successfully created via checkout.
-
-**onSubscriptionCreated**: `(data: { event: Stripe.Event, subscription: Subscription, stripeSubscription: Stripe.Subscription, plan: Plan }) => Promise<void>` - Called when a subscription is created outside the checkout flow.
-
-**onSubscriptionUpdate**: `(data: { event: Stripe.Event, subscription: Subscription }, ctx: GenericEndpointContext) => Promise<void>` - Called when a subscription is updated.
-
-**onSubscriptionCancel**: `(data: { event: Stripe.Event, subscription: Subscription, stripeSubscription: Stripe.Subscription, cancellationDetails: any }, ctx: GenericEndpointContext) => Promise<void>` - Called when a subscription is canceled.
-
-**onSubscriptionDeleted**: `(data: { event: Stripe.Event, subscription: Subscription, stripeSubscription: Stripe.Subscription }, ctx: GenericEndpointContext) => Promise<void>` - Called when a subscription is deleted.
+| Option                     | Type                         | Description                                                                                                            |
+| -------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `enabled`                  | `boolean`                    | Whether to enable subscription functionality. **Required.**                                                            |
+| `plans`                    | `StripePlan[]` or `function` | An array of subscription plans or an async function that returns plans. **Required** if enabled.                       |
+| `requireEmailVerification` | `boolean`                    | Whether to require email verification before allowing subscription upgrades. Default: `false`.                         |
+| `authorizeReference`       | `function`                   | Authorize reference IDs. Receives `{ user, session, referenceId, action }` and context.                                |
+| `getCheckoutSessionParams` | `function`                   | Customize Stripe Checkout session parameters. Receives `{ user, session, plan, subscription }`, request, and context.  |
+| `onSubscriptionComplete`   | `function`                   | Called when a subscription is created via checkout. Receives `{ event, stripeSubscription, subscription, plan }` and context. |
+| `onSubscriptionCreated`    | `function`                   | Called when a subscription is created outside checkout. Receives `{ event, stripeSubscription, subscription, plan }`.  |
+| `onSubscriptionUpdate`     | `function`                   | Called when a subscription is updated. Receives `{ event, subscription }`.                                             |
+| `onSubscriptionCancel`     | `function`                   | Called when a subscription is canceled. Receives `{ event, subscription, stripeSubscription, cancellationDetails }`.   |
+| `onSubscriptionDeleted`    | `function`                   | Called when a subscription is deleted. Receives `{ event, stripeSubscription, subscription }`.                         |
+| `organization`             | `object`                     | Enable organization subscription. Set `{ enabled: true }` to enable.                                                   |
 
 ### Plan Configuration
 
-Each plan can have the following properties:
+| Option                    | Type       | Description                                                  |
+| ------------------------- | ---------- | ------------------------------------------------------------ |
+| `name`                    | `string`   | The name of the plan. **Required.**                          |
+| `priceId`                 | `string`   | The Stripe price ID. **Required** unless using `lookupKey`.  |
+| `lookupKey`               | `string`   | The Stripe price lookup key. Alternative to `priceId`.       |
+| `annualDiscountPriceId`   | `string`   | A price ID for annual billing.                               |
+| `annualDiscountLookupKey` | `string`   | The Stripe price lookup key for annual billing.              |
+| `limits`                  | `object`   | Limits for plan (e.g. `{ projects: 10, storage: 5 }`).       |
+| `group`                   | `string`   | A group name for categorizing plans.                         |
+| `freeTrial`               | `object`   | Trial configuration. See [below](#free-trial-configuration). |
 
-**name**: `string` - The name of the plan. Required.
+#### Free Trial Configuration
 
-**priceId**: `string` - The Stripe price ID. Required unless using `lookupKey`.
-
-**lookupKey**: `string` - The Stripe price lookup key. Alternative to `priceId`.
-
-**annualDiscountPriceId**: `string` - A price ID for annual billing.
-
-**annualDiscountLookupKey**: `string` - The Stripe price lookup key for annual billing. Alternative to `annualDiscountPriceId`.
-
-**limits**: `Record<string, unknown>` - Limits associated with the plan (e.g., `{ projects: 10, storage: 5 }`). Useful when you want to define plan-specific metadata.
-
-**group**: `string` - A group name for the plan, useful for categorizing plans.
-
-**freeTrial**: Object containing trial configuration:
-  - **days**: `number` - Number of trial days.
-  - **onTrialStart**: `(subscription: Subscription) => Promise<void>` - Called when a trial starts.
-  - **onTrialEnd**: `(data: { subscription: Subscription }, ctx: GenericEndpointContext) => Promise<void>` - Called when a trial ends.
-  - **onTrialExpired**: `(subscription: Subscription, ctx: GenericEndpointContext) => Promise<void>` - Called when a trial expires without conversion.
+| Option           | Type       | Description                                                                              |
+| ---------------- | ---------- | ---------------------------------------------------------------------------------------- |
+| `days`           | `number`   | Number of trial days. **Required.**                                                      |
+| `onTrialStart`   | `function` | Called when a trial starts. Receives `subscription`.                                     |
+| `onTrialEnd`     | `function` | Called when a trial ends. Receives `{ subscription }` and context.                       |
+| `onTrialExpired` | `function` | Called when a trial expires without conversion. Receives `subscription` and context.     |
 
 ## Advanced Usage
 
