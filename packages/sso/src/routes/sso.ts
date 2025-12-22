@@ -22,7 +22,7 @@ import * as saml from "samlify";
 import type { BindingContext } from "samlify/types/src/entity";
 import type { IdentityProvider } from "samlify/types/src/entity-idp";
 import type { FlowResult } from "samlify/types/src/flow";
-import * as z from "zod/v4";
+import z from "zod/v4";
 
 interface AuthnRequestRecord {
 	id: string;
@@ -830,7 +830,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 							: `better-auth-token-${provider.providerId}`,
 						createdAt: new Date(),
 						updatedAt: new Date(),
-						value: domainVerificationToken,
+						value: domainVerificationToken as string,
 						expiresAt: new Date(Date.now() + 3600 * 24 * 7 * 1000), // 1 week
 					},
 				});
