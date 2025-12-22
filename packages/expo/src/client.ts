@@ -151,6 +151,37 @@ export function getCookie(cookie: string) {
 	return toSend;
 }
 
+function getOAuthStateValue(
+	cookieJson: string | null,
+	cookiePrefix: string | string[],
+): string | null {
+	if (!cookieJson) return null;
+
+	let parsed: Record<string, StoredCookie>;
+	try {
+		parsed = JSON.parse(cookieJson);
+	} catch {
+		return null;
+	}
+
+	const prefixes = Array.isArray(cookiePrefix) ? cookiePrefix : [cookiePrefix];
+
+	for (const prefix of prefixes) {
+		// cookie strategy uses: <prefix>.oauth_state (secure cookies may be __Secure-*)
+		const candidates = [
+			`__Secure-${prefix}.oauth_state`,
+			`${prefix}.oauth_state`,
+		];
+
+		for (const name of candidates) {
+			const value = parsed?.[name]?.value;
+			if (value) return value;
+		}
+	}
+
+	return null;
+}
+
 function getOrigin(scheme: string) {
 	const schemeURI = Linking.createURL("", { scheme });
 	return schemeURI;
@@ -390,7 +421,17 @@ export const expoClient = (opts: ExpoClientOptions) => {
 								} catch {}
 							}
 
-							const proxyURL = `${context.request.baseURL}/expo-authorization-proxy?authorizationURL=${encodeURIComponent(signInURL)}`;
+							const storedCookieJson = await storage.getItem(cookieName);
+							const oauthStateValue = getOAuthStateValue(
+								storedCookieJson,
+								cookiePrefix,
+							);
+							let proxyURL =
+								`${context.request.baseURL}/expo-authorization-proxy` +
+								`?authorizationURL=${encodeURIComponent(signInURL)}`;
+							if (oauthStateValue) {
+								proxyURL += `&oauthState=${encodeURIComponent(oauthStateValue)}`;
+							}
 							const result = await Browser.openAuthSessionAsync(proxyURL, to);
 							if (result.type !== "success") return;
 							const url = new URL(result.url);
