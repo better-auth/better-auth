@@ -1028,11 +1028,40 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 					message: "Invitation not found!",
 				});
 			}
-			if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
+			const isRecipient =
+				invitation.email.toLowerCase() === session.user.email.toLowerCase();
+
+			if (!isRecipient) {
+				const member = await adapter.findMemberByOrgId({
+					userId: session.user.id,
+					organizationId: invitation.organizationId,
 				});
+
+				if (!member) {
+					throw new APIError("FORBIDDEN", {
+						message:
+							ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
+					});
+				}
+
+				const canViewInvitation = await hasPermission(
+					{
+						role: member.role,
+						options: ctx.context.orgOptions,
+						permissions: {
+							invitation: ["cancel"],
+						},
+						organizationId: invitation.organizationId,
+					},
+					ctx,
+				);
+
+				if (!canViewInvitation) {
+					throw new APIError("FORBIDDEN", {
+						message:
+							ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
+					});
+				}
 			}
 			const organization = await adapter.findOrganizationById(
 				invitation.organizationId,
