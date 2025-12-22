@@ -41,7 +41,7 @@ describe("organization", () => {
 		});
 	});
 
-	it("should infer filed when schema is provided", () => {
+	it("should infer field when schema is provided", () => {
 		const client = createAuthClient({
 			plugins: [
 				organizationClient({
