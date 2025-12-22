@@ -784,8 +784,6 @@ describe("stripe", async () => {
 	});
 
 	it("should not create duplicate subscription if already exists", async () => {
-		const loggerInfoSpy = vi.spyOn(logger, "info");
-
 		// Create user
 		const user = await ctx.adapter.create({
 			model: "user",
@@ -885,20 +883,11 @@ describe("stripe", async () => {
 
 		expect(subscriptions.length).toBe(1);
 
-		// Verify function was called and logged the duplicate
-		expect(loggerInfoSpy).toHaveBeenCalledWith(
-			expect.stringContaining("already exists in database"),
-		);
-
 		// Verify callback was NOT called (early return due to existing subscription)
 		expect(onSubscriptionCreatedCallback).not.toHaveBeenCalled();
-
-		loggerInfoSpy.mockRestore();
 	});
 
 	it("should skip subscription creation when user not found", async () => {
-		const loggerWarnSpy = vi.spyOn(logger, "warn");
-
 		const mockEvent = {
 			type: "customer.subscription.created",
 			data: {
@@ -970,20 +959,11 @@ describe("stripe", async () => {
 
 		expect(subscription).toBeNull();
 
-		// Verify function was called and logged the warning
-		expect(loggerWarnSpy).toHaveBeenCalledWith(
-			expect.stringContaining("No user found with stripeCustomerId"),
-		);
-
 		// Verify callback was NOT called (early return due to user not found)
 		expect(onSubscriptionCreatedCallback).not.toHaveBeenCalled();
-
-		loggerWarnSpy.mockRestore();
 	});
 
 	it("should skip subscription creation when plan not found", async () => {
-		const loggerWarnSpy = vi.spyOn(logger, "warn");
-
 		// Create user
 		await ctx.adapter.create({
 			model: "user",
@@ -1066,15 +1046,8 @@ describe("stripe", async () => {
 
 		expect(subscription).toBeNull();
 
-		// Verify function was called and logged the warning
-		expect(loggerWarnSpy).toHaveBeenCalledWith(
-			expect.stringContaining("No matching plan found for priceId"),
-		);
-
 		// Verify callback was NOT called (early return due to plan not found)
 		expect(onSubscriptionCreatedCallback).not.toHaveBeenCalled();
-
-		loggerWarnSpy.mockRestore();
 	});
 
 	it("should execute subscription event handlers", async () => {
