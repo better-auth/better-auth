@@ -14,7 +14,7 @@ export function parseSetCookieHeader(
 	setCookie: string,
 ): Map<string, CookieAttributes> {
 	const cookies = new Map<string, CookieAttributes>();
-	const cookieArray = setCookie.split(", ");
+	const cookieArray = splitSetCookieHeader(setCookie);
 
 	cookieArray.forEach((cookieString) => {
 		const parts = cookieString.split(";").map((part) => part.trim());
@@ -74,6 +74,43 @@ export function parseSetCookieHeader(
 	return cookies;
 }
 
+/**
+ * Split a combined Set-Cookie header value into individual cookie strings.
+ * Handles commas inside Expires attribute values (e.g., "Wed, 21 Oct 2015 ...").
+ */
+function splitSetCookieHeader(header: string): string[] {
+	const parts: string[] = [];
+	let current = "";
+	let inExpires = false;
+	for (let i = 0; i < header.length; i++) {
+		const ch = header[i]!;
+		// Detect start of Expires attribute (case-insensitive)
+		if (!inExpires) {
+			if (header.slice(i).toLowerCase().startsWith("expires=")) {
+				inExpires = true;
+			}
+		} else {
+			// Expires attribute ends at ';' or end of string
+			if (ch === ";") {
+				inExpires = false;
+			}
+		}
+		// Split on commas that are NOT within an Expires attribute value
+		if (ch === "," && !inExpires) {
+			if (current.trim().length > 0) {
+				parts.push(current.trim());
+			}
+			current = "";
+			continue;
+		}
+		current += ch;
+	}
+	if (current.trim().length > 0) {
+		parts.push(current.trim());
+	}
+	return parts;
+}
+
 export function setCookieToHeader(headers: Headers) {
 	return (context: { response: Response }) => {
 		const setCookieHeader = context.response.headers.get("set-cookie");
@@ -91,9 +128,9 @@ export function setCookieToHeader(headers: Headers) {
 			}
 		});
 
-		const setCookieHeaders = setCookieHeader.split(",");
-		setCookieHeaders.forEach((header) => {
-			const cookies = parseSetCookieHeader(header);
+		const setCookieHeaders = splitSetCookieHeader(setCookieHeader);
+		setCookieHeaders.forEach((headerValue) => {
+			const cookies = parseSetCookieHeader(headerValue);
 			cookies.forEach((value, name) => {
 				cookieMap.set(name, value.value);
 			});
