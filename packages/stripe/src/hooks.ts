@@ -1,4 +1,4 @@
-import type { GenericEndpointContext } from "better-auth";
+import type { GenericEndpointContext, User } from "better-auth";
 import type Stripe from "stripe";
 import type { InputSubscription, StripeOptions, Subscription } from "./types";
 import { getPlanByPriceInfo } from "./utils";
@@ -134,7 +134,7 @@ export async function onSubscriptionCreated(
 		}
 
 		// Find user by stripeCustomerId
-		const user = await ctx.context.adapter.findOne<{ id: string }>({
+		const user = await ctx.context.adapter.findOne<User>({
 			model: "user",
 			where: [
 				{
