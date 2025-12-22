@@ -150,7 +150,7 @@ It enables seamless wallet creation, management, and blockchain interactions wit
     ### Create Better Auth client
 
     ```ts title="auth-client.ts"
-    import { createAuthClient } from "better-auth/client";
+    import { createAuthClient } from 'better-auth/react';
     import { bearer } from "better-auth/plugins/bearer/client";
 
     export const authClient = createAuthClient({
@@ -168,15 +168,14 @@ It enables seamless wallet creation, management, and blockchain interactions wit
     ```tsx title="app/providers.tsx"
     import { OpenfortProvider, ThirdPartyOAuthProvider, getDefaultConfig } from "@openfort/react";
     import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-    import { beamTestnet, polygonAmoy, sepolia } from "viem/chains";
+    import { polygonAmoy, sepolia } from "viem/chains";
     import { WagmiProvider, createConfig } from "wagmi";
     import { authClient } from "./auth-client";
 
     const wagmiConfig = createConfig(
       getDefaultConfig({
         appName: "Your App Name",
-        chains: [beamTestnet, polygonAmoy, sepolia],
-        walletConnectProjectId: import.meta.env.VITE_WALLET_CONNECT_PROJECT_ID,
+        chains: [polygonAmoy, sepolia]
       })
     );
 
