@@ -512,3 +512,37 @@ describe("expo with cookieCache", async () => {
 		expect(map.has("better-auth:session_token")).toBe(false);
 	});
 });
+
+describe("expo with cookie storeStateStrategy", async () => {
+	const { auth, client } = testUtils({
+		account: {
+			storeStateStrategy: "cookie",
+		},
+	});
+
+	beforeAll(async () => {
+		const { runMigrations } = await getMigrations(auth.options);
+		await runMigrations();
+		vi.useFakeTimers();
+	});
+
+	afterAll(() => {
+		vi.useRealTimers();
+	});
+
+	it("should include oauthState param in proxy URL", async () => {
+		fn.mockClear();
+
+		await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+		});
+
+		expect(fn).toHaveBeenCalled();
+		const [url] = fn.mock.calls.at(-1)!;
+
+		expect(String(url)).toContain("/expo-authorization-proxy");
+		expect(String(url)).toContain("authorizationURL=");
+		expect(String(url)).toContain("oauthState=");
+	});
+});
