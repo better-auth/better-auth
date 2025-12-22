@@ -1,5 +1,4 @@
 import type { GenericEndpointContext } from "better-auth";
-import { logger } from "better-auth";
 import type Stripe from "stripe";
 import type { InputSubscription, StripeOptions, Subscription } from "./types";
 import { getPlanByPriceInfo } from "./utils";
@@ -93,7 +92,7 @@ export async function onCheckoutSessionCompleted(
 			}
 		}
 	} catch (e: any) {
-		logger.error(`Stripe webhook failed. Error: ${e.message}`);
+		ctx.context.logger.error(`Stripe webhook failed. Error: ${e.message}`);
 	}
 }
 
@@ -110,7 +109,7 @@ export async function onSubscriptionCreated(
 		const subscriptionCreated = event.data.object as Stripe.Subscription;
 		const stripeCustomerId = subscriptionCreated.customer?.toString();
 		if (!stripeCustomerId) {
-			logger.warn(
+			ctx.context.logger.warn(
 				`Stripe webhook warning: customer.subscription.created event received without customer ID`,
 			);
 			return;
@@ -128,7 +127,7 @@ export async function onSubscriptionCreated(
 				],
 			});
 		if (existingSubscription) {
-			logger.info(
+			ctx.context.logger.info(
 				`Stripe webhook: Subscription ${subscriptionCreated.id} already exists in database, skipping creation`,
 			);
 			return;
@@ -145,7 +144,7 @@ export async function onSubscriptionCreated(
 			],
 		});
 		if (!user) {
-			logger.warn(
+			ctx.context.logger.warn(
 				`Stripe webhook warning: No user found with stripeCustomerId: ${stripeCustomerId}`,
 			);
 			return;
@@ -153,7 +152,7 @@ export async function onSubscriptionCreated(
 
 		const subscriptionItem = subscriptionCreated.items.data[0];
 		if (!subscriptionItem) {
-			logger.warn(
+			ctx.context.logger.warn(
 				`Stripe webhook warning: Subscription ${subscriptionCreated.id} has no items`,
 			);
 			return;
@@ -163,7 +162,7 @@ export async function onSubscriptionCreated(
 		const priceLookupKey = subscriptionItem.price.lookup_key || null;
 		const plan = await getPlanByPriceInfo(options, priceId, priceLookupKey);
 		if (!plan) {
-			logger.warn(
+			ctx.context.logger.warn(
 				`Stripe webhook warning: No matching plan found for priceId: ${priceId}`,
 			);
 			return;
@@ -199,7 +198,7 @@ export async function onSubscriptionCreated(
 			},
 		});
 
-		logger.info(
+		ctx.context.logger.info(
 			`Stripe webhook: Created subscription ${subscriptionCreated.id} for user ${user.id} from dashboard`,
 		);
 
@@ -210,7 +209,7 @@ export async function onSubscriptionCreated(
 			plan,
 		});
 	} catch (error: any) {
-		logger.error(`Stripe webhook failed. Error: ${error}`);
+		ctx.context.logger.error(`Stripe webhook failed. Error: ${error}`);
 	}
 }
 
@@ -248,7 +247,7 @@ export async function onSubscriptionUpdated(
 						sub.status === "active" || sub.status === "trialing",
 				);
 				if (!activeSub) {
-					logger.warn(
+					ctx.context.logger.warn(
 						`Stripe webhook error: Multiple subscriptions found for customerId: ${customerId} and no active subscription is found`,
 					);
 					return;
@@ -322,7 +321,7 @@ export async function onSubscriptionUpdated(
 			}
 		}
 	} catch (error: any) {
-		logger.error(`Stripe webhook failed. Error: ${error}`);
+		ctx.context.logger.error(`Stripe webhook failed. Error: ${error}`);
 	}
 }
 
@@ -366,11 +365,11 @@ export async function onSubscriptionDeleted(
 				subscription,
 			});
 		} else {
-			logger.warn(
+			ctx.context.logger.warn(
 				`Stripe webhook error: Subscription not found for subscriptionId: ${subscriptionId}`,
 			);
 		}
 	} catch (error: any) {
-		logger.error(`Stripe webhook failed. Error: ${error}`);
+		ctx.context.logger.error(`Stripe webhook failed. Error: ${error}`);
 	}
 }
