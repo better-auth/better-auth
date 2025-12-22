@@ -426,12 +426,13 @@ export const expoClient = (opts: ExpoClientOptions) => {
 								storedCookieJson,
 								cookiePrefix,
 							);
-							let proxyURL =
-								`${context.request.baseURL}/expo-authorization-proxy` +
-								`?authorizationURL=${encodeURIComponent(signInURL)}`;
+							const params = new URLSearchParams({
+								authorizationURL: signInURL,
+							});
 							if (oauthStateValue) {
-								proxyURL += `&oauthState=${encodeURIComponent(oauthStateValue)}`;
+								params.append("oauthState", oauthStateValue);
 							}
+							const proxyURL = `${context.request.baseURL}/expo-authorization-proxy?${params.toString()}`;
 							const result = await Browser.openAuthSessionAsync(proxyURL, to);
 							if (result.type !== "success") return;
 							const url = new URL(result.url);
