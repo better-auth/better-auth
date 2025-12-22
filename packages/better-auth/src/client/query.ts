@@ -89,7 +89,9 @@ export const useAuthQuery = <T>(
 				async onRequest(context) {
 					const currentValue = value.get();
 					value.set({
-						isPending: currentValue.data === null,
+						isPending:
+							(currentValue.data === null || currentValue.data === undefined) &&
+							currentValue.isPending,
 						data: currentValue.data,
 						error: null,
 						isRefetching: true,
