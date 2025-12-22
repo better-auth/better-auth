@@ -266,7 +266,7 @@ export type SubscriptionOptions = {
 				event: Stripe.Event;
 				stripeSubscription: Stripe.Subscription;
 				subscription: Subscription;
-				plan?: StripePlan;
+				plan: StripePlan;
 		  }) => Promise<void>)
 		| undefined;
 	/**
