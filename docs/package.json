@@ -59,7 +59,7 @@
     "feed": "^5.1.0",
     "foxact": "^0.2.49",
     "framer-motion": "^12.23.12",
-    "fumadocs-core": "15.8.3",
+    "fumadocs-core": "16.3.2",
     "fumadocs-docgen": "2.1.0",
     "fumadocs-mdx": "11.8.3",
     "fumadocs-typescript": "^4.0.6",
