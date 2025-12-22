@@ -1,13 +1,10 @@
-import { betterAuth } from "better-auth";
-import { getMigrations } from "better-auth/db";
+import { magicLinkClient } from "better-auth/client/plugins";
 import {
 	createAuthMiddleware,
 	magicLink,
 	oAuthProxy,
 } from "better-auth/plugins";
-import { magicLinkClient } from "better-auth/client/plugins";
-import { createAuthClient } from "better-auth/react";
-import Database from "better-sqlite3";
+import { getTestInstance } from "better-auth/test";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { expo } from "../src";
 import { expoClient, storageAdapter } from "../src/client";
@@ -54,53 +51,38 @@ vi.mock("expo-linking", async () => {
 
 const fn = vi.fn();
 
-function testUtils(extraOpts?: Parameters<typeof betterAuth>[0]) {
+describe("expo", async () => {
 	const storage = new Map<string, string>();
 
-	const auth = betterAuth({
-		baseURL: "http://localhost:3000",
-		database: new Database(":memory:"),
-		emailAndPassword: {
-			enabled: true,
-		},
-		socialProviders: {
-			google: {
-				clientId: "test",
-				clientSecret: "test",
+	const { auth, client, testUser } = await getTestInstance(
+		{
+			emailAndPassword: {
+				enabled: true,
 			},
-		},
-		plugins: [expo(), oAuthProxy()],
-		trustedOrigins: ["better-auth://"],
-		...extraOpts,
-	});
-
-	const client = createAuthClient({
-		baseURL: "http://localhost:3000",
-		fetchOptions: {
-			customFetchImpl: (url, init) => {
-				const req = new Request(url.toString(), init);
-				return auth.handler(req);
-			},
-		},
-		plugins: [
-			expoClient({
-				storage: {
-					getItem: (key) => storage.get(key) || null,
-					setItem: async (key, value) => storage.set(key, value),
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
 				},
-			}),
-		],
-	});
-
-	return { storage, auth, client };
-}
-
-describe("expo", async () => {
-	const { auth, client, storage } = testUtils();
+			},
+			plugins: [expo(), oAuthProxy()],
+			trustedOrigins: ["better-auth://"],
+		},
+		{
+			clientOptions: {
+				plugins: [
+					expoClient({
+						storage: {
+							getItem: (key) => storage.get(key) || null,
+							setItem: async (key, value) => storage.set(key, value),
+						},
+					}),
+				],
+			},
+		},
+	);
 
 	beforeAll(async () => {
-		const { runMigrations } = await getMigrations(auth.options);
-		await runMigrations();
 		vi.useFakeTimers();
 	});
 	afterAll(() => {
@@ -108,12 +90,10 @@ describe("expo", async () => {
 	});
 
 	it("should store cookie with expires date", async () => {
-		const testUser = {
-			email: "test@test.com",
-			password: "password",
-			name: "Test User",
-		};
-		await client.signUp.email(testUser);
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
 		const storedCookie = storage.get("better-auth_cookie");
 		expect(storedCookie).toBeDefined();
 		const parsedCookie = JSON.parse(storedCookie || "");
@@ -254,28 +234,41 @@ describe("expo", async () => {
 	it("should modify origin header to expo origin if origin is not set", async () => {
 		let originalOrigin = null;
 		let origin = null;
-		const { auth, client } = testUtils({
-			hooks: {
-				before: createAuthMiddleware(async (ctx) => {
-					origin = ctx.request?.headers.get("origin");
-				}),
-			},
-			plugins: [
-				{
-					id: "test",
-					async onRequest(request, ctx) {
-						const origin = request.headers.get("origin");
-						originalOrigin = origin;
-					},
+		const storage = new Map<string, string>();
+		const { client, testUser } = await getTestInstance(
+			{
+				hooks: {
+					before: createAuthMiddleware(async (ctx) => {
+						origin = ctx.request?.headers.get("origin");
+					}),
 				},
-				expo(),
-			],
-		});
-		const { runMigrations } = await getMigrations(auth.options);
-		await runMigrations();
+				plugins: [
+					{
+						id: "test",
+						async onRequest(request, ctx) {
+							const origin = request.headers.get("origin");
+							originalOrigin = origin;
+						},
+					},
+					expo(),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [
+						expoClient({
+							storage: {
+								getItem: (key) => storage.get(key) || null,
+								setItem: async (key, value) => storage.set(key, value),
+							},
+						}),
+					],
+				},
+			},
+		);
 		await client.signIn.email({
-			email: "test@test.com",
-			password: "password",
+			email: testUser.email,
+			password: testUser.password,
 			callbackURL: "http://localhost:3000/callback",
 		});
 		expect(origin).toBe("better-auth://");
@@ -285,7 +278,7 @@ describe("expo", async () => {
 	it("should not modify origin header if origin is set", async () => {
 		let originalOrigin = "test.com";
 		let origin = null;
-		const { auth, client } = testUtils({
+		const { client, testUser } = await getTestInstance({
 			hooks: {
 				before: createAuthMiddleware(async (ctx) => {
 					origin = ctx.request?.headers.get("origin");
@@ -293,12 +286,10 @@ describe("expo", async () => {
 			},
 			plugins: [expo()],
 		});
-		const { runMigrations } = await getMigrations(auth.options);
-		await runMigrations();
 		await client.signIn.email(
 			{
-				email: "test@test.com",
-				password: "password",
+				email: testUser.email,
+				password: testUser.password,
 				callbackURL: "http://localhost:3000/callback",
 			},
 			{
@@ -312,19 +303,21 @@ describe("expo", async () => {
 
 	it("should not modify origin header if disableOriginOverride is set", async () => {
 		let origin = null;
-		const { auth, client } = testUtils({
-			plugins: [expo({ disableOriginOverride: true })],
+		const { client, testUser } = await getTestInstance({
+			plugins: [
+				expo({
+					disableOriginOverride: true,
+				}),
+			],
 			hooks: {
 				before: createAuthMiddleware(async (ctx) => {
 					origin = ctx.request?.headers.get("origin");
 				}),
 			},
 		});
-		const { runMigrations } = await getMigrations(auth.options);
-		await runMigrations();
 		await client.signIn.email({
-			email: "test@test.com",
-			password: "password",
+			email: testUser.email,
+			password: testUser.password,
 			callbackURL: "http://localhost:3000/callback",
 		});
 		expect(origin).toBe(null);
@@ -332,8 +325,8 @@ describe("expo", async () => {
 
 	it("should preserve existing cookies on link-social", async () => {
 		await client.signIn.email({
-			email: "test@test.com",
-			password: "password",
+			email: testUser.email,
+			password: testUser.password,
 		});
 		const testCookie = "better-auth.test-key";
 		const testCookieValue = "abc";
@@ -365,18 +358,32 @@ describe("expo", async () => {
 });
 
 describe("expo with cookieCache", async () => {
-	const { auth, client, storage } = testUtils({
-		session: {
-			expiresIn: 5,
-			cookieCache: {
-				enabled: true,
-				maxAge: 1,
+	const storage = new Map<string, string>();
+
+	const { client, testUser } = await getTestInstance(
+		{
+			session: {
+				expiresIn: 5,
+				cookieCache: {
+					enabled: true,
+					maxAge: 1,
+				},
 			},
 		},
-	});
+		{
+			clientOptions: {
+				plugins: [
+					expoClient({
+						storage: {
+							getItem: (key) => storage.get(key) || null,
+							setItem: async (key, value) => storage.set(key, value),
+						},
+					}),
+				],
+			},
+		},
+	);
 	beforeAll(async () => {
-		const { runMigrations } = await getMigrations(auth.options);
-		await runMigrations();
 		vi.useFakeTimers();
 	});
 	afterAll(() => {
@@ -384,12 +391,10 @@ describe("expo with cookieCache", async () => {
 	});
 
 	it("should store cookie with expires date", async () => {
-		const testUser = {
-			email: "test@test.com",
-			password: "password",
-			name: "Test User",
-		};
-		await client.signUp.email(testUser);
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
 		const storedCookie = storage.get("better-auth_cookie");
 		expect(storedCookie).toBeDefined();
 		const parsedCookie = JSON.parse(storedCookie || "");
@@ -441,7 +446,7 @@ describe("expo with cookieCache", async () => {
 
 	it("should add `exp://` to trusted origins", async () => {
 		vi.stubEnv("NODE_ENV", "development");
-		const auth = betterAuth({
+		const { auth } = await getTestInstance({
 			plugins: [expo()],
 			trustedOrigins: ["http://localhost:3000"],
 		});
@@ -522,42 +527,32 @@ describe("expo deep link cookie injection", async () => {
 	let magicLinkToken = "";
 	const storage = new Map<string, string>();
 
-	const auth = betterAuth({
-		baseURL: "http://localhost:3000",
-		database: new Database(":memory:"),
-		plugins: [
-			expo(),
-			magicLink({
-				async sendMagicLink({ token }) {
-					magicLinkToken = token;
-				},
-			}),
-		],
-		trustedOrigins: ["myapp://"],
-	});
-
-	const client = createAuthClient({
-		baseURL: "http://localhost:3000",
-		fetchOptions: {
-			customFetchImpl: (url, init) => {
-				return auth.handler(new Request(url.toString(), init));
+	const { client } = await getTestInstance(
+		{
+			plugins: [
+				expo(),
+				magicLink({
+					async sendMagicLink({ token }) {
+						magicLinkToken = token;
+					},
+				}),
+			],
+			trustedOrigins: ["myapp://"],
+		},
+		{
+			clientOptions: {
+				plugins: [
+					expoClient({
+						storage: {
+							getItem: (key) => storage.get(key) || null,
+							setItem: async (key, value) => storage.set(key, value),
+						},
+					}),
+					magicLinkClient(),
+				],
 			},
 		},
-		plugins: [
-			expoClient({
-				storage: {
-					getItem: (key) => storage.get(key) || null,
-					setItem: async (key, value) => storage.set(key, value),
-				},
-			}),
-			magicLinkClient(),
-		],
-	});
-
-	beforeAll(async () => {
-		const { runMigrations } = await getMigrations(auth.options);
-		await runMigrations();
-	});
+	);
 
 	it("should inject cookie into deep link for magic-link verify", async () => {
 		await client.signIn.magicLink({
@@ -565,23 +560,25 @@ describe("expo deep link cookie injection", async () => {
 			callbackURL: "myapp:///dashboard",
 		});
 
-		await client.$fetch("/magic-link/verify", {
+		const { error } = await client.magicLink.verify({
 			query: {
 				token: magicLinkToken,
 				callbackURL: "myapp:///dashboard",
 			},
-			method: "GET",
-			onError(context) {
-				expect(context.response.status).toBe(302);
-				const location = context.response.headers.get("location");
-				expect(location).toContain("myapp://");
+			fetchOptions: {
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					const location = context.response.headers.get("location");
+					expect(location).toContain("myapp://");
 
-				const url = new URL(location!);
-				const cookie = url.searchParams.get("cookie");
-				expect(cookie).toBeDefined();
-				expect(cookie).toContain("better-auth.session_token");
+					const url = new URL(location!);
+					const cookie = url.searchParams.get("cookie");
+					expect(cookie).toBeDefined();
+					expect(cookie).toContain("better-auth.session_token");
+				},
 			},
 		});
+		expect(error).toBeDefined();
 	});
 });
 
@@ -589,44 +586,34 @@ describe("expo deep link cookie injection for verify-email", async () => {
 	let verificationToken = "";
 	const storage = new Map<string, string>();
 
-	const auth = betterAuth({
-		baseURL: "http://localhost:3000",
-		database: new Database(":memory:"),
-		emailAndPassword: {
-			enabled: true,
-			requireEmailVerification: true,
-		},
-		emailVerification: {
-			autoSignInAfterVerification: true,
-			async sendVerificationEmail({ token }: { token: string }) {
-				verificationToken = token;
+	const { client } = await getTestInstance(
+		{
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
 			},
-		},
-		plugins: [expo()],
-		trustedOrigins: ["myapp://"],
-	});
-
-	const client = createAuthClient({
-		baseURL: "http://localhost:3000",
-		fetchOptions: {
-			customFetchImpl: (url, init) => {
-				return auth.handler(new Request(url.toString(), init));
-			},
-		},
-		plugins: [
-			expoClient({
-				storage: {
-					getItem: (key) => storage.get(key) || null,
-					setItem: async (key, value) => storage.set(key, value),
+			emailVerification: {
+				autoSignInAfterVerification: true,
+				async sendVerificationEmail({ token }: { token: string }) {
+					verificationToken = token;
 				},
-			}),
-		],
-	});
-
-	beforeAll(async () => {
-		const { runMigrations } = await getMigrations(auth.options);
-		await runMigrations();
-	});
+			},
+			plugins: [expo()],
+			trustedOrigins: ["myapp://"],
+		},
+		{
+			clientOptions: {
+				plugins: [
+					expoClient({
+						storage: {
+							getItem: (key) => storage.get(key) || null,
+							setItem: async (key, value) => storage.set(key, value),
+						},
+					}),
+				],
+			},
+		},
+	);
 
 	it("should inject cookie into deep link for verify-email", async () => {
 		await client.signUp.email({
@@ -637,25 +624,26 @@ describe("expo deep link cookie injection for verify-email", async () => {
 
 		expect(verificationToken).toBeTruthy();
 
-		await client.$fetch("/verify-email", {
-			query: {
-				token: verificationToken,
-				callbackURL: "myapp:///verified",
+		const { error } = await client.verifyEmail(
+			{
+				query: {
+					token: verificationToken,
+					callbackURL: "myapp:///verified",
+				},
 			},
-			method: "GET",
-			onError(context) {
-				expect(context.response.status).toBe(302);
-				const location = context.response.headers.get("location");
-				console.log("Location:", location);
-				console.log("Set-Cookie:", context.response.headers.get("set-cookie"));
-				expect(location).toContain("myapp://");
+			{
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					const location = context.response.headers.get("location");
+					expect(location).toContain("myapp://");
 
-				const url = new URL(location!);
-				const cookie = url.searchParams.get("cookie");
-				console.log("Cookie param:", cookie);
-				expect(cookie).toBeDefined();
-				expect(cookie).toContain("better-auth.session_token");
+					const url = new URL(location!);
+					const cookie = url.searchParams.get("cookie");
+					expect(cookie).toBeDefined();
+					expect(cookie).toContain("better-auth.session_token");
+				},
 			},
-		});
+		);
+		expect(error).toBeDefined();
 	});
 });
