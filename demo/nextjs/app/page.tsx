@@ -51,6 +51,10 @@ const features: { name: string; link: string }[] = [
 		name: "Last Login Method",
 		link: "https://www.better-auth.com/docs/plugins/last-login-method",
 	},
+	{
+		name: "OAuth Provider",
+		link: "https://www.better-auth.com/docs/plugins/oauth-provider",
+	},
 ];
 
 export default async function Page() {

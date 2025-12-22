@@ -1,3 +1,4 @@
+import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import { passkeyClient } from "@better-auth/passkey/client";
 import { stripeClient } from "@better-auth/stripe/client";
 import {
@@ -31,6 +32,7 @@ export const authClient = createAuthClient({
 				maxAttempts: 1,
 			},
 		}),
+		oauthProviderClient(),
 		stripeClient({
 			subscription: true,
 		}),

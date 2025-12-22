@@ -164,6 +164,20 @@ const supportedPlugins = [
 		clientPath: "better-auth/client/plugins",
 	},
 	{
+		id: "oauth-provider",
+		name: "oauthProvider",
+		clientName: "oauthProviderClient",
+		path: `@better-auth/oauth-provider`,
+		clientPath: "@better-auth/oauth-provider/client",
+	},
+	{
+		id: "oauth-provider-resource-client",
+		name: "oauthProviderResource",
+		clientName: "oauthProviderResourceClient",
+		path: `@better-auth/oauth-provider`,
+		clientPath: "@better-auth/oauth-provider/client",
+	},
+	{
 		id: "oauth-proxy",
 		name: "oAuthProxy",
 		clientName: undefined,

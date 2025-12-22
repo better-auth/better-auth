@@ -1,0 +1,1288 @@
+import { defineRequestState } from "@better-auth/core/context";
+import { logger } from "@better-auth/core/env";
+import { BetterAuthError } from "@better-auth/core/error";
+import {
+	APIError,
+	createAuthEndpoint,
+	createAuthMiddleware,
+	getOAuthState,
+	sessionMiddleware,
+} from "better-auth/api";
+import { parseSetCookieHeader } from "better-auth/cookies";
+import { constantTimeEqual, makeSignature } from "better-auth/crypto";
+import { mergeSchema } from "better-auth/db";
+import type { BetterAuthPlugin } from "better-auth/types";
+import * as z from "zod";
+import { authorizeEndpoint } from "./authorize";
+import { consentEndpoint } from "./consent";
+import { continueEndpoint } from "./continue";
+import { introspectEndpoint } from "./introspect";
+import { rpInitiatedLogoutEndpoint } from "./logout";
+import { authServerMetadata, oidcServerMetadata } from "./metadata";
+import * as oauthClientEndpoints from "./oauthClient";
+import * as oauthConsentEndpoints from "./oauthConsent";
+import { registerEndpoint } from "./register";
+import { revokeEndpoint } from "./revoke";
+import { schema } from "./schema";
+import { tokenEndpoint } from "./token";
+import type { OAuthOptions, Scope } from "./types";
+import { SafeUrlSchema } from "./types/zod";
+import { userInfoEndpoint } from "./userinfo";
+import { deleteFromPrompt, getJwtPlugin } from "./utils";
+
+export const oAuthState = defineRequestState<{ query?: string } | null>(
+	() => null,
+);
+
+/**
+ * oAuth 2.1 provider plugin for Better Auth.
+ *
+ * @see https://better-auth.com/docs/plugins/oauth-provider
+ * @param options - The options for the oAuth Provider plugin.
+ * @returns A Better Auth plugin.
+ */
+export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
+	let clientRegistrationAllowedScopes = options.clientRegistrationAllowedScopes;
+	if (options.clientRegistrationDefaultScopes) {
+		const _allowedScopes = clientRegistrationAllowedScopes
+			? new Set([
+					...clientRegistrationAllowedScopes,
+					...options.clientRegistrationDefaultScopes,
+				])
+			: new Set([...options.clientRegistrationDefaultScopes]);
+		clientRegistrationAllowedScopes = Array.from(_allowedScopes);
+	}
+
+	// Validate scopes
+	const scopes = new Set(
+		(options.scopes ?? ["openid", "profile", "email", "offline_access"]).filter(
+			(val) => val.length,
+		),
+	);
+	if (clientRegistrationAllowedScopes) {
+		for (const sc of clientRegistrationAllowedScopes) {
+			if (!scopes.has(sc)) {
+				throw new BetterAuthError(
+					`clientRegistrationAllowedScope ${sc} not found in scopes`,
+				);
+			}
+		}
+	}
+	for (const sc of options.advertisedMetadata?.scopes_supported ?? []) {
+		if (!scopes?.has(sc)) {
+			throw new BetterAuthError(
+				`advertisedMetadata.scopes_supported ${sc} not found in scopes`,
+			);
+		}
+	}
+
+	// Validate claims
+	const claims = new Set([
+		"sub",
+		"iss",
+		"aud",
+		"exp",
+		"iat",
+		"sid",
+		"scope",
+		"azp",
+		...(scopes.has("email") ? ["email", "email_verified"] : []),
+		...(scopes.has("profile")
+			? ["name", "picture", "family_name", "given_name"]
+			: []),
+	]);
+
+	const opts: O & { claims?: string[] } = {
+		codeExpiresIn: 600, // 10 min
+		accessTokenExpiresIn: 3600, // 1 hour
+		m2mAccessTokenExpiresIn: 3600, // 1 hour
+		refreshTokenExpiresIn: 2592000, // 30 days
+		allowUnauthenticatedClientRegistration: false,
+		allowDynamicClientRegistration: false,
+		disableJwtPlugin: false,
+		storeClientSecret: options.disableJwtPlugin ? "encrypted" : "hashed",
+		storeTokens: "hashed",
+		grantTypes: ["authorization_code", "client_credentials", "refresh_token"],
+		...options,
+		scopes: Array.from(scopes),
+		claims: Array.from(claims),
+		clientRegistrationAllowedScopes,
+	};
+
+	// TODO: device_code grant also allows for refresh tokens
+	if (
+		opts.grantTypes &&
+		opts.grantTypes.includes("refresh_token") &&
+		!opts.grantTypes.includes("authorization_code")
+	) {
+		throw new BetterAuthError(
+			"refresh_token grant requires authorization_code grant",
+		);
+	}
+
+	if (
+		opts.disableJwtPlugin &&
+		(opts.storeClientSecret === "hashed" ||
+			(typeof opts.storeClientSecret === "object" &&
+				"hash" in opts.storeClientSecret))
+	) {
+		throw new BetterAuthError(
+			"unable to store hashed secrets because id tokens will be signed with secret",
+		);
+	}
+
+	if (
+		!opts.disableJwtPlugin &&
+		(opts.storeClientSecret === "encrypted" ||
+			(typeof opts.storeClientSecret === "object" &&
+				("encrypt" in opts.storeClientSecret ||
+					"decrypt" in opts.storeClientSecret)))
+	) {
+		throw new BetterAuthError(
+			"encryption method not recommended, please use 'hashed' or the 'hash' function",
+		);
+	}
+
+	return {
+		id: "oauthProvider",
+		options: opts,
+		init: (ctx) => {
+			// Check for jwt plugin registration
+			if (!opts.disableJwtPlugin) {
+				const jwtPlugin = getJwtPlugin(ctx);
+				const jwtPluginOptions = jwtPlugin.options;
+
+				// Issuer and well-known endpoint checks
+				const issuer = jwtPluginOptions?.jwt?.issuer ?? ctx.baseURL;
+				const issuerPath = new URL(issuer).pathname;
+				// oAuth Server Config
+				if (
+					!opts.silenceWarnings?.oauthAuthServerConfig &&
+					!(ctx.options.basePath === "/" && issuerPath === "/")
+				) {
+					logger.warn(
+						`Please ensure '/.well-known/oauth-authorization-server${issuerPath === "/" ? "" : issuerPath}' exists. Upon completion, clear with silenceWarnings.oauthAuthServerConfig.`,
+					);
+				}
+				// OpenId Config
+				if (
+					!opts.silenceWarnings?.openidConfig &&
+					ctx.options.basePath !== issuerPath &&
+					opts.scopes?.includes("openid")
+				) {
+					logger.warn(
+						`Please ensure '${issuerPath}${issuerPath.endsWith("/") ? "" : "/"}.well-known/openid-configuration' exists. Upon completion, clear with silenceWarnings.openidConfig.`,
+					);
+				}
+			}
+		},
+		hooks: {
+			before: [
+				{
+					// Add oauth_query to request state
+					matcher(ctx) {
+						return ctx.body?.oauth_query;
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						// Verify query signature
+						const query = ctx.body.oauth_query;
+						let queryParams = new URLSearchParams(query);
+						const sig = queryParams.get("sig");
+						const exp = Number(queryParams.get("exp"));
+						queryParams.delete("sig");
+						queryParams = new URLSearchParams(queryParams);
+						const verifySig = await makeSignature(
+							queryParams.toString(),
+							ctx.context.secret,
+						);
+						if (
+							!sig ||
+							!constantTimeEqual(sig, verifySig) ||
+							new Date(exp * 1000) < new Date()
+						) {
+							throw new APIError("BAD_REQUEST", {
+								error: "invalid_signature",
+							});
+						}
+						queryParams.delete("exp");
+						await oAuthState.set({
+							query: new URLSearchParams(queryParams).toString(),
+						});
+
+						// If path starts oauth2 authorize (ie /sign-in/social, /sign-in/oauth2), add to additional data body
+						if (
+							ctx.path === "/sign-in/social" ||
+							ctx.path === "/sign-in/oauth2"
+						) {
+							if (ctx.body.additionalData?.query) return;
+							if (!ctx.body.additionalData) ctx.body.additionalData = {};
+							ctx.body.additionalData.query = queryParams.toString();
+						}
+					}),
+				},
+			],
+			after: [
+				{
+					// Should only capture when session cookie is set (ie after login)
+					matcher(ctx) {
+						return parseSetCookieHeader(
+							ctx.context.responseHeaders?.get("set-cookie") || "",
+						).has(ctx.context.authCookies.sessionToken.name);
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						// Check if session cookie is being set and obtain its session (needed in context)
+						const sessionToken = parseSetCookieHeader(
+							ctx.context.responseHeaders?.get("set-cookie") || "",
+						)
+							.get(ctx.context.authCookies.sessionToken.name)
+							?.value.split(".")[0];
+						if (!sessionToken) return;
+						// Continue with authorization request by using the initial prompt
+						// but clearing the login prompt cookie if forced login prompt
+						const _query =
+							(await oAuthState.get())?.query ??
+							((await getOAuthState())?.query as string | undefined);
+						if (!_query) return;
+						const query = new URLSearchParams(_query);
+
+						const session =
+							await ctx.context.internalAdapter.findSession(sessionToken);
+						if (!session) return;
+						ctx.context.session = session;
+
+						ctx.query = deleteFromPrompt(query, "login");
+						return await authorizeEndpoint(ctx, opts);
+					}),
+				},
+			],
+		},
+		endpoints: {
+			/**
+			 * A server-only endpoint that helps provide the
+			 * oAuth Server configuration at the well-known endpoint.
+			 *
+			 * Provided at /.well-known/oauth-authorization-server/[issuer-path]
+			 * (root if no issuer-path).
+			 */
+			getOAuthServerConfig: createAuthEndpoint(
+				"/.well-known/oauth-authorization-server",
+				{
+					method: "GET",
+					metadata: {
+						SERVER_ONLY: true,
+					},
+				},
+				async (ctx) => {
+					if (opts.scopes && opts.scopes.includes("openid")) {
+						const metadata = oidcServerMetadata(ctx, opts);
+						return metadata;
+					} else {
+						const jwtPluginOptions = opts.disableJwtPlugin
+							? undefined
+							: getJwtPlugin(ctx.context).options;
+						const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
+							scopes_supported:
+								opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
+						});
+						return authMetadata;
+					}
+				},
+			),
+			/**
+			 * A server-only endpoint that helps provide the
+			 * OpenId configuration at the well-known endpoint.
+			 *
+			 * Provided at [issuer-path]/.well-known/openid-configuration
+			 * (root if no issuer-path).
+			 */
+			getOpenIdConfig: createAuthEndpoint(
+				"/.well-known/openid-configuration",
+				{
+					method: "GET",
+					metadata: {
+						SERVER_ONLY: true,
+					},
+				},
+				async (ctx) => {
+					if (opts.scopes && !opts.scopes.includes("openid")) {
+						throw new APIError("NOT_FOUND");
+					}
+					const metadata = oidcServerMetadata(ctx, opts);
+					return metadata;
+				},
+			),
+			oauth2Authorize: createAuthEndpoint(
+				"/oauth2/authorize",
+				{
+					method: "GET",
+					query: z.object({
+						response_type: z.enum(["code"]),
+						client_id: z.string(),
+						redirect_uri: SafeUrlSchema.optional(),
+						scope: z.string().optional(),
+						state: z.string().optional(),
+						code_challenge: z.string().optional(),
+						code_challenge_method: z.enum(["S256"]).optional(),
+						nonce: z.string().optional(),
+						prompt: z
+							.enum([
+								"consent",
+								"login",
+								"create",
+								"select_account",
+								"login consent",
+								"select_account consent",
+							])
+							.optional(),
+					}),
+					metadata: {
+						openapi: {
+							description: "Authorize an OAuth2 request",
+							parameters: [
+								{
+									name: "response_type",
+									in: "query",
+									required: true,
+									schema: { type: "string" },
+									description: "OAuth2 response type (e.g., 'code')",
+								},
+								{
+									name: "client_id",
+									in: "query",
+									required: true,
+									schema: { type: "string" },
+									description: "OAuth2 client ID",
+								},
+								{
+									name: "redirect_uri",
+									in: "query",
+									required: false,
+									schema: { type: "string", format: "uri" },
+									description: "OAuth2 redirect URI",
+								},
+								{
+									name: "scope",
+									in: "query",
+									required: false,
+									schema: { type: "string" },
+									description: "OAuth2 scopes (space-separated)",
+								},
+								{
+									name: "state",
+									in: "query",
+									required: false,
+									schema: { type: "string" },
+									description: "OAuth2 state parameter",
+								},
+								{
+									name: "code_challenge",
+									in: "query",
+									required: false,
+									schema: { type: "string" },
+									description: "PKCE code challenge",
+								},
+								{
+									name: "code_challenge_method",
+									in: "query",
+									required: false,
+									schema: { type: "string" },
+									description: "PKCE code challenge method",
+								},
+								{
+									name: "nonce",
+									in: "query",
+									required: false,
+									schema: { type: "string" },
+									description: "OpenID Connect nonce",
+								},
+								{
+									name: "prompt",
+									in: "query",
+									required: false,
+									schema: { type: "string" },
+									description: "OAuth2 prompt parameter",
+								},
+							],
+							responses: {
+								"302": {
+									description: "Redirect to client with code or error",
+									headers: {
+										Location: {
+											description: "Redirect URI with code or error",
+											schema: { type: "string", format: "uri" },
+										},
+									},
+								},
+								"400": {
+									description: "Invalid request",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													error: { type: "string" },
+													error_description: { type: "string" },
+													state: { type: "string" },
+												},
+												required: ["error"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					return authorizeEndpoint(ctx, opts, {
+						isAuthorize: true,
+					});
+				},
+			),
+			oauth2Consent: createAuthEndpoint(
+				"/oauth2/consent",
+				{
+					method: "POST",
+					body: z.object({
+						accept: z.boolean().meta({
+							description: "Accept or deny user consent for a set of scopes",
+						}),
+						scope: z.string().optional().meta({
+							description:
+								"List of accept of accepted space-separated scopes. If none is provided, then all originally requested scopes are accepted.",
+						}),
+						oauth_query: z.string().optional().meta({
+							description: "The redirected page's query parameters",
+						}),
+					}),
+					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "Handle OAuth2 consent",
+							responses: {
+								"200": {
+									description: "Consent processed successfully",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													redirect_uri: {
+														type: "string",
+														format: "uri",
+														description:
+															"The URI to redirect to, either with an authorization code or an error",
+													},
+												},
+												required: ["redirect_uri"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					return consentEndpoint(ctx, opts);
+				},
+			),
+			oauth2Continue: createAuthEndpoint(
+				"/oauth2/continue",
+				{
+					method: "POST",
+					body: z.object({
+						selected: z.boolean().optional().meta({
+							description:
+								"Confirms an account has been selected and authorization can proceed.",
+						}),
+						created: z.boolean().optional().meta({
+							description: "Confirms an account was registered",
+						}),
+						postLogin: z.boolean().optional().meta({
+							description: "Confirms organization and/or team selection.",
+						}),
+						oauth_query: z.string().optional().meta({
+							description: "The redirected page's query parameters",
+						}),
+					}),
+					use: [sessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "Continues OAuth2 authorization flow",
+							responses: {
+								"200": {
+									description: "Consent processed successfully",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													redirect_uri: {
+														type: "string",
+														format: "uri",
+														description:
+															"The URI to redirect to, either with an authorization code or an error",
+													},
+												},
+												required: ["redirect_uri"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					return continueEndpoint(ctx, opts);
+				},
+			),
+			oauth2Token: createAuthEndpoint(
+				"/oauth2/token",
+				{
+					method: "POST",
+					body: z.object({
+						grant_type: z.enum([
+							"authorization_code",
+							"client_credentials",
+							"refresh_token",
+						]),
+						client_id: z.string().optional(),
+						client_secret: z.string().optional(),
+						code: z.string().optional(),
+						code_verifier: z.string().optional(),
+						redirect_uri: SafeUrlSchema.optional(),
+						refresh_token: z.string().optional(),
+						resource: z.string().optional(),
+						scope: z.string().optional(),
+					}),
+					metadata: {
+						allowedMediaTypes: ["application/x-www-form-urlencoded"],
+						openapi: {
+							description: "Obtain an OAuth2.1 access token",
+							requestBody: {
+								required: true,
+								content: {
+									"application/json": {
+										schema: {
+											type: "object",
+											properties: {
+												grant_type: {
+													type: "string",
+													enum: [
+														"authorization_code",
+														"client_credentials",
+														"refresh_token",
+													],
+													description: "OAuth2 grant type",
+												},
+												client_id: {
+													type: "string",
+													description: "OAuth2 client ID",
+												},
+												client_secret: {
+													type: "string",
+													description: "OAuth2 client secret",
+												},
+												code: {
+													type: "string",
+													description:
+														"Authorization code (for authorization_code grant)",
+												},
+												code_verifier: {
+													type: "string",
+													description:
+														"PKCE code verifier (for authorization_code grant)",
+												},
+												redirect_uri: {
+													type: "string",
+													format: "uri",
+													description:
+														"Redirect URI (for authorization_code grant)",
+												},
+												refresh_token: {
+													type: "string",
+													description:
+														"Refresh token (for refresh_token grant)",
+												},
+												resource: {
+													type: "string",
+													description:
+														"Requested token resource (ie audience) to obtain a JWT formatted access token",
+												},
+												scope: {
+													type: "string",
+													description:
+														"Requested scopes (for client_credentials grant)",
+												},
+											},
+											required: ["grant_type"],
+										},
+									},
+								},
+							},
+							responses: {
+								"200": {
+									description: "Access token response",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													access_token: {
+														type: "string",
+														description:
+															"The access token issued by the authorization server",
+													},
+													token_type: {
+														type: "string",
+														description: "The type of the token issued",
+														enum: ["Bearer"],
+													},
+													expires_in: {
+														type: "number",
+														description:
+															"Lifetime in seconds of the access token",
+													},
+													refresh_token: {
+														type: "string",
+														description: "Refresh token, if issued",
+													},
+													scope: {
+														type: "string",
+														description: "Scopes granted by the access token",
+													},
+													id_token: {
+														type: "string",
+														description: "ID Token (if OpenID Connect)",
+													},
+												},
+												required: ["access_token", "token_type", "expires_in"],
+											},
+										},
+									},
+								},
+								"400": {
+									description: "Invalid request or error response",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													error: { type: "string" },
+													error_description: { type: "string" },
+													error_uri: { type: "string" },
+												},
+												required: ["error"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					return tokenEndpoint(ctx, opts);
+				},
+			),
+			oauth2Introspect: createAuthEndpoint(
+				"/oauth2/introspect",
+				{
+					method: "POST",
+					body: z.object({
+						client_id: z.string().optional(),
+						client_secret: z.string().optional(),
+						token: z.string(),
+						token_type_hint: z
+							.enum(["access_token", "refresh_token"])
+							.optional(),
+					}),
+					metadata: {
+						allowedMediaTypes: ["application/x-www-form-urlencoded"],
+						openapi: {
+							description: "Introspect an OAuth2 access or refresh token",
+							requestBody: {
+								required: true,
+								content: {
+									"application/json": {
+										schema: {
+											type: "object",
+											properties: {
+												client_id: {
+													type: "string",
+													description: "OAuth2 client ID",
+												},
+												client_secret: {
+													type: "string",
+													description: "OAuth2 client secret",
+												},
+												token: {
+													type: "string",
+													description:
+														"The token to introspect (access or refresh token)",
+												},
+												token_type_hint: {
+													type: "string",
+													enum: ["access_token", "refresh_token"],
+													description:
+														"Hint about the type of the token submitted for introspection",
+												},
+												resource: {
+													type: "string",
+													description:
+														"Introspects a token for a specific resource.",
+												},
+											},
+											required: ["token"],
+										},
+									},
+								},
+							},
+							responses: {
+								"200": {
+									description: "Token introspection response",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													active: {
+														type: "boolean",
+														description: "Whether the token is active",
+													},
+													scope: {
+														type: "string",
+														description: "Scopes associated with the token",
+													},
+													client_id: {
+														type: "string",
+														description: "Client ID associated with the token",
+													},
+													username: {
+														type: "string",
+														description: "Username associated with the token",
+													},
+													token_type: {
+														type: "string",
+														description: "Type of the token",
+													},
+													exp: {
+														type: "number",
+														description:
+															"Expiration time of the token (seconds since epoch)",
+													},
+													iat: {
+														type: "number",
+														description: "Issued at time (seconds since epoch)",
+													},
+													nbf: {
+														type: "number",
+														description:
+															"Not before time (seconds since epoch)",
+													},
+													sub: {
+														type: "string",
+														description: "Subject of the token",
+													},
+													aud: {
+														type: "string",
+														description: "Audience of the token",
+													},
+													iss: {
+														type: "string",
+														description: "Issuer of the token",
+													},
+													jti: {
+														type: "string",
+														description: "JWT ID",
+													},
+												},
+												required: ["active"],
+											},
+										},
+									},
+								},
+								"400": {
+									description: "Invalid request or error response",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													error: { type: "string" },
+													error_description: { type: "string" },
+													error_uri: { type: "string" },
+												},
+												required: ["error"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					return introspectEndpoint(ctx, opts);
+				},
+			),
+			oauth2Revoke: createAuthEndpoint(
+				"/oauth2/revoke",
+				{
+					method: "POST",
+					body: z.object({
+						client_id: z.string().optional(),
+						client_secret: z.string().optional(),
+						token: z.string(),
+						token_type_hint: z
+							.enum(["access_token", "refresh_token"])
+							.optional(),
+					}),
+					metadata: {
+						allowedMediaTypes: ["application/x-www-form-urlencoded"],
+						openapi: {
+							description: "Revoke an OAuth2 access or refresh token",
+							requestBody: {
+								required: true,
+								content: {
+									"application/json": {
+										schema: {
+											type: "object",
+											properties: {
+												client_id: {
+													type: "string",
+													description: "OAuth2 client ID",
+												},
+												client_secret: {
+													type: "string",
+													description: "OAuth2 client secret",
+												},
+												token: {
+													type: "string",
+													description:
+														"The token to revoke (access or refresh token)",
+												},
+												token_type_hint: {
+													type: "string",
+													enum: ["access_token", "refresh_token"],
+													description:
+														"Hint about the type of the token submitted for revocation",
+												},
+											},
+											required: ["token"],
+										},
+									},
+								},
+							},
+							responses: {
+								"200": {
+									description:
+										"Token revoked successfully. The response body is empty.",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												description: "Empty object on success",
+											},
+										},
+									},
+								},
+								"400": {
+									description: "Invalid request or error response",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													error: { type: "string" },
+													error_description: { type: "string" },
+													error_uri: { type: "string" },
+												},
+												required: ["error"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					return revokeEndpoint(ctx, opts);
+				},
+			),
+			oauth2UserInfo: createAuthEndpoint(
+				"/oauth2/userinfo",
+				{
+					method: "GET",
+					metadata: {
+						openapi: {
+							description:
+								"Get OpenID Connect user information (UserInfo endpoint)",
+							security: [
+								{ bearerAuth: [] },
+								{ OAuth2: ["openid", "profile", "email"] },
+							],
+							parameters: [
+								{
+									name: "Authorization",
+									in: "header",
+									required: false,
+									schema: { type: "string" },
+									description: "Bearer access token",
+								},
+							],
+							responses: {
+								"200": {
+									description: "User information retrieved successfully",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													sub: {
+														type: "string",
+														description: "Subject identifier (user ID)",
+													},
+													email: {
+														type: "string",
+														format: "email",
+														nullable: true,
+														description:
+															"User's email address, included if 'email' scope is granted",
+													},
+													name: {
+														type: "string",
+														nullable: true,
+														description:
+															"User's full name, included if 'profile' scope is granted",
+													},
+													picture: {
+														type: "string",
+														format: "uri",
+														nullable: true,
+														description:
+															"User's profile picture URL, included if 'profile' scope is granted",
+													},
+													given_name: {
+														type: "string",
+														nullable: true,
+														description:
+															"User's given name, included if 'profile' scope is granted",
+													},
+													family_name: {
+														type: "string",
+														nullable: true,
+														description:
+															"User's family name, included if 'profile' scope is granted",
+													},
+													email_verified: {
+														type: "boolean",
+														nullable: true,
+														description:
+															"Whether the email is verified, included if 'email' scope is granted",
+													},
+												},
+												required: ["sub"],
+											},
+										},
+									},
+								},
+								"401": {
+									description: "Unauthorized - invalid or missing access token",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													error: { type: "string" },
+													error_description: { type: "string" },
+												},
+												required: ["error"],
+											},
+										},
+									},
+								},
+								"403": {
+									description: "Forbidden - insufficient scope",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													error: { type: "string" },
+													error_description: { type: "string" },
+												},
+												required: ["error"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					return userInfoEndpoint(ctx, opts);
+				},
+			),
+			oauth2EndSession: createAuthEndpoint(
+				"/oauth2/end-session",
+				{
+					method: "GET",
+					query: z.object({
+						id_token_hint: z.string(),
+						client_id: z.string().optional(),
+						post_logout_redirect_uri: SafeUrlSchema.optional(),
+						state: z.string().optional(),
+					}),
+					metadata: {
+						openapi: {
+							description:
+								"RP-Initiated Logout endpoint. Allows clients to notify the OP that the End-User has logged out.",
+							responses: {
+								"200": {
+									description:
+										"Logout successful. May include redirect_uri if post_logout_redirect_uri was provided.",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													redirect_uri: {
+														type: "string",
+														format: "uri",
+														description:
+															"URI to redirect to after logout (if post_logout_redirect_uri was provided)",
+													},
+													message: {
+														type: "string",
+														description: "Success message",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					return rpInitiatedLogoutEndpoint(ctx, opts);
+				},
+			),
+			registerOAuthClient: createAuthEndpoint(
+				"/oauth2/register",
+				{
+					method: "POST",
+					body: z.object({
+						redirect_uris: z.array(SafeUrlSchema).min(1).min(1),
+						scope: z.string().optional(),
+						client_name: z.string().optional(),
+						client_uri: z.string().optional(),
+						logo_uri: z.string().optional(),
+						contacts: z.array(z.string().min(1)).min(1).optional(),
+						tos_uri: z.string().optional(),
+						policy_uri: z.string().optional(),
+						software_id: z.string().optional(),
+						software_version: z.string().optional(),
+						software_statement: z.string().optional(),
+						post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
+						token_endpoint_auth_method: z
+							.enum(["none", "client_secret_basic", "client_secret_post"])
+							.default("client_secret_basic")
+							.optional(),
+						grant_types: z
+							.array(
+								z.enum([
+									"authorization_code",
+									"client_credentials",
+									"refresh_token",
+								]),
+							)
+							.default(["authorization_code"])
+							.optional(),
+						response_types: z
+							.array(z.enum(["code"]))
+							.default(["code"])
+							.optional(),
+						type: z.enum(["web", "native", "user-agent-based"]).optional(),
+					}),
+					metadata: {
+						openapi: {
+							description: "Register an OAuth2 application",
+							responses: {
+								"200": {
+									description: "OAuth2 application registered successfully",
+									content: {
+										"application/json": {
+											schema: {
+												/** @returns {OauthClient} */
+												type: "object",
+												properties: {
+													client_id: {
+														type: "string",
+														description: "Unique identifier for the client",
+													},
+													client_secret: {
+														type: "string",
+														description: "Secret key for the client",
+													},
+													client_secret_expires_at: {
+														type: "number",
+														description:
+															"Time the client secret will expire. If 0, the client secret will never expire.",
+													},
+													scope: {
+														type: "string",
+														description:
+															"Space-separated scopes allowed by the client",
+													},
+													user_id: {
+														type: "string",
+														description:
+															"ID of the user who registered the client, null if registered anonymously",
+													},
+													client_id_issued_at: {
+														type: "number",
+														description: "Creation timestamp of this client",
+													},
+													client_name: {
+														type: "string",
+														description: "Name of the OAuth2 application",
+													},
+													client_uri: {
+														type: "string",
+														description: "Name of the OAuth2 application",
+													},
+													logo_uri: {
+														type: "string",
+														description: "Icon URL for the application",
+													},
+													contacts: {
+														type: "array",
+														items: {
+															type: "string",
+														},
+														description:
+															"List representing ways to contact people responsible for this client, typically email addresses",
+													},
+													tos_uri: {
+														type: "string",
+														description: "Client's terms of service uri",
+													},
+													policy_uri: {
+														type: "string",
+														description: "Client's policy uri",
+													},
+													software_id: {
+														type: "string",
+														description:
+															"Unique identifier assigned by the developer to help in the dynamic registration process",
+													},
+													software_version: {
+														type: "string",
+														description:
+															"Version identifier for the software_id",
+													},
+													software_statement: {
+														type: "string",
+														description:
+															"JWT containing metadata values about the client software as claims",
+													},
+													redirect_uris: {
+														type: "array",
+														items: {
+															type: "string",
+															format: "uri",
+														},
+														description: "List of allowed redirect uris",
+													},
+													post_logout_redirect_uris: {
+														type: "array",
+														items: {
+															type: "string",
+															format: "uri",
+														},
+														description: "List of allowed logout redirect uris",
+													},
+													token_endpoint_auth_method: {
+														type: "string",
+														description:
+															"Requested authentication method for the token endpoint",
+														enum: [
+															"none",
+															"client_secret_basic",
+															"client_secret_post",
+														],
+													},
+													grant_types: {
+														type: "array",
+														items: {
+															type: "string",
+															enum: [
+																"authorization_code",
+																"client_credentials",
+																"refresh_token",
+															],
+														},
+														description:
+															"Requested authentication method for the token endpoint",
+													},
+													response_types: {
+														type: "array",
+														items: {
+															type: "string",
+															enum: ["code"],
+														},
+														description:
+															"Requested authentication method for the token endpoint",
+													},
+													public: {
+														type: "boolean",
+														description:
+															"Whether the client is public as determined by the type",
+													},
+													type: {
+														type: "string",
+														description: "Type of the client",
+														enum: ["web", "native", "user-agent-based"],
+													},
+													disabled: {
+														type: "boolean",
+														description: "Whether the client is disabled",
+													},
+												},
+												required: ["client_id"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					return registerEndpoint(ctx, opts);
+				},
+			),
+			adminCreateOAuthClient: oauthClientEndpoints.adminCreateOAuthClient(opts),
+			createOAuthClient: oauthClientEndpoints.createOAuthClient(opts),
+			getOAuthClient: oauthClientEndpoints.getOAuthClient(opts),
+			getOAuthClientPublic: oauthClientEndpoints.getOAuthClientPublic(opts),
+			getOAuthClients: oauthClientEndpoints.getOAuthClients(opts),
+			adminUpdateOAuthClient: oauthClientEndpoints.adminUpdateOAuthClient(opts),
+			updateOAuthClient: oauthClientEndpoints.updateOAuthClient(opts),
+			rotateClientSecret: oauthClientEndpoints.rotateClientSecret(opts),
+			deleteOAuthClient: oauthClientEndpoints.deleteOAuthClient(opts),
+			getOAuthConsent: oauthConsentEndpoints.getOAuthConsent(opts),
+			getOAuthConsents: oauthConsentEndpoints.getOAuthConsents(opts),
+			updateOAuthConsent: oauthConsentEndpoints.updateOAuthConsent(opts),
+			deleteOAuthConsent: oauthConsentEndpoints.deleteOAuthConsent(opts),
+		},
+		schema: mergeSchema(schema, opts?.schema),
+	} satisfies BetterAuthPlugin;
+};

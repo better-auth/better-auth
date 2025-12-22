@@ -19,3 +19,8 @@ export {
 	validateAuthorizationCode,
 	validateToken,
 } from "./validate-authorization-code";
+export {
+	getJwks,
+	verifyAccessToken,
+	verifyJwsAccessToken,
+} from "./verify";
