@@ -66,14 +66,14 @@ const upgradeSubscriptionBodySchema = z.object({
 		})
 		.optional(),
 	/**
-	 * This is to allow a specific subscription to be upgrade.
-	 * If subscription id is provided, and subscription isn't found,
-	 * it'll throw an error.
+	 * The Stripe subscription ID to upgrade.
+	 * If provided and not found, it'll throw an error.
 	 */
 	subscriptionId: z
 		.string()
 		.meta({
-			description: 'The id of the subscription to upgrade. Eg: "sub_123"',
+			description:
+				'The Stripe subscription ID to upgrade. Eg: "sub_1ABC2DEF3GHI4JKL"',
 		})
 		.optional(),
 	/**
@@ -187,14 +187,8 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						model: "subscription",
 						where: [
 							{
-								field: "id",
-								value: ctx.body.subscriptionId,
-								connector: "OR",
-							},
-							{
 								field: "stripeSubscriptionId",
 								value: ctx.body.subscriptionId,
-								connector: "OR",
 							},
 						],
 					})
@@ -661,7 +655,8 @@ const cancelSubscriptionBodySchema = z.object({
 	subscriptionId: z
 		.string()
 		.meta({
-			description: "The id of the subscription to cancel. Eg: 'sub_123'",
+			description:
+				"The Stripe subscription ID to cancel. Eg: 'sub_1ABC2DEF3GHI4JKL'",
 		})
 		.optional(),
 	returnUrl: z.string().meta({
@@ -711,7 +706,7 @@ export const cancelSubscription = (options: StripeOptions) => {
 						model: "subscription",
 						where: [
 							{
-								field: "id",
+								field: "stripeSubscriptionId",
 								value: ctx.body.subscriptionId,
 							},
 						],
@@ -838,7 +833,8 @@ const restoreSubscriptionBodySchema = z.object({
 	subscriptionId: z
 		.string()
 		.meta({
-			description: "The id of the subscription to restore. Eg: 'sub_123'",
+			description:
+				"The Stripe subscription ID to restore. Eg: 'sub_1ABC2DEF3GHI4JKL'",
 		})
 		.optional(),
 });
@@ -869,7 +865,7 @@ export const restoreSubscription = (options: StripeOptions) => {
 						model: "subscription",
 						where: [
 							{
-								field: "id",
+								field: "stripeSubscriptionId",
 								value: ctx.body.subscriptionId,
 							},
 						],

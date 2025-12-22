@@ -7,6 +7,7 @@ import type {
 import type { InferOptionSchema } from "../../types";
 import type { Statements } from "../access";
 import type { apiKeySchema } from "./schema";
+
 export interface ApiKeyOptions {
 	/**
 	 * The header name to check for API key
@@ -257,6 +258,20 @@ export interface ApiKeyOptions {
 				delete: (key: string) => Awaitable<void | null | string>;
 		  }
 		| undefined;
+	/**
+	 * Defer non-critical updates (rate limiting counters, timestamps, remaining count)
+	 * to run after the response is sent using the global `advanced.backgroundTasks` handler.
+	 *
+	 * Requires `advanced.backgroundTasks.handler` to be configured in the main auth options.
+	 *
+	 * ⚠️ Warning: Enabling this introduces eventual consistency where the response
+	 * returns optimistic data before the database is updated. If the deferred update
+	 * fails, the database will have stale values. Only enable if your application
+	 * can tolerate this trade-off for improved latency.
+	 *
+	 * @default false
+	 */
+	deferUpdates?: boolean | undefined;
 }
 
 export type ApiKey = {

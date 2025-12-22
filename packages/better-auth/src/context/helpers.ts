@@ -61,14 +61,19 @@ export function getInternalPlugins(options: BetterAuthOptions) {
 	return plugins;
 }
 
-export function getTrustedOrigins(options: BetterAuthOptions) {
+export async function getTrustedOrigins(
+	options: BetterAuthOptions,
+	request?: Request,
+) {
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
-	if (!baseURL) {
-		return [];
-	}
-	const trustedOrigins = [new URL(baseURL).origin];
-	if (options.trustedOrigins && Array.isArray(options.trustedOrigins)) {
-		trustedOrigins.push(...options.trustedOrigins);
+	const trustedOrigins = baseURL ? [new URL(baseURL).origin] : [];
+	if (options.trustedOrigins) {
+		if (Array.isArray(options.trustedOrigins)) {
+			trustedOrigins.push(...options.trustedOrigins);
+		}
+		if (typeof options.trustedOrigins === "function") {
+			trustedOrigins.push(...(await options.trustedOrigins(request)));
+		}
 	}
 	const envTrustedOrigins = env.BETTER_AUTH_TRUSTED_ORIGINS;
 	if (envTrustedOrigins) {
