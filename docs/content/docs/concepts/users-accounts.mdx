@@ -140,6 +140,21 @@ await auth.api.setPassword({
     headers: await headers() // headers containing the user's session token
 });
 ```
+### Verify Password
+
+The `verifyPassword` function allows you to verify a user's current password. This is useful for confirming user identity before performing sensitive operations like updating security settings. This function can only be called from the server.
+
+```ts
+await auth.api.verifyPassword({
+    body: {
+        password: "user-password" // required
+    },
+    headers: // headers containing the user's session token
+});
+```
+<Callout type="info">
+For OAuth users who don't have passwords, consider using email verification or fresh session checks for sensitive operations instead.
+</Callout>
 
 ## Delete User
 
