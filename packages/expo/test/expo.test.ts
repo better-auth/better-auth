@@ -1,6 +1,11 @@
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db";
-import { createAuthMiddleware, oAuthProxy } from "better-auth/plugins";
+import {
+	createAuthMiddleware,
+	magicLink,
+	oAuthProxy,
+} from "better-auth/plugins";
+import { magicLinkClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 import Database from "better-sqlite3";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -510,5 +515,147 @@ describe("expo with cookieCache", async () => {
 		storage.setItem("better-auth:session_token", "123");
 		expect(map.has("better-auth_session_token")).toBe(true);
 		expect(map.has("better-auth:session_token")).toBe(false);
+	});
+});
+
+describe("expo deep link cookie injection", async () => {
+	let magicLinkToken = "";
+	const storage = new Map<string, string>();
+
+	const auth = betterAuth({
+		baseURL: "http://localhost:3000",
+		database: new Database(":memory:"),
+		plugins: [
+			expo(),
+			magicLink({
+				async sendMagicLink({ token }) {
+					magicLinkToken = token;
+				},
+			}),
+		],
+		trustedOrigins: ["myapp://"],
+	});
+
+	const client = createAuthClient({
+		baseURL: "http://localhost:3000",
+		fetchOptions: {
+			customFetchImpl: (url, init) => {
+				return auth.handler(new Request(url.toString(), init));
+			},
+		},
+		plugins: [
+			expoClient({
+				storage: {
+					getItem: (key) => storage.get(key) || null,
+					setItem: async (key, value) => storage.set(key, value),
+				},
+			}),
+			magicLinkClient(),
+		],
+	});
+
+	beforeAll(async () => {
+		const { runMigrations } = await getMigrations(auth.options);
+		await runMigrations();
+	});
+
+	it("should inject cookie into deep link for magic-link verify", async () => {
+		await client.signIn.magicLink({
+			email: "test@example.com",
+			callbackURL: "myapp:///dashboard",
+		});
+
+		await client.$fetch("/magic-link/verify", {
+			query: {
+				token: magicLinkToken,
+				callbackURL: "myapp:///dashboard",
+			},
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location");
+				expect(location).toContain("myapp://");
+
+				const url = new URL(location!);
+				const cookie = url.searchParams.get("cookie");
+				expect(cookie).toBeDefined();
+				expect(cookie).toContain("better-auth.session_token");
+			},
+		});
+	});
+});
+
+describe("expo deep link cookie injection for verify-email", async () => {
+	let verificationToken = "";
+	const storage = new Map<string, string>();
+
+	const auth = betterAuth({
+		baseURL: "http://localhost:3000",
+		database: new Database(":memory:"),
+		emailAndPassword: {
+			enabled: true,
+			requireEmailVerification: true,
+		},
+		emailVerification: {
+			autoSignInAfterVerification: true,
+			async sendVerificationEmail({ token }: { token: string }) {
+				verificationToken = token;
+			},
+		},
+		plugins: [expo()],
+		trustedOrigins: ["myapp://"],
+	});
+
+	const client = createAuthClient({
+		baseURL: "http://localhost:3000",
+		fetchOptions: {
+			customFetchImpl: (url, init) => {
+				return auth.handler(new Request(url.toString(), init));
+			},
+		},
+		plugins: [
+			expoClient({
+				storage: {
+					getItem: (key) => storage.get(key) || null,
+					setItem: async (key, value) => storage.set(key, value),
+				},
+			}),
+		],
+	});
+
+	beforeAll(async () => {
+		const { runMigrations } = await getMigrations(auth.options);
+		await runMigrations();
+	});
+
+	it("should inject cookie into deep link for verify-email", async () => {
+		await client.signUp.email({
+			email: "verify-test@example.com",
+			password: "password123",
+			name: "Verify Test",
+		});
+
+		expect(verificationToken).toBeTruthy();
+
+		await client.$fetch("/verify-email", {
+			query: {
+				token: verificationToken,
+				callbackURL: "myapp:///verified",
+			},
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location");
+				console.log("Location:", location);
+				console.log("Set-Cookie:", context.response.headers.get("set-cookie"));
+				expect(location).toContain("myapp://");
+
+				const url = new URL(location!);
+				const cookie = url.searchParams.get("cookie");
+				console.log("Cookie param:", cookie);
+				expect(cookie).toBeDefined();
+				expect(cookie).toContain("better-auth.session_token");
+			},
+		});
 	});
 });
