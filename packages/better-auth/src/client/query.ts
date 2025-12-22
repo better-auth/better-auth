@@ -92,8 +92,7 @@ export const useAuthQuery = <T>(
 					const currentValue = value.get();
 					value.set({
 						isPending:
-							currentValue.data === null ||
-							currentValue.data === undefined ||
+							(currentValue.data === null || currentValue.data === undefined) &&
 							currentValue.isPending,
 						data: currentValue.data,
 						error: null,
