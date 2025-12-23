@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { APIError } from "better-call";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { setOAuthState } from "../api/middlewares/oauth";
 import { generateRandomString } from "../crypto";
 import type { StateData } from "../state";
@@ -17,9 +17,7 @@ export async function generateState(
 ) {
 	const callbackURL = c.body?.callbackURL || c.context.options.baseURL;
 	if (!callbackURL) {
-		throw new APIError("BAD_REQUEST", {
-			message: "callbackURL is required",
-		});
+		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.CALLBACK_URL_REQUIRED);
 	}
 
 	const codeVerifier = generateRandomString(128);

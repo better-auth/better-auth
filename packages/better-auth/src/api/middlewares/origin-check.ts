@@ -1,13 +1,8 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
-import { APIError } from "better-call";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { normalizePathname } from "../../utils/url";
 
-/**
- * Checks if a request path should skip origin validation.
- * Supports prefix matching - a configured path like "/sso/saml2/callback"
- * will match request paths like "/sso/saml2/callback/provider-name".
- */
 function shouldSkipOriginCheckForPath(
 	requestUrl: string,
 	basePath: string,
@@ -46,7 +41,15 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	const newUserCallbackURL = body?.newUserCallbackURL;
 	const useCookies = headers?.has("cookie");
 
-	const validateURL = (url: string | undefined, label: string) => {
+	const validateURL = (
+		url: string | undefined,
+		label:
+			| "origin"
+			| "callbackURL"
+			| "redirectURL"
+			| "errorCallbackURL"
+			| "newUserCallbackURL",
+	) => {
 		if (!url) {
 			return;
 		}
@@ -60,7 +63,30 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 				`If it's a valid URL, please add ${url} to trustedOrigins in your auth config\n`,
 				`Current list of trustedOrigins: ${ctx.context.trustedOrigins}`,
 			);
-			throw new APIError("FORBIDDEN", { message: `Invalid ${label}` });
+			if (label === "origin") {
+				throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.INVALID_ORIGIN);
+			}
+			if (label === "callbackURL") {
+				throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.INVALID_CALLBACK_URL);
+			}
+			if (label === "redirectURL") {
+				throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.INVALID_REDIRECT_URL);
+			}
+			if (label === "errorCallbackURL") {
+				throw APIError.from(
+					"FORBIDDEN",
+					BASE_ERROR_CODES.INVALID_ERROR_CALLBACK_URL,
+				);
+			}
+			if (label === "newUserCallbackURL") {
+				throw APIError.from(
+					"FORBIDDEN",
+					BASE_ERROR_CODES.INVALID_NEW_USER_CALLBACK_URL,
+				);
+			}
+			throw APIError.fromStatus("FORBIDDEN", {
+				message: `Invalid ${label}`,
+			});
 		}
 	};
 
@@ -73,7 +99,7 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 
 	if (useCookies && !ctx.context.skipCSRFCheck && !shouldSkipOrigin) {
 		if (!originHeader || originHeader === "null") {
-			throw new APIError("FORBIDDEN", { message: "Missing or null Origin" });
+			throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.MISSING_OR_NULL_ORIGIN);
 		}
 		validateURL(originHeader, "origin");
 	}
@@ -105,7 +131,36 @@ export const originCheck = (
 					`If it's a valid URL, please add ${url} to trustedOrigins in your auth config\n`,
 					`Current list of trustedOrigins: ${ctx.context.trustedOrigins}`,
 				);
-				throw new APIError("FORBIDDEN", { message: `Invalid ${label}` });
+				if (label === "origin") {
+					throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.INVALID_ORIGIN);
+				}
+				if (label === "callbackURL") {
+					throw APIError.from(
+						"FORBIDDEN",
+						BASE_ERROR_CODES.INVALID_CALLBACK_URL,
+					);
+				}
+				if (label === "redirectURL") {
+					throw APIError.from(
+						"FORBIDDEN",
+						BASE_ERROR_CODES.INVALID_REDIRECT_URL,
+					);
+				}
+				if (label === "errorCallbackURL") {
+					throw APIError.from(
+						"FORBIDDEN",
+						BASE_ERROR_CODES.INVALID_ERROR_CALLBACK_URL,
+					);
+				}
+				if (label === "newUserCallbackURL") {
+					throw APIError.from(
+						"FORBIDDEN",
+						BASE_ERROR_CODES.INVALID_NEW_USER_CALLBACK_URL,
+					);
+				}
+				throw APIError.fromStatus("FORBIDDEN", {
+					message: `Invalid ${label}`,
+				});
 			}
 		};
 		const callbacks = Array.isArray(callbackURL) ? callbackURL : [callbackURL];
