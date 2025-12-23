@@ -29,6 +29,7 @@ export const stripeClient = <
 			>
 		>,
 		pathMethods: {
+			"/subscription/restore": "POST",
 			"/subscription/billing-portal": "POST",
 		},
 		$ERROR_CODES: STRIPE_ERROR_CODES,
