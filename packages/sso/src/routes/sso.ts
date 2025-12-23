@@ -1,3 +1,4 @@
+import { base64 } from "@better-auth/utils/base64";
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
 import type { User, Verification } from "better-auth";
 import {
@@ -46,7 +47,7 @@ import {
 	discoverOIDCConfig,
 	mapDiscoveryErrorToAPIError,
 } from "../oidc";
-import { validateSAMLAlgorithms } from "../saml";
+import { validateConfigAlgorithms, validateSAMLAlgorithms } from "../saml";
 import { generateRelayState, parseRelayState } from "../saml-state";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
 import { safeJsonParse, validateEmailDomain } from "../utils";
@@ -784,6 +785,16 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				});
 			};
 
+			if (body.samlConfig) {
+				validateConfigAlgorithms(
+					{
+						signatureAlgorithm: body.samlConfig.signatureAlgorithm,
+						digestAlgorithm: body.samlConfig.digestAlgorithm,
+					},
+					options?.saml?.algorithms,
+				);
+			}
+
 			const provider = await ctx.context.adapter.create<
 				Record<string, any>,
 				SSOProvider<O>
@@ -840,14 +851,20 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				});
 			}
 
+			type SSOProviderResponse = {
+				redirectURI: string;
+				oidcConfig: OIDCConfig | null;
+				samlConfig: SAMLConfig | null;
+			} & Omit<SSOProvider<O>, "oidcConfig" | "samlConfig">;
+
 			type SSOProviderReturn = O["domainVerification"] extends { enabled: true }
-				? {
+				? SSOProviderResponse & {
 						domainVerified: boolean;
 						domainVerificationToken: string;
-					} & SSOProvider<O>
-				: SSOProvider<O>;
+					}
+				: SSOProviderResponse;
 
-			return ctx.json({
+			const result = {
 				...provider,
 				oidcConfig: safeJsonParse<OIDCConfig>(
 					provider.oidcConfig as unknown as string,
@@ -860,7 +877,9 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				...(options?.domainVerification?.enabled
 					? { domainVerificationToken }
 					: {}),
-			} as unknown as SSOProviderReturn);
+			};
+
+			return ctx.json(result as SSOProviderReturn);
 		},
 	);
 };
@@ -1912,8 +1931,8 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			} catch (error) {
 				ctx.context.logger.error("SAML response validation failed", {
 					error,
-					decodedResponse: Buffer.from(SAMLResponse, "base64").toString(
-						"utf-8",
+					decodedResponse: new TextDecoder().decode(
+						base64.decode(SAMLResponse),
 					),
 				});
 				throw new APIError("BAD_REQUEST", {
@@ -2359,8 +2378,8 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			} catch (error) {
 				ctx.context.logger.error("SAML response validation failed", {
 					error,
-					decodedResponse: Buffer.from(SAMLResponse, "base64").toString(
-						"utf-8",
+					decodedResponse: new TextDecoder().decode(
+						base64.decode(SAMLResponse),
 					),
 				});
 				throw new APIError("BAD_REQUEST", {
@@ -2456,8 +2475,8 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			}
 
 			// Assertion Replay Protection
-			const samlContentAcs = Buffer.from(SAMLResponse, "base64").toString(
-				"utf-8",
+			const samlContentAcs = new TextDecoder().decode(
+				base64.decode(SAMLResponse),
 			);
 			const assertionIdAcs = extractAssertionId(samlContentAcs);
 
