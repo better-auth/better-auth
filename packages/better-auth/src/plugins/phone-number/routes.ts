@@ -121,13 +121,17 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 						identifier: phoneNumber,
 						expiresAt: getDate(opts.expiresIn, "sec"),
 					});
-					await opts.sendOTP?.(
-						{
-							phoneNumber,
-							code: otp,
-						},
-						ctx,
-					);
+					if (opts.sendOTP) {
+						await ctx.context.runInBackgroundOrAwait(
+							opts.sendOTP(
+								{
+									phoneNumber,
+									code: otp,
+								},
+								ctx,
+							),
+						);
+					}
 					throw new APIError("UNAUTHORIZED", {
 						message: PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_NOT_VERIFIED,
 					});
@@ -276,12 +280,14 @@ export const sendPhoneNumberOTP = (opts: RequiredPhoneNumberOptions) =>
 				identifier: ctx.body.phoneNumber,
 				expiresAt: getDate(opts.expiresIn, "sec"),
 			});
-			await opts.sendOTP(
-				{
-					phoneNumber: ctx.body.phoneNumber,
-					code,
-				},
-				ctx,
+			await ctx.context.runInBackgroundOrAwait(
+				opts.sendOTP(
+					{
+						phoneNumber: ctx.body.phoneNumber,
+						code,
+					},
+					ctx,
+				),
 			);
 			return ctx.json({ message: "code sent" });
 		},
@@ -697,24 +703,29 @@ export const requestPasswordResetPhoneNumber = (
 					},
 				],
 			});
-			if (!user) {
-				throw new APIError("BAD_REQUEST", {
-					message: PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_NOT_EXIST,
-				});
-			}
 			const code = generateOTP(opts.otpLength);
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: `${code}:0`,
 				identifier: `${ctx.body.phoneNumber}-request-password-reset`,
 				expiresAt: getDate(opts.expiresIn, "sec"),
 			});
-			await opts?.sendPasswordResetOTP?.(
-				{
-					phoneNumber: ctx.body.phoneNumber,
-					code,
-				},
-				ctx,
-			);
+			// to avoid leaking the existence of the phone number
+			if (!user) {
+				return ctx.json({
+					status: true,
+				});
+			}
+			if (opts.sendPasswordResetOTP) {
+				await ctx.context.runInBackgroundOrAwait(
+					opts.sendPasswordResetOTP(
+						{
+							phoneNumber: ctx.body.phoneNumber,
+							code,
+						},
+						ctx,
+					),
+				);
+			}
 			return ctx.json({
 				status: true,
 			});
@@ -817,6 +828,18 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					message: PHONE_NUMBER_ERROR_CODES.UNEXPECTED_ERROR,
 				});
 			}
+			const minLength = ctx.context.password.config.minPasswordLength;
+			const maxLength = ctx.context.password.config.maxPasswordLength;
+			if (ctx.body.newPassword.length < minLength) {
+				throw new APIError("BAD_REQUEST", {
+					message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
+				});
+			}
+			if (ctx.body.newPassword.length > maxLength) {
+				throw new APIError("BAD_REQUEST", {
+					message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
+				});
+			}
 			const hashedPassword = await ctx.context.password.hash(
 				ctx.body.newPassword,
 			);
@@ -824,6 +847,11 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			await ctx.context.internalAdapter.deleteVerificationValue(
 				verification.id,
 			);
+
+			if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
+				await ctx.context.internalAdapter.deleteSessions(user.id);
+			}
+
 			return ctx.json({
 				status: true,
 			});

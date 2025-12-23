@@ -957,6 +957,10 @@ describe("access control", async (it) => {
 		user: ["read"],
 		order: ["read"],
 	});
+	const supportAc = ac.newRole({
+		user: ["update"],
+		order: ["update"],
+	});
 
 	const { signInWithTestUser, cookieSetter, auth, customFetchImpl } =
 		await getTestInstance(
@@ -967,6 +971,7 @@ describe("access control", async (it) => {
 						roles: {
 							admin: adminAc,
 							user: userAc,
+							support: supportAc,
 						},
 					}),
 				],
@@ -979,6 +984,14 @@ describe("access control", async (it) => {
 										data: {
 											...user,
 											role: "admin",
+										},
+									};
+								}
+								if (user.name === "Support") {
+									return {
+										data: {
+											...user,
+											role: "support",
 										},
 									};
 								}
@@ -1001,6 +1014,7 @@ describe("access control", async (it) => {
 				roles: {
 					admin: adminAc,
 					user: userAc,
+					support: supportAc,
 				},
 			}),
 		],
@@ -1011,6 +1025,104 @@ describe("access control", async (it) => {
 	});
 
 	const { headers, user } = await signInWithTestUser();
+
+	it("should not allow role updates via update-user without user:set-role", async () => {
+		const supportHeaders = new Headers();
+		const { data: supportSignUp } = await client.signUp.email(
+			{
+				email: "support@test.com",
+				password: "password",
+				name: "Support",
+			},
+			{
+				onSuccess: cookieSetter(supportHeaders),
+			},
+		);
+		const supportUserId = supportSignUp?.user.id || "";
+
+		// Non-sensitive updates should still be allowed with `user:update`
+		const ok = await client.admin.updateUser(
+			{
+				userId: supportUserId,
+				data: {
+					name: "Support Updated",
+				},
+			},
+			{
+				headers: supportHeaders,
+			},
+		);
+		expect(ok.data?.name).toBe("Support Updated");
+
+		// But attempting to update `role` must be rejected without `user:set-role`.
+		const res = await client.admin.updateUser(
+			{
+				userId: supportUserId,
+				data: {
+					role: "admin",
+				},
+			},
+			{
+				headers: supportHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(403);
+	});
+
+	it("should reject non-existent roles via update-user", async () => {
+		const { data: targetUserRes } = await client.signUp.email(
+			{
+				email: "role-target@test.com",
+				password: "password",
+				name: "Role Target",
+			},
+			{
+				onSuccess: cookieSetter(new Headers()),
+			},
+		);
+		const targetUserId = targetUserRes?.user.id || "";
+
+		const res = await client.admin.updateUser(
+			{
+				userId: targetUserId,
+				data: {
+					role: "non-existent-role",
+				},
+			},
+			{
+				headers,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+	});
+
+	it("should allow role updates via update-user for valid roles with user:set-role", async () => {
+		const { data: targetUserRes } = await client.signUp.email(
+			{
+				email: "role-valid-target@test.com",
+				password: "password",
+				name: "Role Valid Target",
+			},
+			{
+				onSuccess: cookieSetter(new Headers()),
+			},
+		);
+		const targetUserId = targetUserRes?.user.id || "";
+
+		const res = await client.admin.updateUser(
+			{
+				userId: targetUserId,
+				data: {
+					role: "support",
+				},
+			},
+			{
+				headers,
+			},
+		);
+		expect(res.error).toBeNull();
+		expect(res.data?.role).toBe("support");
+	});
 
 	it("should validate on the client", async () => {
 		const canCreateOrder = client.admin.checkRolePermission({

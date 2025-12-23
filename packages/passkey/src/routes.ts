@@ -11,7 +11,6 @@ import {
 	verifyAuthenticationResponse,
 	verifyRegistrationResponse,
 } from "@simplewebauthn/server";
-import { generateId } from "better-auth";
 import {
 	freshSessionMiddleware,
 	getSessionFromCtx,
@@ -212,16 +211,21 @@ export const generatePasskeyRegistrationOptions = (
 						: {}),
 				},
 			});
-			const id = generateId(32);
+			const verificationToken = generateRandomString(32);
 			const webAuthnCookie = ctx.context.createAuthCookie(
 				opts.advanced.webAuthnChallengeCookie,
 			);
-			await ctx.setSignedCookie(webAuthnCookie.name, id, ctx.context.secret, {
-				...webAuthnCookie.attributes,
-				maxAge: maxAgeInSeconds,
-			});
+			await ctx.setSignedCookie(
+				webAuthnCookie.name,
+				verificationToken,
+				ctx.context.secret,
+				{
+					...webAuthnCookie.attributes,
+					maxAge: maxAgeInSeconds,
+				},
+			);
 			await ctx.context.internalAdapter.createVerificationValue({
-				identifier: id,
+				identifier: verificationToken,
 				value: JSON.stringify({
 					expectedChallenge: options.challenge,
 					userData: {
@@ -373,16 +377,21 @@ export const generatePasskeyAuthenticationOptions = (
 					id: session?.user.id || "",
 				},
 			};
-			const id = generateId(32);
+			const verificationToken = generateRandomString(32);
 			const webAuthnCookie = ctx.context.createAuthCookie(
 				opts.advanced.webAuthnChallengeCookie,
 			);
-			await ctx.setSignedCookie(webAuthnCookie.name, id, ctx.context.secret, {
-				...webAuthnCookie.attributes,
-				maxAge: maxAgeInSeconds,
-			});
+			await ctx.setSignedCookie(
+				webAuthnCookie.name,
+				verificationToken,
+				ctx.context.secret,
+				{
+					...webAuthnCookie.attributes,
+					maxAge: maxAgeInSeconds,
+				},
+			);
 			await ctx.context.internalAdapter.createVerificationValue({
-				identifier: id,
+				identifier: verificationToken,
 				value: JSON.stringify(data),
 				expiresAt: expirationTime,
 			});
@@ -442,18 +451,20 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 			const webAuthnCookie = ctx.context.createAuthCookie(
 				options.advanced.webAuthnChallengeCookie,
 			);
-			const challengeId = await ctx.getSignedCookie(
+			const verificationToken = await ctx.getSignedCookie(
 				webAuthnCookie.name,
 				ctx.context.secret,
 			);
-			if (!challengeId) {
+			if (!verificationToken) {
 				throw new APIError("BAD_REQUEST", {
 					message: PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
 				});
 			}
 
 			const data =
-				await ctx.context.internalAdapter.findVerificationValue(challengeId);
+				await ctx.context.internalAdapter.findVerificationValue(
+					verificationToken,
+				);
 			if (!data) {
 				return ctx.json(null, {
 					status: 400,
@@ -506,11 +517,14 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 					model: "passkey",
 					data: newPasskey,
 				});
+				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+					verificationToken,
+				);
 				return ctx.json(newPasskeyRes, {
 					status: 200,
 				});
 			} catch (e) {
-				console.log(e);
+				ctx.context.logger.error("Failed to verify registration", e);
 				throw new APIError("INTERNAL_SERVER_ERROR", {
 					message: PASSKEY_ERROR_CODES.FAILED_TO_VERIFY_REGISTRATION,
 				});
@@ -571,18 +585,20 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 			const webAuthnCookie = ctx.context.createAuthCookie(
 				options.advanced.webAuthnChallengeCookie,
 			);
-			const challengeId = await ctx.getSignedCookie(
+			const verificationToken = await ctx.getSignedCookie(
 				webAuthnCookie.name,
 				ctx.context.secret,
 			);
-			if (!challengeId) {
+			if (!verificationToken) {
 				throw new APIError("BAD_REQUEST", {
 					message: PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
 				});
 			}
 
 			const data =
-				await ctx.context.internalAdapter.findVerificationValue(challengeId);
+				await ctx.context.internalAdapter.findVerificationValue(
+					verificationToken,
+				);
 			if (!data) {
 				throw new APIError("BAD_REQUEST", {
 					message: PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
@@ -659,6 +675,10 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 					session: s,
 					user,
 				});
+				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+					verificationToken,
+				);
+
 				return ctx.json(
 					{
 						session: s,
