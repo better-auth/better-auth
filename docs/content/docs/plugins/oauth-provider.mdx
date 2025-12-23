@@ -1809,7 +1809,7 @@ Option 2 (more complex):
 - Convert `oauthAccessToken` with `refreshToken` field into a new `oauthRefreshToken` entry.
 ```ts
 {
-  token: hashed(refreshToken),
+  token: defaultHasher(refreshToken),
   expiresAt: refreshTokenExpiresAt,
   clientId: clientId,
   scopes: scopes,
@@ -1822,7 +1822,7 @@ Option 2 (more complex):
 - Keep `oauthAccessToken` but reference new `oauthRefreshToken`.
 ```ts
 {
-  token: hashed(accessToken),
+  token: defaultHasher(accessToken),
   expiresAt: accessTokenExpiresAt,
   clientId: clientId,
   scopes: scopes,
