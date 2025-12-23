@@ -1268,6 +1268,6 @@ export function organization<O extends OrganizationOptions>(
 					} & InferOrganization<O, false>,
 		},
 		$ERROR_CODES: ORGANIZATION_ERROR_CODES,
-		options: options as O,
+		options: options as NoInfer<O>,
 	} satisfies BetterAuthPlugin;
 }

@@ -183,6 +183,9 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 									{
 										field: data.filter?.field,
 										value: data.filter?.value,
+										...(data.filter.operator
+											? { operator: data.filter.operator }
+											: {}),
 									},
 								]
 							: []),
@@ -202,6 +205,9 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 									{
 										field: data.filter?.field,
 										value: data.filter?.value,
+										...(data.filter.operator
+											? { operator: data.filter.operator }
+											: {}),
 									},
 								]
 							: []),

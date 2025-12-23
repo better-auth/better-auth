@@ -43,7 +43,7 @@ export type AdapterFactoryCustomizeAdapterCreator = (config: {
 	 *
 	 * If the config has defined `debugLogs` as `false`, no logs will be shown.
 	 */
-	debugLog: (...args: any[]) => void;
+	debugLog: (...args: unknown[]) => void;
 	/**
 	 * Get the model name which is expected to be saved in the database based on the user's schema.
 	 */
@@ -97,23 +97,33 @@ export type AdapterFactoryCustomizeAdapterCreator = (config: {
 	}) => DBFieldAttribute;
 	// The following functions are exposed primarily for the purpose of having wrapper adapters.
 	transformInput: (
-		data: Record<string, any>,
+		data: Record<string, unknown>,
 		defaultModelName: string,
 		action: "create" | "update",
 		forceAllowId?: boolean | undefined,
-	) => Promise<Record<string, any>>;
+	) => Promise<Record<string, unknown>>;
 	transformOutput: (
-		data: Record<string, any>,
+		data: Record<string, unknown>,
 		defaultModelName: string,
 		select?: string[] | undefined,
 		joinConfig?: JoinConfig | undefined,
-	) => Promise<Record<string, any>>;
+	) => Promise<Record<string, unknown>>;
 	transformWhereClause: <W extends Where[] | undefined>({
 		model,
 		where,
+		action,
 	}: {
 		where: W;
 		model: string;
+		action:
+			| "create"
+			| "update"
+			| "findOne"
+			| "findMany"
+			| "updateMany"
+			| "delete"
+			| "deleteMany"
+			| "count";
 	}) => W extends undefined ? undefined : CleanedWhere[];
 }) => CustomAdapter;
 

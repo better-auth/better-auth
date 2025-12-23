@@ -104,6 +104,12 @@ export async function createAuthContext(
 	const logger = createLogger(options.logger);
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
 
+	if (!baseURL) {
+		logger.warn(
+			`[better-auth] Base URL could not be determined. Please set a valid base URL using the baseURL config option or the BETTER_AUTH_BASE_URL environment variable. Without this, callbacks and redirects may not work correctly.`,
+		);
+	}
+
 	const secret =
 		options.secret ||
 		env.BETTER_AUTH_SECRET ||
@@ -176,8 +182,13 @@ export async function createAuthContext(
 			skipStateCookieCheck: !!options.account?.skipStateCookieCheck,
 		},
 		tables,
-		trustedOrigins: getTrustedOrigins(options),
-		isTrustedOrigin(url: string, settings?: { allowRelativePaths: boolean }) {
+		trustedOrigins: await getTrustedOrigins(options),
+		isTrustedOrigin(
+			url: string,
+			settings?: {
+				allowRelativePaths: boolean;
+			},
+		) {
 			return ctx.trustedOrigins.some((origin) =>
 				matchesOriginPattern(url, origin, settings),
 			);
@@ -277,6 +288,30 @@ export async function createAuthContext(
 				: isTest()
 					? true
 					: false,
+		runInBackground:
+			options.advanced?.backgroundTasks?.handler ??
+			((p) => {
+				p.catch(() => {});
+			}),
+		async runInBackgroundOrAwait(
+			promise: Promise<unknown> | Promise<void> | void | unknown,
+		) {
+			try {
+				if (options.advanced?.backgroundTasks?.handler) {
+					if (promise instanceof Promise) {
+						options.advanced.backgroundTasks.handler(
+							promise.catch((e) => {
+								logger.error("Failed to run background task:", e);
+							}),
+						);
+					}
+				} else {
+					await promise;
+				}
+			} catch (e) {
+				logger.error("Failed to run background task:", e);
+			}
+		},
 	};
 
 	const initOrPromise = runPluginInit(ctx);

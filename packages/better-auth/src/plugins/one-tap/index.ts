@@ -6,7 +6,7 @@ import { APIError } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { toBoolean } from "../../utils/boolean";
 
-interface OneTapOptions {
+export interface OneTapOptions {
 	/**
 	 * Disable the signup flow
 	 *
@@ -188,4 +188,5 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 				},
 			),
 		},
+		options,
 	}) satisfies BetterAuthPlugin;
