@@ -1609,15 +1609,27 @@ describe("stripe", () => {
 			data: {
 				referenceId: userRes.user.id,
 				stripeCustomerId: "cus_old_123",
+				status: "incomplete",
+				plan: "premium",
+				stripeSubscriptionId: "sub_decoy_123",
+			},
+		});
+
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				referenceId: userRes.user.id,
+				stripeCustomerId: "cus_old_123",
 				status: "canceled",
 				plan: "starter",
-				trialStart: new Date(),
-				trialEnd: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+				trialStart: new Date(Date.now() - 1000000),
+				trialEnd: new Date(Date.now() - 500000),
 			},
 		});
 
 		const upgradeRes = await client.subscription.upgrade({
 			plan: "premium",
+			subscriptionId: "sub_decoy_123",
 			fetchOptions: { headers },
 		});
 
