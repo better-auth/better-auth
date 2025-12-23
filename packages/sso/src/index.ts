@@ -2,14 +2,6 @@ import type { BetterAuthPlugin } from "better-auth";
 import { createAuthMiddleware } from "better-auth/api";
 import { XMLValidator } from "fast-xml-parser";
 import * as saml from "samlify";
-import type {
-	AuthnRequestRecord,
-	AuthnRequestStore,
-} from "./authn-request-store";
-import {
-	createInMemoryAuthnRequestStore,
-	DEFAULT_AUTHN_REQUEST_TTL_MS,
-} from "./authn-request-store";
 import { assignOrganizationByDomain } from "./linking";
 import {
 	requestDomainVerification,
@@ -25,7 +17,6 @@ import {
 } from "./routes/sso";
 
 export {
-	DEFAULT_CLOCK_SKEW_MS,
 	type SAMLConditions,
 	type TimestampValidationOptions,
 	validateSAMLTimestamp,
@@ -43,8 +34,6 @@ export {
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "./types";
 
 export type { SAMLConfig, OIDCConfig, SSOOptions, SSOProvider };
-export type { AuthnRequestStore, AuthnRequestRecord };
-export { createInMemoryAuthnRequestStore, DEFAULT_AUTHN_REQUEST_TTL_MS };
 
 export {
 	computeDiscoveryUrl,
@@ -189,6 +178,7 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 						await assignOrganizationByDomain(ctx, {
 							user: newSession.user,
 							provisioningOptions: options?.organizationProvisioning,
+							domainVerification: options?.domainVerification,
 						});
 					}),
 				},
@@ -243,5 +233,6 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 				},
 			},
 		},
+		options: options as NoInfer<O>,
 	} satisfies BetterAuthPlugin;
 }

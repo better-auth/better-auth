@@ -42,16 +42,18 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				options: {
 					emailVerification: {
 						async sendVerificationEmail(data, request) {
-							await sendVerificationOTPAction({
-								//@ts-expect-error - we need to pass the context
-								context: ctx,
-								request: request,
-								body: {
-									email: data.user.email,
-									type: "email-verification",
-								},
-								ctx,
-							});
+							await ctx.runInBackgroundOrAwait(
+								sendVerificationOTPAction({
+									//@ts-expect-error - we need to pass the context
+									context: ctx,
+									request: request,
+									body: {
+										email: data.user.email,
+										type: "email-verification",
+									},
+									ctx,
+								}),
+							);
 						},
 					},
 				},
@@ -92,13 +94,15 @@ export const emailOTP = (options: EmailOTPOptions) => {
 								identifier: `email-verification-otp-${email}`,
 								expiresAt: getDate(opts.expiresIn, "sec"),
 							});
-							await options.sendVerificationOTP(
-								{
-									email,
-									otp,
-									type: "email-verification",
-								},
-								ctx,
+							await ctx.context.runInBackgroundOrAwait(
+								options.sendVerificationOTP(
+									{
+										email,
+										otp,
+										type: "email-verification",
+									},
+									ctx,
+								),
 							);
 						}
 					}),
@@ -136,5 +140,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				max: 3,
 			},
 		],
+		options,
 	} satisfies BetterAuthPlugin;
 };
