@@ -49,7 +49,8 @@ This plugin is in active development and may not be suitable for production use.
 
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth";
-    import { oauthProvider, jwt } from "@better-auth/oauth-provider";
+    import { jwt } from "better-auth/plugins";
+    import { oauthProvider } from "@better-auth/oauth-provider";
 
     const auth = betterAuth({
       disabledPaths: [
