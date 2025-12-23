@@ -1,3 +1,4 @@
+import { base64 } from "@better-auth/utils/base64";
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
 import type { User, Verification } from "better-auth";
 import {
@@ -672,8 +673,8 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				const maxMetadataSize =
 					options?.saml?.maxMetadataSize ?? DEFAULT_MAX_SAML_METADATA_SIZE;
 				if (
-					Buffer.byteLength(body.samlConfig.idpMetadata.metadata, "utf8") >
-					maxMetadataSize
+					new TextEncoder().encode(body.samlConfig.idpMetadata.metadata)
+						.length > maxMetadataSize
 				) {
 					throw new APIError("BAD_REQUEST", {
 						message: `IdP metadata exceeds maximum allowed size (${maxMetadataSize} bytes)`,
@@ -1698,7 +1699,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 
 			const maxResponseSize =
 				options?.saml?.maxResponseSize ?? DEFAULT_MAX_SAML_RESPONSE_SIZE;
-			if (Buffer.byteLength(SAMLResponse, "utf8") > maxResponseSize) {
+			if (new TextEncoder().encode(SAMLResponse).length > maxResponseSize) {
 				throw new APIError("BAD_REQUEST", {
 					message: `SAML response exceeds maximum allowed size (${maxResponseSize} bytes)`,
 				});
@@ -1832,8 +1833,8 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			} catch (error) {
 				ctx.context.logger.error("SAML response validation failed", {
 					error,
-					decodedResponse: Buffer.from(SAMLResponse, "base64").toString(
-						"utf-8",
+					decodedResponse: new TextDecoder().decode(
+						base64.decode(SAMLResponse),
 					),
 				});
 				throw new APIError("BAD_REQUEST", {
@@ -2145,7 +2146,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 
 			const maxResponseSize =
 				options?.saml?.maxResponseSize ?? DEFAULT_MAX_SAML_RESPONSE_SIZE;
-			if (Buffer.byteLength(SAMLResponse, "utf8") > maxResponseSize) {
+			if (new TextEncoder().encode(SAMLResponse).length > maxResponseSize) {
 				throw new APIError("BAD_REQUEST", {
 					message: `SAML response exceeds maximum allowed size (${maxResponseSize} bytes)`,
 				});
@@ -2270,8 +2271,8 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			} catch (error) {
 				ctx.context.logger.error("SAML response validation failed", {
 					error,
-					decodedResponse: Buffer.from(SAMLResponse, "base64").toString(
-						"utf-8",
+					decodedResponse: new TextDecoder().decode(
+						base64.decode(SAMLResponse),
 					),
 				});
 				throw new APIError("BAD_REQUEST", {
@@ -2367,8 +2368,8 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			}
 
 			// Assertion Replay Protection
-			const samlContentAcs = Buffer.from(SAMLResponse, "base64").toString(
-				"utf-8",
+			const samlContentAcs = new TextDecoder().decode(
+				base64.decode(SAMLResponse),
 			);
 			const assertionIdAcs = extractAssertionId(samlContentAcs);
 

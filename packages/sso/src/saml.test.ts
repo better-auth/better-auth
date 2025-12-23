@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { createServer } from "node:http";
+import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
@@ -2035,8 +2036,7 @@ describe("SAML SSO - Signature Validation Security", () => {
 			</saml2p:Response>
 		`;
 
-		const encodedForgedResponse =
-			Buffer.from(forgedSamlResponse).toString("base64");
+		const encodedForgedResponse = base64.encode(forgedSamlResponse);
 
 		await expect(
 			auth.api.callbackSSOSAML({
@@ -2111,9 +2111,7 @@ describe("SAML SSO - Signature Validation Security", () => {
 			</saml2p:Response>
 		`;
 
-		const encodedBadSigResponse = Buffer.from(
-			responseWithBadSignature,
-		).toString("base64");
+		const encodedBadSigResponse = base64.encode(responseWithBadSignature);
 
 		await expect(
 			auth.api.callbackSSOSAML({
