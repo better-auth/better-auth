@@ -149,7 +149,7 @@ await auth.api.verifyPassword({
     body: {
         password: "user-password" // required
     },
-    headers: // headers containing the user's session token
+    headers: await headers() // headers containing the user's session token
 });
 ```
 <Callout type="info">
@@ -468,8 +468,8 @@ Users already signed in can manually link their account to additional social pro
 
   ```ts
   await auth.api.setPassword({
-      headers: /* headers containing the user's session token */,
-      password: /* new password */
+      headers: await headers(), // headers containing the user's session token
+      password: "new-password" // required
   });
   ```
 
