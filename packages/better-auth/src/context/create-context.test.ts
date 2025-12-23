@@ -18,6 +18,7 @@ describe("base context creation", () => {
 	};
 	const makePlugin = (
 		opts: Partial<BetterAuthPlugin> = {},
+		nb,
 	): BetterAuthPlugin => ({
 		id: "test",
 		init(ctx) {
@@ -228,6 +229,7 @@ describe("base context creation", () => {
 			baseURL: "http://localhost:3000",
 			plugins: [makePlugin({ enabled: true })],
 		});
+		expect((ctx as any)._pluginRan).toBe(true);
 	});
 
 	it("plugin init is skipped when enabled: false", async () => {
@@ -235,6 +237,7 @@ describe("base context creation", () => {
 			baseURL: "http://localhost:3000",
 			plugins: [makePlugin({ enabled: false })],
 		});
+		expect((ctx as any)._pluginRan).toBeUndefined();
 	});
 
 	it("handles empty basePath", async () => {
