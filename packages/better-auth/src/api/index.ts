@@ -7,8 +7,9 @@ import type {
 import type { InternalLogger } from "@better-auth/core/env";
 import { logger } from "@better-auth/core/env";
 import type { Endpoint, Middleware } from "better-call";
-import { APIError, createRouter } from "better-call";
+import { createRouter } from "better-call";
 import type { UnionToIntersection } from "../types/helper";
+import { isAPIError } from "../utils/is-api-error";
 import { originCheckMiddleware } from "./middlewares";
 import { onRequestRateLimit } from "./rate-limiter";
 import {
@@ -273,6 +274,7 @@ export const router = <Option extends BetterAuthOptions>(
 			//handle disabled paths
 			const disabledPaths = ctx.options.disabledPaths || [];
 			const pathname = new URL(req.url).pathname.replace(/\/+$/, "") || "/";
+
 			const normalizedPath =
 				basePath === "/"
 					? pathname
@@ -314,7 +316,7 @@ export const router = <Option extends BetterAuthOptions>(
 			return res;
 		},
 		onError(e) {
-			if (e instanceof APIError && e.status === "FOUND") {
+			if (isAPIError(e) && e.status === "FOUND") {
 				return;
 			}
 			if (options.onAPIError?.throw) {
@@ -351,7 +353,7 @@ export const router = <Option extends BetterAuthOptions>(
 					}
 				}
 
-				if (e instanceof APIError) {
+				if (isAPIError(e)) {
 					if (e.status === "INTERNAL_SERVER_ERROR") {
 						ctx.logger.error(e.status, e);
 					}
@@ -374,7 +376,8 @@ export {
 	createAuthMiddleware,
 	optionsMiddleware,
 } from "@better-auth/core/api";
-export { APIError } from "better-call";
+export { APIError } from "@better-auth/core/error";
 export { getIp } from "../utils/get-request-ip";
+export { isAPIError } from "../utils/is-api-error";
 export * from "./middlewares";
 export * from "./routes";
