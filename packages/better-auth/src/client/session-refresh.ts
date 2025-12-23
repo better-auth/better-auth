@@ -85,12 +85,9 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 
 					if (data?.needsRefresh) {
 						try {
-							const refreshRes = await $fetch<SessionResponse>(
-								"/get-session",
-								{
-									method: "POST",
-								},
-							);
+							const refreshRes = await $fetch<SessionResponse>("/get-session", {
+								method: "POST",
+							});
 							data = refreshRes.data;
 							error = refreshRes.error || null;
 						} catch {}
