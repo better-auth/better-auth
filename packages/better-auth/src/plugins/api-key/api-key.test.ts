@@ -427,7 +427,7 @@ describe("api-key", async () => {
 	});
 
 	it("should fail to create a key with a custom expiresIn value when customExpiresTime is disabled", async () => {
-		const { client, auth, signInWithTestUser } = await getTestInstance(
+		const { auth, signInWithTestUser } = await getTestInstance(
 			{
 				plugins: [
 					apiKey({
@@ -445,7 +445,7 @@ describe("api-key", async () => {
 			},
 		);
 
-		const { headers, user } = await signInWithTestUser();
+		const { headers } = await signInWithTestUser();
 		let result: { data: ApiKey | null; error: Err | null } = {
 			data: null,
 			error: null,
@@ -758,7 +758,7 @@ describe("api-key", async () => {
 	});
 
 	it("create API key with with metadata when metadata is disabled (should fail)", async () => {
-		const { client, auth, signInWithTestUser } = await getTestInstance(
+		const { auth, signInWithTestUser } = await getTestInstance(
 			{
 				plugins: [
 					apiKey({
@@ -799,7 +799,7 @@ describe("api-key", async () => {
 		expect(result.error?.body.message).toEqual(ERROR_CODES.METADATA_DISABLED);
 	});
 
-	it("should have the first 6 chracaters of the key as the start property", async () => {
+	it("should have the first 6 characters of the key as the start property", async () => {
 		const { data: apiKey } = await client.apiKey.create(
 			{},
 			{ headers: headers },
@@ -811,7 +811,7 @@ describe("api-key", async () => {
 	});
 
 	it("should have the start property as null if shouldStore is false", async () => {
-		const { client, auth, signInWithTestUser } = await getTestInstance(
+		const { client, signInWithTestUser } = await getTestInstance(
 			{
 				plugins: [
 					apiKey({
@@ -839,7 +839,7 @@ describe("api-key", async () => {
 
 	it("should use the defined charactersLength if provided", async () => {
 		const customLength = 3;
-		const { client, auth, signInWithTestUser } = await getTestInstance(
+		const { client, signInWithTestUser } = await getTestInstance(
 			{
 				plugins: [
 					apiKey({
@@ -1681,37 +1681,98 @@ describe("api-key", async () => {
 	// Sessions from API keys
 	// =========================================================================
 
-	it("should get session from an API key", async () => {
-		const { client, auth, signInWithTestUser } = await getTestInstance(
-			{
-				plugins: [
-					apiKey({
-						enableSessionForAPIKeys: true,
-					}),
-				],
-			},
-			{
-				clientOptions: {
-					plugins: [apiKeyClient()],
+	describe("enableSessionForAPIKeys", () => {
+		it("should get session from an API key", async () => {
+			const { client, auth, signInWithTestUser } = await getTestInstance(
+				{
+					plugins: [
+						apiKey({
+							enableSessionForAPIKeys: true,
+						}),
+					],
 				},
-			},
-		);
+				{
+					clientOptions: {
+						plugins: [apiKeyClient()],
+					},
+				},
+			);
 
-		const { headers: userHeaders } = await signInWithTestUser();
+			const { headers: userHeaders } = await signInWithTestUser();
 
-		const { data: apiKey2 } = await client.apiKey.create(
-			{},
-			{ headers: userHeaders },
-		);
-		if (!apiKey2) return;
-		const headers = new Headers();
-		headers.set("x-api-key", apiKey2.key);
+			const { data: apiKey2 } = await client.apiKey.create(
+				{},
+				{ headers: userHeaders },
+			);
+			if (!apiKey2) return;
+			const headers = new Headers();
+			headers.set("x-api-key", apiKey2.key);
 
-		const session = await auth.api.getSession({
-			headers: headers,
+			const session = await auth.api.getSession({
+				headers: headers,
+			});
+
+			expect(session?.session).toBeDefined();
 		});
 
-		expect(session?.session).toBeDefined();
+		it("should not get session from an API key if enableSessionForAPIKeys is false", async () => {
+			const { client, auth, signInWithTestUser } = await getTestInstance(
+				{
+					plugins: [
+						apiKey({
+							enableSessionForAPIKeys: false,
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [apiKeyClient()],
+					},
+				},
+			);
+			const { headers: userHeaders } = await signInWithTestUser();
+			const { data: apiKey2 } = await client.apiKey.create(
+				{},
+				{ headers: userHeaders },
+			);
+			if (!apiKey2) return;
+			const headers = new Headers();
+			headers.set("x-api-key", apiKey2.key);
+			const session = await auth.api.getSession({
+				headers: headers,
+			});
+			expect(session).toBeNull();
+		});
+
+		it("should get the Response object when asResponse is true", async () => {
+			const { client, auth, signInWithTestUser } = await getTestInstance(
+				{
+					plugins: [
+						apiKey({
+							enableSessionForAPIKeys: true,
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [apiKeyClient()],
+					},
+				},
+			);
+			const { headers: userHeaders } = await signInWithTestUser();
+			const { data: apiKey2 } = await client.apiKey.create(
+				{},
+				{ headers: userHeaders },
+			);
+			if (!apiKey2) return;
+			const headers = new Headers();
+			headers.set("x-api-key", apiKey2.key);
+			const res = await auth.api.getSession({
+				headers: headers,
+				asResponse: true,
+			});
+			expect(res).toBeInstanceOf(Response);
+		});
 	});
 
 	// =========================================================================
@@ -2239,7 +2300,7 @@ describe("api-key", async () => {
 		});
 
 		it("should list API keys from secondary storage", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 
 			// Create multiple API keys
 			const { data: key1 } = await client.apiKey.create(
@@ -2262,7 +2323,7 @@ describe("api-key", async () => {
 		});
 
 		it("should update API key in secondary storage", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 			const { data: createdKey } = await client.apiKey.create(
 				{ name: "Original Name" },
 				{ headers: headers },
@@ -2311,7 +2372,7 @@ describe("api-key", async () => {
 		});
 
 		it("should verify API key from secondary storage", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 			const { data: createdKey } = await client.apiKey.create(
 				{},
 				{ headers: headers },
@@ -2331,7 +2392,7 @@ describe("api-key", async () => {
 		});
 
 		it("should set TTL when API key has expiration", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 			const expiresIn = 60 * 60 * 24; // 1 day in seconds
 
 			const { data: createdKey } = await client.apiKey.create(
@@ -2352,7 +2413,7 @@ describe("api-key", async () => {
 		});
 
 		it("should handle metadata in secondary storage", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 			const metadata = { plan: "premium", environment: "production" };
 
 			const { data: createdKey } = await client.apiKey.create(
@@ -2372,7 +2433,7 @@ describe("api-key", async () => {
 		});
 
 		it("should handle rate limiting with secondary storage", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { user } = await signInWithTestUser();
 			const createdKey = await auth.api.createApiKey({
 				body: {
 					rateLimitEnabled: true,
@@ -2410,7 +2471,7 @@ describe("api-key", async () => {
 		});
 
 		it("should handle remaining count with secondary storage", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { user } = await signInWithTestUser();
 			const remaining = 5;
 
 			const createdKey = await auth.api.createApiKey({
@@ -2442,7 +2503,7 @@ describe("api-key", async () => {
 
 		it("should handle expired keys with TTL in secondary storage", async () => {
 			vi.useFakeTimers();
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 			// Use 1 day in seconds (minimum allowed) + 1 second for testing expiration
 			const expiresIn = 60 * 60 * 24 + 1; // 86401 seconds = 1 day + 1 second
 
@@ -2470,7 +2531,7 @@ describe("api-key", async () => {
 		});
 
 		it("should maintain user's API key list in secondary storage", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 
 			// Create multiple API keys for the same user
 			const { data: key1 } = await client.apiKey.create(
@@ -2549,7 +2610,7 @@ describe("api-key", async () => {
 		});
 
 		it("should read from secondary storage first", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 			const { data: createdKey } = await client.apiKey.create(
 				{},
 				{ headers: headers },
@@ -2565,6 +2626,45 @@ describe("api-key", async () => {
 
 			expect(retrievedKey).not.toBeNull();
 			expect(retrievedKey?.id).toBe(createdKey?.id);
+		});
+
+		it("verifyApiKey should persist quota updates to the database when fallbackToDatabase is true", async () => {
+			const { headers, user } = await signInWithTestUser();
+
+			const createdKey = await auth.api.createApiKey({
+				body: {
+					remaining: 1,
+					userId: user.id,
+				},
+			});
+
+			const first = await auth.api.verifyApiKey({
+				body: {
+					key: createdKey.key,
+				},
+			});
+
+			expect(first.valid).toBe(true);
+			expect(first.key?.remaining).toBe(0);
+
+			// Ensure the canonical DB row was updated (not just the cache).
+			const dbAfterFirst = await auth.api.getApiKey({
+				query: { id: createdKey.id },
+				headers,
+			});
+			expect(dbAfterFirst.remaining).toBe(0);
+
+			// Simulate cache eviction/deletion and ensure we don't repopulate stale allowances.
+			store.clear();
+
+			const second = await auth.api.verifyApiKey({
+				body: {
+					key: createdKey.key,
+				},
+			});
+
+			expect(second.valid).toBe(false);
+			expect(second.error?.code).toBe("USAGE_EXCEEDED");
 		});
 
 		it("should fallback to database when not found in storage and auto-populate storage", async () => {
@@ -2705,7 +2805,7 @@ describe("api-key", async () => {
 		});
 
 		it("should write to secondary storage only", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 			const { data: createdKey } = await client.apiKey.create(
 				{ name: "Test Key" },
 				{ headers: headers },
@@ -2716,7 +2816,7 @@ describe("api-key", async () => {
 		});
 
 		it("should create in both database and secondary storage when fallbackToDatabase is true", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 			const { data: createdKey } = await client.apiKey.create(
 				{ name: "Fallback Test Key" },
 				{ headers: headers },
@@ -2738,7 +2838,7 @@ describe("api-key", async () => {
 		});
 
 		it("should update both database and secondary storage when fallbackToDatabase is true", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 			const { data: createdKey } = await client.apiKey.create(
 				{ name: "Original Name" },
 				{ headers: headers },
@@ -2773,7 +2873,7 @@ describe("api-key", async () => {
 		});
 
 		it("should delete from both database and secondary storage when fallbackToDatabase is true", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 			const { data: createdKey } = await client.apiKey.create(
 				{},
 				{ headers: headers },
@@ -2815,13 +2915,171 @@ describe("api-key", async () => {
 		});
 	});
 
+	describe("deferUpdates option", () => {
+		it("should defer updates when deferUpdates is enabled with global backgroundTasks", async () => {
+			const deferredPromises: Array<Promise<void>> = [];
+			const { auth, signInWithTestUser } = await getTestInstance({
+				advanced: {
+					backgroundTasks: {
+						handler: (p: Promise<void>) => {
+							deferredPromises.push(p);
+						},
+					},
+				},
+				plugins: [
+					apiKey({
+						deferUpdates: true,
+					}),
+				],
+			});
+
+			const { headers, user } = await signInWithTestUser();
+
+			const key = await auth.api.createApiKey({
+				body: { userId: user.id },
+				headers,
+			});
+
+			const result = await auth.api.verifyApiKey({
+				body: { key: key.key },
+			});
+
+			expect(result.valid).toBe(true);
+			expect(deferredPromises.length).toBeGreaterThan(0);
+
+			await Promise.all(deferredPromises);
+
+			const updatedKey = await auth.api.getApiKey({
+				query: { id: key.id },
+				headers,
+			});
+			expect(updatedKey.lastRequest).not.toBeNull();
+		});
+
+		it("should still validate rate limits correctly with deferred updates", async () => {
+			const deferredPromises: Array<Promise<void>> = [];
+			const { auth, signInWithTestUser } = await getTestInstance({
+				advanced: {
+					backgroundTasks: {
+						handler: (p: Promise<void>) => {
+							deferredPromises.push(p);
+						},
+					},
+				},
+				plugins: [
+					apiKey({
+						deferUpdates: true,
+						rateLimit: {
+							enabled: true,
+							maxRequests: 2,
+							timeWindow: 60000,
+						},
+					}),
+				],
+			});
+
+			const { headers, user } = await signInWithTestUser();
+
+			const key = await auth.api.createApiKey({
+				body: { userId: user.id },
+				headers,
+			});
+
+			const result1 = await auth.api.verifyApiKey({ body: { key: key.key } });
+			expect(result1.valid).toBe(true);
+
+			await Promise.all(deferredPromises);
+			deferredPromises.length = 0;
+
+			const result2 = await auth.api.verifyApiKey({ body: { key: key.key } });
+			expect(result2.valid).toBe(true);
+
+			await Promise.all(deferredPromises);
+			deferredPromises.length = 0;
+
+			const result3 = await auth.api.verifyApiKey({ body: { key: key.key } });
+			expect(result3.valid).toBe(false);
+			expect(result3.error?.code).toBe("RATE_LIMITED");
+		});
+
+		it("should defer remaining count updates", async () => {
+			const deferredPromises: Array<Promise<void>> = [];
+			const { auth, signInWithTestUser } = await getTestInstance({
+				advanced: {
+					backgroundTasks: {
+						handler: (p: Promise<void>) => {
+							deferredPromises.push(p);
+						},
+					},
+				},
+				plugins: [
+					apiKey({
+						deferUpdates: true,
+					}),
+				],
+			});
+
+			const { headers, user } = await signInWithTestUser();
+
+			const key = await auth.api.createApiKey({
+				body: { userId: user.id, remaining: 10 },
+			});
+
+			const result = await auth.api.verifyApiKey({
+				body: { key: key.key },
+			});
+			expect(result.valid).toBe(true);
+			expect(result.key?.remaining).toBe(9);
+
+			expect(deferredPromises.length).toBeGreaterThan(0);
+
+			await Promise.all(deferredPromises);
+
+			const updatedKey = await auth.api.getApiKey({
+				query: { id: key.id },
+				headers,
+			});
+			expect(updatedKey.remaining).toBe(9);
+		});
+
+		it("should not defer updates when backgroundTasks handler is not configured", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					apiKey({
+						deferUpdates: true,
+					}),
+				],
+			});
+
+			const { headers, user } = await signInWithTestUser();
+
+			const key = await auth.api.createApiKey({
+				body: { userId: user.id },
+				headers,
+			});
+
+			const result = await auth.api.verifyApiKey({
+				body: { key: key.key },
+			});
+
+			expect(result.valid).toBe(true);
+
+			// Without advanced.backgroundTasks handler, updates should happen synchronously
+			const updatedKey = await auth.api.getApiKey({
+				query: { id: key.id },
+				headers,
+			});
+			expect(updatedKey.lastRequest).not.toBeNull();
+		});
+	});
+
 	describe("custom storage methods", async () => {
 		let customStore = new Map<string, string>();
 		let customGetCalled = false;
 		let customSetCalled = false;
 		let customDeleteCalled = false;
 
-		const { client, auth, signInWithTestUser } = await getTestInstance(
+		const { client, signInWithTestUser } = await getTestInstance(
 			{
 				// Don't provide global secondaryStorage
 				plugins: [
@@ -2860,7 +3118,7 @@ describe("api-key", async () => {
 		});
 
 		it("should use custom storage methods instead of global secondaryStorage", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 			const { data: createdKey } = await client.apiKey.create(
 				{},
 				{ headers: headers },
@@ -2872,7 +3130,7 @@ describe("api-key", async () => {
 		});
 
 		it("should use custom get method", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 			const { data: createdKey } = await client.apiKey.create(
 				{},
 				{ headers: headers },
@@ -2891,7 +3149,7 @@ describe("api-key", async () => {
 		});
 
 		it("should use custom delete method", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 			const { data: createdKey } = await client.apiKey.create(
 				{},
 				{ headers: headers },

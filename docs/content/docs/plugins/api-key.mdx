@@ -39,12 +39,12 @@ The API Key plugin allows you to create and manage API keys for your application
 
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
-            ```bash
+            ```package-install
             npx @better-auth/cli migrate
             ```
             </Tab>
             <Tab value="generate">
-            ```bash
+            ```package-install
             npx @better-auth/cli generate
             ```
             </Tab>
@@ -941,6 +941,59 @@ export const auth = betterAuth({
   ],
 });
 ```
+
+`deferUpdates` <span className="opacity-70">`boolean`</span>
+
+Defer non-critical updates (rate limiting counters, timestamps, remaining count) to run after the response is sent using the global `backgroundTasks` handler. This can significantly improve response times on serverless platforms. Default is `false`.
+
+Requires `backgroundTasks.handler` to be configured in the main auth options.
+
+<Callout type="warn">
+  Enabling this introduces eventual consistency where the response returns optimistic data before the database is updated. Only enable if your application can tolerate this trade-off for improved latency.
+</Callout>
+
+<Tabs items={["Vercel", "Cloudflare Workers"]}>
+  <Tab value="Vercel">
+    ```ts
+    import { waitUntil } from "@vercel/functions";
+
+    export const auth = betterAuth({
+      advanced: { 
+          backgroundTasks: {
+             handler: waitUntil,
+          },
+      }
+      plugins: [
+        apiKey({
+          deferUpdates: true,
+        }),
+      ],
+    });
+    ```
+  </Tab>
+  <Tab value="Cloudflare Workers">
+    ```ts
+    import { AsyncLocalStorage } from "node:async_hooks";
+
+    const execCtxStorage = new AsyncLocalStorage<ExecutionContext>();
+
+    export const auth = betterAuth({
+      advanced: { 
+          backgroundTasks: {
+             handler: waitUntil,
+          },
+      }
+      plugins: [
+        apiKey({
+          deferUpdates: true,
+        }),
+      ],
+    });
+
+    // In your request handler, wrap with execCtxStorage.run(ctx, ...)
+    ```
+  </Tab>
+</Tabs>
 
 `permissions` <span className="opacity-70">`{ defaultPermissions?: Statements | ((userId: string, ctx: GenericEndpointContext) => Statements | Promise<Statements>) }`</span>
 

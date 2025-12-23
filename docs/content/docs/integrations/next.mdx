@@ -13,7 +13,7 @@ We need to mount the handler to an API route. Create a route file inside `/api/a
 import { auth } from "@/lib/auth";
 import { toNextJsHandler } from "better-auth/next-js";
 
-export const { GET, POST } = toNextJsHandler(auth.handler);
+export const { GET, POST } = toNextJsHandler(auth);
 ```
 
 <Callout type="info">
@@ -35,7 +35,7 @@ export default toNodeHandler(auth.handler)
 
 ## Create a client
 
-Create a client instance. You can name the file anything you want. Here we are creating `client.ts` file inside the `lib/` directory.
+Create a client instance. You can name the file anything you want. Here we are creating `auth-client.ts` file inside the `lib/` directory.
 
 ```ts title="auth-client.ts"
 import { createAuthClient } from "better-auth/react" // make sure to import from better-auth/react

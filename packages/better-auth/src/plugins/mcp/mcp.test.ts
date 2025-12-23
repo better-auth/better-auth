@@ -21,28 +21,27 @@ describe("mcp", async () => {
 	const baseURL = `http://localhost:${port}`;
 	await tempServer.close();
 
-	const { auth, signInWithTestUser, customFetchImpl, testUser, cookieSetter } =
-		await getTestInstance({
-			baseURL,
-			plugins: [
-				mcp({
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL,
+		plugins: [
+			mcp({
+				loginPage: "/login",
+				oidcConfig: {
 					loginPage: "/login",
-					oidcConfig: {
-						loginPage: "/login",
-						consentPage: "/oauth/consent",
-						requirePKCE: true,
+					consentPage: "/oauth/consent",
+					requirePKCE: true,
 
-						getAdditionalUserInfoClaim(user, scopes, client) {
-							return {
-								custom: "custom value",
-								userId: user.id,
-							};
-						},
+					getAdditionalUserInfoClaim(user, scopes, client) {
+						return {
+							custom: "custom value",
+							userId: user.id,
+						};
 					},
-				}),
-				jwt(),
-			],
-		});
+				},
+			}),
+			jwt(),
+		],
+	});
 
 	const signInResult = await signInWithTestUser();
 	const headers = signInResult.headers;
@@ -368,10 +367,11 @@ describe("mcp", async () => {
 		const metadata = await serverClient.$fetch(
 			"/.well-known/oauth-protected-resource",
 		);
+		const origin = new URL(baseURL).origin;
 
 		expect(metadata.data).toMatchObject({
-			resource: baseURL,
-			authorization_servers: [`${baseURL}/api/auth`],
+			resource: origin,
+			authorization_servers: [origin],
 			jwks_uri: `${baseURL}/api/auth/mcp/jwks`,
 			scopes_supported: ["openid", "profile", "email", "offline_access"],
 			bearer_methods_supported: ["header"],
@@ -471,7 +471,7 @@ describe("mcp", async () => {
 		});
 
 		// Perform OAuth flow
-		const data = await client.signIn.oauth2(
+		await client.signIn.oauth2(
 			{
 				providerId: "test-userinfo",
 				callbackURL: "/dashboard",
@@ -683,6 +683,52 @@ describe("mcp", async () => {
 		expect(redirectLocation).toContain("code=");
 		expect(redirectLocation).toContain("state=test-state-2");
 		expect(redirectLocation).not.toContain("consent_code="); // Should NOT redirect to consent page
+	});
+
+	it("should not include state=undefined in redirect URL when state query parameter is not present", async ({
+		expect,
+	}) => {
+		// Register a client for testing
+		const testClient = await serverClient.$fetch("/mcp/register", {
+			method: "POST",
+			body: {
+				client_name: "test-no-state-client",
+				redirect_uris: [
+					"http://localhost:3000/api/auth/oauth2/callback/test-no-state",
+				],
+				logo_uri: "",
+				token_endpoint_auth_method: "none",
+			},
+		});
+
+		const clientId = (testClient.data as any).client_id;
+		const redirectUri = (testClient.data as any).redirect_uris[0];
+
+		// Construct authorization URL WITHOUT state parameter
+		const authURL = new URL(`${baseURL}/api/auth/mcp/authorize`);
+		authURL.searchParams.set("client_id", clientId);
+		authURL.searchParams.set("redirect_uri", redirectUri);
+		authURL.searchParams.set("response_type", "code");
+		authURL.searchParams.set("scope", "openid profile email");
+		// Intentionally NOT setting state parameter
+		authURL.searchParams.set("code_challenge", "test-challenge-no-state");
+		authURL.searchParams.set("code_challenge_method", "S256");
+
+		// Make authorization request with authenticated session
+		let redirectLocation = "";
+		await serverClient.$fetch(authURL.toString(), {
+			method: "GET",
+			onError(context: any) {
+				redirectLocation = context.response.headers.get("Location") || "";
+			},
+		});
+
+		const redirectUrl = new URL(redirectLocation);
+
+		// Verify redirect doesn't contain state=undefined
+		expect(redirectUrl.toString()).toContain(redirectUri);
+		expect(redirectUrl.searchParams.has("code")).toBe(true);
+		expect(redirectUrl.searchParams.has("state")).toBe(false);
 	});
 
 	describe("withMCPAuth", () => {

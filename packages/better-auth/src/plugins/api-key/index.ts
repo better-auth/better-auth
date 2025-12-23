@@ -95,6 +95,7 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 		enableSessionForAPIKeys: options?.enableSessionForAPIKeys ?? false,
 		fallbackToDatabase: options?.fallbackToDatabase ?? false,
 		customStorage: options?.customStorage,
+		deferUpdates: options?.deferUpdates ?? false,
 	} satisfies ApiKeyOptions;
 
 	const schema = mergeSchema(
@@ -174,13 +175,17 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 							schema,
 						});
 
-						//for cleanup purposes
-						deleteAllExpiredApiKeys(ctx.context).catch((err) => {
-							ctx.context.logger.error(
-								"Failed to delete expired API keys:",
-								err,
-							);
-						});
+						const cleanupTask = deleteAllExpiredApiKeys(ctx.context).catch(
+							(err) => {
+								ctx.context.logger.error(
+									"Failed to delete expired API keys:",
+									err,
+								);
+							},
+						);
+						if (opts.deferUpdates) {
+							ctx.context.runInBackground(cleanupTask);
+						}
 
 						const user = await ctx.context.internalAdapter.findUserById(
 							apiKey.userId,
@@ -335,5 +340,8 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 			deleteAllExpiredApiKeys: routes.deleteAllExpiredApiKeys,
 		},
 		schema,
+		options,
 	} satisfies BetterAuthPlugin;
 };
+
+export type * from "./types";

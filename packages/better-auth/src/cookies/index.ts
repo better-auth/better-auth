@@ -5,11 +5,11 @@ import type {
 } from "@better-auth/core";
 import { env, isProduction } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
+import { safeJSONParse } from "@better-auth/core/utils";
 import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
 import type { CookieOptions } from "better-call";
-import { ms } from "ms";
 import {
 	signJWT,
 	symmetricDecodeJWT,
@@ -19,9 +19,8 @@ import {
 import { parseUserOutput } from "../db/schema";
 import type { Session, User } from "../types";
 import { getDate } from "../utils/date";
-import { safeJSONParse } from "../utils/json";
-import { getBaseURL } from "../utils/url";
-import { createSessionStore } from "./session-store";
+import { sec } from "../utils/time";
+import { createAccountStore, createSessionStore } from "./session-store";
 
 export function createCookieGetter(options: BetterAuthOptions) {
 	const secure =
@@ -75,7 +74,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 
 export function getCookies(options: BetterAuthOptions) {
 	const createCookie = createCookieGetter(options);
-	const sessionMaxAge = options.session?.expiresIn || ms("7d") / 1000;
+	const sessionMaxAge = options.session?.expiresIn || sec("7d");
 	const sessionToken = createCookie("session_token", {
 		maxAge: sessionMaxAge,
 	});
@@ -302,6 +301,35 @@ export function deleteSessionCookie(
 		maxAge: 0,
 	});
 
+	ctx.setCookie(ctx.context.authCookies.sessionData.name, "", {
+		...ctx.context.authCookies.sessionData.options,
+		maxAge: 0,
+	});
+
+	if (ctx.context.options.account?.storeAccountCookie) {
+		ctx.setCookie(ctx.context.authCookies.accountData.name, "", {
+			...ctx.context.authCookies.accountData.options,
+			maxAge: 0,
+		});
+
+		//clean up the account data chunks
+		const accountStore = createAccountStore(
+			ctx.context.authCookies.accountData.name,
+			ctx.context.authCookies.accountData.options,
+			ctx,
+		);
+		const cleanCookies = accountStore.clean();
+		accountStore.setCookies(cleanCookies);
+	}
+
+	if (ctx.context.oauthConfig.storeStateStrategy === "cookie") {
+		const stateCookie = ctx.context.createAuthCookie("oauth_state");
+		ctx.setCookie(stateCookie.name, "", {
+			...stateCookie.attributes,
+			maxAge: 0,
+		});
+	}
+
 	// Use createSessionStore to clean up all session data chunks
 	const sessionStore = createSessionStore(
 		ctx.context.authCookies.sessionData.name,
@@ -324,7 +352,7 @@ export function parseCookies(cookieHeader: string) {
 	const cookieMap = new Map<string, string>();
 
 	cookies.forEach((cookie) => {
-		const [name, value] = cookie.split("=");
+		const [name, value] = cookie.split(/=(.*)/s);
 		cookieMap.set(name!, value!);
 	});
 	return cookieMap;
@@ -350,8 +378,6 @@ export const getSessionCookie = (
 		}
 	}
 	const headers = "headers" in request ? request.headers : request;
-	const req = request instanceof Request ? request : undefined;
-	const url = getBaseURL(req?.url, config?.path, req);
 	const cookies = headers.get("cookie");
 	if (!cookies) {
 		return null;

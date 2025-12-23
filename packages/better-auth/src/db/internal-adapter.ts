@@ -10,12 +10,15 @@ import {
 } from "@better-auth/core/context";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import type { InternalLogger } from "@better-auth/core/env";
+import { generateId, safeJSONParse } from "@better-auth/core/utils";
 import type { Account, Session, User, Verification } from "../types";
-import { generateId } from "../utils";
 import { getDate } from "../utils/date";
 import { getIp } from "../utils/get-request-ip";
-import { safeJSONParse } from "../utils/json";
-import { parseSessionOutput, parseUserOutput } from "./schema";
+import {
+	parseSessionInput,
+	parseSessionOutput,
+	parseUserOutput,
+} from "./schema";
 import { getWithHooks } from "./with-hooks";
 
 export const createInternalAdapter = (
@@ -220,10 +223,6 @@ export const createInternalAdapter = (
 			return total;
 		},
 		deleteUser: async (userId: string) => {
-			if (secondaryStorage) {
-				await secondaryStorage.delete(`active-sessions-${userId}`);
-			}
-
 			if (!secondaryStorage || options.session?.storeSessionInDatabase) {
 				await deleteManyWithHooks(
 					[
@@ -267,6 +266,11 @@ export const createInternalAdapter = (
 			const ctx = await getCurrentAuthContext().catch(() => null);
 			const headers = ctx?.headers || ctx?.request?.headers;
 			const { id: _, ...rest } = override || {};
+			//we're parsing default values for session additional fields
+			const defaultAdditionalFields = parseSessionInput(
+				ctx?.context.options ?? options,
+				{},
+			);
 			const data: Omit<Session, "id"> = {
 				ipAddress:
 					ctx?.request || ctx?.headers
@@ -287,6 +291,7 @@ export const createInternalAdapter = (
 				// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 				createdAt: new Date(),
 				updatedAt: new Date(),
+				...defaultAdditionalFields,
 				...(overrideAll ? rest : {}),
 			};
 			const res = await createWithHooks(
@@ -581,15 +586,12 @@ export const createInternalAdapter = (
 					return;
 				}
 			}
-			await (await getCurrentAdapter(adapter)).delete<Session>({
-				model: "session",
-				where: [
-					{
-						field: "token",
-						value: token,
-					},
-				],
-			});
+
+			await deleteWithHooks(
+				[{ field: "token", value: token }],
+				"session",
+				undefined,
+			);
 		},
 		deleteAccounts: async (userId: string) => {
 			await deleteManyWithHooks(
@@ -623,6 +625,9 @@ export const createInternalAdapter = (
 					for (const session of sessions) {
 						await secondaryStorage.delete(session.token);
 					}
+					await secondaryStorage.delete(
+						`active-sessions-${userIdOrSessionTokens}`,
+					);
 				} else {
 					for (const sessionToken of userIdOrSessionTokens) {
 						const session = await secondaryStorage.get(sessionToken);
@@ -755,6 +760,7 @@ export const createInternalAdapter = (
 			};
 		},
 		findUserById: async (userId: string) => {
+			if (!userId) return null;
 			const user = await (await getCurrentAdapter(adapter)).findOne<User>({
 				model: "user",
 				where: [
@@ -942,41 +948,34 @@ export const createInternalAdapter = (
 				limit: 1,
 			});
 			if (!options.verification?.disableCleanup) {
-				await (await getCurrentAdapter(adapter)).deleteMany({
-					model: "verification",
-					where: [
+				await deleteManyWithHooks(
+					[
 						{
 							field: "expiresAt",
 							value: new Date(),
 							operator: "lt",
 						},
 					],
-				});
+					"verification",
+					undefined,
+				);
 			}
 			const lastVerification = verification[0];
 			return lastVerification as Verification | null;
 		},
 		deleteVerificationValue: async (id: string) => {
-			await (await getCurrentAdapter(adapter)).delete<Verification>({
-				model: "verification",
-				where: [
-					{
-						field: "id",
-						value: id,
-					},
-				],
-			});
+			await deleteWithHooks(
+				[{ field: "id", value: id }],
+				"verification",
+				undefined,
+			);
 		},
 		deleteVerificationByIdentifier: async (identifier: string) => {
-			await (await getCurrentAdapter(adapter)).delete<Verification>({
-				model: "verification",
-				where: [
-					{
-						field: "identifier",
-						value: identifier,
-					},
-				],
-			});
+			await deleteWithHooks(
+				[{ field: "identifier", value: identifier }],
+				"verification",
+				undefined,
+			);
 		},
 		updateVerificationValue: async (
 			id: string,

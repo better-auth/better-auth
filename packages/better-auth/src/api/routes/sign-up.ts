@@ -11,13 +11,24 @@ import { parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput, InferUser, User } from "../../types";
 import { createEmailVerificationToken } from "./email-verification";
 
+const signUpEmailBodySchema = z
+	.object({
+		name: z.string().nonempty(),
+		email: z.email(),
+		password: z.string().nonempty(),
+		image: z.string().optional(),
+		callbackURL: z.string().optional(),
+		rememberMe: z.boolean().optional(),
+	})
+	.and(z.record(z.string(), z.any()));
+
 export const signUpEmail = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
 		"/sign-up/email",
 		{
 			method: "POST",
 			operationId: "signUpWithEmailAndPassword",
-			body: z.record(z.string(), z.any()),
+			body: signUpEmailBodySchema,
 			metadata: {
 				$Infer: {
 					body: {} as {
@@ -181,7 +192,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					email,
 					password,
 					image,
-					callbackURL,
+					callbackURL: _callbackURL,
 					rememberMe,
 					...rest
 				} = body;
@@ -251,7 +262,6 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					ctx.context.logger?.error("Failed to create user", e);
 					throw new APIError("UNPROCESSABLE_ENTITY", {
 						message: BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
-						details: e,
 					});
 				}
 				if (!createdUser) {
@@ -280,30 +290,18 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						: encodeURIComponent("/");
 					const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
 
-					const args: Parameters<
-						Required<
-							Required<BetterAuthOptions>["emailVerification"]
-						>["sendVerificationEmail"]
-					> = ctx.request
-						? [
+					if (ctx.context.options.emailVerification?.sendVerificationEmail) {
+						await ctx.context.runInBackgroundOrAwait(
+							ctx.context.options.emailVerification.sendVerificationEmail(
 								{
 									user: createdUser,
 									url,
 									token,
 								},
 								ctx.request,
-							]
-						: [
-								{
-									user: createdUser,
-									url,
-									token,
-								},
-							];
-
-					await ctx.context.options.emailVerification?.sendVerificationEmail?.(
-						...args,
-					);
+							),
+						);
+					}
 				}
 
 				if (

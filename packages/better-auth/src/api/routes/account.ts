@@ -5,9 +5,12 @@ import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 import { APIError } from "better-call";
 import * as z from "zod";
+import {
+	getAccountCookie,
+	setAccountCookie,
+} from "../../cookies/session-store";
 import { generateState } from "../../oauth2/state";
 import { decryptOAuthToken, setTokenUtil } from "../../oauth2/utils";
-import { safeJSONParse } from "../../utils/json";
 import {
 	freshSessionMiddleware,
 	getSessionFromCtx,
@@ -325,7 +328,7 @@ export const linkSocialAccount = createAuthEndpoint(
 					refreshToken: c.body.idToken.refreshToken,
 					scope: c.body.idToken.scopes?.join(","),
 				});
-			} catch (e: any) {
+			} catch {
 				throw new APIError("EXPECTATION_FAILED", {
 					message: "Account not linked - unable to create account",
 				});
@@ -516,16 +519,7 @@ export const getAccessToken = createAuthEndpoint(
 				message: `Provider ${providerId} is not supported.`,
 			});
 		}
-		const accountDataCookieName = ctx.context.authCookies.accountData.name;
-		const accountDataCookie = await ctx.getSignedCookie(
-			accountDataCookieName,
-			ctx.context.secret,
-		);
-
-		const accountData = accountDataCookie
-			? safeJSONParse<Account>(accountDataCookie)
-			: null;
-
+		const accountData = await getAccountCookie(ctx);
 		let account: Account | undefined = undefined;
 		if (
 			accountData &&
@@ -572,27 +566,24 @@ export const getAccessToken = createAuthEndpoint(
 					ctx.context,
 				);
 				newTokens = await provider.refreshAccessToken(refreshToken);
-				const updatedAccount = await ctx.context.internalAdapter.updateAccount(
-					account.id,
-					{
-						accessToken: await setTokenUtil(newTokens.accessToken, ctx.context),
-						accessTokenExpiresAt: newTokens.accessTokenExpiresAt,
-						refreshToken: await setTokenUtil(
-							newTokens.refreshToken,
-							ctx.context,
-						),
-						refreshTokenExpiresAt: newTokens.refreshTokenExpiresAt,
-					},
-				);
-				const storeAccountCookie =
-					ctx.context.options.account?.storeAccountCookie;
-				if (storeAccountCookie && updatedAccount) {
-					await ctx.setSignedCookie(
-						accountDataCookieName,
-						JSON.stringify(updatedAccount),
-						ctx.context.secret,
-						ctx.context.authCookies.accountData.options,
+				const updatedData = {
+					accessToken: await setTokenUtil(newTokens.accessToken, ctx.context),
+					accessTokenExpiresAt: newTokens.accessTokenExpiresAt,
+					refreshToken: await setTokenUtil(newTokens.refreshToken, ctx.context),
+					refreshTokenExpiresAt: newTokens.refreshTokenExpiresAt,
+				};
+				let updatedAccount: Record<string, any> | null = null;
+				if (account.id) {
+					updatedAccount = await ctx.context.internalAdapter.updateAccount(
+						account.id,
+						updatedData,
 					);
+				}
+				if (ctx.context.options.account?.storeAccountCookie) {
+					await setAccountCookie(ctx, {
+						...account,
+						...(updatedAccount ?? updatedData),
+					});
 				}
 			}
 			const tokens = {
@@ -708,16 +699,8 @@ export const refreshToken = createAuthEndpoint(
 		}
 
 		// Try to read refresh token from cookie first
-		const accountDataCookieName = ctx.context.authCookies.accountData.name;
-		const accountDataCookie = await ctx.getSignedCookie(
-			accountDataCookieName,
-			ctx.context.secret,
-		);
 		let account: Account | undefined = undefined;
-		const accountData = accountDataCookie
-			? safeJSONParse<Account>(accountDataCookie)
-			: null;
-
+		const accountData = await getAccountCookie(ctx);
 		if (
 			accountData &&
 			(!providerId || providerId === accountData?.providerId)
@@ -788,12 +771,7 @@ export const refreshToken = createAuthEndpoint(
 					scope: tokens.scopes?.join(",") || accountData.scope,
 					idToken: tokens.idToken || accountData.idToken,
 				};
-				await ctx.setSignedCookie(
-					accountDataCookieName,
-					JSON.stringify(updateData),
-					ctx.context.secret,
-					ctx.context.authCookies.accountData.options,
-				);
+				await setAccountCookie(ctx, updateData);
 			}
 			return ctx.json({
 				accessToken: tokens.accessToken,
@@ -884,19 +862,10 @@ export const accountInfo = createAuthEndpoint(
 		const providedAccountId = ctx.query?.accountId;
 		let account: Account | undefined = undefined;
 		if (!providedAccountId) {
-			const storeAccountCookie =
-				ctx.context.options.account?.storeAccountCookie;
-			if (storeAccountCookie) {
-				const accountCookieName = ctx.context.authCookies.accountData.name;
-				const accountCookie = await ctx.getSignedCookie(
-					accountCookieName,
-					ctx.context.secret,
-				);
-				if (accountCookie) {
-					const accountData = safeJSONParse<Account>(accountCookie);
-					if (accountData) {
-						account = accountData;
-					}
+			if (ctx.context.options.account?.storeAccountCookie) {
+				const accountData = await getAccountCookie(ctx);
+				if (accountData) {
+					account = accountData;
 				}
 			}
 		} else {
