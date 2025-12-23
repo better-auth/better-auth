@@ -848,10 +848,6 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				},
 			});
 			if (!userRes) {
-				throw new APIError("BAD_REQUEST", {
-					message: PHONE_NUMBER_ERROR_CODES.UNEXPECTED_ERROR,
-				});
-			if (!user) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					PHONE_NUMBER_ERROR_CODES.UNEXPECTED_ERROR,
