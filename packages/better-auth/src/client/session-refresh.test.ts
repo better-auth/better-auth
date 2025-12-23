@@ -3,19 +3,18 @@
 import { atom } from "nanostores";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getGlobalOnlineManager } from "./online-manager";
+import type { SessionAtom } from "./session-atom";
 import { createSessionRefreshManager } from "./session-refresh";
 
 describe("session-refresh", () => {
 	beforeEach(() => {
-		// Reset online manager state before each test
 		const onlineManager = getGlobalOnlineManager();
 		onlineManager.setOnline(true);
+		vi.useFakeTimers();
 	});
 
 	it("should trigger network fetch and update session when refetchInterval fires", async () => {
-		vi.useFakeTimers();
-
-		const sessionAtom = atom({
+		const sessionAtom: SessionAtom = atom({
 			data: {
 				user: { id: "1", email: "old@test.com" },
 				session: { id: "session-1" },
@@ -68,9 +67,7 @@ describe("session-refresh", () => {
 	});
 
 	it("should rate limit refetch on focus if a session request was made recently", async () => {
-		vi.useFakeTimers();
-
-		const sessionAtom = atom({
+		const sessionAtom: SessionAtom = atom({
 			data: {
 				user: { id: "1", email: "test@test.com" },
 				session: { id: "session-1" },
@@ -122,9 +119,7 @@ describe("session-refresh", () => {
 	});
 
 	it("should allow refetch on focus after rate limit window expires", async () => {
-		vi.useFakeTimers();
-
-		const sessionAtom = atom({
+		const sessionAtom: SessionAtom = atom({
 			data: {
 				user: { id: "1", email: "test@test.com" },
 				session: { id: "session-1" },
@@ -179,9 +174,7 @@ describe("session-refresh", () => {
 	});
 
 	it("should allow refetch on focus when session is null even within rate limit", async () => {
-		vi.useFakeTimers();
-
-		const sessionAtom = atom({
+		const sessionAtom: SessionAtom = atom({
 			data: {
 				user: { id: "1", email: "test@test.com" },
 				session: { id: "session-1" },
@@ -225,6 +218,8 @@ describe("session-refresh", () => {
 			data: null as any,
 			error: null,
 			isPending: false,
+			isRefetching: false,
+			refetch: sessionAtom.get().refetch,
 		});
 
 		// Immediately trigger another focus event (within rate limit window)
@@ -240,9 +235,7 @@ describe("session-refresh", () => {
 	});
 
 	it("should allow refetch on focus when session is undefined even within rate limit", async () => {
-		vi.useFakeTimers();
-
-		const sessionAtom = atom({
+		const sessionAtom: SessionAtom = atom({
 			data: {
 				user: { id: "1", email: "test@test.com" },
 				session: { id: "session-1" },
@@ -286,6 +279,8 @@ describe("session-refresh", () => {
 			data: undefined as any,
 			error: null,
 			isPending: false,
+			isRefetching: false,
+			refetch: sessionAtom.get().refetch,
 		});
 
 		// Immediately trigger another focus event (within rate limit window)
@@ -301,9 +296,7 @@ describe("session-refresh", () => {
 	});
 
 	it("should update lastSessionRequest when poll event triggers fetch", async () => {
-		vi.useFakeTimers();
-
-		const sessionAtom = atom({
+		const sessionAtom: SessionAtom = atom({
 			data: {
 				user: { id: "1", email: "test@test.com" },
 				session: { id: "session-1" },
@@ -353,7 +346,7 @@ describe("session-refresh", () => {
 		onlineManager.setOnline(true);
 		onlineManager.setOnline(false);
 
-		const sessionAtom = atom({
+		const sessionAtom: SessionAtom = atom({
 			data: {
 				user: { id: "1", email: "test@test.com" },
 				session: { id: "session-1" },

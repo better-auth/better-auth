@@ -5,6 +5,7 @@ import type { Session, User } from "../types";
 import { getGlobalBroadcastChannel } from "./broadcast-channel";
 import { getGlobalFocusManager } from "./focus-manager";
 import { getGlobalOnlineManager } from "./online-manager";
+import type { AuthQueryAtom } from "./query";
 
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -14,7 +15,10 @@ const now = () => Math.floor(Date.now() / 1000);
 const FOCUS_REFETCH_RATE_LIMIT_SECONDS = 5;
 
 export interface SessionRefreshOptions {
-	sessionAtom: WritableAtom<any>;
+	sessionAtom: AuthQueryAtom<{
+		user: User;
+		session: Session;
+	}>;
 	sessionSignal: WritableAtom<boolean>;
 	$fetch: BetterFetch;
 	options?: BetterAuthClientOptions | undefined;
@@ -74,26 +78,33 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 
 		const fetchSessionWithRefresh = () => {
 			state.lastSessionRequest = now();
-			$fetch("/get-session")
+			$fetch<SessionResponse>("/get-session")
 				.then(async (res) => {
-					const data = res.data as SessionResponse | null;
-					let finalData = res.data;
-					let finalError = res.error || null;
+					let data = res.data;
+					let error = res.error || null;
 
 					if (data?.needsRefresh) {
 						try {
-							const refreshRes = await $fetch("/get-session", {
-								method: "POST",
-							});
-							finalData = refreshRes.data;
-							finalError = refreshRes.error || null;
+							const refreshRes = await $fetch<SessionResponse>(
+								"/get-session",
+								{
+									method: "POST",
+								},
+							);
+							data = refreshRes.data;
+							error = refreshRes.error || null;
 						} catch {}
 					}
 
+					const sessionData =
+						data?.session && data?.user
+							? { session: data.session, user: data.user }
+							: null;
+
 					sessionAtom.set({
 						...currentSession,
-						data: finalData,
-						error: finalError,
+						data: sessionData,
+						error: error as Parameters<typeof sessionAtom.set>[0]["error"],
 					});
 					state.lastSync = now();
 					sessionSignal.set(!sessionSignal.get());
