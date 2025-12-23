@@ -22,7 +22,7 @@ import * as saml from "samlify";
 import type { BindingContext } from "samlify/types/src/entity";
 import type { IdentityProvider } from "samlify/types/src/entity-idp";
 import type { FlowResult } from "samlify/types/src/flow";
-import * as z from "zod/v4";
+import z from "zod/v4";
 
 interface AuthnRequestRecord {
 	id: string;
@@ -830,20 +830,26 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 							: `better-auth-token-${provider.providerId}`,
 						createdAt: new Date(),
 						updatedAt: new Date(),
-						value: domainVerificationToken,
+						value: domainVerificationToken as string,
 						expiresAt: new Date(Date.now() + 3600 * 24 * 7 * 1000), // 1 week
 					},
 				});
 			}
 
+			type SSOProviderResponse = {
+				redirectURI: string;
+				oidcConfig: OIDCConfig | null;
+				samlConfig: SAMLConfig | null;
+			} & Omit<SSOProvider<O>, "oidcConfig" | "samlConfig">;
+
 			type SSOProviderReturn = O["domainVerification"] extends { enabled: true }
-				? {
+				? SSOProviderResponse & {
 						domainVerified: boolean;
 						domainVerificationToken: string;
-					} & SSOProvider<O>
-				: SSOProvider<O>;
+					}
+				: SSOProviderResponse;
 
-			return ctx.json({
+			const result = {
 				...provider,
 				oidcConfig: safeJsonParse<OIDCConfig>(
 					provider.oidcConfig as unknown as string,
@@ -856,7 +862,9 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				...(options?.domainVerification?.enabled
 					? { domainVerificationToken }
 					: {}),
-			} as unknown as SSOProviderReturn);
+			};
+
+			return ctx.json(result as SSOProviderReturn);
 		},
 	);
 };
