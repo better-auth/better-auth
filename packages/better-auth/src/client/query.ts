@@ -7,6 +7,16 @@ import type { SessionQueryParams } from "./types";
 // SSR detection
 const isServer = () => typeof window === "undefined";
 
+export type AuthQueryAtom<T> = PreinitializedWritableAtom<{
+	data: null | T;
+	error: null | BetterFetchError;
+	isPending: boolean;
+	isRefetching: boolean;
+	refetch: (
+		queryParams?: { query?: SessionQueryParams } | undefined,
+	) => Promise<void>;
+}>;
+
 export const useAuthQuery = <T>(
 	initializedAtom:
 		| PreinitializedWritableAtom<any>
@@ -24,15 +34,7 @@ export const useAuthQuery = <T>(
 		  )
 		| undefined,
 ) => {
-	const value = atom<{
-		data: null | T;
-		error: null | BetterFetchError;
-		isPending: boolean;
-		isRefetching: boolean;
-		refetch: (
-			queryParams?: { query?: SessionQueryParams } | undefined,
-		) => Promise<void>;
-	}>({
+	const value: AuthQueryAtom<T> = atom({
 		data: null,
 		error: null,
 		isPending: true,
