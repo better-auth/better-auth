@@ -400,13 +400,14 @@ describe("session-refresh", () => {
 	it("should call POST when server returns needsRefresh: true", async () => {
 		vi.useFakeTimers();
 
-		const sessionAtom = atom({
+		const sessionAtom: SessionAtom = atom({
 			data: {
 				user: { id: "1", email: "test@test.com" },
 				session: { id: "session-1" },
 			},
 			error: null,
 			isPending: false,
+			isRefetching: false,
 		});
 		const sessionSignal = atom(false);
 
@@ -463,13 +464,14 @@ describe("session-refresh", () => {
 	it("should not call POST when server returns needsRefresh: false", async () => {
 		vi.useFakeTimers();
 
-		const sessionAtom = atom({
+		const sessionAtom: SessionAtom = atom({
 			data: {
 				user: { id: "1", email: "test@test.com" },
 				session: { id: "session-1" },
 			},
 			error: null,
 			isPending: false,
+			isRefetching: false,
 		});
 		const sessionSignal = atom(false);
 
@@ -507,13 +509,14 @@ describe("session-refresh", () => {
 	it("should not call POST when needsRefresh is undefined (deferSessionRefresh not enabled)", async () => {
 		vi.useFakeTimers();
 
-		const sessionAtom = atom({
+		const sessionAtom: SessionAtom = atom({
 			data: {
 				user: { id: "1", email: "test@test.com" },
 				session: { id: "session-1" },
 			},
 			error: null,
 			isPending: false,
+			isRefetching: false,
 		});
 		const sessionSignal = atom(false);
 
@@ -550,13 +553,14 @@ describe("session-refresh", () => {
 	it("should call POST on visibilitychange when needsRefresh: true", async () => {
 		vi.useFakeTimers();
 
-		const sessionAtom = atom({
+		const sessionAtom: SessionAtom = atom({
 			data: {
 				user: { id: "1", email: "test@test.com" },
 				session: { id: "session-1" },
 			},
 			error: null,
 			isPending: false,
+			isRefetching: false,
 		});
 		const sessionSignal = atom(false);
 
