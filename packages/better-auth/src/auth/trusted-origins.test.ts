@@ -104,6 +104,25 @@ describe("trusted origins", () => {
 				isTrustedOrigin("https://trusted.com/some/path"),
 			).resolves.toBe(true);
 		});
+
+		it("should allow origins", async () => {
+			const { isTrustedOrigin } = await createAuthTestInstance({
+				trustedOrigins: [
+					"http://localhost:5173",
+					"http://localhost:5174",
+					"http://192.168.178.71:5173",
+					"http://192.168.178.71:5174",
+				],
+			});
+
+			await expect(isTrustedOrigin("http://localhost:5173")).resolves.toBe(
+				true,
+			);
+
+			await expect(isTrustedOrigin("http://localhost:5173/")).resolves.toBe(
+				true,
+			);
+		});
 	});
 
 	describe("relative paths support", () => {
