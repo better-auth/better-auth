@@ -1,6 +1,22 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { normalizePathname } from "../../utils/url";
+
+function shouldSkipOriginCheckForPath(
+	requestUrl: string,
+	basePath: string,
+	skipPaths: string[],
+): boolean {
+	if (skipPaths.length === 0) {
+		return false;
+	}
+	const normalizedPath = normalizePathname(requestUrl, basePath);
+	return skipPaths.some(
+		(skipPath) =>
+			normalizedPath === skipPath || normalizedPath.startsWith(`${skipPath}/`),
+	);
+}
 
 /**
  * A middleware to validate callbackURL and origin against
@@ -73,11 +89,15 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 			});
 		}
 	};
-	if (
-		useCookies &&
-		!ctx.context.skipCSRFCheck &&
-		!ctx.context.skipOriginCheck
-	) {
+
+	const skipOriginCheck = ctx.context.skipOriginCheck;
+	const basePath = new URL(ctx.context.baseURL).pathname;
+	const shouldSkipOrigin =
+		skipOriginCheck === true ||
+		(Array.isArray(skipOriginCheck) &&
+			shouldSkipOriginCheckForPath(ctx.request.url, basePath, skipOriginCheck));
+
+	if (useCookies && !ctx.context.skipCSRFCheck && !shouldSkipOrigin) {
 		if (!originHeader || originHeader === "null") {
 			throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.MISSING_OR_NULL_ORIGIN);
 		}
