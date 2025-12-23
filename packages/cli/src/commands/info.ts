@@ -328,7 +328,7 @@ async function getBetterAuthInfo(
 			const config = await getConfig({
 				cwd: projectRoot,
 				configPath,
-				shouldThrowOnError: false,
+				shouldThrowOnError: true,
 			});
 			const packageInfo = await getPackageInfo();
 			const betterAuthVersion =

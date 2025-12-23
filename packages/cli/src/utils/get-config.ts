@@ -197,6 +197,7 @@ export async function getConfig({
 				configFile: resolvedPath,
 				dotenv: true,
 				jitiOptions: jitiOptions(cwd),
+				cwd,
 			});
 			if (!("auth" in config) && !isDefaultExport(config)) {
 				if (shouldThrowOnError) {
@@ -225,6 +226,7 @@ export async function getConfig({
 					}>({
 						configFile: possiblePath,
 						jitiOptions: jitiOptions(cwd),
+						cwd,
 					});
 					const hasConfig = Object.keys(config).length > 0;
 					if (hasConfig) {
