@@ -125,8 +125,23 @@ describe("listMembers", async () => {
 				).toISOString(),
 			},
 		});
-		expect(members.data?.members.length).toBe(0);
-		expect(members.data?.total).toBe(0);
+		expect(members.data?.members.length).toBe(11);
+		expect(members.data?.total).toBe(11);
+	});
+
+	it("should filter the members verifying the operator functionality", async () => {
+		const members = await client.organization.listMembers({
+			fetchOptions: {
+				headers,
+			},
+			query: {
+				filterField: "role",
+				filterOperator: "ne",
+				filterValue: "owner",
+			},
+		});
+		expect(members.data?.members.length).toBe(10);
+		expect(members.data?.total).toBe(10);
 	});
 
 	it("should sort the members", async () => {
