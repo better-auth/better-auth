@@ -49,7 +49,8 @@ This plugin is in active development and may not be suitable for production use.
 
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth";
-    import { oauthProvider, jwt } from "@better-auth/oauth-provider";
+    import { jwt } from "better-auth/plugins";
+    import { oauthProvider } from "@better-auth/oauth-provider";
 
     const auth = betterAuth({
       disabledPaths: [
@@ -1776,6 +1777,21 @@ To improve lookup performance, database adapters may map the field `client_id` o
 Previously `oauthApplication`
 
 - If `storeClientSecret` was unset or `plain`, you must hash all the stored `clientSecret` values into its "SHA-256" representation then convert it into base64Url format or use another storage method specified by `storeClientSecret`.
+The following function will convert a `plain` representation into the default hash:
+```ts
+import { createHash } from "@better-auth/utils/hash";
+import { base64Url } from "@better-auth/utils/base64";
+
+const defaultHasher = async (value: string) => {
+	const hash = await createHash("SHA-256").digest(
+		new TextEncoder().encode(value),
+	);
+	const hashed = base64Url.encode(new Uint8Array(hash), {
+		padding: false,
+	});
+	return hashed;
+};
+```
 - `type` field is no longer a required field. Instead, the schema requires `public` of type `boolean`. Migrate with the following rules:
     - Clients with `type: "public"`: set `type: undefined`, `public: true`, and `clientSecret: undefined`
     - Clients with `type: "native"`: set `public: true` and `clientSecret: undefined`
@@ -1795,7 +1811,7 @@ Option 2 (more complex):
 - Convert `oauthAccessToken` with `refreshToken` field into a new `oauthRefreshToken` entry.
 ```ts
 {
-  token: hashed(refreshToken),
+  token: defaultHasher(refreshToken),
   expiresAt: refreshTokenExpiresAt,
   clientId: clientId,
   scopes: scopes,
@@ -1808,7 +1824,7 @@ Option 2 (more complex):
 - Keep `oauthAccessToken` but reference new `oauthRefreshToken`.
 ```ts
 {
-  token: hashed(accessToken),
+  token: defaultHasher(accessToken),
   expiresAt: accessTokenExpiresAt,
   clientId: clientId,
   scopes: scopes,
@@ -1828,3 +1844,4 @@ The MCP endpoints moved from `/mcp` to the `/oauth2` equivalent.
 - `/oauth2/register` (previously `/mcp/register`)
 - `/mcp/get-session` removed as not OAuth 2 compliant, use `/oauth2/introspect` instead
 - `/.well-known/oauth-protected-resource` removed, use the helper `mcpHandler` (or manually with the server `api.oAuth2introspectVerify` or the resource client `verifyAccessToken`)
+-  Database changes are equivalent to the [From OIDC Provider Plugin](#from-oidc-provider-plugin) section.
