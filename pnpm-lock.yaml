@@ -1336,15 +1336,9 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
-      '@types/better-sqlite3':
-        specifier: ^7.6.13
-        version: 7.6.13
       better-auth:
         specifier: workspace:*
         version: link:../better-auth
-      better-sqlite3:
-        specifier: ^12.2.0
-        version: 12.4.1
       expo-constants:
         specifier: ~17.1.7
         version: 17.1.7(expo@54.0.21)(react-native@0.80.2(@babel/core@7.28.4)(@react-native-community/cli@20.0.1(typescript@5.9.3))(@types/react@19.2.2)(react@19.2.3))
