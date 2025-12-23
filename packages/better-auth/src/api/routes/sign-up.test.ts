@@ -202,7 +202,7 @@ describe("sign-up CSRF protection", async (it) => {
 		expect(response.status).toBe(403);
 		const error = await response.json();
 		expect(error.message).toBe(
-			BASE_ERROR_CODES.CROSS_SITE_NAVIGATION_LOGIN_BLOCKED,
+			BASE_ERROR_CODES.CROSS_SITE_NAVIGATION_LOGIN_BLOCKED.message,
 		);
 	});
 
@@ -344,7 +344,7 @@ describe("sign-up with form data", async (it) => {
 		expect(response.status).toBe(403);
 		const error = await response.json();
 		expect(error.message).toBe(
-			BASE_ERROR_CODES.CROSS_SITE_NAVIGATION_LOGIN_BLOCKED,
+			BASE_ERROR_CODES.CROSS_SITE_NAVIGATION_LOGIN_BLOCKED.message,
 		);
 	});
 
