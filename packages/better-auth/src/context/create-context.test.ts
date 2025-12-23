@@ -18,7 +18,6 @@ describe("base context creation", () => {
 	};
 	const makePlugin = (
 		opts: Partial<BetterAuthPlugin> = {},
-		nb,
 	): BetterAuthPlugin => ({
 		id: "test",
 		init(ctx) {
