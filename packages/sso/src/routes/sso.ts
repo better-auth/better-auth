@@ -1,3 +1,4 @@
+import { base64 } from "@better-auth/utils/base64";
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
 import type { User, Verification } from "better-auth";
 import {
@@ -1815,8 +1816,8 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			} catch (error) {
 				ctx.context.logger.error("SAML response validation failed", {
 					error,
-					decodedResponse: Buffer.from(SAMLResponse, "base64").toString(
-						"utf-8",
+					decodedResponse: new TextDecoder().decode(
+						base64.decode(SAMLResponse),
 					),
 				});
 				throw new APIError("BAD_REQUEST", {
@@ -2245,8 +2246,8 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			} catch (error) {
 				ctx.context.logger.error("SAML response validation failed", {
 					error,
-					decodedResponse: Buffer.from(SAMLResponse, "base64").toString(
-						"utf-8",
+					decodedResponse: new TextDecoder().decode(
+						base64.decode(SAMLResponse),
 					),
 				});
 				throw new APIError("BAD_REQUEST", {
@@ -2342,8 +2343,8 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			}
 
 			// Assertion Replay Protection
-			const samlContentAcs = Buffer.from(SAMLResponse, "base64").toString(
-				"utf-8",
+			const samlContentAcs = new TextDecoder().decode(
+				base64.decode(SAMLResponse),
 			);
 			const assertionIdAcs = extractAssertionId(samlContentAcs);
 
