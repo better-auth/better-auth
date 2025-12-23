@@ -247,7 +247,8 @@ type upgradeSubscription = {
      */
     returnUrl?: string
     /**
-     * Disable redirect after successful subscription.
+     * Disable the automatic redirect to the subscription page.
+     * @default false
      */
     disableRedirect: boolean = true
 }
@@ -378,7 +379,8 @@ type cancelSubscription = {
      */
     returnUrl: string = '/account'
     /**
-     * Disable redirect after successful subscription cancellation.
+     * Disable the automatic redirect to the subscription cancellation page.
+     * @default false
      */
     disableRedirect?: boolean = false
 }
@@ -440,7 +442,9 @@ type createBillingPortal = {
      */
     returnUrl?: string
     /**
-     * Disable redirect after creating billing portal session.
+    /**
+     * Disable the automatic redirect to the billing page.
+     * @default false
      */
     disableRedirect?: boolean = false
 }
