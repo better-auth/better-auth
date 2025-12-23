@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.4.8",
+  "version": "1.4.9-beta.1",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "license": "MIT",
