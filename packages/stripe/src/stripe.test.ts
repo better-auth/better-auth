@@ -230,19 +230,33 @@ describe("stripe", () => {
 	});
 
 	it("should not allow cross-user subscriptionId operations (upgrade/cancel/restore)", async () => {
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+
 		const userA = {
 			email: "user-a@email.com",
 			password: "password",
 			name: "User A",
 		};
-		const userARes = await authClient.signUp.email(userA, { throw: true });
+		const userARes = await client.signUp.email(userA, { throw: true });
 
 		const userAHeaders = new Headers();
-		await authClient.signIn.email(userA, {
+		await client.signIn.email(userA, {
 			throw: true,
-			onSuccess: setCookieToHeader(userAHeaders),
+			onSuccess: sessionSetter(userAHeaders),
 		});
-		await authClient.subscription.upgrade({
+		await client.subscription.upgrade({
 			plan: "starter",
 			fetchOptions: { headers: userAHeaders },
 		});
@@ -258,11 +272,11 @@ describe("stripe", () => {
 			password: "password",
 			name: "User B",
 		};
-		await authClient.signUp.email(userB, { throw: true });
+		await client.signUp.email(userB, { throw: true });
 		const userBHeaders = new Headers();
-		await authClient.signIn.email(userB, {
+		await client.signIn.email(userB, {
 			throw: true,
-			onSuccess: setCookieToHeader(userBHeaders),
+			onSuccess: sessionSetter(userBHeaders),
 		});
 
 		mockStripe.checkout.sessions.create.mockClear();
@@ -270,7 +284,7 @@ describe("stripe", () => {
 		mockStripe.subscriptions.list.mockClear();
 		mockStripe.subscriptions.update.mockClear();
 
-		const upgradeRes = await authClient.subscription.upgrade({
+		const upgradeRes = await client.subscription.upgrade({
 			plan: "premium",
 			subscriptionId: userASub!.id,
 			fetchOptions: { headers: userBHeaders },
