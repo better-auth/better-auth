@@ -11,6 +11,8 @@ export type {
 	DBAdapterInstance,
 	DBAdapterSchemaCreation,
 	DBTransactionAdapter,
+	JoinConfig,
+	JoinOption,
 } from "@better-auth/core/db/adapter";
 
 export type { Where };
