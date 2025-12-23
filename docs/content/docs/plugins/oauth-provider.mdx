@@ -1776,6 +1776,20 @@ To improve lookup performance, database adapters may map the field `client_id` o
 Previously `oauthApplication`
 
 - If `storeClientSecret` was unset or `plain`, you must hash all the stored `clientSecret` values into its "SHA-256" representation then convert it into base64Url format or use another storage method specified by `storeClientSecret`.
+The following function will convert a `plain` representation into the default hash:
+```ts
+import { createHash } from "@better-auth/utils/hash";
+
+const defaultHasher = async (value: string) => {
+	const hash = await createHash("SHA-256").digest(
+		new TextEncoder().encode(value),
+	);
+	const hashed = base64Url.encode(new Uint8Array(hash), {
+		padding: false,
+	});
+	return hashed;
+};
+```
 - `type` field is no longer a required field. Instead, the schema requires `public` of type `boolean`. Migrate with the following rules:
     - Clients with `type: "public"`: set `type: undefined`, `public: true`, and `clientSecret: undefined`
     - Clients with `type: "native"`: set `public: true` and `clientSecret: undefined`
@@ -1828,3 +1842,4 @@ The MCP endpoints moved from `/mcp` to the `/oauth2` equivalent.
 - `/oauth2/register` (previously `/mcp/register`)
 - `/mcp/get-session` removed as not OAuth 2 compliant, use `/oauth2/introspect` instead
 - `/.well-known/oauth-protected-resource` removed, use the helper `mcpHandler` (or manually with the server `api.oAuth2introspectVerify` or the resource client `verifyAccessToken`)
+-  Database changes are equivalent to the [From OIDC Provider Plugin](#from-oidc-provider-plugin) section.
