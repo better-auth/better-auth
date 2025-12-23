@@ -23,7 +23,14 @@ import type {
 	Subscription,
 	SubscriptionOptions,
 } from "./types";
-import { getPlanByName, getPlanByPriceInfo, getPlans } from "./utils";
+import {
+	getPlanByName,
+	getPlanByPriceInfo,
+	getPlans,
+	isActiveOrTrialing,
+	isPendingCancel,
+	isStripePendingCancel,
+} from "./utils";
 
 const upgradeSubscriptionBodySchema = z.object({
 	/**
@@ -792,7 +799,7 @@ export const cancelSubscription = (options: StripeOptions) => {
 							const stripeSub = await client.subscriptions.retrieve(
 								activeSubscription.id,
 							);
-							await ctx.context.adapter.updateMany({
+							await ctx.context.adapter.update({
 								model: "subscription",
 								update: {
 									cancelAtPeriodEnd: stripeSub.cancel_at_period_end,
@@ -805,8 +812,8 @@ export const cancelSubscription = (options: StripeOptions) => {
 								},
 								where: [
 									{
-										field: "referenceId",
-										value: referenceId,
+										field: "id",
+										value: subscription.id,
 									},
 								],
 							});
@@ -905,7 +912,7 @@ export const restoreSubscription = (options: StripeOptions) => {
 					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_ACTIVE,
 				);
 			}
-			if (!subscription.cancelAtPeriodEnd) {
+			if (!isPendingCancel(subscription)) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION,
@@ -958,14 +965,7 @@ export const restoreSubscription = (options: StripeOptions) => {
 				],
 			});
 
-				return ctx.json(newSub);
-			} catch (error) {
-				ctx.context.logger.error("Error restoring subscription", error);
-				throw APIError.from(
-					"BAD_REQUEST",
-					STRIPE_ERROR_CODES.UNABLE_TO_CREATE_CUSTOMER,
-				);
-			}
+			return ctx.json(newSub);
 		},
 	);
 };
