@@ -131,7 +131,7 @@ export const thingiverse = (options: ThingiverseOptions) => {
 
 				return {
 					user: {
-						id: profile.id,
+						id: String(profile.id),
 						name: profile.name,
 						email: profile.email,
 						image: profile.thumbnail,
