@@ -156,6 +156,7 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 						await assignOrganizationByDomain(ctx, {
 							user: newSession.user,
 							provisioningOptions: options?.organizationProvisioning,
+							domainVerification: options?.domainVerification,
 						});
 					}),
 				},
@@ -210,5 +211,6 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 				},
 			},
 		},
+		options: options as NoInfer<O>,
 	} satisfies BetterAuthPlugin;
 }

@@ -2915,6 +2915,164 @@ describe("api-key", async () => {
 		});
 	});
 
+	describe("deferUpdates option", () => {
+		it("should defer updates when deferUpdates is enabled with global backgroundTasks", async () => {
+			const deferredPromises: Array<Promise<void>> = [];
+			const { auth, signInWithTestUser } = await getTestInstance({
+				advanced: {
+					backgroundTasks: {
+						handler: (p: Promise<void>) => {
+							deferredPromises.push(p);
+						},
+					},
+				},
+				plugins: [
+					apiKey({
+						deferUpdates: true,
+					}),
+				],
+			});
+
+			const { headers, user } = await signInWithTestUser();
+
+			const key = await auth.api.createApiKey({
+				body: { userId: user.id },
+				headers,
+			});
+
+			const result = await auth.api.verifyApiKey({
+				body: { key: key.key },
+			});
+
+			expect(result.valid).toBe(true);
+			expect(deferredPromises.length).toBeGreaterThan(0);
+
+			await Promise.all(deferredPromises);
+
+			const updatedKey = await auth.api.getApiKey({
+				query: { id: key.id },
+				headers,
+			});
+			expect(updatedKey.lastRequest).not.toBeNull();
+		});
+
+		it("should still validate rate limits correctly with deferred updates", async () => {
+			const deferredPromises: Array<Promise<void>> = [];
+			const { auth, signInWithTestUser } = await getTestInstance({
+				advanced: {
+					backgroundTasks: {
+						handler: (p: Promise<void>) => {
+							deferredPromises.push(p);
+						},
+					},
+				},
+				plugins: [
+					apiKey({
+						deferUpdates: true,
+						rateLimit: {
+							enabled: true,
+							maxRequests: 2,
+							timeWindow: 60000,
+						},
+					}),
+				],
+			});
+
+			const { headers, user } = await signInWithTestUser();
+
+			const key = await auth.api.createApiKey({
+				body: { userId: user.id },
+				headers,
+			});
+
+			const result1 = await auth.api.verifyApiKey({ body: { key: key.key } });
+			expect(result1.valid).toBe(true);
+
+			await Promise.all(deferredPromises);
+			deferredPromises.length = 0;
+
+			const result2 = await auth.api.verifyApiKey({ body: { key: key.key } });
+			expect(result2.valid).toBe(true);
+
+			await Promise.all(deferredPromises);
+			deferredPromises.length = 0;
+
+			const result3 = await auth.api.verifyApiKey({ body: { key: key.key } });
+			expect(result3.valid).toBe(false);
+			expect(result3.error?.code).toBe("RATE_LIMITED");
+		});
+
+		it("should defer remaining count updates", async () => {
+			const deferredPromises: Array<Promise<void>> = [];
+			const { auth, signInWithTestUser } = await getTestInstance({
+				advanced: {
+					backgroundTasks: {
+						handler: (p: Promise<void>) => {
+							deferredPromises.push(p);
+						},
+					},
+				},
+				plugins: [
+					apiKey({
+						deferUpdates: true,
+					}),
+				],
+			});
+
+			const { headers, user } = await signInWithTestUser();
+
+			const key = await auth.api.createApiKey({
+				body: { userId: user.id, remaining: 10 },
+			});
+
+			const result = await auth.api.verifyApiKey({
+				body: { key: key.key },
+			});
+			expect(result.valid).toBe(true);
+			expect(result.key?.remaining).toBe(9);
+
+			expect(deferredPromises.length).toBeGreaterThan(0);
+
+			await Promise.all(deferredPromises);
+
+			const updatedKey = await auth.api.getApiKey({
+				query: { id: key.id },
+				headers,
+			});
+			expect(updatedKey.remaining).toBe(9);
+		});
+
+		it("should not defer updates when backgroundTasks handler is not configured", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					apiKey({
+						deferUpdates: true,
+					}),
+				],
+			});
+
+			const { headers, user } = await signInWithTestUser();
+
+			const key = await auth.api.createApiKey({
+				body: { userId: user.id },
+				headers,
+			});
+
+			const result = await auth.api.verifyApiKey({
+				body: { key: key.key },
+			});
+
+			expect(result.valid).toBe(true);
+
+			// Without advanced.backgroundTasks handler, updates should happen synchronously
+			const updatedKey = await auth.api.getApiKey({
+				query: { id: key.id },
+				headers,
+			});
+			expect(updatedKey.lastRequest).not.toBeNull();
+		});
+	});
+
 	describe("custom storage methods", async () => {
 		let customStore = new Map<string, string>();
 		let customGetCalled = false;

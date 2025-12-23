@@ -250,7 +250,12 @@ trustedOrigins: [
 2. Or dynamically compute the `trustedOrigins` by specifying a callback function:
 
 ```ts
-trustedOrigins: async (request: Request) => {
+trustedOrigins: async (request) => {
+    // request is undefined during initialization and auth.api calls
+    if (!request) {
+        return ["https://my-frontend.com"];
+    }
+
     // SSO trusted origin list
     if (request.url.endsWith("/sso/register")) {
         const trustedOrigins = await fetchOriginList();
@@ -1074,6 +1079,21 @@ sso({
     },
 })
 ```
+
+#### Supported Algorithms
+
+**Signature algorithms:**
+- `RSA-SHA256`, `RSA-SHA384`, `RSA-SHA512`
+- `ECDSA-SHA256`, `ECDSA-SHA384`, `ECDSA-SHA512`
+
+**Digest algorithms:**
+- `SHA256`, `SHA384`, `SHA512`
+
+**Deprecated (triggers warning/rejection):**
+- `RSA-SHA1` (signature)
+- `SHA1` (digest)
+- `RSA 1.5` (key encryption)
+- `3DES` (data encryption)
 
 ## Domain verification
 

@@ -1,7 +1,7 @@
 {
   "name": "@better-auth/sso",
   "author": "Bereket Engida",
-  "version": "1.4.8-beta.1",
+  "version": "1.4.8-beta.7",
   "type": "module",
   "main": "dist/index.mjs",
   "types": "dist/index.d.mts",
@@ -71,8 +71,8 @@
   "devDependencies": {
     "@types/body-parser": "^1.19.6",
     "@types/express": "^5.0.5",
-    "better-call": "catalog:",
     "better-auth": "workspace:*",
+    "better-call": "catalog:",
     "body-parser": "^2.2.1",
     "express": "^5.1.0",
     "oauth2-mock-server": "^8.2.0",
