@@ -1,6 +1,7 @@
 import { betterFetch } from "@better-fetch/fetch";
-import { APIError } from "better-call";
+
 import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
+import { APIError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
