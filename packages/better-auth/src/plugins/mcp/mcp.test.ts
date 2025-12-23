@@ -748,6 +748,52 @@ describe("mcp", async () => {
 		expect(redirectLocation).not.toContain("consent_code="); // Should NOT redirect to consent page
 	});
 
+	it("should not include state=undefined in redirect URL when state query parameter is not present", async ({
+		expect,
+	}) => {
+		// Register a client for testing
+		const testClient = await serverClient.$fetch("/mcp/register", {
+			method: "POST",
+			body: {
+				client_name: "test-no-state-client",
+				redirect_uris: [
+					"http://localhost:3000/api/auth/oauth2/callback/test-no-state",
+				],
+				logo_uri: "",
+				token_endpoint_auth_method: "none",
+			},
+		});
+
+		const clientId = (testClient.data as any).client_id;
+		const redirectUri = (testClient.data as any).redirect_uris[0];
+
+		// Construct authorization URL WITHOUT state parameter
+		const authURL = new URL(`${baseURL}/api/auth/mcp/authorize`);
+		authURL.searchParams.set("client_id", clientId);
+		authURL.searchParams.set("redirect_uri", redirectUri);
+		authURL.searchParams.set("response_type", "code");
+		authURL.searchParams.set("scope", "openid profile email");
+		// Intentionally NOT setting state parameter
+		authURL.searchParams.set("code_challenge", "test-challenge-no-state");
+		authURL.searchParams.set("code_challenge_method", "S256");
+
+		// Make authorization request with authenticated session
+		let redirectLocation = "";
+		await serverClient.$fetch(authURL.toString(), {
+			method: "GET",
+			onError(context: any) {
+				redirectLocation = context.response.headers.get("Location") || "";
+			},
+		});
+
+		const redirectUrl = new URL(redirectLocation);
+
+		// Verify redirect doesn't contain state=undefined
+		expect(redirectUrl.toString()).toContain(redirectUri);
+		expect(redirectUrl.searchParams.has("code")).toBe(true);
+		expect(redirectUrl.searchParams.has("state")).toBe(false);
+	});
+
 	describe("withMCPAuth", () => {
 		it("should return 401 if the request is not authenticated returning the right WWW-Authenticate header", async ({
 			expect,
