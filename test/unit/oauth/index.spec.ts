@@ -86,7 +86,7 @@ test("should login with google successfully", async () => {
 			});
 
 			expect(response).toBeInstanceOf(Response);
-			expect(log).not.toHaveBeenCalled()
+			expect(log).not.toHaveBeenCalled();
 		}
 	}
 
