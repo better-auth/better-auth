@@ -1578,6 +1578,55 @@ describe("stripe", () => {
 		expect(hasTrialData).toBe(true);
 	});
 
+	it("should prevent trial abuse when incomplete subscription exists alongside canceled trialed subscription", async () => {
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+
+		const userRes = await client.signUp.email(
+			{ ...testUser, email: "trial-race@email.com" },
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{ ...testUser, email: "trial-race@email.com" },
+			{ throw: true, onSuccess: sessionSetter(headers) },
+		);
+
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				referenceId: userRes.user.id,
+				stripeCustomerId: "cus_old_123",
+				status: "canceled",
+				plan: "starter",
+				trialStart: new Date(),
+				trialEnd: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+			},
+		});
+
+		const upgradeRes = await client.subscription.upgrade({
+			plan: "premium",
+			fetchOptions: { headers },
+		});
+
+		expect(upgradeRes.data?.url).toBeDefined();
+
+		const callArgs = mockStripe.checkout.sessions.create.mock.lastCall?.[0];
+		expect(callArgs?.subscription_data?.trial_period_days).toBeUndefined();
+	});
+
 	it("should upgrade existing subscription instead of creating new one", async () => {
 		// Reset mocks for this test
 		vi.clearAllMocks();

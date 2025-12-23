@@ -465,7 +465,13 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				ctx,
 			);
 
-			const hasEverTrialed = subscriptions.some((s) => {
+			const allSubscriptions = await ctx.context.adapter.findMany<Subscription>(
+				{
+					model: "subscription",
+					where: [{ field: "referenceId", value: referenceId }],
+				},
+			);
+			const hasEverTrialed = allSubscriptions.some((s) => {
 				// Check if user has ever had a trial for any plan (not just the same plan)
 				// This prevents users from getting multiple trials by switching plans
 				const hadTrial =
