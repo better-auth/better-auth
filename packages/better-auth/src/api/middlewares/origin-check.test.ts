@@ -434,3 +434,112 @@ describe("trusted origins with baseURL inferred from request", async (it) => {
 		}
 	});
 });
+
+describe("API Client Support (Non-browser requests)", async (it) => {
+	const { customFetchImpl, testUser, auth } = await getTestInstance({
+		trustedOrigins: ["http://localhost:3000"],
+		emailAndPassword: {
+			enabled: true,
+			async sendResetPassword(url, user) {},
+		},
+		advanced: {
+			disableCSRFCheck: false,
+			disableOriginCheck: false,
+		},
+	});
+
+	it("should allow non-simple requests without Origin header (API clients like Postman)", async () => {
+		const signInRes = await customFetchImpl(
+			"http://localhost:3000/api/auth/sign-in/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+				},
+				body: JSON.stringify({
+					email: testUser.email,
+					password: testUser.password,
+				}),
+			},
+		);
+		expect(signInRes.ok).toBe(true);
+		const sessionCookie = signInRes.headers.get("set-cookie");
+
+		const signOutRes = await customFetchImpl(
+			"http://localhost:3000/api/auth/sign-out",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					cookie: sessionCookie || "",
+				},
+				body: JSON.stringify({}),
+			},
+		);
+		expect(signOutRes.ok).toBe(true);
+	});
+
+	it("should allow non-simple requests with cookies and no Origin header", async () => {
+		const signInRes = await customFetchImpl(
+			"http://localhost:3000/api/auth/sign-in/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+				},
+				body: JSON.stringify({
+					email: testUser.email,
+					password: testUser.password,
+				}),
+			},
+		);
+		const sessionCookie = signInRes.headers.get("set-cookie");
+
+		const secondSignInRes = await customFetchImpl(
+			"http://localhost:3000/api/auth/sign-in/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					cookie: sessionCookie || "",
+				},
+				body: JSON.stringify({
+					email: testUser.email,
+					password: testUser.password,
+				}),
+			},
+		);
+		expect(secondSignInRes.ok).toBe(true);
+	});
+
+	it("should still validate Origin if provided in non-simple requests", async () => {
+		const signInRes = await customFetchImpl(
+			"http://localhost:3000/api/auth/sign-in/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+				},
+				body: JSON.stringify({
+					email: testUser.email,
+					password: testUser.password,
+				}),
+			},
+		);
+		const sessionCookie = signInRes.headers.get("set-cookie");
+
+		const badOriginRes = await customFetchImpl(
+			"http://localhost:3000/api/auth/sign-out",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					origin: "http://malicious.com",
+					cookie: sessionCookie || "",
+				},
+				body: JSON.stringify({}),
+			},
+		);
+		expect(badOriginRes.status).toBe(403);
+	});
+});
