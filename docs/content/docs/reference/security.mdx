@@ -161,8 +161,8 @@ Trusted origins also support custom schemes for mobile apps and browser extensio
   trustedOrigins: [
     "myapp://",                               // Mobile app scheme
     "chrome-extension://YOUR_EXTENSION_ID",   // Browser extension
-    "exp://*/*",                              // Trust all Expo development URLs
-    "exp://10.0.0.*:*/*",                     // Trust 10.0.0.x IP range with any port
+    "exp://**",                               // Trust all Expo development URLs
+    "exp://10.0.0.*:*/**",                    // Trust 10.0.0.x IP range with any port
   ]
 }
 ```

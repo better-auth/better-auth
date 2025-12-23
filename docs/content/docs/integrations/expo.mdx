@@ -160,15 +160,15 @@ Expo is a popular framework for building cross-platform apps with React Native. 
                 
                 // Development mode - Expo's exp:// scheme with local IP ranges
                 ...(process.env.NODE_ENV === "development" ? [
-                    "exp://*/*",                 // Trust all Expo development URLs
-                    "exp://10.0.0.*:*/*",        // Trust 10.0.0.x IP range
-                    "exp://192.168.*.*:*/*",     // Trust 192.168.x.x IP range
-                    "exp://172.*.*.*:*/*",       // Trust 172.x.x.x IP range
-                    "exp://localhost:*/*"        // Trust localhost
+                    "exp://",                      // Trust all Expo URLs (prefix matching)
+                    "exp://**",                    // Trust all Expo URLs (wildcard matching)
+                    "exp://192.168.*.*:*/**",      // Trust 192.168.x.x IP range with any port and path
                 ] : [])
             ]
         })
         ```
+
+        For more information about trusted origins, see [here](/docs/reference/options#trustedorigins).
 
         <Callout type="warn">
           The wildcard patterns for `exp://` should only be used in development. In production, use your app's specific scheme (e.g., `myapp://`).
