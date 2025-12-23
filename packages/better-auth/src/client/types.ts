@@ -79,7 +79,13 @@ export type InferErrorCodes<O extends BetterAuthClientOptions> =
 		? UnionToIntersection<
 				Plugin extends BetterAuthClientPlugin
 					? Plugin["$InferServerPlugin"] extends { $ERROR_CODES: infer E }
-						? E extends Record<string, string>
+						? E extends Record<
+								string,
+								{
+									code: string;
+									message: string;
+								}
+							>
 							? E
 							: {}
 						: {}

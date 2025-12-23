@@ -22,18 +22,20 @@ describe("auth type", () => {
 				{
 					id: "custom-plugin",
 					$ERROR_CODES: {
-						CUSTOM_ERROR: "Custom error message",
+						CUSTOM_ERROR: {
+							code: "CUSTOM_ERROR",
+							message: "Custom error message",
+						},
 					},
 				},
 			],
 		});
 
 		type T = typeof auth.$ERROR_CODES;
-		expectTypeOf<T>().toEqualTypeOf<
-			{
-				CUSTOM_ERROR: string;
-			} & typeof import("@better-auth/core/error").BASE_ERROR_CODES
-		>();
+		expectTypeOf<T["CUSTOM_ERROR"]>().toMatchTypeOf<{
+			code: string;
+			message: string;
+		}>();
 	});
 
 	test("plugin endpoints", () => {

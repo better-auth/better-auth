@@ -11,8 +11,9 @@ import type {
 	EndpointOptions,
 	InputContext,
 } from "better-call";
-import { APIError, toResponse } from "better-call";
+import { toResponse } from "better-call";
 import { createDefu } from "defu";
+import { isAPIError } from "../utils/is-api-error";
 
 type InternalContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>
@@ -114,7 +115,7 @@ export function toAuthEndpoints<
 					const result = (await runWithEndpointContext(internalContext, () =>
 						(endpoint as any)(internalContext as any),
 					).catch((e: any) => {
-						if (e instanceof APIError) {
+						if (isAPIError(e)) {
 							/**
 							 * API Errors from response are caught
 							 * and returned to hooks
@@ -147,14 +148,14 @@ export function toAuthEndpoints<
 					}
 
 					if (
-						result.response instanceof APIError &&
+						isAPIError(result.response) &&
 						shouldPublishLog(authContext.logger.level, "debug")
 					) {
 						// inherit stack from errorStack if debug mode is enabled
 						result.response.stack = result.response.errorStack;
 					}
 
-					if (result.response instanceof APIError && !context?.asResponse) {
+					if (isAPIError(result.response) && !context?.asResponse) {
 						throw result.response;
 					}
 
@@ -211,7 +212,7 @@ async function runBeforeHooks(
 				})
 				.catch((e: unknown) => {
 					if (
-						e instanceof APIError &&
+						isAPIError(e) &&
 						shouldPublishLog(context.context.logger.level, "debug")
 					) {
 						// inherit stack from errorStack if debug mode is enabled
@@ -253,7 +254,7 @@ async function runAfterHooks(
 	for (const hook of hooks) {
 		if (hook.matcher(context)) {
 			const result = (await hook.handler(context).catch((e) => {
-				if (e instanceof APIError) {
+				if (isAPIError(e)) {
 					if (shouldPublishLog(context.context.logger.level, "debug")) {
 						// inherit stack from errorStack if debug mode is enabled
 						e.stack = e.errorStack;

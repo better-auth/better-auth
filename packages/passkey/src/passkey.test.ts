@@ -1,6 +1,6 @@
+import { APIError } from "@better-auth/core/error";
 import { createAuthClient } from "better-auth/client";
 import { getTestInstance } from "better-auth/test";
-import { APIError } from "better-call";
 import { describe, expect, it } from "vitest";
 import type { Passkey } from ".";
 import { passkey } from ".";

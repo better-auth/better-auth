@@ -1,8 +1,9 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
-import { APIError, sessionMiddleware } from "../../../api";
-import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
+import { sessionMiddleware } from "../../../api";
+import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import {
 	deleteApiKey as deleteApiKeyFromStorage,
 	getApiKeyById,
@@ -81,9 +82,7 @@ export function deleteApiKey({
 			const { keyId } = ctx.body;
 			const session = ctx.context.session;
 			if (session.user.banned === true) {
-				throw new APIError("UNAUTHORIZED", {
-					message: ERROR_CODES.USER_BANNED,
-				});
+				throw APIError.from("UNAUTHORIZED", ERROR_CODES.USER_BANNED);
 			}
 
 			let apiKey: ApiKey | null = null;
@@ -91,9 +90,7 @@ export function deleteApiKey({
 			apiKey = await getApiKeyById(ctx, keyId, opts);
 
 			if (!apiKey || apiKey.userId !== session.user.id) {
-				throw new APIError("NOT_FOUND", {
-					message: ERROR_CODES.KEY_NOT_FOUND,
-				});
+				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
 			}
 
 			try {
@@ -122,7 +119,7 @@ export function deleteApiKey({
 					await deleteApiKeyFromStorage(ctx, apiKey, opts);
 				}
 			} catch (error: any) {
-				throw new APIError("INTERNAL_SERVER_ERROR", {
+				throw APIError.fromStatus("INTERNAL_SERVER_ERROR", {
 					message: error?.message,
 				});
 			}
