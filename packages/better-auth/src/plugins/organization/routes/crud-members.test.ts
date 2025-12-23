@@ -73,6 +73,19 @@ describe("listMembers", async () => {
 		expect(members.data?.total).toBe(11);
 	});
 
+	it("should return all members by organization slug", async () => {
+		const members = await client.organization.listMembers({
+			fetchOptions: {
+				headers,
+			},
+			query: {
+				organizationSlug: "test-second",
+			},
+		});
+		expect(members.data?.members.length).toBe(1);
+		expect(members.data?.total).toBe(1);
+	});
+
 	it("should limit the number of members", async () => {
 		const members = await client.organization.listMembers({
 			fetchOptions: {
@@ -112,8 +125,23 @@ describe("listMembers", async () => {
 				).toISOString(),
 			},
 		});
-		expect(members.data?.members.length).toBe(0);
-		expect(members.data?.total).toBe(0);
+		expect(members.data?.members.length).toBe(11);
+		expect(members.data?.total).toBe(11);
+	});
+
+	it("should filter the members verifying the operator functionality", async () => {
+		const members = await client.organization.listMembers({
+			fetchOptions: {
+				headers,
+			},
+			query: {
+				filterField: "role",
+				filterOperator: "ne",
+				filterValue: "owner",
+			},
+		});
+		expect(members.data?.members.length).toBe(10);
+		expect(members.data?.total).toBe(10);
 	});
 
 	it("should sort the members", async () => {
@@ -214,13 +242,12 @@ describe("listMembers", async () => {
 });
 
 describe("updateMemberRole", async () => {
-	const { auth, signInWithTestUser, cookieSetter, customFetchImpl } =
-		await getTestInstance({
-			plugins: [organization()],
-		});
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		plugins: [organization()],
+	});
 
 	it("should update the member role", async () => {
-		const { headers, user } = await signInWithTestUser();
+		const { headers } = await signInWithTestUser();
 		const client = createAuthClient({
 			plugins: [organizationClient()],
 			baseURL: "http://localhost:3000/api/auth",
@@ -278,7 +305,7 @@ describe("updateMemberRole", async () => {
 			},
 		});
 
-		const org = await client.organization.create({
+		await client.organization.create({
 			name: "test",
 			slug: "test",
 			metadata: {
@@ -335,7 +362,7 @@ describe("updateMemberRole", async () => {
 });
 
 describe("activeMemberRole", async () => {
-	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance({
+	const { auth, signInWithTestUser } = await getTestInstance({
 		plugins: [organization()],
 	});
 	const ctx = await auth.$context;
@@ -359,7 +386,7 @@ describe("activeMemberRole", async () => {
 			headers,
 		},
 	});
-	const secondOrg = await client.organization.create({
+	await client.organization.create({
 		name: "test-second",
 		slug: "test-second",
 		metadata: {
@@ -428,5 +455,76 @@ describe("activeMemberRole", async () => {
 		});
 
 		expect(activeMember.data?.role).toBe("member");
+	});
+});
+
+describe("inviteMember role validation", async () => {
+	const { signInWithTestUser, customFetchImpl } = await getTestInstance({
+		plugins: [organization()],
+	});
+
+	it("should fail when inviting with a non-existent role", async () => {
+		const { headers } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [organizationClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const org = await client.organization.create({
+			name: "Test Org Validation",
+			slug: "test-org-validation",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		// Attempt to invite with a fake role
+		const { error } = await client.organization.inviteMember({
+			email: "fake-role@test.com",
+			// @ts-expect-error - testing invalid role validation
+			role: "super-invalid-role-123",
+			organizationId: org.data?.id as string,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(error).toBeTruthy();
+		expect(error?.status).toBe(400);
+		expect(error?.message).toContain(ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND);
+	});
+
+	it("should succeed when inviting with a valid default role", async () => {
+		const { headers } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [organizationClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const org = await client.organization.create({
+			name: "Test Org Validation 2",
+			slug: "test-org-validation-2",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const { data, error } = await client.organization.inviteMember({
+			email: "valid@test.com",
+			role: "admin", // Valid default role
+			organizationId: org.data?.id as string,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(error).toBeNull();
+		expect(data).toBeDefined();
 	});
 });

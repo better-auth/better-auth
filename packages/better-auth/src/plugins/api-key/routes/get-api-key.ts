@@ -1,12 +1,19 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { safeJSONParse } from "@better-auth/core/utils";
 import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../../api";
-import { safeJSONParse } from "../../../utils/json";
-import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
+import { ERROR_CODES } from "..";
+import { getApiKeyById } from "../adapter";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
+
+const getApiKeyQuerySchema = z.object({
+	id: z.string().meta({
+		description: "The id of the Api Key",
+	}),
+});
 
 export function getApiKey({
 	opts,
@@ -24,11 +31,7 @@ export function getApiKey({
 		"/api-key/get",
 		{
 			method: "GET",
-			query: z.object({
-				id: z.string().meta({
-					description: "The id of the Api Key",
-				}),
-			}),
+			query: getApiKeyQuerySchema,
 			use: [sessionMiddleware],
 			metadata: {
 				openapi: {
@@ -172,19 +175,14 @@ export function getApiKey({
 
 			const session = ctx.context.session;
 
-			let apiKey = await ctx.context.adapter.findOne<ApiKey>({
-				model: API_KEY_TABLE_NAME,
-				where: [
-					{
-						field: "id",
-						value: id,
-					},
-					{
-						field: "userId",
-						value: session.user.id,
-					},
-				],
-			});
+			let apiKey: ApiKey | null = null;
+
+			apiKey = await getApiKeyById(ctx, id, opts);
+
+			// Verify ownership
+			if (apiKey && apiKey.userId !== session.user.id) {
+				apiKey = null;
+			}
 
 			if (!apiKey) {
 				throw new APIError("NOT_FOUND", {
@@ -199,7 +197,7 @@ export function getApiKey({
 				apiKey.metadata as never as string,
 			);
 
-			const { key, ...returningApiKey } = apiKey;
+			const { key: _key, ...returningApiKey } = apiKey;
 
 			return ctx.json({
 				...returningApiKey,

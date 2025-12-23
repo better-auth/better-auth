@@ -1,8 +1,8 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { safeJSONParse } from "@better-auth/core/utils";
 import { sessionMiddleware } from "../../../api";
-import { safeJSONParse } from "../../../utils/json";
-import { API_KEY_TABLE_NAME } from "..";
+import { listApiKeys as listApiKeysFromStorage } from "../adapter";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
@@ -165,15 +165,9 @@ export function listApiKeys({
 		},
 		async (ctx) => {
 			const session = ctx.context.session;
-			let apiKeys = await ctx.context.adapter.findMany<ApiKey>({
-				model: API_KEY_TABLE_NAME,
-				where: [
-					{
-						field: "userId",
-						value: session.user.id,
-					},
-				],
-			});
+			let apiKeys: ApiKey[];
+
+			apiKeys = await listApiKeysFromStorage(ctx, session.user.id, opts);
 
 			deleteAllExpiredApiKeys(ctx.context);
 			apiKeys = apiKeys.map((apiKey) => {
@@ -186,7 +180,7 @@ export function listApiKeys({
 			});
 
 			let returningApiKey = apiKeys.map((x) => {
-				const { key, ...returningApiKey } = x;
+				const { key: _key, ...returningApiKey } = x;
 				return {
 					...returningApiKey,
 					permissions: returningApiKey.permissions

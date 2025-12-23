@@ -1,16 +1,14 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type {
+	AdapterFactoryCustomizeAdapterCreator,
+	AdapterFactoryOptions,
 	DBAdapter,
 	DBAdapterDebugLogOption,
 	Where,
 } from "@better-auth/core/db/adapter";
+import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import type { ClientSession, Db, MongoClient } from "mongodb";
 import { ObjectId } from "mongodb";
-import type {
-	AdapterFactoryCustomizeAdapterCreator,
-	AdapterFactoryOptions,
-} from "../adapter-factory";
-import { createAdapterFactory } from "../adapter-factory";
 
 export interface MongoDBAdapterConfig {
 	/**
@@ -101,7 +99,7 @@ export const mongodbAdapter = (
 								if (typeof v === "string") {
 									try {
 										return new ObjectId(v);
-									} catch (e) {
+									} catch {
 										return v;
 									}
 								}
@@ -109,17 +107,17 @@ export const mongodbAdapter = (
 									return v;
 								}
 								throw new Error(
-									"Invalid id value, recieved: " + JSON.stringify(v),
+									"Invalid id value, received: " + JSON.stringify(v),
 								);
 							});
 						}
 						throw new Error(
-							"Invalid id value, recieved: " + JSON.stringify(value),
+							"Invalid id value, received: " + JSON.stringify(value),
 						);
 					}
 					try {
 						return new ObjectId(value);
-					} catch (e) {
+					} catch {
 						return value;
 					}
 				}
@@ -513,10 +511,12 @@ export const mongodbAdapter = (
 						{
 							session,
 							returnDocument: "after",
+							includeResultMetadata: true,
 						},
 					);
-					if (!res) return null;
-					return res as any;
+					const doc = (res as any)?.value ?? null;
+					if (!doc) return null;
+					return doc as any;
 				},
 				async updateMany({ model, where, update: values }) {
 					const clause = convertWhereClause({ where, model });
@@ -604,7 +604,7 @@ export const mongodbAdapter = (
 					if (customIdGen) {
 						return data;
 					}
-					if (action === "update") {
+					if (action !== "create") {
 						return data;
 					}
 					if (Array.isArray(data)) {
@@ -613,7 +613,7 @@ export const mongodbAdapter = (
 								try {
 									const oid = new ObjectId(v);
 									return oid;
-								} catch (error) {
+								} catch {
 									return v;
 								}
 							}
@@ -624,7 +624,7 @@ export const mongodbAdapter = (
 						try {
 							const oid = new ObjectId(data);
 							return oid;
-						} catch (error) {
+						} catch {
 							return data;
 						}
 					}

@@ -132,7 +132,7 @@ pnpm lint:fix
    pnpm test
    
    # Run tests for a specific package
-   pnpm -F "{packagename}" test
+   pnpm -F "{package_name}" test
    ```
 6. Ensure all tests pass and the code is properly formatted
 7. Commit your changes with a descriptive message following this format:

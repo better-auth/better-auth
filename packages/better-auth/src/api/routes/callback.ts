@@ -1,12 +1,12 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
+import { safeJSONParse } from "@better-auth/core/utils";
 import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
 import { setTokenUtil } from "../../oauth2/utils";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
-import { safeJSONParse } from "../../utils/json";
 
 const schema = z.object({
 	code: z.string().optional(),
@@ -221,7 +221,12 @@ export const callbackOAuth = createAuthEndpoint(
 			);
 			return redirectOnError("email_not_found");
 		}
-
+		const accountData = {
+			providerId: provider.id,
+			accountId: String(userInfo.id),
+			...tokens,
+			scope: tokens.scopes?.join(","),
+		};
 		const result = await handleOAuthUserInfo(c, {
 			userInfo: {
 				...userInfo,
@@ -229,12 +234,7 @@ export const callbackOAuth = createAuthEndpoint(
 				email: userInfo.email,
 				name: userInfo.name || userInfo.email,
 			},
-			account: {
-				providerId: provider.id,
-				accountId: String(userInfo.id),
-				...tokens,
-				scope: tokens.scopes?.join(","),
-			},
+			account: accountData,
 			callbackURL,
 			disableSignUp:
 				(provider.disableImplicitSignUp && !requestSignUp) ||
@@ -250,6 +250,7 @@ export const callbackOAuth = createAuthEndpoint(
 			session,
 			user,
 		});
+
 		let toRedirectTo: string;
 		try {
 			const url = result.isRegister ? newUserURL || callbackURL : callbackURL;

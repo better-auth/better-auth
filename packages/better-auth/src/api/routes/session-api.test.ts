@@ -142,7 +142,7 @@ describe("session", async () => {
 
 	it("should handle 'don't remember me' option", async () => {
 		let headers = new Headers();
-		const res = await client.signIn.email(
+		await client.signIn.email(
 			{
 				email: testUser.email,
 				password: testUser.password,
@@ -221,7 +221,7 @@ describe("session", async () => {
 
 	it("should clear session on sign out", async () => {
 		let headers = new Headers();
-		const res = await client.signIn.email(
+		await client.signIn.email(
 			{
 				email: testUser.email,
 				password: testUser.password,
@@ -275,7 +275,7 @@ describe("session", async () => {
 	it("should revoke session", async () => {
 		const headers = new Headers();
 		const headers2 = new Headers();
-		const res = await client.signIn.email({
+		await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
 			fetchOptions: {
@@ -373,7 +373,7 @@ describe("session", async () => {
 
 describe("session storage", async () => {
 	let store = new Map<string, string>();
-	const { client, signInWithTestUser, db } = await getTestInstance({
+	const { client, signInWithTestUser } = await getTestInstance({
 		secondaryStorage: {
 			set(key, value, ttl) {
 				store.set(key, value);
@@ -454,7 +454,7 @@ describe("session storage", async () => {
 		await runWithUser(async () => {
 			const session = await client.getSession();
 			expect(session.data).not.toBeNull();
-			const res = await client.revokeSession({
+			await client.revokeSession({
 				token: session.data?.session?.token || "",
 			});
 			const revokedSession = await client.getSession();
@@ -547,11 +547,11 @@ describe("cookie cache", async () => {
 		});
 		expect(session.data?.user.emailVerified).toBe(true);
 		expect(session.data).not.toBeNull();
-		expect(fn).toHaveBeenCalledTimes(3);
+		expect(fn).toHaveBeenCalledTimes(2);
 	});
 
 	it("should reset cache when expires", async () => {
-		expect(fn).toHaveBeenCalledTimes(3);
+		expect(fn).toHaveBeenCalledTimes(2);
 		await client.getSession({
 			fetchOptions: {
 				headers,
@@ -567,7 +567,7 @@ describe("cookie cache", async () => {
 				},
 			},
 		});
-		expect(fn).toHaveBeenCalledTimes(5);
+		expect(fn).toHaveBeenCalledTimes(3);
 		await client.getSession({
 			fetchOptions: {
 				headers,
@@ -576,7 +576,7 @@ describe("cookie cache", async () => {
 				},
 			},
 		});
-		expect(fn).toHaveBeenCalledTimes(5);
+		expect(fn).toHaveBeenCalledTimes(3);
 	});
 });
 
@@ -803,17 +803,17 @@ describe("cookie cache with JWE strategy", async () => {
 		});
 		expect(session.data?.user.emailVerified).toBe(true);
 		expect(session.data).not.toBeNull();
-		expect(fn).toHaveBeenCalledTimes(3); // Database hit when cache disabled
+		expect(fn).toHaveBeenCalledTimes(2); // Database hit when cache disabled
 	});
 
 	it("should reset JWE cache when expires", async () => {
-		expect(fn).toHaveBeenCalledTimes(3);
+		expect(fn).toHaveBeenCalledTimes(2);
 		await client.getSession({
 			fetchOptions: {
 				headers,
 			},
 		});
-		expect(fn).toHaveBeenCalledTimes(3);
+		expect(fn).toHaveBeenCalledTimes(2);
 
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(1000 * 60 * 10);
@@ -827,7 +827,7 @@ describe("cookie cache with JWE strategy", async () => {
 			},
 		});
 
-		expect(fn.mock.calls.length).toBeGreaterThanOrEqual(3);
+		expect(fn.mock.calls.length).toBeGreaterThanOrEqual(2);
 
 		vi.useRealTimers();
 	});
@@ -913,7 +913,7 @@ describe("cookie cache refreshCache", async () => {
 		expect(fn).toHaveBeenCalledTimes(1);
 	});
 
-	it("should refresh cache stateless when refreshCache threshold is exceeded", async () => {
+	it("should not perform stateless refresh when a database is configured", async () => {
 		const callsBefore = fn.mock.calls.length;
 
 		vi.useFakeTimers();
@@ -930,9 +930,10 @@ describe("cookie cache refreshCache", async () => {
 		});
 		expect(session.data).not.toBeNull();
 
-		// With stateless refresh, no DB call should be made (it just refreshes the cookie)
+		// With a database configured, `refreshCache` is ignored (a warning is logged),
+		// so no additional DB call should be made here.
 		const callsAfterRefresh = fn.mock.calls.length;
-		expect(callsAfterRefresh).toBe(callsBefore); // No DB call for stateless refresh
+		expect(callsAfterRefresh).toBe(callsBefore);
 
 		await client.getSession({
 			fetchOptions: {
@@ -1057,6 +1058,8 @@ describe("cookie cache refreshCache", async () => {
 
 	it("should work without database when refreshCache threshold is reached", async () => {
 		const { client, testUser, cookieSetter, auth } = await getTestInstance({
+			// True stateless mode: no database configured
+			database: undefined as any,
 			session: {
 				cookieCache: {
 					enabled: true,
@@ -1121,7 +1124,6 @@ describe("cookie cache versioning", async () => {
 			client: client1,
 			testUser: testUser1,
 			cookieSetter: cookieSetter1,
-			auth: auth1,
 		} = await getTestInstance({
 			session: {
 				cookieCache: {
@@ -1153,16 +1155,15 @@ describe("cookie cache versioning", async () => {
 		expect(session1.data?.user.email).toBe(testUser1.email);
 
 		// Create new instance with version "2" using same cookies
-		const { client: client2, cookieSetter: cookieSetter2 } =
-			await getTestInstance({
-				session: {
-					cookieCache: {
-						enabled: true,
-						strategy: "jwe",
-						version: "2",
-					},
+		const { client: client2 } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe",
+					version: "2",
 				},
-			});
+			},
+		});
 
 		// Try to get session with old cookies but new version - should invalidate cache
 		const session2 = await client2.getSession({

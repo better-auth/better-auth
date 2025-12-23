@@ -97,36 +97,35 @@ export const getNormalTestSuiteTests = (
 			});
 			expect(findResult).toEqual(res);
 		},
-		"create - should return null for nullable foreign keys": async () => {
-			await modifyBetterAuthOptions(
-				{
-					plugins: [
-						{
-							id: "nullable-test",
-							schema: {
-								testModel: {
-									fields: {
-										nullableReference: {
-											type: "string",
-											references: { field: "id", model: "user" },
-											required: false,
-										},
+		"create - should return null for nullable foreign keys": {
+			migrateBetterAuth: {
+				plugins: [
+					{
+						id: "nullable-test",
+						schema: {
+							testModel: {
+								fields: {
+									nullableReference: {
+										type: "string",
+										references: { field: "id", model: "user" },
+										required: false,
 									},
 								},
 							},
-						} satisfies BetterAuthPlugin,
-					],
-				},
-				true,
-			);
-			const { nullableReference } = await adapter.create<{
-				nullableReference: string | null;
-			}>({
-				model: "testModel",
-				data: { nullableReference: null },
-				forceAllowId: true,
-			});
-			expect(nullableReference).toBeNull();
+						},
+					} satisfies BetterAuthPlugin,
+				],
+			},
+			test: async () => {
+				const { nullableReference } = await adapter.create<{
+					nullableReference: string | null;
+				}>({
+					model: "testModel",
+					data: { nullableReference: null },
+					forceAllowId: true,
+				});
+				expect(nullableReference).toBeNull();
+			},
 		},
 
 		"create - should apply default values to fields": async () => {
@@ -332,9 +331,7 @@ export const getNormalTestSuiteTests = (
 			const users: User[] = [];
 			const sessions: Session[] = [];
 			const accounts: Account[] = [];
-			let i = -1;
 			for (const _ of Array.from({ length: 3 })) {
-				i++;
 				const user = await adapter.create<User>({
 					model: "user",
 					data: {
@@ -762,6 +759,30 @@ export const getNormalTestSuiteTests = (
 			},
 		"findOne - should return null for failed base model lookup that has joins":
 			async () => {
+				await modifyBetterAuthOptions(
+					{
+						plugins: [
+							{
+								id: "one-to-one-test",
+								schema: {
+									oneToOneTable: {
+										modelName: "one_to_one_table",
+										fields: {
+											oneToOne: {
+												type: "string",
+												required: true,
+												references: { field: "id", model: "user" },
+												unique: true,
+											},
+										},
+									},
+								},
+							} satisfies BetterAuthPlugin,
+						],
+					},
+					true,
+				);
+
 				const options = getBetterAuthOptions();
 				const useUUIDs = options.advanced?.database?.generateId === "uuid";
 				const result = await adapter.findOne<User>({
@@ -769,7 +790,7 @@ export const getNormalTestSuiteTests = (
 					where: [
 						{ field: "id", value: useUUIDs ? crypto.randomUUID() : "100000" },
 					],
-					join: { session: true, account: true },
+					join: { session: true, account: true, oneToOneTable: true },
 				});
 				expect(result).toBeNull();
 			},
@@ -832,6 +853,13 @@ export const getNormalTestSuiteTests = (
 				oneToOneTable: oneToOne,
 			});
 		},
+		"findMany - should find many models": async () => {
+			const users = (await insertRandom("user", 3)).map((x) => x[0]);
+			const result = await adapter.findMany<User>({
+				model: "user",
+			});
+			expect(sortModels(result)).toEqual(sortModels(users));
+		},
 		"findMany - should find many models with date fields": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
 			const youngestUser = users.sort(
@@ -848,13 +876,6 @@ export const getNormalTestSuiteTests = (
 					users.filter((user) => user.createdAt < youngestUser.createdAt),
 				),
 			);
-		},
-		"findMany - should find many models": async () => {
-			const users = (await insertRandom("user", 3)).map((x) => x[0]);
-			const result = await adapter.findMany<User>({
-				model: "user",
-			});
-			expect(sortModels(result)).toEqual(sortModels(users));
 		},
 		"findMany - should find many models with join": async () => {
 			type ExpectedResult = User & { session: Session[]; account: Account[] };
@@ -1234,6 +1255,41 @@ export const getNormalTestSuiteTests = (
 					where: [
 						{ field: "id", value: useUUIDs ? crypto.randomUUID() : "100000" },
 					],
+				});
+				expect(result).toEqual([]);
+			},
+		"findMany - should return empty array when base records don't exist with joins":
+			async () => {
+				await modifyBetterAuthOptions(
+					{
+						plugins: [
+							{
+								id: "one-to-one-test",
+								schema: {
+									oneToOneTable: {
+										fields: {
+											oneToOne: {
+												type: "string",
+												required: true,
+												references: { field: "id", model: "user" },
+												unique: true,
+											},
+										},
+									},
+								},
+							} satisfies BetterAuthPlugin,
+						],
+					},
+					true,
+				);
+				const options = getBetterAuthOptions();
+				const useUUIDs = options.advanced?.database?.generateId === "uuid";
+				const result = await adapter.findMany<User>({
+					model: "user",
+					where: [
+						{ field: "id", value: useUUIDs ? crypto.randomUUID() : "100000" },
+					],
+					join: { session: true, account: true, oneToOneTable: true },
 				});
 				expect(result).toEqual([]);
 			},
@@ -2343,7 +2399,7 @@ export const getNormalTestSuiteTests = (
 				});
 
 				// Add a member to the organization
-				const member = await adapter.create<Member>({
+				await adapter.create<Member>({
 					model: "member",
 					data: {
 						organizationId: organizationData.id,
@@ -2355,7 +2411,7 @@ export const getNormalTestSuiteTests = (
 				});
 
 				// Create a team for the organization
-				const team = await adapter.create<Team>({
+				await adapter.create<Team>({
 					model: "team",
 					data: {
 						name: "Test Team",
@@ -2550,6 +2606,381 @@ export const getNormalTestSuiteTests = (
 				expect(user.account).toHaveLength(3);
 				expect(user.account[0]?.userId).toBe(user.id);
 			});
+		},
+		"findOne - should return null for one-to-one join when joined record doesn't exist":
+			async () => {
+				await modifyBetterAuthOptions(
+					{
+						plugins: [
+							{
+								id: "one-to-one-test",
+								schema: {
+									oneToOneTable: {
+										fields: {
+											oneToOne: {
+												type: "string",
+												required: true,
+												references: { field: "id", model: "user" },
+												unique: true,
+											},
+										},
+									},
+								},
+							} satisfies BetterAuthPlugin,
+						],
+					},
+					true,
+				);
+				type OneToOneTable = { oneToOne: string; id: string };
+				// Create a user without a corresponding one-to-one record
+				const user = await adapter.create<User>({
+					model: "user",
+					data: { ...(await generate("user")) },
+					forceAllowId: true,
+				});
+
+				const result = await adapter.findOne<
+					User & { oneToOneTable: OneToOneTable | null }
+				>({
+					model: "user",
+					where: [{ field: "id", value: user.id }],
+					join: { oneToOneTable: true },
+				});
+
+				expect(result).toBeDefined();
+				expect(result?.id).toBe(user.id);
+				expect(result?.oneToOneTable).toBeNull();
+			},
+		"findMany - should return null for one-to-one join when joined records don't exist":
+			async () => {
+				await modifyBetterAuthOptions(
+					{
+						plugins: [
+							{
+								id: "one-to-one-test",
+								schema: {
+									oneToOneTable: {
+										fields: {
+											oneToOne: {
+												type: "string",
+												required: true,
+												references: { field: "id", model: "user" },
+												unique: true,
+											},
+										},
+									},
+								},
+							} satisfies BetterAuthPlugin,
+						],
+					},
+					true,
+				);
+				type OneToOneTable = { oneToOne: string; id: string };
+				// Create multiple users - some with one-to-one records, some without
+				const userWithJoin = await adapter.create<User>({
+					model: "user",
+					data: { ...(await generate("user")) },
+					forceAllowId: true,
+				});
+				const oneToOne = await adapter.create<OneToOneTable>({
+					model: "oneToOneTable",
+					data: { oneToOne: userWithJoin.id },
+				});
+
+				const userWithoutJoin = await adapter.create<User>({
+					model: "user",
+					data: { ...(await generate("user")) },
+					forceAllowId: true,
+				});
+
+				const result = await adapter.findMany<
+					User & { oneToOneTable: OneToOneTable | null }
+				>({
+					model: "user",
+					where: [
+						{ field: "id", value: userWithJoin.id, connector: "OR" },
+						{ field: "id", value: userWithoutJoin.id, connector: "OR" },
+					],
+					join: { oneToOneTable: true },
+				});
+
+				expect(result).toBeDefined();
+				expect(result.length).toBe(2);
+
+				const resultWithJoin = result.find((u) => u.id === userWithJoin.id);
+				const resultWithoutJoin = result.find(
+					(u) => u.id === userWithoutJoin.id,
+				);
+
+				expect(resultWithJoin).toBeDefined();
+				expect(resultWithJoin?.oneToOneTable).toBeDefined();
+				expect(resultWithJoin?.oneToOneTable?.id).toBe(oneToOne.id);
+
+				expect(resultWithoutJoin).toBeDefined();
+				expect(resultWithoutJoin?.oneToOneTable).toBeNull();
+			},
+		"findMany - should return empty array for one-to-many join when joined records don't exist":
+			async () => {
+				// Create multiple users - some with sessions, some without
+				const userWithSessions = await adapter.create<User>({
+					model: "user",
+					data: { ...(await generate("user")) },
+					forceAllowId: true,
+				});
+				const session1 = await adapter.create<Session>({
+					model: "session",
+					data: { ...(await generate("session")), userId: userWithSessions.id },
+					forceAllowId: true,
+				});
+				const session2 = await adapter.create<Session>({
+					model: "session",
+					data: { ...(await generate("session")), userId: userWithSessions.id },
+					forceAllowId: true,
+				});
+
+				const userWithoutSessions = await adapter.create<User>({
+					model: "user",
+					data: { ...(await generate("user")) },
+					forceAllowId: true,
+				});
+
+				const result = await adapter.findMany<User & { session: Session[] }>({
+					model: "user",
+					where: [
+						{ field: "id", value: userWithSessions.id, connector: "OR" },
+						{ field: "id", value: userWithoutSessions.id, connector: "OR" },
+					],
+					join: { session: true },
+				});
+
+				expect(result).toBeDefined();
+				expect(result.length).toBe(2);
+
+				const resultWithSessions = result.find(
+					(u) => u.id === userWithSessions.id,
+				);
+				const resultWithoutSessions = result.find(
+					(u) => u.id === userWithoutSessions.id,
+				);
+
+				expect(resultWithSessions).toBeDefined();
+				expect(Array.isArray(resultWithSessions?.session)).toBe(true);
+				expect(resultWithSessions?.session).toHaveLength(2);
+				expect(
+					resultWithSessions?.session.some((s) => s.id === session1.id),
+				).toBe(true);
+				expect(
+					resultWithSessions?.session.some((s) => s.id === session2.id),
+				).toBe(true);
+
+				expect(resultWithoutSessions).toBeDefined();
+				expect(Array.isArray(resultWithoutSessions?.session)).toBe(true);
+				expect(resultWithoutSessions?.session).toHaveLength(0);
+			},
+		"findMany - should handle mixed joins correctly when some are missing":
+			async () => {
+				await modifyBetterAuthOptions(
+					{
+						plugins: [
+							{
+								id: "one-to-one-test",
+								schema: {
+									oneToOneTable: {
+										fields: {
+											oneToOne: {
+												type: "string",
+												required: true,
+												references: { field: "id", model: "user" },
+												unique: true,
+											},
+										},
+									},
+								},
+							} satisfies BetterAuthPlugin,
+						],
+					},
+					true,
+				);
+				type OneToOneTable = { oneToOne: string; id: string };
+
+				// User 1: Has both one-to-one and one-to-many joins
+				const user1 = await adapter.create<User>({
+					model: "user",
+					data: { ...(await generate("user")) },
+					forceAllowId: true,
+				});
+				const oneToOne1 = await adapter.create<OneToOneTable>({
+					model: "oneToOneTable",
+					data: { oneToOne: user1.id },
+				});
+				const session1 = await adapter.create<Session>({
+					model: "session",
+					data: { ...(await generate("session")), userId: user1.id },
+					forceAllowId: true,
+				});
+
+				// User 2: Has one-to-one but no one-to-many
+				const user2 = await adapter.create<User>({
+					model: "user",
+					data: { ...(await generate("user")) },
+					forceAllowId: true,
+				});
+				const oneToOne2 = await adapter.create<OneToOneTable>({
+					model: "oneToOneTable",
+					data: { oneToOne: user2.id },
+				});
+
+				// User 3: Has one-to-many but no one-to-one
+				const user3 = await adapter.create<User>({
+					model: "user",
+					data: { ...(await generate("user")) },
+					forceAllowId: true,
+				});
+				const session3 = await adapter.create<Session>({
+					model: "session",
+					data: { ...(await generate("session")), userId: user3.id },
+					forceAllowId: true,
+				});
+
+				// User 4: Has neither join
+				const user4 = await adapter.create<User>({
+					model: "user",
+					data: { ...(await generate("user")) },
+					forceAllowId: true,
+				});
+
+				const result = await adapter.findMany<
+					User & { oneToOneTable: OneToOneTable | null; session: Session[] }
+				>({
+					model: "user",
+					where: [
+						{ field: "id", value: user1.id, connector: "OR" },
+						{ field: "id", value: user2.id, connector: "OR" },
+						{ field: "id", value: user3.id, connector: "OR" },
+						{ field: "id", value: user4.id, connector: "OR" },
+					],
+					join: { oneToOneTable: true, session: true },
+				});
+
+				expect(result).toBeDefined();
+				expect(result.length).toBe(4);
+
+				// User 1: Has both
+				const result1 = result.find((u) => u.id === user1.id);
+				expect(result1).toBeDefined();
+				expect(result1?.oneToOneTable).toBeDefined();
+				expect(result1?.oneToOneTable?.id).toBe(oneToOne1.id);
+				expect(Array.isArray(result1?.session)).toBe(true);
+				expect(result1?.session).toHaveLength(1);
+				expect(result1?.session[0]?.id).toBe(session1.id);
+
+				// User 2: Has one-to-one, no one-to-many
+				const result2 = result.find((u) => u.id === user2.id);
+				expect(result2).toBeDefined();
+				expect(result2?.oneToOneTable).toBeDefined();
+				expect(result2?.oneToOneTable?.id).toBe(oneToOne2.id);
+				expect(Array.isArray(result2?.session)).toBe(true);
+				expect(result2?.session).toHaveLength(0);
+
+				// User 3: Has one-to-many, no one-to-one
+				const result3 = result.find((u) => u.id === user3.id);
+				expect(result3).toBeDefined();
+				expect(result3?.oneToOneTable).toBeNull();
+				expect(Array.isArray(result3?.session)).toBe(true);
+				expect(result3?.session).toHaveLength(1);
+				expect(result3?.session[0]?.id).toBe(session3.id);
+
+				// User 4: Has neither
+				const result4 = result.find((u) => u.id === user4.id);
+				expect(result4).toBeDefined();
+				expect(result4?.oneToOneTable).toBeNull();
+				expect(Array.isArray(result4?.session)).toBe(true);
+				expect(result4?.session).toHaveLength(0);
+			},
+		"create - should support arrays": {
+			migrateBetterAuth: {
+				plugins: [
+					{
+						id: "string-arrays-test",
+						schema: {
+							testModel: {
+								fields: {
+									stringArray: {
+										type: "string[]",
+										required: true,
+									},
+									numberArray: {
+										type: "number[]",
+										required: true,
+									},
+								},
+							},
+						},
+					} satisfies BetterAuthPlugin,
+				],
+			},
+			test: async () => {
+				const result = await adapter.create<{
+					id: string;
+					stringArray: string[];
+					numberArray: number[];
+				}>({
+					model: "testModel",
+					data: { stringArray: ["1", "2", "3"], numberArray: [1, 2, 3] },
+				});
+				expect(result.stringArray).toEqual(["1", "2", "3"]);
+				expect(result.numberArray).toEqual([1, 2, 3]);
+
+				const findResult = await adapter.findOne<{
+					stringArray: string[];
+					numberArray: number[];
+				}>({
+					model: "testModel",
+					where: [{ field: "id", value: result.id }],
+				});
+				expect(findResult).toEqual(result);
+				expect(findResult?.stringArray).toEqual(["1", "2", "3"]);
+				expect(findResult?.numberArray).toEqual([1, 2, 3]);
+			},
+		},
+		"create - should support json": {
+			migrateBetterAuth: {
+				plugins: [
+					{
+						id: "json-test",
+						schema: {
+							testModel: {
+								fields: {
+									json: {
+										type: "json",
+										required: true,
+									},
+								},
+							},
+						},
+					} satisfies BetterAuthPlugin,
+				],
+			},
+			test: async () => {
+				const result = await adapter.create<{
+					id: string;
+					json: Record<string, any>;
+				}>({
+					model: "testModel",
+					data: { json: { foo: "bar" } },
+				});
+				expect(result.json).toEqual({ foo: "bar" });
+
+				const findResult = await adapter.findOne<{
+					json: Record<string, any>;
+				}>({
+					model: "testModel",
+					where: [{ field: "id", value: result.id }],
+				});
+				expect(findResult).toEqual(result);
+				expect(findResult?.json).toEqual({ foo: "bar" });
+				console.log(findResult);
+			},
 		},
 	};
 };

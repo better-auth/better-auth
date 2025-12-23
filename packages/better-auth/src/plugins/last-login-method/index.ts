@@ -64,6 +64,7 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 			);
 		}
 		if (ctx.path.includes("siwe")) return "siwe";
+		if (ctx.path.includes("/passkey/verify-authentication")) return "passkey";
 		return null;
 	};
 
@@ -187,5 +188,6 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 					};
 				}
 			: undefined,
+		options: userConfig as NoInfer<O>,
 	} satisfies BetterAuthPlugin;
 };

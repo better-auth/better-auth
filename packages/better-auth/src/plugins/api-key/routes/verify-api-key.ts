@@ -1,11 +1,12 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { safeJSONParse } from "@better-auth/core/utils";
 import * as z from "zod";
 import { APIError } from "../../../api";
-import { safeJSONParse } from "../../../utils/json";
 import { role } from "../../access";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
+import { deleteApiKey, getApiKey, setApiKey } from "../adapter";
 import { isRateLimited } from "../rate-limit";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
@@ -24,15 +25,7 @@ export async function validateApiKey({
 	permissions?: Record<string, string[]> | undefined;
 	ctx: GenericEndpointContext;
 }) {
-	const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-		model: API_KEY_TABLE_NAME,
-		where: [
-			{
-				field: "key",
-				value: hashedKey,
-			},
-		],
-	});
+	const apiKey = await getApiKey(ctx, hashedKey, opts);
 
 	if (!apiKey) {
 		throw new APIError("UNAUTHORIZED", {
@@ -51,18 +44,31 @@ export async function validateApiKey({
 		const now = Date.now();
 		const expiresAt = new Date(apiKey.expiresAt).getTime();
 		if (now > expiresAt) {
-			try {
-				ctx.context.adapter.delete({
-					model: API_KEY_TABLE_NAME,
-					where: [
-						{
-							field: "id",
-							value: apiKey.id,
-						},
-					],
-				});
-			} catch (error) {
-				ctx.context.logger.error(`Failed to delete expired API keys:`, error);
+			const deleteExpiredKey = async () => {
+				if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
+					await deleteApiKey(ctx, apiKey, opts);
+					await ctx.context.adapter.delete({
+						model: API_KEY_TABLE_NAME,
+						where: [{ field: "id", value: apiKey.id }],
+					});
+				} else if (opts.storage === "secondary-storage") {
+					await deleteApiKey(ctx, apiKey, opts);
+				} else {
+					await ctx.context.adapter.delete({
+						model: API_KEY_TABLE_NAME,
+						where: [{ field: "id", value: apiKey.id }],
+					});
+				}
+			};
+
+			if (opts.deferUpdates) {
+				ctx.context.runInBackground(
+					deleteExpiredKey().catch((error) => {
+						ctx.context.logger.error("Deferred update failed:", error);
+					}),
+				);
+			} else {
+				await deleteExpiredKey();
 			}
 
 			throw new APIError("UNAUTHORIZED", {
@@ -99,19 +105,31 @@ export async function validateApiKey({
 	let lastRefillAt = apiKey.lastRefillAt;
 
 	if (apiKey.remaining === 0 && apiKey.refillAmount === null) {
-		// if there is no more remaining requests, and there is no refill amount, than the key is revoked
-		try {
-			ctx.context.adapter.delete({
-				model: API_KEY_TABLE_NAME,
-				where: [
-					{
-						field: "id",
-						value: apiKey.id,
-					},
-				],
-			});
-		} catch (error) {
-			ctx.context.logger.error(`Failed to delete expired API keys:`, error);
+		const deleteExhaustedKey = async () => {
+			if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
+				await deleteApiKey(ctx, apiKey, opts);
+				await ctx.context.adapter.delete({
+					model: API_KEY_TABLE_NAME,
+					where: [{ field: "id", value: apiKey.id }],
+				});
+			} else if (opts.storage === "secondary-storage") {
+				await deleteApiKey(ctx, apiKey, opts);
+			} else {
+				await ctx.context.adapter.delete({
+					model: API_KEY_TABLE_NAME,
+					where: [{ field: "id", value: apiKey.id }],
+				});
+			}
+		};
+
+		if (opts.deferUpdates) {
+			ctx.context.runInBackground(
+				deleteExhaustedKey().catch((error) => {
+					ctx.context.logger.error("Deferred update failed:", error);
+				}),
+			);
+		} else {
+			await deleteExhaustedKey();
 		}
 
 		throw new APIError("TOO_MANY_REQUESTS", {
@@ -147,28 +165,6 @@ export async function validateApiKey({
 
 	const { message, success, update, tryAgainIn } = isRateLimited(apiKey, opts);
 
-	const newApiKey = await ctx.context.adapter.update<ApiKey>({
-		model: API_KEY_TABLE_NAME,
-		where: [
-			{
-				field: "id",
-				value: apiKey.id,
-			},
-		],
-		update: {
-			...update,
-			remaining,
-			lastRefillAt,
-		},
-	});
-
-	if (!newApiKey) {
-		throw new APIError("INTERNAL_SERVER_ERROR", {
-			message: ERROR_CODES.FAILED_TO_UPDATE_API_KEY,
-			code: "INTERNAL_SERVER_ERROR" as const,
-		});
-	}
-
 	if (success === false) {
 		throw new APIError("UNAUTHORIZED", {
 			message: message ?? undefined,
@@ -179,8 +175,75 @@ export async function validateApiKey({
 		});
 	}
 
+	const updated: ApiKey = {
+		...apiKey,
+		...update,
+		remaining,
+		lastRefillAt,
+		updatedAt: new Date(),
+	};
+
+	const performUpdate = async (): Promise<ApiKey | null> => {
+		if (opts.storage === "database") {
+			return ctx.context.adapter.update<ApiKey>({
+				model: API_KEY_TABLE_NAME,
+				where: [{ field: "id", value: apiKey.id }],
+				update: { ...updated, id: undefined },
+			});
+		} else if (
+			opts.storage === "secondary-storage" &&
+			opts.fallbackToDatabase
+		) {
+			const dbUpdated = await ctx.context.adapter.update<ApiKey>({
+				model: API_KEY_TABLE_NAME,
+				where: [{ field: "id", value: apiKey.id }],
+				update: { ...updated, id: undefined },
+			});
+			if (dbUpdated) {
+				await setApiKey(ctx, dbUpdated, opts);
+			}
+			return dbUpdated;
+		} else {
+			await setApiKey(ctx, updated, opts);
+			return updated;
+		}
+	};
+
+	let newApiKey: ApiKey | null = null;
+
+	if (opts.deferUpdates) {
+		ctx.context.runInBackground(
+			performUpdate()
+				.then(() => {})
+				.catch((error) => {
+					ctx.context.logger.error("Failed to update API key:", error);
+				}),
+		);
+		newApiKey = updated;
+	} else {
+		newApiKey = await performUpdate();
+		if (!newApiKey) {
+			throw new APIError("INTERNAL_SERVER_ERROR", {
+				message: ERROR_CODES.FAILED_TO_UPDATE_API_KEY,
+				code: "INTERNAL_SERVER_ERROR" as const,
+			});
+		}
+	}
+
 	return newApiKey;
 }
+
+const verifyApiKeyBodySchema = z.object({
+	key: z.string().meta({
+		description: "The key to verify",
+	}),
+	permissions: z
+		.record(z.string(), z.array(z.string()))
+		.meta({
+			description: "The permissions to verify.",
+		})
+		.optional(),
+});
 
 export function verifyApiKey({
 	opts,
@@ -192,26 +255,12 @@ export function verifyApiKey({
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
 		byPassLastCheckTime?: boolean | undefined,
-	): void;
+	): Promise<void>;
 }) {
 	return createAuthEndpoint(
-		"/api-key/verify",
 		{
 			method: "POST",
-			body: z.object({
-				key: z.string().meta({
-					description: "The key to verify",
-				}),
-				permissions: z
-					.record(z.string(), z.array(z.string()))
-					.meta({
-						description: "The permissions to verify.",
-					})
-					.optional(),
-			}),
-			metadata: {
-				SERVER_ONLY: true,
-			},
+			body: verifyApiKeyBodySchema,
 		},
 		async (ctx) => {
 			const { key } = ctx.body;
@@ -256,7 +305,17 @@ export function verifyApiKey({
 					opts,
 					schema,
 				});
-				await deleteAllExpiredApiKeys(ctx.context);
+
+				if (opts.deferUpdates) {
+					ctx.context.runInBackground(
+						deleteAllExpiredApiKeys(ctx.context).catch((err) => {
+							ctx.context.logger.error(
+								"Failed to delete expired API keys:",
+								err,
+							);
+						}),
+					);
+				}
 			} catch (error) {
 				if (error instanceof APIError) {
 					return ctx.json({

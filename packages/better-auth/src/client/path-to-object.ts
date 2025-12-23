@@ -1,8 +1,8 @@
-import type { BetterAuthClientOptions } from "@better-auth/core";
 import type {
-	BetterFetchOption,
-	BetterFetchResponse,
-} from "@better-fetch/fetch";
+	BetterAuthClientOptions,
+	ClientFetchOption,
+} from "@better-auth/core";
+import type { BetterFetchResponse } from "@better-fetch/fetch";
 import type { Endpoint, InputContext, StandardSchemaV1 } from "better-call";
 import type {
 	HasRequiredKeys,
@@ -31,7 +31,7 @@ export type PathToObject<
 
 export type InferSignUpEmailCtx<
 	ClientOpts extends BetterAuthClientOptions,
-	FetchOptions extends BetterFetchOption,
+	FetchOptions extends ClientFetchOption,
 > = {
 	email: string;
 	name: string;
@@ -43,7 +43,7 @@ export type InferSignUpEmailCtx<
 
 export type InferUserUpdateCtx<
 	ClientOpts extends BetterAuthClientOptions,
-	FetchOptions extends BetterFetchOption,
+	FetchOptions extends ClientFetchOption,
 > = {
 	image?: (string | null) | undefined;
 	name?: string | undefined;
@@ -54,7 +54,7 @@ export type InferUserUpdateCtx<
 
 export type InferCtx<
 	C extends InputContext<any, any>,
-	FetchOptions extends BetterFetchOption,
+	FetchOptions extends ClientFetchOption,
 > = C["body"] extends Record<string, any>
 	? C["body"] & {
 			fetchOptions?: FetchOptions | undefined;
@@ -87,13 +87,19 @@ export type InferRoute<
 				| {
 						SERVER_ONLY: true;
 				  }
+				| {
+						scope: "http";
+				  }
+				| {
+						scope: "server";
+				  }
 			? {}
 			: PathToObject<
 					T["path"],
 					T extends (ctx: infer C) => infer R
 						? C extends InputContext<any, any>
 							? <
-									FetchOptions extends BetterFetchOption<
+									FetchOptions extends ClientFetchOption<
 										Partial<C["body"]> & Record<string, any>,
 										Partial<C["query"]> & Record<string, any>,
 										C["params"]
@@ -158,7 +164,7 @@ export type InferRoutes<
 > = MergeRoutes<InferRoute<API, ClientOpts>>;
 
 export type ProxyRequest = {
-	options?: BetterFetchOption<any, any> | undefined;
+	options?: ClientFetchOption<any, any> | undefined;
 	query?: any | undefined;
 	[key: string]: any;
 };

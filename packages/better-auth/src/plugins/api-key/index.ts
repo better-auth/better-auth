@@ -4,6 +4,7 @@ import { defineErrorCodes } from "@better-auth/core/utils";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { APIError } from "../../api";
+import { generateRandomString } from "../../crypto/random";
 import { mergeSchema } from "../../db";
 import { getDate } from "../../utils/date";
 import { getIp } from "../../utils/get-request-ip";
@@ -70,6 +71,7 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 		enableMetadata: options?.enableMetadata ?? false,
 		disableKeyHashing: options?.disableKeyHashing ?? false,
 		requireName: options?.requireName ?? false,
+		storage: options?.storage ?? "database",
 		rateLimit: {
 			enabled:
 				options?.rateLimit?.enabled === undefined
@@ -91,6 +93,9 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 				options?.startingCharactersConfig?.charactersLength ?? 6,
 		},
 		enableSessionForAPIKeys: options?.enableSessionForAPIKeys ?? false,
+		fallbackToDatabase: options?.fallbackToDatabase ?? false,
+		customStorage: options?.customStorage,
+		deferUpdates: options?.deferUpdates ?? false,
 	} satisfies ApiKeyOptions;
 
 	const schema = mergeSchema(
@@ -119,14 +124,8 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 	const keyGenerator =
 		opts.customKeyGenerator ||
 		(async (options: { length: number; prefix: string | undefined }) => {
-			const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-			let apiKey = `${options.prefix || ""}`;
-			for (let i = 0; i < options.length; i++) {
-				const randomIndex = Math.floor(Math.random() * characters.length);
-				apiKey += characters[randomIndex];
-			}
-
-			return apiKey;
+			const key = generateRandomString(options.length, "a-z", "A-Z");
+			return `${options.prefix || ""}${key}`;
 		});
 
 	const routes = createApiKeyRoutes({ keyGenerator, opts, schema });
@@ -176,13 +175,17 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 							schema,
 						});
 
-						//for cleanup purposes
-						deleteAllExpiredApiKeys(ctx.context).catch((err) => {
-							ctx.context.logger.error(
-								"Failed to delete expired API keys:",
-								err,
-							);
-						});
+						const cleanupTask = deleteAllExpiredApiKeys(ctx.context).catch(
+							(err) => {
+								ctx.context.logger.error(
+									"Failed to delete expired API keys:",
+									err,
+								);
+							},
+						);
+						if (opts.deferUpdates) {
+							ctx.context.runInBackground(cleanupTask);
+						}
 
 						const user = await ctx.context.internalAdapter.findUserById(
 							apiKey.userId,
@@ -337,5 +340,8 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 			deleteAllExpiredApiKeys: routes.deleteAllExpiredApiKeys,
 		},
 		schema,
+		options,
 	} satisfies BetterAuthPlugin;
 };
+
+export type * from "./types";

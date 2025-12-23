@@ -84,7 +84,7 @@ export const getSchema = (options: StripeOptions) => {
 		!options.subscription?.enabled &&
 		"subscription" in options.schema
 	) {
-		const { subscription, ...restSchema } = options.schema;
+		const { subscription: _subscription, ...restSchema } = options.schema;
 		return mergeSchema(baseSchema, restSchema);
 	}
 

@@ -35,7 +35,6 @@ export const requestPasswordReset = createAuthEndpoint(
 	"/request-password-reset",
 	{
 		method: "POST",
-		operationId: "forgetPassword",
 		body: z.object({
 			/**
 			 * The email address of the user to send a password reset email to.
@@ -60,7 +59,7 @@ export const requestPasswordReset = createAuthEndpoint(
 		}),
 		metadata: {
 			openapi: {
-				operationId: "forgetPassword",
+				operationId: "requestPasswordReset",
 				description: "Send a password reset email to the user",
 				responses: {
 					"200": {
@@ -129,22 +128,16 @@ export const requestPasswordReset = createAuthEndpoint(
 		});
 		const callbackURL = redirectTo ? encodeURIComponent(redirectTo) : "";
 		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${callbackURL}`;
-		/**
-		 * We send the email in the background to prevent timing attacks.
-		 * This is to ensure that the response time is consistent regardless of whether the email was sent or not.
-		 */
-		void ctx.context.options.emailAndPassword
-			.sendResetPassword(
+		await ctx.context.runInBackgroundOrAwait(
+			ctx.context.options.emailAndPassword.sendResetPassword(
 				{
 					user: user.user,
 					url,
 					token: verificationToken,
 				},
 				ctx.request,
-			)
-			.catch((e) => {
-				ctx.context.logger.error("Failed to send reset password email", e);
-			});
+			),
+		);
 		return ctx.json({
 			status: true,
 			message:

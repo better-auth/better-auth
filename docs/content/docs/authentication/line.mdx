@@ -75,3 +75,58 @@ await authClient.signIn.social({
 
 Designing a login button? Follow LINE's button [guidelines](https://developers.line.biz/en/docs/line-login/login-button/).
 
+## Multi-Channel Support
+
+LINE requires separate OAuth channels for different countries (Japan, Thailand, Taiwan, etc.), each with its own `clientId` and `clientSecret`. The standard `socialProviders.line` configuration only supports a single channel.
+
+To support multiple countries/channels, use the [Generic OAuth plugin](/docs/plugins/generic-oauth) with the `line()` helper function. This allows you to configure multiple LINE providers with different `providerId`s:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { genericOAuth, line } from "better-auth/plugins";
+
+export const auth = betterAuth({
+  plugins: [
+    genericOAuth({
+      config: [
+        // Japan channel
+        line({
+          providerId: "line-jp",
+          clientId: process.env.LINE_JP_CLIENT_ID,
+          clientSecret: process.env.LINE_JP_CLIENT_SECRET,
+        }),
+        // Thailand channel
+        line({
+          providerId: "line-th",
+          clientId: process.env.LINE_TH_CLIENT_ID,
+          clientSecret: process.env.LINE_TH_CLIENT_SECRET,
+        }),
+        // Taiwan channel
+        line({
+          providerId: "line-tw",
+          clientId: process.env.LINE_TW_CLIENT_ID,
+          clientSecret: process.env.LINE_TW_CLIENT_SECRET,
+        }),
+      ],
+    }),
+  ],
+});
+```
+
+When signing in, use the appropriate `providerId` (e.g., `"line-jp"`, `"line-th"`, `"line-tw"`) to identify which channel to use:
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { genericOAuthClient } from "better-auth/client/plugins";
+
+const authClient = createAuthClient({
+  plugins: [genericOAuthClient()],
+});
+
+// Sign in with Japan channel
+await authClient.signIn.social({ provider: "line-jp" });
+
+// Sign in with Thailand channel
+await authClient.signIn.social({ provider: "line-th" });
+```
+

@@ -13,11 +13,24 @@ import { schema } from "./schema";
 import { getJwtToken, signJWT } from "./sign";
 import type { JwtOptions } from "./types";
 import { createJwk } from "./utils";
+import { verifyJWT as verifyJWTHelper } from "./verify";
 
+export { signJWT } from "./sign";
 export type * from "./types";
-export { createJwk, generateExportedKeyPair } from "./utils";
+export { createJwk, generateExportedKeyPair, toExpJWT } from "./utils";
+export { verifyJWT } from "./verify";
 
-export const jwt = (options?: JwtOptions | undefined) => {
+const signJWTBodySchema = z.object({
+	payload: z.record(z.string(), z.any()),
+	overrideOptions: z.record(z.string(), z.any()).optional(),
+});
+
+const verifyJWTBodySchema = z.object({
+	token: z.string(),
+	issuer: z.string().optional(),
+});
+
+export const jwt = <O extends JwtOptions>(options?: O) => {
 	// Remote url must be set when using signing function
 	if (options?.jwt?.sign && !options.jwks?.remoteUrl) {
 		throw new BetterAuthError(
@@ -34,12 +47,25 @@ export const jwt = (options?: JwtOptions | undefined) => {
 		);
 	}
 
+	const jwksPath = options?.jwks?.jwksPath ?? "/jwks";
+	if (
+		typeof jwksPath !== "string" ||
+		jwksPath.length === 0 ||
+		!jwksPath.startsWith("/") ||
+		jwksPath.includes("..")
+	) {
+		throw new BetterAuthError(
+			"jwks_config",
+			"jwksPath must be a non-empty string starting with '/' and not contain '..'",
+		);
+	}
+
 	return {
 		id: "jwt",
-		options,
+		options: options as NoInfer<O>,
 		endpoints: {
 			getJwks: createAuthEndpoint(
-				"/jwks",
+				jwksPath,
 				{
 					method: "GET",
 					metadata: {
@@ -132,13 +158,13 @@ export const jwt = (options?: JwtOptions | undefined) => {
 						throw new APIError("NOT_FOUND");
 					}
 
-					const adapter = getJwksAdapter(ctx.context.adapter);
+					const adapter = getJwksAdapter(ctx.context.adapter, options);
 
 					let keySets = await adapter.getAllKeys(ctx);
 
 					if (!keySets || keySets?.length === 0) {
-						const key = await createJwk(ctx, options);
-						keySets = [key];
+						await createJwk(ctx, options);
+						keySets = await adapter.getAllKeys(ctx);
 					}
 
 					if (!keySets?.length) {
@@ -146,6 +172,19 @@ export const jwt = (options?: JwtOptions | undefined) => {
 							"No key sets found. Make sure you have a key in your database.",
 						);
 					}
+
+					const now = Date.now();
+					const DEFAULT_GRACE_PERIOD = 60 * 60 * 24 * 30;
+					const gracePeriod =
+						(options?.jwks?.gracePeriod ?? DEFAULT_GRACE_PERIOD) * 1000;
+
+					const keys = keySets.filter((key) => {
+						if (!key.expiresAt) {
+							return true;
+						}
+						return key.expiresAt.getTime() + gracePeriod > now;
+					});
+
 					const keyPairConfig = options?.jwks?.keyPairConfig;
 					const defaultCrv = keyPairConfig
 						? "crv" in keyPairConfig
@@ -153,7 +192,7 @@ export const jwt = (options?: JwtOptions | undefined) => {
 							: undefined
 						: undefined;
 					return ctx.json({
-						keys: keySets.map((keySet) => {
+						keys: keys.map((keySet) => {
 							return {
 								alg: keySet.alg ?? options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
 								crv: keySet.crv ?? defaultCrv,
@@ -203,11 +242,9 @@ export const jwt = (options?: JwtOptions | undefined) => {
 				},
 			),
 			signJWT: createAuthEndpoint(
-				"/sign-jwt",
 				{
 					method: "POST",
 					metadata: {
-						SERVER_ONLY: true,
 						$Infer: {
 							body: {} as {
 								payload: JWTPayload;
@@ -215,10 +252,7 @@ export const jwt = (options?: JwtOptions | undefined) => {
 							},
 						},
 					},
-					body: z.object({
-						payload: z.record(z.string(), z.any()),
-						overrideOptions: z.record(z.string(), z.any()).optional(),
-					}),
+					body: signJWTBodySchema,
 				},
 				async (c) => {
 					const jwt = await signJWT(c, {
@@ -229,6 +263,45 @@ export const jwt = (options?: JwtOptions | undefined) => {
 						payload: c.body.payload,
 					});
 					return c.json({ token: jwt });
+				},
+			),
+			verifyJWT: createAuthEndpoint(
+				{
+					method: "POST",
+					metadata: {
+						$Infer: {
+							body: {} as {
+								token: string;
+								issuer?: string;
+							},
+							response: {} as {
+								payload: {
+									sub: string;
+									aud: string;
+									[key: string]: any;
+								} | null;
+							},
+						},
+					},
+					body: verifyJWTBodySchema,
+				},
+				async (ctx) => {
+					const overrideOptions = ctx.body.issuer
+						? {
+								...options,
+								jwt: {
+									...options?.jwt,
+									issuer: ctx.body.issuer,
+								},
+							}
+						: options;
+
+					const payload = await verifyJWTHelper(
+						ctx.body.token,
+						overrideOptions,
+					);
+
+					return ctx.json({ payload });
 				},
 			),
 		},

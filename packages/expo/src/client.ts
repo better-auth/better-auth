@@ -1,5 +1,8 @@
-import type { BetterAuthClientPlugin, ClientStore } from "@better-auth/core";
-import type { BetterFetchOption } from "@better-fetch/fetch";
+import type {
+	BetterAuthClientPlugin,
+	ClientFetchOption,
+	ClientStore,
+} from "@better-auth/core";
 import Constants from "expo-constants";
 import * as Linking from "expo-linking";
 import { Platform } from "react-native";
@@ -138,7 +141,7 @@ export function getCookie(cookie: string) {
 	let parsed = {} as Record<string, StoredCookie>;
 	try {
 		parsed = JSON.parse(cookie) as Record<string, StoredCookie>;
-	} catch (e) {}
+	} catch {}
 	const toSend = Object.entries(parsed).reduce((acc, [key, value]) => {
 		if (value.expires && new Date(value.expires) < new Date()) {
 			return acc;
@@ -342,7 +345,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 								// Only notify $sessionSignal if the session cookie values actually changed
 								// This prevents infinite refetching when the server sends the same cookie with updated expiry
 								if (hasSessionCookieChanged(prevCookie, toSetCookie)) {
-									await storage.setItem(cookieName, toSetCookie);
+									storage.setItem(cookieName, toSetCookie);
 									store?.notify("$sessionSignal");
 								} else {
 									// Still update the storage to refresh expiry times, but don't trigger refetch
@@ -380,6 +383,13 @@ export const expoClient = (opts: ExpoClientOptions) => {
 									},
 								);
 							}
+
+							if (Platform.OS === "android") {
+								try {
+									Browser.dismissAuthSession();
+								} catch {}
+							}
+
 							const proxyURL = `${context.request.baseURL}/expo-authorization-proxy?authorizationURL=${encodeURIComponent(signInURL)}`;
 							const result = await Browser.openAuthSessionAsync(proxyURL, to);
 							if (result.type !== "success") return;
@@ -397,7 +407,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					if (isWeb) {
 						return {
 							url,
-							options: options as BetterFetchOption,
+							options: options as ClientFetchOption,
 						};
 					}
 					options = options || {};
@@ -446,7 +456,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					}
 					return {
 						url,
-						options: options as BetterFetchOption,
+						options: options as ClientFetchOption,
 					};
 				},
 			},

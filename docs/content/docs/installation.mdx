@@ -26,7 +26,7 @@ Create a `.env` file in the root of your project and add the following environme
 
 1. **Secret Key**
 
-Random value used by the library for encryption and generating hashes. **You can generate one using the button below** or you can use something like openssl.
+A secret value used for encryption and hashing. It must be at least 32 characters and generated with high entropy. Click the button below to generate one. You can also use `openssl rand -base64 32` to generate one.
 
 ```txt title=".env"
 BETTER_AUTH_SECRET=
@@ -70,6 +70,10 @@ export const auth = betterAuth({
 
 Better Auth requires a database to store user data.
 You can easily configure Better Auth to use SQLite, PostgreSQL, or MySQL, and more!
+
+<Callout>
+    You can also configure Better Auth to work in a stateless mode if you don't configure a database. See [Stateless Session Management](/docs/concepts/session-management#stateless-session-management) for more information. Note that most plugins will require a database.
+</Callout>
 
 <Tabs items={["sqlite", "postgres", "mysql"]}>
     <Tab value="sqlite">

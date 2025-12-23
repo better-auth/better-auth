@@ -176,5 +176,3 @@ export function parseJSON<T = unknown>(
 ): T {
 	return betterJSONParse<T>(value, options);
 }
-
-export default parseJSON;

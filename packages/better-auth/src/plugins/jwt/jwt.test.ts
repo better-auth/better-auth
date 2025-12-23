@@ -6,10 +6,10 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { jwt } from ".";
 import { jwtClient } from "./client";
 import type { JWKOptions, Jwk, JwtOptions } from "./types";
-import { generateExportedKeyPair } from "./utils";
+import { generateExportedKeyPair, toExpJWT } from "./utils";
 
 describe("jwt", async () => {
-	// Testing the default behaviour
+	// Testing the default behavior
 	const { auth, signInWithTestUser } = await getTestInstance({
 		plugins: [jwt()],
 		logger: {
@@ -363,6 +363,12 @@ describe.each([
 		const jwks = await auth.api.getJwks();
 		const localJwks = createLocalJWKSet(jwks);
 		const decoded = await jwtVerify(jwt?.token!, localJwks);
+
+		// Verify the kid from the JWT exists in the JWKS
+		const kidFromJwt = decoded.protectedHeader.kid;
+		const keyExists = jwks.keys.some((key) => key.kid === kidFromJwt);
+		expect(keyExists).toBe(true);
+
 		expect(decoded).toMatchObject({
 			payload: {
 				iss: "https://example.com",
@@ -374,7 +380,7 @@ describe.each([
 			},
 			protectedHeader: {
 				alg: keyPairConfig.alg,
-				kid: jwks.keys[0]!.kid,
+				kid: expect.any(String),
 			},
 		});
 	});
@@ -713,9 +719,6 @@ describe("jwt - custom adapter", async () => {
 						getJwks: async () => {
 							return storage;
 						},
-						getLatestKey: async () => {
-							return storage[0] ?? null;
-						},
 						createJwk: async (data) => {
 							const key = {
 								...data,
@@ -738,5 +741,91 @@ describe("jwt - custom adapter", async () => {
 		});
 		expect(token?.token).toBeDefined();
 		expect(storage.length).toBe(1);
+	});
+});
+
+describe("jwt - custom jwksPath", async () => {
+	it("should use custom jwksPath when specified", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				jwt({
+					jwks: {
+						jwksPath: "/.well-known/jwks.json",
+					},
+				}),
+			],
+		});
+
+		const client = createAuthClient({
+			plugins: [jwtClient({ jwks: { jwksPath: "/.well-known/jwks.json" } })],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return auth.handler(new Request(url, init));
+				},
+			},
+		});
+
+		const jwks = await client.jwks();
+		expect(jwks.error).toBeNull();
+		expect(jwks.data?.keys).toBeDefined();
+		expect(jwks.data?.keys.length).toBeGreaterThan(0);
+
+		// Verify old /jwks endpoint is not found
+		const oldJwks = await client.$fetch<JSONWebKeySet>("/jwks");
+		expect(oldJwks.error?.status).toBe(404);
+	});
+});
+
+describe("toExpJWT", () => {
+	const iat = 1000; // base iat for testing
+
+	describe("with number input", () => {
+		it("should return the number as-is", () => {
+			expect(toExpJWT(3600, iat)).toBe(3600);
+			expect(toExpJWT(0, iat)).toBe(0);
+			expect(toExpJWT(9999999, iat)).toBe(9999999);
+		});
+	});
+
+	describe("with Date input", () => {
+		it("should convert Date to seconds timestamp", () => {
+			const date = new Date("2024-01-01T00:00:00.000Z");
+			const expectedSeconds = Math.floor(date.getTime() / 1000);
+			expect(toExpJWT(date, iat)).toBe(expectedSeconds);
+		});
+
+		it("should floor milliseconds", () => {
+			const date = new Date(1704067200500);
+			expect(toExpJWT(date, iat)).toBe(1704067200);
+		});
+	});
+
+	describe("with valid TimeString input", () => {
+		it("should parse short format and add to iat", () => {
+			expect(toExpJWT("1h", iat)).toBe(iat + 3600);
+			expect(toExpJWT("7d", iat)).toBe(iat + 604800);
+			expect(toExpJWT("30m", iat)).toBe(iat + 1800);
+			expect(toExpJWT("1s", iat)).toBe(iat + 1);
+		});
+
+		it("should parse long format and add to iat", () => {
+			expect(toExpJWT("1 hour", iat)).toBe(iat + 3600);
+			expect(toExpJWT("7 days", iat)).toBe(iat + 604800);
+			expect(toExpJWT("30 minutes", iat)).toBe(iat + 1800);
+		});
+
+		it("should handle negative values", () => {
+			expect(toExpJWT("-1h", iat)).toBe(iat - 3600);
+			expect(toExpJWT("1h ago", iat)).toBe(iat - 3600);
+		});
+	});
+
+	describe("with invalid string input", () => {
+		it("should throw TypeError for invalid format", () => {
+			expect(() => toExpJWT("invalid" as any, iat)).toThrow(TypeError);
+			expect(() => toExpJWT("" as any, iat)).toThrow(TypeError);
+			expect(() => toExpJWT("abc123" as any, iat)).toThrow(TypeError);
+		});
 	});
 });
