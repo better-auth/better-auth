@@ -22,6 +22,32 @@ import { getDate } from "../utils/date";
 import { sec } from "../utils/time";
 import { createAccountStore, createSessionStore } from "./session-store";
 
+/**
+ * Normalize and validate a cookie domain.
+ * - Strips scheme and port if accidentally provided
+ * - Lowercases and trims
+ * - Ensures only hostname characters are present
+ */
+function normalizeCookieDomain(input: string): string {
+	let host = input.trim().toLowerCase();
+	try {
+		if (host.includes("://")) {
+			host = new URL(host).hostname;
+		}
+	} catch {
+		// ignore URL parsing failures; fall back to raw handling
+	}
+	// strip port if present
+	if (host.includes(":")) {
+		host = host.split(":")[0]!;
+	}
+	// rudimentary validation: allow a-z0-9 . and -
+	if (!/^[a-z0-9.-]+$/.test(host)) {
+		throw new BetterAuthError("Invalid cookie domain format");
+	}
+	return host;
+}
+
 export function createCookieGetter(options: BetterAuthOptions) {
 	const secure =
 		options.advanced?.useSecureCookies !== undefined
@@ -34,10 +60,11 @@ export function createCookieGetter(options: BetterAuthOptions) {
 	const secureCookiePrefix = secure ? "__Secure-" : "";
 	const crossSubdomainEnabled =
 		!!options.advanced?.crossSubDomainCookies?.enabled;
-	const domain = crossSubdomainEnabled
+	const rawDomain = crossSubdomainEnabled
 		? options.advanced?.crossSubDomainCookies?.domain ||
 			(options.baseURL ? new URL(options.baseURL).hostname : undefined)
 		: undefined;
+	const domain = rawDomain ? normalizeCookieDomain(rawDomain) : undefined;
 	if (crossSubdomainEnabled && !domain) {
 		throw new BetterAuthError(
 			"baseURL is required when crossSubdomainCookies are enabled",
@@ -205,7 +232,8 @@ export async function setCookieCache(
 		}
 
 		// Check if we need to chunk the cookie (only if it exceeds 4093 bytes)
-		if (data.length > 4093) {
+		const byteLength = new TextEncoder().encode(data).length;
+		if (byteLength > 4093) {
 			const sessionStore = createSessionStore(
 				ctx.context.authCookies.sessionData.name,
 				options,
