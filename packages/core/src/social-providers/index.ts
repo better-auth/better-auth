@@ -26,6 +26,7 @@ import { roblox } from "./roblox";
 import { salesforce } from "./salesforce";
 import { slack } from "./slack";
 import { spotify } from "./spotify";
+import { thingiverse } from "./thingiverse";
 import { tiktok } from "./tiktok";
 import { twitch } from "./twitch";
 import { twitter } from "./twitter";
@@ -46,6 +47,7 @@ export const socialProviders = {
 	huggingface,
 	slack,
 	spotify,
+	thingiverse,
 	twitch,
 	twitter,
 	dropbox,
@@ -117,6 +119,7 @@ export * from "./roblox";
 export * from "./salesforce";
 export * from "./slack";
 export * from "./spotify";
+export * from "./thingiverse";
 export * from "./tiktok";
 export * from "./twitch";
 export * from "./twitter";
