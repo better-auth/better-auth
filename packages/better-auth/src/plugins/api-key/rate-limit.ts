@@ -1,4 +1,4 @@
-import { ERROR_CODES } from ".";
+import { API_KEY_ERROR_CODES as ERROR_CODES } from ".";
 import type { PredefinedApiKeyOptions } from "./routes";
 import type { ApiKey } from "./types";
 
@@ -80,7 +80,7 @@ export function isRateLimited(
 		// Rate limit exceeded.
 		return {
 			success: false,
-			message: ERROR_CODES.RATE_LIMIT_EXCEEDED,
+			message: ERROR_CODES.RATE_LIMIT_EXCEEDED.message,
 			update: null,
 			tryAgainIn: Math.ceil(rateLimitTimeWindow - timeSinceLastRequest),
 		};
