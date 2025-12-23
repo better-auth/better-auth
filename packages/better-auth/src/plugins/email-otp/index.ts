@@ -3,11 +3,11 @@ import { createAuthMiddleware } from "@better-auth/core/api";
 import { generateRandomString } from "../../crypto";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
+import { EMAIL_OTP_ERROR_CODES } from "./error-codes";
 import { storeOTP } from "./otp-token";
 import {
 	checkVerificationOTP,
 	createVerificationOTP,
-	ERROR_CODES,
 	forgetPasswordEmailOTP,
 	getVerificationOTP,
 	resetPasswordEmailOTP,
@@ -109,7 +109,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				},
 			],
 		},
-		$ERROR_CODES: ERROR_CODES,
+
 		rateLimit: [
 			{
 				pathMatcher(path) {
@@ -141,5 +141,6 @@ export const emailOTP = (options: EmailOTPOptions) => {
 			},
 		],
 		options,
+		$ERROR_CODES: EMAIL_OTP_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };

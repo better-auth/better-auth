@@ -1,6 +1,9 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
 import type { multiSession } from ".";
+import { MULTI_SESSION_ERROR_CODES } from "./error-codes";
+
+export * from "./error-codes";
 
 export type MultiSessionClientOptions = {
 	schema?:
@@ -33,6 +36,7 @@ export const multiSessionClient = <O extends MultiSessionClientOptions>(
 				signal: "$sessionSignal",
 			},
 		],
+		$ERROR_CODES: MULTI_SESSION_ERROR_CODES,
 	} satisfies BetterAuthClientPlugin;
 };
 
