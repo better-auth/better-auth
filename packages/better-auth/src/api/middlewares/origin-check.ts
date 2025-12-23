@@ -239,9 +239,10 @@ async function validateFormCsrf(ctx: GenericEndpointContext): Promise<void> {
 					secFetchDest: dest,
 				},
 			);
-			throw new APIError("FORBIDDEN", {
-				message: BASE_ERROR_CODES.CROSS_SITE_NAVIGATION_LOGIN_BLOCKED,
-			});
+			throw APIError.from(
+				"FORBIDDEN",
+				BASE_ERROR_CODES.CROSS_SITE_NAVIGATION_LOGIN_BLOCKED,
+			);
 		}
 
 		return await validateOrigin(ctx, true);

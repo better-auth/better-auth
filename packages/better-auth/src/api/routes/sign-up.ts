@@ -209,11 +209,9 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 				}
 
-				if (!password || typeof password !== "string") {
-					throw new APIError("BAD_REQUEST", {
-						message: BASE_ERROR_CODES.INVALID_PASSWORD,
-					});
-				}
+			if (!password || typeof password !== "string") {
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
+			}
 
 				const minPasswordLength = ctx.context.password.config.minPasswordLength;
 				if (password.length < minPasswordLength) {
