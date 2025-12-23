@@ -1792,6 +1792,7 @@ describe("SAML SSO", async () => {
 	});
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 	it("should enable validation automatically when custom authnRequestStore is provided", async () => {
 		const customStore = createInMemoryAuthnRequestStore();
 
@@ -2258,16 +2259,6 @@ describe("SSO Provider Config Parsing", () => {
 });
 
 describe("SAML SSO - IdP Initiated Flow", () => {
-	const mockIdP = createMockSAMLIdP(8081);
-
-	beforeAll(async () => {
-		await mockIdP.start();
-	});
-
-	afterAll(async () => {
-		await mockIdP.stop();
-	});
-
 	it("should handle IdP-initiated flow with GET after POST redirect", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [sso()],
@@ -2281,7 +2272,10 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 				issuer: "http://localhost:8081",
 				domain: "http://localhost:8081",
 				samlConfig: {
-					entryPoint: mockIdP.metadataUrl.replace("/idp/metadata", "/idp/post"),
+					entryPoint: sharedMockIdP.metadataUrl.replace(
+						"/idp/metadata",
+						"/idp/post",
+					),
 					cert: certificate,
 					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
@@ -2398,7 +2392,10 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 				issuer: "http://localhost:8081",
 				domain: "http://localhost:8081",
 				samlConfig: {
-					entryPoint: mockIdP.metadataUrl.replace("/idp/metadata", "/idp/post"),
+					entryPoint: sharedMockIdP.metadataUrl.replace(
+						"/idp/metadata",
+						"/idp/post",
+					),
 					cert: certificate,
 					callbackUrl: callbackRouteUrl,
 					wantAssertionsSigned: false,
@@ -2464,7 +2461,10 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 				issuer: "http://localhost:8081",
 				domain: "http://localhost:8081",
 				samlConfig: {
-					entryPoint: mockIdP.metadataUrl.replace("/idp/metadata", "/idp/post"),
+					entryPoint: sharedMockIdP.metadataUrl.replace(
+						"/idp/metadata",
+						"/idp/post",
+					),
 					cert: certificate,
 					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
@@ -2546,7 +2546,10 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 				issuer: "http://localhost:8081",
 				domain: "http://localhost:8081",
 				samlConfig: {
-					entryPoint: mockIdP.metadataUrl.replace("/idp/metadata", "/idp/post"),
+					entryPoint: sharedMockIdP.metadataUrl.replace(
+						"/idp/metadata",
+						"/idp/post",
+					),
 					cert: certificate,
 					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
@@ -2628,7 +2631,10 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 				issuer: "http://localhost:8081",
 				domain: "http://localhost:8081",
 				samlConfig: {
-					entryPoint: mockIdP.metadataUrl.replace("/idp/metadata", "/idp/post"),
+					entryPoint: sharedMockIdP.metadataUrl.replace(
+						"/idp/metadata",
+						"/idp/post",
+					),
 					cert: certificate,
 					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
@@ -2699,7 +2705,10 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 				issuer: "http://localhost:8081",
 				domain: "http://localhost:8081",
 				samlConfig: {
-					entryPoint: mockIdP.metadataUrl.replace("/idp/metadata", "/idp/post"),
+					entryPoint: sharedMockIdP.metadataUrl.replace(
+						"/idp/metadata",
+						"/idp/post",
+					),
 					cert: certificate,
 					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
@@ -2782,7 +2791,10 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 				issuer: "http://localhost:8081",
 				domain: "http://localhost:8081",
 				samlConfig: {
-					entryPoint: mockIdP.metadataUrl.replace("/idp/metadata", "/idp/post"),
+					entryPoint: sharedMockIdP.metadataUrl.replace(
+						"/idp/metadata",
+						"/idp/post",
+					),
 					cert: certificate,
 					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
@@ -2848,7 +2860,10 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 				issuer: "http://localhost:8081",
 				domain: "http://localhost:8081",
 				samlConfig: {
-					entryPoint: mockIdP.metadataUrl.replace("/idp/metadata", "/idp/post"),
+					entryPoint: sharedMockIdP.metadataUrl.replace(
+						"/idp/metadata",
+						"/idp/post",
+					),
 					cert: certificate,
 					callbackUrl: "http://localhost:3000/dashboard",
 					wantAssertionsSigned: false,
@@ -3137,6 +3152,7 @@ describe("SAML SSO - Timestamp Validation", () => {
 });
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 describe("SAML ACS Origin Check Bypass", () => {
 	const mockIdP = createMockSAMLIdP(8081);
 
@@ -3361,30 +3377,19 @@ describe("SAML ACS Origin Check Bypass", () => {
 });
 
 describe("SAML Response Security", () => {
-	const mockIdP = createMockSAMLIdP(8081);
-
-	beforeAll(async () => {
-		await mockIdP.start();
-	});
-
-	afterAll(async () => {
-		await mockIdP.stop();
-	});
-
 	it("should reject forged/unsigned SAML responses", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [sso()],
 		});
 		const { headers } = await signInWithTestUser();
 
-		// Register a SAML provider
 		await auth.api.registerSSOProvider({
 			body: {
 				providerId: "security-test-provider",
 				issuer: "http://localhost:8081",
 				domain: "security-test.com",
 				samlConfig: {
-					entryPoint: mockIdP.metadataUrl,
+					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
 					callbackUrl: "http://localhost:8081/api/auth/sso/saml2/callback",
 					wantAssertionsSigned: false,
@@ -3398,7 +3403,6 @@ describe("SAML Response Security", () => {
 			headers,
 		});
 
-		// Craft a forged SAML response with a fake nameID (no valid signature)
 		const forgedSAMLResponse = `
 			<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">
 				<saml:Assertion>
@@ -3409,7 +3413,6 @@ describe("SAML Response Security", () => {
 			</samlp:Response>
 		`;
 
-		// Attempt to use the forged response
 		const callbackRes = await auth.handler(
 			new Request(
 				"http://localhost:8081/api/auth/sso/saml2/callback/security-test-provider",
@@ -3426,7 +3429,6 @@ describe("SAML Response Security", () => {
 			),
 		);
 
-		// Should be rejected - NOT allow authentication with forged response
 		expect(callbackRes.status).toBe(400);
 		const body = await callbackRes.json();
 		expect(body.message).toBe("Invalid SAML response");
@@ -3444,7 +3446,7 @@ describe("SAML Response Security", () => {
 				issuer: "http://localhost:8081",
 				domain: "tamper-test.com",
 				samlConfig: {
-					entryPoint: mockIdP.metadataUrl,
+					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
 					callbackUrl: "http://localhost:8081/api/auth/sso/saml2/callback",
 					wantAssertionsSigned: false,
@@ -3458,13 +3460,12 @@ describe("SAML Response Security", () => {
 			headers,
 		});
 
-		// A minimal but invalid SAML response that might have bypassed old regex fallback
 		const tamperedResponse = `<?xml version="1.0"?>
 			<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol">
 				<saml2:NameID xmlns:saml2="urn:oasis:names:tc:SAML:2.0:assertion">admin@victim.com</saml2:NameID>
 			</samlp:Response>`;
 
-		const tamperedCallbackRes = await auth.handler(
+		const callbackRes = await auth.handler(
 			new Request(
 				"http://localhost:8081/api/auth/sso/saml2/callback/tamper-test-provider",
 				{
@@ -3480,8 +3481,7 @@ describe("SAML Response Security", () => {
 			),
 		);
 
-		// Must reject - signature verification should fail
-		expect(tamperedCallbackRes.status).toBe(400);
+		expect(callbackRes.status).toBe(400);
 	});
 });
 
@@ -3525,7 +3525,6 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 			},
 		});
 
-		// First submission should succeed
 		const firstResponse = await auth.handler(
 			new Request(
 				"http://localhost:3000/api/auth/sso/saml2/callback/replay-test-provider",
@@ -3546,7 +3545,6 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 		const firstLocation = firstResponse.headers.get("location") || "";
 		expect(firstLocation).not.toContain("error");
 
-		// Second submission (replay) should be rejected
 		const replayResponse = await auth.handler(
 			new Request(
 				"http://localhost:3000/api/auth/sso/saml2/callback/replay-test-provider",
@@ -3607,7 +3605,6 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 			},
 		});
 
-		// First submission to ACS endpoint should succeed
 		const firstResponse = await auth.handler(
 			new Request(
 				"http://localhost:3000/api/auth/sso/saml2/sp/acs/acs-replay-test-provider",
@@ -3628,7 +3625,6 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 		const firstLocation = firstResponse.headers.get("location") || "";
 		expect(firstLocation).not.toContain("error");
 
-		// Second submission (replay) to ACS endpoint should be rejected
 		const replayResponse = await auth.handler(
 			new Request(
 				"http://localhost:3000/api/auth/sso/saml2/sp/acs/acs-replay-test-provider",
@@ -3689,7 +3685,6 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 			},
 		});
 
-		// First: Submit to callback endpoint (should succeed)
 		const callbackResponse = await auth.handler(
 			new Request(
 				"http://localhost:3000/api/auth/sso/saml2/callback/cross-endpoint-provider",
@@ -3709,7 +3704,6 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 		expect(callbackResponse.status).toBe(302);
 		expect(callbackResponse.headers.get("location")).not.toContain("error");
 
-		// Second: Replay same assertion to ACS endpoint (should be rejected)
 		const acsReplayResponse = await auth.handler(
 			new Request(
 				"http://localhost:3000/api/auth/sso/saml2/sp/acs/cross-endpoint-provider",
