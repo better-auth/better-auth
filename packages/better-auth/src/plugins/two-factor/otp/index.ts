@@ -1,4 +1,4 @@
-import type { GenericEndpointContext } from "@better-auth/core";
+import type { Awaitable, GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
@@ -52,7 +52,7 @@ export interface OTPOptions {
 				 * The request object
 				 */
 				ctx?: GenericEndpointContext,
-		  ) => Promise<void> | void)
+		  ) => Awaitable<void>)
 		| undefined;
 	/**
 	 * The number of allowed attempts for the OTP
@@ -201,10 +201,17 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 				identifier: `2fa-otp-${key}`,
 				expiresAt: new Date(Date.now() + opts.period),
 			});
-			await options.sendOTP(
+			const sendOTPResult = options.sendOTP(
 				{ user: session.user as UserWithTwoFactor, otp: code },
 				ctx,
 			);
+			if (sendOTPResult instanceof Promise) {
+				await ctx.context.runInBackgroundOrAwait(
+					sendOTPResult.catch((e: unknown) => {
+						ctx.context.logger.error("Failed to send two-factor OTP", e);
+					}),
+				);
+			}
 			return ctx.json({ status: true });
 		},
 	);
