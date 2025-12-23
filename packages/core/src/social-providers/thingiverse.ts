@@ -80,16 +80,19 @@ export const thingiverse = (options: ThingiverseOptions) => {
 		},
 
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
-			const tokenParams = new URLSearchParams({
-				client_id: options.clientId,
-				client_secret: options.clientSecret,
-				code,
-				redirect_uri: redirectURI,
-			});
 			const { data: tokenData } = await betterFetch<ThingiverseToken>(
-				`https://www.thingiverse.com/login/oauth/access_token?${tokenParams.toString()}`,
+				"https://www.thingiverse.com/login/oauth/access_token",
 				{
 					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						client_id: options.clientId,
+						client_secret: options.clientSecret || "",
+						code,
+						redirect_uri: redirectURI,
+					}),
 					jsonParser: (text) => {
 						const params = new URLSearchParams(text);
 						return {
