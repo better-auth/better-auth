@@ -229,6 +229,92 @@ describe("stripe", () => {
 		});
 	});
 
+	it("should not allow cross-user subscriptionId operations (upgrade/cancel/restore)", async () => {
+		const userA = {
+			email: "user-a@email.com",
+			password: "password",
+			name: "User A",
+		};
+		const userARes = await authClient.signUp.email(userA, { throw: true });
+
+		const userAHeaders = new Headers();
+		await authClient.signIn.email(userA, {
+			throw: true,
+			onSuccess: setCookieToHeader(userAHeaders),
+		});
+		await authClient.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: { headers: userAHeaders },
+		});
+
+		const userASub = await ctx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "referenceId", value: userARes.user.id }],
+		});
+		expect(userASub).toBeTruthy();
+
+		const userB = {
+			email: "user-b@email.com",
+			password: "password",
+			name: "User B",
+		};
+		await authClient.signUp.email(userB, { throw: true });
+		const userBHeaders = new Headers();
+		await authClient.signIn.email(userB, {
+			throw: true,
+			onSuccess: setCookieToHeader(userBHeaders),
+		});
+
+		mockStripe.checkout.sessions.create.mockClear();
+		mockStripe.billingPortal.sessions.create.mockClear();
+		mockStripe.subscriptions.list.mockClear();
+		mockStripe.subscriptions.update.mockClear();
+
+		const upgradeRes = await authClient.subscription.upgrade({
+			plan: "premium",
+			subscriptionId: userASub!.id,
+			fetchOptions: { headers: userBHeaders },
+		});
+		expect(upgradeRes.error?.message).toContain("Subscription not found");
+		expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
+		expect(mockStripe.billingPortal.sessions.create).not.toHaveBeenCalled();
+
+		const cancelHeaders = new Headers(userBHeaders);
+		cancelHeaders.set("content-type", "application/json");
+		const cancelResponse = await auth.handler(
+			new Request("http://localhost:3000/api/auth/subscription/cancel", {
+				method: "POST",
+				headers: cancelHeaders,
+				body: JSON.stringify({
+					subscriptionId: userASub!.id,
+					returnUrl: "/account",
+				}),
+			}),
+		);
+		expect(cancelResponse.status).toBe(400);
+		expect((await cancelResponse.json()).message).toContain(
+			"Subscription not found",
+		);
+		expect(mockStripe.billingPortal.sessions.create).not.toHaveBeenCalled();
+
+		const restoreHeaders = new Headers(userBHeaders);
+		restoreHeaders.set("content-type", "application/json");
+		const restoreResponse = await auth.handler(
+			new Request("http://localhost:3000/api/auth/subscription/restore", {
+				method: "POST",
+				headers: restoreHeaders,
+				body: JSON.stringify({
+					subscriptionId: userASub!.id,
+				}),
+			}),
+		);
+		expect(restoreResponse.status).toBe(400);
+		expect((await restoreResponse.json()).message).toContain(
+			"Subscription not found",
+		);
+		expect(mockStripe.subscriptions.update).not.toHaveBeenCalled();
+	});
+
 	it("should list active subscriptions", async () => {
 		const { client, auth, sessionSetter } = await getTestInstance(
 			{

@@ -15,8 +15,9 @@ import type { JwtOptions } from "./types";
 import { createJwk } from "./utils";
 import { verifyJWT as verifyJWTHelper } from "./verify";
 
+export { signJWT } from "./sign";
 export type * from "./types";
-export { createJwk, generateExportedKeyPair } from "./utils";
+export { createJwk, generateExportedKeyPair, toExpJWT } from "./utils";
 export { verifyJWT } from "./verify";
 
 const signJWTBodySchema = z.object({
@@ -241,11 +242,9 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 				},
 			),
 			signJWT: createAuthEndpoint(
-				"/sign-jwt",
 				{
 					method: "POST",
 					metadata: {
-						SERVER_ONLY: true,
 						$Infer: {
 							body: {} as {
 								payload: JWTPayload;
@@ -267,11 +266,9 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 				},
 			),
 			verifyJWT: createAuthEndpoint(
-				"/verify-jwt",
 				{
 					method: "POST",
 					metadata: {
-						SERVER_ONLY: true,
 						$Infer: {
 							body: {} as {
 								token: string;

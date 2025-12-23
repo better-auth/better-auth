@@ -7,6 +7,7 @@ import { setSessionCookie } from "../../../cookies";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db";
 import { getDate } from "../../../utils/date";
+import { defaultRoles } from "../access/statement";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
@@ -224,6 +225,44 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 
 			const roles = parseRoles(ctx.body.role);
 
+			const rolesArray = roles
+				.split(",")
+				.map((r) => r.trim())
+				.filter(Boolean);
+			const defaults = Object.keys(defaultRoles);
+			const customRoles = Object.keys(ctx.context.orgOptions.roles || {});
+			const validStaticRoles = new Set([...defaults, ...customRoles]);
+
+			const unknownRoles = rolesArray.filter(
+				(role) => !validStaticRoles.has(role),
+			);
+
+			if (unknownRoles.length > 0) {
+				if (ctx.context.orgOptions.dynamicAccessControl?.enabled) {
+					const foundRoles = await ctx.context.adapter.findMany({
+						model: "organizationRole",
+						where: [
+							{ field: "organizationId", value: organizationId },
+							{ field: "role", value: unknownRoles, operator: "in" },
+						],
+					});
+					const foundRoleNames = foundRoles.map((r: any) => r.role);
+					const stillInvalid = unknownRoles.filter(
+						(r) => !foundRoleNames.includes(r),
+					);
+
+					if (stillInvalid.length > 0) {
+						throw new APIError("BAD_REQUEST", {
+							message: `${ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND}: ${stillInvalid.join(", ")}`,
+						});
+					}
+				} else {
+					throw new APIError("BAD_REQUEST", {
+						message: `${ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND}: ${unknownRoles.join(", ")}`,
+					});
+				}
+			}
+
 			if (
 				member.role !== creatorRole &&
 				roles.split(",").includes(creatorRole)
@@ -291,20 +330,24 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					expiresAt: newExpiresAt,
 				};
 
-				await ctx.context.orgOptions.sendInvitationEmail?.(
-					{
-						id: updatedInvitation.id!,
-						role: updatedInvitation.role! as string,
-						email: updatedInvitation.email!.toLowerCase(),
-						organization: organization,
-						inviter: {
-							...member,
-							user: session.user,
-						},
-						invitation: updatedInvitation as unknown as Invitation,
-					},
-					ctx.request,
-				);
+				if (ctx.context.orgOptions.sendInvitationEmail) {
+					await ctx.context.runInBackgroundOrAwait(
+						ctx.context.orgOptions.sendInvitationEmail(
+							{
+								id: updatedInvitation.id!,
+								role: updatedInvitation.role! as string,
+								email: updatedInvitation.email!.toLowerCase(),
+								organization: organization,
+								inviter: {
+									...member,
+									user: session.user,
+								},
+								invitation: updatedInvitation as unknown as Invitation,
+							},
+							ctx.request,
+						),
+					);
+				}
 
 				return ctx.json(updatedInvitation as InferInvitation<O, false>);
 			}
@@ -433,20 +476,24 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				user: session.user,
 			});
 
-			await ctx.context.orgOptions.sendInvitationEmail?.(
-				{
-					id: invitation.id,
-					role: invitation.role,
-					email: invitation.email.toLowerCase(),
-					organization: organization,
-					inviter: {
-						...(member as Member),
-						user: session.user,
-					},
-					invitation,
-				},
-				ctx.request,
-			);
+			if (ctx.context.orgOptions.sendInvitationEmail) {
+				await ctx.context.runInBackgroundOrAwait(
+					ctx.context.orgOptions.sendInvitationEmail(
+						{
+							id: invitation.id,
+							role: invitation.role,
+							email: invitation.email.toLowerCase(),
+							organization: organization,
+							inviter: {
+								...(member as Member),
+								user: session.user,
+							},
+							invitation,
+						},
+						ctx.request,
+					),
+				);
+			}
 
 			// Run afterCreateInvitation hook
 			if (option?.organizationHooks?.afterCreateInvitation) {

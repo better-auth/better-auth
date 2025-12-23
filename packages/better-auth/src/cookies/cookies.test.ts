@@ -1,6 +1,11 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { describe, expect, it } from "vitest";
-import { getCookieCache, getCookies, getSessionCookie } from "../cookies";
+import {
+	getCookieCache,
+	getCookies,
+	getSessionCookie,
+	parseCookies,
+} from "../cookies";
 import { parseUserOutput } from "../db/schema";
 import { getTestInstance } from "../test-utils/test-instance";
 import { parseSetCookieHeader } from "./cookie-utils";
@@ -1100,5 +1105,35 @@ describe("Cookie Chunking", () => {
 
 		expect(cache).not.toBeNull();
 		expect(cache?.user?.email).toEqual(testUser.email);
+	});
+});
+
+describe("parse cookies", () => {
+	it("should parse cookies into key-value map", () => {
+		const cookieHeader =
+			"better-auth.session_token=session-token.signature; better-auth.session_data=session-data.signature";
+
+		const parsedCookies = parseCookies(cookieHeader);
+
+		expect(parsedCookies.get("better-auth.session_token")).toBe(
+			"session-token.signature",
+		);
+		expect(parsedCookies.get("better-auth.session_data")).toBe(
+			"session-data.signature",
+		);
+	});
+
+	it("should securely parse the signed cookies with padding", () => {
+		const cookieHeader =
+			"better-auth.session_token=session-token.signature=; better-auth.session_data=session-data.signature=";
+
+		const parsedCookies = parseCookies(cookieHeader);
+
+		expect(parsedCookies.get("better-auth.session_token")).toBe(
+			"session-token.signature=",
+		);
+		expect(parsedCookies.get("better-auth.session_data")).toBe(
+			"session-data.signature=",
+		);
 	});
 });

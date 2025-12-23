@@ -1,3 +1,4 @@
+import type { LiteralString } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
@@ -5,7 +6,6 @@ import * as z from "zod";
 import { getSessionFromCtx, sessionMiddleware } from "../../../api";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db/to-zod";
-import type { LiteralString } from "../../../types/helper";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
@@ -48,7 +48,6 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 		isClientSide: true,
 	});
 	return createAuthEndpoint(
-		"/organization/add-member",
 		{
 			method: "POST",
 			body: z.object({
@@ -57,7 +56,6 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 			}),
 			use: [orgMiddleware],
 			metadata: {
-				SERVER_ONLY: true,
 				$Infer: {
 					body: {} as {
 						userId: string;

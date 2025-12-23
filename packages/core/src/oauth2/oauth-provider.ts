@@ -1,4 +1,4 @@
-import type { LiteralString } from "../types";
+import type { Awaitable, LiteralString } from "../types";
 
 export interface OAuth2Tokens {
 	tokenType?: string | undefined;
@@ -35,7 +35,7 @@ export interface OAuthProvider<
 		redirectURI: string;
 		display?: string | undefined;
 		loginHint?: string | undefined;
-	}) => Promise<URL> | URL;
+	}) => Awaitable<URL>;
 	name: string;
 	validateAuthorizationCode: (data: {
 		code: string;

@@ -11,7 +11,16 @@ import { parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput, InferUser, User } from "../../types";
 import { createEmailVerificationToken } from "./email-verification";
 
-const signUpEmailBodySchema = z.record(z.string(), z.any());
+const signUpEmailBodySchema = z
+	.object({
+		name: z.string().nonempty(),
+		email: z.email(),
+		password: z.string().nonempty(),
+		image: z.string().optional(),
+		callbackURL: z.string().optional(),
+		rememberMe: z.boolean().optional(),
+	})
+	.and(z.record(z.string(), z.any()));
 
 export const signUpEmail = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -281,30 +290,18 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						: encodeURIComponent("/");
 					const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
 
-					const args: Parameters<
-						Required<
-							Required<BetterAuthOptions>["emailVerification"]
-						>["sendVerificationEmail"]
-					> = ctx.request
-						? [
+					if (ctx.context.options.emailVerification?.sendVerificationEmail) {
+						await ctx.context.runInBackgroundOrAwait(
+							ctx.context.options.emailVerification.sendVerificationEmail(
 								{
 									user: createdUser,
 									url,
 									token,
 								},
 								ctx.request,
-							]
-						: [
-								{
-									user: createdUser,
-									url,
-									token,
-								},
-							];
-
-					await ctx.context.options.emailVerification?.sendVerificationEmail?.(
-						...args,
-					);
+							),
+						);
+					}
 				}
 
 				if (

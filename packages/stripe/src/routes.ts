@@ -1,6 +1,7 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { defineErrorCodes } from "@better-auth/core/utils";
 import type { GenericEndpointContext } from "better-auth";
+import { HIDE_METADATA } from "better-auth";
 import {
 	APIError,
 	getSessionFromCtx,
@@ -65,14 +66,14 @@ const upgradeSubscriptionBodySchema = z.object({
 		})
 		.optional(),
 	/**
-	 * This is to allow a specific subscription to be upgrade.
-	 * If subscription id is provided, and subscription isn't found,
-	 * it'll throw an error.
+	 * The Stripe subscription ID to upgrade.
+	 * If provided and not found, it'll throw an error.
 	 */
 	subscriptionId: z
 		.string()
 		.meta({
-			description: 'The id of the subscription to upgrade. Eg: "sub_123"',
+			description:
+				'The Stripe subscription ID to upgrade. Eg: "sub_1ABC2DEF3GHI4JKL"',
 		})
 		.optional(),
 	/**
@@ -181,19 +182,13 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					message: STRIPE_ERROR_CODES.SUBSCRIPTION_PLAN_NOT_FOUND,
 				});
 			}
-			const subscriptionToUpdate = ctx.body.subscriptionId
+			let subscriptionToUpdate = ctx.body.subscriptionId
 				? await ctx.context.adapter.findOne<Subscription>({
 						model: "subscription",
 						where: [
 							{
-								field: "id",
-								value: ctx.body.subscriptionId,
-								connector: "OR",
-							},
-							{
 								field: "stripeSubscriptionId",
 								value: ctx.body.subscriptionId,
-								connector: "OR",
 							},
 						],
 					})
@@ -203,6 +198,14 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							where: [{ field: "referenceId", value: referenceId }],
 						})
 					: null;
+
+			if (
+				ctx.body.subscriptionId &&
+				subscriptionToUpdate &&
+				subscriptionToUpdate.referenceId !== referenceId
+			) {
+				subscriptionToUpdate = null;
+			}
 
 			if (ctx.body.subscriptionId && !subscriptionToUpdate) {
 				throw new APIError("BAD_REQUEST", {
@@ -652,7 +655,8 @@ const cancelSubscriptionBodySchema = z.object({
 	subscriptionId: z
 		.string()
 		.meta({
-			description: "The id of the subscription to cancel. Eg: 'sub_123'",
+			description:
+				"The Stripe subscription ID to cancel. Eg: 'sub_1ABC2DEF3GHI4JKL'",
 		})
 		.optional(),
 	returnUrl: z.string().meta({
@@ -697,12 +701,12 @@ export const cancelSubscription = (options: StripeOptions) => {
 		},
 		async (ctx) => {
 			const referenceId = ctx.body?.referenceId || ctx.context.session.user.id;
-			const subscription = ctx.body.subscriptionId
+			let subscription = ctx.body.subscriptionId
 				? await ctx.context.adapter.findOne<Subscription>({
 						model: "subscription",
 						where: [
 							{
-								field: "id",
+								field: "stripeSubscriptionId",
 								value: ctx.body.subscriptionId,
 							},
 						],
@@ -717,6 +721,15 @@ export const cancelSubscription = (options: StripeOptions) => {
 								(sub) => sub.status === "active" || sub.status === "trialing",
 							),
 						);
+
+			// Ensure the specified subscription belongs to the (validated) referenceId.
+			if (
+				ctx.body.subscriptionId &&
+				subscription &&
+				subscription.referenceId !== referenceId
+			) {
+				subscription = undefined;
+			}
 
 			if (!subscription || !subscription.stripeCustomerId) {
 				throw ctx.error("BAD_REQUEST", {
@@ -820,7 +833,8 @@ const restoreSubscriptionBodySchema = z.object({
 	subscriptionId: z
 		.string()
 		.meta({
-			description: "The id of the subscription to restore. Eg: 'sub_123'",
+			description:
+				"The Stripe subscription ID to restore. Eg: 'sub_1ABC2DEF3GHI4JKL'",
 		})
 		.optional(),
 });
@@ -846,12 +860,12 @@ export const restoreSubscription = (options: StripeOptions) => {
 		async (ctx) => {
 			const referenceId = ctx.body?.referenceId || ctx.context.session.user.id;
 
-			const subscription = ctx.body.subscriptionId
+			let subscription = ctx.body.subscriptionId
 				? await ctx.context.adapter.findOne<Subscription>({
 						model: "subscription",
 						where: [
 							{
-								field: "id",
+								field: "stripeSubscriptionId",
 								value: ctx.body.subscriptionId,
 							},
 						],
@@ -871,6 +885,13 @@ export const restoreSubscription = (options: StripeOptions) => {
 								(sub) => sub.status === "active" || sub.status === "trialing",
 							),
 						);
+			if (
+				ctx.body.subscriptionId &&
+				subscription &&
+				subscription.referenceId !== referenceId
+			) {
+				subscription = undefined;
+			}
 			if (!subscription || !subscription.stripeCustomerId) {
 				throw ctx.error("BAD_REQUEST", {
 					message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
@@ -1221,7 +1242,7 @@ export const stripeWebhook = (options: StripeOptions) => {
 		{
 			method: "POST",
 			metadata: {
-				isAction: false,
+				...HIDE_METADATA,
 				openapi: {
 					operationId: "handleStripeWebhook",
 				},
