@@ -456,10 +456,10 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 				ctx.context.secret,
 			);
 			if (!verificationToken) {
-        throw APIError.from(
-          "BAD_REQUEST",
-          PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
-        );
+				throw APIError.from(
+					"BAD_REQUEST",
+					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
+				);
 			}
 
 			const data =
@@ -592,10 +592,10 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				ctx.context.secret,
 			);
 			if (!verificationToken) {
-        throw APIError.from(
-          "BAD_REQUEST",
-          PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
-        );
+				throw APIError.from(
+					"BAD_REQUEST",
+					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
+				);
 			}
 
 			const data =

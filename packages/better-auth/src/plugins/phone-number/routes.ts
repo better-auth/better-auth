@@ -133,10 +133,10 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 							),
 						);
 					}
-          throw APIError.from(
-            "UNAUTHORIZED",
-            PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_NOT_VERIFIED,
-          );
+					throw APIError.from(
+						"UNAUTHORIZED",
+						PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_NOT_VERIFIED,
+					);
 				}
 			}
 			const accounts = await ctx.context.internalAdapter.findAccountByUserId(

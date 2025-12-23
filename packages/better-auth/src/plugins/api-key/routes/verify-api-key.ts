@@ -204,10 +204,10 @@ export async function validateApiKey({
 	} else {
 		newApiKey = await performUpdate();
 		if (!newApiKey) {
-      throw APIError.from(
-        "INTERNAL_SERVER_ERROR",
-        ERROR_CODES.FAILED_TO_UPDATE_API_KEY,
-      );
+			throw APIError.from(
+				"INTERNAL_SERVER_ERROR",
+				ERROR_CODES.FAILED_TO_UPDATE_API_KEY,
+			);
 		}
 	}
 
