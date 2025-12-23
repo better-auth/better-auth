@@ -959,11 +959,12 @@ describe("api-key", async () => {
 	const { headers: rateLimitUserHeaders } = await rateLimitTestUser();
 
 	it("should fail to verify API key 20 times in a row due to rate-limit", async () => {
-		const { data: apiKey2 } = await rateLimitClient.apiKey.create(
+		const createResult = await rateLimitClient.apiKey.create(
 			{},
 			{ headers: rateLimitUserHeaders },
 		);
-		if (!apiKey2) return;
+		expect(createResult.data).not.toBeNull();
+		const apiKey2 = createResult.data!;
 		rateLimitedApiKey = apiKey2;
 		for (let i = 0; i < 20; i++) {
 			const response = await rateLimitAuth.api.verifyApiKey({
@@ -995,13 +996,12 @@ describe("api-key", async () => {
 
 	it("should check if verifying an API key's remaining count does go down", async () => {
 		const remaining = 10;
-		const { data: apiKey } = await client.apiKey.create(
-			{
-				remaining: remaining,
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				remaining,
+				userId: user.id,
 			},
-			{ headers: headers },
-		);
-		if (!apiKey) return;
+		});
 		const afterVerificationOnce = await auth.api.verifyApiKey({
 			body: {
 				key: apiKey.key,
@@ -1115,6 +1115,40 @@ describe("api-key", async () => {
 		expect(apiKey.name).toEqual(newName);
 	});
 
+	it("should fail to update API key from client if userId is provided with own id", async () => {
+		const response = await client.apiKey.update(
+			{
+				keyId: firstApiKey.id,
+				name: "test-name",
+				userId: user.id,
+			},
+			{ headers },
+		);
+		expect(response.error?.status).toBe(401);
+		expect(response.error?.message).toEqual(ERROR_CODES.UNAUTHORIZED_SESSION);
+	});
+
+	it("should fail to update API key from client if userId is provided with different user id", async () => {
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: "update-apikey-test@email.com",
+				password: "password",
+				name: "test-name",
+			},
+		});
+
+		const response = await client.apiKey.update(
+			{
+				keyId: firstApiKey.id,
+				name: "test-name",
+				userId: newUser.user.id,
+			},
+			{ headers },
+		);
+		expect(response.error?.status).toBe(401);
+		expect(response.error?.message).toEqual(ERROR_CODES.UNAUTHORIZED_SESSION);
+	});
+
 	it("should fail to update API key name with a length larger than the allowed maximum", async () => {
 		let error: APIError | null = null;
 		await auth.api
@@ -1208,9 +1242,9 @@ describe("api-key", async () => {
 		);
 		const { headers } = await signInWithTestUser();
 
-		const { data: firstApiKey } = await client.apiKey.create({}, { headers });
-
-		if (!firstApiKey) return;
+		const createResult = await client.apiKey.create({}, { headers });
+		expect(createResult.data).not.toBeNull();
+		const firstApiKey = createResult.data!;
 
 		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
 			data: null,
@@ -1255,9 +1289,9 @@ describe("api-key", async () => {
 		);
 		const { headers } = await signInWithTestUser();
 
-		const { data: firstApiKey } = await client.apiKey.create({}, { headers });
-
-		if (!firstApiKey) return;
+		const createResult = await client.apiKey.create({}, { headers });
+		expect(createResult.data).not.toBeNull();
+		const firstApiKey = createResult.data!;
 
 		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
 			data: null,
@@ -1302,9 +1336,9 @@ describe("api-key", async () => {
 		);
 		const { headers } = await signInWithTestUser();
 
-		const { data: firstApiKey } = await client.apiKey.create({}, { headers });
-
-		if (!firstApiKey) return;
+		const createResult = await client.apiKey.create({}, { headers });
+		expect(createResult.data).not.toBeNull();
+		const firstApiKey = createResult.data!;
 
 		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
 			data: null,
@@ -1633,6 +1667,45 @@ describe("api-key", async () => {
 		expect(apiKey.data?.metadata).toBeInstanceOf(Object);
 	});
 
+	it("should fail to get API key from client if userId is provided with own id", async () => {
+		const response = await client.apiKey.get(
+			{
+				query: {
+					id: firstApiKey.id,
+					userId: user.id,
+				},
+			},
+			{
+				headers,
+			},
+		);
+		expect(response.error?.status).toBe(401);
+		expect(response.error?.message).toEqual(ERROR_CODES.UNAUTHORIZED_SESSION);
+	});
+
+	it("should fail to get API key from client if userId is provided with different user id", async () => {
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: "get-apikey-test@email.com",
+				password: "password",
+				name: "test-name",
+			},
+		});
+		const response = await client.apiKey.get(
+			{
+				query: {
+					id: firstApiKey.id,
+					userId: newUser.user.id,
+				},
+			},
+			{
+				headers,
+			},
+		);
+		expect(response.error?.status).toBe(401);
+		expect(response.error?.message).toEqual(ERROR_CODES.UNAUTHORIZED_SESSION);
+	});
+
 	// =========================================================================
 	// LIST API KEY
 	// =========================================================================
@@ -1675,6 +1748,43 @@ describe("api-key", async () => {
 				expect(apiKey.metadata).toBeInstanceOf(Object);
 			}
 		});
+	});
+
+	it("should fail to list API keys from client if userId is provided with own id", async () => {
+		const response = await client.apiKey.list(
+			{
+				query: {
+					userId: user.id,
+				},
+			},
+			{
+				headers,
+			},
+		);
+		expect(response.error?.status).toBe(401);
+		expect(response.error?.message).toEqual(ERROR_CODES.UNAUTHORIZED_SESSION);
+	});
+
+	it("should fail to list API keys from client if userId is provided with different user id", async () => {
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: "list-apikeys-test@email.com",
+				password: "password",
+				name: "test-name",
+			},
+		});
+		const response = await client.apiKey.list(
+			{
+				query: {
+					userId: newUser.user.id,
+				},
+			},
+			{
+				headers,
+			},
+		);
+		expect(response.error?.status).toBe(401);
+		expect(response.error?.message).toEqual(ERROR_CODES.UNAUTHORIZED_SESSION);
 	});
 
 	// =========================================================================
@@ -1813,12 +1923,13 @@ describe("api-key", async () => {
 	});
 
 	it("should delete an API key by ID with headers using auth-client", async () => {
-		const newApiKey = await client.apiKey.create({}, { headers: headers });
-		if (!newApiKey.data) return;
+		const createResult = await client.apiKey.create({}, { headers: headers });
+		expect(createResult.data).not.toBeNull();
+		const newApiKey = createResult.data!;
 
 		const apiKey = await client.apiKey.delete(
 			{
-				keyId: newApiKey.data.id,
+				keyId: newApiKey.id,
 			},
 			{ headers },
 		);
@@ -1851,6 +1962,54 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("NOT_FOUND");
 		expect(result.error?.body.message).toEqual(ERROR_CODES.KEY_NOT_FOUND);
+	});
+
+	it("should fail to delete API key from client if userId is provided with own id", async () => {
+		const createResult = await client.apiKey.create({}, { headers: headers });
+		expect(createResult.data).not.toBeNull();
+		const newApiKey = createResult.data!;
+
+		const response = await client.apiKey.delete(
+			{
+				keyId: newApiKey.id,
+				userId: user.id,
+			},
+			{ headers },
+		);
+		expect(response.error?.status).toBe(401);
+		expect(response.error?.message).toEqual(ERROR_CODES.UNAUTHORIZED_SESSION);
+	});
+
+	it("should fail to delete API key from client if userId is provided with different user id", async () => {
+		const createResult = await client.apiKey.create({}, { headers: headers });
+		expect(createResult.data).not.toBeNull();
+		const newApiKey = createResult.data!;
+
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: "delete-apikey-test@email.com",
+				password: "password",
+				name: "test-name",
+			},
+		});
+
+		const response = await client.apiKey.delete(
+			{
+				keyId: newApiKey.id,
+				userId: newUser.user.id,
+			},
+			{ headers },
+		);
+		expect(response.error?.status).toBe(401);
+		expect(response.error?.message).toEqual(ERROR_CODES.UNAUTHORIZED_SESSION);
+
+		// Clean up the test API key
+		await auth.api.deleteApiKey({
+			body: {
+				keyId: newApiKey.id,
+			},
+			headers,
+		});
 	});
 
 	it("should create an API key with permissions", async () => {
@@ -1937,7 +2096,6 @@ describe("api-key", async () => {
 		};
 		const apiKey = await auth.api.createApiKey({
 			body: {
-				userId: user.id,
 				metadata: metadata,
 			},
 			headers,
@@ -2216,6 +2374,208 @@ describe("api-key", async () => {
 		expect(result.key?.remaining).toBe(refillAmount - 1);
 
 		vi.useRealTimers();
+	});
+
+	it("should get an API key by id using userId (server-side)", async () => {
+		const newApiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+			},
+		});
+
+		const apiKey = await auth.api.getApiKey({
+			query: {
+				id: newApiKey.id,
+				userId: user.id,
+			},
+		});
+		expect(apiKey).not.toBeNull();
+		expect(apiKey.id).toBe(newApiKey.id);
+	});
+
+	it("should fail to get an API key by id with wrong userId (server-side)", async () => {
+		const newApiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+			},
+		});
+
+		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
+			data: null,
+			error: null,
+		};
+		try {
+			const apiKey = await auth.api.getApiKey({
+				query: {
+					id: newApiKey.id,
+					userId: "wrong-user-id",
+				},
+			});
+			result.data = apiKey;
+		} catch (error: any) {
+			result.error = error;
+		}
+
+		expect(result.data).toBeNull();
+		expect(result.error).toBeDefined();
+		expect(result.error?.status).toEqual("NOT_FOUND");
+	});
+
+	it("should fail to get an API key if session user tries to impersonate another user", async () => {
+		const newApiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+			},
+		});
+
+		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
+			data: null,
+			error: null,
+		};
+		try {
+			const apiKey = await auth.api.getApiKey({
+				query: {
+					id: newApiKey.id,
+					userId: "different-user-id",
+				},
+				headers,
+			});
+			result.data = apiKey;
+		} catch (error: any) {
+			result.error = error;
+		}
+
+		expect(result.data).toBeNull();
+		expect(result.error).toBeDefined();
+		expect(result.error?.status).toEqual("UNAUTHORIZED");
+		expect(result.error?.body.message).toEqual(
+			ERROR_CODES.UNAUTHORIZED_SESSION,
+		);
+	});
+
+	it("should list API keys using userId (server-side)", async () => {
+		const apiKeys = await auth.api.listApiKeys({
+			query: {
+				userId: user.id,
+			},
+		});
+
+		expect(apiKeys).not.toBeNull();
+		expect(apiKeys.length).toBeGreaterThan(0);
+	});
+
+	it("should fail to list API keys with wrong userId (server-side)", async () => {
+		const apiKeys = await auth.api.listApiKeys({
+			query: {
+				userId: "wrong-user-id",
+			},
+		});
+
+		expect(apiKeys).not.toBeNull();
+		expect(apiKeys.length).toBe(0);
+	});
+
+	it("should fail to list API keys if session user tries to impersonate another user", async () => {
+		let result: { data: Partial<ApiKey>[] | null; error: Err | null } = {
+			data: null,
+			error: null,
+		};
+		try {
+			const apiKeys = await auth.api.listApiKeys({
+				query: {
+					userId: "different-user-id",
+				},
+				headers,
+			});
+			result.data = apiKeys;
+		} catch (error: any) {
+			result.error = error;
+		}
+
+		expect(result.data).toBeNull();
+		expect(result.error).toBeDefined();
+		expect(result.error?.status).toEqual("UNAUTHORIZED");
+		expect(result.error?.body.message).toEqual(
+			ERROR_CODES.UNAUTHORIZED_SESSION,
+		);
+	});
+
+	it("should delete an API key using userId (server-side)", async () => {
+		const newApiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+			},
+		});
+
+		const result = await auth.api.deleteApiKey({
+			body: {
+				keyId: newApiKey.id,
+				userId: user.id,
+			},
+		});
+
+		expect(result).not.toBeNull();
+		expect(result.success).toEqual(true);
+	});
+
+	it("should fail to delete an API key with wrong userId (server-side)", async () => {
+		const newApiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+			},
+		});
+
+		let result: { data: { success: boolean } | null; error: Err | null } = {
+			data: null,
+			error: null,
+		};
+		try {
+			const apiKey = await auth.api.deleteApiKey({
+				body: {
+					keyId: newApiKey.id,
+					userId: "wrong-user-id",
+				},
+			});
+			result.data = apiKey;
+		} catch (error: any) {
+			result.error = error;
+		}
+
+		expect(result.data).toBeNull();
+		expect(result.error).toBeDefined();
+		expect(result.error?.status).toEqual("NOT_FOUND");
+	});
+
+	it("should fail to delete an API key if session user tries to impersonate another user", async () => {
+		const newApiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+			},
+		});
+
+		let result: { data: { success: boolean } | null; error: Err | null } = {
+			data: null,
+			error: null,
+		};
+		try {
+			const apiKey = await auth.api.deleteApiKey({
+				body: {
+					keyId: newApiKey.id,
+					userId: "different-user-id",
+				},
+				headers,
+			});
+			result.data = apiKey;
+		} catch (error: any) {
+			result.error = error;
+		}
+
+		expect(result.data).toBeNull();
+		expect(result.error).toBeDefined();
+		expect(result.error?.status).toEqual("UNAUTHORIZED");
+		expect(result.error?.body.message).toEqual(
+			ERROR_CODES.UNAUTHORIZED_SESSION,
+		);
 	});
 
 	describe("secondary storage", async () => {

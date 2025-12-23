@@ -282,7 +282,7 @@ export function createApiKey({
 				});
 			}
 
-			if (session && ctx.body.userId && session?.user.id !== ctx.body.userId) {
+			if (session && ctx.body.userId) {
 				throw new APIError("UNAUTHORIZED", {
 					message: ERROR_CODES.UNAUTHORIZED_SESSION,
 				});
