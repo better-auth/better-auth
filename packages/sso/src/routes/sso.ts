@@ -46,7 +46,11 @@ import {
 	discoverOIDCConfig,
 	mapDiscoveryErrorToAPIError,
 } from "../oidc";
-import { validateConfigAlgorithms, validateSAMLAlgorithms, validateSingleAssertion } from "../saml";
+import {
+	validateConfigAlgorithms,
+	validateSAMLAlgorithms,
+	validateSingleAssertion,
+} from "../saml";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
 import { safeJsonParse, validateEmailDomain } from "../utils";
 
