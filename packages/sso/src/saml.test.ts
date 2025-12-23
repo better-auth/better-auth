@@ -3082,16 +3082,6 @@ describe("SAML SSO - Timestamp Validation", () => {
 });
 
 describe("SAML ACS Origin Check Bypass", () => {
-	const mockIdP = createMockSAMLIdP(8081);
-
-	beforeAll(async () => {
-		await mockIdP.start();
-	});
-
-	afterAll(async () => {
-		await mockIdP.stop();
-	});
-
 	describe("Positive: SAML endpoints allow external IdP origins", () => {
 		it("should allow SAML callback POST from external IdP origin", async () => {
 			const { auth, signInWithTestUser } = await getTestInstance({
@@ -3106,7 +3096,7 @@ describe("SAML ACS Origin Check Bypass", () => {
 					issuer: "http://localhost:8081",
 					domain: "origin-bypass.com",
 					samlConfig: {
-						entryPoint: mockIdP.metadataUrl,
+						entryPoint: sharedMockIdP.metadataUrl,
 						cert: certificate,
 						callbackUrl: "http://localhost:8081/api/auth/sso/saml2/callback",
 						wantAssertionsSigned: false,
@@ -3160,7 +3150,7 @@ describe("SAML ACS Origin Check Bypass", () => {
 					issuer: "http://localhost:8081",
 					domain: "origin-bypass-acs.com",
 					samlConfig: {
-						entryPoint: mockIdP.metadataUrl,
+						entryPoint: sharedMockIdP.metadataUrl,
 						cert: certificate,
 						callbackUrl: "http://localhost:8081/api/auth/sso/saml2/sp/acs",
 						wantAssertionsSigned: false,
@@ -3261,7 +3251,7 @@ describe("SAML ACS Origin Check Bypass", () => {
 					issuer: "http://localhost:8081",
 					domain: "relay-security.com",
 					samlConfig: {
-						entryPoint: mockIdP.metadataUrl,
+						entryPoint: sharedMockIdP.metadataUrl,
 						cert: certificate,
 						callbackUrl: "http://localhost:8081/api/auth/sso/saml2/callback",
 						wantAssertionsSigned: false,
