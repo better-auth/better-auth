@@ -64,8 +64,8 @@ function validateSecret(
 	}
 
 	if (secret.length < 32) {
-		throw new BetterAuthError(
-			`Invalid BETTER_AUTH_SECRET: must be at least 32 characters long for adequate security. Generate one with \`npx @better-auth/cli secret\` or \`openssl rand -base64 32\`.`,
+		logger.warn(
+			`[better-auth] Warning: your BETTER_AUTH_SECRET should be at least 32 characters long for adequate security. Generate one with \`npx @better-auth/cli secret\` or \`openssl rand -base64 32\`.`,
 		);
 	}
 
@@ -103,6 +103,12 @@ export async function createAuthContext(
 	const internalPlugins = getInternalPlugins(options);
 	const logger = createLogger(options.logger);
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
+
+	if (!baseURL) {
+		logger.warn(
+			`[better-auth] Base URL could not be determined. Please set a valid base URL using the baseURL config option or the BETTER_AUTH_BASE_URL environment variable. Without this, callbacks and redirects may not work correctly.`,
+		);
+	}
 
 	const secret =
 		options.secret ||
@@ -176,8 +182,13 @@ export async function createAuthContext(
 			skipStateCookieCheck: !!options.account?.skipStateCookieCheck,
 		},
 		tables,
-		trustedOrigins: getTrustedOrigins(options),
-		isTrustedOrigin(url: string, settings?: { allowRelativePaths: boolean }) {
+		trustedOrigins: await getTrustedOrigins(options),
+		isTrustedOrigin(
+			url: string,
+			settings?: {
+				allowRelativePaths: boolean;
+			},
+		) {
 			return ctx.trustedOrigins.some((origin) =>
 				matchesOriginPattern(url, origin, settings),
 			);
@@ -277,6 +288,30 @@ export async function createAuthContext(
 				: isTest()
 					? true
 					: false,
+		runInBackground:
+			options.advanced?.backgroundTasks?.handler ??
+			((p) => {
+				p.catch(() => {});
+			}),
+		async runInBackgroundOrAwait(
+			promise: Promise<unknown> | Promise<void> | void | unknown,
+		) {
+			try {
+				if (options.advanced?.backgroundTasks?.handler) {
+					if (promise instanceof Promise) {
+						options.advanced.backgroundTasks.handler(
+							promise.catch((e) => {
+								logger.error("Failed to run background task:", e);
+							}),
+						);
+					}
+				} else {
+					await promise;
+				}
+			} catch (e) {
+				logger.error("Failed to run background task:", e);
+			}
+		},
 	};
 
 	const initOrPromise = runPluginInit(ctx);

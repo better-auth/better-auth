@@ -1,7 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { APIError } from "better-call";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { matchesOriginPattern } from "../../auth/trusted-origins";
 
 /**
@@ -26,7 +25,15 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	const errorCallbackURL = body?.errorCallbackURL;
 	const newUserCallbackURL = body?.newUserCallbackURL;
 
-	const validateURL = (url: string | undefined, label: string) => {
+	const validateURL = (
+		url: string | undefined,
+		label:
+			| "origin"
+			| "callbackURL"
+			| "redirectURL"
+			| "errorCallbackURL"
+			| "newUserCallbackURL",
+	) => {
 		if (!url) {
 			return;
 		}
@@ -40,7 +47,30 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 				`If it's a valid URL, please add ${url} to trustedOrigins in your auth config\n`,
 				`Current list of trustedOrigins: ${ctx.context.trustedOrigins}`,
 			);
-			throw new APIError("FORBIDDEN", { message: `Invalid ${label}` });
+			if (label === "origin") {
+				throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.INVALID_ORIGIN);
+			}
+			if (label === "callbackURL") {
+				throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.INVALID_CALLBACK_URL);
+			}
+			if (label === "redirectURL") {
+				throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.INVALID_REDIRECT_URL);
+			}
+			if (label === "errorCallbackURL") {
+				throw APIError.from(
+					"FORBIDDEN",
+					BASE_ERROR_CODES.INVALID_ERROR_CALLBACK_URL,
+				);
+			}
+			if (label === "newUserCallbackURL") {
+				throw APIError.from(
+					"FORBIDDEN",
+					BASE_ERROR_CODES.INVALID_NEW_USER_CALLBACK_URL,
+				);
+			}
+			throw APIError.fromStatus("FORBIDDEN", {
+				message: `Invalid ${label}`,
+			});
 		}
 	};
 
@@ -72,7 +102,36 @@ export const originCheck = (
 					`If it's a valid URL, please add ${url} to trustedOrigins in your auth config\n`,
 					`Current list of trustedOrigins: ${ctx.context.trustedOrigins}`,
 				);
-				throw new APIError("FORBIDDEN", { message: `Invalid ${label}` });
+				if (label === "origin") {
+					throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.INVALID_ORIGIN);
+				}
+				if (label === "callbackURL") {
+					throw APIError.from(
+						"FORBIDDEN",
+						BASE_ERROR_CODES.INVALID_CALLBACK_URL,
+					);
+				}
+				if (label === "redirectURL") {
+					throw APIError.from(
+						"FORBIDDEN",
+						BASE_ERROR_CODES.INVALID_REDIRECT_URL,
+					);
+				}
+				if (label === "errorCallbackURL") {
+					throw APIError.from(
+						"FORBIDDEN",
+						BASE_ERROR_CODES.INVALID_ERROR_CALLBACK_URL,
+					);
+				}
+				if (label === "newUserCallbackURL") {
+					throw APIError.from(
+						"FORBIDDEN",
+						BASE_ERROR_CODES.INVALID_NEW_USER_CALLBACK_URL,
+					);
+				}
+				throw APIError.fromStatus("FORBIDDEN", {
+					message: `Invalid ${label}`,
+				});
 			}
 		};
 		const callbacks = Array.isArray(callbackURL) ? callbackURL : [callbackURL];

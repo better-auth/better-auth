@@ -119,7 +119,12 @@ You can configure the IP address header in your Better Auth configuration:
 
 This ensures that Better Auth only accepts IP addresses from your trusted proxy's header, making it more difficult for attackers to bypass rate limiting or other IP-based security measures by spoofing headers.
 
-> **Important**: When setting a custom IP address header, ensure that your proxy or load balancer is properly configured to set this header, and that it cannot be set by end users directly.
+<Callout type="info">
+**Important**
+
+- When setting a custom IP address header, ensure that your proxy or load balancer is properly configured to set this header, and that it cannot be set by end users directly.
+- In dev/test environments, if the IP cannot be retrieved from headers, 127.0.0.1 is used as a fallback.
+</Callout>
 
 ## Trusted Origins
 
@@ -175,8 +180,8 @@ Trusted origins also support custom schemes for mobile apps and browser extensio
   trustedOrigins: [
     "myapp://",                               // Mobile app scheme
     "chrome-extension://YOUR_EXTENSION_ID",   // Browser extension
-    "exp://*/*",                              // Trust all Expo development URLs
-    "exp://10.0.0.*:*/*",                     // Trust 10.0.0.x IP range with any port
+    "exp://**",                               // Trust all Expo development URLs
+    "exp://10.0.0.*:*/**",                    // Trust 10.0.0.x IP range with any port
   ]
 }
 ```
