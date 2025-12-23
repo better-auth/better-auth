@@ -214,19 +214,17 @@ describe("SSO provider read endpoints", () => {
 				}),
 			});
 
-			const response = await auth.api.listSSOProviders({ headers: ownerHeaders });
+			const response = await auth.api.listSSOProviders({
+				headers: ownerHeaders,
+			});
 
 			expect(response.providers).toHaveLength(1);
 			expect(response.providers[0]!.providerId).toBe("my-saml-provider");
 		});
 
 		it("should return providers for org admin when org plugin enabled", async () => {
-			const {
-				auth,
-				getAuthHeaders,
-				createOrganization,
-				registerSAMLProvider,
-			} = createTestAuth(true);
+			const { auth, getAuthHeaders, createOrganization, registerSAMLProvider } =
+				createTestAuth(true);
 
 			const adminHeaders = await getAuthHeaders({
 				email: "admin@example.com",
@@ -238,19 +236,17 @@ describe("SSO provider read endpoints", () => {
 
 			await registerSAMLProvider(adminHeaders, "org-saml-provider", org!.id);
 
-			const response = await auth.api.listSSOProviders({ headers: adminHeaders });
+			const response = await auth.api.listSSOProviders({
+				headers: adminHeaders,
+			});
 
 			expect(response.providers).toHaveLength(1);
 			expect(response.providers[0]!.providerId).toBe("org-saml-provider");
 		});
 
 		it("should return providers for org owner", async () => {
-			const {
-				auth,
-				getAuthHeaders,
-				createOrganization,
-				registerSAMLProvider,
-			} = createTestAuth(true);
+			const { auth, getAuthHeaders, createOrganization, registerSAMLProvider } =
+				createTestAuth(true);
 
 			const ownerHeaders = await getAuthHeaders({
 				email: "owner@example.com",
@@ -262,7 +258,9 @@ describe("SSO provider read endpoints", () => {
 
 			await registerSAMLProvider(ownerHeaders, "org-saml-provider", org!.id);
 
-			const response = await auth.api.listSSOProviders({ headers: ownerHeaders });
+			const response = await auth.api.listSSOProviders({
+				headers: ownerHeaders,
+			});
 
 			expect(response.providers).toHaveLength(1);
 			expect(response.providers[0]!.providerId).toBe("org-saml-provider");
@@ -304,7 +302,9 @@ describe("SSO provider read endpoints", () => {
 				createdAt: new Date(),
 			});
 
-			const response = await auth.api.listSSOProviders({ headers: multiHeaders });
+			const response = await auth.api.listSSOProviders({
+				headers: multiHeaders,
+			});
 
 			expect(response.providers).toHaveLength(1);
 		});
@@ -341,7 +341,9 @@ describe("SSO provider read endpoints", () => {
 
 			await addMember(memberUser!.id, org!.id, "member", creatorHeaders);
 
-			const response = await auth.api.listSSOProviders({ headers: memberHeaders });
+			const response = await auth.api.listSSOProviders({
+				headers: memberHeaders,
+			});
 
 			expect(response.providers).toHaveLength(0);
 		});
@@ -420,7 +422,9 @@ describe("SSO provider read endpoints", () => {
 			expect(response.type).toBe("saml");
 			expect(response.issuer).toBe("https://idp.example.com");
 			expect(response.samlConfig).toBeDefined();
-			expect(response.samlConfig?.entryPoint).toBe("https://idp.example.com/sso");
+			expect(response.samlConfig?.entryPoint).toBe(
+				"https://idp.example.com/sso",
+			);
 			expect(response.samlConfig?.certificate).toBeDefined();
 			expect(response.spMetadataUrl).toContain("/sso/saml2/sp/metadata");
 		});
@@ -438,7 +442,11 @@ describe("SSO provider read endpoints", () => {
 			const user = (data.user as { id: string; email: string }[]).find(
 				(u) => u.email === "owner@example.com",
 			);
-			createOIDCProviderData(user!.id, "my-oidc-provider", "my-client-id-12345");
+			createOIDCProviderData(
+				user!.id,
+				"my-oidc-provider",
+				"my-client-id-12345",
+			);
 
 			const response = await auth.api.getSSOProvider({
 				params: { providerId: "my-oidc-provider" },

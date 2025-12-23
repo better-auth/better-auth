@@ -1,4 +1,8 @@
-import { APIError, createAuthEndpoint, sessionMiddleware } from "better-auth/api";
+import {
+	APIError,
+	createAuthEndpoint,
+	sessionMiddleware,
+} from "better-auth/api";
 import z from "zod/v4";
 import type { Member, OIDCConfig, SAMLConfig } from "../types";
 import { maskClientId, parseCertificate, safeJsonParse } from "../utils";
@@ -88,7 +92,7 @@ function sanitizeProvider(
 					certificate: parseCertificate(samlConfig.cert),
 				}
 			: undefined,
-		spMetadataUrl: `${baseURL}/sso/saml2/sp/metadata?providerId=${provider.providerId}`,
+		spMetadataUrl: `${baseURL}/sso/saml2/sp/metadata?providerId=${encodeURIComponent(provider.providerId)}`,
 	};
 }
 
@@ -102,8 +106,7 @@ export const listSSOProviders = () => {
 				openapi: {
 					operationId: "listSSOProviders",
 					summary: "List SSO providers",
-					description:
-						"Returns a list of SSO providers the user has access to",
+					description: "Returns a list of SSO providers the user has access to",
 					responses: {
 						"200": {
 							description: "List of SSO providers",
@@ -172,8 +175,7 @@ export const getSSOProvider = () => {
 				openapi: {
 					operationId: "getSSOProvider",
 					summary: "Get SSO provider details",
-					description:
-						"Returns sanitized details for a specific SSO provider",
+					description: "Returns sanitized details for a specific SSO provider",
 					responses: {
 						"200": {
 							description: "SSO provider details",
@@ -234,4 +236,3 @@ export const getSSOProvider = () => {
 		},
 	);
 };
-
