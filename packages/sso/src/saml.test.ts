@@ -1791,8 +1791,6 @@ describe("SAML SSO", async () => {
 		expect(redirectLocation).not.toContain("error=");
 	});
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 	it("should enable validation automatically when custom authnRequestStore is provided", async () => {
 		const customStore = createInMemoryAuthnRequestStore();
 
@@ -3151,8 +3149,6 @@ describe("SAML SSO - Timestamp Validation", () => {
 	});
 });
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 describe("SAML ACS Origin Check Bypass", () => {
 	const mockIdP = createMockSAMLIdP(8081);
 
