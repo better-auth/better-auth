@@ -343,3 +343,10 @@ export interface SSOOptions {
 		algorithms?: AlgorithmValidationOptions;
 	};
 }
+
+export interface Member {
+	id: string;
+	userId: string;
+	organizationId: string;
+	role: string;
+}
