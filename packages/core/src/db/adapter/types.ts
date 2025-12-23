@@ -111,9 +111,19 @@ export type AdapterFactoryCustomizeAdapterCreator = (config: {
 	transformWhereClause: <W extends Where[] | undefined>({
 		model,
 		where,
+		action,
 	}: {
 		where: W;
 		model: string;
+		action:
+			| "create"
+			| "update"
+			| "findOne"
+			| "findMany"
+			| "updateMany"
+			| "delete"
+			| "deleteMany"
+			| "count";
 	}) => W extends undefined ? undefined : CleanedWhere[];
 }) => CustomAdapter;
 
