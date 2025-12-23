@@ -48,7 +48,7 @@ import {
 	discoverOIDCConfig,
 	mapDiscoveryErrorToAPIError,
 } from "../oidc";
-import { validateSAMLAlgorithms } from "../saml";
+import { validateConfigAlgorithms, validateSAMLAlgorithms } from "../saml";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
 import { safeJsonParse, validateEmailDomain } from "../utils";
 
@@ -797,6 +797,16 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				});
 			};
 
+			if (body.samlConfig) {
+				validateConfigAlgorithms(
+					{
+						signatureAlgorithm: body.samlConfig.signatureAlgorithm,
+						digestAlgorithm: body.samlConfig.digestAlgorithm,
+					},
+					options?.saml?.algorithms,
+				);
+			}
+
 			const provider = await ctx.context.adapter.create<
 				Record<string, any>,
 				SSOProvider<O>
@@ -853,14 +863,20 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				});
 			}
 
+			type SSOProviderResponse = {
+				redirectURI: string;
+				oidcConfig: OIDCConfig | null;
+				samlConfig: SAMLConfig | null;
+			} & Omit<SSOProvider<O>, "oidcConfig" | "samlConfig">;
+
 			type SSOProviderReturn = O["domainVerification"] extends { enabled: true }
-				? {
+				? SSOProviderResponse & {
 						domainVerified: boolean;
 						domainVerificationToken: string;
-					} & SSOProvider<O>
-				: SSOProvider<O>;
+					}
+				: SSOProviderResponse;
 
-			return ctx.json({
+			const result = {
 				...provider,
 				oidcConfig: safeJsonParse<OIDCConfig>(
 					provider.oidcConfig as unknown as string,
@@ -873,7 +889,9 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				...(options?.domainVerification?.enabled
 					? { domainVerificationToken }
 					: {}),
-			} as unknown as SSOProviderReturn);
+			};
+
+			return ctx.json(result as SSOProviderReturn);
 		},
 	);
 };

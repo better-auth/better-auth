@@ -1,9 +1,11 @@
 import type { BetterAuthClientOptions } from "@better-auth/core";
-import type { BetterFetch } from "@better-fetch/fetch";
+import type { Session, User } from "@better-auth/core/db";
+import type { BetterFetch, BetterFetchError } from "@better-fetch/fetch";
 import type { WritableAtom } from "nanostores";
 import { getGlobalBroadcastChannel } from "./broadcast-channel";
 import { getGlobalFocusManager } from "./focus-manager";
 import { getGlobalOnlineManager } from "./online-manager";
+import type { AuthQueryAtom } from "./query";
 
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -13,7 +15,10 @@ const now = () => Math.floor(Date.now() / 1000);
 const FOCUS_REFETCH_RATE_LIMIT_SECONDS = 5;
 
 export interface SessionRefreshOptions {
-	sessionAtom: WritableAtom<any>;
+	sessionAtom: AuthQueryAtom<{
+		user: User;
+		session: Session;
+	}>;
 	sessionSignal: WritableAtom<boolean>;
 	$fetch: BetterFetch;
 	options?: BetterAuthClientOptions | undefined;
@@ -67,13 +72,24 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 
 		if (event?.event === "poll") {
 			state.lastSessionRequest = now();
-			$fetch("/get-session")
+			$fetch<{
+				user: User;
+				session: Session;
+			}>("/get-session")
 				.then((res) => {
-					sessionAtom.set({
-						...currentSession,
-						data: res.data,
-						error: res.error || null,
-					});
+					if (res.error) {
+						sessionAtom.set({
+							...currentSession,
+							data: null,
+							error: res.error as BetterFetchError | null,
+						});
+					} else {
+						sessionAtom.set({
+							...currentSession,
+							data: res.data,
+							error: null,
+						});
+					}
 					state.lastSync = now();
 					sessionSignal.set(!sessionSignal.get());
 				})
