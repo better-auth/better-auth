@@ -10,6 +10,7 @@ import {
 } from "@better-auth/core/context";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import type { InternalLogger } from "@better-auth/core/env";
+import { isDevelopment } from "@better-auth/core/env";
 import { generateId, safeJSONParse } from "@better-auth/core/utils";
 import type { Account, Session, User, Verification } from "../types";
 import { getDate } from "../utils/date";
@@ -426,7 +427,17 @@ export const createInternalAdapter = (
 			if (!result) return null;
 
 			const { user, ...session } = result;
-			if (!user) return null;
+			if (!user) {
+				if (isDevelopment()) {
+					logger.error(
+						`Session found (token: ${token.substring(0, 8)}...) but user data is missing. ` +
+							`This indicates your database adapter is not properly implementing the 'join' functionality. ` +
+							`Please ensure your adapter's findOne method returns null when join data cannot be retrieved, ` +
+							`or properly joins the user table with the session.`,
+					);
+				}
+				return null;
+			}
 			const parsedSession = parseSessionOutput(ctx.options, session);
 			const parsedUser = parseUserOutput(ctx.options, user);
 			return {

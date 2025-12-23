@@ -6,6 +6,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import { isDevelopment } from "@better-auth/core/env";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils";
 import { base64Url } from "@better-auth/utils/base64";
@@ -339,6 +340,20 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					await ctx.context.internalAdapter.findSession(sessionCookieToken);
 				ctx.context.session = session;
 				if (!session || session.session.expiresAt < new Date()) {
+					if (isDevelopment()) {
+						if (!session) {
+							ctx.context.logger.debug(
+								`Session lookup returned null for token ${sessionCookieToken.substring(0, 8)}... ` +
+									`This could mean: (1) session doesn't exist in database, ` +
+									`(2) user join data is missing (adapter issue), or ` +
+									`(3) database error occurred.`,
+							);
+						} else if (session.session.expiresAt < new Date()) {
+							ctx.context.logger.debug(
+								`Session expired. Expired at: ${session.session.expiresAt.toISOString()}`,
+							);
+						}
+					}
 					deleteSessionCookie(ctx);
 					if (session) {
 						/**
