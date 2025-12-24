@@ -62,7 +62,7 @@ export const oauthProviderResourceClient = <T extends Auth | undefined>(
 						opts?.jwksUrl ??
 						jwtPluginOptions?.jwks?.remoteUrl ??
 						(authServerBaseUrl
-							? `${authServerBaseUrl + (authServerBasePath ?? "")}/${jwtPluginOptions?.jwks?.jwksPath ?? "jwks"}`
+							? `${authServerBaseUrl + (authServerBasePath ?? "")}${jwtPluginOptions?.jwks?.jwksPath ?? "/jwks"}`
 							: undefined);
 					const introspectUrl =
 						opts?.remoteVerify?.introspectUrl ??

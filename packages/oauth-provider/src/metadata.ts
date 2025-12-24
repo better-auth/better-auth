@@ -28,7 +28,7 @@ export function authServerMetadata(
 		jwks_uri: overrides?.jwt_disabled
 			? undefined
 			: (opts?.jwks?.remoteUrl ??
-				`${baseURL}/${opts?.jwks?.jwksPath ?? "jwks"}`),
+				`${baseURL}${opts?.jwks?.jwksPath ?? "/jwks"}`),
 		registration_endpoint: `${baseURL}/oauth2/register`,
 		introspection_endpoint: `${baseURL}/oauth2/introspect`,
 		revocation_endpoint: `${baseURL}/oauth2/revoke`,
