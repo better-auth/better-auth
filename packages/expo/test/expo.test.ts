@@ -151,7 +151,7 @@ describe("expo", async () => {
 		);
 
 		// Simulate malformed cookie header starting with semicolon
-		const malformedHeader = "; etigo.state=xyz; Path=/";
+		const malformedHeader = "; abc.state=xyz; Path=/";
 		const parsed = parseSetCookieHeader(malformedHeader);
 		expect(parsed.has("")).toBe(false);
 
@@ -163,15 +163,15 @@ describe("expo", async () => {
 
 		// Test that existing session cookies are preserved when malformed cookies arrive
 		const prevCookie = JSON.stringify({
-			"etigo.session_token": {
+			"abc.session_token": {
 				value: "valid-token",
 				expires: new Date(Date.now() + 1000 * 60 * 60).toISOString(),
 			},
 		});
 		const result = getSetCookie(malformedHeader, prevCookie);
 		const resultParsed = JSON.parse(result);
-		expect(resultParsed["etigo.session_token"]).toBeDefined();
-		expect(resultParsed["etigo.session_token"].value).toBe("valid-token");
+		expect(resultParsed["abc.session_token"]).toBeDefined();
+		expect(resultParsed["abc.session_token"].value).toBe("valid-token");
 	});
 
 	it("should not trigger infinite refetch with non-better-auth cookies", async () => {
