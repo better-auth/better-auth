@@ -68,6 +68,7 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@better-auth/utils": "catalog:",
     "@types/body-parser": "^1.19.6",
     "@types/express": "^5.0.5",
     "better-auth": "workspace:*",
