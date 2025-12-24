@@ -6,6 +6,7 @@ import {
 	runWithRequestState,
 } from "@better-auth/core/context";
 import { shouldPublishLog } from "@better-auth/core/env";
+import { APIError } from "@better-auth/core/error";
 import type {
 	EndpointContext,
 	EndpointOptions,
@@ -33,6 +34,11 @@ const defuReplaceArrays = createDefu((obj, key, value) => {
 		return true;
 	}
 });
+
+const hooksSourceWeakMap = new WeakMap<
+	AuthMiddleware,
+	`user` | `plugin:${string}`
+>();
 
 type UserInputContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>
@@ -199,7 +205,6 @@ async function runBeforeHooks(
 	hooks: {
 		matcher: (context: HookEndpointContext) => boolean;
 		handler: AuthMiddleware;
-		source: `user` | `plugin:${string}`;
 	}[],
 ) {
 	let modifiedContext: Partial<InternalContext> = {};
@@ -211,8 +216,9 @@ async function runBeforeHooks(
 		} catch (error) {
 			// manually handle unexpected errors during hook matcher execution to prevent accidental exposure of internal details
 			// Also provides debug information about which plugin the hook failed and error info
+			const hookSource = hooksSourceWeakMap.get(hook.handler) ?? "unknown";
 			context.context.logger.error(
-				`An error occured during ${hook.source} hook matcher execution:`,
+				`An error occurred during ${hookSource} hook matcher execution:`,
 				error,
 			);
 			throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -315,25 +321,25 @@ function getHooks(authContext: AuthContext) {
 	const beforeHooks: {
 		matcher: (context: HookEndpointContext) => boolean;
 		handler: AuthMiddleware;
-		source: `user` | `plugin:${string}`;
 	}[] = [];
 	const afterHooks: {
 		matcher: (context: HookEndpointContext) => boolean;
 		handler: AuthMiddleware;
-		source: `user` | `plugin:${string}`;
 	}[] = [];
-	if (authContext.options.hooks?.before) {
+	const beforeHookHandler = authContext.options.hooks?.before;
+	if (beforeHookHandler) {
+		hooksSourceWeakMap.set(beforeHookHandler, "user");
 		beforeHooks.push({
 			matcher: () => true,
-			handler: authContext.options.hooks.before,
-			source: "user",
+			handler: beforeHookHandler,
 		});
 	}
-	if (authContext.options.hooks?.after) {
+	const afterHookHandler = authContext.options.hooks?.after;
+	if (afterHookHandler) {
+		hooksSourceWeakMap.set(afterHookHandler, "user");
 		afterHooks.push({
 			matcher: () => true,
-			handler: authContext.options.hooks.after,
-			source: "user",
+			handler: afterHookHandler,
 		});
 	}
 	const pluginBeforeHooks = plugins
