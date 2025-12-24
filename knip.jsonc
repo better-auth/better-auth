@@ -10,6 +10,9 @@
 			"entry": ["src/index.ts"],
 			"project": ["src/**/*.ts!"]
 		},
+		"packages/prisma-adapter": {
+			"ignoreDependencies": ["@prisma/client"]
+		},
 		"packages/better-auth": {
 			"project": [
 				"src/**/*.ts!",
