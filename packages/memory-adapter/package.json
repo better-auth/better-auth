@@ -26,7 +26,6 @@
     "@better-auth/core": "workspace:*",
     "@better-auth/utils": "^0.3.0",
     "tsdown": "catalog:",
-    "typescript": "catalog:",
-    "vitest": "catalog:vitest"
+    "typescript": "catalog:"
   }
 }

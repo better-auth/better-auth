@@ -25,6 +25,7 @@ catalogs:
     tailwindcss-animate: ^1.0.7
   vitest:
     '@vitest/coverage-v8': ^4.0.15
+    '@vitest/ui': ^4.0.15
     vitest: ^4.0.15
 
 neverBuiltDependencies: []
