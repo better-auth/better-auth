@@ -21,7 +21,7 @@
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/utils": "^0.3.0",
-    "mongodb": "^6.0.0"
+    "mongodb": "^6.0.0 || ^7.0.0"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
