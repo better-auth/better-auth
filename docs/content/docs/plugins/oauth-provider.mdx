@@ -141,12 +141,12 @@ const authClient = createAuthClient({
 
 The Resource Server is a client that operates on your API server to perform actions like token verification and provide metadata.
 
-```ts title="client.ts"
-import { auth } from "@/lib/auth"; // optional
+```ts title="server-client.ts"
+import { auth } from "@/lib/auth";
 import { createAuthClient } from "better-auth/client";
 import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client"
-const authClient = createAuthClient({
-  plugins: [oauthProviderResourceClient(auth)],
+const serverClient = createAuthClient({
+  plugins: [oauthProviderResourceClient(auth)], // auth optional
 });
 ```
 
@@ -629,6 +629,54 @@ If you get a CORS issue when testing locally such as with the [MCP Inspector](ht
 This section shows how your API should verify tokens received from your clients.
 
 ### Verification
+
+Verification can be performed using `verifyAccessToken` available through the `oauthProviderResourceClient` plugin or `better-auth/oauth2` package.
+
+With `better-auth` package:
+
+```ts title="api/[endpoint].ts"
+import { verifyAccessToken } from "better-auth/oauth2";
+
+export const GET = async (req: Request) => {
+  const authorization = req.headers?.get("authorization") ?? undefined;
+  const accessToken = authorization?.startsWith("Bearer ")
+    ? authorization.replace("Bearer ", "")
+    : authorization;
+  const payload = await verifyAccessToken(
+    accessToken, {
+      verifyOptions: {
+        issuer: "https://auth.example.com",
+        audience: "https://api.example.com",
+      },
+      scopes: ["read:post"], // optional
+    }
+  );
+  // ...continue
+}
+```
+
+With `oauthProviderResourceClient` plugin:
+
+```ts title="api/[endpoint].ts"
+import { serverClient } from "@/lib/server-client";
+
+export const POST = async (req: Request) => {
+  const authorization = req.headers?.get("authorization") ?? undefined;
+  const accessToken = authorization?.startsWith("Bearer ")
+    ? authorization.replace("Bearer ", "")
+    : authorization;
+  const payload = await serverClient.verifyAccessToken(
+    accessToken, {
+      verifyOptions: {
+        issuer: "https://auth.example.com",
+        audience: "https://api.example.com",
+      },
+      scopes: ["write:post"], // optional
+    }
+  );
+  // ...continue
+}
+```
 
 #### JWT Verification
 
@@ -1198,12 +1246,12 @@ If you are using "openid" and confidential MCP clients, you cannot disable the J
     (Optional) If you have your auth configuration available locally, add the configuration as a parameter to the client to fill in these values and warn you about configuration errors. You can always override these values in the function call. If this is not supplied, typescript will guide you with the minimal configuration values needed.
 
     ```ts title="client.ts"
-    import { auth } from "@/lib/auth"; // optional
+    import { auth } from "@/lib/auth";
     import { createAuthClient } from "better-auth/client";
     import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client"
 
     const authClient = createAuthClient({
-      plugins: [oauthProviderResourceClient(auth)],
+      plugins: [oauthProviderResourceClient(auth)], // auth optional
     });
     ```
   </Step>
@@ -1257,38 +1305,20 @@ If you are using "openid" and confidential MCP clients, you cannot disable the J
 
     - Using the client `verifyAccessToken` function
 
-    ```ts title="api/[endpoint].ts"
-    import { authClient } from "@/lib/client";
-
-    export const GET = async (req: Request) => {
-      const authorization = req.headers?.get("authorization") ?? undefined;
-      const accessToken = authorization?.startsWith("Bearer ")
-        ? authorization.replace("Bearer ", "")
-        : authorization;
-      const payload = await authClient.verifyAccessToken(
-        accessToken, {
-          verifyOptions: {
-            issuer: "https://auth.example.com",
-            audience: "https://api.example.com",
-          },
-        }
-      );
-      // ...continue
-    }
-    ```
+    See [Verification](#verification) for verification examples.
 
     - With auth available, use the client `verifyAccessToken` function to automatically determine endpoints
 
     ```ts title="api/[endpoint].ts"
     import { auth } from "@/lib/auth";
-    import { authClient } from "@/lib/client";
+    import { serverClient } from "@/lib/server-client";
 
     export const GET = async (req: Request) => {
       const authorization = req.headers?.get("authorization") ?? undefined;
       const accessToken = authorization?.startsWith("Bearer ")
         ? authorization.replace("Bearer ", "")
         : authorization;
-      const payload = await authClient.verifyAccessToken(
+      const payload = await serverClient.verifyAccessToken(
         accessToken, {
           verifyOptions: {
             audience: "https://api.example.com",
@@ -1804,9 +1834,11 @@ const defaultHasher = async (value: string) => {
 
 Option 1 (simple):
 
-You may choose to opt-out of this table conversion with minimal impact. By doing so, existing users will simply need to login again. Simply delete the existing table `oauthAccessToken`.
+You may choose to opt-out of this table conversion with minimal impact. By doing so, existing application will simply need to login to your application. Simply delete the existing table `oauthAccessToken`.
 
 Option 2 (more complex):
+
+Migrate all tables (you may need to create a clone of `oauthAccessToken` into `oauthRefreshToken` before a migration).
 
 - Convert `oauthAccessToken` with `refreshToken` field into a new `oauthRefreshToken` entry.
 ```ts
