@@ -1100,6 +1100,30 @@ sso({
 - `RSA 1.5` (key encryption)
 - `3DES` (data encryption)
 
+### Size Limits
+
+Better Auth enforces size limits on SAML payloads to protect against denial-of-service attacks via oversized XML.
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `maxResponseSize` | 256KB | Maximum SAML response size in bytes |
+| `maxMetadataSize` | 100KB | Maximum IdP metadata size in bytes |
+
+#### Customizing Limits
+
+```ts title="auth.ts"
+sso({
+    saml: {
+        maxResponseSize: 512 * 1024, // 512KB for enterprise IdPs with large group claims
+        maxMetadataSize: 100 * 1024, // 100KB
+    },
+})
+```
+
+<Callout type="info">
+For true early rejection of oversized payloads (before they reach your application), configure size limits at your infrastructure level (nginx `client_max_body_size`, CDN settings, load balancer).
+</Callout>
+
 ## Domain verification
 
 Domain verification allows your application to automatically trust a new SSO provider
@@ -1400,6 +1424,16 @@ If you want to allow account linking for specific trusted providers, enable the 
                         default: "warn",
                     },
                 },
+            },
+            maxResponseSize: {
+                description: "Maximum allowed size for SAML responses in bytes.",
+                type: "number",
+                default: 262144,
+            },
+            maxMetadataSize: {
+                description: "Maximum allowed size for IdP metadata XML in bytes.",
+                type: "number",
+                default: 102400,
             },
         },
     },
