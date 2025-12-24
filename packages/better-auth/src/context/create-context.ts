@@ -164,7 +164,7 @@ Most of the features of Better Auth will not work correctly.`,
 						`Social provider ${key} is missing clientId or clientSecret`,
 					);
 				}
-				const provider = socialProviders[key](originalConfig as never);
+				const provider = socialProviders[key](config as never);
 				(provider as OAuthProvider).disableImplicitSignUp =
 					config.disableImplicitSignUp;
 				return provider as OAuthProvider;

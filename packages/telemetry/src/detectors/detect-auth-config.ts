@@ -1,7 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { TelemetryContext } from "../types";
 
-export function getTelemetryAuthConfig(
+export async function getTelemetryAuthConfig(
 	options: BetterAuthOptions,
 	context?: TelemetryContext | undefined,
 ) {
@@ -39,8 +39,8 @@ export function getTelemetryAuthConfig(
 			revokeSessionsOnPasswordReset:
 				!!options.emailAndPassword?.revokeSessionsOnPasswordReset,
 		},
-		socialProviders: Object.keys(options.socialProviders || {}).map(
-			async (key) => {
+		socialProviders: await Promise.all(
+			Object.keys(options.socialProviders || {}).map(async (key) => {
 				const p =
 					options.socialProviders?.[
 						key as keyof typeof options.socialProviders
@@ -48,7 +48,7 @@ export function getTelemetryAuthConfig(
 				if (!p) return {};
 				const provider = typeof p === "function" ? await p() : p;
 				return {
-					id: p,
+					id: key,
 					mapProfileToUser: !!provider.mapProfileToUser,
 					disableDefaultScope: !!provider.disableDefaultScope,
 					disableIdTokenSignIn: !!provider.disableIdTokenSignIn,
@@ -61,7 +61,7 @@ export function getTelemetryAuthConfig(
 					scope: provider.scope,
 					refreshAccessToken: !!provider.refreshAccessToken,
 				};
-			},
+			}),
 		),
 		plugins: options.plugins?.map((p) => p.id.toString()),
 		user: {
