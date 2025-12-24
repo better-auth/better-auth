@@ -112,7 +112,8 @@
         "**/*.test.*",
         "**/*.spec.*",
         "**/test/**",
-        "**/__tests__/**"
+        "**/__tests__/**",
+        "packages/sso/**"
       ],
       "linter": {
         "rules": {
