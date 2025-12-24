@@ -47,6 +47,7 @@
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@scalar/nextjs-api-reference": "^0.8.17",
+    "@tanstack/react-table": "^8.21.3",
     "@vercel/analytics": "^1.5.0",
     "@vercel/og": "^0.8.5",
     "ai": "^5.0.64",
