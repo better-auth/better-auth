@@ -14,7 +14,7 @@
   "dependencies": {
     "@ai-sdk/openai-compatible": "^1.0.20",
     "@ai-sdk/react": "^2.0.64",
-    "@better-auth/utils": "0.3.0",
+    "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
     "@hookform/resolvers": "^5.2.1",
     "@oramacloud/client": "^2.1.4",
@@ -97,20 +97,22 @@
     "shiki": "^3.13.0",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.3.1",
-    "tailwindcss-animate": "^1.0.7",
+    "tailwindcss-animate": "catalog:tailwind",
     "unist-util-visit": "^5.0.0",
     "vaul": "^1.1.2",
     "zod": "^4.1.12"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.1.13",
+    "@tailwindcss/postcss": "catalog:tailwind",
+    "@types/hast": "^3.0.4",
+    "@types/js-beautify": "^1.14.3",
     "@types/jsrsasign": "^10.5.15",
     "@types/mdx": "^2.0.13",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
     "mini-svg-data-uri": "^1.4.4",
     "postcss": "^8.5.6",
-    "tailwindcss": "^4.1.13",
+    "tailwindcss": "catalog:tailwind",
     "typescript": "catalog:"
   }
 }

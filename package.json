@@ -11,7 +11,7 @@
     "lint": "biome check .",
     "lint:dependencies": "knip --strict",
     "lint:fix": "biome check . --fix --unsafe",
-    "lint:spell": "cspell .",
+    "lint:spell": "cspell . --color",
     "lint:types": "turbo lint:types --filter=./packages/*",
     "lint:packages": "turbo lint:package --filter=./packages/*",
     "release": "turbo build --filter=./packages/* && bumpp && pnpm -r publish --access public --no-git-checks",
