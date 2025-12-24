@@ -37,6 +37,8 @@ import {
 	DEFAULT_ASSERTION_TTL_MS,
 	DEFAULT_AUTHN_REQUEST_TTL_MS,
 	DEFAULT_CLOCK_SKEW_MS,
+	DEFAULT_MAX_SAML_METADATA_SIZE,
+	DEFAULT_MAX_SAML_RESPONSE_SIZE,
 	USED_ASSERTION_KEY_PREFIX,
 } from "../constants";
 import { assignOrganizationFromProvider } from "../linking";
@@ -666,6 +668,20 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 					message: "Invalid issuer. Must be a valid URL",
 				});
 			}
+
+			if (body.samlConfig?.idpMetadata?.metadata) {
+				const maxMetadataSize =
+					options?.saml?.maxMetadataSize ?? DEFAULT_MAX_SAML_METADATA_SIZE;
+				if (
+					new TextEncoder().encode(body.samlConfig.idpMetadata.metadata)
+						.length > maxMetadataSize
+				) {
+					throw new APIError("BAD_REQUEST", {
+						message: `IdP metadata exceeds maximum allowed size (${maxMetadataSize} bytes)`,
+					});
+				}
+			}
+
 			if (ctx.body.organizationId) {
 				const organization = await ctx.context.adapter.findOne({
 					model: "member",
@@ -1698,6 +1714,15 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 		async (ctx) => {
 			const { SAMLResponse, RelayState } = ctx.body;
 			const { providerId } = ctx.params;
+
+			const maxResponseSize =
+				options?.saml?.maxResponseSize ?? DEFAULT_MAX_SAML_RESPONSE_SIZE;
+			if (new TextEncoder().encode(SAMLResponse).length > maxResponseSize) {
+				throw new APIError("BAD_REQUEST", {
+					message: `SAML response exceeds maximum allowed size (${maxResponseSize} bytes)`,
+				});
+			}
+
 			let provider: SSOProvider<SSOOptions> | null = null;
 			if (options?.defaultSSO?.length) {
 				const matchingDefault = options.defaultSSO.find(
@@ -2136,6 +2161,14 @@ export const acsEndpoint = (options?: SSOOptions) => {
 		async (ctx) => {
 			const { SAMLResponse, RelayState = "" } = ctx.body;
 			const { providerId } = ctx.params;
+
+			const maxResponseSize =
+				options?.saml?.maxResponseSize ?? DEFAULT_MAX_SAML_RESPONSE_SIZE;
+			if (new TextEncoder().encode(SAMLResponse).length > maxResponseSize) {
+				throw new APIError("BAD_REQUEST", {
+					message: `SAML response exceeds maximum allowed size (${maxResponseSize} bytes)`,
+				});
+			}
 
 			// If defaultSSO is configured, use it as the provider
 			let provider: SSOProvider<SSOOptions> | null = null;
