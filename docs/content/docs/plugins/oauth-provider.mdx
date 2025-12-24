@@ -132,7 +132,7 @@ The OAuth Client is the connecting `oauthClient` such a mobile or web applicatio
 ```ts title="client.ts"
 import { createAuthClient } from "better-auth/client";
 import { oauthProviderClient } from "@better-auth/oauth-provider/client"
-const authClient = createAuthClient({
+export const authClient = createAuthClient({
   plugins: [oauthProviderClient()],
 });
 ```
@@ -145,7 +145,7 @@ The Resource Server is a client that operates on your API server to perform acti
 import { auth } from "@/lib/auth";
 import { createAuthClient } from "better-auth/client";
 import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client"
-const serverClient = createAuthClient({
+export const serverClient = createAuthClient({
   plugins: [oauthProviderResourceClient(auth)], // auth optional
 });
 ```
@@ -1245,12 +1245,12 @@ If you are using "openid" and confidential MCP clients, you cannot disable the J
 
     (Optional) If you have your auth configuration available locally, add the configuration as a parameter to the client to fill in these values and warn you about configuration errors. You can always override these values in the function call. If this is not supplied, typescript will guide you with the minimal configuration values needed.
 
-    ```ts title="client.ts"
+    ```ts title="server-client.ts"
     import { auth } from "@/lib/auth";
     import { createAuthClient } from "better-auth/client";
     import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client"
 
-    const authClient = createAuthClient({
+    export const serverClient = createAuthClient({
       plugins: [oauthProviderResourceClient(auth)], // auth optional
     });
     ```
@@ -1260,10 +1260,10 @@ If you are using "openid" and confidential MCP clients, you cannot disable the J
     ### Add OAuth Protected Resource Metadata to your API
 
     ```ts title="/.well-known/oauth-protected-resource/[resource-path]/route.ts"
-    import { authClient } from "@/lib/client";
+    import { serverClient } from "@/lib/server-client";
 
     export const GET = async () => {
-      const metadata = await authClient.getProtectedResourceMetadata({
+      const metadata = await serverClient.getProtectedResourceMetadata({
         resource: "https://api.example.com", // `aud` claim
         authorization_servers: ["https://auth.example.com"],
       })
@@ -1834,7 +1834,7 @@ const defaultHasher = async (value: string) => {
 
 Option 1 (simple):
 
-You may choose to opt-out of this table conversion with minimal impact. By doing so, existing application will simply need to login to your application. Simply delete the existing table `oauthAccessToken`.
+You may choose to opt-out of this table conversion with minimal impact. By doing so, users of the existing application will simply need to login again. Simply delete the existing table `oauthAccessToken`.
 
 Option 2 (more complex):
 
