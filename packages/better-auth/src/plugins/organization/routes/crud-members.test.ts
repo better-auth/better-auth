@@ -125,8 +125,23 @@ describe("listMembers", async () => {
 				).toISOString(),
 			},
 		});
-		expect(members.data?.members.length).toBe(0);
-		expect(members.data?.total).toBe(0);
+		expect(members.data?.members.length).toBe(11);
+		expect(members.data?.total).toBe(11);
+	});
+
+	it("should filter the members verifying the operator functionality", async () => {
+		const members = await client.organization.listMembers({
+			fetchOptions: {
+				headers,
+			},
+			query: {
+				filterField: "role",
+				filterOperator: "ne",
+				filterValue: "owner",
+			},
+		});
+		expect(members.data?.members.length).toBe(10);
+		expect(members.data?.total).toBe(10);
 	});
 
 	it("should sort the members", async () => {
@@ -221,7 +236,8 @@ describe("listMembers", async () => {
 		});
 		expect(members.error).toBeTruthy();
 		expect(members.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
+			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION
+				.message,
 		);
 	});
 });
@@ -341,7 +357,8 @@ describe("updateMemberRole", async () => {
 		);
 		expect(updatedMember.error).toBeTruthy();
 		expect(updatedMember.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
+			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER
+				.message,
 		);
 	});
 });
@@ -479,7 +496,9 @@ describe("inviteMember role validation", async () => {
 
 		expect(error).toBeTruthy();
 		expect(error?.status).toBe(400);
-		expect(error?.message).toContain(ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND);
+		expect(error?.message).toContain(
+			ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.message,
+		);
 	});
 
 	it("should succeed when inviting with a valid default role", async () => {

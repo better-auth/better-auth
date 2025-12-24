@@ -1080,6 +1080,21 @@ sso({
 })
 ```
 
+#### Supported Algorithms
+
+**Signature algorithms:**
+- `RSA-SHA256`, `RSA-SHA384`, `RSA-SHA512`
+- `ECDSA-SHA256`, `ECDSA-SHA384`, `ECDSA-SHA512`
+
+**Digest algorithms:**
+- `SHA256`, `SHA384`, `SHA512`
+
+**Deprecated (triggers warning/rejection):**
+- `RSA-SHA1` (signature)
+- `SHA1` (digest)
+- `RSA 1.5` (key encryption)
+- `3DES` (data encryption)
+
 ## Domain verification
 
 Domain verification allows your application to automatically trust a new SSO provider
