@@ -134,15 +134,16 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 				{
 					matcher(ctx) {
 						return (
-							ctx.path.startsWith("/sign-in") ||
-							ctx.path.startsWith("/sign-up") ||
-							ctx.path.startsWith("/callback") ||
-							ctx.path.startsWith("/oauth2/callback") ||
-							ctx.path.startsWith("/magic-link/verify") ||
-							ctx.path.startsWith("/email-otp/verify-email") ||
-							ctx.path.startsWith("/one-tap/callback") ||
-							ctx.path.startsWith("/passkey/verify-authentication") ||
-							ctx.path.startsWith("/phone-number/verify")
+							ctx.path?.startsWith("/sign-in") ||
+							ctx.path?.startsWith("/sign-up") ||
+							ctx.path?.startsWith("/callback") ||
+							ctx.path?.startsWith("/oauth2/callback") ||
+							ctx.path?.startsWith("/magic-link/verify") ||
+							ctx.path?.startsWith("/email-otp/verify-email") ||
+							ctx.path?.startsWith("/one-tap/callback") ||
+							ctx.path?.startsWith("/passkey/verify-authentication") ||
+							ctx.path?.startsWith("/phone-number/verify") ||
+							false
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
