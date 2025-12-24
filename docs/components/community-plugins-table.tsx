@@ -233,7 +233,7 @@ export const communityPlugins: CommunityPlugin[] = [
 		name: "better-auth-lark",
 		url: "https://github.com/uselark/better-auth-lark",
 		description:
-			"[Lark billing](https://docs.uselark.ai/) plugin that automatically creates customers and subscribes them to free plans on signup.",
+			"Lark billing plugin that automatically creates customers and subscribes them to free plans on signup.",
 		author: {
 			name: "Vijit",
 			github: "vijit-lark",
