@@ -700,7 +700,6 @@ export const createInternalAdapter = (
 					return;
 				}
 			}
-			console.log("Deleting session from database with token:", token);
 			await deleteWithHooks(
 				[{ field: "token", value: token }],
 				"session",
@@ -744,7 +743,6 @@ export const createInternalAdapter = (
 							);
 							if (parsed?.session.id) {
 								// delete session id mapping to token
-
 								await secondaryStorage.delete(
 									`session-id-${parsed.session.id}`,
 								);
@@ -765,7 +763,9 @@ export const createInternalAdapter = (
 							);
 							if (parsed?.session.id) {
 								// delete session id mapping to token
-								await secondaryStorage.delete(parsed?.session.id);
+								await secondaryStorage.delete(
+									`session-id-${parsed.session.id}`,
+								);
 							}
 						}
 					}

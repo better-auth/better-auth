@@ -489,7 +489,6 @@ describe("session storage", async () => {
 			expect(res.data?.status).toBe(true);
 			const response = await client.listSessions();
 			expect(response.data).toBe(null);
-			console.log("Store size after revoking session:", store);
 			// After revoking the only active session, both the session entry and the user's active-sessions record
 			// are removed from secondary storage, so the backing store is expected to be empty again.
 			expect(store.size).toBe(0);
