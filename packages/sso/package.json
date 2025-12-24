@@ -1,7 +1,7 @@
 {
   "name": "@better-auth/sso",
   "author": "Bereket Engida",
-  "version": "1.4.8-beta.7",
+  "version": "1.5.0-beta.1",
   "type": "module",
   "main": "dist/index.mjs",
   "types": "dist/index.d.mts",
@@ -61,7 +61,6 @@
     }
   },
   "dependencies": {
-    "@better-auth/utils": "0.3.0",
     "@better-fetch/fetch": "catalog:",
     "fast-xml-parser": "^5.2.5",
     "jose": "^6.1.0",

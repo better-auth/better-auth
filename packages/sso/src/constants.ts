@@ -40,3 +40,19 @@ export const DEFAULT_ASSERTION_TTL_MS = 15 * 60 * 1000;
  * - Distributed systems across timezones
  */
 export const DEFAULT_CLOCK_SKEW_MS = 5 * 60 * 1000;
+
+// ============================================================================
+// Size Limits (DoS Protection)
+// ============================================================================
+
+/**
+ * Default maximum size for SAML responses (256 KB).
+ * Protects against memory exhaustion from oversized SAML payloads.
+ */
+export const DEFAULT_MAX_SAML_RESPONSE_SIZE = 256 * 1024;
+
+/**
+ * Default maximum size for IdP metadata (100 KB).
+ * Protects against oversized metadata documents.
+ */
+export const DEFAULT_MAX_SAML_METADATA_SIZE = 100 * 1024;
