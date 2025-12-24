@@ -14,7 +14,7 @@
   "dependencies": {
     "@ai-sdk/openai-compatible": "^1.0.20",
     "@ai-sdk/react": "^2.0.64",
-    "@better-auth/utils": "0.3.0",
+    "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
     "@hookform/resolvers": "^5.2.1",
     "@oramacloud/client": "^2.1.4",

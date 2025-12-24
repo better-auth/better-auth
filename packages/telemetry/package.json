@@ -38,7 +38,7 @@
     "type-fest": "^5.2.0"
   },
   "dependencies": {
-    "@better-auth/utils": "0.3.0",
+    "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:"
   },
   "peerDependencies": {
