@@ -8,6 +8,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { isProduction, logger } from "@better-auth/core/env";
+import { safeJSONParse } from "@better-auth/core/utils";
 import { getWebcryptoSubtle } from "@better-auth/utils";
 import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
@@ -29,7 +30,6 @@ import { oidcProvider } from "../oidc-provider";
 import { schema } from "../oidc-provider/schema";
 import { parsePrompt } from "../oidc-provider/utils/prompt";
 import { authorizeMCPOAuth } from "./authorize";
-import { safeJSONParse } from "@better-auth/core/utils";
 
 interface MCPOptions {
 	loginPage: string;
