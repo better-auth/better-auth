@@ -518,6 +518,53 @@ export const createInternalAdapter = (
 										...parsedSession.session,
 										...data,
 									};
+									const now = Date.now();
+									const expiresMs = new Date(
+										updatedSession.expiresAt,
+									).getTime();
+									const sessionTTL = Math.max(
+										Math.floor((expiresMs - now) / 1000),
+										0,
+									);
+									if (sessionTTL > 0) {
+										// 1) Write back the updated session with refreshed TTL
+										await secondaryStorage.set(
+											sessionToken,
+											JSON.stringify({
+												session: updatedSession,
+												user: parsedSession.user,
+											}),
+											sessionTTL,
+										);
+										// 2) Update active-sessions list and its TTL based on furthest exp
+										const listKey = `active-sessions-${updatedSession.userId}`;
+										const listRaw = await secondaryStorage.get(listKey);
+										let list: { token: string; expiresAt: number }[] = listRaw
+											? safeJSONParse(listRaw) || []
+											: [];
+
+										// keep only non-expired and replace this token's entry
+										const filtered = list
+											.filter(
+												(s) => s.token !== sessionToken && s.expiresAt > now,
+											)
+											.concat([{ token: sessionToken, expiresAt: expiresMs }]);
+
+										const sorted = filtered.toSorted(
+											(a, b) => a.expiresAt - b.expiresAt,
+										);
+										const furthest = sorted.at(-1)?.expiresAt;
+
+										if (furthest && furthest > now) {
+											await secondaryStorage.set(
+												listKey,
+												JSON.stringify(sorted),
+												Math.floor((furthest - now) / 1000),
+											);
+										} else {
+											await secondaryStorage.delete(listKey);
+										}
+									}
 									return updatedSession;
 								} else {
 									return null;
