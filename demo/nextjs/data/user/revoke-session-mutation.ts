@@ -4,7 +4,8 @@ import { authClient } from "@/lib/auth-client";
 import { userKeys } from "./keys";
 
 interface RevokeSessionParams {
-	token: string;
+	token?: string;
+	sessionId?: string;
 }
 
 export async function revokeSession(params: RevokeSessionParams) {
