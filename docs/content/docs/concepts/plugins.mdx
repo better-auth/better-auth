@@ -176,10 +176,10 @@ The key is the column name and the value is the column definition. The column de
 
 `unique`: if the field should be unique. (default: `false`)
 
-`reference`: if the field is a reference to another table. (default: `null`) It takes an object with the following properties:
+`references`: if the field is a reference to another table. (optional) It takes an object with the following properties:
     - `model`: The table name to reference.
     - `field`: The field name to reference.
-    - `onDelete`: The action to take when the referenced record is deleted. (default: `null`)
+    - `onDelete`: The action to take when the referenced record is deleted. (default: `cascade`)
 
 **Other Schema Properties**
 
