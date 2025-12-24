@@ -36,7 +36,9 @@ export async function rpInitiatedLogoutEndpoint(
 		? undefined
 		: getJwtPlugin(ctx.context);
 	const jwtPluginOptions = jwtPlugin?.options;
-	const jwksUrl = jwtPluginOptions?.jwks?.remoteUrl ?? `${baseURL}/jwks`;
+	const jwksUrl =
+		jwtPluginOptions?.jwks?.remoteUrl ??
+		`${baseURL}/${jwtPluginOptions?.jwks?.jwksPath ?? "jwks"}`;
 
 	let clientId = client_id;
 	if (!clientId) {
