@@ -29,6 +29,7 @@ import { oidcProvider } from "../oidc-provider";
 import { schema } from "../oidc-provider/schema";
 import { parsePrompt } from "../oidc-provider/utils/prompt";
 import { authorizeMCPOAuth } from "./authorize";
+import { safeJSONParse } from "@better-auth/core/utils";
 
 interface MCPOptions {
 	loginPage: string;
@@ -209,7 +210,11 @@ export const mcp = (options: MCPOptions) => {
 						if (!session) {
 							return;
 						}
-						ctx.query = JSON.parse(cookie);
+						const parsedCookie = safeJSONParse<Record<string, string>>(cookie);
+						if (!parsedCookie) {
+							return;
+						}
+						ctx.query = parsedCookie;
 
 						// Remove "login" from prompt since user just logged in
 						const promptSet = parsePrompt(String(ctx.query?.prompt));
