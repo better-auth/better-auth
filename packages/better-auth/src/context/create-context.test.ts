@@ -1259,7 +1259,7 @@ describe("base context creation", () => {
 			vi.stubEnv("AUTH_SECRET", "");
 			const originalNodeEnv = process.env.NODE_ENV;
 			const log = vi.fn();
-			const res = await initBase({
+			await initBase({
 				logger: {
 					level: "warn",
 					log,
