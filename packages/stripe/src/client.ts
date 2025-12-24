@@ -30,6 +30,7 @@ export const stripeClient = <
 		pathMethods: {
 			"/subscription/restore": "POST",
 			"/subscription/billing-portal": "POST",
+			"/subscription/restore": "POST",
 		},
 	} satisfies BetterAuthClientPlugin;
 };
