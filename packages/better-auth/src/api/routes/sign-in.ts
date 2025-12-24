@@ -208,7 +208,9 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 				},
 			},
 		},
-		async (c): Promise<
+		async (
+			c,
+		): Promise<
 			| { redirect: boolean; url: string }
 			| { redirect: boolean; token: string; url: undefined; user: InferUser<O> }
 		> => {

@@ -5,12 +5,12 @@ import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 
 import * as z from "zod";
+import { getAwaitableValue } from "../../context/helpers";
 import {
 	getAccountCookie,
 	setAccountCookie,
 } from "../../cookies/session-store";
 import { parseAccountOutput } from "../../db/schema";
-import { getAwaitableValue } from "../../context/helpers";
 import { generateState } from "../../oauth2/state";
 import { decryptOAuthToken, setTokenUtil } from "../../oauth2/utils";
 import {
@@ -559,7 +559,10 @@ export const getAccessToken = createAuthEndpoint(
 				const updatedData = {
 					accessToken: await setTokenUtil(newTokens?.accessToken, ctx.context),
 					accessTokenExpiresAt: newTokens?.accessTokenExpiresAt,
-					refreshToken: await setTokenUtil(newTokens?.refreshToken, ctx.context),
+					refreshToken: await setTokenUtil(
+						newTokens?.refreshToken,
+						ctx.context,
+					),
 					refreshTokenExpiresAt: newTokens?.refreshTokenExpiresAt,
 				};
 				let updatedAccount: Record<string, any> | null = null;
