@@ -130,7 +130,7 @@ describe("custom rate limiting storage", async () => {
 
 	it("should use custom storage", async () => {
 		await client.getSession();
-		expect(store.size).toBe(3);
+		expect(store.size).toBe(4);
 		let lastRequest = Date.now();
 		for (let i = 0; i < 4; i++) {
 			const response = await client.signIn.email({

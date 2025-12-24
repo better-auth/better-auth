@@ -99,6 +99,7 @@ exports[`base context creation > should match config 1`] = `
     "findAccounts": [Function],
     "findOAuthUser": [Function],
     "findSession": [Function],
+    "findSessionBySessionId": [Function],
     "findSessions": [Function],
     "findUserByEmail": [Function],
     "findUserById": [Function],
