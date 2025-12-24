@@ -2819,4 +2819,470 @@ describe("stripe", () => {
 			expect(user?.stripeCustomerId).toBeDefined();
 		});
 	});
+
+	describe("Payment Link Support", () => {
+		it("should create subscription from payment link", async () => {
+			const userRes = await authClient.signUp.email(
+				{
+					...testUser,
+					email: "payment-link@email.com",
+				},
+				{
+					throw: true,
+				},
+			);
+
+			// Simulate payment link checkout session completed event
+			const checkoutSessionEvent = {
+				type: "checkout.session.completed",
+				data: {
+					object: {
+						mode: "subscription",
+						subscription: "sub_payment_link_123",
+						payment_link: "plink_test123",
+						customer: "cus_payment_link_123",
+						customer_details: {
+							email: "payment-link@email.com",
+						},
+						client_reference_id: null,
+						metadata: {},
+					},
+				},
+			};
+
+			const mockSubscription = {
+				id: "sub_payment_link_123",
+				status: "active",
+				items: {
+					data: [
+						{
+							price: { id: process.env.STRIPE_PRICE_ID_1 },
+							quantity: 1,
+							current_period_start: Math.floor(Date.now() / 1000),
+							current_period_end:
+								Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+						},
+					],
+				},
+				current_period_start: Math.floor(Date.now() / 1000),
+				current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+				trial_start: null,
+				trial_end: null,
+			};
+
+			const stripeForTest = {
+				...stripeOptions.stripeClient,
+				subscriptions: {
+					...stripeOptions.stripeClient.subscriptions,
+					retrieve: vi.fn().mockResolvedValue(mockSubscription),
+				},
+				webhooks: {
+					constructEventAsync: vi.fn().mockResolvedValue(checkoutSessionEvent),
+				},
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeForTest as unknown as Stripe,
+				stripeWebhookSecret: "test_secret",
+			};
+
+			const testAuth = betterAuth({
+				baseURL: "http://localhost:3000",
+				database: memory,
+				emailAndPassword: {
+					enabled: true,
+				},
+				plugins: [stripe(testOptions)],
+			});
+
+			const testCtx = await testAuth.$context;
+
+			const mockRequest = new Request(
+				"http://localhost:3000/api/auth/stripe/webhook",
+				{
+					method: "POST",
+					headers: {
+						"stripe-signature": "test_signature",
+					},
+					body: JSON.stringify(checkoutSessionEvent),
+				},
+			);
+
+			const response = await testAuth.handler(mockRequest);
+			expect(response.status).toBe(200);
+
+			// Verify user was updated with Stripe customer ID
+			const updatedUser = await testCtx.adapter.findOne<
+				User & { stripeCustomerId?: string }
+			>({
+				model: "user",
+				where: [
+					{
+						field: "id",
+						value: userRes.user.id,
+					},
+				],
+			});
+			expect(updatedUser?.stripeCustomerId).toBe("cus_payment_link_123");
+
+			// Verify subscription was created
+			const subscription = await testCtx.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: [
+					{
+						field: "referenceId",
+						value: userRes.user.id,
+					},
+				],
+			});
+			expect(subscription).toMatchObject({
+				referenceId: userRes.user.id,
+				stripeCustomerId: "cus_payment_link_123",
+				status: "active",
+				plan: "starter",
+				seats: 1,
+				stripeSubscriptionId: "sub_payment_link_123",
+			});
+		});
+
+		it("should not create subscription from payment link for unverified user when verification required", async () => {
+			// Create user without verification
+			const userRes = await authClient.signUp.email(
+				{
+					...testUser,
+					email: "unverified-payment@email.com",
+				},
+				{
+					throw: true,
+				},
+			);
+
+			// Ensure user is NOT verified and has no Stripe customer ID
+			await ctx.adapter.update({
+				model: "user",
+				update: {
+					emailVerified: false,
+					stripeCustomerId: null,
+				},
+				where: [
+					{
+						field: "id",
+						value: userRes.user.id,
+					},
+				],
+			});
+			const checkoutSessionEvent = {
+				type: "checkout.session.completed",
+				data: {
+					object: {
+						mode: "subscription",
+						subscription: "sub_unverified_123",
+						payment_link: "plink_test456",
+						customer: "cus_unverified_123",
+						customer_details: {
+							email: "unverified-payment@email.com",
+						},
+						client_reference_id: null,
+						metadata: {},
+					},
+				},
+			};
+
+			const mockSubscription = {
+				id: "sub_unverified_123",
+				status: "active",
+				items: {
+					data: [
+						{
+							price: { id: process.env.STRIPE_PRICE_ID_1 },
+							quantity: 1,
+							current_period_start: Math.floor(Date.now() / 1000),
+							current_period_end:
+								Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+						},
+					],
+				},
+				current_period_start: Math.floor(Date.now() / 1000),
+				current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+				trial_start: null,
+				trial_end: null,
+			};
+
+			const stripeForTest = {
+				...stripeOptions.stripeClient,
+				subscriptions: {
+					...stripeOptions.stripeClient.subscriptions,
+					retrieve: vi.fn().mockResolvedValue(mockSubscription),
+				},
+				webhooks: {
+					constructEventAsync: vi.fn().mockResolvedValue(checkoutSessionEvent),
+				},
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeForTest as unknown as Stripe,
+				stripeWebhookSecret: "test_secret",
+				subscription: {
+					...stripeOptions.subscription,
+					requireEmailVerification: true,
+				},
+			};
+
+			const testAuth = betterAuth({
+				baseURL: "http://localhost:3000",
+				database: memory,
+				emailAndPassword: {
+					enabled: true,
+				},
+				plugins: [stripe(testOptions)],
+			});
+
+			const testCtx = await testAuth.$context;
+
+			const mockRequest = new Request(
+				"http://localhost:3000/api/auth/stripe/webhook",
+				{
+					method: "POST",
+					headers: {
+						"stripe-signature": "test_signature",
+					},
+					body: JSON.stringify(checkoutSessionEvent),
+				},
+			);
+
+			const response = await testAuth.handler(mockRequest);
+			expect(response.status).toBe(200);
+
+			// Verify subscription was NOT created
+			const subscription = await testCtx.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: [
+					{
+						field: "referenceId",
+						value: userRes.user.id,
+					},
+				],
+			});
+			expect(subscription).toBeNull();
+
+			// Verify user was NOT updated with Stripe customer ID
+			const updatedUser = await testCtx.adapter.findOne<
+				User & { stripeCustomerId?: string }
+			>({
+				model: "user",
+				where: [
+					{
+						field: "id",
+						value: userRes.user.id,
+					},
+				],
+			});
+			expect(updatedUser?.stripeCustomerId).toBeNull();
+		});
+
+		it("should not create subscription from payment link for non-existent user", async () => {
+			const checkoutSessionEvent = {
+				type: "checkout.session.completed",
+				data: {
+					object: {
+						mode: "subscription",
+						subscription: "sub_nonexistent_123",
+						payment_link: "plink_nonexistent",
+						customer: "cus_nonexistent_123",
+						customer_details: {
+							email: "nonexistent@email.com",
+						},
+						client_reference_id: null,
+						metadata: {},
+					},
+				},
+			};
+
+			const mockSubscription = {
+				id: "sub_nonexistent_123",
+				status: "active",
+				items: {
+					data: [
+						{
+							price: { id: process.env.STRIPE_PRICE_ID_1 },
+							quantity: 1,
+							current_period_start: Math.floor(Date.now() / 1000),
+							current_period_end:
+								Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+						},
+					],
+				},
+				current_period_start: Math.floor(Date.now() / 1000),
+				current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+				trial_start: null,
+				trial_end: null,
+			};
+
+			const stripeForTest = {
+				...stripeOptions.stripeClient,
+				subscriptions: {
+					...stripeOptions.stripeClient.subscriptions,
+					retrieve: vi.fn().mockResolvedValue(mockSubscription),
+				},
+				webhooks: {
+					constructEventAsync: vi.fn().mockResolvedValue(checkoutSessionEvent),
+				},
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeForTest as unknown as Stripe,
+				stripeWebhookSecret: "test_secret",
+			};
+
+			const testAuth = betterAuth({
+				baseURL: "http://localhost:3000",
+				database: memory,
+				emailAndPassword: {
+					enabled: true,
+				},
+				plugins: [stripe(testOptions)],
+			});
+
+			const testCtx = await testAuth.$context;
+
+			const mockRequest = new Request(
+				"http://localhost:3000/api/auth/stripe/webhook",
+				{
+					method: "POST",
+					headers: {
+						"stripe-signature": "test_signature",
+					},
+					body: JSON.stringify(checkoutSessionEvent),
+				},
+			);
+
+			const response = await testAuth.handler(mockRequest);
+			expect(response.status).toBe(200);
+
+			// Verify no subscription was created
+			const subscriptions = await testCtx.adapter.findMany<Subscription>({
+				model: "subscription",
+				where: [
+					{
+						field: "stripeCustomerId",
+						value: "cus_nonexistent_123",
+					},
+				],
+			});
+			expect(subscriptions.length).toBe(0);
+		});
+
+		it("should handle payment link with multiple seats", async () => {
+			// Create and verify user
+			const userRes = await authClient.signUp.email(
+				{
+					...testUser,
+					email: "multi-seat-link@email.com",
+				},
+				{
+					throw: true,
+				},
+			);
+
+			const checkoutSessionEvent = {
+				type: "checkout.session.completed",
+				data: {
+					object: {
+						mode: "subscription",
+						subscription: "sub_multi_seat_123",
+						payment_link: "plink_multi_seat",
+						customer: "cus_multi_seat_123",
+						customer_details: {
+							email: "multi-seat-link@email.com",
+						},
+						client_reference_id: null,
+						metadata: {},
+					},
+				},
+			};
+
+			const mockSubscription = {
+				id: "sub_multi_seat_123",
+				status: "active",
+				items: {
+					data: [
+						{
+							price: { id: process.env.STRIPE_PRICE_ID_1 },
+							quantity: 5, // Multiple seats
+							current_period_start: Math.floor(Date.now() / 1000),
+							current_period_end:
+								Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+						},
+					],
+				},
+				current_period_start: Math.floor(Date.now() / 1000),
+				current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+				trial_start: null,
+				trial_end: null,
+			};
+
+			const stripeForTest = {
+				...stripeOptions.stripeClient,
+				subscriptions: {
+					...stripeOptions.stripeClient.subscriptions,
+					retrieve: vi.fn().mockResolvedValue(mockSubscription),
+				},
+				webhooks: {
+					constructEventAsync: vi.fn().mockResolvedValue(checkoutSessionEvent),
+				},
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeForTest as unknown as Stripe,
+				stripeWebhookSecret: "test_secret",
+			};
+
+			const testAuth = betterAuth({
+				baseURL: "http://localhost:3000",
+				database: memory,
+				emailAndPassword: {
+					enabled: true,
+				},
+				plugins: [stripe(testOptions)],
+			});
+
+			const testCtx = await testAuth.$context;
+
+			const mockRequest = new Request(
+				"http://localhost:3000/api/auth/stripe/webhook",
+				{
+					method: "POST",
+					headers: {
+						"stripe-signature": "test_signature",
+					},
+					body: JSON.stringify(checkoutSessionEvent),
+				},
+			);
+
+			const response = await testAuth.handler(mockRequest);
+			expect(response.status).toBe(200);
+
+			// Verify subscription was created with correct seat count
+			const subscription = await testCtx.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: [
+					{
+						field: "referenceId",
+						value: userRes.user.id,
+					},
+				],
+			});
+			expect(subscription).toMatchObject({
+				referenceId: userRes.user.id,
+				stripeCustomerId: "cus_multi_seat_123",
+				status: "active",
+				plan: "starter",
+				seats: 5,
+			});
+		});
+	});
 });
