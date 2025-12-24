@@ -315,6 +315,49 @@ describe("session", async () => {
 		expect(revokeRes.data?.status).toBe(true);
 	});
 
+	it("should revoke session with sessionId", async () => {
+		const headers = new Headers();
+		const headers2 = new Headers();
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				onSuccess: sessionSetter(headers2),
+			},
+		});
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		await client.revokeSession({
+			fetchOptions: {
+				headers,
+			},
+			sessionId: session?.session?.id || "",
+		});
+		const newSession = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(newSession.data).toBeNull();
+		const revokeRes = await client.revokeSessions({
+			fetchOptions: {
+				headers: headers2,
+			},
+		});
+		expect(revokeRes.data?.status).toBe(true);
+	});
+
 	it("should return session headers", async () => {
 		const context = await auth.$context;
 		await runWithEndpointContext(
@@ -398,7 +441,7 @@ describe("session storage", async () => {
 		//since the instance creates a session on init, we expect the store to have 2 item (1 for session and 1 for active sessions record for the user)
 		expect(store.size).toBe(0);
 		const { runWithUser } = await signInWithTestUser();
-		expect(store.size).toBe(2);
+		expect(store.size).toBe(3);
 		await runWithUser(async () => {
 			const session = await client.getSession();
 			expect(session.data).toMatchObject({
@@ -439,12 +482,15 @@ describe("session storage", async () => {
 			const userId = session.data!.session.userId;
 			const sessions = JSON.parse(store.get(`active-sessions-${userId}`)!);
 			expect(sessions.length).toBe(1);
+			expect(store.size).toBe(3);
 			const res = await client.revokeSession({
 				token: session.data?.session?.token!,
 			});
 			expect(res.data?.status).toBe(true);
 			const response = await client.listSessions();
 			expect(response.data).toBe(null);
+			// After revoking the only active session, both the session entry and the user's active-sessions record
+			// are removed from secondary storage, so the backing store is expected to be empty again.
 			expect(store.size).toBe(0);
 		});
 	});

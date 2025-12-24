@@ -69,6 +69,11 @@ export interface InternalAdapter<
 		user: User & Record<string, any>;
 	} | null>;
 
+	findSessionBySessionId(sessionId: string): Promise<{
+		session: Session & Record<string, any>;
+		user: User & Record<string, any>;
+	} | null>;
+
 	findSessions(
 		sessionTokens: string[],
 	): Promise<{ session: Session; user: User }[]>;

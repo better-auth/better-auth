@@ -29,7 +29,7 @@ describe("secondary storage - get returns JSON string", async () => {
 	it("should work end-to-end with string return", async () => {
 		expect(store.size).toBe(0);
 		const { headers } = await signInWithTestUser();
-		expect(store.size).toBe(2);
+		expect(store.size).toBe(3);
 
 		const s1 = await client.getSession({
 			fetchOptions: { headers },

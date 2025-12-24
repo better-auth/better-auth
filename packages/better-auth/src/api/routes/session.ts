@@ -631,11 +631,18 @@ export const revokeSession = createAuthEndpoint(
 	"/revoke-session",
 	{
 		method: "POST",
-		body: z.object({
-			token: z.string().meta({
-				description: "The token to revoke",
+		body: z
+			.object({
+				token: z.string().optional().meta({
+					description: "The token to revoke",
+				}),
+				sessionId: z.string().optional().meta({
+					description: "The session ID to revoke",
+				}),
+			})
+			.refine((data: any) => data.token || data.sessionId, {
+				message: "Either token or sessionId must be provided",
 			}),
-		}),
 		use: [sensitiveSessionMiddleware],
 		requireHeaders: true,
 		metadata: {
@@ -652,7 +659,7 @@ export const revokeSession = createAuthEndpoint(
 										description: "The token to revoke",
 									},
 								},
-								required: ["token"],
+								required: [],
 							},
 						},
 					},
@@ -681,12 +688,14 @@ export const revokeSession = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		const token = ctx.body.token;
-		const session = await ctx.context.internalAdapter.findSession(token);
+		const { token, sessionId } = ctx.body;
+		const session = token
+			? await ctx.context.internalAdapter.findSession(token)
+			: await ctx.context.internalAdapter.findSessionBySessionId(sessionId!);
 
 		if (session?.session.userId === ctx.context.session.user.id) {
 			try {
-				await ctx.context.internalAdapter.deleteSession(token);
+				await ctx.context.internalAdapter.deleteSession(session.session.token);
 			} catch (error) {
 				ctx.context.logger.error(
 					error && typeof error === "object" && "name" in error
@@ -700,6 +709,7 @@ export const revokeSession = createAuthEndpoint(
 				});
 			}
 		}
+
 		return ctx.json({
 			status: true,
 		});

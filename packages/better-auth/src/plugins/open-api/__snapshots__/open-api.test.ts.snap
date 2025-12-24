@@ -2948,9 +2948,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                     "type": "string",
                   },
                 },
-                "required": [
-                  "token",
-                ],
+                "required": [],
                 "type": "object",
               },
             },

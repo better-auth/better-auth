@@ -34,6 +34,7 @@ export const createInternalAdapter = (
 	const options = ctx.options;
 	const secondaryStorage = options.secondaryStorage;
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
+	const generateSessionId = ctx.generateId;
 	const {
 		createWithHooks,
 		updateWithHooks,
@@ -300,6 +301,21 @@ export const createInternalAdapter = (
 				secondaryStorage
 					? {
 							fn: async (sessionData) => {
+								// Ensure session has an ID - generate it if not present
+								// This is needed whenever secondary storage is used because:
+								// 1. listSessions returns sessions from secondary storage (not database)
+								// 2. The session-id mapping uses the secondary storage ID
+								// 3. When both secondary storage and database are configured, they may have different IDs
+								//    (secondary storage ID is generated here, database ID is generated separately)
+								const authCtx = await getCurrentAuthContext().catch(() => null);
+								const sessionIdGenerator =
+									authCtx?.context.generateId || generateSessionId;
+								const sessionWithId = {
+									...sessionData,
+									id:
+										sessionData.id || sessionIdGenerator({ model: "session" }),
+								};
+
 								/**
 								 * store the session token for the user
 								 * so we can retrieve it later for listing sessions
@@ -358,14 +374,20 @@ export const createInternalAdapter = (
 									await secondaryStorage.set(
 										data.token,
 										JSON.stringify({
-											session: sessionData,
+											session: sessionWithId,
 											user,
 										}),
 										sessionTTL,
 									);
+									// Create mapping from sessionId to token for revocation by sessionId
+									await secondaryStorage.set(
+										`session-id-${sessionWithId.id}`,
+										data.token,
+										sessionTTL, // Same TTL as the session!
+									);
 								}
 
-								return sessionData;
+								return sessionWithId;
 							},
 							executeMainFn: options.session?.storeSessionInDatabase,
 						}
@@ -417,6 +439,70 @@ export const createInternalAdapter = (
 					{
 						value: token,
 						field: "token",
+					},
+				],
+				join: {
+					user: true,
+				},
+			});
+			if (!result) return null;
+
+			const { user, ...session } = result;
+			if (!user) return null;
+			const parsedSession = parseSessionOutput(ctx.options, session);
+			const parsedUser = parseUserOutput(ctx.options, user);
+			return {
+				session: parsedSession,
+				user: parsedUser,
+			};
+		},
+		findSessionBySessionId: async (
+			sessionId: string,
+		): Promise<{
+			session: Session & Record<string, any>;
+			user: User & Record<string, any>;
+		} | null> => {
+			if (secondaryStorage) {
+				const tokenRaw = await secondaryStorage.get(`session-id-${sessionId}`);
+				const token = typeof tokenRaw === "string" ? tokenRaw : undefined;
+				const sessionStringified = token
+					? await secondaryStorage.get(token)
+					: undefined;
+				if (!sessionStringified && !options.session?.storeSessionInDatabase) {
+					return null;
+				}
+				if (sessionStringified) {
+					const s = safeJSONParse<{
+						session: Session;
+						user: User;
+					}>(sessionStringified);
+					if (!s) return null;
+					const parsedSession = parseSessionOutput(ctx.options, {
+						...s.session,
+						expiresAt: new Date(s.session.expiresAt),
+						createdAt: new Date(s.session.createdAt),
+						updatedAt: new Date(s.session.updatedAt),
+					});
+					const parsedUser = parseUserOutput(ctx.options, {
+						...s.user,
+						createdAt: new Date(s.user.createdAt),
+						updatedAt: new Date(s.user.updatedAt),
+					});
+					return {
+						session: parsedSession,
+						user: parsedUser,
+					};
+				}
+			}
+			const currentAdapter = await getCurrentAdapter(adapter);
+			const result = await currentAdapter.findOne<
+				Session & { user: User | null }
+			>({
+				model: "session",
+				where: [
+					{
+						value: sessionId,
+						field: "id",
 					},
 				],
 				join: {
@@ -533,18 +619,45 @@ export const createInternalAdapter = (
 			if (secondaryStorage) {
 				// remove the session from the active sessions list
 				const data = await secondaryStorage.get(token);
+				let sessionId: string | undefined;
+				let userId: string | undefined;
 				if (data) {
 					const { session } =
 						safeJSONParse<{
 							session: Session;
 							user: User;
 						}>(data) ?? {};
-					if (!session) {
+					if (session) {
+						userId = session.userId;
+						sessionId = session.id;
+					} else {
 						logger.error("Session not found in secondary storage");
-						return;
 					}
-					const userId = session.userId;
+				}
 
+				// Try to get session from database if not found in cache
+				if (
+					(!userId || !sessionId) &&
+					options.session?.storeSessionInDatabase
+				) {
+					const currentAdapter = await getCurrentAdapter(adapter);
+					const dbSession = await currentAdapter.findOne<Session>({
+						model: "session",
+						where: [
+							{
+								field: "token",
+								value: token,
+							},
+						],
+					});
+					if (dbSession) {
+						userId = userId || dbSession.userId;
+						sessionId = sessionId || dbSession.id;
+					}
+				}
+
+				// Clean up active sessions list
+				if (userId) {
 					const currentList = await secondaryStorage.get(
 						`active-sessions-${userId}`,
 					);
@@ -572,12 +685,13 @@ export const createInternalAdapter = (
 						} else {
 							await secondaryStorage.delete(`active-sessions-${userId}`);
 						}
-					} else {
-						logger.error("Active sessions list not found in secondary storage");
 					}
 				}
 
 				await secondaryStorage.delete(token);
+				if (sessionId) {
+					await secondaryStorage.delete(`session-id-${sessionId}`);
+				}
 
 				if (
 					!options.session?.storeSessionInDatabase ||
@@ -586,7 +700,6 @@ export const createInternalAdapter = (
 					return;
 				}
 			}
-
 			await deleteWithHooks(
 				[{ field: "token", value: token }],
 				"session",
@@ -623,6 +736,18 @@ export const createInternalAdapter = (
 						: [];
 					if (!sessions) return;
 					for (const session of sessions) {
+						const sessionData = await secondaryStorage.get(session.token);
+						if (sessionData) {
+							const parsed = safeJSONParse<{ session: Session; user: User }>(
+								sessionData,
+							);
+							if (parsed?.session.id) {
+								// delete session id mapping to token
+								await secondaryStorage.delete(
+									`session-id-${parsed.session.id}`,
+								);
+							}
+						}
 						await secondaryStorage.delete(session.token);
 					}
 					await secondaryStorage.delete(
@@ -632,7 +757,16 @@ export const createInternalAdapter = (
 					for (const sessionToken of userIdOrSessionTokens) {
 						const session = await secondaryStorage.get(sessionToken);
 						if (session) {
-							await secondaryStorage.delete(sessionToken);
+							await secondaryStorage.delete(`session-id-${sessionToken}`);
+							const parsed = safeJSONParse<{ session: Session; user: User }>(
+								session,
+							);
+							if (parsed?.session.id) {
+								// delete session id mapping to token
+								await secondaryStorage.delete(
+									`session-id-${parsed.session.id}`,
+								);
+							}
 						}
 					}
 				}
