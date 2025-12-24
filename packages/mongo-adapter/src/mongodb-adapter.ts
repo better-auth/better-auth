@@ -638,6 +638,17 @@ export const mongodbAdapter = (
 					const oid = new ObjectId();
 					return oid;
 				}
+				if (fieldAttributes.type === "date") {
+					if (data === null || data === undefined) {
+						return data;
+					}
+					if (typeof data === "string") {
+						return new Date(data);
+					}
+					if (data instanceof Date) {
+						return data;
+					}
+				}
 				return data;
 			},
 			customTransformOutput({ data, field, fieldAttributes }) {
