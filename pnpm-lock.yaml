@@ -6,6 +6,9 @@ settings:
 
 catalogs:
   default:
+    '@better-auth/utils':
+      specifier: 0.3.0
+      version: 0.3.0
     '@better-fetch/fetch':
       specifier: 1.1.21
       version: 1.1.21
@@ -601,7 +604,7 @@ importers:
         specifier: ^2.0.64
         version: 2.0.64(react@19.2.3)(zod@4.1.13)
       '@better-auth/utils':
-        specifier: 0.3.0
+        specifier: 'catalog:'
         version: 0.3.0
       '@better-fetch/fetch':
         specifier: 'catalog:'
@@ -1063,7 +1066,7 @@ importers:
         specifier: workspace:*
         version: link:../telemetry
       '@better-auth/utils':
-        specifier: 0.3.0
+        specifier: 'catalog:'
         version: 0.3.0
       '@better-fetch/fetch':
         specifier: 'catalog:'
@@ -1208,7 +1211,7 @@ importers:
         specifier: workspace:*
         version: link:../telemetry
       '@better-auth/utils':
-        specifier: 0.3.0
+        specifier: 'catalog:'
         version: 0.3.0
       '@clack/prompts':
         specifier: ^0.11.0
@@ -1303,7 +1306,7 @@ importers:
         version: 4.1.13
     devDependencies:
       '@better-auth/utils':
-        specifier: 0.3.0
+        specifier: 'catalog:'
         version: 0.3.0
       '@better-fetch/fetch':
         specifier: 'catalog:'
@@ -1364,7 +1367,7 @@ importers:
   packages/oauth-provider:
     dependencies:
       '@better-auth/utils':
-        specifier: 0.3.0
+        specifier: 'catalog:'
         version: 0.3.0
       '@better-fetch/fetch':
         specifier: 'catalog:'
@@ -1398,7 +1401,7 @@ importers:
   packages/passkey:
     dependencies:
       '@better-auth/utils':
-        specifier: 0.3.0
+        specifier: 'catalog:'
         version: 0.3.0
       '@better-fetch/fetch':
         specifier: 'catalog:'
@@ -1432,7 +1435,7 @@ importers:
   packages/scim:
     dependencies:
       '@better-auth/utils':
-        specifier: 0.3.0
+        specifier: 'catalog:'
         version: 0.3.0
       better-auth:
         specifier: workspace:*
@@ -1469,6 +1472,9 @@ importers:
         specifier: ^4.1.12
         version: 4.1.13
     devDependencies:
+      '@better-auth/utils':
+        specifier: 'catalog:'
+        version: 0.3.0
       '@types/body-parser':
         specifier: ^1.19.6
         version: 1.19.6
@@ -1522,7 +1528,7 @@ importers:
   packages/telemetry:
     dependencies:
       '@better-auth/utils':
-        specifier: 0.3.0
+        specifier: 'catalog:'
         version: 0.3.0
       '@better-fetch/fetch':
         specifier: 'catalog:'
