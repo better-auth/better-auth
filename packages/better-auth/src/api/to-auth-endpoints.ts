@@ -222,7 +222,7 @@ async function runBeforeHooks(
 				error,
 			);
 			throw new APIError("INTERNAL_SERVER_ERROR", {
-				message: `An error occured during hook matcher execution. Check the logs for more details.`,
+				message: `An error occurred during hook matcher execution. Check the logs for more details.`,
 			});
 		}
 		if (matched) {
