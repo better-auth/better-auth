@@ -209,6 +209,8 @@ export const mcp = (options: MCPOptions) => {
 						if (!session) {
 							return;
 						}
+						ctx.query = JSON.parse(cookie);
+
 						// Remove "login" from prompt since user just logged in
 						const promptSet = parsePrompt(String(ctx.query?.prompt));
 						if (promptSet.has("login")) {
