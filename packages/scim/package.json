@@ -53,7 +53,7 @@
   },
   "dependencies": {
     "better-call": "catalog:",
-    "@better-auth/utils": "0.3.0",
+    "@better-auth/utils": "catalog:",
     "zod": "^4.1.5"
   },
   "devDependencies": {
