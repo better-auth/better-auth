@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
+import { setCookieToHeader } from "../../cookies/cookie-utils";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { bearer } from "../bearer";
 import { emailOTP } from ".";
@@ -23,6 +24,14 @@ describe("email-otp", async () => {
 			],
 			emailVerification: {
 				autoSignInAfterVerification: true,
+			},
+			user: {
+				additionalFields: {
+					firstName: {
+						type: "string",
+						required: false,
+					},
+				},
 			},
 		},
 		{
@@ -95,6 +104,72 @@ describe("email-otp", async () => {
 			},
 		);
 		expect(newUser.data?.token).toBeDefined();
+	});
+
+	it("should sign-up with otp and other core properties", async () => {
+		const testUser2 = {
+			email: "test-email-2@domain.com",
+		};
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser2.email,
+			type: "sign-in",
+		});
+		const newUser = await client.signIn.emailOtp(
+			{
+				email: testUser2.email,
+				otp,
+				signupData: {
+					name: "the user",
+					image: "https://user-profiles.com/users/daniel",
+				},
+			},
+			{
+				onSuccess: (ctx) => {
+					const header = ctx.response.headers.get("set-cookie");
+					expect(header).toContain("better-auth.session_token");
+				},
+			},
+		);
+		expect(newUser.data?.token).toBeDefined();
+		expect(newUser.data?.user.name).toBe("the user");
+		expect(newUser.data?.user.image).toBe(
+			"https://user-profiles.com/users/daniel",
+		);
+	});
+
+	it("should sign-up with otp and any additional field", async () => {
+		const testUser3 = {
+			email: "test-email-3@domain.com",
+		};
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser3.email,
+			type: "sign-in",
+		});
+		const headers = new Headers();
+		const newUser = await client.signIn.emailOtp(
+			{
+				email: testUser3.email,
+				otp,
+				signupData: {
+					name: "the user",
+					image: "https://user-profiles.com/users/daniel",
+					firstName: "First",
+				},
+			},
+			{
+				onSuccess: (ctx) => {
+					setCookieToHeader(headers)(ctx);
+					const header = ctx.response.headers.get("set-cookie");
+					expect(header).toContain("better-auth.session_token");
+				},
+			},
+		);
+		expect(newUser.data?.token).toBeDefined();
+
+		const response = await auth.api.getSession({ headers });
+		expect(response?.user.name).toBe("the user");
+		expect(response?.user.firstName).toBe("First");
+		expect(response?.user.image).toBe("https://user-profiles.com/users/daniel");
 	});
 
 	it("should sign-up with uppercase email", async () => {
