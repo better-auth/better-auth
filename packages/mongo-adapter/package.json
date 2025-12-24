@@ -28,7 +28,6 @@
     "@better-auth/utils": "^0.3.0",
     "mongodb": "^6.0.0",
     "tsdown": "catalog:",
-    "typescript": "catalog:",
-    "vitest": "catalog:vitest"
+    "typescript": "catalog:"
   }
 }
