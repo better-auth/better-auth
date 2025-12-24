@@ -21,6 +21,7 @@ import {
 	stopImpersonating,
 	unbanUser,
 	userHasPermission,
+	userHasRole,
 } from "./routes";
 import { schema } from "./schema";
 import type {
@@ -163,6 +164,7 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 			removeUser: removeUser(opts),
 			setUserPassword: setUserPassword(opts),
 			userHasPermission: userHasPermission(opts as O),
+			userHasRole: userHasRole(opts as O),
 		},
 		$ERROR_CODES: ADMIN_ERROR_CODES,
 		schema: mergeSchema(schema, opts.schema),
