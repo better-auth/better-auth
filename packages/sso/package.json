@@ -61,7 +61,6 @@
     }
   },
   "dependencies": {
-    "@better-auth/utils": "0.3.0",
     "@better-fetch/fetch": "catalog:",
     "fast-xml-parser": "^5.2.5",
     "jose": "^6.1.0",
@@ -69,6 +68,7 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@better-auth/utils": "catalog:",
     "@types/body-parser": "^1.19.6",
     "@types/express": "^5.0.5",
     "better-auth": "workspace:*",
