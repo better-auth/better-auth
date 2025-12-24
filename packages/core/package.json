@@ -121,7 +121,7 @@
     "coverage": "vitest run --coverage"
   },
   "devDependencies": {
-    "@better-auth/utils": "0.3.0",
+    "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
     "better-call": "catalog:",
     "jose": "^6.1.0",
@@ -134,7 +134,7 @@
     "zod": "^4.1.12"
   },
   "peerDependencies": {
-    "@better-auth/utils": "0.3.0",
+    "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
     "better-call": "catalog:",
     "jose": "^6.1.0",
