@@ -18,6 +18,7 @@
     "release:no-build": "bumpp && pnpm -r publish --access public --no-git-checks --tag next",
     "release:canary": "turbo build --filter=./packages/* && bumpp && pnpm -r publish --access public --tag canary --no-git-checks",
     "bump": "bumpp",
+    "release:cherry-pick": "./scripts/release-from-canary.sh",
     "test": "turbo test --continue --filter=./packages/* --filter=./test",
     "coverage": "turbo coverage --filter=./packages/* --filter=./test -- --coverage.reporter=json --coverage.provider=istanbul",
     "postcoverage": "pnpm coverage:collect && pnpm coverage:merge && pnpm coverage:report",
