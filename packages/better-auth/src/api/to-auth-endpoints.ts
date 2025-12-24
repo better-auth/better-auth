@@ -343,26 +343,12 @@ function getHooks(authContext: AuthContext) {
 		});
 	}
 	const pluginBeforeHooks = plugins
-		.map((plugin) => {
-			if (plugin.hooks?.before) {
-				return plugin.hooks.before.map((hook) => ({
-					...hook,
-					source: `plugin:${plugin.id}` as const,
-				}));
-			}
-		})
-		.filter((plugin) => plugin !== undefined)
+		.filter((plugin) => plugin.hooks?.before)
+		.map((plugin) => plugin.hooks?.before!)
 		.flat();
 	const pluginAfterHooks = plugins
-		.map((plugin) => {
-			if (plugin.hooks?.after) {
-				return plugin.hooks.after.map((hook) => ({
-					...hook,
-					source: `plugin:${plugin.id}` as const,
-				}));
-			}
-		})
-		.filter((plugin) => plugin !== undefined)
+		.filter((plugin) => plugin.hooks?.after)
+		.map((plugin) => plugin.hooks?.after!)
 		.flat();
 
 	/**
