@@ -27,15 +27,12 @@ export function CustomSearchDialog(props: SharedProps) {
 		type: "orama-cloud",
 		client,
 		locale,
-		/*
-			TODO
-		*/
-		// params: {
-		// 	groupBy: {
-		// 		properties: ["title"],
-		// 		sortBy: "score",
-		// 	},
-		// },
+		params: {
+			groupBy: {
+				properties: ["title"],
+				sortBy: "score",
+			},
+		},
 	});
 
 	return (
