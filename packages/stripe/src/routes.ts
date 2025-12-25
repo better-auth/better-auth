@@ -790,7 +790,7 @@ export const cancelSubscription = (options: StripeOptions) => {
 					},
 				})
 				.catch(async (e) => {
-					if (e.message.includes("already set to be cancel")) {
+					if (e.message?.includes("already set to be canceled")) {
 						/**
 						 * in-case we missed the event from stripe, we sync the actual state
 						 * this is a rare case and should not happen
