@@ -6,7 +6,6 @@ import {
 	runWithRequestState,
 } from "@better-auth/core/context";
 import { shouldPublishLog } from "@better-auth/core/env";
-import { APIError } from "@better-auth/core/error";
 import type {
 	EndpointContext,
 	EndpointOptions,
