@@ -10,6 +10,9 @@ export const auth = betterAuth({
 	emailAndPassword: {
 		enabled: true,
 	},
+	trustedOrigins: [
+		"http://localhost:*", // Allow any localhost port for smoke tests
+	],
 	logger: {
 		level: "debug",
 	},
