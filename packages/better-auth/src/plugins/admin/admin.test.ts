@@ -1444,4 +1444,23 @@ describe("access control", async (it) => {
 			}),
 		).toThrowError(BetterAuthError);
 	});
+
+	it("should properly type custom roles in createUser", async () => {
+		const createdUser = await client.admin.createUser(
+			{
+				name: "Test User with Support Role",
+				email: "support-role@test.com",
+				password: "test",
+				role: "support", // This should be accepted as "support" is a custom role
+			},
+			{
+				headers: headers,
+			},
+		);
+		expect(createdUser.data?.user.role).toBe("support");
+		await client.admin.removeUser(
+			{ userId: createdUser.data?.user.id || "" },
+			{ headers: headers },
+		);
+	});
 });
