@@ -545,6 +545,13 @@ export type BetterAuthOptions = {
 					 */
 					request?: Request,
 				) => Promise<void>;
+
+				/**
+				 * Automatically signs in the user immediately after a successful password reset
+				 * @default false
+				 */
+
+				autoSignInOnResetPassword?: boolean;
 				/**
 				 * Number of seconds the reset password token is
 				 * valid for.

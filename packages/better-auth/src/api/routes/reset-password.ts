@@ -2,9 +2,11 @@ import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
+import { setSessionCookie } from "../../cookies";
 import { generateId } from "../../utils";
 import { getDate } from "../../utils/date";
 import { originCheck } from "../middlewares";
+import { getSessionFromCtx } from "./session";
 
 function redirectError(
 	ctx: AuthContext,
@@ -322,6 +324,37 @@ export const resetPassword = createAuthEndpoint(
 		if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
 			await ctx.context.internalAdapter.deleteSessions(userId);
 		}
+		if (ctx.context.options.emailAndPassword?.autoSignInOnResetPassword) {
+			const currentSession = await getSessionFromCtx(ctx);
+			if (!currentSession || currentSession.user.id !== userId) {
+				const user = await ctx.context.internalAdapter.findUserById(userId);
+				if (!user) {
+					throw new APIError("INTERNAL_SERVER_ERROR", {
+						message: "User not found",
+					});
+				}
+				const session = await ctx.context.internalAdapter.createSession(userId);
+				if (!session) {
+					throw new APIError("INTERNAL_SERVER_ERROR", {
+						message: "Failed to create session",
+					});
+				}
+				await setSessionCookie(ctx, {
+					session,
+					user: {
+						...user,
+					},
+				});
+			} else {
+				await setSessionCookie(ctx, {
+					session: currentSession.session,
+					user: {
+						...currentSession.user,
+					},
+				});
+			}
+		}
+
 		return ctx.json({
 			status: true,
 		});
