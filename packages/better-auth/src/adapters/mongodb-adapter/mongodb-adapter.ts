@@ -560,6 +560,7 @@ export const mongodbAdapter = (
 			mapKeysTransformOutput: {
 				_id: "id",
 			},
+			supportsArrays: true,
 			supportsNumericIds: false,
 			transaction:
 				config?.client && (config?.transaction ?? true)
