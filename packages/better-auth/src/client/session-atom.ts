@@ -21,6 +21,16 @@ export function getSessionAtom(
 		session: Session;
 	}>($signal, "/get-session", $fetch, {
 		method: "GET",
+		onSuccess: (ctx) => {
+			// todo: we should implement the full revalidation logic for async resources, like SWR or React Query
+			// revalidate the session signal after expiration
+			if (ctx.data.session && "expiresAt" in ctx.data.session) {
+				const expiresAt = new Date(ctx.data.session.expiresAt);
+				setTimeout(() => {
+					$signal.set(false);
+				}, expiresAt.getTime() - Date.now());
+			}
+		},
 	});
 
 	onMount(session, () => {
