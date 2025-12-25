@@ -1,16 +1,16 @@
 import Link from "next/link";
 import { MobileSearchIcon } from "@/components/mobile-search-icon";
-import { ThemeToggle } from "@/components/theme-toggler";
+import { ThemeToggle } from "@/components/theme-toggle";
 import DarkPng from "../public/branding/better-auth-logo-dark.png";
 import WhitePng from "../public/branding/better-auth-logo-light.png";
-import { Logo } from "./logo";
+import ChristmasLogo from "./christmas/logo";
 import LogoContextMenu from "./logo-context-menu";
 import { NavLink } from "./nav-link";
 import { NavbarMobile, NavbarMobileBtn } from "./nav-mobile";
 
 export const navMenu = [
 	{
-		name: "helo_",
+		name: "_hello",
 		path: "/",
 	},
 	{
@@ -82,17 +82,21 @@ const logoAssets = {
 export const Navbar = () => {
 	return (
 		<div className="flex flex-col sticky top-0 bg-background backdrop-blur-md z-30">
-			<nav className="md:grid grid-cols-12 md:border-b top-0 flex items-center justify-between">
+			<nav className="md:grid grid-cols-12 border-b top-0 flex items-center justify-between">
 				<Link
 					href="/"
-					className="md:border-r md:px-5 px-2.5 py-4 text-foreground md:col-span-2 shrink-0 transition-colors md:w-[268px] lg:w-[286px]"
+					className="min-navbar:border-r md:px-5 px-2.5 py-4 text-foreground md:col-span-2 shrink-0 transition-colors md:w-[268px] lg:w-[286px]"
 				>
 					<div className="flex flex-col gap-2 w-full">
 						<LogoContextMenu
 							logo={
-								<div className="flex items-center gap-2">
-									<Logo />
-									<p className="select-none">BETTER-AUTH.</p>
+								// <div className="flex items-center gap-2">
+								// 	<Logo />
+								// 	<p className="select-none">BETTER-AUTH.</p>
+								// </div>
+
+								<div className="flex items-center h-6">
+									<ChristmasLogo />
 								</div>
 							}
 							logoAssets={logoAssets}
@@ -106,6 +110,9 @@ export const Navbar = () => {
 								{menu.name}
 							</NavLink>
 						))}
+						<NavLink href="/enterprise" className="relative bg-muted/30">
+							enterprise
+						</NavLink>
 						<NavLink
 							href="https://github.com/better-auth/better-auth"
 							className="bg-muted/20"

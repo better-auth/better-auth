@@ -1,4 +1,4 @@
-import { getColorDepth, logger, TTY_COLORS } from "../../env";
+import { createLogger, getColorDepth, TTY_COLORS } from "../../env";
 import { BetterAuthError } from "../../error";
 import type { BetterAuthOptions } from "../../types";
 import { safeJSONParse } from "../../utils/json";
@@ -64,11 +64,13 @@ export const createAdapterFactory =
 			adapterName: cfg.adapterName ?? cfg.adapterId,
 			supportsNumericIds: cfg.supportsNumericIds ?? true,
 			supportsUUIDs: cfg.supportsUUIDs ?? false,
+			supportsArrays: cfg.supportsArrays ?? false,
 			transaction: cfg.transaction ?? false,
 			disableTransformInput: cfg.disableTransformInput ?? false,
 			disableTransformOutput: cfg.disableTransformOutput ?? false,
 			disableTransformJoin: cfg.disableTransformJoin ?? false,
 		} satisfies AdapterFactoryConfig;
+
 		const useNumberId =
 			options.advanced?.database?.useNumberId === true ||
 			options.advanced?.database?.generateId === "serial";
@@ -83,6 +85,7 @@ export const createAdapterFactory =
 
 		const debugLog = (...args: any[]) => {
 			if (config.debugLogs === true || typeof config.debugLogs === "object") {
+				const logger = createLogger({ level: "info" });
 				// If we're running adapter tests, we'll keep debug logs in memory, then print them out if a test fails.
 				if (
 					typeof config.debugLogs === "object" &&
@@ -137,6 +140,8 @@ export const createAdapterFactory =
 				}
 			}
 		};
+
+		const logger = createLogger(options.logger);
 
 		const getDefaultModelName = initGetDefaultModelName({
 			usePlural: config.usePlural,
@@ -248,7 +253,7 @@ export const createAdapterFactory =
 				) {
 					newValue = JSON.stringify(newValue);
 				} else if (
-					config.supportsJSON === false &&
+					config.supportsArrays === false &&
 					Array.isArray(newValue) &&
 					(fieldAttributes!.type === "string[]" ||
 						fieldAttributes!.type === "number[]")
@@ -343,7 +348,7 @@ export const createAdapterFactory =
 						) {
 							newValue = safeJSONParse(newValue);
 						} else if (
-							config.supportsJSON === false &&
+							config.supportsArrays === false &&
 							typeof newValue === "string" &&
 							(field.type === "string[]" || field.type === "number[]")
 						) {
@@ -469,9 +474,19 @@ export const createAdapterFactory =
 		const transformWhereClause = <W extends Where[] | undefined>({
 			model,
 			where,
+			action,
 		}: {
 			where: W;
 			model: string;
+			action:
+				| "create"
+				| "update"
+				| "findOne"
+				| "findMany"
+				| "updateMany"
+				| "delete"
+				| "deleteMany"
+				| "count";
 		}): W extends undefined ? undefined : CleanedWhere[] => {
 			if (!where) return undefined as any;
 			const newMappedKeys = config.mapKeysTransformInput ?? {};
@@ -555,6 +570,18 @@ export const createAdapterFactory =
 							{ cause: error },
 						);
 					}
+				}
+
+				if (config.customTransformInput) {
+					newValue = config.customTransformInput({
+						data: newValue,
+						fieldAttributes: fieldAttr,
+						field: fieldName,
+						model: getModelName(model),
+						schema,
+						options,
+						action,
+					});
 				}
 
 				return {
@@ -722,6 +749,7 @@ export const createAdapterFactory =
 						connector: "AND",
 					},
 				],
+				action: "findOne",
 			});
 			try {
 				if (joinConfig.relation === "one-to-one") {
@@ -881,6 +909,7 @@ export const createAdapterFactory =
 				const where = transformWhereClause({
 					model: unsafeModel,
 					where: unsafeWhere,
+					action: "update",
 				});
 				debugLog(
 					{ method: "update" },
@@ -941,6 +970,7 @@ export const createAdapterFactory =
 				const where = transformWhereClause({
 					model: unsafeModel,
 					where: unsafeWhere,
+					action: "updateMany",
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
@@ -996,6 +1026,7 @@ export const createAdapterFactory =
 				const where = transformWhereClause({
 					model: unsafeModel,
 					where: unsafeWhere,
+					action: "findOne",
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
 				let join: JoinConfig | undefined;
@@ -1073,6 +1104,7 @@ export const createAdapterFactory =
 				const where = transformWhereClause({
 					model: unsafeModel,
 					where: unsafeWhere,
+					action: "findMany",
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
 				let join: JoinConfig | undefined;
@@ -1146,6 +1178,7 @@ export const createAdapterFactory =
 				const where = transformWhereClause({
 					model: unsafeModel,
 					where: unsafeWhere,
+					action: "delete",
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
@@ -1178,6 +1211,7 @@ export const createAdapterFactory =
 				const where = transformWhereClause({
 					model: unsafeModel,
 					where: unsafeWhere,
+					action: "deleteMany",
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
@@ -1211,6 +1245,7 @@ export const createAdapterFactory =
 				const where = transformWhereClause({
 					model: unsafeModel,
 					where: unsafeWhere,
+					action: "count",
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(

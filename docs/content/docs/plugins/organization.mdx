@@ -102,6 +102,8 @@ type createOrganization = {
 }
 ```
 
+</APIMethod>
+
 <Callout type="warn">
 **Mutually Exclusive Parameters**
 
@@ -111,8 +113,6 @@ The `userId` and session headers cannot be used together:
 
 **For Admins:** To create an organization on behalf of another user, you must make the API call server-side **without** passing session headers.
 </Callout>
-
-</APIMethod>
 
 #### Restrict who can create an organization
 
@@ -1219,7 +1219,7 @@ By default, there are three roles in the organization:
 
 `admin`: Users with the admin role have full control over the organization except for deleting the organization or changing the owner.
 
-`member`: Users with the member role have limited control over the organization. They can create projects, invite users, and manage projects they have created.
+`member`: Users with the member role have limited control over the organization. They can only read organization data and have no permissions to create, update, or delete resources.
 
 <Callout>
   A user can have multiple roles. Multiple roles are stored as string separated
@@ -1511,12 +1511,6 @@ Only users with roles which contain the `ac` resource with the `create` permissi
 By default, only the `admin` and `owner` roles have this permission. You also cannot add permissions that your
 current role in that organization can't already access.
 
-<Callout>
-  TIP: You can validate role names by using the `dynamicAccessControl.validateRoleName` option in the organization plugin config.
-  Learn more [here](#validaterolename).
-</Callout>
-
-
 <APIMethod
   path="/organization/create-role"
   method="POST"
@@ -1622,7 +1616,7 @@ type getOrgRole = {
      */
     roleId?: string = "role-id"
     /**
-     * The organization ID which the role will be deleted in. Defaults to the active organization.
+     * The organization ID from which the role will be retrieved. Defaults to the active organization.
      */
     organizationId?: string = "organization-id"
 }
@@ -2297,6 +2291,46 @@ You need to add two more fields to the session table to store the active organiz
   ]}
 />
 
+### Organization Role (optional)
+
+Table Name: `organizationRole`
+
+<DatabaseTable
+  fields={[
+    {
+      name: "id",
+      type: "string",
+      description: "Unique identifier for each organization role",
+    },
+    {
+      name: "organizationId",
+      type: "string",
+      description: "The ID of the organization",
+      isForeignKey: true,
+    },
+    {
+      name: "role",
+      type: "string",
+      description: "The name of the role",
+    },
+    {
+      name: "permission",
+      type: "string",
+      description: "The permission of the role",
+    },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "Timestamp of when the organization role was created",
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "Timestamp of when the organization role was updated",
+    },
+  ]}
+/>
+
 ### Teams (optional)
 
 Table Name: `team`
@@ -2487,7 +2521,7 @@ await client.organization.create({
 
 **allowUserToCreateOrganization**: `boolean` | `((user: User) => Promise<boolean> | boolean)` - A function that determines whether a user can create an organization. By default, it's `true`. You can set it to `false` to restrict users from creating organizations.
 
-**organizationLimit**: `number` | `((user: User) => Promise<boolean> | boolean)` - The maximum number of organizations allowed for a user. By default, it's `5`. You can set it to any number you want or a function that returns a boolean.
+**organizationLimit**: `number` | `((user: User) => Promise<boolean> | boolean)` - The maximum number of organizations allowed for a user. By default, it's `unlimited`. You can set it to any number you want, or a function that returns a boolean. **If you provide a function, it should return `true` if the user has reached their organization limit (blocking further creation), or `false` if they have not reached their limit (allowing further creation).**
 
 **creatorRole**: `admin | owner` - The role of the user who creates the organization. By default, it's `owner`. You can set it to `admin`.
 

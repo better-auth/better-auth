@@ -1,7 +1,7 @@
 import type { AuthContext, BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
-import { APIError } from "better-call";
+import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../api";
 import { shimContext } from "../../utils/shim";
@@ -136,9 +136,8 @@ const createHasPermissionBodySchema = z
 
 const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 	type DefaultStatements = typeof defaultStatements;
-	type Statements = O["ac"] extends AccessControl<infer S>
-		? S
-		: DefaultStatements;
+	type Statements =
+		O["ac"] extends AccessControl<infer S> ? S : DefaultStatements;
 	type PermissionType = {
 		[key in keyof Statements]?: Array<
 			Statements[key] extends readonly unknown[]
@@ -224,9 +223,10 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 				ctx.body.organizationId ||
 				ctx.context.session.session.activeOrganizationId;
 			if (!activeOrganizationId) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+				);
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const member = await adapter.findMemberByOrgId({
@@ -234,10 +234,10 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 				organizationId: activeOrganizationId,
 			});
 			if (!member) {
-				throw new APIError("UNAUTHORIZED", {
-					message:
-						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
-				});
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+				);
 			}
 			const result = await hasPermission(
 				{
@@ -283,7 +283,7 @@ export type OrganizationPlugin<O extends OrganizationOptions> = {
 				} & InferOrganization<O, false>;
 	};
 	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
-	options: O;
+	options: NoInfer<O>;
 };
 
 /**
@@ -329,7 +329,7 @@ export function organization<
 				} & InferOrganization<O, false>;
 	};
 	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
-	options: O;
+	options: NoInfer<O>;
 };
 export function organization<
 	O extends OrganizationOptions & {
@@ -362,7 +362,7 @@ export function organization<
 				} & InferOrganization<O, false>;
 	};
 	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
-	options: O;
+	options: NoInfer<O>;
 };
 export function organization<
 	O extends OrganizationOptions & {
@@ -392,7 +392,7 @@ export function organization<
 				} & InferOrganization<O, false>;
 	};
 	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
-	options: O;
+	options: NoInfer<O>;
 };
 export function organization<O extends OrganizationOptions>(
 	options?: O | undefined,
@@ -418,7 +418,7 @@ export function organization<O extends OrganizationOptions>(
 				} & InferOrganization<O, false>;
 	};
 	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
-	options: O;
+	options: NoInfer<O>;
 };
 export function organization<O extends OrganizationOptions>(
 	options?: O | undefined,
@@ -1044,6 +1044,7 @@ export function organization<O extends OrganizationOptions>(
 						unique: true,
 						sortable: true,
 						fieldName: options?.schema?.organization?.fields?.slug,
+						index: true,
 					},
 					logo: {
 						type: "string",
@@ -1250,6 +1251,6 @@ export function organization<O extends OrganizationOptions>(
 					} & InferOrganization<O, false>,
 		},
 		$ERROR_CODES: ORGANIZATION_ERROR_CODES,
-		options: options as O,
+		options: options as NoInfer<O>,
 	} satisfies BetterAuthPlugin;
 }

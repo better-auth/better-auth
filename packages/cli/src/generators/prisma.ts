@@ -4,7 +4,7 @@ import path from "node:path";
 import { capitalizeFirstLetter } from "@better-auth/core/utils";
 import { produceSchema } from "@mrleebo/prisma-ast";
 import { initGetFieldName, initGetModelName } from "better-auth/adapters";
-import type { FieldType } from "better-auth/db";
+import type { DBFieldType } from "better-auth/db";
 import { getAuthTables } from "better-auth/db";
 import { getPrismaVersion } from "../utils/get-package-info";
 import type { SchemaGenerator } from "./types";
@@ -14,7 +14,8 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 	options,
 	file,
 }) => {
-	const provider = adapter.options?.provider || "postgresql";
+	const provider: "sqlite" | "postgresql" | "mysql" | "mongodb" =
+		adapter.options?.provider || "postgresql";
 	const tables = getAuthTables(options);
 	const filePath = file || "./prisma/schema.prisma";
 	const schemaPrismaExist = existsSync(path.join(process.cwd(), filePath));
@@ -113,7 +114,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				isOptional,
 				type,
 			}: {
-				type: FieldType;
+				type: DBFieldType;
 				isOptional: boolean;
 				isBigint: boolean;
 			}) {
@@ -133,13 +134,26 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					return isOptional ? "DateTime?" : "DateTime";
 				}
 				if (type === "json") {
+					if (provider === "sqlite" || provider === "mysql") {
+						return isOptional ? "String?" : "String";
+					}
 					return isOptional ? "Json?" : "Json";
 				}
 				if (type === "string[]") {
-					return isOptional ? "String[]" : "String[]";
+					// SQLite and MySQL don't support array of strings, so we use string instead
+					// adapter should handle JSON.stringify and JSON.parse conversion for these fields
+					if (provider === "sqlite" || provider === "mysql") {
+						return isOptional ? "String?" : "String";
+					}
+					return "String[]";
 				}
 				if (type === "number[]") {
-					return isOptional ? "Int[]" : "Int[]";
+					// SQLite and MySQL don't support array of numbers, so we use int instead
+					// adapter should handle JSON.stringify and JSON.parse conversion for these fields
+					if (provider === "sqlite" || provider === "mysql") {
+						return "String";
+					}
+					return "Int[]";
 				}
 			}
 

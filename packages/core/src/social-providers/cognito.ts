@@ -1,8 +1,7 @@
 import { betterFetch } from "@better-fetch/fetch";
-import { APIError } from "better-call";
 import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import { logger } from "../env";
-import { BetterAuthError } from "../error";
+import { APIError, BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
@@ -92,6 +91,17 @@ export const cognito = (options: CognitoOptions) => {
 				redirectURI,
 				prompt: options.prompt,
 			});
+			// AWS Cognito requires scopes to be encoded with %20 instead of +
+			// URLSearchParams encodes spaces as + by default, so we need to fix this
+			const scopeValue = url.searchParams.get("scope");
+			if (scopeValue) {
+				url.searchParams.delete("scope");
+				const encodedScope = encodeURIComponent(scopeValue);
+				// Manually append the scope with proper encoding to the URL
+				const urlString = url.toString();
+				const separator = urlString.includes("?") ? "&" : "?";
+				return new URL(`${urlString}${separator}scope=${encodedScope}`);
+			}
 			return url;
 		},
 

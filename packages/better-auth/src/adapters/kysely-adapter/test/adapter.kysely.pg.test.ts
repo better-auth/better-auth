@@ -46,7 +46,7 @@ const { execute } = await testAdapter({
 		const opts = Object.assign(betterAuthOptions, {
 			database: pgDB,
 		} satisfies BetterAuthOptions);
-		const { runMigrations, compileMigrations } = await getMigrations(opts);
+		const { runMigrations } = await getMigrations(opts);
 		await runMigrations();
 	},
 	tests: [

@@ -6,7 +6,7 @@ import { APIError } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { toBoolean } from "../../utils/boolean";
 
-interface OneTapOptions {
+export interface OneTapOptions {
 	/**
 	 * Disable the signup flow
 	 *
@@ -87,7 +87,7 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 							},
 						);
 						payload = verifiedPayload;
-					} catch (error) {
+					} catch {
 						throw new APIError("BAD_REQUEST", {
 							message: "invalid id token",
 						});
@@ -148,8 +148,8 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 					if (!account) {
 						const accountLinking = ctx.context.options.account?.accountLinking;
 						const shouldLinkAccount =
-							accountLinking?.enabled &&
-							(accountLinking.trustedProviders?.includes("google") ||
+							accountLinking?.enabled !== false &&
+							(accountLinking?.trustedProviders?.includes("google") ||
 								email_verified);
 						if (shouldLinkAccount) {
 							await ctx.context.internalAdapter.linkAccount({
@@ -188,4 +188,5 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 				},
 			),
 		},
+		options,
 	}) satisfies BetterAuthPlugin;

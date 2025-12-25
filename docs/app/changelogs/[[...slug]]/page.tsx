@@ -38,7 +38,6 @@ export default async function Page({
 		notFound();
 	}
 	const MDX = page.data?.body;
-	const toc = page.data?.toc;
 	const { title, description, date } = page.data;
 	return (
 		<div className="md:grid md:grid-cols-2 items-start">

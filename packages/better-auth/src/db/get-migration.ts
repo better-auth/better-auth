@@ -9,9 +9,11 @@ import { createLogger } from "@better-auth/core/env";
 import type {
 	AlterTableBuilder,
 	AlterTableColumnAlteringBuilder,
+	ColumnDataType,
 	CreateIndexBuilder,
 	CreateTableBuilder,
 	Kysely,
+	RawBuilder,
 } from "kysely";
 import { sql } from "kysely";
 import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
@@ -110,7 +112,7 @@ async function getPostgresSchema(db: Kysely<unknown>): Promise<string> {
 				.filter((s) => !s.startsWith("$"));
 			return schemas[0] || "public";
 		}
-	} catch (error) {
+	} catch {
 		// If query fails, fall back to public schema
 	}
 	return "public";
@@ -280,7 +282,12 @@ export async function getMigrations(config: BetterAuthOptions) {
 
 	function getType(field: DBFieldAttribute, fieldName: string) {
 		const type = field.type;
-		const typeMap = {
+		const provider = dbType || "sqlite";
+		type StringOnlyUnion<T> = T extends string ? T : never;
+		const typeMap: Record<
+			StringOnlyUnion<DBFieldType> | "id" | "foreignKeyId",
+			Record<KyselyDatabaseType, ColumnDataType | RawBuilder<unknown>>
+		> = {
 			string: {
 				sqlite: "text",
 				postgres: "text",
@@ -359,18 +366,24 @@ export async function getMigrations(config: BetterAuthOptions) {
 						: "varchar(36)",
 				sqlite: useNumberId ? "integer" : "text",
 			},
+			"string[]": {
+				sqlite: "text",
+				postgres: "jsonb",
+				mysql: "json",
+				mssql: "varchar(8000)",
+			},
+			"number[]": {
+				sqlite: "text",
+				postgres: "jsonb",
+				mysql: "json",
+				mssql: "varchar(8000)",
+			},
 		} as const;
 		if (fieldName === "id" || field.references?.field === "id") {
 			if (fieldName === "id") {
-				return typeMap.id[dbType!];
+				return typeMap.id[provider];
 			}
-			return typeMap.foreignKeyId[dbType!];
-		}
-		if (dbType === "sqlite" && (type === "string[]" || type === "number[]")) {
-			return "text";
-		}
-		if (type === "string[]" || type === "number[]") {
-			return "jsonb";
+			return typeMap.foreignKeyId[provider];
 		}
 		if (Array.isArray(type)) {
 			return "text";
@@ -380,7 +393,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 				`Unsupported field type '${String(type)}' for field '${fieldName}'. Allowed types are: string, number, boolean, date, string[], number[]. If you need to store structured data, store it as a JSON string (type: "string") or split it into primitive fields. See https://better-auth.com/docs/advanced/schema#additional-fields`,
 			);
 		}
-		return typeMap[type]![dbType || "sqlite"];
+		return typeMap[type][provider];
 	}
 	const getModelName = initGetModelName({
 		schema: getAuthTables(config),
