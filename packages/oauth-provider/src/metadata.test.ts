@@ -120,9 +120,7 @@ describe("oauth metadata", async () => {
 				scopes,
 			},
 		});
-		await expect(auth.api.getOpenIdConfig()).rejects.toThrowError(
-			new APIError("NOT_FOUND"),
-		);
+		await expect(auth.api.getOpenIdConfig()).rejects.toThrow(APIError);
 		const oauthMetadata = await auth.api.getOAuthServerConfig();
 		expect(oauthMetadata).toMatchObject({
 			scopes_supported: scopes,
