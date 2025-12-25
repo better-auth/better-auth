@@ -23,7 +23,13 @@ import type {
 	Subscription,
 	SubscriptionOptions,
 } from "./types";
-import { getPlanByName, getPlanByPriceInfo, getPlans } from "./utils";
+import {
+	findExistingStripeCustomer,
+	getPlanByName,
+	getPlanByPriceInfo,
+	getPlans,
+} from "./utils";
+import { defu } from "defu";
 
 const upgradeSubscriptionBodySchema = z.object({
 	/**
@@ -209,22 +215,38 @@ export const upgradeSubscription = (options: StripeOptions) => {
 			if (!customerId) {
 				try {
 					// Try to find existing Stripe customer by email
-					const existingCustomers = await client.customers.list({
-						email: user.email,
-						limit: 1,
-					});
-
-					let stripeCustomer = existingCustomers.data[0];
+					// Uses customerLookupFilter if provided for multi-app scenarios
+					let stripeCustomer = await findExistingStripeCustomer(
+						client,
+						user,
+						options,
+						ctx,
+					);
 
 					if (!stripeCustomer) {
-						stripeCustomer = await client.customers.create({
-							email: user.email,
-							name: user.name,
-							metadata: {
-								...ctx.body.metadata,
-								userId: user.id,
-							},
-						});
+						// Get custom create params if provided
+						let extraCreateParams: Partial<StripeType.CustomerCreateParams> =
+							{};
+						if (options.getCustomerCreateParams) {
+							extraCreateParams = await options.getCustomerCreateParams(
+								user,
+								ctx,
+							);
+						}
+
+						stripeCustomer = await client.customers.create(
+							defu(
+								{
+									email: user.email,
+									name: user.name,
+									metadata: {
+										...ctx.body.metadata,
+										userId: user.id,
+									},
+								},
+								extraCreateParams,
+							),
+						);
 					}
 
 					// Update local DB with Stripe customer ID
