@@ -1591,7 +1591,7 @@ Table Name: `oauthRefreshToken`
     {
       name: "sessionId",
       type: "string",
-      description: "ID of the user associated with the token",
+      description: "ID of the session used at issuance of the token (and still active)",
       isForeignKey: true,
       isRequired: false,
       references: { model: "session", field: "id" },
@@ -1665,7 +1665,7 @@ Table Name: `oauthAccessToken`
     {
       name: "sessionId",
       type: "string",
-      description: "ID of the user associated with the token",
+      description: "ID of the session used at issuance of the token (and still active)",
       isForeignKey: true,
       isOptional: true,
       references: { model: "session", field: "id" },
@@ -1683,7 +1683,7 @@ Table Name: `oauthAccessToken`
       type: "string",
       description: "ID of the user associated with the token",
       isForeignKey: true,
-      isRequired: true,
+      isOptional: true,
       references: { model: "user", field: "id" },
     },
     {

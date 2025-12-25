@@ -147,6 +147,11 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		id: "oauthProvider",
 		options: opts,
 		init: (ctx) => {
+			// Require session id storage on database (secondary-storage only solution not yet supported)
+			if (ctx.options.session && !ctx.options.session.storeSessionInDatabase) {
+				throw new BetterAuthError("sessions must be stored on database");
+			}
+
 			// Check for jwt plugin registration
 			if (!opts.disableJwtPlugin) {
 				const jwtPlugin = getJwtPlugin(ctx);
