@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import type { JWSAlgorithms, JwtOptions } from "better-auth/plugins/jwt";
+import type { JWSAlgorithms, JwtOptions } from "better-auth/plugins";
 import type { OAuthOptions, Scope } from "./types";
 import type {
 	AuthServerMetadata,
@@ -27,7 +27,8 @@ export function authServerMetadata(
 		token_endpoint: `${baseURL}/oauth2/token`,
 		jwks_uri: overrides?.jwt_disabled
 			? undefined
-			: (opts?.jwks?.remoteUrl ?? `${baseURL}/jwks`),
+			: (opts?.jwks?.remoteUrl ??
+				`${baseURL}${opts?.jwks?.jwksPath ?? "/jwks"}`),
 		registration_endpoint: `${baseURL}/oauth2/register`,
 		introspection_endpoint: `${baseURL}/oauth2/introspect`,
 		revocation_endpoint: `${baseURL}/oauth2/revoke`,
