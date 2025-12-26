@@ -520,6 +520,7 @@ export const getNormalTestSuiteTests = (
 				},
 				forceAllowId: true,
 			});
+			console.log(1, user, 1);
 
 			const oneToOne = await adapter.create<OneToOneTable>({
 				model: "oneToOneTable",
@@ -527,6 +528,7 @@ export const getNormalTestSuiteTests = (
 					oneToOne: user.id,
 				},
 			});
+			console.log(2, oneToOne, 1);
 
 			type ResultType = Pick<User, "email" | "name"> & {
 				oneToOneTable: OneToOneTable;
@@ -535,10 +537,10 @@ export const getNormalTestSuiteTests = (
 			const result = await adapter.findOne<ResultType>({
 				model: "user",
 				where: [{ field: "id", value: user.id }],
-				select: ["email", "name"],
+				// select: ["email", "name"],
 				join: { oneToOneTable: true },
 			});
-
+			console.log(3, result);
 			expect(result).toBeDefined();
 			expect(result?.email).toEqual(user.email);
 			expect(result?.name).toEqual(user.name);

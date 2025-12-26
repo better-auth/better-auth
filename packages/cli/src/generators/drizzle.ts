@@ -357,6 +357,10 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				modelName: string;
 				hasUnique: boolean;
 				hasMany: boolean;
+				foreignKeys: Array<{
+					fieldName: string;
+					field: DBFieldAttribute;
+				}>;
 			}
 		>();
 
@@ -381,11 +385,19 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				modelName,
 				hasUnique,
 				hasMany,
+				foreignKeys: foreignKeysPointingHere.map(([fieldName, field]) => ({
+					fieldName,
+					field,
+				})),
 			});
 		}
 
 		// Add relations, deduplicating by relationKey
-		for (const { modelName, hasMany } of modelRelationsMap.values()) {
+		for (const {
+			modelName,
+			hasMany,
+			foreignKeys,
+		} of modelRelationsMap.values()) {
 			// Determine relation type: if all are unique, it's "one", otherwise "many"
 			const relationType = hasMany ? "many" : "one";
 			let relationKey = getModelName(modelName);
@@ -400,14 +412,36 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				relationKey = `${relationKey}s`;
 			}
 
-			// Only add if we haven't seen this key before
-			if (!manyRelationsSet.has(relationKey)) {
-				manyRelationsSet.add(relationKey);
-				manyRelations.push({
+			if (relationType === "one") {
+				// For one-to-one relations, we need to add them to oneRelations with reference info
+				// Use the first foreign key (if all are unique, any one will work)
+				const firstFk = foreignKeys[0]!;
+				// For relations pointing back to THIS table:
+				// - field: primary key in THIS table (the one being referenced)
+				// - references: foreign key in the OTHER table (the one pointing here)
+				const fieldRef = `${getModelName(tableKey)}.${getFieldName({ model: tableKey, field: firstFk.field.references!.field || "id" })}`;
+				const referenceRef = `${getModelName(modelName)}.${getFieldName({ model: modelName, field: firstFk.fieldName })}`;
+
+				oneRelations.push({
 					key: relationKey,
 					model: getModelName(modelName),
-					type: relationType,
+					type: "one",
+					reference: {
+						field: fieldRef,
+						references: referenceRef,
+						fieldName: firstFk.fieldName,
+					},
 				});
+			} else {
+				// Only add if we haven't seen this key before
+				if (!manyRelationsSet.has(relationKey)) {
+					manyRelationsSet.add(relationKey);
+					manyRelations.push({
+						key: relationKey,
+						model: getModelName(modelName),
+						type: relationType,
+					});
+				}
 			}
 		}
 

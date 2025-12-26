@@ -333,6 +333,120 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				if (orGroup.length) clause.push(orClause!);
 				return clause;
 			}
+
+			function convertNewWhereClause(where: Where[], model: string) {
+				const schemaModel = getSchema(model);
+				if (!where || where.length === 0) {
+					return {};
+				}
+
+				const convertWhereToColumn = (w: Where) => {
+					const field = getFieldName({ model, field: w.field });
+					if (!schemaModel[field]) {
+						throw new BetterAuthError(
+							`The field "${w.field}" does not exist in the schema for the model "${model}". Please update your schema.`,
+						);
+					}
+
+					const columnObj: Record<string, any> = {};
+
+					if (w.operator === "in") {
+						if (!Array.isArray(w.value)) {
+							throw new BetterAuthError(
+								`The value for the field "${w.field}" must be an array when using the "in" operator.`,
+							);
+						}
+						columnObj.in = w.value;
+					} else if (w.operator === "not_in") {
+						if (!Array.isArray(w.value)) {
+							throw new BetterAuthError(
+								`The value for the field "${w.field}" must be an array when using the "not_in" operator.`,
+							);
+						}
+						columnObj.notIn = w.value;
+					} else if (w.operator === "contains") {
+						columnObj.like = `%${w.value}%`;
+					} else if (w.operator === "starts_with") {
+						columnObj.like = `${w.value}%`;
+					} else if (w.operator === "ends_with") {
+						columnObj.like = `%${w.value}`;
+					} else if (w.operator === "lt") {
+						columnObj.lt = w.value;
+					} else if (w.operator === "lte") {
+						columnObj.lte = w.value;
+					} else if (w.operator === "ne") {
+						columnObj.ne = w.value;
+					} else if (w.operator === "gt") {
+						columnObj.gt = w.value;
+					} else if (w.operator === "gte") {
+						columnObj.gte = w.value;
+					} else {
+						columnObj.eq = w.value;
+					}
+
+					return { field, columnObj };
+				};
+
+				if (where.length === 1) {
+					const w = where[0];
+					if (!w) {
+						return {};
+					}
+					const { field, columnObj } = convertWhereToColumn(w);
+					return {
+						[field]: columnObj,
+					};
+				}
+
+				const andGroup = where.filter(
+					(w) => w.connector === "AND" || !w.connector,
+				);
+				const orGroup = where.filter((w) => w.connector === "OR");
+
+				const result: Record<string, any> = {};
+
+				if (andGroup.length > 0) {
+					const fieldMap: Record<string, any[]> = {};
+
+					for (const w of andGroup) {
+						const { field, columnObj } = convertWhereToColumn(w);
+						if (!fieldMap[field]) {
+							fieldMap[field] = [];
+						}
+						fieldMap[field].push(columnObj);
+					}
+
+					// Build field conditions - multiple fields are implicitly ANDed
+					for (const [field, conditions] of Object.entries(fieldMap)) {
+						if (conditions.length === 1) {
+							result[field] = conditions[0];
+						} else {
+							// Multiple conditions for same field - use AND array
+							result[field] = {
+								AND: conditions,
+							};
+						}
+					}
+				}
+
+				if (orGroup.length > 0) {
+					const orConditions: any[] = [];
+
+					for (const w of orGroup) {
+						const { field, columnObj } = convertWhereToColumn(w);
+						orConditions.push({
+							[field]: columnObj,
+						});
+					}
+
+					if (orConditions.length > 0) {
+						result.OR = orConditions;
+					}
+				}
+
+				return result;
+			}
+
 			function checkMissingFields(
 				schema: Record<string, any>,
 				model: string,
@@ -394,8 +508,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 									}
 								}
 							}
+							const clause = convertNewWhereClause(where, model);
+							console.log("clause", clause);
 							let query = db.query[model].findFirst({
-								where: clause[0],
+								where: clause,
 								with: includes,
 							});
 							const res = await query;
@@ -438,7 +554,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							logger.info("Falling back to regular query");
 						} else {
 							let includes:
-								| Record<string, { limit: number } | boolean>
+								| Record<string, { limit: number; offset?: number } | boolean>
 								| undefined;
 
 							const pluralJoinResults: string[] = [];
@@ -467,8 +583,9 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 									[fieldName]: sortBy.direction === "desc" ? "desc" : "asc",
 								};
 							}
+
 							let query = db.query[model].findMany({
-								where: clause[0],
+								where: where ? convertNewWhereClause(where, model) : undefined,
 								with: includes,
 								limit: limit ?? 100,
 								offset: offset ?? 0,

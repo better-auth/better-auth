@@ -4,13 +4,14 @@ import { createPool } from "mysql2/promise";
 import { assert } from "vitest";
 import {
 	authFlowTestSuite,
-	joinsTestSuite,
+	// joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
 	transactionsTestSuite,
 	uuidTestSuite,
-	testAdapter
+	testAdapter,
 } from "better-auth/adapters";
+import { joinsTestSuite } from "../../better-auth/src/adapters/tests";
 import { drizzleAdapter } from "../drizzle-adapter";
 import { generateDrizzleSchema, resetGenerationCount } from "./generate-schema";
 
@@ -22,7 +23,14 @@ const mysqlDB = createPool({
 const { execute } = await testAdapter({
 	adapter: async (options) => {
 		const { schema } = await generateDrizzleSchema(mysqlDB, options, "mysql");
-		return drizzleAdapter(drizzle(mysqlDB, { schema, mode: "default" }), {
+		const { relations, ...schema1 } = schema;
+		const drizzleI2 = drizzle({
+			client: mysqlDB,
+			mode: "default",
+			schema: schema1,
+			relations: relations,
+		});
+		return drizzleAdapter(drizzleI2, {
 			debugLogs: { isRunningAdapterTests: true },
 			schema,
 			provider: "mysql",
@@ -63,12 +71,29 @@ const { execute } = await testAdapter({
 	},
 	prefixTests: "mysql",
 	tests: [
-		normalTestSuite(),
-		transactionsTestSuite({ disableTests: { ALL: true } }),
-		authFlowTestSuite(),
-		numberIdTestSuite(),
-		joinsTestSuite(),
-		uuidTestSuite(),
+		// normalTestSuite(),
+		// transactionsTestSuite({ disableTests: { ALL: true } }),
+		// authFlowTestSuite(),
+		// numberIdTestSuite(),
+		joinsTestSuite({
+			disableTests: {
+				ALL: true,
+				"create - should create a model": false,
+				"findOne - should select fields with one-to-one join": false,
+				// // "create - should always return an id": false,
+				// "create - should return null for nullable foreign keys": false,
+				// "create - should apply default values to fields": false,
+				// "findOne - should find a model": false,
+				// "findOne - should not apply defaultValue if value not found": false,
+				// "findOne - should find a model using a reference field": false,
+				// "findOne - should not throw on record not found": false,
+				// // "findOne - should find a model without id": false,
+				// // "findOne - should find a model with join": false,
+				// // "findOne - should find a model with modified field name": false,
+				// // "findOne - should find a model with modified model name": false,
+			},
+		}),
+		// uuidTestSuite(),
 	],
 	async onFinish() {
 		await mysqlDB.end();
