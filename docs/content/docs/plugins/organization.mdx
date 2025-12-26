@@ -646,7 +646,7 @@ export const auth = betterAuth({
       create: {
         before: async (session) => {
           // Implement your custom logic to set initial active organization
-          const organization = await getOrganization(session.userId);
+          const organization = await getOrganizationByUserId(session.userId);
           return {
             data: {
               ...session,
