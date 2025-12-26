@@ -637,7 +637,7 @@ type setActiveOrganization = {
 ```
 </APIMethod>
 
-To set active organization when a session is created you can use [database hooks](/docs/concepts/database#database-hooks).
+To automatically set an active organization when a session is created, you can use [database hooks](/docs/concepts/database#database-hooks). You'll need to implement logic to determine which organization to set as the initial active organization.
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
@@ -645,11 +645,12 @@ export const auth = betterAuth({
     session: {
       create: {
         before: async (session) => {
-          const organization = await getActiveOrganization(session.userId);
+          // Implement your custom logic to set initial active organization
+          const organization = await getOrganization(session.userId);
           return {
             data: {
               ...session,
-              activeOrganizationId: organization.id,
+              activeOrganizationId: organization?.id,
             },
           };
         },
