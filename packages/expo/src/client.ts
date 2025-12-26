@@ -33,15 +33,24 @@ export function parseSetCookieHeader(
 	cookies.forEach((cookie) => {
 		const parts = cookie.split(";").map((p) => p.trim());
 		const [nameValue, ...attributes] = parts;
-		const [name, ...valueParts] = nameValue!.split("=");
+		const [name, ...valueParts] = (nameValue || "").split("=");
 		const value = valueParts.join("=");
-		const cookieObj: CookieAttributes = { value };
+
+		if (!name || value === undefined) {
+			return;
+		}
+
+		const attrObj: CookieAttributes = { value };
 		attributes.forEach((attr) => {
 			const [attrName, ...attrValueParts] = attr.split("=");
+			if (!attrName?.trim()) {
+				return;
+			}
 			const attrValue = attrValueParts.join("=");
-			cookieObj[attrName!.toLowerCase() as "value"] = attrValue;
+			const normalizedAttrName = attrName.trim().toLowerCase();
+			attrObj[normalizedAttrName as "value"] = attrValue;
 		});
-		cookieMap.set(name!, cookieObj);
+		cookieMap.set(name, attrObj);
 	});
 	return cookieMap;
 }
