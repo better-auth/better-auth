@@ -87,7 +87,7 @@ describe("trusted origins", () => {
 			).resolves.toBe(true);
 		});
 
-		it.only("should always allow the app's origin (even if context is updated)", async () => {
+		it("should always allow the app's origin (even if context is updated)", async () => {
 			const { isTrustedOrigin } = await createAuthTestInstance({
 				baseURL: undefined,
 				plugins: [
