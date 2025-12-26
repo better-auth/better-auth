@@ -73,6 +73,20 @@ describe("trusted origins", () => {
 			).resolves.toBe(true);
 		});
 
+		it("should always allow the app's origin (inferred from baseURL)", async () => {
+			const { isTrustedOrigin } = await createAuthTestInstance({
+				baseURL: undefined,
+			});
+
+			await expect(isTrustedOrigin("http://localhost:3000")).resolves.toBe(
+				true,
+			);
+
+			await expect(
+				isTrustedOrigin("http://localhost:3000/some/path"),
+			).resolves.toBe(true);
+		});
+
 		it("should reject origins that start with a trusted origin", async () => {
 			const { isTrustedOrigin } = await createAuthTestInstance({
 				trustedOrigins: ["https://trusted.com"],
