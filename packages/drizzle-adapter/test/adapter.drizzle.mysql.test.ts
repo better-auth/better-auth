@@ -1,7 +1,7 @@
 import { execSync } from "node:child_process";
 import {
 	authFlowTestSuite,
-	// joinsTestSuite,
+	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
 	testAdapter,
@@ -11,7 +11,6 @@ import {
 import { drizzle } from "drizzle-orm/mysql2";
 import { createPool } from "mysql2/promise";
 import { assert } from "vitest";
-import { joinsTestSuite } from "../../better-auth/src/adapters/tests";
 import { drizzleAdapter } from "../drizzle-adapter";
 import { generateDrizzleSchema, resetGenerationCount } from "./generate-schema";
 
