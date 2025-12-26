@@ -1,17 +1,17 @@
 import { execSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
 import {
 	authFlowTestSuite,
 	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
+	testAdapter,
 	transactionsTestSuite,
 	uuidTestSuite,
-	testAdapter,
 } from "better-auth/adapters";
+import Database from "better-sqlite3";
+import { drizzle } from "drizzle-orm/better-sqlite3";
 import { drizzleAdapter } from "../drizzle-adapter";
 import {
 	clearSchemaCache,

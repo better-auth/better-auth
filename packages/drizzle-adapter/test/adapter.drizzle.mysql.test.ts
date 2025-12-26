@@ -1,16 +1,16 @@
 import { execSync } from "node:child_process";
-import { drizzle } from "drizzle-orm/mysql2";
-import { createPool } from "mysql2/promise";
-import { assert } from "vitest";
 import {
 	authFlowTestSuite,
 	// joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
+	testAdapter,
 	transactionsTestSuite,
 	uuidTestSuite,
-	testAdapter,
 } from "better-auth/adapters";
+import { drizzle } from "drizzle-orm/mysql2";
+import { createPool } from "mysql2/promise";
+import { assert } from "vitest";
 import { joinsTestSuite } from "../../better-auth/src/adapters/tests";
 import { drizzleAdapter } from "../drizzle-adapter";
 import { generateDrizzleSchema, resetGenerationCount } from "./generate-schema";

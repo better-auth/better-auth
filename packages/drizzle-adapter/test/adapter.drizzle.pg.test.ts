@@ -1,15 +1,15 @@
 import { execSync } from "node:child_process";
-import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
 import {
 	authFlowTestSuite,
 	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
+	testAdapter,
 	transactionsTestSuite,
 	uuidTestSuite,
-	testAdapter,
 } from "better-auth/adapters";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
 import { drizzleAdapter } from "../drizzle-adapter";
 import { generateDrizzleSchema, resetGenerationCount } from "./generate-schema";
 

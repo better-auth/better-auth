@@ -1,12 +1,12 @@
 import { existsSync } from "node:fs";
+import path from "node:path";
+import type { AdapterSchemaCreation } from "better-auth";
 import { initGetFieldName, initGetModelName } from "better-auth/adapters";
 import type { BetterAuthDBSchema, DBFieldAttribute } from "better-auth/db";
 import { getAuthTables } from "better-auth/db";
 import type { BetterAuthOptions } from "better-auth/types";
 import prettier from "prettier";
 import type { DrizzleAdapterConfig } from "./drizzle-adapter";
-import type { AdapterSchemaCreation } from "better-auth";
-import path from "node:path";
 
 interface SchemaGenerator {
 	<Options extends BetterAuthOptions>(opts: {
