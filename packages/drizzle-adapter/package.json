@@ -57,8 +57,6 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/pg": "^8.15.5",
     "better-sqlite3": "^12.5.0",
-    "drizzle-kit": "1.0.0-beta.6-4414a19",
-    "drizzle-orm": "1.0.0-beta.6-4414a19",
     "mysql2": "^3.14.4",
     "pg": "^8.16.3",
     "tsdown": "catalog:",
@@ -66,7 +64,7 @@
     "vitest": "^4.0.15"
   },
   "peerDependencies": {
-    "drizzle-kit": ">=1.0.0-beta.3-702eadc",
-    "drizzle-orm": ">=1.0.0-beta.3-702eadc"
+    "drizzle-kit": "1.0.0-beta.6-4414a19",
+    "drizzle-orm": "1.0.0-beta.6-4414a19"
   }
 }
