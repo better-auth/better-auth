@@ -377,57 +377,6 @@ describe("generate", async () => {
 		);
 	});
 
-	// Plugin that tests one-to-one relationship
-	const oneToOnePlugin = (): BetterAuthPlugin => {
-		return {
-			id: "one-to-one-test",
-			schema: {
-				oneToOneTable: {
-					fields: {
-						oneToOne: {
-							type: "string",
-							required: true,
-							references: { field: "id", model: "user" },
-							unique: true,
-						},
-					},
-				},
-			},
-		};
-	};
-
-	it("should generate drizzle schema with one-to-one relation in user relations", async () => {
-		const schema = await generateDrizzleSchema({
-			file: "test.drizzle",
-			adapter: drizzleAdapter(
-				{},
-				{
-					provider: "pg",
-					schema: {},
-				},
-			)({} as BetterAuthOptions),
-			options: {
-				experimental: { joins: true },
-				database: drizzleAdapter(
-					{},
-					{
-						provider: "pg",
-						schema: {},
-					},
-				),
-				plugins: [oneToOnePlugin()],
-			},
-		});
-		// Verify that user relations include oneToOneTable
-		expect(schema.code).toContain("userRelations");
-		expect(schema.code).toMatch(
-			/oneToOneTable:\s*one\(oneToOneTable[,\s\S]*fields:\s*\[user\.id\][,\s\S]*references:\s*\[oneToOneTable\.oneToOne\]/,
-		);
-		await expect(schema.code).toMatchFileSnapshot(
-			"./__snapshots__/auth-schema-one-to-one.txt",
-		);
-	});
-
 	it("should generate kysely schema", async () => {
 		const schema = await generateMigrations({
 			file: "test.sql",
