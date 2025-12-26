@@ -373,7 +373,7 @@ describe("session", async () => {
 
 describe("session storage", async () => {
 	let store = new Map<string, string>();
-	const { client, signInWithTestUser } = await getTestInstance({
+	const { client, signInWithTestUser, auth } = await getTestInstance({
 		secondaryStorage: {
 			set(key, value, ttl) {
 				store.set(key, value);
@@ -459,6 +459,81 @@ describe("session storage", async () => {
 			});
 			const revokedSession = await client.getSession();
 			expect(revokedSession.data).toBeNull();
+		});
+	});
+
+	it("should update session TTL and active-sessions list correctly", async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			// Get Initial Session
+			const current = await client.getSession();
+			expect(current.data).not.toBeNull();
+			const sessionToken = current.data!.session.token;
+			const userId = current.data!.session.userId;
+
+			// Store initial state from secondary storage
+			const initialSessionData = store.get(sessionToken);
+			expect(initialSessionData).toBeDefined();
+			const initialParsed = JSON.parse(initialSessionData!);
+			const initialExpiresAt = new Date(initialParsed.expiresAt);
+
+			const initialListKey = `active-sessions-${userId}`;
+			const initialListData = store.get(initialListKey);
+			expect(initialListData).toBeDefined();
+			const initialListParsed = JSON.parse(initialListData!);
+			const initialListSession = initialListParsed.find(
+				(s: { token: string; expiresAt: string }) => s.token === sessionToken,
+			);
+			expect(initialListSession).toBeDefined();
+
+			// Update Session with new Expiry date:
+			const now = Date.now();
+			const updatedExpiresAt = new Date(now + 60 * 60 * 1000); //1hr
+
+			const ctx = await auth.$context;
+			await ctx.internalAdapter.updateSession(sessionToken, {
+				...current.data!.session,
+				expiresAt: updatedExpiresAt,
+			});
+			// Verify session data in secondary storage:
+			const updateSessionData = await store.get(sessionToken);
+			expect(updateSessionData).toBeDefined();
+			const updatedParsed = JSON.parse(updateSessionData!);
+			// Verify expiresAt is updated
+			expect(new Date(updatedParsed.session.expiresAt).getTime()).toBe(
+				updatedExpiresAt.getTime(),
+			);
+			// Verify expiration changed from initial
+			expect(new Date(updatedParsed.session.expiresAt).getTime()).not.toBe(
+				initialExpiresAt.getTime(),
+			);
+			// Verify other fields preserved
+			expect(updatedParsed.session.userId).toBe(userId);
+			expect(updatedParsed.session.token).toBe(sessionToken);
+			expect(updatedParsed.user).toBeDefined();
+
+			//  Verify active-sessions list in secondary storage (store)
+			const updatedListData = store.get(initialListKey);
+			expect(updatedListData).toBeDefined();
+
+			const updatedList = JSON.parse(updatedListData!);
+
+			// Verify list still exists
+			expect(updatedList.length).toBeGreaterThan(0);
+
+			// Verify the updated token's entry
+			const updatedListEntry = updatedList.find(
+				(s: { token: string; expiresAt: number }) => s.token === sessionToken,
+			);
+			expect(updatedListEntry).toBeDefined();
+			expect(updatedListEntry!.expiresAt).toBe(updatedExpiresAt.getTime());
+
+			// Verify expiration changed in the list
+			expect(updatedListEntry!.expiresAt).not.toBe(initialListSession!.expiresAt);
+
+			// Verify list is sorted correctly (furthest expiration last)
+			const sorted = [...updatedList].sort((a, b) => a.expiresAt - b.expiresAt);
+			expect(updatedList).toEqual(sorted);
 		});
 	});
 });

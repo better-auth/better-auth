@@ -550,7 +550,7 @@ export const createInternalAdapter = (
 											)
 											.concat([{ token: sessionToken, expiresAt: expiresMs }]);
 
-										const sorted = filtered.toSorted(
+										const sorted = filtered.sort(
 											(a, b) => a.expiresAt - b.expiresAt,
 										);
 										const furthest = sorted.at(-1)?.expiresAt;
