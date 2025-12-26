@@ -35,8 +35,8 @@ async function createAuthTestInstance(overrides?: Partial<BetterAuthOptions>) {
 
 	const { auth, client } = await getTestInstance(
 		{
-			plugins: [testServerPlugin],
 			...overrides,
+			plugins: [testServerPlugin, ...(overrides?.plugins || [])],
 		},
 		{ clientOptions: { plugins: [testClientPlugin] } },
 	);
@@ -76,6 +76,30 @@ describe("trusted origins", () => {
 		it("should always allow the app's origin (inferred from baseURL)", async () => {
 			const { isTrustedOrigin } = await createAuthTestInstance({
 				baseURL: undefined,
+			});
+
+			await expect(isTrustedOrigin("http://localhost:3000")).resolves.toBe(
+				true,
+			);
+
+			await expect(
+				isTrustedOrigin("http://localhost:3000/some/path"),
+			).resolves.toBe(true);
+		});
+
+		it.only("should always allow the app's origin (even if context is updated)", async () => {
+			const { isTrustedOrigin } = await createAuthTestInstance({
+				baseURL: undefined,
+				plugins: [
+					{
+						id: "test-init-plugin",
+						init() {
+							return {
+								context: {},
+							};
+						},
+					},
+				],
 			});
 
 			await expect(isTrustedOrigin("http://localhost:3000")).resolves.toBe(
