@@ -509,7 +509,6 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								}
 							}
 							const clause = convertNewWhereClause(where, model);
-							console.log("clause", clause);
 							let query = db.query[model].findFirst({
 								where: clause,
 								with: includes,

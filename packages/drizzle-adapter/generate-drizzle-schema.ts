@@ -407,6 +407,36 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 						sourceModel: modelName,
 					});
 				}
+			} else {
+				// Handle one-to-one relationships (all foreign keys are unique)
+				const fkField = foreignKeysPointingHere.find(
+					([_, field]) => field.unique,
+				);
+				if (fkField) {
+					const [fkFieldName, fieldAttr] = fkField;
+					// Use the referenced field (not always "id") as the fromField
+					const referencedField = fieldAttr.references?.field || "id";
+					const fromField = getFieldName({
+						model: tableKey,
+						field: referencedField,
+					});
+					const toField = getFieldName({
+						model: otherTableKey,
+						field: fkFieldName,
+					});
+
+					// For one-to-one, use singular form (no pluralization)
+					const relationKey = otherModelName;
+
+					modelRelations.push({
+						key: relationKey,
+						type: "one",
+						targetModel: otherModelName,
+						fromField,
+						toField,
+						sourceModel: modelName,
+					});
+				}
 			}
 		}
 
