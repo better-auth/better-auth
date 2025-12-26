@@ -27,15 +27,17 @@ const cleanupDatabase = async (shouldDestroy = false) => {
 const { execute } = await testAdapter({
 	adapter: async (options) => {
 		const { schema } = await generateDrizzleSchema(pgDB, options, "pg");
+		const { relations, ...schemas } = schema;
 		return drizzleAdapter(
-			drizzle("postgres://user:password@localhost:5432/better_auth", {
-				schema,
+			drizzle({
+				client: pgDB,
+				relations,
+				schema: schemas,
 			}),
 			{
 				debugLogs: { isRunningAdapterTests: true },
-				schema,
+				schema: { ...schemas, relations },
 				provider: "pg",
-				transaction: true,
 			},
 		);
 	},
