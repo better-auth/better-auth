@@ -423,5 +423,6 @@ export const magicLink = (options: MagicLinkOptions) => {
 				max: opts.rateLimit?.max || 5,
 			},
 		],
+		options,
 	} satisfies BetterAuthPlugin;
 };

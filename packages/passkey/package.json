@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/passkey",
-  "version": "1.4.7",
+  "version": "1.5.0-beta.1",
   "type": "module",
   "description": "Passkey plugin for Better Auth",
   "main": "dist/index.mjs",
@@ -52,7 +52,7 @@
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
-    "@better-auth/utils": "0.3.0",
+    "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:*",
     "better-call": "catalog:",

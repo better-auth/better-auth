@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { APIError } from "better-call";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { setOAuthState } from "../api/middlewares/oauth";
 import { generateRandomString } from "../crypto";
 import type { StateData } from "../state";
@@ -17,9 +17,7 @@ export async function generateState(
 ) {
 	const callbackURL = c.body?.callbackURL || c.context.options.baseURL;
 	if (!callbackURL) {
-		throw new APIError("BAD_REQUEST", {
-			message: "callbackURL is required",
-		});
+		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.CALLBACK_URL_REQUIRED);
 	}
 
 	const state = generateRandomString(32);
@@ -46,10 +44,10 @@ export async function generateState(
 		return await generateGenericState(c, stateData);
 	} catch (error) {
 		c.context.logger.error("Failed to create verification", error);
-		throw new APIError("INTERNAL_SERVER_ERROR", {
-			message: "Unable to create verification",
-			cause: error,
-		});
+		throw APIError.from(
+			"INTERNAL_SERVER_ERROR",
+			BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+		);
 	}
 }
 

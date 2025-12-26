@@ -35,8 +35,27 @@ Better Auth includes multiple safeguards to prevent Cross-Site Request Forgery (
 3. **Secure Cookie Settings**
    Session cookies use the `SameSite=Lax` attribute by default, preventing browsers from sending cookies with most cross-site requests. You can override this behavior using the `defaultCookieAttributes` option.
 
-4. **No Mutations on GET Requests (with additional safeguards)**
-  `GET` requests are assumed to be read-only and should not alter the application’s state. In cases where a `GET` request must perform a mutation—such as during OAuth callbacks - Better Auth applies extra security measures, including validating `nonce` and `state` parameters to ensure the request’s authenticity.
+4. **Fetch Metadata Protection for First-Login CSRF**
+   Better Auth also uses [Fetch Metadata headers](https://developer.mozilla.org/en-US/docs/Web/Security/Attacks/CSRF#fetch_metadata) (`Sec-Fetch-Site`, `Sec-Fetch-Mode`, `Sec-Fetch-Dest`) to provide additional CSRF protection specifically for **first-login scenarios**, where the client does not yet have any cookies.
+   
+   This protection applies to **sign-in and sign-up email routes**, which accept form submissions (simple requests) to support progressive enhancement patterns.
+   
+   When a sign-in or sign-up request is received **without** any cookies:
+   
+   - If the browser indicates a **cross-site navigation** (for example: `Sec-Fetch-Site: cross-site` and `Sec-Fetch-Mode: navigate`), Better Auth **blocks** the request as a potential login CSRF attack.
+   
+   - If the request is **same-origin** or **same-site**, Better Auth still validates the `Origin`/`Referer` against your `trustedOrigins` configuration, using the existing origin validation logic.
+   
+   - If the client does **not** send Fetch Metadata headers (older browsers, some mobile WebViews, non-browser clients), Better Auth falls back to its **previous behavior** and only performs origin validation when cookies are present, preserving backward compatibility.
+   
+   This mechanism allows modern browsers to receive stronger protection against first-login CSRF attacks **without requiring CSRF tokens or client-side JavaScript**, and works seamlessly with progressive enhancement patterns.
+   
+   <Callout type="info">
+     Non-browser HTTP clients (mobile apps, server-to-server) should set the `Origin` or `Referer` header appropriately when making requests that include cookies. This ensures proper CSRF validation regardless of Fetch Metadata support.
+   </Callout> 
+
+5. **No Mutations on GET Requests (with additional safeguards)**
+  `GET` requests are assumed to be read-only and should not alter the application's state. In cases where a `GET` request must perform a mutation—such as during OAuth callbacks - Better Auth applies extra security measures, including validating `nonce` and `state` parameters to ensure the request's authenticity.
 
 You can skip the CSRF check for all requests by setting the `disableCSRFCheck` option to `true` in the configuration.
 
@@ -100,7 +119,12 @@ You can configure the IP address header in your Better Auth configuration:
 
 This ensures that Better Auth only accepts IP addresses from your trusted proxy's header, making it more difficult for attackers to bypass rate limiting or other IP-based security measures by spoofing headers.
 
-> **Important**: When setting a custom IP address header, ensure that your proxy or load balancer is properly configured to set this header, and that it cannot be set by end users directly.
+<Callout type="info">
+**Important**
+
+- When setting a custom IP address header, ensure that your proxy or load balancer is properly configured to set this header, and that it cannot be set by end users directly.
+- In dev/test environments, if the IP cannot be retrieved from headers, 127.0.0.1 is used as a fallback.
+</Callout>
 
 ## Trusted Origins
 
@@ -156,8 +180,8 @@ Trusted origins also support custom schemes for mobile apps and browser extensio
   trustedOrigins: [
     "myapp://",                               // Mobile app scheme
     "chrome-extension://YOUR_EXTENSION_ID",   // Browser extension
-    "exp://*/*",                              // Trust all Expo development URLs
-    "exp://10.0.0.*:*/*",                     // Trust 10.0.0.x IP range with any port
+    "exp://**",                               // Trust all Expo development URLs
+    "exp://10.0.0.*:*/**",                    // Trust 10.0.0.x IP range with any port
   ]
 }
 ```
