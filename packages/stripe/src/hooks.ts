@@ -1,4 +1,5 @@
-import type { GenericEndpointContext, User } from "better-auth";
+import type { GenericEndpointContext } from "@better-auth/core";
+import type { User } from "@better-auth/core/db";
 import type Stripe from "stripe";
 import type { InputSubscription, StripeOptions, Subscription } from "./types";
 import { getPlanByPriceInfo } from "./utils";
