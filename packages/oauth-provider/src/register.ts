@@ -1,7 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
-import { toExpJWT } from "../../better-auth/src/plugins/jwt/utils";
+import { toExpJWT } from "better-auth/plugins";
 import type { OAuthOptions, SchemaClient, Scope } from "./types";
 import type { OAuthClient } from "./types/oauth";
 import { storeClientSecret } from "./utils";
