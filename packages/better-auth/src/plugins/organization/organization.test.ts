@@ -1066,40 +1066,39 @@ describe("organization", async (it) => {
 	});
 
 	it("should respect membershipLimit function when adding members to organization", async () => {
-		const { auth: auth2, signInWithTestUser: signInWithTestUser2 } =
-			await getTestInstance({
-				user: {
-					modelName: "users",
-				},
-				plugins: [
-					organization({
-						membershipLimit: (user, organization) => {
-							// For organizations with "limit" in name, limit to 2 members
-							if (organization.name.includes("limit")) {
-								return 2;
-							}
-							return 100;
-						},
-						async sendInvitationEmail(data, request) {},
-					}),
-				],
-				logger: {
-					level: "error",
-				},
-			});
+		const { auth, signInWithTestUser } = await getTestInstance({
+			user: {
+				modelName: "users",
+			},
+			plugins: [
+				organization({
+					membershipLimit: (user, organization) => {
+						// For organizations with "limit" in name, limit to 2 members
+						if (organization.name.includes("limit")) {
+							return 2;
+						}
+						return 100;
+					},
+					async sendInvitationEmail(data, request) {},
+				}),
+			],
+			logger: {
+				level: "error",
+			},
+		});
 
-		const { headers: headers2 } = await signInWithTestUser2();
+		const { headers: headers2 } = await signInWithTestUser();
 		const client2 = createAuthClient({
 			plugins: [organizationClient()],
 			baseURL: "http://localhost:3000/api/auth",
 			fetchOptions: {
 				customFetchImpl: async (url, init) => {
-					return auth2.handler(new Request(url, init));
+					return auth.handler(new Request(url, init));
 				},
 			},
 		});
 
-		const org = await auth2.api.createOrganization({
+		const org = await auth.api.createOrganization({
 			body: {
 				name: "test-membership-limit-func",
 				slug: "test-membership-limit-func",
@@ -1108,19 +1107,19 @@ describe("organization", async (it) => {
 		});
 
 		// Add 1 member, now count = 2 (creator + 1)
-		const newUser = await auth2.api.signUpEmail({
+		const newUser = await auth.api.signUpEmail({
 			body: {
 				email: "user1@email.com",
 				password: "password",
 				name: "user1",
 			},
 		});
-		const session = await auth2.api.getSession({
+		const session = await auth.api.getSession({
 			headers: new Headers({
 				Authorization: `Bearer ${newUser?.token}`,
 			}),
 		});
-		await auth2.api.addMember({
+		await auth.api.addMember({
 			body: {
 				organizationId: org?.id,
 				userId: session?.user.id!,
@@ -1129,19 +1128,19 @@ describe("organization", async (it) => {
 		});
 
 		// Try to add a second member, should fail since limit is 2
-		const secondUser = await auth2.api.signUpEmail({
+		const secondUser = await auth.api.signUpEmail({
 			body: {
 				email: "user2@email.com",
 				password: "password",
 				name: "user2",
 			},
 		});
-		const session2 = await auth2.api.getSession({
+		const session2 = await auth.api.getSession({
 			headers: new Headers({
 				Authorization: `Bearer ${secondUser?.token}`,
 			}),
 		});
-		await auth2.api
+		await auth.api
 			.addMember({
 				body: {
 					organizationId: org?.id,
@@ -1151,9 +1150,10 @@ describe("organization", async (it) => {
 			})
 			.catch((e: APIError) => {
 				expect(e).not.toBeNull();
-				expect(e).toBeInstanceOf(APIError);
+				expect(isAPIError(e)).toBeTruthy();
 				expect(e.message).toBe(
-					ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED
+						.message,
 				);
 			});
 
