@@ -770,8 +770,32 @@ describe("stripe", () => {
 	});
 
 	it("should handle customer.subscription.created webhook event", async () => {
+		const stripeForTest = {
+			...stripeOptions.stripeClient,
+			webhooks: {
+				constructEventAsync: vi.fn(),
+			},
+		};
+
+		const testOptions = {
+			...stripeOptions,
+			stripeClient: stripeForTest as unknown as Stripe,
+			stripeWebhookSecret: "test_secret",
+		};
+
+		const { auth: testAuth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(testOptions)],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const testCtx = await testAuth.$context;
+
 		// Create a user with stripeCustomerId
-		const userWithCustomerId = await ctx.adapter.create({
+		const userWithCustomerId = await testCtx.adapter.create({
 			model: "user",
 			data: {
 				email: "dashboard-user@test.com",
@@ -804,25 +828,9 @@ describe("stripe", () => {
 			},
 		};
 
-		const stripeForTest = {
-			...stripeOptions.stripeClient,
-			webhooks: {
-				constructEventAsync: vi.fn().mockResolvedValue(mockEvent),
-			},
-		};
-
-		const testOptions = {
-			...stripeOptions,
-			stripeClient: stripeForTest as unknown as Stripe,
-			stripeWebhookSecret: "test_secret",
-		};
-
-		const testAuth = betterAuth({
-			baseURL: "http://localhost:3000",
-			database: memory,
-			emailAndPassword: { enabled: true },
-			plugins: [stripe(testOptions)],
-		});
+		(stripeForTest.webhooks.constructEventAsync as any).mockResolvedValue(
+			mockEvent,
+		);
 
 		const mockRequest = new Request(
 			"http://localhost:3000/api/auth/stripe/webhook",
@@ -839,7 +847,7 @@ describe("stripe", () => {
 		expect(response.status).toBe(200);
 
 		// Verify subscription was created in database
-		const subscription = await ctx.adapter.findOne<Subscription>({
+		const subscription = await testCtx.adapter.findOne<Subscription>({
 			model: "subscription",
 			where: [
 				{ field: "stripeSubscriptionId", value: "sub_dashboard_created" },
@@ -855,8 +863,38 @@ describe("stripe", () => {
 	});
 
 	it("should not create duplicate subscription if already exists", async () => {
+		const onSubscriptionCreatedCallback = vi.fn();
+
+		const stripeForTest = {
+			...stripeOptions.stripeClient,
+			webhooks: {
+				constructEventAsync: vi.fn(),
+			},
+		};
+
+		const testOptions = {
+			...stripeOptions,
+			stripeClient: stripeForTest as unknown as Stripe,
+			stripeWebhookSecret: "test_secret",
+			subscription: {
+				...stripeOptions.subscription,
+				onSubscriptionCreated: onSubscriptionCreatedCallback,
+			},
+		} as StripeOptions;
+
+		const { auth: testAuth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(testOptions)],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const testCtx = await testAuth.$context;
+
 		// Create user
-		const user = await ctx.adapter.create({
+		const user = await testCtx.adapter.create({
 			model: "user",
 			data: {
 				email: "duplicate-sub@test.com",
@@ -867,7 +905,7 @@ describe("stripe", () => {
 		});
 
 		// Create existing subscription
-		await ctx.adapter.create({
+		await testCtx.adapter.create({
 			model: "subscription",
 			data: {
 				referenceId: user.id,
@@ -901,31 +939,9 @@ describe("stripe", () => {
 			},
 		};
 
-		const onSubscriptionCreatedCallback = vi.fn();
-
-		const stripeForTest = {
-			...stripeOptions.stripeClient,
-			webhooks: {
-				constructEventAsync: vi.fn().mockResolvedValue(mockEvent),
-			},
-		};
-
-		const testOptions = {
-			...stripeOptions,
-			stripeClient: stripeForTest as unknown as Stripe,
-			stripeWebhookSecret: "test_secret",
-			subscription: {
-				...stripeOptions.subscription,
-				onSubscriptionCreated: onSubscriptionCreatedCallback,
-			},
-		} as StripeOptions;
-
-		const testAuth = betterAuth({
-			baseURL: "http://localhost:3000",
-			database: memory,
-			emailAndPassword: { enabled: true },
-			plugins: [stripe(testOptions)],
-		});
+		(stripeForTest.webhooks.constructEventAsync as any).mockResolvedValue(
+			mockEvent,
+		);
 
 		const mockRequest = new Request(
 			"http://localhost:3000/api/auth/stripe/webhook",
@@ -942,7 +958,7 @@ describe("stripe", () => {
 		expect(response.status).toBe(200);
 
 		// Verify only one subscription exists (no duplicate)
-		const subscriptions = await ctx.adapter.findMany<Subscription>({
+		const subscriptions = await testCtx.adapter.findMany<Subscription>({
 			model: "subscription",
 			where: [
 				{
@@ -959,6 +975,36 @@ describe("stripe", () => {
 	});
 
 	it("should skip subscription creation when user not found", async () => {
+		const onSubscriptionCreatedCallback = vi.fn();
+
+		const stripeForTest = {
+			...stripeOptions.stripeClient,
+			webhooks: {
+				constructEventAsync: vi.fn(),
+			},
+		};
+
+		const testOptions = {
+			...stripeOptions,
+			stripeClient: stripeForTest as unknown as Stripe,
+			stripeWebhookSecret: "test_secret",
+			subscription: {
+				...stripeOptions.subscription,
+				onSubscriptionCreated: onSubscriptionCreatedCallback,
+			},
+		} as StripeOptions;
+
+		const { auth: testAuth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(testOptions)],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const testCtx = await testAuth.$context;
+
 		const mockEvent = {
 			type: "customer.subscription.created",
 			data: {
@@ -982,31 +1028,9 @@ describe("stripe", () => {
 			},
 		};
 
-		const onSubscriptionCreatedCallback = vi.fn();
-
-		const stripeForTest = {
-			...stripeOptions.stripeClient,
-			webhooks: {
-				constructEventAsync: vi.fn().mockResolvedValue(mockEvent),
-			},
-		};
-
-		const testOptions = {
-			...stripeOptions,
-			stripeClient: stripeForTest as unknown as Stripe,
-			stripeWebhookSecret: "test_secret",
-			subscription: {
-				...stripeOptions.subscription,
-				onSubscriptionCreated: onSubscriptionCreatedCallback,
-			},
-		} as StripeOptions;
-
-		const testAuth = betterAuth({
-			baseURL: "http://localhost:3000",
-			database: memory,
-			emailAndPassword: { enabled: true },
-			plugins: [stripe(testOptions)],
-		});
+		(stripeForTest.webhooks.constructEventAsync as any).mockResolvedValue(
+			mockEvent,
+		);
 
 		const mockRequest = new Request(
 			"http://localhost:3000/api/auth/stripe/webhook",
@@ -1023,7 +1047,7 @@ describe("stripe", () => {
 		expect(response.status).toBe(200);
 
 		// Verify subscription was NOT created
-		const subscription = await ctx.adapter.findOne<Subscription>({
+		const subscription = await testCtx.adapter.findOne<Subscription>({
 			model: "subscription",
 			where: [{ field: "stripeSubscriptionId", value: "sub_no_user" }],
 		});
@@ -1035,8 +1059,38 @@ describe("stripe", () => {
 	});
 
 	it("should skip subscription creation when plan not found", async () => {
+		const onSubscriptionCreatedCallback = vi.fn();
+
+		const stripeForTest = {
+			...stripeOptions.stripeClient,
+			webhooks: {
+				constructEventAsync: vi.fn(),
+			},
+		};
+
+		const testOptions = {
+			...stripeOptions,
+			stripeClient: stripeForTest as unknown as Stripe,
+			stripeWebhookSecret: "test_secret",
+			subscription: {
+				...stripeOptions.subscription,
+				onSubscriptionCreated: onSubscriptionCreatedCallback,
+			},
+		} as StripeOptions;
+
+		const { auth: testAuth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(testOptions)],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const testCtx = await testAuth.$context;
+
 		// Create user
-		await ctx.adapter.create({
+		await testCtx.adapter.create({
 			model: "user",
 			data: {
 				email: "no-plan@test.com",
@@ -1069,31 +1123,9 @@ describe("stripe", () => {
 			},
 		};
 
-		const onSubscriptionCreatedCallback = vi.fn();
-
-		const stripeForTest = {
-			...stripeOptions.stripeClient,
-			webhooks: {
-				constructEventAsync: vi.fn().mockResolvedValue(mockEvent),
-			},
-		};
-
-		const testOptions = {
-			...stripeOptions,
-			stripeClient: stripeForTest as unknown as Stripe,
-			stripeWebhookSecret: "test_secret",
-			subscription: {
-				...stripeOptions.subscription,
-				onSubscriptionCreated: onSubscriptionCreatedCallback,
-			},
-		} as StripeOptions;
-
-		const testAuth = betterAuth({
-			baseURL: "http://localhost:3000",
-			database: memory,
-			emailAndPassword: { enabled: true },
-			plugins: [stripe(testOptions)],
-		});
+		(stripeForTest.webhooks.constructEventAsync as any).mockResolvedValue(
+			mockEvent,
+		);
 
 		const mockRequest = new Request(
 			"http://localhost:3000/api/auth/stripe/webhook",
@@ -1110,7 +1142,7 @@ describe("stripe", () => {
 		expect(response.status).toBe(200);
 
 		// Verify subscription was NOT created (no matching plan)
-		const subscription = await ctx.adapter.findOne<Subscription>({
+		const subscription = await testCtx.adapter.findOne<Subscription>({
 			model: "subscription",
 			where: [{ field: "stripeSubscriptionId", value: "sub_no_plan" }],
 		});
