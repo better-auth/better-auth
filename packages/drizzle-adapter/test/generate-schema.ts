@@ -70,8 +70,6 @@ export const generateDrizzleSchema = async (
 		options,
 	});
 
-	console.log("code", code);
-
 	await fs.writeFile(
 		join(
 			import.meta.dirname,
