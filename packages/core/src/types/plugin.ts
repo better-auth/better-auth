@@ -20,7 +20,7 @@ type DeepPartial<T> = T extends Function
 export type HookEndpointContext = Partial<
 	EndpointContext<string, any> & Omit<InputContext<string, any>, "method">
 > & {
-	path: string;
+	path?: string;
 	context: AuthContext & {
 		returned?: unknown | undefined;
 		responseHeaders?: Headers | undefined;
@@ -146,7 +146,7 @@ export type BetterAuthPlugin = {
 	/**
 	 * The error codes returned by the plugin
 	 */
-	$ERROR_CODES?: Record<string, string> | undefined;
+	$ERROR_CODES?: Record<string, { code: string; message: string }> | undefined;
 	/**
 	 * All database operations that are performed by the plugin
 	 *

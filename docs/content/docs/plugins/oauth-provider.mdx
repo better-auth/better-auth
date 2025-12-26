@@ -49,7 +49,8 @@ This plugin is in active development and may not be suitable for production use.
 
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth";
-    import { oauthProvider, jwt } from "@better-auth/oauth-provider";
+    import { jwt } from "better-auth/plugins";
+    import { oauthProvider } from "@better-auth/oauth-provider";
 
     const auth = betterAuth({
       disabledPaths: [
@@ -131,7 +132,7 @@ The OAuth Client is the connecting `oauthClient` such a mobile or web applicatio
 ```ts title="client.ts"
 import { createAuthClient } from "better-auth/client";
 import { oauthProviderClient } from "@better-auth/oauth-provider/client"
-const authClient = createAuthClient({
+export const authClient = createAuthClient({
   plugins: [oauthProviderClient()],
 });
 ```
@@ -140,12 +141,12 @@ const authClient = createAuthClient({
 
 The Resource Server is a client that operates on your API server to perform actions like token verification and provide metadata.
 
-```ts title="client.ts"
-import { auth } from "@/lib/auth"; // optional
+```ts title="server-client.ts"
+import { auth } from "@/lib/auth";
 import { createAuthClient } from "better-auth/client";
 import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client"
-const authClient = createAuthClient({
-  plugins: [oauthProviderResourceClient(auth)],
+export const serverClient = createAuthClient({
+  plugins: [oauthProviderResourceClient(auth)], // auth optional
 });
 ```
 
@@ -628,6 +629,54 @@ If you get a CORS issue when testing locally such as with the [MCP Inspector](ht
 This section shows how your API should verify tokens received from your clients.
 
 ### Verification
+
+Verification can be performed using `verifyAccessToken` available through the `oauthProviderResourceClient` plugin or `better-auth/oauth2` package.
+
+With `better-auth` package:
+
+```ts title="api/[endpoint].ts"
+import { verifyAccessToken } from "better-auth/oauth2";
+
+export const GET = async (req: Request) => {
+  const authorization = req.headers?.get("authorization") ?? undefined;
+  const accessToken = authorization?.startsWith("Bearer ")
+    ? authorization.replace("Bearer ", "")
+    : authorization;
+  const payload = await verifyAccessToken(
+    accessToken, {
+      verifyOptions: {
+        issuer: "https://auth.example.com",
+        audience: "https://api.example.com",
+      },
+      scopes: ["read:post"], // optional
+    }
+  );
+  // ...continue
+}
+```
+
+With `oauthProviderResourceClient` plugin:
+
+```ts title="api/[endpoint].ts"
+import { serverClient } from "@/lib/server-client";
+
+export const POST = async (req: Request) => {
+  const authorization = req.headers?.get("authorization") ?? undefined;
+  const accessToken = authorization?.startsWith("Bearer ")
+    ? authorization.replace("Bearer ", "")
+    : authorization;
+  const payload = await serverClient.verifyAccessToken(
+    accessToken, {
+      verifyOptions: {
+        issuer: "https://auth.example.com",
+        audience: "https://api.example.com",
+      },
+      scopes: ["write:post"], // optional
+    }
+  );
+  // ...continue
+}
+```
 
 #### JWT Verification
 
@@ -1196,13 +1245,13 @@ If you are using "openid" and confidential MCP clients, you cannot disable the J
 
     (Optional) If you have your auth configuration available locally, add the configuration as a parameter to the client to fill in these values and warn you about configuration errors. You can always override these values in the function call. If this is not supplied, typescript will guide you with the minimal configuration values needed.
 
-    ```ts title="client.ts"
-    import { auth } from "@/lib/auth"; // optional
+    ```ts title="server-client.ts"
+    import { auth } from "@/lib/auth";
     import { createAuthClient } from "better-auth/client";
     import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client"
 
-    const authClient = createAuthClient({
-      plugins: [oauthProviderResourceClient(auth)],
+    export const serverClient = createAuthClient({
+      plugins: [oauthProviderResourceClient(auth)], // auth optional
     });
     ```
   </Step>
@@ -1211,10 +1260,10 @@ If you are using "openid" and confidential MCP clients, you cannot disable the J
     ### Add OAuth Protected Resource Metadata to your API
 
     ```ts title="/.well-known/oauth-protected-resource/[resource-path]/route.ts"
-    import { authClient } from "@/lib/client";
+    import { serverClient } from "@/lib/server-client";
 
     export const GET = async () => {
-      const metadata = await authClient.getProtectedResourceMetadata({
+      const metadata = await serverClient.getProtectedResourceMetadata({
         resource: "https://api.example.com", // `aud` claim
         authorization_servers: ["https://auth.example.com"],
       })
@@ -1256,38 +1305,20 @@ If you are using "openid" and confidential MCP clients, you cannot disable the J
 
     - Using the client `verifyAccessToken` function
 
-    ```ts title="api/[endpoint].ts"
-    import { authClient } from "@/lib/client";
-
-    export const GET = async (req: Request) => {
-      const authorization = req.headers?.get("authorization") ?? undefined;
-      const accessToken = authorization?.startsWith("Bearer ")
-        ? authorization.replace("Bearer ", "")
-        : authorization;
-      const payload = await authClient.verifyAccessToken(
-        accessToken, {
-          verifyOptions: {
-            issuer: "https://auth.example.com",
-            audience: "https://api.example.com",
-          },
-        }
-      );
-      // ...continue
-    }
-    ```
+    See [Verification](#verification) for verification examples.
 
     - With auth available, use the client `verifyAccessToken` function to automatically determine endpoints
 
     ```ts title="api/[endpoint].ts"
     import { auth } from "@/lib/auth";
-    import { authClient } from "@/lib/client";
+    import { serverClient } from "@/lib/server-client";
 
     export const GET = async (req: Request) => {
       const authorization = req.headers?.get("authorization") ?? undefined;
       const accessToken = authorization?.startsWith("Bearer ")
         ? authorization.replace("Bearer ", "")
         : authorization;
-      const payload = await authClient.verifyAccessToken(
+      const payload = await serverClient.verifyAccessToken(
         accessToken, {
           verifyOptions: {
             audience: "https://api.example.com",
@@ -1560,7 +1591,7 @@ Table Name: `oauthRefreshToken`
     {
       name: "sessionId",
       type: "string",
-      description: "ID of the user associated with the token",
+      description: "ID of the session used at issuance of the token (and still active)",
       isForeignKey: true,
       isRequired: false,
       references: { model: "session", field: "id" },
@@ -1634,7 +1665,7 @@ Table Name: `oauthAccessToken`
     {
       name: "sessionId",
       type: "string",
-      description: "ID of the user associated with the token",
+      description: "ID of the session used at issuance of the token (and still active)",
       isForeignKey: true,
       isOptional: true,
       references: { model: "session", field: "id" },
@@ -1652,7 +1683,7 @@ Table Name: `oauthAccessToken`
       type: "string",
       description: "ID of the user associated with the token",
       isForeignKey: true,
-      isRequired: true,
+      isOptional: true,
       references: { model: "user", field: "id" },
     },
     {
@@ -1776,6 +1807,21 @@ To improve lookup performance, database adapters may map the field `client_id` o
 Previously `oauthApplication`
 
 - If `storeClientSecret` was unset or `plain`, you must hash all the stored `clientSecret` values into its "SHA-256" representation then convert it into base64Url format or use another storage method specified by `storeClientSecret`.
+The following function will convert a `plain` representation into the default hash:
+```ts
+import { createHash } from "@better-auth/utils/hash";
+import { base64Url } from "@better-auth/utils/base64";
+
+const defaultHasher = async (value: string) => {
+	const hash = await createHash("SHA-256").digest(
+		new TextEncoder().encode(value),
+	);
+	const hashed = base64Url.encode(new Uint8Array(hash), {
+		padding: false,
+	});
+	return hashed;
+};
+```
 - `type` field is no longer a required field. Instead, the schema requires `public` of type `boolean`. Migrate with the following rules:
     - Clients with `type: "public"`: set `type: undefined`, `public: true`, and `clientSecret: undefined`
     - Clients with `type: "native"`: set `public: true` and `clientSecret: undefined`
@@ -1788,14 +1834,16 @@ Previously `oauthApplication`
 
 Option 1 (simple):
 
-You may choose to opt-out of this table conversion with minimal impact. By doing so, existing users will simply need to login again. Simply delete the existing table `oauthAccessToken`.
+You may choose to opt-out of this table conversion with minimal impact. By doing so, users of the existing application will simply need to login again. Simply delete the existing table `oauthAccessToken`.
 
 Option 2 (more complex):
+
+Migrate all tables (you may need to create a clone of `oauthAccessToken` into `oauthRefreshToken` before a migration).
 
 - Convert `oauthAccessToken` with `refreshToken` field into a new `oauthRefreshToken` entry.
 ```ts
 {
-  token: hashed(refreshToken),
+  token: defaultHasher(refreshToken),
   expiresAt: refreshTokenExpiresAt,
   clientId: clientId,
   scopes: scopes,
@@ -1808,7 +1856,7 @@ Option 2 (more complex):
 - Keep `oauthAccessToken` but reference new `oauthRefreshToken`.
 ```ts
 {
-  token: hashed(accessToken),
+  token: defaultHasher(accessToken),
   expiresAt: accessTokenExpiresAt,
   clientId: clientId,
   scopes: scopes,
@@ -1828,3 +1876,4 @@ The MCP endpoints moved from `/mcp` to the `/oauth2` equivalent.
 - `/oauth2/register` (previously `/mcp/register`)
 - `/mcp/get-session` removed as not OAuth 2 compliant, use `/oauth2/introspect` instead
 - `/.well-known/oauth-protected-resource` removed, use the helper `mcpHandler` (or manually with the server `api.oAuth2introspectVerify` or the resource client `verifyAccessToken`)
+-  Database changes are equivalent to the [From OIDC Provider Plugin](#from-oidc-provider-plugin) section.
