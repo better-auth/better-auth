@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import type { JWSAlgorithms, JwtOptions } from "better-auth/plugins/jwt";
+import type { JWSAlgorithms, JwtOptions } from "better-auth/plugins";
 import type { OAuthOptions, Scope } from "./types";
 import type {
 	AuthServerMetadata,
