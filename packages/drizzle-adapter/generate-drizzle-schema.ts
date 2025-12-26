@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
-import type { AdapterSchemaCreation } from "better-auth";
+import type { DBAdapterSchemaCreation } from "@better-auth/core/db/adapter";
 import { initGetFieldName, initGetModelName } from "better-auth/adapters";
 import type { BetterAuthDBSchema, DBFieldAttribute } from "better-auth/db";
 import { getAuthTables } from "better-auth/db";
@@ -15,7 +15,7 @@ interface SchemaGenerator {
 		provider: "sqlite" | "mysql" | "pg";
 		adapterConfig: DrizzleAdapterConfig;
 		camelCase?: boolean;
-	}): Promise<AdapterSchemaCreation>;
+	}): Promise<DBAdapterSchemaCreation>;
 }
 
 function convertToSnakeCase(str: string, camelCase?: boolean) {
