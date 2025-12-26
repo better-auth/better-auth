@@ -23,7 +23,6 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest",
-    "coverage": "vitest run --coverage",
     "lint:package": "publint run --strict",
     "lint:types": "attw --profile esm-only --pack .",
     "typecheck": "tsc --project tsconfig.json"
@@ -48,12 +47,9 @@
       ]
     }
   },
-  "dependencies": {
+  "devDependencies": {
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
-    "prettier": "^3.7.4"
-  },
-  "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/pg": "^8.15.5",
     "better-sqlite3": "^12.5.0",
@@ -65,6 +61,8 @@
   },
   "peerDependencies": {
     "drizzle-kit": "1.0.0-beta.6-4414a19",
-    "drizzle-orm": "1.0.0-beta.6-4414a19"
+    "drizzle-orm": "1.0.0-beta.6-4414a19",
+    "better-auth": "workspace:*",
+    "@better-auth/core": "workspace:*"
   }
 }
