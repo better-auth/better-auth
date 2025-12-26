@@ -529,7 +529,9 @@ describe("session storage", async () => {
 			expect(updatedListEntry!.expiresAt).toBe(updatedExpiresAt.getTime());
 
 			// Verify expiration changed in the list
-			expect(updatedListEntry!.expiresAt).not.toBe(initialListSession!.expiresAt);
+			expect(updatedListEntry!.expiresAt).not.toBe(
+				initialListSession!.expiresAt,
+			);
 
 			// Verify list is sorted correctly (furthest expiration last)
 			const sorted = [...updatedList].sort((a, b) => a.expiresAt - b.expiresAt);
