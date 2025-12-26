@@ -26,6 +26,7 @@ export const memoryAdapter = (
 			adapterName: "Memory Adapter",
 			usePlural: false,
 			debugLogs: config?.debugLogs || false,
+			supportsArrays: true,
 			customTransformInput(props) {
 				const useNumberId =
 					props.options.advanced?.database?.useNumberId ||
