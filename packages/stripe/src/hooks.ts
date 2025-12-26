@@ -2,7 +2,12 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
 import type Stripe from "stripe";
 import type { InputSubscription, StripeOptions, Subscription } from "./types";
-import { getPlanByPriceInfo } from "./utils";
+import {
+	getPlanByPriceInfo,
+	isActiveOrTrialing,
+	isPendingCancel,
+	isStripePendingCancel,
+} from "./utils";
 
 export async function onCheckoutSessionCompleted(
 	ctx: GenericEndpointContext,
@@ -54,7 +59,17 @@ export async function onCheckoutSessionCompleted(
 								subscription.items.data[0]!.current_period_end * 1000,
 							),
 							stripeSubscriptionId: checkoutSession.subscription as string,
-							seats,
+							cancelAtPeriodEnd: subscription.cancel_at_period_end,
+							cancelAt: subscription.cancel_at
+								? new Date(subscription.cancel_at * 1000)
+								: null,
+							canceledAt: subscription.canceled_at
+								? new Date(subscription.canceled_at * 1000)
+								: null,
+							endedAt: subscription.ended_at
+								? new Date(subscription.ended_at * 1000)
+								: null,
+							seats: seats,
 							...trial,
 						},
 						where: [
@@ -243,9 +258,8 @@ export async function onSubscriptionUpdated(
 				where: [{ field: "stripeCustomerId", value: customerId }],
 			});
 			if (subs.length > 1) {
-				const activeSub = subs.find(
-					(sub: Subscription) =>
-						sub.status === "active" || sub.status === "trialing",
+				const activeSub = subs.find((sub: Subscription) =>
+					isActiveOrTrialing(sub),
 				);
 				if (!activeSub) {
 					ctx.context.logger.warn(
@@ -278,7 +292,16 @@ export async function onSubscriptionUpdated(
 					subscriptionUpdated.items.data[0]!.current_period_end * 1000,
 				),
 				cancelAtPeriodEnd: subscriptionUpdated.cancel_at_period_end,
-				seats,
+				cancelAt: subscriptionUpdated.cancel_at
+					? new Date(subscriptionUpdated.cancel_at * 1000)
+					: null,
+				canceledAt: subscriptionUpdated.canceled_at
+					? new Date(subscriptionUpdated.canceled_at * 1000)
+					: null,
+				endedAt: subscriptionUpdated.ended_at
+					? new Date(subscriptionUpdated.ended_at * 1000)
+					: null,
+				seats: seats,
 				stripeSubscriptionId: subscriptionUpdated.id,
 			},
 			where: [
@@ -288,11 +311,11 @@ export async function onSubscriptionUpdated(
 				},
 			],
 		});
-		const subscriptionCanceled =
+		const isNewCancellation =
 			subscriptionUpdated.status === "active" &&
-			subscriptionUpdated.cancel_at_period_end &&
-			!subscription.cancelAtPeriodEnd; //if this is true, it means the subscription was canceled before the event was triggered
-		if (subscriptionCanceled) {
+			isStripePendingCancel(subscriptionUpdated) &&
+			!isPendingCancel(subscription);
+		if (isNewCancellation) {
 			await options.subscription.onSubscriptionCancel?.({
 				subscription,
 				cancellationDetails:
@@ -358,6 +381,16 @@ export async function onSubscriptionDeleted(
 				update: {
 					status: "canceled",
 					updatedAt: new Date(),
+					cancelAtPeriodEnd: subscriptionDeleted.cancel_at_period_end,
+					cancelAt: subscriptionDeleted.cancel_at
+						? new Date(subscriptionDeleted.cancel_at * 1000)
+						: null,
+					canceledAt: subscriptionDeleted.canceled_at
+						? new Date(subscriptionDeleted.canceled_at * 1000)
+						: null,
+					endedAt: subscriptionDeleted.ended_at
+						? new Date(subscriptionDeleted.ended_at * 1000)
+						: null,
 				},
 			});
 			await options.subscription.onSubscriptionDeleted?.({

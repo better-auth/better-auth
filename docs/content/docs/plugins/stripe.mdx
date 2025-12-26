@@ -384,7 +384,23 @@ type cancelSubscription = {
 
 This will redirect the user to the Stripe Billing Portal where they can cancel their subscription.
 
+<Callout type="info">
+**Understanding Cancellation States**
+
+Stripe supports different types of cancellation, and the plugin tracks all of them:
+
+| Field               | Description                                                                                                                      |
+|---------------------|----------------------------------------------------------------------------------------------------------------------------------|
+| `cancelAtPeriodEnd` | Whether this subscription will (if status=active) or did (if status=canceled) cancel at the end of the current billing period.   |
+| `cancelAt`          | If the subscription is scheduled to be canceled, this is the time at which the cancellation will take effect.                    |
+| `canceledAt`        | If the subscription has been canceled, this is the time when it was canceled.                                                    |
+| `endedAt`           | If the subscription has ended, the date the subscription ended.                                                                  |
+| `status`            | Changes to "canceled" only after the subscription has actually ended.                                                            |
+</Callout>
+
 #### Restoring a Canceled Subscription
+
+> <small className='font-normal'>**Note:** This only works for subscriptions that are still active but scheduled to cancel. It cannot restore subscriptions that have already ended (`status: "canceled"` with `endedAt` set).</small>
 
 If a user changes their mind after canceling a subscription (but before the subscription period ends), you can restore the subscription:
 
@@ -409,9 +425,15 @@ type restoreSubscription = {
 </APIMethod>
 
 
-This will reactivate a subscription that was previously set to cancel at the end of the billing period (`cancelAtPeriodEnd: true`). The subscription will continue to renew automatically.
+This will reactivate a subscription that was previously scheduled to cancel. The subscription will continue to renew automatically.
 
-> **Note:** This only works for subscriptions that are still active but marked to cancel at the end of the period. It cannot restore subscriptions that have already ended.
+<Callout type="info">
+When a subscription is restored:
+- `cancelAtPeriodEnd` is set to `false`
+- `cancelAt` is cleared to `null`
+- `canceledAt` is cleared to `null`
+</Callout>
+
 
 #### Creating Billing Portal Sessions
 
@@ -666,6 +688,24 @@ Table Name: `subscription`
       type: "boolean", 
       description: "Whether the subscription will be canceled at the end of the period",
       defaultValue: false,
+      isOptional: true
+    },
+    { 
+      name: "cancelAt", 
+      type: "Date", 
+      description: "If the subscription is scheduled to be canceled, this is the time at which the cancellation will take effect",
+      isOptional: true
+    },
+    { 
+      name: "canceledAt", 
+      type: "Date", 
+      description: "If the subscription has been canceled, this is the time when the cancellation was requested. Note: If the subscription was canceled with cancelAtPeriodEnd, this reflects the cancellation request time, not when the subscription actually ends",
+      isOptional: true
+    },
+    { 
+      name: "endedAt", 
+      type: "Date", 
+      description: "If the subscription has ended, this is the date the subscription ended",
       isOptional: true
     },
     { 

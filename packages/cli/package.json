@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/cli",
-  "version": "1.4.8-beta.7",
+  "version": "1.5.0-beta.1",
   "type": "module",
   "description": "The CLI for Better Auth",
   "module": "dist/index.mjs",
@@ -55,7 +55,7 @@
     "@babel/preset-typescript": "^7.27.1",
     "@better-auth/core": "workspace:*",
     "@better-auth/telemetry": "workspace:*",
-    "@better-auth/utils": "0.3.0",
+    "@better-auth/utils": "catalog:",
     "@clack/prompts": "^0.11.0",
     "@mrleebo/prisma-ast": "^0.13.0",
     "@prisma/client": "^5.22.0",
