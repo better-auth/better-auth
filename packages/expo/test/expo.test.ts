@@ -145,6 +145,35 @@ describe("expo", async () => {
 		expect(map.get("better-auth.session_data")?.value).toBe("xyz");
 	});
 
+	it("should skip cookies with empty names", async () => {
+		const { parseSetCookieHeader, getSetCookie } = await import(
+			"../src/client"
+		);
+
+		// Simulate malformed cookie header starting with semicolon
+		const malformedHeader = "; abc.state=xyz; Path=/";
+		const parsed = parseSetCookieHeader(malformedHeader);
+		expect(parsed.has("")).toBe(false);
+
+		// Test with proper cookie format containing empty-name pattern
+		const header2 = "=empty-value; Path=/, valid-cookie=value; Path=/";
+		const parsed2 = parseSetCookieHeader(header2);
+		expect(parsed2.has("")).toBe(false);
+		expect(parsed2.get("valid-cookie")?.value).toBe("value");
+
+		// Test that existing session cookies are preserved when malformed cookies arrive
+		const prevCookie = JSON.stringify({
+			"abc.session_token": {
+				value: "valid-token",
+				expires: new Date(Date.now() + 1000 * 60 * 60).toISOString(),
+			},
+		});
+		const result = getSetCookie(malformedHeader, prevCookie);
+		const resultParsed = JSON.parse(result);
+		expect(resultParsed["abc.session_token"]).toBeDefined();
+		expect(resultParsed["abc.session_token"].value).toBe("valid-token");
+	});
+
 	it("should not trigger infinite refetch with non-better-auth cookies", async () => {
 		const { hasBetterAuthCookies } = await import("../src/client");
 
