@@ -207,7 +207,6 @@ export async function onSubscriptionCreated(
 				plan: plan.name.toLowerCase(),
 				periodStart,
 				periodEnd,
-				cancelAtPeriodEnd: subscriptionCreated.cancel_at_period_end,
 				seats,
 				...(plan.limits ? { limits: plan.limits } : {}),
 				...trial,
