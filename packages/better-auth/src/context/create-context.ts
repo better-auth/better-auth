@@ -99,7 +99,7 @@ export async function createAuthContext(
 			},
 		});
 	}
-	const userPlugins = (options.plugins || []).filter(
+	const enabledPlugins = (options.plugins || []).filter(
 		(p) => p?.enabled !== false,
 	);
 	const internalPlugins = getInternalPlugins(options);
@@ -125,7 +125,7 @@ export async function createAuthContext(
 		secret,
 		baseURL: baseURL ? new URL(baseURL).origin : "",
 		basePath: options.basePath || "/api/auth",
-		plugins: userPlugins.concat(internalPlugins),
+		plugins: enabledPlugins.concat(internalPlugins),
 	};
 
 	checkEndpointConflicts(options, logger);
