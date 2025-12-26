@@ -73,6 +73,7 @@ const { execute } = await testAdapter({
 	async onFinish() {
 		clearSchemaCache();
 		resetGenerationCount();
+		sqliteDB.close();
 	},
 });
 
