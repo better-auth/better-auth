@@ -105,7 +105,7 @@ export const yandex = (options: YandexOptions) => {
 			return {
 				user: {
 					id: profile.id,
-					name: profile.display_name ?? profile.real_name ?? profile.first_name,
+					name: profile.display_name ?? profile.real_name ?? profile.first_name ?? profile.login,
 					email: profile.default_email ?? profile.emails?.[0] ?? null,
 					emailVerified: !!profile.default_email || !!profile.emails?.length,
 					image:
