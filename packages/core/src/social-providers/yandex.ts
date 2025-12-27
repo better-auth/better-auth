@@ -118,5 +118,5 @@ export const yandex = (options: YandexOptions) => {
 			};
 		},
 		options,
-	} satisfies OAuthProvider<YandexOptions>;
+	} satisfies OAuthProvider<YandexProfile>;
 };
