@@ -118,26 +118,30 @@ export const authFlowTestSuite = createTestSuite(
 		},
 		"should store and retrieve timestamps correctly across timezones":
 			async () => {
-				using _disposedTZ = recoverProcessTZ();
-				const auth = await getAuth();
-				const user = await generate("user");
-				const password = crypto.randomUUID();
-				const userSignUp = await auth.api.signUpEmail({
-					body: {
-						email: user.email,
-						password: password,
-						name: user.name,
-						image: user.image || "",
-					},
-				});
-				process.env.TZ = "Europe/London";
-				const userSignIn = await auth.api.signInEmail({
-					body: { email: user.email, password: password },
-				});
-				process.env.TZ = "America/Los_Angeles";
-				expect(userSignUp.user.createdAt.toISOString()).toStrictEqual(
-					userSignIn.user.createdAt.toISOString(),
-				);
+				const restoreTZ = recoverProcessTZ();
+				try {
+					const auth = await getAuth();
+					const user = await generate("user");
+					const password = crypto.randomUUID();
+					const userSignUp = await auth.api.signUpEmail({
+						body: {
+							email: user.email,
+							password: password,
+							name: user.name,
+							image: user.image || "",
+						},
+					});
+					process.env.TZ = "Europe/London";
+					const userSignIn = await auth.api.signInEmail({
+						body: { email: user.email, password: password },
+					});
+					process.env.TZ = "America/Los_Angeles";
+					expect(userSignUp.user.createdAt.toISOString()).toStrictEqual(
+						userSignIn.user.createdAt.toISOString(),
+					);
+				} finally {
+					restoreTZ();
+				}
 			},
 		"should sign up with additional fields": async () => {
 			await modifyBetterAuthOptions(
@@ -170,9 +174,7 @@ export const authFlowTestSuite = createTestSuite(
 
 function recoverProcessTZ() {
 	const originalTZ = process.env.TZ;
-	return {
-		[Symbol.dispose]: () => {
-			process.env.TZ = originalTZ;
-		},
+	return () => {
+		process.env.TZ = originalTZ;
 	};
 }
