@@ -107,9 +107,8 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 							if (!signal) return;
 							if (visited.has(match.signal)) {
 								continue;
-							} else {
-								visited.add(match.signal);
 							}
+							visited.add(match.signal);
 							/**
 							 * To avoid race conditions we set the signal in a setTimeout
 							 */
