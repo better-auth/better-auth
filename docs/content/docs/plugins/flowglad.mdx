@@ -1,0 +1,988 @@
+---
+title: "Better Auth"
+description: "Better Auth Plugin for Flowglad"
+---
+
+[Flowglad](https://flowglad.com) is a payments and billing platform that provides a stateless, developer-friendly way to handle subscriptions, usage meters, and feature gating. The Better Auth plugin seamlessly integrates Flowglad with your Better Auth authentication setup.
+
+<Card href="https://discord.gg/flowglad" title="Get help on Flowglad's Discord">
+  We're online to help you with any questions you have.
+</Card>
+
+## Features
+
+* **Automatic Customer Creation**: Customers are automatically created when users sign up or organizations are created
+* **Declarative Customer Mapping**: Choose whether customers are users or organizations with a simple configuration
+* **Custom Customer Extraction**: Full control over how customer data is extracted from your auth session
+* **Seamless Integration**: Works with Better Auth's hooks and endpoints
+
+<Steps>
+  <Step>
+    ### Create Your Flowglad Account
+
+    First, create your pricing plans in Flowglad's [dashboard](https://app.flowglad.com), where you define what each plan and product gets access to and how it should be billed.
+  </Step>
+
+  <Step>
+    ### Install Flowglad SDK
+
+    <CodeBlockTabs defaultValue="nextjs">
+      <CodeBlockTabsList>
+        <CodeBlockTabsTrigger value="nextjs">
+          Next.js
+        </CodeBlockTabsTrigger>
+
+        <CodeBlockTabsTrigger value="react-node">
+          React + Node
+        </CodeBlockTabsTrigger>
+      </CodeBlockTabsList>
+
+      <CodeBlockTab value="nextjs">
+        ```bash
+        bun install @flowglad/nextjs
+        ```
+      </CodeBlockTab>
+
+      <CodeBlockTab value="react-node">
+        ```bash
+        bun install @flowglad/react @flowglad/node
+        ```
+      </CodeBlockTab>
+    </CodeBlockTabs>
+  </Step>
+
+  <Step>
+    ### Add `FLOWGLAD_SECRET_KEY` to your environment variables
+
+    You can find it in Flowglad's dashboard under "[Settings](https://app.flowglad.com/settings)".
+
+    ```bash title=".env"
+    FLOWGLAD_SECRET_KEY=sk_test_xxxxxxxxxx
+    ```
+  </Step>
+
+  <Step>
+    ### Add the Flowglad plugin to your `auth` config
+
+    <Tabs items={["User", "Organization", "Custom"]}>
+      <Tab value="User">
+        ```ts title="lib/auth.ts"
+        import { betterAuth } from "better-auth"
+        import { flowgladPlugin } from "@flowglad/server/better-auth"
+
+        export const auth = betterAuth({
+          // ... your Better Auth config
+          plugins: [
+            flowgladPlugin({
+              customerType: "user",
+            }),
+          ],
+        })
+        ```
+      </Tab>
+
+      <Tab value="Organization">
+        ```ts title="lib/auth.ts"
+        import { betterAuth } from "better-auth"
+        import { organization } from "better-auth/plugins"
+        import { flowgladPlugin } from "@flowglad/server/better-auth"
+
+        export const auth = betterAuth({
+          // ... your Better Auth config
+          plugins: [
+            organization(),
+            flowgladPlugin({
+              customerType: "organization",
+            }),
+          ],
+        })
+        ```
+      </Tab>
+
+      <Tab value="Custom">
+        ```ts title="lib/auth.ts"
+        import { betterAuth } from "better-auth"
+        import { flowgladPlugin } from "@flowglad/server/better-auth"
+
+        export const auth = betterAuth({
+          // ... your Better Auth config
+          plugins: [
+            flowgladPlugin({
+              getCustomer: async (session) => {
+                // Custom logic to extract customer info
+                return {
+                  externalId: session.user.id,
+                  name: session.user.name || "Customer",
+                  email: session.user.email || "",
+                }
+              },
+            }),
+          ],
+        })
+        ```
+      </Tab>
+    </Tabs>
+
+    <Callout>
+      Flowglad will auto-create your customers when they sign up (for `customerType: "user"`) or when organizations are created (for `customerType: "organization"`). You can choose who becomes a customer: individual users, organizations, or something custom using the `getCustomer` function.
+    </Callout>
+  </Step>
+
+  <Step>
+    ### Create Flowglad Factory Function
+
+    Create a factory function that returns a `FlowgladServer` instance scoped to a specific customer. This function will be used by the route handler to create server instances per request.
+
+    <Tabs items={["Next.js App Router", "Express"]}>
+      <Tab value="Next.js App Router">
+        <Tabs items={["User", "Organization", "Custom"]}>
+          <Tab value="User">
+            ```ts title="lib/flowglad.ts"
+            import { FlowgladServer } from "@flowglad/nextjs/server"
+            import { auth } from "@/lib/auth"
+            import { headers } from "next/headers"
+
+            export const flowglad = (customerExternalId: string) => {
+              return new FlowgladServer({
+                customerExternalId,
+                getCustomerDetails: async () => {
+                  const session = await auth.api.getSession({
+                    headers: await headers(),
+                  })
+                  if (!session?.user) {
+                    throw new Error("User not authenticated")
+                  }
+                  return {
+                    email: session.user.email || "",
+                    name: session.user.name || "",
+                  }
+                },
+              })
+            }
+            ```
+          </Tab>
+
+          <Tab value="Organization">
+            ```ts title="lib/flowglad.ts"
+            import { FlowgladServer } from "@flowglad/nextjs/server"
+            import { auth } from "@/lib/auth"
+            import { headers } from "next/headers"
+
+            export const flowglad = (customerExternalId: string) => {
+              return new FlowgladServer({
+                customerExternalId,
+                /**
+                 * Look up the organization details using Better Auth entirely.
+                 * Throws if the organization or session is not found.
+                 */
+                getCustomerDetails: async (externalId: string) => {
+                  // Fetch the organization using Better Auth's API
+                  const orgData = await auth.api.getFullOrganization({
+                    query: { organizationId: externalId },
+                    headers: await headers(),
+                  })
+
+                  if (!orgData?.name) {
+                    throw new Error(`Organization not found: ${externalId}`)
+                  }
+
+                  // Optionally get the active user for contact email (could be the caller)
+                  const session = await auth.api.getSession({
+                    headers: await headers(),
+                  })
+
+                  if (!session?.user) {
+                    throw new Error("User not authenticated")
+                  }
+
+                  return {
+                    email: session.user.email || "",
+                    name: orgData.name,
+                  }
+                },
+              })
+            }
+            ```
+          </Tab>
+
+          <Tab value="Custom">
+            ```ts title="lib/flowglad.ts"
+            import { FlowgladServer } from "@flowglad/nextjs/server"
+            import { db } from "@/server/db/client"
+
+            export const flowglad = (customerExternalId: string) => {
+              return new FlowgladServer({
+                customerExternalId,
+                getCustomerDetails: async (externalId: string) => {
+                  // Fetch customer details from your database
+                  const user = await db.users.findOne({ id: externalId })
+                  if (!user) {
+                    throw new Error(`Customer not found: ${externalId}`)
+                  }
+                  return {
+                    email: user.email || "",
+                    name: user.name || "",
+                  }
+                },
+              })
+            }
+            ```
+          </Tab>
+        </Tabs>
+      </Tab>
+
+      <Tab value="Express">
+        ```ts title="lib/flowglad.ts"
+        import { FlowgladServer } from "@flowglad/server"
+        import { db } from "@/server/db/client"
+
+        export const flowglad = (customerExternalId: string) => {
+          return new FlowgladServer({
+            customerExternalId,
+            getCustomerDetails: async (externalId: string) => {
+              // Fetch customer details from your database
+              const user = await db.users.findOne({ id: externalId })
+              if (!user) {
+                throw new Error(`Customer not found: ${externalId}`)
+              }
+              return {
+                email: user.email || "",
+                name: user.name || "",
+              }
+            },
+          })
+        }
+        ```
+      </Tab>
+    </Tabs>
+
+    <Callout type="warn">
+      If you intend to use Flowglad in your background jobs, you will want to implement `getCustomerDetails` to retrieve details from your database directly so that it doesn't need to depend on authentication state. The examples above that use `auth.api.getSession()` and `headers()` will not work in background jobs where there is no request context.
+    </Callout>
+  </Step>
+
+  <Step>
+    ### Mount Flowglad Route Handler
+
+    Create a route handler to handle Flowglad API requests. The plugin provides a `getExternalId` endpoint that automatically handles your `customerType` configuration.
+
+    <Tabs items={["Next.js App Router", "Next.js Pages Router", "Express", "Hono", "Cloudflare Workers", "Elysia", "TanStack Start"]}>
+      <Tab value="Next.js App Router">
+        ```ts title="app/api/flowglad/[...path]/route.ts"
+        import { nextRouteHandler } from "@flowglad/nextjs/server"
+        import { flowglad } from "@/lib/flowglad"
+        import { auth } from "@/lib/auth"
+        import { headers } from "next/headers"
+
+        export const { GET, POST } = nextRouteHandler({
+          flowglad,
+          getCustomerExternalId: async () => {
+            // Use the Flowglad plugin's getExternalId endpoint
+            // This handles the customerType configuration automatically
+            const { externalId } = await auth.api.getExternalId({
+              headers: await headers(),
+            })
+
+            if (!externalId) {
+              throw new Error("Unable to determine customer external ID")
+            }
+
+            return externalId
+          },
+        })
+        ```
+      </Tab>
+
+      <Tab value="Next.js Pages Router">
+        ```ts title="pages/api/flowglad/[...path].ts"
+        import { pagesRouteHandler } from "@flowglad/nextjs/server"
+        import { flowglad } from "@/lib/flowglad"
+        import { auth } from "@/lib/auth"
+
+        export default pagesRouteHandler({
+          flowglad,
+          getCustomerExternalId: async (req) => {
+            // Use the Flowglad plugin's getExternalId endpoint
+            const { externalId } = await auth.api.getExternalId({
+              headers: req.headers,
+            })
+
+            if (!externalId) {
+              throw new Error("Unable to determine customer external ID")
+            }
+
+            return externalId
+          },
+        })
+        ```
+      </Tab>
+
+      <Tab value="Express">
+        ```ts title="server.ts"
+        import express from "express"
+        import { createFlowgladExpressRouter } from "@flowglad/express"
+        import { flowglad } from "./lib/flowglad"
+        import { auth } from "./lib/auth"
+
+        const app = express()
+
+        app.use(
+          "/api/flowglad",
+          createFlowgladExpressRouter({
+            flowglad,
+            getCustomerExternalId: async (req) => {
+              // Use the Flowglad plugin's getExternalId endpoint
+              const { externalId } = await auth.api.getExternalId({
+                headers: req.headers,
+              })
+
+              if (!externalId) {
+                throw new Error("Unable to determine customer external ID")
+              }
+
+              return externalId
+            },
+          })
+        )
+        ```
+      </Tab>
+
+      <Tab value="Hono">
+        ```ts title="server.ts"
+        import { Hono } from "hono"
+        import { serve } from "@hono/node-server"
+        import { requestHandler } from "@flowglad/server"
+        import { flowglad } from "./lib/flowglad"
+        import { auth } from "./lib/auth"
+
+        const app = new Hono()
+
+        const flowgladHandler = requestHandler({
+          flowglad,
+          getCustomerExternalId: async (req) => {
+            // Use the Flowglad plugin's getExternalId endpoint
+            const { externalId } = await auth.api.getExternalId({
+              headers: Object.fromEntries(req.headers.entries()),
+            })
+
+            if (!externalId) {
+              throw new Error("Unable to determine customer external ID")
+            }
+
+            return externalId
+          },
+        })
+
+        app.on(["POST", "GET"], "/api/flowglad/*", async (c) => {
+          const url = new URL(c.req.url)
+          const path = url.pathname
+            .replace("/api/flowglad/", "")
+            .split("/")
+            .filter((segment) => segment !== "")
+
+          const result = await flowgladHandler(
+            {
+              path,
+              method: c.req.method as "GET" | "POST",
+              query:
+                c.req.method === "GET"
+                  ? Object.fromEntries(url.searchParams)
+                  : undefined,
+              body:
+                c.req.method !== "GET"
+                  ? await c.req.json().catch(() => ({}))
+                  : undefined,
+            },
+            c.req.raw
+          )
+
+          return c.json(
+            {
+              error: result.error,
+              data: result.data,
+            },
+            result.status
+          )
+        })
+
+        serve(app)
+        ```
+      </Tab>
+
+      <Tab value="Cloudflare Workers">
+        ```ts title="src/index.ts"
+        import { requestHandler } from "@flowglad/server"
+        import { flowglad } from "./lib/flowglad"
+        import { auth } from "./lib/auth"
+
+        const flowgladHandler = requestHandler({
+          flowglad,
+          getCustomerExternalId: async (req) => {
+            // Use the Flowglad plugin's getExternalId endpoint
+            const headers = Object.fromEntries(req.headers.entries())
+            const { externalId } = await auth.api.getExternalId({
+              headers,
+            })
+
+            if (!externalId) {
+              throw new Error("Unable to determine customer external ID")
+            }
+
+            return externalId
+          },
+        })
+
+        export default {
+          async fetch(request: Request): Promise<Response> {
+            const url = new URL(request.url)
+
+            // Handle Flowglad routes
+            if (url.pathname.startsWith("/api/flowglad")) {
+              const path = url.pathname
+                .replace("/api/flowglad/", "")
+                .split("/")
+                .filter((segment) => segment !== "")
+
+              const result = await flowgladHandler(
+                {
+                  path,
+                  method: request.method as "GET" | "POST",
+                  query:
+                    request.method === "GET"
+                      ? Object.fromEntries(url.searchParams)
+                      : undefined,
+                  body:
+                    request.method !== "GET"
+                      ? await request.json().catch(() => ({}))
+                      : undefined,
+                },
+                request
+              )
+
+              return Response.json(
+                {
+                  error: result.error,
+                  data: result.data,
+                },
+                {
+                  status: result.status,
+                }
+              )
+            }
+
+            // Handle other routes
+            return new Response("Not found", { status: 404 })
+          },
+        }
+        ```
+      </Tab>
+
+      <Tab value="Elysia">
+        ```ts title="server.ts"
+        import { Elysia, Context } from "elysia"
+        import { requestHandler } from "@flowglad/server"
+        import { flowglad } from "./lib/flowglad"
+        import { auth } from "./lib/auth"
+
+        const flowgladHandler = requestHandler({
+          flowglad,
+          getCustomerExternalId: async (req) => {
+            // Use the Flowglad plugin's getExternalId endpoint
+            const headers = Object.fromEntries(req.headers.entries())
+            const { externalId } = await auth.api.getExternalId({
+              headers,
+            })
+
+            if (!externalId) {
+              throw new Error("Unable to determine customer external ID")
+            }
+
+            return externalId
+          },
+        })
+
+        const flowgladView = async (context: Context) => {
+          const FLOWGLAD_ACCEPT_METHODS = ["POST", "GET"]
+          // validate request method
+          if (FLOWGLAD_ACCEPT_METHODS.includes(context.request.method)) {
+            const url = new URL(context.request.url)
+            const path = url.pathname
+              .replace("/api/flowglad/", "")
+              .split("/")
+              .filter((segment) => segment !== "")
+
+            const result = await flowgladHandler(
+              {
+                path,
+                method: context.request.method as "GET" | "POST",
+                query:
+                  context.request.method === "GET"
+                    ? Object.fromEntries(url.searchParams)
+                    : undefined,
+                body:
+                  context.request.method !== "GET"
+                    ? (context.body as unknown)
+                    : undefined,
+              },
+              context.request
+            )
+
+            return new Response(
+              JSON.stringify({
+                error: result.error,
+                data: result.data,
+              }),
+              {
+                status: result.status,
+                headers: {
+                  "Content-Type": "application/json",
+                },
+              }
+            )
+          } else {
+            context.error(405)
+          }
+        }
+
+        const app = new Elysia().all("/api/flowglad/*", flowgladView).listen(3000)
+
+        console.log(
+          `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`
+        )
+        ```
+      </Tab>
+
+      <Tab value="TanStack Start">
+        ```ts title="src/routes/api/flowglad/$.ts"
+        import { createFileRoute } from "@tanstack/react-router"
+        import { requestHandler } from "@flowglad/server"
+        import { flowglad } from "@/lib/flowglad"
+        import { auth } from "@/lib/auth"
+
+        const flowgladHandler = requestHandler({
+          flowglad,
+          getCustomerExternalId: async (req) => {
+            // Use the Flowglad plugin's getExternalId endpoint
+            const headers = Object.fromEntries(req.headers.entries())
+            const { externalId } = await auth.api.getExternalId({
+              headers,
+            })
+
+            if (!externalId) {
+              throw new Error("Unable to determine customer external ID")
+            }
+
+            return externalId
+          },
+        })
+
+        export const Route = createFileRoute("/api/flowglad/$")({
+          server: {
+            handlers: {
+              GET: async ({ request }: { request: Request }) => {
+                const url = new URL(request.url)
+                const path = url.pathname
+                  .replace("/api/flowglad/", "")
+                  .split("/")
+                  .filter((segment) => segment !== "")
+
+                const result = await flowgladHandler(
+                  {
+                    path,
+                    method: "GET",
+                    query: Object.fromEntries(url.searchParams),
+                  },
+                  request
+                )
+
+                return new Response(
+                  JSON.stringify({
+                    error: result.error,
+                    data: result.data,
+                  }),
+                  {
+                    status: result.status,
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                  }
+                )
+              },
+              POST: async ({ request }: { request: Request }) => {
+                const url = new URL(request.url)
+                const path = url.pathname
+                  .replace("/api/flowglad/", "")
+                  .split("/")
+                  .filter((segment) => segment !== "")
+
+                const result = await flowgladHandler(
+                  {
+                    path,
+                    method: "POST",
+                    body: await request.json().catch(() => ({})),
+                  },
+                  request
+                )
+
+                return new Response(
+                  JSON.stringify({
+                    error: result.error,
+                    data: result.data,
+                  }),
+                  {
+                    status: result.status,
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                  }
+                )
+              },
+            },
+          },
+        })
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step>
+    ### Add `<FlowgladProvider />`
+
+    Client side, wrap your application with the FlowgladProvider component. For Better Auth apps, use a client-side wrapper component that reactively watches the session state.
+
+    ```tsx title="components/providers.tsx"
+    "use client"
+
+    import { FlowgladProvider } from "@flowglad/react"
+    import { authClient } from "@/lib/auth-client"
+
+    export function FlowgladProviderWrapper({
+      children,
+    }: {
+      children: React.ReactNode
+    }) {
+      // Use BetterAuth's useSession to watch for session changes reactively
+      const { data: session } = authClient.useSession()
+
+      // Derive loadBilling from session state reactively
+      // This ensures billing loads when session becomes available, even if layout didn't re-render
+      const loadBilling = !!session?.user
+
+      return (
+        <FlowgladProvider loadBilling={loadBilling}>
+          {children}
+        </FlowgladProvider>
+      )
+    }
+    ```
+
+    ```tsx title="app/layout.tsx"
+    import { FlowgladProviderWrapper } from "@/components/providers"
+
+    export default function RootLayout({
+      children,
+    }: {
+      children: React.ReactNode
+    }) {
+      return (
+        <html>
+          <body>
+            <FlowgladProviderWrapper>
+              {children}
+            </FlowgladProviderWrapper>
+          </body>
+        </html>
+      )
+    }
+    ```
+
+    <Callout type="warn">
+      For Better Auth apps, you must use a client-side wrapper component that uses `authClient.useSession()` to reactively watch for session changes. Otherwise, you may hit an edge case where `loadBilling`'s value does not change when the user authenticates.
+    </Callout>
+  </Step>
+</Steps>
+
+## Usage
+
+### Get Customer External ID
+
+The plugin provides a `getExternalId` endpoint that automatically returns the correct customer external ID based on your `customerType` configuration.
+
+```ts
+import { auth } from "@/lib/auth"
+import { headers } from "next/headers"
+
+// Server-side usage
+const { externalId } = await auth.api.getExternalId({
+  headers: await headers(),
+})
+
+if (!externalId) {
+  // User is not authenticated
+}
+```
+
+### Handle Payments
+
+Call `createCheckoutSession` to redirect the customer to a Stripe checkout page when they want to purchase a plan.
+
+<Callout type="warn">
+  Make sure you've configured your [Stripe integration](https://app.flowglad.com/integrations/stripe) in the Flowglad dashboard.
+</Callout>
+
+```tsx
+import { useBilling } from "@flowglad/react"
+
+export default function PurchaseButton() {
+  const { createCheckoutSession } = useBilling()
+
+  return (
+    <button
+      onClick={async () => {
+        await createCheckoutSession({
+          priceId: "price_pro",
+          successUrl: window.location.href,
+          cancelUrl: window.location.href,
+          autoRedirect: true,
+        })
+      }}
+    >
+      Upgrade to Pro
+    </button>
+  )
+}
+```
+
+### Integrate Pricing Logic
+
+Integrate your client and server pricing tiers logic with the following functions:
+
+* `checkFeatureAccess` to see if the customer has access to a feature
+* `checkUsageBalance` to check usage meter balances
+* `customer` to display any relevant billing data in your UI (subscriptions, feature balances)
+
+<Tabs items={["Client", "Server"]}>
+  <Tab value="Client">
+    ```tsx
+    import { useBilling } from "@flowglad/react"
+
+    export default function SendChatMessage() {
+      const { checkFeatureAccess, customer, reload } = useBilling()
+
+      if (!checkFeatureAccess) {
+        return <div>Loading...</div>
+      }
+
+      return (
+        <button
+          onClick={async () => {
+            if (checkFeatureAccess("messages")) {
+              // Send chatbot message server-side, then
+              await reload() // refetch customer usage data
+              alert(
+                `Remaining messages: ${customer?.usageBalances?.messages?.availableBalance || 0}`
+              )
+            } else {
+              alert("You're out of messages")
+            }
+          }}
+        >
+          Send Message
+        </button>
+      )
+    }
+    ```
+  </Tab>
+
+  <Tab value="Server">
+    ```ts Server
+    import { flowglad } from "@/lib/flowglad"
+    import { auth } from "@/lib/auth"
+    import { headers } from "next/headers"
+
+    export async function POST(req: Request) {
+      const { externalId } = await auth.api.getExternalId({
+        headers: await headers(),
+      })
+
+      if (!externalId) {
+        return new Response("Unauthorized", { status: 401 })
+      }
+
+      const flowgladServer = flowglad(externalId)
+      const billing = await flowgladServer.getBilling()
+
+      // Check if customer can send a message
+      if (!billing.checkFeatureAccess("messages")) {
+        return new Response("Feature not available", { status: 403 })
+      }
+
+      // Server-side function to send the message
+      await sendMessage()
+
+      // Track usage (if using usage-based billing)
+      await flowgladServer.trackUsage({
+        usageMeterSlug: "messages",
+        quantity: 1,
+      })
+
+      return new Response("Message sent", { status: 200 })
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Additional Functions
+
+#### cancelSubscription()
+
+Cancel a subscription.
+
+```tsx
+import { useBilling } from "@flowglad/react"
+
+export default function CancelSubscription() {
+  const { cancelSubscription, currentSubscription } = useBilling()
+
+  return (
+    <button
+      onClick={async () => {
+        await cancelSubscription({
+          subscriptionId: currentSubscription.id,
+        })
+      }}
+    >
+      Cancel Subscription
+    </button>
+  )
+}
+```
+
+#### Billing Portal URL
+
+Opens a billing portal where the customer can update their payment method or cancel their plan.
+
+```tsx
+import { useBilling } from "@flowglad/react"
+
+export default function BillingSettings() {
+  const { billingPortalUrl } = useBilling()
+
+  return (
+    <a href={billingPortalUrl} target="_blank" rel="noopener noreferrer">
+      Manage Billing
+    </a>
+  )
+}
+```
+
+## Configuration Reference
+
+### FlowgladBetterAuthPluginOptions
+
+```ts
+type FlowgladBetterAuthPluginOptions = {
+  /**
+   * Optional API key. If not provided, reads from FLOWGLAD_SECRET_KEY environment variable.
+   */
+  apiKey?: string
+
+  /**
+   * Type of customer to use. Defaults to "user".
+   * - "user": Uses session.user.id as externalId
+   * - "organization": Uses session.user.organizationId (requires org plugin)
+   */
+  customerType?: "user" | "organization"
+
+  /**
+   * Optional function to extract customer info from Better Auth session.
+   * If not provided, defaults to extracting from session.user based on customerType.
+   *
+   * This gives you full control over:
+   * - Which ID to use (user.id, org.id, custom mapping)
+   * - How to get name/email (from user, org, or custom logic)
+   */
+  getCustomer?: (session: InnerSession) => Promise<{
+    externalId: string
+    name: string
+    email: string
+  }>
+}
+```
+
+## Common Patterns
+
+### Programmatic Organization Customer Creation
+
+If you need to create a Flowglad customer for an organization programmatically (outside of the Better Auth hook), you can use the `createFlowgladCustomerForOrganization` helper:
+
+```ts
+import {
+  createFlowgladCustomerForOrganization,
+  type FlowgladBetterAuthPluginOptions,
+} from "@flowglad/server/better-auth"
+
+const flowgladConfig: FlowgladBetterAuthPluginOptions = {
+  customerType: "organization",
+}
+
+await createFlowgladCustomerForOrganization(
+  flowgladConfig,
+  organizationId,
+  userId,
+  userEmail,
+  userName
+)
+```
+
+### Custom Customer Extraction
+
+For advanced use cases, you can provide a custom `getCustomer` function:
+
+```ts
+flowgladPlugin({
+  getCustomer: async (session) => {
+    // Custom logic: use workspace ID if available, otherwise fall back to user ID
+    const workspaceId = session.user.workspaceId
+    const externalId = workspaceId || session.user.id
+
+    // Fetch additional customer data from your database
+    const customerData = await db.customers.findOne({ id: externalId })
+
+    return {
+      externalId,
+      name: customerData?.name || session.user.name || "Customer",
+      email: customerData?.email || session.user.email || "",
+    }
+  },
+})
+```
+
+## Troubleshooting
+
+### Customer not created after sign-up
+
+Make sure:
+- Your `customerType` matches your use case (`"user"` for B2C where users are customers, `"organization"` for B2B where organizations are customers)
+- The Better Auth plugin is properly configured in your `auth` config
+- You have `FLOWGLAD_SECRET_KEY` set in your environment variables
+- Check your server logs for any errors during customer creation
+
+### getExternalId returns null
+
+This means the user is not authenticated. Make sure:
+- You're passing the correct headers to `auth.api.getExternalId()`
+- The user has an active session
+- For organization customers, make sure the organization plugin is installed and the user has an `activeOrganizationId`
+
+### loadBilling not updating reactively
+
+For Better Auth apps in Next.js, you must use a client-side wrapper component that uses `authClient.useSession()` to watch for session changes. See Step 6 in the setup guide above.
+
+### Organization customer creation issues
+
+Make sure:
+- The `organization()` plugin is installed before the `flowgladPlugin`
+- `customerType` is set to `"organization"`
+- The user has an `activeOrganizationId` in their `session` object once the organization has been created
+
