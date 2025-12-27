@@ -1464,3 +1464,103 @@ describe("access control", async (it) => {
 		);
 	});
 });
+
+describe("edge cases: userId validation", async () => {
+	const { signInWithTestUser, customFetchImpl, auth } = await getTestInstance(
+		{
+			advanced: {
+				database: {
+					useNumberId: true,
+				},
+			},
+			plugins: [
+				admin({
+					bannedUserMessage: "Custom banned user message",
+				}),
+			],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => {
+							if (user.name === "Admin") {
+								return {
+									data: {
+										...user,
+										role: "admin",
+									},
+								};
+							}
+						},
+					},
+				},
+			},
+		},
+		{
+			testUser: {
+				name: "Admin",
+			},
+		},
+	);
+	const client = createAuthClient({
+		fetchOptions: {
+			customFetchImpl,
+		},
+		plugins: [adminClient()],
+		baseURL: "http://localhost:3000",
+	});
+
+	const { headers: adminHeaders } = await signInWithTestUser();
+
+	it("should allow admin to check permissions with useNumberId", async () => {
+		const res = await client.admin.hasPermission(
+			{
+				role: "admin",
+				permissions: {
+					user: ["create"],
+				},
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.data?.success).toBe(true);
+	});
+
+	it("should return correct error when userId is missing and not call DB with undefined", async () => {
+		await expect(
+			auth.api.userHasPermission({
+				body: {
+					permissions: {
+						user: ["list"],
+					},
+				},
+			}),
+		).rejects.toThrow("user id or role is required");
+	});
+
+	it("should return user not found when userId is empty string", async () => {
+		await expect(
+			auth.api.userHasPermission({
+				body: {
+					userId: "",
+					permissions: {
+						user: ["list"],
+					},
+				},
+			}),
+		).rejects.toThrow("user id or role is required");
+	});
+
+	it("should not crash if userId is 'NaN'", async () => {
+		await expect(
+			auth.api.userHasPermission({
+				body: {
+					userId: "NaN",
+					permissions: {
+						user: ["list"],
+					},
+				},
+			}),
+		).rejects.toThrow("user not found");
+	});
+});
