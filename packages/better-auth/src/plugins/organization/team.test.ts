@@ -141,12 +141,12 @@ describe("team", async (it) => {
 	});
 
 	it("should add team to the member's list of teams", async () => {
-		const listUserTeamsRes = await client.organization.listUserTeams(
-			{},
-			{
+		const listUserTeamsRes = await client.organization.listUserTeams({
+			fetchOptions: {
 				headers: signUpHeaders,
 			},
-		);
+			query: {},
+		});
 
 		expect(listUserTeamsRes.error).toBeNull();
 		expect(listUserTeamsRes.data).not.toBeNull();
@@ -503,6 +503,7 @@ describe("multi team support", async (it) => {
 
 		const teams = await auth.api.listUserTeams({
 			headers: { cookie: invitedUser.headers.getSetCookie()[0]! },
+			query: {},
 		});
 
 		expect(teams).toHaveLength(3);
@@ -596,6 +597,7 @@ describe("multi team support", async (it) => {
 
 		const teams = await auth.api.listUserTeams({
 			headers: { cookie: invitedUser.headers.getSetCookie()[0]! },
+			query: {},
 		});
 
 		expect(teams).toHaveLength(4);
@@ -617,6 +619,7 @@ describe("multi team support", async (it) => {
 
 		const teams = await auth.api.listUserTeams({
 			headers: { cookie: invitedUser.headers.getSetCookie()[0]! },
+			query: {},
 		});
 
 		expect(teams).toHaveLength(3);
