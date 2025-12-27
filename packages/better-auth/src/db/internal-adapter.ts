@@ -507,21 +507,79 @@ export const createInternalAdapter = (
 					? {
 							async fn(data) {
 								const currentSession = await secondaryStorage.get(sessionToken);
-								let updatedSession: Session | null = null;
-								if (currentSession) {
-									const parsedSession = safeJSONParse<{
-										session: Session;
-										user: User;
-									}>(currentSession);
-									if (!parsedSession) return null;
-									updatedSession = {
-										...parsedSession.session,
-										...data,
-									};
-									return updatedSession;
-								} else {
+								if (!currentSession) {
 									return null;
 								}
+
+								const parsedSession = safeJSONParse<{
+									session: Session;
+									user: User;
+								}>(currentSession);
+								if (!parsedSession) return null;
+
+								const mergedSession = {
+									...parsedSession.session,
+									...data,
+									expiresAt: new Date(
+										data.expiresAt ?? parsedSession.session.expiresAt,
+									),
+									createdAt: new Date(parsedSession.session.createdAt),
+									updatedAt: new Date(
+										data.updatedAt ?? parsedSession.session.updatedAt,
+									),
+								};
+
+								const updatedSession = parseSessionOutput(
+									ctx.options,
+									mergedSession,
+								);
+
+								const now = Date.now();
+								const expiresMs = new Date(updatedSession.expiresAt).getTime();
+								const sessionTTL = Math.max(
+									Math.floor((expiresMs - now) / 1000),
+									0,
+								);
+
+								if (sessionTTL > 0) {
+									await secondaryStorage.set(
+										sessionToken,
+										JSON.stringify({
+											session: updatedSession,
+											user: parsedSession.user,
+										}),
+										sessionTTL,
+									);
+
+									const listKey = `active-sessions-${updatedSession.userId}`;
+									const listRaw = await secondaryStorage.get(listKey);
+									const list: { token: string; expiresAt: number }[] = listRaw
+										? safeJSONParse(listRaw) || []
+										: [];
+
+									const filtered = list
+										.filter(
+											(s) => s.token !== sessionToken && s.expiresAt > now,
+										)
+										.concat([{ token: sessionToken, expiresAt: expiresMs }]);
+
+									const sorted = filtered.sort(
+										(a, b) => a.expiresAt - b.expiresAt,
+									);
+									const furthestSessionExp = sorted.at(-1)?.expiresAt;
+
+									if (furthestSessionExp && furthestSessionExp > now) {
+										await secondaryStorage.set(
+											listKey,
+											JSON.stringify(sorted),
+											Math.floor((furthestSessionExp - now) / 1000),
+										);
+									} else {
+										await secondaryStorage.delete(listKey);
+									}
+								}
+
+								return updatedSession;
 							},
 							executeMainFn: options.session?.storeSessionInDatabase,
 						}
