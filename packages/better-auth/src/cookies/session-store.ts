@@ -3,7 +3,7 @@ import type { Account } from "@better-auth/core/db";
 import type { InternalLogger } from "@better-auth/core/env";
 import { safeJSONParse } from "@better-auth/core/utils";
 import type { CookieOptions } from "better-call";
-import * as z from "zod";
+import * as z from "zod/v4";
 import { symmetricDecodeJWT, symmetricEncodeJWT } from "../crypto";
 
 // Cookie size constants based on browser limits
@@ -96,7 +96,10 @@ function chunkCookie(
 	chunks: Chunks,
 	logger: InternalLogger,
 ): Cookie[] {
-	const chunkCount = Math.ceil(cookie.value.length / CHUNK_SIZE);
+	const encoder = new TextEncoder();
+	const getByteLength = (s: string) => encoder.encode(s).length;
+	const totalBytes = getByteLength(cookie.value);
+	const chunkCount = Math.ceil(totalBytes / CHUNK_SIZE);
 
 	if (chunkCount === 1) {
 		chunks[cookie.name] = cookie.value;
@@ -104,20 +107,37 @@ function chunkCookie(
 	}
 
 	const cookies: Cookie[] = [];
-	for (let i = 0; i < chunkCount; i++) {
-		const name = `${cookie.name}.${i}`;
-		const start = i * CHUNK_SIZE;
-		const value = cookie.value.substring(start, start + CHUNK_SIZE);
-		cookies.push({ ...cookie, name, value });
-		chunks[name] = value;
+	// Build chunks by byte-length to respect 4KB limits across UTF-8 safely
+	let current = "";
+	let currentBytes = 0;
+	let index = 0;
+	for (const char of cookie.value) {
+		const charBytes = getByteLength(char);
+		if (currentBytes + charBytes > CHUNK_SIZE) {
+			const name = `${cookie.name}.${index++}`;
+			cookies.push({ ...cookie, name, value: current });
+			chunks[name] = current;
+			current = char;
+			currentBytes = charBytes;
+		} else {
+			current += char;
+			currentBytes += charBytes;
+		}
+	}
+	if (current.length > 0) {
+		const name = `${cookie.name}.${index++}`;
+		cookies.push({ ...cookie, name, value: current });
+		chunks[name] = current;
 	}
 
 	logger.debug(`CHUNKING_${storeName.toUpperCase()}_COOKIE`, {
 		message: `${storeName} cookie exceeds allowed ${ALLOWED_COOKIE_SIZE} bytes.`,
 		emptyCookieSize: ESTIMATED_EMPTY_COOKIE_SIZE,
-		valueSize: cookie.value.length,
+		valueSize: totalBytes,
 		chunkCount,
-		chunks: cookies.map((c) => c.value.length + ESTIMATED_EMPTY_COOKIE_SIZE),
+		chunks: cookies.map(
+			(c) => getByteLength(c.value) + ESTIMATED_EMPTY_COOKIE_SIZE,
+		),
 	});
 
 	return cookies;
@@ -291,7 +311,8 @@ export async function setAccountCookie(
 		options.maxAge,
 	);
 
-	if (data.length > ALLOWED_COOKIE_SIZE) {
+	const byteLength = new TextEncoder().encode(data).length;
+	if (byteLength > ALLOWED_COOKIE_SIZE) {
 		const accountStore = createAccountStore(accountDataCookie.name, options, c);
 
 		const cookies = accountStore.chunk(data, options);
