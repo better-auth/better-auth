@@ -3,15 +3,11 @@
 import { cva } from "class-variance-authority";
 import type { BreadcrumbOptions } from "fumadocs-core/breadcrumb";
 import { getBreadcrumbItemsFromPath } from "fumadocs-core/breadcrumb";
-import type { PageTree } from "fumadocs-core/server";
+import type { Item, Node, Root } from "fumadocs-core/page-tree";
 import { useEffectEvent } from "fumadocs-core/utils/use-effect-event";
-import {
-	useI18n,
-	usePageStyles,
-	useSidebar,
-	useTreeContext,
-	useTreePath,
-} from "fumadocs-ui/provider";
+import { useSidebar } from "fumadocs-ui/components/sidebar/base";
+import { useI18n } from "fumadocs-ui/contexts/i18n";
+import { useTreeContext, useTreePath } from "fumadocs-ui/contexts/tree";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -19,6 +15,7 @@ import type { HTMLAttributes } from "react";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { isActive } from "../../lib/is-active";
 import { cn } from "../../lib/utils";
+import { usePageStyles } from "./contexts/page-styles";
 import { useNav } from "./layout/nav";
 import { TocPopover } from "./layout/toc";
 
@@ -135,8 +132,8 @@ const itemLabel = cva(
 	"inline-flex items-center gap-0.5 text-fd-muted-foreground",
 );
 
-function scanNavigationList(tree: PageTree.Node[]) {
-	const list: PageTree.Item[] = [];
+function scanNavigationList(tree: Node[]) {
+	const list: Item[] = [];
 
 	tree.forEach((node) => {
 		if (node.type === "folder") {
@@ -156,7 +153,7 @@ function scanNavigationList(tree: PageTree.Node[]) {
 	return list;
 }
 
-const listCache = new WeakMap<PageTree.Root, PageTree.Item[]>();
+const listCache = new WeakMap<Root, Item[]>();
 
 export function Footer({ items }: FooterProps) {
 	const { root } = useTreeContext();
