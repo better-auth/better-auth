@@ -173,7 +173,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					const useNumberId =
 						options.advanced?.database?.useNumberId ||
 						options.advanced?.database?.generateId === "serial";
-					const useUUIDs = options.advanced?.database?.generateId === "uuid";
+					const useUUIDs =
+						options.advanced?.database?.generateId === "uuid" ||
+						options.advanced?.database?.generateId === "uuidv7";
 					if (useNumberId) {
 						builder
 							.model(modelName)
@@ -181,11 +183,15 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 							.attribute("id")
 							.attribute("default(autoincrement())");
 					} else if (useUUIDs && provider === "postgresql") {
+						const isUUIDv7 =
+							options.advanced?.database?.generateId === "uuidv7";
 						builder
 							.model(modelName)
 							.field("id", "String")
 							.attribute("id")
-							.attribute('default(dbgenerated("pg_catalog.gen_random_uuid()"))')
+							.attribute(
+								`default(dbgenerated("${isUUIDv7 ? "uuidv7()" : "pg_catalog.gen_random_uuid()"}"))`,
+							)
 							.attribute("db.Uuid");
 					} else {
 						builder.model(modelName).field("id", "String").attribute("id");
@@ -206,7 +212,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						continue;
 					}
 				}
-				const useUUIDs = options.advanced?.database?.generateId === "uuid";
+				const useUUIDs =
+					options.advanced?.database?.generateId === "uuid" ||
+					options.advanced?.database?.generateId === "uuidv7";
 				const useNumberId =
 					options.advanced?.database?.useNumberId ||
 					options.advanced?.database?.generateId === "serial";
@@ -429,7 +437,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						const useNumberId =
 							options.advanced?.database?.useNumberId ||
 							options.advanced?.database?.generateId === "serial";
-						const useUUIDs = options.advanced?.database?.generateId === "uuid";
+						const useUUIDs =
+							options.advanced?.database?.generateId === "uuid" ||
+							options.advanced?.database?.generateId === "uuidv7";
 						if (field.references?.field === "id" && (useNumberId || useUUIDs)) {
 							indexField = `${fieldName}`;
 						} else {

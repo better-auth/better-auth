@@ -97,6 +97,35 @@ describe("generate", async () => {
 		);
 	});
 
+	it("should generate prisma schema with uuidv7 id", async () => {
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: prismaAdapter(
+				{},
+				{
+					provider: "postgresql",
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: prismaAdapter(
+					{},
+					{
+						provider: "postgresql",
+					},
+				),
+				plugins: [twoFactor(), username()],
+				advanced: {
+					database: {
+						generateId: "uuidv7",
+					},
+				},
+			},
+		});
+		await expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/schema-uuidv7.prisma",
+		);
+	});
+
 	it("should generate prisma schema for mongodb", async () => {
 		const schema = await generatePrismaSchema({
 			file: "test.prisma",
