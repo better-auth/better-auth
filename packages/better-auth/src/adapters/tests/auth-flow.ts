@@ -118,7 +118,7 @@ export const authFlowTestSuite = createTestSuite(
 		},
 		"should store and retrieve timestamps correctly across timezones":
 			async () => {
-				using _ = recoverProcessTZ();
+				using _disposedTZ = recoverProcessTZ();
 				const auth = await getAuth();
 				const user = await generate("user");
 				const password = crypto.randomUUID();
