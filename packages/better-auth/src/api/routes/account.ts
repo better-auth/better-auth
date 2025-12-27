@@ -373,6 +373,10 @@ export const linkSocialAccount = createAuthEndpoint(
 			scopes: c.body.scopes,
 		});
 
+		if (!c.body.disableRedirect) {
+			c.setHeader("Location", url.toString());
+		}
+
 		return c.json({
 			url: url.toString(),
 			redirect: !c.body.disableRedirect,
