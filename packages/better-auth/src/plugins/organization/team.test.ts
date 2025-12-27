@@ -971,4 +971,26 @@ describe("listUserTeams security checks", async () => {
 		expect(teamIds).toContain(team.id);
 		expect(teamIds).not.toContain(teamSecret.id);
 	});
+
+	it("should fail if the target user is not a member of the admin's organization", async () => {
+		const outsider = await auth.api.signUpEmail({
+			body: {
+				name: "Outsider",
+				email: "out@side.com",
+				password: "password123",
+			},
+			returnHeaders: true,
+		});
+		try {
+			await auth.api.listUserTeams({
+				headers: admin.headers,
+				query: { userId: outsider.response.user.id },
+			});
+			throw new Error("Should have failed");
+		} catch (e: any) {
+			expect(e.error?.code || e.code).toBe(
+				ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+			);
+		}
+	});
 });

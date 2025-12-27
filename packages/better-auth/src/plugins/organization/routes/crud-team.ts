@@ -817,7 +817,7 @@ export const listUserTeams = <O extends OrganizationOptions>(options: O) =>
 			const targetUserId = ctx.query?.userId || session.user.id;
 			const isSelf = targetUserId === session.user.id;
 
-			// SECURITY: If listing teams for another user, ensure requester has permission
+			// If listing teams for another user, ensure requester has permission
 			if (!isSelf) {
 				const organizationId = session.session.activeOrganizationId;
 				if (!organizationId) {
@@ -855,13 +855,24 @@ export const listUserTeams = <O extends OrganizationOptions>(options: O) =>
 						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_ACCESS_THIS_ORGANIZATION,
 					);
 				}
+
+				const targetMember = await adapter.findMemberByOrgId({
+					userId: targetUserId,
+					organizationId,
+				});
+				if (!targetMember) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+					);
+				}
 			}
 
 			const teams = await adapter.listTeamsByUser({
 				userId: targetUserId,
 			});
 
-			// PRIVACY: If viewing another user, only return teams within the active organization
+			// If viewing another user, only return teams within the active organization
 			if (!isSelf && session.session.activeOrganizationId) {
 				return ctx.json(
 					teams.filter(
