@@ -189,7 +189,7 @@ export async function createAuthContext(
 				allowRelativePaths: boolean;
 			},
 		) {
-			return ctx.trustedOrigins.some((origin) =>
+			return this.trustedOrigins.some((origin) =>
 				matchesOriginPattern(url, origin, settings),
 			);
 		},
