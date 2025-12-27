@@ -1,11 +1,10 @@
+import { betterFetch } from "@better-fetch/fetch";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
-	type OAuthProvider,
-	type ProviderOptions,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
-import { betterFetch } from "@better-fetch/fetch";
 
 export interface YandexProfile {
 	login: string;

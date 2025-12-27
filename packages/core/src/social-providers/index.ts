@@ -31,8 +31,8 @@ import { twitch } from "./twitch";
 import { twitter } from "./twitter";
 import { vercel } from "./vercel";
 import { vk } from "./vk";
-import { zoom } from "./zoom";
 import { yandex } from "./yandex";
+import { zoom } from "./zoom";
 
 export const socialProviders = {
 	apple,
