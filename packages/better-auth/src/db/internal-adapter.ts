@@ -294,6 +294,9 @@ export const createInternalAdapter = (
 				...defaultAdditionalFields,
 				...(overrideAll ? rest : {}),
 			};
+
+			const storeSessionInDB = options.session?.storeSessionInDatabase;
+
 			const res = await createWithHooks(
 				data,
 				"session",
@@ -341,6 +344,10 @@ export const createInternalAdapter = (
 									);
 								}
 
+								if (storeSessionInDB) {
+									return sessionData;
+								}
+
 								const user = await adapter.findOne<User>({
 									model: "user",
 									where: [
@@ -367,10 +374,39 @@ export const createInternalAdapter = (
 
 								return sessionData;
 							},
-							executeMainFn: options.session?.storeSessionInDatabase,
+							executeMainFn: storeSessionInDB,
 						}
 					: undefined,
 			);
+
+			if (secondaryStorage && storeSessionInDB && res) {
+				const now = Date.now();
+				const sessionTTL = Math.max(
+					Math.floor((data.expiresAt.getTime() - now) / 1000),
+					0,
+				);
+				if (sessionTTL > 0) {
+					const user = await adapter.findOne<User>({
+						model: "user",
+						where: [
+							{
+								field: "id",
+								value: userId,
+							},
+						],
+					});
+
+					await secondaryStorage.set(
+						data.token,
+						JSON.stringify({
+							session: res,
+							user,
+						}),
+						sessionTTL,
+					);
+				}
+			}
+
 			return res as Session;
 		},
 		findSession: async (
