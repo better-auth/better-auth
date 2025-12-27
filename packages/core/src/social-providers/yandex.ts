@@ -14,10 +14,8 @@ export interface YandexProfile {
 	psuid: string;
 	emails?: string[];
 	default_email?: string;
-	email?: string;
 	is_avatar_empty?: boolean;
 	default_avatar_id?: string;
-	avatar_id?: string;
 	birthday?: string | null;
 	first_name?: string;
 	last_name?: string;
