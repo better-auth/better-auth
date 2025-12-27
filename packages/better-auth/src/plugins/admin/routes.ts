@@ -1669,9 +1669,11 @@ export const userHasPermission = <O extends AdminOptions>(opts: O) => {
 				(ctx.body.role
 					? { id: ctx.body.userId || "", role: ctx.body.role }
 					: null) ||
-				((await ctx.context.internalAdapter.findUserById(
-					ctx.body.userId as string,
-				)) as { role?: string | undefined; id: string });
+				(ctx.body.userId
+					? ((await ctx.context.internalAdapter.findUserById(
+							ctx.body.userId as string,
+						)) as { role?: string | undefined; id: string })
+					: null);
 			if (!user) {
 				throw new APIError("BAD_REQUEST", {
 					message: "user not found",
