@@ -100,17 +100,17 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 						 */
 						const matches = atomListeners.filter((s) => s.matcher(routePath));
 						if (!matches.length) return;
-						for (const match of matches) {
-							const signal = atoms[match.signal as any];
-							if (!signal) return;
-							/**
-							 * To avoid race conditions we set the signal in a setTimeout
-							 */
-							const val = signal.get();
-							setTimeout(() => {
-								//@ts-expect-error
-								signal.set(!val);
-							}, 10);
+
+						// Deduplicate signals to avoid toggling the same signal multiple times
+						const uniqueSignals = new Set(matches.map((m) => m.signal));
+
+						for (const signalName of uniqueSignals) {
+							const signal = atoms[signalName as any];
+							if (!signal) continue;
+
+							if ("set" in signal) {
+								signal.set(!signal.get());
+							}
 						}
 					},
 				});
