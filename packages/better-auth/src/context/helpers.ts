@@ -1,5 +1,6 @@
 import type {
 	AuthContext,
+	AwaitableFunction,
 	BetterAuthOptions,
 	BetterAuthPlugin,
 } from "@better-auth/core";
@@ -85,4 +86,17 @@ export async function getTrustedOrigins(
 		);
 	}
 	return trustedOrigins;
+}
+export async function getAwaitableValue<T extends Record<string, any>>(
+	arr: AwaitableFunction<T>[] | undefined,
+	item: { field?: string; value: string },
+): Promise<T | undefined> {
+	if (!arr) return undefined;
+	for (const val of arr) {
+		const value = typeof val === "function" ? await val() : val;
+		if (value[item.field ?? "id"] === item.value) {
+			return value;
+		}
+	}
+	return undefined;
 }

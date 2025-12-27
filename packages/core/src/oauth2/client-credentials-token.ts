@@ -1,14 +1,15 @@
 import { base64Url } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
+import type { AwaitableFunction } from "../types";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
 
-export function createClientCredentialsTokenRequest({
+export async function createClientCredentialsTokenRequest({
 	options,
 	scope,
 	authentication,
 	resource,
 }: {
-	options: ProviderOptions & { clientSecret: string };
+	options: AwaitableFunction<ProviderOptions & { clientSecret: string }>;
 	scope?: string | undefined;
 	authentication?: ("basic" | "post") | undefined;
 	resource?: (string | string[]) | undefined;
@@ -18,6 +19,7 @@ export function createClientCredentialsTokenRequest({
 		"content-type": "application/x-www-form-urlencoded",
 		accept: "application/json",
 	};
+	options = typeof options === "function" ? await options() : options;
 
 	body.set("grant_type", "client_credentials");
 	scope && body.set("scope", scope);
@@ -59,13 +61,13 @@ export async function clientCredentialsToken({
 	authentication,
 	resource,
 }: {
-	options: ProviderOptions & { clientSecret: string };
+	options: AwaitableFunction<ProviderOptions & { clientSecret: string }>;
 	tokenEndpoint: string;
 	scope: string;
 	authentication?: ("basic" | "post") | undefined;
 	resource?: (string | string[]) | undefined;
 }): Promise<OAuth2Tokens> {
-	const { body, headers } = createClientCredentialsTokenRequest({
+	const { body, headers } = await createClientCredentialsTokenRequest({
 		options,
 		scope,
 		authentication,
