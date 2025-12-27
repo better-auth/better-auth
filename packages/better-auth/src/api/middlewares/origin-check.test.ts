@@ -500,6 +500,7 @@ describe("origin check middleware", async (it) => {
 describe("trusted origins with baseURL inferred from request", async (it) => {
 	it("should respect trustedOrigins array when baseURL is NOT in config", async () => {
 		const { customFetchImpl, testUser } = await getTestInstance({
+			baseURL: undefined,
 			trustedOrigins: ["http://my-frontend.com"],
 			emailAndPassword: {
 				enabled: true,
@@ -532,6 +533,7 @@ describe("trusted origins with baseURL inferred from request", async (it) => {
 
 	it("should reject untrusted origins even when baseURL is inferred", async () => {
 		const { customFetchImpl, testUser } = await getTestInstance({
+			baseURL: undefined,
 			trustedOrigins: ["http://my-frontend.com"],
 			emailAndPassword: {
 				enabled: true,
@@ -566,6 +568,7 @@ describe("trusted origins with baseURL inferred from request", async (it) => {
 
 		try {
 			const { customFetchImpl, testUser } = await getTestInstance({
+				baseURL: undefined,
 				emailAndPassword: {
 					enabled: true,
 				},
@@ -600,6 +603,7 @@ describe("trusted origins with baseURL inferred from request", async (it) => {
 
 	it("should allow requests from inferred baseURL origin", async () => {
 		const { customFetchImpl, testUser } = await getTestInstance({
+			baseURL: undefined,
 			emailAndPassword: {
 				enabled: true,
 			},
@@ -634,6 +638,7 @@ describe("trusted origins with baseURL inferred from request", async (it) => {
 
 		try {
 			const { customFetchImpl, testUser } = await getTestInstance({
+				baseURL: undefined,
 				trustedOrigins: ["http://config-origin.com"],
 				emailAndPassword: {
 					enabled: true,
