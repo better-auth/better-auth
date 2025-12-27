@@ -1065,6 +1065,110 @@ describe("organization", async (it) => {
 		expect(getFullOrganization.data?.members.length).toBe(6);
 	});
 
+	it("should respect membershipLimit function when adding members to organization", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			user: {
+				modelName: "users",
+			},
+			plugins: [
+				organization({
+					membershipLimit: (user, organization) => {
+						// For organizations with "limit" in name, limit to 2 members
+						if (organization.name.includes("limit")) {
+							return 2;
+						}
+						return 100;
+					},
+					async sendInvitationEmail(data, request) {},
+				}),
+			],
+			logger: {
+				level: "error",
+			},
+		});
+
+		const { headers: headers2 } = await signInWithTestUser();
+		const client2 = createAuthClient({
+			plugins: [organizationClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return auth.handler(new Request(url, init));
+				},
+			},
+		});
+
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "test-membership-limit-func",
+				slug: "test-membership-limit-func",
+			},
+			headers: headers2,
+		});
+
+		// Add 1 member, now count = 2 (creator + 1)
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: "user1@email.com",
+				password: "password",
+				name: "user1",
+			},
+		});
+		const session = await auth.api.getSession({
+			headers: new Headers({
+				Authorization: `Bearer ${newUser?.token}`,
+			}),
+		});
+		await auth.api.addMember({
+			body: {
+				organizationId: org?.id,
+				userId: session?.user.id!,
+				role: "admin",
+			},
+		});
+
+		// Try to add a second member, should fail since limit is 2
+		const secondUser = await auth.api.signUpEmail({
+			body: {
+				email: "user2@email.com",
+				password: "password",
+				name: "user2",
+			},
+		});
+		const session2 = await auth.api.getSession({
+			headers: new Headers({
+				Authorization: `Bearer ${secondUser?.token}`,
+			}),
+		});
+		await auth.api
+			.addMember({
+				body: {
+					organizationId: org?.id,
+					userId: session2?.user.id!,
+					role: "admin",
+				},
+			})
+			.catch((e: APIError) => {
+				expect(e).not.toBeNull();
+				expect(isAPIError(e)).toBeTruthy();
+				expect(e.message).toBe(
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED
+						.message,
+				);
+			});
+
+		// Check that only 2 members (creator + 1 added)
+		const getFullOrganization = await client2.organization.getFullOrganization({
+			query: {
+				organizationId: org?.id,
+			},
+			fetchOptions: {
+				headers: headers2,
+			},
+		});
+		expect(getFullOrganization.data?.members.length).toBe(2);
+	});
+
 	it("should allow listing invitations for an org", async () => {
 		const invitations = await client.organization.listInvitations({
 			query: {
