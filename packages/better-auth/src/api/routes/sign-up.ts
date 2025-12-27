@@ -12,7 +12,7 @@ import { isAPIError } from "../../utils/is-api-error";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
 
-const _signUpEmailBodySchema = z
+const signUpEmailBodySchema = z
 	.object({
 		name: z.string().nonempty(),
 		email: z.email(),
@@ -30,7 +30,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			method: "POST",
 			operationId: "signUpWithEmailAndPassword",
 			use: [formCsrfMiddleware],
-			body: signUpEmailBodySchema,
+			body: z.record(z.string(), z.any()),
 			metadata: {
 				allowedMediaTypes: [
 					"application/x-www-form-urlencoded",
