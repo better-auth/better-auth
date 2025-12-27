@@ -4,6 +4,14 @@ import { getOrigin } from "../../utils/url";
 import type { OAuthProxyOptions } from "./index";
 
 /**
+ * Strip trailing slashes from URL to prevent double slashes
+ */
+export function stripTrailingSlash(url: string | undefined): string {
+	if (!url) return "";
+	return url.replace(/\/+$/, "");
+}
+
+/**
  * Get base URL from vendor-specific environment variables
  */
 function getVendorBaseURL() {
