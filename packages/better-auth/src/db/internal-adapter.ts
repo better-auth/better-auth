@@ -344,34 +344,6 @@ export const createInternalAdapter = (
 									);
 								}
 
-								if (storeSessionInDB) {
-									return sessionData;
-								}
-
-								const user = await adapter.findOne<User>({
-									model: "user",
-									where: [
-										{
-											field: "id",
-											value: userId,
-										},
-									],
-								});
-								const sessionTTL = Math.max(
-									Math.floor((data.expiresAt.getTime() - now) / 1000),
-									0,
-								);
-								if (sessionTTL > 0) {
-									await secondaryStorage.set(
-										data.token,
-										JSON.stringify({
-											session: sessionData,
-											user,
-										}),
-										sessionTTL,
-									);
-								}
-
 								return sessionData;
 							},
 							executeMainFn: storeSessionInDB,
@@ -379,7 +351,7 @@ export const createInternalAdapter = (
 					: undefined,
 			);
 
-			if (secondaryStorage && storeSessionInDB && res) {
+			if (secondaryStorage && res) {
 				const now = Date.now();
 				const sessionTTL = Math.max(
 					Math.floor((data.expiresAt.getTime() - now) / 1000),
