@@ -223,6 +223,75 @@ export const requestPasswordResetCallback = createAuthEndpoint(
 	},
 );
 
+export const validatePasswordResetToken = createAuthEndpoint(
+	"/validate-reset-password-token",
+	{
+		method: "POST",
+		body: z.object({
+			token: z.string().meta({
+				description: "The token to validate",
+			}),
+		}),
+		metadata: {
+			openapi: {
+				description: "Validate a password reset token without consuming it",
+				responses: {
+					"200": {
+						description: "Token validation result",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										valid: {
+											type: "boolean",
+										},
+										message: {
+											type: "string",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	},
+	async (ctx) => {
+		const { token } = ctx.body;
+		if (!token) {
+			return ctx.json({
+				valid: false,
+				message: "Token is required",
+			});
+		}
+
+		const id = `reset-password:${token}`;
+
+		const verification =
+			await ctx.context.internalAdapter.findVerificationValue(id);
+		if (!verification) {
+			return ctx.json({
+				valid: false,
+				message: "Invalid token",
+			});
+		}
+
+		if (verification.expiresAt < new Date()) {
+			return ctx.json({
+				valid: false,
+				message: "Token has expired",
+			});
+		}
+
+		return ctx.json({
+			valid: true,
+			message: "Token is valid",
+		});
+	},
+);
+
 export const resetPassword = createAuthEndpoint(
 	"/reset-password",
 	{
