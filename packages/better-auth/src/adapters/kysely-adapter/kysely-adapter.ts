@@ -55,7 +55,7 @@ export const kyselyAdapter = (
 		return ({
 			getFieldName,
 			schema,
-			getDefaultFieldName,
+			options,
 			getDefaultModelName,
 			getFieldAttributes,
 			getModelName,
@@ -98,6 +98,10 @@ export const kyselyAdapter = (
 					| InsertQueryBuilder<any, any, any>
 					| UpdateQueryBuilder<any, string, string, any>,
 				model: string,
+				/**
+				 * If `where` is empty, it means this is a `create` operation.
+				 * Otherwise it's a `update` operation.
+				 */
 				where: Where[],
 			) => {
 				let res: any;
@@ -105,31 +109,120 @@ export const kyselyAdapter = (
 					// This isn't good, but kysely doesn't support returning in mysql and it doesn't return the inserted id.
 					// Change this if there is a better way.
 					await builder.execute();
-					const field = values.id
-						? "id"
-						: where.length > 0 && where[0]?.field
-							? where[0].field
-							: "id";
+					const allFields = schema[getDefaultModelName(model)]?.fields || {};
+					const valueKeys = Object.keys(values);
 
-					if (!values.id && where.length === 0) {
+					/**
+					 * A field which the provided `values` object has and is unique.
+					 */
+					const uniqueField: { field: string; value: any } | null = (() => {
+						if ("id" in values && values.id) {
+							return { field: "id", value: values.id };
+						}
+
+						const idWhere = where.find(
+							(x) => x.field === "id" && (x.operator === "eq" || !x.operator),
+						);
+						if (idWhere) {
+							return { field: "id", value: idWhere.value };
+						}
+
+						const allFieldKeys = Object.keys(allFields);
+						const gfa = (f: string) => getFieldAttributes({ model, field: f });
+						const uniqueFields = allFieldKeys
+							.map((field) => ({ attr: gfa(field), key: field }))
+							.filter((field) => field.attr.unique)
+							.map((field) => field.attr.fieldName || field.key);
+
+						const foundWhereKey = where.find(
+							(x) =>
+								uniqueFields.includes(x.field) &&
+								(x.operator === "eq" || !x.operator),
+						);
+						if (foundWhereKey) {
+							let value = foundWhereKey.value;
+							// If it's an `update` operation, and the `values` object contain the same unique field which
+							// was found in the where clause, it means the field is updated and we should use the new value.
+							if (foundWhereKey.field in values) {
+								value = values[foundWhereKey.field];
+							}
+							return { field: foundWhereKey.field, value: value };
+						}
+
+						// if any unique fields are found in the values, use that.
+						const foundKey = valueKeys.find((f) => uniqueFields.includes(f));
+						if (foundKey) return { field: foundKey, value: values[foundKey] };
+						return null;
+					})();
+
+					// If a unique fields exists, use that to find the row.
+					if (uniqueField) {
+						console.log(
+							`has unique field ${uniqueField.field} with value ${uniqueField.value}`,
+						);
 						res = await db
 							.selectFrom(model)
 							.selectAll()
-							.orderBy(getFieldName({ model, field }), "desc")
+							.where(
+								getFieldName({ model, field: uniqueField.field }),
+								"=",
+								uniqueField.value,
+							)
 							.limit(1)
 							.executeTakeFirst();
 						return res;
 					}
 
-					const value = values[field] || where[0]?.value;
-					res = await db
-						.selectFrom(model)
-						.selectAll()
-						.orderBy(getFieldName({ model, field }), "desc")
-						.where(getFieldName({ model, field }), "=", value)
-						.limit(1)
-						.executeTakeFirst();
-					return res;
+					// If using auto-incrementing id, we can use `LAST_INSERT_ID()` to get the last inserted id.
+					// NOTE: still possible for race-conditions to occur here. But can't do much about this.
+					if (options.advanced?.database?.generateId === "serial") {
+						const result = await db
+							.selectFrom(model)
+							.selectAll()
+							.where("id", "=", sql<string>`LAST_INSERT_ID()`)
+							.executeTakeFirst();
+						return result;
+					}
+
+					// Attempt to use `createdAt` to find the last inserted row.
+					// NOTE: Race conditions are still possible here. But can't do much about this.
+					const createdAtField = getFieldName({ model, field: "createdAt" });
+					// if `createdAt` is already defined in the `values` object, use that.
+					const hasCreatedAt = "createdAt" in values && values.createdAt;
+					if (hasCreatedAt) {
+						res = await db
+							.selectFrom(model)
+							.selectAll()
+							.orderBy(createdAtField, "desc")
+							.where(createdAtField, "=", values.createdAt)
+							.limit(1)
+							.executeTakeFirst();
+						return res;
+					}
+
+					// Otherwise make sure the schema has the `createdAt` field, and order by that.
+					const hasField = "createdAt" in allFields && allFields.createdAt;
+					if (hasField) {
+						res = await db
+							.selectFrom(model)
+							.selectAll()
+							.orderBy(createdAtField, "desc")
+							.limit(1)
+							.executeTakeFirst();
+						return res;
+					}
+
+					// Last resort: use all fields in the `values` object to try and find the last inserted row.
+					// Build WHERE clauses for all fields in values
+					let query = db.selectFrom(model).selectAll();
+					for (const [key, value] of Object.entries(values)) {
+						const fieldName = getFieldName({ model, field: key });
+						query = query.where(fieldName, "=", value);
+					}
+					res = await query.limit(1).executeTakeFirst();
+
+					// If no options are found, return null.
+					return null;
 				}
 				if (config?.type === "mssql") {
 					res = await builder.outputAll("inserted").executeTakeFirst();
