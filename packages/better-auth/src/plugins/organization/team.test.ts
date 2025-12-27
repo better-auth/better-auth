@@ -876,13 +876,32 @@ describe("listUserTeams security checks", async () => {
 		],
 	});
 
+	const client = createAuthClient({
+		plugins: [
+			organizationClient({
+				teams: {
+					enabled: true,
+				},
+			}),
+		],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
 	const admin = await signInWithTestUser();
+
+	// 1. Setup: Create Org
 	const orgRes = await auth.api.createOrganization({
 		headers: admin.headers,
 		body: { name: "Security Org", slug: "sec-org" },
 	});
 	const organizationId = orgRes!.id;
 
+	// 2. Setup: Create Member
 	const memberUser = await auth.api.signUpEmail({
 		body: {
 			name: "Regular Member",
@@ -892,6 +911,7 @@ describe("listUserTeams security checks", async () => {
 		returnHeaders: true,
 	});
 
+	// 3. Setup: Add Member to Org
 	await auth.api.addMember({
 		headers: admin.headers,
 		body: {
@@ -901,6 +921,7 @@ describe("listUserTeams security checks", async () => {
 		},
 	});
 
+	// 4. Setup: Create Team & Add Member
 	const team = await auth.api.createTeam({
 		headers: admin.headers,
 		body: { name: "Security Team", organizationId },
@@ -910,39 +931,67 @@ describe("listUserTeams security checks", async () => {
 		body: { teamId: team.id, userId: memberUser.response.user.id },
 	});
 
+	// CRITICAL FIX 1: Explicitly set Active Org for Admin
+	await client.organization.setActive({
+		organizationId: organizationId,
+		fetchOptions: { headers: admin.headers },
+	});
+
+	// CRITICAL FIX 2: Set Active Team for Admin (Permission Context)
+	await client.organization.setActiveTeam({
+		teamId: team.id,
+		fetchOptions: { headers: admin.headers },
+	});
+
+	// CRITICAL FIX 3: Explicitly set Active Org for Member
+	await client.organization.setActive({
+		organizationId: organizationId,
+		fetchOptions: { headers: memberUser.headers },
+	});
+
+	// CRITICAL FIX 4: Set Active Team for Member (Context for self-test)
+	await client.organization.setActiveTeam({
+		teamId: team.id,
+		fetchOptions: { headers: memberUser.headers },
+	});
+
 	it("should allow user to list their own teams without permissions", async () => {
-		const teams = await auth.api.listUserTeams({
-			headers: memberUser.headers,
+		const { data, error } = await client.organization.listUserTeams({
+			fetchOptions: { headers: memberUser.headers },
 			query: { userId: memberUser.response.user.id },
 		});
-		expect(teams).toHaveLength(1);
-		expect(teams![0]!.id).toBe(team.id);
+
+		expect(error).toBeNull();
+		expect(data).toHaveLength(1);
+		expect(data?.[0]?.id).toBe(team.id);
 	});
 
 	it("should allow admin/owner to list another user's teams in the org", async () => {
-		const teams = await auth.api.listUserTeams({
-			headers: admin.headers,
+		const { data, error } = await client.organization.listUserTeams({
+			fetchOptions: { headers: admin.headers },
 			query: { userId: memberUser.response.user.id },
 		});
-		expect(teams).toHaveLength(1);
-		expect(teams![0]!.id).toBe(team.id);
+
+		expect(error).toBeNull();
+		expect(data).toHaveLength(1);
+		expect(data?.[0]?.id).toBe(team.id);
 	});
 
 	it("should FORBID a regular member from listing another user's teams", async () => {
-		try {
-			await auth.api.listUserTeams({
-				headers: memberUser.headers,
-				query: { userId: admin.user.id },
-			});
-			throw new Error("Should have failed");
-		} catch (e: any) {
-			expect(e.error?.code || e.code).toBe(
-				ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_ACCESS_THIS_ORGANIZATION,
-			); // Or check for the specific error code
-		}
+		const { data, error } = await client.organization.listUserTeams({
+			fetchOptions: { headers: memberUser.headers },
+			query: { userId: admin.user.id },
+		});
+
+		expect(data).toBeNull();
+		expect(error).toBeDefined();
+		expect(error?.code).toBe(
+			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_ACCESS_THIS_ORGANIZATION,
+		);
 	});
 
 	it("should NOT return teams from a different organization when querying another user", async () => {
+		// Setup: Create a secret org and team that the member is also in
 		const org2Res = await auth.api.createOrganization({
 			headers: admin.headers,
 			body: { name: "Secret Org", slug: "secret-org" },
@@ -965,14 +1014,19 @@ describe("listUserTeams security checks", async () => {
 			body: { teamId: teamSecret.id, userId: memberUser.response.user.id },
 		});
 
-		const teams = await auth.api.listUserTeams({
-			headers: admin.headers,
+		// Test: Admin (Active in Org 1) queries Member
+		// Note: Admin's context is already set to Org 1 from the "before all" setup above
+		const { data, error } = await client.organization.listUserTeams({
+			fetchOptions: { headers: admin.headers },
 			query: { userId: memberUser.response.user.id },
 		});
 
-		const teamIds = teams.map((t) => t.id);
-		expect(teamIds).toContain(team.id);
-		expect(teamIds).not.toContain(teamSecret.id);
+		expect(error).toBeNull();
+		if (!data) throw new Error("Data should be defined");
+
+		const teamIds = data.map((t) => t.id);
+		expect(teamIds).toContain(team.id); // Should see shared org team
+		expect(teamIds).not.toContain(teamSecret.id); // Should NOT see secret org team
 	});
 
 	it("should fail if the target user is not a member of the admin's organization", async () => {
@@ -984,16 +1038,16 @@ describe("listUserTeams security checks", async () => {
 			},
 			returnHeaders: true,
 		});
-		try {
-			await auth.api.listUserTeams({
-				headers: admin.headers,
-				query: { userId: outsider.response.user.id },
-			});
-			throw new Error("Should have failed");
-		} catch (e: any) {
-			expect(e.error?.code || e.code).toBe(
-				ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
-			);
-		}
+
+		const { data, error } = await client.organization.listUserTeams({
+			fetchOptions: { headers: admin.headers },
+			query: { userId: outsider.response.user.id },
+		});
+
+		expect(data).toBeNull();
+		expect(error).toBeDefined();
+		expect(error?.code).toBe(
+			ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+		);
 	});
 });
