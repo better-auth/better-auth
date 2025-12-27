@@ -32,6 +32,7 @@ import { twitter } from "./twitter";
 import { vercel } from "./vercel";
 import { vk } from "./vk";
 import { zoom } from "./zoom";
+import { yandex } from "./yandex";
 
 export const socialProviders = {
 	apple,
@@ -67,6 +68,7 @@ export const socialProviders = {
 	paypal,
 	polar,
 	vercel,
+	yandex,
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
@@ -122,6 +124,7 @@ export * from "./twitch";
 export * from "./twitter";
 export * from "./vercel";
 export * from "./vk";
+export * from "./yandex";
 export * from "./zoom";
 
 export type SocialProviderList = typeof socialProviderList;

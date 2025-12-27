@@ -1087,6 +1087,22 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				),
 			},
 			{
+				title: "Yandex",
+				isNew: true,
+				href: "/docs/authentication/yandex",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 32 32"
+						fill="currentColor"
+					>
+						<path d="M 20.800781 1 L 15.199219 17.199219 L 10.199219 4 L 7 4 L 14 22.599609 L 14 31 L 17 31 L 17 21.099609 L 24 1 L 20.800781 1 z" />
+					</svg>
+				),
+			},
+			{
 				title: "Zoom",
 				href: "/docs/authentication/zoom",
 				icon: (props?: SVGProps<any>) => (
