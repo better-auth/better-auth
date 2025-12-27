@@ -804,7 +804,6 @@ export const createInternalAdapter = (
 				undefined,
 			);
 			await refreshUserSessions(user);
-			await refreshUserSessions(user);
 			return user;
 		},
 		updateUserByEmail: async (
@@ -822,7 +821,6 @@ export const createInternalAdapter = (
 				"user",
 				undefined,
 			);
-			await refreshUserSessions(user);
 			await refreshUserSessions(user);
 			return user;
 		},
