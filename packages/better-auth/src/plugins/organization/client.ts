@@ -182,6 +182,12 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 					});
 					return isAuthorized;
 				},
+				listUserTeams: async (query?: { userId?: string }) => {
+					return $fetch("/organization/list-user-teams", {
+						method: "GET",
+						query,
+					});
+				},
 			},
 		}),
 		getAtoms: ($fetch) => {

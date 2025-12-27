@@ -1,8 +1,9 @@
-import { describe, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createAuthClient } from "../../client";
 import { setCookieToHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { organizationClient } from "./client";
+import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { organization } from "./organization";
 
 describe("team", async (it) => {
@@ -860,5 +861,114 @@ describe("multi team support", async (it) => {
 			(m: any) => m.userId === newUser.user.id,
 		);
 		expect(stillTeam2Member).toBeUndefined();
+	});
+});
+
+describe("listUserTeams security checks", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				teams: { enabled: true },
+			}),
+		],
+	});
+
+	const admin = await signInWithTestUser();
+	const orgRes = await auth.api.createOrganization({
+		headers: admin.headers,
+		body: { name: "Security Org", slug: "sec-org" },
+	});
+	const organizationId = orgRes!.id;
+
+	const memberUser = await auth.api.signUpEmail({
+		body: {
+			name: "Regular Member",
+			email: "member@security.com",
+			password: "password123",
+		},
+		returnHeaders: true,
+	});
+
+	await auth.api.addMember({
+		headers: admin.headers,
+		body: {
+			organizationId,
+			userId: memberUser.response.user.id,
+			role: "member",
+		},
+	});
+
+	const team = await auth.api.createTeam({
+		headers: admin.headers,
+		body: { name: "Security Team", organizationId },
+	});
+	await auth.api.addTeamMember({
+		headers: admin.headers,
+		body: { teamId: team.id, userId: memberUser.response.user.id },
+	});
+
+	it("should allow user to list their own teams without permissions", async () => {
+		const teams = await auth.api.listUserTeams({
+			headers: memberUser.headers,
+			query: { userId: memberUser.response.user.id },
+		});
+		expect(teams).toHaveLength(1);
+		expect(teams![0]!.id).toBe(team.id);
+	});
+
+	it("should allow admin/owner to list another user's teams in the org", async () => {
+		const teams = await auth.api.listUserTeams({
+			headers: admin.headers,
+			query: { userId: memberUser.response.user.id },
+		});
+		expect(teams).toHaveLength(1);
+		expect(teams![0]!.id).toBe(team.id);
+	});
+
+	it("should FORBID a regular member from listing another user's teams", async () => {
+		try {
+			await auth.api.listUserTeams({
+				headers: memberUser.headers,
+				query: { userId: admin.user.id },
+			});
+			throw new Error("Should have failed");
+		} catch (e: any) {
+			expect(e.error?.code || e.code).toBe(
+				ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_ACCESS_THIS_ORGANIZATION,
+			); // Or check for the specific error code
+		}
+	});
+
+	it("should NOT return teams from a different organization when querying another user", async () => {
+		const org2Res = await auth.api.createOrganization({
+			headers: admin.headers,
+			body: { name: "Secret Org", slug: "secret-org" },
+		});
+		const teamSecret = await auth.api.createTeam({
+			headers: admin.headers,
+			body: { name: "Secret Team", organizationId: org2Res!.id },
+		});
+
+		await auth.api.addMember({
+			headers: admin.headers,
+			body: {
+				organizationId: org2Res!.id,
+				userId: memberUser.response.user.id,
+				role: "member",
+			},
+		});
+		await auth.api.addTeamMember({
+			headers: admin.headers,
+			body: { teamId: teamSecret.id, userId: memberUser.response.user.id },
+		});
+
+		const teams = await auth.api.listUserTeams({
+			headers: admin.headers,
+			query: { userId: memberUser.response.user.id },
+		});
+
+		const teamIds = teams.map((t) => t.id);
+		expect(teamIds).toContain(team.id);
+		expect(teamIds).not.toContain(teamSecret.id);
 	});
 });
