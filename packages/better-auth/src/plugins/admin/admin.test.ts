@@ -1461,11 +1461,11 @@ describe("access control", async (it) => {
 		await client.admin.removeUser(
 			{ userId: createdUser.data?.user.id || "" },
 			{ headers: headers },
-		);
+		expect(createdUser.data?.user.role).toBe("support"		);
 	});
 });
 
-describe("edge cases: NaN value", async () => {
+describe("edge cases: userId validation", async () => {
 	const { signInWithTestUser, customFetchImpl, auth } = await getTestInstance(
 		{
 			advanced: {
