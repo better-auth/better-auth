@@ -36,7 +36,7 @@ export interface AnonymousOptions {
 		  }) => Awaitable<void>)
 		| undefined;
 	/**
-	 * Disable deleting the anonymous user after linking
+	 * Disable deleting the anonymous user
 	 */
 	disableDeleteAnonymousUser?: boolean | undefined;
 	/**
