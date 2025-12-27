@@ -1,8 +1,9 @@
-import { describe, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createAuthClient } from "../../client";
 import { setCookieToHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { organizationClient } from "./client";
+import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { organization } from "./organization";
 
 describe("team", async (it) => {
@@ -140,12 +141,12 @@ describe("team", async (it) => {
 	});
 
 	it("should add team to the member's list of teams", async () => {
-		const listUserTeamsRes = await client.organization.listUserTeams(
-			{},
-			{
+		const listUserTeamsRes = await client.organization.listUserTeams({
+			fetchOptions: {
 				headers: signUpHeaders,
 			},
-		);
+			query: {},
+		});
 
 		expect(listUserTeamsRes.error).toBeNull();
 		expect(listUserTeamsRes.data).not.toBeNull();
@@ -502,6 +503,7 @@ describe("multi team support", async (it) => {
 
 		const teams = await auth.api.listUserTeams({
 			headers: { cookie: invitedUser.headers.getSetCookie()[0]! },
+			query: {},
 		});
 
 		expect(teams).toHaveLength(3);
@@ -595,6 +597,7 @@ describe("multi team support", async (it) => {
 
 		const teams = await auth.api.listUserTeams({
 			headers: { cookie: invitedUser.headers.getSetCookie()[0]! },
+			query: {},
 		});
 
 		expect(teams).toHaveLength(4);
@@ -616,6 +619,7 @@ describe("multi team support", async (it) => {
 
 		const teams = await auth.api.listUserTeams({
 			headers: { cookie: invitedUser.headers.getSetCookie()[0]! },
+			query: {},
 		});
 
 		expect(teams).toHaveLength(3);
@@ -860,5 +864,179 @@ describe("multi team support", async (it) => {
 			(m: any) => m.userId === newUser.user.id,
 		);
 		expect(stillTeam2Member).toBeUndefined();
+	});
+});
+
+describe("listUserTeams security checks", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				teams: { enabled: true },
+			}),
+		],
+	});
+
+	const client = createAuthClient({
+		plugins: [
+			organizationClient({
+				teams: {
+					enabled: true,
+				},
+			}),
+		],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
+	const admin = await signInWithTestUser();
+
+	const orgRes = await auth.api.createOrganization({
+		headers: admin.headers,
+		body: { name: "Security Org", slug: "sec-org" },
+	});
+	const organizationId = orgRes!.id;
+
+	const memberUser = await auth.api.signUpEmail({
+		body: {
+			name: "Regular Member",
+			email: "member@security.com",
+			password: "password123",
+		},
+		returnHeaders: true,
+	});
+
+	await auth.api.addMember({
+		headers: admin.headers,
+		body: {
+			organizationId,
+			userId: memberUser.response.user.id,
+			role: "member",
+		},
+	});
+
+	const team = await auth.api.createTeam({
+		headers: admin.headers,
+		body: { name: "Security Team", organizationId },
+	});
+	await auth.api.addTeamMember({
+		headers: admin.headers,
+		body: { teamId: team.id, userId: memberUser.response.user.id },
+	});
+
+	await client.organization.setActive({
+		organizationId: organizationId,
+		fetchOptions: { headers: admin.headers },
+	});
+
+	await client.organization.setActiveTeam({
+		teamId: team.id,
+		fetchOptions: { headers: admin.headers },
+	});
+
+	await client.organization.setActive({
+		organizationId: organizationId,
+		fetchOptions: { headers: memberUser.headers },
+	});
+
+	await client.organization.setActiveTeam({
+		teamId: team.id,
+		fetchOptions: { headers: memberUser.headers },
+	});
+
+	it("should allow user to list their own teams without permissions", async () => {
+		const { data, error } = await client.organization.listUserTeams({
+			fetchOptions: { headers: memberUser.headers },
+			query: { userId: memberUser.response.user.id },
+		});
+
+		expect(error).toBeNull();
+		expect(data).toHaveLength(1);
+		expect(data?.[0]?.id).toBe(team.id);
+	});
+
+	it("should allow admin/owner to list another user's teams in the org", async () => {
+		const { data, error } = await client.organization.listUserTeams({
+			fetchOptions: { headers: admin.headers },
+			query: { userId: memberUser.response.user.id },
+		});
+
+		expect(error).toBeNull();
+		expect(data).toHaveLength(1);
+		expect(data?.[0]?.id).toBe(team.id);
+	});
+
+	it("should FORBID a regular member from listing another user's teams", async () => {
+		const { data, error } = await client.organization.listUserTeams({
+			fetchOptions: { headers: memberUser.headers },
+			query: { userId: admin.user.id },
+		});
+
+		expect(data).toBeNull();
+		expect(error).toBeDefined();
+		expect(error?.code).toBe(
+			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_ACCESS_THIS_ORGANIZATION,
+		);
+	});
+
+	it("should NOT return teams from a different organization when querying another user", async () => {
+		const org2Res = await auth.api.createOrganization({
+			headers: admin.headers,
+			body: { name: "Secret Org", slug: "secret-org" },
+		});
+		const teamSecret = await auth.api.createTeam({
+			headers: admin.headers,
+			body: { name: "Secret Team", organizationId: org2Res!.id },
+		});
+
+		await auth.api.addMember({
+			headers: admin.headers,
+			body: {
+				organizationId: org2Res!.id,
+				userId: memberUser.response.user.id,
+				role: "member",
+			},
+		});
+		await auth.api.addTeamMember({
+			headers: admin.headers,
+			body: { teamId: teamSecret.id, userId: memberUser.response.user.id },
+		});
+
+		const { data, error } = await client.organization.listUserTeams({
+			fetchOptions: { headers: admin.headers },
+			query: { userId: memberUser.response.user.id },
+		});
+
+		expect(error).toBeNull();
+		if (!data) throw new Error("Data should be defined");
+
+		const teamIds = data.map((t) => t.id);
+		expect(teamIds).toContain(team.id);
+		expect(teamIds).not.toContain(teamSecret.id);
+	});
+
+	it("should fail if the target user is not a member of the admin's organization", async () => {
+		const outsider = await auth.api.signUpEmail({
+			body: {
+				name: "Outsider",
+				email: "out@side.com",
+				password: "password123",
+			},
+			returnHeaders: true,
+		});
+
+		const { data, error } = await client.organization.listUserTeams({
+			fetchOptions: { headers: admin.headers },
+			query: { userId: outsider.response.user.id },
+		});
+
+		expect(data).toBeNull();
+		expect(error).toBeDefined();
+		expect(error?.code).toBe(
+			ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+		);
 	});
 });
