@@ -15,6 +15,11 @@ export async function createAuthServer(
 		emailAndPassword: {
 			enabled: true,
 		},
+		trustedOrigins: [
+			baseURL,
+			"http://localhost:*", // Dynamic frontend port
+			"http://test.com:*", // Cross-domain test
+		],
 	});
 
 	const { runMigrations } = await getMigrations(auth.options);
