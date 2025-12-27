@@ -133,105 +133,77 @@ description: "Better Auth Plugin for Flowglad"
 
     Create a factory function that returns a `FlowgladServer` instance scoped to a specific customer. This function will be used by the route handler to create server instances per request.
 
-    <Tabs items={["Next.js App Router", "Express"]}>
-      <Tab value="Next.js App Router">
-        <Tabs items={["User", "Organization", "Custom"]}>
-          <Tab value="User">
-            ```ts title="lib/flowglad.ts"
-            import { FlowgladServer } from "@flowglad/nextjs/server"
-            import { auth } from "@/lib/auth"
-            import { headers } from "next/headers"
+    <Tabs items={["User", "Organization", "Custom"]}>
+      <Tab value="User">
+        ```ts title="lib/flowglad.ts"
+        import { FlowgladServer } from "@flowglad/nextjs/server"
+        import { auth } from "@/lib/auth"
+        import { headers } from "next/headers"
 
-            export const flowglad = (customerExternalId: string) => {
-              return new FlowgladServer({
-                customerExternalId,
-                getCustomerDetails: async () => {
-                  const session = await auth.api.getSession({
-                    headers: await headers(),
-                  })
-                  if (!session?.user) {
-                    throw new Error("User not authenticated")
-                  }
-                  return {
-                    email: session.user.email || "",
-                    name: session.user.name || "",
-                  }
-                },
+        export const flowglad = (customerExternalId: string) => {
+          return new FlowgladServer({
+            customerExternalId,
+            getCustomerDetails: async () => {
+              const session = await auth.api.getSession({
+                headers: await headers(),
               })
-            }
-            ```
-          </Tab>
-
-          <Tab value="Organization">
-            ```ts title="lib/flowglad.ts"
-            import { FlowgladServer } from "@flowglad/nextjs/server"
-            import { auth } from "@/lib/auth"
-            import { headers } from "next/headers"
-
-            export const flowglad = (customerExternalId: string) => {
-              return new FlowgladServer({
-                customerExternalId,
-                /**
-                 * Look up the organization details using Better Auth entirely.
-                 * Throws if the organization or session is not found.
-                 */
-                getCustomerDetails: async (externalId: string) => {
-                  // Fetch the organization using Better Auth's API
-                  const orgData = await auth.api.getFullOrganization({
-                    query: { organizationId: externalId },
-                    headers: await headers(),
-                  })
-
-                  if (!orgData?.name) {
-                    throw new Error(`Organization not found: ${externalId}`)
-                  }
-
-                  // Optionally get the active user for contact email (could be the caller)
-                  const session = await auth.api.getSession({
-                    headers: await headers(),
-                  })
-
-                  if (!session?.user) {
-                    throw new Error("User not authenticated")
-                  }
-
-                  return {
-                    email: session.user.email || "",
-                    name: orgData.name,
-                  }
-                },
-              })
-            }
-            ```
-          </Tab>
-
-          <Tab value="Custom">
-            ```ts title="lib/flowglad.ts"
-            import { FlowgladServer } from "@flowglad/nextjs/server"
-            import { db } from "@/server/db/client"
-
-            export const flowglad = (customerExternalId: string) => {
-              return new FlowgladServer({
-                customerExternalId,
-                getCustomerDetails: async (externalId: string) => {
-                  // Fetch customer details from your database
-                  const user = await db.users.findOne({ id: externalId })
-                  if (!user) {
-                    throw new Error(`Customer not found: ${externalId}`)
-                  }
-                  return {
-                    email: user.email || "",
-                    name: user.name || "",
-                  }
-                },
-              })
-            }
-            ```
-          </Tab>
-        </Tabs>
+              if (!session?.user) {
+                throw new Error("User not authenticated")
+              }
+              return {
+                email: session.user.email || "",
+                name: session.user.name || "",
+              }
+            },
+          })
+        }
+        ```
       </Tab>
 
-      <Tab value="Express">
+      <Tab value="Organization">
+        ```ts title="lib/flowglad.ts"
+        import { FlowgladServer } from "@flowglad/nextjs/server"
+        import { auth } from "@/lib/auth"
+        import { headers } from "next/headers"
+
+        export const flowglad = (customerExternalId: string) => {
+          return new FlowgladServer({
+            customerExternalId,
+            /**
+             * Look up the organization details using Better Auth entirely.
+             * Throws if the organization or session is not found.
+             */
+            getCustomerDetails: async (externalId: string) => {
+              // Fetch the organization using Better Auth's API
+              const orgData = await auth.api.getFullOrganization({
+                query: { organizationId: externalId },
+                headers: await headers(),
+              })
+
+              if (!orgData?.name) {
+                throw new Error(`Organization not found: ${externalId}`)
+              }
+
+              // Optionally get the active user for contact email (could be the caller)
+              const session = await auth.api.getSession({
+                headers: await headers(),
+              })
+
+              if (!session?.user) {
+                throw new Error("User not authenticated")
+              }
+
+              return {
+                email: session.user.email || "",
+                name: orgData.name,
+              }
+            },
+          })
+        }
+        ```
+      </Tab>
+
+      <Tab value="Custom">
         ```ts title="lib/flowglad.ts"
         import { FlowgladServer } from "@flowglad/server"
         import { db } from "@/server/db/client"
