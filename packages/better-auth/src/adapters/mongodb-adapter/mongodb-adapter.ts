@@ -10,6 +10,16 @@ import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import type { ClientSession, Db, MongoClient } from "mongodb";
 import { ObjectId } from "mongodb";
 
+class MongoAdapterError extends Error {
+	constructor(
+		public code: "INVALID_ID" | "UNSUPPORTED_OPERATOR",
+		message: string,
+	) {
+		super(message);
+		this.name = "MongoAdapterError";
+	}
+}
+
 export interface MongoDBAdapterConfig {
 	/**
 	 * MongoDB client instance
@@ -106,14 +116,10 @@ export const mongodbAdapter = (
 								if (v instanceof ObjectId) {
 									return v;
 								}
-								throw new Error(
-									"Invalid id value, received: " + JSON.stringify(v),
-								);
+								throw new MongoAdapterError("INVALID_ID", "Invalid id value");
 							});
 						}
-						throw new Error(
-							"Invalid id value, received: " + JSON.stringify(value),
-						);
+						throw new MongoAdapterError("INVALID_ID", "Invalid id value");
 					}
 					try {
 						return new ObjectId(value);
@@ -243,7 +249,10 @@ export const mongodbAdapter = (
 							};
 							break;
 						default:
-							throw new Error(`Unsupported operator: ${operator}`);
+							throw new MongoAdapterError(
+								"UNSUPPORTED_OPERATOR",
+								`Unsupported operator: ${operator}`,
+							);
 					}
 					return { condition, connector };
 				});
