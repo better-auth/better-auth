@@ -536,6 +536,88 @@ backup codes are generated and stored in the database when the user enabled two 
     }}
 />
 
+**Trust Device Options**
+
+Trust device options allow you to configure how trusted devices are handled. When a user marks a device as trusted during 2FA verification, they won't be prompted for 2FA on subsequent sign-ins from that device.
+
+<TypeTable
+    type={{
+        disabled: {
+            description: "If true, the trust device feature will be disabled entirely. Users will always be required to complete 2FA verification.",
+            type: "boolean",
+            default: "false",
+        },
+        maxAge: {
+            description: "The max age of the trust device cookie in seconds. After this period, the user will need to complete 2FA again.",
+            type: "number",
+            default: "2592000 (30 days)",
+        },
+        name: {
+            description: "The name of the trust device cookie.",
+            type: "string",
+            default: "trust_device",
+        },
+    }}
+/>
+
+**Two Factor State Options**
+
+The two factor state is used to store the state indicating that the user has already verified the first authentication method (password) and is now in the process of completing the second factor verification.
+
+<TypeTable
+    type={{
+        storeStrategy: {
+            description: "Defines how the 2FA state is stored. 'cookie' stores state in a cookie (easiest). 'database' stores state in the database - you must persist the verificationToken returned after sign-in and provide it when verifying. 'cookieAndDatabase' uses both methods for additional security.",
+            type: "'cookie' | 'database' | 'cookieAndDatabase'",
+            default: "cookie",
+        },
+        maxAge: {
+            description: "The max age of how long the two factor state will be valid for in seconds. This is how long the user has to complete the 2FA verification after signing in.",
+            type: "number",
+            default: "600 (10 minutes)",
+        },
+        cookieName: {
+            description: "The name of the two factor state cookie.",
+            type: "string",
+            default: "two_factor",
+        },
+    }}
+/>
+
+**Example: Using Database Strategy**
+
+When using the `database` strategy, you need to handle the `verificationToken` returned after sign-in:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { twoFactor } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        twoFactor({
+            twoFactorState: {
+                storeStrategy: "database",
+            },
+        })
+    ]
+})
+```
+
+```ts title="sign-in.tsx"
+const signIn = async () => {
+    const { data } = await authClient.signIn.email({
+        email: "user@example.com",
+        password: "password123",
+    });
+    
+    if (data?.twoFactorRedirect) {
+        // Store the verificationToken for the 2FA verification step
+        const verificationToken = data.verificationToken;
+        // Pass this token when verifying OTP/TOTP
+    }
+}
+```
+
 ### Client
 
 To use the two factor plugin in the client, you need to add it on your plugins list.
