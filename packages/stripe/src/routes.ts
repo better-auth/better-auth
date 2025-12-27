@@ -1,9 +1,8 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { defineErrorCodes } from "@better-auth/core/utils";
+import { APIError } from "@better-auth/core/error";
 import type { GenericEndpointContext } from "better-auth";
 import { HIDE_METADATA } from "better-auth";
 import {
-	APIError,
 	getSessionFromCtx,
 	originCheck,
 	sessionMiddleware,
@@ -11,6 +10,7 @@ import {
 import type Stripe from "stripe";
 import type { Stripe as StripeType } from "stripe";
 import * as z from "zod/v4";
+import { STRIPE_ERROR_CODES } from "./error-codes";
 import {
 	onCheckoutSessionCompleted,
 	onSubscriptionDeleted,
@@ -23,20 +23,14 @@ import type {
 	Subscription,
 	SubscriptionOptions,
 } from "./types";
-import { getPlanByName, getPlanByPriceInfo, getPlans } from "./utils";
-
-const STRIPE_ERROR_CODES = defineErrorCodes({
-	SUBSCRIPTION_NOT_FOUND: "Subscription not found",
-	SUBSCRIPTION_PLAN_NOT_FOUND: "Subscription plan not found",
-	ALREADY_SUBSCRIBED_PLAN: "You're already subscribed to this plan",
-	UNABLE_TO_CREATE_CUSTOMER: "Unable to create customer",
-	FAILED_TO_FETCH_PLANS: "Failed to fetch plans",
-	EMAIL_VERIFICATION_REQUIRED:
-		"Email verification is required before you can subscribe to a plan",
-	SUBSCRIPTION_NOT_ACTIVE: "Subscription is not active",
-	SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION:
-		"Subscription is not scheduled for cancellation",
-});
+import {
+	getPlanByName,
+	getPlanByPriceInfo,
+	getPlans,
+	isActiveOrTrialing,
+	isPendingCancel,
+	isStripePendingCancel,
+} from "./utils";
 
 const upgradeSubscriptionBodySchema = z.object({
 	/**
@@ -66,14 +60,14 @@ const upgradeSubscriptionBodySchema = z.object({
 		})
 		.optional(),
 	/**
-	 * This is to allow a specific subscription to be upgrade.
-	 * If subscription id is provided, and subscription isn't found,
-	 * it'll throw an error.
+	 * The Stripe subscription ID to upgrade.
+	 * If provided and not found, it'll throw an error.
 	 */
 	subscriptionId: z
 		.string()
 		.meta({
-			description: 'The id of the subscription to upgrade. Eg: "sub_123"',
+			description:
+				'The Stripe subscription ID to upgrade. Eg: "sub_1ABC2DEF3GHI4JKL"',
 		})
 		.optional(),
 	/**
@@ -171,30 +165,26 @@ export const upgradeSubscription = (options: StripeOptions) => {
 		async (ctx) => {
 			const { user, session } = ctx.context.session;
 			if (!user.emailVerified && subscriptionOptions.requireEmailVerification) {
-				throw new APIError("BAD_REQUEST", {
-					message: STRIPE_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED,
+				);
 			}
 			const referenceId = ctx.body.referenceId || user.id;
 			const plan = await getPlanByName(options, ctx.body.plan);
 			if (!plan) {
-				throw new APIError("BAD_REQUEST", {
-					message: STRIPE_ERROR_CODES.SUBSCRIPTION_PLAN_NOT_FOUND,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.SUBSCRIPTION_PLAN_NOT_FOUND,
+				);
 			}
 			let subscriptionToUpdate = ctx.body.subscriptionId
 				? await ctx.context.adapter.findOne<Subscription>({
 						model: "subscription",
 						where: [
 							{
-								field: "id",
-								value: ctx.body.subscriptionId,
-								connector: "OR",
-							},
-							{
 								field: "stripeSubscriptionId",
 								value: ctx.body.subscriptionId,
-								connector: "OR",
 							},
 						],
 					})
@@ -214,9 +204,10 @@ export const upgradeSubscription = (options: StripeOptions) => {
 			}
 
 			if (ctx.body.subscriptionId && !subscriptionToUpdate) {
-				throw new APIError("BAD_REQUEST", {
-					message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+				);
 			}
 
 			let customerId =
@@ -260,9 +251,10 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					customerId = stripeCustomer.id;
 				} catch (e: any) {
 					ctx.context.logger.error(e);
-					throw new APIError("BAD_REQUEST", {
-						message: STRIPE_ERROR_CODES.UNABLE_TO_CREATE_CUSTOMER,
-					});
+					throw APIError.from(
+						"BAD_REQUEST",
+						STRIPE_ERROR_CODES.UNABLE_TO_CREATE_CUSTOMER,
+					);
 				}
 			}
 
@@ -278,19 +270,15 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						],
 					});
 
-			const activeOrTrialingSubscription = subscriptions.find(
-				(sub) => sub.status === "active" || sub.status === "trialing",
+			const activeOrTrialingSubscription = subscriptions.find((sub) =>
+				isActiveOrTrialing(sub),
 			);
 
 			const activeSubscriptions = await client.subscriptions
 				.list({
 					customer: customerId,
 				})
-				.then((res) =>
-					res.data.filter(
-						(sub) => sub.status === "active" || sub.status === "trialing",
-					),
-				);
+				.then((res) => res.data.filter((sub) => isActiveOrTrialing(sub)));
 
 			const activeSubscription = activeSubscriptions.find((sub) => {
 				// If we have a specific subscription to update, match by ID
@@ -321,9 +309,10 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				activeOrTrialingSubscription.plan === ctx.body.plan &&
 				activeOrTrialingSubscription.seats === (ctx.body.seats || 1)
 			) {
-				throw new APIError("BAD_REQUEST", {
-					message: STRIPE_ERROR_CODES.ALREADY_SUBSCRIBED_PLAN,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.ALREADY_SUBSCRIBED_PLAN,
+				);
 			}
 
 			if (activeSubscription && customerId) {
@@ -605,8 +594,8 @@ export const cancelSubscriptionCallback = (options: StripeOptions) => {
 					});
 					if (
 						!subscription ||
-						subscription.cancelAtPeriodEnd ||
-						subscription.status === "canceled"
+						subscription.status === "canceled" ||
+						isPendingCancel(subscription)
 					) {
 						throw ctx.redirect(getUrl(ctx, callbackURL));
 					}
@@ -618,12 +607,24 @@ export const cancelSubscriptionCallback = (options: StripeOptions) => {
 					const currentSubscription = stripeSubscription.data.find(
 						(sub) => sub.id === subscription.stripeSubscriptionId,
 					);
-					if (currentSubscription?.cancel_at_period_end === true) {
+
+					const isNewCancellation =
+						currentSubscription &&
+						isStripePendingCancel(currentSubscription) &&
+						!isPendingCancel(subscription);
+					if (isNewCancellation) {
 						await ctx.context.adapter.update({
 							model: "subscription",
 							update: {
 								status: currentSubscription?.status,
-								cancelAtPeriodEnd: true,
+								cancelAtPeriodEnd:
+									currentSubscription?.cancel_at_period_end || false,
+								cancelAt: currentSubscription?.cancel_at
+									? new Date(currentSubscription.cancel_at * 1000)
+									: null,
+								canceledAt: currentSubscription?.canceled_at
+									? new Date(currentSubscription.canceled_at * 1000)
+									: null,
 							},
 							where: [
 								{
@@ -661,7 +662,8 @@ const cancelSubscriptionBodySchema = z.object({
 	subscriptionId: z
 		.string()
 		.meta({
-			description: "The id of the subscription to cancel. Eg: 'sub_123'",
+			description:
+				"The Stripe subscription ID to cancel. Eg: 'sub_1ABC2DEF3GHI4JKL'",
 		})
 		.optional(),
 	returnUrl: z.string().meta({
@@ -711,7 +713,7 @@ export const cancelSubscription = (options: StripeOptions) => {
 						model: "subscription",
 						where: [
 							{
-								field: "id",
+								field: "stripeSubscriptionId",
 								value: ctx.body.subscriptionId,
 							},
 						],
@@ -721,13 +723,7 @@ export const cancelSubscription = (options: StripeOptions) => {
 							model: "subscription",
 							where: [{ field: "referenceId", value: referenceId }],
 						})
-						.then((subs) =>
-							subs.find(
-								(sub) => sub.status === "active" || sub.status === "trialing",
-							),
-						);
-
-			// Ensure the specified subscription belongs to the (validated) referenceId.
+						.then((subs) => subs.find((sub) => isActiveOrTrialing(sub)));
 			if (
 				ctx.body.subscriptionId &&
 				subscription &&
@@ -737,19 +733,16 @@ export const cancelSubscription = (options: StripeOptions) => {
 			}
 
 			if (!subscription || !subscription.stripeCustomerId) {
-				throw ctx.error("BAD_REQUEST", {
-					message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+				);
 			}
 			const activeSubscriptions = await client.subscriptions
 				.list({
 					customer: subscription.stripeCustomerId,
 				})
-				.then((res) =>
-					res.data.filter(
-						(sub) => sub.status === "active" || sub.status === "trialing",
-					),
-				);
+				.then((res) => res.data.filter((sub) => isActiveOrTrialing(sub)));
 			if (!activeSubscriptions.length) {
 				/**
 				 * If the subscription is not found, we need to delete the subscription
@@ -764,17 +757,19 @@ export const cancelSubscription = (options: StripeOptions) => {
 						},
 					],
 				});
-				throw ctx.error("BAD_REQUEST", {
-					message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+				);
 			}
 			const activeSubscription = activeSubscriptions.find(
 				(sub) => sub.id === subscription.stripeSubscriptionId,
 			);
 			if (!activeSubscription) {
-				throw ctx.error("BAD_REQUEST", {
-					message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+				);
 			}
 			const { url } = await client.billingPortal.sessions
 				.create({
@@ -795,21 +790,30 @@ export const cancelSubscription = (options: StripeOptions) => {
 					},
 				})
 				.catch(async (e) => {
-					if (e.message.includes("already set to be cancel")) {
+					if (e.message?.includes("already set to be canceled")) {
 						/**
-						 * in-case we missed the event from stripe, we set it manually
+						 * in-case we missed the event from stripe, we sync the actual state
 						 * this is a rare case and should not happen
 						 */
-						if (!subscription.cancelAtPeriodEnd) {
-							await ctx.context.adapter.updateMany({
+						if (!isPendingCancel(subscription)) {
+							const stripeSub = await client.subscriptions.retrieve(
+								activeSubscription.id,
+							);
+							await ctx.context.adapter.update({
 								model: "subscription",
 								update: {
-									cancelAtPeriodEnd: true,
+									cancelAtPeriodEnd: stripeSub.cancel_at_period_end,
+									cancelAt: stripeSub.cancel_at
+										? new Date(stripeSub.cancel_at * 1000)
+										: null,
+									canceledAt: stripeSub.canceled_at
+										? new Date(stripeSub.canceled_at * 1000)
+										: null,
 								},
 								where: [
 									{
-										field: "referenceId",
-										value: referenceId,
+										field: "id",
+										value: subscription.id,
 									},
 								],
 							});
@@ -838,7 +842,8 @@ const restoreSubscriptionBodySchema = z.object({
 	subscriptionId: z
 		.string()
 		.meta({
-			description: "The id of the subscription to restore. Eg: 'sub_123'",
+			description:
+				"The Stripe subscription ID to restore. Eg: 'sub_1ABC2DEF3GHI4JKL'",
 		})
 		.optional(),
 });
@@ -869,7 +874,7 @@ export const restoreSubscription = (options: StripeOptions) => {
 						model: "subscription",
 						where: [
 							{
-								field: "id",
+								field: "stripeSubscriptionId",
 								value: ctx.body.subscriptionId,
 							},
 						],
@@ -884,11 +889,7 @@ export const restoreSubscription = (options: StripeOptions) => {
 								},
 							],
 						})
-						.then((subs) =>
-							subs.find(
-								(sub) => sub.status === "active" || sub.status === "trialing",
-							),
-						);
+						.then((subs) => subs.find((sub) => isActiveOrTrialing(sub)));
 			if (
 				ctx.body.subscriptionId &&
 				subscription &&
@@ -897,70 +898,74 @@ export const restoreSubscription = (options: StripeOptions) => {
 				subscription = undefined;
 			}
 			if (!subscription || !subscription.stripeCustomerId) {
-				throw ctx.error("BAD_REQUEST", {
-					message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+				);
 			}
 			if (
 				subscription.status != "active" &&
 				subscription.status != "trialing"
 			) {
-				throw ctx.error("BAD_REQUEST", {
-					message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_ACTIVE,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_ACTIVE,
+				);
 			}
-			if (!subscription.cancelAtPeriodEnd) {
-				throw ctx.error("BAD_REQUEST", {
-					message:
-						STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION,
-				});
+			if (!isPendingCancel(subscription)) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION,
+				);
 			}
 
 			const activeSubscription = await client.subscriptions
 				.list({
 					customer: subscription.stripeCustomerId,
 				})
-				.then(
-					(res) =>
-						res.data.filter(
-							(sub) => sub.status === "active" || sub.status === "trialing",
-						)[0],
-				);
+				.then((res) => res.data.filter((sub) => isActiveOrTrialing(sub))[0]);
 			if (!activeSubscription) {
-				throw ctx.error("BAD_REQUEST", {
-					message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
-				});
-			}
-
-			try {
-				const newSub = await client.subscriptions.update(
-					activeSubscription.id,
-					{
-						cancel_at_period_end: false,
-					},
+				throw APIError.from(
+					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 				);
-
-				await ctx.context.adapter.update({
-					model: "subscription",
-					update: {
-						cancelAtPeriodEnd: false,
-						updatedAt: new Date(),
-					},
-					where: [
-						{
-							field: "id",
-							value: subscription.id,
-						},
-					],
-				});
-
-				return ctx.json(newSub);
-			} catch (error) {
-				ctx.context.logger.error("Error restoring subscription", error);
-				throw new APIError("BAD_REQUEST", {
-					message: STRIPE_ERROR_CODES.UNABLE_TO_CREATE_CUSTOMER,
-				});
 			}
+
+			// Clear scheduled cancellation based on Stripe subscription state
+			// Note: Stripe doesn't accept both `cancel_at` and `cancel_at_period_end` simultaneously
+			const updateParams: Stripe.SubscriptionUpdateParams = {};
+			if (activeSubscription.cancel_at) {
+				updateParams.cancel_at = "";
+			} else if (activeSubscription.cancel_at_period_end) {
+				updateParams.cancel_at_period_end = false;
+			}
+
+			const newSub = await client.subscriptions
+				.update(activeSubscription.id, updateParams)
+				.catch((e) => {
+					throw ctx.error("BAD_REQUEST", {
+						message: e.message,
+						code: e.code,
+					});
+				});
+
+			await ctx.context.adapter.update({
+				model: "subscription",
+				update: {
+					cancelAtPeriodEnd: false,
+					cancelAt: null,
+					canceledAt: null,
+					updatedAt: new Date(),
+				},
+				where: [
+					{
+						field: "id",
+						value: subscription.id,
+					},
+				],
+			});
+
+			return ctx.json(newSub);
 		},
 	);
 };
@@ -1035,9 +1040,7 @@ export const listActiveSubscriptions = (options: StripeOptions) => {
 						priceId: plan?.priceId,
 					};
 				})
-				.filter((sub) => {
-					return sub.status === "active" || sub.status === "trialing";
-				});
+				.filter((sub) => isActiveOrTrialing(sub));
 			return ctx.json(subs);
 		},
 	);
@@ -1123,6 +1126,13 @@ export const subscriptionSuccess = (options: StripeOptions) => {
 											1000,
 									),
 									stripeSubscriptionId: stripeSubscription.id,
+									cancelAtPeriodEnd: stripeSubscription.cancel_at_period_end,
+									cancelAt: stripeSubscription.cancel_at
+										? new Date(stripeSubscription.cancel_at * 1000)
+										: null,
+									canceledAt: stripeSubscription.canceled_at
+										? new Date(stripeSubscription.canceled_at * 1000)
+										: null,
 									...(stripeSubscription.trial_start &&
 									stripeSubscription.trial_end
 										? {
@@ -1200,11 +1210,7 @@ export const createBillingPortal = (options: StripeOptions) => {
 							},
 						],
 					})
-					.then((subs) =>
-						subs.find(
-							(sub) => sub.status === "active" || sub.status === "trialing",
-						),
-					);
+					.then((subs) => subs.find((sub) => isActiveOrTrialing(sub)));
 
 				customerId = subscription?.stripeCustomerId;
 			}
