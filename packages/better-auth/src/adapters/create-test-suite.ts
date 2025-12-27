@@ -181,7 +181,9 @@ export const createTestSuite = <
 					createAdapterFactory({
 						config: {
 							...adapterConfig,
-							transaction: adapter.transaction,
+							// Use adapterConfig.transaction instead of adapter.transaction
+							// because adapter.transaction gets set to undefined after first call
+							transaction: adapter.options?.adapterConfig.transaction,
 						},
 						adapter: ({ getDefaultModelName }) => {
 							adapter.transaction = undefined as any;

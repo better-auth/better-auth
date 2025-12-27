@@ -87,6 +87,17 @@ services:
     volumes:
       - mysql-prisma_data:/var/lib/mysql
 
+  postgres-bun-sql:
+    image: postgres:latest
+    container_name: postgres-bun-sql
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: better_auth
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres-bun-sql_data:/var/lib/postgresql
 
   mssql:
     image: mcr.microsoft.com/mssql/server:latest
@@ -104,7 +115,8 @@ volumes:
   postgres_data:
   postgres-kysely_data:
   postgres-prisma_data:
+  postgres-bun-sql_data:
   mysql_data:
   mssql_data:
   mysql-kysely_data:
-  mysql-prisma_data: 
+  mysql-prisma_data:

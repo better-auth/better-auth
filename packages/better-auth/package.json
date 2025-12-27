@@ -317,6 +317,17 @@
         "default": "./dist/adapters/memory-adapter/index.cjs"
       }
     },
+    "./adapters/bun-sql": {
+      "better-auth-dev-source": "./src/adapters/bun-sql-adapter/index.ts",
+      "import": {
+        "types": "./dist/adapters/bun-sql-adapter/index.d.ts",
+        "default": "./dist/adapters/bun-sql-adapter/index.js"
+      },
+      "require": {
+        "types": "./dist/adapters/bun-sql-adapter/index.d.cts",
+        "default": "./dist/adapters/bun-sql-adapter/index.cjs"
+      }
+    },
     "./adapters/test": {
       "better-auth-dev-source": "./src/adapters/test.ts",
       "import": {
@@ -669,6 +680,9 @@
       ],
       "adapters/memory": [
         "./dist/adapters/memory-adapter/index.d.ts"
+      ],
+      "adapters/bun-sql": [
+        "./dist/adapters/bun-sql-adapter/index.d.ts"
       ],
       "plugins": [
         "./dist/plugins/index.d.ts"
