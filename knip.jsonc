@@ -10,6 +10,22 @@
 			"entry": ["src/index.ts"],
 			"project": ["src/**/*.ts!"]
 		},
+		"packages/drizzle-adapter": {
+			"project": [
+				"src/**/*.ts!",
+				"!src/test/**/*.prisma",
+				"!src/test/**/.tmp",
+				"!src/test/**/auth.ts"
+			],
+			"ignoreDependencies": [
+				// implicit adapter dependencies
+				"drizzle-kit",
+				"drizzle-orm",
+				// implicit core dependencies
+				"better-auth",
+				"@better-auth/core"
+			]
+		},
 		"packages/better-auth": {
 			"project": [
 				"src/**/*.ts!",
