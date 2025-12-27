@@ -1,5 +1,3 @@
-// packages/better-auth/src/client/proxy.test.ts
-
 import type { BetterAuthClientPlugin } from "@better-auth/core";
 import { atom } from "nanostores";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -38,7 +36,7 @@ describe("createDynamicPathProxy - Signal Race Condition Fix", () => {
 		];
 	});
 
-	it("should toggle signal without race condition using queueMicrotask", async () => {
+	it("should toggle signal correctly on API call", async () => {
 		const proxy = createDynamicPathProxy(
 			{},
 			mockFetch,

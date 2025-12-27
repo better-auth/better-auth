@@ -108,12 +108,9 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 							const signal = atoms[signalName as any];
 							if (!signal) continue;
 
-							// microtask queue for proper async coordination
-							queueMicrotask(() => {
-								if ("set" in signal) {
-									signal.set(!signal.get());
-								}
-							});
+							if ("set" in signal) {
+								signal.set(!signal.get());
+							}
 						}
 					},
 				});
