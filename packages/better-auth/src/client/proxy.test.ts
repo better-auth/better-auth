@@ -1,8 +1,9 @@
-// packages/better-auth/src/client/__tests__/proxy.test.ts
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { atom } from "nanostores";
-import { createDynamicPathProxy } from "./proxy";
+// packages/better-auth/src/client/proxy.test.ts
+
 import type { BetterAuthClientPlugin } from "@better-auth/core";
+import { atom } from "nanostores";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createDynamicPathProxy } from "./proxy";
 
 describe("createDynamicPathProxy - Signal Race Condition Fix", () => {
 	let mockFetch: any;
@@ -68,6 +69,8 @@ describe("createDynamicPathProxy - Signal Race Condition Fix", () => {
 			mockAtomListeners,
 		) as any;
 
+		const initialValue = mockAtoms.$sessionSignal.get();
+
 		// Make 3 concurrent API calls
 		await Promise.all([
 			proxy.testEndpoint(),
@@ -78,12 +81,11 @@ describe("createDynamicPathProxy - Signal Race Condition Fix", () => {
 		// Wait for all microtasks to complete
 		await new Promise((resolve) => setTimeout(resolve, 20));
 
-		// Signal should have been toggled (exact final value depends on timing,
-		// but it should not be stuck at initial value)
 		const finalValue = mockAtoms.$sessionSignal.get();
 
-		// At least one toggle should have occurred
-		expect(typeof finalValue).toBe("boolean");
+		// 3 toggles (odd number) means final value should be opposite of initial
+		// false -> true -> false -> true (3 toggles from false = true)
+		expect(finalValue).toBe(!initialValue);
 	});
 
 	it("should not trigger signal when disableSignal is true", async () => {
@@ -170,5 +172,75 @@ describe("createDynamicPathProxy - Signal Race Condition Fix", () => {
 		await proxy.testEndpoint({}, { onSuccess });
 
 		expect(onSuccess).toHaveBeenCalledTimes(1);
+	});
+
+	it("should deduplicate signals when multiple listeners reference the same signal", async () => {
+		// Create a signal with a spied set method to track call count
+		const testSignal = atom(false);
+		const setSpy = vi.spyOn(testSignal, "set");
+
+		const testAtoms = {
+			$sessionSignal: testSignal,
+			$testSignal: atom(0),
+		};
+
+		// Multiple listeners that all reference the same signal
+		const duplicateListeners = [
+			{
+				matcher: (path: string) => path === "/test-endpoint",
+				signal: "$sessionSignal",
+			},
+			{
+				matcher: (path: string) => path === "/test-endpoint",
+				signal: "$sessionSignal",
+			},
+			{
+				matcher: (path: string) => path === "/test-endpoint",
+				signal: "$sessionSignal",
+			},
+		];
+
+		const proxy = createDynamicPathProxy(
+			{},
+			mockFetch,
+			{ "/test-endpoint": "POST" },
+			testAtoms,
+			duplicateListeners,
+		) as any;
+
+		await proxy.testEndpoint();
+		await new Promise((resolve) => setTimeout(resolve, 20));
+
+		// Signal's set method should be called exactly once, not 3 times
+		expect(setSpy).toHaveBeenCalledTimes(1);
+	});
+
+	it("should continue processing other signals when one signal is missing", async () => {
+		const listenersWithMissingAndValid = [
+			{
+				matcher: (path: string) => path === "/test-endpoint",
+				signal: "$nonExistentSignal" as any,
+			},
+			{
+				matcher: (path: string) => path === "/test-endpoint",
+				signal: "$sessionSignal",
+			},
+		];
+
+		const proxy = createDynamicPathProxy(
+			{},
+			mockFetch,
+			{ "/test-endpoint": "POST" },
+			mockAtoms,
+			listenersWithMissingAndValid,
+		) as any;
+
+		const initialValue = mockAtoms.$sessionSignal.get();
+
+		await proxy.testEndpoint();
+		await new Promise((resolve) => queueMicrotask(resolve));
+
+		// $sessionSignal should still be toggled even though $nonExistentSignal doesn't exist
+		expect(mockAtoms.$sessionSignal.get()).toBe(!initialValue);
 	});
 });
