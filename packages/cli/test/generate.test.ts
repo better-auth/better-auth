@@ -182,6 +182,43 @@ describe("generate", async () => {
 		);
 	});
 
+	it("should generate prisma schema with custom relation names", async () => {
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: prismaAdapter(
+				{},
+				{
+					provider: "postgresql",
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: prismaAdapter(
+					{},
+					{
+						provider: "postgresql",
+					},
+				),
+				user: {
+					relations: {
+						sessions: "UserSessions",
+						accounts: "UserAccounts",
+					},
+				},
+				session: {
+					relations: {
+						user: "Owner",
+					},
+				},
+			},
+		});
+		await expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/schema-relations.prisma",
+		);
+		expect(schema.code).toMatch(/UserSessions\s+Session\[\]/);
+		expect(schema.code).toMatch(/UserAccounts\s+Account\[\]/);
+		expect(schema.code).toMatch(/Owner\s+User/);
+	});
+
 	it("should generate drizzle schema", async () => {
 		const schema = await generateDrizzleSchema({
 			file: "test.drizzle",
