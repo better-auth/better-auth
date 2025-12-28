@@ -188,7 +188,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 				}) => {
 					return $fetch("/organization/list-user-teams", {
 						method: "GET",
-						query: options?.query,
+						query: options?.query || {},
 						...options?.fetchOptions,
 					});
 				},
