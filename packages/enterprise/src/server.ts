@@ -6,8 +6,15 @@ import openapi from "@elysiajs/openapi";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Elysia } from "elysia";
 
-import { auth } from "./better-auth";
-import { db } from "./db";
+import { drizzle, schema } from "./db";
+import { createAuthSystem } from "./better-auth";
+
+const db = drizzle(
+	process.env.DATABASE_URL! + "?options=-c search_path=enterprise",
+	{ schema },
+);
+
+const auth = createAuthSystem({ db });
 
 await migrate(db, {
 	migrationsFolder: "./drizzle",

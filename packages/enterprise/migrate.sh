@@ -1,4 +1,4 @@
-./node_modules/.bin/cli generate --output src/db-schema.generated.ts --config ./src/better-auth.ts
+./node_modules/.bin/cli generate --output src/db-schema.generated.ts --config ./src/test-config.ts
 
 # The drizzle-schema created uses the public schema by default, so we swap
 # pgTable(...) calls with enterpriseSchema.table(...)

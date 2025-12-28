@@ -1,6 +1,6 @@
 import { createAuthClient } from "better-auth/react";
 import type { AuthClient } from "better-auth/react";
-import { organizationClient } from "better-auth/client/plugins";
+import { anonymousClient, organizationClient, phoneNumberClient } from "better-auth/client/plugins";
 import { adminClient } from "better-auth/client/plugins";
 import { apiKeyClient } from "better-auth/client/plugins";
 import { ssoClient } from "@better-auth/sso/client";
@@ -16,6 +16,8 @@ export const createEnterpriseClient = ({ baseURL }: { baseURL: string }) => {
 			organizationClient(),
 			adminClient(),
 			apiKeyClient(),
+			anonymousClient(),
+			phoneNumberClient(),
 			ssoClient(),
 			twoFactorClient(),
 			lastLoginMethodClient(),
@@ -28,7 +30,9 @@ export const createEnterpriseClient = ({ baseURL }: { baseURL: string }) => {
 			ReturnType<typeof apiKeyClient>,
 			ReturnType<typeof ssoClient>,
 			ReturnType<typeof twoFactorClient>,
-			ReturnType<typeof lastLoginMethodClient>,
+			ReturnType<typeof anonymousClient>,
+			ReturnType<typeof phoneNumberClient>,
+			ReturnType<typeof lastLoginMethodClient>
 		];
 	}>;
 };

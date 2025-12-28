@@ -1,9 +1,6 @@
-import { generateId, hashPassword, initializeGraph } from "better-auth";
-import { eq } from "drizzle-orm";
+import { initializeGraph } from "better-auth";
 import { readFile } from "fs/promises";
 
-import { db } from "./db";
-import * as t from "./db-schema.final";
 import { AuthzedSyncClient } from "better-auth/plugins";
 
 const schemaText = await readFile("./src/authzed-schema.zed", "utf-8");
@@ -13,7 +10,6 @@ const authzedClient = new AuthzedSyncClient({
 });
 
 await authzedClient.writeSchema(schemaText);
-
 await initializeGraph(authzedClient);
 
 // db.insert(t.platform_role).values({

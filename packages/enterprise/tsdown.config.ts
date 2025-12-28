@@ -12,6 +12,7 @@ export default defineConfig({
 		"./src/plugins.ts",
 		"./src/react.ts",
 		"./src/social-providers.ts",
+		"./src/init.ts",
 	],
 	clean: true,
 	noExternal: ["better-auth", /@better-auth\/.*/, /better-auth\/.*/],

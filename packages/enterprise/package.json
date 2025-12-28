@@ -1,6 +1,6 @@
 {
   "name": "@rio.js/enterprise",
-  "version": "0.0.1",
+  "version": "1.4.9",
   "type": "module",
   "scripts": {
     "dev": "srvx --import=jiti/register --port 3001",
@@ -15,12 +15,14 @@
     "@elysiajs/cors": "^1.4.0",
     "@elysiajs/jwt": "^1.4.0",
     "@elysiajs/openapi": "^1.4.11",
+    "bcrypt": "^6.0.0",
     "better-call": "^1.0.26",
     "cuid": "^3.0.0",
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.44.7",
     "elysia": "latest",
     "nanostores": "^1.0.1",
+    "npm": "^11.7.0",
     "pg": "^8.16.3",
     "resend": "^6.4.2",
     "zod": "^4.1.12",
@@ -29,12 +31,13 @@
   "devDependencies": {
     "@better-auth/cli": "workspace:*",
     "@better-auth/core": "workspace:*",
-    "jiti": "^2.6.1",
     "@better-auth/sso": "workspace:*",
-    "better-auth": "workspace:*",
+    "@types/bcrypt": "^6.0.0",
     "@types/pg": "^8.15.6",
+    "better-auth": "workspace:*",
     "bun-types": "latest",
     "drizzle-kit": "^0.31.6",
+    "jiti": "^2.6.1",
     "srvx": "^0.9.6",
     "tsdown": "latest"
   },
@@ -45,6 +48,11 @@
       "dev-source": "./src/index.ts",
       "types": "./dist/index.d.mts",
       "default": "./dist/index.mjs"
+    },
+    "./init": {
+      "dev-source": "./src/init.ts",
+      "types": "./dist/init.d.mts",
+      "default": "./dist/init.mjs"
     },
     "./db": {
       "dev-source": "./src/db/index.ts",
@@ -82,6 +90,9 @@
       "default": "./dist/social-providers.mjs"
     }
   },
+  "files": [
+    "dist"
+  ],
   "typesVersions": {
     "*": {
       ".": [

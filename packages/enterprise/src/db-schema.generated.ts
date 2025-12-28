@@ -24,9 +24,16 @@ export const user = enterpriseSchema.table("user", {
   banned: boolean("banned").default(false),
   banReason: text("ban_reason"),
   banExpires: timestamp("ban_expires"),
+  isAnonymous: boolean("is_anonymous").default(false),
+  phoneNumber: text("phone_number").unique(),
+  phoneNumberVerified: boolean("phone_number_verified"),
   twoFactorEnabled: boolean("two_factor_enabled").default(false),
   actorType: text("actor_type").default("person"),
   actorId: text("actor_id"),
+  userMetadata: jsonb("user_metadata"),
+  appMetadata: jsonb("app_metadata"),
+  invitedAt: timestamp("invited_at"),
+  lastSignInAt: timestamp("last_sign_in_at"),
 });
 
 export const session = enterpriseSchema.table(

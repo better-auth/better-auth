@@ -1,20 +1,13 @@
+import { drizzle } from "drizzle-orm/node-postgres";
 import * as generatedTables from "./db-schema.generated";
 
-const schema = {
+export const schema = {
 	...generatedTables,
 };
 
-export const databaseSchema = schema;
+export * from "drizzle-orm/node-postgres";
 
-let drizzle: typeof import("drizzle-orm/node-postgres").drizzle;
+export const connection = (url: string) =>
+	drizzle(url + "?options=-c search_path=enterprise", { schema });
 
-if (process.env.BUN) {
-	drizzle = require("drizzle-orm/bun-sql").drizzle;
-} else {
-	drizzle = require("drizzle-orm/node-postgres").drizzle;
-}
-
-export const db = drizzle(
-	process.env.DATABASE_URL! + "?options=-c search_path=enterprise",
-	{ schema },
-);
+export type Connection = ReturnType<typeof connection>;

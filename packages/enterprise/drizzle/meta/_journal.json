@@ -22,6 +22,13 @@
       "when": 1763991062817,
       "tag": "0002_chubby_husk",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1766748484378,
+      "tag": "0003_bouncy_doctor_faustus",
+      "breakpoints": true
     }
   ]
 }

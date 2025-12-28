@@ -5,9 +5,9 @@ import {
 	betterAuth,
 	invariant,
 } from "better-auth";
-import type { BetterAuthPlugin } from "better-auth";
+import type { BetterAuthOptions, BetterAuthPlugin } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { admin, openAPI, twoFactor } from "better-auth/plugins";
+import { admin, openAPI, twoFactor, anonymous, phoneNumber } from "better-auth/plugins";
 import type { Member, Organization } from "better-auth/plugins";
 import { apiKey } from "better-auth/plugins";
 import { graph } from "better-auth/plugins";
@@ -15,14 +15,14 @@ import { lastLoginMethod } from "better-auth/plugins";
 import { mcp } from "better-auth/plugins";
 import { organization, assets, agents } from "better-auth/plugins";
 import cuid from "cuid";
-
-import { db } from "./db";
+import bcrypt from "bcrypt";
 import * as tables from "./db-schema.final";
 // import { graph } from "./plugins/graph";
 // import { getOrCreateInternalObject } from "./plugins/graph/core";
 // import { subscriptions } from "./plugins/subscriptions";
 // import { webhooks } from "./plugins/webhooks";
 import { sendEmail } from "./utils/email";
+import type { Connection } from "./db";
 
 const tablePrefixes = {
 	user: "usr",
@@ -170,14 +170,17 @@ async function getOrCreatePersonalOrganization(
 	return org;
 }
 
-export function createAuthSystem(options: {
+export function createAuthSystem({ plugins, db, ...options }: {
 	plugins?: BetterAuthPlugin[];
-}): ReturnType<typeof betterAuth> {
+	db: Connection;
+} & BetterAuthOptions): ReturnType<typeof betterAuth> {
 	const auth = betterAuth({
 		plugins: [
 			admin({
 				adminUserIds: ["user_cmhz0nka100003xv322cn6ffp"],
 			}),
+			anonymous(),
+			phoneNumber(),
 			apiKey(),
 			organization({
 				teams: { enabled: true },
@@ -264,18 +267,34 @@ export function createAuthSystem(options: {
 			lastLoginMethod(),
 			openAPI(),
 			// myPlugin(),
-			...(options.plugins ?? []),
+			...(plugins ?? []),
 		],
 		account: {
 			accountLinking: {
 				enabled: true,
 			},
 		},
-
+		session: {
+			cookieCache: {
+				enabled: true,
+				maxAge: 300,
+				refreshCache: {
+					updateAge: 60,
+				},
+			},
+		},
 		trustedOrigins: ["http://localhost:3000"],
 		emailAndPassword: {
 			enabled: true,
 			requireEmailVerification: true,
+			password: {
+				hash: async (password) => {
+					return await bcrypt.hash(password, 10);
+				},
+				verify: async ({ hash, password }) => {
+					return await bcrypt.compare(password, hash);
+				}
+			},
 			sendResetPassword: async ({ user, url, token }, request) => {
 				await sendEmail({
 					to: user.email,
@@ -285,6 +304,7 @@ export function createAuthSystem(options: {
 			},
 		},
 		hooks: {},
+
 		databaseHooks: {
 			user: {
 				create: {
@@ -348,6 +368,26 @@ export function createAuthSystem(options: {
 				actorId: {
 					type: "string",
 				},
+				userMetadata: { 
+					type: 'json', 
+					required: false, 
+					input: false, 
+				}, 
+				appMetadata: { 
+					type: 'json', 
+					required: false, 
+					input: false, 
+				}, 
+				invitedAt: { 
+					type: 'date', 
+					required: false, 
+					input: false, 
+				}, 
+				lastSignInAt: { 
+					type: 'date', 
+					required: false, 
+					input: false, 
+				}, 
 			},
 		},
 		advanced: {
@@ -380,8 +420,7 @@ export function createAuthSystem(options: {
 		graph: {
 			enabled: true,
 		},
+		...options,
 	});
 	return auth;
 }
-
-export const auth = createAuthSystem({});

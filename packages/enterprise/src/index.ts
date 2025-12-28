@@ -1,3 +1,4 @@
 export { createAuthSystem } from "./better-auth";
-export { db as enterpriseDB } from "./db";
 export * from "better-auth";
+export { parseSetCookieHeader } from "better-auth/cookies";
+export * from "better-auth/crypto";
