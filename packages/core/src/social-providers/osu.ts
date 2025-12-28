@@ -1,11 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
-import {
-	refreshAccessToken,
-	validateAuthorizationCode,
-	type OAuth2Tokens,
-	type OAuthProvider,
-	type ProviderOptions,
-} from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import { refreshAccessToken, validateAuthorizationCode } from "../oauth2";
 
 export interface OsuUser {
 	/** user avatar url */
@@ -118,12 +113,15 @@ export const osu = (options: OsuOptions) => {
 
 			const userMap = await options.mapProfileToUser?.(profile);
 
-			// osu! doesn't provide email or email_verified
+			// osu! never provides email or email_verified
 			return {
 				user: {
 					id: profile.id,
 					name: profile.username,
-					email: null,
+
+					// had errors with email = null in dev, so just setting to the username
+					email: profile.username,
+
 					emailVerified: false,
 					image: profile.avatar_url,
 					...userMap,
