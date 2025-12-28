@@ -10,13 +10,13 @@ import {
 export interface OsuUser {
 	/** user avatar url */
 	avatar_url: string;
-	
+
 	/** info about user cover image */
 	cover: {
-		custom_url: string
-		url: string
-		id: null
-	}
+		custom_url: string;
+		url: string;
+		id: null;
+	};
 
 	/** 2 letter code representing user country */
 	country_code: string;
@@ -100,23 +100,23 @@ export const osu = (options: OsuOptions) => {
 				},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
-				return options.getUserInfo(token)
+				return options.getUserInfo(token);
 			}
 
 			const { data: profile, error } = await betterFetch<OsuUser>(
 				"https://osu.ppy.sh/api/v2/me",
 				{
 					headers: {
-						authorization: `Bearer ${token.accessToken}`
-					}
-				}
+						authorization: `Bearer ${token.accessToken}`,
+					},
+				},
 			);
 
 			if (error) {
-				return null
+				return null;
 			}
 
-			const userMap = await options.mapProfileToUser?.(profile)
+			const userMap = await options.mapProfileToUser?.(profile);
 
 			// osu! doesn't provide email or email_verified
 			return {
@@ -126,13 +126,13 @@ export const osu = (options: OsuOptions) => {
 					email: null,
 					emailVerified: false,
 					image: profile.avatar_url,
-					...userMap
+					...userMap,
 				},
 				data: {
-					...profile
-				}
-			}
+					...profile,
+				},
+			};
 		},
-		options
+		options,
 	} satisfies OAuthProvider<OsuUser>;
 };
