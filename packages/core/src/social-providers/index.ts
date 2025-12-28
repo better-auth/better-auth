@@ -32,6 +32,7 @@ import { twitter } from "./twitter";
 import { vercel } from "./vercel";
 import { vk } from "./vk";
 import { zoom } from "./zoom";
+import { osu } from "./osu";
 
 export const socialProviders = {
 	apple,
@@ -67,6 +68,7 @@ export const socialProviders = {
 	paypal,
 	polar,
 	vercel,
+	osu,
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
@@ -109,6 +111,7 @@ export * from "./linkedin";
 export * from "./microsoft-entra-id";
 export * from "./naver";
 export * from "./notion";
+export * from "./osu";
 export * from "./paybin";
 export * from "./paypal";
 export * from "./polar";
