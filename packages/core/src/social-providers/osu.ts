@@ -42,7 +42,7 @@ export interface OsuUser {
 
 	/** time of last visit as a ISO 8601 string */
 	last_visit: string;
-	
+
 	/** whether the user only accepts dms from friends */
 	pm_friends_only: boolean;
 
