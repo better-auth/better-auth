@@ -565,8 +565,13 @@ The logger configuration allows you to customize how Better Auth handles logging
 - `level`: Set the minimum log level to display. Available levels are:
   - `"info"`: Show all logs
   - `"warn"`: Show warnings and errors
-  - `"error"`: Show only errors
+  - `"error"`: Show only errors (default)
   - `"debug"`: Show all logs including debug information
+
+<Callout type="info">
+You can also set the log level via the `BETTER_AUTH_LOG_LEVEL` environment variable. The explicit `level` option takes precedence over the environment variable.
+</Callout>
+
 - `log`: Custom logging function that receives:
   - `level`: The log level (`"info"`, `"warn"`, `"error"`, or `"debug"`)
   - `message`: The log message
