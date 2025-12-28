@@ -770,12 +770,14 @@ export const setActiveTeam = <O extends OrganizationOptions>(options: O) =>
 		},
 	);
 
-const listUserTeamsQuerySchema = z.object({
-	userId: z.string().optional().meta({
-		description:
-			"The user ID to list teams for. Defaults to the current session user. Viewing other users requires 'member:read' permission.",
-	}),
-});
+const listUserTeamsQuerySchema = z
+	.object({
+		userId: z.string().optional().meta({
+			description:
+				"The user ID to list teams for. Defaults to the current session user. Viewing other users requires 'member:read' permission.",
+		}),
+	})
+	.optional();
 
 export const listUserTeams = <O extends OrganizationOptions>(options: O) =>
 	createAuthEndpoint(
