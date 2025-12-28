@@ -770,14 +770,23 @@ export const setActiveTeam = <O extends OrganizationOptions>(options: O) =>
 		},
 	);
 
+const listUserTeamsQuerySchema = z.object({
+	userId: z.string().optional().meta({
+		description:
+			"The user ID to list teams for. Defaults to the current session user. Viewing other users requires 'member:read' permission.",
+	}),
+});
+
 export const listUserTeams = <O extends OrganizationOptions>(options: O) =>
 	createAuthEndpoint(
 		"/organization/list-user-teams",
 		{
 			method: "GET",
+			query: listUserTeamsQuerySchema,
 			metadata: {
 				openapi: {
-					description: "List all teams that the current user is a part of.",
+					description:
+						"List teams for a user. Defaults to current user. Requires 'member:read' permission to query other users.",
 					responses: {
 						"200": {
 							description: "Teams retrieved successfully",
@@ -800,14 +809,80 @@ export const listUserTeams = <O extends OrganizationOptions>(options: O) =>
 				},
 			},
 			requireHeaders: true,
-			use: [orgMiddleware, orgSessionMiddleware],
+			use: [orgMiddleware],
 		},
 		async (ctx) => {
-			const session = ctx.context.session;
+			const session = await getSessionFromCtx(ctx);
+			if (!session) {
+				throw APIError.fromStatus("UNAUTHORIZED");
+			}
 			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+			const targetUserId = ctx.query?.userId || session.user.id;
+			const isSelf = targetUserId === session.user.id;
+
+			// If listing teams for another user, ensure requester has permission
+			if (!isSelf) {
+				const organizationId = session.session.activeOrganizationId;
+				if (!organizationId) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+					);
+				}
+
+				const requesterMember = await adapter.findMemberByOrgId({
+					userId: session.user.id,
+					organizationId: organizationId,
+				});
+
+				if (!requesterMember) {
+					throw APIError.from(
+						"FORBIDDEN",
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_ACCESS_THIS_ORGANIZATION,
+					);
+				}
+
+				const canReadMembers = await hasPermission(
+					{
+						role: requesterMember.role,
+						options: ctx.context.orgOptions,
+						permissions: { member: ["read"] },
+						organizationId,
+					},
+					ctx,
+				);
+
+				if (!canReadMembers) {
+					throw APIError.from(
+						"FORBIDDEN",
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_ACCESS_THIS_ORGANIZATION,
+					);
+				}
+
+				const targetMember = await adapter.findMemberByOrgId({
+					userId: targetUserId,
+					organizationId,
+				});
+				if (!targetMember) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+					);
+				}
+			}
+
 			const teams = await adapter.listTeamsByUser({
-				userId: session.user.id,
+				userId: targetUserId,
 			});
+
+			// If viewing another user, only return teams within the active organization
+			if (!isSelf && session.session.activeOrganizationId) {
+				return ctx.json(
+					teams.filter(
+						(t) => t.organizationId === session.session.activeOrganizationId,
+					),
+				);
+			}
 
 			return ctx.json(teams);
 		},
