@@ -27,6 +27,8 @@ export interface OsuUser {
 
 	/** is this account a bot? */
 	is_bot: boolean;
+
+	/** is account deleted */
 	is_deleted: boolean;
 
 	/** is the user currently restricted? */
@@ -40,10 +42,11 @@ export interface OsuUser {
 
 	/** time of last visit as a ISO 8601 string */
 	last_visit: string;
-
+	
+	/** whether the user only accepts dms from friends */
 	pm_friends_only: boolean;
 
-	/** colour of profile highlight, hex code (e.g. #112233) */
+	/** color of profile highlight, hex code (e.g. #112233) */
 	profile_color?: string;
 
 	/** users display name */
