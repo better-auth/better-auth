@@ -103,6 +103,36 @@ describe("magic link", async () => {
 		);
 	});
 
+	it("should redirect to errorCallbackURL in case of error", async () => {
+		const errorCallbackURL = new URL("http://localhost:3000/error-page");
+		errorCallbackURL.searchParams.set("foo", "bar");
+		errorCallbackURL.searchParams.set("baz", "qux");
+
+		await client.magicLink.verify(
+			{
+				query: {
+					token: "invalid-token",
+					errorCallbackURL: errorCallbackURL.toString(),
+				},
+			},
+			{
+				onError(context) {
+					expect(context.response.status).toBe(302);
+
+					const location = context.response.headers.get("location");
+					expect(location).toBeDefined();
+
+					const url = new URL(location!);
+					expect(url.origin).toBe(errorCallbackURL.origin);
+					expect(url.pathname).toBe(errorCallbackURL.pathname);
+					expect(url.searchParams.get("foo")).toBe("bar");
+					expect(url.searchParams.get("baz")).toBe("qux");
+					expect(url.searchParams.get("error")).toBe("INVALID_TOKEN");
+				},
+			},
+		);
+	});
+
 	it("should sign up with magic link", async () => {
 		const email = "new-email@email.com";
 		await client.signIn.magicLink({
@@ -116,7 +146,7 @@ describe("magic link", async () => {
 			),
 		});
 		const headers = new Headers();
-		const response = await client.magicLink.verify({
+		await client.magicLink.verify({
 			query: {
 				token: new URL(verificationEmail.url).searchParams.get("token") || "",
 			},
@@ -296,6 +326,52 @@ describe("magic link verify", async () => {
 	});
 });
 
+describe("magic link verify origin validation", async () => {
+	it("should reject untrusted callbackURL on verify", async () => {
+		let verificationEmail: VerificationEmail = {
+			email: "",
+			token: "",
+			url: "",
+		};
+
+		const { customFetchImpl, testUser } = await getTestInstance({
+			trustedOrigins: ["http://localhost:3000"],
+			plugins: [
+				magicLink({
+					async sendMagicLink(data) {
+						verificationEmail = data;
+					},
+				}),
+			],
+		});
+
+		const client = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+
+		await client.signIn.magicLink({
+			email: testUser.email,
+		});
+
+		const token =
+			new URL(verificationEmail.url).searchParams.get("token") || "";
+		const res = await client.magicLink.verify({
+			query: {
+				token,
+				callbackURL: "http://malicious.com",
+			},
+		});
+
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.message).toBe("Invalid callbackURL");
+	});
+});
+
 describe("magic link storeToken", async () => {
 	it("should store token in hashed", async () => {
 		let verificationEmail: VerificationEmail = {
@@ -303,21 +379,20 @@ describe("magic link storeToken", async () => {
 			token: "",
 			url: "",
 		};
-		const { auth, signInWithTestUser, client, testUser } =
-			await getTestInstance({
-				plugins: [
-					magicLink({
-						storeToken: "hashed",
-						sendMagicLink(data, request) {
-							verificationEmail = data;
-						},
-					}),
-				],
-			});
+		const { auth, signInWithTestUser, testUser } = await getTestInstance({
+			plugins: [
+				magicLink({
+					storeToken: "hashed",
+					sendMagicLink(data, request) {
+						verificationEmail = data;
+					},
+				}),
+			],
+		});
 
 		const internalAdapter = (await auth.$context).internalAdapter;
 		const { headers } = await signInWithTestUser();
-		const response = await auth.api.signInMagicLink({
+		await auth.api.signInMagicLink({
 			body: {
 				email: testUser.email,
 			},
@@ -342,22 +417,21 @@ describe("magic link storeToken", async () => {
 			token: "",
 			url: "",
 		};
-		const { auth, signInWithTestUser, client, testUser } =
-			await getTestInstance({
-				plugins: [
-					magicLink({
-						storeToken: {
-							type: "custom-hasher",
-							async hash(token) {
-								return token + "hashed";
-							},
+		const { auth, signInWithTestUser, testUser } = await getTestInstance({
+			plugins: [
+				magicLink({
+					storeToken: {
+						type: "custom-hasher",
+						async hash(token) {
+							return token + "hashed";
 						},
-						sendMagicLink(data, request) {
-							verificationEmail = data;
-						},
-					}),
-				],
-			});
+					},
+					sendMagicLink(data, request) {
+						verificationEmail = data;
+					},
+				}),
+			],
+		});
 
 		const internalAdapter = (await auth.$context).internalAdapter;
 		const { headers } = await signInWithTestUser();

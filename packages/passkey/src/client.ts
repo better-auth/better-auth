@@ -17,6 +17,7 @@ import { useAuthQuery } from "better-auth/client";
 import type { Session, User } from "better-auth/types";
 import { atom } from "nanostores";
 import type { passkey } from ".";
+import { PASSKEY_ERROR_CODES } from "./error-codes";
 import type { Passkey } from "./types";
 
 export const getPasskeyActions = (
@@ -69,7 +70,7 @@ export const getPasskeyActions = (
 			$store.notify("$sessionSignal");
 
 			return verified;
-		} catch (e) {
+		} catch {
 			return {
 				data: null,
 				error: {
@@ -261,5 +262,10 @@ export const passkeyClient = () => {
 				signal: "$sessionSignal",
 			},
 		],
+		$ERROR_CODES: PASSKEY_ERROR_CODES,
 	} satisfies BetterAuthClientPlugin;
 };
+
+export type * from "@simplewebauthn/server";
+export * from "./error-codes";
+export type * from "./types";

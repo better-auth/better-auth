@@ -1,7 +1,6 @@
-import type { GenericEndpointContext } from "@better-auth/core";
+import type { Awaitable, GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { APIError } from "better-call";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { setSessionCookie } from "../../../cookies";
 import {
@@ -52,7 +51,7 @@ export interface OTPOptions {
 				 * The request object
 				 */
 				ctx?: GenericEndpointContext,
-		  ) => Promise<void> | void)
+		  ) => Awaitable<void>)
 		| undefined;
 	/**
 	 * The number of allowed attempts for the OTP
@@ -73,6 +72,35 @@ export interface OTPOptions {
 		  )
 		| undefined;
 }
+
+const verifyOTPBodySchema = z.object({
+	code: z.string().meta({
+		description: 'The otp code to verify. Eg: "012345"',
+	}),
+	/**
+	 * if true, the device will be trusted
+	 * for 30 days. It'll be refreshed on
+	 * every sign in request within this time.
+	 */
+	trustDevice: z.boolean().optional().meta({
+		description:
+			"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
+	}),
+});
+
+const send2FaOTPBodySchema = z
+	.object({
+		/**
+		 * if true, the device will be trusted
+		 * for 30 days. It'll be refreshed on
+		 * every sign in request within this time.
+		 */
+		trustDevice: z.boolean().optional().meta({
+			description:
+				"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
+		}),
+	})
+	.optional();
 
 /**
  * The otp adapter is created from the totp adapter.
@@ -130,19 +158,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 		"/two-factor/send-otp",
 		{
 			method: "POST",
-			body: z
-				.object({
-					/**
-					 * if true, the device will be trusted
-					 * for 30 days. It'll be refreshed on
-					 * every sign in request within this time.
-					 */
-					trustDevice: z.boolean().optional().meta({
-						description:
-							"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
-					}),
-				})
-				.optional(),
+			body: send2FaOTPBodySchema,
 			metadata: {
 				openapi: {
 					summary: "Send two factor OTP",
@@ -172,8 +188,9 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 				ctx.context.logger.error(
 					"send otp isn't configured. Please configure the send otp function on otp options.",
 				);
-				throw new APIError("BAD_REQUEST", {
+				throw APIError.from("BAD_REQUEST", {
 					message: "otp isn't configured",
+					code: "OTP_NOT_CONFIGURED",
 				});
 			}
 			const { session, key } = await verifyTwoFactor(ctx);
@@ -184,10 +201,17 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 				identifier: `2fa-otp-${key}`,
 				expiresAt: new Date(Date.now() + opts.period),
 			});
-			await options.sendOTP(
+			const sendOTPResult = options.sendOTP(
 				{ user: session.user as UserWithTwoFactor, otp: code },
 				ctx,
 			);
+			if (sendOTPResult instanceof Promise) {
+				await ctx.context.runInBackgroundOrAwait(
+					sendOTPResult.catch((e: unknown) => {
+						ctx.context.logger.error("Failed to send two-factor OTP", e);
+					}),
+				);
+			}
 			return ctx.json({ status: true });
 		},
 	);
@@ -196,20 +220,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 		"/two-factor/verify-otp",
 		{
 			method: "POST",
-			body: z.object({
-				code: z.string().meta({
-					description: 'The otp code to verify. Eg: "012345"',
-				}),
-				/**
-				 * if true, the device will be trusted
-				 * for 30 days. It'll be refreshed on
-				 * every sign in request within this time.
-				 */
-				trustDevice: z.boolean().optional().meta({
-					description:
-						"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
-				}),
-			}),
+			body: verifyOTPBodySchema,
 			metadata: {
 				openapi: {
 					summary: "Verify two factor OTP",
@@ -295,18 +306,20 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 						toCheckOtp.id,
 					);
 				}
-				throw new APIError("BAD_REQUEST", {
-					message: TWO_FACTOR_ERROR_CODES.OTP_HAS_EXPIRED,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					TWO_FACTOR_ERROR_CODES.OTP_HAS_EXPIRED,
+				);
 			}
 			const allowedAttempts = options?.allowedAttempts || 5;
 			if (parseInt(counter!) >= allowedAttempts) {
 				await ctx.context.internalAdapter.deleteVerificationValue(
 					toCheckOtp.id,
 				);
-				throw new APIError("BAD_REQUEST", {
-					message: TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE,
+				);
 			}
 			const isCodeValid = constantTimeEqual(
 				new TextEncoder().encode(decryptedOtp),
@@ -315,9 +328,10 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			if (isCodeValid) {
 				if (!session.user.twoFactorEnabled) {
 					if (!session.session) {
-						throw new APIError("BAD_REQUEST", {
-							message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-						});
+						throw APIError.from(
+							"BAD_REQUEST",
+							BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+						);
 					}
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
 						session.user.id,

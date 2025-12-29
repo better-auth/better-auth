@@ -294,7 +294,9 @@ async function migrateFromClerk() {
                 // # Admin (if you enabled admin plugin)
                 ...(isAdminEnabled ? {
                     banned: clerkUser?.banned,
-                    banExpiresAt: clerkUser?.lockout_expires_in_seconds,
+                    banExpires: clerkUser?.lockout_expires_in_seconds
+                       ? new Date(Date.now() + clerkUser.lockout_expires_in_seconds * 1000)
+                       : undefined,
                     role: "user"
                 } : {}),
                 // # Username (if you enabled username plugin)

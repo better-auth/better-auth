@@ -2,7 +2,7 @@ import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import type { InternalLogger, LogLevel } from "@better-auth/core/env";
 import { createEndpoint } from "better-call";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { checkEndpointConflicts } from "./index";
+import { checkEndpointConflicts, createAuthEndpoint } from "./index";
 
 let mockLoggerLevel: LogLevel = "debug";
 const mockLogger = {
@@ -439,6 +439,27 @@ describe("checkEndpointConflicts", () => {
 	it("should handle options with empty plugins array", () => {
 		const options: BetterAuthOptions = {
 			plugins: [],
+		};
+
+		checkEndpointConflicts(options, mockLogger);
+
+		expect(mockLogger.error).not.toHaveBeenCalled();
+	});
+
+	it("should handle plugins with endpoints that don't have a path", () => {
+		const plugin1: BetterAuthPlugin = {
+			id: "plugin1",
+			endpoints: {
+				endpoint1: createAuthEndpoint({ method: "GET" }, async () => ({
+					ok: true,
+				})),
+				endpoint2: createAuthEndpoint({ method: "GET" }, async () => ({
+					ok: true,
+				})),
+			},
+		};
+		const options: BetterAuthOptions = {
+			plugins: [plugin1],
 		};
 
 		checkEndpointConflicts(options, mockLogger);

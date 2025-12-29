@@ -1,16 +1,19 @@
 {
   "name": "@better-auth/passkey",
-  "version": "1.4.4-beta.1",
+  "version": "1.5.0-beta.1",
   "type": "module",
   "description": "Passkey plugin for Better Auth",
   "main": "dist/index.mjs",
   "module": "dist/index.mjs",
+  "types": "dist/index.d.mts",
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
     "test": "vitest",
+    "coverage": "vitest run --coverage",
     "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
     "build": "tsdown",
     "dev": "tsdown --watch",
     "typecheck": "tsc --project tsconfig.json"
@@ -49,7 +52,7 @@
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
-    "@better-auth/utils": "0.3.0",
+    "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:*",
     "better-call": "catalog:",
@@ -60,7 +63,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/better-auth/better-auth",
+    "url": "git+https://github.com/better-auth/better-auth.git",
     "directory": "packages/passkey"
   },
   "homepage": "https://www.better-auth.com/docs/plugins/passkey",

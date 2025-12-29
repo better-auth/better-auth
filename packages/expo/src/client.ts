@@ -33,15 +33,24 @@ export function parseSetCookieHeader(
 	cookies.forEach((cookie) => {
 		const parts = cookie.split(";").map((p) => p.trim());
 		const [nameValue, ...attributes] = parts;
-		const [name, ...valueParts] = nameValue!.split("=");
+		const [name, ...valueParts] = (nameValue || "").split("=");
 		const value = valueParts.join("=");
-		const cookieObj: CookieAttributes = { value };
+
+		if (!name || value === undefined) {
+			return;
+		}
+
+		const attrObj: CookieAttributes = { value };
 		attributes.forEach((attr) => {
 			const [attrName, ...attrValueParts] = attr.split("=");
+			if (!attrName?.trim()) {
+				return;
+			}
 			const attrValue = attrValueParts.join("=");
-			cookieObj[attrName!.toLowerCase() as "value"] = attrValue;
+			const normalizedAttrName = attrName.trim().toLowerCase();
+			attrObj[normalizedAttrName as "value"] = attrValue;
 		});
-		cookieMap.set(name!, cookieObj);
+		cookieMap.set(name, attrObj);
 	});
 	return cookieMap;
 }
@@ -141,7 +150,7 @@ export function getCookie(cookie: string) {
 	let parsed = {} as Record<string, StoredCookie>;
 	try {
 		parsed = JSON.parse(cookie) as Record<string, StoredCookie>;
-	} catch (e) {}
+	} catch {}
 	const toSend = Object.entries(parsed).reduce((acc, [key, value]) => {
 		if (value.expires && new Date(value.expires) < new Date()) {
 			return acc;
@@ -345,7 +354,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 								// Only notify $sessionSignal if the session cookie values actually changed
 								// This prevents infinite refetching when the server sends the same cookie with updated expiry
 								if (hasSessionCookieChanged(prevCookie, toSetCookie)) {
-									await storage.setItem(cookieName, toSetCookie);
+									storage.setItem(cookieName, toSetCookie);
 									store?.notify("$sessionSignal");
 								} else {
 									// Still update the storage to refresh expiry times, but don't trigger refetch
@@ -387,7 +396,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							if (Platform.OS === "android") {
 								try {
 									Browser.dismissAuthSession();
-								} catch (e) {}
+								} catch {}
 							}
 
 							const proxyURL = `${context.request.baseURL}/expo-authorization-proxy?authorizationURL=${encodeURIComponent(signInURL)}`;

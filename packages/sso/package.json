@@ -1,13 +1,14 @@
 {
   "name": "@better-auth/sso",
   "author": "Bereket Engida",
-  "version": "1.4.4-beta.1",
+  "version": "1.5.0-beta.1",
   "type": "module",
   "main": "dist/index.mjs",
+  "types": "dist/index.d.mts",
   "homepage": "https://www.better-auth.com/docs/plugins/sso",
   "repository": {
     "type": "git",
-    "url": "https://github.com/better-auth/better-auth",
+    "url": "git+https://github.com/better-auth/better-auth.git",
     "directory": "packages/sso"
   },
   "license": "MIT",
@@ -30,7 +31,9 @@
   "description": "SSO plugin for Better Auth",
   "scripts": {
     "test": "vitest",
+    "coverage": "vitest run --coverage",
     "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
     "build": "tsdown",
     "dev": "tsdown --watch",
     "typecheck": "tsc --project tsconfig.json"
@@ -65,6 +68,7 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@better-auth/utils": "catalog:",
     "@types/body-parser": "^1.19.6",
     "@types/express": "^5.0.5",
     "better-auth": "workspace:*",

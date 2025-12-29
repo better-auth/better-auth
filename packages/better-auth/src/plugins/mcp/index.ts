@@ -110,6 +110,47 @@ export const getMCPProtectedResourceMetadata = (
 	};
 };
 
+const registerMcpClientBodySchema = z.object({
+	redirect_uris: z.array(z.string()),
+	token_endpoint_auth_method: z
+		.enum(["none", "client_secret_basic", "client_secret_post"])
+		.default("client_secret_basic")
+		.optional(),
+	grant_types: z
+		.array(
+			z.enum([
+				"authorization_code",
+				"implicit",
+				"password",
+				"client_credentials",
+				"refresh_token",
+				"urn:ietf:params:oauth:grant-type:jwt-bearer",
+				"urn:ietf:params:oauth:grant-type:saml2-bearer",
+			]),
+		)
+		.default(["authorization_code"])
+		.optional(),
+	response_types: z
+		.array(z.enum(["code", "token"]))
+		.default(["code"])
+		.optional(),
+	client_name: z.string().optional(),
+	client_uri: z.string().optional(),
+	logo_uri: z.string().optional(),
+	scope: z.string().optional(),
+	contacts: z.array(z.string()).optional(),
+	tos_uri: z.string().optional(),
+	policy_uri: z.string().optional(),
+	jwks_uri: z.string().optional(),
+	jwks: z.record(z.string(), z.any()).optional(),
+	metadata: z.record(z.any(), z.any()).optional(),
+	software_id: z.string().optional(),
+	software_version: z.string().optional(),
+	software_statement: z.string().optional(),
+});
+
+const mcpOAuthTokenBodySchema = z.record(z.any(), z.any());
+
 export const mcp = (options: MCPOptions) => {
 	const opts = {
 		codeExpiresIn: 600,
@@ -192,9 +233,7 @@ export const mcp = (options: MCPOptions) => {
 				"/.well-known/oauth-authorization-server",
 				{
 					method: "GET",
-					metadata: {
-						...HIDE_METADATA,
-					},
+					metadata: HIDE_METADATA,
 				},
 				async (c) => {
 					try {
@@ -210,9 +249,7 @@ export const mcp = (options: MCPOptions) => {
 				"/.well-known/oauth-protected-resource",
 				{
 					method: "GET",
-					metadata: {
-						...HIDE_METADATA,
-					},
+					metadata: HIDE_METADATA,
 				},
 				async (c) => {
 					const metadata = getMCPProtectedResourceMetadata(c, options);
@@ -253,9 +290,9 @@ export const mcp = (options: MCPOptions) => {
 				"/mcp/token",
 				{
 					method: "POST",
-					body: z.record(z.any(), z.any()),
+					body: mcpOAuthTokenBodySchema,
 					metadata: {
-						isAction: false,
+						...HIDE_METADATA,
 						allowedMediaTypes: [
 							"application/x-www-form-urlencoded",
 							"application/json",
@@ -315,7 +352,7 @@ export const mcp = (options: MCPOptions) => {
 							}
 							client_id = id;
 							client_secret = secret;
-						} catch (error) {
+						} catch {
 							throw new APIError("UNAUTHORIZED", {
 								error_description: "invalid authorization header format",
 								error: "invalid_client",
@@ -665,44 +702,7 @@ export const mcp = (options: MCPOptions) => {
 				"/mcp/register",
 				{
 					method: "POST",
-					body: z.object({
-						redirect_uris: z.array(z.string()),
-						token_endpoint_auth_method: z
-							.enum(["none", "client_secret_basic", "client_secret_post"])
-							.default("client_secret_basic")
-							.optional(),
-						grant_types: z
-							.array(
-								z.enum([
-									"authorization_code",
-									"implicit",
-									"password",
-									"client_credentials",
-									"refresh_token",
-									"urn:ietf:params:oauth:grant-type:jwt-bearer",
-									"urn:ietf:params:oauth:grant-type:saml2-bearer",
-								]),
-							)
-							.default(["authorization_code"])
-							.optional(),
-						response_types: z
-							.array(z.enum(["code", "token"]))
-							.default(["code"])
-							.optional(),
-						client_name: z.string().optional(),
-						client_uri: z.string().optional(),
-						logo_uri: z.string().optional(),
-						scope: z.string().optional(),
-						contacts: z.array(z.string()).optional(),
-						tos_uri: z.string().optional(),
-						policy_uri: z.string().optional(),
-						jwks_uri: z.string().optional(),
-						jwks: z.record(z.string(), z.any()).optional(),
-						metadata: z.record(z.any(), z.any()).optional(),
-						software_id: z.string().optional(),
-						software_version: z.string().optional(),
-						software_statement: z.string().optional(),
-					}),
+					body: registerMcpClientBodySchema,
 					metadata: {
 						openapi: {
 							description: "Register an OAuth2 application",
@@ -943,6 +943,7 @@ export const mcp = (options: MCPOptions) => {
 			),
 		},
 		schema,
+		options,
 	} satisfies BetterAuthPlugin;
 };
 
@@ -957,7 +958,7 @@ export const withMcpAuth = <
 	auth: Auth,
 	handler: (
 		req: Request,
-		sesssion: OAuthAccessToken,
+		session: OAuthAccessToken,
 	) => Response | Promise<Response>,
 ) => {
 	return async (req: Request) => {

@@ -7,11 +7,11 @@ import type { CookieOptions } from "better-call";
 import * as z from "zod";
 import { originCheck } from "../../api";
 import { parseJSON } from "../../client/parser";
-import { parseSetCookieHeader } from "../../cookies";
+import { parseSetCookieHeader, stripSecureCookiePrefix } from "../../cookies";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { getOrigin } from "../../utils/url";
 import type { AuthContextWithSnapshot, OAuthProxyStatePackage } from "./types";
-import { checkSkipProxy, resolveCurrentURL } from "./utils";
+import { checkSkipProxy, resolveCurrentURL, stripTrailingSlash } from "./utils";
 
 export interface OAuthProxyOptions {
 	/**
@@ -29,26 +29,45 @@ export interface OAuthProxyOptions {
 	 * default to `BETTER_AUTH_URL`
 	 */
 	productionURL?: string | undefined;
+	/**
+	 * Maximum age in seconds for the encrypted cookies payload.
+	 * Payloads older than this will be rejected to prevent replay attacks.
+	 *
+	 * Keep this value short (e.g., 30-60 seconds) to minimize the window
+	 * for potential replay attacks while still allowing normal OAuth flows.
+	 *
+	 * @default 60 (1 minute)
+	 */
+	maxAge?: number | undefined;
 }
 
-export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
+interface EncryptedCookiesPayload {
+	cookies: string;
+	timestamp: number;
+}
+
+const oAuthProxyQuerySchema = z.object({
+	callbackURL: z.string().meta({
+		description: "The URL to redirect to after the proxy",
+	}),
+	cookies: z.string().meta({
+		description: "The cookies to set after the proxy",
+	}),
+});
+
+export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
+	const maxAge = opts?.maxAge ?? 60; // Default 60 seconds
+
 	return {
 		id: "oauth-proxy",
-		options: opts,
+		options: opts as NoInfer<O>,
 		endpoints: {
 			oAuthProxy: createAuthEndpoint(
 				"/oauth-proxy-callback",
 				{
 					method: "GET",
 					operationId: "oauthProxyCallback",
-					query: z.object({
-						callbackURL: z.string().meta({
-							description: "The URL to redirect to after the proxy",
-						}),
-						cookies: z.string().meta({
-							description: "The cookies to set after the proxy",
-						}),
-					}),
+					query: oAuthProxyQuerySchema,
 					use: [originCheck((ctx) => ctx.query.callbackURL)],
 					metadata: {
 						openapi: {
@@ -85,25 +104,77 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 					},
 				},
 				async (ctx) => {
-					const decryptedCookies = await symmetricDecrypt({
-						key: ctx.context.secret,
-						data: ctx.query.cookies,
-					}).catch((e) => {
+					let decryptedPayload: string | null = null;
+					try {
+						decryptedPayload = await symmetricDecrypt({
+							key: ctx.context.secret,
+							data: ctx.query.cookies,
+						});
+					} catch (e) {
 						ctx.context.logger.error(
 							"Failed to decrypt OAuth proxy cookies:",
 							e,
 						);
-						return null;
-					});
-					if (!decryptedCookies) {
+					}
+
+					if (!decryptedPayload) {
 						const errorURL =
 							ctx.context.options.onAPIError?.errorURL ||
-							`${ctx.context.options.baseURL}/api/auth/error`;
+							`${stripTrailingSlash(ctx.context.options.baseURL)}/api/auth/error`;
 
 						throw ctx.redirect(
 							`${errorURL}?error=OAuthProxy - Invalid cookies or secret`,
 						);
 					}
+
+					let payload: EncryptedCookiesPayload;
+					try {
+						payload = parseJSON<EncryptedCookiesPayload>(decryptedPayload);
+					} catch (e) {
+						ctx.context.logger.error("Failed to parse OAuth proxy payload:", e);
+						const errorURL =
+							ctx.context.options.onAPIError?.errorURL ||
+							`${stripTrailingSlash(ctx.context.options.baseURL)}/api/auth/error`;
+
+						throw ctx.redirect(
+							`${errorURL}?error=OAuthProxy - Invalid payload format`,
+						);
+					}
+					if (
+						!payload.cookies ||
+						typeof payload.cookies !== "string" ||
+						typeof payload.timestamp !== "number"
+					) {
+						ctx.context.logger.error(
+							"OAuth proxy payload missing required fields",
+						);
+						const errorURL =
+							ctx.context.options.onAPIError?.errorURL ||
+							`${stripTrailingSlash(ctx.context.options.baseURL)}/api/auth/error`;
+
+						throw ctx.redirect(
+							`${errorURL}?error=OAuthProxy - Invalid payload structure`,
+						);
+					}
+
+					const now = Date.now();
+					const age = (now - payload.timestamp) / 1000;
+
+					// Allow up to 10 seconds of future skew for clock differences
+					if (age > maxAge || age < -10) {
+						ctx.context.logger.error(
+							`OAuth proxy payload expired or invalid (age: ${age}s, maxAge: ${maxAge}s)`,
+						);
+						const errorURL =
+							ctx.context.options.onAPIError?.errorURL ||
+							`${stripTrailingSlash(ctx.context.options.baseURL)}/api/auth/error`;
+
+						throw ctx.redirect(
+							`${errorURL}?error=OAuthProxy - Payload expired or invalid`,
+						);
+					}
+
+					const decryptedCookies = payload.cookies;
 
 					const currentURL = resolveCurrentURL(ctx, opts);
 					const isSecureContext = currentURL.protocol === "https:";
@@ -131,13 +202,23 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 								options.secure = true;
 							}
 
+							// Remove __Secure- or __Host- prefix for non-HTTPS contexts
+							const cookieName = isSecureContext
+								? name
+								: stripSecureCookiePrefix(name);
+
+							// URI-decoded value because `ctx.setCookie` will URI-encode it again
+							let cookieValue: string;
+							try {
+								cookieValue = decodeURIComponent(attrs.value);
+							} catch {
+								cookieValue = attrs.value;
+							}
+
 							return {
-								name,
+								name: cookieName,
+								value: cookieValue,
 								options,
-								/**
-								 * URI-decoded value because `ctx.setCookie` will URI-encode it again
-								 */
-								value: decodeURIComponent(attrs.value),
 							};
 						},
 					);
@@ -168,11 +249,19 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 						}
 
 						const currentURL = resolveCurrentURL(ctx, opts);
+						const productionURL = opts?.productionURL;
 						const originalCallbackURL =
 							ctx.body?.callbackURL || ctx.context.baseURL;
 
+						// Override baseURL to production so redirect_uri points to production
+						// This ensures OAuth provider callbacks go to the production server
+						if (productionURL) {
+							const productionBaseURL = `${stripTrailingSlash(productionURL)}${ctx.context.options.basePath || "/api/auth"}`;
+							ctx.context.baseURL = productionBaseURL;
+						}
+
 						// Construct proxy callback URL
-						const newCallbackURL = `${currentURL.origin}${
+						const newCallbackURL = `${stripTrailingSlash(currentURL.origin)}${
 							ctx.context.options.basePath || "/api/auth"
 						}/oauth-proxy-callback?callbackURL=${encodeURIComponent(
 							originalCallbackURL,
@@ -207,7 +296,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 							});
 							statePackage =
 								parseJSON<OAuthProxyStatePackage>(decryptedPackage);
-						} catch (e) {
+						} catch {
 							// Not an OAuth proxy state, continue normally
 							return;
 						}
@@ -460,9 +549,16 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 						if (!setCookies) {
 							return;
 						}
+
+						// Create payload with timestamp for replay attack protection
+						const payload: EncryptedCookiesPayload = {
+							cookies: setCookies,
+							timestamp: Date.now(),
+						};
+
 						const encryptedCookies = await symmetricEncrypt({
 							key: ctx.context.secret,
-							data: setCookies,
+							data: JSON.stringify(payload),
 						});
 						const locationWithCookies = `${location}&cookies=${encodeURIComponent(
 							encryptedCookies,

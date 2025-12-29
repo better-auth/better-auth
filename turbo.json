@@ -22,11 +22,18 @@
     },
     "//#format": {},
     "lint": {},
+    "lint:types": {
+      "dependsOn": ["build"]
+    },
     "lint:package": {
       "dependsOn": ["build"]
     },
     "test": {
       "dependsOn": ["build"]
+    },
+    "coverage": {
+      "dependsOn": ["build"],
+      "outputs": ["coverage"]
     },
     "e2e:smoke": {
       "dependsOn": ["build"]

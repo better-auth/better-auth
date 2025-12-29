@@ -1,7 +1,7 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { safeJSONParse } from "@better-auth/core/utils";
 import { sessionMiddleware } from "../../../api";
-import { safeJSONParse } from "../../../utils/json";
 import { listApiKeys as listApiKeysFromStorage } from "../adapter";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
@@ -180,7 +180,7 @@ export function listApiKeys({
 			});
 
 			let returningApiKey = apiKeys.map((x) => {
-				const { key, ...returningApiKey } = x;
+				const { key: _key, ...returningApiKey } = x;
 				return {
 					...returningApiKey,
 					permissions: returningApiKey.permissions
