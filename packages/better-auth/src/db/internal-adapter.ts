@@ -358,7 +358,8 @@ export const createInternalAdapter = (
 					0,
 				);
 				if (sessionTTL > 0) {
-					const user = await adapter.findOne<User>({
+					const currentAdapter = await getCurrentAdapter(adapter);
+					const user = await currentAdapter.findOne<User>({
 						model: "user",
 						where: [
 							{
