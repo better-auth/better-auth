@@ -180,13 +180,37 @@ export function getApiKey({
 
 			apiKey = await getApiKeyById(ctx, id, opts);
 
-			// Verify ownership
-			if (apiKey && apiKey.userId !== session.user.id) {
-				apiKey = null;
-			}
-
 			if (!apiKey) {
 				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
+			}
+
+			// Verify ownership
+			if (apiKey.userId !== session.user.id) {
+				if (!apiKey.referenceId) {
+					throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
+				}
+
+				if (!opts.authorizeReference) {
+					throw APIError.from(
+						"UNAUTHORIZED",
+						ERROR_CODES.UNAUTHORIZED_REFERENCE,
+					);
+				}
+
+				const authorized = await opts.authorizeReference(
+					{
+						user: session.user,
+						session: session.session,
+						referenceId: apiKey.referenceId,
+					},
+					ctx,
+				);
+				if (!authorized) {
+					throw APIError.from(
+						"UNAUTHORIZED",
+						ERROR_CODES.UNAUTHORIZED_REFERENCE,
+					);
+				}
 			}
 
 			deleteAllExpiredApiKeys(ctx.context);
