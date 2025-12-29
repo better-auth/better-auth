@@ -135,7 +135,7 @@ describe("base context creation", () => {
 		expect(ctx.options.emailAndPassword?.enabled).toBe(false);
 	});
 
-	it("should properly pass modfied context from one plugin to another", async () => {
+	it("should properly pass modified context from one plugin to another", async () => {
 		const mockProvider = {
 			id: "test-oauth-provider",
 			name: "Test OAuth Provider",
@@ -232,29 +232,46 @@ describe("base context creation", () => {
 
 	describe("secret management", () => {
 		it("should use options.secret as highest priority", async () => {
-			vi.stubEnv("BETTER_AUTH_SECRET", "env-secret");
-			const res = await initBase({ secret: "options-secret" });
-			expect(res.secret).toBe("options-secret");
+			vi.stubEnv(
+				"BETTER_AUTH_SECRET",
+				"env-secret-that-is-long-enough-for-validation-test",
+			);
+			const res = await initBase({
+				secret: "options-secret-that-is-long-enough-for-validation",
+			});
+			expect(res.secret).toBe(
+				"options-secret-that-is-long-enough-for-validation",
+			);
 			vi.unstubAllEnvs();
 		});
 
 		it("should use BETTER_AUTH_SECRET from env", async () => {
-			vi.stubEnv("BETTER_AUTH_SECRET", "better-auth-secret");
+			vi.stubEnv(
+				"BETTER_AUTH_SECRET",
+				"better-auth-secret-that-is-long-enough-for-validation",
+			);
 			const opts: BetterAuthOptions = {};
 			const adapter = await getAdapter(opts);
 			const getDatabaseType = () => "memory";
 			const res = await createAuthContext(adapter, opts, getDatabaseType);
-			expect(res.secret).toBe("better-auth-secret");
+			expect(res.secret).toBe(
+				"better-auth-secret-that-is-long-enough-for-validation",
+			);
 			vi.unstubAllEnvs();
 		});
 
 		it("should fallback to AUTH_SECRET env", async () => {
-			vi.stubEnv("AUTH_SECRET", "auth-secret");
+			vi.stubEnv(
+				"AUTH_SECRET",
+				"auth-secret-that-is-long-enough-for-validation-test",
+			);
 			const opts: BetterAuthOptions = {};
 			const adapter = await getAdapter(opts);
 			const getDatabaseType = () => "memory";
 			const res = await createAuthContext(adapter, opts, getDatabaseType);
-			expect(res.secret).toBe("auth-secret");
+			expect(res.secret).toBe(
+				"auth-secret-that-is-long-enough-for-validation-test",
+			);
 			vi.unstubAllEnvs();
 		});
 	});
@@ -310,6 +327,58 @@ describe("base context creation", () => {
 				enabled: true,
 				updateAge: 200,
 			});
+		});
+
+		it("should disable cookieRefreshCache and warn when database is configured with refreshCache=true", async () => {
+			const log = vi.fn();
+			const res = await initBase({
+				logger: {
+					level: "warn",
+					log,
+				} as any,
+				database: new Database(":memory:"),
+				session: {
+					cookieCache: {
+						refreshCache: true,
+					},
+				},
+			});
+
+			expect(res.sessionConfig.cookieRefreshCache).toBe(false);
+			expect(log).toHaveBeenCalledWith(
+				"warn",
+				expect.stringContaining(
+					"`session.cookieCache.refreshCache` is enabled while `database` or `secondaryStorage` is configured",
+				),
+			);
+		});
+
+		it("should disable cookieRefreshCache and warn when secondaryStorage is configured with refreshCache=true", async () => {
+			const log = vi.fn();
+			const res = await initBase({
+				logger: {
+					level: "warn",
+					log,
+				} as any,
+				secondaryStorage: {
+					get: vi.fn(),
+					set: vi.fn(),
+					delete: vi.fn(),
+				},
+				session: {
+					cookieCache: {
+						refreshCache: true,
+					},
+				},
+			});
+
+			expect(res.sessionConfig.cookieRefreshCache).toBe(false);
+			expect(log).toHaveBeenCalledWith(
+				"warn",
+				expect.stringContaining(
+					"`session.cookieCache.refreshCache` is enabled while `database` or `secondaryStorage` is configured",
+				),
+			);
 		});
 
 		it("should use default maxAge (300) for 20% calculation", async () => {
@@ -1121,28 +1190,142 @@ describe("base context creation", () => {
 		});
 	});
 
-	describe("production environment warnings", () => {
-		it("should not warn about default secret in non-production", async () => {
-			const originalEnv = process.env.NODE_ENV;
-			process.env.NODE_ENV = "development";
+	describe("secret validation", () => {
+		it("should allow default secret in test environment", async () => {
+			vi.stubEnv("BETTER_AUTH_SECRET", "");
+			vi.stubEnv("AUTH_SECRET", "");
 
-			const mockLogger = {
-				warn: vi.fn(),
-				error: vi.fn(),
-				info: vi.fn(),
-				debug: vi.fn(),
-			};
+			const { DEFAULT_SECRET } = await import("../utils/constants");
 
-			await initBase({
-				logger: mockLogger as any,
-				secret: undefined,
+			const ctx = await initBase({
+				secret: DEFAULT_SECRET,
 			});
 
-			expect(mockLogger.error).not.toHaveBeenCalledWith(
-				expect.stringContaining("default secret"),
-			);
+			expect(ctx.secret).toBe(DEFAULT_SECRET);
 
-			process.env.NODE_ENV = originalEnv;
+			vi.unstubAllEnvs();
+		});
+
+		it("should throw error when default secret is set in production environment", async () => {
+			vi.stubEnv("BETTER_AUTH_SECRET", "");
+			vi.stubEnv("AUTH_SECRET", "");
+			const originalNodeEnv = process.env.NODE_ENV;
+
+			const { DEFAULT_SECRET } = await import("../utils/constants");
+
+			const expectedErrorMessage =
+				"You are using the default secret. Please set `BETTER_AUTH_SECRET` in your environment variables or pass `secret` in your auth config.";
+
+			vi.doMock("@better-auth/core/env", async () => {
+				const actual = await vi.importActual("@better-auth/core/env");
+				return {
+					...actual,
+					isProduction: true,
+					isTest: () => false,
+				};
+			});
+
+			vi.resetModules();
+
+			const { createAuthContext } = await import("../context/create-context");
+			const { getAdapter } = await import("../db/adapter-kysely");
+
+			const initBaseProduction = async (
+				options: Partial<BetterAuthOptions> = {},
+			) => {
+				const opts: BetterAuthOptions = {
+					baseURL: "http://localhost:3000",
+					...options,
+				};
+				const adapter = await getAdapter(opts);
+				const getDatabaseType = () => "memory";
+				return createAuthContext(adapter, opts, getDatabaseType);
+			};
+
+			await expect(
+				initBaseProduction({
+					secret: DEFAULT_SECRET,
+				}),
+			).rejects.toThrow(expectedErrorMessage);
+
+			vi.doUnmock("@better-auth/core/env");
+			vi.resetModules();
+			process.env.NODE_ENV = originalNodeEnv;
+			vi.unstubAllEnvs();
+		});
+
+		it("should log a warning when secret is too short", async () => {
+			vi.stubEnv("BETTER_AUTH_SECRET", "");
+			vi.stubEnv("AUTH_SECRET", "");
+			const originalNodeEnv = process.env.NODE_ENV;
+			const log = vi.fn();
+			await initBase({
+				logger: {
+					level: "warn",
+					log,
+				} as any,
+				database: new Database(":memory:"),
+				session: {
+					cookieCache: {
+						refreshCache: true,
+					},
+				},
+			});
+
+			vi.doMock("@better-auth/core/env", async () => {
+				const actual = await vi.importActual("@better-auth/core/env");
+				return {
+					...actual,
+					isProduction: false,
+					isTest: () => false,
+				};
+			});
+
+			vi.resetModules();
+
+			const { createAuthContext } = await import("../context/create-context");
+			const { getAdapter } = await import("../db/adapter-kysely");
+
+			const initBaseNonTest = async (
+				options: Partial<BetterAuthOptions> = {},
+			) => {
+				const opts: BetterAuthOptions = {
+					baseURL: "http://localhost:3000",
+					...options,
+				};
+				const adapter = await getAdapter(opts);
+				const getDatabaseType = () => "memory";
+				return createAuthContext(adapter, opts, getDatabaseType);
+			};
+			initBaseNonTest({
+				secret: "short",
+			}),
+				expect(log).toHaveBeenCalledWith(
+					"warn",
+					expect.stringContaining(
+						"`session.cookieCache.refreshCache` is enabled while `database` or `secondaryStorage` is configured",
+					),
+				);
+
+			vi.doUnmock("@better-auth/core/env");
+			vi.resetModules();
+			process.env.NODE_ENV = originalNodeEnv;
+			vi.unstubAllEnvs();
+		});
+
+		it("should fallback to default secret when secret is empty", async () => {
+			vi.stubEnv("BETTER_AUTH_SECRET", "");
+			vi.stubEnv("AUTH_SECRET", "");
+
+			const { DEFAULT_SECRET } = await import("../utils/constants");
+
+			const ctx = await initBase({
+				secret: "",
+			});
+
+			expect(ctx.secret).toBe(DEFAULT_SECRET);
+
+			vi.unstubAllEnvs();
 		});
 	});
 

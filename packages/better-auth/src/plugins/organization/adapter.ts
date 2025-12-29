@@ -1,7 +1,7 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { getCurrentAdapter } from "@better-auth/core/context";
 import { BetterAuthError } from "@better-auth/core/error";
-import parseJSON from "../../client/parser";
+import { parseJSON } from "../../client/parser";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
 import type { Session, User } from "../../types";
 import { getDate } from "../../utils/date";
@@ -135,6 +135,9 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 									{
 										field: data.filter?.field,
 										value: data.filter?.value,
+										...(data.filter.operator
+											? { operator: data.filter.operator }
+											: {}),
 									},
 								]
 							: []),
@@ -154,6 +157,9 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 									{
 										field: data.filter?.field,
 										value: data.filter?.value,
+										...(data.filter.operator
+											? { operator: data.filter.operator }
+											: {}),
 									},
 								]
 							: []),
@@ -377,7 +383,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		deleteOrganization: async (organizationId: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			await adapter.delete({
+			await adapter.deleteMany({
 				model: "member",
 				where: [
 					{
@@ -386,7 +392,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					},
 				],
 			});
-			await adapter.delete({
+			await adapter.deleteMany({
 				model: "invitation",
 				where: [
 					{
@@ -860,11 +866,21 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		listUserInvitations: async (email: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const invitations = await adapter.findMany<InferInvitation<O, false>>({
+			const invitations = await adapter.findMany<
+				InferInvitation<O, false> & {
+					organization: InferOrganization<O, false>;
+				}
+			>({
 				model: "invitation",
 				where: [{ field: "email", value: email.toLowerCase() }],
+				join: {
+					organization: true,
+				},
 			});
-			return invitations;
+			return invitations.map(({ organization, ...inv }) => ({
+				...inv,
+				organizationName: organization.name,
+			}));
 		},
 		createInvitation: async ({
 			invitation,

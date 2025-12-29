@@ -41,6 +41,7 @@ describe("(bun) simple server", () => {
 				}),
 				headers: {
 					"content-type": "application/json",
+					origin: `http://localhost:${port}`,
 				},
 			},
 		);

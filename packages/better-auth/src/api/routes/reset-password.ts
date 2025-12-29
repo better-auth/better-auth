@@ -1,7 +1,6 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { APIError } from "better-call";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { generateId } from "../../utils";
 import { getDate } from "../../utils/date";
@@ -89,8 +88,9 @@ export const requestPasswordReset = createAuthEndpoint(
 			ctx.context.logger.error(
 				"Reset password isn't enabled.Please pass an emailAndPassword.sendResetPassword function in your auth config!",
 			);
-			throw new APIError("BAD_REQUEST", {
+			throw APIError.from("BAD_REQUEST", {
 				message: "Reset password isn't enabled",
+				code: "RESET_PASSWORD_DISABLED",
 			});
 		}
 		const { email, redirectTo } = ctx.body;
@@ -128,22 +128,16 @@ export const requestPasswordReset = createAuthEndpoint(
 		});
 		const callbackURL = redirectTo ? encodeURIComponent(redirectTo) : "";
 		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${callbackURL}`;
-		/**
-		 * We send the email in the background to prevent timing attacks.
-		 * This is to ensure that the response time is consistent regardless of whether the email was sent or not.
-		 */
-		void ctx.context.options.emailAndPassword
-			.sendResetPassword(
+		await ctx.context.runInBackgroundOrAwait(
+			ctx.context.options.emailAndPassword.sendResetPassword(
 				{
 					user: user.user,
 					url,
 					token: verificationToken,
 				},
 				ctx.request,
-			)
-			.catch((e) => {
-				ctx.context.logger.error("Failed to send reset password email", e);
-			});
+			),
+		);
 		return ctx.json({
 			status: true,
 			message:
@@ -277,9 +271,7 @@ export const resetPassword = createAuthEndpoint(
 	async (ctx) => {
 		const token = ctx.body.token || ctx.query?.token;
 		if (!token) {
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.INVALID_TOKEN,
-			});
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_TOKEN);
 		}
 
 		const { newPassword } = ctx.body;
@@ -287,14 +279,10 @@ export const resetPassword = createAuthEndpoint(
 		const minLength = ctx.context.password?.config.minPasswordLength;
 		const maxLength = ctx.context.password?.config.maxPasswordLength;
 		if (newPassword.length < minLength) {
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
-			});
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
 		}
 		if (newPassword.length > maxLength) {
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
-			});
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
 		}
 
 		const id = `reset-password:${token}`;
@@ -302,9 +290,7 @@ export const resetPassword = createAuthEndpoint(
 		const verification =
 			await ctx.context.internalAdapter.findVerificationValue(id);
 		if (!verification || verification.expiresAt < new Date()) {
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.INVALID_TOKEN,
-			});
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_TOKEN);
 		}
 		const userId = verification.value;
 		const hashedPassword = await ctx.context.password.hash(newPassword);

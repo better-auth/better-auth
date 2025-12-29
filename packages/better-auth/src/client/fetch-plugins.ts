@@ -17,13 +17,3 @@ export const redirectPlugin = {
 		},
 	},
 } satisfies BetterFetchPlugin;
-
-export const userAgentPlugin = {
-	id: "user-agent",
-	name: "UserAgent",
-	hooks: {
-		onRequest(context) {
-			context.headers.append("user-agent", "better-auth");
-		},
-	},
-} satisfies BetterFetchPlugin;
