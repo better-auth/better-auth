@@ -17,7 +17,7 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { createAccessControl } from "../access";
 import { admin } from "./admin";
-import { adminClient } from "./client";
+import { ADMIN_ERROR_CODES, adminClient } from "./client";
 import type { UserWithRole } from "./types";
 
 let testIdToken: string;
@@ -1398,7 +1398,7 @@ describe("access control", async (it) => {
 		expect(res.error).toBeDefined();
 		expect(res.error?.status).toBe(400);
 		expect(res.error?.code).toBe(
-			"YOU_ARE_NOT_ALLOWED_TO_SET_A_NONEXISTENT_ROLE_VALUE",
+			ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE.code,
 		);
 		await client.admin.removeUser(
 			{ userId: createdUser.data?.user.id || "" },
@@ -1429,7 +1429,7 @@ describe("access control", async (it) => {
 		expect(res.error).toBeDefined();
 		expect(res.error?.status).toBe(400);
 		expect(res.error?.code).toBe(
-			"YOU_ARE_NOT_ALLOWED_TO_SET_A_NONEXISTENT_ROLE_VALUE",
+			ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE.code,
 		);
 		await client.admin.removeUser(
 			{ userId: createdUser.data?.user.id || "" },
@@ -1443,5 +1443,124 @@ describe("access control", async (it) => {
 				adminRoles: ["non-existent-role"],
 			}),
 		).toThrowError(BetterAuthError);
+	});
+
+	it("should properly type custom roles in createUser", async () => {
+		const createdUser = await client.admin.createUser(
+			{
+				name: "Test User with Support Role",
+				email: "support-role@test.com",
+				password: "test",
+				role: "support", // This should be accepted as "support" is a custom role
+			},
+			{
+				headers: headers,
+			},
+		);
+		expect(createdUser.data?.user.role).toBe("support");
+		await client.admin.removeUser(
+			{ userId: createdUser.data?.user.id || "" },
+			{ headers: headers },
+		);
+	});
+});
+
+describe("edge cases: userId validation", async () => {
+	const { signInWithTestUser, customFetchImpl, auth } = await getTestInstance(
+		{
+			advanced: {
+				database: {
+					useNumberId: true,
+				},
+			},
+			plugins: [
+				admin({
+					bannedUserMessage: "Custom banned user message",
+				}),
+			],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => {
+							if (user.name === "Admin") {
+								return {
+									data: {
+										...user,
+										role: "admin",
+									},
+								};
+							}
+						},
+					},
+				},
+			},
+		},
+		{
+			testUser: {
+				name: "Admin",
+			},
+		},
+	);
+	const client = createAuthClient({
+		fetchOptions: {
+			customFetchImpl,
+		},
+		plugins: [adminClient()],
+		baseURL: "http://localhost:3000",
+	});
+
+	const { headers: adminHeaders } = await signInWithTestUser();
+
+	it("should allow admin to check permissions with useNumberId", async () => {
+		const res = await client.admin.hasPermission(
+			{
+				role: "admin",
+				permissions: {
+					user: ["create"],
+				},
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.data?.success).toBe(true);
+	});
+
+	it("should return correct error when userId is missing and not call DB with undefined", async () => {
+		await expect(
+			auth.api.userHasPermission({
+				body: {
+					permissions: {
+						user: ["list"],
+					},
+				},
+			}),
+		).rejects.toThrow("user id or role is required");
+	});
+
+	it("should return user not found when userId is empty string", async () => {
+		await expect(
+			auth.api.userHasPermission({
+				body: {
+					userId: "",
+					permissions: {
+						user: ["list"],
+					},
+				},
+			}),
+		).rejects.toThrow("user id or role is required");
+	});
+
+	it("should not crash if userId is 'NaN'", async () => {
+		await expect(
+			auth.api.userHasPermission({
+				body: {
+					userId: "NaN",
+					permissions: {
+						user: ["list"],
+					},
+				},
+			}),
+		).rejects.toThrow("user not found");
 	});
 });
