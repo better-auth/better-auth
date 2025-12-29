@@ -1,5 +1,6 @@
 import type {
 	BetterAuthClientPlugin,
+	ClientAtomListener,
 	ClientFetchOption,
 } from "@better-auth/core";
 import type { BetterFetch } from "@better-fetch/fetch";
@@ -100,9 +101,15 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 						 */
 						const matches = atomListeners.filter((s) => s.matcher(routePath));
 						if (!matches.length) return;
+
+						const visited = new Set<ClientAtomListener["signal"]>();
 						for (const match of matches) {
 							const signal = atoms[match.signal as any];
 							if (!signal) return;
+							if (visited.has(match.signal)) {
+								continue;
+							}
+							visited.add(match.signal);
 							/**
 							 * To avoid race conditions we set the signal in a setTimeout
 							 */
