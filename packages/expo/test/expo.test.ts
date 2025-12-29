@@ -130,6 +130,42 @@ describe("expo", async () => {
 		expect(fn).toHaveBeenCalledWith(
 			expect.stringContaining("accounts.google"),
 			"better-auth:///dashboard",
+			undefined,
+		);
+	});
+
+	it("should pass webBrowserOptions to openAuthSessionAsync", async () => {
+		const { client } = await getTestInstance(
+			{
+				plugins: [expo()],
+				trustedOrigins: ["better-auth://"],
+			},
+			{
+				clientOptions: {
+					plugins: [
+						expoClient({
+							storage: {
+								getItem: (key) => storage.get(key) || null,
+								setItem: async (key, value) => storage.set(key, value),
+							},
+							webBrowserOptions: {
+								preferEphemeralSession: true,
+							},
+						}),
+					],
+				},
+			},
+		);
+		await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+		});
+		expect(fn).toHaveBeenCalledWith(
+			expect.stringContaining("accounts.google"),
+			"better-auth:///dashboard",
+			{
+				preferEphemeralSession: true,
+			},
 		);
 	});
 

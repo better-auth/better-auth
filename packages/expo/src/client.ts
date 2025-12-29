@@ -109,6 +109,10 @@ interface ExpoClientOptions {
 	 */
 	cookiePrefix?: string | string[] | undefined;
 	disableCache?: boolean | undefined;
+	/**
+	 * Options for the web browser
+	 */
+	webBrowserOptions?: import("expo-web-browser").AuthSessionOpenOptions;
 }
 
 interface StoredCookie {
@@ -400,7 +404,11 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							}
 
 							const proxyURL = `${context.request.baseURL}/expo-authorization-proxy?authorizationURL=${encodeURIComponent(signInURL)}`;
-							const result = await Browser.openAuthSessionAsync(proxyURL, to);
+							const result = await Browser.openAuthSessionAsync(
+								proxyURL,
+								to,
+								opts?.webBrowserOptions,
+							);
 							if (result.type !== "success") return;
 							const url = new URL(result.url);
 							const cookie = String(url.searchParams.get("cookie"));
