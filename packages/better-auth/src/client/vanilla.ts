@@ -17,6 +17,7 @@ import type {
 	InferClientAPI,
 	InferErrorCodes,
 	IsSignal,
+	InferPluginsFromClient
 } from "./types";
 
 type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
@@ -77,7 +78,8 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 				? Res
 				: never
 		: never;
-	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &
+	return proxy as UnionToIntersection<InferResolvedHooks<Option>> & 
+	    InferPluginsFromClient<Option> &
 		ClientAPI &
 		InferActions<Option> & {
 			useSession: Atom<{
