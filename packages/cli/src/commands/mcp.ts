@@ -15,7 +15,7 @@ interface MCPOptions {
 
 async function mcpAction(options: MCPOptions) {
 	const mcpUrl = "https://mcp.chonkie.ai/better-auth/better-auth-builder/mcp";
-	const mcpName = "Better Auth";
+	const mcpName = "better-auth";
 
 	if (options.cursor) {
 		await handleCursorAction(mcpUrl, mcpName);
