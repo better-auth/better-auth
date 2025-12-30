@@ -203,6 +203,13 @@ export const username = (options?: UsernameOptions | undefined) => {
 											schema: {
 												type: "object",
 												properties: {
+													redirect: {
+														type: "boolean",
+													},
+													url: {
+														type: "string",
+														nullable: true,
+													},
 													token: {
 														type: "string",
 														description:
@@ -212,7 +219,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 														$ref: "#/components/schemas/User",
 													},
 												},
-												required: ["token", "user"],
+												required: ["token", "user", "redirect"],
 											},
 										},
 									},
