@@ -110,7 +110,23 @@ interface ExpoClientOptions {
 	cookiePrefix?: string | string[] | undefined;
 	disableCache?: boolean | undefined;
 	/**
-	 * Options for the web browser
+	 * Options to customize the Expo web browser behavior when opening authentication
+	 * sessions. These are passed directly to `expo-web-browser`'s
+	 * `AuthSession.openBrowserAsync`.
+	 *
+	 * For example, on iOS you can use `{ preferEphemeralSession: true }` to prevent
+	 * the authentication session from sharing cookies with the user's default
+	 * browser session:
+	 *
+	 * ```ts
+	 * const client = createClient({
+	 *   expo: {
+	 *     webBrowserOptions: {
+	 *       preferEphemeralSession: true,
+	 *     },
+	 *   },
+	 * });
+	 * ```
 	 */
 	webBrowserOptions?: import("expo-web-browser").AuthSessionOpenOptions;
 }
