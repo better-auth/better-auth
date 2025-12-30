@@ -121,7 +121,7 @@ function handleOpenCodeAction(mcpUrl: string) {
 	const openCodeConfig = {
 		$schema: "https://opencode.ai/config.json",
 		mcp: {
-			"Better Auth": {
+			"better-auth": {
 				type: "remote",
 				url: mcpUrl,
 				enabled: true,
