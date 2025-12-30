@@ -82,6 +82,26 @@ export const adminClient = <O extends AdminClientOptions>(
 					});
 					return isAuthorized;
 				},
+				getUser: ((...args: any[]) => any) as any,
+				createUser: ((...args: any[]) => any) as any,
+				updateUser: ((...args: any[]) => any) as any,
+				removeUser: ((...args: any[]) => any) as any,
+
+				listUsers: ((...args: any[]) => any) as any,
+
+				setRole: ((...args: any[]) => any) as any,
+
+				banUser: ((...args: any[]) => any) as any,
+				unbanUser: ((...args: any[]) => any) as any,
+
+				listUserSessions: ((...args: any[]) => any) as any,
+				revokeUserSession: ((...args: any[]) => any) as any,
+				revokeUserSessions: ((...args: any[]) => any) as any,
+
+				impersonateUser: ((...args: any[]) => any) as any,
+				stopImpersonating: ((...args: any[]) => any) as any,
+
+				setUserPassword: ((...args: any[]) => any) as any,
 			},
 		}),
 		pathMethods: {
