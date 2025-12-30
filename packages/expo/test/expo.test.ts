@@ -139,6 +139,12 @@ describe("expo", async () => {
 			{
 				plugins: [expo()],
 				trustedOrigins: ["better-auth://"],
+				socialProviders: {
+					google: {
+						clientId: "GOOGLE_CLIENT_ID",
+						clientSecret: "GOOGLE_CLIENT_SECRET",
+					},
+				},
 			},
 			{
 				clientOptions: {
