@@ -16,7 +16,6 @@
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
     "@hookform/resolvers": "^5.2.1",
-    "@inkeep/widgets": "^0.2.292",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-aspect-ratio": "^1.1.7",

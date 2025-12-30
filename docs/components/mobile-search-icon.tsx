@@ -18,6 +18,7 @@ export function MobileSearchIcon({ className }: MobileSearchIconProps) {
 
 	return (
 		<Button
+			id="mobile-search-button"
 			variant="ghost"
 			size="icon"
 			aria-label="Search"

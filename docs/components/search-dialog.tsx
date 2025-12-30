@@ -1,30 +1,51 @@
 "use client";
 
 import type { SharedProps } from "fumadocs-ui/components/dialog/search";
-import dynamic from "next/dynamic";
+import Script from "next/script";
+import { useEffect, useState } from "react";
 
-const InkeepCustomTrigger = dynamic(
-	() => import("@inkeep/widgets").then((mod) => mod.InkeepCustomTrigger),
-	{
-		ssr: false,
-	},
-);
-
-const baseSettings = {
-	apiKey: process.env.NEXT_PUBLIC_INKEEP_API_KEY!,
-	integrationId: process.env.NEXT_PUBLIC_INKEEP_INTEGRATION_ID!,
-	organizationId: process.env.NEXT_PUBLIC_INKEEP_ORGANIZATION_ID!,
-	primaryBrandColor: "#000000",
-};
+declare global {
+	interface Window {
+		Inkeep?: {
+			SearchBar: (selector: string, config: any) => void;
+		};
+	}
+}
 
 export function CustomSearchDialog(props: SharedProps) {
+	const [isLoaded, setIsLoaded] = useState(false);
+
+	useEffect(() => {
+		if (!isLoaded || !window.Inkeep) return;
+		debugger
+		window.Inkeep.SearchBar("#mobile-search-button", {
+			baseSettings: {
+				apiKey: process.env.NEXT_PUBLIC_INKEEP_API_KEY!,
+				organizationDisplayName: "Better Auth",
+				primaryBrandColor: "#000000",
+			},
+			modalSettings: {
+				shortcutKey: "k",
+			},
+			colorMode: {
+				enableSystem: true,
+				forcedColorMode: "dark",
+				sync: {
+					target: 'html',
+					attributes: ["class"],
+					isDarkMode: (attrs: any) => attrs["class"]?.includes("dark"),
+				},
+			},
+		});
+	}, [props.open, isLoaded, props.onOpenChange]);
+
 	return (
-		<InkeepCustomTrigger
-			baseSettings={baseSettings}
-			isOpen={props.open}
-			onClose={() => {
-				props.onOpenChange(false);
-			}}
+		<Script
+			src="https://cdn.jsdelivr.net/npm/@inkeep/cxkit-js@0.5/dist/embed.js"
+			type="module"
+			strategy="afterInteractive"
+			onLoad={() => setIsLoaded(true)}
+			async
 		/>
 	);
 }
