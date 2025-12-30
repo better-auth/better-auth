@@ -682,7 +682,8 @@ const cancelSubscriptionBodySchema = z.object({
 	disableRedirect: z
 		.boolean()
 		.meta({
-			description: "Disable redirect after successful subscription cancellation. Eg: true",
+			description:
+				"Disable redirect after successful subscription cancellation. Eg: true",
 		})
 		.default(false),
 });
@@ -1193,7 +1194,8 @@ const createBillingPortalBodySchema = z.object({
 	disableRedirect: z
 		.boolean()
 		.meta({
-			description: "Disable redirect after creating billing portal session. Eg: true",
+			description:
+				"Disable redirect after creating billing portal session. Eg: true",
 		})
 		.default(false),
 });
