@@ -11,6 +11,6 @@ describe("memoryAdapter – typed errors", () => {
         model: "users",
         where: [],
       }),
-    ).rejects.toThrow(/Model.*not found/i);
+    ).rejects.toThrowError(/Model.*not found/i);
   });
 });
