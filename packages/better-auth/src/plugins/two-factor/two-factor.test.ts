@@ -245,7 +245,7 @@ describe("two factor", async () => {
 			},
 		});
 		expect(verifyRes.error?.message).toBe(
-			TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
+			TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE.message,
 		);
 	});
 
@@ -256,7 +256,9 @@ describe("two factor", async () => {
 				headers,
 			},
 		});
-		expect(res.error?.message).toBe(TWO_FACTOR_ERROR_CODES.INVALID_CODE);
+		expect(res.error?.message).toBe(
+			TWO_FACTOR_ERROR_CODES.INVALID_CODE.message,
+		);
 	});
 
 	let backupCodes: string[] = [];
@@ -650,19 +652,20 @@ describe("two factor auth API", async () => {
 
 describe("view backup codes", async () => {
 	const sendOTP = vi.fn();
-	const { auth, signInWithTestUser, testUser } = await getTestInstance({
-		secret: DEFAULT_SECRET,
-		plugins: [
-			twoFactor({
-				otpOptions: {
-					sendOTP({ otp }) {
-						sendOTP(otp);
+	const { auth, signInWithTestUser, testUser, customFetchImpl } =
+		await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: {
+						sendOTP({ otp }) {
+							sendOTP(otp);
+						},
 					},
-				},
-				skipVerificationOnEnable: true,
-			}),
-		],
-	});
+					skipVerificationOnEnable: true,
+				}),
+			],
+		});
 	let { headers } = await signInWithTestUser();
 
 	let session = await auth.api.getSession({ headers });
@@ -719,5 +722,19 @@ describe("view backup codes", async () => {
 			expect(code.length).toBeGreaterThan(0);
 		});
 		expect(viewResult.backupCodes).toEqual(generateResult.backupCodes);
+	});
+
+	it("should not expose viewBackupCodes to client", async () => {
+		const response = await customFetchImpl(
+			"http://localhost:3000/api/auth/two-factor/view-backup-codes",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({ userId }),
+			},
+		);
+		expect(response.status).toBe(404);
 	});
 });

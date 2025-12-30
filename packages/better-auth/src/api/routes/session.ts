@@ -6,12 +6,12 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils";
 import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
-import { APIError } from "better-call";
+
 import * as z from "zod";
 import {
 	deleteSessionCookie,
@@ -226,9 +226,12 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							maxAge: 0,
 						});
 					} else {
+						const cachedSessionExpiresAt = new Date(
+							session.session.expiresAt as unknown as string | number | Date,
+						);
 						const hasExpired =
 							sessionDataPayload.expiresAt < Date.now() ||
-							session.session.expiresAt < new Date();
+							cachedSessionExpiresAt < new Date();
 
 						if (hasExpired) {
 							// When the session data cookie has expired, delete it;
@@ -444,9 +447,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				);
 			} catch (error) {
 				ctx.context.logger.error("INTERNAL_SERVER_ERROR", error);
-				throw new APIError("INTERNAL_SERVER_ERROR", {
-					message: BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
-				});
+				throw APIError.from(
+					"INTERNAL_SERVER_ERROR",
+					BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
+				);
 			}
 		},
 	);
@@ -496,7 +500,10 @@ export const getSessionFromCtx = async <
 export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
 	const session = await getSessionFromCtx(ctx);
 	if (!session?.session) {
-		throw new APIError("UNAUTHORIZED");
+		throw APIError.from("UNAUTHORIZED", {
+			message: "Unauthorized",
+			code: "UNAUTHORIZED",
+		});
 	}
 	return {
 		session,
@@ -511,7 +518,10 @@ export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
 export const sensitiveSessionMiddleware = createAuthMiddleware(async (ctx) => {
 	const session = await getSessionFromCtx(ctx, { disableCookieCache: true });
 	if (!session?.session) {
-		throw new APIError("UNAUTHORIZED");
+		throw APIError.from("UNAUTHORIZED", {
+			message: "Unauthorized",
+			code: "UNAUTHORIZED",
+		});
 	}
 	return {
 		session,
@@ -526,7 +536,10 @@ export const requestOnlySessionMiddleware = createAuthMiddleware(
 	async (ctx) => {
 		const session = await getSessionFromCtx(ctx);
 		if (!session?.session && (ctx.request || ctx.headers)) {
-			throw new APIError("UNAUTHORIZED");
+			throw APIError.from("UNAUTHORIZED", {
+				message: "Unauthorized",
+				code: "UNAUTHORIZED",
+			});
 		}
 		return { session };
 	},
@@ -542,7 +555,10 @@ export const requestOnlySessionMiddleware = createAuthMiddleware(
 export const freshSessionMiddleware = createAuthMiddleware(async (ctx) => {
 	const session = await getSessionFromCtx(ctx);
 	if (!session?.session) {
-		throw new APIError("UNAUTHORIZED");
+		throw APIError.from("UNAUTHORIZED", {
+			message: "Unauthorized",
+			code: "UNAUTHORIZED",
+		});
 	}
 	if (ctx.context.sessionConfig.freshAge === 0) {
 		return {
@@ -556,9 +572,7 @@ export const freshSessionMiddleware = createAuthMiddleware(async (ctx) => {
 	const now = Date.now();
 	const isFresh = now - lastUpdated < freshAge * 1000;
 	if (!isFresh) {
-		throw new APIError("FORBIDDEN", {
-			message: "Session is not fresh",
-		});
+		throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.SESSION_NOT_FRESH);
 	}
 	return {
 		session,
@@ -602,23 +616,11 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 				const sessions = await ctx.context.internalAdapter.listSessions(
 					ctx.context.session.user.id,
 				);
-				const activeSessions = sessions
-					.filter((session) => {
-						return session.expiresAt > new Date();
-					})
-					.map((session) => {
-						return {
-							...session,
-							token: undefined, // we don't need to return the token to the client
-							expiresAt: session.expiresAt.toISOString(),
-							createdAt: session.createdAt.toISOString(),
-							updatedAt: session.updatedAt.toISOString(),
-						};
-					});
+				const activeSessions = sessions.filter((session) => {
+					return session.expiresAt > new Date();
+				});
 				return ctx.json(
-					activeSessions as unknown as Prettify<
-						InferSession<Option> & { token: undefined }
-					>[],
+					activeSessions as unknown as Prettify<InferSession<Option>>[],
 				);
 			} catch (e: any) {
 				ctx.context.logger.error(e);
@@ -697,7 +699,10 @@ export const revokeSession = createAuthEndpoint(
 						: "",
 					error,
 				);
-				throw new APIError("INTERNAL_SERVER_ERROR");
+				throw APIError.from("INTERNAL_SERVER_ERROR", {
+					message: "Internal Server Error",
+					code: "INTERNAL_SERVER_ERROR",
+				});
 			}
 		}
 		return ctx.json({
@@ -752,7 +757,10 @@ export const revokeSessions = createAuthEndpoint(
 					: "",
 				error,
 			);
-			throw new APIError("INTERNAL_SERVER_ERROR");
+			throw APIError.from("INTERNAL_SERVER_ERROR", {
+				message: "Internal Server Error",
+				code: "INTERNAL_SERVER_ERROR",
+			});
 		}
 		return ctx.json({
 			status: true,
@@ -796,7 +804,10 @@ export const revokeOtherSessions = createAuthEndpoint(
 	async (ctx) => {
 		const session = ctx.context.session;
 		if (!session.user) {
-			throw new APIError("UNAUTHORIZED");
+			throw APIError.from("UNAUTHORIZED", {
+				message: "Unauthorized",
+				code: "UNAUTHORIZED",
+			});
 		}
 		const sessions = await ctx.context.internalAdapter.listSessions(
 			session.user.id,

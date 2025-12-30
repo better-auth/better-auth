@@ -383,6 +383,89 @@ describe("reset password flow attempts", async (it) => {
 	});
 });
 
+describe("reset password session revocation", async (it) => {
+	let otp = "";
+	let resetOtp = "";
+
+	const { client, sessionSetter } = await getTestInstance(
+		{
+			emailAndPassword: {
+				enabled: true,
+				revokeSessionsOnPasswordReset: true,
+			},
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
+					},
+					sendPasswordResetOTP(data, request) {
+						resetOtp = data.code;
+					},
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}`;
+						},
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
+
+	const testPhoneNumber = "+251911000000";
+
+	it("should revoke all sessions after password reset when configured", async () => {
+		const headers = new Headers();
+
+		await client.phoneNumber.sendOtp({
+			phoneNumber: testPhoneNumber,
+		});
+
+		const verifyRes = await client.phoneNumber.verify(
+			{
+				phoneNumber: testPhoneNumber,
+				code: otp,
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		expect(verifyRes.error).toBe(null);
+
+		const sessionBefore = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(sessionBefore.data?.user).toBeTruthy();
+
+		await client.phoneNumber.requestPasswordReset({
+			phoneNumber: testPhoneNumber,
+		});
+
+		const resetRes = await client.phoneNumber.resetPassword({
+			phoneNumber: testPhoneNumber,
+			otp: resetOtp,
+			newPassword: "new-secure-password",
+		});
+
+		expect(resetRes.error).toBe(null);
+		expect(resetRes.data?.status).toBe(true);
+
+		const sessionAfter = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(sessionAfter.data).toBe(null);
+	});
+});
+
 describe("phone number verification requirement", async () => {
 	let otp = "";
 	const { client } = await getTestInstance(

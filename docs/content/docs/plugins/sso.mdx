@@ -204,10 +204,70 @@ Better Auth fills in the following fields by reading the IdP's discovery documen
 - `discoveryEndpoint`
 - `tokenEndpointAuthentication` (method for token endpoint client authentication)
 
+Following the spec, our discovery process expects all URLs to be valid and to be absolute urls. Relative paths are also supported and resolved relative to the issuer's base URL preserving the path when available.
+
+Example of relative endpoint and issuer without base path:
+
+- `issuer`: `"https://your-org.okta.com"`
+- `token_endpoint`: `"/v1/tokens"`
+- normalized `token_endpoint`: `"https://your-org.okta.com/v1/tokens"`
+
+
+Example of relative endpoint and issuer with base path:
+
+- `issuer`: `"https://your-org.okta.com/v1"`
+- `token_endpoint`: `"/tokens"`
+- normalized `token_endpoint`: `"https://your-org.okta.com/v1/tokens"`
+
 <Callout type="info">
 If you explicitly set these fields in `oidcConfig`, your values override the discovered ones.
 This is useful when you need to override the IdP's advertised metadata or when using incomplete mock servers.
 </Callout>
+
+#### Trusted origins
+
+Both the discovery endpoint as well as any URL resolved through the discovery process are subject to your app's [`trustedOrigins`](/docs/reference/security#trusted-origins) configuration.
+Discovery will fail with the `discovery_untrusted_origin` code unless you explicitly update your `trustedOrigins` configuration:
+
+```ts
+trustedOrigins: ["https://your-org.okta.com"],
+```
+
+If your use-case requires to support multiple arbitrary but known IDPs (e.g Okta), we recommend to:
+
+1. Register a list of well known IDPs ahead of time
+
+```ts
+trustedOrigins: [
+    "https://your-org.okta.com",
+    "https://accounts.google.com",
+    "https://login.microsoftonline.com",
+    "https://auth0.com",
+    "https://idp.example.com"
+],
+```
+
+2. Or dynamically compute the `trustedOrigins` by specifying a callback function:
+
+```ts
+trustedOrigins: async (request) => {
+    // request is undefined during initialization and auth.api calls
+    if (!request) {
+        return ["https://my-frontend.com"];
+    }
+
+    // SSO trusted origin list
+    if (request.url.endsWith("/sso/register")) {
+        const trustedOrigins = await fetchOriginList();
+        return trustedOrigins;
+    }
+
+    // Your normal origin list for everything else
+    return [];
+}
+```
+
+See the [`trustedOrigins`](/docs/reference/security#trusted-origins) docs for more information.
 
 #### Why Discovery Can Fail
 
@@ -229,6 +289,7 @@ If the Identity Provider is misconfigured or unreachable, registration will fail
 | `discovery_not_found` | The discovery document endpoint returned 404 |
 | `discovery_timeout` | The IdP did not respond within the timeout window (default: 10 seconds) |
 | `discovery_invalid_url` | The discovery URL is malformed or uses an unsupported protocol |
+| `discovery_untrusted_origin` | The discovery URL or one of the URLs discovered as part of this process was not trusted by your app's trusted origins configuration |
 | `discovery_invalid_json` | The discovery response is empty or not valid JSON |
 | `unsupported_token_auth_method` | The IdP only supports token auth methods that Better Auth doesn't support |
 
@@ -865,59 +926,6 @@ const auth = betterAuth({
 | `enableInResponseToValidation` | `boolean` | `false` | Enable InResponseTo validation for SP-initiated flows. |
 | `allowIdpInitiated` | `boolean` | `true` | Allow IdP-initiated SSO (responses without InResponseTo). Set to `false` for stricter security. Only applies when validation is enabled. |
 | `requestTTL` | `number` | `300000` (5 min) | Time-to-live for AuthnRequest records in milliseconds. Requests older than this will be rejected. |
-| `authnRequestStore` | `AuthnRequestStore` | In-memory | Custom store implementation. Providing a custom store automatically enables validation. |
-
-#### Multi-Instance Deployments (Production)
-
-<Callout type="warning">
-For multi-instance deployments (load-balanced servers, serverless, etc.), you **must** provide a shared store like Redis. The default in-memory store only works for single-instance deployments.
-</Callout>
-
-Providing a custom `authnRequestStore` automatically enables InResponseTo validation:
-
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { sso, type AuthnRequestStore } from "@better-auth/sso";
-
-// Example Redis-backed store
-const redisAuthnRequestStore: AuthnRequestStore = {
-    async save(record) {
-        const ttl = Math.ceil((record.expiresAt - Date.now()) / 1000);
-        await redis.set(
-            `authn:${record.id}`,
-            JSON.stringify(record),
-            "EX",
-            ttl
-        );
-    },
-    async get(id) {
-        const data = await redis.get(`authn:${id}`);
-        if (!data) return null;
-        const record = JSON.parse(data);
-        if (record.expiresAt < Date.now()) {
-            await redis.del(`authn:${id}`);
-            return null;
-        }
-        return record;
-    },
-    async delete(id) {
-        await redis.del(`authn:${id}`);
-    },
-};
-
-const auth = betterAuth({
-    plugins: [
-        sso({
-            saml: {
-                // Providing a store automatically enables validation
-                authnRequestStore: redisAuthnRequestStore,
-                // Optionally configure other options
-                allowIdpInitiated: false,
-            },
-        }),
-    ],
-});
-```
 
 #### Error Handling
 
@@ -926,6 +934,35 @@ When InResponseTo validation fails, users are redirected with an error query par
 - `?error=invalid_saml_response&error_description=Unknown+or+expired+request+ID` — The request ID was not found or has expired
 - `?error=invalid_saml_response&error_description=Provider+mismatch` — The response was meant for a different provider
 - `?error=unsolicited_response&error_description=IdP-initiated+SSO+not+allowed` — IdP-initiated SSO is disabled
+
+### Assertion Replay Protection
+
+The SSO plugin includes assertion replay protection to prevent attackers from capturing and resubmitting valid SAML responses. Each SAML Assertion ID is tracked and rejected if reused.
+
+<Callout type="info">
+Replay protection is **always enabled**. This is a critical security feature that prevents attackers from reusing intercepted SAML responses.
+</Callout>
+
+#### How It Works
+
+1. When a SAML response is received, the Assertion ID is extracted from the XML
+2. The system checks if this Assertion ID has been seen before
+3. If it's a new assertion, it's stored in the database until its `NotOnOrAfter` expiration
+4. If it's a duplicate (replay attack), the request is rejected
+
+**Both SAML endpoints are protected:**
+- `/sso/saml2/callback/:providerId`
+- `/sso/saml2/sp/acs/:providerId`
+
+<Callout type="info">
+Replay protection uses the database verification table, so it works correctly in multi-instance deployments without additional configuration.
+</Callout>
+
+#### Error Handling
+
+When a replay attack is detected, users are redirected with an error:
+
+- `?error=replay_detected&error_description=SAML+assertion+has+already+been+used` — The assertion ID was already used
 
 ### Timestamp Validation
 
@@ -1010,6 +1047,78 @@ sso({
 - **"SAML assertion has expired"** — Current time is after the `NotOnOrAfter` timestamp (plus clock skew)
 - **"SAML assertion missing required timestamp conditions"** — Assertion has no timestamps and `requireTimestamps` is enabled
 
+### Algorithm Validation
+
+Better Auth validates SAML cryptographic algorithms and warns about deprecated ones (SHA-1, RSA 1.5, 3DES) by default.
+
+```ts title="auth.ts"
+sso({
+    saml: {
+        algorithms: {
+            // "warn" (default) | "reject" | "allow"
+            onDeprecated: "warn",
+        },
+    },
+})
+```
+
+| Value | Behavior |
+|-------|----------|
+| `"warn"` | Log warning, allow authentication (default) |
+| `"reject"` | Throw error, block authentication |
+| `"allow"` | Silent, no validation |
+
+For strict security (production):
+
+```ts title="auth.ts"
+sso({
+    saml: {
+        algorithms: {
+            onDeprecated: "reject",
+        },
+    },
+})
+```
+
+#### Supported Algorithms
+
+**Signature algorithms:**
+- `RSA-SHA256`, `RSA-SHA384`, `RSA-SHA512`
+- `ECDSA-SHA256`, `ECDSA-SHA384`, `ECDSA-SHA512`
+
+**Digest algorithms:**
+- `SHA256`, `SHA384`, `SHA512`
+
+**Deprecated (triggers warning/rejection):**
+- `RSA-SHA1` (signature)
+- `SHA1` (digest)
+- `RSA 1.5` (key encryption)
+- `3DES` (data encryption)
+
+### Size Limits
+
+Better Auth enforces size limits on SAML payloads to protect against denial-of-service attacks via oversized XML.
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `maxResponseSize` | 256KB | Maximum SAML response size in bytes |
+| `maxMetadataSize` | 100KB | Maximum IdP metadata size in bytes |
+
+#### Customizing Limits
+
+```ts title="auth.ts"
+sso({
+    saml: {
+        maxResponseSize: 512 * 1024, // 512KB for enterprise IdPs with large group claims
+        maxMetadataSize: 100 * 1024, // 100KB
+    },
+})
+```
+
+<Callout type="info">
+For true early rejection of oversized payloads (before they reach your application), configure size limits at your infrastructure level (nginx `client_max_body_size`, CDN settings, load balancer).
+</Callout>
+
 ## Domain verification
 
 Domain verification allows your application to automatically trust a new SSO provider
@@ -1019,7 +1128,7 @@ When a provider's domain is verified, it is also trusted for **automatic account
 
 <Tabs items={["client", "server"]}>
     <Tab value="client">
-```ts title="auth.ts"
+```ts title="auth-client.ts"
 const authClient = createAuthClient({
     plugins: [
         ssoClient({ // [!code highlight]
@@ -1033,7 +1142,7 @@ const authClient = createAuthClient({
     </Tab>
 
     <Tab value="server">
-```ts title="auth-client.ts"
+```ts title="auth.ts"
 const auth = betterAuth({
     plugins: [
         sso({ // [!code highlight]
@@ -1269,7 +1378,7 @@ If you want to allow account linking for specific trusted providers, enable the 
         },
     },
     saml: {
-        description: "SAML security options for AuthnRequest/InResponseTo validation and timestamp handling.",
+        description: "SAML security options for AuthnRequest/InResponseTo validation, replay protection, and timestamp handling.",
         type: "object",
         properties: {
             enableInResponseToValidation: {
@@ -1287,11 +1396,6 @@ If you want to allow account linking for specific trusted providers, enable the 
                 type: "number",
                 default: 300000,
             },
-            authnRequestStore: {
-                description: "Custom AuthnRequest store for multi-instance deployments (e.g., Redis). Providing a store automatically enables validation.",
-                type: "AuthnRequestStore",
-                required: false,
-            },
             clockSkew: {
                 description: "Clock skew tolerance for SAML assertion timestamp validation (NotBefore/NotOnOrAfter) in milliseconds. Allows for minor time differences between IdP and SP servers.",
                 type: "number",
@@ -1301,6 +1405,28 @@ If you want to allow account linking for specific trusted providers, enable the 
                 description: "Require timestamp conditions (NotBefore/NotOnOrAfter) in SAML assertions. When enabled, assertions without timestamps are rejected. When disabled, they are accepted with a warning logged.",
                 type: "boolean",
                 default: false,
+            },
+            algorithms: {
+                description: "Algorithm validation options.",
+                type: "object",
+                properties: {
+                    onDeprecated: {
+                        description: "Behavior for deprecated algorithms (SHA-1, RSA 1.5, 3DES).",
+                        type: "string",
+                        enum: ["reject", "warn", "allow"],
+                        default: "warn",
+                    },
+                },
+            },
+            maxResponseSize: {
+                description: "Maximum allowed size for SAML responses in bytes.",
+                type: "number",
+                default: 262144,
+            },
+            maxMetadataSize: {
+                description: "Maximum allowed size for IdP metadata XML in bytes.",
+                type: "number",
+                default: 102400,
             },
         },
     },
