@@ -994,9 +994,17 @@ export type BetterAuthOptions = {
 		| undefined;
 	/**
 	 * List of trusted origins.
+	 *
+	 * @param request - The request object.
+	 * It'll be undefined if no request was
+	 * made. Like during a create context call
+	 * or `auth.api` call.
+	 *
+	 * Trusted origins will be dynamically
+	 * calculated based on the request.
 	 */
 	trustedOrigins?:
-		| (string[] | ((request: Request) => Awaitable<string[]>))
+		| (string[] | ((request?: Request | undefined) => Awaitable<string[]>))
 		| undefined;
 	/**
 	 * Rate limiting configuration
