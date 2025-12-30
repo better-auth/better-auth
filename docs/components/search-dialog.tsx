@@ -1,64 +1,30 @@
 "use client";
 
-import { OramaClient } from "@oramacloud/client";
-import { useDocsSearch } from "fumadocs-core/search/client";
 import type { SharedProps } from "fumadocs-ui/components/dialog/search";
-import {
-	SearchDialog,
-	SearchDialogClose,
-	SearchDialogContent,
-	SearchDialogFooter,
-	SearchDialogHeader,
-	SearchDialogIcon,
-	SearchDialogInput,
-	SearchDialogList,
-	SearchDialogOverlay,
-} from "fumadocs-ui/components/dialog/search";
-import { useI18n } from "fumadocs-ui/contexts/i18n";
+import dynamic from "next/dynamic";
 
-const client = new OramaClient({
-	endpoint: process.env.NEXT_PUBLIC_ORAMA_ENDPOINT!,
-	api_key: process.env.NEXT_PUBLIC_ORAMA_PUBLIC_API_KEY!,
-});
+const InkeepCustomTrigger = dynamic(
+	() => import("@inkeep/widgets").then((mod) => mod.InkeepCustomTrigger),
+	{
+		ssr: false,
+	},
+);
+
+const baseSettings = {
+	apiKey: process.env.NEXT_PUBLIC_INKEEP_API_KEY!,
+	integrationId: process.env.NEXT_PUBLIC_INKEEP_INTEGRATION_ID!,
+	organizationId: process.env.NEXT_PUBLIC_INKEEP_ORGANIZATION_ID!,
+	primaryBrandColor: "#000000",
+};
 
 export function CustomSearchDialog(props: SharedProps) {
-	const { locale } = useI18n();
-	const { search, setSearch, query } = useDocsSearch({
-		type: "orama-cloud",
-		client,
-		locale,
-	});
-
 	return (
-		<>
-			<SearchDialog
-				search={search}
-				onSearchChange={setSearch}
-				isLoading={query.isLoading}
-				{...props}
-			>
-				<SearchDialogOverlay />
-				<SearchDialogContent className="mt-12 md:mt-0">
-					<SearchDialogHeader>
-						<SearchDialogIcon />
-						<SearchDialogInput />
-
-						<SearchDialogClose className="hidden md:block" />
-					</SearchDialogHeader>
-					<SearchDialogList
-						items={query.data !== "empty" ? query.data : null}
-					/>
-					<SearchDialogFooter>
-						<a
-							href="https://orama.com"
-							rel="noreferrer noopener"
-							className="ms-auto text-xs text-fd-muted-foreground"
-						>
-							Search powered by Orama
-						</a>
-					</SearchDialogFooter>
-				</SearchDialogContent>
-			</SearchDialog>
-		</>
+		<InkeepCustomTrigger
+			baseSettings={baseSettings}
+			isOpen={props.open}
+			onClose={() => {
+				props.onOpenChange(false);
+			}}
+		/>
 	);
 }

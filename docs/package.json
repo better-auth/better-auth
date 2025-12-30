@@ -4,12 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "next build && pnpm run scripts:sync-orama",
+    "build": "next build",
     "dev": "next dev",
     "start": "next start",
     "postinstall": "fumadocs-mdx",
-    "scripts:endpoint-to-doc": "bun ./scripts/endpoint-to-doc/index.ts",
-    "scripts:sync-orama": "node ./scripts/sync-orama.ts"
+    "scripts:endpoint-to-doc": "bun ./scripts/endpoint-to-doc/index.ts"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^1.0.20",
@@ -17,7 +16,7 @@
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
     "@hookform/resolvers": "^5.2.1",
-    "@oramacloud/client": "^2.1.4",
+    "@inkeep/widgets": "^0.2.292",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-aspect-ratio": "^1.1.7",
