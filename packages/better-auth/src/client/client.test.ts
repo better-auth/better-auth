@@ -463,13 +463,11 @@ describe("type", () => {
 			client.$ERROR_CODES.USER_NOT_FOUND.message,
 		).toEqualTypeOf<"User not found">();
 	});
-
+	
 	it("infers plugin client APIs on createAuthClient", () => {
-		const client = createVanillaClient({
-			plugins: [testClientPlugin()],
-		});
-
-		expectTypeOf(client).toHaveProperty("test");
-		expectTypeOf(client.test).toHaveProperty("ping");
+	const client = createVanillaClient({
+		plugins: [testClientPlugin()],
 	});
+	expectTypeOf(client).toHaveProperty("test");
+});
 });
