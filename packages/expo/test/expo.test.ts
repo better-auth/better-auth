@@ -394,6 +394,67 @@ describe("expo", async () => {
 		expect(origin).toBe(null);
 	});
 
+	it("should not send cookie or expo-origin headers for ID token requests", async () => {
+		let cookieHeader: string | null | undefined = null;
+		let expoOriginHeader: string | null | undefined = null;
+		let originHeader: string | null | undefined = null;
+		const storage = new Map<string, string>();
+
+		// Pre-populate storage with a cookie to verify it's NOT sent
+		storage.set(
+			"better-auth_cookie",
+			JSON.stringify({
+				"better-auth.session_token": {
+					value: "existing-token",
+					expires: new Date(Date.now() + 1000 * 60 * 60).toISOString(),
+				},
+			}),
+		);
+
+		const { client } = await getTestInstance(
+			{
+				hooks: {
+					before: createAuthMiddleware(async (ctx) => {
+						cookieHeader = ctx.request?.headers.get("cookie");
+						expoOriginHeader = ctx.request?.headers.get("expo-origin");
+						originHeader = ctx.request?.headers.get("origin");
+					}),
+				},
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+				plugins: [expo()],
+			},
+			{
+				clientOptions: {
+					plugins: [
+						expoClient({
+							storage: {
+								getItem: (key) => storage.get(key) || null,
+								setItem: async (key, value) => storage.set(key, value),
+							},
+						}),
+					],
+				},
+			},
+		);
+
+		// ID token request - should NOT have cookie or expo-origin headers
+		await client.signIn.social({
+			provider: "google",
+			idToken: {
+				token: "fake-id-token",
+			},
+		});
+
+		expect(cookieHeader).toBeNull();
+		expect(expoOriginHeader).toBeNull();
+		expect(originHeader).toBeNull();
+	});
+
 	it("should preserve existing cookies on link-social", async () => {
 		await client.signIn.email({
 			email: testUser.email,
