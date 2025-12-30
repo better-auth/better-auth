@@ -1,5 +1,5 @@
+import type { APIError } from "@better-auth/core/error";
 import type { Prettify } from "better-call";
-import { APIError } from "better-call";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { memoryAdapter } from "../../adapters/memory-adapter";
 import type {
@@ -12,6 +12,7 @@ import { nextCookies } from "../../integrations/next-js";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { User } from "../../types";
 import type { PrettifyDeep } from "../../types/helper";
+import { isAPIError } from "../../utils/is-api-error";
 import { createAccessControl } from "../access";
 import { admin } from "../admin";
 import { adminAc, defaultStatements, memberAc, ownerAc } from "./access";
@@ -144,7 +145,9 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(existingSlug.error?.status).toBe(400);
-		expect(existingSlug.error?.message).toBe("slug is taken");
+		expect(existingSlug.error?.message).toBe(
+			ORGANIZATION_ERROR_CODES.ORGANIZATION_SLUG_ALREADY_TAKEN.message,
+		);
 	});
 
 	it("should prevent creating organization with empty slug", async () => {
@@ -299,7 +302,7 @@ describe("organization", async (it) => {
 	});
 	it("should allow activating organization by slug", async () => {
 		const { headers } = await signInWithTestUser();
-		const organization = await client.organization.setActive({
+		await client.organization.setActive({
 			organizationSlug: "test2",
 			fetchOptions: {
 				headers,
@@ -455,7 +458,8 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(inviteAgain.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION,
+			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION
+				.message,
 		);
 
 		const inviteAgainUpper = await client.organization.inviteMember({
@@ -467,7 +471,8 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(inviteAgainUpper.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION,
+			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION
+				.message,
 		);
 
 		await client.signUp.email({
@@ -496,7 +501,8 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(inviteMemberAgain.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION,
+			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION
+				.message,
 		);
 
 		const inviteMemberAgainUpper = await client.organization.inviteMember({
@@ -508,7 +514,8 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(inviteMemberAgainUpper.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION,
+			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION
+				.message,
 		);
 	});
 
@@ -531,7 +538,7 @@ describe("organization", async (it) => {
 	});
 
 	it("should allow updating member", async () => {
-		const { headers, user } = await signInWithTestUser();
+		const { headers } = await signInWithTestUser();
 		const org = await client.organization.getFullOrganization({
 			query: {
 				organizationId,
@@ -642,7 +649,8 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(invite.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE,
+			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE
+				.message,
 		);
 	});
 
@@ -656,7 +664,7 @@ describe("organization", async (it) => {
 		const res = await client.signUp.email(newUser, {
 			onSuccess: cookieSetter(headers),
 		});
-		const member = await auth.api.addMember({
+		await auth.api.addMember({
 			body: {
 				organizationId,
 				userId: res.data?.user.id!,
@@ -756,7 +764,7 @@ describe("organization", async (it) => {
 
 		expect(removedOwner.error?.status).toBe(400);
 
-		const res = await client.organization.updateMemberRole({
+		await client.organization.updateMemberRole({
 			organizationId: organizationId,
 			role: ["owner", "admin"],
 			memberId: org.data?.members.find((m) => m.role === "owner")?.id!,
@@ -837,7 +845,7 @@ describe("organization", async (it) => {
 
 		expect(deleteResult.error?.status).toBe(400);
 		expect(deleteResult.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+			ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION.message,
 		);
 	});
 
@@ -847,7 +855,7 @@ describe("organization", async (it) => {
 			adminUser.password,
 		);
 
-		const r = await client.organization.delete({
+		await client.organization.delete({
 			organizationId,
 			fetchOptions: {
 				headers: adminHeaders,
@@ -1001,7 +1009,7 @@ describe("organization", async (it) => {
 			})
 			.catch((e: APIError) => {
 				expect(e).not.toBeNull();
-				expect(e).toBeInstanceOf(APIError);
+				expect(isAPIError(e)).toBeTruthy();
 				expect(e.message).toBe(
 					ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
 				);
@@ -1043,7 +1051,7 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(invitation.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
+			ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED.message,
 		);
 
 		const getFullOrganization = await client.organization.getFullOrganization({
@@ -1088,11 +1096,11 @@ describe("organization", async (it) => {
 		await auth.api.signUpEmail({
 			body: orgAdminUser,
 		});
-		const { headers: headers2, res: session } = await signInWithUser(
+		const { headers: headers2 } = await signInWithUser(
 			user.email,
 			user.password,
 		);
-		const { headers: adminHeaders, res: adminSession } = await signInWithUser(
+		const { headers: adminHeaders } = await signInWithUser(
 			orgAdminUser.email,
 			orgAdminUser.password,
 		);
@@ -1118,6 +1126,7 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(userInvitations.data?.[0]!.id).toBe(invitation.data?.id);
+		expect(userInvitations.data?.[0]!.organizationName).toBe(orgRng);
 		expect(userInvitations.data?.length).toBe(1);
 	});
 
@@ -1177,7 +1186,7 @@ describe("access control", async (it) => {
 		sales: ["read"],
 		...memberAc.statements,
 	});
-	const { auth, customFetchImpl, sessionSetter, signInWithTestUser } =
+	const { customFetchImpl, sessionSetter, signInWithTestUser } =
 		await getTestInstance({
 			plugins: [
 				organization({
@@ -1217,7 +1226,7 @@ describe("access control", async (it) => {
 		organization: { checkRolePermission, hasPermission, create },
 	} = authClient;
 
-	const { headers, user, session } = await signInWithTestUser();
+	const { headers } = await signInWithTestUser();
 
 	const org = await create(
 		{
@@ -1335,7 +1344,7 @@ describe("invitation limit", async () => {
 		});
 		expect(invite.error?.status).toBe(403);
 		expect(invite.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.INVITATION_LIMIT_REACHED,
+			ORGANIZATION_ERROR_CODES.INVITATION_LIMIT_REACHED.message,
 		);
 	});
 
@@ -1368,7 +1377,7 @@ describe("invitation limit", async () => {
 			})
 			.catch((e: APIError) => {
 				expect(e.message).toBe(
-					ORGANIZATION_ERROR_CODES.INVITATION_LIMIT_REACHED,
+					ORGANIZATION_ERROR_CODES.INVITATION_LIMIT_REACHED.message,
 				);
 			});
 	});
@@ -2282,7 +2291,7 @@ describe("Additional Fields", async () => {
 			},
 			headers,
 		});
-		type Result = PrettifyDeep<typeof removedMember>;
+		type Result = typeof removedMember extends infer U | null ? U : never;
 		type ExpectedResult = {
 			member: {
 				id: string;
@@ -2295,14 +2304,14 @@ describe("Additional Fields", async () => {
 					id: string;
 					email: string;
 					name: string;
-					image?: string;
+					image?: string | undefined;
 				};
 				memberRequiredField: string;
 				memberOptionalField?: string | undefined;
 				memberHiddenField?: string | undefined;
 			};
-		} | null;
-		expectTypeOf<Result>().toEqualTypeOf<ExpectedResult>();
+		};
+		expectTypeOf<Result>().toMatchObjectType<ExpectedResult>();
 		expect(removedMember?.member.user.email).toBe(addedMember.user.email);
 		expect(removedMember?.member.memberRequiredField).toBe("hey");
 		expect(removedMember?.member.memberOptionalField).toBe("hey2");
@@ -2343,7 +2352,7 @@ describe("Additional Fields", async () => {
 			headers.set("cookie", `${current || ""}; ${name}=${value}`);
 		};
 
-		const { data, error } = await client.signUp.email({
+		const { data } = await client.signUp.email({
 			email: testUser.email,
 			password: testUser.password,
 			name: testUser.name,

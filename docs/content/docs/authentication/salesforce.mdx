@@ -71,7 +71,7 @@ description: Salesforce provider setup and usage.
                 clientId: process.env.SALESFORCE_CLIENT_ID as string,
                 clientSecret: process.env.SALESFORCE_CLIENT_SECRET as string,
                 environment: "sandbox", // [!code highlight]
-                loginUrl: "mycompany.my.salesforce.com", // Custom My Domain // [!code highlight]
+                loginUrl: "my-company.my.salesforce.com", // Custom My Domain // [!code highlight]
                 redirectURI: "http://localhost:3000/api/auth/callback/salesforce", // Override if needed // [!code highlight]
             },
         },

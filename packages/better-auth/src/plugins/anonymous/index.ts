@@ -3,11 +3,11 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import { generateId } from "@better-auth/core/utils";
 import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
 import { parseSetCookieHeader, setSessionCookie } from "../../cookies";
 import { mergeSchema } from "../../db/schema";
-import { generateId } from "../../utils/id";
 import { ANONYMOUS_ERROR_CODES } from "./error-codes";
 import { schema } from "./schema";
 import type { AnonymousOptions } from "./types";
@@ -19,9 +19,10 @@ async function getAnonUserEmail(
 	if (customEmail) {
 		const validation = z.email().safeParse(customEmail);
 		if (!validation.success) {
-			throw new APIError("BAD_REQUEST", {
-				message: ANONYMOUS_ERROR_CODES.INVALID_EMAIL_FORMAT,
-			});
+			throw APIError.from(
+				"BAD_REQUEST",
+				ANONYMOUS_ERROR_CODES.INVALID_EMAIL_FORMAT,
+			);
 		}
 		return customEmail;
 	}
@@ -77,10 +78,10 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						isAnonymous: boolean;
 					}>(ctx, { disableRefresh: true });
 					if (existingSession?.user.isAnonymous) {
-						throw new APIError("BAD_REQUEST", {
-							message:
-								ANONYMOUS_ERROR_CODES.ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY,
-						});
+						throw APIError.from(
+							"BAD_REQUEST",
+							ANONYMOUS_ERROR_CODES.ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY,
+						);
 					}
 
 					const email = await getAnonUserEmail(options);
@@ -94,9 +95,10 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						updatedAt: new Date(),
 					});
 					if (!newUser) {
-						throw ctx.error("INTERNAL_SERVER_ERROR", {
-							message: ANONYMOUS_ERROR_CODES.FAILED_TO_CREATE_USER,
-						});
+						throw APIError.from(
+							"INTERNAL_SERVER_ERROR",
+							ANONYMOUS_ERROR_CODES.FAILED_TO_CREATE_USER,
+						);
 					}
 					const session = await ctx.context.internalAdapter.createSession(
 						newUser.id,
@@ -105,7 +107,7 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						return ctx.json(null, {
 							status: 400,
 							body: {
-								message: ANONYMOUS_ERROR_CODES.COULD_NOT_CREATE_SESSION,
+								message: ANONYMOUS_ERROR_CODES.COULD_NOT_CREATE_SESSION.message,
 							},
 						});
 					}
@@ -132,15 +134,16 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 				{
 					matcher(ctx) {
 						return (
-							ctx.path.startsWith("/sign-in") ||
-							ctx.path.startsWith("/sign-up") ||
-							ctx.path.startsWith("/callback") ||
-							ctx.path.startsWith("/oauth2/callback") ||
-							ctx.path.startsWith("/magic-link/verify") ||
-							ctx.path.startsWith("/email-otp/verify-email") ||
-							ctx.path.startsWith("/one-tap/callback") ||
-							ctx.path.startsWith("/passkey/verify-authentication") ||
-							ctx.path.startsWith("/phone-number/verify")
+							ctx.path?.startsWith("/sign-in") ||
+							ctx.path?.startsWith("/sign-up") ||
+							ctx.path?.startsWith("/callback") ||
+							ctx.path?.startsWith("/oauth2/callback") ||
+							ctx.path?.startsWith("/magic-link/verify") ||
+							ctx.path?.startsWith("/email-otp/verify-email") ||
+							ctx.path?.startsWith("/one-tap/callback") ||
+							ctx.path?.startsWith("/passkey/verify-authentication") ||
+							ctx.path?.startsWith("/phone-number/verify") ||
+							false
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
@@ -176,10 +179,10 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						}
 
 						if (ctx.path === "/sign-in/anonymous" && !ctx.context.newSession) {
-							throw new APIError("BAD_REQUEST", {
-								message:
-									ANONYMOUS_ERROR_CODES.ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY,
-							});
+							throw APIError.from(
+								"BAD_REQUEST",
+								ANONYMOUS_ERROR_CODES.ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY,
+							);
 						}
 						const newSession = ctx.context.newSession;
 						if (!newSession) {
@@ -203,6 +206,7 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 				},
 			],
 		},
+		options,
 		schema: mergeSchema(schema, options?.schema),
 		$ERROR_CODES: ANONYMOUS_ERROR_CODES,
 	} satisfies BetterAuthPlugin;

@@ -1,9 +1,12 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type {
+	AdapterFactoryCustomizeAdapterCreator,
+	AdapterFactoryOptions,
 	DBAdapter,
 	DBAdapterDebugLogOption,
 	Where,
 } from "@better-auth/core/db/adapter";
+import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { SQL } from "drizzle-orm";
@@ -24,11 +27,6 @@ import {
 	or,
 	sql,
 } from "drizzle-orm";
-import type {
-	AdapterFactoryCustomizeAdapterCreator,
-	AdapterFactoryOptions,
-} from "../adapter-factory";
-import { createAdapterFactory } from "../adapter-factory";
 
 export interface DB {
 	[key: string]: any;
@@ -347,7 +345,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				for (const key in values) {
 					if (!schema[key]) {
 						throw new BetterAuthError(
-							`The field "${key}" does not exist in the "${model}" Drizzle schema. Please update your drizzle schema or re-generate using "npx @better-auth/cli generate".`,
+							`The field "${key}" does not exist in the "${model}" Drizzle schema. Please update your drizzle schema or re-generate using "npx @better-auth/cli@latest generate".`,
 						);
 					}
 				}
@@ -368,7 +366,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					if (options.experimental?.joins) {
 						if (!db.query || !db.query[model]) {
 							logger.error(
-								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your Drizzle schema to include relations or re-generate using "npx auth generate".`,
+								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your Drizzle schema to include relations or re-generate using "npx @better-auth/cli@latest generate".`,
 							);
 							logger.info("Falling back to regular query");
 						} else {
@@ -434,7 +432,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					if (options.experimental?.joins) {
 						if (!db.query[model]) {
 							logger.error(
-								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your Drizzle schema to include relations or re-generate using "npx auth generate".`,
+								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your Drizzle schema to include relations or re-generate using "npx @better-auth/cli@latest generate".`,
 							);
 							logger.info("Falling back to regular query");
 						} else {
@@ -581,6 +579,11 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
 			supportsUUIDs: config.provider === "pg" ? true : false,
+			supportsJSON:
+				config.provider === "pg" // even though mysql also supports it, mysql requires to pass stringified json anyway.
+					? true
+					: false,
+			supportsArrays: config.provider === "pg" ? true : false,
 			transaction:
 				(config.transaction ?? false)
 					? (cb) =>

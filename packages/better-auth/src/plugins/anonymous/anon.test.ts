@@ -113,7 +113,7 @@ describe("anonymous", async () => {
 
 	it("link anonymous user account", async () => {
 		expect(linkAccountFn).toHaveBeenCalledTimes(0);
-		const res = await client.signIn.email(testUser, {
+		await client.signIn.email(testUser, {
 			headers,
 		});
 		expect(linkAccountFn).toHaveBeenCalledWith(expect.any(Object));

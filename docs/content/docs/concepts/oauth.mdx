@@ -135,7 +135,7 @@ server-side usage:
 
 ```ts
 await auth.api.accountInfo({
-  body: { accountId: "accountId" },
+  query: { accountId: "accountId" },
   headers: // pass headers with authenticated token
 });
 ```
@@ -207,7 +207,7 @@ Example using a before hook:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
-import { getOAuthState } from "better-auth/api/middlewares";
+import { getOAuthState } from "better-auth/api";
 
 export const auth = betterAuth({
   // Other configurations...

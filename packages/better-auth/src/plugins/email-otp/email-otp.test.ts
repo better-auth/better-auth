@@ -97,6 +97,38 @@ describe("email-otp", async () => {
 		expect(newUser.data?.token).toBeDefined();
 	});
 
+	it("should sign-up with uppercase email", async () => {
+		const testUser2 = {
+			email: "TEST-EMAIL@DOMAIN.COM",
+		};
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser2.email,
+			type: "sign-in",
+		});
+
+		const verifiedUser = await client.signIn.emailOtp({
+			email: testUser2.email,
+			otp,
+		});
+		expect(verifiedUser.data?.token).toBeDefined();
+	});
+
+	it("should sign-up with varying case email", async () => {
+		const testUser2 = {
+			email: "test-email@domain.com",
+		};
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser2.email,
+			type: "sign-in",
+		});
+
+		const verifiedUser = await client.signIn.emailOtp({
+			email: testUser2.email.toUpperCase(),
+			otp,
+		});
+		expect(verifiedUser.data?.token).toBeDefined();
+	});
+
 	it("should send verification otp on sign-up", async () => {
 		const testUser2 = {
 			email: "test8@email.com",
@@ -116,13 +148,13 @@ describe("email-otp", async () => {
 			email: testUser.email,
 			type: "forget-password",
 		});
-		const res = await client.emailOtp.resetPassword({
+		await client.emailOtp.resetPassword({
 			email: testUser.email,
 			otp,
 			password: "changed-password",
 		});
 
-		const { data, error } = await client.signIn.email({
+		const { data } = await client.signIn.email({
 			email: testUser.email,
 			password: "changed-password",
 		});
@@ -271,7 +303,7 @@ describe("email-otp", async () => {
 	});
 
 	it("should get verification otp on server", async () => {
-		const res = await auth.api.getVerificationOTP({
+		await auth.api.getVerificationOTP({
 			query: {
 				email: "test@email.com",
 				type: "sign-in",
@@ -280,7 +312,7 @@ describe("email-otp", async () => {
 	});
 
 	it("should work with custom options", async () => {
-		const { client, testUser, auth } = await getTestInstance(
+		const { client, testUser } = await getTestInstance(
 			{
 				plugins: [
 					bearer(),
@@ -322,7 +354,7 @@ describe("email-otp", async () => {
 describe("email-otp-verify", async () => {
 	const otpFn = vi.fn();
 	const otp = [""];
-	const { client, testUser, auth } = await getTestInstance(
+	const { client, testUser } = await getTestInstance(
 		{
 			plugins: [
 				emailOTP({
@@ -477,7 +509,7 @@ describe("email-otp-verify", async () => {
 });
 
 describe("custom rate limiting storage", async () => {
-	const { client, testUser } = await getTestInstance({
+	const { client } = await getTestInstance({
 		rateLimit: {
 			enabled: true,
 		},
@@ -597,7 +629,7 @@ describe("custom storeOTP", async () => {
 			};
 		}
 
-		const { client, testUser, auth } = await getTestInstance(
+		const { client, auth } = await getTestInstance(
 			{
 				plugins: [
 					emailOTP({
@@ -698,7 +730,7 @@ describe("custom storeOTP", async () => {
 			};
 		}
 
-		const { client, testUser, auth } = await getTestInstance(
+		const { client, auth } = await getTestInstance(
 			{
 				plugins: [
 					emailOTP({
@@ -718,7 +750,6 @@ describe("custom storeOTP", async () => {
 		const authCtx = await auth.$context;
 		const userEmail1 = `${crypto.randomUUID()}@email.com`;
 
-		let encryptedOtp = "";
 		let validOTP = "";
 
 		it("should create an encrypted otp", async () => {
@@ -737,7 +768,6 @@ describe("custom storeOTP", async () => {
 			expect(storedOtp.length !== 0).toBe(true);
 			expect(splitAtLastColon(storedOtp)[0]).not.toBe(otp);
 			expect(storedOtp.endsWith(":0")).toBe(true);
-			encryptedOtp = storedOtp;
 			validOTP = otp;
 		});
 
@@ -799,7 +829,7 @@ describe("custom storeOTP", async () => {
 			};
 		}
 
-		const { client, testUser, auth } = await getTestInstance(
+		const { client, auth } = await getTestInstance(
 			{
 				plugins: [
 					emailOTP({
@@ -905,7 +935,7 @@ describe("custom storeOTP", async () => {
 			};
 		}
 
-		const { client, testUser, auth } = await getTestInstance(
+		const { client, auth } = await getTestInstance(
 			{
 				plugins: [
 					emailOTP({
@@ -951,7 +981,7 @@ describe("custom storeOTP", async () => {
 
 		it("should be allowed to get otp if storeOTP is custom hasher", async () => {
 			try {
-				const result = await auth.api.getVerificationOTP({
+				await auth.api.getVerificationOTP({
 					query: {
 						email: userEmail1,
 						type: "sign-in",
@@ -1096,6 +1126,7 @@ describe("override default email verification", async () => {
 			name: "Test User",
 		});
 
+		expect(callCountForTestEmail).toBe(1);
 		expect(sendVerificationOTPFn).toHaveBeenCalledTimes(1);
 		expect(sendVerificationOTPFn).toHaveBeenCalledWith(
 			expect.objectContaining({
