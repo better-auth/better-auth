@@ -114,7 +114,7 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
         https://your-domain.com/api/auth/stripe/webhook
         ```
         `/api/auth` is the default path for the auth server.
-
+        
         Make sure to select at least these events:
         - `checkout.session.completed`
         - `customer.subscription.updated`
@@ -214,43 +214,42 @@ To create a subscription, use the `subscription.upgrade` method:
 ```ts
 type upgradeSubscription = {
     /**
-     * The name of the plan to upgrade to.
+     * The name of the plan to upgrade to. 
      */
     plan: string = "pro"
     /**
-     * Whether to upgrade to an annual plan.
+     * Whether to upgrade to an annual plan. 
      */
     annual?: boolean = true
     /**
-     * Reference id of the subscription to upgrade.
+     * Reference id of the subscription to upgrade. 
      */
     referenceId?: string = "123"
     /**
-     * The id of the subscription to upgrade.
+     * The id of the subscription to upgrade. 
      */
     subscriptionId?: string = "sub_123"
     metadata?: Record<string, any>
     /**
-     * Number of seats to upgrade to (if applicable).
+     * Number of seats to upgrade to (if applicable). 
      */
     seats?: number = 1
     /**
-     * Callback URL to redirect back after successful subscription.
+     * Callback URL to redirect back after successful subscription. 
      */
     successUrl: string
     /**
      * If set, checkout shows a back button and customers will be directed here if they cancel payment.
      */
-    cancelUrl: string
+    cancelUrl: string 
     /**
      * URL to take customers to when they click on the billing portal’s link to return to your website.
      */
     returnUrl?: string
     /**
-     * Disable the automatic redirect to the subscription page.
-     * @default false
+     * Disable redirect after successful subscription. 
      */
-    disableRedirect: boolean = false
+    disableRedirect: boolean = true
 }
 ```
 </APIMethod>
@@ -317,7 +316,7 @@ To get the user's active subscriptions:
 ```ts
 type listActiveSubscriptions = {
     /**
-     * Reference id of the subscription to list.
+     * Reference id of the subscription to list. 
      */
     referenceId?: string = '123'
 }
@@ -345,7 +344,7 @@ stripe({
                     where: {
                         organizationId: referenceId,
                         userId: user.id
-                    }
+                    }   
                 });
                 return org?.role === "owner"
             }
@@ -371,25 +370,36 @@ type cancelSubscription = {
      */
     referenceId?: string = 'org_123'
     /**
-     * The id of the subscription to cancel.
+     * The id of the subscription to cancel. 
      */
     subscriptionId?: string = 'sub_123'
     /**
      * URL to take customers to when they click on the billing portal’s link to return to your website.
      */
     returnUrl: string = '/account'
-    /**
-     * Disable the automatic redirect to the subscription cancellation page.
-     * @default false
-     */
-    disableRedirect?: boolean = false
 }
 ```
 </APIMethod>
 
 This will redirect the user to the Stripe Billing Portal where they can cancel their subscription.
 
+<Callout type="info">
+**Understanding Cancellation States**
+
+Stripe supports different types of cancellation, and the plugin tracks all of them:
+
+| Field               | Description                                                                                                                      |
+|---------------------|----------------------------------------------------------------------------------------------------------------------------------|
+| `cancelAtPeriodEnd` | Whether this subscription will (if status=active) or did (if status=canceled) cancel at the end of the current billing period.   |
+| `cancelAt`          | If the subscription is scheduled to be canceled, this is the time at which the cancellation will take effect.                    |
+| `canceledAt`        | If the subscription has been canceled, this is the time when it was canceled.                                                    |
+| `endedAt`           | If the subscription has ended, the date the subscription ended.                                                                  |
+| `status`            | Changes to "canceled" only after the subscription has actually ended.                                                            |
+</Callout>
+
 #### Restoring a Canceled Subscription
+
+> <small className='font-normal'>**Note:** This only works for subscriptions that are still active but scheduled to cancel. It cannot restore subscriptions that have already ended (`status: "canceled"` with `endedAt` set).</small>
 
 If a user changes their mind after canceling a subscription (but before the subscription period ends), you can restore the subscription:
 
@@ -406,7 +416,7 @@ type restoreSubscription = {
      */
     referenceId?: string = '123'
     /**
-     * The id of the subscription to restore.
+     * The id of the subscription to restore. 
      */
     subscriptionId?: string = 'sub_123'
 }
@@ -414,9 +424,15 @@ type restoreSubscription = {
 </APIMethod>
 
 
-This will reactivate a subscription that was previously set to cancel at the end of the billing period (`cancelAtPeriodEnd: true`). The subscription will continue to renew automatically.
+This will reactivate a subscription that was previously scheduled to cancel. The subscription will continue to renew automatically.
 
-> **Note:** This only works for subscriptions that are still active but marked to cancel at the end of the period. It cannot restore subscriptions that have already ended.
+<Callout type="info">
+When a subscription is restored:
+- `cancelAtPeriodEnd` is set to `false`
+- `cancelAt` is cleared to `null`
+- `canceledAt` is cleared to `null`
+</Callout>
+
 
 #### Creating Billing Portal Sessions
 
@@ -434,25 +450,20 @@ type createBillingPortal = {
     */
     locale?: string
     /**
-     * Reference id of the subscription to upgrade.
+     * Reference id of the subscription to upgrade. 
      */
     referenceId?: string = "123"
     /**
-     * Return URL to redirect back after successful subscription.
+     * Return URL to redirect back after successful subscription. 
      */
     returnUrl?: string
-    /**
-     * Disable the automatic redirect to the billing page.
-     * @default false
-     */
-    disableRedirect?: boolean = false
 }
 ```
 </APIMethod>
 <Callout type="info" >
 For supported locales, see the [IETF language tag documentation](https://docs.stripe.com/js/appendix/supported_locales).
 </Callout>
-
+        
 This endpoint creates a Stripe billing portal session and returns a URL in the response as `data.url`. You can redirect users to this URL to allow them to manage their subscription, payment methods, and billing history.
 
 ### Reference System
@@ -505,7 +516,7 @@ subscription: {
                 where: {
                     organizationId: referenceId,
                     userId: user.id
-                }
+                }   
             });
             return org?.role === "owner"
         }
@@ -604,9 +615,9 @@ Table Name: `user`
 
 <DatabaseTable
   fields={[
-    {
-      name: "stripeCustomerId",
-      type: "string",
+    { 
+      name: "stripeCustomerId", 
+      type: "string", 
       description: "The Stripe customer ID",
       isOptional: true
     },
@@ -619,75 +630,93 @@ Table Name: `subscription`
 
 <DatabaseTable
   fields={[
-    {
-      name: "id",
-      type: "string",
+    { 
+      name: "id", 
+      type: "string", 
       description: "Unique identifier for each subscription",
       isPrimaryKey: true
     },
-    {
-      name: "plan",
-      type: "string",
-      description: "The name of the subscription plan"
+    { 
+      name: "plan", 
+      type: "string", 
+      description: "The name of the subscription plan" 
     },
-    {
-      name: "referenceId",
-      type: "string",
+    { 
+      name: "referenceId", 
+      type: "string", 
       description: "The ID this subscription is associated with (user ID by default). This should NOT be a unique field in your database, as it must allow users to resubscribe after a cancellation.",
       isUnique: false
     },
-    {
-      name: "stripeCustomerId",
-      type: "string",
+    { 
+      name: "stripeCustomerId", 
+      type: "string", 
       description: "The Stripe customer ID",
       isOptional: true
     },
-    {
-      name: "stripeSubscriptionId",
-      type: "string",
+    { 
+      name: "stripeSubscriptionId", 
+      type: "string", 
       description: "The Stripe subscription ID",
       isOptional: true
     },
-    {
-      name: "status",
-      type: "string",
+    { 
+      name: "status", 
+      type: "string", 
       description: "The status of the subscription (active, canceled, etc.)",
       defaultValue: "incomplete"
     },
-    {
-      name: "periodStart",
-      type: "Date",
+    { 
+      name: "periodStart", 
+      type: "Date", 
       description: "Start date of the current billing period",
       isOptional: true
     },
-    {
-      name: "periodEnd",
-      type: "Date",
+    { 
+      name: "periodEnd", 
+      type: "Date", 
       description: "End date of the current billing period",
       isOptional: true
     },
-    {
-      name: "cancelAtPeriodEnd",
-      type: "boolean",
+    { 
+      name: "cancelAtPeriodEnd", 
+      type: "boolean", 
       description: "Whether the subscription will be canceled at the end of the period",
       defaultValue: false,
       isOptional: true
     },
-    {
-      name: "seats",
-      type: "number",
+    { 
+      name: "cancelAt", 
+      type: "Date", 
+      description: "If the subscription is scheduled to be canceled, this is the time at which the cancellation will take effect",
+      isOptional: true
+    },
+    { 
+      name: "canceledAt", 
+      type: "Date", 
+      description: "If the subscription has been canceled, this is the time when the cancellation was requested. Note: If the subscription was canceled with cancelAtPeriodEnd, this reflects the cancellation request time, not when the subscription actually ends",
+      isOptional: true
+    },
+    { 
+      name: "endedAt", 
+      type: "Date", 
+      description: "If the subscription has ended, this is the date the subscription ended",
+      isOptional: true
+    },
+    { 
+      name: "seats", 
+      type: "number", 
       description: "Number of seats for team plans",
       isOptional: true
     },
-    {
-      name: "trialStart",
-      type: "Date",
+    { 
+      name: "trialStart", 
+      type: "Date", 
       description: "Start date of the trial period",
       isOptional: true
     },
-    {
-      name: "trialEnd",
-      type: "Date",
+    { 
+      name: "trialEnd", 
+      type: "Date", 
       description: "End date of the trial period",
       isOptional: true
     }
@@ -795,7 +824,7 @@ subscription: {
                 organizationId: referenceId
             }
         });
-
+        
         return member?.role === "owner" || member?.role === "admin";
     }
 }

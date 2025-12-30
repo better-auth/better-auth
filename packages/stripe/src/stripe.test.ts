@@ -1578,6 +1578,85 @@ describe("stripe", () => {
 		expect(hasTrialData).toBe(true);
 	});
 
+	it("should prevent trial abuse when processing incomplete subscription with past trial history", async () => {
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [
+					stripe({
+						...stripeOptions,
+						subscription: {
+							...stripeOptions.subscription,
+							plans: stripeOptions.subscription.plans.map((plan) => ({
+								...plan,
+								freeTrial: { days: 7 },
+							})),
+						},
+					}),
+				],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+
+		const userRes = await client.signUp.email(
+			{ ...testUser, email: "trial-findone-test@email.com" },
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{ ...testUser, email: "trial-findone-test@email.com" },
+			{ throw: true, onSuccess: sessionSetter(headers) },
+		);
+
+		// Create a canceled subscription with trial history first
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				referenceId: userRes.user.id,
+				stripeCustomerId: "cus_old_customer",
+				status: "canceled",
+				plan: "starter",
+				stripeSubscriptionId: "sub_canceled_with_trial",
+				trialStart: new Date(Date.now() - 1000000),
+				trialEnd: new Date(Date.now() - 500000),
+			},
+		});
+
+		// Create an new incomplete subscription (without trial info)
+		const incompleteSubId = "sub_incomplete_new";
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				referenceId: userRes.user.id,
+				stripeCustomerId: "cus_old_customer",
+				status: "incomplete",
+				plan: "premium",
+				stripeSubscriptionId: incompleteSubId,
+			},
+		});
+
+		// When upgrading with a specific subscriptionId pointing to the incomplete one,
+		// the system should still check ALL subscriptions for trial history
+		const upgradeRes = await client.subscription.upgrade({
+			plan: "premium",
+			subscriptionId: incompleteSubId,
+			fetchOptions: { headers },
+		});
+
+		expect(upgradeRes.data?.url).toBeDefined();
+
+		// Verify that NO trial was granted despite processing the incomplete subscription
+		const callArgs = mockStripe.checkout.sessions.create.mock.lastCall?.[0];
+		expect(callArgs?.subscription_data?.trial_period_days).toBeUndefined();
+	});
+
 	it("should upgrade existing subscription instead of creating new one", async () => {
 		// Reset mocks for this test
 		vi.clearAllMocks();
@@ -2817,6 +2896,686 @@ describe("stripe", () => {
 				where: [{ field: "id", value: userRes.user.id }],
 			});
 			expect(user?.stripeCustomerId).toBeDefined();
+		});
+	});
+
+	describe("webhook: cancel_at_period_end cancellation", () => {
+		it("should sync cancelAtPeriodEnd and canceledAt when user cancels via Billing Portal (at_period_end mode)", async () => {
+			const { auth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptions)],
+				},
+				{ disableTestUser: true },
+			);
+			const ctx = await auth.$context;
+
+			// Setup: Create user and active subscription
+			const { id: userId } = await ctx.adapter.create({
+				model: "user",
+				data: { email: "cancel-period-end@test.com" },
+			});
+
+			const now = Math.floor(Date.now() / 1000);
+			const periodEnd = now + 30 * 24 * 60 * 60;
+			const canceledAt = now;
+
+			const { id: subscriptionId } = await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userId,
+					stripeCustomerId: "cus_cancel_test",
+					stripeSubscriptionId: "sub_cancel_period_end",
+					status: "active",
+					plan: "starter",
+					cancelAtPeriodEnd: false,
+					cancelAt: null,
+					canceledAt: null,
+				},
+			});
+
+			// Simulate: Stripe webhook for cancel_at_period_end
+			const webhookEvent = {
+				type: "customer.subscription.updated",
+				data: {
+					object: {
+						id: "sub_cancel_period_end",
+						customer: "cus_cancel_test",
+						status: "active",
+						cancel_at_period_end: true,
+						cancel_at: null,
+						canceled_at: canceledAt,
+						ended_at: null,
+						items: {
+							data: [
+								{
+									price: { id: "price_starter_123", lookup_key: null },
+									quantity: 1,
+									current_period_start: now,
+									current_period_end: periodEnd,
+								},
+							],
+						},
+						cancellation_details: {
+							reason: "cancellation_requested",
+							comment: "User requested cancellation",
+						},
+					},
+				},
+			};
+
+			const stripeForTest = {
+				...stripeOptions.stripeClient,
+				webhooks: {
+					constructEventAsync: vi.fn().mockResolvedValue(webhookEvent),
+				},
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeForTest as unknown as Stripe,
+				stripeWebhookSecret: "test_secret",
+			};
+
+			const { auth: webhookAuth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(testOptions)],
+				},
+				{ disableTestUser: true },
+			);
+			const webhookCtx = await webhookAuth.$context;
+
+			const response = await webhookAuth.handler(
+				new Request("http://localhost:3000/api/auth/stripe/webhook", {
+					method: "POST",
+					headers: { "stripe-signature": "test_signature" },
+					body: JSON.stringify(webhookEvent),
+				}),
+			);
+
+			expect(response.status).toBe(200);
+
+			const updatedSub = await webhookCtx.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: [{ field: "id", value: subscriptionId }],
+			});
+
+			expect(updatedSub).toMatchObject({
+				status: "active",
+				cancelAtPeriodEnd: true,
+				cancelAt: null,
+				canceledAt: expect.any(Date),
+				endedAt: null,
+			});
+		});
+
+		it("should sync cancelAt when subscription is scheduled to cancel at a specific date", async () => {
+			const { auth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptions)],
+				},
+				{ disableTestUser: true },
+			);
+			const ctx = await auth.$context;
+
+			const { id: userId } = await ctx.adapter.create({
+				model: "user",
+				data: { email: "cancel-at-date@test.com" },
+			});
+
+			const now = Math.floor(Date.now() / 1000);
+			const cancelAt = now + 15 * 24 * 60 * 60; // Cancel in 15 days
+			const canceledAt = now;
+
+			const { id: subscriptionId } = await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userId,
+					stripeCustomerId: "cus_cancel_at_test",
+					stripeSubscriptionId: "sub_cancel_at_date",
+					status: "active",
+					plan: "starter",
+					cancelAtPeriodEnd: false,
+					cancelAt: null,
+					canceledAt: null,
+				},
+			});
+
+			// Simulate: Dashboard/API cancel with specific date (cancel_at)
+			const webhookEvent = {
+				type: "customer.subscription.updated",
+				data: {
+					object: {
+						id: "sub_cancel_at_date",
+						customer: "cus_cancel_at_test",
+						status: "active",
+						cancel_at_period_end: false,
+						cancel_at: cancelAt,
+						canceled_at: canceledAt,
+						ended_at: null,
+						items: {
+							data: [
+								{
+									price: { id: "price_starter_123", lookup_key: null },
+									quantity: 1,
+									current_period_start: now,
+									current_period_end: now + 30 * 24 * 60 * 60,
+								},
+							],
+						},
+					},
+				},
+			};
+
+			const stripeForTest = {
+				...stripeOptions.stripeClient,
+				webhooks: {
+					constructEventAsync: vi.fn().mockResolvedValue(webhookEvent),
+				},
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeForTest as unknown as Stripe,
+				stripeWebhookSecret: "test_secret",
+			};
+
+			const { auth: webhookAuth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(testOptions)],
+				},
+				{ disableTestUser: true },
+			);
+			const webhookCtx = await webhookAuth.$context;
+
+			const response = await webhookAuth.handler(
+				new Request("http://localhost:3000/api/auth/stripe/webhook", {
+					method: "POST",
+					headers: { "stripe-signature": "test_signature" },
+					body: JSON.stringify(webhookEvent),
+				}),
+			);
+
+			expect(response.status).toBe(200);
+
+			const updatedSub = await webhookCtx.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: [{ field: "id", value: subscriptionId }],
+			});
+
+			expect(updatedSub).toMatchObject({
+				status: "active",
+				cancelAtPeriodEnd: false,
+				cancelAt: expect.any(Date),
+				canceledAt: expect.any(Date),
+				endedAt: null,
+			});
+
+			// Verify the cancelAt date is correct
+			expect(updatedSub!.cancelAt!.getTime()).toBe(cancelAt * 1000);
+		});
+	});
+
+	describe("webhook: immediate cancellation (subscription deleted)", () => {
+		it("should set status=canceled and endedAt when subscription is immediately canceled", async () => {
+			const { auth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptions)],
+				},
+				{ disableTestUser: true },
+			);
+			const ctx = await auth.$context;
+
+			const { id: userId } = await ctx.adapter.create({
+				model: "user",
+				data: { email: "immediate-cancel@test.com" },
+			});
+
+			const now = Math.floor(Date.now() / 1000);
+
+			const { id: subscriptionId } = await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userId,
+					stripeCustomerId: "cus_immediate_cancel",
+					stripeSubscriptionId: "sub_immediate_cancel",
+					status: "active",
+					plan: "starter",
+				},
+			});
+
+			// Simulate: Immediate cancellation via Billing Portal (mode: immediately) or API
+			const webhookEvent = {
+				type: "customer.subscription.deleted",
+				data: {
+					object: {
+						id: "sub_immediate_cancel",
+						customer: "cus_immediate_cancel",
+						status: "canceled",
+						cancel_at_period_end: false,
+						cancel_at: null,
+						canceled_at: now,
+						ended_at: now,
+					},
+				},
+			};
+
+			const stripeForTest = {
+				...stripeOptions.stripeClient,
+				webhooks: {
+					constructEventAsync: vi.fn().mockResolvedValue(webhookEvent),
+				},
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeForTest as unknown as Stripe,
+				stripeWebhookSecret: "test_secret",
+			};
+
+			const { auth: webhookAuth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(testOptions)],
+				},
+				{ disableTestUser: true },
+			);
+			const webhookCtx = await webhookAuth.$context;
+
+			const response = await webhookAuth.handler(
+				new Request("http://localhost:3000/api/auth/stripe/webhook", {
+					method: "POST",
+					headers: { "stripe-signature": "test_signature" },
+					body: JSON.stringify(webhookEvent),
+				}),
+			);
+
+			expect(response.status).toBe(200);
+
+			const updatedSub = await webhookCtx.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: [{ field: "id", value: subscriptionId }],
+			});
+
+			expect(updatedSub).not.toBeNull();
+			expect(updatedSub!.status).toBe("canceled");
+			expect(updatedSub!.endedAt).not.toBeNull();
+		});
+
+		it("should set endedAt when cancel_at_period_end subscription reaches period end", async () => {
+			const { auth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptions)],
+				},
+				{ disableTestUser: true },
+			);
+			const ctx = await auth.$context;
+
+			const { id: userId } = await ctx.adapter.create({
+				model: "user",
+				data: { email: "period-end-reached@test.com" },
+			});
+
+			const now = Math.floor(Date.now() / 1000);
+			const canceledAt = now - 30 * 24 * 60 * 60; // Canceled 30 days ago
+
+			const { id: subscriptionId } = await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userId,
+					stripeCustomerId: "cus_period_end_reached",
+					stripeSubscriptionId: "sub_period_end_reached",
+					status: "active",
+					plan: "starter",
+					cancelAtPeriodEnd: true,
+					canceledAt: new Date(canceledAt * 1000),
+				},
+			});
+
+			// Simulate: Period ended, subscription is now deleted
+			const webhookEvent = {
+				type: "customer.subscription.deleted",
+				data: {
+					object: {
+						id: "sub_period_end_reached",
+						customer: "cus_period_end_reached",
+						status: "canceled",
+						cancel_at_period_end: true,
+						cancel_at: null,
+						canceled_at: canceledAt,
+						ended_at: now,
+					},
+				},
+			};
+
+			const stripeForTest = {
+				...stripeOptions.stripeClient,
+				webhooks: {
+					constructEventAsync: vi.fn().mockResolvedValue(webhookEvent),
+				},
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeForTest as unknown as Stripe,
+				stripeWebhookSecret: "test_secret",
+			};
+
+			const { auth: webhookAuth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(testOptions)],
+				},
+				{ disableTestUser: true },
+			);
+			const webhookCtx = await webhookAuth.$context;
+
+			const response = await webhookAuth.handler(
+				new Request("http://localhost:3000/api/auth/stripe/webhook", {
+					method: "POST",
+					headers: { "stripe-signature": "test_signature" },
+					body: JSON.stringify(webhookEvent),
+				}),
+			);
+
+			expect(response.status).toBe(200);
+
+			const updatedSub = await webhookCtx.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: [{ field: "id", value: subscriptionId }],
+			});
+
+			expect(updatedSub).not.toBeNull();
+			expect(updatedSub!.status).toBe("canceled");
+			expect(updatedSub!.cancelAtPeriodEnd).toBe(true);
+			expect(updatedSub!.endedAt).not.toBeNull();
+
+			// endedAt should be the actual termination time (now), not the cancellation request time
+			expect(updatedSub!.endedAt!.getTime()).toBe(now * 1000);
+		});
+	});
+
+	describe("restore subscription", () => {
+		it("should clear cancelAtPeriodEnd when restoring a cancel_at_period_end subscription", async () => {
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			const userRes = await client.signUp.email(
+				{
+					email: "restore-period-end@test.com",
+					password: "password",
+					name: "Test",
+				},
+				{ throw: true },
+			);
+
+			const headers = new Headers();
+			await client.signIn.email(
+				{ email: "restore-period-end@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			// Create subscription scheduled to cancel at period end
+			await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userRes.user.id,
+					stripeCustomerId: "cus_restore_test",
+					stripeSubscriptionId: "sub_restore_period_end",
+					status: "active",
+					plan: "starter",
+					cancelAtPeriodEnd: true,
+					cancelAt: null,
+					canceledAt: new Date(),
+				},
+			});
+
+			mockStripe.subscriptions.list.mockResolvedValueOnce({
+				data: [
+					{
+						id: "sub_restore_period_end",
+						status: "active",
+						cancel_at_period_end: true,
+						cancel_at: null,
+					},
+				],
+			});
+
+			mockStripe.subscriptions.update.mockResolvedValueOnce({
+				id: "sub_restore_period_end",
+				status: "active",
+				cancel_at_period_end: false,
+				cancel_at: null,
+			});
+
+			const restoreRes = await client.subscription.restore({
+				fetchOptions: { headers },
+			});
+
+			expect(restoreRes.data).toBeDefined();
+
+			// Verify Stripe was called with correct params (cancel_at_period_end: false)
+			expect(mockStripe.subscriptions.update).toHaveBeenCalledWith(
+				"sub_restore_period_end",
+				{ cancel_at_period_end: false },
+			);
+
+			const updatedSub = await ctx.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: [{ field: "referenceId", value: userRes.user.id }],
+			});
+
+			expect(updatedSub).toMatchObject({
+				cancelAtPeriodEnd: false,
+				cancelAt: null,
+				canceledAt: null,
+			});
+		});
+
+		it("should clear cancelAt when restoring a cancel_at (specific date) subscription", async () => {
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			const userRes = await client.signUp.email(
+				{
+					email: "restore-cancel-at@test.com",
+					password: "password",
+					name: "Test",
+				},
+				{ throw: true },
+			);
+
+			const headers = new Headers();
+			await client.signIn.email(
+				{ email: "restore-cancel-at@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			const cancelAt = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000);
+
+			// Create subscription scheduled to cancel at specific date
+			await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userRes.user.id,
+					stripeCustomerId: "cus_restore_cancel_at",
+					stripeSubscriptionId: "sub_restore_cancel_at",
+					status: "active",
+					plan: "starter",
+					cancelAtPeriodEnd: false,
+					cancelAt: cancelAt,
+					canceledAt: new Date(),
+				},
+			});
+
+			mockStripe.subscriptions.list.mockResolvedValueOnce({
+				data: [
+					{
+						id: "sub_restore_cancel_at",
+						status: "active",
+						cancel_at_period_end: false,
+						cancel_at: Math.floor(cancelAt.getTime() / 1000),
+					},
+				],
+			});
+
+			mockStripe.subscriptions.update.mockResolvedValueOnce({
+				id: "sub_restore_cancel_at",
+				status: "active",
+				cancel_at_period_end: false,
+				cancel_at: null,
+			});
+
+			const restoreRes = await client.subscription.restore({
+				fetchOptions: { headers },
+			});
+
+			expect(restoreRes.data).toBeDefined();
+
+			// Verify Stripe was called with correct params (cancel_at: "" to clear)
+			expect(mockStripe.subscriptions.update).toHaveBeenCalledWith(
+				"sub_restore_cancel_at",
+				{ cancel_at: "" },
+			);
+
+			const updatedSub = await ctx.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: [{ field: "referenceId", value: userRes.user.id }],
+			});
+
+			expect(updatedSub).toMatchObject({
+				cancelAtPeriodEnd: false,
+				cancelAt: null,
+				canceledAt: null,
+			});
+		});
+	});
+
+	describe("cancel subscription fallback (missed webhook)", () => {
+		it("should sync from Stripe when cancel request fails because subscription is already canceled", async () => {
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			const userRes = await client.signUp.email(
+				{
+					email: "missed-webhook@test.com",
+					password: "password",
+					name: "Test",
+				},
+				{ throw: true },
+			);
+
+			const headers = new Headers();
+			await client.signIn.email(
+				{ email: "missed-webhook@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			const now = Math.floor(Date.now() / 1000);
+			const cancelAt = now + 15 * 24 * 60 * 60;
+
+			// Create subscription in DB (not synced - missed webhook)
+			const { id: subscriptionId } = await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userRes.user.id,
+					stripeCustomerId: "cus_missed_webhook",
+					stripeSubscriptionId: "sub_missed_webhook",
+					status: "active",
+					plan: "starter",
+					cancelAtPeriodEnd: false, // DB thinks it's not canceling
+					cancelAt: null,
+					canceledAt: null,
+				},
+			});
+
+			// Stripe has the subscription already scheduled to cancel with cancel_at
+			mockStripe.subscriptions.list.mockResolvedValueOnce({
+				data: [
+					{
+						id: "sub_missed_webhook",
+						status: "active",
+						cancel_at_period_end: false,
+						cancel_at: cancelAt,
+					},
+				],
+			});
+
+			// Billing portal returns error because subscription is already set to cancel
+			mockStripe.billingPortal.sessions.create.mockRejectedValueOnce(
+				new Error("This subscription is already set to be canceled"),
+			);
+
+			// When fallback kicks in, it retrieves from Stripe
+			mockStripe.subscriptions.retrieve.mockResolvedValueOnce({
+				id: "sub_missed_webhook",
+				status: "active",
+				cancel_at_period_end: false,
+				cancel_at: cancelAt,
+				canceled_at: now,
+			});
+
+			// Try to cancel - should fail but trigger sync
+			const cancelRes = await client.subscription.cancel({
+				returnUrl: "/account",
+				fetchOptions: { headers },
+			});
+
+			// Should have error because portal creation failed
+			expect(cancelRes.error).toBeDefined();
+
+			// But DB should now be synced with Stripe's actual state
+			const updatedSub = await ctx.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: [{ field: "id", value: subscriptionId }],
+			});
+
+			expect(updatedSub).toMatchObject({
+				cancelAtPeriodEnd: false,
+				cancelAt: expect.any(Date),
+				canceledAt: expect.any(Date),
+			});
+
+			// Verify it's the correct cancel_at date from Stripe
+			expect(updatedSub!.cancelAt!.getTime()).toBe(cancelAt * 1000);
 		});
 	});
 });
