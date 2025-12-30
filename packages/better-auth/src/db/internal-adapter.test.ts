@@ -635,4 +635,87 @@ describe("internal adapter test", async () => {
 		accounts = await internalAdapter.findAccounts(user.id);
 		expect(accounts.length).toBe(0);
 	});
+
+	it("should store session with id in secondary storage when storeSessionInDatabase is true", async () => {
+		const testMap = new Map<string, string>();
+		const testExpirationMap = new Map<string, number>();
+
+		const testDb = new Database(":memory:");
+		const testSqliteDialect = new SqliteDialect({
+			database: testDb,
+		});
+
+		const testOpts = {
+			database: {
+				dialect: testSqliteDialect,
+				type: "sqlite",
+			},
+			secondaryStorage: {
+				set(key: string, value: string, ttl?: number) {
+					testMap.set(key, value);
+					if (ttl !== undefined) {
+						testExpirationMap.set(key, ttl);
+					}
+				},
+				get(key: string) {
+					return testMap.get(key) || null;
+				},
+				delete(key: string) {
+					testMap.delete(key);
+					testExpirationMap.delete(key);
+				},
+			},
+			session: {
+				storeSessionInDatabase: true, // key config for this case
+			},
+		} satisfies BetterAuthOptions;
+
+		// Run migrations for the new database
+		(await getMigrations(testOpts)).runMigrations();
+
+		const testCtx = await init(testOpts);
+		const testInternalAdapter = testCtx.internalAdapter;
+
+		// Create a user first
+		const user = await testInternalAdapter.createUser({
+			name: "test-user-with-id",
+			email: "test-with-id@email.com",
+		});
+
+		// Create a session
+		const session = await testInternalAdapter.createSession(user.id);
+
+		// The session returned from createSession should have an id
+		expect(session.id).toBeDefined();
+		expect(typeof session.id).toBe("string");
+		expect(session.id.length).toBeGreaterThan(0);
+
+		// Get the session from secondary storage
+		const storedSessionStr = testMap.get(session.token);
+		expect(storedSessionStr).toBeDefined();
+
+		const storedSession = safeJSONParse<{
+			session: Session;
+			user: User;
+		}>(storedSessionStr!);
+
+		expect(storedSession).toBeDefined();
+		expect(storedSession?.session).toBeDefined();
+
+		// The session in secondary storage MUST have an id
+		// This is the actual bug: previously id was undefined
+		expect(storedSession?.session.id).toBeDefined();
+		expect(storedSession?.session.id).toBe(session.id);
+
+		// Verify the session can be found by its id in the database
+		const dbSession = await testCtx.adapter.findOne<Session>({
+			model: "session",
+			where: [{ field: "id", value: session.id }],
+		});
+		expect(dbSession).toBeDefined();
+		expect(dbSession?.id).toBe(session.id);
+
+		// Clean up DB
+		testDb.close();
+	});
 });
