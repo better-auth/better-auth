@@ -275,6 +275,18 @@ export type SubscriptionOptions = {
 		  }) => Promise<void>)
 		| undefined;
 	/**
+	 * A callback to run when a subscription is created
+	 * @returns
+	 */
+	onSubscriptionCreated?:
+		| ((data: {
+				event: Stripe.Event;
+				stripeSubscription: Stripe.Subscription;
+				subscription: Subscription;
+				plan: StripePlan;
+		  }) => Promise<void>)
+		| undefined;
+	/**
 	 * parameters for session create params
 	 *
 	 * @param data - data containing user, session and plan

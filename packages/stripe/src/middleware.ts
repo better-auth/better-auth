@@ -1,5 +1,4 @@
 import { createAuthMiddleware } from "@better-auth/core/api";
-import { logger } from "better-auth";
 import { APIError } from "better-auth/api";
 import type { SubscriptionOptions } from "./types";
 
@@ -24,7 +23,7 @@ export const referenceMiddleware = (
 			referenceId !== session.user.id &&
 			!subscriptionOptions.authorizeReference
 		) {
-			logger.error(
+			ctx.context.logger.error(
 				`Passing referenceId into a subscription action isn't allowed if subscription.authorizeReference isn't defined in your stripe plugin config.`,
 			);
 			throw new APIError("BAD_REQUEST", {
