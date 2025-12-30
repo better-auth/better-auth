@@ -1578,6 +1578,85 @@ describe("stripe", () => {
 		expect(hasTrialData).toBe(true);
 	});
 
+	it("should prevent trial abuse when processing incomplete subscription with past trial history", async () => {
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [
+					stripe({
+						...stripeOptions,
+						subscription: {
+							...stripeOptions.subscription,
+							plans: stripeOptions.subscription.plans.map((plan) => ({
+								...plan,
+								freeTrial: { days: 7 },
+							})),
+						},
+					}),
+				],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+
+		const userRes = await client.signUp.email(
+			{ ...testUser, email: "trial-findone-test@email.com" },
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{ ...testUser, email: "trial-findone-test@email.com" },
+			{ throw: true, onSuccess: sessionSetter(headers) },
+		);
+
+		// Create a canceled subscription with trial history first
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				referenceId: userRes.user.id,
+				stripeCustomerId: "cus_old_customer",
+				status: "canceled",
+				plan: "starter",
+				stripeSubscriptionId: "sub_canceled_with_trial",
+				trialStart: new Date(Date.now() - 1000000),
+				trialEnd: new Date(Date.now() - 500000),
+			},
+		});
+
+		// Create an new incomplete subscription (without trial info)
+		const incompleteSubId = "sub_incomplete_new";
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				referenceId: userRes.user.id,
+				stripeCustomerId: "cus_old_customer",
+				status: "incomplete",
+				plan: "premium",
+				stripeSubscriptionId: incompleteSubId,
+			},
+		});
+
+		// When upgrading with a specific subscriptionId pointing to the incomplete one,
+		// the system should still check ALL subscriptions for trial history
+		const upgradeRes = await client.subscription.upgrade({
+			plan: "premium",
+			subscriptionId: incompleteSubId,
+			fetchOptions: { headers },
+		});
+
+		expect(upgradeRes.data?.url).toBeDefined();
+
+		// Verify that NO trial was granted despite processing the incomplete subscription
+		const callArgs = mockStripe.checkout.sessions.create.mock.lastCall?.[0];
+		expect(callArgs?.subscription_data?.trial_period_days).toBeUndefined();
+	});
+
 	it("should upgrade existing subscription instead of creating new one", async () => {
 		// Reset mocks for this test
 		vi.clearAllMocks();
