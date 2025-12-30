@@ -486,6 +486,83 @@ describe("JSON field support in CLI generators", () => {
 		expect(schema.code).toContain("preferences: json(");
 	});
 
+	it("should generate Drizzle schema with string array fields for MySQL", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: {
+					provider: "mysql",
+					schema: {},
+				},
+			} as any,
+			options: {
+				database: {} as any,
+				user: {
+					additionalFields: {
+						tags: {
+							type: "string[]",
+						},
+					},
+				},
+			} as BetterAuthOptions,
+		});
+		expect(schema.code).toContain('tags: json("tags").$type<string[]>()');
+		expect(schema.code).not.toContain("{ mode:");
+	});
+
+	it("should generate Drizzle schema with number array fields for MySQL", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: {
+					provider: "mysql",
+					schema: {},
+				},
+			} as any,
+			options: {
+				database: {} as any,
+				user: {
+					additionalFields: {
+						scores: {
+							type: "number[]",
+						},
+					},
+				},
+			} as BetterAuthOptions,
+		});
+		expect(schema.code).toContain('scores: json("scores").$type<number[]>()');
+		expect(schema.code).not.toContain("{ mode:");
+	});
+
+	it("should generate valid Drizzle MySQL schema for JSON fields", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: {
+					provider: "mysql",
+					schema: {},
+				},
+			} as any,
+			options: {
+				database: {} as any,
+				user: {
+					additionalFields: {
+						metadata: {
+							type: "json",
+						},
+					},
+				},
+			} as BetterAuthOptions,
+		});
+		expect(schema.code).toContain(
+			'metadata: json("metadata").$type<Record<string, unknown>>()',
+		);
+		expect(schema.code).not.toContain("{ mode:");
+	});
+
 	it("should generate Drizzle schema with JSON fields for SQLite", async () => {
 		const schema = await generateDrizzleSchema({
 			file: "test.drizzle",
@@ -567,6 +644,38 @@ describe("JSON field support in CLI generators", () => {
 		expect(schema.code).toContain('@default("{\\"premiumuser\\":true}")');
 		expect(schema.code).toContain(
 			'@default("[{\\"name\\":\\"john\\",\\"subscribed\\":false},{\\"name\\":\\"doe\\",\\"subscribed\\":true}]")',
+		);
+	});
+
+	it("should generate Drizzle schema with all JSON/array field types for MySQL", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: {
+					provider: "mysql",
+					schema: {},
+				},
+			} as any,
+			options: {
+				database: {} as any,
+				user: {
+					additionalFields: {
+						tags: {
+							type: "string[]",
+						},
+						scores: {
+							type: "number[]",
+						},
+						metadata: {
+							type: "json",
+						},
+					},
+				},
+			} as BetterAuthOptions,
+		});
+		await expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/auth-schema-mysql-json-array.txt",
 		);
 	});
 });
