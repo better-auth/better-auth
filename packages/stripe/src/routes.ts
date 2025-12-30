@@ -13,6 +13,7 @@ import * as z from "zod/v4";
 import { STRIPE_ERROR_CODES } from "./error-codes";
 import {
 	onCheckoutSessionCompleted,
+	onSubscriptionCreated,
 	onSubscriptionDeleted,
 	onSubscriptionUpdated,
 } from "./hooks";
@@ -1308,6 +1309,10 @@ export const stripeWebhook = (options: StripeOptions) => {
 				switch (event.type) {
 					case "checkout.session.completed":
 						await onCheckoutSessionCompleted(ctx, options, event);
+						await options.onEvent?.(event);
+						break;
+					case "customer.subscription.created":
+						await onSubscriptionCreated(ctx, options, event);
 						await options.onEvent?.(event);
 						break;
 					case "customer.subscription.updated":
