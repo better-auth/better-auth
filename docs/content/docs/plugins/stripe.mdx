@@ -250,7 +250,7 @@ type upgradeSubscription = {
     /**
      * Disable redirect after successful subscription. 
      */
-    disableRedirect: boolean = true
+    disableRedirect: boolean = false
 }
 ```
 </APIMethod>
@@ -458,6 +458,11 @@ type createBillingPortal = {
      * Return URL to redirect back after successful subscription. 
      */
     returnUrl?: string
+    /**
+     * Disable the automatic redirect to the billing page.
+     * @default false
+     */
+    disableRedirect?: boolean = false
 }
 ```
 </APIMethod>
