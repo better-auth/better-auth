@@ -769,6 +769,390 @@ describe("stripe", () => {
 		}
 	});
 
+	it("should handle customer.subscription.created webhook event", async () => {
+		const stripeForTest = {
+			...stripeOptions.stripeClient,
+			webhooks: {
+				constructEventAsync: vi.fn(),
+			},
+		};
+
+		const testOptions = {
+			...stripeOptions,
+			stripeClient: stripeForTest as unknown as Stripe,
+			stripeWebhookSecret: "test_secret",
+		};
+
+		const { auth: testAuth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(testOptions)],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const testCtx = await testAuth.$context;
+
+		// Create a user with stripeCustomerId
+		const userWithCustomerId = await testCtx.adapter.create({
+			model: "user",
+			data: {
+				email: "dashboard-user@test.com",
+				name: "Dashboard User",
+				emailVerified: true,
+				stripeCustomerId: "cus_dashboard_test",
+			},
+		});
+
+		const mockEvent = {
+			type: "customer.subscription.created",
+			data: {
+				object: {
+					id: "sub_dashboard_created",
+					customer: "cus_dashboard_test",
+					status: "active",
+					items: {
+						data: [
+							{
+								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								quantity: 1,
+								current_period_start: Math.floor(Date.now() / 1000),
+								current_period_end:
+									Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+							},
+						],
+					},
+					cancel_at_period_end: false,
+				},
+			},
+		};
+
+		(stripeForTest.webhooks.constructEventAsync as any).mockResolvedValue(
+			mockEvent,
+		);
+
+		const mockRequest = new Request(
+			"http://localhost:3000/api/auth/stripe/webhook",
+			{
+				method: "POST",
+				headers: {
+					"stripe-signature": "test_signature",
+				},
+				body: JSON.stringify(mockEvent),
+			},
+		);
+
+		const response = await testAuth.handler(mockRequest);
+		expect(response.status).toBe(200);
+
+		// Verify subscription was created in database
+		const subscription = await testCtx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [
+				{ field: "stripeSubscriptionId", value: "sub_dashboard_created" },
+			],
+		});
+
+		expect(subscription).toBeDefined();
+		expect(subscription?.referenceId).toBe(userWithCustomerId.id);
+		expect(subscription?.stripeCustomerId).toBe("cus_dashboard_test");
+		expect(subscription?.status).toBe("active");
+		expect(subscription?.plan).toBe("starter");
+		expect(subscription?.seats).toBe(1);
+	});
+
+	it("should not create duplicate subscription if already exists", async () => {
+		const onSubscriptionCreatedCallback = vi.fn();
+
+		const stripeForTest = {
+			...stripeOptions.stripeClient,
+			webhooks: {
+				constructEventAsync: vi.fn(),
+			},
+		};
+
+		const testOptions = {
+			...stripeOptions,
+			stripeClient: stripeForTest as unknown as Stripe,
+			stripeWebhookSecret: "test_secret",
+			subscription: {
+				...stripeOptions.subscription,
+				onSubscriptionCreated: onSubscriptionCreatedCallback,
+			},
+		} as StripeOptions;
+
+		const { auth: testAuth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(testOptions)],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const testCtx = await testAuth.$context;
+
+		// Create user
+		const user = await testCtx.adapter.create({
+			model: "user",
+			data: {
+				email: "duplicate-sub@test.com",
+				name: "Duplicate Test",
+				emailVerified: true,
+				stripeCustomerId: "cus_duplicate_test",
+			},
+		});
+
+		// Create existing subscription
+		await testCtx.adapter.create({
+			model: "subscription",
+			data: {
+				referenceId: user.id,
+				stripeCustomerId: "cus_duplicate_test",
+				stripeSubscriptionId: "sub_already_exists",
+				status: "active",
+				plan: "starter",
+			},
+		});
+
+		const mockEvent = {
+			type: "customer.subscription.created",
+			data: {
+				object: {
+					id: "sub_already_exists",
+					customer: "cus_duplicate_test",
+					status: "active",
+					items: {
+						data: [
+							{
+								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								quantity: 1,
+								current_period_start: Math.floor(Date.now() / 1000),
+								current_period_end:
+									Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+							},
+						],
+					},
+					cancel_at_period_end: false,
+				},
+			},
+		};
+
+		(stripeForTest.webhooks.constructEventAsync as any).mockResolvedValue(
+			mockEvent,
+		);
+
+		const mockRequest = new Request(
+			"http://localhost:3000/api/auth/stripe/webhook",
+			{
+				method: "POST",
+				headers: {
+					"stripe-signature": "test_signature",
+				},
+				body: JSON.stringify(mockEvent),
+			},
+		);
+
+		const response = await testAuth.handler(mockRequest);
+		expect(response.status).toBe(200);
+
+		// Verify only one subscription exists (no duplicate)
+		const subscriptions = await testCtx.adapter.findMany<Subscription>({
+			model: "subscription",
+			where: [
+				{
+					field: "stripeSubscriptionId",
+					value: "sub_already_exists",
+				},
+			],
+		});
+
+		expect(subscriptions.length).toBe(1);
+
+		// Verify callback was NOT called (early return due to existing subscription)
+		expect(onSubscriptionCreatedCallback).not.toHaveBeenCalled();
+	});
+
+	it("should skip subscription creation when user not found", async () => {
+		const onSubscriptionCreatedCallback = vi.fn();
+
+		const stripeForTest = {
+			...stripeOptions.stripeClient,
+			webhooks: {
+				constructEventAsync: vi.fn(),
+			},
+		};
+
+		const testOptions = {
+			...stripeOptions,
+			stripeClient: stripeForTest as unknown as Stripe,
+			stripeWebhookSecret: "test_secret",
+			subscription: {
+				...stripeOptions.subscription,
+				onSubscriptionCreated: onSubscriptionCreatedCallback,
+			},
+		} as StripeOptions;
+
+		const { auth: testAuth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(testOptions)],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const testCtx = await testAuth.$context;
+
+		const mockEvent = {
+			type: "customer.subscription.created",
+			data: {
+				object: {
+					id: "sub_no_user",
+					customer: "cus_nonexistent",
+					status: "active",
+					items: {
+						data: [
+							{
+								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								quantity: 1,
+								current_period_start: Math.floor(Date.now() / 1000),
+								current_period_end:
+									Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+							},
+						],
+					},
+					cancel_at_period_end: false,
+				},
+			},
+		};
+
+		(stripeForTest.webhooks.constructEventAsync as any).mockResolvedValue(
+			mockEvent,
+		);
+
+		const mockRequest = new Request(
+			"http://localhost:3000/api/auth/stripe/webhook",
+			{
+				method: "POST",
+				headers: {
+					"stripe-signature": "test_signature",
+				},
+				body: JSON.stringify(mockEvent),
+			},
+		);
+
+		const response = await testAuth.handler(mockRequest);
+		expect(response.status).toBe(200);
+
+		// Verify subscription was NOT created
+		const subscription = await testCtx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "stripeSubscriptionId", value: "sub_no_user" }],
+		});
+
+		expect(subscription).toBeNull();
+
+		// Verify callback was NOT called (early return due to user not found)
+		expect(onSubscriptionCreatedCallback).not.toHaveBeenCalled();
+	});
+
+	it("should skip subscription creation when plan not found", async () => {
+		const onSubscriptionCreatedCallback = vi.fn();
+
+		const stripeForTest = {
+			...stripeOptions.stripeClient,
+			webhooks: {
+				constructEventAsync: vi.fn(),
+			},
+		};
+
+		const testOptions = {
+			...stripeOptions,
+			stripeClient: stripeForTest as unknown as Stripe,
+			stripeWebhookSecret: "test_secret",
+			subscription: {
+				...stripeOptions.subscription,
+				onSubscriptionCreated: onSubscriptionCreatedCallback,
+			},
+		} as StripeOptions;
+
+		const { auth: testAuth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(testOptions)],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const testCtx = await testAuth.$context;
+
+		// Create user
+		await testCtx.adapter.create({
+			model: "user",
+			data: {
+				email: "no-plan@test.com",
+				name: "No Plan User",
+				emailVerified: true,
+				stripeCustomerId: "cus_no_plan",
+			},
+		});
+
+		const mockEvent = {
+			type: "customer.subscription.created",
+			data: {
+				object: {
+					id: "sub_no_plan",
+					customer: "cus_no_plan",
+					status: "active",
+					items: {
+						data: [
+							{
+								price: { id: "price_unknown" }, // Unknown price
+								quantity: 1,
+								current_period_start: Math.floor(Date.now() / 1000),
+								current_period_end:
+									Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+							},
+						],
+					},
+					cancel_at_period_end: false,
+				},
+			},
+		};
+
+		(stripeForTest.webhooks.constructEventAsync as any).mockResolvedValue(
+			mockEvent,
+		);
+
+		const mockRequest = new Request(
+			"http://localhost:3000/api/auth/stripe/webhook",
+			{
+				method: "POST",
+				headers: {
+					"stripe-signature": "test_signature",
+				},
+				body: JSON.stringify(mockEvent),
+			},
+		);
+
+		const response = await testAuth.handler(mockRequest);
+		expect(response.status).toBe(200);
+
+		// Verify subscription was NOT created (no matching plan)
+		const subscription = await testCtx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "stripeSubscriptionId", value: "sub_no_plan" }],
+		});
+
+		expect(subscription).toBeNull();
+
+		// Verify callback was NOT called (early return due to plan not found)
+		expect(onSubscriptionCreatedCallback).not.toHaveBeenCalled();
+	});
+
 	it("should execute subscription event handlers", async () => {
 		const { auth: testAuth } = await getTestInstance(
 			{
@@ -1576,6 +1960,85 @@ describe("stripe", () => {
 			(s: Subscription) => s.trialStart || s.trialEnd,
 		);
 		expect(hasTrialData).toBe(true);
+	});
+
+	it("should prevent trial abuse when processing incomplete subscription with past trial history", async () => {
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [
+					stripe({
+						...stripeOptions,
+						subscription: {
+							...stripeOptions.subscription,
+							plans: stripeOptions.subscription.plans.map((plan) => ({
+								...plan,
+								freeTrial: { days: 7 },
+							})),
+						},
+					}),
+				],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+
+		const userRes = await client.signUp.email(
+			{ ...testUser, email: "trial-findone-test@email.com" },
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{ ...testUser, email: "trial-findone-test@email.com" },
+			{ throw: true, onSuccess: sessionSetter(headers) },
+		);
+
+		// Create a canceled subscription with trial history first
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				referenceId: userRes.user.id,
+				stripeCustomerId: "cus_old_customer",
+				status: "canceled",
+				plan: "starter",
+				stripeSubscriptionId: "sub_canceled_with_trial",
+				trialStart: new Date(Date.now() - 1000000),
+				trialEnd: new Date(Date.now() - 500000),
+			},
+		});
+
+		// Create an new incomplete subscription (without trial info)
+		const incompleteSubId = "sub_incomplete_new";
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				referenceId: userRes.user.id,
+				stripeCustomerId: "cus_old_customer",
+				status: "incomplete",
+				plan: "premium",
+				stripeSubscriptionId: incompleteSubId,
+			},
+		});
+
+		// When upgrading with a specific subscriptionId pointing to the incomplete one,
+		// the system should still check ALL subscriptions for trial history
+		const upgradeRes = await client.subscription.upgrade({
+			plan: "premium",
+			subscriptionId: incompleteSubId,
+			fetchOptions: { headers },
+		});
+
+		expect(upgradeRes.data?.url).toBeDefined();
+
+		// Verify that NO trial was granted despite processing the incomplete subscription
+		const callArgs = mockStripe.checkout.sessions.create.mock.lastCall?.[0];
+		expect(callArgs?.subscription_data?.trial_period_days).toBeUndefined();
 	});
 
 	it("should upgrade existing subscription instead of creating new one", async () => {

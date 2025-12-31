@@ -13,6 +13,7 @@ import * as z from "zod/v4";
 import { STRIPE_ERROR_CODES } from "./error-codes";
 import {
 	onCheckoutSessionCompleted,
+	onSubscriptionCreated,
 	onSubscriptionDeleted,
 	onSubscriptionUpdated,
 } from "./hooks";
@@ -403,7 +404,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					});
 				return ctx.json({
 					url,
-					redirect: true,
+					redirect: !ctx.body.disableRedirect,
 				});
 			}
 
@@ -460,7 +461,13 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				ctx,
 			);
 
-			const hasEverTrialed = subscriptions.some((s) => {
+			const allSubscriptions = await ctx.context.adapter.findMany<Subscription>(
+				{
+					model: "subscription",
+					where: [{ field: "referenceId", value: referenceId }],
+				},
+			);
+			const hasEverTrialed = allSubscriptions.some((s) => {
 				// Check if user has ever had a trial for any plan (not just the same plan)
 				// This prevents users from getting multiple trials by switching plans
 				const hadTrial =
@@ -670,6 +677,16 @@ const cancelSubscriptionBodySchema = z.object({
 		description:
 			'URL to take customers to when they click on the billing portal\'s link to return to your website. Eg: "/account"',
 	}),
+	/**
+	 * Disable Redirect
+	 */
+	disableRedirect: z
+		.boolean()
+		.meta({
+			description:
+				"Disable redirect after successful subscription cancellation. Eg: true",
+		})
+		.default(false),
 });
 
 /**
@@ -824,10 +841,10 @@ export const cancelSubscription = (options: StripeOptions) => {
 						code: e.code,
 					});
 				});
-			return {
+			return ctx.json({
 				url,
-				redirect: true,
-			};
+				redirect: !ctx.body.disableRedirect,
+			});
 		},
 	);
 };
@@ -1172,6 +1189,16 @@ const createBillingPortalBodySchema = z.object({
 		.optional(),
 	referenceId: z.string().optional(),
 	returnUrl: z.string().default("/"),
+	/**
+	 * Disable Redirect
+	 */
+	disableRedirect: z
+		.boolean()
+		.meta({
+			description:
+				"Disable redirect after creating billing portal session. Eg: true",
+		})
+		.default(false),
 });
 
 export const createBillingPortal = (options: StripeOptions) => {
@@ -1230,7 +1257,7 @@ export const createBillingPortal = (options: StripeOptions) => {
 
 				return ctx.json({
 					url,
-					redirect: true,
+					redirect: !ctx.body.disableRedirect,
 				});
 			} catch (error: any) {
 				ctx.context.logger.error(
@@ -1302,6 +1329,10 @@ export const stripeWebhook = (options: StripeOptions) => {
 				switch (event.type) {
 					case "checkout.session.completed":
 						await onCheckoutSessionCompleted(ctx, options, event);
+						await options.onEvent?.(event);
+						break;
+					case "customer.subscription.created":
+						await onSubscriptionCreated(ctx, options, event);
 						await options.onEvent?.(event);
 						break;
 					case "customer.subscription.updated":
