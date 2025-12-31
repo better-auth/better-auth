@@ -220,7 +220,7 @@ describe("internal adapter test", async () => {
 		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
 
 		const value2 = await internalAdapter.findVerificationValue("test-id-1");
-		expect(value2).toBe(undefined);
+		expect(value2).toBe(null);
 		await internalAdapter.createVerificationValue({
 			identifier: `test-id-1`,
 			value: "test-id-1",
