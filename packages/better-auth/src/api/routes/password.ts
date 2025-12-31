@@ -378,9 +378,7 @@ export const verifyPassword = createAuthEndpoint(
 		});
 
 		if (!isValid) {
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.INVALID_PASSWORD,
-			});
+			throw new APIError("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
 		}
 
 		return ctx.json({
