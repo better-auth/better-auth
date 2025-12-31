@@ -323,12 +323,6 @@ export function verifyApiKey({
 				key: 1,
 				permissions: undefined,
 			};
-			if ("metadata" in returningApiKey) {
-				returningApiKey.metadata =
-					schema.apikey.fields.metadata.transform.output(
-						returningApiKey.metadata as never as string,
-					);
-			}
 
 			returningApiKey.permissions = returningApiKey.permissions
 				? safeJSONParse<{

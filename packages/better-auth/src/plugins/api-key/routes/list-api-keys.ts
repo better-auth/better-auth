@@ -170,14 +170,6 @@ export function listApiKeys({
 			apiKeys = await listApiKeysFromStorage(ctx, session.user.id, opts);
 
 			deleteAllExpiredApiKeys(ctx.context);
-			apiKeys = apiKeys.map((apiKey) => {
-				return {
-					...apiKey,
-					metadata: schema.apikey.fields.metadata.transform.output(
-						apiKey.metadata as never as string,
-					),
-				};
-			});
 
 			let returningApiKey = apiKeys.map((x) => {
 				const { key: _key, ...returningApiKey } = x;
