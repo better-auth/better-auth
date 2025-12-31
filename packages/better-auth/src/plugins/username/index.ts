@@ -412,7 +412,8 @@ export const username = (options?: UsernameOptions | undefined) => {
 						redirect: !!ctx.body.callbackURL,
 						url: ctx.body.callbackURL,
 						token: session.token,
-						user: parseUserOutput(ctx.context.options, user),
+						user: parseUserOutput(ctx.context.options, user) as User &
+							Record<string, unknown>,
 					});
 				},
 			),
