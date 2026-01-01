@@ -34,7 +34,11 @@
     "typescript",
     "better-auth"
   ],
-  "exports": "./dist/index.mjs",
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./api": { "types": "./dist/api.d.mts", "default": "./dist/api.mjs" }
+  },
+  "typesVersions": { "*": { "api": ["./dist/api.d.mts"] } },
   "bin": {
     "better-auth": "./dist/index.mjs"
   },
