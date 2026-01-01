@@ -923,10 +923,7 @@ export const restoreSubscription = (options: StripeOptions) => {
 					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 				);
 			}
-			if (
-				subscription.status != "active" &&
-				subscription.status != "trialing"
-			) {
+			if (!isActiveOrTrialing(subscription)) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_ACTIVE,
