@@ -73,7 +73,7 @@ export async function getTrustedOrigins(
 		}
 		if (typeof options.trustedOrigins === "function") {
 			const dynamicOrigins = await options.trustedOrigins(request);
-			const validOrigins = dynamicOrigins.filter((origin) => !!origin);
+			const validOrigins = dynamicOrigins.filter(Boolean);
 			trustedOrigins.push(...validOrigins);
 		}
 	}
