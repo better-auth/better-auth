@@ -8,7 +8,7 @@ interface OsuProfile {
 	id: number;
 	avatar_url: string;
 	username: string;
-	email: null;
+	email: null | undefined;
 	email_verified: false;
 }
 
@@ -34,7 +34,9 @@ export function osu(options: OsuOptions): GenericOAuthConfig {
 		return {
 			id: profile.id,
 			name: profile.username,
-			email: profile.email,
+
+			// osu! never returns email so yeah lol, have to set to username or we get errors
+			email: profile.username ?? null,
 			emailVerified: profile.email_verified,
 			image: profile.avatar_url,
 		};
