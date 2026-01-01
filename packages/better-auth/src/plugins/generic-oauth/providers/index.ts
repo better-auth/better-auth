@@ -34,3 +34,4 @@ export {
 export { type OktaOptions, okta } from "./okta";
 export { type PatreonOptions, patreon } from "./patreon";
 export { type SlackOptions, slack } from "./slack";
+export { type OsuOptions, osu } from "./osu";
