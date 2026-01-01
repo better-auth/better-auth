@@ -1313,7 +1313,7 @@ export const stripeWebhook = (options: StripeOptions) => {
 			const webhookSecret = options.stripeWebhookSecret;
 			if (!webhookSecret) {
 				throw APIError.from(
-					"BAD_REQUEST",
+					"INTERNAL_SERVER_ERROR",
 					STRIPE_ERROR_CODES.STRIPE_WEBHOOK_SECRET_NOT_FOUND,
 				);
 			}
