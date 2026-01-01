@@ -1086,14 +1086,14 @@ export const subscriptionSuccess = (options: StripeOptions) => {
 			if (!ctx.query || !ctx.query.callbackURL || !ctx.query.subscriptionId) {
 				throw ctx.redirect(getUrl(ctx, ctx.query?.callbackURL || "/"));
 			}
+			const { callbackURL, subscriptionId } = ctx.query;
+
 			const session = await getSessionFromCtx<{ stripeCustomerId: string }>(
 				ctx,
 			);
 			if (!session) {
 				throw ctx.redirect(getUrl(ctx, ctx.query?.callbackURL || "/"));
 			}
-			const { user } = session;
-			const { callbackURL, subscriptionId } = ctx.query;
 
 			const subscription = await ctx.context.adapter.findOne<Subscription>({
 				model: "subscription",
@@ -1104,81 +1104,89 @@ export const subscriptionSuccess = (options: StripeOptions) => {
 					},
 				],
 			});
-
-			if (
-				subscription?.status === "active" ||
-				subscription?.status === "trialing"
-			) {
-				return ctx.redirect(getUrl(ctx, callbackURL));
+			if (!subscription) {
+				ctx.context.logger.warn(
+					`Subscription record not found for subscriptionId: ${subscriptionId}`,
+				);
+				throw ctx.redirect(getUrl(ctx, callbackURL));
 			}
+
+			// Already active or trialing, no need to update
+			if (isActiveOrTrialing(subscription)) {
+				throw ctx.redirect(getUrl(ctx, callbackURL));
+			}
+
 			const customerId =
-				subscription?.stripeCustomerId || user.stripeCustomerId;
+				subscription.stripeCustomerId || session.user.stripeCustomerId;
+			if (!customerId) {
+				throw ctx.redirect(getUrl(ctx, callbackURL));
+			}
 
-			if (customerId) {
-				try {
-					const stripeSubscription = await client.subscriptions
-						.list({
-							customer: customerId,
-							status: "active",
-						})
-						.then((res) => res.data[0]);
-
-					if (stripeSubscription) {
-						const plan = await getPlanByPriceInfo(
-							options,
-							stripeSubscription.items.data[0]?.price.id!,
-							stripeSubscription.items.data[0]?.price.lookup_key!,
-						);
-
-						if (plan && subscription) {
-							await ctx.context.adapter.update({
-								model: "subscription",
-								update: {
-									status: stripeSubscription.status,
-									seats: stripeSubscription.items.data[0]?.quantity || 1,
-									plan: plan.name.toLowerCase(),
-									periodEnd: new Date(
-										stripeSubscription.items.data[0]?.current_period_end! *
-											1000,
-									),
-									periodStart: new Date(
-										stripeSubscription.items.data[0]?.current_period_start! *
-											1000,
-									),
-									stripeSubscriptionId: stripeSubscription.id,
-									cancelAtPeriodEnd: stripeSubscription.cancel_at_period_end,
-									cancelAt: stripeSubscription.cancel_at
-										? new Date(stripeSubscription.cancel_at * 1000)
-										: null,
-									canceledAt: stripeSubscription.canceled_at
-										? new Date(stripeSubscription.canceled_at * 1000)
-										: null,
-									...(stripeSubscription.trial_start &&
-									stripeSubscription.trial_end
-										? {
-												trialStart: new Date(
-													stripeSubscription.trial_start * 1000,
-												),
-												trialEnd: new Date(stripeSubscription.trial_end * 1000),
-											}
-										: {}),
-								},
-								where: [
-									{
-										field: "id",
-										value: subscription.id,
-									},
-								],
-							});
-						}
-					}
-				} catch (error) {
+			const stripeSubscription = await client.subscriptions
+				.list({ customer: customerId, status: "active" })
+				.then((res) => res.data[0])
+				.catch((error) => {
 					ctx.context.logger.error(
 						"Error fetching subscription from Stripe",
 						error,
 					);
-				}
+					throw ctx.redirect(getUrl(ctx, callbackURL));
+				});
+			if (!stripeSubscription) {
+				throw ctx.redirect(getUrl(ctx, callbackURL));
 			}
+
+			const subscriptionItem = stripeSubscription.items.data[0];
+			if (!subscriptionItem) {
+				ctx.context.logger.warn(
+					`No subscription items found for Stripe subscription ${stripeSubscription.id}`,
+				);
+				throw ctx.redirect(getUrl(ctx, callbackURL));
+			}
+
+			const plan = await getPlanByPriceInfo(
+				options,
+				subscriptionItem.price.id,
+				subscriptionItem.price.lookup_key,
+			);
+			if (!plan) {
+				ctx.context.logger.warn(
+					`Plan not found for price ${subscriptionItem.price.id}`,
+				);
+				throw ctx.redirect(getUrl(ctx, callbackURL));
+			}
+
+			await ctx.context.adapter.update({
+				model: "subscription",
+				update: {
+					status: stripeSubscription.status,
+					seats: subscriptionItem.quantity || 1,
+					plan: plan.name.toLowerCase(),
+					periodEnd: new Date(subscriptionItem.current_period_end * 1000),
+					periodStart: new Date(subscriptionItem.current_period_start * 1000),
+					stripeSubscriptionId: stripeSubscription.id,
+					cancelAtPeriodEnd: stripeSubscription.cancel_at_period_end,
+					cancelAt: stripeSubscription.cancel_at
+						? new Date(stripeSubscription.cancel_at * 1000)
+						: null,
+					canceledAt: stripeSubscription.canceled_at
+						? new Date(stripeSubscription.canceled_at * 1000)
+						: null,
+					...(stripeSubscription.trial_start && stripeSubscription.trial_end
+						? {
+								trialStart: new Date(stripeSubscription.trial_start * 1000),
+								trialEnd: new Date(stripeSubscription.trial_end * 1000),
+							}
+						: {}),
+				},
+				where: [
+					{
+						field: "id",
+						value: subscription.id,
+					},
+				],
+			});
+
 			throw ctx.redirect(getUrl(ctx, callbackURL));
 		},
 	);
