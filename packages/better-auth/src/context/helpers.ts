@@ -72,7 +72,9 @@ export async function getTrustedOrigins(
 			trustedOrigins.push(...options.trustedOrigins);
 		}
 		if (typeof options.trustedOrigins === "function") {
-			trustedOrigins.push(...(await options.trustedOrigins(request)));
+			const dynamicOrigins = await options.trustedOrigins(request);
+			const validOrigins = dynamicOrigins.filter((origin) => !!origin);
+			trustedOrigins.push(...validOrigins);
 		}
 	}
 	const envTrustedOrigins = env.BETTER_AUTH_TRUSTED_ORIGINS;

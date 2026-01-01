@@ -203,6 +203,46 @@ describe("Origin Check", async (it) => {
 		});
 		expect(invalidRes.error?.status).toBe(403);
 	});
+
+	it("should filter out null values from trustedOrigins callback", async () => {
+		const { customFetchImpl, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			advanced: {
+				disableCSRFCheck: false,
+				disableOriginCheck: false,
+			},
+			trustedOrigins: async (request) => {
+				if (!request) return [];
+				// Simulate a scenario where some dynamic origins might be null
+				const dynamicOrigins = [
+					"http://valid-origin.com",
+					request.headers.get("x-custom-origin"), // Could be null
+					request.headers.get("x-another-origin"), // Could be null
+				];
+				return dynamicOrigins as string[];
+			},
+		});
+
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "http://valid-origin.com",
+				},
+			},
+		});
+
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+
+		// Should succeed because valid-origin.com is in the list and null values are filtered out
+		expect(res.data?.user).toBeDefined();
+	});
 });
 
 describe("Fetch Metadata CSRF Protection", async (it) => {
