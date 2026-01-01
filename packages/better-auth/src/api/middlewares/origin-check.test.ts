@@ -246,18 +246,16 @@ describe("Origin Check", async (it) => {
 });
 
 describe("Fetch Metadata CSRF Protection", async (it) => {
-	const { customFetchImpl, testUser, auth, signInWithTestUser } =
-		await getTestInstance({
-			trustedOrigins: ["http://localhost:3000", "https://app.example.com"],
-			emailAndPassword: {
-				enabled: true,
-				async sendResetPassword(url, user) {},
-			},
-			advanced: {
-				disableCSRFCheck: false,
-				disableOriginCheck: false,
-			},
-		});
+	const { testUser, auth } = await getTestInstance({
+		trustedOrigins: ["http://localhost:3000", "https://app.example.com"],
+		emailAndPassword: {
+			enabled: true,
+		},
+		advanced: {
+			disableCSRFCheck: false,
+			disableOriginCheck: false,
+		},
+	});
 
 	it("should block cross-site navigation on first-login (no session cookie)", async (ctx) => {
 		const maliciousRequest = new Request(
