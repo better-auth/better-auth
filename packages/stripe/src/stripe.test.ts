@@ -388,6 +388,7 @@ describe("stripe", () => {
 				subscription_data: expect.objectContaining({
 					metadata: expect.objectContaining(customMetadata),
 				}),
+				metadata: expect.objectContaining(customMetadata),
 			}),
 			undefined,
 		);
