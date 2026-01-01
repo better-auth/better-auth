@@ -83,7 +83,9 @@ export function matchType(
 		return type.toLowerCase().split("(")[0]!.trim();
 	}
 	if (fieldType === "string[]" || fieldType === "number[]") {
-		return columnDataType.toLowerCase().includes("json");
+		// For array-like fields we store as JSON (or TEXT for engines without native JSON)
+		const jsonTypeList = map[dbType]!.json.map((t) => t.toLowerCase());
+		return jsonTypeList.includes(normalize(columnDataType));
 	}
 	const types = map[dbType]!;
 	const expected = Array.isArray(fieldType)
@@ -429,7 +431,24 @@ export async function getMigrations(config: BetterAuthOptions) {
 				}
 
 				let built = builder.addColumn(fieldName, type, (col) => {
-					col = field.required !== false ? col.notNull() : col;
+					// When adding a NOT NULL column to an existing table without a default,
+					// the migration will fail. Only enforce NOT NULL if a default is defined
+					// or if we handle defaults for date columns on supported providers.
+					const hasDefault =
+						field.defaultValue !== undefined ||
+						(field.type === "date" &&
+							typeof field.defaultValue === "function" &&
+							(dbType === "postgres" ||
+								dbType === "mysql" ||
+								dbType === "mssql"));
+					if (field.required !== false && !hasDefault) {
+						// Leave as nullable to avoid breaking existing rows; warn the user.
+						logger.warn(
+							`Adding required column '${fieldName}' to '${table.table}' without a default; column will be nullable. Consider providing a defaultValue or backfilling data and altering to NOT NULL.`,
+						);
+					} else {
+						col = field.required !== false ? col.notNull() : col;
+					}
 					if (field.references) {
 						col = col
 							.references(

@@ -4,12 +4,13 @@ import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
-import { parseUserOutput } from "../../db/schema";
+import { parseUserOutput } from "../../db";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import type { InferUser } from "../../types";
 import { generateState } from "../../utils";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
+import { originCheck } from "../middlewares";
 
 const socialSignInBodySchema = z.object({
 	/**
@@ -157,8 +158,23 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 		"/sign-in/social",
 		{
 			method: "POST",
-			operationId: "socialSignIn",
 			body: socialSignInBodySchema,
+			use: [
+				originCheck((ctx) => {
+					const items = [
+						ctx.body.callbackURL,
+						ctx.body.errorCallbackURL,
+						ctx.body.newUserCallbackURL,
+					].filter(Boolean) as string[];
+					return items.map((v) => {
+						try {
+							return decodeURIComponent(v);
+						} catch {
+							return v;
+						}
+					});
+				}),
+			],
 			metadata: {
 				$Infer: {
 					body: {} as z.infer<typeof socialSignInBodySchema>,
@@ -310,7 +326,12 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 			const { codeVerifier, state } = await generateState(
 				c,
 				undefined,
-				c.body.additionalData,
+				{
+					...c.body.additionalData,
+					callbackURL: c.body.callbackURL,
+					newUserCallbackURL: c.body.newUserCallbackURL,
+					errorCallbackURL: c.body.errorCallbackURL,
+				},
 			);
 			const url = await provider.createAuthorizationURL({
 				state,
@@ -371,6 +392,17 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 					.default(true)
 					.optional(),
 			}),
+			use: [
+				originCheck((ctx) => {
+					const v = ctx.body.callbackURL;
+					if (!v) return "";
+					try {
+						return decodeURIComponent(v);
+					} catch {
+						return v;
+					}
+				}),
+			],
 			metadata: {
 				allowedMediaTypes: [
 					"application/x-www-form-urlencoded",

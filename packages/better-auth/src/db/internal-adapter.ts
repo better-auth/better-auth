@@ -61,7 +61,9 @@ export const createInternalAdapter = (
 				if (!parsed) return;
 
 				const sessionTTL = Math.max(
-					Math.floor(new Date(parsed.session.expiresAt).getTime() - now) / 1000,
+					Math.floor(
+						(new Date(parsed.session.expiresAt).getTime() - now) / 1000,
+					),
 					0,
 				);
 
@@ -168,7 +170,7 @@ export const createInternalAdapter = (
 							session: Session;
 							user: User;
 						}>(sessionStringified);
-						if (!s) return [];
+						if (!s) continue;
 						const parsedSession = parseSessionOutput(ctx.options, {
 							...s.session,
 							expiresAt: new Date(s.session.expiresAt),
@@ -447,7 +449,7 @@ export const createInternalAdapter = (
 							session: Session;
 							user: User;
 						}>(sessionStringified);
-						if (!s) return [];
+						if (!s) continue;
 						const session = {
 							session: {
 								...s.session,
