@@ -406,7 +406,7 @@ export const auth = betterAuth({
   user: {
     additionalFields: {
       role: {
-        type: "string",
+        type: ["user", "admin"],
         required: false,
         defaultValue: "user",
         input: false, // don't allow user to set role
@@ -804,4 +804,4 @@ It's very important to read the documentation regarding experimental joins for y
 - [MySQL](/docs/adapters/mysql#joins-experimental)
 - [PostgreSQL](/docs/adapters/postgresql#joins-experimental)
 - [MSSQL](/docs/adapters/mssql#joins-experimental)
-- [MongoDB](/docs/adapters/mongodb#joins-experimental)
+- [MongoDB](/docs/adapters/mongo#joins-experimental)
