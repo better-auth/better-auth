@@ -98,6 +98,8 @@
 		"e2e/smoke/test/fixtures/cloudflare/worker-configuration.d.ts",
 		"*.config.js",
 		"*.config.ts",
-		"*.json"
+		"*.json",
+		"docker-compose.yml",
+		"*.sql"
 	]
 }
