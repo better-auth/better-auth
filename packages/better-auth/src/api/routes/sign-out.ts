@@ -1,15 +1,15 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { APIError } from "better-call";
 import { deleteSessionCookie } from "../../cookies";
 
 export const signOut = createAuthEndpoint(
 	"/sign-out",
 	{
 		method: "POST",
+		operationId: "signOut",
 		requireHeaders: true,
 		metadata: {
 			openapi: {
+				operationId: "signOut",
 				description: "Sign out the current user",
 				responses: {
 					"200": {
@@ -36,13 +36,13 @@ export const signOut = createAuthEndpoint(
 			ctx.context.authCookies.sessionToken.name,
 			ctx.context.secret,
 		);
-		if (!sessionCookieToken) {
-			deleteSessionCookie(ctx);
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
-			});
+		if (sessionCookieToken) {
+			try {
+				await ctx.context.internalAdapter.deleteSession(sessionCookieToken);
+			} catch (e) {
+				ctx.context.logger.error("Failed to delete session from database", e);
+			}
 		}
-		await ctx.context.internalAdapter.deleteSession(sessionCookieToken);
 		deleteSessionCookie(ctx);
 		return ctx.json({
 			success: true,

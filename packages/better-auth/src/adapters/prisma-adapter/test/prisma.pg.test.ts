@@ -3,6 +3,7 @@ import { Pool } from "pg";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
+	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
 	transactionsTestSuite,
@@ -45,6 +46,7 @@ const { execute } = await testAdapter({
 		transactionsTestSuite(),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
+		joinsTestSuite(),
 		uuidTestSuite({}),
 	],
 	onFinish: async () => {},

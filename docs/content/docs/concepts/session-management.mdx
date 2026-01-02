@@ -9,7 +9,8 @@ Better Auth manages session using a traditional cookie-based session management.
 
 The session table stores the session data. The session table has the following fields:
 
-- `id`: The session token. Which is also used as the session cookie.
+- `id`: Unique identifier for the session.
+- `token`: The session token. Which is also used as the session cookie.
 - `userId`: The user ID of the user.
 - `expiresAt`: The expiration date of the session.
 - `ipAddress`: The IP address of the user.
@@ -176,6 +177,21 @@ export const auth = betterAuth({
 });
 ```
 
+<Callout type="info">
+**Notes**
+
+When `cookieCache` is enabled, revoked sessions may remain active on other devices until the cookie cache expires (`maxAge`). This is because:
+
+- Cookie cache stores session data in the client's browser
+- The server cannot directly delete cookies from other devices
+- Sessions are only revalidated when the cache expires or `disableCookieCache: true` is used
+
+**If immediate session revocation is critical:**
+- Disable `cookieCache` entirely, or
+- Set a shorter `maxAge` (e.g. 60 seconds), or
+- Use `disableCookieCache: true` for sensitive operations
+</Callout>
+
 #### Cookie Cache Strategies
 
 Better Auth supports three different encoding strategies for cookie cache:
@@ -253,7 +269,7 @@ export const auth = betterAuth({
 });
 ```
 
-To manually enable stateless mode, you need to configure `cookieCache` and `oauthConfig` with the following options:
+To manually enable stateless mode, you need to configure `cookieCache` and `account` with the following options:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -267,11 +283,10 @@ export const auth = betterAuth({
             refreshCache: true, // Enable stateless refresh
         },
     },
-    advanced: {
-        oauthConfig: {
-            storeStateStrategy: "cookie",
-        },
-    },
+    account: {
+        storeStateStrategy: "cookie",
+        storeAccountCookie: true, // Store account data after OAuth flow in a cookie (useful for database-less flows)
+    }
 });
 ```
 

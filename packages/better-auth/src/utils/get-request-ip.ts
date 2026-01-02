@@ -1,6 +1,6 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { isDevelopment, isTest } from "@better-auth/core/env";
-import { z } from "zod";
+import * as z from "zod";
 
 // Localhost IP used for test and development environments
 const LOCALHOST_IP = "127.0.0.1";
@@ -11,10 +11,6 @@ export function getIp(
 ): string | null {
 	if (options.advanced?.ipAddress?.disableIpTracking) {
 		return null;
-	}
-
-	if (isTest() || isDevelopment()) {
-		return LOCALHOST_IP;
 	}
 
 	const headers = "headers" in req ? req.headers : req;
@@ -33,6 +29,12 @@ export function getIp(
 			}
 		}
 	}
+
+	// Fallback to localhost IP in development/test environments when no IP found in headers
+	if (isTest() || isDevelopment()) {
+		return LOCALHOST_IP;
+	}
+
 	return null;
 }
 

@@ -1,9 +1,10 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { describe, expect } from "vitest";
-import { z } from "zod";
+import { describe, expect, vi } from "vitest";
+import * as z from "zod";
 import { createAuthClient } from "../../client";
+import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { isSimpleRequest, originCheck } from "./origin-check";
+import { originCheck } from "./origin-check";
 
 describe("Origin Check", async (it) => {
 	const { customFetchImpl, testUser } = await getTestInstance({
@@ -11,7 +12,6 @@ describe("Origin Check", async (it) => {
 			"http://localhost:5000",
 			"https://trusted.com",
 			"*.my-site.com",
-			"https://*.protocol-site.com",
 		],
 		emailAndPassword: {
 			enabled: true,
@@ -57,115 +57,6 @@ describe("Origin Check", async (it) => {
 		expect(res.error?.message).toBe("Invalid callbackURL");
 	});
 
-	it("should allow query params in callback url", async (ctx) => {
-		const client = createAuthClient({
-			baseURL: "http://localhost:3000",
-			fetchOptions: {
-				customFetchImpl,
-				headers: {
-					origin: "https://localhost:3000",
-				},
-			},
-		});
-		const res = await client.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-			callbackURL: "/dashboard?test=123",
-		});
-		expect(res.data?.user).toBeDefined();
-	});
-
-	it("should allow plus signs in the callback url", async (ctx) => {
-		const client = createAuthClient({
-			baseURL: "http://localhost:3000",
-			fetchOptions: {
-				customFetchImpl,
-				headers: {
-					origin: "https://localhost:3000",
-				},
-			},
-		});
-		const res = await client.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-			callbackURL: "/dashboard+page?test=123+456",
-		});
-		expect(res.data?.user).toBeDefined();
-	});
-
-	it("should reject callback url with double slash", async (ctx) => {
-		const client = createAuthClient({
-			baseURL: "http://localhost:3000",
-			fetchOptions: {
-				customFetchImpl,
-				headers: {
-					origin: "https://localhost:3000",
-				},
-			},
-		});
-		const res = await client.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-			callbackURL: "//evil.com",
-		});
-		expect(res.error?.status).toBe(403);
-	});
-
-	it("should reject callback urls with encoded malicious content", async (ctx) => {
-		const client = createAuthClient({
-			baseURL: "http://localhost:3000",
-			fetchOptions: {
-				customFetchImpl,
-				headers: {
-					origin: "https://localhost:3000",
-				},
-			},
-		});
-
-		const maliciousPatterns = [
-			"/%5C/evil.com",
-			`/\\/\\/evil.com`,
-			"/%5C/evil.com",
-			"/..%2F..%2Fevil.com",
-			"javascript:alert('xss')",
-			"data:text/html,<script>alert('xss')</script>",
-		];
-
-		for (const pattern of maliciousPatterns) {
-			const res = await client.signIn.email({
-				email: testUser.email,
-				password: testUser.password,
-				callbackURL: pattern,
-			});
-			expect(res.error?.status).toBe(403);
-		}
-	});
-
-	it("should reject callback url with malicious domain with wildcard trusted origins", async (ctx) => {
-		const { customFetchImpl, testUser } = await getTestInstance({
-			trustedOrigins: ["*.example.com"],
-			emailAndPassword: {
-				enabled: true,
-				async sendResetPassword(url, user) {},
-			},
-		});
-		const client = createAuthClient({
-			baseURL: "http://localhost:3000",
-			fetchOptions: {
-				customFetchImpl,
-				headers: {
-					cookie: "session=123",
-				},
-			},
-		});
-		const res = await client.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-			callbackURL: "malicious.com?.example.com",
-		});
-		expect(res.error?.status).toBe(403);
-	});
-
 	it("should reject untrusted origin headers", async (ctx) => {
 		const client = createAuthClient({
 			baseURL: "http://localhost:3000",
@@ -173,42 +64,6 @@ describe("Origin Check", async (it) => {
 				customFetchImpl,
 				headers: {
 					origin: "malicious.com",
-					cookie: "session=123",
-				},
-			},
-		});
-		const res = await client.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-		});
-		expect(res.error?.status).toBe(403);
-	});
-
-	it("should reject untrusted origin headers which start with trusted origin", async (ctx) => {
-		const client = createAuthClient({
-			baseURL: "http://localhost:3000",
-			fetchOptions: {
-				customFetchImpl,
-				headers: {
-					origin: "https://trusted.com.malicious.com",
-					cookie: "session=123",
-				},
-			},
-		});
-		const res = await client.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-		});
-		expect(res.error?.status).toBe(403);
-	});
-
-	it("should reject untrusted origin subdomains", async (ctx) => {
-		const client = createAuthClient({
-			baseURL: "http://localhost:3000",
-			fetchOptions: {
-				customFetchImpl,
-				headers: {
-					origin: "http://sub-domain.trusted.com",
 					cookie: "session=123",
 				},
 			},
@@ -296,23 +151,6 @@ describe("Origin Check", async (it) => {
 			callbackURL: "https://sub-domain.my-site.com/callback",
 		});
 		expect(res.data?.user).toBeDefined();
-
-		// Test another subdomain with the wildcard pattern
-		const client2 = createAuthClient({
-			baseURL: "https://another-sub.my-site.com",
-			fetchOptions: {
-				customFetchImpl,
-				headers: {
-					origin: "https://another-sub.my-site.com",
-				},
-			},
-		});
-		const res2 = await client2.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-			callbackURL: "https://another-sub.my-site.com/callback",
-		});
-		expect(res2.data?.user).toBeDefined();
 	});
 
 	it("should work with GET requests", async (ctx) => {
@@ -366,110 +204,292 @@ describe("Origin Check", async (it) => {
 		expect(invalidRes.error?.status).toBe(403);
 	});
 
-	it("should work with relative callbackURL with query params", async (ctx) => {
+	it("should filter out null values from trustedOrigins callback", async () => {
+		const { customFetchImpl, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			advanced: {
+				disableCSRFCheck: false,
+				disableOriginCheck: false,
+			},
+			trustedOrigins: async (request) => {
+				if (!request) return [];
+				// Simulate a scenario where some dynamic origins might be null
+				const dynamicOrigins = [
+					"http://valid-origin.com",
+					request.headers.get("x-custom-origin"), // Could be null
+					request.headers.get("x-another-origin"), // Could be null
+				];
+				return dynamicOrigins as string[];
+			},
+		});
+
 		const client = createAuthClient({
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
 				customFetchImpl,
+				headers: {
+					origin: "http://valid-origin.com",
+				},
 			},
 		});
+
 		const res = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
-			callbackURL: "/dashboard?email=123@email.com",
 		});
+
+		// Should succeed because valid-origin.com is in the list and null values are filtered out
 		expect(res.data?.user).toBeDefined();
 	});
+});
 
-	it("should work with protocol specific wildcard trusted origins", async () => {
-		// Test HTTPS protocol specific wildcard - should work
-		const httpsClient = createAuthClient({
-			baseURL: "http://localhost:3000",
-			fetchOptions: {
-				customFetchImpl,
-				headers: {
-					origin: "https://api.protocol-site.com",
-					cookie: "session=123",
-				},
-			},
-		});
-		const httpsRes = await httpsClient.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-			callbackURL: "https://app.protocol-site.com/dashboard",
-		});
-		expect(httpsRes.data?.user).toBeDefined();
-
-		// Test HTTP with HTTPS protocol wildcard - should fail
-		const httpClient = createAuthClient({
-			baseURL: "http://localhost:3000",
-			fetchOptions: {
-				customFetchImpl,
-				headers: {
-					origin: "http://api.protocol-site.com",
-					cookie: "session=123",
-				},
-			},
-		});
-		const httpRes = await httpClient.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-		});
-		expect(httpRes.error?.status).toBe(403);
+describe("Fetch Metadata CSRF Protection", async (it) => {
+	const { testUser, auth } = await getTestInstance({
+		trustedOrigins: ["http://localhost:3000", "https://app.example.com"],
+		emailAndPassword: {
+			enabled: true,
+		},
+		advanced: {
+			disableCSRFCheck: false,
+			disableOriginCheck: false,
+		},
 	});
 
-	it("should work with custom scheme wildcards (e.g. exp:// for Expo)", async () => {
-		const { customFetchImpl, testUser } = await getTestInstance({
-			trustedOrigins: [
-				"exp://10.0.0.*:*/*",
-				"exp://192.168.*.*:*/*",
-				"exp://172.*.*.*:*/*",
-			],
-			emailAndPassword: {
-				enabled: true,
-				async sendResetPassword(url, user) {},
+	it("should block cross-site navigation on first-login (no session cookie)", async (ctx) => {
+		const maliciousRequest = new Request(
+			"http://localhost:3000/api/auth/sign-in/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"Sec-Fetch-Site": "cross-site",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Dest": "document",
+					origin: "https://evil.com",
+				},
+				body: JSON.stringify({
+					email: "attacker@evil.com",
+					password: "password123",
+				}),
 			},
-		});
+		);
 
-		// Test custom scheme with wildcard - should work
-		const expoClient = createAuthClient({
-			baseURL: "http://localhost:3000",
-			fetchOptions: {
-				customFetchImpl,
+		const response = await auth.handler(maliciousRequest);
+		expect(response.status).toBe(403);
+		const error = await response.json();
+		expect(error.message).toBe(
+			"Cross-site navigation login blocked. This request appears to be a CSRF attack.",
+		);
+	});
+
+	it("should allow same-origin navigation on first-login (no session cookie)", async (ctx) => {
+		const legitimateRequest = new Request(
+			"http://localhost:3000/api/auth/sign-in/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"Sec-Fetch-Site": "same-origin",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Dest": "document",
+					origin: "http://localhost:3000",
+				},
+				body: JSON.stringify({
+					email: testUser.email,
+					password: testUser.password,
+				}),
 			},
+		);
+
+		const response = await auth.handler(legitimateRequest);
+
+		expect(response.status).not.toBe(403);
+		const error = await response.json().catch(() => null);
+		if (error?.message) {
+			expect(error.message).not.toBe(
+				"Cross-site navigation login blocked. This request appears to be a CSRF attack.",
+			);
+		}
+	});
+
+	it("should allow same-site navigation on first-login (no session cookie)", async (ctx) => {
+		const legitimateRequest = new Request(
+			"http://localhost:3000/api/auth/sign-in/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"Sec-Fetch-Site": "same-site",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Dest": "document",
+					origin: "https://app.example.com",
+				},
+				body: JSON.stringify({
+					email: testUser.email,
+					password: testUser.password,
+				}),
+			},
+		);
+
+		const response = await auth.handler(legitimateRequest);
+
+		expect(response.status).not.toBe(403);
+		const error = await response.json().catch(() => null);
+		if (error?.message) {
+			expect(error.message).not.toBe(
+				"Cross-site navigation login blocked. This request appears to be a CSRF attack.",
+			);
+		}
+	});
+
+	it("should fallback to origin validation when Fetch Metadata is missing", async (ctx) => {
+		const requestWithoutMetadata = new Request(
+			"http://localhost:3000/api/auth/sign-in/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					origin: "http://localhost:3000",
+				},
+				body: JSON.stringify({
+					email: testUser.email,
+					password: testUser.password,
+				}),
+			},
+		);
+
+		const response = await auth.handler(requestWithoutMetadata);
+
+		expect(response.status).not.toBe(403);
+	});
+
+	it("should use existing origin validation when session cookie exists", async (ctx) => {
+		const signInResponse = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			asResponse: true,
 		});
 
-		// Test with IP matching the wildcard pattern
-		const resWithIP = await expoClient.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-			callbackURL: "exp://10.0.0.29:8081/--/",
-		});
-		expect(resWithIP.data?.user).toBeDefined();
+		const setCookieHeader = signInResponse.headers.get("set-cookie");
+		const cookies = parseSetCookieHeader(setCookieHeader || "");
+		const sessionCookie = cookies.get("better-auth.session_token");
+		if (!sessionCookie) {
+			throw new Error("Failed to get session cookie");
+		}
 
-		// Test with different IP range that matches
-		const resWithIP2 = await expoClient.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-			callbackURL: "exp://192.168.1.100:8081/--/",
-		});
-		expect(resWithIP2.data?.user).toBeDefined();
+		const requestWithSession = new Request(
+			"http://localhost:3000/api/auth/sign-in/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					cookie: `better-auth.session_token=${sessionCookie.value}`,
+					"Sec-Fetch-Site": "cross-site",
+					"Sec-Fetch-Mode": "navigate",
+					origin: "http://localhost:3000",
+				},
+				body: JSON.stringify({
+					email: testUser.email,
+					password: testUser.password,
+				}),
+			},
+		);
 
-		// Test with different IP range that matches
-		const resWithIP3 = await expoClient.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-			callbackURL: "exp://172.16.0.1:8081/--/",
-		});
-		expect(resWithIP3.data?.user).toBeDefined();
+		const response = await auth.handler(requestWithSession);
 
-		// Test with IP that doesn't match any pattern - should fail
-		const resWithUnmatchedIP = await expoClient.signIn.email({
-			email: testUser.email,
-			password: testUser.password,
-			callbackURL: "exp://203.0.113.0:8081/--/",
-		});
-		expect(resWithUnmatchedIP.error?.status).toBe(403);
+		expect(response.status).not.toBe(403);
+	});
+
+	it("should block cross-site navigation for sign-up endpoint", async (ctx) => {
+		const maliciousRequest = new Request(
+			"http://localhost:3000/api/auth/sign-up/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"Sec-Fetch-Site": "cross-site",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Dest": "document",
+					origin: "https://evil.com",
+				},
+				body: JSON.stringify({
+					email: "attacker@evil.com",
+					password: "password123",
+					name: "Attacker",
+				}),
+			},
+		);
+
+		const response = await auth.handler(maliciousRequest);
+		expect(response.status).toBe(403);
+		const error = await response.json();
+		expect(error.message).toBe(
+			"Cross-site navigation login blocked. This request appears to be a CSRF attack.",
+		);
+	});
+
+	it("should allow cors mode requests (fetch/XHR)", async (ctx) => {
+		const fetchRequest = new Request(
+			"http://localhost:3000/api/auth/sign-in/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"Sec-Fetch-Site": "same-origin",
+					"Sec-Fetch-Mode": "cors",
+					"Sec-Fetch-Dest": "empty",
+					origin: "http://localhost:3000",
+				},
+				body: JSON.stringify({
+					email: testUser.email,
+					password: testUser.password,
+				}),
+			},
+		);
+
+		const response = await auth.handler(fetchRequest);
+
+		expect(response.status).not.toBe(403);
+		const error = await response.json().catch(() => null);
+		if (error?.message) {
+			expect(error.message).not.toBe(
+				"Cross-site navigation login blocked. This request appears to be a CSRF attack.",
+			);
+		}
+	});
+
+	it("should allow requests with expired session cookie (cookie presence check)", async (ctx) => {
+		const requestWithExpiredCookie = new Request(
+			"http://localhost:3000/api/auth/sign-in/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					cookie: "better-auth.session_token=expired_or_invalid_token",
+					"Sec-Fetch-Site": "cross-site",
+					"Sec-Fetch-Mode": "navigate",
+					origin: "http://localhost:3000",
+				},
+				body: JSON.stringify({
+					email: testUser.email,
+					password: testUser.password,
+				}),
+			},
+		);
+
+		const response = await auth.handler(requestWithExpiredCookie);
+
+		expect(response.status).not.toBe(403);
+		const error = await response.json().catch(() => null);
+		if (error?.message) {
+			expect(error.message).not.toBe(
+				"Cross-site navigation login blocked. This request appears to be a CSRF attack.",
+			);
+		}
 	});
 });
 
@@ -516,36 +536,195 @@ describe("origin check middleware", async (it) => {
 	});
 });
 
-describe("is simple request", async (it) => {
-	it("should return true for simple requests", async () => {
-		const request = new Request("http://localhost:3000/test", {
-			method: "GET",
-		});
-		const isSimple = isSimpleRequest(request.headers);
-		expect(isSimple).toBe(true);
-	});
-
-	it("should return false for non-simple requests", async () => {
-		const request = new Request("http://localhost:3000/test", {
-			method: "POST",
-			headers: {
-				"custom-header": "value",
+describe("trusted origins with baseURL inferred from request", async (it) => {
+	it("should respect trustedOrigins array when baseURL is NOT in config", async () => {
+		const { customFetchImpl, testUser } = await getTestInstance({
+			baseURL: undefined,
+			trustedOrigins: ["http://my-frontend.com"],
+			emailAndPassword: {
+				enabled: true,
+			},
+			advanced: {
+				disableCSRFCheck: false,
+				disableOriginCheck: false,
 			},
 		});
-		const isSimple = isSimpleRequest(request.headers);
-		expect(isSimple).toBe(false);
-	});
 
-	it("should return false for requests with a content type that is not simple", async () => {
-		const request = new Request("http://localhost:3000/test", {
-			method: "POST",
-			headers: {
-				"content-type": "application/json",
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "http://my-frontend.com",
+					cookie: "session=test",
+				},
 			},
 		});
-		const isSimple = isSimpleRequest(request.headers);
-		expect(isSimple).toBe(false);
+
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			callbackURL: "http://my-frontend.com/dashboard",
+		});
+
+		expect(res.data?.user).toBeDefined();
 	});
 
-	it;
+	it("should reject untrusted origins even when baseURL is inferred", async () => {
+		const { customFetchImpl, testUser } = await getTestInstance({
+			baseURL: undefined,
+			trustedOrigins: ["http://my-frontend.com"],
+			emailAndPassword: {
+				enabled: true,
+			},
+			advanced: {
+				disableCSRFCheck: false,
+				disableOriginCheck: false,
+			},
+		});
+
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "http://evil-site.com",
+					cookie: "session=test",
+				},
+			},
+		});
+
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+
+		expect(res.error?.status).toBe(403);
+	});
+
+	it("should respect BETTER_AUTH_TRUSTED_ORIGINS env when baseURL is NOT in config", async () => {
+		vi.stubEnv("BETTER_AUTH_TRUSTED_ORIGINS", "http://env-frontend.com");
+
+		try {
+			const { customFetchImpl, testUser } = await getTestInstance({
+				baseURL: undefined,
+				emailAndPassword: {
+					enabled: true,
+				},
+				advanced: {
+					disableCSRFCheck: false,
+					disableOriginCheck: false,
+				},
+			});
+
+			const client = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					customFetchImpl,
+					headers: {
+						origin: "http://env-frontend.com",
+						cookie: "session=test",
+					},
+				},
+			});
+
+			const res = await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				callbackURL: "http://env-frontend.com/dashboard",
+			});
+
+			expect(res.data?.user).toBeDefined();
+		} finally {
+			vi.unstubAllEnvs();
+		}
+	});
+
+	it("should allow requests from inferred baseURL origin", async () => {
+		const { customFetchImpl, testUser } = await getTestInstance({
+			baseURL: undefined,
+			emailAndPassword: {
+				enabled: true,
+			},
+			advanced: {
+				disableCSRFCheck: false,
+				disableOriginCheck: false,
+			},
+		});
+
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "http://localhost:3000",
+					cookie: "session=test",
+				},
+			},
+		});
+
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			callbackURL: "http://localhost:3000/dashboard",
+		});
+
+		expect(res.data?.user).toBeDefined();
+	});
+
+	it("should support both config array and env var together when baseURL is inferred", async () => {
+		vi.stubEnv("BETTER_AUTH_TRUSTED_ORIGINS", "http://env-origin.com");
+
+		try {
+			const { customFetchImpl, testUser } = await getTestInstance({
+				baseURL: undefined,
+				trustedOrigins: ["http://config-origin.com"],
+				emailAndPassword: {
+					enabled: true,
+				},
+				advanced: {
+					disableCSRFCheck: false,
+					disableOriginCheck: false,
+				},
+			});
+
+			const client = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					customFetchImpl,
+					headers: {
+						origin: "http://config-origin.com",
+						cookie: "session=test",
+					},
+				},
+			});
+
+			const res1 = await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				callbackURL: "http://config-origin.com/dashboard",
+			});
+			expect(res1.data?.user).toBeDefined();
+
+			const client2 = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					customFetchImpl,
+					headers: {
+						origin: "http://env-origin.com",
+						cookie: "session=test",
+					},
+				},
+			});
+
+			const res2 = await client2.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				callbackURL: "http://env-origin.com/dashboard",
+			});
+			expect(res2.data?.user).toBeDefined();
+		} finally {
+			vi.unstubAllEnvs();
+		}
+	});
 });

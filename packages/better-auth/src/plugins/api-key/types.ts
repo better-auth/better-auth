@@ -1,10 +1,13 @@
 import type {
+	Awaitable,
 	GenericEndpointContext,
 	HookEndpointContext,
 } from "@better-auth/core";
+
 import type { InferOptionSchema } from "../../types";
 import type { Statements } from "../access";
 import type { apiKeySchema } from "./schema";
+
 export interface ApiKeyOptions {
 	/**
 	 * The header name to check for API key
@@ -33,7 +36,7 @@ export interface ApiKeyOptions {
 		| ((options: {
 				ctx: GenericEndpointContext;
 				key: string;
-		  }) => boolean | Promise<boolean>)
+		  }) => Awaitable<boolean>)
 		| undefined;
 	/**
 	 * custom key generation function
@@ -47,7 +50,7 @@ export interface ApiKeyOptions {
 		 * The prefix of the API key to generate
 		 */
 		prefix: string | undefined;
-	}) => string | Promise<string>;
+	}) => Awaitable<string>;
 	/**
 	 * The configuration for storing the starting characters of the API key in the database.
 	 *
@@ -206,9 +209,69 @@ export interface ApiKeyOptions {
 					| ((
 							userId: string,
 							ctx: GenericEndpointContext,
-					  ) => Statements | Promise<Statements>);
+					  ) => Awaitable<Statements>);
 		  }
 		| undefined;
+	/**
+	 * Storage backend for API keys.
+	 *
+	 * - `"database"`: Store API keys in the database adapter (default)
+	 * - `"secondary-storage"`: Store API keys in the configured secondary storage (e.g., Redis)
+	 *
+	 * @default "database"
+	 */
+	storage?: "database" | "secondary-storage" | undefined;
+	/**
+	 * When `storage` is `"secondary-storage"`, enable fallback to database if key is not found in secondary storage.
+	 *
+	 * Useful for gradual migration from database to secondary storage.
+	 *
+	 * @default false
+	 */
+	fallbackToDatabase?: boolean | undefined;
+	/**
+	 * Custom storage methods for API keys.
+	 *
+	 * If provided, these methods will be used instead of `ctx.context.secondaryStorage`.
+	 * Custom methods take precedence over global secondary storage.
+	 *
+	 * Useful when you want to use a different storage backend specifically for API keys,
+	 * or when you need custom logic for storage operations.
+	 */
+	customStorage?:
+		| {
+				/**
+				 * Get a value from storage
+				 */
+				get: (key: string) => Awaitable<unknown>;
+				/**
+				 * Set a value in storage
+				 */
+				set: (
+					key: string,
+					value: string,
+					ttl?: number | undefined,
+				) => Awaitable<void | null | unknown>;
+				/**
+				 * Delete a value from storage
+				 */
+				delete: (key: string) => Awaitable<void | null | string>;
+		  }
+		| undefined;
+	/**
+	 * Defer non-critical updates (rate limiting counters, timestamps, remaining count)
+	 * to run after the response is sent using the global `advanced.backgroundTasks` handler.
+	 *
+	 * Requires `advanced.backgroundTasks.handler` to be configured in the main auth options.
+	 *
+	 * ⚠️ Warning: Enabling this introduces eventual consistency where the response
+	 * returns optimistic data before the database is updated. If the deferred update
+	 * fails, the database will have stale values. Only enable if your application
+	 * can tolerate this trade-off for improved latency.
+	 *
+	 * @default false
+	 */
+	deferUpdates?: boolean | undefined;
 }
 
 export type ApiKey = {

@@ -1,8 +1,10 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
+import { getCurrentAuthContext } from "@better-auth/core/context";
 import { defineErrorCodes } from "@better-auth/core/utils";
 import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "../../api";
+import { isAPIError } from "../../utils/is-api-error";
 
 const ERROR_CODES = defineErrorCodes({
 	PASSWORD_COMPROMISED:
@@ -42,13 +44,13 @@ async function checkPasswordCompromise(
 		);
 
 		if (found) {
-			throw new APIError("BAD_REQUEST", {
-				message: customMessage || ERROR_CODES.PASSWORD_COMPROMISED,
-				code: "PASSWORD_COMPROMISED",
+			throw APIError.from("BAD_REQUEST", {
+				message: customMessage || ERROR_CODES.PASSWORD_COMPROMISED.message,
+				code: ERROR_CODES.PASSWORD_COMPROMISED.code,
 			});
 		}
 	} catch (error) {
-		if (error instanceof APIError) throw error;
+		if (isAPIError(error)) throw error;
 		throw new APIError("INTERNAL_SERVER_ERROR", {
 			message: "Failed to check password. Please try again later.",
 		});
@@ -57,10 +59,22 @@ async function checkPasswordCompromise(
 
 export interface HaveIBeenPwnedOptions {
 	customPasswordCompromisedMessage?: string | undefined;
+	/**
+	 * Paths to check for password
+	 *
+	 * @default ["/sign-up/email", "/change-password", "/reset-password"]
+	 */
+	paths?: string[];
 }
 
-export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) =>
-	({
+export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
+	const paths = options?.paths || [
+		"/sign-up/email",
+		"/change-password",
+		"/reset-password",
+	];
+
+	return {
 		id: "haveIBeenPwned",
 		init(ctx) {
 			return {
@@ -68,6 +82,10 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) =>
 					password: {
 						...ctx.password,
 						async hash(password) {
+							const c = await getCurrentAuthContext();
+							if (!c.path || !paths.includes(c.path)) {
+								return ctx.password.hash(password);
+							}
 							await checkPasswordCompromise(
 								password,
 								options?.customPasswordCompromisedMessage,
@@ -78,5 +96,7 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) =>
 				},
 			};
 		},
+		options,
 		$ERROR_CODES: ERROR_CODES,
-	}) satisfies BetterAuthPlugin;
+	} satisfies BetterAuthPlugin;
+};

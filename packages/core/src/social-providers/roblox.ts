@@ -90,14 +90,15 @@ export const roblox = (options: RobloxOptions) => {
 			}
 
 			const userMap = await options.mapProfileToUser?.(profile);
-
+			// Roblox does not provide email or email_verified claim.
+			// We default to false for security consistency.
 			return {
 				user: {
 					id: profile.sub,
 					name: profile.nickname || profile.preferred_username || "",
 					image: profile.picture,
 					email: profile.preferred_username || null, // Roblox does not provide email
-					emailVerified: true,
+					emailVerified: false,
 					...userMap,
 				},
 				data: {

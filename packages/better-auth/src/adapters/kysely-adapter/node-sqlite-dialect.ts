@@ -3,28 +3,30 @@
  */
 
 import type { DatabaseSync } from "node:sqlite";
+import type {
+	DatabaseConnection,
+	DatabaseIntrospector,
+	DatabaseMetadata,
+	DatabaseMetadataOptions,
+	Dialect,
+	DialectAdapter,
+	DialectAdapterBase,
+	Driver,
+	Kysely,
+	QueryCompiler,
+	QueryResult,
+	SchemaMetadata,
+	TableMetadata,
+} from "kysely";
 import {
 	CompiledQuery,
-	type DatabaseConnection,
-	type DatabaseIntrospector,
-	type DatabaseMetadata,
-	type DatabaseMetadataOptions,
 	DEFAULT_MIGRATION_LOCK_TABLE,
 	DEFAULT_MIGRATION_TABLE,
 	DefaultQueryCompiler,
-	type Dialect,
-	type DialectAdapter,
-	DialectAdapterBase,
-	type Driver,
-	Kysely,
-	type QueryCompiler,
-	type QueryResult,
-	type SchemaMetadata,
 	sql,
-	type TableMetadata,
 } from "kysely";
 
-export class NodeSqliteAdapter implements DialectAdapterBase {
+class NodeSqliteAdapter implements DialectAdapterBase {
 	get supportsCreateIfNotExists(): boolean {
 		return true;
 	}
@@ -70,7 +72,7 @@ export interface NodeSqliteDialectConfig {
 		| undefined;
 }
 
-export class NodeSqliteDriver implements Driver {
+class NodeSqliteDriver implements Driver {
 	readonly #config: NodeSqliteDialectConfig;
 	readonly #connectionMutex = new ConnectionMutex();
 
@@ -166,7 +168,7 @@ class ConnectionMutex {
 	}
 }
 
-export class NodeSqliteIntrospector implements DatabaseIntrospector {
+class NodeSqliteIntrospector implements DatabaseIntrospector {
 	readonly #db: Kysely<unknown>;
 
 	constructor(db: Kysely<unknown>) {
@@ -257,7 +259,7 @@ export class NodeSqliteIntrospector implements DatabaseIntrospector {
 	}
 }
 
-export class NodeSqliteQueryCompiler extends DefaultQueryCompiler {
+class NodeSqliteQueryCompiler extends DefaultQueryCompiler {
 	protected override getCurrentParameterPlaceholder() {
 		return "?";
 	}

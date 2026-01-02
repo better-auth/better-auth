@@ -1,9 +1,10 @@
-import { execSync } from "child_process";
+import { execSync } from "node:child_process";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
+	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
 	transactionsTestSuite,
@@ -26,7 +27,7 @@ const cleanupDatabase = async (shouldDestroy = false) => {
 const { execute } = await testAdapter({
 	adapter: async (options) => {
 		const { schema } = await generateDrizzleSchema(pgDB, options, "pg");
-		return drizzleAdapter(drizzle(pgDB), {
+		return drizzleAdapter(drizzle(pgDB, { schema }), {
 			debugLogs: { isRunningAdapterTests: true },
 			schema,
 			provider: "pg",
@@ -62,6 +63,7 @@ const { execute } = await testAdapter({
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
+		joinsTestSuite(),
 		uuidTestSuite(),
 	],
 	async onFinish() {

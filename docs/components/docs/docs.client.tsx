@@ -3,7 +3,7 @@
 import { SidebarTrigger } from "fumadocs-core/sidebar";
 import { useSidebar } from "fumadocs-ui/provider";
 import { Menu, X } from "lucide-react";
-import { type ButtonHTMLAttributes, type HTMLAttributes } from "react";
+import type { ButtonHTMLAttributes, HTMLAttributes } from "react";
 import { cn } from "../../lib/utils";
 import { useNav } from "./layout/nav";
 import { buttonVariants } from "./ui/button";

@@ -12,7 +12,7 @@ import type { AuthMiddleware } from "../api";
 import type {
 	Account,
 	DBFieldAttribute,
-	DBPreservedModels,
+	ModelNames,
 	RateLimit,
 	SecondaryStorage,
 	Session,
@@ -23,7 +23,7 @@ import type { DBAdapterDebugLogOption, DBAdapterInstance } from "../db/adapter";
 import type { Logger } from "../env";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { AuthContext, GenericEndpointContext } from "./context";
-import type { LiteralUnion } from "./helper";
+import type { Awaitable, LiteralUnion } from "./helper";
 import type { BetterAuthPlugin } from "./plugin";
 
 type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
@@ -33,7 +33,7 @@ type Optional<T> = {
 };
 
 export type GenerateIdFn = (options: {
-	model: LiteralUnion<DBPreservedModels, string>;
+	model: ModelNames;
 	size?: number | undefined;
 }) => string | false;
 
@@ -106,7 +106,7 @@ export type BetterAuthRateLimitOptions = {
 	/**
 	 * Custom field names for the rate limit table
 	 */
-	fields?: Record<keyof RateLimit, string> | undefined;
+	fields?: Partial<Record<keyof RateLimit, string>> | undefined;
 	/**
 	 * custom storage configuration.
 	 *
@@ -193,6 +193,7 @@ export type BetterAuthAdvancedOptions = {
 	 * - "session_token"
 	 * - "session_data"
 	 * - "dont_remember"
+	 * - "account_data"
 	 *
 	 * plugins can also add additional cookies
 	 */
@@ -257,28 +258,44 @@ export type BetterAuthAdvancedOptions = {
 		  }
 		| undefined;
 	/**
-	 * OAuth configuration
+	 * Trusted proxy headers
+	 *
+
+	 * - `x-forwarded-host`
+	 * - `x-forwarded-proto`
+	 *
+	 * If set to `true` and no `baseURL` option is provided, we will use the headers to infer the
+	 * base URL.
+	 *
+	 * ⚠︎ This may expose your application to security vulnerabilities if not
+	 * used correctly. Please use this with caution.
 	 */
-	oauthConfig?:
-		| {
-				/**
-				 * Skip state cookie check
-				 *
-				 * ⚠︎ this has security implications and should only be enabled if you know what you are doing.
-				 * @default false
-				 */
-				skipStateCookieCheck?: boolean;
-				/**
-				 * Strategy for storing OAuth state
-				 *
-				 * - "cookie": Store state in an encrypted cookie (stateless)
-				 * - "database": Store state in the database
-				 *
-				 * @default "cookie"
-				 */
-				storeStateStrategy?: "database" | "cookie";
-		  }
-		| undefined;
+	trustedProxyHeaders?: boolean | undefined;
+	/**
+	 * Configure background task handling for deferred operations.
+	 *
+	 * Background tasks allow non-critical operations (like cleanup, analytics,
+	 * or timing-attack mitigation) to run after the response is sent.
+	 *
+	 * Use `waitUntil` from `@vercel/functions` on Vercel,
+	 * or `ctx.waitUntil` on Cloudflare Workers.
+	 *
+	 * @example
+	 * // Vercel
+	 * import { waitUntil } from "@vercel/functions";
+	 * advanced: { backgroundTasks: { handler: waitUntil } }
+	 *
+	 * @example
+	 * // Cloudflare Workers (with AsyncLocalStorage)
+	 * advanced: {
+	 *   backgroundTasks: {
+	 *     handler: (p) => execCtxStorage.getStore()?.waitUntil(p)
+	 *   }
+	 * }
+	 */
+	backgroundTasks?: {
+		handler: (promise: Promise<void>) => void;
+	};
 };
 
 export type BetterAuthOptions = {
@@ -617,6 +634,7 @@ export type BetterAuthOptions = {
 					 * Send a verification email when the user changes their email.
 					 * @param data the data object
 					 * @param request the request object
+					 * @deprecated Use `sendChangeEmailConfirmation` instead
 					 */
 					sendChangeEmailVerification?: (
 						data: {
@@ -627,6 +645,25 @@ export type BetterAuthOptions = {
 						},
 						request?: Request,
 					) => Promise<void>;
+					/**
+					 * Send a confirmation email to the old email address when the user changes their email.
+					 * @param data the data object
+					 * @param request the request object
+					 */
+					sendChangeEmailConfirmation?: (
+						data: {
+							user: User;
+							newEmail: string;
+							url: string;
+							token: string;
+						},
+						request?: Request,
+					) => Promise<void>;
+					/**
+					 * Update the email without verification if the user is not verified.
+					 * @default false
+					 */
+					updateEmailWithoutVerification?: boolean;
 				};
 				/**
 				 * User deletion configuration
@@ -901,6 +938,32 @@ export type BetterAuthOptions = {
 				 * @default false
 				 */
 				encryptOAuthTokens?: boolean;
+				/**
+				 * Skip state cookie check
+				 *
+				 * ⚠︎ this has security implications and should only be enabled if you know what you are doing.
+				 * @default false
+				 */
+				skipStateCookieCheck?: boolean;
+				/**
+				 * Strategy for storing OAuth state
+				 *
+				 * - "cookie": Store state in an encrypted cookie (stateless)
+				 * - "database": Store state in the database
+				 *
+				 * @default "cookie"
+				 */
+				storeStateStrategy?: "database" | "cookie";
+				/**
+				 * Store account data after oauth flow on a cookie
+				 *
+				 * This is useful for database-less flow
+				 *
+				 * @default false
+				 *
+				 * @note This is automatically set to true if you haven't passed a database
+				 */
+				storeAccountCookie?: boolean;
 		  }
 		| undefined;
 	/**
@@ -917,6 +980,12 @@ export type BetterAuthOptions = {
 				 */
 				fields?: Partial<Record<keyof OmitId<Verification>, string>>;
 				/**
+				 * Additional fields for the verification
+				 */
+				additionalFields?: {
+					[key: string]: DBFieldAttribute;
+				};
+				/**
 				 * disable cleaning up expired values when a verification value is
 				 * fetched
 				 */
@@ -925,9 +994,34 @@ export type BetterAuthOptions = {
 		| undefined;
 	/**
 	 * List of trusted origins.
+	 *
+	 * @param request - The request object.
+	 * It'll be undefined if no request was
+	 * made. Like during a create context call
+	 * or `auth.api` call.
+	 *
+	 * Trusted origins will be dynamically
+	 * calculated based on the request.
+	 *
+	 * @example
+	 * ```ts
+	 * trustedOrigins: async (request) => {
+	 *   return [
+	 *    "https://better-auth.com",
+	 *    "https://*.better-auth.com",
+	 *    request.headers.get("x-custom-origin")
+	 *   ];
+	 * }
+	 * ```
+	 * @returns An array of trusted origins.
 	 */
 	trustedOrigins?:
-		| (string[] | ((request: Request) => string[] | Promise<string[]>))
+		| (
+				| string[]
+				| ((
+						request?: Request | undefined,
+				  ) => Awaitable<(string | undefined | null)[]>)
+		  )
 		| undefined;
 	/**
 	 * Rate limiting configuration
@@ -936,14 +1030,7 @@ export type BetterAuthOptions = {
 	/**
 	 * Advanced options
 	 */
-	advanced?:
-		| (BetterAuthAdvancedOptions & {
-				/**
-				 * @deprecated Please use `database.generateId` instead.
-				 */
-				generateId?: never;
-		  })
-		| undefined;
+	advanced?: BetterAuthAdvancedOptions | undefined;
 	logger?: Logger | undefined;
 	/**
 	 * allows you to define custom hooks that can be
@@ -964,7 +1051,7 @@ export type BetterAuthOptions = {
 						 */
 						before?: (
 							user: User & Record<string, unknown>,
-							context?: GenericEndpointContext,
+							context: GenericEndpointContext | null,
 						) => Promise<
 							| boolean
 							| void
@@ -977,7 +1064,7 @@ export type BetterAuthOptions = {
 						 */
 						after?: (
 							user: User & Record<string, unknown>,
-							context?: GenericEndpointContext,
+							context: GenericEndpointContext | null,
 						) => Promise<void>;
 					};
 					update?: {
@@ -988,7 +1075,7 @@ export type BetterAuthOptions = {
 						 */
 						before?: (
 							user: Partial<User> & Record<string, unknown>,
-							context?: GenericEndpointContext,
+							context: GenericEndpointContext | null,
 						) => Promise<
 							| boolean
 							| void
@@ -1001,7 +1088,7 @@ export type BetterAuthOptions = {
 						 */
 						after?: (
 							user: User & Record<string, unknown>,
-							context?: GenericEndpointContext,
+							context: GenericEndpointContext | null,
 						) => Promise<void>;
 					};
 					delete?: {
@@ -1011,14 +1098,14 @@ export type BetterAuthOptions = {
 						 */
 						before?: (
 							user: User & Record<string, unknown>,
-							context?: GenericEndpointContext,
+							context: GenericEndpointContext | null,
 						) => Promise<boolean | void>;
 						/**
 						 * Hook that is called after a user is deleted.
 						 */
 						after?: (
 							user: User & Record<string, unknown>,
-							context?: GenericEndpointContext,
+							context: GenericEndpointContext | null,
 						) => Promise<void>;
 					};
 				};
@@ -1034,7 +1121,7 @@ export type BetterAuthOptions = {
 						 */
 						before?: (
 							session: Session & Record<string, unknown>,
-							context?: GenericEndpointContext,
+							context: GenericEndpointContext | null,
 						) => Promise<
 							| boolean
 							| void
@@ -1047,7 +1134,7 @@ export type BetterAuthOptions = {
 						 */
 						after?: (
 							session: Session & Record<string, unknown>,
-							context?: GenericEndpointContext,
+							context: GenericEndpointContext | null,
 						) => Promise<void>;
 					};
 					/**
@@ -1061,7 +1148,7 @@ export type BetterAuthOptions = {
 						 */
 						before?: (
 							session: Partial<Session> & Record<string, unknown>,
-							context?: GenericEndpointContext,
+							context: GenericEndpointContext | null,
 						) => Promise<
 							| boolean
 							| void
@@ -1074,7 +1161,7 @@ export type BetterAuthOptions = {
 						 */
 						after?: (
 							session: Session & Record<string, unknown>,
-							context?: GenericEndpointContext,
+							context: GenericEndpointContext | null,
 						) => Promise<void>;
 					};
 					delete?: {
@@ -1084,14 +1171,14 @@ export type BetterAuthOptions = {
 						 */
 						before?: (
 							session: Session & Record<string, unknown>,
-							context?: GenericEndpointContext,
+							context: GenericEndpointContext | null,
 						) => Promise<boolean | void>;
 						/**
 						 * Hook that is called after a session is deleted.
 						 */
 						after?: (
 							session: Session & Record<string, unknown>,
-							context?: GenericEndpointContext,
+							context: GenericEndpointContext | null,
 						) => Promise<void>;
 					};
 				};
@@ -1107,7 +1194,7 @@ export type BetterAuthOptions = {
 						 */
 						before?: (
 							account: Account,
-							context?: GenericEndpointContext,
+							context: GenericEndpointContext | null,
 						) => Promise<
 							| boolean
 							| void
@@ -1120,7 +1207,7 @@ export type BetterAuthOptions = {
 						 */
 						after?: (
 							account: Account,
-							context?: GenericEndpointContext,
+							context: GenericEndpointContext | null,
 						) => Promise<void>;
 					};
 					/**
@@ -1134,7 +1221,7 @@ export type BetterAuthOptions = {
 						 */
 						before?: (
 							account: Partial<Account> & Record<string, unknown>,
-							context?: GenericEndpointContext,
+							context: GenericEndpointContext | null,
 						) => Promise<
 							| boolean
 							| void
@@ -1147,7 +1234,7 @@ export type BetterAuthOptions = {
 						 */
 						after?: (
 							account: Account & Record<string, unknown>,
-							context?: GenericEndpointContext,
+							context: GenericEndpointContext | null,
 						) => Promise<void>;
 					};
 					delete?: {
@@ -1157,14 +1244,14 @@ export type BetterAuthOptions = {
 						 */
 						before?: (
 							account: Account & Record<string, unknown>,
-							context?: GenericEndpointContext,
+							context: GenericEndpointContext | null,
 						) => Promise<boolean | void>;
 						/**
 						 * Hook that is called after an account is deleted.
 						 */
 						after?: (
 							account: Account & Record<string, unknown>,
-							context?: GenericEndpointContext,
+							context: GenericEndpointContext | null,
 						) => Promise<void>;
 					};
 				};
@@ -1180,7 +1267,7 @@ export type BetterAuthOptions = {
 						 */
 						before?: (
 							verification: Verification & Record<string, unknown>,
-							context?: GenericEndpointContext,
+							context: GenericEndpointContext | null,
 						) => Promise<
 							| boolean
 							| void
@@ -1193,7 +1280,7 @@ export type BetterAuthOptions = {
 						 */
 						after?: (
 							verification: Verification & Record<string, unknown>,
-							context?: GenericEndpointContext,
+							context: GenericEndpointContext | null,
 						) => Promise<void>;
 					};
 					update?: {
@@ -1204,7 +1291,7 @@ export type BetterAuthOptions = {
 						 */
 						before?: (
 							verification: Partial<Verification> & Record<string, unknown>,
-							context?: GenericEndpointContext,
+							context: GenericEndpointContext | null,
 						) => Promise<
 							| boolean
 							| void
@@ -1217,7 +1304,7 @@ export type BetterAuthOptions = {
 						 */
 						after?: (
 							verification: Verification & Record<string, unknown>,
-							context?: GenericEndpointContext,
+							context: GenericEndpointContext | null,
 						) => Promise<void>;
 					};
 					delete?: {
@@ -1227,14 +1314,14 @@ export type BetterAuthOptions = {
 						 */
 						before?: (
 							verification: Verification & Record<string, unknown>,
-							context?: GenericEndpointContext,
+							context: GenericEndpointContext | null,
 						) => Promise<boolean | void>;
 						/**
 						 * Hook that is called after a verification is deleted.
 						 */
 						after?: (
 							verification: Verification & Record<string, unknown>,
-							context?: GenericEndpointContext,
+							context: GenericEndpointContext | null,
 						) => Promise<void>;
 					};
 				};
@@ -1345,4 +1432,18 @@ export type BetterAuthOptions = {
 				debug?: boolean;
 		  }
 		| undefined;
+	/**
+	 * Experimental features
+	 */
+	experimental?: {
+		/**
+		 * Enable experimental joins for your database adapter.
+		 *
+		 * 	Please read the adapter documentation for more information regarding joins before enabling this.
+		 * 	Not all adapters support joins.
+		 *
+		 * @default false
+		 */
+		joins?: boolean;
+	};
 };

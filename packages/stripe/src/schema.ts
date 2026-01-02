@@ -46,6 +46,18 @@ export const subscriptions = {
 				required: false,
 				defaultValue: false,
 			},
+			cancelAt: {
+				type: "date",
+				required: false,
+			},
+			canceledAt: {
+				type: "date",
+				required: false,
+			},
+			endedAt: {
+				type: "date",
+				required: false,
+			},
 			seats: {
 				type: "number",
 				required: false,
@@ -84,7 +96,7 @@ export const getSchema = (options: StripeOptions) => {
 		!options.subscription?.enabled &&
 		"subscription" in options.schema
 	) {
-		const { subscription, ...restSchema } = options.schema;
+		const { subscription: _subscription, ...restSchema } = options.schema;
 		return mergeSchema(baseSchema, restSchema);
 	}
 

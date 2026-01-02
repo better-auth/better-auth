@@ -1,9 +1,12 @@
+import { existsSync } from "node:fs";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { capitalizeFirstLetter } from "@better-auth/core/utils";
 import { produceSchema } from "@mrleebo/prisma-ast";
-import { capitalizeFirstLetter } from "better-auth";
-import { type FieldType, getAuthTables } from "better-auth/db";
-import { existsSync } from "fs";
-import fs from "fs/promises";
-import path from "path";
+import { initGetFieldName, initGetModelName } from "better-auth/adapters";
+import type { DBFieldType } from "better-auth/db";
+import { getAuthTables } from "better-auth/db";
+import { getPrismaVersion } from "../utils/get-package-info";
 import type { SchemaGenerator } from "./types";
 
 export const generatePrismaSchema: SchemaGenerator = async ({
@@ -11,10 +14,20 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 	options,
 	file,
 }) => {
-	const provider = adapter.options?.provider || "postgresql";
+	const provider: "sqlite" | "postgresql" | "mysql" | "mongodb" =
+		adapter.options?.provider || "postgresql";
 	const tables = getAuthTables(options);
 	const filePath = file || "./prisma/schema.prisma";
 	const schemaPrismaExist = existsSync(path.join(process.cwd(), filePath));
+
+	const getModelName = initGetModelName({
+		schema: getAuthTables(options),
+		usePlural: adapter.options?.adapterConfig?.usePlural,
+	});
+	const getFieldName = initGetFieldName({
+		schema: getAuthTables(options),
+		usePlural: false,
+	});
 
 	let schemaPrisma = "";
 	if (schemaPrismaExist) {
@@ -23,7 +36,25 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 			"utf-8",
 		);
 	} else {
-		schemaPrisma = getNewPrisma(provider);
+		schemaPrisma = getNewPrisma(provider, process.cwd());
+	}
+
+	// Update generator block for Prisma v7+ in existing schemas
+	const prismaVersion = getPrismaVersion(process.cwd());
+	if (prismaVersion && prismaVersion >= 7 && schemaPrismaExist) {
+		schemaPrisma = produceSchema(schemaPrisma, (builder) => {
+			const generator: any = builder.findByType("generator", {
+				name: "client",
+			});
+			if (generator && generator.properties) {
+				const providerProp = generator.properties.find(
+					(prop: any) => prop.type === "assignment" && prop.key === "provider",
+				);
+				if (providerProp && providerProp.value === '"prisma-client-js"') {
+					providerProp.value = '"prisma-client"';
+				}
+			}
+		});
 	}
 
 	const manyToManyRelations = new Map();
@@ -37,7 +68,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				const referencedCustomModel =
 					tables[referencedOriginalModel]?.modelName || referencedOriginalModel;
 				const referencedModelNameCap = capitalizeFirstLetter(
-					referencedCustomModel,
+					getModelName(referencedCustomModel),
 				);
 
 				if (!manyToManyRelations.has(referencedModelNameCap)) {
@@ -45,7 +76,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				}
 
 				const currentCustomModel = tables[table]?.modelName || table;
-				const currentModelNameCap = capitalizeFirstLetter(currentCustomModel);
+				const currentModelNameCap = capitalizeFirstLetter(
+					getModelName(currentCustomModel),
+				);
 
 				manyToManyRelations
 					.get(referencedModelNameCap)
@@ -58,7 +91,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 	for (const table in tables) {
 		const fields = tables[table]?.fields;
 		const customModelName = tables[table]?.modelName || table;
-		const modelName = capitalizeFirstLetter(customModelName);
+		const modelName = capitalizeFirstLetter(getModelName(customModelName));
 		indexedFields.set(modelName, []);
 
 		for (const field in fields) {
@@ -74,14 +107,14 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 		for (const table in tables) {
 			const originalTableName = table;
 			const customModelName = tables[table]?.modelName || table;
-			const modelName = capitalizeFirstLetter(customModelName);
+			const modelName = capitalizeFirstLetter(getModelName(customModelName));
 			const fields = tables[table]?.fields;
 			function getType({
 				isBigint,
 				isOptional,
 				type,
 			}: {
-				type: FieldType;
+				type: DBFieldType;
 				isOptional: boolean;
 				isBigint: boolean;
 			}) {
@@ -101,13 +134,26 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					return isOptional ? "DateTime?" : "DateTime";
 				}
 				if (type === "json") {
+					if (provider === "sqlite" || provider === "mysql") {
+						return isOptional ? "String?" : "String";
+					}
 					return isOptional ? "Json?" : "Json";
 				}
 				if (type === "string[]") {
-					return isOptional ? "String[]" : "String[]";
+					// SQLite and MySQL don't support array of strings, so we use string instead
+					// adapter should handle JSON.stringify and JSON.parse conversion for these fields
+					if (provider === "sqlite" || provider === "mysql") {
+						return isOptional ? "String?" : "String";
+					}
+					return "String[]";
 				}
 				if (type === "number[]") {
-					return isOptional ? "Int[]" : "Int[]";
+					// SQLite and MySQL don't support array of numbers, so we use int instead
+					// adapter should handle JSON.stringify and JSON.parse conversion for these fields
+					if (provider === "sqlite" || provider === "mysql") {
+						return "String";
+					}
+					return "Int[]";
 				}
 			}
 
@@ -139,10 +185,8 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 							.model(modelName)
 							.field("id", "String")
 							.attribute("id")
-							.attribute("db.Uuid")
-							.attribute(
-								'default(dbgenerated("pg_catalog.gen_random_uuid()"))',
-							);
+							.attribute('default(dbgenerated("pg_catalog.gen_random_uuid()"))')
+							.attribute("db.Uuid");
 					} else {
 						builder.model(modelName).field("id", "String").attribute("id");
 					}
@@ -282,11 +326,17 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				}
 
 				if (attr.references) {
-					if (useUUIDs && provider === "postgresql") {
-						fieldBuilder.attribute(`db.Uuid`);
+					if (
+						useUUIDs &&
+						provider === "postgresql" &&
+						attr.references?.field === "id"
+					) {
+						builder.model(modelName).field(fieldName).attribute(`db.Uuid`);
 					}
 
-					const referencedOriginalModelName = attr.references.model;
+					const referencedOriginalModelName = getModelName(
+						attr.references.model,
+					);
 					const referencedCustomModelName =
 						tables[referencedOriginalModelName]?.modelName ||
 						referencedOriginalModelName;
@@ -297,7 +347,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						action = "SetDefault";
 					else if (attr.references.onDelete === "restrict") action = "Restrict";
 
-					const relationField = `relation(fields: [${fieldName}], references: [${attr.references.field}], onDelete: ${action})`;
+					const relationField = `relation(fields: [${getFieldName({ model: originalTableName, field: fieldName })}], references: [${getFieldName({ model: attr.references.model, field: attr.references.field })}], onDelete: ${action})`;
 					builder
 						.model(modelName)
 						.field(
@@ -321,13 +371,36 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 			// Add many-to-many fields
 			if (manyToManyRelations.has(modelName)) {
 				for (const relatedModel of manyToManyRelations.get(modelName)) {
-					const fieldName = `${relatedModel.toLowerCase()}s`;
+					// Find the FK field on the related model that points to this model
+					const relatedTableName = Object.keys(tables).find(
+						(key) =>
+							capitalizeFirstLetter(tables[key]?.modelName || key) ===
+							relatedModel,
+					);
+					const relatedFields = relatedTableName
+						? tables[relatedTableName]?.fields
+						: {};
+					const fkField = Object.entries(relatedFields || {}).find(
+						([_fieldName, fieldAttr]: any) =>
+							fieldAttr.references &&
+							getModelName(fieldAttr.references.model) ===
+								getModelName(originalTableName),
+					);
+					const [_fieldKey, fkFieldAttr] = fkField || [];
+					const isUnique = fkFieldAttr?.unique === true;
+
+					const fieldName =
+						isUnique || adapter.options?.usePlural === true
+							? `${relatedModel.toLowerCase()}`
+							: `${relatedModel.toLowerCase()}s`;
 					const existingField = builder.findByType("field", {
 						name: fieldName,
 						within: prismaModel?.properties,
 					});
 					if (!existingField) {
-						builder.model(modelName).field(fieldName, `${relatedModel}[]`);
+						builder
+							.model(modelName)
+							.field(fieldName, `${relatedModel}${isUnique ? "?" : "[]"}`);
 					}
 				}
 			}
@@ -336,6 +409,17 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 			const indexedFieldsForModel = indexedFields.get(modelName);
 			if (indexedFieldsForModel && indexedFieldsForModel.length > 0) {
 				for (const fieldName of indexedFieldsForModel) {
+					if (prismaModel) {
+						const indexExist = prismaModel.properties.some(
+							(v) =>
+								v.type === "attribute" &&
+								v.name === "index" &&
+								JSON.stringify(v.args[0]?.value).includes(fieldName),
+						);
+						if (indexExist) {
+							continue;
+						}
+					}
 					const field = Object.entries(fields!).find(
 						([key, attr]) => (attr.fieldName || key) === fieldName,
 					)?.[1];
@@ -367,7 +451,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					.model(modelName)
 					.blockAttribute(
 						"map",
-						`${hasChanged ? customModelName : originalTableName}`,
+						`${getModelName(hasChanged ? customModelName : originalTableName)}`,
 					);
 			}
 		}
@@ -382,13 +466,20 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 	};
 };
 
-const getNewPrisma = (provider: string) => `generator client {
-    provider = "prisma-client-js"
+const getNewPrisma = (provider: string, cwd?: string) => {
+	const prismaVersion = getPrismaVersion(cwd);
+	// Use "prisma-client" for Prisma v7+, otherwise use "prisma-client-js"
+	const clientProvider =
+		prismaVersion && prismaVersion >= 7 ? "prisma-client" : "prisma-client-js";
+
+	return `generator client {
+    provider = "${clientProvider}"
   }
-  
+
   datasource db {
     provider = "${provider}"
     url      = ${
 			provider === "sqlite" ? `"file:./dev.db"` : `env("DATABASE_URL")`
 		}
   }`;
+};

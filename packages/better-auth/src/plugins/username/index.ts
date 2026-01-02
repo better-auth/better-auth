@@ -4,15 +4,15 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import type { Account, User } from "@better-auth/core/db";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { APIError } from "better-call";
-import { z } from "zod";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import * as z from "zod";
 import { createEmailVerificationToken } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { mergeSchema } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
 import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
-import { getSchema, type UsernameSchema } from "./schema";
+import type { UsernameSchema } from "./schema";
+import { getSchema } from "./schema";
 
 export { USERNAME_ERROR_CODES } from "./error-codes";
 
@@ -86,6 +86,29 @@ export type UsernameOptions = {
 function defaultUsernameValidator(username: string) {
 	return /^[a-zA-Z0-9_.]+$/.test(username);
 }
+
+const signInUsernameBodySchema = z.object({
+	username: z.string().meta({ description: "The username of the user" }),
+	password: z.string().meta({ description: "The password of the user" }),
+	rememberMe: z
+		.boolean()
+		.meta({
+			description: "Remember the user session",
+		})
+		.optional(),
+	callbackURL: z
+		.string()
+		.meta({
+			description: "The URL to redirect to after email verification",
+		})
+		.optional(),
+});
+
+const isUsernameAvailableBodySchema = z.object({
+	username: z.string().meta({
+		description: "The username to check",
+	}),
+});
 
 export const username = (options?: UsernameOptions | undefined) => {
 	const normalizer = (username: string) => {
@@ -167,26 +190,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 				"/sign-in/username",
 				{
 					method: "POST",
-					body: z.object({
-						username: z
-							.string()
-							.meta({ description: "The username of the user" }),
-						password: z
-							.string()
-							.meta({ description: "The password of the user" }),
-						rememberMe: z
-							.boolean()
-							.meta({
-								description: "Remember the user session",
-							})
-							.optional(),
-						callbackURL: z
-							.string()
-							.meta({
-								description: "The URL to redirect to after email verification",
-							})
-							.optional(),
-					}),
+					body: signInUsernameBodySchema,
 					metadata: {
 						openapi: {
 							summary: "Sign in with username",
@@ -235,9 +239,10 @@ export const username = (options?: UsernameOptions | undefined) => {
 				async (ctx) => {
 					if (!ctx.body.username || !ctx.body.password) {
 						ctx.context.logger.error("Username or password not found");
-						throw new APIError("UNAUTHORIZED", {
-							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
-						});
+						throw APIError.from(
+							"UNAUTHORIZED",
+							ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
+						);
 					}
 
 					const username =
@@ -252,27 +257,31 @@ export const username = (options?: UsernameOptions | undefined) => {
 						ctx.context.logger.error("Username too short", {
 							username,
 						});
-						throw new APIError("UNPROCESSABLE_ENTITY", {
-							message: ERROR_CODES.USERNAME_TOO_SHORT,
-						});
+						throw APIError.from(
+							"UNPROCESSABLE_ENTITY",
+							ERROR_CODES.USERNAME_TOO_SHORT,
+						);
 					}
 
 					if (username.length > maxUsernameLength) {
 						ctx.context.logger.error("Username too long", {
 							username,
 						});
-						throw new APIError("UNPROCESSABLE_ENTITY", {
-							message: ERROR_CODES.USERNAME_TOO_LONG,
-						});
+						throw APIError.from(
+							"UNPROCESSABLE_ENTITY",
+							ERROR_CODES.USERNAME_TOO_LONG,
+						);
 					}
 
 					const validator =
 						options?.usernameValidator || defaultUsernameValidator;
 
-					if (!validator(username)) {
-						throw new APIError("UNPROCESSABLE_ENTITY", {
-							message: ERROR_CODES.INVALID_USERNAME,
-						});
+					const valid = await validator(username);
+					if (!valid) {
+						throw APIError.from(
+							"UNPROCESSABLE_ENTITY",
+							ERROR_CODES.INVALID_USERNAME,
+						);
 					}
 
 					const user = await ctx.context.adapter.findOne<
@@ -293,9 +302,10 @@ export const username = (options?: UsernameOptions | undefined) => {
 						ctx.context.logger.error("User not found", {
 							username,
 						});
-						throw new APIError("UNAUTHORIZED", {
-							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
-						});
+						throw APIError.from(
+							"UNAUTHORIZED",
+							ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
+						);
 					}
 
 					const account = await ctx.context.adapter.findOne<Account>({
@@ -312,18 +322,20 @@ export const username = (options?: UsernameOptions | undefined) => {
 						],
 					});
 					if (!account) {
-						throw new APIError("UNAUTHORIZED", {
-							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
-						});
+						throw APIError.from(
+							"UNAUTHORIZED",
+							ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
+						);
 					}
 					const currentPassword = account?.password;
 					if (!currentPassword) {
 						ctx.context.logger.error("Password not found", {
 							username,
 						});
-						throw new APIError("UNAUTHORIZED", {
-							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
-						});
+						throw APIError.from(
+							"UNAUTHORIZED",
+							ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
+						);
 					}
 					const validPassword = await ctx.context.password.verify({
 						hash: currentPassword,
@@ -331,9 +343,10 @@ export const username = (options?: UsernameOptions | undefined) => {
 					});
 					if (!validPassword) {
 						ctx.context.logger.error("Invalid password");
-						throw new APIError("UNAUTHORIZED", {
-							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
-						});
+						throw APIError.from(
+							"UNAUTHORIZED",
+							ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
+						);
 					}
 
 					if (
@@ -343,9 +356,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 						if (
 							!ctx.context.options?.emailVerification?.sendVerificationEmail
 						) {
-							throw new APIError("FORBIDDEN", {
-								message: ERROR_CODES.EMAIL_NOT_VERIFIED,
-							});
+							throw APIError.from("FORBIDDEN", ERROR_CODES.EMAIL_NOT_VERIFIED);
 						}
 
 						if (ctx.context.options?.emailVerification?.sendOnSignIn) {
@@ -358,19 +369,19 @@ export const username = (options?: UsernameOptions | undefined) => {
 							const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${
 								ctx.body.callbackURL || "/"
 							}`;
-							await ctx.context.options.emailVerification.sendVerificationEmail(
-								{
-									user: user,
-									url,
-									token,
-								},
-								ctx.request,
+							await ctx.context.runInBackgroundOrAwait(
+								ctx.context.options.emailVerification.sendVerificationEmail(
+									{
+										user: user,
+										url,
+										token,
+									},
+									ctx.request,
+								),
 							);
 						}
 
-						throw new APIError("FORBIDDEN", {
-							message: ERROR_CODES.EMAIL_NOT_VERIFIED,
-						});
+						throw APIError.from("FORBIDDEN", ERROR_CODES.EMAIL_NOT_VERIFIED);
 					}
 
 					const session = await ctx.context.internalAdapter.createSession(
@@ -381,7 +392,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 						return ctx.json(null, {
 							status: 500,
 							body: {
-								message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+								message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION.message,
 							},
 						});
 					}
@@ -410,42 +421,43 @@ export const username = (options?: UsernameOptions | undefined) => {
 				"/is-username-available",
 				{
 					method: "POST",
-					body: z.object({
-						username: z.string().meta({
-							description: "The username to check",
-						}),
-					}),
+					body: isUsernameAvailableBodySchema,
 				},
 				async (ctx) => {
 					const username = ctx.body.username;
 					if (!username) {
-						throw new APIError("UNPROCESSABLE_ENTITY", {
-							message: ERROR_CODES.INVALID_USERNAME,
-						});
+						throw APIError.from(
+							"UNPROCESSABLE_ENTITY",
+							ERROR_CODES.INVALID_USERNAME,
+						);
 					}
 
 					const minUsernameLength = options?.minUsernameLength || 3;
 					const maxUsernameLength = options?.maxUsernameLength || 30;
 
 					if (username.length < minUsernameLength) {
-						throw new APIError("UNPROCESSABLE_ENTITY", {
-							message: ERROR_CODES.USERNAME_TOO_SHORT,
-						});
+						throw APIError.from(
+							"UNPROCESSABLE_ENTITY",
+							ERROR_CODES.USERNAME_TOO_SHORT,
+						);
 					}
 
 					if (username.length > maxUsernameLength) {
-						throw new APIError("UNPROCESSABLE_ENTITY", {
-							message: ERROR_CODES.USERNAME_TOO_LONG,
-						});
+						throw APIError.from(
+							"UNPROCESSABLE_ENTITY",
+							ERROR_CODES.USERNAME_TOO_LONG,
+						);
 					}
 
 					const validator =
 						options?.usernameValidator || defaultUsernameValidator;
 
-					if (!(await validator(username))) {
-						throw new APIError("UNPROCESSABLE_ENTITY", {
-							message: ERROR_CODES.INVALID_USERNAME,
-						});
+					const valid = await validator(username);
+					if (!valid) {
+						throw APIError.from(
+							"UNPROCESSABLE_ENTITY",
+							ERROR_CODES.INVALID_USERNAME,
+						);
 					}
 					const user = await ctx.context.adapter.findOne<User>({
 						model: "user",
@@ -494,15 +506,17 @@ export const username = (options?: UsernameOptions | undefined) => {
 							const minUsernameLength = options?.minUsernameLength || 3;
 							const maxUsernameLength = options?.maxUsernameLength || 30;
 							if (username.length < minUsernameLength) {
-								throw new APIError("BAD_REQUEST", {
-									message: ERROR_CODES.USERNAME_TOO_SHORT,
-								});
+								throw APIError.from(
+									"BAD_REQUEST",
+									ERROR_CODES.USERNAME_TOO_SHORT,
+								);
 							}
 
 							if (username.length > maxUsernameLength) {
-								throw new APIError("BAD_REQUEST", {
-									message: ERROR_CODES.USERNAME_TOO_LONG,
-								});
+								throw APIError.from(
+									"BAD_REQUEST",
+									ERROR_CODES.USERNAME_TOO_LONG,
+								);
 							}
 
 							const validator =
@@ -510,9 +524,10 @@ export const username = (options?: UsernameOptions | undefined) => {
 
 							const valid = await validator(username);
 							if (!valid) {
-								throw new APIError("BAD_REQUEST", {
-									message: ERROR_CODES.INVALID_USERNAME,
-								});
+								throw APIError.from(
+									"BAD_REQUEST",
+									ERROR_CODES.INVALID_USERNAME,
+								);
 							}
 							const user = await ctx.context.adapter.findOne<User>({
 								model: "user",
@@ -531,9 +546,10 @@ export const username = (options?: UsernameOptions | undefined) => {
 								ctx.context.session &&
 								user.id !== ctx.context.session.session.userId;
 							if (blockChangeSignUp || blockChangeUpdateUser) {
-								throw new APIError("BAD_REQUEST", {
-									message: ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
-								});
+								throw APIError.from(
+									"BAD_REQUEST",
+									ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
+								);
 							}
 						}
 
@@ -551,9 +567,10 @@ export const username = (options?: UsernameOptions | undefined) => {
 								const valid =
 									await options.displayUsernameValidator(displayUsername);
 								if (!valid) {
-									throw new APIError("BAD_REQUEST", {
-										message: ERROR_CODES.INVALID_DISPLAY_USERNAME,
-									});
+									throw APIError.from(
+										"BAD_REQUEST",
+										ERROR_CODES.INVALID_DISPLAY_USERNAME,
+									);
 								}
 							}
 						}
@@ -577,6 +594,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 				},
 			],
 		},
+		options,
 		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };

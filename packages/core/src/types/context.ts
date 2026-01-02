@@ -2,17 +2,16 @@ import type { CookieOptions, EndpointContext } from "better-call";
 import type {
 	Account,
 	BetterAuthDBSchema,
-	DBPreservedModels,
+	ModelNames,
 	SecondaryStorage,
 	Session,
 	User,
 	Verification,
 } from "../db";
 import type { DBAdapter, Where } from "../db/adapter";
-import { createLogger } from "../env";
+import type { createLogger } from "../env";
 import type { OAuthProvider } from "../oauth2";
 import type { BetterAuthCookies } from "./cookie";
-import type { LiteralUnion } from "./helper";
 import type {
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
@@ -25,7 +24,7 @@ export type GenericEndpointContext<
 };
 
 export interface InternalAdapter<
-	Options extends BetterAuthOptions = BetterAuthOptions,
+	_Options extends BetterAuthOptions = BetterAuthOptions,
 > {
 	createOAuthUser(
 		user: Omit<User, "id" | "createdAt" | "updatedAt">,
@@ -104,16 +103,16 @@ export interface InternalAdapter<
 		account: Omit<Account, "id" | "createdAt" | "updatedAt"> & Partial<Account>,
 	): Promise<Account>;
 
-	// fixme: any type
-	updateUser(
+	// Record<string, any> is to take into account additional fields or plugin-added fields
+	updateUser<T extends Record<string, any>>(
 		userId: string,
 		data: Partial<User> & Record<string, any>,
-	): Promise<any>;
+	): Promise<User & T>;
 
-	updateUserByEmail(
+	updateUserByEmail<T extends Record<string, any>>(
 		email: string,
 		data: Partial<User & Record<string, any>>,
-	): Promise<User>;
+	): Promise<User & T>;
 
 	updatePassword(userId: string, password: string): Promise<void>;
 
@@ -166,6 +165,16 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 		appName: string;
 		baseURL: string;
 		trustedOrigins: string[];
+		/**
+		 * Verifies whether url is a trusted origin according to the "trustedOrigins" configuration
+		 * @param url The url to verify against the "trustedOrigins" configuration
+		 * @param settings Specify supported pattern matching settings
+		 * @returns {boolean} true if the URL matches the origin pattern, false otherwise.
+		 */
+		isTrustedOrigin: (
+			url: string,
+			settings?: { allowRelativePaths: boolean },
+		) => boolean;
 		oauthConfig: {
 			/**
 			 * This is dangerous and should only be used in dev or staging environments.
@@ -226,7 +235,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 				  };
 		};
 		generateId: (options: {
-			model: LiteralUnion<DBPreservedModels, string>;
+			model: ModelNames;
 			size?: number | undefined;
 		}) => string | false;
 		secondaryStorage: SecondaryStorage | undefined;
@@ -267,4 +276,22 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 		 * @default false
 		 */
 		skipCSRFCheck: boolean;
+		/**
+		 * Background task handler for deferred operations.
+		 *
+		 * This is inferred from the `options.advanced?.backgroundTasks?.handler` option.
+		 * Defaults to a no-op that just runs the promise.
+		 */
+		runInBackground: (promise: Promise<void>) => void;
+		/**
+		 * Runs a task in the background if `runInBackground` is configured,
+		 * otherwise awaits the task directly.
+		 *
+		 * This is useful for operations like sending emails where we want
+		 * to avoid blocking the response when possible (for timing attack
+		 * mitigation), but still ensure the operation completes.
+		 */
+		runInBackgroundOrAwait: (
+			promise: Promise<unknown> | Promise<void> | void | unknown,
+		) => Promise<unknown>;
 	};

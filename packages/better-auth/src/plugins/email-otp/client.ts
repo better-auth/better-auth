@@ -1,6 +1,10 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
 import type { emailOTP } from ".";
 
+import { EMAIL_OTP_ERROR_CODES } from "./error-codes";
+
+export * from "./error-codes";
+
 export const emailOTPClient = () => {
 	return {
 		id: "email-otp",
@@ -12,5 +16,6 @@ export const emailOTPClient = () => {
 				signal: "$sessionSignal",
 			},
 		],
+		$ERROR_CODES: EMAIL_OTP_ERROR_CODES,
 	} satisfies BetterAuthClientPlugin;
 };

@@ -1,5 +1,9 @@
-import type { BetterAuthClientPlugin, ClientStore } from "@better-auth/core";
-import type { BetterFetch, BetterFetchOption } from "@better-fetch/fetch";
+import type {
+	BetterAuthClientPlugin,
+	ClientFetchOption,
+	ClientStore,
+} from "@better-auth/core";
+import type { BetterFetch } from "@better-fetch/fetch";
 import type {
 	PublicKeyCredentialCreationOptionsJSON,
 	PublicKeyCredentialRequestOptionsJSON,
@@ -13,6 +17,7 @@ import { useAuthQuery } from "better-auth/client";
 import type { Session, User } from "better-auth/types";
 import { atom } from "nanostores";
 import type { passkey } from ".";
+import { PASSKEY_ERROR_CODES } from "./error-codes";
 import type { Passkey } from "./types";
 
 export const getPasskeyActions = (
@@ -29,15 +34,15 @@ export const getPasskeyActions = (
 		opts?:
 			| {
 					autoFill?: boolean;
-					fetchOptions?: BetterFetchOption;
+					fetchOptions?: ClientFetchOption;
 			  }
 			| undefined,
-		options?: BetterFetchOption | undefined,
+		options?: ClientFetchOption | undefined,
 	) => {
 		const response = await $fetch<PublicKeyCredentialRequestOptionsJSON>(
 			"/passkey/generate-authenticate-options",
 			{
-				method: "POST",
+				method: "GET",
 				throw: false,
 			},
 		);
@@ -65,7 +70,7 @@ export const getPasskeyActions = (
 			$store.notify("$sessionSignal");
 
 			return verified;
-		} catch (e) {
+		} catch {
 			return {
 				data: null,
 				error: {
@@ -81,7 +86,7 @@ export const getPasskeyActions = (
 	const registerPasskey = async (
 		opts?:
 			| {
-					fetchOptions?: BetterFetchOption;
+					fetchOptions?: ClientFetchOption;
 					/**
 					 * The name of the passkey. This is used to
 					 * identify the passkey in the UI.
@@ -102,7 +107,7 @@ export const getPasskeyActions = (
 					useAutoRegister?: boolean;
 			  }
 			| undefined,
-		fetchOpts?: BetterFetchOption | undefined,
+		fetchOpts?: ClientFetchOption | undefined,
 	) => {
 		const options = await $fetch<PublicKeyCredentialCreationOptionsJSON>(
 			"/passkey/generate-register-options",
@@ -128,9 +133,7 @@ export const getPasskeyActions = (
 				optionsJSON: options.data,
 				useAutoRegister: opts?.useAutoRegister,
 			});
-			const verified = await $fetch<{
-				passkey: Passkey;
-			}>("/passkey/verify-registration", {
+			const verified = await $fetch<Passkey>("/passkey/verify-registration", {
 				...opts?.fetchOptions,
 				...fetchOpts,
 				body: {
@@ -145,6 +148,7 @@ export const getPasskeyActions = (
 				return verified;
 			}
 			$listPasskeys.set(Math.random());
+			return verified;
 		} catch (e) {
 			if (e instanceof WebAuthnError) {
 				if (e.code === "ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED") {
@@ -258,5 +262,10 @@ export const passkeyClient = () => {
 				signal: "$sessionSignal",
 			},
 		],
+		$ERROR_CODES: PASSKEY_ERROR_CODES,
 	} satisfies BetterAuthClientPlugin;
 };
+
+export type * from "@simplewebauthn/server";
+export * from "./error-codes";
+export type * from "./types";

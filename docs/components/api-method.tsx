@@ -1,5 +1,5 @@
 import { Link } from "lucide-react";
-import { JSX, ReactNode } from "react";
+import type { JSX, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import {
 	ApiMethodTabs,
@@ -51,15 +51,18 @@ export const APIMethod = ({
 	path,
 	isServerOnly,
 	isClientOnly,
+	isExternalOnly,
 	method,
 	children,
 	noResult,
 	requireSession,
+	requireBearerToken,
 	note,
 	clientOnlyNote,
 	serverOnlyNote,
 	resultVariable = "data",
 	forceAsBody,
+	forceAsParam,
 	forceAsQuery,
 }: {
 	/**
@@ -73,6 +76,12 @@ export const APIMethod = ({
 	 */
 	requireSession?: boolean;
 	/**
+	 *  If enabled, will add a bearer authorization header to the fetch options
+	 *
+	 * @default false
+	 */
+	requireBearerToken?: boolean;
+	/**
 	 * The HTTP method to the endpoint
 	 *
 	 * @default "GET"
@@ -85,11 +94,15 @@ export const APIMethod = ({
 	 */
 	isServerOnly?: boolean;
 	/**
-	 * Wether the code example is client-only, thus maening it's an endpoint.
+	 * Wether the code example is client-only, thus meaning it's an endpoint.
 	 *
 	 * @default false
 	 */
 	isClientOnly?: boolean;
+	/**
+	 * Wether the code example is meant for external consumers
+	 */
+	isExternalOnly?: boolean;
 	/**
 	 * The `ts` codeblock which describes the API method.
 	 * I recommend checking other parts of the Better-Auth docs which is using this component to get an idea of how to
@@ -126,6 +139,10 @@ export const APIMethod = ({
 	 * Force the server auth API to use `query`, rather than auto choosing
 	 */
 	forceAsQuery?: boolean;
+	/**
+	 * Force the server auth api to use `path`, rather than auto choosing
+	 */
+	forceAsParam?: boolean;
 }) => {
 	let { props, functionName, code_prefix, code_suffix } = parseCode(children);
 
@@ -136,13 +153,16 @@ export const APIMethod = ({
 		method: method ?? "GET",
 		forceAsBody,
 		forceAsQuery,
+		forceAsParam,
 	});
 
 	const serverBody = createServerBody({
 		props,
 		method: method ?? "GET",
 		requireSession: requireSession ?? false,
+		requireBearerToken: requireBearerToken ?? false,
 		forceAsQuery,
+		forceAsParam,
 		forceAsBody,
 	});
 
@@ -155,6 +175,43 @@ export const APIMethod = ({
 			allowCopy={!isClientOnly}
 		/>
 	);
+
+	const serverTabContent = (
+		<>
+			{isClientOnly ? null : (
+				<Endpoint
+					method={method || "GET"}
+					path={path}
+					isServerOnly={isServerOnly ?? false}
+					className=""
+				/>
+			)}
+			{serverOnlyNote || note ? (
+				<Note>
+					{note && tsxifyBackticks(note)}
+					{serverOnlyNote ? (
+						<>
+							{note ? <br /> : null}
+							{tsxifyBackticks(serverOnlyNote)}
+						</>
+					) : null}
+				</Note>
+			) : null}
+			<div className={cn("relative w-full")}>
+				{serverCodeBlock}
+				{isClientOnly ? (
+					<div className="flex absolute inset-0 justify-center items-center w-full h-full rounded-lg border backdrop-brightness-50 backdrop-blur-xs border-border">
+						<span>This is a client-only endpoint</span>
+					</div>
+				) : null}
+			</div>
+			{!isClientOnly ? <TypeTable props={props} isServer /> : null}
+		</>
+	);
+
+	if (isExternalOnly) {
+		return serverTabContent;
+	}
 
 	let pathId = path.replaceAll("/", "-");
 
@@ -263,34 +320,7 @@ export const APIMethod = ({
 					{!isServerOnly ? <TypeTable props={props} isServer={false} /> : null}
 				</ApiMethodTabsContent>
 				<ApiMethodTabsContent value="server">
-					{isClientOnly ? null : (
-						<Endpoint
-							method={method || "GET"}
-							path={path}
-							isServerOnly={isServerOnly ?? false}
-							className=""
-						/>
-					)}
-					{serverOnlyNote || note ? (
-						<Note>
-							{note && tsxifyBackticks(note)}
-							{serverOnlyNote ? (
-								<>
-									{note ? <br /> : null}
-									{tsxifyBackticks(serverOnlyNote)}
-								</>
-							) : null}
-						</Note>
-					) : null}
-					<div className={cn("relative w-full")}>
-						{serverCodeBlock}
-						{isClientOnly ? (
-							<div className="flex absolute inset-0 justify-center items-center w-full h-full rounded-lg border backdrop-brightness-50 backdrop-blur-xs border-border">
-								<span>This is a client-only endpoint</span>
-							</div>
-						) : null}
-					</div>
-					{!isClientOnly ? <TypeTable props={props} isServer /> : null}
+					{serverTabContent}
 				</ApiMethodTabsContent>
 			</ApiMethodTabs>
 		</>
@@ -633,9 +663,11 @@ function shouldClientUseQueryParams(
 	method: string | undefined,
 	forceAsBody: boolean | undefined,
 	forceAsQuery: boolean | undefined,
+	forceAsParam: boolean | undefined,
 ): boolean {
 	if (forceAsQuery) return true;
 	if (forceAsBody) return false;
+	if (forceAsParam) return false;
 	return method === "GET";
 }
 
@@ -644,16 +676,19 @@ function createClientBody({
 	method,
 	forceAsBody,
 	forceAsQuery,
+	forceAsParam,
 }: {
 	props: Property[];
 	method?: string;
 	forceAsBody?: boolean;
 	forceAsQuery?: boolean;
+	forceAsParam?: boolean;
 }) {
 	const isQueryParam = shouldClientUseQueryParams(
 		method,
 		forceAsBody,
 		forceAsQuery,
+		forceAsParam,
 	);
 	const baseIndentLevel = isQueryParam ? 2 : 1;
 
@@ -701,29 +736,36 @@ function shouldServerUseQueryParams(
 	method: string,
 	forceAsBody: boolean | undefined,
 	forceAsQuery: boolean | undefined,
+	forceAsParam: boolean | undefined,
 ): boolean {
 	if (forceAsQuery) return true;
 	if (forceAsBody) return false;
+	if (forceAsParam) return false;
 	return method === "GET";
 }
 
 function createServerBody({
 	props,
 	requireSession,
+	requireBearerToken,
 	method,
 	forceAsBody,
+	forceAsParam,
 	forceAsQuery,
 }: {
 	props: Property[];
 	requireSession: boolean;
+	requireBearerToken: boolean;
 	method: string;
 	forceAsQuery: boolean | undefined;
+	forceAsParam: boolean | undefined;
 	forceAsBody: boolean | undefined;
 }) {
 	const isQueryParam = shouldServerUseQueryParams(
 		method,
 		forceAsBody,
 		forceAsQuery,
+		forceAsParam,
 	);
 	const clientOnlyProps = props.filter((x) => !x.isClientOnly);
 
@@ -779,11 +821,16 @@ function createServerBody({
 			"\n    // This endpoint requires session cookies.\n    headers: await headers(),";
 	}
 
+	if (requireBearerToken) {
+		fetchOptions +=
+			"\n    // This endpoint requires a bearer authentication token.\n    headers: { authorization: 'Bearer <token>' },";
+	}
+
 	// Assemble final result
 	let result = "";
 	if (clientOnlyProps.length > 0) {
 		result += "{\n";
-		const paramType = isQueryParam ? "query" : "body";
+		const paramType = isQueryParam ? "query" : forceAsParam ? "params" : "body";
 		result += `    ${paramType}: ${propertiesContent}${fetchOptions}\n}`;
 	} else if (fetchOptions.length) {
 		result += `{${fetchOptions}\n}`;
