@@ -1,4 +1,3 @@
-import { base64 } from "@better-auth/utils/base64";
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
 import type { User, Verification } from "better-auth";
 import {
@@ -38,6 +37,8 @@ import {
 	DEFAULT_ASSERTION_TTL_MS,
 	DEFAULT_AUTHN_REQUEST_TTL_MS,
 	DEFAULT_CLOCK_SKEW_MS,
+	DEFAULT_MAX_SAML_METADATA_SIZE,
+	DEFAULT_MAX_SAML_RESPONSE_SIZE,
 	USED_ASSERTION_KEY_PREFIX,
 } from "../constants";
 import { assignOrganizationFromProvider } from "../linking";
@@ -670,6 +671,20 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 					message: "Invalid issuer. Must be a valid URL",
 				});
 			}
+
+			if (body.samlConfig?.idpMetadata?.metadata) {
+				const maxMetadataSize =
+					options?.saml?.maxMetadataSize ?? DEFAULT_MAX_SAML_METADATA_SIZE;
+				if (
+					new TextEncoder().encode(body.samlConfig.idpMetadata.metadata)
+						.length > maxMetadataSize
+				) {
+					throw new APIError("BAD_REQUEST", {
+						message: `IdP metadata exceeds maximum allowed size (${maxMetadataSize} bytes)`,
+					});
+				}
+			}
+
 			if (ctx.body.organizationId) {
 				const organization = await ctx.context.adapter.findOne({
 					model: "member",
@@ -1795,6 +1810,14 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 
 			const { SAMLResponse } = ctx.body;
 
+			const maxResponseSize =
+				options?.saml?.maxResponseSize ?? DEFAULT_MAX_SAML_RESPONSE_SIZE;
+			if (new TextEncoder().encode(SAMLResponse).length > maxResponseSize) {
+				throw new APIError("BAD_REQUEST", {
+					message: `SAML response exceeds maximum allowed size (${maxResponseSize} bytes)`,
+				});
+			}
+
 			let relayState: RelayState | null = null;
 			if (ctx.body.RelayState) {
 				try {
@@ -1931,8 +1954,8 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			} catch (error) {
 				ctx.context.logger.error("SAML response validation failed", {
 					error,
-					decodedResponse: new TextDecoder().decode(
-						base64.decode(SAMLResponse),
+					decodedResponse: Buffer.from(SAMLResponse, "base64").toString(
+						"utf-8",
 					),
 				});
 				throw new APIError("BAD_REQUEST", {
@@ -2259,6 +2282,14 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			const { SAMLResponse, RelayState = "" } = ctx.body;
 			const { providerId } = ctx.params;
 
+			const maxResponseSize =
+				options?.saml?.maxResponseSize ?? DEFAULT_MAX_SAML_RESPONSE_SIZE;
+			if (new TextEncoder().encode(SAMLResponse).length > maxResponseSize) {
+				throw new APIError("BAD_REQUEST", {
+					message: `SAML response exceeds maximum allowed size (${maxResponseSize} bytes)`,
+				});
+			}
+
 			// If defaultSSO is configured, use it as the provider
 			let provider: SSOProvider<SSOOptions> | null = null;
 
@@ -2378,8 +2409,8 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			} catch (error) {
 				ctx.context.logger.error("SAML response validation failed", {
 					error,
-					decodedResponse: new TextDecoder().decode(
-						base64.decode(SAMLResponse),
+					decodedResponse: Buffer.from(SAMLResponse, "base64").toString(
+						"utf-8",
 					),
 				});
 				throw new APIError("BAD_REQUEST", {
@@ -2475,8 +2506,8 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			}
 
 			// Assertion Replay Protection
-			const samlContentAcs = new TextDecoder().decode(
-				base64.decode(SAMLResponse),
+			const samlContentAcs = Buffer.from(SAMLResponse, "base64").toString(
+				"utf-8",
 			);
 			const assertionIdAcs = extractAssertionId(samlContentAcs);
 

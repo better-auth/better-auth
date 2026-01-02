@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { createServer } from "node:http";
+import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
@@ -3081,6 +3082,7 @@ describe("SAML SSO - Timestamp Validation", () => {
 	});
 });
 
+<<<<<<< HEAD
 describe("SAML Response Security", () => {
 	it("should reject forged/unsigned SAML responses", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
@@ -3187,6 +3189,16 @@ describe("SAML Response Security", () => {
 		);
 
 		expect(callbackRes.status).toBe(400);
+	});
+});
+
+describe("SAML SSO - Size Limit Validation", () => {
+	it("should export default size limit constants", async () => {
+		const { DEFAULT_MAX_SAML_RESPONSE_SIZE, DEFAULT_MAX_SAML_METADATA_SIZE } =
+			await import("./constants");
+
+		expect(DEFAULT_MAX_SAML_RESPONSE_SIZE).toBe(256 * 1024);
+		expect(DEFAULT_MAX_SAML_METADATA_SIZE).toBe(100 * 1024);
 	});
 });
 
