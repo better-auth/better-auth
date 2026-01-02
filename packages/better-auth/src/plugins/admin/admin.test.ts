@@ -17,7 +17,7 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { createAccessControl } from "../access";
 import { admin } from "./admin";
-import { adminClient } from "./client";
+import { ADMIN_ERROR_CODES, adminClient } from "./client";
 import type { UserWithRole } from "./types";
 
 let testIdToken: string;
@@ -1398,7 +1398,7 @@ describe("access control", async (it) => {
 		expect(res.error).toBeDefined();
 		expect(res.error?.status).toBe(400);
 		expect(res.error?.code).toBe(
-			"YOU_ARE_NOT_ALLOWED_TO_SET_A_NONEXISTENT_ROLE_VALUE",
+			ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE.code,
 		);
 		await client.admin.removeUser(
 			{ userId: createdUser.data?.user.id || "" },
@@ -1429,7 +1429,7 @@ describe("access control", async (it) => {
 		expect(res.error).toBeDefined();
 		expect(res.error?.status).toBe(400);
 		expect(res.error?.code).toBe(
-			"YOU_ARE_NOT_ALLOWED_TO_SET_A_NONEXISTENT_ROLE_VALUE",
+			ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE.code,
 		);
 		await client.admin.removeUser(
 			{ userId: createdUser.data?.user.id || "" },

@@ -145,7 +145,7 @@ export type BetterAuthPlugin = {
 	/**
 	 * The error codes returned by the plugin
 	 */
-	$ERROR_CODES?: Record<string, string> | undefined;
+	$ERROR_CODES?: Record<string, { code: string; message: string }> | undefined;
 	/**
 	 * All database operations that are performed by the plugin
 	 *

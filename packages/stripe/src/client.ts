@@ -1,4 +1,5 @@
 import type { BetterAuthClientPlugin } from "better-auth";
+import { STRIPE_ERROR_CODES } from "./error-codes";
 import type { stripe } from "./index";
 
 export const stripeClient = <
@@ -31,5 +32,7 @@ export const stripeClient = <
 			"/subscription/billing-portal": "POST",
 			"/subscription/restore": "POST",
 		},
+		$ERROR_CODES: STRIPE_ERROR_CODES,
 	} satisfies BetterAuthClientPlugin;
 };
+export * from "./error-codes";

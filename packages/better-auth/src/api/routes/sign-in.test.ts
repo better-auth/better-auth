@@ -1,5 +1,4 @@
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { APIError } from "better-call";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { describe, expect, vi } from "vitest";
 import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -70,9 +69,7 @@ describe("sign-in", async (it) => {
 				},
 			}),
 		).rejects.toThrowError(
-			new APIError("FORBIDDEN", {
-				message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
-			}),
+			APIError.from("FORBIDDEN", BASE_ERROR_CODES.EMAIL_NOT_VERIFIED),
 		);
 
 		expect(sendVerificationEmail).toHaveBeenCalledTimes(2);
@@ -101,9 +98,7 @@ describe("sign-in", async (it) => {
 				},
 			}),
 		).rejects.toThrowError(
-			new APIError("FORBIDDEN", {
-				message: BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
-			}),
+			APIError.from("FORBIDDEN", BASE_ERROR_CODES.EMAIL_NOT_VERIFIED),
 		);
 
 		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
@@ -169,7 +164,7 @@ describe("sign-in CSRF protection", async (it) => {
 		expect(response.status).toBe(403);
 		const error = await response.json();
 		expect(error.message).toBe(
-			BASE_ERROR_CODES.CROSS_SITE_NAVIGATION_LOGIN_BLOCKED,
+			BASE_ERROR_CODES.CROSS_SITE_NAVIGATION_LOGIN_BLOCKED.message,
 		);
 	});
 
@@ -301,7 +296,7 @@ describe("sign-in with form data", async (it) => {
 		expect(response.status).toBe(403);
 		const error = await response.json();
 		expect(error.message).toBe(
-			BASE_ERROR_CODES.CROSS_SITE_NAVIGATION_LOGIN_BLOCKED,
+			BASE_ERROR_CODES.CROSS_SITE_NAVIGATION_LOGIN_BLOCKED.message,
 		);
 	});
 
