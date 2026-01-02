@@ -7,6 +7,11 @@ description: Integrate Single Sign-On (SSO) with your application.
 
 Single Sign-On (SSO) allows users to authenticate with multiple applications using a single set of credentials. This plugin supports OpenID Connect (OIDC), OAuth2 providers, and SAML 2.0.
 
+
+<Callout type="warn">
+The SAML 2.0 support is in active development and may not be suitable for production use. Please report any issues or bugs on [GitHub](https://github.com/better-auth/better-auth).
+</Callout>
+
 ## Installation
 
 <Steps>
@@ -1286,6 +1291,8 @@ For a detailed guide on setting up SAML SSO with examples for Okta and testing w
 **defaultOverrideUserInfo**: Override user info with the provider info by default.
 
 **disableImplicitSignUp**: Disable implicit sign up for new users.
+
+**trustEmailVerified** — Trusts the `email_verified` flag from the provider. ⚠️ Use this with caution — it can lead to account takeover if misused. Only enable this if you know what you are doing or in a controlled environment.
 
 If you want to allow account linking for specific trusted providers, enable the `accountLinking` option in your auth config and specify those providers in the `trustedProviders` list.
 
