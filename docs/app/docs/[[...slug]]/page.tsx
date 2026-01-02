@@ -18,13 +18,6 @@ import { GenerateSecret } from "@/components/generate-secret";
 import { AddToCursor } from "@/components/mdx/add-to-cursor";
 import DatabaseTable from "@/components/mdx/database-tables";
 import { Callout } from "@/components/ui/callout";
-import {
-	CodeBlock,
-	CodeBlockTab,
-	CodeBlockTabs,
-	CodeBlockTabsList,
-	Pre,
-} from "@/components/ui/code-block";
 import { AnimatePresence } from "@/components/ui/fade-in";
 import { source } from "@/lib/source";
 import { absoluteUrl, cn } from "@/lib/utils";

@@ -5,6 +5,7 @@ import type { BreadcrumbOptions } from "fumadocs-core/breadcrumb";
 import { getBreadcrumbItemsFromPath } from "fumadocs-core/breadcrumb";
 import type { PageTree } from "fumadocs-core/server";
 import { useEffectEvent } from "fumadocs-core/utils/use-effect-event";
+import { useSidebar } from "fumadocs-ui/components/sidebar/base";
 import { useI18n } from "fumadocs-ui/contexts/i18n";
 import { useTreeContext, useTreePath } from "fumadocs-ui/contexts/tree";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -16,7 +17,6 @@ import { isActive } from "../../lib/is-active";
 import { cn } from "../../lib/utils";
 import { useNav } from "./layout/nav";
 import { TocPopover } from "./layout/toc";
-import { useSidebar } from "fumadocs-ui/components/sidebar/base";
 
 export function TocPopoverHeader(props: HTMLAttributes<HTMLDivElement>) {
 	const ref = useRef<HTMLElement>(null);

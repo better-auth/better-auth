@@ -5,9 +5,9 @@ import {
 } from "fumadocs-mdx/config";
 import lastModified from "fumadocs-mdx/plugins/last-modified";
 import {
+	createFileSystemGeneratorCache,
 	createGenerator,
 	remarkAutoTypeTable,
-	createFileSystemGeneratorCache,
 } from "fumadocs-typescript";
 import * as z from "zod";
 

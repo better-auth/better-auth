@@ -1,11 +1,11 @@
 import type { PageTree } from "fumadocs-core/server";
+import { SidebarProvider } from "fumadocs-ui/components/sidebar/base";
 import { TreeContextProvider } from "fumadocs-ui/contexts/tree";
 import type { HTMLAttributes, ReactNode } from "react";
 import { cn } from "../../lib/utils";
 import ArticleLayout from "../side-bar";
 import { NavProvider } from "./layout/nav";
 import type { BaseLayoutProps } from "./shared";
-import { SidebarProvider } from "fumadocs-ui/components/sidebar/base";
 
 export interface DocsLayoutProps extends BaseLayoutProps {
 	tree: PageTree.Root;
