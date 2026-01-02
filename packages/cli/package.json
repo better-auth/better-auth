@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/cli",
-  "version": "1.5.0-beta.1",
+  "version": "1.5.0-beta.2",
   "type": "module",
   "description": "The CLI for Better Auth",
   "module": "dist/index.mjs",
@@ -34,7 +34,20 @@
     "typescript",
     "better-auth"
   ],
-  "exports": "./dist/index.mjs",
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./api": {
+      "types": "./dist/api.d.mts",
+      "default": "./dist/api.mjs"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "api": [
+        "./dist/api.d.mts"
+      ]
+    }
+  },
   "bin": {
     "better-auth": "./dist/index.mjs"
   },

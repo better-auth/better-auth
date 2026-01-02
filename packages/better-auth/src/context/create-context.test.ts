@@ -691,13 +691,15 @@ describe("base context creation", () => {
 			vi.unstubAllEnvs();
 		});
 
-		it("should throw error for invalid trusted origin", async () => {
-			await expect(
-				initBase({
-					baseURL: "http://localhost:3000",
-					trustedOrigins: ["", "http://valid.com"],
-				}),
-			).rejects.toThrow();
+		it("should filter out empty origin from trusted origin", async () => {
+			const ctx = await initBase({
+				baseURL: "http://localhost:3000",
+				trustedOrigins: ["", "http://valid.com"],
+			});
+			expect(ctx.trustedOrigins).toEqual([
+				"http://localhost:3000",
+				"http://valid.com",
+			]);
 		});
 
 		it("should handle empty baseURL gracefully", async () => {
