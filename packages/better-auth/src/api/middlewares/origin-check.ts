@@ -163,11 +163,15 @@ async function validateOrigin(
 	if (skipOriginCheck === true) {
 		shouldSkip = true;
 	} else if (Array.isArray(skipOriginCheck)) {
-		const basePath = new URL(ctx.context.baseURL).pathname;
-		const currentPath = normalizePathname(ctx.request.url, basePath);
-		shouldSkip = skipOriginCheck.some((skipPath) =>
-			currentPath.startsWith(skipPath),
-		);
+		try {
+			const basePath = new URL(ctx.context.baseURL).pathname;
+			const currentPath = normalizePathname(ctx.request.url, basePath);
+			shouldSkip = skipOriginCheck.some((skipPath) =>
+				currentPath.startsWith(skipPath),
+			);
+		} catch {
+			shouldSkip = false;
+		}
 	}
 
 	const shouldValidate =
