@@ -174,7 +174,9 @@ async function validateOrigin(
 		? ctx.context.trustedOrigins
 		: [
 				...ctx.context.trustedOrigins,
-				...((await ctx.context.options.trustedOrigins?.(ctx.request)) || []),
+				...((await ctx.context.options.trustedOrigins?.(ctx.request))?.filter(
+					(v): v is string => Boolean(v),
+				) || []),
 			];
 
 	const isTrustedOrigin = trustedOrigins.some((origin) =>
