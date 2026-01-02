@@ -1017,7 +1017,7 @@ export type BetterAuthOptions = {
 	 */
 	trustedOrigins?:
 		| (
-				| (string | undefined | null)[]
+				| string[]
 				| ((
 						request?: Request | undefined,
 				  ) => Awaitable<(string | undefined | null)[]>)
