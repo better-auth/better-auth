@@ -37,8 +37,6 @@ if (glo[importIdentifier] === true) {
 	 *
 	 * If you see this message, make sure that you only import one version of Better Auth. In many cases,
 	 * your package manager installs two versions of Better Auth that are used by different packages within your project.
-	 * Another reason for this message is that some parts of your project use the commonjs version of Better Auth
-	 * and others use the EcmaScript version of Better Auth.
 	 *
 	 * This often leads to issues that are hard to debug. We often need to ensure async local storage instance,
 	 * If you imported different versions of Better Auth, it is impossible for us to
