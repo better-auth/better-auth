@@ -49,9 +49,9 @@
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
-    "better-auth": "workspace:*",
     "@types/better-sqlite3": "^7.6.13",
     "@types/pg": "^8.15.5",
+    "better-auth": "workspace:*",
     "better-sqlite3": "^12.5.0",
     "mysql2": "^3.14.4",
     "pg": "^8.16.3",
@@ -60,9 +60,10 @@
     "vitest": "^4.0.15"
   },
   "peerDependencies": {
+    "@better-auth/core": "workspace:*",
+    "better-auth": "workspace:*",
     "drizzle-kit": "1.0.0-beta.6-4414a19",
     "drizzle-orm": "1.0.0-beta.6-4414a19",
-    "better-auth": "workspace:*",
-    "@better-auth/core": "workspace:*"
+    "prettier": "^3.7.4"
   }
 }

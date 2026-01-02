@@ -14,8 +14,9 @@ import { assert } from "vitest";
 import { drizzleAdapter } from "../drizzle-adapter";
 import { generateDrizzleSchema, resetGenerationCount } from "./generate-schema";
 
+const dbName = "drizzle_better_auth";
 const mysqlDB = createPool({
-	uri: "mysql://user:password@localhost:3306/better_auth",
+	uri: `mysql://user:password@127.0.0.1:3306/${dbName}`,
 	timezone: "Z",
 });
 
@@ -36,9 +37,9 @@ const { execute } = await testAdapter({
 		});
 	},
 	async runMigrations(betterAuthOptions) {
-		await mysqlDB.query("DROP DATABASE IF EXISTS better_auth");
-		await mysqlDB.query("CREATE DATABASE better_auth");
-		await mysqlDB.query("USE better_auth");
+		await mysqlDB.query(`DROP DATABASE IF EXISTS ${dbName}`);
+		await mysqlDB.query(`CREATE DATABASE IF NOT EXISTS ${dbName}`);
+		await mysqlDB.query(`USE ${dbName}`);
 
 		const { fileName } = await generateDrizzleSchema(
 			mysqlDB,
@@ -46,7 +47,7 @@ const { execute } = await testAdapter({
 			"mysql",
 		);
 
-		const command = `npx drizzle-kit push --dialect=mysql --schema=${fileName}.ts --url=mysql://user:password@localhost:3306/better_auth`;
+		const command = `npx drizzle-kit push --dialect=mysql --schema=${fileName}.ts --url=mysql://user:password@localhost:3306/${dbName}`;
 		console.log(`Running: ${command}`);
 		console.log(`Options:`, betterAuthOptions);
 		try {
