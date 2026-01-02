@@ -130,6 +130,48 @@ describe("expo", async () => {
 		expect(fn).toHaveBeenCalledWith(
 			expect.stringContaining("accounts.google"),
 			"better-auth:///dashboard",
+			undefined,
+		);
+	});
+
+	it("should pass webBrowserOptions to openAuthSessionAsync", async () => {
+		const { client } = await getTestInstance(
+			{
+				plugins: [expo()],
+				trustedOrigins: ["better-auth://"],
+				socialProviders: {
+					google: {
+						clientId: "GOOGLE_CLIENT_ID",
+						clientSecret: "GOOGLE_CLIENT_SECRET",
+					},
+				},
+			},
+			{
+				clientOptions: {
+					plugins: [
+						expoClient({
+							storage: {
+								getItem: (key) => storage.get(key) || null,
+								setItem: async (key, value) => storage.set(key, value),
+							},
+							webBrowserOptions: {
+								preferEphemeralSession: true,
+							},
+						}),
+					],
+				},
+			},
+		);
+		await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+		});
+		expect(fn).toHaveBeenCalledWith(
+			expect.stringContaining("accounts.google"),
+			"better-auth:///dashboard",
+			{
+				preferEphemeralSession: true,
+			},
 		);
 	});
 
@@ -143,6 +185,35 @@ describe("expo", async () => {
 		const map = (await import("../src/client")).parseSetCookieHeader(header);
 		expect(map.get("better-auth.session_token")?.value).toBe("abc");
 		expect(map.get("better-auth.session_data")?.value).toBe("xyz");
+	});
+
+	it("should skip cookies with empty names", async () => {
+		const { parseSetCookieHeader, getSetCookie } = await import(
+			"../src/client"
+		);
+
+		// Simulate malformed cookie header starting with semicolon
+		const malformedHeader = "; abc.state=xyz; Path=/";
+		const parsed = parseSetCookieHeader(malformedHeader);
+		expect(parsed.has("")).toBe(false);
+
+		// Test with proper cookie format containing empty-name pattern
+		const header2 = "=empty-value; Path=/, valid-cookie=value; Path=/";
+		const parsed2 = parseSetCookieHeader(header2);
+		expect(parsed2.has("")).toBe(false);
+		expect(parsed2.get("valid-cookie")?.value).toBe("value");
+
+		// Test that existing session cookies are preserved when malformed cookies arrive
+		const prevCookie = JSON.stringify({
+			"abc.session_token": {
+				value: "valid-token",
+				expires: new Date(Date.now() + 1000 * 60 * 60).toISOString(),
+			},
+		});
+		const result = getSetCookie(malformedHeader, prevCookie);
+		const resultParsed = JSON.parse(result);
+		expect(resultParsed["abc.session_token"]).toBeDefined();
+		expect(resultParsed["abc.session_token"].value).toBe("valid-token");
 	});
 
 	it("should not trigger infinite refetch with non-better-auth cookies", async () => {
