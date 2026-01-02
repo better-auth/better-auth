@@ -1796,7 +1796,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 					relayState,
 					currentCallbackPath,
 					appOrigin,
-					ctx.context.isTrustedOrigin,
+					(url, settings) => ctx.context.isTrustedOrigin(url, settings),
 				);
 
 				throw ctx.redirect(safeRedirectUrl);
@@ -2235,7 +2235,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 				relayState?.callbackURL || parsedSamlConfig.callbackUrl,
 				currentCallbackPath,
 				appOrigin,
-				ctx.context.isTrustedOrigin,
+				(url, settings) => ctx.context.isTrustedOrigin(url, settings),
 			);
 			throw ctx.redirect(safeRedirectUrl);
 		},
