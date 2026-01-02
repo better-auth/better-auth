@@ -1,6 +1,6 @@
 "use client";
 
-import { useSearchContext } from "fumadocs-ui/contexts/search";
+import { useSearchContext } from "fumadocs-ui/provider";
 import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
