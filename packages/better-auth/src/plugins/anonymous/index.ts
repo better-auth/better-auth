@@ -18,7 +18,7 @@ import {
 import { mergeSchema } from "../../db/schema";
 import { ANONYMOUS_ERROR_CODES } from "./error-codes";
 import { schema } from "./schema";
-import type { AnonymousOptions } from "./types";
+import type { AnonymousOptions, AnonymousSession } from "./types";
 
 async function getAnonUserEmail(
 	options: AnonymousOptions | undefined,
@@ -195,9 +195,7 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 					},
 				},
 				async (ctx) => {
-					const session = ctx.context.session as typeof ctx.context.session & {
-						user: { isAnonymous: boolean | null };
-					};
+					const session = ctx.context.session as AnonymousSession;
 
 					if (options?.disableDeleteAnonymousUser) {
 						throw new APIError("BAD_REQUEST", {
