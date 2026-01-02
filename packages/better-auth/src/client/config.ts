@@ -72,6 +72,7 @@ export const getClientConfig = (
 		"/revoke-sessions": "POST",
 		"/revoke-other-sessions": "POST",
 		"/delete-user": "POST",
+		"/validate-reset-password-token": "POST",
 	};
 	const atomListeners: ClientAtomListener[] = [
 		{
