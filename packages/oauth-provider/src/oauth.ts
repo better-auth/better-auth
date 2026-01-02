@@ -1,4 +1,4 @@
-import { defineRequestState } from "@better-auth/core/context";
+import { defineRequestState, hasRequestState } from "@better-auth/core/context";
 import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import {
@@ -246,6 +246,11 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						if (!sessionToken) return;
 						// Continue with authorization request by using the initial prompt
 						// but clearing the login prompt cookie if forced login prompt
+
+						// Guard against missing request state context in serverless environments
+						// Fixes: https://github.com/better-auth/better-auth/issues/6613
+						if (!(await hasRequestState())) return;
+
 						const _query =
 							(await oAuthState.get())?.query ??
 							((await getOAuthState())?.query as string | undefined);
