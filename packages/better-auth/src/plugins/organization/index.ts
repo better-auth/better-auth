@@ -1,4 +1,3 @@
-export type * from "./access";
 export { getOrgAdapter } from "./adapter";
 export * from "./organization";
 export type * from "./schema";

@@ -117,13 +117,10 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 		// Rate limit: don't refetch on focus if a session request was made recently
 		if (event?.event === "visibilitychange") {
 			const timeSinceLastRequest = now() - state.lastSessionRequest;
-			if (
-				timeSinceLastRequest < FOCUS_REFETCH_RATE_LIMIT_SECONDS &&
-				currentSession?.data !== null &&
-				currentSession?.data !== undefined
-			) {
+			if (timeSinceLastRequest < FOCUS_REFETCH_RATE_LIMIT_SECONDS) {
 				return;
 			}
+			state.lastSessionRequest = now();
 		}
 
 		if (event?.event === "visibilitychange") {

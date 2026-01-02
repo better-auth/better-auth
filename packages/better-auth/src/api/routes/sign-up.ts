@@ -9,6 +9,7 @@ import { parseUserInput } from "../../db";
 import { parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput, InferUser, User } from "../../types";
 import { isAPIError } from "../../utils/is-api-error";
+import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
 
 const signUpEmailBodySchema = z
@@ -28,8 +29,13 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 		{
 			method: "POST",
 			operationId: "signUpWithEmailAndPassword",
+			use: [formCsrfMiddleware],
 			body: signUpEmailBodySchema,
 			metadata: {
+				allowedMediaTypes: [
+					"application/x-www-form-urlencoded",
+					"application/json",
+				],
 				$Infer: {
 					body: {} as {
 						name: string;
@@ -201,6 +207,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 
 				if (!isValidEmail.success) {
 					throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
+				}
+
+				if (!password || typeof password !== "string") {
+					throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
 				}
 
 				const minPasswordLength = ctx.context.password.config.minPasswordLength;
