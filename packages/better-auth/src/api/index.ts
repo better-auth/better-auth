@@ -10,6 +10,7 @@ import type { Endpoint, Middleware } from "better-call";
 import { createRouter } from "better-call";
 import type { UnionToIntersection } from "../types/helper";
 import { isAPIError } from "../utils/is-api-error";
+import { normalizePathname } from "../utils/url";
 import { originCheckMiddleware } from "./middlewares";
 import { onRequestRateLimit } from "./rate-limiter";
 import {
@@ -275,14 +276,7 @@ export const router = <Option extends BetterAuthOptions>(
 		async onRequest(req) {
 			//handle disabled paths
 			const disabledPaths = ctx.options.disabledPaths || [];
-			const pathname = new URL(req.url).pathname.replace(/\/+$/, "") || "/";
-
-			const normalizedPath =
-				basePath === "/"
-					? pathname
-					: pathname.startsWith(basePath)
-						? pathname.slice(basePath.length).replace(/\/+$/, "") || "/"
-						: pathname;
+			const normalizedPath = normalizePathname(req.url, basePath);
 			if (disabledPaths.includes(normalizedPath)) {
 				return new Response("Not Found", { status: 404 });
 			}
