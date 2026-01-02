@@ -83,5 +83,3 @@ export function gumroad(options: GumroadOptions): GenericOAuthConfig {
 		getUserInfo,
 	};
 }
-
-
