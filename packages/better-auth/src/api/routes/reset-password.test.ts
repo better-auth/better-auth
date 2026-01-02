@@ -402,3 +402,53 @@ describe("revoke sessions on password reset", async (it) => {
 		});
 	});
 });
+
+describe("auto sign in on reset password", async (it) => {
+	const mockSendEmail = vi.fn();
+	let token = "";
+	const { client, testUser, sessionSetter } = await getTestInstance(
+		{
+			emailAndPassword: {
+				enabled: true,
+				autoSignInOnResetPassword: true,
+				async sendResetPassword({ url }) {
+					token = url.split("?")[0]!.split("/").pop() || "";
+					await mockSendEmail();
+				},
+			},
+		},
+		{
+			testWith: "sqlite",
+		},
+	);
+
+	it("should sign in automatically after password reset", async () => {
+		await client.requestPasswordReset({
+			email: testUser.email,
+			redirectTo: "http://localhost:3000",
+		});
+		let verifyHeaders = new Headers();
+		const res = await client.resetPassword(
+			{
+				newPassword: "new-password",
+			},
+			{
+				query: {
+					token,
+				},
+				onSuccess(context) {
+					sessionSetter(verifyHeaders)(context);
+				},
+			},
+		);
+
+		expect(res.data?.status).toBe(true);
+		const session = await client.getSession({
+			fetchOptions: {
+				headers: verifyHeaders,
+			},
+		});
+		expect(session.data?.user).toBeDefined();
+		expect(session.data?.user.email).toBe(testUser.email);
+	});
+});
