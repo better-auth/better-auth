@@ -2,7 +2,7 @@
   "name": "@better-auth/root",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@10.23.0",
+  "packageManager": "pnpm@10.26.2",
   "scripts": {
     "build": "turbo build --filter=./packages/*",
     "dev": "turbo dev --filter=./packages/* --filter=!./packages/cli",
@@ -11,7 +11,7 @@
     "lint": "biome check .",
     "lint:dependencies": "knip --strict",
     "lint:fix": "biome check . --fix --unsafe",
-    "lint:spell": "cspell .",
+    "lint:spell": "cspell . --color",
     "lint:types": "turbo lint:types --filter=./packages/*",
     "lint:packages": "turbo lint:package --filter=./packages/*",
     "release": "turbo build --filter=./packages/* && bumpp && pnpm -r publish --access public --no-git-checks",

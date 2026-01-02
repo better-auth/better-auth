@@ -64,8 +64,8 @@ function validateSecret(
 	}
 
 	if (secret.length < 32) {
-		throw new BetterAuthError(
-			`Invalid BETTER_AUTH_SECRET: must be at least 32 characters long for adequate security. Generate one with \`npx @better-auth/cli secret\` or \`openssl rand -base64 32\`.`,
+		logger.warn(
+			`[better-auth] Warning: your BETTER_AUTH_SECRET should be at least 32 characters long for adequate security. Generate one with \`npx @better-auth/cli secret\` or \`openssl rand -base64 32\`.`,
 		);
 	}
 
@@ -189,7 +189,7 @@ export async function createAuthContext(
 				allowRelativePaths: boolean;
 			},
 		) {
-			return ctx.trustedOrigins.some((origin) =>
+			return this.trustedOrigins.some((origin) =>
 				matchesOriginPattern(url, origin, settings),
 			);
 		},
@@ -288,6 +288,30 @@ export async function createAuthContext(
 				: isTest()
 					? true
 					: false,
+		runInBackground:
+			options.advanced?.backgroundTasks?.handler ??
+			((p) => {
+				p.catch(() => {});
+			}),
+		async runInBackgroundOrAwait(
+			promise: Promise<unknown> | Promise<void> | void | unknown,
+		) {
+			try {
+				if (options.advanced?.backgroundTasks?.handler) {
+					if (promise instanceof Promise) {
+						options.advanced.backgroundTasks.handler(
+							promise.catch((e) => {
+								logger.error("Failed to run background task:", e);
+							}),
+						);
+					}
+				} else {
+					await promise;
+				}
+			} catch (e) {
+				logger.error("Failed to run background task:", e);
+			}
+		},
 	};
 
 	const initOrPromise = runPluginInit(ctx);

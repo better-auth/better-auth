@@ -154,9 +154,26 @@ export interface Subscription {
 	 */
 	periodEnd?: Date | undefined;
 	/**
-	 * Cancel at period end
+	 * Whether this subscription will (if status=active)
+	 * or did (if status=canceled) cancel at the end of the current billing period.
 	 */
 	cancelAtPeriodEnd?: boolean | undefined;
+	/**
+	 * If the subscription is scheduled to be canceled,
+	 * this is the time at which the cancellation will take effect.
+	 */
+	cancelAt?: Date | undefined;
+	/**
+	 * If the subscription has been canceled, this is the time when it was canceled.
+	 *
+	 * Note: If the subscription was canceled with `cancel_at_period_end`,
+	 * this reflects the cancellation request time, not when the subscription actually ends.
+	 */
+	canceledAt?: Date | undefined;
+	/**
+	 * If the subscription has ended, the date the subscription ended.
+	 */
+	endedAt?: Date | undefined;
 	/**
 	 * A field to group subscriptions so you can have multiple subscriptions
 	 * for one reference id
@@ -255,6 +272,18 @@ export type SubscriptionOptions = {
 				event: Stripe.Event;
 				stripeSubscription: Stripe.Subscription;
 				subscription: Subscription;
+		  }) => Promise<void>)
+		| undefined;
+	/**
+	 * A callback to run when a subscription is created
+	 * @returns
+	 */
+	onSubscriptionCreated?:
+		| ((data: {
+				event: Stripe.Event;
+				stripeSubscription: Stripe.Subscription;
+				subscription: Subscription;
+				plan: StripePlan;
 		  }) => Promise<void>)
 		| undefined;
 	/**

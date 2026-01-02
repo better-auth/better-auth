@@ -691,13 +691,15 @@ describe("base context creation", () => {
 			vi.unstubAllEnvs();
 		});
 
-		it("should throw error for invalid trusted origin", async () => {
-			await expect(
-				initBase({
-					baseURL: "http://localhost:3000",
-					trustedOrigins: ["", "http://valid.com"],
-				}),
-			).rejects.toThrow();
+		it("should filter out empty origin from trusted origin", async () => {
+			const ctx = await initBase({
+				baseURL: "http://localhost:3000",
+				trustedOrigins: ["", "http://valid.com"],
+			});
+			expect(ctx.trustedOrigins).toEqual([
+				"http://localhost:3000",
+				"http://valid.com",
+			]);
 		});
 
 		it("should handle empty baseURL gracefully", async () => {
@@ -1254,13 +1256,23 @@ describe("base context creation", () => {
 			vi.unstubAllEnvs();
 		});
 
-		it("should throw error when secret is too short", async () => {
+		it("should log a warning when secret is too short", async () => {
 			vi.stubEnv("BETTER_AUTH_SECRET", "");
 			vi.stubEnv("AUTH_SECRET", "");
 			const originalNodeEnv = process.env.NODE_ENV;
-
-			const expectedErrorMessage =
-				"Invalid BETTER_AUTH_SECRET: must be at least 32 characters long for adequate security. Generate one with `npx @better-auth/cli secret` or `openssl rand -base64 32`.";
+			const log = vi.fn();
+			await initBase({
+				logger: {
+					level: "warn",
+					log,
+				} as any,
+				database: new Database(":memory:"),
+				session: {
+					cookieCache: {
+						refreshCache: true,
+					},
+				},
+			});
 
 			vi.doMock("@better-auth/core/env", async () => {
 				const actual = await vi.importActual("@better-auth/core/env");
@@ -1287,12 +1299,15 @@ describe("base context creation", () => {
 				const getDatabaseType = () => "memory";
 				return createAuthContext(adapter, opts, getDatabaseType);
 			};
-
-			await expect(
-				initBaseNonTest({
-					secret: "short",
-				}),
-			).rejects.toThrow(expectedErrorMessage);
+			initBaseNonTest({
+				secret: "short",
+			}),
+				expect(log).toHaveBeenCalledWith(
+					"warn",
+					expect.stringContaining(
+						"`session.cookieCache.refreshCache` is enabled while `database` or `secondaryStorage` is configured",
+					),
+				);
 
 			vi.doUnmock("@better-auth/core/env");
 			vi.resetModules();

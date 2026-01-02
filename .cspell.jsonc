@@ -82,6 +82,9 @@
 		// match any string starting with price_ (stripe related)
 		"price_[a-zA-Z0-9-_]+",
 
+		// match Stripe subscription IDs (sub_)
+		"sub_[a-zA-Z0-9-_]+",
+
 		// match any url-encoded string
 		"%[0-9A-Fa-f]{2}(?:%[0-9A-Fa-f]{2})*",
 
