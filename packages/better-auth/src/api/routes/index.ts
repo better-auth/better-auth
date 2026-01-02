@@ -3,7 +3,7 @@ export * from "./callback";
 export * from "./email-verification";
 export * from "./error";
 export * from "./ok";
-export * from "./reset-password";
+export * from "./password";
 export * from "./session";
 export * from "./sign-in";
 export * from "./sign-out";

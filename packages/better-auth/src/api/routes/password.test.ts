@@ -1,3 +1,4 @@
+import { APIError } from "better-call";
 import { describe, expect, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { Account } from "../../types";
@@ -400,5 +401,79 @@ describe("revoke sessions on password reset", async (it) => {
 			const sessionAttempt = await client.getSession();
 			expect(sessionAttempt.data?.user).toBeDefined();
 		});
+	});
+});
+
+describe("verify password", async (it) => {
+	const { testUser, auth } = await getTestInstance({
+		emailAndPassword: {
+			enabled: true,
+		},
+	});
+
+	const getSessionHeaders = async () => {
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			returnHeaders: true,
+		});
+
+		const headers = new Headers();
+		headers.set("cookie", signInRes.headers.getSetCookie()[0]!);
+		return headers;
+	};
+
+	it("should verify password with correct password", async () => {
+		const headers = await getSessionHeaders();
+
+		const verifyRes = await auth.api.verifyPassword({
+			body: {
+				password: testUser.password,
+			},
+			headers,
+		});
+
+		expect(verifyRes).toMatchObject({
+			status: true,
+		});
+	});
+
+	it("should fail to verify password with incorrect password", async () => {
+		const headers = await getSessionHeaders();
+
+		try {
+			await auth.api.verifyPassword({
+				body: {
+					password: "wrong-password",
+				},
+				headers,
+			});
+			expect.fail("Should have thrown an error");
+		} catch (error) {
+			expect(error).toBeInstanceOf(APIError);
+			if (error instanceof APIError) {
+				expect(error.status).toBe("BAD_REQUEST");
+				expect(error.message).toBe("Invalid password");
+			}
+		}
+	});
+
+	it("should require a session to verify password", async () => {
+		try {
+			await auth.api.verifyPassword({
+				body: {
+					password: testUser.password,
+				},
+				headers: new Headers(),
+			});
+			expect.fail("Should have thrown an error");
+		} catch (error) {
+			expect(error).toBeInstanceOf(APIError);
+			if (error instanceof APIError) {
+				expect(error.status).toBe("UNAUTHORIZED");
+			}
+		}
 	});
 });
