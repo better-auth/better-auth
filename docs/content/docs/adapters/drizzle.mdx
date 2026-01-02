@@ -165,10 +165,12 @@ After installing, update your imports:
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter"; // [!code highlight]
 import { db } from "./database.ts";
+import * as schema from "./schema.ts";
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: "sqlite", // or "pg" or "mysql"
+    schema,
   }),
   //... the rest of your config
 });
