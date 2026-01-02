@@ -1,33 +1,13 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
-import type { DBFieldAttribute } from "@better-auth/core/db";
 import type { multiSession } from ".";
 import { MULTI_SESSION_ERROR_CODES } from "./error-codes";
 
 export * from "./error-codes";
 
-export type MultiSessionClientOptions = {
-	schema?:
-		| {
-				user?:
-					| {
-							additionalFields?: Record<string, DBFieldAttribute> | undefined;
-					  }
-					| undefined;
-				session?:
-					| {
-							additionalFields?: Record<string, DBFieldAttribute> | undefined;
-					  }
-					| undefined;
-		  }
-		| undefined;
-};
-
-export const multiSessionClient = <O extends MultiSessionClientOptions>(
-	options?: O | undefined,
-) => {
+export const multiSessionClient = () => {
 	return {
 		id: "multi-session",
-		$InferServerPlugin: {} as ReturnType<typeof multiSession<O>>,
+		$InferServerPlugin: {} as ReturnType<typeof multiSession>,
 		atomListeners: [
 			{
 				matcher(path) {
