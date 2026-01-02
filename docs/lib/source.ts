@@ -1,6 +1,6 @@
+import { blogCollection, changelogCollection, docs } from "collections/server";
 import { loader } from "fumadocs-core/source";
 import { toFumadocsSource } from "fumadocs-mdx/runtime/server";
-import { blogCollection, changelogCollection, docs } from "collections/server";
 import { getPageTree } from "@/components/sidebar-content";
 
 export const source = loader({

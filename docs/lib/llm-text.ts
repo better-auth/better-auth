@@ -1,5 +1,5 @@
-import type { source } from "@/lib/source";
 import type { InferPageType } from "fumadocs-core/source";
+import type { source } from "@/lib/source";
 
 type PropertyDefinition = {
 	name: string;
