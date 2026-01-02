@@ -157,9 +157,9 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 							return;
 						}
 
-					if (!ctx.context.hasPlugin("organization")) {
-						return;
-					}
+						if (!ctx.context.hasPlugin("organization")) {
+							return;
+						}
 
 						await assignOrganizationByDomain(ctx, {
 							user: newSession.user,
