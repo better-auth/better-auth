@@ -69,31 +69,31 @@ To start the OAuth sign-in process:
 ```ts
 type signInWithOAuth2 = {
     /**
-     * The provider ID for the OAuth provider. 
+     * The provider ID for the OAuth provider.
      */
     providerId: string = "provider-id"
     /**
-     * The URL to redirect to after sign in. 
+     * The URL to redirect to after sign in.
      */
     callbackURL?: string = "/dashboard"
     /**
-     * The URL to redirect to if an error occurs. 
+     * The URL to redirect to if an error occurs.
      */
     errorCallbackURL?: string = "/error-page"
     /**
-     * The URL to redirect to after login if the user is new. 
+     * The URL to redirect to after login if the user is new.
      */
     newUserCallbackURL?: string = "/welcome"
     /**
-     * Disable redirect. 
+     * Disable redirect.
      */
     disableRedirect?: boolean = false
     /**
-     * Scopes to be passed to the provider authorization request. 
+     * Scopes to be passed to the provider authorization request.
      */
     scopes?: string[] = ["my-scope"]
     /**
-     * Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider. 
+     * Explicitly request sign-up. Useful when disableImplicitSignUp is true for this provider.
      */
     requestSignUp?: boolean = false
 }
@@ -112,11 +112,11 @@ To link an OAuth account to an existing user:
 ```ts
 type oAuth2LinkAccount = {
     /**
-     * The OAuth provider ID. 
+     * The OAuth provider ID.
      */
     providerId: string = "my-provider-id"
     /**
-     * The URL to redirect to once the account linking was complete. 
+     * The URL to redirect to once the account linking was complete.
      */
     callbackURL: string = "/successful-link"
 }
@@ -134,6 +134,7 @@ Better Auth provides pre-configured helper functions for popular OAuth providers
 ### Supported Providers
 
 - **Auth0** - `auth0(options)`
+- **Gumroad** - `gumroad(options)`
 - **HubSpot** - `hubspot(options)`
 - **Keycloak** - `keycloak(options)`
 - **LINE** - `line(options)`
@@ -156,6 +157,7 @@ import {
 	okta,
 	slack,
 	patreon,
+  gumroad,
 } from 'better-auth/plugins';
 
 export const auth = betterAuth({
@@ -206,6 +208,10 @@ export const auth = betterAuth({
 					clientId: process.env.PATREON_CLIENT_ID,
 					clientSecret: process.env.PATREON_CLIENT_SECRET,
 				}),
+        gumroad({
+          clientId: process.env.GUMROAD_CLIENT_ID,
+          clientSecret: process.env.GUMROAD_CLIENT_SECRET,
+        }),
 			],
 		}),
 	],
@@ -215,6 +221,7 @@ export const auth = betterAuth({
 Each provider helper accepts common OAuth options (extending `BaseOAuthProviderOptions`) plus provider-specific fields:
 
 - **Auth0**: Requires `domain` (e.g., `dev-xxx.eu.auth0.com`)
+- **Gumroad**: No additional required fields. Optional `scopes` (defaults to `["view_profile"]`). Get credentials from [Gumroad Advanced Settings](https://gumroad.com/settings/advanced)
 - **HubSpot**: No additional required fields. Optional `scopes` (defaults to `["oauth"]`)
 - **Keycloak**: Requires `issuer` (e.g., `https://my-domain/realms/MyRealm`)
 - **LINE**: Optional `providerId` (defaults to `"line"`). LINE requires separate channels for different countries (Japan, Thailand, Taiwan, etc.), so you can call `line()` multiple times with different `providerId`s and credentials to support multiple countries
