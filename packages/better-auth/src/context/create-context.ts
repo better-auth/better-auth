@@ -179,6 +179,10 @@ export async function createAuthContext(
 				: getDatabaseType(options.database),
 	});
 
+	const pluginIds = new Set(
+		options.plugins?.map((p) => p.id).filter(Boolean) ?? [],
+	);
+
 	const ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
 		socialProviders: providers,

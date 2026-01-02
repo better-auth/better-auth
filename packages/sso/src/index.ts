@@ -157,12 +157,9 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 							return;
 						}
 
-						const isOrgPluginEnabled = ctx.context.options.plugins?.find(
-							(plugin: { id: string }) => plugin.id === "organization",
-						);
-						if (!isOrgPluginEnabled) {
-							return;
-						}
+					if (!ctx.context.hasPlugin("organization")) {
+						return;
+					}
 
 						await assignOrganizationByDomain(ctx, {
 							user: newSession.user,
