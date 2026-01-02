@@ -9,14 +9,6 @@ import { maskClientId, parseCertificate, safeJsonParse } from "../utils";
 
 const ADMIN_ROLES = ["owner", "admin"];
 
-function isOrgPluginEnabled(ctx: {
-	context: { options: { plugins?: { id: string }[] } };
-}): boolean {
-	return (
-		ctx.context.options.plugins?.some((p) => p.id === "organization") ?? false
-	);
-}
-
 async function isOrgAdmin(
 	ctx: {
 		context: {
@@ -132,7 +124,7 @@ export const listSSOProviders = () => {
 				model: "ssoProvider",
 			});
 
-			const orgPluginEnabled = isOrgPluginEnabled(ctx);
+			const orgPluginEnabled = ctx.context.hasPlugin("organization");
 
 			const accessibleProviders = await Promise.all(
 				allProviders.map(async (provider) => {
@@ -217,7 +209,7 @@ export const getSSOProvider = () => {
 
 			let hasAccess = false;
 			if (provider.organizationId) {
-				if (isOrgPluginEnabled(ctx)) {
+				if (ctx.context.hasPlugin("organization")) {
 					hasAccess = await isOrgAdmin(ctx, userId, provider.organizationId);
 				} else {
 					hasAccess = provider.userId === userId;

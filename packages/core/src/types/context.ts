@@ -283,15 +283,29 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 		 * Defaults to a no-op that just runs the promise.
 		 */
 		runInBackground: (promise: Promise<void>) => void;
-		/**
-		 * Runs a task in the background if `runInBackground` is configured,
-		 * otherwise awaits the task directly.
-		 *
-		 * This is useful for operations like sending emails where we want
-		 * to avoid blocking the response when possible (for timing attack
-		 * mitigation), but still ensure the operation completes.
-		 */
-		runInBackgroundOrAwait: (
-			promise: Promise<unknown> | Promise<void> | void | unknown,
-		) => Promise<unknown>;
-	};
+	/**
+	 * Runs a task in the background if `runInBackground` is configured,
+	 * otherwise awaits the task directly.
+	 *
+	 * This is useful for operations like sending emails where we want
+	 * to avoid blocking the response when possible (for timing attack
+	 * mitigation), but still ensure the operation completes.
+	 */
+	runInBackgroundOrAwait: (
+		promise: Promise<unknown> | Promise<void> | void | unknown,
+	) => Promise<unknown>;
+	/**
+	 * Checks if a plugin is enabled by its ID.
+	 *
+	 * @param pluginId - The ID of the plugin to check
+	 * @returns `true` if the plugin is enabled, `false` otherwise
+	 *
+	 * @example
+	 * ```ts
+	 * if (ctx.context.hasPlugin("organization")) {
+	 *   // organization plugin is enabled
+	 * }
+	 * ```
+	 */
+	hasPlugin: (pluginId: string) => boolean;
+};
