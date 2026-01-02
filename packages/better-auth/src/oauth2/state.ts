@@ -196,6 +196,9 @@ export async function parseState(c: GenericEndpointContext) {
 			!skipStateCookieCheck &&
 			(!stateCookieValue || stateCookieValue !== state)
 		) {
+			c.context.logger.error("State Mismatch. Cookie value mismatch", {
+				state,
+			});
 			const errorURL =
 				c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
 			throw c.redirect(`${errorURL}?error=state_mismatch`);
@@ -215,6 +218,9 @@ export async function parseState(c: GenericEndpointContext) {
 
 	// Check expiration
 	if (parsedData.expiresAt < Date.now()) {
+		c.context.logger.error("OAuth state expired", {
+			expiresAt: parsedData.expiresAt,
+		});
 		const errorURL =
 			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
 		throw c.redirect(`${errorURL}?error=please_restart_the_process`);
