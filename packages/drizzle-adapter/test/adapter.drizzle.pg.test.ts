@@ -13,12 +13,16 @@ import { Pool } from "pg";
 import { drizzleAdapter } from "../drizzle-adapter";
 import { generateDrizzleSchema, resetGenerationCount } from "./generate-schema";
 
+const dbName = "drizzle_better_auth";
 const pgDB = new Pool({
-	connectionString: "postgres://user:password@localhost:5432/better_auth",
+	connectionString: `postgres://user:password@localhost:5432/${dbName}`,
 });
 
 const cleanupDatabase = async (shouldDestroy = false) => {
-	await pgDB.query(`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`);
+	await pgDB.query(` DROP SCHEMA public CASCADE;
+    CREATE SCHEMA public;
+    GRANT ALL ON SCHEMA public TO "${process.env.POSTGRES_USER ?? "user"}";
+    GRANT ALL ON SCHEMA public TO public;`);
 	if (shouldDestroy) {
 		await pgDB.end();
 	}
@@ -49,7 +53,7 @@ const { execute } = await testAdapter({
 			"pg",
 		);
 
-		const command = `npx drizzle-kit push --dialect=postgresql --schema=${fileName}.ts --url=postgres://user:password@localhost:5432/better_auth`;
+		const command = `npx drizzle-kit push --dialect=postgresql --schema=${fileName}.ts --url=postgres://user:password@localhost:5432/${dbName}`;
 		console.log(`Running: ${command}`);
 		console.log(`Options:`, betterAuthOptions);
 		try {

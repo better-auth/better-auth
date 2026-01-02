@@ -21,6 +21,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql
+      - ./docker/pg:/docker-entrypoint-initdb.d
 
   postgres-kysely:
     image: postgres:latest
