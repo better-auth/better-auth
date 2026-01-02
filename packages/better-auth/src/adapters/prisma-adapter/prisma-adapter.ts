@@ -463,7 +463,6 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						where,
 						action: "update",
 					});
-					console.log("where", whereClause);
 
 					return await db[model]!.update({
 						where: whereClause,
