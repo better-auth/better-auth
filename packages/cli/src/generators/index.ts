@@ -1,13 +1,13 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { generateDrizzleSchema } from "./drizzle";
-import { generateMigrations } from "./kysely";
+import { generateKyselySchema } from "./kysely";
 import { generatePrismaSchema } from "./prisma";
 
 export const adapters = {
 	prisma: generatePrismaSchema,
 	drizzle: generateDrizzleSchema,
-	kysely: generateMigrations,
+	kysely: generateKyselySchema,
 };
 
 export const generateSchema = (opts: {
@@ -35,8 +35,7 @@ export const generateSchema = (opts: {
 			}));
 	}
 
-	console.error(
+	throw new Error(
 		`${adapter.id} is not supported. If it is a custom adapter, please request the maintainer to implement createSchema`,
 	);
-	process.exit(1);
 };

@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 import type { SupportedPlugin } from "../src/commands/init";
 import { generateAuthConfig } from "../src/generators/auth-config";
 import { generateDrizzleSchema } from "../src/generators/drizzle";
-import { generateMigrations } from "../src/generators/kysely";
+import { generateKyselySchema } from "../src/generators/kysely";
 import { generatePrismaSchema } from "../src/generators/prisma";
 import { getPrismaVersion } from "../src/utils/get-package-info";
 
@@ -378,7 +378,7 @@ describe("generate", async () => {
 	});
 
 	it("should generate kysely schema", async () => {
-		const schema = await generateMigrations({
+		const schema = await generateKyselySchema({
 			file: "test.sql",
 			options: {
 				database: new Database(":memory:"),
@@ -392,7 +392,7 @@ describe("generate", async () => {
 
 	it("should throw for unsupported additionalFields type in migrations", async () => {
 		await expect(
-			generateMigrations({
+			generateKyselySchema({
 				file: "test.sql",
 				options: {
 					database: new Database(":memory:"),
@@ -714,7 +714,7 @@ describe("Enum field support in Drizzle schemas", () => {
 	});
 	it("should throw for unsupported additionalFields type in migrations", async () => {
 		await expect(
-			generateMigrations({
+			generateKyselySchema({
 				file: "test.sql",
 				options: {
 					database: new Database(":memory:"),
