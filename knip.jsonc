@@ -23,7 +23,8 @@
 				"drizzle-orm",
 				// implicit core dependencies
 				"better-auth",
-				"@better-auth/core"
+				"@better-auth/core",
+				"prettier"
 			]
 		},
 		"packages/better-auth": {
