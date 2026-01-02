@@ -186,6 +186,21 @@ npx @better-auth/cli@latest generate
   You do not need to run database migrations when upgrading to Relations v2. The database structure remains the same - only the relation definitions change. The schema generator will output the new v2 format automatically.
 </Callout>
 
+And apply the new relations to your drizzle instance:
+
+```ts
+import { drizzle } from "drizzle-orm/...";
+import * as schemas from "./schema.ts";
+
+const { relations, ...schema } = schemas;
+
+export const db = drizzle({
+  client: db,
+  schema, // [!code highlight]
+  relations, // [!code highlight]
+});
+```
+
 ## Additional Information
 
 - If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.
