@@ -203,21 +203,59 @@ describe("Origin Check", async (it) => {
 		});
 		expect(invalidRes.error?.status).toBe(403);
 	});
-});
 
-describe("Fetch Metadata CSRF Protection", async (it) => {
-	const { customFetchImpl, testUser, auth, signInWithTestUser } =
-		await getTestInstance({
-			trustedOrigins: ["http://localhost:3000", "https://app.example.com"],
+	it("should filter out null values from trustedOrigins callback", async () => {
+		const { customFetchImpl, testUser } = await getTestInstance({
 			emailAndPassword: {
 				enabled: true,
-				async sendResetPassword(url, user) {},
 			},
 			advanced: {
 				disableCSRFCheck: false,
 				disableOriginCheck: false,
 			},
+			trustedOrigins: async (request) => {
+				if (!request) return [];
+				// Simulate a scenario where some dynamic origins might be null
+				const dynamicOrigins = [
+					"http://valid-origin.com",
+					request.headers.get("x-custom-origin"), // Could be null
+					request.headers.get("x-another-origin"), // Could be null
+				];
+				return dynamicOrigins as string[];
+			},
 		});
+
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers: {
+					origin: "http://valid-origin.com",
+				},
+			},
+		});
+
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+
+		// Should succeed because valid-origin.com is in the list and null values are filtered out
+		expect(res.data?.user).toBeDefined();
+	});
+});
+
+describe("Fetch Metadata CSRF Protection", async (it) => {
+	const { testUser, auth } = await getTestInstance({
+		trustedOrigins: ["http://localhost:3000", "https://app.example.com"],
+		emailAndPassword: {
+			enabled: true,
+		},
+		advanced: {
+			disableCSRFCheck: false,
+			disableOriginCheck: false,
+		},
+	});
 
 	it("should block cross-site navigation on first-login (no session cookie)", async (ctx) => {
 		const maliciousRequest = new Request(
