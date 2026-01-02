@@ -183,18 +183,18 @@ export async function createAuthContext(
 				(options.database ? "database" : "cookie"),
 			skipStateCookieCheck: !!options.account?.skipStateCookieCheck,
 		},
-		tables,
-		trustedOrigins,
-		isTrustedOrigin: (
-			url: string,
-			settings?: {
-				allowRelativePaths: boolean;
-			},
-		) => {
-			return trustedOrigins.some((origin) =>
-				matchesOriginPattern(url, origin, settings),
-			);
+	tables,
+	trustedOrigins,
+	isTrustedOrigin(
+		url: string,
+		settings?: {
+			allowRelativePaths: boolean;
 		},
+	) {
+		return this.trustedOrigins.some((origin) =>
+			matchesOriginPattern(url, origin, settings),
+		);
+	},
 		baseURL: baseURL || "",
 		sessionConfig: {
 			updateAge:

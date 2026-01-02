@@ -64,7 +64,11 @@ export async function getTrustedOrigins(
 	options: BetterAuthOptions,
 	request?: Request,
 ): Promise<string[]> {
-	const baseURL = getBaseURL(options.baseURL, options.basePath);
+	const baseURL = getBaseURL(
+		options.baseURL,
+		options.basePath,
+		request,
+	);
 	const trustedOrigins: (string | undefined | null)[] = baseURL
 		? [new URL(baseURL).origin]
 		: [];
