@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import type { createServer } from "node:http";
-import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
@@ -3082,7 +3081,6 @@ describe("SAML SSO - Timestamp Validation", () => {
 	});
 });
 
-<<<<<<< HEAD
 describe("SAML Response Security", () => {
 	it("should reject forged/unsigned SAML responses", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
