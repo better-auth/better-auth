@@ -341,6 +341,18 @@ export interface SSOOptions {
 		 * ```
 		 */
 		algorithms?: AlgorithmValidationOptions;
+		/**
+		 * Maximum allowed size for SAML responses in bytes.
+		 *
+		 * @default 262144 (256KB)
+		 */
+		maxResponseSize?: number;
+		/**
+		 * Maximum allowed size for IdP metadata XML in bytes.
+		 *
+		 * @default 102400 (100KB)
+		 */
+		maxMetadataSize?: number;
 	};
 }
 
