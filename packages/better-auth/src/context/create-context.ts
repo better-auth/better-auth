@@ -171,6 +171,8 @@ export async function createAuthContext(
 				: getDatabaseType(options.database),
 	});
 
+	const trustedOrigins = await getTrustedOrigins(options);
+
 	let ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
 		socialProviders: providers,
@@ -182,14 +184,14 @@ export async function createAuthContext(
 			skipStateCookieCheck: !!options.account?.skipStateCookieCheck,
 		},
 		tables,
-		trustedOrigins: await getTrustedOrigins(options),
-		isTrustedOrigin(
+		trustedOrigins,
+		isTrustedOrigin: (
 			url: string,
 			settings?: {
 				allowRelativePaths: boolean;
 			},
-		) {
-			return this.trustedOrigins.some((origin) =>
+		) => {
+			return trustedOrigins.some((origin) =>
 				matchesOriginPattern(url, origin, settings),
 			);
 		},

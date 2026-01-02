@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import type { createServer } from "node:http";
-import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
