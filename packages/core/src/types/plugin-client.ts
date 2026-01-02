@@ -66,6 +66,8 @@ export interface RevalidateOptions {
 	refetchWhenOffline?: boolean | undefined;
 }
 
+import type { BASE_ERROR_CODES } from '../error';
+
 export interface BetterAuthClientOptions {
 	fetchOptions?: ClientFetchOption | undefined;
 	plugins?: BetterAuthClientPlugin[] | undefined;
@@ -74,6 +76,7 @@ export interface BetterAuthClientOptions {
 	disableDefaultFetchPlugins?: boolean | undefined;
 	$InferAuth?: BetterAuthOptions | undefined;
 	sessionOptions?: RevalidateOptions | undefined;
+	translations?: Partial<Record<keyof typeof BASE_ERROR_CODES, string>> & Record<string, string> | undefined;
 }
 
 export interface BetterAuthClientPlugin {
