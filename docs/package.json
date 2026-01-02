@@ -9,7 +9,7 @@
     "start": "next start",
     "postinstall": "fumadocs-mdx",
     "scripts:endpoint-to-doc": "bun ./scripts/endpoint-to-doc/index.ts",
-    "scripts:sync-orama": "node ./scripts/sync-orama.ts"
+    "scripts:sync-orama": "bun ./scripts/sync-orama.ts"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^2.0.1",
@@ -60,11 +60,10 @@
     "feed": "^5.1.0",
     "foxact": "^0.2.49",
     "framer-motion": "^12.23.12",
-    "fumadocs-core": "15.8.3",
-    "fumadocs-docgen": "2.1.0",
-    "fumadocs-mdx": "11.8.3",
-    "fumadocs-typescript": "^4.0.6",
-    "fumadocs-ui": "15.8.3",
+    "fumadocs-core": "16.4.2",
+    "fumadocs-mdx": "14.2.4",
+    "fumadocs-typescript": "^5.0.1",
+    "fumadocs-ui": "16.4.2",
     "geist": "^1.4.2",
     "gray-matter": "^4.0.3",
     "hast-util-to-jsx-runtime": "^2.3.6",
