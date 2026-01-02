@@ -133,6 +133,12 @@ pnpm lint:fix
    
    # Run tests for a specific package
    pnpm -F "{package_name}" test
+   
+   # Example: Run tests for better-auth package (includes all plugins)
+   pnpm -F "better-auth" test
+   
+   # Example: Run tests for a specific plugin
+   pnpm -F "better-auth" test password-history
    ```
 6. Ensure all tests pass and the code is properly formatted
 7. Commit your changes with a descriptive message following this format:
