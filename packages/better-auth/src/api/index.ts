@@ -42,6 +42,7 @@ import {
 	unlinkAccount,
 	updateUser,
 	verifyEmail,
+	verifyPassword,
 } from "./routes";
 import { toAuthEndpoints } from "./to-auth-endpoints";
 
@@ -216,6 +217,7 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 		signUpEmail: signUpEmail<Option>(),
 		signInEmail: signInEmail<Option>(),
 		resetPassword,
+		verifyPassword,
 		verifyEmail,
 		sendVerificationEmail,
 		changeEmail,
@@ -284,25 +286,26 @@ export const router = <Option extends BetterAuthOptions>(
 			if (disabledPaths.includes(normalizedPath)) {
 				return new Response("Not Found", { status: 404 });
 			}
+
+			let currentRequest = req;
 			for (const plugin of ctx.options.plugins || []) {
 				if (plugin.onRequest) {
-					const response = await plugin.onRequest(req, ctx);
+					const response = await plugin.onRequest(currentRequest, ctx);
 					if (response && "response" in response) {
 						return response.response;
 					}
 					if (response && "request" in response) {
-						const rateLimitResponse = await onRequestRateLimit(
-							response.request,
-							ctx,
-						);
-						if (rateLimitResponse) {
-							return rateLimitResponse;
-						}
-						return response.request;
+						currentRequest = response.request;
 					}
 				}
 			}
-			return onRequestRateLimit(req, ctx);
+
+			const rateLimitResponse = await onRequestRateLimit(currentRequest, ctx);
+			if (rateLimitResponse) {
+				return rateLimitResponse;
+			}
+
+			return currentRequest;
 		},
 		async onResponse(res) {
 			for (const plugin of ctx.options.plugins || []) {
