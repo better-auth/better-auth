@@ -171,8 +171,7 @@ async function validateOrigin(
 	}
 
 	const shouldValidate =
-		forceValidate ||
-		(useCookies && !ctx.context.skipCSRFCheck && !shouldSkip);
+		forceValidate || (useCookies && !ctx.context.skipCSRFCheck && !shouldSkip);
 
 	if (!shouldValidate) {
 		return;
