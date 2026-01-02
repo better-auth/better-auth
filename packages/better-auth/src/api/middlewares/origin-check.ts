@@ -2,6 +2,7 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { matchesOriginPattern } from "../../auth/trusted-origins";
+import { normalizePathname } from "../../utils/url";
 
 /**
  * A middleware to validate callbackURL and origin against trustedOrigins.
@@ -156,9 +157,22 @@ async function validateOrigin(
 	const originHeader = headers.get("origin") || headers.get("referer") || "";
 	const useCookies = headers.has("cookie");
 
+	const skipOriginCheck = ctx.context.skipOriginCheck;
+	let shouldSkip = false;
+
+	if (skipOriginCheck === true) {
+		shouldSkip = true;
+	} else if (Array.isArray(skipOriginCheck)) {
+		const basePath = new URL(ctx.context.baseURL).pathname;
+		const currentPath = normalizePathname(ctx.request.url, basePath);
+		shouldSkip = skipOriginCheck.some((skipPath) =>
+			currentPath.startsWith(skipPath),
+		);
+	}
+
 	const shouldValidate =
 		forceValidate ||
-		(useCookies && !ctx.context.skipCSRFCheck && !ctx.context.skipOriginCheck);
+		(useCookies && !ctx.context.skipCSRFCheck && !shouldSkip);
 
 	if (!shouldValidate) {
 		return;
