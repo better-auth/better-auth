@@ -36,9 +36,18 @@
   ],
   "exports": {
     ".": "./dist/index.mjs",
-    "./api": { "types": "./dist/api.d.mts", "default": "./dist/api.mjs" }
+    "./api": {
+      "types": "./dist/api.d.mts",
+      "default": "./dist/api.mjs"
+    }
   },
-  "typesVersions": { "*": { "api": ["./dist/api.d.mts"] } },
+  "typesVersions": {
+    "*": {
+      "api": [
+        "./dist/api.d.mts"
+      ]
+    }
+  },
   "bin": {
     "better-auth": "./dist/index.mjs"
   },
