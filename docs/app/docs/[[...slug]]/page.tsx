@@ -67,7 +67,7 @@ export default async function Page({
 					<LLMCopyButton />
 					<ViewOptions
 						markdownUrl={`${page.url}.mdx`}
-						githubUrl={`https://github.com/better-auth/better-auth/blob/main/docs/content/docs/${page.file.path}`}
+						githubUrl={`https://github.com/better-auth/better-auth/blob/main/docs/content/docs/${page.path}`}
 					/>
 				</div>
 			)}
@@ -75,42 +75,6 @@ export default async function Page({
 				<MDX
 					components={{
 						...defaultMdxComponents,
-						CodeBlockTabs: (props) => {
-							return (
-								<CodeBlockTabs
-									{...props}
-									className="p-0 rounded-lg border-0 bg-fd-secondary"
-								>
-									<div {...props}>{props.children}</div>
-								</CodeBlockTabs>
-							);
-						},
-						CodeBlockTabsList: (props) => {
-							return (
-								<CodeBlockTabsList
-									{...props}
-									className="pb-0 my-0 rounded-lg bg-fd-secondary"
-								/>
-							);
-						},
-						CodeBlockTab: (props) => {
-							return <CodeBlockTab {...props} className="p-0 m-0 rounded-lg" />;
-						},
-						pre: (props) => {
-							return (
-								<CodeBlock
-									className="rounded-xl bg-fd-muted"
-									allowCopy={true}
-									{...props}
-								>
-									<div style={{ minWidth: "100%", display: "table" }}>
-										<Pre className="px-0 py-3 bg-fd-muted focus-visible:outline-none">
-											{props.children}
-										</Pre>
-									</div>
-								</CodeBlock>
-							);
-						},
 						Link: ({
 							className,
 							...props
@@ -188,7 +152,6 @@ export async function generateMetadata({
 	const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL;
 	const url = new URL(`${baseUrl}/api/og`);
 	const { title, description } = page.data;
-	const pageSlug = page.file.path;
 	url.searchParams.set("type", "Documentation");
 	url.searchParams.set("mode", "dark");
 	url.searchParams.set("heading", `${title}`);
@@ -200,7 +163,7 @@ export async function generateMetadata({
 			title,
 			description,
 			type: "website",
-			url: absoluteUrl(`docs/${pageSlug}`),
+			url: absoluteUrl(page.url),
 			images: [
 				{
 					url: url.toString(),
