@@ -329,6 +329,71 @@ describe("stripe", () => {
 		expect(mockStripe.subscriptions.update).not.toHaveBeenCalled();
 	});
 
+	it("should pass metadata to subscription when upgrading", async () => {
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [
+						stripeClient({
+							subscription: true,
+						}),
+					],
+				},
+			},
+		);
+
+		await client.signUp.email(
+			{
+				...testUser,
+				email: "metadata-test@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				...testUser,
+				email: "metadata-test@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const customMetadata = {
+			customField: "customValue",
+			organizationId: "org_123",
+			projectId: "proj_456",
+		};
+
+		await client.subscription.upgrade({
+			plan: "starter",
+			metadata: customMetadata,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(mockStripe.checkout.sessions.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				subscription_data: expect.objectContaining({
+					metadata: expect.objectContaining(customMetadata),
+				}),
+				metadata: expect.objectContaining(customMetadata),
+			}),
+			undefined,
+		);
+	});
+
 	it("should list active subscriptions", async () => {
 		const { client, auth, sessionSetter } = await getTestInstance(
 			{
