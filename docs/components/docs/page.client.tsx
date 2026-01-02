@@ -5,9 +5,13 @@ import type { BreadcrumbOptions } from "fumadocs-core/breadcrumb";
 import { getBreadcrumbItemsFromPath } from "fumadocs-core/breadcrumb";
 import type { PageTree } from "fumadocs-core/server";
 import { useEffectEvent } from "fumadocs-core/utils/use-effect-event";
-import { useSidebar } from "fumadocs-ui/components/sidebar/base";
-import { useI18n } from "fumadocs-ui/contexts/i18n";
-import { useTreeContext, useTreePath } from "fumadocs-ui/contexts/tree";
+import {
+	useI18n,
+	usePageStyles,
+	useSidebar,
+	useTreeContext,
+	useTreePath,
+} from "fumadocs-ui/provider";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -22,6 +26,7 @@ export function TocPopoverHeader(props: HTMLAttributes<HTMLDivElement>) {
 	const ref = useRef<HTMLElement>(null);
 	const [open, setOpen] = useState(false);
 	const sidebar = useSidebar();
+	const { tocNav } = usePageStyles();
 	const { isTransparent } = useNav();
 
 	const onClick = useEffectEvent((e: Event) => {
@@ -41,7 +46,7 @@ export function TocPopoverHeader(props: HTMLAttributes<HTMLDivElement>) {
 
 	return (
 		<div
-			className={cn("sticky overflow-visible z-10 xl:hidden", props.className)}
+			className={cn("sticky overflow-visible z-10", tocNav, props.className)}
 			style={{
 				top: "calc(var(--fd-banner-height) + var(--fd-nav-height))",
 			}}
@@ -66,11 +71,13 @@ export function TocPopoverHeader(props: HTMLAttributes<HTMLDivElement>) {
 }
 
 export function PageBody(props: HTMLAttributes<HTMLDivElement>) {
+	const { page } = usePageStyles();
+
 	return (
 		<div
 			id="nd-page"
 			{...props}
-			className={cn("flex w-full min-w-0 flex-col", props.className)}
+			className={cn("flex w-full min-w-0 flex-col", page, props.className)}
 		>
 			{props.children}
 		</div>
@@ -78,11 +85,14 @@ export function PageBody(props: HTMLAttributes<HTMLDivElement>) {
 }
 
 export function PageArticle(props: HTMLAttributes<HTMLElement>) {
+	const { article } = usePageStyles();
+
 	return (
 		<article
 			{...props}
 			className={cn(
 				"flex w-full flex-1 flex-col gap-6 px-4 pt-8 md:px-6 md:pt-12 xl:px-12 xl:mx-auto",
+				article,
 				props.className,
 			)}
 		>
