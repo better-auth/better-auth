@@ -19,7 +19,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			method: "POST",
 			operationId: "signUpWithEmailAndPassword",
 			use: [formCsrfMiddleware],
-			body: z.record(z.string(), z.any()),
+			body: signUpEmailBodySchema,
 			metadata: {
 				allowedMediaTypes: [
 					"application/x-www-form-urlencoded",

@@ -13,6 +13,7 @@ import * as z from "zod/v4";
 import { STRIPE_ERROR_CODES } from "./error-codes";
 import {
 	onCheckoutSessionCompleted,
+	onSubscriptionCreated,
 	onSubscriptionDeleted,
 	onSubscriptionUpdated,
 } from "./hooks";
@@ -403,7 +404,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					});
 				return ctx.json({
 					url,
-					redirect: true,
+					redirect: !ctx.body.disableRedirect,
 				});
 			}
 
@@ -446,7 +447,10 @@ export const upgradeSubscription = (options: StripeOptions) => {
 
 			if (!subscription) {
 				ctx.context.logger.error("Subscription ID not found");
-				throw new APIError("INTERNAL_SERVER_ERROR");
+				throw APIError.from(
+					"NOT_FOUND",
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+				);
 			}
 
 			const params = await subscriptionOptions.getCheckoutSessionParams?.(
@@ -460,7 +464,13 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				ctx,
 			);
 
-			const hasEverTrialed = subscriptions.some((s) => {
+			const allSubscriptions = await ctx.context.adapter.findMany<Subscription>(
+				{
+					model: "subscription",
+					where: [{ field: "referenceId", value: referenceId }],
+				},
+			);
+			const hasEverTrialed = allSubscriptions.some((s) => {
 				// Check if user has ever had a trial for any plan (not just the same plan)
 				// This prevents users from getting multiple trials by switching plans
 				const hadTrial =
@@ -670,6 +680,16 @@ const cancelSubscriptionBodySchema = z.object({
 		description:
 			'URL to take customers to when they click on the billing portal\'s link to return to your website. Eg: "/account"',
 	}),
+	/**
+	 * Disable Redirect
+	 */
+	disableRedirect: z
+		.boolean()
+		.meta({
+			description:
+				"Disable redirect after successful subscription cancellation. Eg: true",
+		})
+		.default(false),
 });
 
 /**
@@ -824,10 +844,10 @@ export const cancelSubscription = (options: StripeOptions) => {
 						code: e.code,
 					});
 				});
-			return {
+			return ctx.json({
 				url,
-				redirect: true,
-			};
+				redirect: !ctx.body.disableRedirect,
+			});
 		},
 	);
 };
@@ -903,10 +923,7 @@ export const restoreSubscription = (options: StripeOptions) => {
 					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 				);
 			}
-			if (
-				subscription.status != "active" &&
-				subscription.status != "trialing"
-			) {
+			if (!isActiveOrTrialing(subscription)) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_ACTIVE,
@@ -1066,14 +1083,14 @@ export const subscriptionSuccess = (options: StripeOptions) => {
 			if (!ctx.query || !ctx.query.callbackURL || !ctx.query.subscriptionId) {
 				throw ctx.redirect(getUrl(ctx, ctx.query?.callbackURL || "/"));
 			}
+			const { callbackURL, subscriptionId } = ctx.query;
+
 			const session = await getSessionFromCtx<{ stripeCustomerId: string }>(
 				ctx,
 			);
 			if (!session) {
 				throw ctx.redirect(getUrl(ctx, ctx.query?.callbackURL || "/"));
 			}
-			const { user } = session;
-			const { callbackURL, subscriptionId } = ctx.query;
 
 			const subscription = await ctx.context.adapter.findOne<Subscription>({
 				model: "subscription",
@@ -1084,81 +1101,89 @@ export const subscriptionSuccess = (options: StripeOptions) => {
 					},
 				],
 			});
-
-			if (
-				subscription?.status === "active" ||
-				subscription?.status === "trialing"
-			) {
-				return ctx.redirect(getUrl(ctx, callbackURL));
+			if (!subscription) {
+				ctx.context.logger.warn(
+					`Subscription record not found for subscriptionId: ${subscriptionId}`,
+				);
+				throw ctx.redirect(getUrl(ctx, callbackURL));
 			}
+
+			// Already active or trialing, no need to update
+			if (isActiveOrTrialing(subscription)) {
+				throw ctx.redirect(getUrl(ctx, callbackURL));
+			}
+
 			const customerId =
-				subscription?.stripeCustomerId || user.stripeCustomerId;
+				subscription.stripeCustomerId || session.user.stripeCustomerId;
+			if (!customerId) {
+				throw ctx.redirect(getUrl(ctx, callbackURL));
+			}
 
-			if (customerId) {
-				try {
-					const stripeSubscription = await client.subscriptions
-						.list({
-							customer: customerId,
-							status: "active",
-						})
-						.then((res) => res.data[0]);
-
-					if (stripeSubscription) {
-						const plan = await getPlanByPriceInfo(
-							options,
-							stripeSubscription.items.data[0]?.price.id!,
-							stripeSubscription.items.data[0]?.price.lookup_key!,
-						);
-
-						if (plan && subscription) {
-							await ctx.context.adapter.update({
-								model: "subscription",
-								update: {
-									status: stripeSubscription.status,
-									seats: stripeSubscription.items.data[0]?.quantity || 1,
-									plan: plan.name.toLowerCase(),
-									periodEnd: new Date(
-										stripeSubscription.items.data[0]?.current_period_end! *
-											1000,
-									),
-									periodStart: new Date(
-										stripeSubscription.items.data[0]?.current_period_start! *
-											1000,
-									),
-									stripeSubscriptionId: stripeSubscription.id,
-									cancelAtPeriodEnd: stripeSubscription.cancel_at_period_end,
-									cancelAt: stripeSubscription.cancel_at
-										? new Date(stripeSubscription.cancel_at * 1000)
-										: null,
-									canceledAt: stripeSubscription.canceled_at
-										? new Date(stripeSubscription.canceled_at * 1000)
-										: null,
-									...(stripeSubscription.trial_start &&
-									stripeSubscription.trial_end
-										? {
-												trialStart: new Date(
-													stripeSubscription.trial_start * 1000,
-												),
-												trialEnd: new Date(stripeSubscription.trial_end * 1000),
-											}
-										: {}),
-								},
-								where: [
-									{
-										field: "id",
-										value: subscription.id,
-									},
-								],
-							});
-						}
-					}
-				} catch (error) {
+			const stripeSubscription = await client.subscriptions
+				.list({ customer: customerId, status: "active" })
+				.then((res) => res.data[0])
+				.catch((error) => {
 					ctx.context.logger.error(
 						"Error fetching subscription from Stripe",
 						error,
 					);
-				}
+					throw ctx.redirect(getUrl(ctx, callbackURL));
+				});
+			if (!stripeSubscription) {
+				throw ctx.redirect(getUrl(ctx, callbackURL));
 			}
+
+			const subscriptionItem = stripeSubscription.items.data[0];
+			if (!subscriptionItem) {
+				ctx.context.logger.warn(
+					`No subscription items found for Stripe subscription ${stripeSubscription.id}`,
+				);
+				throw ctx.redirect(getUrl(ctx, callbackURL));
+			}
+
+			const plan = await getPlanByPriceInfo(
+				options,
+				subscriptionItem.price.id,
+				subscriptionItem.price.lookup_key,
+			);
+			if (!plan) {
+				ctx.context.logger.warn(
+					`Plan not found for price ${subscriptionItem.price.id}`,
+				);
+				throw ctx.redirect(getUrl(ctx, callbackURL));
+			}
+
+			await ctx.context.adapter.update({
+				model: "subscription",
+				update: {
+					status: stripeSubscription.status,
+					seats: subscriptionItem.quantity || 1,
+					plan: plan.name.toLowerCase(),
+					periodEnd: new Date(subscriptionItem.current_period_end * 1000),
+					periodStart: new Date(subscriptionItem.current_period_start * 1000),
+					stripeSubscriptionId: stripeSubscription.id,
+					cancelAtPeriodEnd: stripeSubscription.cancel_at_period_end,
+					cancelAt: stripeSubscription.cancel_at
+						? new Date(stripeSubscription.cancel_at * 1000)
+						: null,
+					canceledAt: stripeSubscription.canceled_at
+						? new Date(stripeSubscription.canceled_at * 1000)
+						: null,
+					...(stripeSubscription.trial_start && stripeSubscription.trial_end
+						? {
+								trialStart: new Date(stripeSubscription.trial_start * 1000),
+								trialEnd: new Date(stripeSubscription.trial_end * 1000),
+							}
+						: {}),
+				},
+				where: [
+					{
+						field: "id",
+						value: subscription.id,
+					},
+				],
+			});
+
 			throw ctx.redirect(getUrl(ctx, callbackURL));
 		},
 	);
@@ -1172,6 +1197,16 @@ const createBillingPortalBodySchema = z.object({
 		.optional(),
 	referenceId: z.string().optional(),
 	returnUrl: z.string().default("/"),
+	/**
+	 * Disable Redirect
+	 */
+	disableRedirect: z
+		.boolean()
+		.meta({
+			description:
+				"Disable redirect after creating billing portal session. Eg: true",
+		})
+		.default(false),
 });
 
 export const createBillingPortal = (options: StripeOptions) => {
@@ -1216,9 +1251,7 @@ export const createBillingPortal = (options: StripeOptions) => {
 			}
 
 			if (!customerId) {
-				throw new APIError("BAD_REQUEST", {
-					message: "No Stripe customer found for this user",
-				});
+				throw APIError.from("NOT_FOUND", STRIPE_ERROR_CODES.CUSTOMER_NOT_FOUND);
 			}
 
 			try {
@@ -1230,16 +1263,17 @@ export const createBillingPortal = (options: StripeOptions) => {
 
 				return ctx.json({
 					url,
-					redirect: true,
+					redirect: !ctx.body.disableRedirect,
 				});
 			} catch (error: any) {
 				ctx.context.logger.error(
 					"Error creating billing portal session",
 					error,
 				);
-				throw new APIError("BAD_REQUEST", {
-					message: error.message,
-				});
+				throw APIError.from(
+					"INTERNAL_SERVER_ERROR",
+					STRIPE_ERROR_CODES.UNABLE_TO_CREATE_BILLING_PORTAL,
+				);
 			}
 		},
 	);
@@ -1258,50 +1292,69 @@ export const stripeWebhook = (options: StripeOptions) => {
 				},
 			},
 			cloneRequest: true,
-			//don't parse the body
-			disableBody: true,
+			disableBody: true, // Don't parse the body
 		},
 		async (ctx) => {
 			if (!ctx.request?.body) {
-				throw new APIError("INTERNAL_SERVER_ERROR");
+				throw APIError.from(
+					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.INVALID_REQUEST_BODY,
+				);
 			}
-			const buf = await ctx.request.text();
-			const sig = ctx.request.headers.get("stripe-signature") as string;
+
+			const sig = ctx.request.headers.get("stripe-signature");
+			if (!sig) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.STRIPE_SIGNATURE_NOT_FOUND,
+				);
+			}
+
 			const webhookSecret = options.stripeWebhookSecret;
+			if (!webhookSecret) {
+				throw APIError.from(
+					"INTERNAL_SERVER_ERROR",
+					STRIPE_ERROR_CODES.STRIPE_WEBHOOK_SECRET_NOT_FOUND,
+				);
+			}
+
+			const payload = await ctx.request.text();
+
 			let event: Stripe.Event;
 			try {
-				if (!sig || !webhookSecret) {
-					throw new APIError("BAD_REQUEST", {
-						message: "Stripe webhook secret not found",
-					});
-				}
 				// Support both Stripe v18 (constructEvent) and v19+ (constructEventAsync)
 				if (typeof client.webhooks.constructEventAsync === "function") {
 					// Stripe v19+ - use async method
 					event = await client.webhooks.constructEventAsync(
-						buf,
+						payload,
 						sig,
 						webhookSecret,
 					);
 				} else {
 					// Stripe v18 - use sync method
-					event = client.webhooks.constructEvent(buf, sig, webhookSecret);
+					event = client.webhooks.constructEvent(payload, sig, webhookSecret);
 				}
 			} catch (err: any) {
 				ctx.context.logger.error(`${err.message}`);
-				throw new APIError("BAD_REQUEST", {
-					message: `Webhook Error: ${err.message}`,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.FAILED_TO_CONSTRUCT_STRIPE_EVENT,
+				);
 			}
 			if (!event) {
-				throw new APIError("BAD_REQUEST", {
-					message: "Failed to construct event",
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.FAILED_TO_CONSTRUCT_STRIPE_EVENT,
+				);
 			}
 			try {
 				switch (event.type) {
 					case "checkout.session.completed":
 						await onCheckoutSessionCompleted(ctx, options, event);
+						await options.onEvent?.(event);
+						break;
+					case "customer.subscription.created":
+						await onSubscriptionCreated(ctx, options, event);
 						await options.onEvent?.(event);
 						break;
 					case "customer.subscription.updated":
@@ -1318,9 +1371,10 @@ export const stripeWebhook = (options: StripeOptions) => {
 				}
 			} catch (e: any) {
 				ctx.context.logger.error(`Stripe webhook failed. Error: ${e.message}`);
-				throw new APIError("BAD_REQUEST", {
-					message: "Webhook error: See server logs for more information.",
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.STRIPE_WEBHOOK_ERROR,
+				);
 			}
 			return ctx.json({ success: true });
 		},
