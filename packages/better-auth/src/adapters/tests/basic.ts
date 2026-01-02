@@ -43,7 +43,6 @@ export const getNormalTestSuiteTests = (
 	return {
 		"create - should create a model": async () => {
 			const user = await generate("user");
-			// console.log(`pre-transformed:`, user);
 			const result = await adapter.create<User>({
 				model: "user",
 				data: user,
@@ -60,8 +59,6 @@ export const getNormalTestSuiteTests = (
 
 			expect(typeof result.id).toEqual("string");
 			const transformed = transformGeneratedModel(user);
-			// console.log(`transformed:`, transformed);
-			// console.log(`result:`, result);
 			expect(result).toEqual(transformed);
 		},
 		"create - should always return an id": async () => {
@@ -2979,9 +2976,34 @@ export const getNormalTestSuiteTests = (
 				});
 				expect(findResult).toEqual(result);
 				expect(findResult?.json).toEqual({ foo: "bar" });
-				console.log(findResult);
 			},
 		},
+		"create - should not get race-condition issues during concurrent row creations":
+			async () => {
+				// This tests works by creating several concurrent row creations,
+				// then checking that all returned rows are in the correct order.
+				// Databases such as MySQL and potentially others fail at this when
+				// IDs are not generated ahead of time.
+				const count = 20;
+				const promises = [];
+				for (let i = 0; i < count; i++) {
+					const { id: _, ...user } = await generate("user");
+					const email = `${i}@email.com`;
+					promises.push(
+						adapter.create<User>({
+							model: "user",
+							data: { ...user, email },
+						}),
+					);
+				}
+				const results = await Promise.all(promises);
+				expect(results.length).toBe(count);
+				for (let i = 0; i < count; i++) {
+					const result = results[i]!;
+					expect(result.email).toBe(`${i}@email.com`);
+					expect(result.id).toBeDefined();
+				}
+			},
 	};
 };
 

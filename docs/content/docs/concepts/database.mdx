@@ -482,6 +482,15 @@ export const auth = betterAuth({
 Better Auth by default will generate unique IDs for users, sessions, and other entities.
 You can customize ID generation behavior using the `advanced.database.generateId` option.
 
+<Callout type="warn">
+  MySQL does not support returning inserted rows.
+  We work around this by using pre-generated IDs, then querying the inserted row.
+  
+  If you disable ID generation or use database-level ID generation,
+  this workaround won't work, and alternative methods are prone to race conditions.
+  We recommend avoiding database-level ID generation for these reasons for MySQL databases.
+</Callout>
+
 #### Option 1: Let Database Generate IDs
 
 Setting `generateId` to `false` allows your database handle all ID generation: (outside of `generateId` being `serial` and some cases of `generateId` being `uuid`)
