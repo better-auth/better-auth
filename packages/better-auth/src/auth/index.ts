@@ -1,1 +1,1 @@
-export * from "./auth";
+export { betterAuth } from "./auth";
