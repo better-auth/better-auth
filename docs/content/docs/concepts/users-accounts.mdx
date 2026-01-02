@@ -134,8 +134,10 @@ If a user was registered using OAuth or other providers, they won't have a passw
 
 ```ts
 await auth.api.setPassword({
-    body: { newPassword: "password" },
-    headers: // headers containing the user's session token
+    body: {
+        newPassword: "new-password",
+    },
+    headers: await headers() // headers containing the user's session token
 });
 ```
 
