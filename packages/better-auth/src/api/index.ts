@@ -217,6 +217,7 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 		signUpEmail: signUpEmail<Option>(),
 		signInEmail: signInEmail<Option>(),
 		resetPassword,
+		verifyPassword,
 		verifyEmail,
 		sendVerificationEmail,
 		changeEmail,
@@ -237,7 +238,6 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 		refreshToken,
 		getAccessToken,
 		accountInfo,
-		verifyPassword,
 	};
 	const endpoints = {
 		...baseEndpoints,
