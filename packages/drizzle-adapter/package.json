@@ -62,8 +62,8 @@
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
-    "drizzle-kit": "1.0.0-beta.1-b96a4f8",
-    "drizzle-orm": "1.0.0-beta.1-b96a4f8",
+    "drizzle-kit": "1.0.0-beta.8-734e789",
+    "drizzle-orm": "1.0.0-beta.8-734e789",
     "prettier": "^3.7.4"
   }
 }
