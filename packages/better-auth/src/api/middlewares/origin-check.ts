@@ -2,22 +2,6 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { matchesOriginPattern } from "../../auth/trusted-origins";
-import { normalizePathname } from "../../utils/url";
-
-function shouldSkipOriginCheckForPath(
-	requestUrl: string,
-	basePath: string,
-	skipPaths: string[],
-): boolean {
-	if (skipPaths.length === 0) {
-		return false;
-	}
-	const normalizedPath = normalizePathname(requestUrl, basePath);
-	return skipPaths.some(
-		(skipPath) =>
-			normalizedPath === skipPath || normalizedPath.startsWith(`${skipPath}/`),
-	);
-}
 
 /**
  * A middleware to validate callbackURL and origin against trustedOrigins.
