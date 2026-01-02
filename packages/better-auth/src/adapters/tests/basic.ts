@@ -2982,6 +2982,24 @@ export const getNormalTestSuiteTests = (
 				console.log(findResult);
 			},
 		},
+		"update - should support multiple where conditions under AND connector with unique field":
+			async () => {
+				// This test is specific to Prisma where unique fields must be at root level,
+				// not nested in AND arrays (which is what we do by default)
+				const [user] = await insertRandom("user");
+				const result = await adapter.update<User>({
+					model: "user",
+					where: [
+						{ field: "email", value: user.email },
+						{ field: "id", value: user.id },
+					],
+					update: { name: "Updated Name" },
+				});
+				expect(result).toBeDefined();
+				expect(result!.name).toBe("Updated Name");
+				expect(result!.email).toBe(user.email);
+				expect(result!.id).toBe(user.id);
+			},
 	};
 };
 
