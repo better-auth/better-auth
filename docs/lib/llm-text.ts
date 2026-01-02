@@ -1,14 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import { remarkNpm } from "fumadocs-core/mdx-plugins";
-import { fileGenerator, remarkDocGen } from "fumadocs-docgen";
-import { remarkInclude } from "fumadocs-mdx/config";
-import { remarkAutoTypeTable } from "fumadocs-typescript";
-import { remark } from "remark";
-import remarkGfm from "remark-gfm";
-import remarkMdx from "remark-mdx";
-import remarkStringify from "remark-stringify";
 import type { source } from "@/lib/source";
+import type { InferPageType } from "fumadocs-core/source";
 
 type PropertyDefinition = {
 	name: string;
@@ -250,73 +241,19 @@ function createServerBody(
 	return serverBody;
 }
 
-const processor = remark()
-	.use(remarkMdx)
-	.use(remarkInclude)
-	.use(remarkGfm)
-	.use(remarkAutoTypeTable)
-	.use(remarkDocGen, { generators: [fileGenerator()] })
-	.use(remarkNpm)
-	.use(remarkStringify);
-
-function resolveFallbackPaths(
-	docPage: ReturnType<typeof source.getPage>,
-): string[] {
-	const candidates: string[] = [];
-	const relativePath = docPage?.path;
-
-	if (!relativePath) return candidates;
-
-	const withExtension = relativePath.endsWith(".mdx")
-		? relativePath
-		: `${relativePath}.mdx`;
-
-	candidates.push(join(process.cwd(), "content", "docs", withExtension));
-
-	// Add docs prefix only if not already present
-	if (!relativePath.startsWith("docs/")) {
-		candidates.push(join(process.cwd(), "docs", withExtension));
-	}
-
-	return candidates;
-}
-
-function readDocContent(docPage: ReturnType<typeof source.getPage>): string {
-	if (!docPage) {
-		throw new Error("Missing doc page data");
-	}
-
-	try {
-		return docPage.data.content;
-	} catch (error) {
-		for (const fallbackPath of resolveFallbackPaths(docPage)) {
-			if (existsSync(fallbackPath)) {
-				return readFileSync(fallbackPath, "utf8");
-			}
-		}
-
-		throw error;
-	}
-}
-
 export async function getLLMText(
-	docPage: ReturnType<typeof source.getPage>,
+	docPage: InferPageType<typeof source>,
 ): Promise<string> {
-	const rawContent = readDocContent(docPage);
+	const mdContent = await docPage.data.getText("processed");
 
 	// Extract APIMethod components & other nested wrapper before processing
-	const processedContent = extractAPIMethods(rawContent);
-
-	const processed = await processor.process({
-		path: docPage!.path,
-		value: processedContent,
-	});
+	const processedContent = extractAPIMethods(mdContent);
 
 	return `# ${docPage!.data.title}
 
 ${docPage!.data.description || ""}
 
-${processed.toString()}
+${processedContent}
 `;
 }
 
