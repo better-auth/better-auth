@@ -12,6 +12,7 @@ export {
 } from "./env-impl";
 export {
 	createLogger,
+	getLogLevelFromEnv,
 	type InternalLogger,
 	type Logger,
 	type LogHandlerParams,
