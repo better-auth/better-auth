@@ -37,6 +37,7 @@ The last login method plugin tracks the most recent authentication method used b
         })
         ```
     </Step>
+
 </Steps>
 
 ## Usage
@@ -48,17 +49,17 @@ Once installed, the plugin automatically tracks the last authentication method u
 The client plugin provides several methods to work with the last login method:
 
 ```ts title="app.tsx"
-import { authClient } from "@/lib/auth-client"
+import { authClient } from '@/lib/auth-client';
 
 // Get the last used login method
-const lastMethod = authClient.getLastUsedLoginMethod()
-console.log(lastMethod) // "google", "email", "github", etc.
+const lastMethod = authClient.getLastUsedLoginMethod();
+console.log(lastMethod); // "google", "email", "github", etc.
 
 // Check if a specific method was last used
-const wasGoogle = authClient.isLastUsedLoginMethod("google")
+const wasGoogle = authClient.isLastUsedLoginMethod('google');
 
 // Clear the stored method
-authClient.clearLastUsedLoginMethod()
+authClient.clearLastUsedLoginMethod();
 ```
 
 ### UI Integration Example
@@ -72,14 +73,14 @@ import { Badge } from "@/components/ui/badge"
 
 export function SignInPage() {
     const lastMethod = authClient.getLastUsedLoginMethod()
-    
+
     return (
         <div className="space-y-4">
             <h1>Sign In</h1>
-            
+
             {/* Email sign in */}
             <div className="relative">
-                <Button 
+                <Button
                     onClick={() => authClient.signIn.email({...})}
                     variant={lastMethod === "email" ? "default" : "outline"}
                     className="w-full"
@@ -90,10 +91,10 @@ export function SignInPage() {
                     )}
                 </Button>
             </div>
-            
+
             {/* OAuth providers */}
             <div className="relative">
-                <Button 
+                <Button
                     onClick={() => authClient.signIn.social({ provider: "google" })}
                     variant={lastMethod === "google" ? "default" : "outline"}
                     className="w-full"
@@ -104,9 +105,9 @@ export function SignInPage() {
                     )}
                 </Button>
             </div>
-            
+
             <div className="relative">
-                <Button 
+                <Button
                     onClick={() => authClient.signIn.social({ provider: "github" })}
                     variant={lastMethod === "github" ? "default" : "outline"}
                     className="w-full"
@@ -180,6 +181,7 @@ By default, the last login method is stored only in cookies. For more persistent
         console.log(session?.user.lastLoginMethod)
         ```
     </Step>
+
 </Steps>
 
 ### Database Schema
@@ -189,9 +191,14 @@ When `storeInDatabase` is enabled, the plugin adds the following field to the `u
 Table: `user`
 
 <DatabaseTable
-    fields={[
-        { name: "lastLoginMethod", type: "string", description: "The last authentication method used by the user", isOptional: true },
-    ]}
+	fields={[
+		{
+			name: 'lastLoginMethod',
+			type: 'string',
+			description: 'The last authentication method used by the user',
+			isOptional: true,
+		},
+	]}
 />
 
 ### Custom Schema Configuration
@@ -199,21 +206,21 @@ Table: `user`
 You can customize the database field name:
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth"
-import { lastLoginMethod } from "better-auth/plugins"
+import { betterAuth } from 'better-auth';
+import { lastLoginMethod } from 'better-auth/plugins';
 
 export const auth = betterAuth({
-    plugins: [
-        lastLoginMethod({
-            storeInDatabase: true,
-            schema: {
-                user: {
-                    lastLoginMethod: "last_auth_method" // Custom field name
-                }
-            }
-        })
-    ]
-})
+	plugins: [
+		lastLoginMethod({
+			storeInDatabase: true,
+			schema: {
+				user: {
+					lastLoginMethod: 'last_auth_method', // Custom field name
+				},
+			},
+		}),
+	],
+});
 ```
 
 ## Configuration Options
@@ -223,79 +230,85 @@ The last login method plugin accepts the following options:
 ### Server Options
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth"
-import { lastLoginMethod } from "better-auth/plugins"
+import { betterAuth } from 'better-auth';
+import { lastLoginMethod } from 'better-auth/plugins';
 
 export const auth = betterAuth({
-    plugins: [
-        lastLoginMethod({
-            // Cookie configuration
-            cookieName: "better-auth.last_used_login_method", // Default: "better-auth.last_used_login_method"
-            maxAge: 60 * 60 * 24 * 30, // Default: 30 days in seconds
-            
-            // Database persistence
-            storeInDatabase: false, // Default: false
-            
-            // Custom method resolution
-            customResolveMethod: (ctx) => {
-                // Custom logic to determine the login method
-                if (ctx.path === "/oauth/callback/custom-provider") {
-                    return "custom-provider"
-                }
-                // Return null to use default resolution
-                return null
-            },
-            
-            // Schema customization (when storeInDatabase is true)
-            schema: {
-                user: {
-                    lastLoginMethod: "custom_field_name"
-                }
-            }
-        })
-    ]
-})
+	plugins: [
+		lastLoginMethod({
+			// Cookie configuration
+			cookieName: 'better-auth.last_used_login_method', // Default: "better-auth.last_used_login_method"
+			maxAge: 60 * 60 * 24 * 30, // Default: 30 days in seconds
+
+			// Database persistence
+			storeInDatabase: false, // Default: false
+
+			// Custom method resolution
+			customResolveMethod: (ctx) => {
+				// Custom logic to determine the login method
+				if (ctx.path === '/oauth/callback/custom-provider') {
+					return 'custom-provider';
+				}
+				// Return null to use default resolution
+				return null;
+			},
+
+			// Schema customization (when storeInDatabase is true)
+			schema: {
+				user: {
+					lastLoginMethod: 'custom_field_name',
+				},
+			},
+		}),
+	],
+});
 ```
 
 **cookieName**: `string`
+
 - The name of the cookie used to store the last login method
 - Default: `"better-auth.last_used_login_method"`
 - **Note**: This cookie is `httpOnly: false` to allow client-side JavaScript access for UI features
 
-**maxAge**: `number`  
+**maxAge**: `number`
+
 - Cookie expiration time in seconds
 - Default: `2592000` (30 days)
 
 **storeInDatabase**: `boolean`
+
 - Whether to store the last login method in the database
 - Default: `false`
 - When enabled, adds a `lastLoginMethod` field to the user table
 
 **customResolveMethod**: `(ctx: GenericEndpointContext) => string | null`
+
 - Custom function to determine the login method from the request context
 - Return `null` to use the default resolution logic
 - Useful for custom OAuth providers or authentication flows
 
 **schema**: `object`
+
 - Customize database field names when `storeInDatabase` is enabled
 - Allows mapping the `lastLoginMethod` field to a custom column name
 
 ### Client Options
 
 ```ts title="auth-client.ts"
-import { createAuthClient } from "better-auth/client"
-import { lastLoginMethodClient } from "better-auth/client/plugins"
+import { createAuthClient } from 'better-auth/client';
+import { lastLoginMethodClient } from 'better-auth/client/plugins';
 
 export const authClient = createAuthClient({
-    plugins: [
-        lastLoginMethodClient({
-            cookieName: "better-auth.last_used_login_method" // Default: "better-auth.last_used_login_method"
-        })
-    ]
-})
+	plugins: [
+		lastLoginMethodClient({
+			cookieName: 'better-auth.last_used_login_method', // Default: "better-auth.last_used_login_method"
+		}),
+	],
+});
 ```
 
 **cookieName**: `string`
+
 - The name of the cookie to read the last login method from
 - Must match the server-side `cookieName` configuration
 - Default: `"better-auth.last_used_login_method"`
@@ -310,8 +323,9 @@ By default, the plugin tracks these authentication methods:
 - **Sign up methods**: Tracked the same as sign in methods
 
 The plugin automatically detects the method from these endpoints:
+
 - `/callback/:id` - OAuth callback with provider ID
-- `/oauth2/callback/:id` - OAuth2 callback with provider ID  
+- `/oauth2/callback/:id` - OAuth2 callback with provider ID
 - `/sign-in/email` - Email sign in
 - `/sign-up/email` - Email sign up
 
@@ -331,34 +345,34 @@ When you enable `crossSubDomainCookies` or `crossOriginCookies` in your Better A
 If you have custom OAuth providers or authentication methods, you can use the `customResolveMethod` option:
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth"
-import { lastLoginMethod } from "better-auth/plugins"
+import { betterAuth } from 'better-auth';
+import { lastLoginMethod } from 'better-auth/plugins';
 
 export const auth = betterAuth({
-    plugins: [
-        lastLoginMethod({
-            customResolveMethod: (ctx) => {
-                // Track custom SAML provider
-                if (ctx.path === "/saml/callback") {
-                    return "saml"
-                }
-                
-                // Track magic link authentication
-                if (ctx.path === "/magic-link/verify") {
-                    return "magic-link"
-                }
-                
-                // Track phone authentication
-                if (ctx.path === "/sign-in/phone") {
-                    return "phone"
-                }
-                
-                // Return null to use default logic
-                return null
-            }
-        })
-    ]
-})
+	plugins: [
+		lastLoginMethod({
+			customResolveMethod: (ctx) => {
+				// Track custom SAML provider
+				if (ctx.path === '/saml/callback') {
+					return 'saml';
+				}
+
+				// Track magic link authentication
+				if (ctx.path === '/magic-link/verify') {
+					return 'magic-link';
+				}
+
+				// Track phone authentication
+				if (ctx.path === '/sign-in/phone') {
+					return 'phone';
+				}
+
+				// Return null to use default logic
+				return null;
+			},
+		}),
+	],
+});
 ```
 
 ### Usage with Expo
@@ -366,26 +380,27 @@ export const auth = betterAuth({
 When using Better Auth with Expo, make sure to import the client plugin from `@better-auth/expo/plugins` rather than from `better-auth/plugins/client`. This ensures the last login method is stored correctly using the configured storage.
 
 ```ts
-import { createAuthClient } from "better-auth/react"
-import { expoClient } from "@better-auth/expo"
-import { lastLoginMethodClient } from "@better-auth/expo/plugins" // [!code highlight]
-import * as SecureStore from "expo-secure-store"
+import { createAuthClient } from 'better-auth/react';
+import { expoClient } from '@better-auth/expo';
+import { lastLoginMethodClient } from '@better-auth/expo/plugins'; // [!code highlight]
+import * as SecureStore from 'expo-secure-store';
 
 export const authClient = createAuthClient({
-  plugins: [
-    expoClient({
-      scheme: "myapp",
-      storagePrefix: "myapp",
-      storage: SecureStore,
-    }),
-    lastLoginMethodClient({
-      storagePrefix: "myapp",
-      storage: SecureStorage,
-    })
-  ]
-})
+	plugins: [
+		expoClient({
+			scheme: 'myapp',
+			storagePrefix: 'myapp',
+			storage: SecureStore,
+		}),
+		lastLoginMethodClient({
+			storagePrefix: 'myapp',
+			storage: SecureStorage,
+		}),
+	],
+});
 ```
 
 <Callout type="info">
-    In Expo only apps, where browser support isn’t needed, you can omit the server plugin and rely solely on the client plugin.
+	In Expo only apps, where browser support isn’t needed, you can omit the server
+	plugin and rely solely on the client plugin.
 </Callout>

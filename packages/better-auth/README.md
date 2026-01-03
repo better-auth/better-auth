@@ -22,9 +22,6 @@
   </p>
 </p>
 
-
-
-
 ## Getting Started
 
 ```bash
