@@ -50,6 +50,18 @@ const { execute } = await testAdapter({
 			"sqlite",
 		);
 
+		try {
+			const version = execSync("bunx drizzle-kit --version", {
+				cwd: import.meta.dirname,
+				stdio: ["ignore", "pipe", "pipe"],
+			})
+				.toString()
+				.trim();
+			console.log(`bunx drizzle-kit --version output:`, version);
+		} catch (err) {
+			console.error("Failed to check drizzle-kit version with bunx:", err);
+		}
+
 		const command = `npx drizzle-kit push --dialect=sqlite --schema=${fileName}.ts --url=./test.db`;
 		console.log(`Running: ${command}`);
 		console.log(`Options:`, betterAuthOptions);
