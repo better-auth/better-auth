@@ -12,13 +12,14 @@ Before diving in, here are a few important resources:
 - Take a look at our existing <Link href="https://github.com/better-auth/better-auth/issues">issues</Link> and <Link href="https://github.com/better-auth/better-auth/pulls">pull requests</Link>
 - Join our community discussions in <Link href="https://discord.gg/better-auth">Discord</Link>
 
+
 ## Development Setup
 
 To get started with development:
 
 <Callout type="warn">
-	Make sure you have <Link href="https://nodejs.org/en/download">Node.JS</Link>{' '}
-	installed, preferably on LTS.
+  Make sure you have <Link href="https://nodejs.org/en/download">Node.JS</Link>{" "}
+  installed, preferably on LTS.
 </Callout>
 
 <Steps>
@@ -111,6 +112,7 @@ Once you have an idea of what you want to contribute, you can start making chang
 
 </Steps>
 
+
 ### Issues and Bug Fixes
 
 - Check our [GitHub issues](https://github.com/better-auth/better-auth/issues) for tasks labeled `good first issue`
@@ -142,15 +144,15 @@ We welcome contributions to support more frameworks:
 We use Vitest for testing. Place test files next to the source files they test:
 
 ```ts
-import { describe, it, expect } from 'vitest';
-import { getTestInstance } from './test-utils/test-instance';
+import { describe, it, expect } from "vitest";
+import { getTestInstance } from "./test-utils/test-instance";
 
-describe('Feature', () => {
-	it('should work as expected', async () => {
-		const { client } = await getTestInstance();
-		// Test code here
-		expect(result).toBeDefined();
-	});
+describe("Feature", () => {
+    it("should work as expected", async () => {
+        const { client } = await getTestInstance();
+        // Test code here
+        expect(result).toBeDefined();
+    });
 });
 ```
 
@@ -162,16 +164,16 @@ The test instance helper now includes improved async context support for managin
 const { client, runWithUser, signInWithTestUser } = await getTestInstance();
 
 // Run tests with a specific user context
-await runWithUser('user@example.com', 'password', async (headers) => {
-	// All client calls within this block will use the user's session
-	const response = await client.getSession();
-	// headers are automatically applied
+await runWithUser("user@example.com", "password", async (headers) => {
+    // All client calls within this block will use the user's session
+    const response = await client.getSession();
+    // headers are automatically applied
 });
 
 // Or use the test user with async context
 const { runWithDefaultUser } = await signInWithTestUser();
 await runWithDefaultUser(async (headers) => {
-	// Code here runs with the test user's session context
+    // Code here runs with the test user's session context
 });
 ```
 

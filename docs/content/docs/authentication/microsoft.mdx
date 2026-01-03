@@ -28,16 +28,16 @@ Enabling OAuth with Microsoft Azure Entra ID (formerly Active Directory) allows 
                 clientId: process.env.MICROSOFT_CLIENT_ID as string, // [!code highlight]
                 clientSecret: process.env.MICROSOFT_CLIENT_SECRET as string, // [!code highlight]
                 // Optional
-                tenantId: 'common', // [!code highlight]
+                tenantId: 'common', // [!code highlight]                
                 authority: "https://login.microsoftonline.com", // Authentication authority URL // [!code highlight]
                 prompt: "select_account", // Forces account selection // [!code highlight]
             }, // [!code highlight]
         },
     })
     ```
-
+    
     **Authority URL**: Use the default `https://login.microsoftonline.com` for standard Entra ID scenarios or `https://<tenant-id>.ciamlogin.com` for CIAM (Customer Identity and Access Management) scenarios.
-
+    
     </Step>
 
 </Steps>
@@ -49,14 +49,14 @@ To sign in with Microsoft, you can use the `signIn.social` function provided by 
 - `provider`: The provider to use. It should be set to `microsoft`.
 
 ```ts title="auth-client.ts"
-import { createAuthClient } from 'better-auth/client';
+import { createAuthClient } from "better-auth/client";
 
 const authClient = createAuthClient();
 
 const signIn = async () => {
-	const data = await authClient.signIn.social({
-		provider: 'microsoft',
-		callbackURL: '/dashboard', // The URL to redirect to after the sign in
-	});
+  const data = await authClient.signIn.social({
+    provider: "microsoft",
+    callbackURL: "/dashboard", // The URL to redirect to after the sign in
+  });
 };
 ```

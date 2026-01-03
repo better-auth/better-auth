@@ -13,14 +13,13 @@ provides a simple way to integrate One Tap into your application, handling the c
 Add the One Tap plugin to your auth configuration:
 
 ```ts title="auth.ts"
-import { betterAuth } from 'better-auth';
-import { oneTap } from 'better-auth/plugins'; // [!code highlight]
+import { betterAuth } from "better-auth";
+import { oneTap } from "better-auth/plugins"; // [!code highlight]
 
 export const auth = betterAuth({
-	plugins: [
-		// [!code highlight]
-		oneTap(), // Add the One Tap server plugin  // [!code highlight]
-	], // [!code highlight]
+    plugins: [ // [!code highlight]
+        oneTap(), // Add the One Tap server plugin  // [!code highlight]
+    ] // [!code highlight]
 });
 ```
 
@@ -28,28 +27,29 @@ export const auth = betterAuth({
 
 Add the client plugin and specify where the user should be redirected after sign-in or if additional verification (like 2FA) is needed.
 
+
 ```ts
-import { createAuthClient } from 'better-auth/client';
-import { oneTapClient } from 'better-auth/client/plugins';
+import { createAuthClient } from "better-auth/client";
+import { oneTapClient } from "better-auth/client/plugins";
 
 export const authClient = createAuthClient({
-	plugins: [
-		oneTapClient({
-			clientId: 'YOUR_CLIENT_ID',
-			// Optional client configuration:
-			autoSelect: false,
-			cancelOnTapOutside: true,
-			context: 'signin',
-			additionalOptions: {
-				// Any extra options for the Google initialize method
-			},
-			// Configure prompt behavior and exponential backoff:
-			promptOptions: {
-				baseDelay: 1000, // Base delay in ms (default: 1000)
-				maxAttempts: 5, // Maximum number of attempts before triggering onPromptNotification (default: 5)
-			},
-		}),
-	],
+  plugins: [
+    oneTapClient({
+      clientId: "YOUR_CLIENT_ID",
+      // Optional client configuration:
+      autoSelect: false,
+      cancelOnTapOutside: true,
+      context: "signin",
+      additionalOptions: {
+        // Any extra options for the Google initialize method
+      },
+      // Configure prompt behavior and exponential backoff:
+      promptOptions: {
+        baseDelay: 1000,   // Base delay in ms (default: 1000)
+        maxAttempts: 5     // Maximum number of attempts before triggering onPromptNotification (default: 5)
+      }
+    })
+  ]
 });
 ```
 
@@ -71,12 +71,12 @@ Pass fetchOptions with an onSuccess callback to handle the login response withou
 
 ```ts
 await authClient.oneTap({
-	fetchOptions: {
-		onSuccess: () => {
-			// For example, use a router to navigate without a full reload:
-			router.push('/dashboard');
-		},
-	},
+  fetchOptions: {
+    onSuccess: () => {
+      // For example, use a router to navigate without a full reload:
+      router.push("/dashboard");
+    }
+  }
 });
 ```
 
@@ -86,7 +86,7 @@ To perform a hard redirect to a different page after login, use the callbackURL 
 
 ```ts
 await authClient.oneTap({
-	callbackURL: '/dashboard',
+  callbackURL: "/dashboard"
 });
 ```
 
@@ -98,13 +98,10 @@ If the maximum number of attempts is reached without a successful sign-in, you c
 
 ```ts
 await authClient.oneTap({
-	onPromptNotification: (notification) => {
-		console.warn(
-			'Prompt was dismissed or skipped. Consider displaying an alternative sign-in option.',
-			notification,
-		);
-		// Render your alternative UI here
-	},
+  onPromptNotification: (notification) => {
+    console.warn("Prompt was dismissed or skipped. Consider displaying an alternative sign-in option.", notification);
+    // Render your alternative UI here
+  }
 });
 ```
 
@@ -122,9 +119,8 @@ await authClient.oneTap({
 
 ### Server Options
 
-- **disableSignUp**: Disable the sign-up option, allowing only existing users to sign in. Default is `false`.
+- **disableSignUp**:  Disable the sign-up option, allowing only existing users to sign in. Default is `false`.
 - **ClientId**: Optionally, pass a client ID here if it is not provided in your social provider configuration.
 
 ### Authorized JavaScript origins
-
 Ensure you have configured the Authorized JavaScript origins (e.g., http://localhost:3000, https://example.com) for your Client ID in the Google Cloud Console. This is a required step for the Google One Tap API, and it will not function correctly unless your origins are correctly set.

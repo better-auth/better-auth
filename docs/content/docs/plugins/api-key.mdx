@@ -164,17 +164,16 @@ const permissions = { // Permissions to check are optional.
 }
 
 type verifyApiKey = {
-/**
-_ The key to verify.
-_/
-key: string = "your_api_key_here"
-/**
-_ The permissions to verify. Optional.
-_/
-permissions?: Record<string, string[]>
+    /**
+     * The key to verify.
+     */
+    key: string = "your_api_key_here"
+    /**
+     * The permissions to verify. Optional.
+     */
+    permissions?: Record<string, string[]>
 }
-
-````
+```
 </APIMethod>
 
 
@@ -186,7 +185,7 @@ type Result = {
   error: { message: string; code: string } | null;
   key: Omit<ApiKey, "key"> | null;
 };
-````
+```
 
 ---
 
@@ -213,7 +212,7 @@ You'll receive everything about the API key details, except for the `key` value 
 If it fails, it will throw an `APIError`.
 
 ```ts
-type Result = Omit<ApiKey, 'key'>;
+type Result = Omit<ApiKey, "key">;
 ```
 
 ---
@@ -322,7 +321,7 @@ Otherwise, you'll receive:
 
 ```ts
 type Result = {
-	success: boolean;
+  success: boolean;
 };
 ```
 
@@ -330,9 +329,15 @@ type Result = {
 
 ### List API keys
 
-<APIMethod path="/api-key/list" method="GET" requireSession>
-	```ts type listApiKeys = {}
-	```
+<APIMethod
+  path="/api-key/list"
+  method="GET"
+  requireSession
+>
+```ts
+type listApiKeys = {
+}
+```
 </APIMethod>
 
 #### Result
@@ -351,18 +356,20 @@ type Result = ApiKey[];
 This function will delete all API keys that have an expired expiration date.
 
 <APIMethod
-	path="/api-key/delete-all-expired-api-keys"
-	method="POST"
-	isServerOnly
+  path="/api-key/delete-all-expired-api-keys"
+  method="POST"
+  isServerOnly
 >
-	```ts type deleteAllExpiredApiKeys = {}
-	```
+```ts
+type deleteAllExpiredApiKeys = {
+}
+```
 </APIMethod>
 
 <Callout>
-	We automatically delete expired API keys every time any apiKey plugin
-	endpoints were called, however they are rate-limited to a 10 second cool down
-	each call to prevent multiple calls to the database.
+  We automatically delete expired API keys every time any apiKey plugin
+  endpoints were called, however they are rate-limited to a 10 second cool down
+  each call to prevent multiple calls to the database.
 </Callout>
 
 ---
@@ -372,25 +379,21 @@ This function will delete all API keys that have an expired expiration date.
 Any time an endpoint in Better Auth is called that has a valid API key in the headers, you can automatically create a mock session to represent the user by enabling `sessionForAPIKeys` option.
 
 <Callout type="warn">
-	This is generally not recommended, as it can lead to security issues if not
-	used carefully. A leaked api key can be used to impersonate a user.
+ This is generally not recommended, as it can lead to security issues if not used carefully. A leaked api key can be used to impersonate a user.
 </Callout>
 
 <Callout>
-	**Rate Limiting Note**: When `enableSessionForAPIKeys` is enabled, the API key
-	is validated once per request, and rate limiting is applied accordingly. If
-	you manually verify an API key and then fetch a session separately, both
-	operations will increment the rate limit counter. Using
-	`enableSessionForAPIKeys` avoids this double increment.
+  **Rate Limiting Note**: When `enableSessionForAPIKeys` is enabled, the API key is validated once per request, and rate limiting is applied accordingly.
+  If you manually verify an API key and then fetch a session separately, both operations will increment the rate limit counter. Using `enableSessionForAPIKeys` avoids this double increment.
 </Callout>
 
 ```ts
 export const auth = betterAuth({
-	plugins: [
-		apiKey({
-			enableSessionForAPIKeys: true,
-		}),
-	],
+  plugins: [
+    apiKey({
+      enableSessionForAPIKeys: true,
+    }),
+  ],
 });
 ```
 
@@ -406,15 +409,16 @@ export const auth = betterAuth({
     </Tab>
 </Tabs>
 
+
 The default header key is `x-api-key`, but this can be changed by setting the `apiKeyHeaders` option in the plugin options.
 
 ```ts
 export const auth = betterAuth({
-	plugins: [
-		apiKey({
-			apiKeyHeaders: ['x-api-key', 'xyz-api-key'], // or you can pass just a string, eg: "x-api-key"
-		}),
-	],
+  plugins: [
+    apiKey({
+      apiKeyHeaders: ["x-api-key", "xyz-api-key"], // or you can pass just a string, eg: "x-api-key"
+    }),
+  ],
 });
 ```
 
@@ -422,15 +426,15 @@ Or optionally, you can pass an `apiKeyGetter` function to the plugin options, wh
 
 ```ts
 export const auth = betterAuth({
-	plugins: [
-		apiKey({
-			apiKeyGetter: (ctx) => {
-				const has = ctx.request.headers.has('x-api-key');
-				if (!has) return null;
-				return ctx.request.headers.get('x-api-key');
-			},
-		}),
-	],
+  plugins: [
+    apiKey({
+      apiKeyGetter: (ctx) => {
+        const has = ctx.request.headers.has("x-api-key");
+        if (!has) return null;
+        return ctx.request.headers.get("x-api-key");
+      },
+    }),
+  ],
 });
 ```
 
@@ -446,11 +450,11 @@ Store API keys only in the database adapter. This is the default mode and requir
 
 ```ts
 export const auth = betterAuth({
-	plugins: [
-		apiKey({
-			storage: 'database', // Default, can be omitted
-		}),
-	],
+  plugins: [
+    apiKey({
+      storage: "database", // Default, can be omitted
+    }),
+  ],
 });
 ```
 
@@ -460,27 +464,27 @@ Store API keys only in secondary storage (e.g., Redis).
 No fallback to database. Best for high-performance scenarios where all keys are migrated to secondary storage.
 
 ```ts
-import { createClient } from 'redis';
-import { betterAuth } from 'better-auth';
-import { apiKey } from 'better-auth/plugins';
+import { createClient } from "redis";
+import { betterAuth } from "better-auth";
+import { apiKey } from "better-auth/plugins";
 
 const redis = createClient();
 await redis.connect();
 
 export const auth = betterAuth({
-	secondaryStorage: {
-		get: async (key) => await redis.get(key),
-		set: async (key, value, ttl) => {
-			if (ttl) await redis.set(key, value, { EX: ttl });
-			else await redis.set(key, value);
-		},
-		delete: async (key) => await redis.del(key),
-	},
-	plugins: [
-		apiKey({
-			storage: 'secondary-storage',
-		}),
-	],
+  secondaryStorage: {
+    get: async (key) => await redis.get(key),
+    set: async (key, value, ttl) => {
+      if (ttl) await redis.set(key, value, { EX: ttl });
+      else await redis.set(key, value);
+    },
+    delete: async (key) => await redis.del(key),
+  },
+  plugins: [
+    apiKey({
+      storage: "secondary-storage",
+    }),
+  ],
 });
 ```
 
@@ -489,33 +493,31 @@ export const auth = betterAuth({
 Check secondary storage first, then fallback to database if not found.
 
 **Read behavior:**
-
 - Checks secondary storage first
 - If not found, queries the database
 - **Automatically populates secondary storage** when falling back to database (cache warming)
 - Ensures frequently accessed keys stay in cache over time
 
 **Write behavior:**
-
 - Writes to **both** database and secondary storage
 - Ensures consistency between both storage layers
 
 ```ts
 export const auth = betterAuth({
-	secondaryStorage: {
-		get: async (key) => await redis.get(key),
-		set: async (key, value, ttl) => {
-			if (ttl) await redis.set(key, value, { EX: ttl });
-			else await redis.set(key, value);
-		},
-		delete: async (key) => await redis.del(key),
-	},
-	plugins: [
-		apiKey({
-			storage: 'secondary-storage',
-			fallbackToDatabase: true,
-		}),
-	],
+  secondaryStorage: {
+    get: async (key) => await redis.get(key),
+    set: async (key, value, ttl) => {
+      if (ttl) await redis.set(key, value, { EX: ttl });
+      else await redis.set(key, value);
+    },
+    delete: async (key) => await redis.del(key),
+  },
+  plugins: [
+    apiKey({
+      storage: "secondary-storage",
+      fallbackToDatabase: true,
+    }),
+  ],
 });
 ```
 
@@ -525,45 +527,45 @@ You can provide custom storage methods specifically for API keys, overriding the
 
 ```ts
 export const auth = betterAuth({
-	plugins: [
-		apiKey({
-			storage: 'secondary-storage',
-			customStorage: {
-				get: async (key) => {
-					// Custom get logic for API keys
-					return await customStorage.get(key);
-				},
-				set: async (key, value, ttl) => {
-					// Custom set logic for API keys
-					await customStorage.set(key, value, ttl);
-				},
-				delete: async (key) => {
-					// Custom delete logic for API keys
-					await customStorage.delete(key);
-				},
-			},
-		}),
-	],
+  plugins: [
+    apiKey({
+      storage: "secondary-storage",
+      customStorage: {
+        get: async (key) => {
+          // Custom get logic for API keys
+          return await customStorage.get(key);
+        },
+        set: async (key, value, ttl) => {
+          // Custom set logic for API keys
+          await customStorage.set(key, value, ttl);
+        },
+        delete: async (key) => {
+          // Custom delete logic for API keys
+          await customStorage.delete(key);
+        },
+      },
+    }),
+  ],
 });
 ```
+
+
+
+
 
 ## Rate Limiting
 
 Every API key can have its own rate limit settings. The built-in rate-limiting applies whenever an API key is validated, which includes:
-
 - When verifying an API key via the `/api-key/verify` endpoint
 - When using API keys for session creation (if `enableSessionForAPIKeys` is enabled), rate limiting applies to all endpoints that use the API key
 
 For other endpoints/methods that don't use API keys, you should utilize Better Auth's [built-in rate-limiting](/docs/concepts/rate-limit).
 
 <Callout type="warn">
-	**Double Rate-Limit Increment**: If you manually verify an API key using
-	`verifyApiKey()` and then fetch a session using `getSession()` with the same
-	API key header, both operations will increment the rate limit counter,
-	resulting in two increments for a single request. To avoid this, either: - Use
-	`enableSessionForAPIKeys: true` and let Better Auth handle session creation
-	automatically (recommended) - Or verify the API key once and reuse the
-	validated result instead of calling both methods separately
+  **Double Rate-Limit Increment**: If you manually verify an API key using `verifyApiKey()` and then fetch a session using `getSession()` with the same API key header, both operations will increment the rate limit counter, resulting in two increments for a single request. To avoid this, either:
+  
+  - Use `enableSessionForAPIKeys: true` and let Better Auth handle session creation automatically (recommended)
+  - Or verify the API key once and reuse the validated result instead of calling both methods separately
 </Callout>
 
 You can refer to the rate-limit default configurations below in the API Key plugin options.
@@ -572,32 +574,32 @@ An example default value:
 
 ```ts
 export const auth = betterAuth({
-	plugins: [
-		apiKey({
-			rateLimit: {
-				enabled: true,
-				timeWindow: 1000 * 60 * 60 * 24, // 1 day
-				maxRequests: 10, // 10 requests per day
-			},
-		}),
-	],
+  plugins: [
+    apiKey({
+      rateLimit: {
+        enabled: true,
+        timeWindow: 1000 * 60 * 60 * 24, // 1 day
+        maxRequests: 10, // 10 requests per day
+      },
+    }),
+  ],
 });
 ```
 
 For each API key, you can customize the rate-limit options on create.
 
 <Callout>
-	You can only customize the rate-limit options on the server auth instance.
+  You can only customize the rate-limit options on the server auth instance.
 </Callout>
 
 ```ts
 const apiKey = await auth.api.createApiKey({
-	body: {
-		rateLimitEnabled: true,
-		rateLimitTimeWindow: 1000 * 60 * 60 * 24, // 1 day
-		rateLimitMax: 10, // 10 requests per day
-	},
-	headers: user_headers,
+  body: {
+    rateLimitEnabled: true,
+    rateLimitTimeWindow: 1000 * 60 * 60 * 24, // 1 day
+    rateLimitMax: 10, // 10 requests per day
+  },
+  headers: user_headers,
 });
 ```
 
@@ -614,7 +616,6 @@ The rate limiting system uses a sliding window approach:
 4. **Rate Limit Exceeded**: When a request is rejected due to rate limiting, the error response includes a `tryAgainIn` value (in milliseconds) indicating how long to wait before the window resets.
 
 **Disabling Rate Limiting**:
-
 - **Globally**: Set `rateLimit.enabled: false` in plugin options
 - **Per Key**: Set `rateLimitEnabled: false` when creating or updating an API key
 - **Null Values**: If `rateLimitTimeWindow` or `rateLimitMax` is `null`, rate limiting is effectively disabled for that key
@@ -641,7 +642,6 @@ If the `remaining` count is 0, then the API key is disabled & removed.
 Whenever an API key is created, the `refillInterval` and `refillAmount` are set to `null` by default.
 This means that the API key will not be refilled automatically.
 However, if both `refillInterval` & `refillAmount` are set, then whenever the API key is used:
-
 - The system checks if the time since the last refill (or since creation if no refill has occurred) exceeds the `refillInterval`
 - If the interval has passed, the `remaining` count is reset to `refillAmount` (not incremented)
 - The `lastRefillAt` timestamp is updated to the current time
@@ -660,24 +660,24 @@ Here's an example:
 
 ```ts
 export const auth = betterAuth({
-	plugins: [
-		apiKey({
-			customKeyGenerator: (options: {
-				length: number;
-				prefix: string | undefined;
-			}) => {
-				const apiKey = mySuperSecretApiKeyGenerator(
-					options.length,
-					options.prefix,
-				);
-				return apiKey;
-			},
-			customAPIKeyValidator: async ({ ctx, key }) => {
-				const res = await keyService.verify(key);
-				return res.valid;
-			},
-		}),
-	],
+  plugins: [
+    apiKey({
+      customKeyGenerator: (options: {
+        length: number;
+        prefix: string | undefined;
+      }) => {
+        const apiKey = mySuperSecretApiKeyGenerator(
+          options.length,
+          options.prefix
+        );
+        return apiKey;
+      },
+      customAPIKeyValidator: async ({ ctx, key }) => {
+        const res = await keyService.verify(key)
+        return res.valid
+      },
+    }),
+  ],
 });
 ```
 
@@ -686,14 +686,14 @@ If you're **not** using the `length` property provided by `customKeyGenerator`, 
 
 ```ts
 export const auth = betterAuth({
-	plugins: [
-		apiKey({
-			customKeyGenerator: () => {
-				return crypto.randomUUID();
-			},
-			defaultKeyLength: 36, // Or whatever the length is
-		}),
-	],
+  plugins: [
+    apiKey({
+      customKeyGenerator: () => {
+        return crypto.randomUUID();
+      },
+      defaultKeyLength: 36, // Or whatever the length is
+    }),
+  ],
 });
 ```
 
@@ -711,11 +711,11 @@ To store metadata, make sure you haven't disabled the metadata feature in the pl
 
 ```ts
 export const auth = betterAuth({
-	plugins: [
-		apiKey({
-			enableMetadata: true,
-		}),
-	],
+  plugins: [
+    apiKey({
+      enableMetadata: true,
+    }),
+  ],
 });
 ```
 
@@ -723,11 +723,11 @@ Then, you can store metadata in the `metadata` field of the API key object.
 
 ```ts
 const apiKey = await auth.api.createApiKey({
-	body: {
-		metadata: {
-			plan: 'premium',
-		},
-	},
+  body: {
+    metadata: {
+      plan: "premium",
+    },
+  },
 });
 ```
 
@@ -735,9 +735,9 @@ You can then retrieve the metadata from the API key object.
 
 ```ts
 const apiKey = await auth.api.getApiKey({
-	body: {
-		keyId: 'your_api_key_id_here',
-	},
+  body: {
+    keyId: "your_api_key_id_here",
+  },
 });
 
 console.log(apiKey.metadata.plan); // "premium"
@@ -891,33 +891,33 @@ When `storage` is `"secondary-storage"`, enable fallback to database if key is n
 Default is `false`.
 
 <Callout>
-	When `storage` is set to `"secondary-storage"`, you must configure
-	`secondaryStorage` in your Better Auth options. API keys will be stored using
-	key-value patterns: - `api-key:${hashedKey}` - Primary lookup by hashed key -
-	`api-key:by-id:${id}` - Lookup by ID - `api-key:by-user:${userId}` - User's
-	API key list If an API key has an expiration date (`expiresAt`), a TTL will be
-	automatically set in secondary storage to ensure automatic cleanup.
+  When `storage` is set to `"secondary-storage"`, you must configure `secondaryStorage` in your Better Auth options. API keys will be stored using key-value patterns:
+  - `api-key:${hashedKey}` - Primary lookup by hashed key
+  - `api-key:by-id:${id}` - Lookup by ID
+  - `api-key:by-user:${userId}` - User's API key list
+  
+  If an API key has an expiration date (`expiresAt`), a TTL will be automatically set in secondary storage to ensure automatic cleanup.
 </Callout>
 
 ```ts
 export const auth = betterAuth({
-	secondaryStorage: {
-		get: async (key) => {
-			return await redis.get(key);
-		},
-		set: async (key, value, ttl) => {
-			if (ttl) await redis.set(key, value, { EX: ttl });
-			else await redis.set(key, value);
-		},
-		delete: async (key) => {
-			await redis.del(key);
-		},
-	},
-	plugins: [
-		apiKey({
-			storage: 'secondary-storage',
-		}),
-	],
+  secondaryStorage: {
+    get: async (key) => {
+      return await redis.get(key);
+    },
+    set: async (key, value, ttl) => {
+      if (ttl) await redis.set(key, value, { EX: ttl });
+      else await redis.set(key, value);
+    },
+    delete: async (key) => {
+      await redis.del(key);
+    },
+  },
+  plugins: [
+    apiKey({
+      storage: "secondary-storage",
+    }),
+  ],
 });
 ```
 
@@ -929,17 +929,16 @@ Useful when you want to use a different storage backend specifically for API key
 
 ```ts
 export const auth = betterAuth({
-	plugins: [
-		apiKey({
-			storage: 'secondary-storage',
-			customStorage: {
-				get: async (key) => await customStorage.get(key),
-				set: async (key, value, ttl) =>
-					await customStorage.set(key, value, ttl),
-				delete: async (key) => await customStorage.delete(key),
-			},
-		}),
-	],
+  plugins: [
+    apiKey({
+      storage: "secondary-storage",
+      customStorage: {
+        get: async (key) => await customStorage.get(key),
+        set: async (key, value, ttl) => await customStorage.set(key, value, ttl),
+        delete: async (key) => await customStorage.delete(key), 
+      },
+    }),
+  ],
 });
 ```
 
@@ -950,9 +949,7 @@ Defer non-critical updates (rate limiting counters, timestamps, remaining count)
 Requires `backgroundTasks.handler` to be configured in the main auth options.
 
 <Callout type="warn">
-	Enabling this introduces eventual consistency where the response returns
-	optimistic data before the database is updated. Only enable if your
-	application can tolerate this trade-off for improved latency.
+  Enabling this introduces eventual consistency where the response returns optimistic data before the database is updated. Only enable if your application can tolerate this trade-off for improved latency.
 </Callout>
 
 <Tabs items={["Vercel", "Cloudflare Workers"]}>
@@ -961,7 +958,7 @@ Requires `backgroundTasks.handler` to be configured in the main auth options.
     import { waitUntil } from "@vercel/functions";
 
     export const auth = betterAuth({
-      advanced: {
+      advanced: { 
           backgroundTasks: {
              handler: waitUntil,
           },
@@ -973,7 +970,6 @@ Requires `backgroundTasks.handler` to be configured in the main auth options.
       ],
     });
     ```
-
   </Tab>
   <Tab value="Cloudflare Workers">
     ```ts
@@ -982,7 +978,7 @@ Requires `backgroundTasks.handler` to be configured in the main auth options.
     const execCtxStorage = new AsyncLocalStorage<ExecutionContext>();
 
     export const auth = betterAuth({
-      advanced: {
+      advanced: { 
           backgroundTasks: {
              handler: waitUntil,
           },
@@ -996,7 +992,6 @@ Requires `backgroundTasks.handler` to be configured in the main auth options.
 
     // In your request handler, wrap with execCtxStorage.run(ctx, ...)
     ```
-
   </Tab>
 </Tabs>
 
@@ -1034,16 +1029,16 @@ You can configure default permissions that will be applied to all newly created 
 
 ```ts
 export const auth = betterAuth({
-	plugins: [
-		apiKey({
-			permissions: {
-				defaultPermissions: {
-					files: ['read'],
-					users: ['read'],
-				},
-			},
-		}),
-	],
+  plugins: [
+    apiKey({
+      permissions: {
+        defaultPermissions: {
+          files: ["read"],
+          users: ["read"],
+        },
+      },
+    }),
+  ],
 });
 ```
 
@@ -1051,19 +1046,19 @@ You can also provide a function that returns permissions dynamically:
 
 ```ts
 export const auth = betterAuth({
-	plugins: [
-		apiKey({
-			permissions: {
-				defaultPermissions: async (userId, ctx) => {
-					// Fetch user role or other data to determine permissions
-					return {
-						files: ['read'],
-						users: ['read'],
-					};
-				},
-			},
-		}),
-	],
+  plugins: [
+    apiKey({
+      permissions: {
+        defaultPermissions: async (userId, ctx) => {
+          // Fetch user role or other data to determine permissions
+          return {
+            files: ["read"],
+            users: ["read"],
+          };
+        },
+      },
+    }),
+  ],
 });
 ```
 
@@ -1073,14 +1068,14 @@ When creating an API key, you can specify custom permissions:
 
 ```ts
 const apiKey = await auth.api.createApiKey({
-	body: {
-		name: 'My API Key',
-		permissions: {
-			files: ['read', 'write'],
-			users: ['read'],
-		},
-		userId: 'userId',
-	},
+  body: {
+    name: "My API Key",
+    permissions: {
+      files: ["read", "write"],
+      users: ["read"],
+    },
+    userId: "userId",
+  },
 });
 ```
 
@@ -1090,18 +1085,18 @@ When verifying an API key, you can check if it has the required permissions:
 
 ```ts
 const result = await auth.api.verifyApiKey({
-	body: {
-		key: 'your_api_key_here',
-		permissions: {
-			files: ['read'],
-		},
-	},
+  body: {
+    key: "your_api_key_here",
+    permissions: {
+      files: ["read"],
+    },
+  },
 });
 
 if (result.valid) {
-	// API key is valid and has the required permissions
+  // API key is valid and has the required permissions
 } else {
-	// API key is invalid or doesn't have the required permissions
+  // API key is invalid or doesn't have the required permissions
 }
 ```
 
@@ -1111,14 +1106,14 @@ You can update the permissions of an existing API key:
 
 ```ts
 const apiKey = await auth.api.updateApiKey({
-	body: {
-		keyId: existingApiKeyId,
-		permissions: {
-			files: ['read', 'write', 'delete'],
-			users: ['read', 'write'],
-		},
-	},
-	headers: user_headers,
+  body: {
+    keyId: existingApiKeyId,
+    permissions: {
+      files: ["read", "write", "delete"],
+      users: ["read", "write"],
+    },
+  },
+  headers: user_headers,
 });
 ```
 
@@ -1128,14 +1123,14 @@ Permissions follow a resource-based structure:
 
 ```ts
 type Permissions = {
-	[resourceType: string]: string[];
+  [resourceType: string]: string[];
 };
 
 // Example:
 const permissions = {
-	files: ['read', 'write', 'delete'],
-	users: ['read'],
-	projects: ['read', 'write'],
+  files: ["read", "write", "delete"],
+  users: ["read"],
+  projects: ["read", "write"],
 };
 ```
 
@@ -1146,130 +1141,130 @@ When verifying an API key, all required permissions must be present in the API k
 Table: `apikey`
 
 <DatabaseTable
-	fields={[
-		{
-			name: 'id',
-			type: 'string',
-			description: 'The ID of the API key.',
-			isUnique: true,
-			isPrimaryKey: true,
-		},
-		{
-			name: 'name',
-			type: 'string',
-			description: 'The name of the API key.',
-			isOptional: true,
-		},
-		{
-			name: 'start',
-			type: 'string',
-			description:
-				'The starting characters of the API key. Useful for showing the first few characters of the API key in the UI for the users to easily identify.',
-			isOptional: true,
-		},
-		{
-			name: 'prefix',
-			type: 'string',
-			description: 'The API Key prefix. Stored as plain text.',
-			isOptional: true,
-		},
-		{
-			name: 'key',
-			type: 'string',
-			description: 'The hashed API key itself.',
-		},
-		{
-			name: 'userId',
-			type: 'string',
-			description: 'The ID of the user associated with the API key.',
-			isForeignKey: true,
-		},
-		{
-			name: 'refillInterval',
-			type: 'number',
-			description: 'The interval to refill the key in milliseconds.',
-			isOptional: true,
-		},
-		{
-			name: 'refillAmount',
-			type: 'number',
-			description: 'The amount to refill the remaining count of the key.',
-			isOptional: true,
-		},
-		{
-			name: 'lastRefillAt',
-			type: 'Date',
-			description: 'The date and time when the key was last refilled.',
-			isOptional: true,
-		},
-		{
-			name: 'enabled',
-			type: 'boolean',
-			description: 'Whether the API key is enabled.',
-		},
-		{
-			name: 'rateLimitEnabled',
-			type: 'boolean',
-			description: 'Whether the API key has rate limiting enabled.',
-		},
-		{
-			name: 'rateLimitTimeWindow',
-			type: 'number',
-			description: 'The time window in milliseconds for the rate limit.',
-			isOptional: true,
-		},
-		{
-			name: 'rateLimitMax',
-			type: 'number',
-			description:
-				'The maximum number of requests allowed within the `rateLimitTimeWindow`.',
-			isOptional: true,
-		},
-		{
-			name: 'requestCount',
-			type: 'number',
-			description:
-				'The number of requests made within the rate limit time window.',
-		},
-		{
-			name: 'remaining',
-			type: 'number',
-			description: 'The number of requests remaining.',
-			isOptional: true,
-		},
-		{
-			name: 'lastRequest',
-			type: 'Date',
-			description: 'The date and time of the last request made to the key.',
-			isOptional: true,
-		},
-		{
-			name: 'expiresAt',
-			type: 'Date',
-			description: 'The date and time when the key will expire.',
-			isOptional: true,
-		},
-		{
-			name: 'createdAt',
-			type: 'Date',
-			description: 'The date and time the API key was created.',
-		},
-		{
-			name: 'updatedAt',
-			type: 'Date',
-			description: 'The date and time the API key was updated.',
-		},
-		{
-			name: 'permissions',
-			type: 'string',
-			description: 'The permissions of the key.',
-			isOptional: true,
-		},
-		{
-			name: 'metadata',
-			type: 'Object',
-			isOptional: true,
-			description: 'Any additional metadata you want to store with the key.',
-		},
-	]}
+  fields={[
+    {
+      name: "id",
+      type: "string",
+      description: "The ID of the API key.",
+      isUnique: true,
+      isPrimaryKey: true,
+    },
+    {
+      name: "name",
+      type: "string",
+      description: "The name of the API key.",
+      isOptional: true,
+    },
+    {
+      name: "start",
+      type: "string",
+      description:
+        "The starting characters of the API key. Useful for showing the first few characters of the API key in the UI for the users to easily identify.",
+      isOptional: true,
+    },
+    {
+      name: "prefix",
+      type: "string",
+      description: "The API Key prefix. Stored as plain text.",
+      isOptional: true,
+    },
+    {
+      name: "key",
+      type: "string",
+      description: "The hashed API key itself.",
+    },
+    {
+      name: "userId",
+      type: "string",
+      description: "The ID of the user associated with the API key.",
+      isForeignKey: true,
+    },
+    {
+      name: "refillInterval",
+      type: "number",
+      description: "The interval to refill the key in milliseconds.",
+      isOptional: true,
+    },
+    {
+      name: "refillAmount",
+      type: "number",
+      description: "The amount to refill the remaining count of the key.",
+      isOptional: true,
+    },
+    {
+      name: "lastRefillAt",
+      type: "Date",
+      description: "The date and time when the key was last refilled.",
+      isOptional: true,
+    },
+    {
+      name: "enabled",
+      type: "boolean",
+      description: "Whether the API key is enabled.",
+    },
+    {
+      name: "rateLimitEnabled",
+      type: "boolean",
+      description: "Whether the API key has rate limiting enabled.",
+    },
+    {
+      name: "rateLimitTimeWindow",
+      type: "number",
+      description: "The time window in milliseconds for the rate limit.",
+      isOptional: true,
+    },
+    {
+      name: "rateLimitMax",
+      type: "number",
+      description:
+        "The maximum number of requests allowed within the `rateLimitTimeWindow`.",
+      isOptional: true,
+    },
+    {
+      name: "requestCount",
+      type: "number",
+      description:
+        "The number of requests made within the rate limit time window.",
+    },
+    {
+      name: "remaining",
+      type: "number",
+      description: "The number of requests remaining.",
+      isOptional: true,
+    },
+    {
+      name: "lastRequest",
+      type: "Date",
+      description: "The date and time of the last request made to the key.",
+      isOptional: true,
+    },
+    {
+      name: "expiresAt",
+      type: "Date",
+      description: "The date and time when the key will expire.",
+      isOptional: true,
+    },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "The date and time the API key was created.",
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "The date and time the API key was updated.",
+    },
+    {
+      name: "permissions",
+      type: "string",
+      description: "The permissions of the key.",
+      isOptional: true,
+    },
+    {
+      name: "metadata",
+      type: "Object",
+      isOptional: true,
+      description: "Any additional metadata you want to store with the key.",
+    },
+  ]}
 />

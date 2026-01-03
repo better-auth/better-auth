@@ -88,12 +88,12 @@ Before signing a SIWE message, you need to generate a nonce for the wallet addre
 
 ```ts title="generate-nonce.ts"
 const { data, error } = await authClient.siwe.nonce({
-	walletAddress: '0x1234567890abcdef1234567890abcdef12345678',
-	chainId: 1, // optional for Ethereum mainnet, required for other chains. Defaults to 1
+  walletAddress: "0x1234567890abcdef1234567890abcdef12345678",
+  chainId: 1, // optional for Ethereum mainnet, required for other chains. Defaults to 1
 });
 
 if (data) {
-	console.log('Nonce:', data.nonce);
+  console.log("Nonce:", data.nonce);
 }
 ```
 
@@ -103,15 +103,15 @@ After generating a nonce and creating a SIWE message, verify the signature to au
 
 ```ts title="sign-in-siwe.ts"
 const { data, error } = await authClient.siwe.verify({
-	message: 'Your SIWE message string',
-	signature: '0x...', // The signature from the user's wallet
-	walletAddress: '0x1234567890abcdef1234567890abcdef12345678',
-	chainId: 1, // optional for Ethereum mainnet, required for other chains. Must match Chain ID in SIWE message
-	email: 'user@example.com', // optional, required if anonymous is false
+  message: "Your SIWE message string",
+  signature: "0x...", // The signature from the user's wallet
+  walletAddress: "0x1234567890abcdef1234567890abcdef12345678",
+  chainId: 1, // optional for Ethereum mainnet, required for other chains. Must match Chain ID in SIWE message
+  email: "user@example.com", // optional, required if anonymous is false
 });
 
 if (data) {
-	console.log('Authentication successful:', data.user);
+  console.log("Authentication successful:", data.user);
 }
 ```
 
@@ -122,47 +122,45 @@ Here are examples for different blockchain networks:
 ```ts title="ethereum-mainnet.ts"
 // Ethereum Mainnet (chainId can be omitted, defaults to 1)
 const { data, error } = await authClient.siwe.verify({
-	message,
-	signature,
-	walletAddress,
-	// chainId: 1 (default)
+  message,
+  signature,
+  walletAddress,
+  // chainId: 1 (default)
 });
 ```
 
 ```ts title="polygon.ts"
 // Polygon (chainId REQUIRED)
 const { data, error } = await authClient.siwe.verify({
-	message,
-	signature,
-	walletAddress,
-	chainId: 137, // Required for Polygon
+  message,
+  signature,
+  walletAddress,
+  chainId: 137, // Required for Polygon
 });
 ```
 
 ```ts title="arbitrum.ts"
 // Arbitrum (chainId REQUIRED)
 const { data, error } = await authClient.siwe.verify({
-	message,
-	signature,
-	walletAddress,
-	chainId: 42161, // Required for Arbitrum
+  message,
+  signature,
+  walletAddress,
+  chainId: 42161, // Required for Arbitrum
 });
 ```
 
 ```ts title="base.ts"
 // Base (chainId REQUIRED)
 const { data, error } = await authClient.siwe.verify({
-	message,
-	signature,
-	walletAddress,
-	chainId: 8453, // Required for Base
+  message,
+  signature,
+  walletAddress,
+  chainId: 8453, // Required for Base
 });
 ```
 
 <Callout type="warning">
-	The `chainId` must match the Chain ID specified in your SIWE message.
-	Verification will fail with a 401 error if there's a mismatch between the
-	message's Chain ID and the `chainId` parameter.
+  The `chainId` must match the Chain ID specified in your SIWE message. Verification will fail with a 401 error if there's a mismatch between the message's Chain ID and the `chainId` parameter.
 </Callout>
 
 ## Configuration Options
@@ -183,15 +181,15 @@ The SIWE plugin accepts the following configuration options:
 The SIWE client plugin doesn't require any configuration options, but you can pass them if needed for future extensibility:
 
 ```ts title="auth-client.ts"
-import { createAuthClient } from 'better-auth/client';
-import { siweClient } from 'better-auth/client/plugins';
+import { createAuthClient } from "better-auth/client";
+import { siweClient } from "better-auth/client/plugins";
 
 export const authClient = createAuthClient({
-	plugins: [
-		siweClient({
-			// Optional client configuration can go here
-		}),
-	],
+  plugins: [
+    siweClient({
+      // Optional client configuration can go here
+    }),
+  ],
 });
 ```
 
@@ -213,70 +211,70 @@ The SIWE plugin adds a `walletAddress` table to store user wallet associations:
 Here's a complete example showing how to implement SIWE authentication:
 
 ```ts title="auth.ts"
-import { betterAuth } from 'better-auth';
-import { siwe } from 'better-auth/plugins';
-import { generateRandomString } from 'better-auth/crypto';
-import { verifyMessage, createPublicClient, http } from 'viem';
-import { mainnet } from 'viem/chains';
+import { betterAuth } from "better-auth";
+import { siwe } from "better-auth/plugins";
+import { generateRandomString } from "better-auth/crypto";
+import { verifyMessage, createPublicClient, http } from "viem";
+import { mainnet } from "viem/chains";
 
 export const auth = betterAuth({
-	database: {
-		// your database configuration
-	},
-	plugins: [
-		siwe({
-			domain: 'myapp.com',
-			emailDomainName: 'myapp.com',
-			anonymous: false,
-			getNonce: async () => {
-				// Generate a cryptographically secure random nonce
-				return generateRandomString(32, 'a-z', 'A-Z', '0-9');
-			},
-			verifyMessage: async ({ message, signature, address }) => {
-				try {
-					// Verify the signature using viem (recommended)
-					const isValid = await verifyMessage({
-						address: address as `0x${string}`,
-						message,
-						signature: signature as `0x${string}`,
-					});
-					return isValid;
-				} catch (error) {
-					console.error('SIWE verification failed:', error);
-					return false;
-				}
-			},
-			ensLookup: async ({ walletAddress }) => {
-				try {
-					// Optional: lookup ENS name and avatar using viem
-					// You can use viem's ENS utilities here
-					const client = createPublicClient({
-						chain: mainnet,
-						transport: http(),
-					});
+  database: {
+    // your database configuration
+  },
+  plugins: [
+    siwe({
+      domain: "myapp.com",
+      emailDomainName: "myapp.com",
+      anonymous: false,
+      getNonce: async () => {
+        // Generate a cryptographically secure random nonce
+        return generateRandomString(32, "a-z", "A-Z", "0-9");
+      },
+      verifyMessage: async ({ message, signature, address }) => {
+        try {
+          // Verify the signature using viem (recommended)
+          const isValid = await verifyMessage({
+            address: address as `0x${string}`,
+            message,
+            signature: signature as `0x${string}`,
+          });
+          return isValid;
+        } catch (error) {
+          console.error("SIWE verification failed:", error);
+          return false;
+        }
+      },
+      ensLookup: async ({ walletAddress }) => {
+        try {
+          // Optional: lookup ENS name and avatar using viem
+          // You can use viem's ENS utilities here
+          const client = createPublicClient({
+            chain: mainnet,
+            transport: http(),
+          });
 
-					const ensName = await client.getEnsName({
-						address: walletAddress as `0x${string}`,
-					});
+          const ensName = await client.getEnsName({
+            address: walletAddress as `0x${string}`,
+          });
 
-					const ensAvatar = ensName
-						? await client.getEnsAvatar({
-								name: ensName,
-							})
-						: null;
+          const ensAvatar = ensName
+            ? await client.getEnsAvatar({
+                name: ensName,
+              })
+            : null;
 
-					return {
-						name: ensName || walletAddress,
-						avatar: ensAvatar || '',
-					};
-				} catch {
-					return {
-						name: walletAddress,
-						avatar: '',
-					};
-				}
-			},
-		}),
-	],
+          return {
+            name: ensName || walletAddress,
+            avatar: ensAvatar || "",
+          };
+        } catch {
+          return {
+            name: walletAddress,
+            avatar: "",
+          };
+        }
+      },
+    }),
+  ],
 });
 ```

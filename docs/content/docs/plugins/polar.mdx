@@ -6,9 +6,9 @@ description: Better Auth Plugin for Payment and Checkouts using Polar
 [Polar](https://polar.sh) is a developer first payment infrastructure. Out of the box it provides a lot of developer first integrations for payments, checkouts and more. This plugin helps you integrate Polar with Better Auth to make your auth + payments flow seamless.
 
 <Callout>
-	This plugin is maintained by Polar team. For bugs, issues or feature requests,
-	please visit the [Polar GitHub
-	repo](https://github.com/polarsource/polar-adapters).
+  This plugin is maintained by Polar team. For bugs, issues or feature requests,
+  please visit the [Polar GitHub
+  repo](https://github.com/polarsource/polar-adapters).
 </Callout>
 
 ## Features
@@ -94,53 +94,53 @@ const auth = betterAuth({
 You will be using the BetterAuth Client to interact with the Polar functionalities.
 
 ```typescript
-import { createAuthClient } from 'better-auth/react';
-import { polarClient } from '@polar-sh/better-auth/client';
+import { createAuthClient } from "better-auth/react";
+import { polarClient } from "@polar-sh/better-auth/client";
 
 // This is all that is needed
 // All Polar plugins, etc. should be attached to the server-side BetterAuth config
 export const authClient = createAuthClient({
-	plugins: [polarClient()],
+  plugins: [polarClient()],
 });
 ```
 
 ## Configuration Options
 
 ```typescript
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth";
 import {
-	polar,
-	checkout,
-	portal,
-	usage,
-	webhooks,
-} from '@polar-sh/better-auth';
-import { Polar } from '@polar-sh/sdk';
+  polar,
+  checkout,
+  portal,
+  usage,
+  webhooks,
+} from "@polar-sh/better-auth";
+import { Polar } from "@polar-sh/sdk";
 
 const polarClient = new Polar({
-	accessToken: process.env.POLAR_ACCESS_TOKEN,
-	// Use 'sandbox' if you're using the Polar Sandbox environment
-	// Remember that access tokens, products, etc. are completely separated between environments.
-	// Access tokens obtained in Production are for instance not usable in the Sandbox environment.
-	server: 'sandbox',
+  accessToken: process.env.POLAR_ACCESS_TOKEN,
+  // Use 'sandbox' if you're using the Polar Sandbox environment
+  // Remember that access tokens, products, etc. are completely separated between environments.
+  // Access tokens obtained in Production are for instance not usable in the Sandbox environment.
+  server: "sandbox",
 });
 
 const auth = betterAuth({
-	// ... Better Auth config
-	plugins: [
-		polar({
-			client: polarClient,
-			createCustomerOnSignUp: true,
-			getCustomerCreateParams: ({ user }, request) => ({
-				metadata: {
-					myCustomProperty: 123,
-				},
-			}),
-			use: [
-				// This is where you add Polar plugins
-			],
-		}),
-	],
+  // ... Better Auth config
+  plugins: [
+    polar({
+      client: polarClient,
+      createCustomerOnSignUp: true,
+      getCustomerCreateParams: ({ user }, request) => ({
+        metadata: {
+          myCustomProperty: 123,
+        },
+      }),
+      use: [
+        // This is where you add Polar plugins
+      ],
+    }),
+  ],
 });
 ```
 
@@ -190,10 +190,10 @@ When checkouts are enabled, you're able to initialize Checkout Sessions using th
 
 ```typescript
 await authClient.checkout({
-	// Any Polar Product ID can be passed here
-	products: ['e651f46d-ac20-4f26-b769-ad088b123df2'],
-	// Or, if you setup "products" in the Checkout Config, you can pass the slug
-	slug: 'pro',
+  // Any Polar Product ID can be passed here
+  products: ["e651f46d-ac20-4f26-b769-ad088b123df2"],
+  // Or, if you setup "products" in the Checkout Config, you can pass the slug
+  slug: "pro",
 });
 ```
 
@@ -281,10 +281,10 @@ This method only lists granted benefits for the authenticated user/customer.
 
 ```typescript
 const { data: benefits } = await authClient.customer.benefits.list({
-	query: {
-		page: 1,
-		limit: 10,
-	},
+  query: {
+    page: 1,
+    limit: 10,
+  },
 });
 ```
 
@@ -294,11 +294,11 @@ This method lists orders like purchases and subscription renewals for the authen
 
 ```typescript
 const { data: orders } = await authClient.customer.orders.list({
-	query: {
-		page: 1,
-		limit: 10,
-		productBillingType: 'one_time', // or 'recurring'
-	},
+  query: {
+    page: 1,
+    limit: 10,
+    productBillingType: "one_time", // or 'recurring'
+  },
 });
 ```
 
@@ -308,11 +308,11 @@ This method lists the subscriptions associated with authenticated user/customer.
 
 ```typescript
 const { data: subscriptions } = await authClient.customer.subscriptions.list({
-	query: {
-		page: 1,
-		limit: 10,
-		active: true,
-	},
+  query: {
+    page: 1,
+    limit: 10,
+    active: true,
+  },
 });
 ```
 
@@ -371,10 +371,10 @@ Polar's Usage Based Billing builds entirely on event ingestion. Ingest events fr
 
 ```typescript
 const { data: ingested } = await authClient.usage.ingest({
-	event: 'file-uploads',
-	metadata: {
-		uploadedFiles: 12,
-	},
+  event: "file-uploads",
+  metadata: {
+    uploadedFiles: 12,
+  },
 });
 ```
 
@@ -395,10 +395,10 @@ Customer Meter's contains all information about their consumption on your define
 
 ```typescript
 const { data: customerMeters } = await authClient.usage.meters.list({
-	query: {
-		page: 1,
-		limit: 10,
-	},
+  query: {
+    page: 1,
+    limit: 10,
+  },
 });
 ```
 

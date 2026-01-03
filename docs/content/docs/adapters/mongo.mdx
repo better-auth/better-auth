@@ -12,24 +12,25 @@ Before getting started, make sure you have MongoDB installed and configured. For
 You can use the MongoDB adapter to connect to your database as follows.
 
 ```ts title="auth.ts"
-import { betterAuth } from 'better-auth';
-import { MongoClient } from 'mongodb';
-import { mongodbAdapter } from 'better-auth/adapters/mongodb';
+import { betterAuth } from "better-auth";
+import { MongoClient } from "mongodb";
+import { mongodbAdapter } from "better-auth/adapters/mongodb";
 
-const client = new MongoClient('mongodb://localhost:27017/database');
+const client = new MongoClient("mongodb://localhost:27017/database");
 const db = client.db();
 
 export const auth = betterAuth({
-	database: mongodbAdapter(db, {
-		// Optional: if you don't provide a client, database transactions won't be enabled.
-		client,
-	}),
+  database: mongodbAdapter(db, {
+    // Optional: if you don't provide a client, database transactions won't be enabled.
+    client
+  }),
 });
 ```
 
 ## Schema generation & migration
 
 For MongoDB, we don't need to generate or migrate the schema.
+
 
 ## Joins (Experimental)
 
@@ -42,10 +43,9 @@ To enable this feature, you need to set the `experimental.joins` option to `true
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
-	experimental: { joins: true },
+  experimental: { joins: true }
 });
 ```
-
 ## Additional Information
 
 - If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.

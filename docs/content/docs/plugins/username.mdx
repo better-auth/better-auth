@@ -58,7 +58,6 @@ The username plugin is a lightweight plugin that adds username support to the em
         })
         ```
     </Step>
-
 </Steps>
 
 ## Usage
@@ -95,11 +94,9 @@ type signUpEmail = {
 ```
 </APIMethod>
 
+
 <Callout type="info">
-	If only `username` is provided, the `displayUsername` will be set to the pre
-	normalized version of the `username`. You can see the [Username
-	Normalization](#username-normalization) and [Display Username
-	Normalization](#display-username-normalization) sections for more details.
+    If only `username` is provided, the `displayUsername` will be set to the pre normalized version of the `username`. You can see the [Username Normalization](#username-normalization) and [Display Username Normalization](#display-username-normalization) sections for more details.
 </Callout>
 
 ### Sign in
@@ -150,12 +147,11 @@ type isUsernameAvailable = {
 }
 
 if(response?.available) {
-console.log("Username is available");
+    console.log("Username is available");
 } else {
-console.log("Username is not available");
+    console.log("Username is not available");
 }
-
-````
+```
 </APIMethod>
 
 ## Options
@@ -178,26 +174,26 @@ const auth = betterAuth({
         })
     ]
 })
-````
+```
 
 ### Max Username Length
 
 The maximum length of the username. Default is `30`.
 
 ```ts title="auth.ts"
-import { betterAuth } from 'better-auth';
-import { username } from 'better-auth/plugins';
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
 
 const auth = betterAuth({
-	emailAndPassword: {
-		enabled: true,
-	},
-	plugins: [
-		username({
-			maxUsernameLength: 100,
-		}),
-	],
-});
+    emailAndPassword: {
+        enabled: true,
+    },
+    plugins: [
+        username({
+            maxUsernameLength: 100
+        })
+    ]
+})
 ```
 
 ### Username Validator
@@ -205,24 +201,24 @@ const auth = betterAuth({
 A function that validates the username. The function should return false if the username is invalid. By default, the username should only contain alphanumeric characters, underscores, and dots.
 
 ```ts title="auth.ts"
-import { betterAuth } from 'better-auth';
-import { username } from 'better-auth/plugins';
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
 
 const auth = betterAuth({
-	emailAndPassword: {
-		enabled: true,
-	},
-	plugins: [
-		username({
-			usernameValidator: (username) => {
-				if (username === 'admin') {
-					return false;
-				}
-				return true;
-			},
-		}),
-	],
-});
+    emailAndPassword: {
+        enabled: true,
+    },
+    plugins: [
+        username({
+            usernameValidator: (username) => {
+                if (username === "admin") {
+                    return false
+                }
+                return true
+            }
+        })
+    ]
+})
 ```
 
 ### Display Username Validator
@@ -230,22 +226,22 @@ const auth = betterAuth({
 A function that validates the display username. The function should return false if the display username is invalid. By default, no validation is applied to display username.
 
 ```ts title="auth.ts"
-import { betterAuth } from 'better-auth';
-import { username } from 'better-auth/plugins';
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
 
 const auth = betterAuth({
-	emailAndPassword: {
-		enabled: true,
-	},
-	plugins: [
-		username({
-			displayUsernameValidator: (displayUsername) => {
-				// Allow only alphanumeric characters, underscores, and hyphens
-				return /^[a-zA-Z0-9_-]+$/.test(displayUsername);
-			},
-		}),
-	],
-});
+    emailAndPassword: {
+        enabled: true,
+    },
+    plugins: [
+        username({
+            displayUsernameValidator: (displayUsername) => {
+                // Allow only alphanumeric characters, underscores, and hyphens
+                return /^[a-zA-Z0-9_-]+$/.test(displayUsername)
+            }
+        })
+    ]
+})
 ```
 
 ### Username Normalization
@@ -255,25 +251,24 @@ A function that normalizes the username, or `false` if you want to disable norma
 By default, usernames are normalized to lowercase, so "TestUser" and "testuser", for example, are considered the same username. The `username` field will contain the normalized (lower case) username, while `displayUsername` will contain the original `username`.
 
 ```ts title="auth.ts"
-import { betterAuth } from 'better-auth';
-import { username } from 'better-auth/plugins';
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
 
 const auth = betterAuth({
-	emailAndPassword: {
-		enabled: true,
-	},
-	plugins: [
-		username({
-			usernameNormalization: (username) => {
-				return username
-					.toLowerCase()
-					.replaceAll('0', 'o')
-					.replaceAll('3', 'e')
-					.replaceAll('4', 'a');
-			},
-		}),
-	],
-});
+    emailAndPassword: {
+        enabled: true,
+    },
+    plugins: [
+        username({
+            usernameNormalization: (username) => {
+                return username.toLowerCase()
+                    .replaceAll("0", "o")
+                    .replaceAll("3", "e")
+                    .replaceAll("4", "a");
+            }
+        })
+    ]
+})
 ```
 
 ### Display Username Normalization
@@ -283,20 +278,19 @@ A function that normalizes the display username, or `false` to disable normaliza
 By default, display usernames are not normalized. When only `username` is provided during signup or update, the `displayUsername` will be set to match the original `username` value (before normalization). You can also explicitly set a `displayUsername` which will be preserved as-is. For custom normalization, provide a function that takes the display username as input and returns the normalized version.
 
 ```ts title="auth.ts"
-import { betterAuth } from 'better-auth';
-import { username } from 'better-auth/plugins';
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
 
 const auth = betterAuth({
-	emailAndPassword: {
-		enabled: true,
-	},
-	plugins: [
-		username({
-			displayUsernameNormalization: (displayUsername) =>
-				displayUsername.toLowerCase(),
-		}),
-	],
-});
+    emailAndPassword: {
+        enabled: true,
+    },
+    plugins: [
+        username({
+            displayUsernameNormalization: (displayUsername) => displayUsername.toLowerCase(),
+        })
+    ]
+})
 ```
 
 ### Validation Order
@@ -304,22 +298,22 @@ const auth = betterAuth({
 By default, username and display username are validated before normalization. You can change this behavior by setting `validationOrder` to `post-normalization`.
 
 ```ts title="auth.ts"
-import { betterAuth } from 'better-auth';
-import { username } from 'better-auth/plugins';
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
 
 const auth = betterAuth({
-	emailAndPassword: {
-		enabled: true,
-	},
-	plugins: [
-		username({
-			validationOrder: {
-				username: 'post-normalization',
-				displayUsername: 'post-normalization',
-			},
-		}),
-	],
-});
+    emailAndPassword: {
+        enabled: true,
+    },
+    plugins: [
+        username({
+            validationOrder: {
+                username: "post-normalization",
+                displayUsername: "post-normalization",
+            }
+        })
+    ]
+})
 ```
 
 ### Disable Is Username Available
@@ -327,16 +321,18 @@ const auth = betterAuth({
 By default, the plugin exposes an endpoint `/is-username-available` to check if a username is available. You can disable this endpoint by providing `disablePaths` option to the better-auth configuration. This is useful if you want to protect usernames from being enumerated.
 
 ```ts title="auth.ts"
-import { betterAuth } from 'better-auth';
-import { username } from 'better-auth/plugins';
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
 
 const auth = betterAuth({
-	emailAndPassword: {
-		enabled: true,
-	},
-	disablePaths: ['/is-username-available'],
-	plugins: [username()],
-});
+    emailAndPassword: {
+        enabled: true,
+    },
+    disablePaths: ["/is-username-available"],
+    plugins: [
+        username()
+    ]
+})
 ```
 
 ## Schema
@@ -344,18 +340,18 @@ const auth = betterAuth({
 The plugin requires 2 fields to be added to the user table:
 
 <DatabaseTable
-	fields={[
-		{
-			name: 'username',
-			type: 'string',
-			description: 'The username of the user',
-			isUnique: true,
-		},
-		{
-			name: 'displayUsername',
-			type: 'string',
-			description: 'Non normalized username of the user',
-			isUnique: true,
-		},
-	]}
+    fields={[
+        {
+            name: "username",
+            type: "string",
+            description: "The username of the user",
+            isUnique: true
+        },
+        {
+            name: "displayUsername",
+            type: "string",
+            description: "Non normalized username of the user",
+            isUnique: true
+        },
+    ]}
 />
