@@ -53,7 +53,8 @@ export const getNormalTestSuiteTests = (
 			if (
 				options.advanced?.database?.useNumberId ||
 				options.advanced?.database?.generateId === "serial" ||
-				options.advanced?.database?.generateId === "uuid"
+				options.advanced?.database?.generateId === "uuid" ||
+				options.advanced?.database?.generateId === "uuidv7"
 			) {
 				user.id = result.id;
 			}
@@ -310,7 +311,9 @@ export const getNormalTestSuiteTests = (
 		},
 		"findOne - should not throw on record not found": async () => {
 			const options = getBetterAuthOptions();
-			const useUUIDs = options.advanced?.database?.generateId === "uuid";
+			const useUUIDs =
+				options.advanced?.database?.generateId === "uuid" ||
+				options.advanced?.database?.generateId === "uuidv7";
 			const result = await adapter.findOne<User>({
 				model: "user",
 				where: [
@@ -784,7 +787,9 @@ export const getNormalTestSuiteTests = (
 				);
 
 				const options = getBetterAuthOptions();
-				const useUUIDs = options.advanced?.database?.generateId === "uuid";
+				const useUUIDs =
+					options.advanced?.database?.generateId === "uuid" ||
+					options.advanced?.database?.generateId === "uuidv7";
 				const result = await adapter.findOne<User>({
 					model: "user",
 					where: [
@@ -1249,7 +1254,9 @@ export const getNormalTestSuiteTests = (
 		"findMany - should return an empty array when no models are found":
 			async () => {
 				const options = getBetterAuthOptions();
-				const useUUIDs = options.advanced?.database?.generateId === "uuid";
+				const useUUIDs =
+					options.advanced?.database?.generateId === "uuid" ||
+					options.advanced?.database?.generateId === "uuidv7";
 				const result = await adapter.findMany<User>({
 					model: "user",
 					where: [
@@ -1283,7 +1290,9 @@ export const getNormalTestSuiteTests = (
 					true,
 				);
 				const options = getBetterAuthOptions();
-				const useUUIDs = options.advanced?.database?.generateId === "uuid";
+				const useUUIDs =
+					options.advanced?.database?.generateId === "uuid" ||
+					options.advanced?.database?.generateId === "uuidv7";
 				const result = await adapter.findMany<User>({
 					model: "user",
 					where: [
@@ -1993,7 +2002,9 @@ export const getNormalTestSuiteTests = (
 		},
 		"delete - should not throw on record not found": async () => {
 			const options = getBetterAuthOptions();
-			const useUUIDs = options.advanced?.database?.generateId === "uuid";
+			const useUUIDs =
+				options.advanced?.database?.generateId === "uuid" ||
+				options.advanced?.database?.generateId === "uuidv7";
 			await expect(
 				adapter.delete({
 					model: "user",
