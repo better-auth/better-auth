@@ -14,7 +14,7 @@ describe("Custom Session Plugin Tests", async () => {
 	const options = {
 		plugins: [admin(), multiSession()],
 	} satisfies BetterAuthOptions;
-	const { auth, signInWithTestUser, testUser, customFetchImpl, cookieSetter } =
+	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
 		await getTestInstance({
 			session: {
 				maxAge: 10,
@@ -66,7 +66,7 @@ describe("Custom Session Plugin Tests", async () => {
 
 	it("should return set cookie headers", async () => {
 		const { headers } = await signInWithTestUser();
-		const s = await client.getSession({
+		await client.getSession({
 			fetchOptions: {
 				headers,
 				onResponse(context) {

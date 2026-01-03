@@ -1,8 +1,9 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
-import { APIError } from "../../api";
+import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { mergeSchema } from "../../db/schema";
 import { getEndpointResponse } from "../../utils/plugin-helper";
+import { defaultRoles } from "./access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import {
 	adminUpdateUser,
@@ -30,13 +31,33 @@ import type {
 
 export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 	const opts = {
+		...(options || {}),
 		defaultRole: options?.defaultRole ?? "user",
 		adminRoles: options?.adminRoles ?? ["admin"],
 		bannedUserMessage:
 			options?.bannedUserMessage ??
 			"You have been banned from this application. Please contact support if you believe this is an error.",
-		...options,
-	};
+	} as O &
+		Required<
+			Pick<AdminOptions, "defaultRole" | "adminRoles" | "bannedUserMessage">
+		>;
+
+	if (options?.adminRoles) {
+		const adminRoles = Array.isArray(options.adminRoles)
+			? options.adminRoles
+			: [...options.adminRoles.split(",")];
+		const invalidRoles = adminRoles.filter(
+			(role) =>
+				!Object.keys(options?.roles || defaultRoles)
+					.map((r) => r.toLowerCase())
+					.includes(role.toLowerCase()),
+		);
+		if (invalidRoles.length > 0) {
+			throw new BetterAuthError(
+				`Invalid admin roles: ${invalidRoles.join(", ")}. Admin roles must be defined in the 'roles' configuration.`,
+			);
+		}
+	}
 
 	return {
 		id: "admin",
@@ -95,7 +116,7 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 											);
 										}
 
-										throw new APIError("FORBIDDEN", {
+										throw APIError.from("FORBIDDEN", {
 											message: opts.bannedUserMessage,
 											code: "BANNED_USER",
 										});
@@ -148,6 +169,6 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 		},
 		$ERROR_CODES: ADMIN_ERROR_CODES,
 		schema: mergeSchema(schema, opts.schema),
-		options: options as any,
+		options: options as NoInfer<O>,
 	} satisfies BetterAuthPlugin;
 };

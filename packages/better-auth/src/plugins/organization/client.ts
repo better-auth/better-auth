@@ -14,10 +14,13 @@ import type { Prettify } from "../../types/helper";
 import type { AccessControl, Role } from "../access";
 import type { defaultStatements } from "./access";
 import { adminAc, defaultRoles, memberAc, ownerAc } from "./access";
+import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import type { OrganizationPlugin } from "./organization";
 import type { HasPermissionBaseInput } from "./permission";
 import { hasPermissionFn } from "./permission";
 import type { OrganizationOptions } from "./types";
+
+export * from "./error-codes";
 
 /**
  * Using the same `hasPermissionFn` function, but without the need for a `ctx` parameter or the `organizationId` parameter.
@@ -275,6 +278,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 				signal: "$activeMemberRoleSignal",
 			},
 		],
+		$ERROR_CODES: ORGANIZATION_ERROR_CODES,
 	} satisfies BetterAuthClientPlugin;
 };
 
@@ -303,7 +307,7 @@ export const inferOrgAdditionalFields = <
 	// if we don't remove all other properties we may see assignability issues
 
 	type ExtractClientOnlyFields<T> = {
-		[K in keyof T]: T[K] extends { additionalFields: infer AF }
+		[K in keyof T]: T[K] extends { additionalFields: infer _AF }
 			? T[K]
 			: undefined;
 	};

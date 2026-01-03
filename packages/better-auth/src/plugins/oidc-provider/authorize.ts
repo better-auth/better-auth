@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { APIError } from "better-call";
+import { APIError } from "@better-auth/core/error";
 import { getSessionFromCtx } from "../../api";
 import { generateRandomString } from "../../crypto";
 import { getClient } from "./index";
@@ -297,7 +297,7 @@ export async function authorize(
 			identifier: code,
 			expiresAt,
 		});
-	} catch (e) {
+	} catch {
 		return handleRedirect(
 			formatErrorURL(
 				query.redirect_uri,

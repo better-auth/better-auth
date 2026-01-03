@@ -1,4 +1,8 @@
-import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
+import type {
+	AuthContext,
+	Awaitable,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import type { EndpointContext } from "better-call";
 import type { InferOptionSchema, Session, User } from "../../types";
 import type { schema } from "./schema";
@@ -33,7 +37,7 @@ export interface AnonymousOptions {
 					session: Session & Record<string, any>;
 				};
 				ctx: GenericEndpointContext;
-		  }) => Promise<void> | void)
+		  }) => Awaitable<void>)
 		| undefined;
 	/**
 	 * Disable deleting the anonymous user
@@ -53,7 +57,7 @@ export interface AnonymousOptions {
 					},
 					AuthContext
 				>,
-		  ) => Promise<string> | string)
+		  ) => Awaitable<string>)
 		| undefined;
 	/**
 	 * A custom random email generation function.
@@ -61,7 +65,7 @@ export interface AnonymousOptions {
 	 * You are responsible for ensuring the email is unique to avoid conflicts.
 	 * @returns The email address for the anonymous user.
 	 */
-	generateRandomEmail?: (() => Promise<string> | string) | undefined;
+	generateRandomEmail?: (() => Awaitable<string>) | undefined;
 	/**
 	 * Custom schema for the anonymous plugin
 	 */

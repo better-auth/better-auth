@@ -507,21 +507,79 @@ export const createInternalAdapter = (
 					? {
 							async fn(data) {
 								const currentSession = await secondaryStorage.get(sessionToken);
-								let updatedSession: Session | null = null;
-								if (currentSession) {
-									const parsedSession = safeJSONParse<{
-										session: Session;
-										user: User;
-									}>(currentSession);
-									if (!parsedSession) return null;
-									updatedSession = {
-										...parsedSession.session,
-										...data,
-									};
-									return updatedSession;
-								} else {
+								if (!currentSession) {
 									return null;
 								}
+
+								const parsedSession = safeJSONParse<{
+									session: Session;
+									user: User;
+								}>(currentSession);
+								if (!parsedSession) return null;
+
+								const mergedSession = {
+									...parsedSession.session,
+									...data,
+									expiresAt: new Date(
+										data.expiresAt ?? parsedSession.session.expiresAt,
+									),
+									createdAt: new Date(parsedSession.session.createdAt),
+									updatedAt: new Date(
+										data.updatedAt ?? parsedSession.session.updatedAt,
+									),
+								};
+
+								const updatedSession = parseSessionOutput(
+									ctx.options,
+									mergedSession,
+								);
+
+								const now = Date.now();
+								const expiresMs = new Date(updatedSession.expiresAt).getTime();
+								const sessionTTL = Math.max(
+									Math.floor((expiresMs - now) / 1000),
+									0,
+								);
+
+								if (sessionTTL > 0) {
+									await secondaryStorage.set(
+										sessionToken,
+										JSON.stringify({
+											session: updatedSession,
+											user: parsedSession.user,
+										}),
+										sessionTTL,
+									);
+
+									const listKey = `active-sessions-${updatedSession.userId}`;
+									const listRaw = await secondaryStorage.get(listKey);
+									const list: { token: string; expiresAt: number }[] = listRaw
+										? safeJSONParse(listRaw) || []
+										: [];
+
+									const filtered = list
+										.filter(
+											(s) => s.token !== sessionToken && s.expiresAt > now,
+										)
+										.concat([{ token: sessionToken, expiresAt: expiresMs }]);
+
+									const sorted = filtered.sort(
+										(a, b) => a.expiresAt - b.expiresAt,
+									);
+									const furthestSessionExp = sorted.at(-1)?.expiresAt;
+
+									if (furthestSessionExp && furthestSessionExp > now) {
+										await secondaryStorage.set(
+											listKey,
+											JSON.stringify(sorted),
+											Math.floor((furthestSessionExp - now) / 1000),
+										);
+									} else {
+										await secondaryStorage.delete(listKey);
+									}
+								}
+
+								return updatedSession;
 							},
 							executeMainFn: options.session?.storeSessionInDatabase,
 						}
@@ -586,15 +644,12 @@ export const createInternalAdapter = (
 					return;
 				}
 			}
-			await (await getCurrentAdapter(adapter)).delete<Session>({
-				model: "session",
-				where: [
-					{
-						field: "token",
-						value: token,
-					},
-				],
-			});
+
+			await deleteWithHooks(
+				[{ field: "token", value: token }],
+				"session",
+				undefined,
+			);
 		},
 		deleteAccounts: async (userId: string) => {
 			await deleteManyWithHooks(
@@ -807,7 +862,6 @@ export const createInternalAdapter = (
 				undefined,
 			);
 			await refreshUserSessions(user);
-			await refreshUserSessions(user);
 			return user;
 		},
 		updateUserByEmail: async (
@@ -825,7 +879,6 @@ export const createInternalAdapter = (
 				"user",
 				undefined,
 			);
-			await refreshUserSessions(user);
 			await refreshUserSessions(user);
 			return user;
 		},
@@ -951,41 +1004,34 @@ export const createInternalAdapter = (
 				limit: 1,
 			});
 			if (!options.verification?.disableCleanup) {
-				await (await getCurrentAdapter(adapter)).deleteMany({
-					model: "verification",
-					where: [
+				await deleteManyWithHooks(
+					[
 						{
 							field: "expiresAt",
 							value: new Date(),
 							operator: "lt",
 						},
 					],
-				});
+					"verification",
+					undefined,
+				);
 			}
 			const lastVerification = verification[0];
 			return lastVerification as Verification | null;
 		},
 		deleteVerificationValue: async (id: string) => {
-			await (await getCurrentAdapter(adapter)).delete<Verification>({
-				model: "verification",
-				where: [
-					{
-						field: "id",
-						value: id,
-					},
-				],
-			});
+			await deleteWithHooks(
+				[{ field: "id", value: id }],
+				"verification",
+				undefined,
+			);
 		},
 		deleteVerificationByIdentifier: async (identifier: string) => {
-			await (await getCurrentAdapter(adapter)).delete<Verification>({
-				model: "verification",
-				where: [
-					{
-						field: "identifier",
-						value: identifier,
-					},
-				],
-			});
+			await deleteWithHooks(
+				[{ field: "identifier", value: identifier }],
+				"verification",
+				undefined,
+			);
 		},
 		updateVerificationValue: async (
 			id: string,

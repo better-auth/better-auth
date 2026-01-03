@@ -1,7 +1,7 @@
-import { defineErrorCodes } from "@better-auth/core/utils";
 import type { BetterAuthPlugin } from "better-auth";
 import { defu } from "defu";
 import type Stripe from "stripe";
+import { STRIPE_ERROR_CODES } from "./error-codes";
 import {
 	cancelSubscription,
 	cancelSubscriptionCallback,
@@ -19,19 +19,6 @@ import type {
 	Subscription,
 	SubscriptionOptions,
 } from "./types";
-
-const STRIPE_ERROR_CODES = defineErrorCodes({
-	SUBSCRIPTION_NOT_FOUND: "Subscription not found",
-	SUBSCRIPTION_PLAN_NOT_FOUND: "Subscription plan not found",
-	ALREADY_SUBSCRIBED_PLAN: "You're already subscribed to this plan",
-	UNABLE_TO_CREATE_CUSTOMER: "Unable to create customer",
-	FAILED_TO_FETCH_PLANS: "Failed to fetch plans",
-	EMAIL_VERIFICATION_REQUIRED:
-		"Email verification is required before you can subscribe to a plan",
-	SUBSCRIPTION_NOT_ACTIVE: "Subscription is not active",
-	SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION:
-		"Subscription is not scheduled for cancellation",
-});
 
 export const stripe = <O extends StripeOptions>(options: O) => {
 	const client = options.stripeClient;
@@ -205,6 +192,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			};
 		},
 		schema: getSchema(options),
+		options: options as NoInfer<O>,
 		$ERROR_CODES: STRIPE_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };

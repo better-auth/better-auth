@@ -1,9 +1,19 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { describe, expect, it } from "vitest";
-import { getCookieCache, getCookies, getSessionCookie } from "../cookies";
+import {
+	getCookieCache,
+	getCookies,
+	getSessionCookie,
+	parseCookies,
+} from "../cookies";
 import { parseUserOutput } from "../db/schema";
 import { getTestInstance } from "../test-utils/test-instance";
-import { parseSetCookieHeader } from "./cookie-utils";
+import {
+	HOST_COOKIE_PREFIX,
+	parseSetCookieHeader,
+	SECURE_COOKIE_PREFIX,
+	stripSecureCookiePrefix,
+} from "./cookie-utils";
 
 describe("cookies", async () => {
 	const { client, testUser } = await getTestInstance();
@@ -45,7 +55,7 @@ describe("cookies", async () => {
 		const { client, testUser } = await getTestInstance({
 			advanced: { useSecureCookies: true },
 		});
-		const res = await client.signIn.email(
+		await client.signIn.email(
 			{
 				email: testUser.email,
 				password: testUser.password,
@@ -164,9 +174,61 @@ describe("cookie-utils parseSetCookieHeader", () => {
 	});
 });
 
+describe("cookie-utils stripSecureCookiePrefix", () => {
+	it("should strip __Secure- prefix from cookie name", () => {
+		const cookieName = `${SECURE_COOKIE_PREFIX}session_token`;
+		const result = stripSecureCookiePrefix(cookieName);
+		expect(result).toBe("session_token");
+	});
+
+	it("should strip __Host- prefix from cookie name", () => {
+		const cookieName = `${HOST_COOKIE_PREFIX}session_token`;
+		const result = stripSecureCookiePrefix(cookieName);
+		expect(result).toBe("session_token");
+	});
+
+	it("should return cookie name unchanged if no prefix", () => {
+		const cookieName = "session_token";
+		const result = stripSecureCookiePrefix(cookieName);
+		expect(result).toBe("session_token");
+	});
+
+	it("should handle cookie names with prefix-like strings in the middle", () => {
+		const cookieName = "my__Secure-cookie";
+		const result = stripSecureCookiePrefix(cookieName);
+		expect(result).toBe("my__Secure-cookie");
+	});
+
+	it("should handle empty string", () => {
+		const result = stripSecureCookiePrefix("");
+		expect(result).toBe("");
+	});
+
+	it("should handle cookie names that are exactly the prefix", () => {
+		const secureResult = stripSecureCookiePrefix(SECURE_COOKIE_PREFIX);
+		expect(secureResult).toBe("");
+
+		const hostResult = stripSecureCookiePrefix(HOST_COOKIE_PREFIX);
+		expect(hostResult).toBe("");
+	});
+
+	it("should prioritize __Secure- prefix over __Host- prefix", () => {
+		// Cookie name starting with __Secure- should strip that prefix
+		const secureCookie = `${SECURE_COOKIE_PREFIX}${HOST_COOKIE_PREFIX}test`;
+		const result = stripSecureCookiePrefix(secureCookie);
+		expect(result).toBe(`${HOST_COOKIE_PREFIX}test`);
+	});
+
+	it("should handle cookie names with dots and special characters", () => {
+		const cookieName = `${SECURE_COOKIE_PREFIX}better-auth.session_token`;
+		const result = stripSecureCookiePrefix(cookieName);
+		expect(result).toBe("better-auth.session_token");
+	});
+});
+
 describe("getSessionCookie", async () => {
 	it("should return the correct session cookie", async () => {
-		const { client, testUser, signInWithTestUser } = await getTestInstance();
+		const { signInWithTestUser } = await getTestInstance();
 		const { headers } = await signInWithTestUser();
 		const request = new Request("http://localhost:3000/api/auth/session", {
 			headers,
@@ -325,7 +387,7 @@ describe("getSessionCookie", async () => {
 	});
 
 	it("should return null if the cookie is invalid", async () => {
-		const { client, testUser, cookieSetter } = await getTestInstance({
+		const { client, testUser } = await getTestInstance({
 			session: {
 				cookieCache: {
 					enabled: true,
@@ -371,7 +433,7 @@ describe("getSessionCookie", async () => {
 	});
 
 	it("should chunk large cookies instead of logging error", async () => {
-		const { client, testUser } = await getTestInstance({
+		const { client } = await getTestInstance({
 			secret: "better-auth.secret",
 			user: {
 				additionalFields: {
@@ -789,16 +851,6 @@ describe("Cookie Cache Field Filtering", () => {
 	});
 
 	it("should return null for invalid JWT token", async () => {
-		const { cookieSetter } = await getTestInstance({
-			secret: "better-auth.secret",
-			session: {
-				cookieCache: {
-					enabled: true,
-					strategy: "jwt",
-				},
-			},
-		});
-
 		const headers = new Headers();
 		// Set an invalid JWT token manually
 		headers.set("cookie", "better-auth.session_data=invalid.jwt.token");
@@ -856,7 +908,7 @@ describe("Cookie Chunking", () => {
 		// Create a large string that will exceed the cookie size limit
 		const largeString = "x".repeat(2000);
 
-		const { client, cookieSetter } = await getTestInstance({
+		const { client } = await getTestInstance({
 			secret: "better-auth.secret",
 			user: {
 				additionalFields: {
@@ -1052,7 +1104,7 @@ describe("Cookie Chunking", () => {
 	});
 
 	it("should NOT chunk cookies when they are under 4KB", async () => {
-		const { client, testUser, cookieSetter } = await getTestInstance({
+		const { client, testUser } = await getTestInstance({
 			secret: "better-auth.secret",
 			session: {
 				cookieCache: {
@@ -1110,5 +1162,35 @@ describe("Cookie Chunking", () => {
 
 		expect(cache).not.toBeNull();
 		expect(cache?.user?.email).toEqual(testUser.email);
+	});
+});
+
+describe("parse cookies", () => {
+	it("should parse cookies into key-value map", () => {
+		const cookieHeader =
+			"better-auth.session_token=session-token.signature; better-auth.session_data=session-data.signature";
+
+		const parsedCookies = parseCookies(cookieHeader);
+
+		expect(parsedCookies.get("better-auth.session_token")).toBe(
+			"session-token.signature",
+		);
+		expect(parsedCookies.get("better-auth.session_data")).toBe(
+			"session-data.signature",
+		);
+	});
+
+	it("should securely parse the signed cookies with padding", () => {
+		const cookieHeader =
+			"better-auth.session_token=session-token.signature=; better-auth.session_data=session-data.signature=";
+
+		const parsedCookies = parseCookies(cookieHeader);
+
+		expect(parsedCookies.get("better-auth.session_token")).toBe(
+			"session-token.signature=",
+		);
+		expect(parsedCookies.get("better-auth.session_data")).toBe(
+			"session-data.signature=",
+		);
 	});
 });
