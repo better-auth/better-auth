@@ -163,17 +163,17 @@ npm install @better-auth/drizzle-adapter
 After installing, update your imports:
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { drizzleAdapter } from "@better-auth/drizzle-adapter"; // [!code highlight]
-import { db } from "./database.ts";
-import * as schema from "./schema.ts";
+import { betterAuth } from 'better-auth';
+import { drizzleAdapter } from '@better-auth/drizzle-adapter'; // [!code highlight]
+import { db } from './database.ts';
+import * as schema from './schema.ts';
 
 export const auth = betterAuth({
-  database: drizzleAdapter(db, {
-    provider: "sqlite", // or "pg" or "mysql"
-    schema,
-  }),
-  //... the rest of your config
+	database: drizzleAdapter(db, {
+		provider: 'sqlite', // or "pg" or "mysql"
+		schema,
+	}),
+	//... the rest of your config
 });
 ```
 
@@ -184,21 +184,23 @@ npx @better-auth/cli@latest generate
 ```
 
 <Callout type="info">
-  You do not need to run database migrations when upgrading to Relations v2. The database structure remains the same - only the relation definitions change. The schema generator will output the new v2 format automatically.
+	You do not need to run database migrations when upgrading to Relations v2. The
+	database structure remains the same - only the relation definitions change.
+	The schema generator will output the new v2 format automatically.
 </Callout>
 
 And apply the new relations to your drizzle instance:
 
 ```ts
-import { drizzle } from "drizzle-orm/...";
-import * as schemas from "./schema.ts";
+import { drizzle } from 'drizzle-orm/...';
+import * as schemas from './schema.ts';
 
 const { relations, ...schema } = schemas;
 
 export const db = drizzle({
-  client: db,
-  schema, // [!code highlight]
-  relations, // [!code highlight]
+	client: db,
+	schema, // [!code highlight]
+	relations, // [!code highlight]
 });
 ```
 
