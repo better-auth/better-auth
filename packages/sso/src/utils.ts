@@ -1,3 +1,5 @@
+import { X509Certificate } from "node:crypto";
+
 /**
  * Safely parses a value that might be a JSON string or already a parsed object.
  * This handles cases where ORMs like Drizzle might return already parsed objects
@@ -39,3 +41,30 @@ export const validateEmailDomain = (email: string, domain: string) => {
 		emailDomain === providerDomain || emailDomain.endsWith(`.${providerDomain}`)
 	);
 };
+
+export function parseCertificate(certPem: string) {
+	try {
+		const normalized = certPem.includes("-----BEGIN")
+			? certPem
+			: `-----BEGIN CERTIFICATE-----\n${certPem}\n-----END CERTIFICATE-----`;
+
+		const cert = new X509Certificate(normalized);
+
+		return {
+			fingerprintSha256: cert.fingerprint256,
+			notBefore: cert.validFrom,
+			notAfter: cert.validTo,
+			publicKeyAlgorithm:
+				cert.publicKey.asymmetricKeyType?.toUpperCase() || "UNKNOWN",
+		};
+	} catch {
+		return { certParseError: "Failed to parse certificate" };
+	}
+}
+
+export function maskClientId(clientId: string): string {
+	if (clientId.length <= 4) {
+		return "****";
+	}
+	return `****${clientId.slice(-4)}`;
+}

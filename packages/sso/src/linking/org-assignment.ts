@@ -39,11 +39,7 @@ export async function assignOrganizationFromProvider(
 		return;
 	}
 
-	const isOrgPluginEnabled = ctx.context.options.plugins?.find(
-		(plugin) => plugin.id === "organization",
-	);
-
-	if (!isOrgPluginEnabled) {
+	if (!ctx.context.hasPlugin("organization")) {
 		return;
 	}
 
@@ -105,11 +101,7 @@ export async function assignOrganizationByDomain(
 		return;
 	}
 
-	const isOrgPluginEnabled = ctx.context.options.plugins?.find(
-		(plugin) => plugin.id === "organization",
-	);
-
-	if (!isOrgPluginEnabled) {
+	if (!ctx.context.hasPlugin("organization")) {
 		return;
 	}
 
