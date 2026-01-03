@@ -19,7 +19,7 @@ description: GitHub provider setup and usage.
 
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
-        
+
         export const auth = betterAuth({
             socialProviders: {
                 github: { // [!code highlight]
@@ -35,10 +35,10 @@ description: GitHub provider setup and usage.
         To sign in with GitHub, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
         - `provider`: The provider to use. It should be set to `github`.
 
-        ```ts title="auth-client.ts"  
+        ```ts title="auth-client.ts"
         import { createAuthClient } from "better-auth/client"
         const authClient =  createAuthClient()
-        
+
         const signIn = async () => {
             const data = await authClient.signIn.social({
                 provider: "github"
@@ -46,6 +46,7 @@ description: GitHub provider setup and usage.
         }
         ```
     </Step>
+
 </Steps>
 
 ## Usage
@@ -56,14 +57,15 @@ Github has two types of apps: Github apps and OAuth apps.
 
 For OAuth apps, you don't have to do anything special (just follow the steps above). For Github apps, you DO have to add one more thing, which is enable it to read the user's email:
 
-1. After creating your app, go to *Permissions and Events* > *Account Permissions* > *Email Addresses* and select "Read-Only"
+1. After creating your app, go to _Permissions and Events_ > _Account Permissions_ > _Email Addresses_ and select "Read-Only"
 
-2. Save changes. 
+2. Save changes.
 
-That's all! Now you can copy the Client ID and Client Secret of your app! 
+That's all! Now you can copy the Client ID and Client Secret of your app!
 
 <Callout>
-If you get "email_not_found" error, it's because you selected a Github app & did not configure this part!
+	If you get "email_not_found" error, it's because you selected a Github app &
+	did not configure this part!
 </Callout>
 
 ### Why don't I have a refresh token?

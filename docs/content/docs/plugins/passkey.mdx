@@ -90,14 +90,14 @@ type addPasskey = {
 </APIMethod>
 
 <Callout>
- Setting `throw: true` in the fetch options has no effect for the register and sign-in passkey responses — they will always return a data object containing the error object.
+	Setting `throw: true` in the fetch options has no effect for the register and
+	sign-in passkey responses — they will always return a data object containing
+	the error object.
 </Callout>
-
 
 ### Sign in with a passkey
 
 To sign in with a passkey you can use the `signIn.passkey` method. This will prompt the user to sign in with their passkey.
-
 
 <APIMethod path="/sign-in/passkey" method="POST" isClientOnly>
 ```ts
@@ -111,20 +111,21 @@ type signInPasskey = {
 </APIMethod>
 
 #### Example Usage
+
 ```ts
 // With post authentication redirect
 await authClient.signIn.passkey({
-    autoFill: true,
-    fetchOptions: {
-        onSuccess(context) {
-            // Redirect to dashboard after successful authentication
-            window.location.href = "/dashboard";
-        },
-        onError(context) {
-            // Handle authentication errors
-            console.error("Authentication failed:", context.error.message);
-        }
-    }
+	autoFill: true,
+	fetchOptions: {
+		onSuccess(context) {
+			// Redirect to dashboard after successful authentication
+			window.location.href = '/dashboard';
+		},
+		onError(context) {
+			// Handle authentication errors
+			console.error('Authentication failed:', context.error.message);
+		},
+	},
 });
 ```
 
@@ -133,15 +134,13 @@ await authClient.signIn.passkey({
 You can list all of the passkeys for the authenticated user by calling `passkey.listUserPasskeys`:
 
 <APIMethod
-  path="/passkey/list-user-passkeys"
-  method="GET"
-  requireSession
-  resultVariable="passkeys"
+	path="/passkey/list-user-passkeys"
+	method="GET"
+	requireSession
+	resultVariable="passkeys"
 >
-```ts
-type listPasskeys = {
-}
-```
+	```ts type listPasskeys = {}
+	```
 </APIMethod>
 
 ### Deleting passkeys
@@ -246,70 +245,71 @@ The plugin require a new table in the database to store passkey data.
 Table Name: `passkey`
 
 <DatabaseTable
-    fields={[
-        { 
-            name: "id", 
-            type: "string", 
-            description: "Unique identifier for each passkey",
-            isPrimaryKey: true
-        },
-        {
-            name: "name",
-            type: "string",
-            description: "The name of the passkey",
-            isOptional: true
-        },
-        { 
-            name: "publicKey", 
-            type: "string", 
-            description: "The public key of the passkey",
-        },
-        { 
-            name: "userId", 
-            type: "string", 
-            description: "The ID of the user",
-            isForeignKey: true
-        },
-        {
-            name: "credentialID",
-            type: "string",
-            description: "The unique identifier of the registered credential",
-        },
-        { 
-            name: "counter", 
-            type: "number", 
-            description: "The counter of the passkey",
-        },
-        {
-            name: "deviceType",
-            type: "string",
-            description: "The type of device used to register the passkey",
-        },
-        {
-            name: "backedUp",
-            type: "boolean",
-            description: "Whether the passkey is backed up",
-        },
-        {
-            name: "transports",
-            type: "string",
-            description: "The transports used to register the passkey",
-            isOptional: true
-        },
-        { 
-            name: "createdAt", 
-            type: "Date", 
-            description: "The time when the passkey was created",
-            isOptional: true
-        },
-        {
-                name: "aaguid",
-                type: "string",
-                description: "Authenticator's Attestation GUID indicating the type of the authenticator",
-                isOptional: true
-        },
-    ]}
-    />
+	fields={[
+		{
+			name: 'id',
+			type: 'string',
+			description: 'Unique identifier for each passkey',
+			isPrimaryKey: true,
+		},
+		{
+			name: 'name',
+			type: 'string',
+			description: 'The name of the passkey',
+			isOptional: true,
+		},
+		{
+			name: 'publicKey',
+			type: 'string',
+			description: 'The public key of the passkey',
+		},
+		{
+			name: 'userId',
+			type: 'string',
+			description: 'The ID of the user',
+			isForeignKey: true,
+		},
+		{
+			name: 'credentialID',
+			type: 'string',
+			description: 'The unique identifier of the registered credential',
+		},
+		{
+			name: 'counter',
+			type: 'number',
+			description: 'The counter of the passkey',
+		},
+		{
+			name: 'deviceType',
+			type: 'string',
+			description: 'The type of device used to register the passkey',
+		},
+		{
+			name: 'backedUp',
+			type: 'boolean',
+			description: 'Whether the passkey is backed up',
+		},
+		{
+			name: 'transports',
+			type: 'string',
+			description: 'The transports used to register the passkey',
+			isOptional: true,
+		},
+		{
+			name: 'createdAt',
+			type: 'Date',
+			description: 'The time when the passkey was created',
+			isOptional: true,
+		},
+		{
+			name: 'aaguid',
+			type: 'string',
+			description:
+				"Authenticator's Attestation GUID indicating the type of the authenticator",
+			isOptional: true,
+		},
+	]}
+/>
 
 ## Options
 
@@ -324,19 +324,19 @@ until it hits an effective TLD. So `www.example.com` can use the RP IDs `www.exa
 **authenticatorSelection**: Allows customization of WebAuthn authenticator selection criteria. Leave unspecified for default settings.
 
 - `authenticatorAttachment`: Specifies the type of authenticator
-    - `platform`: Authenticator is attached to the platform (e.g., fingerprint reader)
-    - `cross-platform`: Authenticator is not attached to the platform (e.g., security key)
-    - Default: `not set` (both platform and cross-platform allowed, with platform preferred)
+  - `platform`: Authenticator is attached to the platform (e.g., fingerprint reader)
+  - `cross-platform`: Authenticator is not attached to the platform (e.g., security key)
+  - Default: `not set` (both platform and cross-platform allowed, with platform preferred)
 - `residentKey`: Determines credential storage behavior.
-    - `required`: User MUST store credentials on the authenticator (highest security)
-    - `preferred`: Encourages credential storage but not mandatory
-    - `discouraged`: No credential storage required (fastest experience)
-    - Default: `preferred`
+  - `required`: User MUST store credentials on the authenticator (highest security)
+  - `preferred`: Encourages credential storage but not mandatory
+  - `discouraged`: No credential storage required (fastest experience)
+  - Default: `preferred`
 - `userVerification`: Controls biometric/PIN verification during authentication:
-    - `required`: User MUST verify identity (highest security)
-    - `preferred`: Verification encouraged but not mandatory
-    - `discouraged`: No verification required (fastest experience)
-    - Default: `preferred`
+  - `required`: User MUST verify identity (highest security)
+  - `preferred`: Verification encouraged but not mandatory
+  - `discouraged`: No verification required (fastest experience)
+  - Default: `preferred`
 
 **advanced**: Advanced options
 
@@ -353,37 +353,37 @@ By default, the passkey plugin uses `"better-auth-passkey"` as the challenge coo
 If you're using a custom cookie name:
 
 ```ts title="Server: auth.ts"
-import { betterAuth } from "better-auth";
-import { passkey } from "@better-auth/passkey";
+import { betterAuth } from 'better-auth';
+import { passkey } from '@better-auth/passkey';
 
 export const auth = betterAuth({
-    plugins: [
-        passkey({
-            advanced: {
-                webAuthnChallengeCookie: "my-app-passkey" // Custom cookie name
-            }
-        })
-    ]
+	plugins: [
+		passkey({
+			advanced: {
+				webAuthnChallengeCookie: 'my-app-passkey', // Custom cookie name
+			},
+		}),
+	],
 });
 ```
 
 Make sure to configure your Expo client with the matching prefix:
 
 ```ts title="Client: auth-client.ts"
-import { createAuthClient } from "better-auth/react";
-import { expoClient } from "@better-auth/expo/client";
-import { passkeyClient } from "@better-auth/passkey/client";
-import * as SecureStore from "expo-secure-store";
+import { createAuthClient } from 'better-auth/react';
+import { expoClient } from '@better-auth/expo/client';
+import { passkeyClient } from '@better-auth/passkey/client';
+import * as SecureStore from 'expo-secure-store';
 
 export const authClient = createAuthClient({
-    baseURL: "http://localhost:8081",
-    plugins: [
-        expoClient({
-            storage: SecureStore,
-            cookiePrefix: "my-app" // Must match the prefix of your custom cookie name
-        }),
-        passkeyClient()
-    ]
+	baseURL: 'http://localhost:8081',
+	plugins: [
+		expoClient({
+			storage: SecureStore,
+			cookiePrefix: 'my-app', // Must match the prefix of your custom cookie name
+		}),
+		passkeyClient(),
+	],
 });
 ```
 
@@ -391,13 +391,16 @@ If you're using multiple authentication systems or custom cookie names, you can 
 
 ```ts title="Client: auth-client.ts"
 expoClient({
-    storage: SecureStore,
-    cookiePrefix: ["better-auth", "my-app", "custom-auth"]
-})
+	storage: SecureStore,
+	cookiePrefix: ['better-auth', 'my-app', 'custom-auth'],
+});
 ```
 
 <Callout type="warn">
-  If the `cookiePrefix` doesn't match the prefix of your `webAuthnChallengeCookie`, the passkey authentication flow will fail because the challenge cookie won't be stored and sent back to the server during verification.
+	If the `cookiePrefix` doesn't match the prefix of your
+	`webAuthnChallengeCookie`, the passkey authentication flow will fail because
+	the challenge cookie won't be stored and sent back to the server during
+	verification.
 </Callout>
 
 For more information on Expo integration, see the [Expo documentation](/docs/integrations/expo).

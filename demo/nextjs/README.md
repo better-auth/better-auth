@@ -26,7 +26,6 @@ Here’s how you can get the app running locally:
    ```
 
 3. **Set up your environment variables**:
-
    - Rename the `.env.example` file to `.env`:
 
      ```bash

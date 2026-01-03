@@ -11,7 +11,7 @@ description: Spotify provider setup and usage.
         **Important:** Spotify no longer supports `localhost` as a redirect URI. You must use `127.0.0.1` for local development.
 
         Make sure to set the redirect URL to `http://127.0.0.1:3000/api/auth/callback/spotify` in your Spotify Dashboard.
-        
+
         Consequently, ensure you access your local app via `http://127.0.0.1:3000` (not `localhost:3000`) so the browser URL matches the redirect URI exactly.
 
         For production, you should set it to the URL of your application (must be HTTPS). If you change the base path of the auth routes, you should update the redirect URL accordingly.
@@ -22,16 +22,16 @@ description: Spotify provider setup and usage.
         To configure the provider, you need to import the provider and pass it to the `socialProviders` option of the auth instance.
 
         You must also ensure your environment variables use the correct loopback IP to match the redirect URI. Update your `.env` file:
-        
+
         ```bash title=".env"
         BETTER_AUTH_URL=http://127.0.0.1:3000
         ```
 
-        ```ts title="auth.ts"  
+        ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
-        
+
         export const auth = betterAuth({
-            
+
             socialProviders: {
                 spotify: { // [!code highlight]
                     clientId: process.env.SPOTIFY_CLIENT_ID as string, // [!code highlight]
@@ -49,7 +49,7 @@ description: Spotify provider setup and usage.
         ```ts title="auth-client.ts"
         import { createAuthClient } from "better-auth/client"
         const authClient =  createAuthClient()
-        
+
         const signIn = async () => {
             const data = await authClient.signIn.social({
                 provider: "spotify"
@@ -57,4 +57,5 @@ description: Spotify provider setup and usage.
         }
         ```
     </Step>
+
 </Steps>

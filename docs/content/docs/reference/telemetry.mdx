@@ -29,18 +29,19 @@ We also collect anonymous telemetry from the CLI:
 - **CLI generate (`cli_generate`)**: outcome `generated | overwritten | appended | no_changes | aborted` plus redacted config.
 - **CLI migrate (`cli_migrate`)**: outcome `migrated | no_changes | aborted | unsupported_adapter` plus adapter id (when relevant) and redacted config.
 
-
 <Callout type="info">
   You can audit telemetry locally by setting the `BETTER_AUTH_TELEMETRY_DEBUG=1` environment variable when running your project or by setting `telemetry: { debug: true }` in your auth config. In this debug mode, telemetry events are logged only to the console.
 
-  ```ts title="auth.ts"
-  export const auth = betterAuth({
-    // [!code highlight]
-    telemetry: { // [!code highlight]
-      debug: true // [!code highlight]
-    } // [!code highlight]
-  });
-  ```
+```ts title="auth.ts"
+export const auth = betterAuth({
+	// [!code highlight]
+	telemetry: {
+		// [!code highlight]
+		debug: true, // [!code highlight]
+	}, // [!code highlight]
+});
+```
+
 </Callout>
 
 ## How is my data protected?
@@ -59,10 +60,11 @@ You can enable telemetry collection in your auth config or by setting an environ
 
   ```ts title="auth.ts"
   export const auth = betterAuth({
-    // [!code highlight]
-    telemetry: { // [!code highlight]
-      enabled: true// [!code highlight]
-    } // [!code highlight]
+  	// [!code highlight]
+  	telemetry: {
+  		// [!code highlight]
+  		enabled: true, // [!code highlight]
+  	}, // [!code highlight]
   });
   ```
 
@@ -75,7 +77,6 @@ You can enable telemetry collection in your auth config or by setting an environ
   # Disable telemetry
   BETTER_AUTH_TELEMETRY=0
   ```
-
 
 ### When is telemetry sent?
 

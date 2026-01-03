@@ -15,10 +15,10 @@ description: Discord provider setup and usage.
         ### Configure the provider
         To configure the provider, you need to import the provider and pass it to the `socialProviders` option of the auth instance.
 
-        ```ts title="auth.ts" 
+        ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
-        
-        export const auth = betterAuth({ 
+
+        export const auth = betterAuth({
             socialProviders: {
                 discord: { // [!code highlight]
                     clientId: process.env.DISCORD_CLIENT_ID as string, // [!code highlight]
@@ -28,24 +28,26 @@ description: Discord provider setup and usage.
         })
         ```
     </Step>
+
 </Steps>
 
 ## Usage
 
-### Sign In with Discord 
+### Sign In with Discord
 
 To sign in with Discord, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
+
 - `provider`: The provider to use. It should be set to `discord`.
 
 ```ts title="auth-client.ts"
-import { createAuthClient } from "better-auth/client"
-const authClient =  createAuthClient()
+import { createAuthClient } from 'better-auth/client';
+const authClient = createAuthClient();
 
 const signIn = async () => {
-    const data = await authClient.signIn.social({
-        provider: "discord"
-    })
-}
+	const data = await authClient.signIn.social({
+		provider: 'discord',
+	});
+};
 ```
 
 ## Options
@@ -56,18 +58,18 @@ For the full list of options supported by all social providers, check the [Provi
 
 If you're using the `bot` scope with Discord OAuth, you can specify bot permissions using the `permissions` option. It can either be a bitwise value (e.g `2048 | 16384` for Send Messages and Embed Links) or a specific permission value (e.g `16384` for Embed Links).
 
-```ts title="auth.ts" 
-import { betterAuth } from "better-auth"
+```ts title="auth.ts"
+import { betterAuth } from 'better-auth';
 
-export const auth = betterAuth({ 
-    socialProviders: {
-        discord: {
-            clientId: process.env.DISCORD_CLIENT_ID as string,
-            clientSecret: process.env.DISCORD_CLIENT_SECRET as string,
-            permissions: 2048 | 16384, // Send Messages + Embed Links // [!code highlight]
-        }, 
-    },
-})
+export const auth = betterAuth({
+	socialProviders: {
+		discord: {
+			clientId: process.env.DISCORD_CLIENT_ID as string,
+			clientSecret: process.env.DISCORD_CLIENT_SECRET as string,
+			permissions: 2048 | 16384, // Send Messages + Embed Links // [!code highlight]
+		},
+	},
+});
 ```
 
 **Note:** The `permissions` parameter only works when the `bot` scope is included in your OAuth2 scopes. Read more about [Discord bot permissions](https://discord.com/developers/docs/topics/permissions).

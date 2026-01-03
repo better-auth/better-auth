@@ -1,13 +1,23 @@
 ---
-title: "Better Auth 1.4"
-description: "Stateless Auth, SCIM, Optimized database queries, additional state in OAuth flows, performance improvements, SSO domain verification, and more!"
+title: 'Better Auth 1.4'
+description: 'Stateless Auth, SCIM, Optimized database queries, additional state in OAuth flows, performance improvements, SSO domain verification, and more!'
 date: 2025-11-21
 author:
-  name: "Bereket Engida"
-  avatar: "/avatars/beka.jpg"
-  twitter: "bekacru"
-image: "/release-og/1-4.png"
-tags: ["1.4", "stateless sessions", "SCIM", "database indexing", "database join", "SSO domain verification", "uuid", "device authorization"]
+  name: 'Bereket Engida'
+  avatar: '/avatars/beka.jpg'
+  twitter: 'bekacru'
+image: '/release-og/1-4.png'
+tags:
+  [
+    '1.4',
+    'stateless sessions',
+    'SCIM',
+    'database indexing',
+    'database join',
+    'SSO domain verification',
+    'uuid',
+    'device authorization',
+  ]
 ---
 
 ## Better Auth 1.4 Release
@@ -26,28 +36,28 @@ npm install better-auth@1.4
 
 ### Stateless Auth
 
-You can now enable stateless session management without any database by omitting the `database` option in your auth config. 
+You can now enable stateless session management without any database by omitting the `database` option in your auth config.
 
 [👉 Read more about stateless auth](/docs/concepts/session-management#stateless-session-management)
 
 ```ts
-import { betterAuth } from "better-auth";
+import { betterAuth } from 'better-auth';
 
 export const auth = betterAuth({
-    // No database configuration
-    socialProviders: {
-        google: {
-            clientId: process.env.GOOGLE_CLIENT_ID,
-            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        },
-    },
+	// No database configuration
+	socialProviders: {
+		google: {
+			clientId: process.env.GOOGLE_CLIENT_ID,
+			clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+		},
+	},
 });
 ```
 
 It also supports getting `accessToken`, `accountInfo` and `refreshToken` endpoints without any database.
 
 ```ts
-import { authClient } from "@/lib/auth-client";
+import { authClient } from '@/lib/auth-client';
 
 const accessToken = await authClient.getAccessToken();
 
@@ -57,7 +67,6 @@ const accountInfo = await authClient.accountInfo();
 
 ---
 
-
 ### SCIM Provisioning
 
 SCIM makes managing identities in multi-domain scenarios easier to support via a standardized protocol.
@@ -65,15 +74,15 @@ SCIM makes managing identities in multi-domain scenarios easier to support via a
 [👉 Read more about SCIM provisioning](/docs/plugins/scim)
 
 ```ts
-import { scim } from "@better-auth/scim";
-import { betterAuth } from "better-auth";
+import { scim } from '@better-auth/scim';
+import { betterAuth } from 'better-auth';
 
 export const auth = betterAuth({
-    plugins: [scim()]
+	plugins: [scim()],
 });
 ```
----
 
+---
 
 ### Custom State for OAuth Flows
 
@@ -82,34 +91,38 @@ You can now provide any additional state through the OAuth flow.
 [👉 Read more about custom state for OAuth flows](/docs/concepts/oauth#passing-additional-data-through-oauth-flow)
 
 ```ts
-import { authClient } from "@/lib/auth-client";
+import { authClient } from '@/lib/auth-client';
 
 await authClient.signIn.social({
-    provider: "google",
-    additionalData: { // [!code highlight]
-        referralCode: "ABC123", // [!code highlight]
-        source: "landing-page", // [!code highlight]
-    }, // [!code highlight]
+	provider: 'google',
+	additionalData: {
+		// [!code highlight]
+		referralCode: 'ABC123', // [!code highlight]
+		source: 'landing-page', // [!code highlight]
+	}, // [!code highlight]
 });
 ```
 
 Access additional data in any hook, middleware, or endpoints
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { getOAuthState, createAuthMiddleware } from "better-auth/api";
+import { betterAuth } from 'better-auth';
+import { getOAuthState, createAuthMiddleware } from 'better-auth/api';
 
 const auth = betterAuth({
-    hooks: {
-      before: createAuthMiddleware(async (ctx) => {
-        const additionalData = await getOAuthState<{ referralCode: string, source: string }>();
-        console.log(additionalData);
-      })
-    }
+	hooks: {
+		before: createAuthMiddleware(async (ctx) => {
+			const additionalData = await getOAuthState<{
+				referralCode: string;
+				source: string;
+			}>();
+			console.log(additionalData);
+		}),
+	},
 });
 ```
----
 
+---
 
 ### Database Joins Improvements (experimental)
 
@@ -121,17 +134,18 @@ Then, re-run migrations or schema generation to get the updated schema which sup
 [👉 Read more about database joins](/docs/concepts/database#experimental-joins)
 
 ```ts
-import { betterAuth } from "better-auth";
+import { betterAuth } from 'better-auth';
 
 export const auth = betterAuth({
-    experimental: {
-        joins: true,
-    },
+	experimental: {
+		joins: true,
+	},
 });
 ```
 
 <Callout type="info">
-  Although joins are experimental, they are supported by all adapters and will be enabled by default in the next release.
+	Although joins are experimental, they are supported by all adapters and will
+	be enabled by default in the next release.
 </Callout>
 
 ---
@@ -140,18 +154,17 @@ export const auth = betterAuth({
 
 The API-Key plugin now supports secondary storage for faster key lookups!
 
-
 [👉 Read more about secondary storage for API keys](/docs/plugins/api-key#storage-modes)
 
 ```ts
-import { apiKey } from "@better-auth/api-key";
-import { betterAuth } from "better-auth";
+import { apiKey } from '@better-auth/api-key';
+import { betterAuth } from 'better-auth';
 
 export const auth = betterAuth({
-    secondaryStorage: {
-        //...
-    },
-    plugins: [apiKey({ storage: "secondary-storage" })], // [!code highlight]
+	secondaryStorage: {
+		//...
+	},
+	plugins: [apiKey({ storage: 'secondary-storage' })], // [!code highlight]
 });
 ```
 
@@ -195,7 +208,6 @@ export const auth = betterAuth({
   </Accordion>
 </Accordions>
 
-
 ---
 
 ### New Default Error Page
@@ -205,7 +217,11 @@ You can also customize the stylings of our default error page or simply provide 
 
 [👉 Read more about error page improvements](/docs/reference/options#onapierror)
 
-<img src="/images/blogs/1-4_error.png" alt="Error Page" className="w-full max-w-2xl mx-auto rounded-lg border border-border" />
+<img
+	src="/images/blogs/1-4_error.png"
+	alt="Error Page"
+	className="w-full max-w-2xl mx-auto rounded-lg border border-border"
+/>
 
 ---
 
@@ -217,11 +233,11 @@ by automatically validating ownership via the associated domain:
 👉 [Read more about domain verification](/docs/plugins/sso#domain-verification)
 
 ```ts
-import { sso } from "@better-auth/sso";
-import { betterAuth } from "better-auth";
+import { sso } from '@better-auth/sso';
+import { betterAuth } from 'better-auth';
 
 export const auth = betterAuth({
-    plugins: [sso({ domainVerification: { enabled: true } })],
+	plugins: [sso({ domainVerification: { enabled: true } })],
 });
 ```
 
@@ -244,17 +260,21 @@ npx @better-auth/cli migrate
 The JWT plugin now supports key rotation, allowing you to rotate your JWT keys without downtime.
 
 ```ts
-import { jwt } from "@better-auth/jwt";
-import { betterAuth } from "better-auth";
+import { jwt } from '@better-auth/jwt';
+import { betterAuth } from 'better-auth';
 
 export const auth = betterAuth({
-    plugins: [
-      jwt({ 
-        jwks: { rotationInterval: 60 * 60 * 24 * 30, gracePeriod: 60 * 60 * 24 * 30 } // [!code highlight]
-      })
-    ],
+	plugins: [
+		jwt({
+			jwks: {
+				rotationInterval: 60 * 60 * 24 * 30,
+				gracePeriod: 60 * 60 * 24 * 30,
+			}, // [!code highlight]
+		}),
+	],
 });
 ```
+
 👉 [Read more about JWT key rotation](/docs/plugins/jwt#key-rotation)
 
 ### Improved Generic OAuth Plugin
@@ -263,21 +283,22 @@ OAuth providers not yet supported natively will be available as pre-configured o
 with plans to eventually support all providers that Auth.js does.
 
 ```ts
-import { betterAuth } from "better-auth";
-import { genericOAuth } from "better-auth/plugins";
-import { keycloak } from "better-auth/plugins/generic-oauth";
+import { betterAuth } from 'better-auth';
+import { genericOAuth } from 'better-auth/plugins';
+import { keycloak } from 'better-auth/plugins/generic-oauth';
 
 export const auth = betterAuth({
-    plugins: [genericOAuth({
-        config: [
-            keycloak({
-                clientId: process.env.KEYCLOAK_CLIENT_ID,
-                clientSecret: process.env.KEYCLOAK_CLIENT_SECRET,
-                issuer: process.env.KEYCLOAK_ISSUER,
-            })
-        ]
-    })
-    ]
+	plugins: [
+		genericOAuth({
+			config: [
+				keycloak({
+					clientId: process.env.KEYCLOAK_CLIENT_ID,
+					clientSecret: process.env.KEYCLOAK_CLIENT_SECRET,
+					issuer: process.env.KEYCLOAK_ISSUER,
+				}),
+			],
+		}),
+	],
 });
 ```
 
@@ -292,12 +313,12 @@ This version excludes Kysely, which is only needed when using direct database co
 [👉 Read more about bundle size optimizations](/docs/guides/optimizing-for-performance#bundle-size-optimization)
 
 ```ts
-import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { betterAuth } from "better-auth/minimal"; // [!code highlight]
-import { db } from "./database";
+import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { betterAuth } from 'better-auth/minimal'; // [!code highlight]
+import { db } from './database';
 
 export const auth = betterAuth({
-    database: drizzleAdapter(db, { provider: "pg" }),
+	database: drizzleAdapter(db, { provider: 'pg' }),
 });
 ```
 
@@ -310,14 +331,14 @@ We now support having UUIDs as the primary ID field type out of the box.
 [👉 Read more about UUID support](/docs/concepts/database#uuids)
 
 ```ts
-import { betterAuth } from "better-auth";
-import { db } from "./database";
+import { betterAuth } from 'better-auth';
+import { db } from './database';
 
 export const auth = betterAuth({
-    database: db,
-    advanced: {
-        database: { generateId: "uuid" }, // [!code highlight]
-    },
+	database: db,
+	advanced: {
+		database: { generateId: 'uuid' }, // [!code highlight]
+	},
 });
 ```
 
@@ -326,26 +347,29 @@ export const auth = betterAuth({
 ### Improved Email Change Flow
 
 For added security, you can now require users to confirm the change via their **current** email before
-the verification email is sent to the new address. 
+the verification email is sent to the new address.
 
 [👉 Read more about improved email change flow](/docs/concepts/users-accounts#confirming-with-current-email)
 
 ```ts
-import { betterAuth } from "better-auth";
+import { betterAuth } from 'better-auth';
 
 export const auth = betterAuth({
-    user: {
-        changeEmail: {
-            enabled: true,
-            sendChangeEmailConfirmation: async ({ user, newEmail, url, token }, request) => {
-                sendEmail({
-                    to: user.email, // Sent to the CURRENT email
-                    subject: 'Approve email change',
-                    text: `Click the link to approve the change to ${newEmail}: ${url}`
-                })
-            }
-        }
-    }
+	user: {
+		changeEmail: {
+			enabled: true,
+			sendChangeEmailConfirmation: async (
+				{ user, newEmail, url, token },
+				request,
+			) => {
+				sendEmail({
+					to: user.email, // Sent to the CURRENT email
+					subject: 'Approve email change',
+					text: `Click the link to approve the change to ${newEmail}: ${url}`,
+				});
+			},
+		},
+	},
 });
 ```
 
@@ -358,13 +382,11 @@ Full support for the OAuth 2.0 Device Authorization Grant (RFC 8628), allowing u
 [👉 Read more about Device Authorization](/docs/plugins/device-authorization)
 
 ```ts
-import { betterAuth } from "better-auth";
-import { deviceAuthorization } from "better-auth/plugins";
+import { betterAuth } from 'better-auth';
+import { deviceAuthorization } from 'better-auth/plugins';
 
 export const auth = betterAuth({
-    plugins: [
-        deviceAuthorization()
-    ]
+	plugins: [deviceAuthorization()],
 });
 ```
 
@@ -376,14 +398,13 @@ You can now store user account data in a signed cookie, which is perfect for sta
 
 ```ts
 export const auth = betterAuth({
-    account: {
-        storeAccountCookie: true
-    } 
+	account: {
+		storeAccountCookie: true,
+	},
 });
 ```
 
 ---
-
 
 ## ⚠️ Breaking Changes
 
@@ -401,9 +422,9 @@ Minor auth flow changes to make everything smoother, faster, and more reliable.
 
   ```ts
   auth.api.accountInfo({
-      body: {
-          // ...
-      }
+  	body: {
+  		// ...
+  	},
   });
   ```
 
@@ -411,9 +432,9 @@ Minor auth flow changes to make everything smoother, faster, and more reliable.
 
   ```ts
   auth.api.accountInfo({
-      query: {
-          // ...
-      }
+  	query: {
+  		// ...
+  	},
   });
   ```
 
@@ -422,7 +443,7 @@ Minor auth flow changes to make everything smoother, faster, and more reliable.
 Multiple plugin options that accept `request` as an argument for callback functions have now replaced request with `ctx` instead. Passkey plugin is now moved to its own package, and API Key mock-sessions are now disabled by default.
 
 - **Passkey Plugin**: The passkey plugin is now moved to its own package.
-  
+
   Install it today:
 
   ```package-install
@@ -481,6 +502,7 @@ compatibility_date = "2024-09-23"
 ```
 
 Alternatively, if you only need AsyncLocalStorage support:
+
 ```toml title="wrangler.toml"
 compatibility_flags = ["nodejs_als"]
 ```
@@ -532,16 +554,90 @@ A lot of refinements to make everything smoother, faster, and more reliable.
 
 Thanks to all the contributors for making this release possible!
 
-<Contributors usernames={[
-  "zain", "dandamian", "hartbit", "rmarscher", "kaandok", "acusti", "rbayliss", "kevcube", "bsklaroff", "jonathansamines", 
-  "mburumaxwell", "erquhart", "dmmulroy", "iRoachie", "mohebifar", "thomasmol", "borgoat", "XiNiHa", "Berndwl", "xiaoyu2er", 
-  "ebalo55", "udnes99", "himself65", "dvanmali", "AlexStrNik", "ThibautCuchet", "zbeyens", "xuchenhao001", "tnkuehne", "Tobix99", 
-  "hieudien14310", "3ddelano", "bdkopen", "jslno", "chhoumann", "mrl5", "tgrassl", "hyoban", "redoh", "gregtjack", 
-  "ouwargui", "kanarian", "natetewelde", "Badbird5907", "max-programming", "eni4sure", "frectonz", "ephraimduncan", "Eazash", "ahmedriad1", 
-  "Velka-DEV", "Kinfe123", "zy1p", "okisdev", "surafel58", "DevDuki", "TheUntraceable", "nakasyou", "JagritGumber", "HoshangDEV", 
-  "vagxrth", "Paola3stefania", "Bekacru", "kira-1011", "almadoro", "ocherry341", "QuintenStr", "Ridhim-RR", "ahmed-abdat", "mohit4bug", 
-  "Pankaj3112", "ShobhitPatra", "ping-maxwell", "nbifrye", "rovertrack", "GautamBytes", "AntonVishal", "bytaesu", "ic4l4s9c", "jcajuab", 
-  "yutaka5"
-]} />
+<Contributors
+	usernames={[
+		'zain',
+		'dandamian',
+		'hartbit',
+		'rmarscher',
+		'kaandok',
+		'acusti',
+		'rbayliss',
+		'kevcube',
+		'bsklaroff',
+		'jonathansamines',
+		'mburumaxwell',
+		'erquhart',
+		'dmmulroy',
+		'iRoachie',
+		'mohebifar',
+		'thomasmol',
+		'borgoat',
+		'XiNiHa',
+		'Berndwl',
+		'xiaoyu2er',
+		'ebalo55',
+		'udnes99',
+		'himself65',
+		'dvanmali',
+		'AlexStrNik',
+		'ThibautCuchet',
+		'zbeyens',
+		'xuchenhao001',
+		'tnkuehne',
+		'Tobix99',
+		'hieudien14310',
+		'3ddelano',
+		'bdkopen',
+		'jslno',
+		'chhoumann',
+		'mrl5',
+		'tgrassl',
+		'hyoban',
+		'redoh',
+		'gregtjack',
+		'ouwargui',
+		'kanarian',
+		'natetewelde',
+		'Badbird5907',
+		'max-programming',
+		'eni4sure',
+		'frectonz',
+		'ephraimduncan',
+		'Eazash',
+		'ahmedriad1',
+		'Velka-DEV',
+		'Kinfe123',
+		'zy1p',
+		'okisdev',
+		'surafel58',
+		'DevDuki',
+		'TheUntraceable',
+		'nakasyou',
+		'JagritGumber',
+		'HoshangDEV',
+		'vagxrth',
+		'Paola3stefania',
+		'Bekacru',
+		'kira-1011',
+		'almadoro',
+		'ocherry341',
+		'QuintenStr',
+		'Ridhim-RR',
+		'ahmed-abdat',
+		'mohit4bug',
+		'Pankaj3112',
+		'ShobhitPatra',
+		'ping-maxwell',
+		'nbifrye',
+		'rovertrack',
+		'GautamBytes',
+		'AntonVishal',
+		'bytaesu',
+		'ic4l4s9c',
+		'jcajuab',
+		'yutaka5',
+	]}
+/>
 
 ---

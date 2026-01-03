@@ -22,9 +22,9 @@ description: Facebook provider setup and usage.
         ### Configure the provider
         To configure the provider, you need to import the provider and pass it to the `socialProviders` option of the auth instance.
 
-        ```ts title="auth.ts"  
+        ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
-        
+
         export const auth = betterAuth({
             socialProviders: {
                 facebook: { // [!code highlight]
@@ -56,31 +56,34 @@ description: Facebook provider setup and usage.
         }
         ```
     </Step>
+
 </Steps>
 
 ## Additional Configuration
 
 ### Scopes
+
 By default, Facebook provides basic user information. If you need additional permissions, you can specify scopes in your auth configuration:
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
-    socialProviders: {
-        facebook: {
-            clientId: process.env.FACEBOOK_CLIENT_ID as string,
-            clientSecret: process.env.FACEBOOK_CLIENT_SECRET as string,
-            scopes: ["email", "public_profile", "user_friends"], // Overwrites permissions
-            fields: ["user_friends"], // Extending list of fields
-        },
-    },
-})
+	socialProviders: {
+		facebook: {
+			clientId: process.env.FACEBOOK_CLIENT_ID as string,
+			clientSecret: process.env.FACEBOOK_CLIENT_SECRET as string,
+			scopes: ['email', 'public_profile', 'user_friends'], // Overwrites permissions
+			fields: ['user_friends'], // Extending list of fields
+		},
+	},
+});
 ```
 
 Additional options:
+
 - `scopes`: Access basic account information (overwrites).
-    - Default: `"email", "public_profile"`
+  - Default: `"email", "public_profile"`
 - `fields`: Extend list of fields to retrieve from the Facebook user profile (assignment).
-    - Default: `"id", "name", "email", "picture"`
+  - Default: `"id", "name", "email", "picture"`
 
 ### Sign In with Facebook With ID or Access Token
 
@@ -89,21 +92,22 @@ To sign in with Facebook using the ID Token, you can use the `signIn.social` fun
 This is useful when you have the ID Token from Facebook on the client-side and want to use it to sign in on the server.
 
 <Callout>
- If ID token is provided no redirection will happen, and the user will be signed in directly.
+	If ID token is provided no redirection will happen, and the user will be
+	signed in directly.
 </Callout>
 
 For limited login, you need to pass `idToken.token`, for only `accessToken` you need to pass `idToken.accessToken` and `idToken.token` together because of (#1183)[https://github.com/better-auth/better-auth/issues/1183].
 
-
 ```ts title="auth-client.ts"
 const data = await authClient.signIn.social({
-    provider: "facebook",
-    idToken: {  // [!code highlight]
-        ...(platform === 'ios' ?  // [!code highlight]
-            { token: idToken }  // [!code highlight]
-            : { token: accessToken, accessToken: accessToken }), // [!code highlight]
-    },
-})
+	provider: 'facebook',
+	idToken: {
+		// [!code highlight]
+		...(platform === 'ios' // [!code highlight]
+			? { token: idToken } // [!code highlight]
+			: { token: accessToken, accessToken: accessToken }), // [!code highlight]
+	},
+});
 ```
 
 For a complete list of available permissions, refer to the [Permissions Reference](https://developers.facebook.com/docs/permissions).

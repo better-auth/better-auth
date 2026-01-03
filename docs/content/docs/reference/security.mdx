@@ -5,7 +5,6 @@ description: Better Auth security features.
 
 This page contains information about security features of Better Auth.
 
-
 ## Password Hashing
 
 Better Auth uses the `scrypt` algorithm to hash passwords by default. This algorithm is designed to be memory-hard and CPU-intensive, making it resistant to brute-force attacks. You can customize the password hashing function by setting the `password` option in the configuration. This option should include a `hash` function to hash passwords and a `verify` function to verify them.
@@ -28,7 +27,6 @@ Better Auth includes multiple safeguards to prevent Cross-Site Request Forgery (
 
 1. **Avoid simple requests**
    See [Avoiding simple requests](https://developer.mozilla.org/en-US/docs/Web/Security/Attacks/CSRF#avoiding_simple_requests) for more details. Better Auth only allows requests with a non-simple header or a `Content-Type` header of `application/json`.
-   
 2. **Origin Validation**
    Each request’s `Origin` header is verified to confirm it comes from your application or another explicitly trusted source. Requests from untrusted origins are rejected. By default, Better Auth trusts the base URL of your app, but you can specify additional trusted origins via the `trustedOrigins` configuration option.
 
@@ -37,33 +35,33 @@ Better Auth includes multiple safeguards to prevent Cross-Site Request Forgery (
 
 4. **Fetch Metadata Protection for First-Login CSRF**
    Better Auth also uses [Fetch Metadata headers](https://developer.mozilla.org/en-US/docs/Web/Security/Attacks/CSRF#fetch_metadata) (`Sec-Fetch-Site`, `Sec-Fetch-Mode`, `Sec-Fetch-Dest`) to provide additional CSRF protection specifically for **first-login scenarios**, where the client does not yet have any cookies.
-   
+
    This protection applies to **sign-in and sign-up email routes**, which accept form submissions (simple requests) to support progressive enhancement patterns.
-   
+
    When a sign-in or sign-up request is received **without** any cookies:
-   
    - If the browser indicates a **cross-site navigation** (for example: `Sec-Fetch-Site: cross-site` and `Sec-Fetch-Mode: navigate`), Better Auth **blocks** the request as a potential login CSRF attack.
-   
    - If the request is **same-origin** or **same-site**, Better Auth still validates the `Origin`/`Referer` against your `trustedOrigins` configuration, using the existing origin validation logic.
-   
    - If the client does **not** send Fetch Metadata headers (older browsers, some mobile WebViews, non-browser clients), Better Auth falls back to its **previous behavior** and only performs origin validation when cookies are present, preserving backward compatibility.
-   
+
    This mechanism allows modern browsers to receive stronger protection against first-login CSRF attacks **without requiring CSRF tokens or client-side JavaScript**, and works seamlessly with progressive enhancement patterns.
-   
+
    <Callout type="info">
-     Non-browser HTTP clients (mobile apps, server-to-server) should set the `Origin` or `Referer` header appropriately when making requests that include cookies. This ensures proper CSRF validation regardless of Fetch Metadata support.
-   </Callout> 
+   	Non-browser HTTP clients (mobile apps, server-to-server) should set the
+   	`Origin` or `Referer` header appropriately when making requests that
+   	include cookies. This ensures proper CSRF validation regardless of Fetch
+   	Metadata support.
+   </Callout>
 
 5. **No Mutations on GET Requests (with additional safeguards)**
-  `GET` requests are assumed to be read-only and should not alter the application's state. In cases where a `GET` request must perform a mutation—such as during OAuth callbacks - Better Auth applies extra security measures, including validating `nonce` and `state` parameters to ensure the request's authenticity.
+   `GET` requests are assumed to be read-only and should not alter the application's state. In cases where a `GET` request must perform a mutation—such as during OAuth callbacks - Better Auth applies extra security measures, including validating `nonce` and `state` parameters to ensure the request's authenticity.
 
 You can skip the CSRF check for all requests by setting the `disableCSRFCheck` option to `true` in the configuration.
 
 ```typescript
 {
-  advanced: {
-    disableCSRFCheck: true
-  }
+	advanced: {
+		disableCSRFCheck: true;
+	}
 }
 ```
 
@@ -71,14 +69,16 @@ You can skip the origin check for all requests by setting the `disableOriginChec
 
 ```typescript
 {
-  advanced: {
-    disableOriginCheck: true
-  }
+	advanced: {
+		disableOriginCheck: true;
+	}
 }
 ```
 
 <Callout type="warning">
-  Skipping csrf check will open your application to CSRF attacks. And skipping origin check may open up your application to other security vulnerabilities including open redirects.
+	Skipping csrf check will open your application to CSRF attacks. And skipping
+	origin check may open up your application to other security vulnerabilities
+	including open redirects.
 </Callout>
 
 ## OAuth State and PKCE
@@ -87,7 +87,7 @@ To secure OAuth flows, Better Auth stores the OAuth state and PKCE (Proof Key fo
 
 ## Cookies
 
-Better Auth assigns secure cookies by default when the base URL uses `https`. These secure cookies are encrypted and only sent over secure connections, adding an extra layer of protection. They are also set with the `sameSite` attribute to `lax` by default to prevent cross-site request forgery attacks. And the `httpOnly` attribute is enabled to prevent client-side JavaScript from accessing the cookie. 
+Better Auth assigns secure cookies by default when the base URL uses `https`. These secure cookies are encrypted and only sent over secure connections, adding an extra layer of protection. They are also set with the `sameSite` attribute to `lax` by default to prevent cross-site request forgery attacks. And the `httpOnly` attribute is enabled to prevent client-side JavaScript from accessing the cookie.
 
 For Cross-Subdomain Cookies, you can set the `crossSubDomainCookies` option in the configuration. This option allows cookies to be shared across subdomains, enabling seamless authentication across multiple subdomains.
 
@@ -109,11 +109,11 @@ You can configure the IP address header in your Better Auth configuration:
 
 ```typescript
 {
-  advanced: {
-    ipAddress: {
-      ipAddressHeaders: ['cf-connecting-ip'] // or any other custom header
-    }
-  }
+	advanced: {
+		ipAddress: {
+			ipAddressHeaders: ['cf-connecting-ip']; // or any other custom header
+		}
+	}
 }
 ```
 
@@ -124,7 +124,7 @@ This ensures that Better Auth only accepts IP addresses from your trusted proxy'
 
 - When setting a custom IP address header, ensure that your proxy or load balancer is properly configured to set this header, and that it cannot be set by end users directly.
 - In dev/test environments, if the IP cannot be retrieved from headers, 127.0.0.1 is used as a fallback.
-</Callout>
+  </Callout>
 
 ## Trusted Origins
 
@@ -136,11 +136,11 @@ The most basic usage is to specify exact origins:
 
 ```typescript
 {
-  trustedOrigins: [
-    "https://example.com",
-    "https://app.example.com",
-    "http://localhost:3000"
-  ]
+	trustedOrigins: [
+		'https://example.com',
+		'https://app.example.com',
+		'http://localhost:3000',
+	];
 }
 ```
 
@@ -150,17 +150,18 @@ Better Auth supports wildcard patterns in trusted origins, which allows you to t
 
 ```typescript
 {
-  trustedOrigins: [
-    "*.example.com",             // Trust all subdomains of example.com (any protocol)
-    "https://*.example.com",     // Trust only HTTPS subdomains of example.com
-    "http://*.dev.example.com"   // Trust all HTTP subdomains of dev.example.com
-  ]
+	trustedOrigins: [
+		'*.example.com', // Trust all subdomains of example.com (any protocol)
+		'https://*.example.com', // Trust only HTTPS subdomains of example.com
+		'http://*.dev.example.com', // Trust all HTTP subdomains of dev.example.com
+	];
 }
 ```
 
 #### Protocol-specific wildcards
 
 When using a wildcard pattern with a protocol prefix (like `https://`):
+
 - The protocol must match exactly
 - The domain can have any subdomain in place of the `*`
 - Requests using a different protocol will be rejected, even if the domain matches
@@ -168,6 +169,7 @@ When using a wildcard pattern with a protocol prefix (like `https://`):
 #### Protocol-agnostic wildcards
 
 When using a wildcard pattern without a protocol prefix (like `*.example.com`):
+
 - Any protocol (http, https, etc.) will be accepted
 - The domain must match the wildcard pattern
 
@@ -177,12 +179,12 @@ Trusted origins also support custom schemes for mobile apps and browser extensio
 
 ```typescript
 {
-  trustedOrigins: [
-    "myapp://",                               // Mobile app scheme
-    "chrome-extension://YOUR_EXTENSION_ID",   // Browser extension
-    "exp://**",                               // Trust all Expo development URLs
-    "exp://10.0.0.*:*/**",                    // Trust 10.0.0.x IP range with any port
-  ]
+	trustedOrigins: [
+		'myapp://', // Mobile app scheme
+		'chrome-extension://YOUR_EXTENSION_ID', // Browser extension
+		'exp://**', // Trust all Expo development URLs
+		'exp://10.0.0.*:*/**', // Trust 10.0.0.x IP range with any port
+	];
 }
 ```
 
@@ -192,15 +194,16 @@ You can also dynamically set the list of trusted origins by providing a function
 
 ```typescript
 {
-  trustedOrigins: async (request) => {
-    const trustedOrigins = await queryTrustedDomains();
-    return trustedOrigins;
-  }
+	trustedOrigins: async (request) => {
+		const trustedOrigins = await queryTrustedDomains();
+		return trustedOrigins;
+	};
 }
 ```
 
 <Callout>
-**Important**: This function will be invoked per incoming request, so be careful if you decide to dynamically fetch your list of trusted domains.
+	**Important**: This function will be invoked per incoming request, so be
+	careful if you decide to dynamically fetch your list of trusted domains.
 </Callout>
 
 ## Reporting Vulnerabilities

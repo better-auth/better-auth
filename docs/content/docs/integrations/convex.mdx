@@ -4,8 +4,9 @@ description: Integrate Better Auth with Convex.
 ---
 
 <Callout>
-  This section is adapted from the [Convex + Better Auth guide](https://convex-better-auth.netlify.app/),
-  for more information, please refer to their documentation.
+	This section is adapted from the [Convex + Better Auth
+	guide](https://convex-better-auth.netlify.app/), for more information, please
+	refer to their documentation.
 </Callout>
 
 ## Prerequisites
@@ -16,6 +17,7 @@ description: Integrate Better Auth with Convex.
 
 To use Convex + Better Auth, you'll first need a [Convex](https://www.convex.dev/) project.
 If you don't have one, run the following command to get started.
+
 ```package-install
 npm create convex@latest
 ```
@@ -34,6 +36,7 @@ if it doesn't already exist, and keeps generated types current through the proce
 ```package-install
 npx convex dev
 ```
+
 </Step>
 </Steps>
 
@@ -44,7 +47,9 @@ The following documentation assumes you're using Next.js.
 If you're not using Next.js, support for other frameworks is documented in the [installation guide by Convex](https://convex-better-auth.netlify.app/#select-your-framework).
 
 <Callout>
-    For a complete example, check out Convex + Better Auth example with Next.js [on GitHub](https://github.com/get-convex/better-auth/tree/main/examples/next).
+	For a complete example, check out Convex + Better Auth example with Next.js
+	[on
+	GitHub](https://github.com/get-convex/better-auth/tree/main/examples/next).
 </Callout>
 
 ### Installation
@@ -272,8 +277,8 @@ If you're not using Next.js, support for other frameworks is documented in the [
     }
     ```
     </Step>
-</Steps>
 
+</Steps>
 
 ### You're done!
 
@@ -293,41 +298,42 @@ components via `preloadAuthQuery` and `usePreloadedAuthQuery`.
 Preloading in a server component:
 
 ```tsx title="app/(auth)/(dashboard)/page.tsx"
-import { preloadAuthQuery } from "@/lib/auth-server";
-import { api } from "@/convex/_generated/api";
+import { preloadAuthQuery } from '@/lib/auth-server';
+import { api } from '@/convex/_generated/api';
 
 const Page = async () => {
-    const [preloadedUserQuery] = await Promise.all([
-        preloadAuthQuery(api.auth.getCurrentUser),
-        // Load multiple queries in parallel if needed
-    ]);
+	const [preloadedUserQuery] = await Promise.all([
+		preloadAuthQuery(api.auth.getCurrentUser),
+		// Load multiple queries in parallel if needed
+	]);
 
-    return (
-        <div>
-            <Header preloadedUserQuery={preloadedUserQuery} />
-        </div>
-    );
+	return (
+		<div>
+			<Header preloadedUserQuery={preloadedUserQuery} />
+		</div>
+	);
 };
 
 export default Page;
 ```
+
 Rendering preloaded data in a client component:
 
 ```tsx title="app/(auth)/(dashboard)/header.tsx"
-import { usePreloadedAuthQuery } from "@convex-dev/better-auth/nextjs/client";
-import { api } from "@/convex/_generated/api";
+import { usePreloadedAuthQuery } from '@convex-dev/better-auth/nextjs/client';
+import { api } from '@/convex/_generated/api';
 
 export const Header = ({
-    preloadedUserQuery,
+	preloadedUserQuery,
 }: {
-    preloadedUserQuery: Preloaded<typeof api.auth.getCurrentUser>;
+	preloadedUserQuery: Preloaded<typeof api.auth.getCurrentUser>;
 }) => {
-    const user = usePreloadedAuthQuery(preloadedUserQuery);
-    return (
-        <div>
-            <h1>{user?.name}</h1>
-        </div>
-    );
+	const user = usePreloadedAuthQuery(preloadedUserQuery);
+	return (
+		<div>
+			<h1>{user?.name}</h1>
+		</div>
+	);
 };
 
 export default Header;
@@ -349,47 +355,47 @@ method is called inside of a Convex mutation, because we know this function
 needs write access. For reads a query function can be used.
 
 ```ts title="convex/users.ts"
-import { mutation } from "./_generated/server";
-import { v } from "convex/values";
-import { createAuth, authComponent } from "./auth";
+import { mutation } from './_generated/server';
+import { v } from 'convex/values';
+import { createAuth, authComponent } from './auth';
 
 export const updateUserPassword = mutation({
-    args: {
-        currentPassword: v.string(),
-        newPassword: v.string(),
-    },
-    handler: async (ctx, args) => {
-        const { auth, headers } = await authComponent.getAuth(createAuth, ctx);
-        await auth.api.changePassword({
-            body: {
-                currentPassword: args.currentPassword,
-                newPassword: args.newPassword,
-            },
-            headers,
-        });
-    },
+	args: {
+		currentPassword: v.string(),
+		newPassword: v.string(),
+	},
+	handler: async (ctx, args) => {
+		const { auth, headers } = await authComponent.getAuth(createAuth, ctx);
+		await auth.api.changePassword({
+			body: {
+				currentPassword: args.currentPassword,
+				newPassword: args.newPassword,
+			},
+			headers,
+		});
+	},
 });
 ```
 
 Here we call the mutation from a server action.
 
 ```ts title="app/actions.ts"
-"use server";
+'use server';
 
-import { fetchAuthMutation } from "@/lib/auth-server";
-import { api } from "../convex/_generated/api";
+import { fetchAuthMutation } from '@/lib/auth-server';
+import { api } from '../convex/_generated/api';
 
 // Authenticated mutation via server function
 export async function updatePassword({
-    currentPassword,
-    newPassword,
+	currentPassword,
+	newPassword,
 }: {
-    currentPassword: string;
-    newPassword: string;
+	currentPassword: string;
+	newPassword: string;
 }) {
-    await fetchAuthMutation(api.users.updatePassword, {
-        currentPassword,
-        newPassword,
-    });
+	await fetchAuthMutation(api.users.updatePassword, {
+		currentPassword,
+		newPassword,
+	});
 }
 ```

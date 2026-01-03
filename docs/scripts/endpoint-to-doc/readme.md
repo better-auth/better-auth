@@ -1,6 +1,6 @@
 # Endpoint To Documentation
 
-This script allows you to copy the code of what you would normally pass into `createAuthEndpoint`, and it will automatically convert it into a `APIMethod` component which you can use in the Better-Auth documentation 
+This script allows you to copy the code of what you would normally pass into `createAuthEndpoint`, and it will automatically convert it into a `APIMethod` component which you can use in the Better-Auth documentation
 to easily document the details of a given endpoint.
 
 This script will also generate JSDoc which you can then place above each endpoint code.

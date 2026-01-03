@@ -114,7 +114,7 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
         https://your-domain.com/api/auth/stripe/webhook
         ```
         `/api/auth` is the default path for the auth server.
-        
+
         Make sure to select at least these events:
         - `checkout.session.completed`
         - `customer.subscription.created`
@@ -123,6 +123,7 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
 
         Save the webhook signing secret provided by Stripe and add it to your environment variables as `STRIPE_WEBHOOK_SECRET`.
     </Step>
+
 </Steps>
 
 ## Usage
@@ -136,21 +137,21 @@ You can customize the customer creation process:
 
 ```ts title="auth.ts"
 stripe({
-    // ... other options
-    createCustomerOnSignUp: true,
-    onCustomerCreate: async ({ stripeCustomer, user }, ctx) => {
-        // Do something with the newly created customer
-        console.log(`Customer ${stripeCustomer.id} created for user ${user.id}`);
-    },
-    getCustomerCreateParams: async (user, ctx) => {
-        // Customize the Stripe customer creation parameters
-        return {
-            metadata: {
-                referralSource: user.metadata?.referralSource
-            }
-        };
-    }
-})
+	// ... other options
+	createCustomerOnSignUp: true,
+	onCustomerCreate: async ({ stripeCustomer, user }, ctx) => {
+		// Do something with the newly created customer
+		console.log(`Customer ${stripeCustomer.id} created for user ${user.id}`);
+	},
+	getCustomerCreateParams: async (user, ctx) => {
+		// Customize the Stripe customer creation parameters
+		return {
+			metadata: {
+				referralSource: user.metadata?.referralSource,
+			},
+		};
+	},
+});
 ```
 
 ### Subscription Management
@@ -259,49 +260,55 @@ type upgradeSubscription = {
 
 ```ts title="client.ts"
 await client.subscription.upgrade({
-    plan: "pro",
-    successUrl: "/dashboard",
-    cancelUrl: "/pricing",
-    annual: true, // Optional: upgrade to an annual plan
-    referenceId: "org_123", // Optional: defaults to the current logged in user ID
-    seats: 5 // Optional: for team plans
+	plan: 'pro',
+	successUrl: '/dashboard',
+	cancelUrl: '/pricing',
+	annual: true, // Optional: upgrade to an annual plan
+	referenceId: 'org_123', // Optional: defaults to the current logged in user ID
+	seats: 5, // Optional: for team plans
 });
 ```
 
 This will create a Checkout Session and redirect the user to the Stripe Checkout page.
 
 <Callout type="warn">
-If the user already has an active subscription, you *must* provide the `subscriptionId` parameter. Otherwise, the user will be subscribed to (and pay for) both plans.
+	If the user already has an active subscription, you *must* provide the
+	`subscriptionId` parameter. Otherwise, the user will be subscribed to (and pay
+	for) both plans.
 </Callout>
 
 > **Important:** The `successUrl` parameter will be internally modified to handle race conditions between checkout completion and webhook processing. The plugin creates an intermediate redirect that ensures subscription status is properly updated before redirecting to your success page.
 
 ```ts
 const { error } = await client.subscription.upgrade({
-    plan: "pro",
-    successUrl: "/dashboard",
-    cancelUrl: "/pricing",
+	plan: 'pro',
+	successUrl: '/dashboard',
+	cancelUrl: '/pricing',
 });
-if(error) {
-    alert(error.message);
+if (error) {
+	alert(error.message);
 }
 ```
 
 <Callout type="warn">
-For each reference ID (user or organization), only one active or trialing subscription is supported at a time. The plugin doesn't currently support multiple concurrent active subscriptions for the same reference ID.
+	For each reference ID (user or organization), only one active or trialing
+	subscription is supported at a time. The plugin doesn't currently support
+	multiple concurrent active subscriptions for the same reference ID.
 </Callout>
 
 #### Switching Plans
 
 To switch a subscription to a different plan, use the `subscription.upgrade` method:
+
 ```ts title="client.ts"
 await client.subscription.upgrade({
-    plan: "pro",
-    successUrl: "/dashboard",
-    cancelUrl: "/pricing",
-    subscriptionId: "sub_123", // the Stripe subscription ID of the user's current plan
+	plan: 'pro',
+	successUrl: '/dashboard',
+	cancelUrl: '/pricing',
+	subscriptionId: 'sub_123', // the Stripe subscription ID of the user's current plan
 });
 ```
+
 This ensures that the user only pays for the new plan, and not both.
 
 #### Listing Active Subscriptions
@@ -324,12 +331,13 @@ type listActiveSubscriptions = {
 
 // get the active subscription
 const activeSubscription = subscriptions.find(
-    sub => sub.status === "active" || sub.status === "trialing"
+sub => sub.status === "active" || sub.status === "trialing"
 );
 
 // Check subscription limits
 const projectLimit = subscriptions?.limits?.projects || 0;
-```
+
+````
 </APIMethod>
 
 Make sure to provide `authorizeReference` in your plugin config to authorize the reference ID
@@ -345,7 +353,7 @@ stripe({
                     where: {
                         organizationId: referenceId,
                         userId: user.id
-                    }   
+                    }
                 });
                 return org?.role === "owner"
             }
@@ -354,7 +362,8 @@ stripe({
         }
     }
 })
-```
+````
+
 #### Canceling a Subscription
 
 To cancel a subscription:
@@ -389,21 +398,25 @@ This will redirect the user to the Stripe Billing Portal where they can cancel t
 
 Stripe supports different types of cancellation, and the plugin tracks all of them:
 
-| Field               | Description                                                                                                                      |
-|---------------------|----------------------------------------------------------------------------------------------------------------------------------|
-| `cancelAtPeriodEnd` | Whether this subscription will (if status=active) or did (if status=canceled) cancel at the end of the current billing period.   |
-| `cancelAt`          | If the subscription is scheduled to be canceled, this is the time at which the cancellation will take effect.                    |
-| `canceledAt`        | If the subscription has been canceled, this is the time when it was canceled.                                                    |
-| `endedAt`           | If the subscription has ended, the date the subscription ended.                                                                  |
-| `status`            | Changes to "canceled" only after the subscription has actually ended.                                                            |
+| Field               | Description                                                                                                                    |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `cancelAtPeriodEnd` | Whether this subscription will (if status=active) or did (if status=canceled) cancel at the end of the current billing period. |
+| `cancelAt`          | If the subscription is scheduled to be canceled, this is the time at which the cancellation will take effect.                  |
+| `canceledAt`        | If the subscription has been canceled, this is the time when it was canceled.                                                  |
+| `endedAt`           | If the subscription has ended, the date the subscription ended.                                                                |
+| `status`            | Changes to "canceled" only after the subscription has actually ended.                                                          |
+
 </Callout>
 
 #### Restoring a Canceled Subscription
 
-> <small className='font-normal'>**Note:** This only works for subscriptions that are still active but scheduled to cancel. It cannot restore subscriptions that have already ended (`status: "canceled"` with `endedAt` set).</small>
+> <small className="font-normal">
+> 	**Note:** This only works for subscriptions that are still active but
+> 	scheduled to cancel. It cannot restore subscriptions that have already ended
+> 	(`status: "canceled"` with `endedAt` set).
+> </small>
 
 If a user changes their mind after canceling a subscription (but before the subscription period ends), you can restore the subscription:
-
 
 <APIMethod
   path="/subscription/restore"
@@ -424,16 +437,12 @@ type restoreSubscription = {
 ```
 </APIMethod>
 
-
 This will reactivate a subscription that was previously scheduled to cancel. The subscription will continue to renew automatically.
 
 <Callout type="info">
-When a subscription is restored:
-- `cancelAtPeriodEnd` is set to `false`
-- `cancelAt` is cleared to `null`
-- `canceledAt` is cleared to `null`
+	When a subscription is restored: - `cancelAtPeriodEnd` is set to `false` -
+	`cancelAt` is cleared to `null` - `canceledAt` is cleared to `null`
 </Callout>
-
 
 #### Creating Billing Portal Sessions
 
@@ -479,18 +488,18 @@ By default, subscriptions are associated with the user ID. However, you can use 
 ```ts title="client.ts"
 // Create a subscription for an organization
 await client.subscription.upgrade({
-    plan: "pro",
-    referenceId: "org_123456",
-    successUrl: "/dashboard",
-    cancelUrl: "/pricing",
-    seats: 5 // Number of seats for team plans
+	plan: 'pro',
+	referenceId: 'org_123456',
+	successUrl: '/dashboard',
+	cancelUrl: '/pricing',
+	seats: 5, // Number of seats for team plans
 });
 
 // List subscriptions for an organization
 const { data: subscriptions } = await client.subscription.list({
-    query: {
-        referenceId: "org_123456"
-    }
+	query: {
+		referenceId: 'org_123456',
+	},
 });
 ```
 
@@ -500,11 +509,11 @@ For team or organization plans, you can specify the number of seats:
 
 ```ts
 await client.subscription.upgrade({
-    plan: "team",
-    referenceId: "org_123456",
-    seats: 10, // 10 team members
-    successUrl: "/org/billing/success",
-    cancelUrl: "/org/billing"
+	plan: 'team',
+	referenceId: 'org_123456',
+	seats: 10, // 10 team members
+	successUrl: '/org/billing/success',
+	cancelUrl: '/org/billing',
 });
 ```
 
@@ -514,20 +523,24 @@ To authorize reference IDs, implement the `authorizeReference` function:
 
 ```ts title="auth.ts"
 subscription: {
-    // ... other options
-    authorizeReference: async ({ user, session, referenceId, action }) => {
-        // Check if the user has permission to manage subscriptions for this reference
-        if (action === "upgrade-subscription" || action === "cancel-subscription" || action === "restore-subscription") {
-            const org = await db.member.findFirst({
-                where: {
-                    organizationId: referenceId,
-                    userId: user.id
-                }   
-            });
-            return org?.role === "owner"
-        }
-        return true;
-    }
+	// ... other options
+	authorizeReference: async ({ user, session, referenceId, action }) => {
+		// Check if the user has permission to manage subscriptions for this reference
+		if (
+			action === 'upgrade-subscription' ||
+			action === 'cancel-subscription' ||
+			action === 'restore-subscription'
+		) {
+			const org = await db.member.findFirst({
+				where: {
+					organizationId: referenceId,
+					userId: user.id,
+				},
+			});
+			return org?.role === 'owner';
+		}
+		return true;
+	};
 }
 ```
 
@@ -544,19 +557,19 @@ You can also handle custom events:
 
 ```ts title="auth.ts"
 stripe({
-    // ... other options
-    onEvent: async (event) => {
-        // Handle any Stripe event
-        switch (event.type) {
-            case "invoice.paid":
-                // Handle paid invoice
-                break;
-            case "payment_intent.succeeded":
-                // Handle successful payment
-                break;
-        }
-    }
-})
+	// ... other options
+	onEvent: async (event) => {
+		// Handle any Stripe event
+		switch (event.type) {
+			case 'invoice.paid':
+				// Handle paid invoice
+				break;
+			case 'payment_intent.succeeded':
+				// Handle successful payment
+				break;
+		}
+	},
+});
 ```
 
 ### Subscription Lifecycle Hooks
@@ -619,20 +632,19 @@ You can configure trial periods for your plans:
 
 The Stripe plugin adds the following tables to your database:
 
-
 ### User
 
 Table Name: `user`
 
 <DatabaseTable
-  fields={[
-    { 
-      name: "stripeCustomerId", 
-      type: "string", 
-      description: "The Stripe customer ID",
-      isOptional: true
-    },
-  ]}
+	fields={[
+		{
+			name: 'stripeCustomerId',
+			type: 'string',
+			description: 'The Stripe customer ID',
+			isOptional: true,
+		},
+	]}
 />
 
 ### Subscription
@@ -640,98 +652,103 @@ Table Name: `user`
 Table Name: `subscription`
 
 <DatabaseTable
-  fields={[
-    { 
-      name: "id", 
-      type: "string", 
-      description: "Unique identifier for each subscription",
-      isPrimaryKey: true
-    },
-    { 
-      name: "plan", 
-      type: "string", 
-      description: "The name of the subscription plan" 
-    },
-    { 
-      name: "referenceId", 
-      type: "string", 
-      description: "The ID this subscription is associated with (user ID by default). This should NOT be a unique field in your database, as it must allow users to resubscribe after a cancellation.",
-      isUnique: false
-    },
-    { 
-      name: "stripeCustomerId", 
-      type: "string", 
-      description: "The Stripe customer ID",
-      isOptional: true
-    },
-    { 
-      name: "stripeSubscriptionId", 
-      type: "string", 
-      description: "The Stripe subscription ID",
-      isOptional: true
-    },
-    { 
-      name: "status", 
-      type: "string", 
-      description: "The status of the subscription (active, canceled, etc.)",
-      defaultValue: "incomplete"
-    },
-    { 
-      name: "periodStart", 
-      type: "Date", 
-      description: "Start date of the current billing period",
-      isOptional: true
-    },
-    { 
-      name: "periodEnd", 
-      type: "Date", 
-      description: "End date of the current billing period",
-      isOptional: true
-    },
-    { 
-      name: "cancelAtPeriodEnd", 
-      type: "boolean", 
-      description: "Whether the subscription will be canceled at the end of the period",
-      defaultValue: false,
-      isOptional: true
-    },
-    { 
-      name: "cancelAt", 
-      type: "Date", 
-      description: "If the subscription is scheduled to be canceled, this is the time at which the cancellation will take effect",
-      isOptional: true
-    },
-    { 
-      name: "canceledAt", 
-      type: "Date", 
-      description: "If the subscription has been canceled, this is the time when the cancellation was requested. Note: If the subscription was canceled with cancelAtPeriodEnd, this reflects the cancellation request time, not when the subscription actually ends",
-      isOptional: true
-    },
-    { 
-      name: "endedAt", 
-      type: "Date", 
-      description: "If the subscription has ended, this is the date the subscription ended",
-      isOptional: true
-    },
-    { 
-      name: "seats", 
-      type: "number", 
-      description: "Number of seats for team plans",
-      isOptional: true
-    },
-    { 
-      name: "trialStart", 
-      type: "Date", 
-      description: "Start date of the trial period",
-      isOptional: true
-    },
-    { 
-      name: "trialEnd", 
-      type: "Date", 
-      description: "End date of the trial period",
-      isOptional: true
-    }
-  ]}
+	fields={[
+		{
+			name: 'id',
+			type: 'string',
+			description: 'Unique identifier for each subscription',
+			isPrimaryKey: true,
+		},
+		{
+			name: 'plan',
+			type: 'string',
+			description: 'The name of the subscription plan',
+		},
+		{
+			name: 'referenceId',
+			type: 'string',
+			description:
+				'The ID this subscription is associated with (user ID by default). This should NOT be a unique field in your database, as it must allow users to resubscribe after a cancellation.',
+			isUnique: false,
+		},
+		{
+			name: 'stripeCustomerId',
+			type: 'string',
+			description: 'The Stripe customer ID',
+			isOptional: true,
+		},
+		{
+			name: 'stripeSubscriptionId',
+			type: 'string',
+			description: 'The Stripe subscription ID',
+			isOptional: true,
+		},
+		{
+			name: 'status',
+			type: 'string',
+			description: 'The status of the subscription (active, canceled, etc.)',
+			defaultValue: 'incomplete',
+		},
+		{
+			name: 'periodStart',
+			type: 'Date',
+			description: 'Start date of the current billing period',
+			isOptional: true,
+		},
+		{
+			name: 'periodEnd',
+			type: 'Date',
+			description: 'End date of the current billing period',
+			isOptional: true,
+		},
+		{
+			name: 'cancelAtPeriodEnd',
+			type: 'boolean',
+			description:
+				'Whether the subscription will be canceled at the end of the period',
+			defaultValue: false,
+			isOptional: true,
+		},
+		{
+			name: 'cancelAt',
+			type: 'Date',
+			description:
+				'If the subscription is scheduled to be canceled, this is the time at which the cancellation will take effect',
+			isOptional: true,
+		},
+		{
+			name: 'canceledAt',
+			type: 'Date',
+			description:
+				'If the subscription has been canceled, this is the time when the cancellation was requested. Note: If the subscription was canceled with cancelAtPeriodEnd, this reflects the cancellation request time, not when the subscription actually ends',
+			isOptional: true,
+		},
+		{
+			name: 'endedAt',
+			type: 'Date',
+			description:
+				'If the subscription has ended, this is the date the subscription ended',
+			isOptional: true,
+		},
+		{
+			name: 'seats',
+			type: 'number',
+			description: 'Number of seats for team plans',
+			isOptional: true,
+		},
+		{
+			name: 'trialStart',
+			type: 'Date',
+			description: 'Start date of the trial period',
+			isOptional: true,
+		},
+		{
+			name: 'trialEnd',
+			type: 'Date',
+			description: 'End date of the trial period',
+			isOptional: true,
+		},
+	]}
 />
 
 ### Customizing the Schema
@@ -740,16 +757,16 @@ To change the schema table names or fields, you can pass a `schema` option to th
 
 ```ts title="auth.ts"
 stripe({
-    // ... other options
-    schema: {
-        subscription: {
-            modelName: "stripeSubscriptions", // map the subscription table to stripeSubscriptions
-            fields: {
-                plan: "planName" // map the plan field to planName
-            }
-        }
-    }
-})
+	// ... other options
+	schema: {
+		subscription: {
+			modelName: 'stripeSubscriptions', // map the subscription table to stripeSubscriptions
+			fields: {
+				plan: 'planName', // map the plan field to planName
+			},
+		},
+	},
+});
 ```
 
 ## Options
@@ -769,41 +786,41 @@ stripe({
 
 ### Subscription Options
 
-| Option                     | Type                         | Description                                                                                                            |
-| -------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `enabled`                  | `boolean`                    | Whether to enable subscription functionality. **Required.**                                                            |
-| `plans`                    | `StripePlan[]` or `function` | An array of subscription plans or an async function that returns plans. **Required** if enabled.                       |
-| `requireEmailVerification` | `boolean`                    | Whether to require email verification before allowing subscription upgrades. Default: `false`.                         |
-| `authorizeReference`       | `function`                   | Authorize reference IDs. Receives `{ user, session, referenceId, action }` and context.                                |
-| `getCheckoutSessionParams` | `function`                   | Customize Stripe Checkout session parameters. Receives `{ user, session, plan, subscription }`, request, and context.  |
+| Option                     | Type                         | Description                                                                                                                   |
+| -------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`                  | `boolean`                    | Whether to enable subscription functionality. **Required.**                                                                   |
+| `plans`                    | `StripePlan[]` or `function` | An array of subscription plans or an async function that returns plans. **Required** if enabled.                              |
+| `requireEmailVerification` | `boolean`                    | Whether to require email verification before allowing subscription upgrades. Default: `false`.                                |
+| `authorizeReference`       | `function`                   | Authorize reference IDs. Receives `{ user, session, referenceId, action }` and context.                                       |
+| `getCheckoutSessionParams` | `function`                   | Customize Stripe Checkout session parameters. Receives `{ user, session, plan, subscription }`, request, and context.         |
 | `onSubscriptionComplete`   | `function`                   | Called when a subscription is created via checkout. Receives `{ event, stripeSubscription, subscription, plan }` and context. |
-| `onSubscriptionCreated`    | `function`                   | Called when a subscription is created outside checkout. Receives `{ event, stripeSubscription, subscription, plan }`.  |
-| `onSubscriptionUpdate`     | `function`                   | Called when a subscription is updated. Receives `{ event, subscription }`.                                             |
-| `onSubscriptionCancel`     | `function`                   | Called when a subscription is canceled. Receives `{ event, subscription, stripeSubscription, cancellationDetails }`.   |
-| `onSubscriptionDeleted`    | `function`                   | Called when a subscription is deleted. Receives `{ event, stripeSubscription, subscription }`.                         |
-| `organization`             | `object`                     | Enable organization subscription. Set `{ enabled: true }` to enable.                                                   |
+| `onSubscriptionCreated`    | `function`                   | Called when a subscription is created outside checkout. Receives `{ event, stripeSubscription, subscription, plan }`.         |
+| `onSubscriptionUpdate`     | `function`                   | Called when a subscription is updated. Receives `{ event, subscription }`.                                                    |
+| `onSubscriptionCancel`     | `function`                   | Called when a subscription is canceled. Receives `{ event, subscription, stripeSubscription, cancellationDetails }`.          |
+| `onSubscriptionDeleted`    | `function`                   | Called when a subscription is deleted. Receives `{ event, stripeSubscription, subscription }`.                                |
+| `organization`             | `object`                     | Enable organization subscription. Set `{ enabled: true }` to enable.                                                          |
 
 ### Plan Configuration
 
-| Option                    | Type       | Description                                                  |
-| ------------------------- | ---------- | ------------------------------------------------------------ |
-| `name`                    | `string`   | The name of the plan. **Required.**                          |
-| `priceId`                 | `string`   | The Stripe price ID. **Required** unless using `lookupKey`.  |
-| `lookupKey`               | `string`   | The Stripe price lookup key. Alternative to `priceId`.       |
-| `annualDiscountPriceId`   | `string`   | A price ID for annual billing.                               |
-| `annualDiscountLookupKey` | `string`   | The Stripe price lookup key for annual billing.              |
-| `limits`                  | `object`   | Limits for plan (e.g. `{ projects: 10, storage: 5 }`).       |
-| `group`                   | `string`   | A group name for categorizing plans.                         |
-| `freeTrial`               | `object`   | Trial configuration. See [below](#free-trial-configuration). |
+| Option                    | Type     | Description                                                  |
+| ------------------------- | -------- | ------------------------------------------------------------ |
+| `name`                    | `string` | The name of the plan. **Required.**                          |
+| `priceId`                 | `string` | The Stripe price ID. **Required** unless using `lookupKey`.  |
+| `lookupKey`               | `string` | The Stripe price lookup key. Alternative to `priceId`.       |
+| `annualDiscountPriceId`   | `string` | A price ID for annual billing.                               |
+| `annualDiscountLookupKey` | `string` | The Stripe price lookup key for annual billing.              |
+| `limits`                  | `object` | Limits for plan (e.g. `{ projects: 10, storage: 5 }`).       |
+| `group`                   | `string` | A group name for categorizing plans.                         |
+| `freeTrial`               | `object` | Trial configuration. See [below](#free-trial-configuration). |
 
 #### Free Trial Configuration
 
-| Option           | Type       | Description                                                                              |
-| ---------------- | ---------- | ---------------------------------------------------------------------------------------- |
-| `days`           | `number`   | Number of trial days. **Required.**                                                      |
-| `onTrialStart`   | `function` | Called when a trial starts. Receives `subscription`.                                     |
-| `onTrialEnd`     | `function` | Called when a trial ends. Receives `{ subscription }` and context.                       |
-| `onTrialExpired` | `function` | Called when a trial expires without conversion. Receives `subscription` and context.     |
+| Option           | Type       | Description                                                                          |
+| ---------------- | ---------- | ------------------------------------------------------------------------------------ |
+| `days`           | `number`   | Number of trial days. **Required.**                                                  |
+| `onTrialStart`   | `function` | Called when a trial starts. Receives `subscription`.                                 |
+| `onTrialEnd`     | `function` | Called when a trial ends. Receives `{ subscription }` and context.                   |
+| `onTrialExpired` | `function` | Called when a trial expires without conversion. Receives `subscription` and context. |
 
 ## Advanced Usage
 
@@ -817,12 +834,12 @@ const { data: activeOrg } = client.useActiveOrganization();
 
 // Create a subscription for the organization
 await client.subscription.upgrade({
-    plan: "team",
-    referenceId: activeOrg.id,
-    seats: 10,
-    annual: true, // upgrade to an annual plan (optional)
-    successUrl: "/org/billing/success",
-    cancelUrl: "/org/billing"
+	plan: 'team',
+	referenceId: activeOrg.id,
+	seats: 10,
+	annual: true, // upgrade to an annual plan (optional)
+	successUrl: '/org/billing/success',
+	cancelUrl: '/org/billing',
 });
 ```
 
@@ -830,17 +847,17 @@ Make sure to implement the `authorizeReference` function to verify that the user
 
 ```ts title="auth.ts"
 subscription: {
-    // ... other subscription options
-    authorizeReference: async ({ user, referenceId, action }) => {
-        const member = await db.members.findFirst({
-            where: {
-                userId: user.id,
-                organizationId: referenceId
-            }
-        });
-        
-        return member?.role === "owner" || member?.role === "admin";
-    }
+	// ... other subscription options
+	authorizeReference: async ({ user, referenceId, action }) => {
+		const member = await db.members.findFirst({
+			where: {
+				userId: user.id,
+				organizationId: referenceId,
+			},
+		});
+
+		return member?.role === 'owner' || member?.role === 'admin';
+	};
 }
 ```
 
@@ -849,29 +866,32 @@ subscription: {
 You can customize the Stripe Checkout session with additional parameters:
 
 ```ts title="auth.ts"
-getCheckoutSessionParams: async ({ user, session, plan, subscription }, ctx) => {
-    return {
-        params: {
-            allow_promotion_codes: true,
-            tax_id_collection: {
-                enabled: true
-            },
-            billing_address_collection: "required",
-            custom_text: {
-                submit: {
-                    message: "We'll start your subscription right away"
-                }
-            },
-            metadata: {
-                planType: "business",
-                referralCode: user.metadata?.referralCode
-            }
-        },
-        options: {
-            idempotencyKey: `sub_${user.id}_${plan.name}_${Date.now()}`
-        }
-    };
-}
+getCheckoutSessionParams: async (
+	{ user, session, plan, subscription },
+	ctx,
+) => {
+	return {
+		params: {
+			allow_promotion_codes: true,
+			tax_id_collection: {
+				enabled: true,
+			},
+			billing_address_collection: 'required',
+			custom_text: {
+				submit: {
+					message: "We'll start your subscription right away",
+				},
+			},
+			metadata: {
+				planType: 'business',
+				referralCode: user.metadata?.referralCode,
+			},
+		},
+		options: {
+			idempotencyKey: `sub_${user.id}_${plan.name}_${Date.now()}`,
+		},
+	};
+};
 ```
 
 ### Tax Collection
@@ -880,16 +900,19 @@ To collect tax IDs from the customer, set `tax_id_collection` to true:
 
 ```ts title="auth.ts"
 subscription: {
-    // ... other options
-    getCheckoutSessionParams: async ({ user, session, plan, subscription }, ctx) => {
-        return {
-            params: {
-                tax_id_collection: {
-                    enabled: true
-                }
-            }
-        };
-    }
+	// ... other options
+	getCheckoutSessionParams: async (
+		{ user, session, plan, subscription },
+		ctx,
+	) => {
+		return {
+			params: {
+				tax_id_collection: {
+					enabled: true,
+				},
+			},
+		};
+	};
 }
 ```
 
@@ -899,16 +922,19 @@ To enable automatic tax calculation using the customer's location, set `automati
 
 ```ts title="auth.ts"
 subscription: {
-    // ... other options
-    getCheckoutSessionParams: async ({ user, session, plan, subscription }, ctx) => {
-        return {
-            params: {
-                automatic_tax: {
-                    enabled: true
-                }
-            }
-        };
-    }
+	// ... other options
+	getCheckoutSessionParams: async (
+		{ user, session, plan, subscription },
+		ctx,
+	) => {
+		return {
+			params: {
+				automatic_tax: {
+					enabled: true,
+				},
+			},
+		};
+	};
 }
 ```
 
@@ -917,12 +943,14 @@ subscription: {
 The Stripe plugin automatically prevents users from getting multiple free trials. Once a user has used a trial period (regardless of which plan), they will not be eligible for additional trials on any plan.
 
 **How it works:**
+
 - The system tracks trial usage across all plans for each user
 - When a user subscribes to a plan with a trial, the system checks their subscription history
 - If the user has ever had a trial (indicated by `trialStart`/`trialEnd` fields or `trialing` status), no new trial will be offered
 - This prevents abuse where users cancel subscriptions and resubscribe to get multiple free trials
 
 **Example scenario:**
+
 1. User subscribes to "Starter" plan with 7-day trial
 2. User cancels the subscription after the trial
 3. User tries to subscribe to "Premium" plan - no trial will be offered

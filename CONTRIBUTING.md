@@ -60,7 +60,9 @@ When contributing to Better Auth:
    ```bash
    npm install -g pnpm
    ```
+
 5. Install project dependencies:
+
    ```bash
    pnpm install
    ```
@@ -76,6 +78,7 @@ When contributing to Better Auth:
      ```
 
 7. Build the project:
+
    ```bash
    pnpm build
    ```
@@ -84,7 +87,6 @@ When contributing to Better Auth:
    ```bash
    pnpm -F docs dev
    ```
-
 
 ## Code Formatting with BiomeJS
 
@@ -104,11 +106,12 @@ pnpm lint:fix
 ## Development Workflow
 
 1. Create a new branch for your changes:
+
    ```bash
    git checkout -b type/description
    # Example: git checkout -b feat/oauth-provider
    ```
-   
+
    Branch type prefixes:
    - `feat/` - New features
    - `fix/` - Bug fixes
@@ -120,6 +123,7 @@ pnpm lint:fix
 2. Make your changes following the code style guidelines
 3. Add tests for your changes
 4. Run database containers (needed for testing database adapters)
+
    ```bash
    docker compose up -d
    ```
@@ -127,42 +131,49 @@ pnpm lint:fix
    > Note: On MacOS, the **mssql** container will likely require Rosetta emulation and at least 2GB of RAM of allocated memory. See their [container requirements](https://learn.microsoft.com/en-us/sql/linux/quickstart-install-connect-docker?view=sql-server-ver17&tabs=cli&pivots=cs1-bash#prerequisites).
 
 5. Run the test suite:
+
    ```bash
    # Run all tests
    pnpm test
-   
+
    # Run tests for a specific package
    pnpm -F "{package_name}" test
    ```
+
 6. Ensure all tests pass and the code is properly formatted
 7. Commit your changes with a descriptive message following this format:
    For changes that need to be included in the changelog (excluding docs or chore changes), use the `fix` or `feat` format with a specific scope:
+
    ```
    fix(organization): fix incorrect member role assignment
-   
+
    feat(two-factor): add support for TOTP authentication
    ```
 
    For core library changes that don't have a specific plugin or scope, you can use `fix` and `feat` without a scope:
+
    ```
    fix: resolve memory leak in session handling
-   
+
    feat: add support for custom error messages
    ```
 
    For documentation changes, use `docs`:
+
    ```bash
    docs: improve authentication flow explanation
    docs: fix typos in API reference
    ```
-   
+
    For changes that refactor or don't change the functionality of the library or docs, use `chore`:
+
    ```bash
    chore(refactor): reorganize authentication middleware
    chore: update dependencies to latest versions
    ```
 
    Each commit message should be clear and descriptive, explaining what the change does. For features and fixes, include context about what was added or resolved.
+
 8. Push your branch to your fork
 9. Open a pull request against the **canary** branch. In your PR description:
    - Clearly describe what changes you made and why
@@ -205,8 +216,9 @@ All contributions must include appropriate tests. Follow these guidelines:
 ## Component-Specific Guidelines
 
 ### Core Library (`/packages/better-auth`)
+
 - Keep the core library focused on essential authentication functionality
-- Plugins in the core generally are made by core members. If you have a plugin idea consider open sourcing it yourself instead. 
+- Plugins in the core generally are made by core members. If you have a plugin idea consider open sourcing it yourself instead.
 - Ensure all public APIs are well-documented with JSDoc comments
 - Maintain backward compatibility. If it's super necessary, provide a clear migration path
 - Follow the existing patterns for error handling and logging

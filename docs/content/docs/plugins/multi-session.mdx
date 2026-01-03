@@ -37,27 +37,24 @@ export const auth = betterAuth({
         })
         ```
         </Step>
-</Steps>    
 
+</Steps>
 
 ## Usage
 
-Whenever a user logs in, the plugin will add additional cookie to the browser. This cookie will be used to maintain multiple sessions across different accounts. 
-
+Whenever a user logs in, the plugin will add additional cookie to the browser. This cookie will be used to maintain multiple sessions across different accounts.
 
 ### List all device sessions
 
 To list all active sessions for the current user, you can call the `listDeviceSessions` method.
 
 <APIMethod
-  path="/multi-session/list-device-sessions"
-  method="GET"
-  requireSession
+	path="/multi-session/list-device-sessions"
+	method="GET"
+	requireSession
 >
-```ts
-type listDeviceSessions = {
-}
-```
+	```ts type listDeviceSessions = {}
+	```
 </APIMethod>
 
 ### Set active session
@@ -107,13 +104,13 @@ When a user logs out, the plugin will revoke all active sessions for the user. Y
 You can specify the maximum number of sessions a user can have by passing the `maximumSessions` option to the plugin. By default, the plugin allows 5 sessions per device.
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth"
+import { betterAuth } from 'better-auth';
 
 export const auth = betterAuth({
-    plugins: [
-        multiSession({
-            maximumSessions: 3
-        })
-    ]
-})
+	plugins: [
+		multiSession({
+			maximumSessions: 3,
+		}),
+	],
+});
 ```
