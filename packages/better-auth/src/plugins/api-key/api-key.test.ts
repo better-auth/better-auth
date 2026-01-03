@@ -3197,4 +3197,302 @@ describe("api-key", async () => {
 			expect(customStore.has(`api-key:by-id:${createdKey!.id}`)).toBe(false);
 		});
 	});
+
+	describe("api-key with referenceId", async () => {
+		const authorizeReference = vi.fn();
+		const { client, signInWithTestUser, signInWithUser } =
+			await getTestInstance(
+				{
+					plugins: [
+						apiKey({
+							authorizeReference: async (data, ctx) => {
+								return authorizeReference(data, ctx);
+							},
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [apiKeyClient()],
+					},
+				},
+			);
+		const { headers, user } = await signInWithTestUser();
+		const orgId = "org-123";
+
+		const adminEmail = "admin@test.com";
+		const adminPassword = "password123";
+		await client.signUp.email({
+			email: adminEmail,
+			password: adminPassword,
+			name: "Admin",
+		});
+		const { headers: adminHeaders, res: adminRes } = await signInWithUser(
+			adminEmail,
+			adminPassword,
+		);
+		const admin = adminRes.user;
+
+		beforeEach(() => {
+			authorizeReference.mockReset();
+		});
+
+		it("should create api key with referenceId", async () => {
+			authorizeReference.mockResolvedValue(true);
+			const res = await client.apiKey.create(
+				{
+					referenceId: orgId,
+					name: "test-key",
+				},
+				{ headers },
+			);
+
+			expect(res.data).toBeDefined();
+			expect(res.data?.referenceId).toBe(orgId);
+			expect(res.data?.userId).toBe(user.id);
+			expect(authorizeReference).toHaveBeenCalledWith(
+				expect.objectContaining({
+					referenceId: orgId,
+					user: expect.objectContaining({ id: user.id }),
+				}),
+				expect.anything(),
+			);
+		});
+
+		it("should fail to create api key with referenceId if unauthorized", async () => {
+			authorizeReference.mockResolvedValue(false);
+			const res = await client.apiKey.create(
+				{
+					referenceId: "org-unauthorized",
+					name: "test-key-2",
+				},
+				{ headers },
+			);
+
+			expect(res.error).toBeDefined();
+			expect(res.error?.code).toBe("UNAUTHORIZED_REFERENCE");
+		});
+
+		it("should list api keys by referenceId", async () => {
+			authorizeReference.mockResolvedValue(true);
+			await client.apiKey.create(
+				{
+					referenceId: orgId,
+					name: "key2",
+				},
+				{ headers },
+			);
+
+			const res = await client.apiKey.list(
+				{
+					query: {
+						referenceId: orgId,
+					},
+				},
+				{ headers },
+			);
+
+			expect(res.data).toBeDefined();
+			expect(res.data?.length).toBeGreaterThanOrEqual(2);
+			expect(res.data?.every((k) => k.referenceId === orgId)).toBe(true);
+		});
+
+		it("should fail to list api keys by referenceId if unauthorized", async () => {
+			authorizeReference.mockResolvedValue(false);
+			const res = await client.apiKey.list(
+				{
+					query: {
+						referenceId: "org-unauthorized-list",
+					},
+				},
+				{ headers },
+			);
+
+			expect(res.error).toBeDefined();
+			expect(res.error?.code).toBe("UNAUTHORIZED_REFERENCE");
+		});
+
+		it("should allow admin to get key by referenceId even if not owner", async () => {
+			authorizeReference.mockResolvedValue(true);
+			// Owner creates a key
+			const createRes = await client.apiKey.create(
+				{
+					referenceId: orgId,
+					name: "key-to-get",
+				},
+				{ headers },
+			);
+			const keyId = createRes.data!.id;
+
+			// Admin tries to get it
+			const getRes = await client.apiKey.get(
+				{
+					query: {
+						id: keyId,
+					},
+				},
+				{ headers: adminHeaders },
+			);
+
+			expect(getRes.data).toBeDefined();
+			expect(getRes.data?.id).toBe(keyId);
+			expect(authorizeReference).toHaveBeenCalledWith(
+				expect.objectContaining({
+					referenceId: orgId,
+					user: expect.objectContaining({ id: admin.id }),
+				}),
+				expect.anything(),
+			);
+		});
+
+		it("should fail to get key if not authorized for referenceId", async () => {
+			authorizeReference.mockResolvedValue(true);
+			// Owner creates a key
+			const createRes = await client.apiKey.create(
+				{
+					referenceId: orgId,
+					name: "key-to-get-fail",
+				},
+				{ headers },
+			);
+			const keyId = createRes.data!.id;
+
+			// Admin tries to get it but is unauthorized
+			authorizeReference.mockResolvedValueOnce(false);
+			const getRes = await client.apiKey.get(
+				{
+					query: {
+						id: keyId,
+					},
+				},
+				{ headers: adminHeaders },
+			);
+
+			expect(getRes.error).toBeDefined();
+			expect(getRes.error?.code).toBe("UNAUTHORIZED_REFERENCE");
+		});
+
+		it("should allow admin to update key by referenceId even if not owner", async () => {
+			authorizeReference.mockResolvedValue(true);
+			// Owner creates a key
+			const createRes = await client.apiKey.create(
+				{
+					referenceId: orgId,
+					name: "key-to-update",
+				},
+				{ headers },
+			);
+			const keyId = createRes.data!.id;
+
+			// Admin tries to update it
+			const updateRes = await client.apiKey.update(
+				{
+					keyId: keyId,
+					name: "updated-by-admin",
+				},
+				{ headers: adminHeaders },
+			);
+
+			expect(updateRes.data).toBeDefined();
+			expect(updateRes.data?.name).toBe("updated-by-admin");
+
+			// Verify update persisted
+			const getRes = await client.apiKey.get(
+				{
+					query: {
+						id: keyId,
+					},
+				},
+				{ headers },
+			);
+			expect(getRes.data?.name).toBe("updated-by-admin");
+		});
+
+		it("should fail to update key if not authorized for referenceId", async () => {
+			authorizeReference.mockResolvedValue(true);
+			// Owner creates a key
+			const createRes = await client.apiKey.create(
+				{
+					referenceId: orgId,
+					name: "key-to-update-fail",
+				},
+				{ headers },
+			);
+			const keyId = createRes.data!.id;
+
+			// Admin tries to update it but is unauthorized
+			authorizeReference.mockResolvedValueOnce(false);
+			const updateRes = await client.apiKey.update(
+				{
+					keyId: keyId,
+					name: "updated-fail",
+				},
+				{ headers: adminHeaders },
+			);
+
+			expect(updateRes.error).toBeDefined();
+			expect(updateRes.error?.code).toBe("UNAUTHORIZED_REFERENCE");
+		});
+
+		it("should allow admin to delete key by referenceId even if not owner", async () => {
+			authorizeReference.mockResolvedValue(true);
+			// Owner creates a key
+			const createRes = await client.apiKey.create(
+				{
+					referenceId: orgId,
+					name: "key-to-delete",
+				},
+				{ headers },
+			);
+			const keyId = createRes.data!.id;
+
+			// Admin tries to delete it
+			const deleteRes = await client.apiKey.delete(
+				{
+					keyId: keyId,
+				},
+				{ headers: adminHeaders },
+			);
+
+			expect(deleteRes.data).toBeDefined();
+			expect(deleteRes.data?.success).toBe(true);
+
+			// Verify deletion
+			const getRes = await client.apiKey.get(
+				{
+					query: {
+						id: keyId,
+					},
+				},
+				{ headers },
+			);
+			expect(getRes.error).toBeDefined();
+			expect(getRes.error?.code).toBe("KEY_NOT_FOUND");
+		});
+
+		it("should fail to delete key if not authorized for referenceId", async () => {
+			authorizeReference.mockResolvedValue(true);
+			// Owner creates a key
+			const createRes = await client.apiKey.create(
+				{
+					referenceId: orgId,
+					name: "key-to-delete-fail",
+				},
+				{ headers },
+			);
+			const keyId = createRes.data!.id;
+
+			// Admin tries to delete it but is unauthorized
+			authorizeReference.mockResolvedValueOnce(false);
+			const deleteRes = await client.apiKey.delete(
+				{
+					keyId: keyId,
+				},
+				{ headers: adminHeaders },
+			);
+
+			expect(deleteRes.error).toBeDefined();
+			expect(deleteRes.error?.code).toBe("UNAUTHORIZED_REFERENCE");
+		});
+	});
 });

@@ -1,11 +1,21 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { APIError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils";
+import * as z from "zod";
 import { sessionMiddleware } from "../../../api";
+import { API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import { listApiKeys as listApiKeysFromStorage } from "../adapter";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
+
+const listApiKeysQuerySchema = z
+	.object({
+		referenceId: z.string().optional(),
+	})
+	.optional();
+
 export function listApiKeys({
 	opts,
 	schema,
@@ -22,6 +32,7 @@ export function listApiKeys({
 		"/api-key/list",
 		{
 			method: "GET",
+			query: listApiKeysQuerySchema,
 			use: [sessionMiddleware],
 			metadata: {
 				openapi: {
@@ -60,6 +71,11 @@ export function listApiKeys({
 												userId: {
 													type: "string",
 													description: "The owner of the user id",
+												},
+												referenceId: {
+													type: "string",
+													nullable: true,
+													description: "The reference id of the key",
 												},
 												refillInterval: {
 													type: "number",
@@ -165,9 +181,42 @@ export function listApiKeys({
 		},
 		async (ctx) => {
 			const session = ctx.context.session;
+			const { referenceId } = ctx.query || {};
+
+			if (referenceId && referenceId !== session.user.id) {
+				if (!opts.authorizeReference) {
+					throw APIError.from(
+						"UNAUTHORIZED",
+						ERROR_CODES.UNAUTHORIZED_REFERENCE,
+					);
+				}
+				const authorized = await opts.authorizeReference(
+					{
+						user: session.user,
+						session: session.session,
+						referenceId,
+					},
+					ctx,
+				);
+				if (!authorized) {
+					throw APIError.from(
+						"UNAUTHORIZED",
+						ERROR_CODES.UNAUTHORIZED_REFERENCE,
+					);
+				}
+			}
+
 			let apiKeys: ApiKey[];
 
-			apiKeys = await listApiKeysFromStorage(ctx, session.user.id, opts);
+			if (referenceId) {
+				apiKeys = await listApiKeysFromStorage(ctx, { referenceId }, opts);
+			} else {
+				apiKeys = await listApiKeysFromStorage(
+					ctx,
+					{ userId: session.user.id },
+					opts,
+				);
+			}
 
 			deleteAllExpiredApiKeys(ctx.context);
 			apiKeys = apiKeys.map((apiKey) => {

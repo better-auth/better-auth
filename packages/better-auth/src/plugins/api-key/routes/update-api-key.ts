@@ -296,13 +296,41 @@ export function updateApiKey({
 
 			apiKey = await getApiKeyById(ctx, keyId, opts);
 
-			// Verify ownership
-			if (apiKey && apiKey.userId !== user.id) {
-				apiKey = null;
-			}
-
 			if (!apiKey) {
 				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
+			}
+
+			// Verify ownership
+			if (apiKey.userId !== user.id) {
+				if (!apiKey.referenceId) {
+					throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
+				}
+
+				if (!opts.authorizeReference) {
+					throw APIError.from(
+						"UNAUTHORIZED",
+						ERROR_CODES.UNAUTHORIZED_REFERENCE,
+					);
+				}
+
+				// if the request is from the server, we can skip the authorization check
+				// since the server is always authorized.
+				if (session) {
+					const authorized = await opts.authorizeReference(
+						{
+							user: session.user,
+							session: session.session,
+							referenceId: apiKey.referenceId,
+						},
+						ctx,
+					);
+					if (!authorized) {
+						throw APIError.from(
+							"UNAUTHORIZED",
+							ERROR_CODES.UNAUTHORIZED_REFERENCE,
+						);
+					}
+				}
 			}
 
 			let newValues: Partial<ApiKey> = {};

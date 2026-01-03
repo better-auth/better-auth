@@ -51,7 +51,16 @@ export const apiKeySchema = ({
 				userId: {
 					type: "string",
 					references: { model: "user", field: "id", onDelete: "cascade" },
-					required: true,
+					required: false,
+					input: false,
+					index: true,
+				},
+				/**
+				 * The reference id of the key.
+				 */
+				referenceId: {
+					type: "string",
+					required: false,
 					input: false,
 					index: true,
 				},

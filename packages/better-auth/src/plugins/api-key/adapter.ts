@@ -25,6 +25,13 @@ function getStorageKeyByUserId(userId: string): string {
 }
 
 /**
+ * Generate storage key for reference's API key list
+ */
+function getStorageKeyByReferenceId(referenceId: string): string {
+	return `api-key:by-reference:${referenceId}`;
+}
+
+/**
  * Serialize API key for storage
  */
 function serializeApiKey(apiKey: ApiKey): string {
@@ -137,23 +144,47 @@ async function setApiKeyInStorage(
 	await storage.set(getStorageKeyById(id), serialized, ttl);
 
 	// Update user's API key list
-	const userKey = getStorageKeyByUserId(apiKey.userId);
-	const userListData = await storage.get(userKey);
-	let userIds: string[] = [];
+	if (apiKey.userId) {
+		const userKey = getStorageKeyByUserId(apiKey.userId);
+		const userListData = await storage.get(userKey);
+		let userIds: string[] = [];
 
-	if (userListData && typeof userListData === "string") {
-		try {
-			userIds = JSON.parse(userListData);
-		} catch {
-			userIds = [];
+		if (userListData && typeof userListData === "string") {
+			try {
+				userIds = JSON.parse(userListData);
+			} catch {
+				userIds = [];
+			}
+		} else if (Array.isArray(userListData)) {
+			userIds = userListData;
 		}
-	} else if (Array.isArray(userListData)) {
-		userIds = userListData;
+
+		if (!userIds.includes(id)) {
+			userIds.push(id);
+			await storage.set(userKey, JSON.stringify(userIds));
+		}
 	}
 
-	if (!userIds.includes(id)) {
-		userIds.push(id);
-		await storage.set(userKey, JSON.stringify(userIds));
+	// Update reference's API key list
+	if (apiKey.referenceId) {
+		const referenceKey = getStorageKeyByReferenceId(apiKey.referenceId);
+		const referenceListData = await storage.get(referenceKey);
+		let referenceIds: string[] = [];
+
+		if (referenceListData && typeof referenceListData === "string") {
+			try {
+				referenceIds = JSON.parse(referenceListData);
+			} catch {
+				referenceIds = [];
+			}
+		} else if (Array.isArray(referenceListData)) {
+			referenceIds = referenceListData;
+		}
+
+		if (!referenceIds.includes(id)) {
+			referenceIds.push(id);
+			await storage.set(referenceKey, JSON.stringify(referenceIds));
+		}
 	}
 }
 
@@ -176,25 +207,51 @@ async function deleteApiKeyFromStorage(
 	await storage.delete(getStorageKeyById(id));
 
 	// Update user's API key list
-	const userKey = getStorageKeyByUserId(userId);
-	const userListData = await storage.get(userKey);
-	let userIds: string[] = [];
+	if (userId) {
+		const userKey = getStorageKeyByUserId(userId);
+		const userListData = await storage.get(userKey);
+		let userIds: string[] = [];
 
-	if (userListData && typeof userListData === "string") {
-		try {
-			userIds = JSON.parse(userListData);
-		} catch {
-			userIds = [];
+		if (userListData && typeof userListData === "string") {
+			try {
+				userIds = JSON.parse(userListData);
+			} catch {
+				userIds = [];
+			}
+		} else if (Array.isArray(userListData)) {
+			userIds = userListData;
 		}
-	} else if (Array.isArray(userListData)) {
-		userIds = userListData;
+
+		const filteredIds = userIds.filter((keyId) => keyId !== id);
+		if (filteredIds.length === 0) {
+			await storage.delete(userKey);
+		} else {
+			await storage.set(userKey, JSON.stringify(filteredIds));
+		}
 	}
 
-	const filteredIds = userIds.filter((keyId) => keyId !== id);
-	if (filteredIds.length === 0) {
-		await storage.delete(userKey);
-	} else {
-		await storage.set(userKey, JSON.stringify(filteredIds));
+	// Update reference's API key list
+	if (apiKey.referenceId) {
+		const referenceKey = getStorageKeyByReferenceId(apiKey.referenceId);
+		const referenceListData = await storage.get(referenceKey);
+		let referenceIds: string[] = [];
+
+		if (referenceListData && typeof referenceListData === "string") {
+			try {
+				referenceIds = JSON.parse(referenceListData);
+			} catch {
+				referenceIds = [];
+			}
+		} else if (Array.isArray(referenceListData)) {
+			referenceIds = referenceListData;
+		}
+
+		const filteredReferenceIds = referenceIds.filter((keyId) => keyId !== id);
+		if (filteredReferenceIds.length === 0) {
+			await storage.delete(referenceKey);
+		} else {
+			await storage.set(referenceKey, JSON.stringify(filteredReferenceIds));
+		}
 	}
 }
 
@@ -398,45 +455,64 @@ export async function deleteApiKey(
  */
 export async function listApiKeys(
 	ctx: GenericEndpointContext,
-	userId: string,
+	filter: { userId?: string; referenceId?: string },
 	opts: PredefinedApiKeyOptions,
 ): Promise<ApiKey[]> {
 	const storage = getStorageInstance(ctx, opts);
+	const { userId, referenceId } = filter;
 
 	// Database mode only
 	if (opts.storage === "database") {
+		type ApiKeyWhereCondition = {
+			field: string;
+			value: string;
+		};
+		const where: ApiKeyWhereCondition[] = [];
+
+		if (userId) {
+			where.push({
+				field: "userId",
+				value: userId,
+			});
+		}
+		if (referenceId) {
+			where.push({
+				field: "referenceId",
+				value: referenceId,
+			});
+		}
 		return await ctx.context.adapter.findMany<ApiKey>({
 			model: "apikey",
-			where: [
-				{
-					field: "userId",
-					value: userId,
-				},
-			],
+			where,
 		});
 	}
 
 	// Secondary storage mode with fallback
 	if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
-		const userKey = getStorageKeyByUserId(userId);
+		let storageKey: string | null = null;
+		if (referenceId) {
+			storageKey = getStorageKeyByReferenceId(referenceId);
+		} else if (userId) {
+			storageKey = getStorageKeyByUserId(userId);
+		}
 
-		if (storage) {
-			const userListData = await storage.get(userKey);
-			let userIds: string[] = [];
+		if (storage && storageKey) {
+			const listData = await storage.get(storageKey);
+			let ids: string[] = [];
 
-			if (userListData && typeof userListData === "string") {
+			if (listData && typeof listData === "string") {
 				try {
-					userIds = JSON.parse(userListData);
+					ids = JSON.parse(listData);
 				} catch {
-					userIds = [];
+					ids = [];
 				}
-			} else if (Array.isArray(userListData)) {
-				userIds = userListData;
+			} else if (Array.isArray(listData)) {
+				ids = listData;
 			}
 
-			if (userIds.length > 0) {
+			if (ids.length > 0) {
 				const apiKeys: ApiKey[] = [];
-				for (const id of userIds) {
+				for (const id of ids) {
 					const apiKey = await getApiKeyByIdFromStorage(ctx, id, storage);
 					if (apiKey) {
 						apiKeys.push(apiKey);
@@ -446,27 +522,35 @@ export async function listApiKeys(
 			}
 		}
 		// Fallback to database
+		const where: any[] = [];
+		if (userId) {
+			where.push({
+				field: "userId",
+				value: userId,
+			});
+		}
+		if (referenceId) {
+			where.push({
+				field: "referenceId",
+				value: referenceId,
+			});
+		}
 		const dbKeys = await ctx.context.adapter.findMany<ApiKey>({
 			model: "apikey",
-			where: [
-				{
-					field: "userId",
-					value: userId,
-				},
-			],
+			where,
 		});
 
 		// Populate secondary storage with fetched keys
-		if (storage && dbKeys.length > 0) {
-			const userIds: string[] = [];
+		if (storage && dbKeys.length > 0 && storageKey) {
+			const ids: string[] = [];
 			for (const apiKey of dbKeys) {
 				// Store each key in secondary storage
 				const ttl = calculateTTL(apiKey);
 				await setApiKeyInStorage(ctx, apiKey, storage, ttl);
-				userIds.push(apiKey.id);
+				ids.push(apiKey.id);
 			}
 			// Update user's key list in secondary storage
-			await storage.set(userKey, JSON.stringify(userIds));
+			await storage.set(storageKey, JSON.stringify(ids));
 		}
 
 		return dbKeys;
@@ -478,24 +562,34 @@ export async function listApiKeys(
 			return [];
 		}
 
-		const userKey = getStorageKeyByUserId(userId);
-		const userListData = await storage.get(userKey);
-		let userIds: string[] = [];
+		let storageKey: string | null = null;
+		if (referenceId) {
+			storageKey = getStorageKeyByReferenceId(referenceId);
+		} else if (userId) {
+			storageKey = getStorageKeyByUserId(userId);
+		}
 
-		if (userListData && typeof userListData === "string") {
+		if (!storageKey) {
+			return [];
+		}
+
+		const listData = await storage.get(storageKey);
+		let ids: string[] = [];
+
+		if (listData && typeof listData === "string") {
 			try {
-				userIds = JSON.parse(userListData);
+				ids = JSON.parse(listData);
 			} catch {
 				return [];
 			}
-		} else if (Array.isArray(userListData)) {
-			userIds = userListData;
+		} else if (Array.isArray(listData)) {
+			ids = listData;
 		} else {
 			return [];
 		}
 
 		const apiKeys: ApiKey[] = [];
-		for (const id of userIds) {
+		for (const id of ids) {
 			const apiKey = await getApiKeyByIdFromStorage(ctx, id, storage);
 			if (apiKey) {
 				apiKeys.push(apiKey);
@@ -506,13 +600,21 @@ export async function listApiKeys(
 	}
 
 	// Default fallback
+	const where: any[] = [];
+	if (userId) {
+		where.push({
+			field: "userId",
+			value: userId,
+		});
+	}
+	if (referenceId) {
+		where.push({
+			field: "referenceId",
+			value: referenceId,
+		});
+	}
 	return await ctx.context.adapter.findMany<ApiKey>({
 		model: "apikey",
-		where: [
-			{
-				field: "userId",
-				value: userId,
-			},
-		],
+		where,
 	});
 }

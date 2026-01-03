@@ -32,6 +32,12 @@ const createApiKeyBodySchema = z.object({
 				'User Id of the user that the Api Key belongs to. server-only. Eg: "user-id"',
 		})
 		.optional(),
+	referenceId: z
+		.string()
+		.meta({
+			description: 'Reference Id of the key. Eg: "org-id"',
+		})
+		.optional(),
 	prefix: z
 		.string()
 		.meta({ description: "Prefix of the Api Key" })
@@ -176,6 +182,11 @@ export function createApiKey({
 												type: "string",
 												description: "ID of the user owning the key",
 											},
+											referenceId: {
+												type: "string",
+												nullable: true,
+												description: "Reference ID of the key",
+											},
 											lastRefillAt: {
 												type: "string",
 												format: "date-time",
@@ -279,6 +290,39 @@ export function createApiKey({
 
 			if (!user?.id) {
 				throw APIError.from("UNAUTHORIZED", ERROR_CODES.UNAUTHORIZED_SESSION);
+			}
+
+			let referenceId: string | undefined = undefined;
+			if (opts.authorizeReference) {
+				if (!ctx.body.referenceId) {
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.REFERENCE_ID_REQUIRED);
+				}
+				if (session) {
+					const authorized = await opts.authorizeReference(
+						{
+							user: session.user,
+							session: session.session,
+							referenceId: ctx.body.referenceId,
+						},
+						ctx,
+					);
+					if (!authorized) {
+						throw APIError.from(
+							"UNAUTHORIZED",
+							ERROR_CODES.UNAUTHORIZED_REFERENCE,
+						);
+					}
+				}
+				referenceId = ctx.body.referenceId;
+			} else {
+				if (ctx.body.referenceId) {
+					if (session && ctx.body.referenceId !== session.user.id) {
+						throw APIError.from(
+							"UNAUTHORIZED",
+							ERROR_CODES.UNAUTHORIZED_REFERENCE,
+						);
+					}
+				}
 			}
 
 			if (session && ctx.body.userId && session?.user.id !== ctx.body.userId) {
@@ -407,11 +451,12 @@ export function createApiKey({
 				enabled: true,
 				expiresAt: expiresIn
 					? getDate(expiresIn, "sec")
-					: opts.keyExpiration.defaultExpiresIn
+					: opts.keyExpiration?.defaultExpiresIn
 						? getDate(opts.keyExpiration.defaultExpiresIn, "sec")
 						: null,
 				userId: user.id,
 				lastRefillAt: null,
+				referenceId: referenceId,
 				lastRequest: null,
 				metadata: null,
 				rateLimitMax: rateLimitMax ?? opts.rateLimit.maxRequests ?? null,

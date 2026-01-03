@@ -3,6 +3,7 @@ import type {
 	GenericEndpointContext,
 	HookEndpointContext,
 } from "@better-auth/core";
+import type { Session, User } from "@better-auth/core/db";
 
 import type { InferOptionSchema } from "../../types";
 import type { Statements } from "../access";
@@ -272,6 +273,17 @@ export interface ApiKeyOptions {
 	 * @default false
 	 */
 	deferUpdates?: boolean | undefined;
+	/**
+	 * A custom function to authorize the reference id
+	 */
+	authorizeReference?: (
+		data: {
+			user: User;
+			session: Session;
+			referenceId: string;
+		},
+		ctx: GenericEndpointContext,
+	) => Awaitable<boolean>;
 }
 
 export type ApiKey = {
@@ -299,7 +311,11 @@ export type ApiKey = {
 	/**
 	 * The owner of the user id
 	 */
-	userId: string;
+	userId?: string;
+	/**
+	 * The reference id of the key.
+	 */
+	referenceId?: string;
 	/**
 	 * The interval in milliseconds between refills of the `remaining` count
 	 *
