@@ -147,8 +147,11 @@ Better Auth provides pre-configured helper functions for popular OAuth providers
 ```ts title="auth.ts"
 import { betterAuth } from 'better-auth';
 import {
+	// genericOAuth plugin
 	genericOAuth,
+	// providers
 	auth0,
+	gumroad,
 	hubspot,
 	keycloak,
 	line,
@@ -166,6 +169,10 @@ export const auth = betterAuth({
 					clientId: process.env.AUTH0_CLIENT_ID,
 					clientSecret: process.env.AUTH0_CLIENT_SECRET,
 					domain: process.env.AUTH0_DOMAIN,
+				}),
+				gumroad({
+					clientId: process.env.GUMROAD_CLIENT_ID,
+					clientSecret: process.env.GUMROAD_CLIENT_SECRET,
 				}),
 				hubspot({
 					clientId: process.env.HUBSPOT_CLIENT_ID,
