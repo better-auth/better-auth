@@ -5,7 +5,19 @@
  *
  * @example
  * ```ts
- * import { genericOAuth, okta, auth0, microsoftEntraId, slack, keycloak, line, hubspot, gumroad } from "better-auth/plugins/generic-oauth";
+ * import { betterAuth } from 'better-auth';
+ * import {
+ *  genericOAuth,
+ *  auth0,
+ *  gumroad,
+ *  hubspot,
+ *  keycloak,
+ *  line,
+ *  microsoftEntraId,
+ *  okta,
+ *  slack,
+ *  patreon,
+ * } from 'better-auth/plugins';
  *
  * export const auth = betterAuth({
  *   plugins: [
