@@ -17,14 +17,13 @@ export async function handleOAuthUserInfo(
 		isTrustedProvider?: boolean | undefined;
 	},
 ) {
-	const { userInfo, account, callbackURL, disableSignUp, overrideUserInfo } =
-		opts;
+	const { account, callbackURL, disableSignUp, overrideUserInfo } = opts;
+	const userInfo = {
+		...opts.userInfo,
+		email: opts.userInfo.email.toLowerCase(),
+	};
 	const dbUser = await c.context.internalAdapter
-		.findOAuthUser(
-			userInfo.email.toLowerCase(),
-			account.accountId,
-			account.providerId,
-		)
+		.findOAuthUser(userInfo.email, account.accountId, account.providerId)
 		.catch((e) => {
 			logger.error(
 				"Better auth was unable to query your database.\nError: ",
@@ -86,7 +85,7 @@ export async function handleOAuthUserInfo(
 			if (
 				userInfo.emailVerified &&
 				!dbUser.user.emailVerified &&
-				userInfo.email.toLowerCase() === dbUser.user.email
+				userInfo.email === dbUser.user.email
 			) {
 				await c.context.internalAdapter.updateUser(dbUser.user.id, {
 					emailVerified: true,
@@ -122,7 +121,7 @@ export async function handleOAuthUserInfo(
 			if (
 				userInfo.emailVerified &&
 				!dbUser.user.emailVerified &&
-				userInfo.email.toLowerCase() === dbUser.user.email
+				userInfo.email === dbUser.user.email
 			) {
 				await c.context.internalAdapter.updateUser(dbUser.user.id, {
 					emailVerified: true,
@@ -134,9 +133,9 @@ export async function handleOAuthUserInfo(
 			// update user info from the provider if overrideUserInfo is true
 			user = await c.context.internalAdapter.updateUser(dbUser.user.id, {
 				...restUserInfo,
-				email: userInfo.email.toLowerCase(),
+				email: userInfo.email,
 				emailVerified:
-					userInfo.email.toLowerCase() === dbUser.user.email
+					userInfo.email === dbUser.user.email
 						? dbUser.user.emailVerified || userInfo.emailVerified
 						: userInfo.emailVerified,
 			});
@@ -165,7 +164,7 @@ export async function handleOAuthUserInfo(
 				await c.context.internalAdapter.createOAuthUser(
 					{
 						...restUserInfo,
-						email: userInfo.email.toLowerCase(),
+						email: userInfo.email,
 					},
 					accountData,
 				);
