@@ -597,6 +597,7 @@ export default async function DashboardPage() {
   const { user } = await withAuth({ ensureSignedIn: true });
 
 return (
+
 <div>
 <p>Welcome {user.firstName && `, ${user.lastName}`}</p>
 </div>
@@ -651,6 +652,7 @@ return <div>Loading...</div>;
 }
 
 return (
+
 <div>
 <p>Welcome {user.firstName && `, ${user.lastName}`}</p>
 </div>

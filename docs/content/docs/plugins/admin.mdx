@@ -504,8 +504,9 @@ The plugin provides an easy way to define your own set of permissions for each r
         project: ["create"], // [!code highlight]
     }); // [!code highlight]
 
-export const admin = ac.newRole({ // [!code highlight]
-project: ["create", "update"], // [!code highlight]
+export const admin = ac.newRole({
+	// [!code highlight]
+	project: ['create', 'update'], // [!code highlight]
 }); // [!code highlight]
 
     export const myCustomRole = ac.newRole({ // [!code highlight]
