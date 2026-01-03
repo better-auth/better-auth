@@ -431,10 +431,12 @@ Now you can access the additional fields in your application logic.
 ```ts
 //on signup
 const res = await auth.api.signUpEmail({
-	email: 'test@example.com',
-	password: 'password',
-	name: 'John Doe',
-	lang: 'fr',
+	body: {
+		email: 'test@example.com',
+		password: 'password',
+		name: 'John Doe',
+		lang: 'fr',
+	},
 });
 
 //user object
