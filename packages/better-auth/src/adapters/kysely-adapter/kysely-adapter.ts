@@ -17,6 +17,13 @@ import type {
 import { sql } from "kysely";
 import type { KyselyDatabaseType } from "./types";
 
+function escapeLikePattern(value: string): string {
+	return value
+		.replace(/\\/g, "\\\\") // Escape backslashes first
+		.replace(/%/g, "\\%") // Escape percent signs
+		.replace(/_/g, "\\_"); // Escape underscores
+}
+
 interface KyselyAdapterConfig {
 	/**
 	 * Database type.
@@ -174,15 +181,18 @@ export const kyselyAdapter = (
 						}
 
 						if (operator === "contains") {
-							return eb(f, "like", `%${value}%`);
+							const escaped = escapeLikePattern(String(value));
+							return sql`${sql.ref(f)} LIKE ${`%${escaped}%`} ESCAPE '\\'`;
 						}
 
 						if (operator === "starts_with") {
-							return eb(f, "like", `${value}%`);
+							const escaped = escapeLikePattern(String(value));
+							return sql`${sql.ref(f)} LIKE ${`${escaped}%`} ESCAPE '\\'`;
 						}
 
 						if (operator === "ends_with") {
-							return eb(f, "like", `%${value}`);
+							const escaped = escapeLikePattern(String(value));
+							return sql`${sql.ref(f)} LIKE ${`%${escaped}`} ESCAPE '\\'`;
 						}
 
 						if (operator === "eq") {

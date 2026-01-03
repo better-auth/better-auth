@@ -19,7 +19,6 @@ import {
 	gt,
 	gte,
 	inArray,
-	like,
 	lt,
 	lte,
 	ne,
@@ -30,6 +29,17 @@ import {
 
 export interface DB {
 	[key: string]: any;
+}
+
+function escapeLikePattern(value: string): string {
+	return value
+		.replace(/\\/g, "\\\\") // Escape backslashes first
+		.replace(/%/g, "\\%") // Escape percent signs
+		.replace(/_/g, "\\_"); // Escape underscores
+}
+
+function likeWithEscape(column: any, pattern: string): SQL<unknown> {
+	return sql`${column} LIKE ${pattern} ESCAPE '\\'`;
 }
 
 export interface DrizzleAdapterConfig {
@@ -195,15 +205,18 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					}
 
 					if (w.operator === "contains") {
-						return [like(schemaModel[field], `%${w.value}%`)];
+						const escaped = escapeLikePattern(String(w.value));
+						return [likeWithEscape(schemaModel[field], `%${escaped}%`)];
 					}
 
 					if (w.operator === "starts_with") {
-						return [like(schemaModel[field], `${w.value}%`)];
+						const escaped = escapeLikePattern(String(w.value));
+						return [likeWithEscape(schemaModel[field], `${escaped}%`)];
 					}
 
 					if (w.operator === "ends_with") {
-						return [like(schemaModel[field], `%${w.value}`)];
+						const escaped = escapeLikePattern(String(w.value));
+						return [likeWithEscape(schemaModel[field], `%${escaped}`)];
 					}
 
 					if (w.operator === "lt") {
@@ -253,13 +266,16 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							return notInArray(schemaModel[field], w.value);
 						}
 						if (w.operator === "contains") {
-							return like(schemaModel[field], `%${w.value}%`);
+							const escaped = escapeLikePattern(String(w.value));
+							return likeWithEscape(schemaModel[field], `%${escaped}%`);
 						}
 						if (w.operator === "starts_with") {
-							return like(schemaModel[field], `${w.value}%`);
+							const escaped = escapeLikePattern(String(w.value));
+							return likeWithEscape(schemaModel[field], `${escaped}%`);
 						}
 						if (w.operator === "ends_with") {
-							return like(schemaModel[field], `%${w.value}`);
+							const escaped = escapeLikePattern(String(w.value));
+							return likeWithEscape(schemaModel[field], `%${escaped}`);
 						}
 						if (w.operator === "lt") {
 							return lt(schemaModel[field], w.value);
@@ -299,13 +315,16 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							return notInArray(schemaModel[field], w.value);
 						}
 						if (w.operator === "contains") {
-							return like(schemaModel[field], `%${w.value}%`);
+							const escaped = escapeLikePattern(String(w.value));
+							return likeWithEscape(schemaModel[field], `%${escaped}%`);
 						}
 						if (w.operator === "starts_with") {
-							return like(schemaModel[field], `${w.value}%`);
+							const escaped = escapeLikePattern(String(w.value));
+							return likeWithEscape(schemaModel[field], `${escaped}%`);
 						}
 						if (w.operator === "ends_with") {
-							return like(schemaModel[field], `%${w.value}`);
+							const escaped = escapeLikePattern(String(w.value));
+							return likeWithEscape(schemaModel[field], `%${escaped}`);
 						}
 						if (w.operator === "lt") {
 							return lt(schemaModel[field], w.value);

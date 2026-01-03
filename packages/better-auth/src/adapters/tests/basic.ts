@@ -1377,6 +1377,172 @@ export const getNormalTestSuiteTests = (
 			expect(result[0]!.id).toBe(literalRegexUser.id);
 			expect(result[0]!.name.includes(".*")).toBe(true);
 		},
+		"findMany - contains should escape SQL LIKE special character percent":
+			async () => {
+				// Create a user whose name literally contains the % character
+				const userTemplate = await generate("user");
+				const percentUser = await adapter.create<User>({
+					model: "user",
+					data: {
+						...userTemplate,
+						name: "user%test",
+					},
+					forceAllowId: true,
+				});
+
+				// Create other users that should NOT match when searching for %
+				await adapter.create<User>({
+					model: "user",
+					data: {
+						...(await generate("user")),
+						name: "normaluser",
+					},
+					forceAllowId: true,
+				});
+
+				const result = await adapter.findMany<User>({
+					model: "user",
+					where: [{ field: "name", value: "%", operator: "contains" }],
+				});
+
+				// Should only match the literal % character, not treat it as a wildcard
+				expect(result.length).toBe(1);
+				expect(result[0]!.id).toBe(percentUser.id);
+				expect(result[0]!.name.includes("%")).toBe(true);
+			},
+		"findMany - starts_with should escape SQL LIKE special character percent":
+			async () => {
+				// Create a user whose name starts with %
+				const userTemplate = await generate("user");
+				const percentUser = await adapter.create<User>({
+					model: "user",
+					data: {
+						...userTemplate,
+						name: "%admin",
+					},
+					forceAllowId: true,
+				});
+
+				// Create other users that should NOT match
+				await adapter.create<User>({
+					model: "user",
+					data: {
+						...(await generate("user")),
+						name: "admin",
+					},
+					forceAllowId: true,
+				});
+
+				const result = await adapter.findMany<User>({
+					model: "user",
+					where: [{ field: "name", value: "%", operator: "starts_with" }],
+				});
+
+				// Should only match names literally starting with %
+				expect(result.length).toBe(1);
+				expect(result[0]!.id).toBe(percentUser.id);
+				expect(result[0]!.name.startsWith("%")).toBe(true);
+			},
+		"findMany - ends_with should escape SQL LIKE special character percent":
+			async () => {
+				// Create a user whose name ends with %
+				const userTemplate = await generate("user");
+				const percentUser = await adapter.create<User>({
+					model: "user",
+					data: {
+						...userTemplate,
+						name: "discount100%",
+					},
+					forceAllowId: true,
+				});
+
+				// Create other users that should NOT match
+				await adapter.create<User>({
+					model: "user",
+					data: {
+						...(await generate("user")),
+						name: "discount100",
+					},
+					forceAllowId: true,
+				});
+
+				const result = await adapter.findMany<User>({
+					model: "user",
+					where: [{ field: "name", value: "%", operator: "ends_with" }],
+				});
+
+				// Should only match names literally ending with %
+				expect(result.length).toBe(1);
+				expect(result[0]!.id).toBe(percentUser.id);
+				expect(result[0]!.name.endsWith("%")).toBe(true);
+			},
+		"findMany - contains should escape SQL LIKE special character underscore":
+			async () => {
+				// Create a user whose name contains the _ character
+				const userTemplate = await generate("user");
+				const underscoreUser = await adapter.create<User>({
+					model: "user",
+					data: {
+						...userTemplate,
+						name: "user_name",
+					},
+					forceAllowId: true,
+				});
+
+				// Create other users that should NOT match when searching for _
+				// Note: without escaping, _ would match any single character
+				await adapter.create<User>({
+					model: "user",
+					data: {
+						...(await generate("user")),
+						name: "username", // no underscore - should not match
+					},
+					forceAllowId: true,
+				});
+
+				const result = await adapter.findMany<User>({
+					model: "user",
+					where: [{ field: "name", value: "_", operator: "contains" }],
+				});
+
+				// Should only match the literal _ character, not any single character
+				expect(result.length).toBe(1);
+				expect(result[0]!.id).toBe(underscoreUser.id);
+				expect(result[0]!.name.includes("_")).toBe(true);
+			},
+		"findMany - contains should escape SQL LIKE special character backslash":
+			async () => {
+				// Create a user whose name contains the \ character
+				const userTemplate = await generate("user");
+				const backslashUser = await adapter.create<User>({
+					model: "user",
+					data: {
+						...userTemplate,
+						name: "path\\to\\file",
+					},
+					forceAllowId: true,
+				});
+
+				// Create other users that should NOT match
+				await adapter.create<User>({
+					model: "user",
+					data: {
+						...(await generate("user")),
+						name: "pathtofile",
+					},
+					forceAllowId: true,
+				});
+
+				const result = await adapter.findMany<User>({
+					model: "user",
+					where: [{ field: "name", value: "\\", operator: "contains" }],
+				});
+
+				// Should only match the literal \ character
+				expect(result.length).toBe(1);
+				expect(result[0]!.id).toBe(backslashUser.id);
+				expect(result[0]!.name.includes("\\")).toBe(true);
+			},
 		"findMany - should find many models with ends_with operator": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
 			for (const user of users) {
