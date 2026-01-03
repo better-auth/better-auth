@@ -200,24 +200,27 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 					const session = ctx.context.session as AnonymousSession;
 
 					if (options?.disableDeleteAnonymousUser) {
-						throw new APIError("BAD_REQUEST", {
-							message: ANONYMOUS_ERROR_CODES.DELETE_ANONYMOUS_USER_DISABLED,
-						});
+						throw APIError.from(
+							"BAD_REQUEST",
+							ANONYMOUS_ERROR_CODES.DELETE_ANONYMOUS_USER_DISABLED,
+						);
 					}
 
 					if (!session.user.isAnonymous) {
-						throw new APIError("FORBIDDEN", {
-							message: ANONYMOUS_ERROR_CODES.USER_IS_NOT_ANONYMOUS,
-						});
+						throw APIError.from(
+							"FORBIDDEN",
+							ANONYMOUS_ERROR_CODES.USER_IS_NOT_ANONYMOUS,
+						);
 					}
 
 					try {
 						await ctx.context.internalAdapter.deleteUser(session.user.id);
 					} catch (error) {
 						ctx.context.logger.error("Failed to delete anonymous user", error);
-						throw new APIError("INTERNAL_SERVER_ERROR", {
-							message: ANONYMOUS_ERROR_CODES.FAILED_TO_DELETE_ANONYMOUS_USER,
-						});
+						throw APIError.from(
+							"INTERNAL_SERVER_ERROR",
+							ANONYMOUS_ERROR_CODES.FAILED_TO_DELETE_ANONYMOUS_USER,
+						);
 					}
 					deleteSessionCookie(ctx);
 					return ctx.json({ success: true });
