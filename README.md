@@ -36,7 +36,7 @@ Authentication in the TypeScript ecosystem is a half-solved problem. Other open-
 
 ## Contribution
 
-Better Auth is free and open source project licensed under the [MIT License](./LICENSE.md). You are free to do whatever you want with it.
+Better Auth is a free and open source project licensed under the [MIT License](./LICENSE.md). You are free to do whatever you want with it.
 
 You could help continuing its development by:
 
