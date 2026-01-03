@@ -71,12 +71,14 @@ function contentToPageTree(content: Content): PageTree.Folder {
 					url: content.href,
 				}
 			: undefined,
-		children: content.list.map((item) => ({
-			type: "page",
-			url: item.href,
-			name: item.title,
-			icon: <item.icon />,
-		})),
+		children: content.list
+			.filter((item) => !item.group && item.href)
+			.map((item) => ({
+				type: "page",
+				url: item.href,
+				name: item.title,
+				icon: <item.icon />,
+			})),
 	};
 }
 
