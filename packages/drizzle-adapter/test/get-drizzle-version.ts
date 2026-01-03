@@ -1,7 +1,7 @@
 import { execSync } from "node:child_process";
 
-export const getDrizzleVersion = async () => {
-	const version = execSync("npx drizzle-kit --version", {
+export const getDrizzleVersion = async (beta: boolean = false) => {
+	const version = execSync(`npx drizzle-kit@${beta} --version`, {
 		cwd: import.meta.dirname,
 		stdio: ["ignore", "pipe", "pipe"],
 	})
