@@ -24,7 +24,7 @@ const client = new OramaClient({
 export function CustomSearchDialog(props: SharedProps) {
 	const { locale } = useI18n();
 	const { search, setSearch, query } = useDocsSearch({
-		type: "orama-cloud",
+		type: "orama-cloud-legacy",
 		client,
 		locale,
 	});
