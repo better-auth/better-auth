@@ -359,9 +359,64 @@ export const auth = betterAuth({
 });
 ```
 
-<Callout>
-  Type inference in your code will still use the original field names (e.g.,
-  `user.name`, not `user.full_name`).
+#### Understanding Field Mapping
+
+The `fields` configuration maps Better Auth's default field names to your database column names. This is a **database-only mapping** - your JavaScript/TypeScript code will always use the original field names for type safety and consistency.
+
+**Example with snake_case database columns:**
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  user: {
+    modelName: "users",
+    fields: {
+      emailVerified: "email_verified",
+      createdAt: "created_at",
+      updatedAt: "updated_at",
+    },
+  },
+  session: {
+    modelName: "sessions",
+    fields: {
+      expiresAt: "expires_at",
+      createdAt: "created_at",
+      updatedAt: "updated_at",
+    },
+  },
+});
+```
+
+**Database Schema (what gets created):**
+
+```sql
+CREATE TABLE users (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL,
+  email_verified BOOLEAN,  -- mapped from emailVerified
+  created_at TIMESTAMP,    -- mapped from createdAt
+  updated_at TIMESTAMP,    -- mapped from updatedAt
+  ...
+);
+```
+
+**In your application code (always use original names):**
+
+```ts title="middleware.ts"
+// ✅ Correct - use original field names
+const session = await auth.api.getSession({ headers });
+if (session?.user) {
+  console.log(session.user.emailVerified);  // Use camelCase
+  console.log(session.user.createdAt);
+  console.log(session.user.updatedAt);
+}
+
+// ❌ Wrong - these properties don't exist in JavaScript
+console.log(session.user.email_verified);  // undefined
+console.log(session.user.created_at);      // undefined
+```
+
+<Callout type="info">
+  **Why this design?** Field mapping only affects database column names, keeping your TypeScript code consistent with camelCase conventions while allowing snake_case or other naming conventions in your database. This ensures type safety and prevents breaking changes when migrating existing databases.
 </Callout>
 
 To customize table names and column name for plugins, you can use the `schema` property in the plugin config:
