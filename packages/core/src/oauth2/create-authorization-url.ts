@@ -1,3 +1,4 @@
+import type { AwaitableFunction } from "../types";
 import type { ProviderOptions } from "./index";
 import { generateCodeChallenge } from "./utils";
 
@@ -22,7 +23,7 @@ export async function createAuthorizationURL({
 	scopeJoiner,
 }: {
 	id: string;
-	options: ProviderOptions;
+	options: AwaitableFunction<ProviderOptions>;
 	redirectURI: string;
 	authorizationEndpoint: string;
 	state: string;
@@ -41,6 +42,7 @@ export async function createAuthorizationURL({
 	scopeJoiner?: string | undefined;
 }) {
 	const url = new URL(authorizationEndpoint);
+	options = typeof options === "function" ? await options() : options;
 	url.searchParams.set("response_type", responseType || "code");
 	const primaryClientId = Array.isArray(options.clientId)
 		? options.clientId[0]

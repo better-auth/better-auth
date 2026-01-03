@@ -2,6 +2,7 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { safeJSONParse } from "@better-auth/core/utils";
 import * as z from "zod";
+import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
@@ -106,9 +107,10 @@ export const callbackOAuth = createAuthEndpoint(
 			c.context.logger.error("Code not found");
 			throw redirectOnError("no_code");
 		}
-		const provider = c.context.socialProviders.find(
-			(p) => p.id === c.params.id,
-		);
+
+		const provider = await getAwaitableValue(c.context.socialProviders, {
+			value: c.params.id,
+		});
 
 		if (!provider) {
 			c.context.logger.error(
