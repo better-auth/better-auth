@@ -749,4 +749,45 @@ describe("siwe", async (it) => {
 		expect(polygonRecord?.isPrimary).toBe(false); // Second address is not primary
 		expect(ethereumRecord?.userId).toBe(polygonRecord?.userId); // Same user ID
 	});
+
+	it("should set lastLoginMethod to 'siwe' after successful verification", async () => {
+		const { client, auth } = await getTestInstance(
+			{
+				plugins: [
+					siwe({
+						domain,
+						async getNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifyMessage() {
+							return true;
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [siweClient()] } },
+		);
+
+		await client.siwe.nonce({ walletAddress, chainId });
+
+		const result = await client.siwe.verify({
+			message: "valid_message",
+			signature: "valid_signature",
+			walletAddress,
+			chainId,
+		});
+
+		expect(result.error).toBeNull();
+		expect(result.data?.success).toBe(true);
+
+		const context = await auth.$context;
+
+		const user = await context.adapter.findOne({
+			model: "user",
+			where: [{ field: "id", operator: "eq", value: result.data!.user.id }],
+		});
+
+		expect(user).toBeDefined();
+		expect((user as any).lastLoginMethod).toBe("siwe");
+	});
 });
