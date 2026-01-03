@@ -19,9 +19,9 @@ description: Notion provider setup and usage.
         ### Configure the provider
         To configure the provider, you need to pass the `clientId` and `clientSecret` to `socialProviders.notion` in your auth configuration.
 
-        ```ts title="auth.ts"   
+        ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
-        
+
         export const auth = betterAuth({
             socialProviders: {
                 notion: { // [!code highlight]
@@ -32,6 +32,7 @@ description: Notion provider setup and usage.
         })
         ```
     </Step>
+
 </Steps>
 
 ## Usage
@@ -39,17 +40,18 @@ description: Notion provider setup and usage.
 ### Sign In with Notion
 
 To sign in with Notion, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
+
 - `provider`: The provider to use. It should be set to `notion`.
 
-```ts title="auth-client.ts"  
-import { createAuthClient } from "better-auth/client"
-const authClient =  createAuthClient()
+```ts title="auth-client.ts"
+import { createAuthClient } from 'better-auth/client';
+const authClient = createAuthClient();
 
 const signIn = async () => {
-    const data = await authClient.signIn.social({
-        provider: "notion"
-    })
-}
+	const data = await authClient.signIn.social({
+		provider: 'notion',
+	});
+};
 ```
 
 ### Notion Integration Types
@@ -78,5 +80,7 @@ return <button onClick={requestNotionAccess}>Connect Notion Workspace</button>;
 ```
 
 <Callout>
-After authentication, you can use the access token to interact with the Notion API to read and write pages, databases, and other content that the user has granted access to.
+	After authentication, you can use the access token to interact with the Notion
+	API to read and write pages, databases, and other content that the user has
+	granted access to.
 </Callout>

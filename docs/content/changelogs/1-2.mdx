@@ -23,24 +23,27 @@ npm install @better-auth/stripe
 ```
 
 ```ts title="auth.ts"
-import { stripe } from "@better-auth/stripe"; // [!code highlight]
+import { stripe } from '@better-auth/stripe'; // [!code highlight]
 
 export const auth = betterAuth({
-  plugins: [
-    stripe({
-      // [!code highlight]
-      createCustomerOnSignup: true, // [!code highlight]
-      subscription: { // [!code highlight]
-        enabled: true, // [!code highlight]
-        plans: [// [!code highlight]
-          { // [!code highlight]
-            name: "pro", // [!code highlight]
-            priceId: "price_1234567890", // [!code highlight]
-          }, // [!code highlight]
-        ], // [!code highlight]
-      }, // [!code highlight]
-    }), // [!code highlight]
-  ],
+	plugins: [
+		stripe({
+			// [!code highlight]
+			createCustomerOnSignup: true, // [!code highlight]
+			subscription: {
+				// [!code highlight]
+				enabled: true, // [!code highlight]
+				plans: [
+					// [!code highlight]
+					{
+						// [!code highlight]
+						name: 'pro', // [!code highlight]
+						priceId: 'price_1234567890', // [!code highlight]
+					}, // [!code highlight]
+				], // [!code highlight]
+			}, // [!code highlight]
+		}), // [!code highlight]
+	],
 });
 ```
 
@@ -51,17 +54,17 @@ Read the [Stripe Plugin docs](/docs/plugins/stripe) for more information.
 Protect your authentication flows with Google reCAPTCHA and Cloudflare Turnstile. Works for signup, signin, and password resets.
 
 ```ts title="auth.ts"
-import { captcha } from "better-auth/plugins";
+import { captcha } from 'better-auth/plugins';
 
 const auth = betterAuth({
-  plugins: [
-    // [!code highlight]
-    captcha({
-      // [!code highlight]
-      provider: "cloudflare-turnstile", // or "google-recaptcha" // [!code highlight]
-      secretKey: process.env.TURNSTILE_SECRET_KEY!, // [!code highlight]
-    }), // [!code highlight]
-  ], // [!code highlight]
+	plugins: [
+		// [!code highlight]
+		captcha({
+			// [!code highlight]
+			provider: 'cloudflare-turnstile', // or "google-recaptcha" // [!code highlight]
+			secretKey: process.env.TURNSTILE_SECRET_KEY!, // [!code highlight]
+		}), // [!code highlight]
+	], // [!code highlight]
 });
 ```
 
@@ -72,10 +75,10 @@ Read the [Captcha Plugin docs](/docs/plugins/captcha) for more information.
 Generate and manage API keys with rate limiting, expiration, and metadata. Supports session creation from API keys.
 
 ```ts title="auth.ts"
-import { apiKey } from "better-auth/plugins";
+import { apiKey } from 'better-auth/plugins';
 
 const auth = betterAuth({
-  plugins: [apiKey()],
+	plugins: [apiKey()],
 });
 ```
 
@@ -87,13 +90,13 @@ Organizations can now have teams or sub-organizations under them.
 
 ```ts title="auth.ts"
 const auth = betterAuth({
-  plugins: [
-    organization({
-      teams: {
-        enabled: true,
-      },
-    }),
-  ],
+	plugins: [
+		organization({
+			teams: {
+				enabled: true,
+			},
+		}),
+	],
 });
 ```
 
@@ -113,8 +116,8 @@ npx @better-auth/cli init
 - Built-in validation.
 
 <Callout type="info">
-  If you're using the Username plugin, make sure to add the `displayName` field
-  to your schema.
+	If you're using the Username plugin, make sure to add the `displayName` field
+	to your schema.
 </Callout>
 
 ### **Organization**

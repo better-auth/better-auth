@@ -2,7 +2,6 @@
 
 Better Auth comes with a built-in CLI to help you manage the database schema needed for both core functionality and plugins.
 
-
 ### **Init**
 
 The CLI includes an `init` command to add Better Auth to your project.
@@ -34,7 +33,6 @@ The CLI also provides a way to generate a secret key for your Better Auth instan
 ```bash title="terminal"
 npx @better-auth/cli@latest secret
 ```
-
 
 ## License
 
