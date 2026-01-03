@@ -362,6 +362,240 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
         ],
       },
     },
+    "/callback/{id}": {
+      "get": {
+        "description": undefined,
+        "operationId": undefined,
+        "parameters": [],
+        "responses": {
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "message",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "message",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Unauthorized. Due to missing or invalid authentication.",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Not Found. The requested resource was not found.",
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+          },
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+          },
+        ],
+        "tags": [
+          "Default",
+        ],
+      },
+      "post": {
+        "description": undefined,
+        "operationId": undefined,
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object",
+              },
+            },
+          },
+        },
+        "responses": {
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "message",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "message",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Unauthorized. Due to missing or invalid authentication.",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Not Found. The requested resource was not found.",
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+          },
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+          },
+        ],
+        "tags": [
+          "Default",
+        ],
+      },
+    },
     "/change-email": {
       "post": {
         "description": undefined,
@@ -1374,6 +1608,150 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
         "description": "Get the current session",
         "operationId": "getSession",
         "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "nullable": true,
+                  "properties": {
+                    "session": {
+                      "$ref": "#/components/schemas/Session",
+                    },
+                    "user": {
+                      "$ref": "#/components/schemas/User",
+                    },
+                  },
+                  "required": [
+                    "session",
+                    "user",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "message",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "message",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Unauthorized. Due to missing or invalid authentication.",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Not Found. The requested resource was not found.",
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+          },
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+          },
+        ],
+        "tags": [
+          "Default",
+        ],
+      },
+      "post": {
+        "description": "Get the current session",
+        "operationId": "getSession",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object",
+              },
+            },
+          },
+        },
         "responses": {
           "200": {
             "content": {
