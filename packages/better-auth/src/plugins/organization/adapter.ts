@@ -558,7 +558,10 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				return [];
 			}
 
-			const organizations = result.map((member) => member.organization);
+			const organizations = result.map((member) => ({
+				...member.organization,
+				role: member.role,
+			}));
 
 			return organizations;
 		},

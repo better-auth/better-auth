@@ -185,14 +185,11 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 			},
 		}),
 		getAtoms: ($fetch) => {
-			const listOrganizations = useAuthQuery<InferOrganization<CO, false>[]>(
-				$listOrg,
-				"/organization/list",
-				$fetch,
-				{
-					method: "GET",
-				},
-			);
+			const listOrganizations = useAuthQuery<
+				(InferOrganization<CO, false> & { role?: string })[]
+			>($listOrg, "/organization/list", $fetch, {
+				method: "GET",
+			});
 			const activeOrganization = useAuthQuery<
 				Prettify<
 					InferOrganization<CO, false> & {
