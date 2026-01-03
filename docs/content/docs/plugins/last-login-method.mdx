@@ -61,6 +61,15 @@ const wasGoogle = authClient.isLastUsedLoginMethod("google")
 authClient.clearLastUsedLoginMethod()
 ```
 
+<Tabs items={[ "nuxt"
+ ]} defaultValue="nuxt">
+    <Tab value="nuxt">
+    In Nuxt applications with SSR enabled, calling `getLastUsedLoginMethod()` during server rendering may cause hydration mismatches.  
+To avoid layout shifts, read the value directly from the cookie using
+`useCookie('better-auth.last_used_login_method')` (the default cookie name).
+    </Tab>
+</Tabs>
+
 ### UI Integration Example
 
 Here's how to use the plugin to enhance your login page:
