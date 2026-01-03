@@ -139,3 +139,32 @@ test("should login with google successfully", async () => {
 		invitedBy: "user-123",
 	});
 });
+
+test("should use custom authorizationEndpoint when provided", async () => {
+	const customAuthEndpoint = "http://localhost:8080/custom-oauth/authorize";
+
+	const { client } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		socialProviders: {
+			google: {
+				clientId: "test-client-id",
+				clientSecret: "test-client-secret",
+				authorizationEndpoint: customAuthEndpoint,
+			},
+		},
+	});
+
+	const signInRes = await client.signIn.social({
+		provider: "google",
+		callbackURL: "/dashboard",
+	});
+
+	expect(signInRes.data).toMatchObject({
+		url: expect.stringContaining(customAuthEndpoint),
+		redirect: true,
+	});
+
+	// Verify it uses custom endpoint instead of default google.com
+	expect(signInRes.data?.url).not.toContain("accounts.google.com");
+	expect(signInRes.data?.url).toContain("localhost:8080");
+});
