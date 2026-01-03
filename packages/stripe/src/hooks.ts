@@ -138,19 +138,17 @@ export async function onSubscriptionCreated(
 		}
 
 		// Check if subscription already exists in database
+		const subscriptionId = subscriptionCreated.metadata?.subscriptionId;
 		const existingSubscription =
 			await ctx.context.adapter.findOne<Subscription>({
 				model: "subscription",
-				where: [
-					{
-						field: "stripeSubscriptionId",
-						value: subscriptionCreated.id,
-					},
-				],
+				where: subscriptionId
+					? [{ field: "id", value: subscriptionId }]
+					: [{ field: "stripeSubscriptionId", value: subscriptionCreated.id }], // Probably won't match since it's not set yet
 			});
 		if (existingSubscription) {
 			ctx.context.logger.info(
-				`Stripe webhook: Subscription ${subscriptionCreated.id} already exists in database, skipping creation`,
+				`Stripe webhook: Subscription already exists in database (id: ${existingSubscription.id}), skipping creation`,
 			);
 			return;
 		}
