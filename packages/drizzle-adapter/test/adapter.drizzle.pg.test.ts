@@ -14,7 +14,7 @@ import { drizzleAdapter } from "../drizzle-adapter";
 import { generateDrizzleSchema, resetGenerationCount } from "./generate-schema";
 import { getDrizzleVersion, instalBetaDrizzle } from "./get-drizzle-version";
 
-const dbName = "drizzle_better_auth";
+const dbName = "better_auth";
 const pgDB = new Pool({
 	connectionString: `postgres://user:password@localhost:5432/${dbName}`,
 });

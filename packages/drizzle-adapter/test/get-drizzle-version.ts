@@ -1,6 +1,9 @@
 import { execSync } from "node:child_process";
 
+let cachedDrizzleVersion: { kit: string; orm: string } | null = null;
+
 export const getDrizzleVersion = async (beta: boolean = false) => {
+	if (cachedDrizzleVersion) return cachedDrizzleVersion;
 	const version = execSync(`npx drizzle-kit@${beta ? "beta" : ""} --version`, {
 		cwd: import.meta.dirname,
 		stdio: ["ignore", "pipe", "pipe"],
@@ -20,6 +23,7 @@ export const getDrizzleVersion = async (beta: boolean = false) => {
 			},
 			{} as { kit: string; orm: string },
 		);
+	cachedDrizzleVersion = version;
 	return version;
 };
 

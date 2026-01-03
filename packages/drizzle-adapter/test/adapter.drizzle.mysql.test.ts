@@ -15,7 +15,7 @@ import { drizzleAdapter } from "../drizzle-adapter";
 import { generateDrizzleSchema, resetGenerationCount } from "./generate-schema";
 import { getDrizzleVersion, instalBetaDrizzle } from "./get-drizzle-version";
 
-const dbName = "drizzle_better_auth";
+const dbName = "better_auth";
 const mysqlDB = createPool({
 	uri: `mysql://user:password@127.0.0.1:3306/${dbName}`,
 	timezone: "Z",
