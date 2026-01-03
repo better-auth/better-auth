@@ -56,10 +56,10 @@ description: Paypal provider setup and usage.
         ```
         #### Options
         The PayPal provider accepts the following options:
-    
+
         - `environment`: `'sandbox' | 'live'` - PayPal environment to use (default: `'sandbox'`)
         - `requestShippingAddress`: `boolean` - Whether to request shipping address information (default: `false`)
-    
+
         ```ts title="auth.ts"
         export const auth = betterAuth({
             socialProviders: {
@@ -101,7 +101,7 @@ description: Paypal provider setup and usage.
         - `mapProfileToUser`: Custom function to map PayPal profile data to user object.
         - `getUserInfo`: Custom function to retrieve user information.
         For more details refer to the [User Reference](https://developer.paypal.com/docs/api/identity/v1/#userinfo_get)
-        - `verifyIdToken`: Custom ID token verification function.   
+        - `verifyIdToken`: Custom ID token verification function.
     </Step>
 
 </Steps>

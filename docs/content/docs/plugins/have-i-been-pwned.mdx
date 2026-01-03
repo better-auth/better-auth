@@ -8,15 +8,14 @@ The Have I Been Pwned plugin helps protect user accounts by preventing the use o
 ## Installation
 
 ### Add the plugin to your **auth** config
+
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth"
-import { haveIBeenPwned } from "better-auth/plugins" // [!code highlight]
+import { betterAuth } from 'better-auth';
+import { haveIBeenPwned } from 'better-auth/plugins'; // [!code highlight]
 
 export const auth = betterAuth({
-    plugins: [
-        haveIBeenPwned()
-    ]
-})
+	plugins: [haveIBeenPwned()],
+});
 ```
 
 ## Usage
@@ -25,8 +24,8 @@ When a user attempts to create an account or update their password with a compro
 
 ```json
 {
-  "code": "PASSWORD_COMPROMISED",
-  "message": "Password is compromised"
+	"code": "PASSWORD_COMPROMISED",
+	"message": "Password is compromised"
 }
 ```
 
@@ -36,9 +35,10 @@ You can customize the error message:
 
 ```ts
 haveIBeenPwned({
-    customPasswordCompromisedMessage: "Please choose a more secure password."
-})
+	customPasswordCompromisedMessage: 'Please choose a more secure password.',
+});
 ```
+
 ## Security Notes
 
 - Only the first 5 characters of the password hash are sent to the API
