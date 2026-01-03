@@ -8,10 +8,10 @@ In this guide, we'll walk you through the steps of creating a browser extension 
 If you would like to view a completed example, you can check out the <Link href="https://github.com/better-auth/examples/tree/main/browser-extension-example">browser extension example</Link>.
 
 <Callout type="warn">
-	The Plasmo framework does not provide a backend for the browser extension.
-	This guide assumes you have{' '}
-	<Link href="/docs/integrations/hono">a backend setup</Link> of Better Auth and
-	are ready to create a browser extension to connect to it.
+  The Plasmo framework does not provide a backend for the browser extension.
+  This guide assumes you have{" "}
+  <Link href="/docs/integrations/hono">a backend setup</Link> of Better Auth and
+  are ready to create a browser extension to connect to it.
 </Callout>
 
 <Steps>
@@ -164,7 +164,7 @@ If you would like to view a completed example, you can check out the <Link href=
         ## Configure the server auth instance
 
         First, we will need your extension URL.
-
+        
         An extension URL formed like this: `chrome-extension://YOUR_EXTENSION_ID`.
 
         You can find your extension ID at <Link href="chrome://extensions" target="_blank">chrome://extensions</Link>.
@@ -190,7 +190,7 @@ If you would like to view a completed example, you can check out the <Link href=
             trustedOrigins: [
                 // Support a specific extension ID
                 "chrome-extension://YOUR_EXTENSION_ID",
-
+                
                 // Or support multiple extensions with wildcard (less secure)
                 "chrome-extension://*"
             ],
@@ -198,7 +198,7 @@ If you would like to view a completed example, you can check out the <Link href=
         ```
 
         <Callout type="warn">
-          Using wildcards for extension origins (`chrome-extension://*`) reduces security by trusting all extensions.
+          Using wildcards for extension origins (`chrome-extension://*`) reduces security by trusting all extensions. 
           It's safer to explicitly list each extension ID you trust. Only use wildcards for development and testing.
         </Callout>
     </Step>
@@ -210,6 +210,7 @@ If you would like to view a completed example, you can check out the <Link href=
     </Step>
 
 </Steps>
+
 
 ## Wrapping Up
 

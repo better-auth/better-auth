@@ -23,7 +23,7 @@ description: Reddit provider setup and usage.
 
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
-
+        
         export const auth = betterAuth({
             socialProviders: {
                 reddit: {
@@ -43,7 +43,7 @@ description: Reddit provider setup and usage.
         ```ts title="auth-client.ts"
         import { createAuthClient } from "better-auth/client"
         const authClient = createAuthClient()
-
+        
         const signIn = async () => {
             const data = await authClient.signIn.social({
                 provider: "reddit"
@@ -51,30 +51,27 @@ description: Reddit provider setup and usage.
         }
         ```
     </Step>
-
 </Steps>
 
 ## Additional Configuration
 
 ### Scopes
-
 By default, Reddit provides basic user information. If you need additional permissions, you can specify scopes in your auth configuration:
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
-	socialProviders: {
-		reddit: {
-			clientId: process.env.REDDIT_CLIENT_ID as string,
-			clientSecret: process.env.REDDIT_CLIENT_SECRET as string,
-			duration: 'permanent',
-			scope: ['read', 'submit'], // Add required scopes
-		},
-	},
-});
+    socialProviders: {
+        reddit: {
+            clientId: process.env.REDDIT_CLIENT_ID as string,
+            clientSecret: process.env.REDDIT_CLIENT_SECRET as string,
+            duration: "permanent",
+            scope: ["read", "submit"] // Add required scopes
+        },
+    },
+})
 ```
 
 Common Reddit scopes include:
-
 - `identity`: Access basic account information
 - `read`: Access posts and comments
 - `submit`: Submit posts and comments

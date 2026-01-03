@@ -12,42 +12,41 @@ This page contains frequently asked questions, common issues, and other helpful 
 If you're using the auth client on react front-end, you'll need to import it from `/react`:
 
 ```ts title="component.ts"
-import { createAuthClient } from 'better-auth/react';
+import { createAuthClient } from "better-auth/react";
 ```
 
 Where as if you're using the auth client in Next.js middleware, server-actions, server-components or anything server-related, you'll likely need to import it from `/client`:
 
 ```ts title="server.ts"
-import { createAuthClient } from 'better-auth/client';
+import { createAuthClient } from "better-auth/client";
 ```
 
 </Accordion>
 
 <Accordion title="getSession not working">
-If you try to call `authClient.getSession` on a server environment (e.g, a Next.js server component), it doesn't work since it can't access the cookies. You can use the `auth.api.getSession` instead and pass the request headers to it.
+If you try to call `authClient.getSession` on a server environment (e.g, a Next.js server component), it doesn't work since it can't access the cookies. You can use the `auth.api.getSession` instead and pass the request headers to it. 
 
 ```tsx title="server.tsx"
-import { auth } from './auth';
-import { headers } from 'next/headers';
+import { auth } from "./auth";
+import { headers } from "next/headers";
 
 const session = await auth.api.getSession({
-	headers: await headers(),
-});
+    headers: await headers()
+})
 ```
 
 if you need to use the auth client on the server for different purposes, you still can pass the request headers to it:
 
 ```tsx title="server.tsx"
-import { authClient } from './auth-client';
-import { headers } from 'next/headers';
+import { authClient } from "./auth-client";
+import { headers } from "next/headers";
 
 const session = await authClient.getSession({
-	fetchOptions: {
-		headers: await headers(),
-	},
-});
+    fetchOptions:{
+      headers: await headers()
+    }
+})
 ```
-
 </Accordion>
 
 <Accordion title="Adding custom fields to the users table">
@@ -64,9 +63,9 @@ Both `useSession` and `getSession` instances are used fundamentally different ba
 If you have UI you need to change based on user or session data, you can use this hook.
 
 <Callout type="warn">
-	For performance reasons, do not use this hook on your `layout.tsx` file. We
-	recommend using RSC and use your server auth instance to get the session data
-	via `auth.api.getSession`.
+  For performance reasons, do not use this hook on your `layout.tsx` file. We
+  recommend using RSC and use your server auth instance to get the session data
+  via `auth.api.getSession`.
 </Callout>
 
 `getSession` returns a promise containing data and error.
@@ -90,22 +89,19 @@ If you're facing typescript errors, make sure your tsconfig has `strict` set to 
 ```
 
 if you can't set strict to true, you can enable strictNullChecks:
-
 ```json title="tsconfig.json"
 {
-	"compilerOptions": {
-		"strictNullChecks": true
-	}
+  "compilerOptions": {
+    "strictNullChecks": true,
+  }
 }
 ```
 
 You can learn more in our <Link href="/docs/concepts/typescript#typescript-config">TypeScript docs</Link>.
-
 </Accordion>
 <Accordion title="Can I remove `name`, `image`, or `email` fields from the user table?">
 At this time, you can't remove the `name`, `image`, or `email` fields from the user table.
 
 We do plan to have more customizability in the future in this regard, but for now, you can't remove these fields.
-
 </Accordion>
 </Accordions>

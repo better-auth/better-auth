@@ -3,13 +3,13 @@ title: Autumn Billing
 description: Better Auth Plugin for Autumn Billing
 ---
 
-import { HomeIcon } from 'lucide-react';
-import { Accordion, Accordions } from 'fumadocs-ui/components/accordion';
+import { HomeIcon } from "lucide-react";
+import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 
 [Autumn](https://useautumn.com) is open source infrastructure to run SaaS pricing plans. It sits between your app and Stripe, and acts as the database for your customers' subscription status, usage metering and feature permissions.
 
 <Card href="https://discord.gg/STqxY92zuS" title="Get help on Autumn's Discord">
-	We're online to help you with any questions you have.
+  We're online to help you with any questions you have.
 </Card>
 
 ## Features
@@ -19,6 +19,7 @@ import { Accordion, Accordions } from 'fumadocs-ui/components/accordion';
 - Manages your application's free and paid plans
 - Usage tracking for usage billing and periodic limits
 - Custom plans and pricing changes through Autumn's dashboard
+
 
 <Steps>
   <Step>
@@ -34,7 +35,6 @@ import { Accordion, Accordions } from 'fumadocs-ui/components/accordion';
     <Callout>
       If you're using a separate client and server setup, make sure to install the plugin in both parts of your project.
     </Callout>
-
   </Step>
 
   <Step>
@@ -45,7 +45,6 @@ import { Accordion, Accordions } from 'fumadocs-ui/components/accordion';
     ```bash title=".env"
     AUTUMN_SECRET_KEY=am_sk_xxxxxxxxxx
     ```
-
   </Step>
 
   <Step>
@@ -152,7 +151,6 @@ import { Accordion, Accordions } from 'fumadocs-ui/components/accordion';
         );
       }
       ```
-
   </Step>  
 </Steps>
 
@@ -165,30 +163,30 @@ Call `attach` to redirect the customer to a Stripe checkout page when they want 
 If their payment method is already on file, `AttachDialog` will open instead to let the customer confirm their new subscription or purchase, and handle the payment.
 
 <Callout type="warn">
-	{' '}
-	Make sure you've pasted in your [Stripe test secret
-	key](https://dashboard.stripe.com/test/apikeys) in the [Autumn
-	dashboard](https://app.useautumn.com/integrations/stripe).
+  {" "}
+  Make sure you've pasted in your [Stripe test secret
+  key](https://dashboard.stripe.com/test/apikeys) in the [Autumn
+  dashboard](https://app.useautumn.com/integrations/stripe).
 </Callout>
 
 ```tsx
-import { useCustomer, AttachDialog } from 'autumn-js/react';
+import { useCustomer, AttachDialog } from "autumn-js/react";
 
 export default function PurchaseButton() {
-	const { attach } = useCustomer();
+  const { attach } = useCustomer();
 
-	return (
-		<button
-			onClick={async () => {
-				await attach({
-					productId: 'pro',
-					dialog: AttachDialog,
-				});
-			}}
-		>
-			Upgrade to Pro
-		</button>
-	);
+  return (
+    <button
+      onClick={async () => {
+        await attach({
+          productId: "pro",
+          dialog: AttachDialog,
+        });
+      }}
+    >
+      Upgrade to Pro
+    </button>
+  );
 }
 ```
 
@@ -209,30 +207,30 @@ Server-side, you can access Autumn's functions through the `auth` object.
 <Tab value="Client">
 
 ```jsx
-import { useCustomer } from 'autumn-js/react';
+import { useCustomer } from "autumn-js/react";
 
 export default function SendChatMessage() {
-	const { customer, allowed, refetch } = useCustomer();
+  const { customer, allowed, refetch } = useCustomer();
 
-	return (
-		<>
-			<button
-				onClick={async () => {
-					if (allowed({ featureId: 'messages' })) {
-						//... send chatbot message server-side, then
-						await refetch(); // refetch customer usage data
-						alert(
-							'Remaining messages: ' + customer?.features.messages?.balance,
-						);
-					} else {
-						alert("You're out of messages");
-					}
-				}}
-			>
-				Send Message
-			</button>
-		</>
-	);
+  return (
+    <>
+      <button
+        onClick={async () => {
+          if (allowed({ featureId: "messages" })) {
+            //... send chatbot message server-side, then
+            await refetch(); // refetch customer usage data
+            alert(
+              "Remaining messages: " + customer?.features.messages?.balance
+            );
+          } else {
+            alert("You're out of messages");
+          }
+        }}
+      >
+        Send Message
+      </button>
+    </>
+  );
 }
 ```
 
@@ -240,25 +238,25 @@ export default function SendChatMessage() {
 <Tab value="Server">
 
 ```typescript Server
-import { auth } from '@/lib/auth';
+import { auth } from "@/lib/auth";
 
 // check on the backend if the customer can send a message
 const { allowed } = await auth.api.check({
-	headers: await headers(), // pass the request headers
-	body: {
-		featureId: 'messages',
-	},
+  headers: await headers(), // pass the request headers
+  body: {
+    featureId: "messages",
+  },
 });
 
 // server-side function to send the message
 
 // then track the usage
 await auth.api.track({
-	headers: await headers(),
-	body: {
-		featureId: 'messages',
-		value: 2,
-	},
+  headers: await headers(),
+  body: {
+    featureId: "messages",
+    value: 2,
+  },
 });
 ```
 
@@ -272,22 +270,22 @@ await auth.api.track({
 Opens a billing portal where the customer can update their payment method or cancel their plan.
 
 ```tsx
-import { useCustomer } from 'autumn-js/react';
+import { useCustomer } from "autumn-js/react";
 
 export default function BillingSettings() {
-	const { openBillingPortal } = useCustomer();
+  const { openBillingPortal } = useCustomer();
 
-	return (
-		<button
-			onClick={async () => {
-				await openBillingPortal({
-					returnUrl: '/settings/billing',
-				});
-			}}
-		>
-			Manage Billing
-		</button>
-	);
+  return (
+    <button
+      onClick={async () => {
+        await openBillingPortal({
+          returnUrl: "/settings/billing",
+        });
+      }}
+    >
+      Manage Billing
+    </button>
+  );
 }
 ```
 
@@ -296,20 +294,20 @@ export default function BillingSettings() {
 Cancel a product or subscription.
 
 ```tsx
-import { useCustomer } from 'autumn-js/react';
+import { useCustomer } from "autumn-js/react";
 
 export default function CancelSubscription() {
-	const { cancel } = useCustomer();
+  const { cancel } = useCustomer();
 
-	return (
-		<button
-			onClick={async () => {
-				await cancel({ productId: 'pro' });
-			}}
-		>
-			Cancel Subscription
-		</button>
-	);
+  return (
+    <button
+      onClick={async () => {
+        await cancel({ productId: "pro" });
+      }}
+    >
+      Cancel Subscription
+    </button>
+  );
 }
 ```
 
@@ -318,18 +316,18 @@ export default function CancelSubscription() {
 Pass in an `expand` param into `useCustomer` to get additional information. You can expand `invoices`, `trials_used`, `payment_method`, or `rewards`.
 
 ```tsx
-import { useCustomer } from 'autumn-js/react';
+import { useCustomer } from "autumn-js/react";
 
 export default function CustomerProfile() {
-	const { customer } = useCustomer({ expand: ['invoices'] });
+  const { customer } = useCustomer({ expand: ["invoices"] });
 
-	return (
-		<div>
-			<h2>Customer Profile</h2>
-			<p>Name: {customer?.name}</p>
-			<p>Email: {customer?.email}</p>
-			<p>Balance: {customer?.features.chat_messages?.balance}</p>
-		</div>
-	);
+  return (
+    <div>
+      <h2>Customer Profile</h2>
+      <p>Name: {customer?.name}</p>
+      <p>Email: {customer?.email}</p>
+      <p>Balance: {customer?.features.chat_messages?.balance}</p>
+    </div>
+  );
 }
 ```
