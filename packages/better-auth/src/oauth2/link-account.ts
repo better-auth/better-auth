@@ -48,6 +48,16 @@ export async function handleOAuthUserInfo(
 				c.context.options.account?.accountLinking?.trustedProviders;
 			const isTrustedProvider =
 				opts.isTrustedProvider || trustedProviders?.includes(account.providerId);
+			let linkData:
+				| {
+						idToken?: string;
+						accessToken?: string;
+						refreshToken?: string;
+						accessTokenExpiresAt?: Date;
+						refreshTokenExpiresAt?: Date;
+						scope?: string;
+				  }
+				| null = null;
 			if (
 				(!isTrustedProvider && !userInfo.emailVerified) ||
 				c.context.options.account?.accountLinking?.enabled === false
@@ -63,16 +73,21 @@ export async function handleOAuthUserInfo(
 				};
 			}
 			try {
+				linkData = {
+					idToken: account.idToken || undefined,
+					accessToken:
+						(await setTokenUtil(account.accessToken, c.context)) || undefined,
+					refreshToken:
+						(await setTokenUtil(account.refreshToken, c.context)) || undefined,
+					accessTokenExpiresAt: account.accessTokenExpiresAt || undefined,
+					refreshTokenExpiresAt: account.refreshTokenExpiresAt || undefined,
+					scope: account.scope || undefined,
+				};
 				await c.context.internalAdapter.linkAccount({
 					providerId: account.providerId,
 					accountId: userInfo.id.toString(),
 					userId: dbUser.user.id,
-					accessToken: await setTokenUtil(account.accessToken, c.context),
-					refreshToken: await setTokenUtil(account.refreshToken, c.context),
-					idToken: account.idToken,
-					accessTokenExpiresAt: account.accessTokenExpiresAt,
-					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
-					scope: account.scope,
+					...linkData,
 				});
 			} catch (e) {
 				logger.error("Unable to link account", e);
@@ -86,12 +101,7 @@ export async function handleOAuthUserInfo(
 				await setAccountCookie(c, {
 					providerId: account.providerId,
 					accountId: userInfo.id.toString(),
-					accessToken: await setTokenUtil(account.accessToken, c.context),
-					refreshToken: await setTokenUtil(account.refreshToken, c.context),
-					idToken: account.idToken,
-					accessTokenExpiresAt: account.accessTokenExpiresAt,
-					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
-					scope: account.scope,
+					...(linkData || {}),
 				});
 			}
 
