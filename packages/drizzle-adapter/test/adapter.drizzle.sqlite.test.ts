@@ -18,6 +18,7 @@ import {
 	generateDrizzleSchema,
 	resetGenerationCount,
 } from "./generate-schema";
+import { getDrizzleVersion } from "./get-drizzle-version";
 
 const dbFilePath = path.join(import.meta.dirname, "test.db");
 let sqliteDB = new Database(dbFilePath);
@@ -50,17 +51,8 @@ const { execute } = await testAdapter({
 			"sqlite",
 		);
 
-		try {
-			const version = execSync("npx drizzle-kit --version", {
-				cwd: import.meta.dirname,
-				stdio: ["ignore", "pipe", "pipe"],
-			})
-				.toString()
-				.trim();
-			console.log(`npx drizzle-kit --version output:`, version);
-		} catch (err) {
-			console.error("Failed to check drizzle-kit version with bunx:", err);
-		}
+		const version = await getDrizzleVersion();
+		console.log(123, "version", version);
 
 		const command = `npx drizzle-kit push --dialect=sqlite --schema=${fileName}.ts --url=./test.db`;
 		console.log(`Running: ${command}`);
