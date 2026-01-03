@@ -157,7 +157,7 @@ import {
 	okta,
 	slack,
 	patreon,
-  gumroad,
+	gumroad,
 } from 'better-auth/plugins';
 
 export const auth = betterAuth({
@@ -208,10 +208,10 @@ export const auth = betterAuth({
 					clientId: process.env.PATREON_CLIENT_ID,
 					clientSecret: process.env.PATREON_CLIENT_SECRET,
 				}),
-        gumroad({
-          clientId: process.env.GUMROAD_CLIENT_ID,
-          clientSecret: process.env.GUMROAD_CLIENT_SECRET,
-        }),
+				gumroad({
+					clientId: process.env.GUMROAD_CLIENT_ID,
+					clientSecret: process.env.GUMROAD_CLIENT_SECRET,
+				}),
 			],
 		}),
 	],
