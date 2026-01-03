@@ -22,24 +22,27 @@ All you need to do is provide the database logic, and the `createAdapterFactory`
 3. Create the adapter!
 
 ```ts
-import { createAdapterFactory, type DBAdapterDebugLogOption } from "better-auth/adapters";
+import {
+	createAdapterFactory,
+	type DBAdapterDebugLogOption,
+} from 'better-auth/adapters';
 
 // Your custom adapter config options
 interface CustomAdapterConfig {
-  /**
-   * Helps you debug issues with the adapter.
-   */
-  debugLogs?: DBAdapterDebugLogOption;
-  /**
-   * If the table names in the schema are plural.
-   */
-  usePlural?: boolean;
+	/**
+	 * Helps you debug issues with the adapter.
+	 */
+	debugLogs?: DBAdapterDebugLogOption;
+	/**
+	 * If the table names in the schema are plural.
+	 */
+	usePlural?: boolean;
 }
 
 export const myAdapter = (config: CustomAdapterConfig = {}) =>
-  createAdapterFactory({
-    // ...
-  });
+	createAdapterFactory({
+		// ...
+	});
 ```
 
 </Step>
@@ -53,20 +56,21 @@ We try to minimize the amount of code you need to write in your adapter function
 ```ts
 // ...
 export const myAdapter = (config: CustomAdapterConfig = {}) =>
-  createAdapterFactory({
-    config: {
-      adapterId: "custom-adapter", // A unique identifier for the adapter.
-      adapterName: "Custom Adapter", // The name of the adapter.
-      usePlural: config.usePlural ?? false, // Whether the table names in the schema are plural.
-      debugLogs: config.debugLogs ?? false, // Whether to enable debug logs.
-      supportsJSON: false, // Whether the database supports JSON. (Default: false)
-      supportsDates: true, // Whether the database supports dates. (Default: true)
-      supportsBooleans: true, // Whether the database supports booleans. (Default: true)
-      supportsNumericIds: true, // Whether the database supports auto-incrementing numeric IDs. (Default: true)
-    },
-    // ...
-  });
+	createAdapterFactory({
+		config: {
+			adapterId: 'custom-adapter', // A unique identifier for the adapter.
+			adapterName: 'Custom Adapter', // The name of the adapter.
+			usePlural: config.usePlural ?? false, // Whether the table names in the schema are plural.
+			debugLogs: config.debugLogs ?? false, // Whether to enable debug logs.
+			supportsJSON: false, // Whether the database supports JSON. (Default: false)
+			supportsDates: true, // Whether the database supports dates. (Default: true)
+			supportsBooleans: true, // Whether the database supports booleans. (Default: true)
+			supportsNumericIds: true, // Whether the database supports auto-incrementing numeric IDs. (Default: true)
+		},
+		// ...
+	});
 ```
+
 </Step>
 
 <Step>
@@ -77,28 +81,28 @@ The `adapter` function is where you write the code that interacts with your data
 ```ts
 // ...
 export const myAdapter = (config: CustomAdapterConfig = {}) =>
-  createAdapterFactory({
-    config: {
-      // ...
-    },
-    adapter: ({}) => {
-      return {
-        create: async ({ data, model, select }) => {
-          // ...
-        },
-        update: async ({ data, model, select }) => {
-          // ...
-        },
-        updateMany: async ({ data, model, select }) => {
-          // ...
-        },
-        delete: async ({ data, model, select }) => {
-          // ...
-        },
-        // ...
-      };
-    },
-  });
+	createAdapterFactory({
+		config: {
+			// ...
+		},
+		adapter: ({}) => {
+			return {
+				create: async ({ data, model, select }) => {
+					// ...
+				},
+				update: async ({ data, model, select }) => {
+					// ...
+				},
+				updateMany: async ({ data, model, select }) => {
+					// ...
+				},
+				delete: async ({ data, model, select }) => {
+					// ...
+				},
+				// ...
+			};
+		},
+	});
 ```
 
 <Callout>
@@ -130,21 +134,21 @@ Before we get into the adapter function, let's go over the parameters that are a
 
 ```ts title="Example"
 adapter: ({
-  options,
-  schema,
-  debugLog,
-  getFieldName,
-  getModelName,
-  getDefaultModelName,
-  getDefaultFieldName,
-  getFieldAttributes,
-  transformInput,
-  transformOutput,
-  transformWhereClause,
+	options,
+	schema,
+	debugLog,
+	getFieldName,
+	getModelName,
+	getDefaultModelName,
+	getDefaultFieldName,
+	getFieldAttributes,
+	transformInput,
+	transformOutput,
+	transformWhereClause,
 }) => {
-  return {
-    // ...
-  };
+	return {
+		// ...
+	};
 };
 ```
 
@@ -160,8 +164,9 @@ adapter: ({
 The `create` method is used to create a new record in the database.
 
 <Callout>
-It's possible to pass `forceAllowId` as a parameter to the `create` method, which allows `id` to be provided in the `data` object.
-We handle `forceAllowId` internally, so you don't need to worry about it.
+	It's possible to pass `forceAllowId` as a parameter to the `create` method,
+	which allows `id` to be provided in the `data` object. We handle
+	`forceAllowId` internally, so you don't need to worry about it.
 </Callout>
 
 parameters:
@@ -171,13 +176,13 @@ parameters:
 - `select`: An array of fields to return from the database.
 
 <Callout>
-  Make sure to return the data that is inserted into the database.
+	Make sure to return the data that is inserted into the database.
 </Callout>
 
 ```ts title="Example"
 create: async ({ model, data, select }) => {
-  // Example of inserting data into the database.
-  return await db.insert(model).values(data);
+	// Example of inserting data into the database.
+	return await db.insert(model).values(data);
 };
 ```
 
@@ -192,14 +197,14 @@ parameters:
 - `update`: The data to update the record with.
 
 <Callout>
-  Make sure to return the data in the row which is updated. This includes any
-  fields that were not updated.
+	Make sure to return the data in the row which is updated. This includes any
+	fields that were not updated.
 </Callout>
 
 ```ts title="Example"
 update: async ({ model, where, update }) => {
-  // Example of updating data in the database.
-  return await db.update(model).set(update).where(where);
+	// Example of updating data in the database.
+	return await db.update(model).set(update).where(where);
 };
 ```
 
@@ -217,8 +222,8 @@ parameters:
 
 ```ts title="Example"
 updateMany: async ({ model, where, update }) => {
-  // Example of updating multiple records in the database.
-  return await db.update(model).set(update).where(where);
+	// Example of updating multiple records in the database.
+	return await db.update(model).set(update).where(where);
 };
 ```
 
@@ -251,8 +256,8 @@ parameters:
 
 ```ts title="Example"
 deleteMany: async ({ model, where }) => {
-  // Example of deleting multiple records from the database.
-  return await db.delete(model).where(where);
+	// Example of deleting multiple records from the database.
+	return await db.delete(model).where(where);
 };
 ```
 
@@ -271,8 +276,8 @@ parameters:
 
 ```ts title="Example"
 findOne: async ({ model, where, select, join }) => {
-  // Example of finding a single record in the database.
-  return await db.select().from(model).where(where).limit(1);
+	// Example of finding a single record in the database.
+	return await db.select().from(model).where(where).limit(1);
 };
 ```
 
@@ -290,19 +295,19 @@ parameters:
 - `join`: Optional join configuration to fetch related records in a single query.
 
 <Callout>
-  Make sure to return the array of data that is found in the database.
+	Make sure to return the array of data that is found in the database.
 </Callout>
 
 ```ts title="Example"
 findMany: async ({ model, where, limit, sortBy, offset, join }) => {
-  // Example of finding multiple records in the database.
-  return await db
-    .select()
-    .from(model)
-    .where(where)
-    .limit(limit)
-    .offset(offset)
-    .orderBy(sortBy);
+	// Example of finding multiple records in the database.
+	return await db
+		.select()
+		.from(model)
+		.where(where)
+		.limit(limit)
+		.offset(offset)
+		.orderBy(sortBy);
 };
 ```
 
@@ -319,8 +324,8 @@ parameters:
 
 ```ts title="Example"
 count: async ({ model, where }) => {
-  // Example of counting the number of records in the database.
-  return await db.select().from(model).where(where).count();
+	// Example of counting the number of records in the database.
+	return await db.select().from(model).where(where).count();
 };
 ```
 
@@ -330,16 +335,16 @@ The `options` object is for any potential config that you got from your custom a
 
 ```ts title="Example"
 const myAdapter = (config: CustomAdapterConfig) =>
-  createAdapterFactory({
-    config: {
-      // ...
-    },
-    adapter: ({ options }) => {
-      return {
-        options: config,
-      };
-    },
-  });
+	createAdapterFactory({
+		config: {
+			// ...
+		},
+		adapter: ({ options }) => {
+			return {
+				options: config,
+			};
+		},
+	});
 ```
 
 ### `createSchema` (optional)
@@ -353,7 +358,7 @@ parameters:
 
 ```ts title="Example"
 createSchema: async ({ file, tables }) => {
-  // ... Custom logic to create a schema for the database.
+	// ... Custom logic to create a schema for the database.
 };
 ```
 
@@ -362,26 +367,26 @@ createSchema: async ({ file, tables }) => {
 We've provided a test suite that you can use to test your adapter. It requires you to use `vitest`.
 
 ```ts title="my-adapter.test.ts"
-import { expect, test, describe } from "vitest";
-import { runAdapterTest } from "better-auth/adapters/test";
-import { myAdapter } from "./my-adapter";
+import { expect, test, describe } from 'vitest';
+import { runAdapterTest } from 'better-auth/adapters/test';
+import { myAdapter } from './my-adapter';
 
-describe("My Adapter Tests", async () => {
-  afterAll(async () => {
-    // Run DB cleanup here...
-  });
-  const adapter = myAdapter({
-    debugLogs: {
-      // If your adapter config allows passing in debug logs, then pass this here.
-      isRunningAdapterTests: true, // This is our super secret flag to let us know to only log debug logs if a test fails.
-    },
-  });
+describe('My Adapter Tests', async () => {
+	afterAll(async () => {
+		// Run DB cleanup here...
+	});
+	const adapter = myAdapter({
+		debugLogs: {
+			// If your adapter config allows passing in debug logs, then pass this here.
+			isRunningAdapterTests: true, // This is our super secret flag to let us know to only log debug logs if a test fails.
+		},
+	});
 
-  runAdapterTest({
-    getAdapter: async (betterAuthOptions = {}) => {
-      return adapter(betterAuthOptions);
-    },
-  });
+	runAdapterTest({
+		getAdapter: async (betterAuthOptions = {}) => {
+			return adapter(betterAuthOptions);
+		},
+	});
 });
 ```
 
@@ -390,26 +395,26 @@ describe("My Adapter Tests", async () => {
 If your database supports numeric IDs, then you should run this test as well:
 
 ```ts title="my-adapter.number-id.test.ts"
-import { expect, test, describe } from "vitest";
-import { runNumberIdAdapterTest } from "better-auth/adapters/test";
-import { myAdapter } from "./my-adapter";
+import { expect, test, describe } from 'vitest';
+import { runNumberIdAdapterTest } from 'better-auth/adapters/test';
+import { myAdapter } from './my-adapter';
 
-describe("My Adapter Numeric ID Tests", async () => {
-  afterAll(async () => {
-    // Run DB cleanup here...
-  });
-  const adapter = myAdapter({
-    debugLogs: {
-      // If your adapter config allows passing in debug logs, then pass this here.
-      isRunningAdapterTests: true, // This is our super secret flag to let us know to only log debug logs if a test fails.
-    },
-  });
+describe('My Adapter Numeric ID Tests', async () => {
+	afterAll(async () => {
+		// Run DB cleanup here...
+	});
+	const adapter = myAdapter({
+		debugLogs: {
+			// If your adapter config allows passing in debug logs, then pass this here.
+			isRunningAdapterTests: true, // This is our super secret flag to let us know to only log debug logs if a test fails.
+		},
+	});
 
-  runNumberIdAdapterTest({
-    getAdapter: async (betterAuthOptions = {}) => {
-      return adapter(betterAuthOptions);
-    },
-  });
+	runNumberIdAdapterTest({
+		getAdapter: async (betterAuthOptions = {}) => {
+			return adapter(betterAuthOptions);
+		},
+	});
 });
 ```
 
@@ -453,9 +458,9 @@ Whether the table names in the schema are plural. This is often defined by the u
 
 ```ts title="Example"
 const adapter = myAdapter({
-  // This value then gets passed into the `usePlural`
-  // option in the createAdapterFactory `config` object.
-  usePlural: true,
+	// This value then gets passed into the `usePlural`
+	// option in the createAdapterFactory `config` object.
+	usePlural: true,
 });
 ```
 
@@ -464,9 +469,9 @@ const adapter = myAdapter({
 Whether the adapter supports transactions. If `false`, operations run sequentially; otherwise provide a function that executes a callback with a `TransactionAdapter`.
 
 <Callout type="warn">
-  If your database does not support transactions, the error handling and rollback
-  will not be as robust. We recommend using a database that supports transactions
-  for better data integrity.
+	If your database does not support transactions, the error handling and
+	rollback will not be as robust. We recommend using a database that supports
+	transactions for better data integrity.
 </Callout>
 
 ### `debugLogs`
@@ -477,17 +482,17 @@ If any of the keys are `true`, the debug logs will be enabled for that method.
 ```ts title="Example"
 // Will log debug logs for all methods.
 const adapter = myAdapter({
-  debugLogs: true,
+	debugLogs: true,
 });
 ```
 
 ```ts title="Example"
 // Will only log debug logs for the `create` and `update` methods.
 const adapter = myAdapter({
-  debugLogs: {
-    create: true,
-    update: true,
-  },
+	debugLogs: {
+		create: true,
+		update: true,
+	},
 });
 ```
 
@@ -536,9 +541,9 @@ mapKeysTransformOutput: {
 If you need to transform the input data before it is saved to the database, you can use this option to transform the data.
 
 <Callout type="warn">
-  If you're using `supportsJSON`, `supportsDates`, or `supportsBooleans`, then
-  the transformations will be applied before your `customTransformInput`
-  function is called.
+	If you're using `supportsJSON`, `supportsDates`, or `supportsBooleans`, then
+	the transformations will be applied before your `customTransformInput`
+	function is called.
 </Callout>
 The `customTransformInput` function receives the following arguments:
 
@@ -554,11 +559,11 @@ The `customTransformInput` function runs at every key in the data object of a gi
 
 ```ts title="Example"
 customTransformInput: ({ field, data }) => {
-  if (field === "id") {
-    return "123"; // Force the ID to be "123"
-  }
+	if (field === 'id') {
+		return '123'; // Force the ID to be "123"
+	}
 
-  return data;
+	return data;
 };
 ```
 
@@ -569,20 +574,20 @@ Similar to the `customTransformInput` function, it runs at every key in the data
 
 ```ts title="Example"
 customTransformOutput: ({ field, data }) => {
-  if (field === "name") {
-    return "Bob"; // Force the name to be "Bob"
-  }
+	if (field === 'name') {
+		return 'Bob'; // Force the name to be "Bob"
+	}
 
-  return data;
+	return data;
 };
 ```
 
 ```ts
 const some_data = await adapter.create({
-  model: "user",
-  data: {
-    name: "John",
-  },
+	model: 'user',
+	data: {
+		name: 'John',
+	},
 });
 
 // The name will be "Bob"
@@ -594,7 +599,8 @@ console.log(some_data.name);
 Whether to disable input transformation. This should only be used if you know what you're doing and are manually handling all transformations.
 
 <Callout type="warn">
-  Disabling input transformation can break important adapter functionality like ID generation, boolean/date/JSON conversion, and key mapping.
+	Disabling input transformation can break important adapter functionality like
+	ID generation, boolean/date/JSON conversion, and key mapping.
 </Callout>
 
 ### `disableTransformOutput`
@@ -602,7 +608,8 @@ Whether to disable input transformation. This should only be used if you know wh
 Whether to disable output transformation. This should only be used if you know what you're doing and are manually handling all transformations.
 
 <Callout type="warn">
-  Disabling output transformation can break important adapter functionality like boolean/date/JSON parsing and key mapping.
+	Disabling output transformation can break important adapter functionality like
+	boolean/date/JSON parsing and key mapping.
 </Callout>
 
 ### `disableTransformJoin`
@@ -610,7 +617,7 @@ Whether to disable output transformation. This should only be used if you know w
 Whether to disable join transformation. This should only be used if you know what you're doing and are manually handling joins.
 
 <Callout type="warn">
-  Disabling join transformation can break join functionality.
+	Disabling join transformation can break join functionality.
 </Callout>
 
 ### `supportsJoin`
@@ -620,7 +627,6 @@ Whether the adapter supports native joins. If set to `false` (the default), Bett
 ```ts title="Example"
 // For adapters that support native SQL joins
 const adapter = myAdapter({
-  supportsJoin: true,
+	supportsJoin: true,
 });
 ```
- 

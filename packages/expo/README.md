@@ -42,18 +42,18 @@ Then, add the Expo plugin to your Better Auth server configuration (e.g., in you
 
 ```typescript
 // lib/auth.ts
-import { betterAuth } from "better-auth";
-import { expo } from "@better-auth/expo"; // Import the server plugin
+import { betterAuth } from 'better-auth';
+import { expo } from '@better-auth/expo'; // Import the server plugin
 
 export const auth = betterAuth({
-    // ...your other Better Auth options
-    baseURL: "http://localhost:8081", // The base URL of your application server where the routes are mounted.
-    plugins: [expo()], // Add the Expo server plugin
-    emailAndPassword: { 
-        enabled: true,
-    },
-    // Add other configurations like trustedOrigins
-    trustedOrigins: ["myapp://"] // Replace "myapp" with your app's scheme
+	// ...your other Better Auth options
+	baseURL: 'http://localhost:8081', // The base URL of your application server where the routes are mounted.
+	plugins: [expo()], // Add the Expo server plugin
+	emailAndPassword: {
+		enabled: true,
+	},
+	// Add other configurations like trustedOrigins
+	trustedOrigins: ['myapp://'], // Replace "myapp" with your app's scheme
 });
 ```
 
@@ -63,24 +63,25 @@ In your Expo app, initialize the client (e.g., in `lib/auth-client.ts`):
 
 ```typescript
 // lib/auth-client.ts
-import { createAuthClient } from "better-auth/react";
-import { expoClient } from "@better-auth/expo/client"; // Import the client plugin
-import * as SecureStore from "expo-secure-store";
+import { createAuthClient } from 'better-auth/react';
+import { expoClient } from '@better-auth/expo/client'; // Import the client plugin
+import * as SecureStore from 'expo-secure-store';
 
 export const authClient = createAuthClient({
-    baseURL: "http://localhost:8081", // Your Better Auth backend URL
-    plugins: [
-        expoClient({
-            scheme: "myapp", // Your app's scheme (defined in app.json)
-            storagePrefix: "myapp", // A prefix for storage keys
-            storage: SecureStore, // Pass SecureStore for token storage
-        })
-    ]
+	baseURL: 'http://localhost:8081', // Your Better Auth backend URL
+	plugins: [
+		expoClient({
+			scheme: 'myapp', // Your app's scheme (defined in app.json)
+			storagePrefix: 'myapp', // A prefix for storage keys
+			storage: SecureStore, // Pass SecureStore for token storage
+		}),
+	],
 });
 
 // You can also export specific methods if you prefer:
 // export const { signIn, signUp, useSession } = authClient;
 ```
+
 Make sure your app's scheme (e.g., "myapp") is defined in your `app.json`.
 
 ## Documentation
