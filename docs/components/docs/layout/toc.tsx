@@ -3,9 +3,9 @@ import type {
 	PopoverContentProps,
 	PopoverTriggerProps,
 } from "@radix-ui/react-popover";
-import type { TOCItemType } from "fumadocs-core/server";
+import type { TOCItemType } from "fumadocs-core/toc";
 import * as Primitive from "fumadocs-core/toc";
-import { useI18n, usePageStyles } from "fumadocs-ui/provider";
+import { useI18n } from "fumadocs-ui/contexts/i18n";
 import { ChevronRight, Text } from "lucide-react";
 import type { ComponentProps, HTMLAttributes, ReactNode } from "react";
 import {
@@ -17,6 +17,7 @@ import {
 	useState,
 } from "react";
 import { cn } from "@/lib/utils";
+import { usePageStyles } from "../contexts/page-styles";
 import {
 	Collapsible,
 	CollapsibleContent,

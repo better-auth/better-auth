@@ -1,7 +1,8 @@
 import { Analytics } from "@vercel/analytics/react";
-import { RootProvider } from "fumadocs-ui/provider";
+import { RootProvider } from "fumadocs-ui/provider/next";
 import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { AnchorScroll } from "@/components/anchor-scroll-fix";
 import { Navbar } from "@/components/nav-bar";
@@ -12,7 +13,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { baseUrl, createMetadata } from "@/lib/metadata";
 import "./global.css";
 
-export const metadata = createMetadata({
+export const metadata: Metadata = createMetadata({
 	title: {
 		template: "%s | Better Auth",
 		default: "Better Auth",

@@ -1,4 +1,4 @@
-import type { PageTree } from "fumadocs-core/server";
+import type { Folder, Root } from "fumadocs-core/page-tree";
 import type { LucideIcon } from "lucide-react";
 import {
 	Binoculars,
@@ -35,7 +35,7 @@ interface Content {
 	}[];
 }
 
-export function getPageTree(): PageTree.Root {
+export function getPageTree(): Root {
 	return {
 		$id: "root",
 		name: "docs",
@@ -58,7 +58,7 @@ export function getPageTree(): PageTree.Root {
 	};
 }
 
-function contentToPageTree(content: Content): PageTree.Folder {
+function contentToPageTree(content: Content): Folder {
 	return {
 		type: "folder",
 		icon: <content.Icon />,
