@@ -16,15 +16,15 @@ Calling your database every time `useSession` or `getSession` is invoked isn’t
 To turn on cookie caching, just set `session.cookieCache` in your auth config:
 
 ```ts title="auth.ts"
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-	session: {
-		cookieCache: {
-			enabled: true,
-			maxAge: 5 * 60, // Cache duration in seconds
-		},
-	},
+  session: {
+    cookieCache: {
+      enabled: true,
+      maxAge: 5 * 60, // Cache duration in seconds
+    },
+  },
 });
 ```
 
@@ -122,7 +122,7 @@ If you're using a framework that supports server-side rendering, it's usually be
 
 ```ts
 const session = await auth.api.getSession({
-	headers: await headers(),
+  headers: await headers(),
 });
 //then pass the session to the client
 ```
@@ -146,7 +146,7 @@ Optimizing database performance is essential to get the best out of Better Auth.
 | twoFactor     | `secret`                   | twoFactor    |
 
 <Callout>
-	We intend to add indexing support in our schema generation tool in the future.
+  We intend to add indexing support in our schema generation tool in the future.
 </Callout>
 
 ## Bundle Size Optimization
@@ -172,7 +172,6 @@ Simply import from `better-auth/minimal` instead of `better-auth`:
       }),
     });
     ```
-
   </Tab>
 
   <Tab value="Drizzle">
@@ -187,7 +186,6 @@ Simply import from `better-auth/minimal` instead of `better-auth`:
       }),
     });
     ```
-
   </Tab>
 
   <Tab value="MongoDB">
@@ -203,12 +201,11 @@ Simply import from `better-auth/minimal` instead of `better-auth`:
       database: mongodbAdapter(db),
     });
     ```
-
   </Tab>
 </Tabs>
 
 <Callout type="warning">
-	**Limitations:** - Direct database connections are not supported (you must use
-	an adapter) - Built-in migrations are not supported. Use external migration
-	tools (or use `better-auth` if you need built-in migration support)
+  **Limitations:**
+  - Direct database connections are not supported (you must use an adapter)
+  - Built-in migrations are not supported. Use external migration tools (or use `better-auth` if you need built-in migration support)
 </Callout>

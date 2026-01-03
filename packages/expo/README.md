@@ -88,8 +88,8 @@ Make sure your app's scheme (e.g., "myapp") is defined in your `app.json`.
 
 For more detailed information and advanced configurations, please refer to the documentation:
 
-- **Main Better Auth Installation:** [https://www.better-auth.com/docs/installation](https://www.better-auth.com/docs/installation)
-- **Expo Integration Guide:** [https://www.better-auth.com/docs/integrations/expo](https://www.better-auth.com/docs/integrations/expo)
+* **Main Better Auth Installation:** [https://www.better-auth.com/docs/installation](https://www.better-auth.com/docs/installation)
+* **Expo Integration Guide:** [https://www.better-auth.com/docs/integrations/expo](https://www.better-auth.com/docs/integrations/expo)
 
 ## License
 
