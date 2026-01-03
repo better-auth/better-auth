@@ -23,8 +23,16 @@ export async function onCheckoutSessionCompleted(
 		const subscription = await client.subscriptions.retrieve(
 			checkoutSession.subscription as string,
 		);
-		const priceId = subscription.items.data[0]?.price.id;
-		const priceLookupKey = subscription.items.data[0]?.price.lookup_key || null;
+		const subscriptionItem = subscription.items.data[0];
+		if (!subscriptionItem) {
+			ctx.context.logger.warn(
+				`Stripe webhook warning: Subscription ${subscription.id} has no items`,
+			);
+			return;
+		}
+
+		const priceId = subscriptionItem.price.id;
+		const priceLookupKey = subscriptionItem.price.lookup_key;
 		const plan = await getPlanByPriceInfo(
 			options,
 			priceId as string,
@@ -35,7 +43,7 @@ export async function onCheckoutSessionCompleted(
 				checkoutSession?.client_reference_id ||
 				checkoutSession?.metadata?.referenceId;
 			const subscriptionId = checkoutSession?.metadata?.subscriptionId;
-			const seats = subscription.items.data[0]!.quantity;
+			const seats = subscriptionItem.quantity;
 			if (referenceId && subscriptionId) {
 				const trial =
 					subscription.trial_start && subscription.trial_end
@@ -53,11 +61,9 @@ export async function onCheckoutSessionCompleted(
 							status: subscription.status,
 							updatedAt: new Date(),
 							periodStart: new Date(
-								subscription.items.data[0]!.current_period_start * 1000,
+								subscriptionItem.current_period_start * 1000,
 							),
-							periodEnd: new Date(
-								subscription.items.data[0]!.current_period_end * 1000,
-							),
+							periodEnd: new Date(subscriptionItem.current_period_end * 1000),
 							stripeSubscriptionId: checkoutSession.subscription as string,
 							cancelAtPeriodEnd: subscription.cancel_at_period_end,
 							cancelAt: subscription.cancel_at
@@ -132,19 +138,17 @@ export async function onSubscriptionCreated(
 		}
 
 		// Check if subscription already exists in database
+		const subscriptionId = subscriptionCreated.metadata?.subscriptionId;
 		const existingSubscription =
 			await ctx.context.adapter.findOne<Subscription>({
 				model: "subscription",
-				where: [
-					{
-						field: "stripeSubscriptionId",
-						value: subscriptionCreated.id,
-					},
-				],
+				where: subscriptionId
+					? [{ field: "id", value: subscriptionId }]
+					: [{ field: "stripeSubscriptionId", value: subscriptionCreated.id }], // Probably won't match since it's not set yet
 			});
 		if (existingSubscription) {
 			ctx.context.logger.info(
-				`Stripe webhook: Subscription ${subscriptionCreated.id} already exists in database, skipping creation`,
+				`Stripe webhook: Subscription already exists in database (id: ${existingSubscription.id}), skipping creation`,
 			);
 			return;
 		}
@@ -238,9 +242,16 @@ export async function onSubscriptionUpdated(
 			return;
 		}
 		const subscriptionUpdated = event.data.object as Stripe.Subscription;
-		const priceId = subscriptionUpdated.items.data[0]!.price.id;
-		const priceLookupKey =
-			subscriptionUpdated.items.data[0]!.price.lookup_key || null;
+		const subscriptionItem = subscriptionUpdated.items.data[0];
+		if (!subscriptionItem) {
+			ctx.context.logger.warn(
+				`Stripe webhook warning: Subscription ${subscriptionUpdated.id} has no items`,
+			);
+			return;
+		}
+
+		const priceId = subscriptionItem.price.id;
+		const priceLookupKey = subscriptionItem.price.lookup_key;
 		const plan = await getPlanByPriceInfo(options, priceId, priceLookupKey);
 
 		const subscriptionId = subscriptionUpdated.metadata?.subscriptionId;
@@ -272,7 +283,6 @@ export async function onSubscriptionUpdated(
 			}
 		}
 
-		const seats = subscriptionUpdated.items.data[0]!.quantity;
 		const updatedSubscription = await ctx.context.adapter.update<Subscription>({
 			model: "subscription",
 			update: {
@@ -284,12 +294,8 @@ export async function onSubscriptionUpdated(
 					: {}),
 				updatedAt: new Date(),
 				status: subscriptionUpdated.status,
-				periodStart: new Date(
-					subscriptionUpdated.items.data[0]!.current_period_start * 1000,
-				),
-				periodEnd: new Date(
-					subscriptionUpdated.items.data[0]!.current_period_end * 1000,
-				),
+				periodStart: new Date(subscriptionItem.current_period_start * 1000),
+				periodEnd: new Date(subscriptionItem.current_period_end * 1000),
 				cancelAtPeriodEnd: subscriptionUpdated.cancel_at_period_end,
 				cancelAt: subscriptionUpdated.cancel_at
 					? new Date(subscriptionUpdated.cancel_at * 1000)
@@ -300,7 +306,7 @@ export async function onSubscriptionUpdated(
 				endedAt: subscriptionUpdated.ended_at
 					? new Date(subscriptionUpdated.ended_at * 1000)
 					: null,
-				seats: seats,
+				seats: subscriptionItem.quantity,
 				stripeSubscriptionId: subscriptionUpdated.id,
 			},
 			where: [
