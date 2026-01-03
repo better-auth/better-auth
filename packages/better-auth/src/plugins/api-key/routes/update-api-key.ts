@@ -350,9 +350,8 @@ export function updateApiKey({
 				if (typeof metadata !== "object") {
 					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_METADATA_TYPE);
 				}
-				//@ts-expect-error - we need this to be a string to save into DB.
-				newValues.metadata =
-					schema.apikey.fields.metadata.transform.input(metadata);
+				// The adapter will automatically apply the schema transform to stringify
+				newValues.metadata = metadata;
 			}
 			if (remaining !== undefined) {
 				newValues.remaining = remaining;
@@ -437,11 +436,6 @@ export function updateApiKey({
 			}
 
 			deleteAllExpiredApiKeys(ctx.context);
-
-			// transform metadata from string back to object
-			newApiKey.metadata = schema.apikey.fields.metadata.transform.output(
-				newApiKey.metadata as never as string,
-			);
 
 			const { key: _key, ...returningApiKey } = newApiKey;
 

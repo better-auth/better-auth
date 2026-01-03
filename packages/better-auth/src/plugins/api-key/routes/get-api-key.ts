@@ -191,11 +191,6 @@ export function getApiKey({
 
 			deleteAllExpiredApiKeys(ctx.context);
 
-			// convert metadata string back to object
-			apiKey.metadata = schema.apikey.fields.metadata.transform.output(
-				apiKey.metadata as never as string,
-			);
-
 			const { key: _key, ...returningApiKey } = apiKey;
 
 			return ctx.json({
