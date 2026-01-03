@@ -55,7 +55,7 @@ const { execute } = await testAdapter({
 		console.log(123, "version", version);
 		console.log(123, "beta version", await getDrizzleVersion(true));
 
-		const command = `npm i drizzle-orm@beta && npx drizzle-kit push --dialect=sqlite --schema=${fileName}.ts --url=./test.db`;
+		const command = `pnpm i drizzle-orm@beta && npx drizzle-kit push --dialect=sqlite --schema=${fileName}.ts --url=./test.db`;
 		console.log(`Running: ${command}`);
 		console.log(`Options:`, betterAuthOptions);
 		try {
