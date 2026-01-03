@@ -12,16 +12,16 @@ Before getting started, make sure you have Drizzle installed and configured. For
 You can use the Drizzle adapter to connect to your database as follows.
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { db } from "./database.ts";
+import { betterAuth } from 'better-auth';
+import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { db } from './database.ts';
 
 export const auth = betterAuth({
-  database: drizzleAdapter(db, {
-    // [!code highlight]
-    provider: "sqlite", // or "pg" or "mysql" // [!code highlight]
-  }), // [!code highlight]
-  //... the rest of your config
+	database: drizzleAdapter(db, {
+		// [!code highlight]
+		provider: 'sqlite', // or "pg" or "mysql" // [!code highlight]
+	}), // [!code highlight]
+	//... the rest of your config
 });
 ```
 
@@ -43,7 +43,6 @@ npx drizzle-kit generate # generate the migration file
 npx drizzle-kit migrate # apply the migration
 ```
 
-
 ## Joins (Experimental)
 
 Database joins is useful when Better-Auth needs to fetch related data from multiple tables in a single query.
@@ -55,15 +54,17 @@ To enable this feature, you need to set the `experimental.joins` option to `true
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
-  experimental: { joins: true }
+	experimental: { joins: true },
 });
 ```
+
 <Callout type="warn">
   Please make sure that your Drizzle schema has the necessary relations defined.
   If you do not see any relations in your Drizzle schema, you can manually add them using the [`relation`](https://orm.drizzle.team/docs/relations) drizzle-orm function
   or run our latest CLI version `npx @better-auth/cli@latest generate` to generate a new Drizzle schema with the relations.
 
-  Additionally, you're required to pass each [relation](https://orm.drizzle.team/docs/relations) through the drizzle adapter schema object.
+Additionally, you're required to pass each [relation](https://orm.drizzle.team/docs/relations) through the drizzle adapter schema object.
+
 </Callout>
 
 ## Modifying Table Names
@@ -71,19 +72,19 @@ export const auth = betterAuth({
 The Drizzle adapter expects the schema you define to match the table names. For example, if your Drizzle schema maps the `user` table to `users`, you need to manually pass the schema and map it to the user table.
 
 ```ts
-import { betterAuth } from "better-auth";
-import { db } from "./drizzle";
-import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { schema } from "./schema";
+import { betterAuth } from 'better-auth';
+import { db } from './drizzle';
+import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { schema } from './schema';
 
 export const auth = betterAuth({
-  database: drizzleAdapter(db, {
-    provider: "sqlite", // or "pg" or "mysql"
-    schema: {
-      ...schema,
-      user: schema.users,
-    },
-  }),
+	database: drizzleAdapter(db, {
+		provider: 'sqlite', // or "pg" or "mysql"
+		schema: {
+			...schema,
+			user: schema.users,
+		},
+	}),
 });
 ```
 
@@ -93,13 +94,13 @@ For example:
 
 ```ts
 export const auth = betterAuth({
-  database: drizzleAdapter(db, {
-    provider: "sqlite", // or "pg" or "mysql"
-    schema,
-  }),
-  user: {
-    modelName: "users", // [!code highlight]
-  }
+	database: drizzleAdapter(db, {
+		provider: 'sqlite', // or "pg" or "mysql"
+		schema,
+	}),
+	user: {
+		modelName: 'users', // [!code highlight]
+	},
 });
 ```
 
@@ -110,12 +111,12 @@ For example, if you want to modify the `email` field to `email_address`,
 you simply need to change the Drizzle schema to:
 
 ```ts
-export const user = mysqlTable("user", {
-  // Changed field name without changing the schema property name
-  // This allows drizzle & better-auth to still use the original field name,
-  // while your DB uses the modified field name
-  email: varchar("email_address", { length: 255 }).notNull().unique(), // [!code highlight]
-  // ... others
+export const user = mysqlTable('user', {
+	// Changed field name without changing the schema property name
+	// This allows drizzle & better-auth to still use the original field name,
+	// while your DB uses the modified field name
+	email: varchar('email_address', { length: 255 }).notNull().unique(), // [!code highlight]
+	// ... others
 });
 ```
 
@@ -125,15 +126,15 @@ For example:
 
 ```ts
 export const auth = betterAuth({
-  database: drizzleAdapter(db, {
-    provider: "sqlite", // or "pg" or "mysql"
-    schema,
-  }),
-  user: {
-    fields: {
-      email: "email_address", // [!code highlight]
-    }
-  }
+	database: drizzleAdapter(db, {
+		provider: 'sqlite', // or "pg" or "mysql"
+		schema,
+	}),
+	user: {
+		fields: {
+			email: 'email_address', // [!code highlight]
+		},
+	},
 });
 ```
 

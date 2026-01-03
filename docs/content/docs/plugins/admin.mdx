@@ -162,7 +162,6 @@ type listUsers = {
 ```
 </APIMethod>
 
-
 #### Query Filtering
 
 The `listUsers` function supports various filter operators including `eq`, `contains`, `starts_with`, and `ends_with`.
@@ -198,14 +197,14 @@ const pageSize = 10;
 const currentPage = 2;
 
 const users = await authClient.admin.listUsers({
-    query: {
-        limit: pageSize,
-        offset: (currentPage - 1) * pageSize
-    }
+	query: {
+		limit: pageSize,
+		offset: (currentPage - 1) * pageSize,
+	},
 });
 
 const totalUsers = users.total;
-const totalPages = Math.ceil(totalUsers / pageSize)
+const totalPages = Math.ceil(totalUsers / pageSize);
 ```
 
 ### Set User Role
@@ -281,7 +280,6 @@ type adminUpdateUser = {
 
 Bans a user, preventing them from signing in and revokes all of their existing sessions.
 
-
 <APIMethod
   path="/admin/ban-user"
   method="POST"
@@ -349,7 +347,6 @@ type listUserSessions = {
 
 Revokes a specific session for a user.
 
-
 <APIMethod
   path="/admin/revoke-user-session"
   method="POST"
@@ -407,11 +404,14 @@ type impersonateUser = {
 
 To stop impersonating a user and continue with the admin account, you can use `stopImpersonating`
 
-<APIMethod path="/admin/stop-impersonating" method="POST" noResult requireSession>
-```ts
-type stopImpersonating = {
-}
-```
+<APIMethod
+	path="/admin/stop-impersonating"
+	method="POST"
+	noResult
+	requireSession
+>
+	```ts type stopImpersonating = {}
+	```
 </APIMethod>
 
 ### Remove User
@@ -447,7 +447,8 @@ By default, there are two roles:
 `user`: Users with the user role have no control over other users.
 
 <Callout>
-  A user can have multiple roles. Multiple roles are stored as string separated by comma (",").
+	A user can have multiple roles. Multiple roles are stored as string separated
+	by comma (",").
 </Callout>
 
 ### Permissions
@@ -455,10 +456,10 @@ By default, there are two roles:
 By default, there are two resources with up to six permissions.
 
 **user**:
-  `create` `list` `set-role` `ban` `impersonate` `delete` `set-password`
+`create` `list` `set-role` `ban` `impersonate` `delete` `set-password`
 
 **session**:
-  `list` `revoke` `delete`
+`list` `revoke` `delete`
 
 Users with the admin role have full control over all the resources and actions. Users with the user role have no control over any of those actions.
 
@@ -503,9 +504,9 @@ The plugin provides an easy way to define your own set of permissions for each r
         project: ["create"], // [!code highlight]
     }); // [!code highlight]
 
-   export const admin = ac.newRole({ // [!code highlight]
-        project: ["create", "update"], // [!code highlight]
-    }); // [!code highlight]
+export const admin = ac.newRole({ // [!code highlight]
+project: ["create", "update"], // [!code highlight]
+}); // [!code highlight]
 
     export const myCustomRole = ac.newRole({ // [!code highlight]
         project: ["create", "update", "delete"], // [!code highlight]
@@ -588,7 +589,6 @@ The plugin provides an easy way to define your own set of permissions for each r
 
 To check a user's permissions, you can use the `hasPermission` function provided by the client.
 
-
 <APIMethod path="/admin/has-permission" method="POST">
 ```ts
 type userHasPermission = {
@@ -617,58 +617,55 @@ Example usage:
 
 ```ts title="auth-client.ts"
 const canCreateProject = await authClient.admin.hasPermission({
-  permissions: {
-    project: ["create"],
-  },
+	permissions: {
+		project: ['create'],
+	},
 });
 
 // You can also check multiple resource permissions at the same time
 const canCreateProjectAndCreateSale = await authClient.admin.hasPermission({
-  permissions: {
-    project: ["create"],
-    sale: ["create"]
-  },
+	permissions: {
+		project: ['create'],
+		sale: ['create'],
+	},
 });
 ```
 
 If you want to check a user's permissions server-side, you can use the `userHasPermission` action provided by the `api` to check the user's permissions.
 
-
-
 ```ts title="api.ts"
-import { auth } from "@/auth";
+import { auth } from '@/auth';
 
 await auth.api.userHasPermission({
-  body: {
-    userId: 'id', //the user id
-    permissions: {
-      project: ["create"], // This must match the structure in your access control
-    },
-  },
+	body: {
+		userId: 'id', //the user id
+		permissions: {
+			project: ['create'], // This must match the structure in your access control
+		},
+	},
 });
 
 // You can also just pass the role directly
 await auth.api.userHasPermission({
-  body: {
-   role: "admin",
-    permissions: {
-      project: ["create"], // This must match the structure in your access control
-    },
-  },
+	body: {
+		role: 'admin',
+		permissions: {
+			project: ['create'], // This must match the structure in your access control
+		},
+	},
 });
 
 // You can also check multiple resource permissions at the same time
 await auth.api.userHasPermission({
-  body: {
-   role: "admin",
-    permissions: {
-      project: ["create"], // This must match the structure in your access control
-      sale: ["create"]
-    },
-  },
+	body: {
+		role: 'admin',
+		permissions: {
+			project: ['create'], // This must match the structure in your access control
+			sale: ['create'],
+		},
+	},
 });
 ```
-
 
 **Check Role Permission**:
 
@@ -678,19 +675,19 @@ Note that this function does **not** check the permissions of the currently logg
 
 ```ts title="auth-client.ts"
 const canCreateProject = authClient.admin.checkRolePermission({
-  permissions: {
-    user: ["delete"],
-  },
-  role: "admin",
+	permissions: {
+		user: ['delete'],
+	},
+	role: 'admin',
 });
 
 // You can also check multiple resource permissions at the same time
 const canDeleteUserAndRevokeSession = authClient.admin.checkRolePermission({
-  permissions: {
-    user: ["delete"],
-    session: ["revoke"]
-  },
-  role: "admin",
+	permissions: {
+		user: ['delete'],
+		session: ['revoke'],
+	},
+	role: 'admin',
 });
 ```
 
@@ -699,46 +696,46 @@ const canDeleteUserAndRevokeSession = authClient.admin.checkRolePermission({
 This plugin adds the following fields to the `user` table:
 
 <DatabaseTable
-  fields={[
-    {
-      name: "role",
-      type: "string",
-      description:
-        "The user's role. Defaults to `user`. Admins will have the `admin` role.",
-      isOptional: true,
-    },
-    {
-      name: "banned",
-      type: "boolean",
-      description: "Indicates whether the user is banned.",
-      isOptional: true,
-    },
-    {
-      name: "banReason",
-      type: "string",
-      description: "The reason for the user's ban.",
-      isOptional: true,
-    },
-    {
-      name: "banExpires",
-      type: "date",
-      description: "The date when the user's ban will expire.",
-      isOptional: true,
-    },
-  ]}
+	fields={[
+		{
+			name: 'role',
+			type: 'string',
+			description:
+				"The user's role. Defaults to `user`. Admins will have the `admin` role.",
+			isOptional: true,
+		},
+		{
+			name: 'banned',
+			type: 'boolean',
+			description: 'Indicates whether the user is banned.',
+			isOptional: true,
+		},
+		{
+			name: 'banReason',
+			type: 'string',
+			description: "The reason for the user's ban.",
+			isOptional: true,
+		},
+		{
+			name: 'banExpires',
+			type: 'date',
+			description: "The date when the user's ban will expire.",
+			isOptional: true,
+		},
+	]}
 />
 
 And adds one field in the `session` table:
 
 <DatabaseTable
-  fields={[
-    {
-      name: "impersonatedBy",
-      type: "string",
-      description: "The ID of the admin that is impersonating this session.",
-      isOptional: true,
-    },
-  ]}
+	fields={[
+		{
+			name: 'impersonatedBy',
+			type: 'string',
+			description: 'The ID of the admin that is impersonating this session.',
+			isOptional: true,
+		},
+	]}
 />
 
 ## Options
@@ -749,24 +746,27 @@ The default role for a user. Defaults to `user`.
 
 ```ts title="auth.ts"
 admin({
-  defaultRole: "regular",
+	defaultRole: 'regular',
 });
 ```
+
 ### Admin Roles
 
 The roles that are considered admin roles when **not** using custom access control. Defaults to `["admin"]`.
 
 ```ts title="auth.ts"
 admin({
-  adminRoles: ["admin", "superadmin"],
+	adminRoles: ['admin', 'superadmin'],
 });
 ```
 
 <Callout type="warning">
-  **Note:** The `adminRoles` option is **not required** when using custom access control (via `ac` and `roles`). When you define custom roles with specific permissions, those roles will have exactly the permissions you grant them through the access control system.  
-  
-  **Warning:** When **not** using custom access control, any role that isn't in the `adminRoles` list will **not** be able to perform admin operations.
-  
+	**Note:** The `adminRoles` option is **not required** when using custom access
+	control (via `ac` and `roles`). When you define custom roles with specific
+	permissions, those roles will have exactly the permissions you grant them
+	through the access control system. **Warning:** When **not** using custom
+	access control, any role that isn't in the `adminRoles` list will **not** be
+	able to perform admin operations.
 </Callout>
 
 ### Admin userIds
@@ -775,8 +775,8 @@ You can pass an array of userIds that should be considered as admin. Default to 
 
 ```ts title="auth.ts"
 admin({
-    adminUserIds: ["user_id_1", "user_id_2"]
-})
+	adminUserIds: ['user_id_1', 'user_id_2'],
+});
 ```
 
 If a user is in the `adminUserIds` list, they will be able to perform any admin operation.
@@ -787,7 +787,7 @@ The duration of the impersonation session in seconds. Defaults to 1 hour.
 
 ```ts title="auth.ts"
 admin({
-  impersonationSessionDuration: 60 * 60 * 24, // 1 day
+	impersonationSessionDuration: 60 * 60 * 24, // 1 day
 });
 ```
 
@@ -797,7 +797,7 @@ The default ban reason for a user created by the admin. Defaults to `No reason`.
 
 ```ts title="auth.ts"
 admin({
-  defaultBanReason: "Spamming",
+	defaultBanReason: 'Spamming',
 });
 ```
 
@@ -807,7 +807,7 @@ The default ban expires in for a user created by the admin in seconds. Defaults 
 
 ```ts title="auth.ts"
 admin({
-  defaultBanExpiresIn: 60 * 60 * 24, // 1 day
+	defaultBanExpiresIn: 60 * 60 * 24, // 1 day
 });
 ```
 
@@ -817,7 +817,7 @@ The message to show when a banned user tries to sign in. Defaults to "You have b
 
 ```ts title="auth.ts"
 admin({
-  bannedUserMessage: "Custom banned user message",
+	bannedUserMessage: 'Custom banned user message',
 });
 ```
 
@@ -827,6 +827,6 @@ Whether to allow impersonating other admin users. Defaults to `false`.
 
 ```ts title="auth.ts"
 admin({
-  allowImpersonatingAdmins: true,
+	allowImpersonatingAdmins: true,
 });
 ```

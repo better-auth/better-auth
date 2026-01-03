@@ -57,7 +57,7 @@ description: Salesforce provider setup and usage.
     #### Configuration Options
 
     - `clientId`: Your Connected App's Consumer Key
-    - `clientSecret`: Your Connected App's Consumer Secret  
+    - `clientSecret`: Your Connected App's Consumer Secret
     - `environment`: `"production"` (default) or `"sandbox"`
     - `loginUrl`: Custom My Domain URL (without `https://`) - overrides environment setting
     - `redirectURI`: Override the auto-generated redirect URI if needed
@@ -84,7 +84,8 @@ description: Salesforce provider setup and usage.
         - The `redirectURI` option helps resolve redirect URI mismatch errors
     </Callout>
     </Step>
-        
+
+
    <Step>
     ### Environment Variables
     Add the following environment variables to your `.env.local` file:
@@ -118,6 +119,7 @@ description: Salesforce provider setup and usage.
         })
     }
     ```
+
 </Step>
 <Step>
     ### Troubleshooting
@@ -149,5 +151,6 @@ description: Salesforce provider setup and usage.
     <Callout type="info">
         The default scopes requested are `openid`, `email`, and `profile`. The provider will automatically include the `id` scope for accessing basic user information.
     </Callout>
+
 </Step>
 </Steps>

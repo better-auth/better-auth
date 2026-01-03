@@ -12,19 +12,19 @@ Make sure you have PostgreSQL installed and configured.
 Then, you can connect it straight into Better Auth.
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { Pool } from "pg";
+import { betterAuth } from 'better-auth';
+import { Pool } from 'pg';
 
 export const auth = betterAuth({
-  database: new Pool({
-    connectionString: "postgres://user:password@localhost:5432/database",
-  }),
+	database: new Pool({
+		connectionString: 'postgres://user:password@localhost:5432/database',
+	}),
 });
 ```
 
 <Callout>
-  For more information, read Kysely's documentation to the
-  [PostgresDialect](https://kysely-org.github.io/kysely-apidoc/classes/PostgresDialect.html).
+	For more information, read Kysely's documentation to the
+	[PostgresDialect](https://kysely-org.github.io/kysely-apidoc/classes/PostgresDialect.html).
 </Callout>
 
 ## Schema generation & migration
@@ -33,22 +33,26 @@ The [Better Auth CLI](/docs/concepts/cli) allows you to generate or migrate
 your database schema based on your Better Auth configuration and plugins.
 
 <table>
-  <thead>
-    <tr className="border-b">
-      <th>
-        <p className="font-bold text-[16px] mb-1">PostgreSQL Schema Generation</p>
-      </th>
-      <th>
-        <p className="font-bold text-[16px] mb-1">PostgreSQL Schema Migration</p>
-      </th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr className="h-10">
-      <td>✅ Supported</td>
-      <td>✅ Supported</td>
-    </tr>
-  </tbody>
+	<thead>
+		<tr className="border-b">
+			<th>
+				<p className="font-bold text-[16px] mb-1">
+					PostgreSQL Schema Generation
+				</p>
+			</th>
+			<th>
+				<p className="font-bold text-[16px] mb-1">
+					PostgreSQL Schema Migration
+				</p>
+			</th>
+		</tr>
+	</thead>
+	<tbody>
+		<tr className="h-10">
+			<td>✅ Supported</td>
+			<td>✅ Supported</td>
+		</tr>
+	</tbody>
 </table>
 
 ```package-install title="Schema Generation"
@@ -70,11 +74,12 @@ To enable this feature, you need to set the `experimental.joins` option to `true
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
-  experimental: { joins: true }
+	experimental: { joins: true },
 });
 ```
+
 <Callout type="warn">
-  It's possible that you may need to run migrations after enabling this feature.
+	It's possible that you may need to run migrations after enabling this feature.
 </Callout>
 
 ## Use a non-default schema
@@ -87,13 +92,14 @@ non-default schema (e.g., `auth`) for its tables, you have several options:
 Append the `options` parameter to your connection URI:
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { Pool } from "pg";
+import { betterAuth } from 'better-auth';
+import { Pool } from 'pg';
 
 export const auth = betterAuth({
-  database: new Pool({
-    connectionString: "postgres://user:password@localhost:5432/database?options=-c search_path=auth",
-  }),
+	database: new Pool({
+		connectionString:
+			'postgres://user:password@localhost:5432/database?options=-c search_path=auth',
+	}),
 });
 ```
 
@@ -102,18 +108,18 @@ URL-encode if needed: `?options=-c%20search_path%3Dauth`.
 ### Option 2: Set search_path using Pool options
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { Pool } from "pg";
+import { betterAuth } from 'better-auth';
+import { Pool } from 'pg';
 
 export const auth = betterAuth({
-  database: new Pool({
-    host: "localhost",
-    port: 5432,
-    user: "postgres",
-    password: "password",
-    database: "my-db",
-    options: "-c search_path=auth",
-  }),
+	database: new Pool({
+		host: 'localhost',
+		port: 5432,
+		user: 'postgres',
+		password: 'password',
+		database: 'my-db',
+		options: '-c search_path=auth',
+	}),
 });
 ```
 
@@ -132,6 +138,7 @@ After setting this, reconnect to apply the changes.
 Before using a non-default schema, ensure:
 
 1. **The schema exists:**
+
    ```sql
    CREATE SCHEMA IF NOT EXISTS auth;
    ```
@@ -157,6 +164,7 @@ The Better Auth CLI migration system automatically detects your configured `sear
 **Issue:** "relation does not exist" error during migration
 
 **Solution:** This usually means the schema doesn't exist or the user lacks permissions. Create the schema and grant permissions as shown above.
+
 </Callout>
 
 <Callout type="info">
@@ -169,6 +177,7 @@ SHOW search_path;
 ```
 
 This should return your custom schema (e.g., `auth`) as the first value.
+
 </Callout>
 
 ## Additional Information

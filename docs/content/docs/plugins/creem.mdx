@@ -5,11 +5,14 @@ description: Better Auth Plugin for Payment and Subscriptions using Creem
 
 [Creem](https://creem.io) is a financial OS that enables teams and individuals selling software globally to split revenue and collaborate on financial workflows without any tax compliance headaches. This plugin integrates Creem with Better Auth, bringing payment processing and subscription management directly into your authentication layer.
 
-<Card href="https://discord.gg/q3GKZs92Av" title="Get support on Creem Discord or in our in-app live-chat">
-  This plugin is maintained by the Creem team.<br />
-  Need help? Reach out to our team anytime on Discord.
+<Card
+	href="https://discord.gg/q3GKZs92Av"
+	title="Get support on Creem Discord or in our in-app live-chat"
+>
+	This plugin is maintained by the Creem team.
+	<br />
+	Need help? Reach out to our team anytime on Discord.
 </Card>
-
 
 ## Features
 
@@ -37,6 +40,7 @@ description: Better Auth Plugin for Payment and Subscriptions using Creem
     <Callout>
       If you're using a separate client and server setup, make sure to install the plugin in both parts of your project.
     </Callout>
+
   </Step>
 
   <Step>
@@ -52,6 +56,7 @@ description: Better Auth Plugin for Payment and Subscriptions using Creem
     <Callout type="warn">
       Test Mode and Production have different API keys. Make sure you're using the correct one for your environment.
     </Callout>
+
   </Step>
 
 </Steps>
@@ -64,22 +69,22 @@ Configure Better Auth with the Creem plugin:
 
 ```typescript
 // lib/auth.ts
-import { betterAuth } from "better-auth";
-import { creem } from "@creem_io/better-auth";
+import { betterAuth } from 'better-auth';
+import { creem } from '@creem_io/better-auth';
 
 export const auth = betterAuth({
-  database: {
-    // your database config
-  },
-  plugins: [
-    creem({
-      apiKey: process.env.CREEM_API_KEY!,
-      webhookSecret: process.env.CREEM_WEBHOOK_SECRET, // Optional, webhooks are automatically enabled when passing a signing secret
-      testMode: true, // Optional, use test mode for development
-      defaultSuccessUrl: "/success", // Optional, redirect to this URL after successful payments
-      persistSubscriptions: true, // Optional, enable database persistence (default: true)
-    }),
-  ],
+	database: {
+		// your database config
+	},
+	plugins: [
+		creem({
+			apiKey: process.env.CREEM_API_KEY!,
+			webhookSecret: process.env.CREEM_WEBHOOK_SECRET, // Optional, webhooks are automatically enabled when passing a signing secret
+			testMode: true, // Optional, use test mode for development
+			defaultSuccessUrl: '/success', // Optional, redirect to this URL after successful payments
+			persistSubscriptions: true, // Optional, enable database persistence (default: true)
+		}),
+	],
 });
 ```
 
@@ -89,12 +94,12 @@ export const auth = betterAuth({
 
 ```typescript
 // lib/auth-client.ts
-import { createAuthClient } from "better-auth/react";
-import { creemClient } from "@creem_io/better-auth/client";
+import { createAuthClient } from 'better-auth/react';
+import { creemClient } from '@creem_io/better-auth/client';
 
 export const authClient = createAuthClient({
-  baseURL: process.env.NEXT_PUBLIC_APP_URL,
-  plugins: [creemClient()],
+	baseURL: process.env.NEXT_PUBLIC_APP_URL,
+	plugins: [creemClient()],
 });
 ```
 
@@ -104,38 +109,35 @@ For improved TypeScript IntelliSense and autocomplete:
 
 ```typescript
 // lib/auth-client.ts
-import { createCreemAuthClient } from "@creem_io/better-auth/create-creem-auth-client";
-import { creemClient } from "@creem_io/better-auth/client";
+import { createCreemAuthClient } from '@creem_io/better-auth/create-creem-auth-client';
+import { creemClient } from '@creem_io/better-auth/client';
 
 export const authClient = createCreemAuthClient({
-  baseURL: process.env.NEXT_PUBLIC_APP_URL,
-  plugins: [creemClient()],
+	baseURL: process.env.NEXT_PUBLIC_APP_URL,
+	plugins: [creemClient()],
 });
 ```
 
 <Callout>
-  The `createCreemAuthClient` wrapper provides enhanced TypeScript support and cleaner parameter types. It's optimized for use with the Creem plugin.
+	The `createCreemAuthClient` wrapper provides enhanced TypeScript support and
+	cleaner parameter types. It's optimized for use with the Creem plugin.
 </Callout>
 
 ### Database Migration
 
 If you're using database persistence (`persistSubscriptions: true`), generate and run the database schema:
 
-<Tabs items={["migrate", "generate"]}>
-    <Tab value="migrate">
-    ```package-install
-    npx @better-auth/cli migrate
-    ```
-    </Tab>
-    <Tab value="generate">
-    ```package-install
-    npx @better-auth/cli generate
-    ```
-    </Tab>
+<Tabs items={['migrate', 'generate']}>
+	<Tab value="migrate">```package-install npx @better-auth/cli migrate ```</Tab>
+	<Tab value="generate">
+		```package-install npx @better-auth/cli generate ```
+	</Tab>
 </Tabs>
 
 <Callout type="info">
-  Depending on your database adapter, additional setup steps may be required. Refer to the [Better Auth adapter documentation](https://www.better-auth.com/docs/adapters/mysql) for details.
+	Depending on your database adapter, additional setup steps may be required.
+	Refer to the [Better Auth adapter
+	documentation](https://www.better-auth.com/docs/adapters/mysql) for details.
 </Callout>
 
 ### Webhook Setup
@@ -155,6 +157,7 @@ If you're using database persistence (`persistSubscriptions: true`), generate an
     <Callout type="info">
       Check step 3 if local development.
     </Callout>
+
   </Step>
 
   <Step>
@@ -175,6 +178,7 @@ If you're using database persistence (`persistSubscriptions: true`), generate an
       testMode: true,
     })
     ```
+
   </Step>
 
   <Step>
@@ -187,6 +191,7 @@ If you're using database persistence (`persistSubscriptions: true`), generate an
     ```
 
     Add the ngrok URL to your Creem webhook settings.
+
   </Step>
 </Steps>
 
@@ -262,8 +267,8 @@ Redirect users to manage their subscriptions:
 
 ```typescript
 const handlePortal = async () => {
-  // No need to redirect, the portal will be opened in the same tab
-  const { data, error } = await authClient.creem.createPortal();
+	// No need to redirect, the portal will be opened in the same tab
+	const { data, error } = await authClient.creem.createPortal();
 };
 ```
 
@@ -275,11 +280,11 @@ When database persistence is enabled, the subscription is found automatically fo
 
 ```typescript
 const handleCancel = async () => {
-  const { data, error } = await authClient.creem.cancelSubscription();
+	const { data, error } = await authClient.creem.cancelSubscription();
 
-  if (data?.success) {
-    console.log(data.message);
-  }
+	if (data?.success) {
+		console.log(data.message);
+	}
 };
 ```
 
@@ -287,7 +292,7 @@ If database persistence is disabled, provide the subscription ID:
 
 ```typescript
 const { data } = await authClient.creem.cancelSubscription({
-  id: "sub_123456",
+	id: 'sub_123456',
 });
 ```
 
@@ -297,13 +302,13 @@ Get subscription details for the authenticated user:
 
 ```typescript
 const getSubscription = async () => {
-  const { data } = await authClient.creem.retrieveSubscription();
+	const { data } = await authClient.creem.retrieveSubscription();
 
-  if (data) {
-    console.log(`Status: ${data.status}`);
-    console.log(`Product: ${data.product.name}`);
-    console.log(`Price: ${data.product.price} ${data.product.currency}`);
-  }
+	if (data) {
+		console.log(`Status: ${data.status}`);
+		console.log(`Product: ${data.product.name}`);
+		console.log(`Price: ${data.product.price} ${data.product.currency}`);
+	}
 };
 ```
 
@@ -315,13 +320,15 @@ Verify if the user has an active subscription (requires database mode):
 const { data } = await authClient.creem.hasAccessGranted();
 
 if (data?.hasAccess) {
-  // User has active subscription access
-  console.log(`Expires: ${data.expiresAt}`);
+	// User has active subscription access
+	console.log(`Expires: ${data.expiresAt}`);
 }
 ```
 
 <Callout type="info">
-  This function checks if the user has access for the current billing period. For example, if a user purchases a yearly plan and cancels after one month, they still have access until the year ends.
+	This function checks if the user has access for the current billing period.
+	For example, if a user purchases a yearly plan and cancels after one month,
+	they still have access until the year ends.
 </Callout>
 
 ### Transaction History
@@ -330,15 +337,15 @@ Search transaction records for the authenticated user:
 
 ```typescript
 const { data } = await authClient.creem.searchTransactions({
-  productId: "prod_xyz789", // Optional filter
-  pageNumber: 1,
-  pageSize: 50,
+	productId: 'prod_xyz789', // Optional filter
+	pageNumber: 1,
+	pageSize: 50,
 });
 
 if (data?.transactions) {
-  data.transactions.forEach((tx) => {
-    console.log(`${tx.type}: ${tx.amount} ${tx.currency}`);
-  });
+	data.transactions.forEach((tx) => {
+		console.log(`${tx.type}: ${tx.amount} ${tx.currency}`);
+	});
 }
 ```
 
@@ -350,67 +357,69 @@ The plugin provides flexible webhook handling with both granular event handlers 
 
 These handlers provide the simplest and most powerful way to manage user access. They automatically handle all payment scenarios and subscription states, so you don't need to manage individual subscription events.
 
-  <strong> Database Persistence Required:</strong> These handlers require the database persistence option to be enabled in your plugin configuration.
+<strong> Database Persistence Required:</strong> These handlers require the
+database persistence option to be enabled in your plugin configuration.
 
-  | Handler Name           | Data Parameter Type        | Description                                                                                              |
-  |------------------------|----------------------------|----------------------------------------------------------------------------------------------------------|
-  | **`onGrantAccess`**    | **`GrantAccessContext`**   | **Called when a user should be granted access.** Handles successful payments, active subscriptions, and trial periods. Use this to enable features, add user to groups, or update permissions. |
-  | **`onRevokeAccess`**   | **`RevokeAccessContext`**  | **Called when a user's access should be revoked.** Handles cancellations, expirations, refunds, and failed payments. Use this to disable features, remove from groups, or revoke permissions. |
+| Handler Name         | Data Parameter Type       | Description                                                                                                                                                                                    |
+| -------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`onGrantAccess`**  | **`GrantAccessContext`**  | **Called when a user should be granted access.** Handles successful payments, active subscriptions, and trial periods. Use this to enable features, add user to groups, or update permissions. |
+| **`onRevokeAccess`** | **`RevokeAccessContext`** | **Called when a user's access should be revoked.** Handles cancellations, expirations, refunds, and failed payments. Use this to disable features, remove from groups, or revoke permissions.  |
 
 **Why use these handlers?**
--  Single source of truth for access control
--  Handles all payment scenarios automatically
--  Reduces code complexity and potential bugs
--  Works for both one-time purchases and subscriptions
--  Takes current billing period and access expiration dates into consideration
+
+- Single source of truth for access control
+- Handles all payment scenarios automatically
+- Reduces code complexity and potential bugs
+- Works for both one-time purchases and subscriptions
+- Takes current billing period and access expiration dates into consideration
 
 ```typescript
 // lib/auth.ts
-import { betterAuth } from "better-auth";
-import { creem } from "@creem_io/better-auth";
+import { betterAuth } from 'better-auth';
+import { creem } from '@creem_io/better-auth';
 
 export const auth = betterAuth({
-  database: {
-    // your database config
-  },
-  plugins:[ 
-    creem({
-      apiKey: process.env.CREEM_API_KEY!,
-      webhookSecret: process.env.CREEM_WEBHOOK_SECRET!,
+	database: {
+		// your database config
+	},
+	plugins: [
+		creem({
+			apiKey: process.env.CREEM_API_KEY!,
+			webhookSecret: process.env.CREEM_WEBHOOK_SECRET!,
 
-      onGrantAccess: async ({ reason, product, customer, metadata }) => {
-        const userId = metadata?.referenceId as string;
+			onGrantAccess: async ({ reason, product, customer, metadata }) => {
+				const userId = metadata?.referenceId as string;
 
-        // Update your database specific logic
-        await db.user.update({
-          where: { id: userId },
-          data: { 
-            hasAccess: true, 
-            subscriptionTier: product.name,
-            accessReason: reason 
-          },
-        });
+				// Update your database specific logic
+				await db.user.update({
+					where: { id: userId },
+					data: {
+						hasAccess: true,
+						subscriptionTier: product.name,
+						accessReason: reason,
+					},
+				});
 
-        console.log(`Granted ${reason} access to ${customer.email}`);
-      },
+				console.log(`Granted ${reason} access to ${customer.email}`);
+			},
 
-      onRevokeAccess: async ({ reason, product, customer, metadata }) => {
-        const userId = metadata?.referenceId as string;
+			onRevokeAccess: async ({ reason, product, customer, metadata }) => {
+				const userId = metadata?.referenceId as string;
 
-        // Update your database specific logic
-        await db.user.update({
-          where: { id: userId },
-          data: { 
-            hasAccess: false, 
-            revokeReason: reason 
-          },
-        });
+				// Update your database specific logic
+				await db.user.update({
+					where: { id: userId },
+					data: {
+						hasAccess: false,
+						revokeReason: reason,
+					},
+				});
 
-        console.log(`Revoked access (${reason}) from ${customer.email}`);
-      },
-    }),
-  ],
-})
+				console.log(`Revoked access (${reason}) from ${customer.email}`);
+			},
+		}),
+	],
+});
 ```
 
 ### Grant Access Reasons
@@ -425,27 +434,26 @@ export const auth = betterAuth({
 - `subscription_expired` - Subscription expired without renewal
 - `subscription_period_end` - Current subscription period ended without renewal
 
-
 ---
 
 ### Granular Event Handlers
 
 For advanced use cases where you need fine-grained control over specific events, use these handlers:
 
-  | Handler Name                | Data Parameter Type            | Description                                                  |
-  |-----------------------------|-------------------------------|--------------------------------------------------------------|
-  | `onCheckoutCompleted`       | `FlatCheckoutCompleted`       | Called when a checkout is completed successfully.            |
-  | `onRefundCreated`           | `FlatRefundCreated`           | Triggered when a refund is issued for a payment.             |
-  | `onDisputeCreated`          | `FlatDisputeCreated`          | Invoked when a payment dispute/chargeback is created.        |
-  | `onSubscriptionActive`      | `FlatSubscriptionEvent`       | Fired when a subscription becomes active.                    |
-  | `onSubscriptionTrialing`    | `FlatSubscriptionEvent`       | Subscription enters a trial period.                          |
-  | `onSubscriptionCanceled`    | `FlatSubscriptionEvent`       | Called when a subscription is canceled.                      |
-  | `onSubscriptionPaid`        | `FlatSubscriptionEvent`       | Subscription payment is received.                            |
-  | `onSubscriptionExpired`     | `FlatSubscriptionEvent`       | Subscription has expired (no renewal/payment).               |
-  | `onSubscriptionUnpaid`      | `FlatSubscriptionEvent`       | Payment for a subscription failed or remains unpaid.         |
-  | `onSubscriptionUpdate`      | `FlatSubscriptionEvent`       | Subscription settings/details updated.                       |
-  | `onSubscriptionPastDue`     | `FlatSubscriptionEvent`       | Subscription payment is late or overdue.                     |
-  | `onSubscriptionPaused`      | `FlatSubscriptionEvent`       | Subscription has been paused (by user or admin).             |
+| Handler Name             | Data Parameter Type     | Description                                           |
+| ------------------------ | ----------------------- | ----------------------------------------------------- |
+| `onCheckoutCompleted`    | `FlatCheckoutCompleted` | Called when a checkout is completed successfully.     |
+| `onRefundCreated`        | `FlatRefundCreated`     | Triggered when a refund is issued for a payment.      |
+| `onDisputeCreated`       | `FlatDisputeCreated`    | Invoked when a payment dispute/chargeback is created. |
+| `onSubscriptionActive`   | `FlatSubscriptionEvent` | Fired when a subscription becomes active.             |
+| `onSubscriptionTrialing` | `FlatSubscriptionEvent` | Subscription enters a trial period.                   |
+| `onSubscriptionCanceled` | `FlatSubscriptionEvent` | Called when a subscription is canceled.               |
+| `onSubscriptionPaid`     | `FlatSubscriptionEvent` | Subscription payment is received.                     |
+| `onSubscriptionExpired`  | `FlatSubscriptionEvent` | Subscription has expired (no renewal/payment).        |
+| `onSubscriptionUnpaid`   | `FlatSubscriptionEvent` | Payment for a subscription failed or remains unpaid.  |
+| `onSubscriptionUpdate`   | `FlatSubscriptionEvent` | Subscription settings/details updated.                |
+| `onSubscriptionPastDue`  | `FlatSubscriptionEvent` | Subscription payment is late or overdue.              |
+| `onSubscriptionPaused`   | `FlatSubscriptionEvent` | Subscription has been paused (by user or admin).      |
 
 ### How to use a Webhook Handler
 
@@ -453,55 +461,54 @@ Handle individual webhook events with all properties flattened for easy access:
 
 ```typescript
 // lib/auth.ts
-import { betterAuth } from "better-auth";
-import { creem } from "@creem_io/better-auth";
+import { betterAuth } from 'better-auth';
+import { creem } from '@creem_io/better-auth';
 
 export const auth = betterAuth({
-  database: {
-    // your database config
-  },
-  plugins: [
-    creem({
-      apiKey: process.env.CREEM_API_KEY!,
-      webhookSecret: process.env.CREEM_WEBHOOK_SECRET!,
+	database: {
+		// your database config
+	},
+	plugins: [
+		creem({
+			apiKey: process.env.CREEM_API_KEY!,
+			webhookSecret: process.env.CREEM_WEBHOOK_SECRET!,
 
-      onCheckoutCompleted: async (data) => {
-        const { customer, product, order, webhookEventType } = data;
-        console.log(`${customer.email} purchased ${product.name}`);
-        
-        // Perfect for one-time payments
-        await sendThankYouEmail(customer.email);
-      },
+			onCheckoutCompleted: async (data) => {
+				const { customer, product, order, webhookEventType } = data;
+				console.log(`${customer.email} purchased ${product.name}`);
 
-      onSubscriptionActive: async (data) => {
-        const { customer, product, status } = data;
-        // Handle active subscription
-      },
+				// Perfect for one-time payments
+				await sendThankYouEmail(customer.email);
+			},
 
-      onSubscriptionTrialing: async (data) => {
-        // Handle trial period
-      },
+			onSubscriptionActive: async (data) => {
+				const { customer, product, status } = data;
+				// Handle active subscription
+			},
 
-      onSubscriptionCanceled: async (data) => {
-        // Handle cancellation
-      },
+			onSubscriptionTrialing: async (data) => {
+				// Handle trial period
+			},
 
-      onSubscriptionExpired: async (data) => {
-        // Handle expiration
-      },
+			onSubscriptionCanceled: async (data) => {
+				// Handle cancellation
+			},
 
-      onRefundCreated: async (data) => {
-        // Handle refunds
-      },
+			onSubscriptionExpired: async (data) => {
+				// Handle expiration
+			},
 
-      onDisputeCreated: async (data) => {
-        // Handle disputes
-      },
-    }),
-  ],
+			onRefundCreated: async (data) => {
+				// Handle refunds
+			},
+
+			onDisputeCreated: async (data) => {
+				// Handle disputes
+			},
+		}),
+	],
 });
 ```
-
 
 ### Custom Webhook Handler
 
@@ -509,26 +516,26 @@ Create your own webhook endpoint with signature verification:
 
 ```typescript
 // app/api/webhooks/custom/route.ts
-import { validateWebhookSignature } from "@creem_io/better-auth/server";
+import { validateWebhookSignature } from '@creem_io/better-auth/server';
 
 export async function POST(req: Request) {
-  const payload = await req.text();
-  const signature = req.headers.get("creem-signature");
+	const payload = await req.text();
+	const signature = req.headers.get('creem-signature');
 
-  if (
-    !validateWebhookSignature(
-      payload,
-      signature,
-      process.env.CREEM_WEBHOOK_SECRET!
-    )
-  ) {
-    return new Response("Invalid signature", { status: 401 });
-  }
+	if (
+		!validateWebhookSignature(
+			payload,
+			signature,
+			process.env.CREEM_WEBHOOK_SECRET!,
+		)
+	) {
+		return new Response('Invalid signature', { status: 401 });
+	}
 
-  const event = JSON.parse(payload);
-  // Your custom webhook handling logic
+	const event = JSON.parse(payload);
+	// Your custom webhook handling logic
 
-  return Response.json({ received: true });
+	return Response.json({ received: true });
 }
 ```
 
@@ -540,17 +547,17 @@ Use these utilities directly in Server Components, Server Actions, or API routes
 
 ```typescript
 import {
-  createCheckout,
-  createPortal,
-  cancelSubscription,
-  retrieveSubscription,
-  searchTransactions,
-  checkSubscriptionAccess,
-  isActiveSubscription,
-  formatCreemDate,
-  getDaysUntilRenewal,
-  validateWebhookSignature,
-} from "@creem_io/better-auth/server";
+	createCheckout,
+	createPortal,
+	cancelSubscription,
+	retrieveSubscription,
+	searchTransactions,
+	checkSubscriptionAccess,
+	isActiveSubscription,
+	formatCreemDate,
+	getDaysUntilRenewal,
+	validateWebhookSignature,
+} from '@creem_io/better-auth/server';
 ```
 
 ### Server Component Example
@@ -598,34 +605,34 @@ export default async function DashboardPage() {
 ### Server Action Example
 
 ```typescript
-"use server";
+'use server';
 
-import { createCheckout } from "@creem_io/better-auth/server";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
-import { redirect } from "next/navigation";
+import { createCheckout } from '@creem_io/better-auth/server';
+import { auth } from '@/lib/auth';
+import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
 
 export async function startCheckout(productId: string) {
-  const session = await auth.api.getSession({ headers: await headers() });
+	const session = await auth.api.getSession({ headers: await headers() });
 
-  if (!session?.user) {
-    throw new Error("Not authenticated");
-  }
+	if (!session?.user) {
+		throw new Error('Not authenticated');
+	}
 
-  const { url } = await createCheckout(
-    {
-      apiKey: process.env.CREEM_API_KEY!,
-      testMode: true,
-    },
-    {
-      productId,
-      customer: { email: session.user.email },
-      successUrl: "/success",
-      metadata: { userId: session.user.id },
-    }
-  );
+	const { url } = await createCheckout(
+		{
+			apiKey: process.env.CREEM_API_KEY!,
+			testMode: true,
+		},
+		{
+			productId,
+			customer: { email: session.user.email },
+			successUrl: '/success',
+			metadata: { userId: session.user.id },
+		},
+	);
 
-  redirect(url);
+	redirect(url);
 }
 ```
 
@@ -634,39 +641,39 @@ export async function startCheckout(productId: string) {
 Protect routes based on subscription status:
 
 ```typescript
-import { checkSubscriptionAccess } from "@creem_io/better-auth/server";
-import { auth } from "@/lib/auth";
-import { NextRequest, NextResponse } from "next/server";
+import { checkSubscriptionAccess } from '@creem_io/better-auth/server';
+import { auth } from '@/lib/auth';
+import { NextRequest, NextResponse } from 'next/server';
 
 export async function middleware(request: NextRequest) {
-  const session = await auth.api.getSession({
-    headers: request.headers,
-  });
+	const session = await auth.api.getSession({
+		headers: request.headers,
+	});
 
-  if (!session?.user) {
-    return NextResponse.redirect(new URL("/login", request.url));
-  }
+	if (!session?.user) {
+		return NextResponse.redirect(new URL('/login', request.url));
+	}
 
-  const status = await checkSubscriptionAccess(
-    {
-      apiKey: process.env.CREEM_API_KEY!,
-      testMode: true,
-    },
-    {
-      database: auth.options.database,
-      userId: session.user.id,
-    }
-  );
+	const status = await checkSubscriptionAccess(
+		{
+			apiKey: process.env.CREEM_API_KEY!,
+			testMode: true,
+		},
+		{
+			database: auth.options.database,
+			userId: session.user.id,
+		},
+	);
 
-  if (!status.hasAccess) {
-    return NextResponse.redirect(new URL("/subscribe", request.url));
-  }
+	if (!status.hasAccess) {
+		return NextResponse.redirect(new URL('/subscribe', request.url));
+	}
 
-  return NextResponse.next();
+	return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*"],
+	matcher: ['/dashboard/:path*'],
 };
 ```
 
@@ -674,14 +681,14 @@ export const config = {
 
 ```typescript
 import {
-  isActiveSubscription,
-  formatCreemDate,
-  getDaysUntilRenewal,
-} from "@creem_io/better-auth/server";
+	isActiveSubscription,
+	formatCreemDate,
+	getDaysUntilRenewal,
+} from '@creem_io/better-auth/server';
 
 // Check if status grants access
 if (isActiveSubscription(subscription.status)) {
-  // User has access
+	// User has access
 }
 
 // Format Creem timestamps
@@ -693,7 +700,6 @@ const days = getDaysUntilRenewal(subscription.current_period_end_date);
 console.log(`Renews in ${days} days`);
 ```
 
-
 ### Database Mode vs API Mode
 
 The plugin supports two operational modes:
@@ -703,6 +709,7 @@ The plugin supports two operational modes:
 When `persistSubscriptions: true` (default), subscription data is stored in your database.
 
 **Benefits:**
+
 - Fast access checks without API calls
 - Offline access to subscription data
 - Query subscriptions with SQL
@@ -713,9 +720,9 @@ When `persistSubscriptions: true` (default), subscription data is stored in your
 
 ```typescript
 creem({
-  apiKey: process.env.CREEM_API_KEY!,
-  persistSubscriptions: true, // Default
-})
+	apiKey: process.env.CREEM_API_KEY!,
+	persistSubscriptions: true, // Default
+});
 ```
 
 ### API Mode
@@ -723,10 +730,12 @@ creem({
 When `persistSubscriptions: false`, all data comes directly from the Creem API.
 
 **Benefits:**
+
 - No database schema required
 - Simpler initial setup
 
 **Limitations:**
+
 - Requires API call for each access check
 - Some features require custom implementation
 - No built-in trial abuse prevention
@@ -735,54 +744,57 @@ When `persistSubscriptions: false`, all data comes directly from the Creem API.
 
 ```typescript
 creem({
-  apiKey: process.env.CREEM_API_KEY!,
-  persistSubscriptions: false,
-})
+	apiKey: process.env.CREEM_API_KEY!,
+	persistSubscriptions: false,
+});
 ```
 
 <Callout type="warn">
-  In API mode, functions like `checkSubscriptionAccess` and `hasAccessGranted` have limited functionality and may require custom implementation using the Creem SDK directly.
+	In API mode, functions like `checkSubscriptionAccess` and `hasAccessGranted`
+	have limited functionality and may require custom implementation using the
+	Creem SDK directly.
 </Callout>
 
 ## Type Exports
 
 ### Server-Side Types
 
-| Type Name               | Description                                                                                       | Typical Usage                                      |
-|-------------------------|---------------------------------------------------------------------------------------------------|----------------------------------------------------|
-| `CreemOptions`          | Configuration options for the Creem plugin, such as API keys and persistence settings.            | Used to configure the plugin on the server.         |
-| `GrantAccessContext`    | Context passed to custom access control hooks when granting access to a user.                      | Used in custom access logic.                        |
-| `RevokeAccessContext`   | Context passed to hooks when revoking user access due to subscription status changes.              | Used in custom access logic.                        |
-| `GrantAccessReason`     | Enum or type describing reasons for granting access (e.g., payment received, trial activated).     | Returned in access-related hooks and events.        |
-| `RevokeAccessReason`    | Enum or type describing reasons for revoking access (e.g., canceled, payment failed).              | Returned in access-related hooks and events.        |
-| `FlatCheckoutCompleted` | Event object type for webhook payload when a checkout completes successfully.                      | Used in webhook handlers and event listeners.       |
-| `FlatRefundCreated`     | Event object type for webhook payload when a refund is created.                                   | Used in webhook handlers and event listeners.       |
-| `FlatDisputeCreated`    | Event object type for webhook payload when a dispute is created.                                  | Used in webhook handlers and event listeners.       |
-| `FlatSubscriptionEvent` | Event object type for generic subscription events (created, updated, canceled, etc).              | Used in webhook handlers and event listeners.       |
+| Type Name               | Description                                                                                    | Typical Usage                                 |
+| ----------------------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `CreemOptions`          | Configuration options for the Creem plugin, such as API keys and persistence settings.         | Used to configure the plugin on the server.   |
+| `GrantAccessContext`    | Context passed to custom access control hooks when granting access to a user.                  | Used in custom access logic.                  |
+| `RevokeAccessContext`   | Context passed to hooks when revoking user access due to subscription status changes.          | Used in custom access logic.                  |
+| `GrantAccessReason`     | Enum or type describing reasons for granting access (e.g., payment received, trial activated). | Returned in access-related hooks and events.  |
+| `RevokeAccessReason`    | Enum or type describing reasons for revoking access (e.g., canceled, payment failed).          | Returned in access-related hooks and events.  |
+| `FlatCheckoutCompleted` | Event object type for webhook payload when a checkout completes successfully.                  | Used in webhook handlers and event listeners. |
+| `FlatRefundCreated`     | Event object type for webhook payload when a refund is created.                                | Used in webhook handlers and event listeners. |
+| `FlatDisputeCreated`    | Event object type for webhook payload when a dispute is created.                               | Used in webhook handlers and event listeners. |
+| `FlatSubscriptionEvent` | Event object type for generic subscription events (created, updated, canceled, etc).           | Used in webhook handlers and event listeners. |
 
 ### Client-Side Types
 
-| Type Name                    | Description                                                                                           |
-|------------------------------|-------------------------------------------------------------------------------------------------------|
-| `CreateCheckoutInput`        | Input parameters for creating a checkout session.                                                     |
-| `CreateCheckoutResponse`     | Response shape for a checkout session creation request.                                               |
-| `CheckoutCustomer`           | Customer information type used in a checkout session.                                                 |
-| `CreatePortalInput`          | Input parameters for creating a customer portal session.                                              |
-| `CreatePortalResponse`       | Response data for a request to create a customer portal.                                              |
-| `CancelSubscriptionInput`    | Input parameters when cancelling a subscription.                                                      |
-| `CancelSubscriptionResponse` | Response data for a subscription cancellation request.                                                |
-| `RetrieveSubscriptionInput`  | Input for retrieving a specific subscription's details.                                               |
-| `SubscriptionData`           | Subscription information structure as returned by the API.                                            |
-| `SearchTransactionsInput`    | Filters and parameters for searching transactions.                                                    |
-| `SearchTransactionsResponse` | Response structure for a transaction search query.                                                    |
-| `TransactionData`            | Data relating to individual transactions (e.g., payment, refund, etc).                                |
-| `HasAccessGrantedResponse`   | The shape of the response indicating whether a user has access based on subscription status/rules.    |
+| Type Name                    | Description                                                                                        |
+| ---------------------------- | -------------------------------------------------------------------------------------------------- |
+| `CreateCheckoutInput`        | Input parameters for creating a checkout session.                                                  |
+| `CreateCheckoutResponse`     | Response shape for a checkout session creation request.                                            |
+| `CheckoutCustomer`           | Customer information type used in a checkout session.                                              |
+| `CreatePortalInput`          | Input parameters for creating a customer portal session.                                           |
+| `CreatePortalResponse`       | Response data for a request to create a customer portal.                                           |
+| `CancelSubscriptionInput`    | Input parameters when cancelling a subscription.                                                   |
+| `CancelSubscriptionResponse` | Response data for a subscription cancellation request.                                             |
+| `RetrieveSubscriptionInput`  | Input for retrieving a specific subscription's details.                                            |
+| `SubscriptionData`           | Subscription information structure as returned by the API.                                         |
+| `SearchTransactionsInput`    | Filters and parameters for searching transactions.                                                 |
+| `SearchTransactionsResponse` | Response structure for a transaction search query.                                                 |
+| `TransactionData`            | Data relating to individual transactions (e.g., payment, refund, etc).                             |
+| `HasAccessGrantedResponse`   | The shape of the response indicating whether a user has access based on subscription status/rules. |
 
 ## Trial Abuse Prevention
 
 When using database mode (`persistSubscriptions: true`), the plugin automatically prevents trial abuse. Users can only receive one trial across all subscription plans.
 
 **Example Scenario:**
+
 1. User subscribes to "Starter" plan with 7-day trial
 2. User cancels subscription during the trial period
 3. User attempts to subscribe to "Premium" plan
@@ -826,7 +838,7 @@ If database persistence isn't functioning:
 Some functionalities are only available in database mode or require extra parameters to be passed:
 
 - `checkSubscriptionAccess` requires passing the `userId` parameter
-- `getActiveSubscriptions` requires passing the `userId` parameter  
+- `getActiveSubscriptions` requires passing the `userId` parameter
 - No automatic trial abuse prevention
 - No access to `hasAccessGranted` client method
 

@@ -56,24 +56,27 @@ description: Paybin provider setup and usage.
 ## Additional Configuration
 
 ### Scopes
+
 By default, Paybin provider requests the following scopes: `openid`, `email`, and `profile`. You can customize the scopes based on your application's needs.
 
 For a complete list of available scopes and their descriptions, see the [Paybin OIDC Scopes Documentation](https://developers.paybin.io/knowledge-center/oidc#available-scopes).
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
-    socialProviders: {
-        paybin: {
-            clientId: process.env.PAYBIN_CLIENT_ID as string,
-            clientSecret: process.env.PAYBIN_CLIENT_SECRET as string,
-            scope: ["openid", "email", "profile", "transactions"], // [!code highlight]
-        },
-    },
-})
+	socialProviders: {
+		paybin: {
+			clientId: process.env.PAYBIN_CLIENT_ID as string,
+			clientSecret: process.env.PAYBIN_CLIENT_SECRET as string,
+			scope: ['openid', 'email', 'profile', 'transactions'], // [!code highlight]
+		},
+	},
+});
 ```
 
 ### User Profile Mapping
+
 Paybin returns user information in the ID token following OpenID Connect standards. The provider automatically extracts:
+
 - `id` from `sub` claim
 - `name` from `name`, `preferred_username`, or `email` (in order of preference)
 - `email` from `email` claim

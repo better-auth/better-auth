@@ -56,10 +56,10 @@ You can also nest any of these folders under `src/`, `app/` or `server/` folder.
 And in this file, import Better Auth and create your auth instance. Make sure to export the auth instance with the variable name `auth` or as a `default` export.
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth";
+import { betterAuth } from 'better-auth';
 
 export const auth = betterAuth({
-  //...
+	//...
 });
 ```
 
@@ -72,7 +72,10 @@ Better Auth requires a database to store user data.
 You can easily configure Better Auth to use SQLite, PostgreSQL, or MySQL, and more!
 
 <Callout>
-    You can also configure Better Auth to work in a stateless mode if you don't configure a database. See [Stateless Session Management](/docs/concepts/session-management#stateless-session-management) for more information. Note that most plugins will require a database.
+	You can also configure Better Auth to work in a stateless mode if you don't
+	configure a database. See [Stateless Session
+	Management](/docs/concepts/session-management#stateless-session-management)
+	for more information. Note that most plugins will require a database.
 </Callout>
 
 <Tabs items={["sqlite", "postgres", "mysql"]}>
@@ -161,9 +164,9 @@ Alternatively, if you prefer to use an ORM, you can use one of the built-in adap
 </Tabs>
 
 <Callout>
-  If your database is not listed above, check out our other supported
-  [databases](/docs/adapters/other-relational-databases) for more information,
-  or use one of the supported ORMs.
+	If your database is not listed above, check out our other supported
+	[databases](/docs/adapters/other-relational-databases) for more information,
+	or use one of the supported ORMs.
 </Callout>
 
 </Step>
@@ -203,19 +206,22 @@ Alternatively, if you prefer to use an ORM, you can use one of the built-in adap
 Configure the authentication methods you want to use. Better Auth comes with built-in support for email/password, and social sign-on providers.
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth";
+import { betterAuth } from 'better-auth';
 
 export const auth = betterAuth({
-  //...other options // [!code highlight]
-  emailAndPassword: { // [!code highlight]
-    enabled: true, // [!code highlight]
-  }, // [!code highlight]
-  socialProviders: { // [!code highlight]
-    github: { // [!code highlight]
-      clientId: process.env.GITHUB_CLIENT_ID as string, // [!code highlight]
-      clientSecret: process.env.GITHUB_CLIENT_SECRET as string, // [!code highlight]
-    }, // [!code highlight]
-  }, // [!code highlight]
+	//...other options // [!code highlight]
+	emailAndPassword: {
+		// [!code highlight]
+		enabled: true, // [!code highlight]
+	}, // [!code highlight]
+	socialProviders: {
+		// [!code highlight]
+		github: {
+			// [!code highlight]
+			clientId: process.env.GITHUB_CLIENT_ID as string, // [!code highlight]
+			clientSecret: process.env.GITHUB_CLIENT_SECRET as string, // [!code highlight]
+		}, // [!code highlight]
+	}, // [!code highlight]
 });
 ```
 
@@ -231,8 +237,8 @@ To handle API requests, you need to set up a route handler on your server.
 Create a new file or route in your framework's designated catch-all route handler. This route should handle requests for the path `/api/auth/*` (unless you've configured a different base path).
 
 <Callout>
-  Better Auth supports any backend framework with standard Request and Response
-  objects and offers helper functions for popular frameworks.
+	Better Auth supports any backend framework with standard Request and Response
+	objects and offers helper functions for popular frameworks.
 </Callout>
 
 <Tabs items={["next-js-app-router", "next-js-pages-router", "nuxt", "svelte-kit", "remix", "solid-start", "hono", "cloudflare-workers", "express", "elysia", "tanstack-start", "expo"]} defaultValue="next-js-app-router">
@@ -456,9 +462,9 @@ The client-side library helps you interact with the auth server. Better Auth com
 3. Pass the base URL of your auth server. (If the auth server is running on the same domain as your client, you can skip this step.)
 
 <Callout type="info">
-  If you're using a different base path other than `/api/auth` make sure to pass
-  the whole URL including the path. (e.g.
-  `http://localhost:3000/custom-path/auth`)
+	If you're using a different base path other than `/api/auth` make sure to pass
+	the whole URL including the path. (e.g.
+	`http://localhost:3000/custom-path/auth`)
 </Callout>
 
 <Tabs items={["react", "vue", "svelte", "solid",
