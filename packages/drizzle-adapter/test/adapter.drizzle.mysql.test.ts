@@ -48,13 +48,13 @@ const { execute } = await testAdapter({
 		);
 
 		try {
-			const version = execSync("bunx drizzle-kit --version", {
+			const version = execSync("npx drizzle-kit --version", {
 				cwd: import.meta.dirname,
 				stdio: ["ignore", "pipe", "pipe"],
 			})
 				.toString()
 				.trim();
-			console.log(`bunx drizzle-kit --version output:`, version);
+			console.log(`npx drizzle-kit --version output:`, version);
 		} catch (err) {
 			console.error("Failed to check drizzle-kit version with bunx:", err);
 		}
