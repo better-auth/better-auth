@@ -1,15 +1,19 @@
 <p align="center">
+  {/* lint disable maximum-line-length */}
+
   <picture>
-    <source srcset="https://github.com/better-auth/better-auth/blob/main/banner-dark.png?raw=true" media="(prefers-color-scheme: dark)" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://github.com/better-auth/better-auth/blob/main/banner-dark.png?raw=true" />
 
-    <source srcset="https://github.com/better-auth/better-auth/blob/main/banner.png?raw=true" media="(prefers-color-scheme: light)" />
+    <source media="(prefers-color-scheme: light)" srcset="https://github.com/better-auth/better-auth/blob/main/banner.png?raw=true" />
 
-    <img src="https://github.com/better-auth/better-auth/blob/main/banner.png?raw=true" alt="Better Auth Logo" />
+    <img alt="Better Auth Logo" src="https://github.com/better-auth/better-auth/blob/main/banner.png?raw=true" />
   </picture>
 
-  <h2 align="center">
+  {/* lint enable maximum-line-length */}
+
+  <h1 align="center">
     Better Auth
-  </h2>
+  </h1>
 
   <p align="center">
     The most comprehensive authentication framework for TypeScript
@@ -36,4 +40,5 @@
 pnpm install better-auth
 ```
 
-Read the [Installation Guide](https://better-auth.com/docs/installation) to learn more.
+Read the [Installation Guide](https://better-auth.com/docs/installation) to
+learn more.

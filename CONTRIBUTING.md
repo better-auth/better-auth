@@ -1,10 +1,13 @@
 # Contributing to Better Auth
 
-Thank you for your interest in contributing to Better Auth. This guide will help you get started with the contribution process.
+Thank you for your interest in contributing to Better Auth.
+This guide will help you get started with the contribution process.
 
 ## Code of Conduct
 
-This project and everyone participating in it is governed by our [Code of Conduct](/CODE_OF_CONDUCT.md) By participating, you are expected to uphold this code.
+This project and everyone participating in it is governed by our
+[Code of Conduct](/CODE_OF_CONDUCT.md).
+By participating, you are expected to uphold this code.
 
 ## Project Structure
 
@@ -23,18 +26,23 @@ The Better Auth monorepo is organized as follows:
 
 When contributing to Better Auth:
 
-* Keep changes focused. Large PRs are harder to review and unlikely to be accepted. We recommend opening an issue and discussing it with us first.
+* Keep changes focused.
+  Large PRs are harder to review and unlikely to be accepted.
+  We recommend opening an issue and discussing it with us first.
 * Ensure all code is type-safe and takes full advantage of TypeScript features.
-* Write clear, self-explanatory code. Use comments only when truly necessary.
+* Write clear, self-explanatory code.
+  Use comments only when truly necessary.
 * Maintain a consistent and predictable API across all supported frameworks.
 * Follow the existing code style and conventions.
-* We aim for stability, so avoid changes that would require users to run a migration or update their config...
+* We aim for stability, so avoid changes that would require users to run a
+  migration or update their config...
 
 ## Getting Started
 
 1. Fork the repository to your GitHub account
 
 2. Clone your fork locally:
+
    ```bash
    git clone https://github.com/your-username/better-auth.git
    cd better-auth
@@ -42,20 +50,27 @@ When contributing to Better Auth:
 
 3. Install Node.js (LTS version recommended)
 
-   > **Note**: This project is configured to use [nvm](https://github.com/nvm-sh/nvm) to manage the local Node.js version, as such this is simplest way to get you up and running.
+   > **Note**: This project is configured to use
+   > [nvm](https://github.com/nvm-sh/nvm) to manage the local Node.js version,
+   > as such this is simplest way to get you up and running.
 
    Once installed, use:
 
    ```bash
-   $ nvm install
-   $ nvm use
+   nvm install
+   nvm use
    ```
 
-   Alternatively, see Node.js [installation](https://nodejs.org/en/download) for other supported methods.
+   Alternatively, see
+   [Node.js installation](https://nodejs.org/en/download) for other supported
+   methods.
 
-4. Install `pnpm` if you haven't already:
+4. Install `pnpm` if you haven’t already:
 
-   > **Note:** This project is configured to manage [pnpm](https://pnpm.io/) via [corepack](https://github.com/nodejs/corepack). Once installed, upon usage you'll be prompted to install the correct pnpm version
+   > **Note:** This project is configured to manage [pnpm](https://pnpm.io/) via
+   > [corepack](https://github.com/nodejs/corepack).
+   > Once installed, upon usage you’ll be prompted to install the correct pnpm
+   > version
 
    Alternatively, use `npm` to install it:
 
@@ -75,7 +90,7 @@ When contributing to Better Auth:
      cp -n ./docs/.env.example ./docs/.env
      ```
    * On Windows:
-     ```cmd
+     ```batch
      copy /Y .\docs\.env.example .\docs\.env
      ```
 
@@ -86,13 +101,15 @@ When contributing to Better Auth:
    ```
 
 8. Run the documentation locally:
+
    ```bash
    pnpm -F docs dev
    ```
 
 ## Code Formatting with BiomeJS
 
-We use [BiomeJS](https://biomejs.dev/) for code formatting and linting. Before committing, please ensure your code is properly formatted:
+We use [BiomeJS](https://biomejs.dev/) for code formatting and linting.
+Before committing, please ensure your code is properly formatted:
 
 ```bash
 # Format all code
@@ -133,7 +150,9 @@ pnpm lint:fix
    docker compose up -d
    ```
 
-   > Note: On MacOS, the **mssql** container will likely require Rosetta emulation and at least 2GB of RAM of allocated memory. See their [container requirements](https://learn.microsoft.com/en-us/sql/linux/quickstart-install-connect-docker?view=sql-server-ver17\&tabs=cli\&pivots=cs1-bash#prerequisites).
+   > Note: On MacOS, the **mssql** container will likely require Rosetta
+   > emulation and at least 2GB of RAM of allocated memory. See their
+   > [container requirements](https://learn.microsoft.com/en-us/sql/linux/quickstart-install-connect-docker?view=sql-server-ver17\&tabs=cli\&pivots=cs1-bash#prerequisites).
 
 5. Run the test suite:
 
@@ -148,20 +167,22 @@ pnpm lint:fix
 6. Ensure all tests pass and the code is properly formatted
 
 7. Commit your changes with a descriptive message following this format:
-   For changes that need to be included in the changelog (excluding docs or chore changes), use the `fix` or `feat` format with a specific scope:
+   For changes that need to be included in the changelog (excluding docs or
+   chore changes), use the `fix` or `feat` format with a specific scope:
 
+   ```text
+   fix(organization): fix incorrect member role assignment.
+
+   feat(two-factor): add support for TOTP authentication.
    ```
-   fix(organization): fix incorrect member role assignment
 
-   feat(two-factor): add support for TOTP authentication
-   ```
+   For core library changes that don’t have a specific plugin or scope, you can
+   use `fix` and `feat` without a scope:
 
-   For core library changes that don't have a specific plugin or scope, you can use `fix` and `feat` without a scope:
+   ```text
+   fix: resolve memory leak in session handling.
 
-   ```
-   fix: resolve memory leak in session handling
-
-   feat: add support for custom error messages
+   feat: add support for custom error messages.
    ```
 
    For documentation changes, use `docs`:
@@ -171,14 +192,17 @@ pnpm lint:fix
    docs: fix typos in API reference
    ```
 
-   For changes that refactor or don't change the functionality of the library or docs, use `chore`:
+   For changes that refactor or don’t change the functionality of the library or
+   docs, use `chore`:
 
    ```bash
    chore(refactor): reorganize authentication middleware
    chore: update dependencies to latest versions
    ```
 
-   Each commit message should be clear and descriptive, explaining what the change does. For features and fixes, include context about what was added or resolved.
+   Each commit message should be clear and descriptive, explaining what the
+   change does.
+   For features and fixes, include context about what was added or resolved.
 
 8. Push your branch to your fork
 
@@ -202,12 +226,12 @@ All contributions must include appropriate tests. Follow these guidelines:
 ## Pull Request Process
 
 1. Create a draft pull request early to facilitate discussion
-2. Reference any related issues in your PR description (e.g., 'Closes [#123](https://github.com/better-auth/better-auth/issues/123)')
+2. Reference any related issues in your PR description
 3. Ensure all tests pass and the build is successful
 4. Update documentation as needed
 5. Keep your PR focused on a single feature or bug fix
-6. Be responsive to code review feedback
-7. Update the CHANGELOG.md if your changes are user-facing
+6. Be responsive to code review feedback.
+7. Update the CHANGELOG.md if your changes are user-facing.
 
 ## Code Style
 
@@ -225,9 +249,11 @@ All contributions must include appropriate tests. Follow these guidelines:
 ### Core Library (`/packages/better-auth`)
 
 * Keep the core library focused on essential authentication functionality
-* Plugins in the core generally are made by core members. If you have a plugin idea consider open sourcing it yourself instead.
+* Plugins in the core generally are made by core members.
+  If you have a plugin idea consider open sourcing it yourself instead.
 * Ensure all public APIs are well-documented with JSDoc comments
-* Maintain backward compatibility. If it's super necessary, provide a clear migration path
+* Maintain backward compatibility.
+  If it’s super necessary, provide a clear migration path
 * Follow the existing patterns for error handling and logging
 
 ### Documentation (`/docs`)
@@ -240,4 +266,8 @@ All contributions must include appropriate tests. Follow these guidelines:
 
 ## Security Issues
 
-For security-related issues, please email [security@better-auth.com](mailto:security@better-auth.com). Include a detailed description of the vulnerability and steps to reproduce it. All reports will be reviewed and addressed promptly. For more information, see our [security documentation](/docs/reference/security).
+For security-related issues, please email
+[security@better-auth.com](mailto:security@better-auth.com).
+Include a detailed description of the vulnerability and steps to reproduce it.
+All reports will be reviewed and addressed promptly.
+For more information, see our [security documentation](/SECURITY.md).
