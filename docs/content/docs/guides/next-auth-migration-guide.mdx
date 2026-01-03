@@ -56,10 +56,11 @@ Now Better Auth supports stateless session management without any database. If y
 This client instance includes a set of functions for interacting with the Better Auth server instance. For more information, see [here](/docs/concepts/client).
 
 ```ts title="auth-client.ts"
-import { createAuthClient } from "better-auth/react"
+import { createAuthClient } from 'better-auth/react';
 
-export const authClient = createAuthClient()
+export const authClient = createAuthClient();
 ```
+
 </Step>
 
 <Step>
@@ -103,10 +104,11 @@ Here are the differences between Auth.js and Better Auth for signing in users. F
 ```ts 
 "use client"
 
-import { signIn } from "next-auth/react"
+import { signIn } from 'next-auth/react';
 
 signIn("github")
-```
+
+````
 </Tab>
 
 <Tab value="Better Auth">
@@ -118,7 +120,8 @@ import { authClient } from "@/lib/auth-client";
 const { data, error } = await authClient.signIn.social({
   provider: "github",
 })
-```
+````
+
 </Tab>
 </Tabs>
 
@@ -131,10 +134,11 @@ Here are the differences between Auth.js and Better Auth when signing out users.
 ```ts 
 "use client"
 
-import { signOut } from "next-auth/react"
+import { signOut } from 'next-auth/react';
 
 signOut()
-```
+
+````
 </Tab>
 
 <Tab value="Better Auth">
@@ -144,7 +148,8 @@ signOut()
 import { authClient } from "@/lib/auth-client";
 
 const { data, error } = await authClient.signOut()
-```
+````
+
 </Tab>
 </Tabs>
 
@@ -157,10 +162,11 @@ Here are the differences between Auth.js and Better Auth for getting the current
 ```ts 
 "use client"
 
-import { useSession } from "next-auth/react"
+import { useSession } from 'next-auth/react';
 
 const { data, status, update } = useSession()
-```
+
+````
 </Tab>
 
 <Tab value="Better Auth">
@@ -170,7 +176,8 @@ const { data, status, update } = useSession()
 import { authClient } from "@/lib/auth-client";
 
 const { data, error, refetch, isPending, isRefetching } = authClient.useSession()
-```
+````
+
 </Tab>
 </Tabs>
 
@@ -186,7 +193,8 @@ Here are the differences between Auth.js and Better Auth for signing in users. F
 import { signIn } from "@/lib/auth"
 
 await signIn("github")
-```
+
+````
 </Tab>
 
 <Tab value="Better Auth">
@@ -198,7 +206,8 @@ const { redirect, url } = await auth.api.signInSocial({
     provider: "github",
   },
 })
-```
+````
+
 </Tab>
 </Tabs>
 
@@ -212,7 +221,8 @@ Here are the differences between Auth.js and Better Auth when signing out users.
 import { signOut } from "@/lib/auth"
 
 await signOut()
-```
+
+````
 </Tab>
 
 <Tab value="Better Auth">
@@ -223,7 +233,8 @@ import { headers } from "next/headers";
 const { success } = await auth.api.signOut({
   headers: await headers(),
 })
-```
+````
+
 </Tab>
 </Tabs>
 
@@ -237,7 +248,8 @@ Here are the differences between Auth.js and Better Auth for getting the current
 import { auth } from "@/lib/auth";
 
 const session = await auth()
-```
+
+````
 </Tab>
 
 <Tab value="Better Auth">
@@ -248,7 +260,8 @@ import { headers } from "next/headers";
 const session = await auth.api.getSession({
   headers: await headers(),
 })
-```
+````
+
 </Tab>
 </Tabs>
 </Step>
@@ -265,24 +278,25 @@ Auth.js offers approaches using Proxy (Middleware), but we recommend handling au
 ```ts title="app/dashboard/page.tsx"
 "use client";
 
-import { authClient } from "@/lib/auth-client";
-import { redirect } from "next/navigation";
+import { authClient } from '@/lib/auth-client';
+import { redirect } from 'next/navigation';
 
 const DashboardPage = () => {
-  const { data, error, isPending } = authClient.useSession();
+const { data, error, isPending } = authClient.useSession();
 
-  if (isPending) {
-    return <div>Pending</div>;
-  }
-  if (!data || error) {
-    redirect("/sign-in");
-  }
+if (isPending) {
+return <div>Pending</div>;
+}
+if (!data || error) {
+redirect("/sign-in");
+}
 
-  return (
-    <div>
-      <h1>Welcome {data.user.name}</h1>
-    </div>
-  );
+return (
+
+<div>
+<h1>Welcome {data.user.name}</h1>
+</div>
+);
 };
 
 export default DashboardPage;
@@ -296,19 +310,20 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 const DashboardPage = async () => {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+const session = await auth.api.getSession({
+headers: await headers(),
+});
 
-  if (!session) {
-    redirect("/sign-in");
-  }
+if (!session) {
+redirect("/sign-in");
+}
 
-  return (
-    <div>
-      <h1>Welcome {session.user.name}</h1>
-    </div>
-  );
+return (
+
+<div>
+<h1>Welcome {session.user.name}</h1>
+</div>
+);
 };
 
 export default DashboardPage;
@@ -756,7 +771,7 @@ If you were using Auth.js v4, note that v5 does not introduce any breaking chang
 
 ### Customization
 
-You may have extended the database models or implemented additional logic in Auth.js. Better Auth allows you to customize the core schema in a type-safe way. You can also define custom logic during the lifecycle of database operations. For more details, see [Concepts - Database](/docs/concepts/database). 
+You may have extended the database models or implemented additional logic in Auth.js. Better Auth allows you to customize the core schema in a type-safe way. You can also define custom logic during the lifecycle of database operations. For more details, see [Concepts - Database](/docs/concepts/database).
 </Step>
 </Steps>
 
@@ -765,3 +780,4 @@ You may have extended the database models or implemented additional logic in Aut
 Now you're ready to migrate from Auth.js to Better Auth. For a complete implementation with multiple authentication methods, check out the [Next.js Demo App](https://github.com/better-auth/better-auth/tree/canary/demo/nextjs). Better Auth offers greater flexibility and more features, so be sure to explore the [documentation](/docs) to unlock its full potential.
 
 If you need help with migration, join our [community](/community) or reach out to [contact@better-auth.com](mailto:contact@better-auth.com).
+```

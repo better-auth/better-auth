@@ -9,7 +9,6 @@
 - 2bd2fa9: Added support for listing organization members with pagination, sorting, and filtering, and improved client inference for additional organization fields. Also fixed date handling in rate limits and tokens, improved Notion OAuth user extraction, and ensured session is always set in context.
 
   Organization
-
   - Added listMembers API with pagination, sorting, and filtering.
   - Added membersLimit param to getFullOrganization.
   - Improved client inference for additional fields in organization schemas.

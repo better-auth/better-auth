@@ -17,7 +17,7 @@ description: GitLab provider setup and usage.
 
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
-        
+
         export const auth = betterAuth({
             socialProviders: {
                 gitlab: { // [!code highlight]
@@ -32,7 +32,7 @@ description: GitLab provider setup and usage.
         #### Configuration Options
 
         - `clientId`: Your GitLab application's Client ID
-        - `clientSecret`: Your GitLab application's Client Secret  
+        - `clientSecret`: Your GitLab application's Client Secret
         - `issuer`: (Optional) The URL of your GitLab instance. Use this for self-hosted GitLab servers.
             - Default: `"https://gitlab.com"` (GitLab.com)
             - Example: `"https://gitlab.company.com"`
@@ -60,10 +60,10 @@ description: GitLab provider setup and usage.
         To sign in with GitLab, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
         - `provider`: The provider to use. It should be set to `gitlab`.
 
-        ```ts title="auth-client.ts"  
+        ```ts title="auth-client.ts"
         import { createAuthClient } from "better-auth/client"
         const authClient =  createAuthClient()
-        
+
         const signIn = async () => {
             const data = await authClient.signIn.social({
                 provider: "gitlab"
@@ -71,4 +71,5 @@ description: GitLab provider setup and usage.
         }
         ```
     </Step>
+
 </Steps>

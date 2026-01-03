@@ -15,37 +15,39 @@ Better Auth supports multiple SQLite drivers. Choose the one that best fits your
 The most popular and stable SQLite driver for Node.js:
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import Database from "better-sqlite3";
+import { betterAuth } from 'better-auth';
+import Database from 'better-sqlite3';
 
 export const auth = betterAuth({
-  database: new Database("database.sqlite"),
+	database: new Database('database.sqlite'),
 });
 ```
 
 <Callout>
-  For more information, read Kysely's documentation to the
-  [SqliteDialect](https://kysely-org.github.io/kysely-apidoc/classes/SqliteDialect.html).
+	For more information, read Kysely's documentation to the
+	[SqliteDialect](https://kysely-org.github.io/kysely-apidoc/classes/SqliteDialect.html).
 </Callout>
 
 ### Node.js Built-in SQLite (Experimental)
 
 <Callout type="warning">
-  The `node:sqlite` module is still experimental and may change at any time. It requires Node.js 22.5.0 or later.
+	The `node:sqlite` module is still experimental and may change at any time. It
+	requires Node.js 22.5.0 or later.
 </Callout>
 
 Starting from Node.js 22.5.0, you can use the built-in [SQLite](https://nodejs.org/api/sqlite.html) module:
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { DatabaseSync } from "node:sqlite";
+import { betterAuth } from 'better-auth';
+import { DatabaseSync } from 'node:sqlite';
 
 export const auth = betterAuth({
-  database: new DatabaseSync("database.sqlite"),
+	database: new DatabaseSync('database.sqlite'),
 });
 ```
 
 To run your application with Node.js SQLite:
+
 ```bash
 node your-app.js
 ```
@@ -55,10 +57,10 @@ node your-app.js
 You can also use the built-in [SQLite](https://bun.com/docs/api/sqlite) module in Bun, which is similar to the Node.js version:
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { Database } from "bun:sqlite";
+import { betterAuth } from 'better-auth';
+import { Database } from 'bun:sqlite';
 export const auth = betterAuth({
-  database: new Database("database.sqlite"),
+	database: new Database('database.sqlite'),
 });
 ```
 
@@ -68,22 +70,22 @@ The [Better Auth CLI](/docs/concepts/cli) allows you to generate or migrate
 your database schema based on your Better Auth configuration and plugins.
 
 <table>
-  <thead>
-    <tr className="border-b">
-      <th>
-        <p className="font-bold text-[16px] mb-1">SQLite Schema Generation</p>
-      </th>
-      <th>
-        <p className="font-bold text-[16px] mb-1">SQLite Schema Migration</p>
-      </th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr className="h-10">
-      <td>✅ Supported</td>
-      <td>✅ Supported</td>
-    </tr>
-  </tbody>
+	<thead>
+		<tr className="border-b">
+			<th>
+				<p className="font-bold text-[16px] mb-1">SQLite Schema Generation</p>
+			</th>
+			<th>
+				<p className="font-bold text-[16px] mb-1">SQLite Schema Migration</p>
+			</th>
+		</tr>
+	</thead>
+	<tbody>
+		<tr className="h-10">
+			<td>✅ Supported</td>
+			<td>✅ Supported</td>
+		</tr>
+	</tbody>
 </table>
 
 ```package-install title="Schema Generation"
@@ -105,11 +107,12 @@ To enable this feature, you need to set the `experimental.joins` option to `true
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
-  experimental: { joins: true }
+	experimental: { joins: true },
 });
 ```
+
 <Callout type="warn">
-  It's possible that you may need to run migrations after enabling this feature.
+	It's possible that you may need to run migrations after enabling this feature.
 </Callout>
 
 ## Additional Information

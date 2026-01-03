@@ -5,11 +5,10 @@ description: Open API reference for Better Auth.
 
 This is a plugin that provides an Open API reference for Better Auth. It shows all endpoints added by plugins and the core. It also provides a way to test the endpoints. It uses [Scalar](https://scalar.com/) to display the Open API reference.
 
-
 <Callout>
-This plugin is still in the early stages of development. We are working on adding more features to it and filling in the gaps.
+	This plugin is still in the early stages of development. We are working on
+	adding more features to it and filling in the gaps.
 </Callout>
-
 
 ## Installation
 
@@ -29,16 +28,15 @@ This plugin is still in the early stages of development. We are working on addin
     </Step>
     <Step>
     ### Navigate to `/api/auth/reference` to view the Open API reference
-    
+
     Each plugin endpoints are grouped by the plugin name. The core endpoints are grouped under the `Default` group. And Model schemas are grouped under the `Models` group.
 
     ![Open API reference](/open-api-reference.png)
     </Step>
-</Steps>    
 
+</Steps>
 
-
-## Usage 
+## Usage
 
 The Open API reference is generated using the [OpenAPI 3.0](https://swagger.io/specification/) specification. You can use the reference to generate client libraries, documentation, and more.
 
@@ -51,10 +49,10 @@ The reference is generated using the [Scalar](https://scalar.com/) library. Scal
 To get the generated Open API schema directly as JSON, you can do `auth.api.generateOpenAPISchema()`. This will return the Open API schema as a JSON object.
 
 ```ts
-import { auth } from "~/lib/auth"
+import { auth } from '~/lib/auth';
 
-const openAPISchema = await auth.api.generateOpenAPISchema()
-console.log(openAPISchema)
+const openAPISchema = await auth.api.generateOpenAPISchema();
+console.log(openAPISchema);
 ```
 
 ### Using Scalar with Multiple Sources
@@ -64,14 +62,17 @@ If you're using Scalar for your API documentation, you can add Better Auth as an
 When using Hono with Scalar for OpenAPI documentation, you can integrate Better Auth by adding it as a source:
 
 ```ts
-app.get("/docs", Scalar({
-  pageTitle: "API Documentation", 
-  sources: [
-    { url: "/api/open-api", title: "API" },
-    // Better Auth schema generation endpoint
-    { url: "/api/auth/open-api/generate-schema", title: "Auth" },
-  ],
-}));
+app.get(
+	'/docs',
+	Scalar({
+		pageTitle: 'API Documentation',
+		sources: [
+			{ url: '/api/open-api', title: 'API' },
+			// Better Auth schema generation endpoint
+			{ url: '/api/auth/open-api/generate-schema', title: 'Auth' },
+		],
+	}),
+);
 ```
 
 ## Configuration

@@ -74,6 +74,7 @@ This plugin exposes a [SCIM](https://simplecloud.info/#Specification) server tha
         </Tabs>
         See the [Schema](#schema) section to add the fields manually.
     </Step>
+
 </Steps>
 
 ## Usage
@@ -109,27 +110,32 @@ A `SCIM` token is always restricted to a provider, thus you are required to spec
 Additionally, when the `organization` plugin is registered, you can optionally restrict the token to an organization via the `organizationId`.
 
 <Callout>
-**Important:** By default, any authenticated user with access to your better-auth instance will be able to generate a SCIM token. This can be an important security risk to your application, especially in multi-tenant scenarios.
-It is highly recommended that you implement [hooks](#hooks) to restrict this access to certain roles or users:
+	**Important:** By default, any authenticated user with access to your
+	better-auth instance will be able to generate a SCIM token. This can be an
+	important security risk to your application, especially in multi-tenant
+	scenarios. It is highly recommended that you implement [hooks](#hooks) to
+	restrict this access to certain roles or users:
 </Callout>
 
 ```ts
-const userRoles = new Set(["admin"]);
-const userAdminIds = new Set(["some-admin-user-id"]);
+const userRoles = new Set(['admin']);
+const userAdminIds = new Set(['some-admin-user-id']);
 
 scim({
-    beforeSCIMTokenGenerated: async ({ user, member, scimToken }) => {
-        // IMPORTANT: Use this hook to restrict access to certain roles or users
-        // At the very least access must be restricted to admin users (see example below)
+	beforeSCIMTokenGenerated: async ({ user, member, scimToken }) => {
+		// IMPORTANT: Use this hook to restrict access to certain roles or users
+		// At the very least access must be restricted to admin users (see example below)
 
-        const userHasAdmin = member?.role && userRoles.has(member.role);
-        const userIsAdmin = userAdminIds.size > 0 && userAdminIds.has(user.id);
+		const userHasAdmin = member?.role && userRoles.has(member.role);
+		const userIsAdmin = userAdminIds.size > 0 && userAdminIds.has(user.id);
 
-        if (!userHasAdmin && !userIsAdmin) {
-            throw new APIError("FORBIDDEN", { message: "User does not have enough permissions" });
-        }
-    },
-})
+		if (!userHasAdmin && !userIsAdmin) {
+			throw new APIError('FORBIDDEN', {
+				message: 'User does not have enough permissions',
+			});
+		}
+	},
+});
 ```
 
 See the [hooks](#hooks) documentation for more details about supported hooks.
@@ -275,55 +281,70 @@ type deleteSCIMUser = {
 
 Get SCIM metadata describing supported features of this server.
 
-<APIMethod path="/scim/v2/ServiceProviderConfig" method="GET" isExternalOnly note="Standard SCIM metadata endpoint used by identity providers. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
-```ts
-type getSCIMServiceProviderConfig = {
-}
-```
+<APIMethod
+	path="/scim/v2/ServiceProviderConfig"
+	method="GET"
+	isExternalOnly
+	note="Standard SCIM metadata endpoint used by identity providers. See https://datatracker.ietf.org/doc/html/rfc7644#section-4"
+>
+	```ts type getSCIMServiceProviderConfig = {}
+	```
 </APIMethod>
 
 #### Get SCIM schemas
 
 Get the list of supported SCIM schemas.
 
-<APIMethod path="/scim/v2/Schemas" method="GET" isExternalOnly note="Standard SCIM metadata endpoint used by identity providers to acquire information about supported schemas. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
-```ts
-type getSCIMSchemas = {
-}
-```
+<APIMethod
+	path="/scim/v2/Schemas"
+	method="GET"
+	isExternalOnly
+	note="Standard SCIM metadata endpoint used by identity providers to acquire information about supported schemas. See https://datatracker.ietf.org/doc/html/rfc7644#section-4"
+>
+	```ts type getSCIMSchemas = {}
+	```
 </APIMethod>
 
 #### Get SCIM schema
 
 Get the details of a supported SCIM schema.
 
-<APIMethod path="/scim/v2/Schemas/:schemaId" method="GET" isExternalOnly note="Standard SCIM metadata endpoint used by identity providers to acquire information about a given schema. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
-```ts
-type getSCIMSchema = {
-}
-```
+<APIMethod
+	path="/scim/v2/Schemas/:schemaId"
+	method="GET"
+	isExternalOnly
+	note="Standard SCIM metadata endpoint used by identity providers to acquire information about a given schema. See https://datatracker.ietf.org/doc/html/rfc7644#section-4"
+>
+	```ts type getSCIMSchema = {}
+	```
 </APIMethod>
 
 #### Get SCIM resource types
 
 Get the list of supported SCIM types.
 
-<APIMethod path="/scim/v2/ResourceTypes" method="GET" isExternalOnly note="Standard SCIM metadata endpoint used by identity providers to get a list of server supported types. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
-```ts
-type getSCIMResourceTypes = {
-}
-```
+<APIMethod
+	path="/scim/v2/ResourceTypes"
+	method="GET"
+	isExternalOnly
+	note="Standard SCIM metadata endpoint used by identity providers to get a list of server supported types. See https://datatracker.ietf.org/doc/html/rfc7644#section-4"
+>
+	```ts type getSCIMResourceTypes = {}
+	```
 </APIMethod>
 
 #### Get SCIM resource type
 
 Get the details of a supported SCIM resource type.
 
-<APIMethod path="/scim/v2/ResourceTypes/:resourceTypeId" method="GET" isExternalOnly note="Standard SCIM metadata endpoint used by identity providers to get a server supported type. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
-```ts
-type getSCIMResourceType = {
-}
-```
+<APIMethod
+	path="/scim/v2/ResourceTypes/:resourceTypeId"
+	method="GET"
+	isExternalOnly
+	note="Standard SCIM metadata endpoint used by identity providers to get a server supported type. See https://datatracker.ietf.org/doc/html/rfc7644#section-4"
+>
+	```ts type getSCIMResourceType = {}
+	```
 </APIMethod>
 
 #### SCIM attribute mapping
@@ -341,16 +362,39 @@ By default, the SCIM provisioning will automatically map the following fields:
 The plugin requires additional fields in the `scimProvider` table to store the provider's configuration.
 
 <DatabaseTable
-    fields={[
-        {
-            name: "id", type: "string", description: "A database identifier", isRequired: true, isPrimaryKey: true,
-        },
-        { name: "providerId", type: "string", description: "The provider ID. Used to identify a provider and to generate a redirect URL.", isRequired: true, isUnique: true },
-        { name: "scimToken", type: "string", description: "The SCIM bearer token. Used by your identity provider to authenticate against your server", isRequired: true, isUnique: true },
-        { name: "organizationId", type: "string", description: "The organization Id. If provider is linked to an organization.", isRequired: false },
-    ]}
+	fields={[
+		{
+			name: 'id',
+			type: 'string',
+			description: 'A database identifier',
+			isRequired: true,
+			isPrimaryKey: true,
+		},
+		{
+			name: 'providerId',
+			type: 'string',
+			description:
+				'The provider ID. Used to identify a provider and to generate a redirect URL.',
+			isRequired: true,
+			isUnique: true,
+		},
+		{
+			name: 'scimToken',
+			type: 'string',
+			description:
+				'The SCIM bearer token. Used by your identity provider to authenticate against your server',
+			isRequired: true,
+			isUnique: true,
+		},
+		{
+			name: 'organizationId',
+			type: 'string',
+			description:
+				'The organization Id. If provider is linked to an organization.',
+			isRequired: false,
+		},
+	]}
 />
-
 
 ## Options
 
@@ -364,27 +408,27 @@ Alternatively, you can pass a custom encryptor or hasher to store the SCIM token
 
 ```ts title="auth.ts"
 scim({
-    storeSCIMToken: { 
-        encrypt: async (scimToken) => {
-            return myCustomEncryptor(scimToken);
-        },
-        decrypt: async (scimToken) => {
-            return myCustomDecryptor(scimToken);
-        },
-    }
-})
+	storeSCIMToken: {
+		encrypt: async (scimToken) => {
+			return myCustomEncryptor(scimToken);
+		},
+		decrypt: async (scimToken) => {
+			return myCustomDecryptor(scimToken);
+		},
+	},
+});
 ```
 
 **Custom hasher**
 
 ```ts title="auth.ts"
 scim({
-    storeSCIMToken: {
-        hash: async (scimToken) => {
-            return myCustomHasher(scimToken);
-        },
-    }
-})
+	storeSCIMToken: {
+		hash: async (scimToken) => {
+			return myCustomHasher(scimToken);
+		},
+	},
+});
 ```
 
 ### Hooks
@@ -393,21 +437,29 @@ The following hooks allow to intercept the lifecycle of the `SCIM` token generat
 
 ```ts
 scim({
-    beforeSCIMTokenGenerated: async ({ user, member, scimToken }) => {
-        // Callback called before the scim token is persisted
-        // can be useful to intercept the generation
-        if (member?.role !== "admin") {
-            throw new APIError("FORBIDDEN", { message: "User does not have enough permissions" });
-        }
-    },
-    afterSCIMTokenGenerated: async ({ user, member, scimToken, scimProvider }) => {
-        // Callback called after the scim token has been persisted
-        // can be useful to send a notification or otherwise share the token
-        await shareSCIMTokenWithInterestedParty(scimToken);
-    },
-})
+	beforeSCIMTokenGenerated: async ({ user, member, scimToken }) => {
+		// Callback called before the scim token is persisted
+		// can be useful to intercept the generation
+		if (member?.role !== 'admin') {
+			throw new APIError('FORBIDDEN', {
+				message: 'User does not have enough permissions',
+			});
+		}
+	},
+	afterSCIMTokenGenerated: async ({
+		user,
+		member,
+		scimToken,
+		scimProvider,
+	}) => {
+		// Callback called after the scim token has been persisted
+		// can be useful to send a notification or otherwise share the token
+		await shareSCIMTokenWithInterestedParty(scimToken);
+	},
+});
 ```
 
 <Callout>
-**Note**: All hooks support error handling. Throwing an error in a before hook will prevent the operation from proceeding.
+	**Note**: All hooks support error handling. Throwing an error in a before hook
+	will prevent the operation from proceeding.
 </Callout>

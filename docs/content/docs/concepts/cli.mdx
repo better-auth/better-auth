@@ -19,7 +19,6 @@ npx @better-auth/cli@latest generate
 - `--config` - The path to your Better Auth config file. By default, the CLI will search for an auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under the `src` directory.
 - `--yes` - Skip the confirmation prompt and generate the schema directly.
 
-
 ## Migrate
 
 The migrate command applies the Better Auth schema directly to your database. This is available if you're using the built-in Kysely adapter. For other adapters, you'll need to apply the schema using your ORM's migration tool.
@@ -37,6 +36,7 @@ npx @better-auth/cli@latest migrate
 **Using PostgreSQL with a non-default schema?**
 
 The migrate command automatically detects your configured `search_path` and creates tables in the correct schema. See the [PostgreSQL adapter documentation](/docs/adapters/postgresql#use-a-non-default-schema) for configuration details.
+
 </Callout>
 
 ## Init
@@ -66,6 +66,7 @@ npx @better-auth/cli@latest info
 ### Output
 
 The command displays:
+
 - **System**: OS, CPU, memory, Node.js version
 - **Package Manager**: Detected manager and version
 - **Better Auth**: Version and configuration (sensitive data auto-redacted)

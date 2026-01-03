@@ -1,0 +1,12 @@
+*
+!*/
+!*.md
+!**/*.md
+!*.mdx
+!**/*.mdx
+node_modules
+pnpm-lock.yaml
+.next
+.turbo
+dist
+coverage
