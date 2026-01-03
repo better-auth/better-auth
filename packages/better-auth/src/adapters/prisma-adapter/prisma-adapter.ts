@@ -129,7 +129,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 				try {
 					const defaultBaseModelName = getDefaultModelName(baseModel);
 					const defaultJoinedModelName = getDefaultModelName(joinedModel);
-					const key = getModelName(joinedModel).toLowerCase();
+					let key = getModelName(joinedModel).toLowerCase();
 
 					// First, check if the joined model has FKs to the base model (forward join)
 					let foreignKeys = Object.entries(
@@ -145,29 +145,38 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						// Forward join: joined model has FK to base model
 						// This is typically a one-to-many relationship (plural)
 						// Unless the FK is unique, then it's one-to-one (singular)
-						const [_foreignKey, foreignKeyAttributes] = foreignKeys[0] as any;
 						// Only check if field is explicitly marked as unique
+						const [_foreignKey, foreignKeyAttributes] = foreignKeys[0] as any;
 						const isUnique = foreignKeyAttributes?.unique === true;
-						return isUnique || config.usePlural === true ? key : `${key}s`;
+						key = isUnique || config.usePlural === true ? key : `${key}s`;
+					} else {
+						const reverseKeys = Object.entries(
+							schema[defaultBaseModelName]?.fields || {},
+						).filter(
+							([_, attr]: any) =>
+								attr.references &&
+								getDefaultModelName(attr.references.model) ===
+									defaultJoinedModelName,
+						);
+						if (reverseKeys.length === 0) {
+							key = `${getModelName(joinedModel).toLowerCase()}s`;
+						}
 					}
 
-					// Check backwards: does the base model have FKs to the joined model?
-					foreignKeys = Object.entries(
-						schema[defaultBaseModelName]?.fields || {},
-					).filter(
-						([_field, fieldAttributes]: any) =>
-							fieldAttributes.references &&
-							getDefaultModelName(fieldAttributes.references.model) ===
-								defaultJoinedModelName,
-					);
-
-					if (foreignKeys.length > 0) {
-						return key;
+					const baseConfig = lazyOptions?.[
+						defaultBaseModelName as keyof typeof lazyOptions
+					] as any;
+					if (baseConfig?.relations) {
+						if (baseConfig.relations[key]) return baseConfig.relations[key];
+						if (key.endsWith("s") && baseConfig.relations[key.slice(0, -1)])
+							return baseConfig.relations[key.slice(0, -1)];
+						if (!key.endsWith("s") && baseConfig.relations[`${key}s`])
+							return baseConfig.relations[`${key}s`];
 					}
+					return key;
 				} catch {
-					// Fallback to pluralizing if we can't determine uniqueness
+					return `${getModelName(joinedModel).toLowerCase()}s`;
 				}
-				return `${getModelName(joinedModel).toLowerCase()}s`;
 			};
 			function operatorToPrismaOperator(operator: string) {
 				switch (operator) {
