@@ -592,13 +592,6 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				organizationId: invitation.organizationId,
 			});
 
-			if (membersCount >= membershipLimit) {
-				throw APIError.from(
-					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
-				);
-			}
-
 			const organization = await adapter.findOrganizationById(
 				invitation.organizationId,
 			);
@@ -606,6 +599,18 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				throw APIError.from(
 					"BAD_REQUEST",
 					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				);
+			}
+
+			const limit =
+				typeof membershipLimit === "number"
+					? membershipLimit
+					: await membershipLimit(session.user, organization);
+
+			if (membersCount >= limit) {
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
 				);
 			}
 

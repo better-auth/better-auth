@@ -137,7 +137,20 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 			const membershipLimit = ctx.context.orgOptions?.membershipLimit || 100;
 			const count = await adapter.countMembers({ organizationId: orgId });
 
-			if (count >= membershipLimit) {
+			const organization = await adapter.findOrganizationById(orgId);
+			if (!organization) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				);
+			}
+
+			const limit =
+				typeof membershipLimit === "number"
+					? membershipLimit
+					: await membershipLimit(user, organization);
+
+			if (count >= limit) {
 				throw APIError.from(
 					"FORBIDDEN",
 					ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
@@ -150,14 +163,6 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 				organizationId: ___,
 				...additionalFields
 			} = ctx.body;
-
-			const organization = await adapter.findOrganizationById(orgId);
-			if (!organization) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-				);
-			}
 
 			let memberData = {
 				organizationId: orgId,
