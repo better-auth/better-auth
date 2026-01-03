@@ -18,7 +18,7 @@ import {
 	generateDrizzleSchema,
 	resetGenerationCount,
 } from "./generate-schema";
-import { getDrizzleVersion } from "./get-drizzle-version";
+import { getDrizzleVersion, instalBetaDrizzle } from "./get-drizzle-version";
 
 const dbFilePath = path.join(import.meta.dirname, "test.db");
 let sqliteDB = new Database(dbFilePath);
@@ -51,16 +51,22 @@ const { execute } = await testAdapter({
 			"sqlite",
 		);
 
+		// Even if we defined the same drizzle-orm version in the package.json,
+		// CI wouldn't wouldn't run the same drizzle beta version between drizzle-kit and drizzle-orm which causes the push command
+		// to fail as Drizzle-kit will ask for the same orm version.
+		// This is a workaround to install the beta drizzle-orm live if the version mismatch is detected.
 		const version = await getDrizzleVersion();
-		console.log(123, "version", version);
-		console.log(123, "beta version", await getDrizzleVersion(true));
+		if (version.kit !== version.orm) {
+			await instalBetaDrizzle();
+		}
 
-		const command = `pnpm i drizzle-orm@beta && npx drizzle-kit push --dialect=sqlite --schema=${fileName}.ts --url=./test.db`;
+		const command = `npx drizzle-kit push --dialect=sqlite --schema=${fileName}.ts --url=./test.db`;
 		console.log(`Running: ${command}`);
 		console.log(`Options:`, betterAuthOptions);
 		try {
 			// wait for the above console.log to be printed
 			await new Promise((resolve) => setTimeout(resolve, 10));
+
 			execSync(command, {
 				cwd: import.meta.dirname,
 				stdio: "inherit",

@@ -12,6 +12,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { drizzleAdapter } from "../drizzle-adapter";
 import { generateDrizzleSchema, resetGenerationCount } from "./generate-schema";
+import { getDrizzleVersion, instalBetaDrizzle } from "./get-drizzle-version";
 
 const dbName = "drizzle_better_auth";
 const pgDB = new Pool({
@@ -53,16 +54,13 @@ const { execute } = await testAdapter({
 			"pg",
 		);
 
-		try {
-			const version = execSync("npx drizzle-kit --version", {
-				cwd: import.meta.dirname,
-				stdio: ["ignore", "pipe", "pipe"],
-			})
-				.toString()
-				.trim();
-			console.log(`npx drizzle-kit --version output:`, version);
-		} catch (err) {
-			console.error("Failed to check drizzle-kit version with bunx:", err);
+		// Even if we defined the same drizzle-orm version in the package.json,
+		// CI wouldn't wouldn't run the same drizzle beta version between drizzle-kit and drizzle-orm which causes the push command
+		// to fail as Drizzle-kit will ask for the same orm version.
+		// This is a workaround to install the beta drizzle-orm live if the version mismatch is detected.
+		const version = await getDrizzleVersion();
+		if (version.kit !== version.orm) {
+			await instalBetaDrizzle();
 		}
 
 		const command = `npx drizzle-kit push --dialect=postgresql --schema=${fileName}.ts --url=postgres://user:password@localhost:5432/${dbName}`;

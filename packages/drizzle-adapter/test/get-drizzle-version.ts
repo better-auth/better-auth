@@ -22,3 +22,16 @@ export const getDrizzleVersion = async (beta: boolean = false) => {
 		);
 	return version;
 };
+
+export const instalBetaDrizzle = async () => {
+	console.log("Installing beta drizzle-orm...");
+	try {
+		execSync(`pnpm i drizzle-orm@beta`, {
+			cwd: import.meta.dirname,
+			stdio: "inherit",
+		});
+	} catch (error) {
+		console.error("Failed to install beta drizzle-orm:", error);
+		throw error;
+	}
+};
