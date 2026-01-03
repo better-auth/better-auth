@@ -47,8 +47,7 @@ export async function handleOAuthUserInfo(
 			const trustedProviders =
 				c.context.options.account?.accountLinking?.trustedProviders;
 			const isTrustedProvider =
-				opts.isTrustedProvider ||
-				trustedProviders?.includes(account.providerId as "apple");
+				opts.isTrustedProvider || trustedProviders?.includes(account.providerId);
 			if (
 				(!isTrustedProvider && !userInfo.emailVerified) ||
 				c.context.options.account?.accountLinking?.enabled === false
@@ -81,6 +80,19 @@ export async function handleOAuthUserInfo(
 					error: "unable to link account",
 					data: null,
 				};
+			}
+			// Optionally set account cookie after linking
+			if (c.context.options.account?.storeAccountCookie) {
+				await setAccountCookie(c, {
+					providerId: account.providerId,
+					accountId: userInfo.id.toString(),
+					accessToken: await setTokenUtil(account.accessToken, c.context),
+					refreshToken: await setTokenUtil(account.refreshToken, c.context),
+					idToken: account.idToken,
+					accessTokenExpiresAt: account.accessTokenExpiresAt,
+					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+					scope: account.scope,
+				});
 			}
 
 			if (
@@ -132,8 +144,13 @@ export async function handleOAuthUserInfo(
 		if (overrideUserInfo) {
 			const { id: _, ...restUserInfo } = userInfo;
 			// update user info from the provider if overrideUserInfo is true
+			const filteredUserUpdates = Object.fromEntries(
+				Object.entries(restUserInfo).filter(
+					([, value]) => value !== undefined,
+				),
+			) as Partial<User>;
 			user = await c.context.internalAdapter.updateUser(dbUser.user.id, {
-				...restUserInfo,
+				...filteredUserUpdates,
 				email: userInfo.email.toLowerCase(),
 				emailVerified:
 					userInfo.email.toLowerCase() === dbUser.user.email
@@ -185,7 +202,9 @@ export async function handleOAuthUserInfo(
 					undefined,
 					c.context.options.emailVerification?.expiresIn,
 				);
-				const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
+				const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
+					callbackURL || "/",
+				)}`;
 				await c.context.runInBackgroundOrAwait(
 					c.context.options.emailVerification.sendVerificationEmail(
 						{
@@ -201,7 +220,7 @@ export async function handleOAuthUserInfo(
 			logger.error(e);
 			if (isAPIError(e)) {
 				return {
-					error: e.message,
+					error: (e as any)?.message ?? String(e),
 					data: null,
 					isRegister: false,
 				};
