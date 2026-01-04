@@ -5,7 +5,7 @@ import { safeJSONParse } from "@better-auth/core/utils";
 import * as z from "zod";
 import { sessionMiddleware } from "../../../api";
 import { API_KEY_ERROR_CODES as ERROR_CODES } from "..";
-import { getApiKeyById } from "../adapter";
+import { getApiKeyById, migrateDoubleStringifiedMetadata } from "../adapter";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
@@ -191,10 +191,18 @@ export function getApiKey({
 
 			deleteAllExpiredApiKeys(ctx.context);
 
+			// Migrate legacy double-stringified metadata if needed
+			const metadata = await migrateDoubleStringifiedMetadata(
+				ctx,
+				apiKey,
+				opts,
+			);
+
 			const { key: _key, ...returningApiKey } = apiKey;
 
 			return ctx.json({
 				...returningApiKey,
+				metadata,
 				permissions: returningApiKey.permissions
 					? safeJSONParse<{
 							[key: string]: string[];

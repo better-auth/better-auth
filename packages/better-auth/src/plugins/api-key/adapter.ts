@@ -1,7 +1,121 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import type { SecondaryStorage } from "@better-auth/core/db";
+import { safeJSONParse } from "@better-auth/core/utils";
 import type { PredefinedApiKeyOptions } from "./routes";
 import type { ApiKey } from "./types";
+
+/**
+ * Parses double-stringified metadata synchronously without updating the database.
+ * Use this for reading metadata, then call migrateLegacyMetadataInBackground for DB updates.
+ *
+ * @returns The properly parsed metadata object, or the original if already an object
+ */
+export function parseDoubleStringifiedMetadata(
+	metadata: ApiKey["metadata"],
+): Record<string, any> | null {
+	// If metadata is null/undefined, return null
+	if (metadata == null) {
+		return null;
+	}
+
+	// If metadata is already an object, no migration needed
+	if (typeof metadata === "object") {
+		return metadata;
+	}
+
+	// Metadata is a string - this is legacy double-stringified data
+	// Parse it to get the actual object
+	return safeJSONParse<Record<string, any>>(metadata);
+}
+
+/**
+ * Checks if metadata needs migration (is a string instead of object)
+ */
+export function needsMetadataMigration(metadata: ApiKey["metadata"]): boolean {
+	return metadata != null && typeof metadata === "string";
+}
+
+/**
+ * Batch migrates double-stringified metadata for multiple API keys.
+ * Runs all updates in parallel to avoid N sequential database calls.
+ */
+export async function batchMigrateLegacyMetadata(
+	ctx: GenericEndpointContext,
+	apiKeys: ApiKey[],
+	opts: PredefinedApiKeyOptions,
+): Promise<void> {
+	// Only migrate for database storage
+	if (opts.storage !== "database" && !opts.fallbackToDatabase) {
+		return;
+	}
+
+	// Filter keys that need migration
+	const keysToMigrate = apiKeys.filter((key) =>
+		needsMetadataMigration(key.metadata),
+	);
+
+	if (keysToMigrate.length === 0) {
+		return;
+	}
+
+	// Run migrations in parallel (not sequentially)
+	const migrationPromises = keysToMigrate.map(async (apiKey) => {
+		const parsed = parseDoubleStringifiedMetadata(apiKey.metadata);
+		try {
+			await ctx.context.adapter.update({
+				model: "apikey",
+				where: [{ field: "id", value: apiKey.id }],
+				update: { metadata: parsed },
+			});
+		} catch (error) {
+			ctx.context.logger.warn(
+				`Failed to migrate double-stringified metadata for API key ${apiKey.id}:`,
+				error,
+			);
+		}
+	});
+
+	await Promise.all(migrationPromises);
+}
+
+/**
+ * Migrates double-stringified metadata to properly parsed object.
+ *
+ * This handles legacy data where metadata was incorrectly double-stringified.
+ * If metadata is a string (should be object after adapter's transform.output),
+ * it parses it and optionally updates the database.
+ *
+ * @returns The properly parsed metadata object
+ */
+export async function migrateDoubleStringifiedMetadata(
+	ctx: GenericEndpointContext,
+	apiKey: ApiKey,
+	opts: PredefinedApiKeyOptions,
+): Promise<Record<string, any> | null> {
+	const parsed = parseDoubleStringifiedMetadata(apiKey.metadata);
+
+	// Update the database to fix the legacy data (only for database storage)
+	if (
+		needsMetadataMigration(apiKey.metadata) &&
+		(opts.storage === "database" || opts.fallbackToDatabase)
+	) {
+		try {
+			await ctx.context.adapter.update({
+				model: "apikey",
+				where: [{ field: "id", value: apiKey.id }],
+				update: { metadata: parsed },
+			});
+		} catch (error) {
+			// Log but don't fail the request if migration update fails
+			ctx.context.logger.warn(
+				`Failed to migrate double-stringified metadata for API key ${apiKey.id}:`,
+				error,
+			);
+		}
+	}
+
+	return parsed;
+}
 
 /**
  * Generate storage key for API key by hashed key

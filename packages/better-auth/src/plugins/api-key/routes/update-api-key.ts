@@ -6,7 +6,11 @@ import * as z from "zod";
 import { getSessionFromCtx } from "../../../api";
 import { getDate } from "../../../utils/date";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
-import { getApiKeyById, setApiKey } from "../adapter";
+import {
+	getApiKeyById,
+	migrateDoubleStringifiedMetadata,
+	setApiKey,
+} from "../adapter";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
@@ -437,10 +441,18 @@ export function updateApiKey({
 
 			deleteAllExpiredApiKeys(ctx.context);
 
+			// Migrate legacy double-stringified metadata if needed
+			const migratedMetadata = await migrateDoubleStringifiedMetadata(
+				ctx,
+				newApiKey,
+				opts,
+			);
+
 			const { key: _key, ...returningApiKey } = newApiKey;
 
 			return ctx.json({
 				...returningApiKey,
+				metadata: migratedMetadata,
 				permissions: returningApiKey.permissions
 					? safeJSONParse<{
 							[key: string]: string[];
