@@ -7,11 +7,11 @@ import type { CookieOptions } from "better-call";
 import * as z from "zod";
 import { originCheck } from "../../api";
 import { parseJSON } from "../../client/parser";
-import { parseSetCookieHeader } from "../../cookies";
+import { parseSetCookieHeader, stripSecureCookiePrefix } from "../../cookies";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { getOrigin } from "../../utils/url";
 import type { AuthContextWithSnapshot, OAuthProxyStatePackage } from "./types";
-import { checkSkipProxy, resolveCurrentURL } from "./utils";
+import { checkSkipProxy, resolveCurrentURL, stripTrailingSlash } from "./utils";
 
 export interface OAuthProxyOptions {
 	/**
@@ -55,12 +55,12 @@ const oAuthProxyQuerySchema = z.object({
 	}),
 });
 
-export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
+export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 	const maxAge = opts?.maxAge ?? 60; // Default 60 seconds
 
 	return {
 		id: "oauth-proxy",
-		options: opts,
+		options: opts as NoInfer<O>,
 		endpoints: {
 			oAuthProxy: createAuthEndpoint(
 				"/oauth-proxy-callback",
@@ -120,7 +120,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 					if (!decryptedPayload) {
 						const errorURL =
 							ctx.context.options.onAPIError?.errorURL ||
-							`${ctx.context.options.baseURL}/api/auth/error`;
+							`${stripTrailingSlash(ctx.context.options.baseURL)}/api/auth/error`;
 
 						throw ctx.redirect(
 							`${errorURL}?error=OAuthProxy - Invalid cookies or secret`,
@@ -134,7 +134,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 						ctx.context.logger.error("Failed to parse OAuth proxy payload:", e);
 						const errorURL =
 							ctx.context.options.onAPIError?.errorURL ||
-							`${ctx.context.options.baseURL}/api/auth/error`;
+							`${stripTrailingSlash(ctx.context.options.baseURL)}/api/auth/error`;
 
 						throw ctx.redirect(
 							`${errorURL}?error=OAuthProxy - Invalid payload format`,
@@ -150,7 +150,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 						);
 						const errorURL =
 							ctx.context.options.onAPIError?.errorURL ||
-							`${ctx.context.options.baseURL}/api/auth/error`;
+							`${stripTrailingSlash(ctx.context.options.baseURL)}/api/auth/error`;
 
 						throw ctx.redirect(
 							`${errorURL}?error=OAuthProxy - Invalid payload structure`,
@@ -167,7 +167,7 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 						);
 						const errorURL =
 							ctx.context.options.onAPIError?.errorURL ||
-							`${ctx.context.options.baseURL}/api/auth/error`;
+							`${stripTrailingSlash(ctx.context.options.baseURL)}/api/auth/error`;
 
 						throw ctx.redirect(
 							`${errorURL}?error=OAuthProxy - Payload expired or invalid`,
@@ -202,13 +202,23 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 								options.secure = true;
 							}
 
+							// Remove __Secure- or __Host- prefix for non-HTTPS contexts
+							const cookieName = isSecureContext
+								? name
+								: stripSecureCookiePrefix(name);
+
+							// URI-decoded value because `ctx.setCookie` will URI-encode it again
+							let cookieValue: string;
+							try {
+								cookieValue = decodeURIComponent(attrs.value);
+							} catch {
+								cookieValue = attrs.value;
+							}
+
 							return {
-								name,
+								name: cookieName,
+								value: cookieValue,
 								options,
-								/**
-								 * URI-decoded value because `ctx.setCookie` will URI-encode it again
-								 */
-								value: decodeURIComponent(attrs.value),
 							};
 						},
 					);
@@ -239,11 +249,19 @@ export const oAuthProxy = (opts?: OAuthProxyOptions | undefined) => {
 						}
 
 						const currentURL = resolveCurrentURL(ctx, opts);
+						const productionURL = opts?.productionURL;
 						const originalCallbackURL =
 							ctx.body?.callbackURL || ctx.context.baseURL;
 
+						// Override baseURL to production so redirect_uri points to production
+						// This ensures OAuth provider callbacks go to the production server
+						if (productionURL) {
+							const productionBaseURL = `${stripTrailingSlash(productionURL)}${ctx.context.options.basePath || "/api/auth"}`;
+							ctx.context.baseURL = productionBaseURL;
+						}
+
 						// Construct proxy callback URL
-						const newCallbackURL = `${currentURL.origin}${
+						const newCallbackURL = `${stripTrailingSlash(currentURL.origin)}${
 							ctx.context.options.basePath || "/api/auth"
 						}/oauth-proxy-callback?callbackURL=${encodeURIComponent(
 							originalCallbackURL,

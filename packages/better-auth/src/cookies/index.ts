@@ -10,7 +10,6 @@ import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
 import type { CookieOptions } from "better-call";
-import { ms } from "ms";
 import {
 	signJWT,
 	symmetricDecodeJWT,
@@ -20,6 +19,8 @@ import {
 import { parseUserOutput } from "../db/schema";
 import type { Session, User } from "../types";
 import { getDate } from "../utils/date";
+import { sec } from "../utils/time";
+import { SECURE_COOKIE_PREFIX } from "./cookie-utils";
 import { createAccountStore, createSessionStore } from "./session-store";
 
 export function createCookieGetter(options: BetterAuthOptions) {
@@ -31,7 +32,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 					? true
 					: false
 				: isProduction;
-	const secureCookiePrefix = secure ? "__Secure-" : "";
+	const secureCookiePrefix = secure ? SECURE_COOKIE_PREFIX : "";
 	const crossSubdomainEnabled =
 		!!options.advanced?.crossSubDomainCookies?.enabled;
 	const domain = crossSubdomainEnabled
@@ -74,7 +75,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 
 export function getCookies(options: BetterAuthOptions) {
 	const createCookie = createCookieGetter(options);
-	const sessionMaxAge = options.session?.expiresIn || ms("7d") / 1000;
+	const sessionMaxAge = options.session?.expiresIn || sec("7d");
 	const sessionToken = createCookie("session_token", {
 		maxAge: sessionMaxAge,
 	});
@@ -352,7 +353,7 @@ export function parseCookies(cookieHeader: string) {
 	const cookieMap = new Map<string, string>();
 
 	cookies.forEach((cookie) => {
-		const [name, value] = cookie.split("=");
+		const [name, value] = cookie.split(/=(.*)/s);
 		cookieMap.set(name!, value!);
 	});
 	return cookieMap;
@@ -385,7 +386,7 @@ export const getSessionCookie = (
 	const { cookieName = "session_token", cookiePrefix = "better-auth." } =
 		config || {};
 	const name = `${cookiePrefix}${cookieName}`;
-	const secureCookieName = `__Secure-${name}`;
+	const secureCookieName = `${SECURE_COOKIE_PREFIX}${name}`;
 	const parsedCookie = parseCookies(cookies);
 	const sessionToken =
 		parsedCookie.get(name) || parsedCookie.get(secureCookieName);
@@ -435,10 +436,10 @@ export const getCookieCache = async <
 	const name =
 		config?.isSecure !== undefined
 			? config.isSecure
-				? `__Secure-${cookiePrefix}.${cookieName}`
+				? `${SECURE_COOKIE_PREFIX}${cookiePrefix}.${cookieName}`
 				: `${cookiePrefix}.${cookieName}`
 			: isProduction
-				? `__Secure-${cookiePrefix}.${cookieName}`
+				? `${SECURE_COOKIE_PREFIX}${cookiePrefix}.${cookieName}`
 				: `${cookiePrefix}.${cookieName}`;
 	const parsedCookie = parseCookies(cookies);
 

@@ -1,4 +1,3 @@
-// NOTE: Error code const must be all capital of string (ref https://github.com/better-auth/better-auth/issues/4386)
 import { defineErrorCodes } from "@better-auth/core/utils";
 
 export const ADMIN_ERROR_CODES = defineErrorCodes({
@@ -29,4 +28,5 @@ export const ADMIN_ERROR_CODES = defineErrorCodes({
 	YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE:
 		"You are not allowed to set a non-existent role value",
 	YOU_CANNOT_IMPERSONATE_ADMINS: "You cannot impersonate admins",
+	INVALID_ROLE_TYPE: "Invalid role type",
 });

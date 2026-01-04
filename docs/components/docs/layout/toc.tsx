@@ -81,6 +81,54 @@ export function TOCScrollArea({
 	...props
 }: ComponentProps<typeof ScrollArea> & { isMenu?: boolean }) {
 	const viewRef = useRef<HTMLDivElement>(null);
+	const [scrollState, setScrollState] = useState<{
+		isAtTop: boolean;
+		isAtBottom: boolean;
+	}>({ isAtTop: true, isAtBottom: true });
+
+	useEffect(() => {
+		const viewport = viewRef.current;
+		if (!viewport) return;
+
+		const checkScroll = () => {
+			const { scrollTop, scrollHeight, clientHeight } = viewport;
+			const newState = {
+				isAtTop: scrollTop <= 1,
+				isAtBottom: scrollTop + clientHeight >= scrollHeight - 1,
+			};
+
+			setScrollState((prev) => {
+				if (
+					prev.isAtTop === newState.isAtTop &&
+					prev.isAtBottom === newState.isAtBottom
+				) {
+					return prev;
+				}
+				return newState;
+			});
+		};
+
+		checkScroll();
+		viewport.addEventListener("scroll", checkScroll, { passive: true });
+
+		const observer = new ResizeObserver(checkScroll);
+		observer.observe(viewport);
+
+		return () => {
+			viewport.removeEventListener("scroll", checkScroll);
+			observer.disconnect();
+		};
+	}, []);
+
+	const maskImage = useMemo(() => {
+		const { isAtTop, isAtBottom } = scrollState;
+		if (isAtTop && isAtBottom) return "none";
+		if (isAtTop)
+			return "linear-gradient(to bottom, black calc(100% - 40px), transparent)";
+		if (isAtBottom)
+			return "linear-gradient(to top, black calc(100% - 40px), transparent)";
+		return "linear-gradient(to bottom, transparent, black 40px, black calc(100% - 40px), transparent)";
+	}, [scrollState]);
 
 	return (
 		<ScrollArea
@@ -94,6 +142,11 @@ export function TOCScrollArea({
 						isMenu && "mt-2 mb-4 mx-4 md:mx-6",
 					)}
 					ref={viewRef}
+					style={{
+						...props.style,
+						maskImage: maskImage,
+						WebkitMaskImage: maskImage,
+					}}
 				>
 					{props.children}
 				</ScrollViewport>

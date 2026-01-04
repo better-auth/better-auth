@@ -5,7 +5,6 @@
 		"type": true
 	},
 	"tags": ["-lintignore"],
-	"ignore": ["bump.js"],
 	"workspaces": {
 		"packages/*": {
 			"entry": ["src/index.ts"],
