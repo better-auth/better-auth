@@ -60,10 +60,9 @@ const { execute } = await testAdapter({
 		// This is a workaround to install the beta drizzle-orm live if the version mismatch is detected.
 		// const version = await getDrizzleVersion();
 		// if (version.kit !== version.orm) {
-		// 	await installBetaDrizzle();
 		// }
 
-		const command = `pnpm i drizzle-orm@beta && pnpx drizzle-kit@beta push --dialect=postgresql --schema=${fileName}.ts --url=postgres://user:password@localhost:5432/${dbName}`;
+		const command = `pnpm i drizzle-orm@beta drizzle-kit@beta && npx drizzle-kit@beta push --dialect=postgresql --schema=${fileName}.ts --url=postgres://user:password@localhost:5432/${dbName}`;
 		console.log(`Running: ${command}`);
 		console.log(`Options:`, betterAuthOptions);
 		try {
