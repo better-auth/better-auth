@@ -62,7 +62,7 @@ const { execute } = await testAdapter({
 		// if (version.kit !== version.orm) {
 		// }
 
-		const command = `pnpm i drizzle-orm@beta drizzle-kit@beta && npx drizzle-kit@beta push --dialect=postgresql --schema=${fileName}.ts --url=postgres://user:password@localhost:5432/${dbName}`;
+		const command = `npm i drizzle-orm@beta && npx drizzle-kit@beta push --dialect=postgresql --schema=${fileName}.ts --url=postgres://user:password@localhost:5432/${dbName}`;
 		console.log(`Running: ${command}`);
 		console.log(`Options:`, betterAuthOptions);
 		try {
