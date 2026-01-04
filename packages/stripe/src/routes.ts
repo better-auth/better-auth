@@ -28,6 +28,7 @@ import {
 	getPlanByName,
 	getPlanByPriceInfo,
 	getPlans,
+	groupsMatch,
 	isActiveOrTrialing,
 	isPendingCancel,
 	isStripePendingCancel,
@@ -179,6 +180,10 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					STRIPE_ERROR_CODES.SUBSCRIPTION_PLAN_NOT_FOUND,
 				);
 			}
+
+			// Get groupId from plan configuration for multi-product subscriptions
+			const groupId = plan.group;
+
 			let subscriptionToUpdate = ctx.body.subscriptionId
 				? await ctx.context.adapter.findOne<Subscription>({
 						model: "subscription",
@@ -190,10 +195,17 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						],
 					})
 				: referenceId
-					? await ctx.context.adapter.findOne<Subscription>({
-							model: "subscription",
-							where: [{ field: "referenceId", value: referenceId }],
-						})
+					? await ctx.context.adapter
+							.findMany<Subscription>({
+								model: "subscription",
+								where: [{ field: "referenceId", value: referenceId }],
+							})
+							.then((subs) =>
+								subs.find(
+									(sub) =>
+										isActiveOrTrialing(sub) && groupsMatch(sub.groupId, groupId),
+								),
+							)
 					: null;
 
 			if (
@@ -271,8 +283,9 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						],
 					});
 
-			const activeOrTrialingSubscription = subscriptions.find((sub) =>
-				isActiveOrTrialing(sub),
+			// Find subscription in the same group (for multi-product support)
+			const activeOrTrialingSubscription = subscriptions.find(
+				(sub) => isActiveOrTrialing(sub) && groupsMatch(sub.groupId, groupId),
 			);
 
 			const activeSubscriptions = await client.subscriptions
@@ -299,16 +312,18 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				return false;
 			});
 
-			// Also find any incomplete subscription that we can reuse
+			// Also find any incomplete subscription in the same group that we can reuse
 			const incompleteSubscription = subscriptions.find(
-				(sub) => sub.status === "incomplete",
+				(sub) =>
+					sub.status === "incomplete" && groupsMatch(sub.groupId, groupId),
 			);
 
 			if (
 				activeOrTrialingSubscription &&
 				activeOrTrialingSubscription.status === "active" &&
 				activeOrTrialingSubscription.plan === ctx.body.plan &&
-				activeOrTrialingSubscription.seats === (ctx.body.seats || 1)
+				activeOrTrialingSubscription.seats === (ctx.body.seats || 1) &&
+				groupsMatch(activeOrTrialingSubscription.groupId, groupId)
 			) {
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -441,6 +456,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						status: "incomplete",
 						referenceId,
 						seats: ctx.body.seats || 1,
+						groupId,
 					},
 				});
 			}
@@ -538,6 +554,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 								userId: user.id,
 								subscriptionId: subscription.id,
 								referenceId,
+								...(groupId ? { groupId } : {}),
 							},
 						},
 						mode: "subscription",
@@ -549,6 +566,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							userId: user.id,
 							subscriptionId: subscription.id,
 							referenceId,
+							...(groupId ? { groupId } : {}),
 						},
 					},
 					params?.options,
@@ -684,6 +702,13 @@ const cancelSubscriptionBodySchema = z.object({
 				"The Stripe subscription ID to cancel. Eg: 'sub_1ABC2DEF3GHI4JKL'",
 		})
 		.optional(),
+	groupId: z
+		.string()
+		.meta({
+			description:
+				'Group ID to identify which subscription to cancel when user has multiple subscriptions. Eg: "ai-features"',
+		})
+		.optional(),
 	returnUrl: z.string().meta({
 		description:
 			'URL to take customers to when they click on the billing portal\'s link to return to your website. Eg: "/account"',
@@ -736,6 +761,8 @@ export const cancelSubscription = (options: StripeOptions) => {
 		},
 		async (ctx) => {
 			const referenceId = ctx.body?.referenceId || ctx.context.session.user.id;
+			const groupId = ctx.body.groupId;
+
 			let subscription = ctx.body.subscriptionId
 				? await ctx.context.adapter.findOne<Subscription>({
 						model: "subscription",
@@ -751,7 +778,25 @@ export const cancelSubscription = (options: StripeOptions) => {
 							model: "subscription",
 							where: [{ field: "referenceId", value: referenceId }],
 						})
-						.then((subs) => subs.find((sub) => isActiveOrTrialing(sub)));
+						.then((subs) => {
+							const activeSubscriptions = subs.filter((sub) =>
+								isActiveOrTrialing(sub),
+							);
+							// If groupId is specified, filter by it
+							if (groupId) {
+								return activeSubscriptions.find((sub) =>
+									groupsMatch(sub.groupId, groupId),
+								);
+							}
+							// If multiple active subscriptions and no groupId, require disambiguation
+							if (activeSubscriptions.length > 1) {
+								throw APIError.from(
+									"BAD_REQUEST",
+									STRIPE_ERROR_CODES.SUBSCRIPTION_GROUP_REQUIRED,
+								);
+							}
+							return activeSubscriptions[0];
+						});
 			if (
 				ctx.body.subscriptionId &&
 				subscription &&
@@ -874,6 +919,13 @@ const restoreSubscriptionBodySchema = z.object({
 				"The Stripe subscription ID to restore. Eg: 'sub_1ABC2DEF3GHI4JKL'",
 		})
 		.optional(),
+	groupId: z
+		.string()
+		.meta({
+			description:
+				'Group ID to identify which subscription to restore when user has multiple subscriptions. Eg: "ai-features"',
+		})
+		.optional(),
 });
 
 export const restoreSubscription = (options: StripeOptions) => {
@@ -896,6 +948,7 @@ export const restoreSubscription = (options: StripeOptions) => {
 		},
 		async (ctx) => {
 			const referenceId = ctx.body?.referenceId || ctx.context.session.user.id;
+			const groupId = ctx.body.groupId;
 
 			let subscription = ctx.body.subscriptionId
 				? await ctx.context.adapter.findOne<Subscription>({
@@ -917,7 +970,25 @@ export const restoreSubscription = (options: StripeOptions) => {
 								},
 							],
 						})
-						.then((subs) => subs.find((sub) => isActiveOrTrialing(sub)));
+						.then((subs) => {
+							const activeSubscriptions = subs.filter((sub) =>
+								isActiveOrTrialing(sub),
+							);
+							// If groupId is specified, filter by it
+							if (groupId) {
+								return activeSubscriptions.find((sub) =>
+									groupsMatch(sub.groupId, groupId),
+								);
+							}
+							// If multiple active subscriptions and no groupId, require disambiguation
+							if (activeSubscriptions.length > 1) {
+								throw APIError.from(
+									"BAD_REQUEST",
+									STRIPE_ERROR_CODES.SUBSCRIPTION_GROUP_REQUIRED,
+								);
+							}
+							return activeSubscriptions[0];
+						});
 			if (
 				ctx.body.subscriptionId &&
 				subscription &&
@@ -1003,6 +1074,13 @@ const listActiveSubscriptionsQuerySchema = z.optional(
 				description: "Reference id of the subscription to list. Eg: '123'",
 			})
 			.optional(),
+		groupId: z
+			.string()
+			.meta({
+				description:
+					'Filter subscriptions by group ID. Eg: "ai-features". If not provided, returns all active subscriptions.',
+			})
+			.optional(),
 	}),
 );
 /**
@@ -1038,6 +1116,8 @@ export const listActiveSubscriptions = (options: StripeOptions) => {
 			],
 		},
 		async (ctx) => {
+			const groupId = ctx.query?.groupId;
+
 			const subscriptions = await ctx.context.adapter.findMany<Subscription>({
 				model: "subscription",
 				where: [
@@ -1063,9 +1143,12 @@ export const listActiveSubscriptions = (options: StripeOptions) => {
 						...sub,
 						limits: plan?.limits,
 						priceId: plan?.priceId,
+						group: plan?.group,
 					};
 				})
-				.filter((sub) => isActiveOrTrialing(sub));
+				.filter((sub) => isActiveOrTrialing(sub))
+				// Filter by groupId if specified
+				.filter((sub) => !groupId || groupsMatch(sub.groupId, groupId));
 			return ctx.json(subs);
 		},
 	);

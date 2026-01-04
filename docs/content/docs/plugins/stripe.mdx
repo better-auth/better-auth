@@ -16,6 +16,7 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
 - **Automatic trial abuse prevention** - Users can only get one trial per account across all plans
 - Flexible reference system to associate subscriptions with users or organizations
 - Team subscription support with seats management
+- **Multiple product subscriptions** - Users can subscribe to multiple products simultaneously (e.g., "Pro Plan" + "AI Addon")
 
 ## Installation
 
@@ -287,8 +288,8 @@ if(error) {
 }
 ```
 
-<Callout type="warn">
-For each reference ID (user or organization), only one active or trialing subscription is supported at a time. The plugin doesn't currently support multiple concurrent active subscriptions for the same reference ID.
+<Callout type="info">
+By default, each reference ID (user or organization) can only have one active subscription at a time. To support multiple concurrent subscriptions (e.g., a main plan plus add-ons), use the `group` property on your plans. See [Multiple Product Subscriptions](#multiple-product-subscriptions) for details.
 </Callout>
 
 #### Switching Plans
@@ -317,18 +318,22 @@ To get the user's active subscriptions:
 ```ts
 type listActiveSubscriptions = {
     /**
-     * Reference id of the subscription to list. 
+     * Reference id of the subscription to list.
      */
     referenceId?: string = '123'
+    /**
+     * Filter subscriptions by group ID. If not provided, returns all active subscriptions.
+     */
+    groupId?: string = 'ai-features'
 }
 
-// get the active subscription
-const activeSubscription = subscriptions.find(
+// get all active subscriptions
+const activeSubscriptions = subscriptions.filter(
     sub => sub.status === "active" || sub.status === "trialing"
 );
 
-// Check subscription limits
-const projectLimit = subscriptions?.limits?.projects || 0;
+// Check subscription limits for a specific subscription
+const projectLimit = activeSubscriptions[0]?.limits?.projects || 0;
 ```
 </APIMethod>
 
@@ -371,11 +376,15 @@ type cancelSubscription = {
      */
     referenceId?: string = 'org_123'
     /**
-     * The id of the subscription to cancel. 
+     * The id of the subscription to cancel.
      */
     subscriptionId?: string = 'sub_123'
     /**
-     * URL to take customers to when they click on the billing portal’s link to return to your website.
+     * Group ID to identify which subscription to cancel when user has multiple subscriptions.
+     */
+    groupId?: string = 'ai-features'
+    /**
+     * URL to take customers to when they click on the billing portal's link to return to your website.
      */
     returnUrl: string = '/account'
 }
@@ -383,6 +392,10 @@ type cancelSubscription = {
 </APIMethod>
 
 This will redirect the user to the Stripe Billing Portal where they can cancel their subscription.
+
+<Callout type="info">
+If the user has multiple active subscriptions (from different plan groups), you must specify either `subscriptionId` or `groupId` to identify which subscription to cancel. If neither is provided and multiple subscriptions exist, an error will be returned.
+</Callout>
 
 <Callout type="info">
 **Understanding Cancellation States**
@@ -417,9 +430,13 @@ type restoreSubscription = {
      */
     referenceId?: string = '123'
     /**
-     * The id of the subscription to restore. 
+     * The id of the subscription to restore.
      */
     subscriptionId?: string = 'sub_123'
+    /**
+     * Group ID to identify which subscription to restore when user has multiple subscriptions.
+     */
+    groupId?: string = 'ai-features'
 }
 ```
 </APIMethod>
@@ -509,6 +526,92 @@ await client.subscription.upgrade({
 ```
 
 The `seats` parameter is passed to Stripe as the quantity for the subscription item. You can use this value in your application logic to limit the number of members in a team or organization.
+
+### Multiple Product Subscriptions
+
+By default, each reference ID (user or organization) can only have one active subscription at a time. If you need users to subscribe to multiple products simultaneously (e.g., a main plan plus add-ons), you can use the `group` property on your plans.
+
+#### How Groups Work
+
+- Plans with the same `group` value will upgrade/replace each other
+- Plans with different `group` values create separate, concurrent subscriptions
+- Plans without a `group` value belong to a default group
+
+```ts title="auth.ts"
+subscription: {
+    enabled: true,
+    plans: [
+        // Main subscription group - these plans upgrade each other
+        { name: "starter", priceId: "price_starter", group: "main" },
+        { name: "pro", priceId: "price_pro", group: "main" },
+        { name: "enterprise", priceId: "price_enterprise", group: "main" },
+
+        // AI add-on group - separate subscription
+        { name: "ai-basic", priceId: "price_ai_basic", group: "ai" },
+        { name: "ai-pro", priceId: "price_ai_pro", group: "ai" },
+
+        // Storage add-on group - another separate subscription
+        { name: "storage-100gb", priceId: "price_storage_100", group: "storage" },
+        { name: "storage-1tb", priceId: "price_storage_1tb", group: "storage" },
+    ]
+}
+```
+
+#### Subscribing to Multiple Products
+
+```ts title="client.ts"
+// Subscribe to the main plan
+await client.subscription.upgrade({
+    plan: "pro",
+    successUrl: "/dashboard",
+    cancelUrl: "/pricing"
+});
+
+// Subscribe to AI add-on (creates a separate subscription)
+await client.subscription.upgrade({
+    plan: "ai-basic",
+    successUrl: "/dashboard",
+    cancelUrl: "/pricing"
+});
+
+// Upgrade within the same group (upgrades existing AI subscription)
+await client.subscription.upgrade({
+    plan: "ai-pro",
+    successUrl: "/dashboard",
+    cancelUrl: "/pricing"
+});
+```
+
+#### Managing Multiple Subscriptions
+
+When a user has multiple subscriptions, you need to specify which one you're managing:
+
+```ts title="client.ts"
+// List all subscriptions
+const { data: subscriptions } = await client.subscription.list();
+// Returns: [{ plan: "pro", groupId: "main", ... }, { plan: "ai-pro", groupId: "ai", ... }]
+
+// Cancel a specific subscription by group
+await client.subscription.cancel({
+    groupId: "ai",
+    returnUrl: "/billing"
+});
+
+// Or cancel by subscription ID
+await client.subscription.cancel({
+    subscriptionId: "sub_123",
+    returnUrl: "/billing"
+});
+
+// Restore a specific subscription
+await client.subscription.restore({
+    groupId: "ai"
+});
+```
+
+<Callout type="warn">
+If you don't specify `groupId` or `subscriptionId` when canceling/restoring and the user has multiple active subscriptions, an error will be returned asking you to specify which subscription to manage.
+</Callout>
 
 To authorize reference IDs, implement the `authorizeReference` function:
 
@@ -713,22 +816,28 @@ Table Name: `subscription`
       description: "If the subscription has ended, this is the date the subscription ended",
       isOptional: true
     },
-    { 
-      name: "seats", 
-      type: "number", 
+    {
+      name: "seats",
+      type: "number",
       description: "Number of seats for team plans",
       isOptional: true
     },
-    { 
-      name: "trialStart", 
-      type: "Date", 
+    {
+      name: "trialStart",
+      type: "Date",
       description: "Start date of the trial period",
       isOptional: true
     },
-    { 
-      name: "trialEnd", 
-      type: "Date", 
+    {
+      name: "trialEnd",
+      type: "Date",
       description: "End date of the trial period",
+      isOptional: true
+    },
+    {
+      name: "groupId",
+      type: "string",
+      description: "Group identifier for multi-product subscriptions. Derived from the plan's group property.",
       isOptional: true
     }
   ]}
@@ -793,7 +902,7 @@ stripe({
 | `annualDiscountPriceId`   | `string`   | A price ID for annual billing.                               |
 | `annualDiscountLookupKey` | `string`   | The Stripe price lookup key for annual billing.              |
 | `limits`                  | `object`   | Limits for plan (e.g. `{ projects: 10, storage: 5 }`).       |
-| `group`                   | `string`   | A group name for categorizing plans.                         |
+| `group`                   | `string`   | A group name for multi-product subscriptions. Plans in the same group upgrade each other; plans in different groups create separate subscriptions. See [Multiple Product Subscriptions](#multiple-product-subscriptions). |
 | `freeTrial`               | `object`   | Trial configuration. See [below](#free-trial-configuration). |
 
 #### Free Trial Configuration

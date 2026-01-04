@@ -1,5 +1,38 @@
 # [**@better-auth/stripe**](https://github.com/better-auth/stripe)
 
+## Unreleased
+
+### Minor Changes
+
+* Added support for multiple product subscriptions per user/reference. Users can now subscribe to multiple products simultaneously (e.g., "Pro Plan" + "AI Addon" + "Storage Addon").
+
+  **New Features:**
+
+  * Added `groupId` field to subscription schema for grouping subscriptions by product line
+  * Plans in the same `group` upgrade each other, plans in different groups create separate subscriptions
+  * Added `groupId` parameter to cancel and restore endpoints for disambiguation
+  * Added `groupId` filter to list subscriptions endpoint
+  * Improved webhook handling for multi-subscription scenarios
+
+  **Usage:**
+
+  ```ts
+  // Define plans with groups
+  plans: [
+    { name: "pro", priceId: "price_xxx", group: "main" },
+    { name: "ai-addon", priceId: "price_yyy", group: "ai" },
+  ]
+
+  // Subscribe to multiple products
+  await client.subscription.upgrade({ plan: "pro" });      // main group
+  await client.subscription.upgrade({ plan: "ai-addon" }); // ai group (separate subscription)
+
+  // Cancel specific subscription
+  await client.subscription.cancel({ groupId: "ai", returnUrl: "/" });
+  ```
+
+  **Breaking Changes:** None. Fully backwards compatible - existing subscriptions without `groupId` continue to work as before.
+
 ## 1.3.4
 
 ### Patch Changes
