@@ -58,7 +58,7 @@ const { execute } = await testAdapter({
 		// 	await installBetaDrizzle();
 		// }
 
-		const command = `pnpm i drizzle-orm@latest && pnpx drizzle-kit push --dialect=mysql --schema=${fileName}.ts --url=mysql://user:password@localhost:3306/${dbName}`;
+		const command = `pnpm i drizzle-orm@beta && pnpx drizzle-kit push --dialect=mysql --schema=${fileName}.ts --url=mysql://user:password@localhost:3306/${dbName}`;
 		console.log(`Running: ${command}`);
 		console.log(`Options:`, betterAuthOptions);
 		try {
