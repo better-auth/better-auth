@@ -1162,9 +1162,7 @@ export function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
 
 export function recoverProcessTZ() {
 	const originalTZ = process.env.TZ;
-	return {
-		[Symbol.dispose]: () => {
-			process.env.TZ = originalTZ;
-		},
+	return () => {
+		process.env.TZ = originalTZ;
 	};
 }
