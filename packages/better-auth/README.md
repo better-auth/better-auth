@@ -1,19 +1,31 @@
 <p align="center">
+  {/* lint disable maximum-line-length */}
+
   <picture>
-    <source srcset="https://github.com/better-auth/better-auth/blob/main/banner-dark.png?raw=true" media="(prefers-color-scheme: dark)">
-    <source srcset="https://github.com/better-auth/better-auth/blob/main/banner.png?raw=true" media="(prefers-color-scheme: light)">
-    <img src="https://github.com/better-auth/better-auth/blob/main/banner.png?raw=true" alt="Better Auth Logo">
+    <source media="(prefers-color-scheme: dark)" srcset="https://github.com/better-auth/better-auth/blob/main/banner-dark.png?raw=true" />
+
+    <source media="(prefers-color-scheme: light)" srcset="https://github.com/better-auth/better-auth/blob/main/banner.png?raw=true" />
+
+    <img alt="Better Auth Logo" src="https://github.com/better-auth/better-auth/blob/main/banner.png?raw=true" />
   </picture>
-  <h2 align="center">
+
+  {/* lint enable maximum-line-length */}
+
+  <h1 align="center">
     Better Auth
-  </h2>
+  </h1>
 
   <p align="center">
     The most comprehensive authentication framework for TypeScript
+
     <br />
+
     <a href="https://better-auth.com"><strong>Learn more »</strong></a>
+
     <br />
+
     <br />
+
     <a href="https://discord.gg/better-auth">Discord</a>
     ·
     <a href="https://better-auth.com">Website</a>
@@ -28,4 +40,5 @@
 pnpm install better-auth
 ```
 
-Read the [Installation Guide](https://better-auth.com/docs/installation) to learn more.
+Read the [Installation Guide](https://better-auth.com/docs/installation) to
+learn more.

@@ -6,9 +6,7 @@ description: Authenticate users with JWT tokens in services that can't use the s
 The JWT plugin provides endpoints to retrieve a JWT token and a JWKS endpoint to verify the token.
 
 <Callout type="info">
-	This plugin is not meant as a replacement for the session. It's meant to be
-	used for services that require JWT tokens. If you're looking to use JWT tokens
-	for authentication, check out the [Bearer Plugin](/docs/plugins/bearer).
+  This plugin is not meant as a replacement for the session. It's meant to be used for services that require JWT tokens. If you're looking to use JWT tokens for authentication, check out the [Bearer Plugin](/docs/plugins/bearer).
 </Callout>
 
 ## Installation
@@ -46,9 +44,9 @@ export const auth = betterAuth({
         </Tab>
     </Tabs>
     See the [Schema](#schema) section to add the fields manually.
-
 </Step>
-</Steps>
+</Steps>    
+
 
 ## Usage
 
@@ -65,26 +63,26 @@ There are multiple ways to retrieve JWT tokens:
 Add the `jwtClient` plugin to your auth client configuration:
 
 ```ts title="auth-client.ts"
-import { createAuthClient } from 'better-auth/client';
-import { jwtClient } from 'better-auth/client/plugins'; // [!code highlight]
+import { createAuthClient } from "better-auth/client"
+import { jwtClient } from "better-auth/client/plugins" // [!code highlight]
 
 export const authClient = createAuthClient({
-	plugins: [
-		jwtClient(), // [!code highlight]
-	],
-});
+  plugins: [
+    jwtClient() // [!code highlight]
+  ]
+})
 ```
 
 Then use the client to get JWT tokens:
 
 ```ts
-const { data, error } = await authClient.token();
+const { data, error } = await authClient.token()
 if (error) {
-	// handle error
+  // handle error
 }
 if (data) {
-	const jwtToken = data.token;
-	// Use this token for authenticated requests to external services
+  const jwtToken = data.token
+  // Use this token for authenticated requests to external services
 }
 ```
 
@@ -93,21 +91,21 @@ This is the recommended approach for client applications that need JWT tokens fo
 2. **Using your session token**
 
 To get the token, call the `/token` endpoint. This will return the following:
-
+  
 ```json
-{
-	"token": "ey..."
-}
+  { 
+    "token": "ey..."
+  }
 ```
 
 Make sure to include the token in the `Authorization` header of your requests if the `bearer` plugin is added in your auth configuration.
 
 ```ts
-await fetch('/api/auth/token', {
-	headers: {
-		Authorization: `Bearer ${token}`,
-	},
-});
+await fetch("/api/auth/token", {
+  headers: {
+    "Authorization": `Bearer ${token}`
+  },
+})
 ```
 
 3. **From `set-auth-jwt` header**
@@ -116,16 +114,15 @@ When you call `getSession` method, a JWT is returned in the `set-auth-jwt` heade
 
 ```ts
 await authClient.getSession({
-	fetchOptions: {
-		onSuccess: (ctx) => {
-			const jwt = ctx.response.headers.get('set-auth-jwt');
-		},
-	},
-});
+  fetchOptions: {
+    onSuccess: (ctx)=>{
+      const jwt = ctx.response.headers.get("set-auth-jwt")
+    }
+  }
+})
 ```
 
 ### Verifying the token
-
 The token can be verified in your own service, without the need for an additional verify call or database check.
 For this JWKS is used. The public key can be fetched from the `/api/auth/jwks` endpoint.
 
@@ -134,16 +131,16 @@ The key ID (`kid`) that was used to sign a JWT is included in the header of the 
 In case a JWT with a different `kid` is received, it is recommended to fetch the JWKS again.
 
 ```json
-{
-	"keys": [
-		{
-			"crv": "Ed25519",
-			"x": "bDHiLTt7u-VIU7rfmcltcFhaHKLVvWFy-_csKZARUEU",
-			"kty": "OKP",
-			"kid": "c5c7995d-0037-4553-8aee-b5b620b89b23"
-		}
-	]
-}
+  {
+    "keys": [
+        {
+            "crv": "Ed25519",
+            "x": "bDHiLTt7u-VIU7rfmcltcFhaHKLVvWFy-_csKZARUEU",
+            "kty": "OKP",
+            "kid": "c5c7995d-0037-4553-8aee-b5b620b89b23"
+        }
+    ]
+  }
 ```
 
 ### OAuth Provider Mode
@@ -152,76 +149,75 @@ If you are making your system oAuth compliant (such as when utilizing the OIDC o
 
 ```ts title="auth.ts"
 betterAuth({
-	disabledPaths: ['/token'],
-	plugins: [
-		jwt({
-			disableSettingJwtHeader: true,
-		}),
-	],
-});
+  disabledPaths: [
+    "/token",
+  ],
+  plugins: [jwt({
+    disableSettingJwtHeader: true,
+  })]
+})
 ```
 
 #### Example using jose with remote JWKS
 
 ```ts
-import { jwtVerify, createRemoteJWKSet } from 'jose';
+import { jwtVerify, createRemoteJWKSet } from 'jose'
 
 async function validateToken(token: string) {
-	try {
-		const JWKS = createRemoteJWKSet(
-			new URL('http://localhost:3000/api/auth/jwks'),
-		);
-		const { payload } = await jwtVerify(token, JWKS, {
-			issuer: 'http://localhost:3000', // Should match your JWT issuer, which is the BASE_URL
-			audience: 'http://localhost:3000', // Should match your JWT audience, which is the BASE_URL by default
-		});
-		return payload;
-	} catch (error) {
-		console.error('Token validation failed:', error);
-		throw error;
-	}
+  try {
+    const JWKS = createRemoteJWKSet(
+      new URL('http://localhost:3000/api/auth/jwks')
+    )
+    const { payload } = await jwtVerify(token, JWKS, {
+      issuer: 'http://localhost:3000', // Should match your JWT issuer, which is the BASE_URL
+      audience: 'http://localhost:3000', // Should match your JWT audience, which is the BASE_URL by default
+    })
+    return payload
+  } catch (error) {
+    console.error('Token validation failed:', error)
+    throw error
+  }
 }
 
 // Usage example
-const token = 'your.jwt.token'; // this is the token you get from the /api/auth/token endpoint
-const payload = await validateToken(token);
+const token = 'your.jwt.token' // this is the token you get from the /api/auth/token endpoint
+const payload = await validateToken(token)
 ```
 
 #### Example with local JWKS
 
 ```ts
-import { jwtVerify, createLocalJWKSet } from 'jose';
+import { jwtVerify, createLocalJWKSet } from 'jose'
+
 
 async function validateToken(token: string) {
-	try {
-		/**
-		 * This is the JWKS that you get from the /api/auth/
-		 * jwks endpoint
-		 */
-		const storedJWKS = {
-			keys: [
-				{
-					//...
-				},
-			],
-		};
-		const JWKS = createLocalJWKSet({
-			keys: storedJWKS.data?.keys!,
-		});
-		const { payload } = await jwtVerify(token, JWKS, {
-			issuer: 'http://localhost:3000', // Should match your JWT issuer, which is the BASE_URL
-			audience: 'http://localhost:3000', // Should match your JWT audience, which is the BASE_URL by default
-		});
-		return payload;
-	} catch (error) {
-		console.error('Token validation failed:', error);
-		throw error;
-	}
+  try {
+    /**
+     * This is the JWKS that you get from the /api/auth/
+     * jwks endpoint
+     */
+    const storedJWKS = {
+      keys: [{
+        //...
+      }]
+    };
+    const JWKS = createLocalJWKSet({
+      keys: storedJWKS.data?.keys!,
+    })
+    const { payload } = await jwtVerify(token, JWKS, {
+      issuer: 'http://localhost:3000', // Should match your JWT issuer, which is the BASE_URL
+      audience: 'http://localhost:3000', // Should match your JWT audience, which is the BASE_URL by default
+    })
+    return payload
+  } catch (error) {
+    console.error('Token validation failed:', error)
+    throw error
+  }
 }
 
 // Usage example
-const token = 'your.jwt.token'; // this is the token you get from the /api/auth/token endpoint
-const payload = await validateToken(token);
+const token = 'your.jwt.token' // this is the token you get from the /api/auth/token endpoint
+const payload = await validateToken(token)
 ```
 
 ### Remote JWKS Url
@@ -234,13 +230,13 @@ NOTE: you **MUST** specify which asymmetric algorithm is used for signing.
 
 ```ts title="auth.ts"
 jwt({
-	jwks: {
-		remoteUrl: 'https://example.com/.well-known/jwks.json',
-		keyPairConfig: {
-			alg: 'ES256',
-		},
-	},
-});
+  jwks: {
+    remoteUrl: "https://example.com/.well-known/jwks.json",
+    keyPairConfig: {
+      alg: 'ES256',
+    },
+  }
+})
 ```
 
 ### Custom JWKS Path
@@ -248,7 +244,6 @@ jwt({
 By default, the JWKS endpoint is available at `/jwks`. You can customize this path using the `jwksPath` option.
 
 This is useful when you need to:
-
 - Follow OAuth 2.0/OIDC conventions (e.g., `/.well-known/jwks.json`)
 - Match existing API conventions in your application
 - Avoid path conflicts with other endpoints
@@ -257,10 +252,10 @@ This is useful when you need to:
 
 ```ts title="auth.ts"
 jwt({
-	jwks: {
-		jwksPath: '/.well-known/jwks.json',
-	},
-});
+  jwks: {
+    jwksPath: "/.well-known/jwks.json"
+  }
+})
 ```
 
 **Client Configuration:**
@@ -268,33 +263,31 @@ jwt({
 When using a custom `jwksPath` on the server, you **MUST** configure the client with the same path:
 
 ```ts title="auth-client.ts"
-import { createAuthClient } from 'better-auth/client';
-import { jwtClient } from 'better-auth/client/plugins';
+import { createAuthClient } from "better-auth/client"
+import { jwtClient } from "better-auth/client/plugins"
 
 export const authClient = createAuthClient({
-	plugins: [
-		jwtClient({
-			jwks: {
-				jwksPath: '/.well-known/jwks.json', // Must match server configuration
-			},
-		}),
-	],
-});
+  plugins: [
+    jwtClient({
+      jwks: {
+        jwksPath: "/.well-known/jwks.json" // Must match server configuration
+      }
+    })
+  ]
+})
 ```
 
 Then you can use the `jwks()` method as usual:
 
 ```ts
-const { data, error } = await authClient.jwks();
+const { data, error } = await authClient.jwks()
 if (data) {
-	// Use data.keys to verify JWT tokens
+  // Use data.keys to verify JWT tokens
 }
 ```
 
 <Callout type="warning">
-	The `jwksPath` configured on the client **MUST** match the server
-	configuration. If they don't match, the client will not be able to fetch the
-	JWKS.
+  The `jwksPath` configured on the client **MUST** match the server configuration. If they don't match, the client will not be able to fetch the JWKS.
 </Callout>
 
 ### Custom Signing
@@ -302,7 +295,6 @@ if (data) {
 This is an advanced feature. Configuration outside of this plugin **MUST** be provided.
 
 Implementers:
-
 - `remoteUrl` must be defined if using the `sign` function. This shall store all active keys, not just the current one.
 - If using localized approach, ensure server uses the latest private key when rotated. Depending on deployment, the server may need to be restarted.
 - When using remote approach, verify the payload is unchanged after transit. Use integrity validation like CRC32 or SHA256 checks if available.
@@ -311,25 +303,25 @@ Implementers:
 
 ```ts title="auth.ts"
 jwt({
-	jwks: {
-		remoteUrl: 'https://example.com/.well-known/jwks.json',
-		keyPairConfig: {
-			alg: 'EdDSA',
-		},
-	},
-	jwt: {
-		sign: async (jwtPayload: JWTPayload) => {
-			// this is pseudocode
-			return await new SignJWT(jwtPayload)
-				.setProtectedHeader({
-					alg: 'EdDSA',
-					kid: process.env.currentKid,
-					typ: 'JWT',
-				})
-				.sign(process.env.clientPrivateKey);
-		},
-	},
-});
+  jwks: {
+    remoteUrl: "https://example.com/.well-known/jwks.json",
+    keyPairConfig: {
+      alg: 'EdDSA',
+    },
+  },
+  jwt: {
+    sign: async (jwtPayload: JWTPayload) => {
+      // this is pseudocode
+      return await new SignJWT(jwtPayload)
+        .setProtectedHeader({
+          alg: "EdDSA",
+          kid: process.env.currentKid,
+          typ: "JWT",
+        })
+        .sign(process.env.clientPrivateKey);
+    },
+  },
+})
 ```
 
 #### Remote Signing
@@ -338,32 +330,33 @@ Useful if you are using a remote Key Management Service such as [Google KMS](htt
 
 ```ts title="auth.ts"
 jwt({
-	jwks: {
-		remoteUrl: 'https://example.com/.well-known/jwks.json',
-		keyPairConfig: {
-			alg: 'ES256',
-		},
-	},
-	jwt: {
-		sign: async (jwtPayload: JWTPayload) => {
-			// this is pseudocode
-			const headers = JSON.stringify({ kid: '123', alg: 'ES256', typ: 'JWT' });
-			const payload = JSON.stringify(jwtPayload);
-			const encodedHeaders = Buffer.from(headers).toString('base64url');
-			const encodedPayload = Buffer.from(payload).toString('base64url');
-			const hash = createHash('sha256');
-			const data = `${encodedHeaders}.${encodedPayload}`;
-			hash.update(Buffer.from(data));
-			const digest = hash.digest();
-			const sig = await remoteSign(digest);
-			// integrityCheck(sig)
-			const jwt = `${data}.${sig}`;
-			// verifyJwt(jwt)
-			return jwt;
-		},
-	},
-});
+  jwks: {
+    remoteUrl: "https://example.com/.well-known/jwks.json",
+    keyPairConfig: {
+      alg: 'ES256',
+    },
+  },
+  jwt: {
+    sign: async (jwtPayload: JWTPayload) => {
+      // this is pseudocode
+      const headers = JSON.stringify({ kid: '123', alg: 'ES256', typ: 'JWT' })
+      const payload = JSON.stringify(jwtPayload)
+      const encodedHeaders = Buffer.from(headers).toString('base64url')
+      const encodedPayload = Buffer.from(payload).toString('base64url')
+      const hash = createHash('sha256')
+      const data = `${encodedHeaders}.${encodedPayload}`
+      hash.update(Buffer.from(data))
+      const digest = hash.digest()
+      const sig = await remoteSign(digest)
+      // integrityCheck(sig)
+      const jwt = `${data}.${sig}`
+      // verifyJwt(jwt)
+      return jwt
+    },
+  },
+})
 ```
+
 
 ## Schema
 
@@ -374,41 +367,39 @@ The JWT plugin adds the following tables to the database:
 Table Name: `jwks`
 
 <DatabaseTable
-	fields={[
-		{
-			name: 'id',
-			type: 'string',
-			description: 'Unique identifier for each web key',
-			isPrimaryKey: true,
-		},
-		{
-			name: 'publicKey',
-			type: 'string',
-			description: 'The public part of the web key',
-		},
-		{
-			name: 'privateKey',
-			type: 'string',
-			description: 'The private part of the web key',
-		},
-		{
-			name: 'createdAt',
-			type: 'Date',
-			description: 'Timestamp of when the web key was created',
-		},
-		{
-			name: 'expiresAt',
-			type: 'Date',
-			description: 'Timestamp of when the web key expires',
-			isOptional: true,
-		},
-	]}
-/>
+  fields={[
+    { 
+      name: "id", 
+      type: "string", 
+      description: "Unique identifier for each web key",
+      isPrimaryKey: true
+    },
+    { 
+      name: "publicKey", 
+      type: "string", 
+      description: "The public part of the web key" 
+    },
+    { 
+      name: "privateKey", 
+      type: "string", 
+      description: "The private part of the web key" 
+    },
+    { 
+      name: "createdAt", 
+      type: "Date", 
+      description: "Timestamp of when the web key was created" 
+    },
+    { 
+      name: "expiresAt", 
+      type: "Date", 
+      description: "Timestamp of when the web key expires",
+      isOptional: true
+    },
+  ]}
+  />
 
 <Callout>
-	You can customize the table name and fields for the `jwks` table. See the
-	[Database concept documentation](/docs/concepts/database#custom-table-names)
-	for more information on how to customize plugin schema.
+  You can customize the table name and fields for the `jwks` table. See the [Database concept documentation](/docs/concepts/database#custom-table-names) for more information on how to customize plugin schema.
 </Callout>
 
 ## Options
@@ -419,47 +410,42 @@ The algorithm used for the generation of the key pair. The default is **EdDSA** 
 
 ```ts title="auth.ts"
 jwt({
-	jwks: {
-		keyPairConfig: {
-			alg: 'EdDSA',
-			crv: 'Ed25519',
-		},
-	},
-});
+  jwks: {
+    keyPairConfig: {
+      alg: "EdDSA",
+      crv: "Ed25519"
+    }
+  }
+})
 ```
 
 #### EdDSA
-
 - **Default Curve**: `Ed25519`
 - **Optional Property**: `crv`
   - Available options: `Ed25519`, `Ed448`
   - Default: `Ed25519`
 
 #### ES256
-
 - No additional properties
 
 #### RSA256
-
 - **Optional Property**: `modulusLength`
   - Expects a number
   - Default: `2048`
 
 #### PS256
-
 - **Optional Property**: `modulusLength`
   - Expects a number
   - Default: `2048`
 
 #### ECDH-ES
-
 - **Optional Property**: `crv`
   - Available options: `P-256`, `P-384`, `P-521`
   - Default: `P-256`
 
 #### ES512
-
 - No additional properties
+
 
 ### Disable private key encryption
 
@@ -469,10 +455,10 @@ For security reasons, it's recommended to keep the private key encrypted.
 
 ```ts title="auth.ts"
 jwt({
-	jwks: {
-		disablePrivateKeyEncryption: true,
-	},
-});
+  jwks: {
+    disablePrivateKeyEncryption: true
+  }
+})
 ```
 
 ### Key Rotation
@@ -483,11 +469,11 @@ The default value is `undefined` (disabled).
 
 ```ts title="auth.ts"
 jwt({
-	jwks: {
-		rotationInterval: 60 * 60 * 24 * 30, // 30 days
-		gracePeriod: 60 * 60 * 24 * 30, // 30 days
-	},
-});
+  jwks: {
+    rotationInterval: 60 * 60 * 24 * 30, // 30 days
+    gracePeriod: 60 * 60 * 24 * 30 // 30 days
+  }
+})
 ```
 
 - `rotationInterval`: The interval in seconds to rotate the key pair.
@@ -499,34 +485,33 @@ By default the entire user object is added to the JWT payload. You can modify th
 
 ```ts title="auth.ts"
 jwt({
-	jwt: {
-		definePayload: ({ user }) => {
-			return {
-				id: user.id,
-				email: user.email,
-				role: user.role,
-			};
-		},
-	},
-});
+  jwt: {
+    definePayload: ({user}) => {
+      return {
+        id: user.id,
+        email: user.email,
+        role: user.role
+      }
+    }
+  }
+})
 ```
 
 ### Modify Issuer, Audience, Subject or Expiration time
-
 If none is given, the `BASE_URL` is used as the issuer and the audience is set to the `BASE_URL`. The expiration time is set to 15 minutes.
 
 ```ts title="auth.ts"
 jwt({
-	jwt: {
-		issuer: 'https://example.com',
-		audience: 'https://example.com',
-		expirationTime: '1h',
-		getSubject: (session) => {
-			// by default the subject is the user id
-			return session.user.email;
-		},
-	},
-});
+  jwt: {
+    issuer: "https://example.com",
+    audience: "https://example.com",
+    expirationTime: "1h",
+    getSubject: (session) => {
+      // by default the subject is the user id
+      return session.user.email
+    }
+  }
+})
 ```
 
 ### Custom Adapter
@@ -535,17 +520,17 @@ By default, the JWT plugin stores and retrieves JWKS from your database. You can
 
 ```ts title="auth.ts"
 jwt({
-	adapter: {
-		getJwks: async (ctx) => {
-			// Custom implementation to get all JWKS
-			// This overrides the default database query
-			return await yourCustomStorage.getAllKeys();
-		},
-		createJwk: async (ctx, webKey) => {
-			// Custom implementation to create a new key
-			// This overrides the default database insert
-			return await yourCustomStorage.createKey(webKey);
-		},
-	},
-});
+  adapter: {
+    getJwks: async (ctx) => {
+      // Custom implementation to get all JWKS
+      // This overrides the default database query
+      return await yourCustomStorage.getAllKeys()
+    },
+    createJwk: async (ctx, webKey) => {
+      // Custom implementation to create a new key
+      // This overrides the default database insert
+      return await yourCustomStorage.createKey(webKey)
+    }
+  }
+})
 ```

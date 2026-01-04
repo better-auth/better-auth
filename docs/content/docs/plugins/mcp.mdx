@@ -6,16 +6,13 @@ description: MCP provider plugin for Better Auth
 `OAuth` `MCP`
 
 <Callout type="warn">
-	This plugin will soon be deprecated in favor of the [OAuth Provider
-	Plugin](/docs/plugins/oauth-provider).
+This plugin will soon be deprecated in favor of the [OAuth Provider Plugin](/docs/plugins/oauth-provider).
 </Callout>
 
 The **MCP** plugin lets your app act as an OAuth provider for MCP clients. It handles authentication and makes it easy to issue and manage access tokens for MCP applications.
 
 <Callout type="warn">
-	This plugin is based on OIDC Provider plugin. It's currently not ready for
-	production use. We are working on it and will update this documentation when
-	it's ready.
+This plugin is based on OIDC Provider plugin. It's currently not ready for production use. We are working on it and will update this documentation when it's ready.
 </Callout>
 
 ## Installation
@@ -62,7 +59,6 @@ The **MCP** plugin lets your app act as an OAuth provider for MCP clients. It ha
         </Tabs>
         The MCP plugin uses the same schema as the OIDC Provider plugin. See the [OIDC Provider Schema](/docs/plugins/oidc-provider#schema) section for details.
     </Step>
-
 </Steps>
 
 ## Usage
@@ -72,8 +68,8 @@ The **MCP** plugin lets your app act as an OAuth provider for MCP clients. It ha
 Better Auth already handles the `/api/auth/.well-known/oauth-authorization-server` route automatically but some client may fail to parse the `WWW-Authenticate` header and default to `/.well-known/oauth-authorization-server` (this can happen, for example, if your CORS configuration doesn't expose the `WWW-Authenticate`). For this reason it's better to add a route to expose OAuth metadata for MCP clients:
 
 ```ts title=".well-known/oauth-authorization-server/route.ts"
-import { oAuthDiscoveryMetadata } from 'better-auth/plugins';
-import { auth } from '../../../lib/auth';
+import { oAuthDiscoveryMetadata } from "better-auth/plugins";
+import { auth } from "../../../lib/auth";
 
 export const GET = oAuthDiscoveryMetadata(auth);
 ```
@@ -83,8 +79,8 @@ export const GET = oAuthDiscoveryMetadata(auth);
 Better Auth already handles the `/api/auth/.well-known/oauth-protected-resource` route automatically but some client may fail to parse the `WWW-Authenticate` header and default to `/.well-known/oauth-protected-resource` (this can happen, for example, if your CORS configuration doesn't expose the `WWW-Authenticate`). For this reason it's better to add a route to expose OAuth metadata for MCP clients:
 
 ```ts title="/.well-known/oauth-protected-resource/route.ts"
-import { oAuthProtectedResourceMetadata } from 'better-auth/plugins';
-import { auth } from '@/lib/auth';
+import { oAuthProtectedResourceMetadata } from "better-auth/plugins";
+import { auth } from "@/lib/auth";
 
 export const GET = oAuthProtectedResourceMetadata(auth);
 ```
@@ -93,43 +89,44 @@ export const GET = oAuthProtectedResourceMetadata(auth);
 
 You can use the helper function `withMcpAuth` to get the session and handle unauthenticated calls automatically.
 
+
 ```ts title="api/[transport]/route.ts"
-import { auth } from '@/lib/auth';
-import { createMcpHandler } from '@vercel/mcp-adapter';
-import { withMcpAuth } from 'better-auth/plugins';
-import { z } from 'zod';
+import { auth } from "@/lib/auth";
+import { createMcpHandler } from "@vercel/mcp-adapter";
+import { withMcpAuth } from "better-auth/plugins";
+import { z } from "zod";
 
 const handler = withMcpAuth(auth, (req, session) => {
-	// session contains the access token record with scopes and user ID
-	return createMcpHandler(
-		(server) => {
-			server.tool(
-				'echo',
-				'Echo a message',
-				{ message: z.string() },
-				async ({ message }) => {
-					return {
-						content: [{ type: 'text', text: `Tool echo: ${message}` }],
-					};
-				},
-			);
-		},
-		{
-			capabilities: {
-				tools: {
-					echo: {
-						description: 'Echo a message',
-					},
-				},
-			},
-		},
-		{
-			redisUrl: process.env.REDIS_URL,
-			basePath: '/api',
-			verboseLogs: true,
-			maxDuration: 60,
-		},
-	)(req);
+    // session contains the access token record with scopes and user ID
+    return createMcpHandler(
+        (server) => {
+            server.tool(
+                "echo",
+                "Echo a message",
+                { message: z.string() },
+                async ({ message }) => {
+                    return {
+                        content: [{ type: "text", text: `Tool echo: ${message}` }],
+                    };
+                },
+            );
+        },
+        {
+            capabilities: {
+                tools: {
+                    echo: {
+                        description: "Echo a message",
+                    },
+                },
+            },
+        },
+        {
+            redisUrl: process.env.REDIS_URL,
+            basePath: "/api",
+            verboseLogs: true,
+            maxDuration: 60,
+        },
+    )(req);
 });
 
 export { handler as GET, handler as POST, handler as DELETE };
@@ -138,51 +135,51 @@ export { handler as GET, handler as POST, handler as DELETE };
 You can also use `auth.api.getMcpSession` to get the session using the access token sent from the MCP client:
 
 ```ts title="api/[transport]/route.ts"
-import { auth } from '@/lib/auth';
-import { createMcpHandler } from '@vercel/mcp-adapter';
-import { z } from 'zod';
+import { auth } from "@/lib/auth";
+import { createMcpHandler } from "@vercel/mcp-adapter";
+import { z } from "zod";
 
 const handler = async (req: Request) => {
-	// session contains the access token record with scopes and user ID
-	const session = await auth.api.getMcpSession({
-		headers: req.headers,
-	});
-	if (!session) {
-		//this is important and you must return 401
-		return new Response(null, {
-			status: 401,
-		});
-	}
-	return createMcpHandler(
-		(server) => {
-			server.tool(
-				'echo',
-				'Echo a message',
-				{ message: z.string() },
-				async ({ message }) => {
-					return {
-						content: [{ type: 'text', text: `Tool echo: ${message}` }],
-					};
-				},
-			);
-		},
-		{
-			capabilities: {
-				tools: {
-					echo: {
-						description: 'Echo a message',
-					},
-				},
-			},
-		},
-		{
-			redisUrl: process.env.REDIS_URL,
-			basePath: '/api',
-			verboseLogs: true,
-			maxDuration: 60,
-		},
-	)(req);
-};
+     // session contains the access token record with scopes and user ID
+    const session = await auth.api.getMcpSession({
+        headers: req.headers
+    })
+    if(!session){
+        //this is important and you must return 401
+        return new Response(null, {
+            status: 401
+        })
+    }
+    return createMcpHandler(
+        (server) => {
+            server.tool(
+                "echo",
+                "Echo a message",
+                { message: z.string() },
+                async ({ message }) => {
+                    return {
+                        content: [{ type: "text", text: `Tool echo: ${message}` }],
+                    };
+                },
+            );
+        },
+        {
+            capabilities: {
+                tools: {
+                    echo: {
+                        description: "Echo a message",
+                    },
+                },
+            },
+        },
+        {
+            redisUrl: process.env.REDIS_URL,
+            basePath: "/api",
+            verboseLogs: true,
+            maxDuration: 60,
+        },
+    )(req);
+}
 
 export { handler as GET, handler as POST, handler as DELETE };
 ```
@@ -192,25 +189,23 @@ export { handler as GET, handler as POST, handler as DELETE };
 The MCP plugin accepts the following configuration options:
 
 <TypeTable
-	type={{
-		loginPage: {
-			description:
-				'Path to the login page where users will be redirected for authentication',
-			type: 'string',
-			required: true,
-		},
-		resource: {
-			description:
-				'The resource that should be returned by the protected resource metadata endpoint',
-			type: 'string',
-			required: false,
-		},
-		oidcConfig: {
-			description: 'Optional OIDC configuration options',
-			type: 'object',
-			required: false,
-		},
-	}}
+  type={{
+    loginPage: {
+        description: "Path to the login page where users will be redirected for authentication",
+        type: "string",
+        required: true
+    },
+    resource: {
+        description: "The resource that should be returned by the protected resource metadata endpoint",
+        type: "string",
+        required: false
+    },
+    oidcConfig: {
+        description: "Optional OIDC configuration options",
+        type: "object",
+        required: false
+    }
+  }}
 />
 
 ### OIDC Configuration
@@ -218,33 +213,33 @@ The MCP plugin accepts the following configuration options:
 The plugin supports additional OIDC configuration options through the `oidcConfig` parameter:
 
 <TypeTable
-	type={{
-		codeExpiresIn: {
-			description: 'Expiration time for authorization codes in seconds',
-			type: 'number',
-			default: 600,
-		},
-		accessTokenExpiresIn: {
-			description: 'Expiration time for access tokens in seconds',
-			type: 'number',
-			default: 3600,
-		},
-		refreshTokenExpiresIn: {
-			description: 'Expiration time for refresh tokens in seconds',
-			type: 'number',
-			default: 604800,
-		},
-		defaultScope: {
-			description: 'Default scope for OAuth requests',
-			type: 'string',
-			default: 'openid',
-		},
-		scopes: {
-			description: 'Additional scopes to support',
-			type: 'string[]',
-			default: '["openid", "profile", "email", "offline_access"]',
-		},
-	}}
+  type={{
+    codeExpiresIn: {
+        description: "Expiration time for authorization codes in seconds",
+        type: "number",
+        default: 600
+    },
+    accessTokenExpiresIn: {
+        description: "Expiration time for access tokens in seconds",
+        type: "number",
+        default: 3600
+    },
+    refreshTokenExpiresIn: {
+        description: "Expiration time for refresh tokens in seconds",
+        type: "number",
+        default: 604800
+    },
+    defaultScope: {
+        description: "Default scope for OAuth requests",
+        type: "string",
+        default: "openid"
+    },
+    scopes: {
+        description: "Additional scopes to support",
+        type: "string[]",
+        default: '["openid", "profile", "email", "offline_access"]'
+    }
+  }}
 />
 
 ## Schema

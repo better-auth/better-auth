@@ -10,10 +10,10 @@ List of all the available options for configuring Better Auth. See [Better Auth 
 The name of the application.
 
 ```ts
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth";
 export const auth = betterAuth({
-	appName: 'My App',
-});
+	appName: "My App",
+})
 ```
 
 ## `baseURL`
@@ -21,18 +21,16 @@ export const auth = betterAuth({
 Base URL for Better Auth. This is typically the root URL where your application server is hosted. Note: If you include a path in the baseURL, it will take precedence over the default path.
 
 ```ts
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth";
 export const auth = betterAuth({
-	baseURL: 'https://example.com',
-});
+	baseURL: "https://example.com",
+})
 ```
 
 If not explicitly set, the system will check for the environment variable `BETTER_AUTH_URL`. If that's also not set, it will be inferred from the incoming request.
 
 <Callout type="warn">
-	Relying on request inference is not recommended. For security and stability,
-	always set `baseURL` explicitly in your config or via the `BETTER_AUTH_URL`
-	environment variable.
+Relying on request inference is not recommended. For security and stability, always set `baseURL` explicitly in your config or via the `BETTER_AUTH_URL` environment variable.
 </Callout>
 
 ## `basePath`
@@ -40,10 +38,10 @@ If not explicitly set, the system will check for the environment variable `BETTE
 Base path for Better Auth. This is typically the path where the Better Auth routes are mounted. It will be overridden if there is a path component within `baseURL`.
 
 ```ts
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth";
 export const auth = betterAuth({
-	basePath: '/api/auth',
-});
+	basePath: "/api/auth",
+})
 ```
 
 Default: `/api/auth`
@@ -57,10 +55,10 @@ List of trusted origins. You can provide a static array of origins, a function t
 You can provide a static array of origins:
 
 ```ts
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth";
 export const auth = betterAuth({
-	trustedOrigins: ['http://localhost:3000', 'https://example.com'],
-});
+	trustedOrigins: ["http://localhost:3000", "https://example.com"],
+})
 ```
 
 ### Dynamic Origins
@@ -72,18 +70,16 @@ export const auth = betterAuth({
 	trustedOrigins: async (request) => {
 		// request is undefined during initialization and auth.api calls
 		if (!request) {
-			return ['https://my-frontend.com'];
+			return ["https://my-frontend.com"];
 		}
 		// Dynamic logic based on the request
-		return ['https://dynamic-origin.com'];
-	},
-});
+		return ["https://dynamic-origin.com"];
+	}
+})
 ```
 
 <Callout type="info">
-	The `request` parameter is `undefined` during initialization and when calling
-	`auth.api` directly. Make sure to handle this case by returning default
-	trusted origins.
+  The `request` parameter is `undefined` during initialization and when calling `auth.api` directly. Make sure to handle this case by returning default trusted origins.
 </Callout>
 
 ### Wildcard Support
@@ -93,29 +89,30 @@ You can use wildcard patterns in trusted origins:
 ```ts
 export const auth = betterAuth({
 	trustedOrigins: [
-		'https://*.example.com', // trust all HTTPS subdomains of example.com
-		'http://*.dev.example.com', // trust all HTTP subdomains of dev.example.com
-	],
-});
+		"https://*.example.com", // trust all HTTPS subdomains of example.com
+		"http://*.dev.example.com" // trust all HTTP subdomains of dev.example.com
+	]
+})
 ```
 
 #### Pattern Syntax
 
-| Pattern | Description                                          |
-| ------- | ---------------------------------------------------- |
-| `?`     | Matches exactly one character (except `/`)           |
-| `*`     | Matches zero or more characters that don't cross `/` |
-| `**`    | Matches zero or more characters including `/`        |
+| Pattern | Description |
+|---------|-------------|
+| `?` | Matches exactly one character (except `/`) |
+| `*` | Matches zero or more characters that don't cross `/` |
+| `**` | Matches zero or more characters including `/` |
 
 #### Pattern Examples
 
-| Pattern                  | Matches                                                                                | Does Not Match                                     |
-| ------------------------ | -------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| `http://*.example.com`   | `http://api.example.com`<br/>`http://app.example.com`<br/>`http://api.app.example.com` | `https://api.example.com`<br/>`http://example.com` |
-| `https://**.example.com` | `https://api.example.com`<br/>`https://api.app.example.com`                            | `http://api.example.com`                           |
-| `https://example.com`    | `https://example.com`<br/>`https://example.com/path`                                   | `https://api.example.com`<br/>`http://example.com` |
-| `exp://192.168.*.*:*/**` | `exp://192.168.1.100:8081/path`<br/>`exp://192.168.50.200:19000/auth/callback`         | `exp://10.0.0.29:8081/path`                        |
-| `myapp://`               | All URLs starting with `myapp://`                                                      | -                                                  |
+| Pattern | Matches | Does Not Match |
+|---------|---------|----------------|
+| `http://*.example.com` | `http://api.example.com`<br/>`http://app.example.com`<br/>`http://api.app.example.com` | `https://api.example.com`<br/>`http://example.com` |
+| `https://**.example.com` | `https://api.example.com`<br/>`https://api.app.example.com` | `http://api.example.com` |
+| `https://example.com` | `https://example.com`<br/>`https://example.com/path` | `https://api.example.com`<br/>`http://example.com` |
+| `exp://192.168.*.*:*/**` | `exp://192.168.1.100:8081/path`<br/>`exp://192.168.50.200:19000/auth/callback` | `exp://10.0.0.29:8081/path` |
+| `myapp://` | All URLs starting with `myapp://` | - |
+
 
 <Callout type="info">
 **Notes**
@@ -123,21 +120,20 @@ export const auth = betterAuth({
 - For `http://` and `https://` URLs, patterns match the full origin. Paths and query strings are ignored.
 - For custom schemes (like `exp://` or `myapp://`), patterns match against the full URL including paths when wildcards are present, or use prefix matching when no wildcards exist.
 - The separator is `/` (forward slash). This means `http://*.example.com` matches both `http://api.example.com` and `http://api.app.example.com`.
-  </Callout>
+</Callout>
 
 ## `secret`
 
 The secret used for encryption, signing, and hashing.
 
 ```ts
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth";
 export const auth = betterAuth({
-	secret: 'your-secret-key',
-});
+	secret: "your-secret-key",
+})
 ```
 
 By default, Better Auth will look for the following environment variables:
-
 - `process.env.BETTER_AUTH_SECRET`
 - `process.env.AUTH_SECRET`
 
@@ -154,14 +150,14 @@ openssl rand -base64 32
 Database configuration for Better Auth.
 
 ```ts
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	database: {
-		dialect: 'postgres',
-		type: 'postgres',
-		casing: 'camel',
+		dialect: "postgres",
+		type: "postgres",
+		casing: "camel"
 	},
-});
+})
 ```
 
 Better Auth supports various database configurations including [PostgreSQL](/docs/adapters/postgresql), [MySQL](/docs/adapters/mysql), and [SQLite](/docs/adapters/sqlite).
@@ -173,14 +169,14 @@ Read more about databases [here](/docs/concepts/database).
 Secondary storage configuration used to store session and rate limit data.
 
 ```ts
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
 	// ... other options
-	secondaryStorage: {
-		// Your implementation here
-	},
-});
+    secondaryStorage: {
+    	// Your implementation here
+    },
+})
 ```
 
 Read more about secondary storage [here](/docs/concepts/database#secondary-storage).
@@ -190,7 +186,7 @@ Read more about secondary storage [here](/docs/concepts/database#secondary-stora
 Email verification configuration.
 
 ```ts
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	emailVerification: {
 		sendVerificationEmail: async ({ user, url, token }) => {
@@ -198,9 +194,9 @@ export const auth = betterAuth({
 		},
 		sendOnSignUp: true,
 		autoSignInAfterVerification: true,
-		expiresIn: 3600, // 1 hour
+		expiresIn: 3600 // 1 hour
 	},
-});
+})
 ```
 
 - `sendVerificationEmail`: Function to send verification email
@@ -214,7 +210,7 @@ export const auth = betterAuth({
 Email and password authentication configuration.
 
 ```ts
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	emailAndPassword: {
 		enabled: true,
@@ -235,10 +231,10 @@ export const auth = betterAuth({
 			verify: async ({ hash, password }) => {
 				// Custom password verification
 				return isValid;
-			},
-		},
+			}
+		}
 	},
-});
+})
 ```
 
 - `enabled`: Enable email and password authentication (default: `false`)
@@ -256,21 +252,21 @@ export const auth = betterAuth({
 Configure social login providers.
 
 ```ts
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	socialProviders: {
 		google: {
-			clientId: 'your-client-id',
-			clientSecret: 'your-client-secret',
-			redirectURI: 'https://example.com/api/auth/callback/google',
+			clientId: "your-client-id",
+			clientSecret: "your-client-secret",
+			redirectURI: "https://example.com/api/auth/callback/google"
 		},
 		github: {
-			clientId: 'your-client-id',
-			clientSecret: 'your-client-secret',
-			redirectURI: 'https://example.com/api/auth/callback/github',
-		},
+			clientId: "your-client-id",
+			clientSecret: "your-client-secret",
+			redirectURI: "https://example.com/api/auth/callback/github"
+		}
 	},
-});
+})
 ```
 
 ## `plugins`
@@ -278,18 +274,18 @@ export const auth = betterAuth({
 List of Better Auth plugins.
 
 ```ts
-import { betterAuth } from 'better-auth';
-import { emailOTP } from 'better-auth/plugins';
+import { betterAuth } from "better-auth";
+import { emailOTP } from "better-auth/plugins";
 
 export const auth = betterAuth({
 	plugins: [
 		emailOTP({
 			sendVerificationOTP: async ({ email, otp, type }) => {
 				// Send OTP to user's email
-			},
-		}),
+			}
+		})
 	],
-});
+})
 ```
 
 ## `user`
@@ -297,25 +293,25 @@ export const auth = betterAuth({
 User configuration options.
 
 ```ts
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	user: {
-		modelName: 'users',
+		modelName: "users",
 		fields: {
-			email: 'emailAddress',
-			name: 'fullName',
+			email: "emailAddress",
+			name: "fullName"
 		},
 		additionalFields: {
 			customField: {
-				type: 'string',
-			},
+				type: "string",
+			}
 		},
 		changeEmail: {
 			enabled: true,
 			sendChangeEmailConfirmation: async ({ user, newEmail, url, token }) => {
 				// Send change email confirmation to the old email
 			},
-			updateEmailWithoutVerification: false, // Update email without verification if user is not verified
+			updateEmailWithoutVerification: false // Update email without verification if user is not verified
 		},
 		deleteUser: {
 			enabled: true,
@@ -327,10 +323,10 @@ export const auth = betterAuth({
 			},
 			afterDelete: async (user) => {
 				// Perform cleanup after user deletion
-			},
-		},
+			}
+		}
 	},
-});
+})
 ```
 
 - `modelName`: The model name for the user (default: `"user"`)
@@ -344,30 +340,29 @@ export const auth = betterAuth({
 Session configuration options.
 
 ```ts
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	session: {
-		modelName: 'sessions',
+		modelName: "sessions",
 		fields: {
-			userId: 'user_id',
+			userId: "user_id"
 		},
 		expiresIn: 604800, // 7 days
 		updateAge: 86400, // 1 day
 		disableSessionRefresh: true, // Disable session refresh so that the session is not updated regardless of the `updateAge` option. (default: `false`)
-		additionalFields: {
-			// Additional fields for the session table
+		additionalFields: { // Additional fields for the session table
 			customField: {
-				type: 'string',
-			},
+				type: "string",
+			}
 		},
 		storeSessionInDatabase: true, // Store session in database when secondary storage is provided (default: `false`)
 		preserveSessionInDatabase: false, // Preserve session records in database when deleted from secondary storage (default: `false`)
 		cookieCache: {
-			enabled: true, // Enable caching session in cookie (default: `false`)
-			maxAge: 300, // 5 minutes
-		},
+			enabled: true, // Enable caching session in cookie (default: `false`)	
+			maxAge: 300 // 5 minutes
+		}
 	},
-});
+})
 ```
 
 - `modelName`: The model name for the session (default: `"session"`)
@@ -384,22 +379,22 @@ export const auth = betterAuth({
 Account configuration options.
 
 ```ts
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	account: {
-		modelName: 'accounts',
+		modelName: "accounts",
 		fields: {
-			userId: 'user_id',
+			userId: "user_id"
 		},
 		encryptOAuthTokens: true, // Encrypt OAuth tokens before storing them in the database
 		storeAccountCookie: true, // Store account data after OAuth flow in a cookie (useful for database-less flows)
 		accountLinking: {
 			enabled: true,
-			trustedProviders: ['google', 'github', 'email-password'],
-			allowDifferentEmails: false,
-		},
+			trustedProviders: ["google", "github", "email-password"],
+			allowDifferentEmails: false
+		}
 	},
-});
+})
 ```
 
 - `modelName`: The model name for the account
@@ -435,16 +430,16 @@ Configuration for account linking.
 Verification configuration options.
 
 ```ts
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	verification: {
-		modelName: 'verifications',
+		modelName: "verifications",
 		fields: {
-			userId: 'user_id',
+			userId: "user_id"
 		},
-		disableCleanup: false,
+		disableCleanup: false
 	},
-});
+})
 ```
 
 - `modelName`: The model name for the verification table
@@ -456,22 +451,22 @@ export const auth = betterAuth({
 Rate limiting configuration.
 
 ```ts
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	rateLimit: {
 		enabled: true,
 		window: 10,
 		max: 100,
 		customRules: {
-			'/example/path': {
+			"/example/path": {
 				window: 10,
-				max: 100,
-			},
+				max: 100
+			}
 		},
-		storage: 'memory',
-		modelName: 'rateLimit',
-	},
-});
+		storage: "memory",
+		modelName: "rateLimit"
+	}
+})
 ```
 
 - `enabled`: Enable rate limiting (defaults: `true` in production, `false` in development)
@@ -481,57 +476,57 @@ export const auth = betterAuth({
 - `storage`: Storage configuration. If you passed a secondary storage, rate limiting will be stored in the secondary storage. (options: `"memory", "database", "secondary-storage"`, default: `"memory"`)
 - `modelName`: The name of the table to use for rate limiting if database is used as storage. (default: `"rateLimit"`)
 
+
 ## `advanced`
 
 Advanced configuration options.
 
 ```ts
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	advanced: {
 		ipAddress: {
-			ipAddressHeaders: ['x-client-ip', 'x-forwarded-for'],
-			disableIpTracking: false,
+			ipAddressHeaders: ["x-client-ip", "x-forwarded-for"],
+			disableIpTracking: false
 		},
 		useSecureCookies: true,
 		disableCSRFCheck: false,
 		crossSubDomainCookies: {
 			enabled: true,
-			additionalCookies: ['custom_cookie'],
-			domain: 'example.com',
+			additionalCookies: ["custom_cookie"],
+			domain: "example.com"
 		},
 		cookies: {
 			session_token: {
-				name: 'custom_session_token',
+				name: "custom_session_token",
 				attributes: {
 					httpOnly: true,
-					secure: true,
-				},
-			},
+					secure: true
+				}
+			}
 		},
 		defaultCookieAttributes: {
 			httpOnly: true,
-			secure: true,
+			secure: true
 		},
 		// OAuth state configuration has been moved to account option
 		// Use account.storeStateStrategy and account.skipStateCookieCheck instead
-		cookiePrefix: 'myapp',
+		cookiePrefix: "myapp",
 		database: {
 			// Use your own custom ID generator,
 			// disable generating IDS so your database will generate them,
 			// or use "serial" to use your database's auto-incrementing ID, or "uuid" to use a random UUID.
-			generateId:
-				((options: { model: LiteralUnion<Models, string>; size?: number }) => {
-					return 'my-super-unique-id';
-				}) |
-				false |
-				'serial' |
-				'uuid',
+			generateId: (((options: {
+				model: LiteralUnion<Models, string>;
+				size?: number;
+			}) => {
+				return "my-super-unique-id";
+			})) | false | "serial" | "uuid",
 			defaultFindManyLimit: 100,
 			experimentalJoins: false,
-		},
+		}
 	},
-});
+})
 ```
 
 - `ipAddress`: IP address configuration for rate limiting and session tracking
@@ -549,18 +544,18 @@ export const auth = betterAuth({
 Logger configuration for Better Auth.
 
 ```ts
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	logger: {
 		disabled: false,
 		disableColors: false,
-		level: 'error',
+		level: "error",
 		log: (level, message, ...args) => {
 			// Custom logging implementation
 			console.log(`[${level}] ${message}`, ...args);
-		},
-	},
-});
+		}
+	}
+})
 ```
 
 The logger configuration allows you to customize how Better Auth handles logging. It supports the following options:
@@ -580,21 +575,21 @@ The logger configuration allows you to customize how Better Auth handles logging
 Example with custom logging:
 
 ```ts
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	logger: {
-		level: 'info',
+		level: "info",
 		log: (level, message, ...args) => {
 			// Send logs to a custom logging service
 			myLoggingService.log({
 				level,
 				message,
 				metadata: args,
-				timestamp: new Date().toISOString(),
+				timestamp: new Date().toISOString()
 			});
-		},
-	},
-});
+		}
+	}
+})
 ```
 
 ## `databaseHooks`
@@ -602,18 +597,18 @@ export const auth = betterAuth({
 Database lifecycle hooks for core operations.
 
 ```ts
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	databaseHooks: {
 		user: {
 			create: {
 				before: async (user) => {
 					// Modify user data before creation
-					return { data: { ...user, customField: 'value' } };
+					return { data: { ...user, customField: "value" } };
 				},
 				after: async (user) => {
 					// Perform actions after user creation
-				},
+				}
 			},
 			update: {
 				before: async (userData) => {
@@ -622,8 +617,8 @@ export const auth = betterAuth({
 				},
 				after: async (user) => {
 					// Perform actions after user update
-				},
-			},
+				}
+			}
 		},
 		session: {
 			// Session hooks
@@ -633,9 +628,9 @@ export const auth = betterAuth({
 		},
 		verification: {
 			// Verification hooks
-		},
+		}
 	},
-});
+})
 ```
 
 ## `onAPIError`
@@ -643,49 +638,49 @@ export const auth = betterAuth({
 API error handling configuration.
 
 ```ts
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	onAPIError: {
 		throw: true,
 		onError: (error, ctx) => {
 			// Custom error handling
-			console.error('Auth error:', error);
+			console.error("Auth error:", error);
 		},
-		errorURL: '/auth/error',
+		errorURL: "/auth/error",
 		customizeDefaultErrorPage: {
 			colors: {
-				background: '#ffffff',
-				foreground: '#000000',
-				primary: '#0070f3',
-				primaryForeground: '#ffffff',
-				mutedForeground: '#666666',
-				border: '#e0e0e0',
-				destructive: '#ef4444',
-				titleBorder: '#0070f3',
-				titleColor: '#000000',
-				gridColor: '#f0f0f0',
-				cardBackground: '#ffffff',
-				cornerBorder: '#0070f3',
+				background: "#ffffff",
+				foreground: "#000000",
+				primary: "#0070f3",
+				primaryForeground: "#ffffff",
+				mutedForeground: "#666666",
+				border: "#e0e0e0",
+				destructive: "#ef4444",
+				titleBorder: "#0070f3",
+				titleColor: "#000000",
+				gridColor: "#f0f0f0",
+				cardBackground: "#ffffff",
+				cornerBorder: "#0070f3"
 			},
 			size: {
-				radiusSm: '0.25rem',
-				radiusMd: '0.5rem',
-				radiusLg: '1rem',
-				textSm: '0.875rem',
-				text2xl: '1.5rem',
-				text4xl: '2.25rem',
-				text6xl: '3.75rem',
+				radiusSm: "0.25rem",
+				radiusMd: "0.5rem",
+				radiusLg: "1rem",
+				textSm: "0.875rem",
+				text2xl: "1.5rem",
+				text4xl: "2.25rem",
+				text6xl: "3.75rem"
 			},
 			font: {
-				defaultFamily: 'system-ui, sans-serif',
-				monoFamily: 'monospace',
+				defaultFamily: "system-ui, sans-serif",
+				monoFamily: "monospace"
 			},
 			disableTitleBorder: false,
 			disableCornerDecorations: false,
-			disableBackgroundGrid: false,
-		},
+			disableBackgroundGrid: false
+		}
 	},
-});
+})
 ```
 
 - `throw`: Throw an error on API error (default: `false`)
@@ -725,21 +720,21 @@ export const auth = betterAuth({
 Request lifecycle hooks.
 
 ```ts
-import { betterAuth } from 'better-auth';
-import { createAuthMiddleware } from 'better-auth/api';
+import { betterAuth } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
 
 export const auth = betterAuth({
 	hooks: {
 		before: createAuthMiddleware(async (ctx) => {
 			// Execute before processing the request
-			console.log('Request path:', ctx.path);
+			console.log("Request path:", ctx.path);
 		}),
 		after: createAuthMiddleware(async (ctx) => {
 			// Execute after processing the request
-			console.log('Response:', ctx.context.returned);
-		}),
+			console.log("Response:", ctx.context.returned);
+		})
 	},
-});
+})
 ```
 
 For more details and examples, see the [Hooks documentation](/docs/concepts/hooks).
@@ -749,10 +744,10 @@ For more details and examples, see the [Hooks documentation](/docs/concepts/hook
 Disable specific auth paths.
 
 ```ts
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth";
 export const auth = betterAuth({
-	disabledPaths: ['/sign-up/email', '/sign-in/email'],
-});
+	disabledPaths: ["/sign-up/email", "/sign-in/email"],
+})
 ```
 
 ## `telemetry`
@@ -760,10 +755,10 @@ export const auth = betterAuth({
 Enable or disable Better Auth's telemetry collection. (default: `false`)
 
 ```ts
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth";
 export const auth = betterAuth({
-	telemetry: {
-		enabled: false,
-	},
-});
+  telemetry: {
+    enabled: false,
+  }
+})
 ```

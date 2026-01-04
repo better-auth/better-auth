@@ -12,23 +12,23 @@ Make sure you have MySQL installed and configured.
 Then, you can connect it straight into Better Auth.
 
 ```ts title="auth.ts"
-import { betterAuth } from 'better-auth';
-import { createPool } from 'mysql2/promise';
+import { betterAuth } from "better-auth";
+import { createPool } from "mysql2/promise";
 
 export const auth = betterAuth({
-	database: createPool({
-		host: 'localhost',
-		user: 'root',
-		password: 'password',
-		database: 'database',
-		timezone: 'Z', // Important to ensure consistent timezone values
-	}),
+  database: createPool({
+    host: "localhost",
+    user: "root",
+    password: "password",
+    database: "database",
+    timezone: "Z", // Important to ensure consistent timezone values
+  }),
 });
 ```
 
 <Callout>
-	For more information, read Kysely's documentation to the
-	[MySQLDialect](https://kysely-org.github.io/kysely-apidoc/classes/MysqlDialect.html).
+  For more information, read Kysely's documentation to the
+  [MySQLDialect](https://kysely-org.github.io/kysely-apidoc/classes/MysqlDialect.html).
 </Callout>
 
 ## Schema generation & migration
@@ -37,22 +37,22 @@ The [Better Auth CLI](/docs/concepts/cli) allows you to generate or migrate
 your database schema based on your Better Auth configuration and plugins.
 
 <table>
-	<thead>
-		<tr className="border-b">
-			<th>
-				<p className="font-bold text-[16px] mb-1">MySQL Schema Generation</p>
-			</th>
-			<th>
-				<p className="font-bold text-[16px] mb-1">MySQL Schema Migration</p>
-			</th>
-		</tr>
-	</thead>
-	<tbody>
-		<tr className="h-10">
-			<td>✅ Supported</td>
-			<td>✅ Supported</td>
-		</tr>
-	</tbody>
+  <thead>
+    <tr className="border-b">
+      <th>
+        <p className="font-bold text-[16px] mb-1">MySQL Schema Generation</p>
+      </th>
+      <th>
+        <p className="font-bold text-[16px] mb-1">MySQL Schema Migration</p>
+      </th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr className="h-10">
+      <td>✅ Supported</td>
+      <td>✅ Supported</td>
+    </tr>
+  </tbody>
 </table>
 
 ```package-install title="Schema Generation"
@@ -75,12 +75,11 @@ To enable this feature, you need to set the `experimental.joins` option to `true
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
-	experimental: { joins: true },
+  experimental: { joins: true }
 });
 ```
-
 <Callout type="warn">
-	It's possible that you may need to run migrations after enabling this feature.
+  It's possible that you may need to run migrations after enabling this feature.
 </Callout>
 
 ## Additional Information

@@ -19,7 +19,7 @@ description: Linear provider setup and usage.
 
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
-
+        
         export const auth = betterAuth({
             socialProviders: {
                 linear: { // [!code highlight]
@@ -36,10 +36,10 @@ description: Linear provider setup and usage.
         To sign in with Linear, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
         - `provider`: The provider to use. It should be set to `linear`.
 
-        ```ts title="auth-client.ts"
+        ```ts title="auth-client.ts"  
         import { createAuthClient } from "better-auth/client"
         const authClient = createAuthClient()
-
+        
         const signIn = async () => {
             const data = await authClient.signIn.social({
                 provider: "linear"
@@ -72,5 +72,4 @@ description: Linear provider setup and usage.
         })
         ```
     </Step>
-
 </Steps>
