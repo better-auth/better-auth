@@ -71,12 +71,14 @@ function contentToPageTree(content: Content): PageTree.Folder {
 					url: content.href,
 				}
 			: undefined,
-		children: content.list.map((item) => ({
-			type: "page",
-			url: item.href,
-			name: item.title,
-			icon: <item.icon />,
-		})),
+		children: content.list
+			.filter((item) => !item.group && item.href)
+			.map((item) => ({
+				type: "page",
+				url: item.href,
+				name: item.title,
+				icon: <item.icon />,
+			})),
 	};
 }
 
@@ -1952,7 +1954,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				href: "/docs/plugins/jwt",
 			},
 			{
-				title: "3rd party",
+				title: "Payments",
 				group: true,
 				href: "",
 				icon: () => <LucideAArrowDown className="w-4 h-4" />,
@@ -2090,26 +2092,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				),
 			},
 			{
-				title: "Dub",
-				href: "/docs/plugins/dub",
-				icon: () => (
-					<svg
-						width="1.2em"
-						height="1.2em"
-						viewBox="0 0 65 64"
-						fill="none"
-						xmlns="http://www.w3.org/2000/svg"
-					>
-						<path
-							fillRule="evenodd"
-							clipRule="evenodd"
-							d="M32.5 64C50.1731 64 64.5 49.6731 64.5 32C64.5 20.1555 58.0648 9.81393 48.5 4.28099V31.9999V47.9998H40.5V45.8594C38.1466 47.2207 35.4143 47.9999 32.5 47.9999C23.6634 47.9999 16.5 40.8364 16.5 31.9999C16.5 23.1633 23.6634 15.9999 32.5 15.9999C35.4143 15.9999 38.1466 16.779 40.5 18.1404V1.00812C37.943 0.350018 35.2624 0 32.5 0C14.8269 0 0.500038 14.3269 0.500038 32C0.500038 49.6731 14.8269 64 32.5 64Z"
-							fill="currentColor"
-						/>
-					</svg>
-				),
-			},
-			{
 				title: "Commet",
 				href: "/docs/plugins/commet",
 				icon: () => (
@@ -2126,6 +2108,32 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 						/>
 						<path
 							d="M250 440L356.521 255.5H143.479L250 440Z"
+							fill="currentColor"
+						/>
+					</svg>
+				),
+			},
+			{
+				title: "Others",
+				group: true,
+				icon: () => null,
+				href: "",
+			},
+			{
+				title: "Dub",
+				href: "/docs/plugins/dub",
+				icon: () => (
+					<svg
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 65 64"
+						fill="none"
+						xmlns="http://www.w3.org/2000/svg"
+					>
+						<path
+							fillRule="evenodd"
+							clipRule="evenodd"
+							d="M32.5 64C50.1731 64 64.5 49.6731 64.5 32C64.5 20.1555 58.0648 9.81393 48.5 4.28099V31.9999V47.9998H40.5V45.8594C38.1466 47.2207 35.4143 47.9999 32.5 47.9999C23.6634 47.9999 16.5 40.8364 16.5 31.9999C16.5 23.1633 23.6634 15.9999 32.5 15.9999C35.4143 15.9999 38.1466 16.779 40.5 18.1404V1.00812C37.943 0.350018 35.2624 0 32.5 0C14.8269 0 0.500038 14.3269 0.500038 32C0.500038 49.6731 14.8269 64 32.5 64Z"
 							fill="currentColor"
 						/>
 					</svg>

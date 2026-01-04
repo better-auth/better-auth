@@ -172,7 +172,7 @@ describe("session-refresh", () => {
 		vi.useRealTimers();
 	});
 
-	it("should allow refetch on focus when session is null even within rate limit", async () => {
+	it("should rate limit refetch on focus when session is null", async () => {
 		const sessionAtom: SessionAtom = atom({
 			data: {
 				user: { id: "1", email: "test@test.com" },
@@ -223,15 +223,15 @@ describe("session-refresh", () => {
 		// Immediately trigger another focus event (within rate limit window)
 		manager.triggerRefetch({ event: "visibilitychange" });
 
-		// Signal should change because session is null (rate limit bypassed)
-		expect(signalChangeCount).toBeGreaterThan(signalCountAfterFirstFocus);
+		// Signal should NOT change because rate limit should apply even when session is null
+		expect(signalChangeCount).toBe(signalCountAfterFirstFocus);
 
 		unsubscribeSignal();
 		manager.cleanup();
 		vi.useRealTimers();
 	});
 
-	it("should allow refetch on focus when session is undefined even within rate limit", async () => {
+	it("should rate limit refetch on focus when session is undefined", async () => {
 		const sessionAtom: SessionAtom = atom({
 			data: {
 				user: { id: "1", email: "test@test.com" },
@@ -282,8 +282,8 @@ describe("session-refresh", () => {
 		// Immediately trigger another focus event (within rate limit window)
 		manager.triggerRefetch({ event: "visibilitychange" });
 
-		// Signal should change because session is undefined (rate limit bypassed)
-		expect(signalChangeCount).toBeGreaterThan(signalCountAfterFirstFocus);
+		// Signal should NOT change because rate limit should apply even when session is undefined
+		expect(signalChangeCount).toBe(signalCountAfterFirstFocus);
 
 		unsubscribeSignal();
 		manager.cleanup();

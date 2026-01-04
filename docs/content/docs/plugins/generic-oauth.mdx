@@ -16,13 +16,13 @@ The Generic OAuth plugin provides a flexible way to integrate authentication wit
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth"
     import { genericOAuth } from "better-auth/plugins" // [!code highlight]
-    
+
     export const auth = betterAuth({
         // ... other config options
-        plugins: [ 
+        plugins: [
             genericOAuth({ // [!code highlight]
                 config: [ // [!code highlight]
-                    { // [!code highlight] 
+                    { // [!code highlight]
                         providerId: "provider-id", // [!code highlight]
                         clientId: "test-client-id", // [!code highlight]
                         clientSecret: "test-client-secret", // [!code highlight]
@@ -45,7 +45,7 @@ The Generic OAuth plugin provides a flexible way to integrate authentication wit
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client"
     import { genericOAuthClient } from "better-auth/client/plugins"
-    
+
     export const authClient = createAuthClient({
         plugins: [
             genericOAuthClient()
@@ -156,6 +156,10 @@ export const auth = betterAuth({
           clientSecret: process.env.AUTH0_CLIENT_SECRET,
           domain: process.env.AUTH0_DOMAIN,
         }),
+        gumroad({
+					clientId: process.env.GUMROAD_CLIENT_ID,
+					clientSecret: process.env.GUMROAD_CLIENT_SECRET,
+				}),
         hubspot({
           clientId: process.env.HUBSPOT_CLIENT_ID,
           clientSecret: process.env.HUBSPOT_CLIENT_SECRET,
