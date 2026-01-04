@@ -63,7 +63,7 @@ const { execute } = await testAdapter({
 		// 	await installBetaDrizzle();
 		// }
 
-		const command = `pnpm i drizzle-orm@beta && pnpx drizzle-kit push --dialect=postgresql --schema=${fileName}.ts --url=postgres://user:password@localhost:5432/${dbName}`;
+		const command = `pnpm i drizzle-orm@beta && pnpx drizzle-kit@beta push --dialect=postgresql --schema=${fileName}.ts --url=postgres://user:password@localhost:5432/${dbName}`;
 		console.log(`Running: ${command}`);
 		console.log(`Options:`, betterAuthOptions);
 		try {
