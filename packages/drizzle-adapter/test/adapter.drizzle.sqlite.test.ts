@@ -55,12 +55,11 @@ const { execute } = await testAdapter({
 		// CI wouldn't wouldn't run the same drizzle beta version between drizzle-kit and drizzle-orm which causes the push command
 		// to fail as Drizzle-kit will ask for the same orm version.
 		// This is a workaround to install the beta drizzle-orm live if the version mismatch is detected.
-		// const version = await getDrizzleVersion();
-		// if (version.kit !== version.orm) {
-		// 	await installBetaDrizzle();
-		// }
+		await installBetaDrizzle();
+		const version = await getDrizzleVersion();
+		console.log("version", version);
 
-		const command = `npm i drizzle-orm@beta && npx drizzle-kit@beta push --dialect=sqlite --schema=${fileName}.ts --url=./test.db`;
+		const command = `npx drizzle-kit@${version.kit} push --dialect=sqlite --schema=${fileName}.ts --url=./test.db`;
 		console.log(`Running: ${command}`);
 		console.log(`Options:`, betterAuthOptions);
 		try {
