@@ -4,6 +4,7 @@ import type Stripe from "stripe";
 import type { InputSubscription, StripeOptions, Subscription } from "./types";
 import {
 	getPlanByPriceInfo,
+	groupsMatch,
 	isActiveOrTrialing,
 	isPendingCancel,
 	isStripePendingCancel,
@@ -43,6 +44,11 @@ export async function onCheckoutSessionCompleted(
 				checkoutSession?.client_reference_id ||
 				checkoutSession?.metadata?.referenceId;
 			const subscriptionId = checkoutSession?.metadata?.subscriptionId;
+			// Extract groupId from metadata (set during checkout creation)
+			const groupId =
+				checkoutSession?.metadata?.groupId ||
+				subscription.metadata?.groupId ||
+				plan.group;
 			const seats = subscriptionItem.quantity;
 			if (referenceId && subscriptionId) {
 				const trial =
@@ -76,6 +82,7 @@ export async function onCheckoutSessionCompleted(
 								? new Date(subscription.ended_at * 1000)
 								: null,
 							seats: seats,
+							groupId,
 							...trial,
 						},
 						where: [
@@ -192,6 +199,9 @@ export async function onSubscriptionCreated(
 		const periodStart = new Date(subscriptionItem.current_period_start * 1000);
 		const periodEnd = new Date(subscriptionItem.current_period_end * 1000);
 
+		// Get groupId from metadata or plan configuration
+		const groupId = subscriptionCreated.metadata?.groupId || plan.group;
+
 		const trial =
 			subscriptionCreated.trial_start && subscriptionCreated.trial_end
 				? {
@@ -212,6 +222,7 @@ export async function onSubscriptionCreated(
 				periodStart,
 				periodEnd,
 				seats,
+				groupId,
 				...(plan.limits ? { limits: plan.limits } : {}),
 				...trial,
 			},
@@ -256,6 +267,7 @@ export async function onSubscriptionUpdated(
 
 		const subscriptionId = subscriptionUpdated.metadata?.subscriptionId;
 		const customerId = subscriptionUpdated.customer?.toString();
+		const groupId = subscriptionUpdated.metadata?.groupId;
 		let subscription = await ctx.context.adapter.findOne<Subscription>({
 			model: "subscription",
 			where: subscriptionId
@@ -268,16 +280,33 @@ export async function onSubscriptionUpdated(
 				where: [{ field: "stripeCustomerId", value: customerId }],
 			});
 			if (subs.length > 1) {
-				const activeSub = subs.find((sub: Subscription) =>
-					isActiveOrTrialing(sub),
+				// First try to match by stripeSubscriptionId
+				subscription = subs.find(
+					(sub: Subscription) =>
+						sub.stripeSubscriptionId === subscriptionUpdated.id,
 				);
-				if (!activeSub) {
-					ctx.context.logger.warn(
-						`Stripe webhook error: Multiple subscriptions found for customerId: ${customerId} and no active subscription is found`,
+
+				// Then try to match by groupId if available
+				if (!subscription && groupId) {
+					subscription = subs.find(
+						(sub: Subscription) =>
+							groupsMatch(sub.groupId, groupId) && isActiveOrTrialing(sub),
 					);
-					return;
 				}
-				subscription = activeSub;
+
+				// Fallback to any active subscription (backwards compatible)
+				if (!subscription) {
+					const activeSub = subs.find((sub: Subscription) =>
+						isActiveOrTrialing(sub),
+					);
+					if (!activeSub) {
+						ctx.context.logger.warn(
+							`Stripe webhook error: Multiple subscriptions found for customerId: ${customerId} and no matching subscription found`,
+						);
+						return;
+					}
+					subscription = activeSub;
+				}
 			} else {
 				subscription = subs[0]!;
 			}

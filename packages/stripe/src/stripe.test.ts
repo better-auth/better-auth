@@ -4166,4 +4166,1188 @@ describe("stripe", () => {
 			expect(updatedSub!.cancelAt!.getTime()).toBe(cancelAt * 1000);
 		});
 	});
+
+	describe("group subscriptions", () => {
+		const groupedStripeOptions = {
+			stripeClient: mockStripe as unknown as Stripe,
+			stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
+			createCustomerOnSignUp: true,
+			subscription: {
+				enabled: true,
+				plans: [
+					{ name: "starter", priceId: "price_starter", group: "main" },
+					{ name: "pro", priceId: "price_pro", group: "main" },
+					{ name: "ai-basic", priceId: "price_ai_basic", group: "ai" },
+					{ name: "ai-pro", priceId: "price_ai_pro", group: "ai" },
+					{ name: "storage", priceId: "price_storage", group: "storage" },
+					{ name: "legacy", priceId: "price_legacy" }, // No group for backwards compat
+				],
+			},
+		} satisfies StripeOptions;
+
+		describe("basic group subscription creation", () => {
+			it("should create subscription with groupId from plan.group", async () => {
+				const { client, auth, sessionSetter } = await getTestInstance(
+					{
+						database: memory,
+						plugins: [stripe(groupedStripeOptions)],
+					},
+					{
+						disableTestUser: true,
+						clientOptions: {
+							plugins: [stripeClient({ subscription: true })],
+						},
+					},
+				);
+				const ctx = await auth.$context;
+
+				await client.signUp.email(
+					{ email: "group-test@email.com", password: "password", name: "Test" },
+					{ throw: true },
+				);
+
+				const headers = new Headers();
+				await client.signIn.email(
+					{ email: "group-test@email.com", password: "password" },
+					{ throw: true, onSuccess: sessionSetter(headers) },
+				);
+
+				await client.subscription.upgrade({
+					plan: "starter",
+					fetchOptions: { headers },
+				});
+
+				// Verify checkout was called with groupId in metadata
+				expect(mockStripe.checkout.sessions.create).toHaveBeenCalledWith(
+					expect.objectContaining({
+						subscription_data: expect.objectContaining({
+							metadata: expect.objectContaining({
+								groupId: "main",
+							}),
+						}),
+					}),
+					undefined,
+				);
+
+				// Verify subscription was created with groupId
+				const subscription = await ctx.adapter.findOne<Subscription>({
+					model: "subscription",
+					where: [{ field: "plan", value: "starter" }],
+				});
+				expect(subscription?.groupId).toBe("main");
+			});
+
+			it("should create subscription without groupId for plans without group", async () => {
+				const { client, auth, sessionSetter } = await getTestInstance(
+					{
+						database: memory,
+						plugins: [stripe(groupedStripeOptions)],
+					},
+					{
+						disableTestUser: true,
+						clientOptions: {
+							plugins: [stripeClient({ subscription: true })],
+						},
+					},
+				);
+				const ctx = await auth.$context;
+
+				await client.signUp.email(
+					{
+						email: "legacy-test@email.com",
+						password: "password",
+						name: "Test",
+					},
+					{ throw: true },
+				);
+
+				const headers = new Headers();
+				await client.signIn.email(
+					{ email: "legacy-test@email.com", password: "password" },
+					{ throw: true, onSuccess: sessionSetter(headers) },
+				);
+
+				await client.subscription.upgrade({
+					plan: "legacy",
+					fetchOptions: { headers },
+				});
+
+				const subscription = await ctx.adapter.findOne<Subscription>({
+					model: "subscription",
+					where: [{ field: "plan", value: "legacy" }],
+				});
+				expect(subscription?.groupId).toBeUndefined();
+			});
+		});
+
+		describe("multi-product subscriptions", () => {
+			it("should allow subscribing to multiple products in different groups", async () => {
+				const { client, auth, sessionSetter } = await getTestInstance(
+					{
+						database: memory,
+						plugins: [stripe(groupedStripeOptions)],
+					},
+					{
+						disableTestUser: true,
+						clientOptions: {
+							plugins: [stripeClient({ subscription: true })],
+						},
+					},
+				);
+				const ctx = await auth.$context;
+
+				const userRes = await client.signUp.email(
+					{
+						email: "multi-group@email.com",
+						password: "password",
+						name: "Test",
+					},
+					{ throw: true },
+				);
+
+				const headers = new Headers();
+				await client.signIn.email(
+					{ email: "multi-group@email.com", password: "password" },
+					{ throw: true, onSuccess: sessionSetter(headers) },
+				);
+
+				// Subscribe to main group
+				await client.subscription.upgrade({
+					plan: "starter",
+					fetchOptions: { headers },
+				});
+
+				// Subscribe to ai group (different group = new subscription)
+				await client.subscription.upgrade({
+					plan: "ai-basic",
+					fetchOptions: { headers },
+				});
+
+				// Subscribe to storage group
+				await client.subscription.upgrade({
+					plan: "storage",
+					fetchOptions: { headers },
+				});
+
+				// Should have 3 separate subscriptions
+				const subscriptions = await ctx.adapter.findMany<Subscription>({
+					model: "subscription",
+					where: [{ field: "referenceId", value: userRes.user.id }],
+				});
+
+				expect(subscriptions.length).toBe(3);
+				expect(subscriptions.map((s: Subscription) => s.groupId).sort()).toEqual(
+					["ai", "main", "storage"],
+				);
+			});
+
+			it("should list all active subscriptions across groups", async () => {
+				const { client, auth, sessionSetter } = await getTestInstance(
+					{
+						database: memory,
+						plugins: [stripe(groupedStripeOptions)],
+					},
+					{
+						disableTestUser: true,
+						clientOptions: {
+							plugins: [stripeClient({ subscription: true })],
+						},
+					},
+				);
+				const ctx = await auth.$context;
+
+				const userRes = await client.signUp.email(
+					{
+						email: "list-groups@email.com",
+						password: "password",
+						name: "Test",
+					},
+					{ throw: true },
+				);
+
+				const headers = new Headers();
+				await client.signIn.email(
+					{ email: "list-groups@email.com", password: "password" },
+					{ throw: true, onSuccess: sessionSetter(headers) },
+				);
+
+				// Create two subscriptions in different groups
+				await client.subscription.upgrade({
+					plan: "pro",
+					fetchOptions: { headers },
+				});
+				await client.subscription.upgrade({
+					plan: "ai-basic",
+					fetchOptions: { headers },
+				});
+
+				// Set both to active
+				await ctx.adapter.update({
+					model: "subscription",
+					update: { status: "active" },
+					where: [{ field: "referenceId", value: userRes.user.id }],
+				});
+
+				const listRes = await client.subscription.list({
+					fetchOptions: { headers },
+				});
+
+				expect(listRes.data?.length).toBe(2);
+			});
+
+			it("should filter subscriptions by groupId", async () => {
+				const { client, auth, sessionSetter } = await getTestInstance(
+					{
+						database: memory,
+						plugins: [stripe(groupedStripeOptions)],
+					},
+					{
+						disableTestUser: true,
+						clientOptions: {
+							plugins: [stripeClient({ subscription: true })],
+						},
+					},
+				);
+				const ctx = await auth.$context;
+
+				const userRes = await client.signUp.email(
+					{
+						email: "filter-groups@email.com",
+						password: "password",
+						name: "Test",
+					},
+					{ throw: true },
+				);
+
+				const headers = new Headers();
+				await client.signIn.email(
+					{ email: "filter-groups@email.com", password: "password" },
+					{ throw: true, onSuccess: sessionSetter(headers) },
+				);
+
+				// Create subscriptions in two different groups
+				await client.subscription.upgrade({
+					plan: "starter",
+					fetchOptions: { headers },
+				});
+				await client.subscription.upgrade({
+					plan: "ai-pro",
+					fetchOptions: { headers },
+				});
+
+				// Set both to active
+				await ctx.adapter.update({
+					model: "subscription",
+					update: { status: "active" },
+					where: [{ field: "referenceId", value: userRes.user.id }],
+				});
+
+				// Filter by main group
+				const mainListRes = await client.subscription.list({
+					query: { groupId: "main" },
+					fetchOptions: { headers },
+				});
+
+				expect(mainListRes.data?.length).toBe(1);
+				expect(mainListRes.data![0].plan).toBe("starter");
+
+				// Filter by ai group
+				const aiListRes = await client.subscription.list({
+					query: { groupId: "ai" },
+					fetchOptions: { headers },
+				});
+
+				expect(aiListRes.data?.length).toBe(1);
+				expect(aiListRes.data![0].plan).toBe("ai-pro");
+			});
+		});
+
+		describe("upgrade within same group", () => {
+			it("should upgrade within same group via billing portal (starter -> pro)", async () => {
+				const { client, auth, sessionSetter } = await getTestInstance(
+					{
+						database: memory,
+						plugins: [stripe(groupedStripeOptions)],
+					},
+					{
+						disableTestUser: true,
+						clientOptions: {
+							plugins: [stripeClient({ subscription: true })],
+						},
+					},
+				);
+				const ctx = await auth.$context;
+
+				const userRes = await client.signUp.email(
+					{
+						email: "upgrade-group@email.com",
+						password: "password",
+						name: "Test",
+					},
+					{ throw: true },
+				);
+
+				const headers = new Headers();
+				await client.signIn.email(
+					{ email: "upgrade-group@email.com", password: "password" },
+					{ throw: true, onSuccess: sessionSetter(headers) },
+				);
+
+				// First subscribe to starter
+				await client.subscription.upgrade({
+					plan: "starter",
+					fetchOptions: { headers },
+				});
+
+				// Set to active to simulate completed checkout
+				await ctx.adapter.update({
+					model: "subscription",
+					update: { status: "active", stripeSubscriptionId: "sub_upgrade_test" },
+					where: [{ field: "referenceId", value: userRes.user.id }],
+				});
+
+				// Mock Stripe subscription list for existing subscription
+				mockStripe.subscriptions.list.mockResolvedValueOnce({
+					data: [
+						{
+							id: "sub_upgrade_test",
+							status: "active",
+							items: {
+								data: [{ id: "si_item_1", price: { id: "price_starter" } }],
+							},
+						},
+					],
+				});
+
+				// Upgrade to pro (same main group) - this triggers a billing portal session
+				const upgradeRes = await client.subscription.upgrade({
+					plan: "pro",
+					fetchOptions: { headers },
+				});
+
+				// The upgrade creates a billing portal session for plan change
+				expect(upgradeRes.data?.url).toBeDefined();
+
+				// Verify billing portal was called with plan upgrade flow
+				expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalledWith(
+					expect.objectContaining({
+						flow_data: expect.objectContaining({
+							type: "subscription_update_confirm",
+							subscription_update_confirm: expect.objectContaining({
+								subscription: "sub_upgrade_test",
+								items: expect.arrayContaining([
+									expect.objectContaining({
+										price: "price_pro",
+									}),
+								]),
+							}),
+						}),
+					}),
+				);
+
+				// Should still have only 1 subscription (not duplicated)
+				const subscriptions = await ctx.adapter.findMany<Subscription>({
+					model: "subscription",
+					where: [{ field: "referenceId", value: userRes.user.id }],
+				});
+				expect(subscriptions.length).toBe(1);
+				expect(subscriptions[0]!.groupId).toBe("main");
+			});
+
+			it("should return error when already subscribed to same plan", async () => {
+				const { client, auth, sessionSetter } = await getTestInstance(
+					{
+						database: memory,
+						plugins: [stripe(groupedStripeOptions)],
+					},
+					{
+						disableTestUser: true,
+						clientOptions: {
+							plugins: [stripeClient({ subscription: true })],
+						},
+					},
+				);
+				const ctx = await auth.$context;
+
+				const userRes = await client.signUp.email(
+					{
+						email: "duplicate-plan@email.com",
+						password: "password",
+						name: "Test",
+					},
+					{ throw: true },
+				);
+
+				const headers = new Headers();
+				await client.signIn.email(
+					{ email: "duplicate-plan@email.com", password: "password" },
+					{ throw: true, onSuccess: sessionSetter(headers) },
+				);
+
+				// Subscribe to starter
+				await client.subscription.upgrade({
+					plan: "starter",
+					fetchOptions: { headers },
+				});
+
+				// Set to active
+				await ctx.adapter.update({
+					model: "subscription",
+					update: { status: "active" },
+					where: [{ field: "referenceId", value: userRes.user.id }],
+				});
+
+				// Try to subscribe to starter again
+				const res = await client.subscription.upgrade({
+					plan: "starter",
+					fetchOptions: { headers },
+				});
+
+				expect(res.error?.message).toContain("already subscribed");
+			});
+		});
+
+		describe("cancel/restore with multiple subscriptions", () => {
+			it("should require groupId when canceling with multiple active subscriptions", async () => {
+				const { client, auth, sessionSetter } = await getTestInstance(
+					{
+						database: memory,
+						plugins: [stripe(groupedStripeOptions)],
+					},
+					{
+						disableTestUser: true,
+						clientOptions: {
+							plugins: [stripeClient({ subscription: true })],
+						},
+					},
+				);
+				const ctx = await auth.$context;
+
+				const userRes = await client.signUp.email(
+					{
+						email: "multi-cancel@email.com",
+						password: "password",
+						name: "Test",
+					},
+					{ throw: true },
+				);
+
+				const headers = new Headers();
+				await client.signIn.email(
+					{ email: "multi-cancel@email.com", password: "password" },
+					{ throw: true, onSuccess: sessionSetter(headers) },
+				);
+
+				// Create two active subscriptions
+				await ctx.adapter.create({
+					model: "subscription",
+					data: {
+						referenceId: userRes.user.id,
+						stripeCustomerId: "cus_multi_cancel",
+						stripeSubscriptionId: "sub_main",
+						status: "active",
+						plan: "starter",
+						groupId: "main",
+					},
+				});
+				await ctx.adapter.create({
+					model: "subscription",
+					data: {
+						referenceId: userRes.user.id,
+						stripeCustomerId: "cus_multi_cancel",
+						stripeSubscriptionId: "sub_ai",
+						status: "active",
+						plan: "ai-basic",
+						groupId: "ai",
+					},
+				});
+
+				// Try to cancel without specifying groupId
+				const cancelHeaders = new Headers(headers);
+				cancelHeaders.set("content-type", "application/json");
+				const cancelResponse = await auth.handler(
+					new Request("http://localhost:3000/api/auth/subscription/cancel", {
+						method: "POST",
+						headers: cancelHeaders,
+						body: JSON.stringify({ returnUrl: "/account" }),
+					}),
+				);
+
+				expect(cancelResponse.status).toBe(400);
+				const body = await cancelResponse.json();
+				expect(body.message).toContain("groupId");
+			});
+
+			it("should cancel correct subscription by groupId", async () => {
+				const { client, auth, sessionSetter } = await getTestInstance(
+					{
+						database: memory,
+						plugins: [stripe(groupedStripeOptions)],
+					},
+					{
+						disableTestUser: true,
+						clientOptions: {
+							plugins: [stripeClient({ subscription: true })],
+						},
+					},
+				);
+				const ctx = await auth.$context;
+
+				const userRes = await client.signUp.email(
+					{
+						email: "cancel-group@email.com",
+						password: "password",
+						name: "Test",
+					},
+					{ throw: true },
+				);
+
+				const headers = new Headers();
+				await client.signIn.email(
+					{ email: "cancel-group@email.com", password: "password" },
+					{ throw: true, onSuccess: sessionSetter(headers) },
+				);
+
+				// Create two active subscriptions
+				await ctx.adapter.create({
+					model: "subscription",
+					data: {
+						referenceId: userRes.user.id,
+						stripeCustomerId: "cus_cancel_group",
+						stripeSubscriptionId: "sub_main_cancel",
+						status: "active",
+						plan: "starter",
+						groupId: "main",
+					},
+				});
+				await ctx.adapter.create({
+					model: "subscription",
+					data: {
+						referenceId: userRes.user.id,
+						stripeCustomerId: "cus_cancel_group",
+						stripeSubscriptionId: "sub_ai_cancel",
+						status: "active",
+						plan: "ai-basic",
+						groupId: "ai",
+					},
+				});
+
+				// Mock subscriptions.list for looking up Stripe subscription
+				mockStripe.subscriptions.list.mockResolvedValueOnce({
+					data: [
+						{
+							id: "sub_ai_cancel",
+							status: "active",
+							items: { data: [{ price: { id: "price_ai_basic" } }] },
+						},
+					],
+				});
+
+				// Cancel only the AI subscription
+				const cancelHeaders = new Headers(headers);
+				cancelHeaders.set("content-type", "application/json");
+				const cancelResponse = await auth.handler(
+					new Request("http://localhost:3000/api/auth/subscription/cancel", {
+						method: "POST",
+						headers: cancelHeaders,
+						body: JSON.stringify({ returnUrl: "/account", groupId: "ai" }),
+					}),
+				);
+
+				expect(cancelResponse.status).toBe(200);
+
+				// Verify billing portal was called with the correct subscription
+				expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalledWith(
+					expect.objectContaining({
+						flow_data: expect.objectContaining({
+							subscription_cancel: expect.objectContaining({
+								subscription: "sub_ai_cancel",
+							}),
+						}),
+					}),
+				);
+			});
+
+			it("should require groupId when restoring with multiple subscriptions", async () => {
+				const { client, auth, sessionSetter } = await getTestInstance(
+					{
+						database: memory,
+						plugins: [stripe(groupedStripeOptions)],
+					},
+					{
+						disableTestUser: true,
+						clientOptions: {
+							plugins: [stripeClient({ subscription: true })],
+						},
+					},
+				);
+				const ctx = await auth.$context;
+
+				const userRes = await client.signUp.email(
+					{
+						email: "multi-restore@email.com",
+						password: "password",
+						name: "Test",
+					},
+					{ throw: true },
+				);
+
+				const headers = new Headers();
+				await client.signIn.email(
+					{ email: "multi-restore@email.com", password: "password" },
+					{ throw: true, onSuccess: sessionSetter(headers) },
+				);
+
+				// Create two subscriptions scheduled for cancellation
+				await ctx.adapter.create({
+					model: "subscription",
+					data: {
+						referenceId: userRes.user.id,
+						stripeCustomerId: "cus_multi_restore",
+						stripeSubscriptionId: "sub_main_restore",
+						status: "active",
+						plan: "starter",
+						groupId: "main",
+						cancelAtPeriodEnd: true,
+					},
+				});
+				await ctx.adapter.create({
+					model: "subscription",
+					data: {
+						referenceId: userRes.user.id,
+						stripeCustomerId: "cus_multi_restore",
+						stripeSubscriptionId: "sub_ai_restore",
+						status: "active",
+						plan: "ai-basic",
+						groupId: "ai",
+						cancelAtPeriodEnd: true,
+					},
+				});
+
+				// Try to restore without specifying groupId
+				const restoreHeaders = new Headers(headers);
+				restoreHeaders.set("content-type", "application/json");
+				const restoreResponse = await auth.handler(
+					new Request("http://localhost:3000/api/auth/subscription/restore", {
+						method: "POST",
+						headers: restoreHeaders,
+						body: JSON.stringify({}),
+					}),
+				);
+
+				expect(restoreResponse.status).toBe(400);
+				const body = await restoreResponse.json();
+				expect(body.message).toContain("groupId");
+			});
+
+			it("should restore correct subscription by groupId", async () => {
+				const { client, auth, sessionSetter } = await getTestInstance(
+					{
+						database: memory,
+						plugins: [stripe(groupedStripeOptions)],
+					},
+					{
+						disableTestUser: true,
+						clientOptions: {
+							plugins: [stripeClient({ subscription: true })],
+						},
+					},
+				);
+				const ctx = await auth.$context;
+
+				const userRes = await client.signUp.email(
+					{
+						email: "restore-group@email.com",
+						password: "password",
+						name: "Test",
+					},
+					{ throw: true },
+				);
+
+				const headers = new Headers();
+				await client.signIn.email(
+					{ email: "restore-group@email.com", password: "password" },
+					{ throw: true, onSuccess: sessionSetter(headers) },
+				);
+
+				// Create two subscriptions scheduled for cancellation
+				await ctx.adapter.create({
+					model: "subscription",
+					data: {
+						referenceId: userRes.user.id,
+						stripeCustomerId: "cus_restore_group",
+						stripeSubscriptionId: "sub_main_group_restore",
+						status: "active",
+						plan: "starter",
+						groupId: "main",
+						cancelAtPeriodEnd: true,
+					},
+				});
+				await ctx.adapter.create({
+					model: "subscription",
+					data: {
+						referenceId: userRes.user.id,
+						stripeCustomerId: "cus_restore_group",
+						stripeSubscriptionId: "sub_ai_group_restore",
+						status: "active",
+						plan: "ai-basic",
+						groupId: "ai",
+						cancelAtPeriodEnd: true,
+					},
+				});
+
+				// Mock subscriptions.list for Stripe subscription lookup
+				mockStripe.subscriptions.list.mockResolvedValueOnce({
+					data: [
+						{
+							id: "sub_main_group_restore",
+							status: "active",
+							cancel_at_period_end: true,
+							items: { data: [{ price: { id: "price_starter" } }] },
+						},
+					],
+				});
+
+				// Mock subscriptions.update for restoring
+				mockStripe.subscriptions.update.mockResolvedValueOnce({
+					id: "sub_main_group_restore",
+					status: "active",
+					cancel_at_period_end: false,
+				});
+
+				// Restore only the main subscription
+				const restoreHeaders = new Headers(headers);
+				restoreHeaders.set("content-type", "application/json");
+				const restoreResponse = await auth.handler(
+					new Request("http://localhost:3000/api/auth/subscription/restore", {
+						method: "POST",
+						headers: restoreHeaders,
+						body: JSON.stringify({ groupId: "main" }),
+					}),
+				);
+
+				expect(restoreResponse.status).toBe(200);
+
+				// Verify Stripe was called with the correct subscription
+				expect(mockStripe.subscriptions.update).toHaveBeenCalledWith(
+					"sub_main_group_restore",
+					expect.objectContaining({ cancel_at_period_end: false }),
+				);
+			});
+		});
+
+		describe("webhook handling with groups", () => {
+			it("should store groupId from metadata on checkout.session.completed", async () => {
+				const { auth: testAuth } = await getTestInstance(
+					{
+						database: memory,
+						plugins: [stripe(groupedStripeOptions)],
+					},
+					{ disableTestUser: true },
+				);
+				const testCtx = await testAuth.$context;
+
+				const { id: testReferenceId } = await testCtx.adapter.create({
+					model: "user",
+					data: { email: "webhook-group@email.com" },
+				});
+				const { id: testSubscriptionId } = await testCtx.adapter.create({
+					model: "subscription",
+					data: {
+						referenceId: testReferenceId,
+						stripeCustomerId: "cus_webhook_group",
+						status: "incomplete",
+						plan: "ai-basic",
+					},
+				});
+
+				const mockCheckoutSessionEvent = {
+					type: "checkout.session.completed",
+					data: {
+						object: {
+							mode: "subscription",
+							subscription: "sub_webhook_group",
+							metadata: {
+								referenceId: testReferenceId,
+								subscriptionId: testSubscriptionId,
+								groupId: "ai",
+							},
+						},
+					},
+				};
+
+				const mockSubscription = {
+					id: "sub_webhook_group",
+					status: "active",
+					metadata: { groupId: "ai" },
+					items: {
+						data: [
+							{
+								price: { id: "price_ai_basic" },
+								quantity: 1,
+								current_period_start: Math.floor(Date.now() / 1000),
+								current_period_end:
+									Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+							},
+						],
+					},
+				};
+
+				const stripeForTest = {
+					...groupedStripeOptions.stripeClient,
+					subscriptions: {
+						retrieve: vi.fn().mockResolvedValue(mockSubscription),
+						list: vi.fn().mockResolvedValue({ data: [] }),
+						update: vi.fn(),
+					},
+					webhooks: {
+						constructEventAsync: vi
+							.fn()
+							.mockResolvedValue(mockCheckoutSessionEvent),
+					},
+				};
+
+				const testOptions = {
+					...groupedStripeOptions,
+					stripeClient: stripeForTest as unknown as Stripe,
+					stripeWebhookSecret: "test_secret",
+				};
+
+				const { auth: webhookTestAuth } = await getTestInstance(
+					{
+						database: memory,
+						plugins: [stripe(testOptions)],
+					},
+					{ disableTestUser: true },
+				);
+
+				const webhookTestCtx = await webhookTestAuth.$context;
+
+				const mockRequest = new Request(
+					"http://localhost:3000/api/auth/stripe/webhook",
+					{
+						method: "POST",
+						headers: { "stripe-signature": "test_signature" },
+						body: JSON.stringify(mockCheckoutSessionEvent),
+					},
+				);
+
+				const response = await webhookTestAuth.handler(mockRequest);
+				expect(response.status).toBe(200);
+
+				const updatedSubscription =
+					await webhookTestCtx.adapter.findOne<Subscription>({
+						model: "subscription",
+						where: [{ field: "id", value: testSubscriptionId }],
+					});
+
+				expect(updatedSubscription?.groupId).toBe("ai");
+			});
+
+			it("should set groupId from plan.group when creating subscription from Stripe dashboard", async () => {
+				const { auth: testAuth } = await getTestInstance(
+					{
+						database: memory,
+						plugins: [stripe(groupedStripeOptions)],
+					},
+					{ disableTestUser: true },
+				);
+				const testCtx = await testAuth.$context;
+
+				await testCtx.adapter.create({
+					model: "user",
+					data: {
+						email: "dashboard-sub@email.com",
+						stripeCustomerId: "cus_dashboard_sub",
+					},
+				});
+
+				const mockSubscriptionCreatedEvent = {
+					type: "customer.subscription.created",
+					data: {
+						object: {
+							id: "sub_dashboard_created",
+							customer: "cus_dashboard_sub",
+							status: "active",
+							metadata: {},
+							items: {
+								data: [
+									{
+										price: { id: "price_storage" },
+										quantity: 1,
+										current_period_start: Math.floor(Date.now() / 1000),
+										current_period_end:
+											Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+									},
+								],
+							},
+						},
+					},
+				};
+
+				const stripeForTest = {
+					...groupedStripeOptions.stripeClient,
+					subscriptions: {
+						retrieve: vi.fn(),
+						list: vi.fn().mockResolvedValue({ data: [] }),
+						update: vi.fn(),
+					},
+					webhooks: {
+						constructEventAsync: vi
+							.fn()
+							.mockResolvedValue(mockSubscriptionCreatedEvent),
+					},
+				};
+
+				const testOptions = {
+					...groupedStripeOptions,
+					stripeClient: stripeForTest as unknown as Stripe,
+					stripeWebhookSecret: "test_secret",
+				};
+
+				const { auth: webhookTestAuth } = await getTestInstance(
+					{
+						database: memory,
+						plugins: [stripe(testOptions)],
+					},
+					{ disableTestUser: true },
+				);
+
+				const webhookTestCtx = await webhookTestAuth.$context;
+
+				const mockRequest = new Request(
+					"http://localhost:3000/api/auth/stripe/webhook",
+					{
+						method: "POST",
+						headers: { "stripe-signature": "test_signature" },
+						body: JSON.stringify(mockSubscriptionCreatedEvent),
+					},
+				);
+
+				const response = await webhookTestAuth.handler(mockRequest);
+				expect(response.status).toBe(200);
+
+				const createdSubscription =
+					await webhookTestCtx.adapter.findOne<Subscription>({
+						model: "subscription",
+						where: [{ field: "stripeSubscriptionId", value: "sub_dashboard_created" }],
+					});
+
+				expect(createdSubscription).toBeDefined();
+				expect(createdSubscription?.groupId).toBe("storage");
+			});
+
+			it("should correctly match subscription by groupId in subscription.updated", async () => {
+				const { auth: testAuth } = await getTestInstance(
+					{
+						database: memory,
+						plugins: [stripe(groupedStripeOptions)],
+					},
+					{ disableTestUser: true },
+				);
+				const testCtx = await testAuth.$context;
+
+				const { id: testUserId } = await testCtx.adapter.create({
+					model: "user",
+					data: {
+						email: "update-match@email.com",
+						stripeCustomerId: "cus_update_match",
+					},
+				});
+
+				// Create two subscriptions for the same customer
+				await testCtx.adapter.create({
+					model: "subscription",
+					data: {
+						referenceId: testUserId,
+						stripeCustomerId: "cus_update_match",
+						stripeSubscriptionId: "sub_main_update",
+						status: "active",
+						plan: "starter",
+						groupId: "main",
+					},
+				});
+				const { id: aiSubId } = await testCtx.adapter.create({
+					model: "subscription",
+					data: {
+						referenceId: testUserId,
+						stripeCustomerId: "cus_update_match",
+						stripeSubscriptionId: "sub_ai_update",
+						status: "active",
+						plan: "ai-basic",
+						groupId: "ai",
+					},
+				});
+
+				const mockSubscriptionUpdatedEvent = {
+					type: "customer.subscription.updated",
+					data: {
+						object: {
+							id: "sub_ai_update",
+							customer: "cus_update_match",
+							status: "active",
+							cancel_at_period_end: true,
+							cancel_at: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+							canceled_at: Math.floor(Date.now() / 1000),
+							metadata: { groupId: "ai" },
+							items: {
+								data: [
+									{
+										price: { id: "price_ai_basic" },
+										quantity: 1,
+										current_period_start: Math.floor(Date.now() / 1000),
+										current_period_end:
+											Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+									},
+								],
+							},
+						},
+					},
+				};
+
+				const stripeForTest = {
+					...groupedStripeOptions.stripeClient,
+					subscriptions: {
+						retrieve: vi.fn(),
+						list: vi.fn().mockResolvedValue({ data: [] }),
+						update: vi.fn(),
+					},
+					webhooks: {
+						constructEventAsync: vi
+							.fn()
+							.mockResolvedValue(mockSubscriptionUpdatedEvent),
+					},
+				};
+
+				const testOptions = {
+					...groupedStripeOptions,
+					stripeClient: stripeForTest as unknown as Stripe,
+					stripeWebhookSecret: "test_secret",
+				};
+
+				const { auth: webhookTestAuth } = await getTestInstance(
+					{
+						database: memory,
+						plugins: [stripe(testOptions)],
+					},
+					{ disableTestUser: true },
+				);
+
+				const webhookTestCtx = await webhookTestAuth.$context;
+
+				const mockRequest = new Request(
+					"http://localhost:3000/api/auth/stripe/webhook",
+					{
+						method: "POST",
+						headers: { "stripe-signature": "test_signature" },
+						body: JSON.stringify(mockSubscriptionUpdatedEvent),
+					},
+				);
+
+				const response = await webhookTestAuth.handler(mockRequest);
+				expect(response.status).toBe(200);
+
+				// Verify the AI subscription was updated, not the main one
+				const updatedAiSub =
+					await webhookTestCtx.adapter.findOne<Subscription>({
+						model: "subscription",
+						where: [{ field: "id", value: aiSubId }],
+					});
+
+				expect(updatedAiSub?.cancelAtPeriodEnd).toBe(true);
+				expect(updatedAiSub?.canceledAt).toBeInstanceOf(Date);
+			});
+		});
+
+		describe("edge cases", () => {
+			it("should handle mixed subscriptions (some with groupId, some without)", async () => {
+				const { client, auth, sessionSetter } = await getTestInstance(
+					{
+						database: memory,
+						plugins: [stripe(groupedStripeOptions)],
+					},
+					{
+						disableTestUser: true,
+						clientOptions: {
+							plugins: [stripeClient({ subscription: true })],
+						},
+					},
+				);
+				const ctx = await auth.$context;
+
+				const userRes = await client.signUp.email(
+					{ email: "mixed@email.com", password: "password", name: "Test" },
+					{ throw: true },
+				);
+
+				const headers = new Headers();
+				await client.signIn.email(
+					{ email: "mixed@email.com", password: "password" },
+					{ throw: true, onSuccess: sessionSetter(headers) },
+				);
+
+				// Create a legacy subscription (no groupId)
+				await ctx.adapter.create({
+					model: "subscription",
+					data: {
+						referenceId: userRes.user.id,
+						stripeCustomerId: "cus_mixed",
+						stripeSubscriptionId: "sub_legacy",
+						status: "active",
+						plan: "legacy",
+					},
+				});
+
+				// Create a grouped subscription
+				await ctx.adapter.create({
+					model: "subscription",
+					data: {
+						referenceId: userRes.user.id,
+						stripeCustomerId: "cus_mixed",
+						stripeSubscriptionId: "sub_grouped",
+						status: "active",
+						plan: "starter",
+						groupId: "main",
+					},
+				});
+
+				// List should return both
+				const listRes = await client.subscription.list({
+					fetchOptions: { headers },
+				});
+
+				expect(listRes.data?.length).toBe(2);
+
+				// Filter by main group should return only the grouped one
+				const groupedRes = await client.subscription.list({
+					query: { groupId: "main" },
+					fetchOptions: { headers },
+				});
+
+				expect(groupedRes.data?.length).toBe(1);
+				expect(groupedRes.data![0].plan).toBe("starter");
+			});
+
+			it("should treat null and undefined groupId as same default group (groupsMatch utility)", async () => {
+				// This test verifies the groupsMatch utility function behavior
+				// Import the function for direct testing
+				const { groupsMatch } = await import("./utils");
+
+				// Both null/undefined should match (same "default" group)
+				expect(groupsMatch(null, null)).toBe(true);
+				expect(groupsMatch(undefined, undefined)).toBe(true);
+				expect(groupsMatch(null, undefined)).toBe(true);
+				expect(groupsMatch(undefined, null)).toBe(true);
+
+				// Same group should match
+				expect(groupsMatch("main", "main")).toBe(true);
+				expect(groupsMatch("ai", "ai")).toBe(true);
+
+				// Different groups should not match
+				expect(groupsMatch("main", "ai")).toBe(false);
+				expect(groupsMatch("main", null)).toBe(false);
+				expect(groupsMatch(null, "main")).toBe(false);
+			});
+		});
+	});
 });

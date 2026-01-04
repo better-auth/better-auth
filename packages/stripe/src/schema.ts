@@ -62,6 +62,10 @@ export const subscriptions = {
 				type: "number",
 				required: false,
 			},
+			groupId: {
+				type: "string",
+				required: false,
+			},
 		},
 	},
 } satisfies BetterAuthPluginDBSchema;

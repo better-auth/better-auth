@@ -57,3 +57,17 @@ export function isPendingCancel(sub: Subscription): boolean {
 export function isStripePendingCancel(stripeSub: Stripe.Subscription): boolean {
 	return !!(stripeSub.cancel_at_period_end || stripeSub.cancel_at);
 }
+
+/**
+ * Check if two group IDs match. Treats undefined/null as the same "default" group.
+ * This allows backwards compatibility where existing subscriptions without groupId
+ * are treated as belonging to the same default group.
+ */
+export function groupsMatch(
+	groupA: string | undefined | null,
+	groupB: string | undefined | null,
+): boolean {
+	// Both undefined/null means same "default" group
+	if (!groupA && !groupB) return true;
+	return groupA === groupB;
+}

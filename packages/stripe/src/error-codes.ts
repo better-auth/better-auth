@@ -20,4 +20,8 @@ export const STRIPE_ERROR_CODES = defineErrorCodes({
 	SUBSCRIPTION_NOT_ACTIVE: "Subscription is not active",
 	SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION:
 		"Subscription is not scheduled for cancellation",
+	SUBSCRIPTION_GROUP_REQUIRED:
+		"Multiple subscriptions found. Please specify a groupId to identify which subscription.",
+	SUBSCRIPTION_EXISTS_IN_GROUP:
+		"An active subscription already exists in this group",
 });
