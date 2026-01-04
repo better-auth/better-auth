@@ -54,7 +54,7 @@
   "dependencies": {
     "better-call": "catalog:",
     "@better-auth/utils": "catalog:",
-    "zod": "^4.1.5"
+    "zod": "^4.3.5"
   },
   "devDependencies": {
     "@better-auth/sso": "workspace:*",
