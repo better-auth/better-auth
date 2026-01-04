@@ -1,7 +1,8 @@
-import { APIError } from "better-call";
+import type { APIError } from "@better-auth/core/error";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { apiKey, ERROR_CODES } from ".";
+import { isAPIError } from "../../utils/is-api-error";
+import { apiKey, API_KEY_ERROR_CODES as ERROR_CODES } from ".";
 import { apiKeyClient } from "./client";
 import type { ApiKey } from "./types";
 
@@ -38,7 +39,9 @@ describe("api-key", async () => {
 		expect(apiKeyFail.error).toBeDefined();
 		expect(apiKeyFail.error?.status).toEqual(401);
 		expect(apiKeyFail.error?.statusText).toEqual("UNAUTHORIZED");
-		expect(apiKeyFail.error?.message).toEqual(ERROR_CODES.UNAUTHORIZED_SESSION);
+		expect(apiKeyFail.error?.message).toEqual(
+			ERROR_CODES.UNAUTHORIZED_SESSION.message,
+		);
 	});
 
 	let firstApiKey: ApiKey;
@@ -95,7 +98,9 @@ describe("api-key", async () => {
 		expect(res.error).toBeDefined();
 		expect(res.error?.statusCode).toEqual(401);
 		expect(res.error?.status).toEqual("UNAUTHORIZED");
-		expect(res.error?.body.message).toEqual(ERROR_CODES.UNAUTHORIZED_SESSION);
+		expect(res.error?.body.message).toEqual(
+			ERROR_CODES.UNAUTHORIZED_SESSION.message,
+		);
 	});
 
 	it("should fail to create api keys from the client if user id is provided", async () => {
@@ -198,7 +203,7 @@ describe("api-key", async () => {
 			err = error;
 		}
 		expect(err).toBeDefined();
-		expect(err.body.message).toBe(ERROR_CODES.NAME_REQUIRED);
+		expect(err.body.message).toBe(ERROR_CODES.NAME_REQUIRED.message);
 	});
 
 	it("should respect rateLimit configuration from plugin options", async () => {
@@ -266,7 +271,9 @@ describe("api-key", async () => {
 		expect(result.data).toBeNull();
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
-		expect(result.error?.body.message).toEqual(ERROR_CODES.INVALID_NAME_LENGTH);
+		expect(result.error?.body.message).toEqual(
+			ERROR_CODES.INVALID_NAME_LENGTH.message,
+		);
 	});
 
 	it("should create the API key with a name that's longer than the allowed maximum", async () => {
@@ -288,7 +295,9 @@ describe("api-key", async () => {
 		expect(result.data).toBeNull();
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
-		expect(result.error?.body.message).toEqual(ERROR_CODES.INVALID_NAME_LENGTH);
+		expect(result.error?.body.message).toEqual(
+			ERROR_CODES.INVALID_NAME_LENGTH.message,
+		);
 	});
 
 	it("should create the API key with the given prefix", async () => {
@@ -325,7 +334,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.INVALID_PREFIX_LENGTH,
+			ERROR_CODES.INVALID_PREFIX_LENGTH.message,
 		);
 	});
 
@@ -349,7 +358,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.INVALID_PREFIX_LENGTH,
+			ERROR_CODES.INVALID_PREFIX_LENGTH.message,
 		);
 	});
 
@@ -465,7 +474,7 @@ describe("api-key", async () => {
 		expect(result.data).toBeNull();
 		expect(result.error).toBeDefined();
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.KEY_DISABLED_EXPIRATION,
+			ERROR_CODES.KEY_DISABLED_EXPIRATION.message,
 		);
 	});
 
@@ -490,7 +499,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
+			ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL.message,
 		);
 	});
 
@@ -515,7 +524,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
+			ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE.message,
 		);
 	});
 
@@ -530,7 +539,9 @@ describe("api-key", async () => {
 		expect(apiKey.data).toBeNull();
 		expect(apiKey.error).toBeDefined();
 		expect(apiKey.error?.statusText).toEqual("BAD_REQUEST");
-		expect(apiKey.error?.message).toEqual(ERROR_CODES.SERVER_ONLY_PROPERTY);
+		expect(apiKey.error?.message).toEqual(
+			ERROR_CODES.SERVER_ONLY_PROPERTY.message,
+		);
 
 		const apiKey2 = await client.apiKey.create(
 			{
@@ -542,7 +553,9 @@ describe("api-key", async () => {
 		expect(apiKey2.data).toBeNull();
 		expect(apiKey2.error).toBeDefined();
 		expect(apiKey2.error?.statusText).toEqual("BAD_REQUEST");
-		expect(apiKey2.error?.message).toEqual(ERROR_CODES.SERVER_ONLY_PROPERTY);
+		expect(apiKey2.error?.message).toEqual(
+			ERROR_CODES.SERVER_ONLY_PROPERTY.message,
+		);
 	});
 
 	it("should fail to create API key when refill interval is provided, but no refill amount", async () => {
@@ -566,7 +579,7 @@ describe("api-key", async () => {
 		expect(res.error).toBeDefined();
 		expect(res.error?.status).toEqual("BAD_REQUEST");
 		expect(res.error?.body.message).toEqual(
-			ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
+			ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED.message,
 		);
 	});
 
@@ -591,7 +604,7 @@ describe("api-key", async () => {
 		expect(res.error).toBeDefined();
 		expect(res.error?.status).toEqual("BAD_REQUEST");
 		expect(res.error?.body.message).toEqual(
-			ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
+			ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED.message,
 		);
 	});
 
@@ -710,7 +723,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.INVALID_METADATA_TYPE,
+			ERROR_CODES.INVALID_METADATA_TYPE.message,
 		);
 	});
 
@@ -796,7 +809,9 @@ describe("api-key", async () => {
 		expect(result.data).toBeNull();
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
-		expect(result.error?.body.message).toEqual(ERROR_CODES.METADATA_DISABLED);
+		expect(result.error?.body.message).toEqual(
+			ERROR_CODES.METADATA_DISABLED.message,
+		);
 	});
 
 	it("should have the first 6 characters of the key as the start property", async () => {
@@ -879,7 +894,9 @@ describe("api-key", async () => {
 		expect(apiKey.data).toBeNull();
 		expect(apiKey.error).toBeDefined();
 		expect(apiKey.error?.statusText).toEqual("BAD_REQUEST");
-		expect(apiKey.error?.message).toEqual(ERROR_CODES.SERVER_ONLY_PROPERTY);
+		expect(apiKey.error?.message).toEqual(
+			ERROR_CODES.SERVER_ONLY_PROPERTY.message,
+		);
 
 		const apiKey2 = await client.apiKey.create(
 			{
@@ -891,7 +908,9 @@ describe("api-key", async () => {
 		expect(apiKey2.data).toBeNull();
 		expect(apiKey2.error).toBeDefined();
 		expect(apiKey2.error?.statusText).toEqual("BAD_REQUEST");
-		expect(apiKey2.error?.message).toEqual(ERROR_CODES.SERVER_ONLY_PROPERTY);
+		expect(apiKey2.error?.message).toEqual(
+			ERROR_CODES.SERVER_ONLY_PROPERTY.message,
+		);
 	});
 
 	it("should successfully apply custom rate-limit options on the newly created API key", async () => {
@@ -1098,7 +1117,9 @@ describe("api-key", async () => {
 		expect(res.error).toBeDefined();
 		expect(res.error?.statusCode).toEqual(401);
 		expect(res.error?.status).toEqual("UNAUTHORIZED");
-		expect(res.error?.body.message).toEqual(ERROR_CODES.UNAUTHORIZED_SESSION);
+		expect(res.error?.body.message).toEqual(
+			ERROR_CODES.UNAUTHORIZED_SESSION.message,
+		);
 	});
 
 	it("should update API key name with headers", async () => {
@@ -1126,10 +1147,12 @@ describe("api-key", async () => {
 				headers,
 			})
 			.catch((e) => {
-				if (e instanceof APIError) {
+				if (isAPIError(e)) {
 					error = e;
 					expect(error?.status).toEqual("BAD_REQUEST");
-					expect(error?.body?.message).toEqual(ERROR_CODES.INVALID_NAME_LENGTH);
+					expect(error?.body?.message).toEqual(
+						ERROR_CODES.INVALID_NAME_LENGTH.message,
+					);
 				}
 			});
 		expect(error).not.toBeNull();
@@ -1146,10 +1169,12 @@ describe("api-key", async () => {
 				headers,
 			})
 			.catch((e) => {
-				if (e instanceof APIError) {
+				if (isAPIError(e)) {
 					error = e;
 					expect(error?.status).toEqual("BAD_REQUEST");
-					expect(error?.body?.message).toEqual(ERROR_CODES.INVALID_NAME_LENGTH);
+					expect(error?.body?.message).toEqual(
+						ERROR_CODES.INVALID_NAME_LENGTH.message,
+					);
 				}
 			});
 		expect(error).not.toBeNull();
@@ -1165,10 +1190,12 @@ describe("api-key", async () => {
 				headers,
 			})
 			.catch((e) => {
-				if (e instanceof APIError) {
+				if (isAPIError(e)) {
 					error = e;
 					expect(error?.status).toEqual("BAD_REQUEST");
-					expect(error?.body?.message).toEqual(ERROR_CODES.NO_VALUES_TO_UPDATE);
+					expect(error?.body?.message).toEqual(
+						ERROR_CODES.NO_VALUES_TO_UPDATE.message,
+					);
 				}
 			});
 		expect(error).not.toBeNull();
@@ -1232,7 +1259,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.KEY_DISABLED_EXPIRATION,
+			ERROR_CODES.KEY_DISABLED_EXPIRATION.message,
 		);
 	});
 
@@ -1279,7 +1306,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
+			ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL.message,
 		);
 	});
 
@@ -1326,7 +1353,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
+			ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE.message,
 		);
 	});
 
@@ -1365,7 +1392,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
+			ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED.message,
 		);
 	});
 
@@ -1390,7 +1417,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
+			ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED.message,
 		);
 	});
 
@@ -1446,7 +1473,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.INVALID_METADATA_TYPE,
+			ERROR_CODES.INVALID_METADATA_TYPE.message,
 		);
 	});
 
@@ -1850,7 +1877,9 @@ describe("api-key", async () => {
 		expect(result.data).toBeNull();
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("NOT_FOUND");
-		expect(result.error?.body.message).toEqual(ERROR_CODES.KEY_NOT_FOUND);
+		expect(result.error?.body.message).toEqual(
+			ERROR_CODES.KEY_NOT_FOUND.message,
+		);
 	});
 
 	it("should create an API key with permissions", async () => {
@@ -2912,6 +2941,164 @@ describe("api-key", async () => {
 			}
 			expect(error).not.toBeNull();
 			expect(error.status).toBe("NOT_FOUND");
+		});
+	});
+
+	describe("deferUpdates option", () => {
+		it("should defer updates when deferUpdates is enabled with global backgroundTasks", async () => {
+			const deferredPromises: Array<Promise<void>> = [];
+			const { auth, signInWithTestUser } = await getTestInstance({
+				advanced: {
+					backgroundTasks: {
+						handler: (p: Promise<void>) => {
+							deferredPromises.push(p);
+						},
+					},
+				},
+				plugins: [
+					apiKey({
+						deferUpdates: true,
+					}),
+				],
+			});
+
+			const { headers, user } = await signInWithTestUser();
+
+			const key = await auth.api.createApiKey({
+				body: { userId: user.id },
+				headers,
+			});
+
+			const result = await auth.api.verifyApiKey({
+				body: { key: key.key },
+			});
+
+			expect(result.valid).toBe(true);
+			expect(deferredPromises.length).toBeGreaterThan(0);
+
+			await Promise.all(deferredPromises);
+
+			const updatedKey = await auth.api.getApiKey({
+				query: { id: key.id },
+				headers,
+			});
+			expect(updatedKey.lastRequest).not.toBeNull();
+		});
+
+		it("should still validate rate limits correctly with deferred updates", async () => {
+			const deferredPromises: Array<Promise<void>> = [];
+			const { auth, signInWithTestUser } = await getTestInstance({
+				advanced: {
+					backgroundTasks: {
+						handler: (p: Promise<void>) => {
+							deferredPromises.push(p);
+						},
+					},
+				},
+				plugins: [
+					apiKey({
+						deferUpdates: true,
+						rateLimit: {
+							enabled: true,
+							maxRequests: 2,
+							timeWindow: 60000,
+						},
+					}),
+				],
+			});
+
+			const { headers, user } = await signInWithTestUser();
+
+			const key = await auth.api.createApiKey({
+				body: { userId: user.id },
+				headers,
+			});
+
+			const result1 = await auth.api.verifyApiKey({ body: { key: key.key } });
+			expect(result1.valid).toBe(true);
+
+			await Promise.all(deferredPromises);
+			deferredPromises.length = 0;
+
+			const result2 = await auth.api.verifyApiKey({ body: { key: key.key } });
+			expect(result2.valid).toBe(true);
+
+			await Promise.all(deferredPromises);
+			deferredPromises.length = 0;
+
+			const result3 = await auth.api.verifyApiKey({ body: { key: key.key } });
+			expect(result3.valid).toBe(false);
+			expect(result3.error?.code).toBe("RATE_LIMITED");
+		});
+
+		it("should defer remaining count updates", async () => {
+			const deferredPromises: Array<Promise<void>> = [];
+			const { auth, signInWithTestUser } = await getTestInstance({
+				advanced: {
+					backgroundTasks: {
+						handler: (p: Promise<void>) => {
+							deferredPromises.push(p);
+						},
+					},
+				},
+				plugins: [
+					apiKey({
+						deferUpdates: true,
+					}),
+				],
+			});
+
+			const { headers, user } = await signInWithTestUser();
+
+			const key = await auth.api.createApiKey({
+				body: { userId: user.id, remaining: 10 },
+			});
+
+			const result = await auth.api.verifyApiKey({
+				body: { key: key.key },
+			});
+			expect(result.valid).toBe(true);
+			expect(result.key?.remaining).toBe(9);
+
+			expect(deferredPromises.length).toBeGreaterThan(0);
+
+			await Promise.all(deferredPromises);
+
+			const updatedKey = await auth.api.getApiKey({
+				query: { id: key.id },
+				headers,
+			});
+			expect(updatedKey.remaining).toBe(9);
+		});
+
+		it("should not defer updates when backgroundTasks handler is not configured", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					apiKey({
+						deferUpdates: true,
+					}),
+				],
+			});
+
+			const { headers, user } = await signInWithTestUser();
+
+			const key = await auth.api.createApiKey({
+				body: { userId: user.id },
+				headers,
+			});
+
+			const result = await auth.api.verifyApiKey({
+				body: { key: key.key },
+			});
+
+			expect(result.valid).toBe(true);
+
+			// Without advanced.backgroundTasks handler, updates should happen synchronously
+			const updatedKey = await auth.api.getApiKey({
+				query: { id: key.id },
+				headers,
+			});
+			expect(updatedKey.lastRequest).not.toBeNull();
 		});
 	});
 
