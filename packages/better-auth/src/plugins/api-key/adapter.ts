@@ -31,7 +31,7 @@ export function parseDoubleStringifiedMetadata(
 /**
  * Checks if metadata needs migration (is a string instead of object)
  */
-export function needsMetadataMigration(metadata: ApiKey["metadata"]): boolean {
+function needsMetadataMigration(metadata: ApiKey["metadata"]): boolean {
 	return metadata != null && typeof metadata === "string";
 }
 
