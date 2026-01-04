@@ -1,9 +1,13 @@
 import type { AuthContext, BetterAuthPlugin } from "@better-auth/core";
-import { createAuthEndpoint } from "@better-auth/core/api";
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+} from "@better-auth/core/api";
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../api";
+import { generateRandomString } from "../../crypto";
 import { shimContext } from "../../utils/shim";
 import type { AccessControl } from "../access";
 import type { defaultStatements } from "./access";
@@ -423,6 +427,9 @@ export function organization<O extends OrganizationOptions>(
 export function organization<O extends OrganizationOptions>(
 	options?: O | undefined,
 ): any {
+	if (options?.teams?.enabled && options.teams.keepActiveTeam) {
+		options.keepActiveOrganization = true;
+	}
 	let endpoints = {
 		/**
 		 * ### Endpoint
@@ -1194,8 +1201,173 @@ export function organization<O extends OrganizationOptions>(
 			...(api as OrganizationEndpoints<O>),
 			hasPermission: createHasPermission(options as O),
 		},
+		hooks: {
+			before: [
+				{
+					matcher: (ctx) => ctx.path === "/sign-out",
+					handler: createAuthMiddleware(async (ctx) => {
+						if (!options?.keepActiveOrganization) return;
+						const session = await getSessionFromCtx(ctx);
+						if (!session) return;
+
+						const data: Record<string, any> = {
+							lastOrganizationId: session.session?.activeOrganizationId,
+						};
+						if (!data.lastOrganizationId) return;
+						if (options.teams?.enabled && options.teams.keepActiveTeam) {
+							data.lastTeamId = session.session?.activeTeamId;
+						}
+
+						await ctx.context.internalAdapter.updateUser(session.user.id, data);
+					}),
+				},
+			],
+			after: [
+				{
+					matcher: (ctx) =>
+						ctx.path.startsWith("/sign-in") ||
+						ctx.path.startsWith("/sign-up") ||
+						ctx.path.startsWith("/callback") ||
+						ctx.path.startsWith("/oauth2/callback") ||
+						ctx.path.startsWith("/magic-link/verify") ||
+						ctx.path.startsWith("/email-otp/verify-email") ||
+						ctx.path.startsWith("/one-tap/callback") ||
+						ctx.path.startsWith("/passkey/verify-authentication") ||
+						ctx.path.startsWith("/phone-number/verify"),
+					handler: createAuthMiddleware(async (ctx) => {
+						const session = ctx.context.newSession;
+						if (!session) {
+							return;
+						}
+
+						if (options?.defaultOrganization?.enabled) {
+							const adapter = getOrgAdapter(ctx.context, options);
+							const orgs = await adapter.listOrganizations(session.user.id);
+							if (orgs.length === 0) {
+								const slugify = (text: string) => {
+									return text
+										.toString()
+										.normalize("NFD")
+										.toLowerCase()
+										.replace(/\s+/g, "-")
+										.replace(/[^\w\-]+/g, "")
+										.replace(/\-\-+/g, "-")
+										.replace(/^-+/, "")
+										.replace(/-+$/, "");
+								};
+
+								await ctx.context.adapter.transaction(async () => {
+									const organization =
+										(await options.defaultOrganization?.customCreateDefaultOrganization?.(
+											session.user,
+											ctx,
+										)) ||
+										(await adapter.createOrganization({
+											organization: {
+												name: session.user.name,
+												slug: `${slugify(session.user.name || "organization")}-${generateRandomString(6, "0-9", "a-z", "A-Z")}`,
+												createdAt: new Date(),
+											},
+										}));
+									if (!organization) {
+										throw new APIError("INTERNAL_SERVER_ERROR", {
+											message: "Failed to create organization during sign-up",
+										});
+									}
+
+									let teamId: string | undefined = undefined;
+									if (
+										options?.teams?.enabled &&
+										options.teams.defaultTeam?.enabled !== false
+									) {
+										const defaultTeam =
+											(await options.teams.defaultTeam?.customCreateDefaultTeam?.(
+												organization,
+												ctx,
+											)) ||
+											(await adapter.createTeam({
+												organizationId: organization.id,
+												name: organization.name,
+												createdAt: new Date(),
+											}));
+										teamId = defaultTeam.id;
+									}
+									await adapter.createMember({
+										...(teamId ? { teamId } : {}),
+										userId: session.user.id,
+										organizationId: organization.id,
+										role: options?.creatorRole || "owner",
+									});
+
+									await ctx.context.internalAdapter.updateSession(
+										session.session.token,
+										{
+											activeOrganizationId: organization.id,
+											...(teamId
+												? {
+														activeTeamId: teamId,
+													}
+												: {}),
+										},
+									);
+								});
+								return;
+							}
+						}
+
+						if (
+							ctx.path.startsWith("/sign-up") ||
+							!options?.keepActiveOrganization
+						) {
+							return;
+						}
+
+						if (!session.user?.lastOrganizationId) {
+							return;
+						}
+
+						let activeTeamId =
+							options.teams?.enabled && options.teams.keepActiveTeam
+								? (session.user?.lastTeamId ?? null)
+								: undefined;
+						await ctx.context.internalAdapter.updateSession(
+							session.session.token,
+							{
+								activeOrganizationId: session.user.lastOrganizationId,
+								...(activeTeamId !== undefined ? { activeTeamId } : {}),
+							},
+						);
+					}),
+				},
+			],
+		},
 		schema: {
 			...(schema as BetterAuthPluginDBSchema),
+			...((options?.teams?.enabled && options.teams.keepActiveTeam) ||
+			options?.keepActiveOrganization
+				? {
+						user: {
+							fields: {
+								lastOrganizationId: {
+									type: "string",
+									required: false,
+									input: false,
+									fieldName: options?.schema?.user?.fields?.lastOrganizationId,
+								},
+								...(options.teams?.enabled && options.teams.keepActiveTeam
+									? {
+											lastTeamId: {
+												type: "string",
+												required: false,
+												input: false,
+												fieldName: options?.schema?.user?.fields?.lastTeamId,
+											},
+										}
+									: {}),
+							},
+						},
+					}
+				: {}),
 			session: {
 				fields: {
 					activeOrganizationId: {
