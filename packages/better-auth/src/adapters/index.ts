@@ -17,8 +17,6 @@ import {
 } from "@better-auth/core/db/adapter";
 
 export * from "@better-auth/core/db/adapter";
-export { testAdapter } from "./test-adapter";
-export * from "./tests";
 
 export type {
 	AdapterFactoryOptions,

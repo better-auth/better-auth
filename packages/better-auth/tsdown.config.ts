@@ -19,6 +19,7 @@ export default defineConfig({
 		"./src/adapters/memory-adapter/index.ts",
 		"./src/adapters/test.ts",
 		"./src/adapters/index.ts",
+		"./src/adapters/test-adapter.ts",
 		"./src/db/index.ts",
 		"./src/oauth2/index.ts",
 		"./src/client/react/index.ts",

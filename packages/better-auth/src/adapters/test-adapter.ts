@@ -6,6 +6,8 @@ import { afterAll, beforeAll, describe } from "vitest";
 import { getAuthTables } from "../db";
 import type { createTestSuite, TestSuiteStats } from "./create-test-suite";
 
+export * from "./tests";
+
 export type Logger = {
 	info: (...args: any[]) => void;
 	success: (...args: any[]) => void;

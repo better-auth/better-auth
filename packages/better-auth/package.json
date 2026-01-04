@@ -185,6 +185,11 @@
       "types": "./dist/adapters/index.d.mts",
       "default": "./dist/adapters/index.mjs"
     },
+    "./adapters/test-adapter": {
+      "dev-source": "./src/adapters/test-adapter.ts",
+      "types": "./dist/adapters/test-adapter.d.mts",
+      "default": "./dist/adapters/test-adapter.mjs"
+    },
     "./plugins/access": {
       "dev-source": "./src/plugins/access/index.ts",
       "types": "./dist/plugins/access/index.d.mts",
@@ -363,6 +368,9 @@
       ],
       "adapters": [
         "./dist/adapters/index.d.mts"
+      ],
+      "adapters/test-adapter": [
+        "./dist/adapters/test-adapter.d.mts"
       ],
       "adapters/prisma": [
         "./dist/adapters/prisma-adapter/index.d.mts"

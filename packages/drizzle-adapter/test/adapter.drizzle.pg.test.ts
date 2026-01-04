@@ -7,12 +7,12 @@ import {
 	testAdapter,
 	transactionsTestSuite,
 	uuidTestSuite,
-} from "better-auth/adapters";
+} from "better-auth/adapters/test-adapter";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { drizzleAdapter } from "../drizzle-adapter";
 import { generateDrizzleSchema, resetGenerationCount } from "./generate-schema";
-import { getDrizzleVersion, instalBetaDrizzle } from "./get-drizzle-version";
+import { getDrizzleVersion, installBetaDrizzle } from "./drizzle-cli-utils";
 
 const dbName = "better_auth";
 const pgDB = new Pool({
@@ -60,7 +60,7 @@ const { execute } = await testAdapter({
 		// This is a workaround to install the beta drizzle-orm live if the version mismatch is detected.
 		const version = await getDrizzleVersion();
 		if (version.kit !== version.orm) {
-			await instalBetaDrizzle();
+			await installBetaDrizzle();
 		}
 
 		const command = `npx drizzle-kit push --dialect=postgresql --schema=${fileName}.ts --url=postgres://user:password@localhost:5432/${dbName}`;

@@ -27,7 +27,7 @@ export const getDrizzleVersion = async (beta: boolean = false) => {
 	return version;
 };
 
-export const instalBetaDrizzle = async () => {
+export const installBetaDrizzle = async () => {
 	console.log("Installing beta drizzle-orm...");
 	try {
 		execSync(`pnpm i drizzle-orm@beta`, {

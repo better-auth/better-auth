@@ -9,7 +9,7 @@ import {
 	testAdapter,
 	transactionsTestSuite,
 	uuidTestSuite,
-} from "better-auth/adapters";
+} from "better-auth/adapters/test-adapter";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { drizzleAdapter } from "../drizzle-adapter";
@@ -18,7 +18,7 @@ import {
 	generateDrizzleSchema,
 	resetGenerationCount,
 } from "./generate-schema";
-import { getDrizzleVersion, instalBetaDrizzle } from "./get-drizzle-version";
+import { getDrizzleVersion, installBetaDrizzle } from "./drizzle-cli-utils";
 
 const dbFilePath = path.join(import.meta.dirname, "test.db");
 let sqliteDB = new Database(dbFilePath);
@@ -57,7 +57,7 @@ const { execute } = await testAdapter({
 		// This is a workaround to install the beta drizzle-orm live if the version mismatch is detected.
 		const version = await getDrizzleVersion();
 		if (version.kit !== version.orm) {
-			await instalBetaDrizzle();
+			await installBetaDrizzle();
 		}
 
 		const command = `npx drizzle-kit push --dialect=sqlite --schema=${fileName}.ts --url=./test.db`;

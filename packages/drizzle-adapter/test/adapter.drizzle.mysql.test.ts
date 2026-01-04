@@ -7,13 +7,13 @@ import {
 	testAdapter,
 	transactionsTestSuite,
 	uuidTestSuite,
-} from "better-auth/adapters";
+} from "better-auth/adapters/test-adapter";
 import { drizzle } from "drizzle-orm/mysql2";
 import { createPool } from "mysql2/promise";
 import { assert } from "vitest";
 import { drizzleAdapter } from "../drizzle-adapter";
 import { generateDrizzleSchema, resetGenerationCount } from "./generate-schema";
-import { getDrizzleVersion, instalBetaDrizzle } from "./get-drizzle-version";
+import { getDrizzleVersion, installBetaDrizzle } from "./drizzle-cli-utils";
 
 const dbName = "better_auth";
 const mysqlDB = createPool({
@@ -53,8 +53,9 @@ const { execute } = await testAdapter({
 		// to fail as Drizzle-kit will ask for the same orm version.
 		// This is a workaround to install the beta drizzle-orm live if the version mismatch is detected.
 		const version = await getDrizzleVersion();
+		console.log("version", version);
 		if (version.kit !== version.orm) {
-			await instalBetaDrizzle();
+			await installBetaDrizzle();
 		}
 
 		const command = `npx drizzle-kit push --dialect=mysql --schema=${fileName}.ts --url=mysql://user:password@localhost:3306/${dbName}`;
