@@ -52,7 +52,7 @@ export async function generateState(
 		});
 
 		const stateCookie = c.context.createAuthCookie("oauth_state", {
-			maxAge: 10 * 60 * 1000, // 10 minutes
+			maxAge: 10 * 60, // 10 minutes (seconds)
 		});
 
 		c.setCookie(stateCookie.name, encryptedData, stateCookie.attributes);
@@ -65,7 +65,7 @@ export async function generateState(
 
 	// Default: database strategy
 	const stateCookie = c.context.createAuthCookie("state", {
-		maxAge: 5 * 60 * 1000, // 5 minutes
+		maxAge: 5 * 60, // 5 minutes (seconds)
 	});
 	await c.setSignedCookie(
 		stateCookie.name,
@@ -99,6 +99,7 @@ export async function generateState(
 export async function parseState(c: GenericEndpointContext) {
 	const state = c.query.state || c.body.state;
 	const storeStateStrategy = c.context.oauthConfig.storeStateStrategy;
+	const skipStateCookieCheck = c.context.oauthConfig?.skipStateCookieCheck;
 
 	const stateDataSchema = z.looseObject({
 		callbackURL: z.string(),
@@ -122,7 +123,6 @@ export async function parseState(c: GenericEndpointContext) {
 	 * dev or staging environments. It's currently used by the oauth-proxy
 	 * plugin
 	 */
-	const skipStateCookieCheck = c.context.oauthConfig?.skipStateCookieCheck;
 	if (storeStateStrategy === "cookie") {
 		// Retrieve state data from encrypted cookie
 		const stateCookie = c.context.createAuthCookie("oauth_state");
@@ -153,7 +153,6 @@ export async function parseState(c: GenericEndpointContext) {
 			throw c.redirect(`${errorURL}?error=please_restart_the_process`);
 		}
 
-		const skipStateCookieCheck = c.context.oauthConfig?.skipStateCookieCheck;
 		if (
 			!skipStateCookieCheck &&
 			parsedData.state &&
@@ -184,7 +183,16 @@ export async function parseState(c: GenericEndpointContext) {
 			throw c.redirect(`${errorURL}?error=please_restart_the_process`);
 		}
 
-		parsedData = stateDataSchema.parse(JSON.parse(data.value));
+		try {
+			parsedData = stateDataSchema.parse(JSON.parse(data.value));
+		} catch (error) {
+			c.context.logger.error("Failed to parse OAuth state from database", {
+				error,
+			});
+			const errorURL =
+				c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
+			throw c.redirect(`${errorURL}?error=please_restart_the_process`);
+		}
 
 		const stateCookie = c.context.createAuthCookie("state");
 		const stateCookieValue = await c.getSignedCookie(
