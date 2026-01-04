@@ -1,4 +1,8 @@
-import { blogCollection, changelogCollection, docs } from "collections/server";
+import {
+	blogCollection,
+	changelogCollection,
+	docs,
+} from "fumadocs-mdx:collections/server";
 import { loader } from "fumadocs-core/source";
 import { toFumadocsSource } from "fumadocs-mdx/runtime/server";
 import { getPageTree } from "@/components/sidebar-content";

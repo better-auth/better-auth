@@ -15,7 +15,7 @@
     "jsx": "react-jsx",
     "incremental": true,
     "paths": {
-      "collections/*": ["./.source/*"],
+      "fumadocs-mdx:collections/*": ["./.source/*"],
       "@/*": ["./*"]
     },
     "plugins": [
