@@ -1,4 +1,5 @@
 CREATE DATABASE drizzle_better_auth;
+CREATE DATABASE better_auth;
 
 DO $$
 BEGIN

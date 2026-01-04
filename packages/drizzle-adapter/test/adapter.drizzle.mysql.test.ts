@@ -55,8 +55,11 @@ const { execute } = await testAdapter({
 		await installBetaDrizzle();
 		const version = await getDrizzleVersion();
 		console.log("version", version);
+		if (!version.kit.includes("beta")) {
+			throw new Error("Drizzle-kit is not the beta version");
+		}
 
-		const command = `npx drizzle-kit@${version.kit.replace("v", "")} push --dialect=mysql --schema=${fileName}.ts --url=mysql://user:password@localhost:3306/${dbName}`;
+		const command = `npx drizzle-kit push --dialect=mysql --schema=${fileName}.ts --url=mysql://user:password@localhost:3306/${dbName}`;
 		console.log(`Running: ${command}`);
 		console.log(`Options:`, betterAuthOptions);
 		try {
