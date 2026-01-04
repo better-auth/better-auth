@@ -11,26 +11,70 @@ import {
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
 import type { UserWithTwoFactor } from "./types";
 
-export async function verifyTwoFactor(ctx: GenericEndpointContext) {
+export async function verifyTwoFactor(
+	ctx: GenericEndpointContext, 
+	options?: { 
+		cookieName?: string;
+		trustDeviceOptions?: {
+			disabled?: boolean;
+			maxAge?: number;
+			name?: string;
+		};
+		storeStrategy?: 'cookie' | 'database' | 'cookieAndDatabase';
+		verificationToken?: string;
+	}
+) {
 	const invalid = (errorKey: keyof typeof TWO_FACTOR_ERROR_CODES) => {
 		throw APIError.from("UNAUTHORIZED", TWO_FACTOR_ERROR_CODES[errorKey]);
 	};
 
 	const session = await getSessionFromCtx(ctx);
 	if (!session) {
-		const cookieName = ctx.context.createAuthCookie(TWO_FACTOR_COOKIE_NAME);
-		const twoFactorCookie = await ctx.getSignedCookie(
-			cookieName.name,
-			ctx.context.secret,
-		);
-		if (!twoFactorCookie) {
+		const storeStrategy = options?.storeStrategy ?? 'cookie';
+		const cookieNameValue = options?.cookieName ?? TWO_FACTOR_COOKIE_NAME;
+		const cookieName = ctx.context.createAuthCookie(cookieNameValue);
+		
+		let identifier: string | undefined;
+		
+		// Handle different storage strategies
+		if (storeStrategy === 'cookie' || storeStrategy === 'cookieAndDatabase') {
+			// Get identifier from cookie
+			const twoFactorCookie = await ctx.getSignedCookie(
+				cookieName.name,
+				ctx.context.secret,
+			);
+			if (!twoFactorCookie) {
+				throw APIError.from(
+					"UNAUTHORIZED",
+					TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
+				);
+			}
+			identifier = twoFactorCookie;
+		}
+		
+		// For database or cookieAndDatabase, also check verification token
+		if (storeStrategy === 'database' || storeStrategy === 'cookieAndDatabase') {
+			// If database only, get identifier from the provided verification token
+			if (storeStrategy === 'database' && options?.verificationToken) {
+				identifier = options.verificationToken;
+			} else if (storeStrategy === 'cookieAndDatabase' && !identifier) {
+				// If cookieAndDatabase but no cookie, fail
+				throw APIError.from(
+					"UNAUTHORIZED",
+					TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
+				);
+			}
+		}
+		
+		if (!identifier) {
 			throw APIError.from(
 				"UNAUTHORIZED",
 				TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
 			);
 		}
+		
 		const verificationToken =
-			await ctx.context.internalAdapter.findVerificationValue(twoFactorCookie);
+			await ctx.context.internalAdapter.findVerificationValue(identifier);
 		if (!verificationToken) {
 			throw APIError.from(
 				"UNAUTHORIZED",
@@ -74,11 +118,14 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 				ctx.setCookie(cookieName.name, "", {
 					maxAge: 0,
 				});
-				if (ctx.body.trustDevice) {
+				if (ctx.body.trustDevice && !options?.trustDeviceOptions?.disabled) {
+					const trustDeviceName = options?.trustDeviceOptions?.name ?? TRUST_DEVICE_COOKIE_NAME;
+					const trustDeviceMaxAge = options?.trustDeviceOptions?.maxAge ?? TRUST_DEVICE_COOKIE_MAX_AGE;
+					
 					const trustDeviceCookie = ctx.context.createAuthCookie(
-						TRUST_DEVICE_COOKIE_NAME,
+						trustDeviceName,
 						{
-							maxAge: TRUST_DEVICE_COOKIE_MAX_AGE,
+							maxAge: trustDeviceMaxAge,
 						},
 					);
 					/**
@@ -118,7 +165,7 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 				session: null,
 				user,
 			},
-			key: twoFactorCookie,
+			key: identifier,
 		};
 	}
 	return {
