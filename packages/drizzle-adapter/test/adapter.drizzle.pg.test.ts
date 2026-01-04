@@ -62,7 +62,7 @@ const { execute } = await testAdapter({
 		const version = await getDrizzleVersion();
 		console.log("version", version);
 
-		const command = `npx drizzle-kit@${version.kit} push --dialect=postgresql --schema=${fileName}.ts --url=postgres://user:password@localhost:5432/${dbName}`;
+		const command = `npx drizzle-kit@${version.kit.replace("v", "")} push --dialect=postgresql --schema=${fileName}.ts --url=postgres://user:password@localhost:5432/${dbName}`;
 		console.log(`Running: ${command}`);
 		console.log(`Options:`, betterAuthOptions);
 		try {
