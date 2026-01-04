@@ -7,10 +7,10 @@
     "hono": "^4.9.7"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.8.69",
-    "@cloudflare/workers-types": "^4.20250903.0",
-    "drizzle-kit": "^0.31.4",
-    "wrangler": "4.33.2"
+    "@cloudflare/vitest-pool-workers": "^0.11.1",
+    "@cloudflare/workers-types": "^4.20260103.0",
+    "drizzle-kit": "^0.31.8",
+    "wrangler": "4.54.0"
   },
   "scripts": {
     "check": "tsc && wrangler build",
