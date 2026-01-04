@@ -11,8 +11,8 @@ import {
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { drizzleAdapter } from "../drizzle-adapter";
-import { generateDrizzleSchema, resetGenerationCount } from "./generate-schema";
 import { getDrizzleVersion, installBetaDrizzle } from "./drizzle-cli-utils";
+import { generateDrizzleSchema, resetGenerationCount } from "./generate-schema";
 
 const dbName = "better_auth";
 const pgDB = new Pool({
@@ -58,12 +58,13 @@ const { execute } = await testAdapter({
 		// CI wouldn't wouldn't run the same drizzle beta version between drizzle-kit and drizzle-orm which causes the push command
 		// to fail as Drizzle-kit will ask for the same orm version.
 		// This is a workaround to install the beta drizzle-orm live if the version mismatch is detected.
-		await installBetaDrizzle();
 		const version = await getDrizzleVersion();
 		console.log("version", version);
-		if (!version.kit.includes("beta")) {
-			throw new Error("Drizzle-kit is not the beta version");
+		if (!version.kit.includes("beta") || !version.orm.includes("beta")) {
+			await installBetaDrizzle();
 		}
+		const version2 = await getDrizzleVersion();
+		console.log("version2", version2);
 
 		const command = `npx drizzle-kit push --dialect=postgresql --schema=${fileName}.ts --url=postgres://user:password@localhost:5432/${dbName}`;
 		console.log(`Running: ${command}`);

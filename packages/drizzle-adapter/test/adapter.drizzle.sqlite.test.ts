@@ -13,12 +13,12 @@ import {
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { drizzleAdapter } from "../drizzle-adapter";
+import { getDrizzleVersion, installBetaDrizzle } from "./drizzle-cli-utils";
 import {
 	clearSchemaCache,
 	generateDrizzleSchema,
 	resetGenerationCount,
 } from "./generate-schema";
-import { getDrizzleVersion, installBetaDrizzle } from "./drizzle-cli-utils";
 
 const dbFilePath = path.join(import.meta.dirname, "test.db");
 let sqliteDB = new Database(dbFilePath);
@@ -55,12 +55,13 @@ const { execute } = await testAdapter({
 		// CI wouldn't wouldn't run the same drizzle beta version between drizzle-kit and drizzle-orm which causes the push command
 		// to fail as Drizzle-kit will ask for the same orm version.
 		// This is a workaround to install the beta drizzle-orm live if the version mismatch is detected.
-		await installBetaDrizzle();
 		const version = await getDrizzleVersion();
 		console.log("version", version);
-		if (!version.kit.includes("beta")) {
-			throw new Error("Drizzle-kit is not the beta version");
+		if (!version.kit.includes("beta") || !version.orm.includes("beta")) {
+			await installBetaDrizzle();
 		}
+		const version2 = await getDrizzleVersion();
+		console.log("version2", version2);
 
 		const command = `npx drizzle-kit push --dialect=sqlite --schema=${fileName}.ts --url=./test.db`;
 		console.log(`Running: ${command}`);
