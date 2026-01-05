@@ -183,9 +183,10 @@ export const listSSOProviders = () => {
 		async (ctx) => {
 			const userId = ctx.context.session.user.id;
 
-			const allProviders = await ctx.context.adapter.findMany<SSOProviderRecord>({
-				model: "ssoProvider",
-			});
+			const allProviders =
+				await ctx.context.adapter.findMany<SSOProviderRecord>({
+					model: "ssoProvider",
+				});
 
 			const userOwnedProviders = allProviders.filter(
 				(p) => p.userId === userId && !p.organizationId,
@@ -499,10 +500,12 @@ export const updateSSOProvider = <O extends SSOOptions>(options: O) => {
 				update: updateData,
 			});
 
-			const fullProvider = await ctx.context.adapter.findOne<SSOProviderRecord>({
-				model: "ssoProvider",
-				where: [{ field: "providerId", value: providerId }],
-			});
+			const fullProvider = await ctx.context.adapter.findOne<SSOProviderRecord>(
+				{
+					model: "ssoProvider",
+					where: [{ field: "providerId", value: providerId }],
+				},
+			);
 
 			if (!fullProvider) {
 				throw new APIError("NOT_FOUND", {
