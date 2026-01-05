@@ -242,7 +242,7 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 			const result = await hasPermission(
 				{
 					role: member.role,
-					options: options || {},
+					options: options,
 					permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
 					organizationId: activeOrganizationId,
 				},
@@ -420,9 +420,8 @@ export function organization<O extends OrganizationOptions>(
 	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
 	options: NoInfer<O>;
 };
-export function organization<O extends OrganizationOptions>(
-	options?: O | undefined,
-): any {
+export function organization<O extends OrganizationOptions>(options?: O): any {
+	const opts = (options || {}) as O;
 	let endpoints = {
 		/**
 		 * ### Endpoint
@@ -439,7 +438,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-create)
 		 */
-		createOrganization: createOrganization(options as O),
+		createOrganization: createOrganization(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -455,7 +454,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-update)
 		 */
-		updateOrganization: updateOrganization(options as O),
+		updateOrganization: updateOrganization(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -471,7 +470,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-delete)
 		 */
-		deleteOrganization: deleteOrganization(options as O),
+		deleteOrganization: deleteOrganization(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -487,7 +486,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-set-active)
 		 */
-		setActiveOrganization: setActiveOrganization(options as O),
+		setActiveOrganization: setActiveOrganization(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -503,7 +502,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-full-organization)
 		 */
-		getFullOrganization: getFullOrganization(options as O),
+		getFullOrganization: getFullOrganization(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -519,7 +518,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-list)
 		 */
-		listOrganizations: listOrganizations(options as O),
+		listOrganizations: listOrganizations(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -535,7 +534,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-invite-member)
 		 */
-		createInvitation: createInvitation(options as O),
+		createInvitation: createInvitation(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -551,7 +550,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-cancel-invitation)
 		 */
-		cancelInvitation: cancelInvitation(options as O),
+		cancelInvitation: cancelInvitation(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -567,7 +566,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-accept-invitation)
 		 */
-		acceptInvitation: acceptInvitation(options as O),
+		acceptInvitation: acceptInvitation(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -583,7 +582,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-invitation)
 		 */
-		getInvitation: getInvitation(options as O),
+		getInvitation: getInvitation(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -599,7 +598,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-reject-invitation)
 		 */
-		rejectInvitation: rejectInvitation(options as O),
+		rejectInvitation: rejectInvitation(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -615,7 +614,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-list-invitations)
 		 */
-		listInvitations: listInvitations(options as O),
+		listInvitations: listInvitations(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -631,7 +630,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-active-member)
 		 */
-		getActiveMember: getActiveMember(options as O),
+		getActiveMember: getActiveMember(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -647,7 +646,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-check-slug)
 		 */
-		checkOrganizationSlug: checkOrganizationSlug(options as O),
+		checkOrganizationSlug: checkOrganizationSlug(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -661,7 +660,7 @@ export function organization<O extends OrganizationOptions>(
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-add-member)
 		 */
 
-		addMember: addMember<O>(options as O),
+		addMember: addMember<O>(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -677,7 +676,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-remove-member)
 		 */
-		removeMember: removeMember(options as O),
+		removeMember: removeMember(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -693,7 +692,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-update-member-role)
 		 */
-		updateMemberRole: updateMemberRole(options as O),
+		updateMemberRole: updateMemberRole(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -709,8 +708,8 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-leave)
 		 */
-		leaveOrganization: leaveOrganization(options as O),
-		listUserInvitations: listUserInvitations(options as O),
+		leaveOrganization: leaveOrganization(opts),
+		listUserInvitations: listUserInvitations(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -724,7 +723,7 @@ export function organization<O extends OrganizationOptions>(
 		 * **client:**
 		 * `authClient.organization.listMembers`
 		 */
-		listMembers: listMembers(options as O),
+		listMembers: listMembers(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -740,7 +739,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-active-member-role)
 		 */
-		getActiveMemberRole: getActiveMemberRole(options as O),
+		getActiveMemberRole: getActiveMemberRole(opts),
 	};
 	const teamSupport = options?.teams?.enabled;
 	const teamEndpoints = {
@@ -759,7 +758,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-create-team)
 		 */
-		createTeam: createTeam(options as O),
+		createTeam: createTeam(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -775,7 +774,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-list-teams)
 		 */
-		listOrganizationTeams: listOrganizationTeams(options as O),
+		listOrganizationTeams: listOrganizationTeams(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -791,7 +790,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-remove-team)
 		 */
-		removeTeam: removeTeam(options as O),
+		removeTeam: removeTeam(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -807,7 +806,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-update-team)
 		 */
-		updateTeam: updateTeam(options as O),
+		updateTeam: updateTeam(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -823,7 +822,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-set-active-team)
 		 */
-		setActiveTeam: setActiveTeam(options as O),
+		setActiveTeam: setActiveTeam(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -839,7 +838,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-set-active-team)
 		 */
-		listUserTeams: listUserTeams(options as O),
+		listUserTeams: listUserTeams(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -855,7 +854,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-set-active-team)
 		 */
-		listTeamMembers: listTeamMembers(options as O),
+		listTeamMembers: listTeamMembers(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -871,7 +870,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-add-team-member)
 		 */
-		addTeamMember: addTeamMember(options as O),
+		addTeamMember: addTeamMember(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -887,7 +886,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-remove-team-member)
 		 */
-		removeTeamMember: removeTeamMember(options as O),
+		removeTeamMember: removeTeamMember(opts),
 	};
 	if (teamSupport) {
 		endpoints = {
@@ -897,11 +896,11 @@ export function organization<O extends OrganizationOptions>(
 	}
 
 	const dynamicAccessControlEndpoints = {
-		createOrgRole: createOrgRole(options as O),
-		deleteOrgRole: deleteOrgRole(options as O),
-		listOrgRoles: listOrgRoles(options as O),
-		getOrgRole: getOrgRole(options as O),
-		updateOrgRole: updateOrgRole(options as O),
+		createOrgRole: createOrgRole(opts),
+		deleteOrgRole: deleteOrgRole(opts),
+		listOrgRoles: listOrgRoles(opts),
+		getOrgRole: getOrgRole(opts),
+		updateOrgRole: updateOrgRole(opts),
 	};
 	if (options?.dynamicAccessControl?.enabled) {
 		endpoints = {
@@ -1180,7 +1179,7 @@ export function organization<O extends OrganizationOptions>(
 	 * This `shimContext` function is used to add those missing properties to the context object.
 	 */
 	const api = shimContext(endpoints, {
-		orgOptions: options || {},
+		orgOptions: opts,
 		roles,
 		getSession: async (context: AuthContext) => {
 			//@ts-expect-error
@@ -1192,7 +1191,7 @@ export function organization<O extends OrganizationOptions>(
 		id: "organization",
 		endpoints: {
 			...(api as OrganizationEndpoints<O>),
-			hasPermission: createHasPermission(options as O),
+			hasPermission: createHasPermission(opts),
 		},
 		schema: {
 			...(schema as BetterAuthPluginDBSchema),
@@ -1251,6 +1250,6 @@ export function organization<O extends OrganizationOptions>(
 					} & InferOrganization<O, false>,
 		},
 		$ERROR_CODES: ORGANIZATION_ERROR_CODES,
-		options: options as NoInfer<O>,
+		options: opts as NoInfer<O>,
 	} satisfies BetterAuthPlugin;
 }
