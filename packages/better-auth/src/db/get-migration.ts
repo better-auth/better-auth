@@ -107,9 +107,9 @@ async function getPostgresSchema(db: Kysely<unknown>): Promise<string> {
 			const schemas = result.rows[0].search_path
 				.split(",")
 				.map((s) => s.trim())
-				// Remove quotes and filter out variables like $user
+				// Remove quotes and filter out variables like $user or \$user (escaped)
 				.map((s) => s.replace(/^["']|["']$/g, ""))
-				.filter((s) => !s.startsWith("$"));
+				.filter((s) => !/^\\?\$/.test(s));
 			return schemas[0] || "public";
 		}
 	} catch {
