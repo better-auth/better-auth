@@ -13,6 +13,13 @@ import { updateSSOProviderBodySchema } from "./schemas";
 
 const ADMIN_ROLES = ["owner", "admin"];
 
+function hasPlugin(
+	context: AuthContext,
+	pluginId: string,
+): boolean {
+	return (context as any).hasPlugin?.(pluginId) ?? false;
+}
+
 async function isOrgAdmin(
 	ctx: {
 		context: {
@@ -39,6 +46,43 @@ async function isOrgAdmin(
 	return roles.some((r) => ADMIN_ROLES.includes(r.trim()));
 }
 
+async function batchCheckOrgAdmin(
+	ctx: {
+		context: {
+			adapter: {
+				findMany: <T>(query: {
+					model: string;
+					where: { field: string; value: string | string[]; operator?: string }[];
+				}) => Promise<T[]>;
+			};
+		};
+	},
+	userId: string,
+	organizationIds: string[],
+): Promise<Set<string>> {
+	if (organizationIds.length === 0) {
+		return new Set();
+	}
+
+	const members = await ctx.context.adapter.findMany<Member>({
+		model: "member",
+		where: [
+			{ field: "userId", value: userId },
+			{ field: "organizationId", value: organizationIds, operator: "in" },
+		],
+	});
+
+	const adminOrgIds = new Set<string>();
+	for (const member of members) {
+		const roles = member.role.split(",");
+		if (roles.some((r) => ADMIN_ROLES.includes(r.trim()))) {
+			adminOrgIds.add(member.organizationId);
+		}
+	}
+
+	return adminOrgIds;
+}
+
 function sanitizeProvider(
 	provider: {
 		providerId: string;
@@ -51,8 +95,20 @@ function sanitizeProvider(
 	},
 	baseURL: string,
 ) {
-	const oidcConfig = safeJsonParse<OIDCConfig>(provider.oidcConfig as string);
-	const samlConfig = safeJsonParse<SAMLConfig>(provider.samlConfig as string);
+	let oidcConfig: OIDCConfig | null = null;
+	let samlConfig: SAMLConfig | null = null;
+
+	try {
+		oidcConfig = safeJsonParse<OIDCConfig>(provider.oidcConfig as string);
+	} catch {
+		oidcConfig = null;
+	}
+
+	try {
+		samlConfig = safeJsonParse<SAMLConfig>(provider.samlConfig as string);
+	} catch {
+		samlConfig = null;
+	}
 
 	const type = samlConfig ? "saml" : "oidc";
 
@@ -128,30 +184,46 @@ export const listSSOProviders = () => {
 				model: "ssoProvider",
 			});
 
-			const orgPluginEnabled = (ctx.context as any).hasPlugin?.(
-				"organization",
-			) as boolean | undefined;
-
-			const accessibleProviders = await Promise.all(
-				allProviders.map(async (provider) => {
-					if (provider.organizationId) {
-						if (orgPluginEnabled) {
-							const hasAccess = await isOrgAdmin(
-								ctx as any,
-								userId,
-								provider.organizationId,
-							);
-							return hasAccess ? provider : null;
-						}
-						return provider.userId === userId ? provider : null;
-					}
-					return provider.userId === userId ? provider : null;
-				}),
+			const userOwnedProviders = allProviders.filter(
+				(p) => p.userId === userId && !p.organizationId,
 			);
 
-			const providers = accessibleProviders
-				.filter((p): p is NonNullable<typeof p> => p !== null)
-				.map((p) => sanitizeProvider(p, ctx.context.baseURL));
+			const orgProviders = allProviders.filter(
+				(p) => p.organizationId !== null && p.organizationId !== undefined,
+			);
+
+			const orgPluginEnabled = hasPlugin(ctx.context, "organization");
+
+			let accessibleProviders: typeof userOwnedProviders = [
+				...userOwnedProviders,
+			];
+
+			if (orgPluginEnabled && orgProviders.length > 0) {
+				const orgIds = orgProviders
+					.map((p) => p.organizationId)
+					.filter((id): id is string => id !== null && id !== undefined);
+
+				const adminOrgIds = await batchCheckOrgAdmin(
+					ctx as any,
+					userId,
+					orgIds,
+				);
+
+				const orgAccessibleProviders = orgProviders.filter(
+					(provider) =>
+						provider.organizationId &&
+						adminOrgIds.has(provider.organizationId),
+				);
+
+				accessibleProviders = [
+					...accessibleProviders,
+					...orgAccessibleProviders,
+				];
+			}
+
+			const providers = accessibleProviders.map((p) =>
+				sanitizeProvider(p, ctx.context.baseURL),
+			);
 
 			return ctx.json({ providers });
 		},
@@ -232,10 +304,7 @@ async function checkProviderAccess(
 
 	let hasAccess = false;
 	if (provider.organizationId) {
-		const hasPlugin = (ctx.context as any).hasPlugin as
-			| ((pluginId: string) => boolean)
-			| undefined;
-		if (hasPlugin?.("organization")) {
+		if (hasPlugin(ctx.context, "organization")) {
 			hasAccess = await isOrgAdmin(ctx, userId, provider.organizationId);
 		} else {
 			hasAccess = provider.userId === userId;
@@ -365,9 +434,14 @@ export const updateSSOProvider = <O extends SSOOptions>(options: O) => {
 					);
 				}
 
-				const currentSamlConfig = safeJsonParse<SAMLConfig>(
-					existingProvider.samlConfig as string,
-				);
+				let currentSamlConfig: SAMLConfig | null = null;
+				try {
+					currentSamlConfig = safeJsonParse<SAMLConfig>(
+						existingProvider.samlConfig as string,
+					);
+				} catch {
+					currentSamlConfig = null;
+				}
 
 				if (!currentSamlConfig) {
 					throw new APIError("BAD_REQUEST", {
@@ -385,9 +459,14 @@ export const updateSSOProvider = <O extends SSOOptions>(options: O) => {
 			}
 
 			if (body.oidcConfig) {
-				const currentOidcConfig = safeJsonParse<OIDCConfig>(
-					existingProvider.oidcConfig as string,
-				);
+				let currentOidcConfig: OIDCConfig | null = null;
+				try {
+					currentOidcConfig = safeJsonParse<OIDCConfig>(
+						existingProvider.oidcConfig as string,
+					);
+				} catch {
+					currentOidcConfig = null;
+				}
 
 				if (!currentOidcConfig) {
 					throw new APIError("BAD_REQUEST", {
