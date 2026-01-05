@@ -6,6 +6,8 @@ import { EXTERNAL_ERROR_CODES, INTERNAL_ERROR_CODES } from "./error-codes";
 import type { CaptchaOptions } from "./types";
 import * as verifyHandlers from "./verify-handlers";
 
+export type * from "./types";
+
 export const captcha = (options: CaptchaOptions) =>
 	({
 		id: "captcha",
