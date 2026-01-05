@@ -11,6 +11,18 @@ import type { Member, OIDCConfig, SAMLConfig, SSOOptions } from "../types";
 import { maskClientId, parseCertificate, safeJsonParse } from "../utils";
 import { updateSSOProviderBodySchema } from "./schemas";
 
+interface SSOProviderRecord {
+	id: string;
+	providerId: string;
+	issuer: string;
+	domain: string;
+	organizationId?: string | null;
+	domainVerified?: boolean;
+	userId: string;
+	oidcConfig?: string | null;
+	samlConfig?: string | null;
+}
+
 const ADMIN_ROLES = ["owner", "admin"];
 
 function hasPlugin(context: AuthContext, pluginId: string): boolean {
@@ -171,17 +183,7 @@ export const listSSOProviders = () => {
 		async (ctx) => {
 			const userId = ctx.context.session.user.id;
 
-			const allProviders = await ctx.context.adapter.findMany<{
-				id: string;
-				providerId: string;
-				issuer: string;
-				domain: string;
-				organizationId?: string | null;
-				domainVerified?: boolean;
-				userId: string;
-				oidcConfig?: string | null;
-				samlConfig?: string | null;
-			}>({
+			const allProviders = await ctx.context.adapter.findMany<SSOProviderRecord>({
 				model: "ssoProvider",
 			});
 
@@ -200,9 +202,13 @@ export const listSSOProviders = () => {
 			];
 
 			if (orgPluginEnabled && orgProviders.length > 0) {
-				const orgIds = orgProviders
-					.map((p) => p.organizationId)
-					.filter((id): id is string => id !== null && id !== undefined);
+				const orgIds = [
+					...new Set(
+						orgProviders
+							.map((p) => p.organizationId)
+							.filter((id): id is string => id !== null && id !== undefined),
+					),
+				];
 
 				const adminOrgIds = await batchCheckOrgAdmin(
 					ctx as any,
@@ -289,17 +295,7 @@ async function checkProviderAccess(
 ) {
 	const userId = ctx.context.session.user.id;
 
-	const provider = await ctx.context.adapter.findOne<{
-		id: string;
-		providerId: string;
-		issuer: string;
-		domain: string;
-		organizationId?: string | null;
-		domainVerified?: boolean;
-		userId: string;
-		oidcConfig?: string | null;
-		samlConfig?: string | null;
-	}>({
+	const provider = await ctx.context.adapter.findOne<SSOProviderRecord>({
 		model: "ssoProvider",
 		where: [{ field: "providerId", value: providerId }],
 	});
@@ -399,12 +395,6 @@ export const updateSSOProvider = <O extends SSOOptions>(options: O) => {
 			const updateData: Record<string, any> = {};
 
 			if (body.issuer !== undefined) {
-				const issuerValidator = z.string().url();
-				if (issuerValidator.safeParse(body.issuer).error) {
-					throw new APIError("BAD_REQUEST", {
-						message: "Invalid issuer. Must be a valid URL",
-					});
-				}
 				updateData.issuer = body.issuer;
 			}
 
@@ -509,17 +499,7 @@ export const updateSSOProvider = <O extends SSOOptions>(options: O) => {
 				update: updateData,
 			});
 
-			const fullProvider = await ctx.context.adapter.findOne<{
-				id: string;
-				providerId: string;
-				issuer: string;
-				domain: string;
-				organizationId?: string | null;
-				domainVerified?: boolean;
-				userId: string;
-				oidcConfig?: string | null;
-				samlConfig?: string | null;
-			}>({
+			const fullProvider = await ctx.context.adapter.findOne<SSOProviderRecord>({
 				model: "ssoProvider",
 				where: [{ field: "providerId", value: providerId }],
 			});
