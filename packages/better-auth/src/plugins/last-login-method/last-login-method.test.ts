@@ -1,8 +1,8 @@
 import type { GoogleProfile } from "@better-auth/core/social-providers";
-import { createAuthMiddleware } from "@better-auth/core/api";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { createAuthMiddleware } from "../../api";
 import { parseCookies, parseSetCookieHeader } from "../../cookies";
 import { signJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
