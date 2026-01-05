@@ -186,46 +186,9 @@ export const getSSOProvider = () => {
 			},
 		},
 		async (ctx) => {
-			const userId = ctx.context.session.user.id;
 			const { providerId } = ctx.params;
 
-			const provider = await ctx.context.adapter.findOne<{
-				id: string;
-				providerId: string;
-				issuer: string;
-				domain: string;
-				organizationId?: string | null;
-				domainVerified?: boolean;
-				userId: string;
-				oidcConfig?: string | null;
-				samlConfig?: string | null;
-			}>({
-				model: "ssoProvider",
-				where: [{ field: "providerId", value: providerId }],
-			});
-
-			if (!provider) {
-				throw new APIError("NOT_FOUND", {
-					message: "Provider not found",
-				});
-			}
-
-			let hasAccess = false;
-			if (provider.organizationId) {
-				if (ctx.context.hasPlugin("organization")) {
-					hasAccess = await isOrgAdmin(ctx, userId, provider.organizationId);
-				} else {
-					hasAccess = provider.userId === userId;
-				}
-			} else {
-				hasAccess = provider.userId === userId;
-			}
-
-			if (!hasAccess) {
-				throw new APIError("FORBIDDEN", {
-					message: "You don't have access to this provider",
-				});
-			}
+			const provider = await checkProviderAccess(ctx, providerId);
 
 			return ctx.json(sanitizeProvider(provider, ctx.context.baseURL));
 		},
@@ -475,6 +438,48 @@ export const updateSSOProvider = <O extends SSOOptions>(options: O) => {
 			}
 
 			return ctx.json(sanitizeProvider(fullProvider, ctx.context.baseURL));
+		},
+	);
+};
+
+export const deleteSSOProvider = () => {
+	return createAuthEndpoint(
+		"/sso/providers/:providerId",
+		{
+			method: "DELETE",
+			use: [sessionMiddleware],
+			params: getSSOProviderParamsSchema,
+			metadata: {
+				openapi: {
+					operationId: "deleteSSOProvider",
+					summary: "Delete SSO provider",
+					description:
+						"Delete an SSO provider. This removes the provider configuration but keeps existing linked account rows. Future SSO sign-ins for this provider will fail.",
+					responses: {
+						"200": {
+							description: "SSO provider deleted successfully",
+						},
+						"404": {
+							description: "Provider not found",
+						},
+						"403": {
+							description: "Access denied",
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const { providerId } = ctx.params;
+
+			await checkProviderAccess(ctx, providerId);
+
+			await ctx.context.adapter.delete({
+				model: "ssoProvider",
+				where: [{ field: "providerId", value: providerId }],
+			});
+
+			return ctx.json({ success: true });
 		},
 	);
 };
