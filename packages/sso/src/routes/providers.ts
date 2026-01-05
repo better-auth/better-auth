@@ -3,6 +3,7 @@ import {
 	createAuthEndpoint,
 	sessionMiddleware,
 } from "better-auth/api";
+import type { AuthContext } from "better-auth";
 import z from "zod/v4";
 import { DEFAULT_MAX_SAML_METADATA_SIZE } from "../constants";
 import { validateConfigAlgorithms } from "../saml";
@@ -127,14 +128,16 @@ export const listSSOProviders = () => {
 				model: "ssoProvider",
 			});
 
-			const orgPluginEnabled = ctx.context.hasPlugin("organization");
+			const orgPluginEnabled = (ctx.context as any).hasPlugin?.(
+				"organization",
+			) as boolean | undefined;
 
 			const accessibleProviders = await Promise.all(
 				allProviders.map(async (provider) => {
 					if (provider.organizationId) {
 						if (orgPluginEnabled) {
 							const hasAccess = await isOrgAdmin(
-								ctx,
+								ctx as any,
 								userId,
 								provider.organizationId,
 							);
@@ -197,15 +200,9 @@ export const getSSOProvider = () => {
 
 async function checkProviderAccess(
 	ctx: {
-		context: {
+		context: AuthContext & {
 			session: { user: { id: string } };
-			adapter: {
-				findOne: <T>(query: {
-					model: string;
-					where: { field: string; value: string }[];
-				}) => Promise<T | null>;
-			};
-			hasPlugin: (pluginId: string) => boolean;
+			hasPlugin?: (pluginId: string) => boolean;
 		};
 	},
 	providerId: string,
@@ -235,7 +232,10 @@ async function checkProviderAccess(
 
 	let hasAccess = false;
 	if (provider.organizationId) {
-		if (ctx.context.hasPlugin("organization")) {
+		const hasPlugin = (ctx.context as any).hasPlugin as
+			| ((pluginId: string) => boolean)
+			| undefined;
+		if (hasPlugin?.("organization")) {
 			hasAccess = await isOrgAdmin(ctx, userId, provider.organizationId);
 		} else {
 			hasAccess = provider.userId === userId;
