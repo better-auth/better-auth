@@ -573,4 +573,545 @@ describe("SSO provider read endpoints", () => {
 			expect(response.oidcConfig?.clientIdLastFour).toBe("****");
 		});
 	});
+
+	describe("PATCH /sso/providers/:providerId", () => {
+		it("should return 401 when not authenticated", async () => {
+			const { auth } = createTestAuth();
+			const response = await auth.api.updateSSOProvider({
+				params: { providerId: "test" },
+				body: { domain: "new-domain.com" },
+				asResponse: true,
+			});
+			expect(response.status).toBe(401);
+		});
+
+		it("should return 404 when provider not found", async () => {
+			const { auth, getAuthHeaders } = createTestAuth();
+			const headers = await getAuthHeaders({
+				email: "test@example.com",
+				password: "password123",
+				name: "Test User",
+			});
+
+			const response = await auth.api.updateSSOProvider({
+				params: { providerId: "nonexistent" },
+				body: { domain: "new-domain.com" },
+				headers,
+				asResponse: true,
+			});
+			expect(response.status).toBe(404);
+		});
+
+		it("should return 403 when user does not own provider", async () => {
+			const { auth, getAuthHeaders, registerSAMLProvider } =
+				createTestAuth(false);
+
+			const ownerHeaders = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			await registerSAMLProvider(ownerHeaders, "other-provider");
+
+			const otherHeaders = await getAuthHeaders({
+				email: "other@example.com",
+				password: "password123",
+				name: "Other User",
+			});
+
+			const response = await auth.api.updateSSOProvider({
+				params: { providerId: "other-provider" },
+				body: { domain: "new-domain.com" },
+				headers: otherHeaders,
+				asResponse: true,
+			});
+			expect(response.status).toBe(403);
+		});
+
+		it("should update domain and reset domainVerified to false", async () => {
+			const { auth, getAuthHeaders, registerSAMLProvider } =
+				createTestAuth(false);
+
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			await registerSAMLProvider(headers, "my-saml-provider");
+
+			const updated = await auth.api.updateSSOProvider({
+				params: { providerId: "my-saml-provider" },
+				body: { domain: "new-domain.com" },
+				headers,
+			});
+
+			expect(updated.domain).toBe("new-domain.com");
+			expect(updated.domainVerified).toBe(false);
+		});
+
+		it("should perform partial update on SAML provider", async () => {
+			const { auth, getAuthHeaders, registerSAMLProvider } =
+				createTestAuth(false);
+
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			await registerSAMLProvider(headers, "my-saml-provider");
+
+			const updated = await auth.api.updateSSOProvider({
+				params: { providerId: "my-saml-provider" },
+				body: {
+					samlConfig: {
+						audience: "new-audience",
+						wantAssertionsSigned: false,
+					},
+				},
+				headers,
+			});
+
+			expect(updated.samlConfig?.audience).toBe("new-audience");
+			expect(updated.samlConfig?.wantAssertionsSigned).toBe(false);
+			expect(updated.samlConfig?.entryPoint).toBe("https://idp.example.com/sso");
+		});
+
+		it("should perform partial update on OIDC provider", async () => {
+			const { auth, getAuthHeaders, createOIDCProviderData, data } =
+				createTestAuth(false);
+
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			const user = (data.user as { id: string; email: string }[]).find(
+				(u) => u.email === "owner@example.com",
+			);
+			createOIDCProviderData(user!.id, "my-oidc-provider", "client123");
+
+			const updated = await auth.api.updateSSOProvider({
+				params: { providerId: "my-oidc-provider" },
+				body: {
+					oidcConfig: {
+						scopes: ["openid", "email", "profile", "custom"],
+						pkce: false,
+					},
+				},
+				headers,
+			});
+
+			expect(updated.oidcConfig?.scopes).toEqual([
+				"openid",
+				"email",
+				"profile",
+				"custom",
+			]);
+			expect(updated.oidcConfig?.pkce).toBe(false);
+		});
+
+		it("should update issuer", async () => {
+			const { auth, getAuthHeaders, registerSAMLProvider } =
+				createTestAuth(false);
+
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			await registerSAMLProvider(headers, "my-saml-provider");
+
+			const updated = await auth.api.updateSSOProvider({
+				params: { providerId: "my-saml-provider" },
+				body: { issuer: "https://new-issuer.example.com" },
+				headers,
+			});
+
+			expect(updated.issuer).toBe("https://new-issuer.example.com");
+		});
+
+		it("should return 400 when issuer is invalid URL", async () => {
+			const { auth, getAuthHeaders, registerSAMLProvider } =
+				createTestAuth(false);
+
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			await registerSAMLProvider(headers, "my-saml-provider");
+
+			const response = await auth.api.updateSSOProvider({
+				params: { providerId: "my-saml-provider" },
+				body: { issuer: "invalid-url" },
+				headers,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(400);
+		});
+
+		it("should return 400 when no fields provided", async () => {
+			const { auth, getAuthHeaders, registerSAMLProvider } =
+				createTestAuth(false);
+
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			await registerSAMLProvider(headers, "my-saml-provider");
+
+			const response = await auth.api.updateSSOProvider({
+				params: { providerId: "my-saml-provider" },
+				body: {},
+				headers,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(400);
+		});
+
+		it("should allow org admin to update org provider", async () => {
+			const {
+				auth,
+				getAuthHeaders,
+				createOrganization,
+				registerSAMLProvider,
+				addMember,
+				data,
+			} = createTestAuth(true);
+
+			const ownerHeaders = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			const org = await createOrganization("test-org", ownerHeaders);
+			await registerSAMLProvider(ownerHeaders, "org-provider", org!.id);
+
+			const adminHeaders = await getAuthHeaders({
+				email: "admin@example.com",
+				password: "password123",
+				name: "Admin",
+			});
+
+			const adminUser = (data.user as { id: string; email: string }[]).find(
+				(u) => u.email === "admin@example.com",
+			);
+
+			await addMember(adminUser!.id, org!.id, "admin", ownerHeaders);
+
+			const updated = await auth.api.updateSSOProvider({
+				params: { providerId: "org-provider" },
+				body: { domain: "new-domain.com" },
+				headers: adminHeaders,
+			});
+
+			expect(updated.domain).toBe("new-domain.com");
+		});
+
+		it("should return 403 when org member tries to update org provider", async () => {
+			const {
+				auth,
+				getAuthHeaders,
+				createOrganization,
+				registerSAMLProvider,
+				addMember,
+				data,
+			} = createTestAuth(true);
+
+			const ownerHeaders = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			const org = await createOrganization("test-org", ownerHeaders);
+			await registerSAMLProvider(ownerHeaders, "org-provider", org!.id);
+
+			const memberHeaders = await getAuthHeaders({
+				email: "member@example.com",
+				password: "password123",
+				name: "Member",
+			});
+
+			const memberUser = (data.user as { id: string; email: string }[]).find(
+				(u) => u.email === "member@example.com",
+			);
+
+			await addMember(memberUser!.id, org!.id, "member", ownerHeaders);
+
+			const response = await auth.api.updateSSOProvider({
+				params: { providerId: "org-provider" },
+				body: { domain: "new-domain.com" },
+				headers: memberHeaders,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(403);
+		});
+
+		it("should return 400 when trying to update SAML config for OIDC provider", async () => {
+			const { auth, getAuthHeaders, createOIDCProviderData, data } =
+				createTestAuth(false);
+
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			const user = (data.user as { id: string; email: string }[]).find(
+				(u) => u.email === "owner@example.com",
+			);
+			createOIDCProviderData(user!.id, "my-oidc-provider", "client123");
+
+			const response = await auth.api.updateSSOProvider({
+				params: { providerId: "my-oidc-provider" },
+				body: {
+					samlConfig: {
+						entryPoint: "https://idp.example.com/sso",
+						cert: TEST_CERT,
+						callbackUrl: "http://localhost:3000/api/sso/callback",
+						spMetadata: {},
+					},
+				},
+				headers,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(400);
+		});
+
+		it("should return 400 when trying to update OIDC config for SAML provider", async () => {
+			const { auth, getAuthHeaders, registerSAMLProvider } =
+				createTestAuth(false);
+
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			await registerSAMLProvider(headers, "my-saml-provider");
+
+			const response = await auth.api.updateSSOProvider({
+				params: { providerId: "my-saml-provider" },
+				body: {
+					oidcConfig: {
+						clientId: "new-client-id",
+						clientSecret: "new-secret",
+					},
+				},
+				headers,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(400);
+		});
+	});
+
+	describe("DELETE /sso/providers/:providerId", () => {
+		it("should return 401 when not authenticated", async () => {
+			const { auth } = createTestAuth();
+			const response = await auth.api.deleteSSOProvider({
+				params: { providerId: "test" },
+				asResponse: true,
+			});
+			expect(response.status).toBe(401);
+		});
+
+		it("should return 404 when provider not found", async () => {
+			const { auth, getAuthHeaders } = createTestAuth();
+			const headers = await getAuthHeaders({
+				email: "test@example.com",
+				password: "password123",
+				name: "Test User",
+			});
+
+			const response = await auth.api.deleteSSOProvider({
+				params: { providerId: "nonexistent" },
+				headers,
+				asResponse: true,
+			});
+			expect(response.status).toBe(404);
+		});
+
+		it("should return 403 when user does not own provider", async () => {
+			const { auth, getAuthHeaders, registerSAMLProvider } =
+				createTestAuth(false);
+
+			const ownerHeaders = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			await registerSAMLProvider(ownerHeaders, "other-provider");
+
+			const otherHeaders = await getAuthHeaders({
+				email: "other@example.com",
+				password: "password123",
+				name: "Other User",
+			});
+
+			const response = await auth.api.deleteSSOProvider({
+				params: { providerId: "other-provider" },
+				headers: otherHeaders,
+				asResponse: true,
+			});
+			expect(response.status).toBe(403);
+		});
+
+		it("should delete provider successfully", async () => {
+			const { auth, getAuthHeaders, registerSAMLProvider } =
+				createTestAuth(false);
+
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			await registerSAMLProvider(headers, "my-saml-provider");
+
+			const deleteResponse = await auth.api.deleteSSOProvider({
+				params: { providerId: "my-saml-provider" },
+				headers,
+			});
+
+			expect(deleteResponse.success).toBe(true);
+
+			const getResponse = await auth.api.getSSOProvider({
+				params: { providerId: "my-saml-provider" },
+				headers,
+				asResponse: true,
+			});
+
+			expect(getResponse.status).toBe(404);
+		});
+
+		it("should allow org admin to delete org provider", async () => {
+			const {
+				auth,
+				getAuthHeaders,
+				createOrganization,
+				registerSAMLProvider,
+				addMember,
+				data,
+			} = createTestAuth(true);
+
+			const ownerHeaders = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			const org = await createOrganization("test-org", ownerHeaders);
+			await registerSAMLProvider(ownerHeaders, "org-provider", org!.id);
+
+			const adminHeaders = await getAuthHeaders({
+				email: "admin@example.com",
+				password: "password123",
+				name: "Admin",
+			});
+
+			const adminUser = (data.user as { id: string; email: string }[]).find(
+				(u) => u.email === "admin@example.com",
+			);
+
+			await addMember(adminUser!.id, org!.id, "admin", ownerHeaders);
+
+			const deleteResponse = await auth.api.deleteSSOProvider({
+				params: { providerId: "org-provider" },
+				headers: adminHeaders,
+			});
+
+			expect(deleteResponse.success).toBe(true);
+		});
+
+		it("should return 403 when org member tries to delete org provider", async () => {
+			const {
+				auth,
+				getAuthHeaders,
+				createOrganization,
+				registerSAMLProvider,
+				addMember,
+				data,
+			} = createTestAuth(true);
+
+			const ownerHeaders = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			const org = await createOrganization("test-org", ownerHeaders);
+			await registerSAMLProvider(ownerHeaders, "org-provider", org!.id);
+
+			const memberHeaders = await getAuthHeaders({
+				email: "member@example.com",
+				password: "password123",
+				name: "Member",
+			});
+
+			const memberUser = (data.user as { id: string; email: string }[]).find(
+				(u) => u.email === "member@example.com",
+			);
+
+			await addMember(memberUser!.id, org!.id, "member", ownerHeaders);
+
+			const response = await auth.api.deleteSSOProvider({
+				params: { providerId: "org-provider" },
+				headers: memberHeaders,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(403);
+		});
+
+		it("should not delete linked accounts when provider is deleted", async () => {
+			const { auth, getAuthHeaders, registerSAMLProvider, data } =
+				createTestAuth(false);
+
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			await registerSAMLProvider(headers, "my-saml-provider");
+
+			const user = (data.user as { id: string; email: string }[]).find(
+				(u) => u.email === "owner@example.com",
+			);
+
+			data.account.push({
+				id: "account-1",
+				userId: user!.id,
+				providerId: "my-saml-provider",
+				accountId: "saml-account-id",
+				accessToken: "token",
+				refreshToken: "refresh",
+			});
+
+			const accountCountBefore = data.account.length;
+
+			await auth.api.deleteSSOProvider({
+				params: { providerId: "my-saml-provider" },
+				headers,
+			});
+
+			expect(data.account.length).toBe(accountCountBefore);
+		});
+	});
 });
