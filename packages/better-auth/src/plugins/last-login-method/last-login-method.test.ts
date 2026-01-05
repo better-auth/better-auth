@@ -1,4 +1,5 @@
 import type { GoogleProfile } from "@better-auth/core/social-providers";
+import { createAuthMiddleware } from "@better-auth/core/api";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -441,5 +442,77 @@ describe("lastLoginMethod", async () => {
 		expect((oauthSession?.data?.user as any).lastLoginMethod).toBe(
 			"my-provider-id",
 		);
+	});
+
+	it("should handle multiple set-cookie headers correctly", async () => {
+		// Create a custom plugin that sets an additional cookie to simulate multiple Set-Cookie headers
+		const multiCookiePlugin = {
+			id: "multi-cookie-test",
+			hooks: {
+				after: [
+					{
+						matcher() {
+							return true;
+						},
+						handler: createAuthMiddleware(async (ctx) => {
+							const setCookieHeaders =
+								ctx.context.responseHeaders?.getSetCookie?.() || [];
+							const sessionTokenName =
+								ctx.context.authCookies.sessionToken.name;
+							// If session token is being set, also set an additional cookie BEFORE checking
+							const hasSessionToken = setCookieHeaders.some((cookie) =>
+								cookie.includes(sessionTokenName),
+							);
+							if (hasSessionToken) {
+								ctx.setCookie("additional-test-cookie", "test-value", {
+									maxAge: 60 * 60 * 24 * 30,
+									httpOnly: false,
+								});
+							}
+						}),
+					},
+				],
+			},
+		};
+
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				plugins: [multiCookiePlugin, lastLoginMethod()],
+			},
+			{
+				clientOptions: {
+					plugins: [lastLoginMethodClient()],
+				},
+			},
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess(context) {
+					cookieSetter(headers)(context);
+
+					// Verify that multiple cookies are present in the response
+					const setCookieHeaders =
+						context.response.headers.getSetCookie?.() || [];
+					expect(setCookieHeaders.length).toBeGreaterThan(1);
+
+					// Verify both cookies are present
+					const cookieStrings = setCookieHeaders.join(";");
+					expect(cookieStrings).toContain("additional-test-cookie=test-value");
+					expect(cookieStrings).toContain(
+						"better-auth.last_used_login_method=email",
+					);
+				},
+			},
+		);
+
+		const cookies = parseCookies(headers.get("cookie") || "");
+		expect(cookies.get("better-auth.last_used_login_method")).toBe("email");
+		expect(cookies.get("additional-test-cookie")).toBe("test-value");
 	});
 });
