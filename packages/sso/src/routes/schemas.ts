@@ -1,6 +1,6 @@
 import z from "zod/v4";
 
-export const oidcMappingSchema = z
+const oidcMappingSchema = z
 	.object({
 		id: z.string().optional(),
 		email: z.string().optional(),
@@ -11,7 +11,7 @@ export const oidcMappingSchema = z
 	})
 	.optional();
 
-export const samlMappingSchema = z
+const samlMappingSchema = z
 	.object({
 		id: z.string().optional(),
 		email: z.string().optional(),
@@ -23,7 +23,7 @@ export const samlMappingSchema = z
 	})
 	.optional();
 
-export const oidcConfigSchema = z.object({
+const oidcConfigSchema = z.object({
 	clientId: z.string().optional(),
 	clientSecret: z.string().optional(),
 	authorizationEndpoint: z.string().url().optional(),
@@ -40,7 +40,7 @@ export const oidcConfigSchema = z.object({
 	mapping: oidcMappingSchema,
 });
 
-export const samlConfigSchema = z.object({
+const samlConfigSchema = z.object({
 	entryPoint: z.string().url().optional(),
 	cert: z.string().optional(),
 	callbackUrl: z.string().url().optional(),
