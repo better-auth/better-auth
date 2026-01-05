@@ -43,14 +43,15 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 		>;
 
 	if (options?.adminRoles) {
+		const rolesSource = options?.roles || defaultRoles;
+		const validRoles = new Set(
+			Object.keys(rolesSource).map((r) => r.toLowerCase()),
+		);
 		const adminRoles = Array.isArray(options.adminRoles)
 			? options.adminRoles
 			: [...options.adminRoles.split(",")];
 		const invalidRoles = adminRoles.filter(
-			(role) =>
-				!Object.keys(options?.roles || defaultRoles)
-					.map((r) => r.toLowerCase())
-					.includes(role.toLowerCase()),
+			(role) => !validRoles.has(role.toLowerCase()),
 		);
 		if (invalidRoles.length > 0) {
 			throw new BetterAuthError(
@@ -68,10 +69,13 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 						user: {
 							create: {
 								async before(user) {
+									const role =
+										(user as unknown as { role?: string })?.role ??
+										(options?.defaultRole ?? "user");
 									return {
 										data: {
-											role: options?.defaultRole ?? "user",
 											...user,
+											role,
 										},
 									};
 								},
@@ -104,7 +108,7 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 										}
 
 										if (
-											ctx &&
+											ctx?.path &&
 											(ctx.path.startsWith("/callback") ||
 												ctx.path.startsWith("/oauth2/callback"))
 										) {
@@ -112,7 +116,9 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 												ctx.context.options.onAPIError?.errorURL ||
 												`${ctx.context.baseURL}/error`;
 											throw ctx.redirect(
-												`${redirectURI}?error=banned&error_description=${opts.bannedUserMessage}`,
+												`${redirectURI}?error=banned&error_description=${encodeURIComponent(
+													opts.bannedUserMessage,
+												)}`,
 											);
 										}
 
