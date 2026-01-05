@@ -1,9 +1,9 @@
+import type { AuthContext } from "better-auth";
 import {
 	APIError,
 	createAuthEndpoint,
 	sessionMiddleware,
 } from "better-auth/api";
-import type { AuthContext } from "better-auth";
 import z from "zod/v4";
 import { DEFAULT_MAX_SAML_METADATA_SIZE } from "../constants";
 import { validateConfigAlgorithms } from "../saml";
@@ -13,10 +13,7 @@ import { updateSSOProviderBodySchema } from "./schemas";
 
 const ADMIN_ROLES = ["owner", "admin"];
 
-function hasPlugin(
-	context: AuthContext,
-	pluginId: string,
-): boolean {
+function hasPlugin(context: AuthContext, pluginId: string): boolean {
 	return (context as any).hasPlugin?.(pluginId) ?? false;
 }
 
@@ -52,7 +49,11 @@ async function batchCheckOrgAdmin(
 			adapter: {
 				findMany: <T>(query: {
 					model: string;
-					where: { field: string; value: string | string[]; operator?: string }[];
+					where: {
+						field: string;
+						value: string | string[];
+						operator?: string;
+					}[];
 				}) => Promise<T[]>;
 			};
 		};
@@ -445,14 +446,17 @@ export const updateSSOProvider = <O extends SSOOptions>(options: O) => {
 
 				if (!currentSamlConfig) {
 					throw new APIError("BAD_REQUEST", {
-						message: "Cannot update SAML config for a provider that doesn't have SAML configured",
+						message:
+							"Cannot update SAML config for a provider that doesn't have SAML configured",
 					});
 				}
 
 				const updatedSamlConfig = mergeSAMLConfig(
 					currentSamlConfig,
 					body.samlConfig,
-					updateData.issuer || currentSamlConfig.issuer || existingProvider.issuer,
+					updateData.issuer ||
+						currentSamlConfig.issuer ||
+						existingProvider.issuer,
 				);
 
 				updateData.samlConfig = JSON.stringify(updatedSamlConfig);
@@ -470,14 +474,17 @@ export const updateSSOProvider = <O extends SSOOptions>(options: O) => {
 
 				if (!currentOidcConfig) {
 					throw new APIError("BAD_REQUEST", {
-						message: "Cannot update OIDC config for a provider that doesn't have OIDC configured",
+						message:
+							"Cannot update OIDC config for a provider that doesn't have OIDC configured",
 					});
 				}
 
 				const updatedOidcConfig = mergeOIDCConfig(
 					currentOidcConfig,
 					body.oidcConfig,
-					updateData.issuer || currentOidcConfig.issuer || existingProvider.issuer,
+					updateData.issuer ||
+						currentOidcConfig.issuer ||
+						existingProvider.issuer,
 				);
 
 				updateData.oidcConfig = JSON.stringify(updatedOidcConfig);

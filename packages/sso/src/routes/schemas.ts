@@ -93,4 +93,3 @@ export const updateSSOProviderBodySchema = z.object({
 	oidcConfig: oidcConfigSchema.optional(),
 	samlConfig: samlConfigSchema.optional(),
 });
-

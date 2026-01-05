@@ -676,7 +676,9 @@ describe("SSO provider read endpoints", () => {
 
 			expect(updated.samlConfig?.audience).toBe("new-audience");
 			expect(updated.samlConfig?.wantAssertionsSigned).toBe(false);
-			expect(updated.samlConfig?.entryPoint).toBe("https://idp.example.com/sso");
+			expect(updated.samlConfig?.entryPoint).toBe(
+				"https://idp.example.com/sso",
+			);
 		});
 
 		it("should perform partial update on OIDC provider", async () => {
