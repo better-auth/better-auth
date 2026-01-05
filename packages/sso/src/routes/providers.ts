@@ -4,8 +4,11 @@ import {
 	sessionMiddleware,
 } from "better-auth/api";
 import z from "zod/v4";
-import type { Member, OIDCConfig, SAMLConfig } from "../types";
+import { DEFAULT_MAX_SAML_METADATA_SIZE } from "../constants";
+import { validateConfigAlgorithms } from "../saml";
+import type { Member, OIDCConfig, SAMLConfig, SSOOptions } from "../types";
 import { maskClientId, parseCertificate, safeJsonParse } from "../utils";
+import { updateSSOProviderBodySchema } from "./schemas";
 
 const ADMIN_ROLES = ["owner", "admin"];
 
@@ -225,6 +228,253 @@ export const getSSOProvider = () => {
 			}
 
 			return ctx.json(sanitizeProvider(provider, ctx.context.baseURL));
+		},
+	);
+};
+
+async function checkProviderAccess(
+	ctx: {
+		context: {
+			session: { user: { id: string } };
+			adapter: {
+				findOne: <T>(query: {
+					model: string;
+					where: { field: string; value: string }[];
+				}) => Promise<T | null>;
+			};
+			hasPlugin: (pluginId: string) => boolean;
+		};
+	},
+	providerId: string,
+) {
+	const userId = ctx.context.session.user.id;
+
+	const provider = await ctx.context.adapter.findOne<{
+		id: string;
+		providerId: string;
+		issuer: string;
+		domain: string;
+		organizationId?: string | null;
+		domainVerified?: boolean;
+		userId: string;
+		oidcConfig?: string | null;
+		samlConfig?: string | null;
+	}>({
+		model: "ssoProvider",
+		where: [{ field: "providerId", value: providerId }],
+	});
+
+	if (!provider) {
+		throw new APIError("NOT_FOUND", {
+			message: "Provider not found",
+		});
+	}
+
+	let hasAccess = false;
+	if (provider.organizationId) {
+		if (ctx.context.hasPlugin("organization")) {
+			hasAccess = await isOrgAdmin(ctx, userId, provider.organizationId);
+		} else {
+			hasAccess = provider.userId === userId;
+		}
+	} else {
+		hasAccess = provider.userId === userId;
+	}
+
+	if (!hasAccess) {
+		throw new APIError("FORBIDDEN", {
+			message: "You don't have access to this provider",
+		});
+	}
+
+	return provider;
+}
+
+function mergeSAMLConfig(
+	current: SAMLConfig,
+	updates: Partial<SAMLConfig>,
+	issuer: string,
+): SAMLConfig {
+	return {
+		...current,
+		...updates,
+		issuer,
+		entryPoint: updates.entryPoint ?? current.entryPoint,
+		cert: updates.cert ?? current.cert,
+		callbackUrl: updates.callbackUrl ?? current.callbackUrl,
+		spMetadata: updates.spMetadata ?? current.spMetadata,
+	};
+}
+
+function mergeOIDCConfig(
+	current: OIDCConfig,
+	updates: Partial<OIDCConfig>,
+	issuer: string,
+): OIDCConfig {
+	return {
+		...current,
+		...updates,
+		issuer,
+		pkce: updates.pkce ?? current.pkce ?? true,
+		clientId: updates.clientId ?? current.clientId,
+		clientSecret: updates.clientSecret ?? current.clientSecret,
+		discoveryEndpoint: updates.discoveryEndpoint ?? current.discoveryEndpoint,
+	};
+}
+
+export const updateSSOProvider = <O extends SSOOptions>(options: O) => {
+	return createAuthEndpoint(
+		"/sso/providers/:providerId",
+		{
+			method: "PATCH",
+			use: [sessionMiddleware],
+			params: getSSOProviderParamsSchema,
+			body: updateSSOProviderBodySchema,
+			metadata: {
+				openapi: {
+					operationId: "updateSSOProvider",
+					summary: "Update SSO provider",
+					description:
+						"Partially update an SSO provider. Only provided fields are updated. If domain changes, domainVerified is reset to false.",
+					responses: {
+						"200": {
+							description: "SSO provider updated successfully",
+						},
+						"404": {
+							description: "Provider not found",
+						},
+						"403": {
+							description: "Access denied",
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const { providerId } = ctx.params;
+			const body = ctx.body;
+
+			const existingProvider = await checkProviderAccess(ctx, providerId);
+
+			const updateData: Record<string, any> = {};
+
+			if (body.issuer !== undefined) {
+				const issuerValidator = z.string().url();
+				if (issuerValidator.safeParse(body.issuer).error) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Invalid issuer. Must be a valid URL",
+					});
+				}
+				updateData.issuer = body.issuer;
+			}
+
+			if (body.domain !== undefined) {
+				updateData.domain = body.domain;
+				if (body.domain !== existingProvider.domain) {
+					updateData.domainVerified = false;
+				}
+			}
+
+			if (body.samlConfig) {
+				if (body.samlConfig.idpMetadata?.metadata) {
+					const maxMetadataSize =
+						options?.saml?.maxMetadataSize ?? DEFAULT_MAX_SAML_METADATA_SIZE;
+					if (
+						new TextEncoder().encode(body.samlConfig.idpMetadata.metadata)
+							.length > maxMetadataSize
+					) {
+						throw new APIError("BAD_REQUEST", {
+							message: `IdP metadata exceeds maximum allowed size (${maxMetadataSize} bytes)`,
+						});
+					}
+				}
+
+				if (
+					body.samlConfig.signatureAlgorithm !== undefined ||
+					body.samlConfig.digestAlgorithm !== undefined
+				) {
+					validateConfigAlgorithms(
+						{
+							signatureAlgorithm: body.samlConfig.signatureAlgorithm,
+							digestAlgorithm: body.samlConfig.digestAlgorithm,
+						},
+						options?.saml?.algorithms,
+					);
+				}
+
+				const currentSamlConfig = safeJsonParse<SAMLConfig>(
+					existingProvider.samlConfig as string,
+				);
+
+				if (!currentSamlConfig) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Cannot update SAML config for a provider that doesn't have SAML configured",
+					});
+				}
+
+				const updatedSamlConfig = mergeSAMLConfig(
+					currentSamlConfig,
+					body.samlConfig,
+					updateData.issuer || currentSamlConfig.issuer || existingProvider.issuer,
+				);
+
+				updateData.samlConfig = JSON.stringify(updatedSamlConfig);
+			}
+
+			if (body.oidcConfig) {
+				const currentOidcConfig = safeJsonParse<OIDCConfig>(
+					existingProvider.oidcConfig as string,
+				);
+
+				if (!currentOidcConfig) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Cannot update OIDC config for a provider that doesn't have OIDC configured",
+					});
+				}
+
+				const updatedOidcConfig = mergeOIDCConfig(
+					currentOidcConfig,
+					body.oidcConfig,
+					updateData.issuer || currentOidcConfig.issuer || existingProvider.issuer,
+				);
+
+				updateData.oidcConfig = JSON.stringify(updatedOidcConfig);
+			}
+
+			if (Object.keys(updateData).length === 0) {
+				throw new APIError("BAD_REQUEST", {
+					message: "No fields provided for update",
+				});
+			}
+
+			await ctx.context.adapter.update({
+				model: "ssoProvider",
+				where: [{ field: "providerId", value: providerId }],
+				update: updateData,
+			});
+
+			const fullProvider = await ctx.context.adapter.findOne<{
+				id: string;
+				providerId: string;
+				issuer: string;
+				domain: string;
+				organizationId?: string | null;
+				domainVerified?: boolean;
+				userId: string;
+				oidcConfig?: string | null;
+				samlConfig?: string | null;
+			}>({
+				model: "ssoProvider",
+				where: [{ field: "providerId", value: providerId }],
+			});
+
+			if (!fullProvider) {
+				throw new APIError("NOT_FOUND", {
+					message: "Provider not found after update",
+				});
+			}
+
+			return ctx.json(sanitizeProvider(fullProvider, ctx.context.baseURL));
 		},
 	);
 };
