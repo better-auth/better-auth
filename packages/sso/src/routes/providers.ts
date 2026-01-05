@@ -119,7 +119,7 @@ function sanitizeProvider(
 		issuer: provider.issuer,
 		domain: provider.domain,
 		organizationId: provider.organizationId || null,
-		domainVerified: provider.domainVerified,
+		domainVerified: provider.domainVerified ?? false,
 		oidcConfig: oidcConfig
 			? {
 					discoveryEndpoint: oidcConfig.discoveryEndpoint,
@@ -212,13 +212,20 @@ export const listSSOProviders = () => {
 
 				const orgAccessibleProviders = orgProviders.filter(
 					(provider) =>
-						provider.organizationId &&
-						adminOrgIds.has(provider.organizationId),
+						provider.organizationId && adminOrgIds.has(provider.organizationId),
 				);
 
 				accessibleProviders = [
 					...accessibleProviders,
 					...orgAccessibleProviders,
+				];
+			} else if (!orgPluginEnabled) {
+				const userOwnedOrgProviders = orgProviders.filter(
+					(p) => p.userId === userId,
+				);
+				accessibleProviders = [
+					...accessibleProviders,
+					...userOwnedOrgProviders,
 				];
 			}
 
