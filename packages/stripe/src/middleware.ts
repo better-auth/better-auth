@@ -1,5 +1,6 @@
 import { createAuthMiddleware } from "@better-auth/core/api";
-import { APIError } from "better-auth/api";
+import { APIError } from "@better-auth/core/error";
+import { STRIPE_ERROR_CODES } from "./error-codes";
 import type { SubscriptionOptions } from "./types";
 
 export const referenceMiddleware = (
@@ -14,7 +15,7 @@ export const referenceMiddleware = (
 	createAuthMiddleware(async (ctx) => {
 		const session = ctx.context.session;
 		if (!session) {
-			throw new APIError("UNAUTHORIZED");
+			throw APIError.from("UNAUTHORIZED", STRIPE_ERROR_CODES.UNAUTHORIZED);
 		}
 		const referenceId =
 			ctx.body?.referenceId || ctx.query?.referenceId || session.user.id;
@@ -26,10 +27,10 @@ export const referenceMiddleware = (
 			ctx.context.logger.error(
 				`Passing referenceId into a subscription action isn't allowed if subscription.authorizeReference isn't defined in your stripe plugin config.`,
 			);
-			throw new APIError("BAD_REQUEST", {
-				message:
-					"Reference id is not allowed. Read server logs for more details.",
-			});
+			throw APIError.from(
+				"BAD_REQUEST",
+				STRIPE_ERROR_CODES.REFERENCE_ID_NOT_ALLOWED,
+			);
 		}
 		/**
 		 * if referenceId is the same as the active session user's id
@@ -50,8 +51,6 @@ export const referenceMiddleware = (
 					)) || sameReference
 				: true;
 		if (!isAuthorized) {
-			throw new APIError("UNAUTHORIZED", {
-				message: "Unauthorized",
-			});
+			throw APIError.from("UNAUTHORIZED", STRIPE_ERROR_CODES.UNAUTHORIZED);
 		}
 	});
