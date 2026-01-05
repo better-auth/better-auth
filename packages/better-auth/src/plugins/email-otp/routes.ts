@@ -544,6 +544,11 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				ctx.request,
 			);
 
+			await ctx.context.options.emailVerification?.afterEmailVerification?.(
+				updatedUser,
+				ctx.request,
+			);
+
 			if (ctx.context.options.emailVerification?.autoSignInAfterVerification) {
 				const session = await ctx.context.internalAdapter.createSession(
 					updatedUser.id,
