@@ -669,7 +669,7 @@ const setActiveTeamBodySchema = z.object({
 		.optional(),
 });
 
-export const setActiveTeam = <O extends OrganizationOptions>(_options: O) =>
+export const setActiveTeam = <O extends OrganizationOptions>(options: O) =>
 	createAuthEndpoint(
 		"/organization/set-active-team",
 		{
@@ -770,7 +770,7 @@ export const setActiveTeam = <O extends OrganizationOptions>(_options: O) =>
 		},
 	);
 
-export const listUserTeams = <O extends OrganizationOptions>(_options: O) =>
+export const listUserTeams = <O extends OrganizationOptions>(options: O) =>
 	createAuthEndpoint(
 		"/organization/list-user-teams",
 		{
@@ -822,7 +822,7 @@ const listTeamMembersQuerySchema = z.optional(
 	}),
 );
 
-export const listTeamMembers = <O extends OrganizationOptions>(_options: O) =>
+export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 	createAuthEndpoint(
 		"/organization/list-team-members",
 		{
