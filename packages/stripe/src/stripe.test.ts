@@ -3,7 +3,15 @@ import type { Auth, User } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { getTestInstance } from "better-auth/test";
 import type Stripe from "stripe";
-import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
+import {
+	assert,
+	beforeEach,
+	describe,
+	expect,
+	expectTypeOf,
+	it,
+	vi,
+} from "vitest";
 import type { StripePlugin } from ".";
 import { stripe } from ".";
 import { stripeClient } from "./client";
@@ -1216,6 +1224,137 @@ describe("stripe", () => {
 
 		// Verify callback was NOT called (early return due to plan not found)
 		expect(onSubscriptionCreatedCallback).not.toHaveBeenCalled();
+	});
+
+	it("should skip creating subscription when metadata.subscriptionId exists", async () => {
+		const stripeForTest = {
+			...stripeOptions.stripeClient,
+			webhooks: {
+				constructEventAsync: vi.fn(),
+			},
+		};
+
+		const testOptions = {
+			...stripeOptions,
+			stripeClient: stripeForTest as unknown as Stripe,
+			stripeWebhookSecret: "test_secret",
+		};
+
+		const {
+			auth: testAuth,
+			client,
+			sessionSetter,
+		} = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(testOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const testCtx = await testAuth.$context;
+
+		// Create user and sign in
+		const userRes = await client.signUp.email(
+			{
+				...testUser,
+			},
+			{ throw: true },
+		);
+		const userId = userRes.user.id;
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				...testUser,
+			},
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		// User upgrades to paid plan - this creates an "incomplete" subscription
+		await client.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: { headers },
+		});
+
+		// Verify the incomplete subscription was created
+		const incompleteSubscription = await testCtx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "referenceId", value: userId }],
+		});
+		assert(
+			incompleteSubscription,
+			"Expected incomplete subscription to be created",
+		);
+		expect(incompleteSubscription.status).toBe("incomplete");
+		expect(incompleteSubscription.stripeSubscriptionId).toBeUndefined();
+
+		// Get user with stripeCustomerId
+		const user = await testCtx.adapter.findOne<any>({
+			model: "user",
+			where: [{ field: "id", value: userId }],
+		});
+		const stripeCustomerId = user?.stripeCustomerId;
+		expect(stripeCustomerId).toBeDefined();
+
+		// Simulate `customer.subscription.created` webhook arriving
+		const mockEvent = {
+			type: "customer.subscription.created",
+			data: {
+				object: {
+					id: "sub_new_from_checkout",
+					customer: stripeCustomerId,
+					status: "active",
+					metadata: {
+						subscriptionId: incompleteSubscription.id,
+					},
+					items: {
+						data: [
+							{
+								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								quantity: 1,
+								current_period_start: Math.floor(Date.now() / 1000),
+								current_period_end:
+									Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+							},
+						],
+					},
+					cancel_at_period_end: false,
+				},
+			},
+		};
+
+		(stripeForTest.webhooks.constructEventAsync as any).mockResolvedValue(
+			mockEvent,
+		);
+
+		const mockRequest = new Request(
+			"http://localhost:3000/api/auth/stripe/webhook",
+			{
+				method: "POST",
+				headers: {
+					"stripe-signature": "test_signature",
+				},
+				body: JSON.stringify(mockEvent),
+			},
+		);
+
+		const response = await testAuth.handler(mockRequest);
+		expect(response.status).toBe(200);
+
+		// Verify that no duplicate subscription was created
+		const allSubscriptions = await testCtx.adapter.findMany<Subscription>({
+			model: "subscription",
+			where: [{ field: "referenceId", value: userId }],
+		});
+		expect(allSubscriptions.length).toBe(1);
 	});
 
 	it("should execute subscription event handlers", async () => {
