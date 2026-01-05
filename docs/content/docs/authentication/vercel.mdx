@@ -19,10 +19,10 @@ description: Vercel provider setup and usage.
         ### Configure the provider
         To configure the provider, you need to import the provider and pass it to the `socialProviders` option of the auth instance.
 
-        ```ts title="auth.ts"
+        ```ts title="auth.ts" 
         import { betterAuth } from "better-auth"
 
-        export const auth = betterAuth({
+        export const auth = betterAuth({ 
             socialProviders: {
                 vercel: { // [!code highlight]
                     clientId: process.env.VERCEL_CLIENT_ID as string, // [!code highlight]
@@ -32,26 +32,25 @@ description: Vercel provider setup and usage.
         })
         ```
     </Step>
-
 </Steps>
 
 ## Usage
 
-### Sign in with Vercel
+### Sign in with Vercel 
 
 To sign in with Vercel, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
 
 - `provider`: The provider to use. It should be set to `vercel`.
 
 ```ts title="auth-client.ts"
-import { createAuthClient } from 'better-auth/client';
-const authClient = createAuthClient();
+import { createAuthClient } from "better-auth/client"
+const authClient = createAuthClient()
 
 const signIn = async () => {
-	const data = await authClient.signIn.social({
-		provider: 'vercel',
-	});
-};
+    const data = await authClient.signIn.social({
+        provider: "vercel"
+    })
+}
 ```
 
 ## Options
@@ -72,20 +71,19 @@ Scopes are configured on the Vercel App, and so it is not necessary to pass a `s
 If you do pass a `scope` parameter, it has the effect of requesting a subset of the configured scopes:
 
 ```ts title="auth.ts"
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth"
 
 export const auth = betterAuth({
-	socialProviders: {
-		vercel: {
-			clientId: process.env.VERCEL_CLIENT_ID as string,
-			clientSecret: process.env.VERCEL_CLIENT_SECRET as string,
-			scope: ['openid', 'email', 'profile'], // [!code highlight]
-		},
-	},
-});
+    socialProviders: {
+        vercel: {
+            clientId: process.env.VERCEL_CLIENT_ID as string,
+            clientSecret: process.env.VERCEL_CLIENT_SECRET as string,
+            scope: ["openid", "email", "profile"], // [!code highlight]
+        },
+    },
+})
 ```
 
 <Callout type="info">
-	For more information about Vercel's scopes and API capabilities, refer to the
-	[official Vercel documentation](https://vercel.com/docs/sign-in-with-vercel).
+    For more information about Vercel's scopes and API capabilities, refer to the [official Vercel documentation](https://vercel.com/docs/sign-in-with-vercel).
 </Callout>

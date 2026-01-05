@@ -1,5 +1,5 @@
 ---
-title: Anonymous
+title: Anonymous  
 description: Anonymous plugin for Better Auth.
 ---
 
@@ -16,7 +16,7 @@ The Anonymous plugin allows users to have an authenticated experience without re
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth"
     import { anonymous } from "better-auth/plugins" // [!code highlight]
-
+    
     export const auth = betterAuth({
         // ... other config options
         plugins: [
@@ -24,7 +24,6 @@ The Anonymous plugin allows users to have an authenticated experience without re
         ]
     })
     ```
-
   </Step>
 
     <Step>
@@ -55,14 +54,13 @@ The Anonymous plugin allows users to have an authenticated experience without re
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client"
     import { anonymousClient } from "better-auth/client/plugins"
-
+    
     export const authClient = createAuthClient({
         plugins: [
             anonymousClient()
         ]
     })
     ```
-
   </Step>
 </Steps>
 
@@ -73,7 +71,7 @@ The Anonymous plugin allows users to have an authenticated experience without re
 To sign in a user anonymously, use the `signIn.anonymous()` method.
 
 ```ts title="example.ts"
-const user = await authClient.signIn.anonymous();
+const user = await authClient.signIn.anonymous()
 ```
 
 ### Link Account
@@ -100,8 +98,8 @@ Then when you call `signIn` or `signUp` with another method, the `onLinkAccount`
 
 ```ts title="example.ts"
 const user = await authClient.signIn.email({
-	email,
-});
+    email,
+})
 ```
 
 ### Delete Anonymous User
@@ -132,15 +130,15 @@ type deleteAnonymousUser = {
 The domain name to use when generating an email address for anonymous users. If not provided, the default format `temp@{id}.com` is used.
 
 ```ts title="auth.ts"
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth"
 
 export const auth = betterAuth({
-	plugins: [
-		anonymous({
-			emailDomainName: 'example.com', // [!code highlight] -> temp-{id}@example.com
-		}),
-	],
-});
+    plugins: [
+        anonymous({
+            emailDomainName: "example.com" // [!code highlight] -> temp-{id}@example.com
+        })
+    ]
+})
 ```
 
 ### `generateRandomEmail`
@@ -148,26 +146,26 @@ export const auth = betterAuth({
 A custom function to generate email addresses for anonymous users. This allows you to define your own email format. The function can be synchronous or asynchronous.
 
 ```ts title="auth.ts"
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth"
 
 export const auth = betterAuth({
-	plugins: [
-		anonymous({
-			generateRandomEmail: () => {
-				// [!code highlight]
-				const id = crypto.randomUUID(); // [!code highlight]
-				return `guest-${id}@example.com`; // [!code highlight]
-			}, // [!code highlight]
-		}),
-	],
-});
+    plugins: [
+        anonymous({
+            generateRandomEmail: () => { // [!code highlight]
+                const id = crypto.randomUUID() // [!code highlight]
+                return `guest-${id}@example.com` // [!code highlight]
+            } // [!code highlight]
+        })
+    ]
+})
 ```
 
 <Callout type="info">
-	**Notes:** - If `generateRandomEmail` is provided, `emailDomainName` is
-	ignored. - You are responsible for ensuring the email is unique to avoid
-	conflicts. The returned email must be in a valid format.
+**Notes:**
+- If `generateRandomEmail` is provided, `emailDomainName` is ignored.
+- You are responsible for ensuring the email is unique to avoid conflicts. The returned email must be in a valid format.
 </Callout>
+
 
 ### `onLinkAccount`
 
@@ -189,12 +187,7 @@ A callback function that is called to generate a name for the anonymous user. Us
 The anonymous plugin requires an additional field in the user table:
 
 <DatabaseTable
-	fields={[
-		{
-			name: 'isAnonymous',
-			type: 'boolean',
-			description: 'Indicates whether the user is anonymous.',
-			isOptional: true,
-		},
-	]}
+    fields={[
+        { name: "isAnonymous", type: "boolean", description: "Indicates whether the user is anonymous.", isOptional: true },
+    ]}
 />

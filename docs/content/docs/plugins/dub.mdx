@@ -56,19 +56,19 @@ This plugins allows you to track leads when a user signs up using a Dub link. It
 By default, the plugin will track sign up events as leads. You can disable this by setting `disableLeadTracking` to `true`.
 
 ```ts
-import { dubAnalytics } from '@dub/better-auth';
-import { betterAuth } from 'better-auth';
-import { Dub } from 'dub';
+import { dubAnalytics } from "@dub/better-auth";
+import { betterAuth } from "better-auth";
+import { Dub } from "dub";
 
 const dub = new Dub();
 
 const betterAuth = betterAuth({
-	plugins: [
-		dubAnalytics({
-			dubClient: dub,
-			disableLeadTracking: true, // Disable lead tracking
-		}),
-	],
+  plugins: [
+    dubAnalytics({
+      dubClient: dub,
+      disableLeadTracking: true, // Disable lead tracking
+    }),
+  ],
 });
 ```
 
@@ -82,22 +82,22 @@ Once you get the client ID and client secret, you can configure the plugin.
 
 ```ts
 dubAnalytics({
-	dubClient: dub,
-	oauth: {
-		clientId: 'your-client-id',
-		clientSecret: 'your-client-secret',
-	},
+  dubClient: dub,
+  oauth: {
+    clientId: "your-client-id",
+    clientSecret: "your-client-secret",
+  },
 });
 ```
 
 And in the client, you need to use the `dubAnalyticsClient` plugin.
 
 ```ts
-import { createAuthClient } from 'better-auth/client';
-import { dubAnalyticsClient } from '@dub/better-auth/client';
+import { createAuthClient } from "better-auth/client";
+import { dubAnalyticsClient } from "@dub/better-auth/client";
 
 const authClient = createAuthClient({
-	plugins: [dubAnalyticsClient()],
+  plugins: [dubAnalyticsClient()],
 });
 ```
 

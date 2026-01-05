@@ -3,7 +3,7 @@ title: OAuth Proxy
 description: OAuth Proxy plugin for Better Auth
 ---
 
-A proxy plugin, that allows you to proxy OAuth requests. Useful for development and preview deployments where the redirect URL can't be known in advance to add to the OAuth provider.
+A proxy plugin, that allows you to proxy OAuth requests. Useful for development and preview deployments where the redirect URL can't be known in advance to add to the OAuth provider. 
 
 ## Installation
 
@@ -18,7 +18,7 @@ A proxy plugin, that allows you to proxy OAuth requests. Useful for development 
         plugins: [ // [!code highlight]
             oAuthProxy({ // [!code highlight]
                 productionURL: "https://my-main-app.com", // Optional - if the URL isn't inferred correctly // [!code highlight]
-                currentURL: "http://localhost:3000", // Optional - if the URL isn't inferred correctly // [!code highlight]
+                currentURL: "http://localhost:3000", // Optional - if the URL isn't inferred correctly // [!code highlight] 
             }), // [!code highlight]
         ] // [!code highlight]
     })
@@ -27,13 +27,13 @@ A proxy plugin, that allows you to proxy OAuth requests. Useful for development 
     <Step>
     ### Add redirect URL to your OAuth provider
 
-For the proxy server to work properly, you’ll need to pass the redirect URL of your main production app registered with the OAuth provider in your social provider config. This needs to be done for each social provider you want to proxy requests for.
+   For the proxy server to work properly, you’ll need to pass the redirect URL of your main production app registered with the OAuth provider in your social provider config. This needs to be done for each social provider you want to proxy requests for.
 
     ```ts
     export const auth = betterAuth({
        plugins: [
            oAuthProxy(),
-       ],
+       ], 
        socialProviders: {
             github: {
                 clientId: "your-client-id",
@@ -44,8 +44,8 @@ For the proxy server to work properly, you’ll need to pass the redirect URL of
     })
     ```
     </Step>
+</Steps>    
 
-</Steps>
 
 ## How it works
 
@@ -53,9 +53,9 @@ The plugin adds an endpoint to your server that proxies OAuth requests. When you
 
 ```ts
 await authClient.signIn.social({
-	provider: 'github',
-	callbackURL: '/dashboard', // the plugin will override this to something like "http://localhost:3000/api/auth/oauth-proxy?callbackURL=/dashboard"
-});
+    provider: "github",
+    callbackURL: "/dashboard" // the plugin will override this to something like "http://localhost:3000/api/auth/oauth-proxy?callbackURL=/dashboard"
+})
 ```
 
 When the OAuth provider returns the user to your server, the plugin automatically redirects them to the intended callback URL.
@@ -63,10 +63,7 @@ When the OAuth provider returns the user to your server, the plugin automaticall
 To share cookies between the proxy server and your main server it uses URL query parameters to pass the cookies encrypted in the URL. This is secure as the cookies are encrypted and can only be decrypted by the server.
 
 <Callout type="warn">
-	This plugin requires skipping the state cookie check. This has security
-	implications and should only be used in dev or staging environments. If
-	`baseURL` and `productionURL` are the same, the plugin will not proxy the
-	request.
+This plugin requires skipping the state cookie check. This has security implications and should only be used in dev or staging environments. If `baseURL` and `productionURL` are the same, the plugin will not proxy the request.
 </Callout>
 
 ## Options

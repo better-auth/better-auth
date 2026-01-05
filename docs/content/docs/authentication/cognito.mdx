@@ -18,10 +18,9 @@ description: Amazon Cognito provider setup and usage.
     5. Add your callback URL (e.g., `http://localhost:3000/api/auth/callback/cognito`).
 
     <Callout type="info">
-      - **User Pool is required** for Cognito authentication.
-      - Make sure the callback URL matches exactly what you configure in Cognito.
+      - **User Pool is required** for Cognito authentication.  
+      - Make sure the callback URL matches exactly what you configure in Cognito.   
     </Callout>
-
   </Step>
 
   <Step>
@@ -43,12 +42,11 @@ description: Amazon Cognito provider setup and usage.
       },
     })
     ```
-
   </Step>
 
   <Step>
     ### Sign In with Cognito
-    To sign in with Cognito, use the `signIn.social` function from the client.
+    To sign in with Cognito, use the `signIn.social` function from the client.  
 
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client"
@@ -61,7 +59,7 @@ description: Amazon Cognito provider setup and usage.
       })
     }
     ```
-
+    
       ### Additional Options:
         - `scope`: Additional OAuth2 scopes to request (combined with default permissions).
             - Default: `"openid" "profile" "email"`
@@ -72,10 +70,9 @@ description: Amazon Cognito provider setup and usage.
               - `phone`: Access to user’s phone number
               - `aws.cognito.signin.user.admin`: Grants access to Cognito-specific APIs
         - Note: You must configure the scopes in your Cognito App Client settings. [available scopes](https://docs.aws.amazon.com/cognito/latest/developerguide/token-endpoint.html#token-endpoint-userinfo)
-        - `getUserInfo`: Custom function to retrieve user information from the Cognito UserInfo endpoint.
+        - `getUserInfo`: Custom function to retrieve user information from the Cognito UserInfo endpoint.  
        <Callout type="info">
         For more information about Amazon Cognito's scopes and API capabilities, refer to the [official documentation](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-define-resource-servers.html?utm_source).
         </Callout>
-
   </Step>
 </Steps>

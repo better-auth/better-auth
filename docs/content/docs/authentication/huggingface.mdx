@@ -17,7 +17,7 @@ description: Hugging Face provider setup and usage.
 
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
-
+        
         export const auth = betterAuth({
             socialProviders: {
                 huggingface: { // [!code highlight]
@@ -33,10 +33,10 @@ description: Hugging Face provider setup and usage.
         To sign in with Hugging Face, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
         - `provider`: The provider to use. It should be set to `huggingface`.
 
-        ```ts title="auth-client.ts"
+        ```ts title="auth-client.ts"  
         import { createAuthClient } from "better-auth/client"
         const authClient =  createAuthClient()
-
+        
         const signIn = async () => {
             const data = await authClient.signIn.social({
                 provider: "huggingface"
@@ -44,5 +44,4 @@ description: Hugging Face provider setup and usage.
         }
         ```
     </Step>
-
 </Steps>

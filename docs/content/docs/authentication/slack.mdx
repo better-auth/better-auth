@@ -50,11 +50,11 @@ To sign in with Slack, you can use the `signIn.social` function provided by the 
 - `provider`: The provider to use. It should be set to `slack`.
 
 ```ts title="auth-client.ts"
-import { createAuthClient } from 'better-auth/client';
+import { createAuthClient } from "better-auth/client";
 const authClient = createAuthClient();
 
 const signIn = async () => {
-	const data = await authClient.signIn.social({ provider: 'slack' });
+  const data = await authClient.signIn.social({ provider: "slack" });
 };
 ```
 
@@ -64,10 +64,10 @@ By default, Slack uses OpenID Connect scopes: `openid`, `profile`, and `email`. 
 
 ```ts title="auth-client.ts"
 const signInWithSlack = async () => {
-	await authClient.signIn.social({
-		provider: 'slack',
-		scopes: ['channels:read', 'chat:write'], // Additional Slack API scopes
-	});
+  await authClient.signIn.social({
+    provider: "slack",
+    scopes: ["channels:read", "chat:write"], // Additional Slack API scopes
+  });
 };
 ```
 
@@ -92,14 +92,14 @@ After successful authentication, you can access the user's Slack information thr
 ```ts
 const session = await authClient.getSession();
 if (session?.user) {
-	// Access Slack-specific data
-	const slackUserId = session.user.id; // This is the Slack user ID
-	// The access token is stored securely on the server
+  // Access Slack-specific data
+  const slackUserId = session.user.id; // This is the Slack user ID
+  // The access token is stored securely on the server
 }
 ```
 
 <Callout>
-	The Slack provider uses OpenID Connect by default, which provides basic user
-	information. If you need to access other Slack APIs, make sure to request the
-	appropriate scopes during sign-in.
+  The Slack provider uses OpenID Connect by default, which provides basic user
+  information. If you need to access other Slack APIs, make sure to request the
+  appropriate scopes during sign-in.
 </Callout>

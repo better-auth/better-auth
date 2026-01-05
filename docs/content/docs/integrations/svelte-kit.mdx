@@ -10,12 +10,12 @@ Before you start, make sure you have a Better Auth instance configured. If you h
 We need to mount the handler to SvelteKit server hook.
 
 ```ts title="hooks.server.ts"
-import { auth } from '$lib/auth';
-import { svelteKitHandler } from 'better-auth/svelte-kit';
-import { building } from '$app/environment';
+import { auth } from "$lib/auth";
+import { svelteKitHandler } from "better-auth/svelte-kit";
+import { building } from "$app/environment";
 
 export async function handle({ event, resolve }) {
-	return svelteKitHandler({ event, resolve, auth, building });
+  return svelteKitHandler({ event, resolve, auth, building });
 }
 ```
 
@@ -24,23 +24,23 @@ export async function handle({ event, resolve }) {
 The `svelteKitHandler` does not automatically populate `event.locals.user` or `event.locals.session`. If you want to access the current session in your server code (e.g., in `+layout.server.ts`, actions, or endpoints), populate `event.locals` in your `handle` hook:
 
 ```ts title="hooks.server.ts"
-import { auth } from '$lib/auth';
-import { svelteKitHandler } from 'better-auth/svelte-kit';
-import { building } from '$app/environment';
+import { auth } from "$lib/auth";
+import { svelteKitHandler } from "better-auth/svelte-kit";
+import { building } from "$app/environment";
 
 export async function handle({ event, resolve }) {
-	// Fetch current session from Better Auth
-	const session = await auth.api.getSession({
-		headers: event.request.headers,
-	});
+  // Fetch current session from Better Auth
+  const session = await auth.api.getSession({
+    headers: event.request.headers,
+  });
 
-	// Make session and user available on server
-	if (session) {
-		event.locals.session = session.session;
-		event.locals.user = session.user;
-	}
+  // Make session and user available on server
+  if (session) {
+    event.locals.session = session.session;
+    event.locals.user = session.user;
+  }
 
-	return svelteKitHandler({ event, resolve, auth, building });
+  return svelteKitHandler({ event, resolve, auth, building });
 }
 ```
 
@@ -51,18 +51,18 @@ To ensure cookies are properly set when you call functions like `signInEmail` or
 You need to add it as a plugin to your Better Auth instance.
 
 <Callout>
-	The `getRequestEvent` function is available in SvelteKit `2.20.0` and later.
-	Make sure you are using a compatible version.
+  The `getRequestEvent` function is available in SvelteKit `2.20.0` and later.
+  Make sure you are using a compatible version.
 </Callout>
 
 ```ts title="lib/auth.ts"
-import { betterAuth } from 'better-auth';
-import { sveltekitCookies } from 'better-auth/svelte-kit';
-import { getRequestEvent } from '$app/server';
+import { betterAuth } from "better-auth";
+import { sveltekitCookies } from "better-auth/svelte-kit";
+import { getRequestEvent } from "$app/server";
 
 export const auth = betterAuth({
-	// ... your config
-	plugins: [sveltekitCookies(getRequestEvent)], // make sure this is the last plugin in the array
+  // ... your config
+  plugins: [sveltekitCookies(getRequestEvent)], // make sure this is the last plugin in the array
 });
 ```
 
@@ -71,10 +71,10 @@ export const auth = betterAuth({
 Create a client instance. You can name the file anything you want. Here we are creating `client.ts` file inside the `lib/` directory.
 
 ```ts title="auth-client.ts"
-import { createAuthClient } from 'better-auth/svelte'; // make sure to import from better-auth/svelte
+import { createAuthClient } from "better-auth/svelte"; // make sure to import from better-auth/svelte
 
 export const authClient = createAuthClient({
-	// you can pass client configuration here
+  // you can pass client configuration here
 });
 ```
 
