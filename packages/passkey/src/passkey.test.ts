@@ -1,14 +1,53 @@
 import { APIError } from "@better-auth/core/error";
 import { createAuthClient } from "better-auth/client";
 import { getTestInstance } from "better-auth/test";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Passkey } from ".";
 import { passkey } from ".";
 import { passkeyClient } from "./client";
 
+const serverMocks = vi.hoisted(() => ({
+	verifyRegistrationResponse: vi.fn(),
+}));
+
+vi.mock("@simplewebauthn/server", async () => {
+	const actual = await vi.importActual<
+		typeof import("@simplewebauthn/server")
+	>("@simplewebauthn/server");
+	return {
+		...actual,
+		verifyRegistrationResponse: serverMocks.verifyRegistrationResponse,
+	};
+});
+
+const mockRegistrationResponse = {
+	id: "credential-id",
+	response: {
+		transports: ["internal"],
+	},
+};
+
+const mockRegistrationVerification = {
+	verified: true,
+	registrationInfo: {
+		aaguid: "test-aaguid",
+		credentialDeviceType: "singleDevice",
+		credentialBackedUp: false,
+		credential: {
+			id: "credential-id",
+			publicKey: new Uint8Array([1, 2, 3]),
+			counter: 0,
+		},
+	},
+};
+
 describe("passkey", async () => {
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		plugins: [passkey()],
+	});
+
+	afterEach(() => {
+		serverMocks.verifyRegistrationResponse.mockReset();
 	});
 
 	it("should generate register options", async () => {
@@ -81,6 +120,156 @@ describe("passkey", async () => {
 		await expect(
 			preAuth.api.generatePasskeyRegistrationOptions({}),
 		).rejects.toThrowError(APIError);
+	});
+
+	it("should call afterVerification and allow userId override", async () => {
+		let linkedUserId = "";
+		const afterVerification = vi.fn(async () => ({
+			userId: linkedUserId,
+		}));
+		const { auth: preAuth, client, cookieSetter } = await getTestInstance({
+			plugins: [
+				passkey({
+					registration: {
+						requireSession: false,
+						resolveUser: async () => ({
+							id: "pre-auth-user-id",
+							name: "pre-auth@example.com",
+							displayName: "Pre-auth user",
+						}),
+						afterVerification,
+					},
+				}),
+			],
+		});
+		const signUp = await preAuth.api.signUpEmail({
+			body: {
+				email: "linked-user@example.com",
+				password: "test123456",
+				name: "Linked User",
+			},
+		});
+		linkedUserId = signUp.user.id;
+		serverMocks.verifyRegistrationResponse.mockResolvedValue(
+			mockRegistrationVerification,
+		);
+		const headers = new Headers();
+		headers.set("origin", "http://localhost:3000");
+		const setCookie = cookieSetter(headers);
+
+		await client.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			query: {
+				context: "link-token",
+			},
+			onResponse: setCookie,
+		});
+
+		const passkeyRecord = await preAuth.api.verifyPasskeyRegistration({
+			headers,
+			body: {
+				response: mockRegistrationResponse,
+			},
+		});
+
+		expect(serverMocks.verifyRegistrationResponse).toHaveBeenCalled();
+		expect(afterVerification).toHaveBeenCalledWith(
+			expect.objectContaining({
+				context: "link-token",
+			}),
+		);
+		expect(passkeyRecord.userId).toBe(linkedUserId);
+	});
+
+	it("should reject invalid userId returned from afterVerification", async () => {
+		let resolvedUserId = "";
+		const afterVerification = vi.fn(async () => ({
+			userId: 123 as unknown as string,
+		}));
+		const { auth: preAuth, client, cookieSetter } = await getTestInstance({
+			plugins: [
+				passkey({
+					registration: {
+						requireSession: false,
+						resolveUser: async () => ({
+							id: resolvedUserId,
+							name: "pre-auth@example.com",
+						}),
+						afterVerification,
+					},
+				}),
+			],
+		});
+		const signUp = await preAuth.api.signUpEmail({
+			body: {
+				email: "invalid-user-id@example.com",
+				password: "test123456",
+				name: "Invalid User Id Test",
+			},
+		});
+		resolvedUserId = signUp.user.id;
+		serverMocks.verifyRegistrationResponse.mockResolvedValue(
+			mockRegistrationVerification,
+		);
+		const headers = new Headers();
+		headers.set("origin", "http://localhost:3000");
+		const setCookie = cookieSetter(headers);
+
+		await client.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			query: {
+				context: "link-token",
+			},
+			onResponse: setCookie,
+		});
+
+		await expect(
+			preAuth.api.verifyPasskeyRegistration({
+				headers,
+				body: {
+					response: mockRegistrationResponse,
+				},
+			}),
+		).rejects.toThrowError(APIError);
+		expect(afterVerification).toHaveBeenCalled();
+	});
+
+	it("should reject afterVerification override that mismatches session user", async () => {
+		const afterVerification = vi.fn(async () => ({
+			userId: "different-user-id",
+		}));
+		const { auth: sessionAuth, client, cookieSetter, signInWithTestUser } =
+			await getTestInstance({
+				plugins: [
+					passkey({
+						registration: {
+							afterVerification,
+						},
+					}),
+				],
+			});
+		serverMocks.verifyRegistrationResponse.mockResolvedValue(
+			mockRegistrationVerification,
+		);
+		const { headers } = await signInWithTestUser();
+		headers.set("origin", "http://localhost:3000");
+		const setCookie = cookieSetter(headers);
+
+		await client.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			headers,
+			onResponse: setCookie,
+		});
+
+		await expect(
+			sessionAuth.api.verifyPasskeyRegistration({
+				headers,
+				body: {
+					response: mockRegistrationResponse,
+				},
+			}),
+		).rejects.toThrowError(APIError);
+		expect(afterVerification).toHaveBeenCalled();
 	});
 
 	it("should generate authenticate options", async () => {

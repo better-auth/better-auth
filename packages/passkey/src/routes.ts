@@ -59,7 +59,7 @@ const resolveRegistrationUser = async (
 		if (!session?.user?.id) {
 			throw APIError.from(
 				"UNAUTHORIZED",
-				PASSKEY_ERROR_CODES.RESOLVE_USER_REQUIRED,
+				PASSKEY_ERROR_CODES.SESSION_REQUIRED,
 			);
 		}
 		const sessionName = session.user.email || session.user.id;

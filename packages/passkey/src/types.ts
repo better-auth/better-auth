@@ -46,7 +46,7 @@ export interface PasskeyRegistrationOptions {
 	requireSession?: boolean | undefined;
 	/**
 	 * Resolve the user when session is not available.
-	 * Required when `requireSession` is false.
+	 * Required when `requireSession` is false and no session exists.
 	 */
 	resolveUser?:
 		| ((args: {
