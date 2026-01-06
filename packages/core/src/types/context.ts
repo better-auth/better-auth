@@ -314,5 +314,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 		 * }
 		 * ```
 		 */
-		hasPlugin: (pluginId: string) => boolean;
+		hasPlugin: <Plugin extends BetterAuthPlugin>(
+			pluginId: Plugin["id"],
+		) => boolean;
 	};
