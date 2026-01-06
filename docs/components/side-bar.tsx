@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, MotionConfig, motion } from "framer-motion";
-import { useSearchContext } from "fumadocs-ui/provider";
+import { useSearchContext } from "fumadocs-ui/contexts/search";
 import { ChevronDownIcon, Search } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
