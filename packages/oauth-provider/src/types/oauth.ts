@@ -1,5 +1,4 @@
 import type { JWSAlgorithms } from "better-auth/plugins";
-
 import type { Prompt } from ".";
 
 /**
@@ -358,7 +357,7 @@ export interface OAuthClient {
 	enable_end_session?: boolean;
 	//---- All other metadata ----//
 	reference_id?: string;
-	metadata?: Record<string, any>;
+	[key: string]: any;
 }
 
 /**
