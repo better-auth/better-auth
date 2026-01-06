@@ -7,7 +7,12 @@ import {
 	requestDomainVerification,
 	verifyDomain,
 } from "./routes/domain-verification";
-import { getSSOProvider, listSSOProviders } from "./routes/providers";
+import {
+	deleteSSOProvider,
+	getSSOProvider,
+	listSSOProviders,
+	updateSSOProvider,
+} from "./routes/providers";
 import {
 	acsEndpoint,
 	callbackSSO,
@@ -87,6 +92,8 @@ type SSOEndpoints<O extends SSOOptions> = {
 	acsEndpoint: ReturnType<typeof acsEndpoint>;
 	listSSOProviders: ReturnType<typeof listSSOProviders>;
 	getSSOProvider: ReturnType<typeof getSSOProvider>;
+	updateSSOProvider: ReturnType<typeof updateSSOProvider<O>>;
+	deleteSSOProvider: ReturnType<typeof deleteSSOProvider>;
 };
 
 export type SSOPlugin<O extends SSOOptions> = {
@@ -128,6 +135,8 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 		acsEndpoint: acsEndpoint(optionsWithStore),
 		listSSOProviders: listSSOProviders(),
 		getSSOProvider: getSSOProvider(),
+		updateSSOProvider: updateSSOProvider(optionsWithStore),
+		deleteSSOProvider: deleteSSOProvider(),
 	};
 
 	if (options?.domainVerification?.enabled) {

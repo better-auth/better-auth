@@ -4,8 +4,11 @@ import {
 	sessionMiddleware,
 } from "better-auth/api";
 import z from "zod/v4";
-import type { Member, OIDCConfig, SAMLConfig } from "../types";
+import { DEFAULT_MAX_SAML_METADATA_SIZE } from "../constants";
+import { validateConfigAlgorithms } from "../saml";
+import type { Member, OIDCConfig, SAMLConfig, SSOOptions } from "../types";
 import { maskClientId, parseCertificate, safeJsonParse } from "../utils";
+import { updateSSOProviderBodySchema } from "./schemas";
 
 const ADMIN_ROLES = ["owner", "admin"];
 async function isOrgAdmin(
@@ -224,6 +227,301 @@ export const getSSOProvider = () => {
 			}
 
 			return ctx.json(sanitizeProvider(provider, ctx.context.baseURL));
+		},
+	);
+};
+
+async function checkProviderAccess(
+	ctx: {
+		context: {
+			session: { user: { id: string } };
+			adapter: {
+				findOne: <T>(query: {
+					model: string;
+					where: { field: string; value: string }[];
+				}) => Promise<T | null>;
+			};
+			hasPlugin: (pluginId: string) => boolean;
+		};
+	},
+	providerId: string,
+): Promise<{
+	id: string;
+	providerId: string;
+	issuer: string;
+	domain: string;
+	organizationId?: string | null;
+	domainVerified?: boolean;
+	userId: string;
+	oidcConfig?: string | null;
+	samlConfig?: string | null;
+}> {
+	const userId = ctx.context.session.user.id;
+
+	const provider = await ctx.context.adapter.findOne<{
+		id: string;
+		providerId: string;
+		issuer: string;
+		domain: string;
+		organizationId?: string | null;
+		domainVerified?: boolean;
+		userId: string;
+		oidcConfig?: string | null;
+		samlConfig?: string | null;
+	}>({
+		model: "ssoProvider",
+		where: [{ field: "providerId", value: providerId }],
+	});
+
+	if (!provider) {
+		throw new APIError("NOT_FOUND", {
+			message: "Provider not found",
+		});
+	}
+
+	let hasAccess = false;
+	if (provider.organizationId) {
+		if (ctx.context.hasPlugin("organization")) {
+			hasAccess = await isOrgAdmin(ctx, userId, provider.organizationId);
+		} else {
+			hasAccess = provider.userId === userId;
+		}
+	} else {
+		hasAccess = provider.userId === userId;
+	}
+
+	if (!hasAccess) {
+		throw new APIError("FORBIDDEN", {
+			message: "You don't have access to this provider",
+		});
+	}
+
+	return provider;
+}
+
+export const updateSSOProvider = <O extends SSOOptions>(options?: O) => {
+	return createAuthEndpoint(
+		"/sso/providers/:providerId",
+		{
+			method: "PATCH",
+			use: [sessionMiddleware],
+			params: getSSOProviderParamsSchema,
+			body: updateSSOProviderBodySchema,
+			metadata: {
+				openapi: {
+					operationId: "updateSSOProvider",
+					summary: "Update SSO provider",
+					description: "Updates an existing SSO provider configuration",
+					responses: {
+						"200": {
+							description: "SSO provider updated successfully",
+						},
+						"404": {
+							description: "Provider not found",
+						},
+						"403": {
+							description: "Access denied",
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const { providerId } = ctx.params;
+			const body = ctx.body;
+
+			const provider = await checkProviderAccess(ctx, providerId);
+
+			if (body.issuer) {
+				const issuerValidator = z.string().url();
+				if (issuerValidator.safeParse(body.issuer).error) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Invalid issuer. Must be a valid URL",
+					});
+				}
+			}
+
+			if (body.samlConfig?.idpMetadata?.metadata) {
+				const maxMetadataSize =
+					options?.saml?.maxMetadataSize ?? DEFAULT_MAX_SAML_METADATA_SIZE;
+				if (
+					new TextEncoder().encode(body.samlConfig.idpMetadata.metadata)
+						.length > maxMetadataSize
+				) {
+					throw new APIError("BAD_REQUEST", {
+						message: `IdP metadata exceeds maximum allowed size (${maxMetadataSize} bytes)`,
+					});
+				}
+			}
+
+			const existingOidcConfig = safeJsonParse<OIDCConfig>(
+				provider.oidcConfig as string,
+			);
+			const existingSamlConfig = safeJsonParse<SAMLConfig>(
+				provider.samlConfig as string,
+			);
+
+			if (body.oidcConfig && existingSamlConfig) {
+				throw new APIError("BAD_REQUEST", {
+					message: "Cannot update OIDC config for a SAML provider",
+				});
+			}
+
+			if (body.samlConfig && existingOidcConfig) {
+				throw new APIError("BAD_REQUEST", {
+					message: "Cannot update SAML config for an OIDC provider",
+				});
+			}
+
+			let updatedOidcConfig: string | null = provider.oidcConfig as string;
+			let updatedSamlConfig: string | null = provider.samlConfig as string;
+
+			if (body.oidcConfig && existingOidcConfig) {
+				const mergedOidcConfig = {
+					...existingOidcConfig,
+					...body.oidcConfig,
+					mapping: body.oidcConfig.mapping ?? existingOidcConfig.mapping,
+				};
+				updatedOidcConfig = JSON.stringify(mergedOidcConfig);
+			}
+
+			if (body.samlConfig) {
+				if (existingSamlConfig) {
+					validateConfigAlgorithms(
+						{
+							signatureAlgorithm:
+								body.samlConfig.signatureAlgorithm ??
+								existingSamlConfig.signatureAlgorithm,
+							digestAlgorithm:
+								body.samlConfig.digestAlgorithm ??
+								existingSamlConfig.digestAlgorithm,
+						},
+						options?.saml?.algorithms,
+					);
+
+					const mergedSamlConfig = {
+						...existingSamlConfig,
+						...body.samlConfig,
+						idpMetadata: body.samlConfig.idpMetadata ?? existingSamlConfig.idpMetadata,
+						spMetadata: body.samlConfig.spMetadata ?? existingSamlConfig.spMetadata,
+						mapping: body.samlConfig.mapping ?? existingSamlConfig.mapping,
+					};
+					updatedSamlConfig = JSON.stringify(mergedSamlConfig);
+				} else {
+					validateConfigAlgorithms(
+						{
+							signatureAlgorithm: body.samlConfig.signatureAlgorithm,
+							digestAlgorithm: body.samlConfig.digestAlgorithm,
+						},
+						options?.saml?.algorithms,
+					);
+
+					updatedSamlConfig = JSON.stringify({
+						issuer: body.issuer ?? provider.issuer,
+						...body.samlConfig,
+					});
+				}
+			} else if (existingSamlConfig) {
+				validateConfigAlgorithms(
+					{
+						signatureAlgorithm: existingSamlConfig.signatureAlgorithm,
+						digestAlgorithm: existingSamlConfig.digestAlgorithm,
+					},
+					options?.saml?.algorithms,
+				);
+			}
+
+			const updateData: {
+				issuer?: string;
+				domain?: string;
+				oidcConfig?: string | null;
+				samlConfig?: string | null;
+				domainVerified?: boolean;
+			} = {};
+
+			if (body.issuer !== undefined) {
+				updateData.issuer = body.issuer;
+			}
+
+			if (body.domain !== undefined) {
+				updateData.domain = body.domain;
+				if (body.domain !== provider.domain) {
+					updateData.domainVerified = false;
+				}
+			}
+
+			if (updatedOidcConfig !== null) {
+				updateData.oidcConfig = updatedOidcConfig;
+			}
+
+			if (updatedSamlConfig !== null) {
+				updateData.samlConfig = updatedSamlConfig;
+			}
+
+			const updatedProvider = await ctx.context.adapter.update<{
+				id: string;
+				providerId: string;
+				issuer: string;
+				domain: string;
+				organizationId?: string | null;
+				domainVerified?: boolean;
+				userId: string;
+				oidcConfig?: string | null;
+				samlConfig?: string | null;
+			}>({
+				model: "ssoProvider",
+				where: [{ field: "providerId", value: providerId }],
+				update: updateData,
+			});
+
+			if (!updatedProvider) {
+				throw new APIError("NOT_FOUND", {
+					message: "Provider not found",
+				});
+			}
+
+			return ctx.json(sanitizeProvider(updatedProvider, ctx.context.baseURL));
+		},
+	);
+};
+
+export const deleteSSOProvider = () => {
+	return createAuthEndpoint(
+		"/sso/providers/:providerId",
+		{
+			method: "DELETE",
+			use: [sessionMiddleware],
+			params: getSSOProviderParamsSchema,
+			metadata: {
+				openapi: {
+					operationId: "deleteSSOProvider",
+					summary: "Delete SSO provider",
+					description: "Deletes an SSO provider",
+					responses: {
+						"200": {
+							description: "SSO provider deleted successfully",
+						},
+						"404": {
+							description: "Provider not found",
+						},
+						"403": {
+							description: "Access denied",
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const { providerId } = ctx.params;
+
+			await checkProviderAccess(ctx, providerId);
+
+			await ctx.context.adapter.delete({
+				model: "ssoProvider",
+				where: [{ field: "providerId", value: providerId }],
+			});
+
+			return ctx.json({ success: true });
 		},
 	);
 };
