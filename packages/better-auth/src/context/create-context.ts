@@ -130,10 +130,6 @@ export async function createAuthContext(
 		plugins: plugins.concat(internalPlugins),
 	};
 
-	const pluginIds = new Set(
-		options.plugins?.map((p) => p.id).filter(Boolean) ?? [],
-	);
-
 	checkEndpointConflicts(options, logger);
 	const cookies = getCookies(options);
 	const tables = getAuthTables(options);
@@ -178,6 +174,13 @@ export async function createAuthContext(
 				? "adapter"
 				: getDatabaseType(options.database),
 	});
+
+	const getPluginFn = <Plugin extends BetterAuthPlugin>(
+		id: Plugin["id"],
+	): Plugin | null =>
+		(options.plugins!.find((p): p is Plugin => p.id === id) as
+			| Plugin
+			| undefined) ?? null;
 
 	const ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
@@ -320,11 +323,10 @@ export async function createAuthContext(
 				logger.error("Failed to run background task:", e);
 			}
 		},
-		getPlugin: <Plugin extends BetterAuthPlugin>(id: Plugin["id"]) =>
-			(options.plugins!.find((p): p is Plugin => p.id === id) as
-				| Plugin
-				| undefined) ?? null,
-		hasPlugin: (pluginId: string) => pluginIds.has(pluginId),
+		getPlugin: getPluginFn,
+		hasPlugin: <Plugin extends BetterAuthPlugin>(
+			pluginId: Plugin["id"],
+		) => getPluginFn(pluginId) !== null,
 	};
 
 	const initOrPromise = runPluginInit(ctx);
