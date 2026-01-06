@@ -109,10 +109,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 					try {
 						// Check if organization has any active subscriptions
-						for await (const sub of client.subscriptions.list({
+						const subscriptions = await client.subscriptions.list({
 							customer: organization.stripeCustomerId,
 							status: "all",
-						})) {
+						});
+						for (const sub of subscriptions.data) {
 							if (
 								sub.status !== "canceled" &&
 								sub.status !== "incomplete" &&
