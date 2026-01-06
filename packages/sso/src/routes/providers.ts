@@ -81,7 +81,13 @@ function sanitizeProvider(
 					identifierFormat: samlConfig.identifierFormat,
 					signatureAlgorithm: samlConfig.signatureAlgorithm,
 					digestAlgorithm: samlConfig.digestAlgorithm,
-					certificate: parseCertificate(samlConfig.cert),
+					certificate: (() => {
+						try {
+							return parseCertificate(samlConfig.cert);
+						} catch {
+							return { error: "Failed to parse certificate" };
+						}
+					})(),
 				}
 			: undefined,
 		spMetadataUrl: `${baseURL}/sso/saml2/sp/metadata?providerId=${encodeURIComponent(provider.providerId)}`,
