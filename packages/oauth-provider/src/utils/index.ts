@@ -52,12 +52,12 @@ export const getOAuthProviderPlugin = (ctx: AuthContext | Auth) => {
  * Gets the JWT Plugin
  * @internal
  */
-export const getJwtPlugin = (ctx: AuthContext | Auth) => {
-	const plugin = ctx.options.plugins?.find((plugin) => plugin.id === "jwt");
+export const getJwtPlugin = (ctx: AuthContext): ReturnType<typeof jwt> => {
+	const plugin = ctx.getPlugin<ReturnType<typeof jwt>>("jwt");
 	if (!plugin) {
 		throw new BetterAuthError("jwt_config", "jwt plugin not found");
 	}
-	return plugin as ReturnType<typeof jwt>;
+	return plugin;
 };
 
 const cachedTrustedClients = new TTLCache<string, SchemaClient<Scope[]>>();
