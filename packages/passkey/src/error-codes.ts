@@ -9,4 +9,6 @@ export const PASSKEY_ERROR_CODES = defineErrorCodes({
 	AUTHENTICATION_FAILED: "Authentication failed",
 	UNABLE_TO_CREATE_SESSION: "Unable to create session",
 	FAILED_TO_UPDATE_PASSKEY: "Failed to update passkey",
+	RESOLVE_USER_REQUIRED: "Passkey registration requires resolveUser",
+	RESOLVED_USER_INVALID: "Resolved user is invalid",
 });

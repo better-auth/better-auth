@@ -43,6 +43,46 @@ describe("passkey", async () => {
 		});
 	});
 
+	it("should generate register options without session when resolveUser is provided", async () => {
+		const { auth: preAuth } = await getTestInstance({
+			plugins: [
+				passkey({
+					registration: {
+						requireSession: false,
+						resolveUser: async () => ({
+							id: "pre-auth-user",
+							name: "pre-auth@example.com",
+						}),
+					},
+				}),
+			],
+		});
+
+		const options = await preAuth.api.generatePasskeyRegistrationOptions({});
+
+		expect(options).toBeDefined();
+		expect(options).toHaveProperty("challenge");
+		expect(options).toHaveProperty("rp");
+		expect(options).toHaveProperty("user");
+		expect(options).toHaveProperty("pubKeyCredParams");
+	});
+
+	it("should require resolveUser when session is not available", async () => {
+		const { auth: preAuth } = await getTestInstance({
+			plugins: [
+				passkey({
+					registration: {
+						requireSession: false,
+					},
+				}),
+			],
+		});
+
+		await expect(
+			preAuth.api.generatePasskeyRegistrationOptions({}),
+		).rejects.toThrowError(APIError);
+	});
+
 	it("should generate authenticate options", async () => {
 		const { headers } = await signInWithTestUser();
 		const options = await auth.api.generatePasskeyAuthenticationOptions({

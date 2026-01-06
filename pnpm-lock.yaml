@@ -1118,6 +1118,9 @@ importers:
 
   e2e/smoke:
     dependencies:
+      '@better-auth/passkey':
+        specifier: workspace:*
+        version: link:../../packages/passkey
       better-auth:
         specifier: workspace:*
         version: link:../../packages/better-auth
