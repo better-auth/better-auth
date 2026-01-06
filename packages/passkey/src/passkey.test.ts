@@ -11,9 +11,9 @@ const serverMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@simplewebauthn/server", async () => {
-	const actual = await vi.importActual<
-		typeof import("@simplewebauthn/server")
-	>("@simplewebauthn/server");
+	const actual = await vi.importActual<typeof import("@simplewebauthn/server")>(
+		"@simplewebauthn/server",
+	);
 	return {
 		...actual,
 		verifyRegistrationResponse: serverMocks.verifyRegistrationResponse,
@@ -74,7 +74,7 @@ describe("passkey", async () => {
 		await client.$fetch("/passkey/generate-register-options", {
 			headers: headers,
 			method: "GET",
-			onResponse(context) {
+			onResponse(context: { response: Response }) {
 				const setCookie = context.response.headers.get("Set-Cookie");
 				expect(setCookie).toBeDefined();
 				expect(setCookie).toContain("better-auth-passkey");
@@ -127,7 +127,11 @@ describe("passkey", async () => {
 		const afterVerification = vi.fn(async () => ({
 			userId: linkedUserId,
 		}));
-		const { auth: preAuth, client, cookieSetter } = await getTestInstance({
+		const {
+			auth: preAuth,
+			client,
+			cookieSetter,
+		} = await getTestInstance({
 			plugins: [
 				passkey({
 					registration: {
@@ -178,7 +182,8 @@ describe("passkey", async () => {
 				context: "link-token",
 			}),
 		);
-		expect(passkeyRecord.userId).toBe(linkedUserId);
+		expect(passkeyRecord).not.toBeNull();
+		expect(passkeyRecord!.userId).toBe(linkedUserId);
 	});
 
 	it("should reject invalid userId returned from afterVerification", async () => {
@@ -186,7 +191,11 @@ describe("passkey", async () => {
 		const afterVerification = vi.fn(async () => ({
 			userId: 123 as unknown as string,
 		}));
-		const { auth: preAuth, client, cookieSetter } = await getTestInstance({
+		const {
+			auth: preAuth,
+			client,
+			cookieSetter,
+		} = await getTestInstance({
 			plugins: [
 				passkey({
 					registration: {
@@ -238,16 +247,20 @@ describe("passkey", async () => {
 		const afterVerification = vi.fn(async () => ({
 			userId: "different-user-id",
 		}));
-		const { auth: sessionAuth, client, cookieSetter, signInWithTestUser } =
-			await getTestInstance({
-				plugins: [
-					passkey({
-						registration: {
-							afterVerification,
-						},
-					}),
-				],
-			});
+		const {
+			auth: sessionAuth,
+			client,
+			cookieSetter,
+			signInWithTestUser,
+		} = await getTestInstance({
+			plugins: [
+				passkey({
+					registration: {
+						afterVerification,
+					},
+				}),
+			],
+		});
 		serverMocks.verifyRegistrationResponse.mockResolvedValue(
 			mockRegistrationVerification,
 		);
