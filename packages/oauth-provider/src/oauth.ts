@@ -30,6 +30,15 @@ import { SafeUrlSchema } from "./types/zod";
 import { userInfoEndpoint } from "./userinfo";
 import { deleteFromPrompt, getJwtPlugin } from "./utils";
 
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		"oauth-provider": {
+			creator: typeof oauthProvider;
+		};
+	}
+}
+
 export const oAuthState = defineRequestState<{ query?: string } | null>(
 	() => null,
 );
@@ -144,8 +153,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 	}
 
 	return {
-		id: "oauthProvider",
-		options: opts as NoInfer<O>,
+		id: "oauth-provider",
+    options: opts as NoInfer<O>,
 		init: (ctx) => {
 			// Require session id storage on database (secondary-storage only solution not yet supported)
 			if (ctx.options.session && !ctx.options.session.storeSessionInDatabase) {
@@ -157,7 +166,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			// Check for jwt plugin registration
 			if (!opts.disableJwtPlugin) {
 				const jwtPlugin = getJwtPlugin(ctx);
-				const jwtPluginOptions = jwtPlugin.options;
+				const jwtPluginOptions = jwtPlugin?.options;
 
 				// Issuer and well-known endpoint checks
 				const issuer = jwtPluginOptions?.jwt?.issuer ?? ctx.baseURL;
@@ -284,9 +293,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						const metadata = oidcServerMetadata(ctx, opts);
 						return metadata;
 					} else {
+						ctx.context.getPlugin("jwt");
 						const jwtPluginOptions = opts.disableJwtPlugin
 							? undefined
-							: getJwtPlugin(ctx.context).options;
+							: getJwtPlugin(ctx.context)?.options;
 						const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
 							scopes_supported:
 								opts.advertisedMetadata?.scopes_supported ?? opts.scopes,

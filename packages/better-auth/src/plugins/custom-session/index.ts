@@ -12,6 +12,15 @@ import { getSession } from "../../api";
 import type { InferSession, InferUser } from "../../types";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		"custom-session": {
+			creator: typeof customSession;
+		};
+	}
+}
+
 const getSessionQuerySchema = z.optional(
 	z.object({
 		/**

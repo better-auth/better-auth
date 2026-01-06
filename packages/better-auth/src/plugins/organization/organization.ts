@@ -68,6 +68,15 @@ import type {
 } from "./schema";
 import type { OrganizationOptions } from "./types";
 
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		organization: {
+			creator: typeof organization;
+		};
+	}
+}
+
 export function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;
 }
