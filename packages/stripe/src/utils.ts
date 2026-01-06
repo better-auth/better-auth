@@ -91,3 +91,14 @@ export function isPendingCancel(sub: Subscription): boolean {
 export function isStripePendingCancel(stripeSub: Stripe.Subscription): boolean {
 	return !!(stripeSub.cancel_at_period_end || stripeSub.cancel_at);
 }
+
+/**
+ * Escapes a value for use in Stripe search queries.
+ * Stripe search query uses double quotes for string values,
+ * and double quotes within the value need to be escaped with backslash.
+ *
+ * @see https://docs.stripe.com/search#search-query-language
+ */
+export function escapeStripeSearchValue(value: string): string {
+	return value.replace(/"/g, '\\"');
+}

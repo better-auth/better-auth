@@ -24,6 +24,7 @@ import type {
 	WithStripeCustomerId,
 } from "./types";
 import {
+	escapeStripeSearchValue,
 	getPlanByName,
 	getPlanByPriceInfo,
 	getPlans,
@@ -326,7 +327,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						try {
 							// First, search for existing organization customer by organizationId
 							const existingOrgCustomers = await client.customers.search({
-								query: `metadata['organizationId']:'${org.id}'`,
+								query: `metadata["organizationId"]:"${org.id}"`,
 								limit: 1,
 							});
 
@@ -400,7 +401,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					try {
 						// Try to find existing user Stripe customer by email
 						const existingCustomers = await client.customers.search({
-							query: `email:'${user.email}' AND -metadata['customerType']:'organization'`,
+							query: `email:"${escapeStripeSearchValue(user.email)}" AND -metadata["customerType"]:"organization"`,
 							limit: 1,
 						});
 

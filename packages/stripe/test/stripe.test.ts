@@ -3405,7 +3405,7 @@ describe("stripe", () => {
 
 			// Should check for existing user customer by email (excluding organization customers)
 			expect(mockStripe.customers.search).toHaveBeenCalledWith({
-				query: `email:'${existingEmail}' AND -metadata['customerType']:'organization'`,
+				query: `email:"${existingEmail}" AND -metadata["customerType"]:"organization"`,
 				limit: 1,
 			});
 
@@ -3467,7 +3467,7 @@ describe("stripe", () => {
 
 			// Should check for existing user customer first (excluding organization customers)
 			expect(mockStripe.customers.search).toHaveBeenCalledWith({
-				query: `email:'${newEmail}' AND -metadata['customerType']:'organization'`,
+				query: `email:"${newEmail}" AND -metadata["customerType"]:"organization"`,
 				limit: 1,
 			});
 
@@ -3545,7 +3545,7 @@ describe("stripe", () => {
 
 			// Should search with query that EXCLUDES organization customers
 			expect(mockStripe.customers.search).toHaveBeenCalledWith({
-				query: `email:'${sharedEmail}' AND -metadata['customerType']:'organization'`,
+				query: `email:"${sharedEmail}" AND -metadata["customerType"]:"organization"`,
 				limit: 1,
 			});
 
@@ -3625,7 +3625,7 @@ describe("stripe", () => {
 
 			// Should search excluding organization customers
 			expect(mockStripe.customers.search).toHaveBeenCalledWith({
-				query: `email:'${sharedEmail}' AND -metadata['customerType']:'organization'`,
+				query: `email:"${sharedEmail}" AND -metadata["customerType"]:"organization"`,
 				limit: 1,
 			});
 

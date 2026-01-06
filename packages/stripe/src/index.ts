@@ -22,7 +22,7 @@ import type {
 	SubscriptionOptions,
 	WithStripeCustomerId,
 } from "./types";
-import { getOrganizationPlugin } from "./utils";
+import { escapeStripeSearchValue, getOrganizationPlugin } from "./utils";
 
 export const stripe = <O extends StripeOptions>(options: O) => {
 	const client = options.stripeClient;
@@ -169,7 +169,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 									try {
 										// Check if user customer already exists in Stripe by email
 										const existingCustomers = await client.customers.search({
-											query: `email:'${user.email}' AND -metadata['customerType']:'organization'`,
+											query: `email:"${escapeStripeSearchValue(user.email)}" AND -metadata["customerType"]:"organization"`,
 											limit: 1,
 										});
 
