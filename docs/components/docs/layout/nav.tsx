@@ -1,6 +1,6 @@
 "use client";
 import Link, { type LinkProps } from "fumadocs-core/link";
-import { useI18n } from "fumadocs-ui/provider";
+import { useI18n } from "fumadocs-ui/contexts/i18n";
 import type { ReactNode } from "react";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { cn } from "../../../lib/utils";

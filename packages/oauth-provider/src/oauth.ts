@@ -145,7 +145,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 
 	return {
 		id: "oauthProvider",
-		options: opts,
+		options: opts as NoInfer<O>,
 		init: (ctx) => {
 			// Require session id storage on database (secondary-storage only solution not yet supported)
 			if (ctx.options.session && !ctx.options.session.storeSessionInDatabase) {
