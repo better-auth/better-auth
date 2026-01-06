@@ -20,4 +20,9 @@ export const STRIPE_ERROR_CODES = defineErrorCodes({
 	SUBSCRIPTION_NOT_ACTIVE: "Subscription is not active",
 	SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION:
 		"Subscription is not scheduled for cancellation",
+	ORGANIZATION_NOT_FOUND: "Organization not found",
+	ORGANIZATION_SUBSCRIPTION_NOT_ENABLED:
+		"Organization subscription is not enabled",
+	ORGANIZATION_HAS_ACTIVE_SUBSCRIPTION:
+		"Cannot delete organization with active subscription",
 });
