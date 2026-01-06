@@ -1,39 +1,5 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
-import type { OrganizationOptions } from "better-auth/plugins/organization";
 import type Stripe from "stripe";
 import type { StripeOptions, Subscription } from "./types";
-
-/**
- * Type guard to check if a plugin is an organization plugin with valid options
- */
-function isOrganizationPlugin(
-	plugin: BetterAuthPlugin,
-): plugin is BetterAuthPlugin & { options: OrganizationOptions } {
-	return (
-		plugin.id === "organization" &&
-		!!plugin.options &&
-		typeof plugin.options === "object"
-	);
-}
-
-/**
- * Get organization plugin from plugins array
- * Returns null if plugin not found or doesn't have valid options
- */
-export function getOrganizationPlugin(
-	plugins: BetterAuthPlugin[] | undefined,
-): (BetterAuthPlugin & { options: OrganizationOptions }) | null {
-	if (!plugins) return null;
-
-	const orgPlugin = plugins.find((p) => p.id === "organization");
-	if (!orgPlugin) return null;
-
-	if (!isOrganizationPlugin(orgPlugin)) {
-		return null;
-	}
-
-	return orgPlugin;
-}
 
 export async function getPlans(
 	subscriptionOptions: StripeOptions["subscription"],

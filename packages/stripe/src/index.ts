@@ -1,6 +1,10 @@
 import type { BetterAuthPlugin, User } from "better-auth";
 import { APIError } from "better-auth";
-import type { Organization } from "better-auth/plugins/organization";
+import type {
+	Organization,
+	OrganizationOptions,
+	OrganizationPlugin,
+} from "better-auth/plugins/organization";
 import { defu } from "defu";
 import type Stripe from "stripe";
 import { STRIPE_ERROR_CODES } from "./error-codes";
@@ -22,7 +26,7 @@ import type {
 	SubscriptionOptions,
 	WithStripeCustomerId,
 } from "./types";
-import { escapeStripeSearchValue, getOrganizationPlugin } from "./utils";
+import { escapeStripeSearchValue } from "./utils";
 
 export const stripe = <O extends StripeOptions>(options: O) => {
 	const client = options.stripeClient;
@@ -50,14 +54,17 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				: {}),
 		},
 		init(ctx) {
-			if (options.organization?.enabled && ctx.options?.plugins) {
-				const orgPlugin = getOrganizationPlugin(ctx.options.plugins);
+			if (options.organization?.enabled) {
+				const orgPlugin =
+					ctx.getPlugin<OrganizationPlugin<OrganizationOptions>>(
+						"organization",
+					);
 				if (!orgPlugin) {
 					ctx.logger.error(`Organization plugin not found`);
 					return;
 				}
 
-				const existingHooks = orgPlugin.options.organizationHooks || {};
+				const existingHooks = orgPlugin.options.organizationHooks ?? {};
 
 				/**
 				 * Sync organization name to Stripe customer
