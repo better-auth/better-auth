@@ -1,4 +1,8 @@
-import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
+import type {
+	AuthContext,
+	BetterAuthOptions,
+	BetterAuthPlugin,
+} from "@better-auth/core";
 import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { createLogger, env, isProduction, isTest } from "@better-auth/core/env";
@@ -171,9 +175,14 @@ export async function createAuthContext(
 				: getDatabaseType(options.database),
 	});
 
-	const pluginIds = new Set(options.plugins?.map((p) => p.id) ?? []);
+	const getPluginFn = <Plugin extends BetterAuthPlugin>(
+		id: Plugin["id"],
+	): Plugin | null =>
+		(options.plugins!.find((p): p is Plugin => p.id === id) as
+			| Plugin
+			| undefined) ?? null;
 
-	let ctx: AuthContext = {
+	const ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
 		socialProviders: providers,
 		options,
@@ -314,7 +323,10 @@ export async function createAuthContext(
 				logger.error("Failed to run background task:", e);
 			}
 		},
-		hasPlugin: (pluginId: string) => pluginIds.has(pluginId),
+		getPlugin: getPluginFn,
+		hasPlugin: <Plugin extends BetterAuthPlugin>(
+			pluginId: Plugin["id"],
+		) => getPluginFn(pluginId) !== null,
 	};
 
 	const initOrPromise = runPluginInit(ctx);

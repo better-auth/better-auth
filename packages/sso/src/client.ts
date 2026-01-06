@@ -24,7 +24,6 @@ export const ssoClient = <CO extends SSOClientOptions>(
 		pathMethods: {
 			"/sso/providers": "GET",
 			"/sso/providers/:providerId": "GET",
-			// PATCH/DELETE inferred from endpoints or specified in fetchOptions
 		},
 	} satisfies BetterAuthClientPlugin;
 };

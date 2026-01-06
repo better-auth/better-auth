@@ -1,34 +1,13 @@
-import type { AuthContext } from "better-auth";
 import {
 	APIError,
 	createAuthEndpoint,
 	sessionMiddleware,
 } from "better-auth/api";
 import z from "zod/v4";
-import { DEFAULT_MAX_SAML_METADATA_SIZE } from "../constants";
-import { validateConfigAlgorithms } from "../saml";
-import type { Member, OIDCConfig, SAMLConfig, SSOOptions } from "../types";
+import type { Member, OIDCConfig, SAMLConfig } from "../types";
 import { maskClientId, parseCertificate, safeJsonParse } from "../utils";
-import { updateSSOProviderBodySchema } from "./schemas";
-
-interface SSOProviderRecord {
-	id: string;
-	providerId: string;
-	issuer: string;
-	domain: string;
-	organizationId?: string | null;
-	domainVerified?: boolean;
-	userId: string;
-	oidcConfig?: string | null;
-	samlConfig?: string | null;
-}
 
 const ADMIN_ROLES = ["owner", "admin"];
-
-function hasPlugin(context: AuthContext, pluginId: string): boolean {
-	return (context as any).hasPlugin?.(pluginId) ?? false;
-}
-
 async function isOrgAdmin(
 	ctx: {
 		context: {
@@ -55,47 +34,6 @@ async function isOrgAdmin(
 	return roles.some((r) => ADMIN_ROLES.includes(r.trim()));
 }
 
-async function batchCheckOrgAdmin(
-	ctx: {
-		context: {
-			adapter: {
-				findMany: <T>(query: {
-					model: string;
-					where: {
-						field: string;
-						value: string | string[];
-						operator?: string;
-					}[];
-				}) => Promise<T[]>;
-			};
-		};
-	},
-	userId: string,
-	organizationIds: string[],
-): Promise<Set<string>> {
-	if (organizationIds.length === 0) {
-		return new Set();
-	}
-
-	const members = await ctx.context.adapter.findMany<Member>({
-		model: "member",
-		where: [
-			{ field: "userId", value: userId },
-			{ field: "organizationId", value: organizationIds, operator: "in" },
-		],
-	});
-
-	const adminOrgIds = new Set<string>();
-	for (const member of members) {
-		const roles = member.role.split(",");
-		if (roles.some((r) => ADMIN_ROLES.includes(r.trim()))) {
-			adminOrgIds.add(member.organizationId);
-		}
-	}
-
-	return adminOrgIds;
-}
-
 function sanitizeProvider(
 	provider: {
 		providerId: string;
@@ -108,20 +46,8 @@ function sanitizeProvider(
 	},
 	baseURL: string,
 ) {
-	let oidcConfig: OIDCConfig | null = null;
-	let samlConfig: SAMLConfig | null = null;
-
-	try {
-		oidcConfig = safeJsonParse<OIDCConfig>(provider.oidcConfig as string);
-	} catch {
-		oidcConfig = null;
-	}
-
-	try {
-		samlConfig = safeJsonParse<SAMLConfig>(provider.samlConfig as string);
-	} catch {
-		samlConfig = null;
-	}
+	const oidcConfig = safeJsonParse<OIDCConfig>(provider.oidcConfig as string);
+	const samlConfig = safeJsonParse<SAMLConfig>(provider.samlConfig as string);
 
 	const type = samlConfig ? "saml" : "oidc";
 
@@ -131,7 +57,7 @@ function sanitizeProvider(
 		issuer: provider.issuer,
 		domain: provider.domain,
 		organizationId: provider.organizationId || null,
-		domainVerified: provider.domainVerified ?? false,
+		domainVerified: provider.domainVerified,
 		oidcConfig: oidcConfig
 			? {
 					discoveryEndpoint: oidcConfig.discoveryEndpoint,
@@ -183,62 +109,42 @@ export const listSSOProviders = () => {
 		async (ctx) => {
 			const userId = ctx.context.session.user.id;
 
-			const allProviders =
-				await ctx.context.adapter.findMany<SSOProviderRecord>({
-					model: "ssoProvider",
-				});
+			const allProviders = await ctx.context.adapter.findMany<{
+				id: string;
+				providerId: string;
+				issuer: string;
+				domain: string;
+				organizationId?: string | null;
+				domainVerified?: boolean;
+				userId: string;
+				oidcConfig?: string | null;
+				samlConfig?: string | null;
+			}>({
+				model: "ssoProvider",
+			});
 
-			const userOwnedProviders = allProviders.filter(
-				(p) => p.userId === userId && !p.organizationId,
+			const orgPluginEnabled = ctx.context.hasPlugin("organization");
+
+			const accessibleProviders = await Promise.all(
+				allProviders.map(async (provider) => {
+					if (provider.organizationId) {
+						if (orgPluginEnabled) {
+							const hasAccess = await isOrgAdmin(
+								ctx,
+								userId,
+								provider.organizationId,
+							);
+							return hasAccess ? provider : null;
+						}
+						return provider.userId === userId ? provider : null;
+					}
+					return provider.userId === userId ? provider : null;
+				}),
 			);
 
-			const orgProviders = allProviders.filter(
-				(p) => p.organizationId !== null && p.organizationId !== undefined,
-			);
-
-			const orgPluginEnabled = hasPlugin(ctx.context, "organization");
-
-			let accessibleProviders: typeof userOwnedProviders = [
-				...userOwnedProviders,
-			];
-
-			if (orgPluginEnabled && orgProviders.length > 0) {
-				const orgIds = [
-					...new Set(
-						orgProviders
-							.map((p) => p.organizationId)
-							.filter((id): id is string => id !== null && id !== undefined),
-					),
-				];
-
-				const adminOrgIds = await batchCheckOrgAdmin(
-					ctx as any,
-					userId,
-					orgIds,
-				);
-
-				const orgAccessibleProviders = orgProviders.filter(
-					(provider) =>
-						provider.organizationId && adminOrgIds.has(provider.organizationId),
-				);
-
-				accessibleProviders = [
-					...accessibleProviders,
-					...orgAccessibleProviders,
-				];
-			} else if (!orgPluginEnabled) {
-				const userOwnedOrgProviders = orgProviders.filter(
-					(p) => p.userId === userId,
-				);
-				accessibleProviders = [
-					...accessibleProviders,
-					...userOwnedOrgProviders,
-				];
-			}
-
-			const providers = accessibleProviders.map((p) =>
-				sanitizeProvider(p, ctx.context.baseURL),
-			);
+			const providers = accessibleProviders
+				.filter((p): p is NonNullable<typeof p> => p !== null)
+				.map((p) => sanitizeProvider(p, ctx.context.baseURL));
 
 			return ctx.json({ providers });
 		},
@@ -276,283 +182,48 @@ export const getSSOProvider = () => {
 			},
 		},
 		async (ctx) => {
+			const userId = ctx.context.session.user.id;
 			const { providerId } = ctx.params;
 
-			const provider = await checkProviderAccess(ctx, providerId);
+			const provider = await ctx.context.adapter.findOne<{
+				id: string;
+				providerId: string;
+				issuer: string;
+				domain: string;
+				organizationId?: string | null;
+				domainVerified?: boolean;
+				userId: string;
+				oidcConfig?: string | null;
+				samlConfig?: string | null;
+			}>({
+				model: "ssoProvider",
+				where: [{ field: "providerId", value: providerId }],
+			});
+
+			if (!provider) {
+				throw new APIError("NOT_FOUND", {
+					message: "Provider not found",
+				});
+			}
+
+			let hasAccess = false;
+			if (provider.organizationId) {
+				if (ctx.context.hasPlugin("organization")) {
+					hasAccess = await isOrgAdmin(ctx, userId, provider.organizationId);
+				} else {
+					hasAccess = provider.userId === userId;
+				}
+			} else {
+				hasAccess = provider.userId === userId;
+			}
+
+			if (!hasAccess) {
+				throw new APIError("FORBIDDEN", {
+					message: "You don't have access to this provider",
+				});
+			}
 
 			return ctx.json(sanitizeProvider(provider, ctx.context.baseURL));
-		},
-	);
-};
-
-async function checkProviderAccess(
-	ctx: {
-		context: AuthContext & {
-			session: { user: { id: string } };
-			hasPlugin?: (pluginId: string) => boolean;
-		};
-	},
-	providerId: string,
-) {
-	const userId = ctx.context.session.user.id;
-
-	const provider = await ctx.context.adapter.findOne<SSOProviderRecord>({
-		model: "ssoProvider",
-		where: [{ field: "providerId", value: providerId }],
-	});
-
-	if (!provider) {
-		throw new APIError("NOT_FOUND", {
-			message: "Provider not found",
-		});
-	}
-
-	let hasAccess = false;
-	if (provider.organizationId) {
-		if (hasPlugin(ctx.context, "organization")) {
-			hasAccess = await isOrgAdmin(ctx, userId, provider.organizationId);
-		} else {
-			hasAccess = provider.userId === userId;
-		}
-	} else {
-		hasAccess = provider.userId === userId;
-	}
-
-	if (!hasAccess) {
-		throw new APIError("FORBIDDEN", {
-			message: "You don't have access to this provider",
-		});
-	}
-
-	return provider;
-}
-
-function mergeSAMLConfig(
-	current: SAMLConfig,
-	updates: Partial<SAMLConfig>,
-	issuer: string,
-): SAMLConfig {
-	return {
-		...current,
-		...updates,
-		issuer,
-		entryPoint: updates.entryPoint ?? current.entryPoint,
-		cert: updates.cert ?? current.cert,
-		callbackUrl: updates.callbackUrl ?? current.callbackUrl,
-		spMetadata: updates.spMetadata ?? current.spMetadata,
-	};
-}
-
-function mergeOIDCConfig(
-	current: OIDCConfig,
-	updates: Partial<OIDCConfig>,
-	issuer: string,
-): OIDCConfig {
-	return {
-		...current,
-		...updates,
-		issuer,
-		pkce: updates.pkce ?? current.pkce ?? true,
-		clientId: updates.clientId ?? current.clientId,
-		clientSecret: updates.clientSecret ?? current.clientSecret,
-		discoveryEndpoint: updates.discoveryEndpoint ?? current.discoveryEndpoint,
-	};
-}
-
-function parseAndValidateConfig<T>(
-	configString: string | null | undefined,
-	configType: "SAML" | "OIDC",
-): T {
-	let config: T | null = null;
-	try {
-		config = safeJsonParse<T>(configString as string);
-	} catch {
-		config = null;
-	}
-	if (!config) {
-		throw new APIError("BAD_REQUEST", {
-			message: `Cannot update ${configType} config for a provider that doesn't have ${configType} configured`,
-		});
-	}
-	return config;
-}
-
-export const updateSSOProvider = <O extends SSOOptions>(options: O) => {
-	return createAuthEndpoint(
-		"/sso/providers/:providerId",
-		{
-			method: "PATCH",
-			use: [sessionMiddleware],
-			params: getSSOProviderParamsSchema,
-			body: updateSSOProviderBodySchema,
-			metadata: {
-				openapi: {
-					operationId: "updateSSOProvider",
-					summary: "Update SSO provider",
-					description:
-						"Partially update an SSO provider. Only provided fields are updated. If domain changes, domainVerified is reset to false.",
-					responses: {
-						"200": {
-							description: "SSO provider updated successfully",
-						},
-						"404": {
-							description: "Provider not found",
-						},
-						"403": {
-							description: "Access denied",
-						},
-					},
-				},
-			},
-		},
-		async (ctx) => {
-			const { providerId } = ctx.params;
-			const body = ctx.body;
-
-			const { issuer, domain, samlConfig, oidcConfig } = body;
-			if (!issuer && !domain && !samlConfig && !oidcConfig) {
-				throw new APIError("BAD_REQUEST", {
-					message: "No fields provided for update",
-				});
-			}
-
-			const existingProvider = await checkProviderAccess(ctx, providerId);
-
-			const updateData: Partial<SSOProviderRecord> = {};
-
-			if (body.issuer !== undefined) {
-				updateData.issuer = body.issuer;
-			}
-
-			if (body.domain !== undefined) {
-				updateData.domain = body.domain;
-				if (body.domain !== existingProvider.domain) {
-					updateData.domainVerified = false;
-				}
-			}
-
-			if (body.samlConfig) {
-				if (body.samlConfig.idpMetadata?.metadata) {
-					const maxMetadataSize =
-						options?.saml?.maxMetadataSize ?? DEFAULT_MAX_SAML_METADATA_SIZE;
-					if (
-						new TextEncoder().encode(body.samlConfig.idpMetadata.metadata)
-							.length > maxMetadataSize
-					) {
-						throw new APIError("BAD_REQUEST", {
-							message: `IdP metadata exceeds maximum allowed size (${maxMetadataSize} bytes)`,
-						});
-					}
-				}
-
-				if (
-					body.samlConfig.signatureAlgorithm !== undefined ||
-					body.samlConfig.digestAlgorithm !== undefined
-				) {
-					validateConfigAlgorithms(
-						{
-							signatureAlgorithm: body.samlConfig.signatureAlgorithm,
-							digestAlgorithm: body.samlConfig.digestAlgorithm,
-						},
-						options?.saml?.algorithms,
-					);
-				}
-
-				const currentSamlConfig = parseAndValidateConfig<SAMLConfig>(
-					existingProvider.samlConfig,
-					"SAML",
-				);
-
-				const updatedSamlConfig = mergeSAMLConfig(
-					currentSamlConfig,
-					body.samlConfig,
-					updateData.issuer ||
-						currentSamlConfig.issuer ||
-						existingProvider.issuer,
-				);
-
-				updateData.samlConfig = JSON.stringify(updatedSamlConfig);
-			}
-
-			if (body.oidcConfig) {
-				const currentOidcConfig = parseAndValidateConfig<OIDCConfig>(
-					existingProvider.oidcConfig,
-					"OIDC",
-				);
-
-				const updatedOidcConfig = mergeOIDCConfig(
-					currentOidcConfig,
-					body.oidcConfig,
-					updateData.issuer ||
-						currentOidcConfig.issuer ||
-						existingProvider.issuer,
-				);
-
-				updateData.oidcConfig = JSON.stringify(updatedOidcConfig);
-			}
-
-			await ctx.context.adapter.update({
-				model: "ssoProvider",
-				where: [{ field: "providerId", value: providerId }],
-				update: updateData,
-			});
-
-			const fullProvider = await ctx.context.adapter.findOne<SSOProviderRecord>(
-				{
-					model: "ssoProvider",
-					where: [{ field: "providerId", value: providerId }],
-				},
-			);
-
-			if (!fullProvider) {
-				throw new APIError("NOT_FOUND", {
-					message: "Provider not found after update",
-				});
-			}
-
-			return ctx.json(sanitizeProvider(fullProvider, ctx.context.baseURL));
-		},
-	);
-};
-
-export const deleteSSOProvider = () => {
-	return createAuthEndpoint(
-		"/sso/providers/:providerId",
-		{
-			method: "DELETE",
-			use: [sessionMiddleware],
-			params: getSSOProviderParamsSchema,
-			metadata: {
-				openapi: {
-					operationId: "deleteSSOProvider",
-					summary: "Delete SSO provider",
-					description:
-						"Delete an SSO provider. This removes the provider configuration but keeps existing linked account rows. Future SSO sign-ins for this provider will fail.",
-					responses: {
-						"200": {
-							description: "SSO provider deleted successfully",
-						},
-						"404": {
-							description: "Provider not found",
-						},
-						"403": {
-							description: "Access denied",
-						},
-					},
-				},
-			},
-		},
-		async (ctx) => {
-			const { providerId } = ctx.params;
-
-			await checkProviderAccess(ctx, providerId);
-
-			await ctx.context.adapter.delete({
-				model: "ssoProvider",
-				where: [{ field: "providerId", value: providerId }],
-			});
-
-			return ctx.json({ success: true });
 		},
 	);
 };
