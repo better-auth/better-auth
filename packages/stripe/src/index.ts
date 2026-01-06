@@ -112,6 +112,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 						const subscriptions = await client.subscriptions.list({
 							customer: organization.stripeCustomerId,
 							status: "all",
+							limit: 100, // 1 ~ 100
 						});
 						for (const sub of subscriptions.data) {
 							if (
