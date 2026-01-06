@@ -873,7 +873,7 @@ describe("siwe", () => {
 
 			expect(error).toBeDefined();
 			expect(error?.status).toBe(400);
-			expect(error?.code).toBe("WALLET_ALREADY_LINKED_TO_ANOTHER_USER");
+			expect(error?.code).toBe("WALLET_ALREADY_LINKED");
 		});
 
 		it("should create new user when not authenticated (no session)", async () => {
@@ -1088,9 +1088,7 @@ describe("siwe", () => {
 			// is already associated with User A, preventing a split identity.
 			expect(linkResult.error).toBeDefined();
 			expect(linkResult.error?.status).toBe(400);
-			expect(linkResult.error?.code).toBe(
-				"WALLET_ALREADY_LINKED_TO_ANOTHER_USER",
-			);
+			expect(linkResult.error?.code).toBe("WALLET_ALREADY_LINKED");
 
 			// Verify that no new walletAddress record was created for User B
 			const ctx = await auth.$context;
