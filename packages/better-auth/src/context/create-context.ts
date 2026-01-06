@@ -324,9 +324,8 @@ export async function createAuthContext(
 			}
 		},
 		getPlugin: getPluginFn,
-		hasPlugin: <Plugin extends BetterAuthPlugin>(
-			pluginId: Plugin["id"],
-		) => getPluginFn(pluginId) !== null,
+		hasPlugin: <Plugin extends BetterAuthPlugin>(pluginId: Plugin["id"]) =>
+			getPluginFn(pluginId) !== null,
 	};
 
 	const initOrPromise = runPluginInit(ctx);
