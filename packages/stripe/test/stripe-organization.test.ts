@@ -1855,9 +1855,6 @@ describe("stripe - organizationHooks integration", () => {
 		});
 		expect(subscription).toBeDefined();
 		expect(subscription?.status).toBe("active");
-
-		// Note: The actual deletion block is tested via organization plugin integration
-		// This test verifies the subscription state that would trigger the block
 	});
 
 	it("should allow organization deletion when no active subscription", async () => {
@@ -1936,86 +1933,5 @@ describe("stripe - organizationHooks integration", () => {
 		});
 		expect(subscription).toBeDefined();
 		expect(subscription?.status).toBe("canceled");
-
-		// Note: Actual customer deletion is tested via organization plugin integration
-	});
-
-	it("should clean up Stripe customer and DB subscriptions on organization deletion", async () => {
-		const { client, sessionSetter, auth } = await getTestInstance(
-			{
-				plugins: [organization(), stripe(baseHooksStripeOptions)],
-			},
-			{
-				disableTestUser: true,
-				clientOptions: {
-					plugins: [organizationClient(), stripeClient({ subscription: true })],
-				},
-			},
-		);
-
-		// Sign up and sign in
-		await client.signUp.email({
-			email: "org-cleanup-test@example.com",
-			password: "password123",
-			name: "Cleanup Test User",
-		});
-		const headers = new Headers();
-		await client.signIn.email(
-			{
-				email: "org-cleanup-test@example.com",
-				password: "password123",
-			},
-			{
-				onSuccess: sessionSetter(headers),
-			},
-		);
-
-		// Create organization via client
-		const org = await client.organization.create({
-			name: "Cleanup Test Org",
-			slug: "cleanup-test-org",
-			fetchOptions: { headers },
-		});
-		const orgId = org.data?.id as string;
-
-		// Update org with stripeCustomerId via adapter
-		const ctx = await auth.$context;
-		await ctx.adapter.update({
-			model: "organization",
-			update: { stripeCustomerId: "cus_cleanup_123" },
-			where: [{ field: "id", value: orgId }],
-		});
-
-		// Create subscription record
-		await ctx.adapter.create({
-			model: "subscription",
-			data: {
-				referenceId: orgId,
-				stripeCustomerId: "cus_cleanup_123",
-				stripeSubscriptionId: "sub_cleanup_123",
-				status: "canceled",
-				plan: "starter",
-			},
-		});
-
-		// Verify subscription exists before cleanup
-		const subBefore = await ctx.adapter.findOne<Subscription>({
-			model: "subscription",
-			where: [{ field: "referenceId", value: orgId }],
-		});
-		expect(subBefore).toBeDefined();
-
-		// Simulate cleanup
-		await ctx.adapter.deleteMany({
-			model: "subscription",
-			where: [{ field: "referenceId", value: orgId }],
-		});
-
-		// Verify subscription is cleaned up
-		const subAfter = await ctx.adapter.findOne<Subscription>({
-			model: "subscription",
-			where: [{ field: "referenceId", value: orgId }],
-		});
-		expect(subAfter).toBeNull();
 	});
 });
