@@ -50,10 +50,7 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					.optional(),
 				type: z.enum(["web", "native", "user-agent-based"]).optional(),
 				// SERVER_ONLY applicable fields
-				client_secret_expires_at: z
-					.union([z.string(), z.number()])
-					.optional()
-					.default(0),
+				client_secret_expires_at: z.number().optional().default(0),
 				skip_consent: z.boolean().optional(),
 				enable_end_session: z.boolean().optional(),
 				metadata: z.record(z.string(), z.unknown()).optional(),
@@ -504,9 +501,7 @@ export const adminUpdateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					response_types: z.array(z.enum(["code"])).optional(),
 					type: z.enum(["web", "native", "user-agent-based"]).optional(),
 					// SERVER_ONLY applicable fields
-					client_secret_expires_at: z
-						.union([z.string(), z.number()])
-						.optional(),
+					client_secret_expires_at: z.number().optional(),
 					skip_consent: z.boolean().optional(),
 					enable_end_session: z.boolean().optional(),
 					metadata: z.record(z.string(), z.unknown()).optional(),

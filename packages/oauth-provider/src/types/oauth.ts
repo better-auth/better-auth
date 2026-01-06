@@ -1,4 +1,5 @@
 import type { JWSAlgorithms } from "better-auth/plugins";
+import type { JSONWebKeySet } from "jose";
 import type { Prompt } from ".";
 
 /**
@@ -267,7 +268,7 @@ export interface OAuthClient {
 	tos_uri?: string;
 	policy_uri?: string;
 	//---- Jwks (only one can be used) ----//
-	jwks?: string[];
+	jwks?: JSONWebKeySet;
 	jwks_uri?: string;
 	//---- User Software Identifiers ----//
 	software_id?: string;
@@ -292,7 +293,7 @@ export interface OAuthClient {
 	enable_end_session?: boolean;
 	//---- All other metadata ----//
 	reference_id?: string;
-	[key: string]: unknown;
+	metadata?: Record<string, any>;
 }
 
 /**
