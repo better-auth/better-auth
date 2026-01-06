@@ -9,3 +9,5 @@ export {
 	validateConfigAlgorithms,
 	validateSAMLAlgorithms,
 } from "./algorithms";
+
+export { validateSingleAssertion } from "./assertions";
