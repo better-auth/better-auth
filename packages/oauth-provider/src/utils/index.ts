@@ -42,7 +42,7 @@ class TTLCache<K, V extends { expiresAt?: Date }> {
  * @internal
  */
 export const getOAuthProviderPlugin = (ctx: AuthContext) => {
-	return ctx.getPlugin("oauthProvider") satisfies ReturnType<
+	return ctx.getPlugin("oauth-provider") satisfies ReturnType<
 		typeof oauthProvider
 	> | null;
 };

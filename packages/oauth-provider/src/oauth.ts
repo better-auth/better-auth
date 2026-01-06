@@ -293,7 +293,6 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						const metadata = oidcServerMetadata(ctx, opts);
 						return metadata;
 					} else {
-						ctx.context.getPlugin("jwt");
 						const jwtPluginOptions = opts.disableJwtPlugin
 							? undefined
 							: getJwtPlugin(ctx.context)?.options;
