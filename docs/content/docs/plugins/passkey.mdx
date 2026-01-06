@@ -82,7 +82,7 @@ export const auth = betterAuth({
       registration: {
         // Default: true. Set false for passkey-first onboarding.
         requireSession: false,
-        // Required if requireSession is false.
+        // Required if requireSession is false and no session exists.
         resolveUser: async ({ ctx, context }) => {
           // Validate context (e.g., a signed token), then create or load a user.
           return { id: "user-id", name: "user@example.com" }
