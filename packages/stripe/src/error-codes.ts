@@ -25,4 +25,6 @@ export const STRIPE_ERROR_CODES = defineErrorCodes({
 		"Organization subscription is not enabled",
 	ORGANIZATION_HAS_ACTIVE_SUBSCRIPTION:
 		"Cannot delete organization with active subscription",
+	ORGANIZATION_REFERENCE_ID_REQUIRED:
+		"Reference ID is required. Provide referenceId or set activeOrganizationId in session",
 });

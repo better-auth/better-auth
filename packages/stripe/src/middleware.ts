@@ -52,7 +52,7 @@ export const referenceMiddleware = (
 			if (!referenceId) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					STRIPE_ERROR_CODES.REFERENCE_ID_NOT_ALLOWED,
+					STRIPE_ERROR_CODES.ORGANIZATION_REFERENCE_ID_REQUIRED,
 				);
 			}
 			const isAuthorized = await subscriptionOptions.authorizeReference(
