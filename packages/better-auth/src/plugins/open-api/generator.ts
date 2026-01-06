@@ -80,6 +80,9 @@ export interface Path {
 type AllowedType = "string" | "number" | "boolean" | "array" | "object";
 const allowedType = new Set(["string", "number", "boolean", "array", "object"]);
 function getTypeFromZodType(zodType: z.ZodType<any>) {
+	if ((zodType as any)?._def?.typeName === "ZodDefault") {
+		return getTypeFromZodType((zodType as any)._def.innerType);
+	}
 	const type = zodType.type;
 	return allowedType.has(type) ? (type as AllowedType) : "string";
 }
