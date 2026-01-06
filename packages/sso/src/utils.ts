@@ -43,23 +43,21 @@ export const validateEmailDomain = (email: string, domain: string) => {
 };
 
 export function parseCertificate(certPem: string) {
-	try {
-		const normalized = certPem.includes("-----BEGIN")
-			? certPem
-			: `-----BEGIN CERTIFICATE-----\n${certPem}\n-----END CERTIFICATE-----`;
+	// SAML metadata X509Certificate elements contain raw base64 without PEM headers,
+	// but users may also provide full PEM-formatted certificates. Normalize to PEM.
+	const normalized = certPem.includes("-----BEGIN")
+		? certPem
+		: `-----BEGIN CERTIFICATE-----\n${certPem}\n-----END CERTIFICATE-----`;
 
-		const cert = new X509Certificate(normalized);
+	const cert = new X509Certificate(normalized);
 
-		return {
-			fingerprintSha256: cert.fingerprint256,
-			notBefore: cert.validFrom,
-			notAfter: cert.validTo,
-			publicKeyAlgorithm:
-				cert.publicKey.asymmetricKeyType?.toUpperCase() || "UNKNOWN",
-		};
-	} catch {
-		return { certParseError: "Failed to parse certificate" };
-	}
+	return {
+		fingerprintSha256: cert.fingerprint256,
+		notBefore: cert.validFrom,
+		notAfter: cert.validTo,
+		publicKeyAlgorithm:
+			cert.publicKey.asymmetricKeyType?.toUpperCase() || "UNKNOWN",
+	};
 }
 
 export function maskClientId(clientId: string): string {

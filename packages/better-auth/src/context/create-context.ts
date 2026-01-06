@@ -175,6 +175,8 @@ export async function createAuthContext(
 				: getDatabaseType(options.database),
 	});
 
+	const pluginIds = new Set(options.plugins!.map((p) => p.id));
+
 	const getPluginFn = <Plugin extends BetterAuthPlugin>(
 		id: Plugin["id"],
 	): Plugin | null =>
@@ -325,7 +327,7 @@ export async function createAuthContext(
 		},
 		getPlugin: getPluginFn,
 		hasPlugin: <Plugin extends BetterAuthPlugin>(pluginId: Plugin["id"]) =>
-			getPluginFn(pluginId) !== null,
+			pluginIds.has(pluginId),
 	};
 
 	const initOrPromise = runPluginInit(ctx);
