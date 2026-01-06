@@ -4,6 +4,7 @@ import type { GenericEndpointContext, User } from "better-auth";
 import { HIDE_METADATA } from "better-auth";
 import { getSessionFromCtx, originCheck } from "better-auth/api";
 import type { Organization } from "better-auth/plugins/organization";
+import { defu } from "defu";
 import type Stripe from "stripe";
 import type { Stripe as StripeType } from "stripe";
 import * as z from "zod/v4";
@@ -347,15 +348,19 @@ export const upgradeSubscription = (options: StripeOptions) => {
 
 								// Create Stripe customer for organization
 								// Email can be set via getCustomerCreateParams or updated in billing portal
-								stripeCustomer = await client.customers.create({
-									name: org.name,
-									metadata: {
-										...ctx.body.metadata,
-										organizationId: org.id,
-										customerType: "organization",
+								// Use defu to ensure internal metadata fields are preserved
+								const customerParams: StripeType.CustomerCreateParams = defu(
+									{
+										name: org.name,
+										metadata: {
+											...ctx.body.metadata,
+											organizationId: org.id,
+											customerType: "organization",
+										},
 									},
-									...extraCreateParams,
-								});
+									extraCreateParams,
+								);
+								stripeCustomer = await client.customers.create(customerParams);
 
 								// Call onCustomerCreate callback only for newly created customers
 								await options.organization?.onCustomerCreate?.(
