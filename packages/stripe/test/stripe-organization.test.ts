@@ -1736,11 +1736,13 @@ describe("stripe - organizationHooks integration", () => {
 	};
 
 	beforeEach(() => {
-		vi.clearAllMocks();
+		vi.resetAllMocks();
+		mockStripeHooks.subscriptions.list.mockResolvedValue({ data: [] });
+		mockStripeHooks.customers.list.mockResolvedValue({ data: [] });
 	});
 
 	it("should sync organization name to Stripe customer on update", async () => {
-		const { client, sessionSetter } = await getTestInstance(
+		const { client, sessionSetter, auth } = await getTestInstance(
 			{
 				plugins: [organization(), stripe(baseHooksStripeOptions)],
 			},
@@ -1769,28 +1771,46 @@ describe("stripe - organizationHooks integration", () => {
 			},
 		);
 
-		// Create organization via client (which properly uses createdAt, etc.)
+		// Create organization via client
 		const org = await client.organization.create({
 			name: "Old Org Name",
 			slug: "sync-test-org",
 			fetchOptions: { headers },
 		});
+		const orgId = org.data?.id as string;
+		expect(orgId).toBeDefined();
 
-		expect(org.data?.id).toBeDefined();
+		// Set stripeCustomerId on organization
+		const ctx = await auth.$context;
+		await ctx.adapter.update({
+			model: "organization",
+			update: { stripeCustomerId: "cus_sync_test_123" },
+			where: [{ field: "id", value: orgId }],
+		});
+
+		// Mock Stripe customer retrieve to return old name
+		mockStripeHooks.customers.retrieve.mockResolvedValueOnce({
+			id: "cus_sync_test_123",
+			name: "Old Org Name",
+			deleted: false,
+		});
+
+		// Update organization name
+		const updateResult = await client.organization.update({
+			organizationId: orgId,
+			data: { name: "New Org Name" },
+			fetchOptions: { headers },
+		});
+		expect(updateResult.error).toBeNull();
+
+		// Verify Stripe customer was updated with new name
+		expect(mockStripeHooks.customers.update).toHaveBeenCalledWith(
+			"cus_sync_test_123",
+			expect.objectContaining({ name: "New Org Name" }),
+		);
 	});
 
 	it("should block organization deletion when active subscription exists", async () => {
-		// Mock subscriptions.list to return an active subscription
-		mockStripeHooks.subscriptions.list.mockResolvedValueOnce({
-			data: [
-				{
-					id: "sub_active_123",
-					status: "active",
-					customer: "cus_delete_block_123",
-				},
-			],
-		});
-
 		const { client, sessionSetter, auth } = await getTestInstance(
 			{
 				plugins: [organization(), stripe(baseHooksStripeOptions)],
@@ -1836,7 +1856,7 @@ describe("stripe - organizationHooks integration", () => {
 			where: [{ field: "id", value: orgId }],
 		});
 
-		// Create active subscription for the org
+		// Create active subscription for the org in DB
 		await ctx.adapter.create({
 			model: "subscription",
 			data: {
@@ -1848,27 +1868,38 @@ describe("stripe - organizationHooks integration", () => {
 			},
 		});
 
-		// Verify the subscription exists
-		const subscription = await ctx.adapter.findOne<Subscription>({
-			model: "subscription",
-			where: [{ field: "referenceId", value: orgId }],
-		});
-		expect(subscription).toBeDefined();
-		expect(subscription?.status).toBe("active");
-	});
-
-	it("should allow organization deletion when no active subscription", async () => {
-		// Mock subscriptions.list to return only canceled subscriptions
+		// Mock Stripe API to return an active subscription
 		mockStripeHooks.subscriptions.list.mockResolvedValueOnce({
 			data: [
 				{
-					id: "sub_canceled_123",
-					status: "canceled",
-					customer: "cus_delete_allow_123",
+					id: "sub_active_123",
+					status: "active",
+					customer: "cus_delete_block_123",
 				},
 			],
 		});
 
+		// Attempt to delete the organization
+		const deleteResult = await client.organization.delete({
+			organizationId: orgId,
+			fetchOptions: { headers },
+		});
+
+		// Verify deletion was blocked with expected error
+		expect(deleteResult.error).toBeDefined();
+		expect(deleteResult.error?.code).toBe(
+			"ORGANIZATION_HAS_ACTIVE_SUBSCRIPTION",
+		);
+
+		// Verify organization still exists
+		const orgAfterDelete = await ctx.adapter.findOne({
+			model: "organization",
+			where: [{ field: "id", value: orgId }],
+		});
+		expect(orgAfterDelete).not.toBeNull();
+	});
+
+	it("should allow organization deletion when no active subscription", async () => {
 		const { client, sessionSetter, auth } = await getTestInstance(
 			{
 				plugins: [organization(), stripe(baseHooksStripeOptions)],
@@ -1926,12 +1957,37 @@ describe("stripe - organizationHooks integration", () => {
 			},
 		});
 
-		// Verify the subscription is canceled
+		// Verify the subscription is canceled in DB
 		const subscription = await ctx.adapter.findOne<Subscription>({
 			model: "subscription",
 			where: [{ field: "referenceId", value: orgId }],
 		});
 		expect(subscription).toBeDefined();
 		expect(subscription?.status).toBe("canceled");
+
+		// Mock Stripe API to return only canceled subscriptions
+		mockStripeHooks.subscriptions.list.mockResolvedValueOnce({
+			data: [
+				{
+					id: "sub_canceled_123",
+					status: "canceled",
+					customer: "cus_delete_allow_123",
+				},
+			],
+		});
+
+		// Actually delete the organization and verify it succeeds
+		const deleteResult = await client.organization.delete({
+			organizationId: orgId,
+			fetchOptions: { headers },
+		});
+		expect(deleteResult.error).toBeNull();
+
+		// Verify organization is deleted
+		const deletedOrg = await ctx.adapter.findOne({
+			model: "organization",
+			where: [{ field: "id", value: orgId }],
+		});
+		expect(deletedOrg).toBeNull();
 	});
 });
