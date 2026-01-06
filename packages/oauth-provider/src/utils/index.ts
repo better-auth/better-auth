@@ -7,7 +7,7 @@ import {
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "better-auth/crypto";
-import type { jwt } from "better-auth/plugins/jwt";
+import type { jwt } from "better-auth/plugins";
 import type { Auth } from "better-auth/types";
 import { APIError } from "better-call";
 import type { oauthProvider } from "..";

@@ -6,6 +6,8 @@ import { EXTERNAL_ERROR_CODES, INTERNAL_ERROR_CODES } from "./error-codes";
 import type { CaptchaOptions } from "./types";
 import * as verifyHandlers from "./verify-handlers";
 
+export type * from "./types";
+
 export const captcha = (options: CaptchaOptions) =>
 	({
 		id: "captcha",
@@ -19,7 +21,7 @@ export const captcha = (options: CaptchaOptions) =>
 					return undefined;
 
 				if (!options.secretKey) {
-					throw new Error(INTERNAL_ERROR_CODES.MISSING_SECRET_KEY);
+					throw new Error(INTERNAL_ERROR_CODES.MISSING_SECRET_KEY.message);
 				}
 
 				const captchaResponse = request.headers.get("x-captcha-response");
@@ -27,7 +29,7 @@ export const captcha = (options: CaptchaOptions) =>
 
 				if (!captchaResponse) {
 					return middlewareResponse({
-						message: EXTERNAL_ERROR_CODES.MISSING_RESPONSE,
+						message: EXTERNAL_ERROR_CODES.MISSING_RESPONSE.message,
 						status: 400,
 					});
 				}
@@ -76,7 +78,7 @@ export const captcha = (options: CaptchaOptions) =>
 				});
 
 				return middlewareResponse({
-					message: EXTERNAL_ERROR_CODES.UNKNOWN_ERROR,
+					message: EXTERNAL_ERROR_CODES.UNKNOWN_ERROR.message,
 					status: 500,
 				});
 			}
