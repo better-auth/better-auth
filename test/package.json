@@ -4,14 +4,16 @@
   "type": "module",
   "scripts": {
     "test": "vitest",
-    "lint:package": "publint run --strict"
+    "coverage": "vitest run --coverage",
+    "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack ."
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:*",
-    "msw": "^2.12.1",
+    "msw": "^2.12.4",
     "openid-client": "^6.8.1",
-    "vitest": "catalog:"
+    "vitest": "catalog:vitest"
   }
 }

@@ -155,7 +155,7 @@ describe("Social Providers", async (c) => {
 	afterAll(async () => {
 		await server.stop().catch(console.error);
 	});
-	server.service.on("beforeRsponse", (tokenResponse, req) => {
+	server.service.on("beforeResponse", (tokenResponse, req) => {
 		tokenResponse.body = {
 			accessToken: "access-token",
 			refreshToken: "refresher-token",
@@ -382,7 +382,7 @@ describe("Social Providers", async (c) => {
 				expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
 			},
 		});
-		const accounts = await client.listAccounts({
+		await client.listAccounts({
 			fetchOptions: { headers },
 		});
 		await client.$fetch("/refresh-token", {
@@ -782,6 +782,7 @@ describe("signin", async () => {
 			expiresAt: expect.any(Number),
 			invitedBy: "user-123",
 			errorURL: "http://localhost:3000/api/auth/error",
+			state: expect.any(String),
 		});
 	});
 

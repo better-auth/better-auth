@@ -158,6 +158,8 @@ describe("type", () => {
 			},
 		});
 		expectTypeOf<typeof client>().not.toHaveProperty("testNonAction");
+		expectTypeOf<typeof client>().not.toHaveProperty("testServerScoped");
+		expectTypeOf<typeof client>().not.toHaveProperty("testHttpScoped");
 	});
 	it("should infer session additional fields", () => {
 		const client = createReactClient({
@@ -423,42 +425,42 @@ describe("type", () => {
 
 		// Should have organization error codes
 		expectTypeOf(
-			client.$ERROR_CODES.ORGANIZATION_NOT_FOUND,
+			client.$ERROR_CODES.ORGANIZATION_NOT_FOUND.message,
 		).toEqualTypeOf<"Organization not found">();
 
 		// Should have two-factor error codes
 		expectTypeOf(
-			client.$ERROR_CODES.OTP_HAS_EXPIRED,
+			client.$ERROR_CODES.OTP_HAS_EXPIRED.message,
 		).toEqualTypeOf<"OTP has expired">();
 
 		// Should have email-otp error codes
 		expectTypeOf(
-			client.$ERROR_CODES.INVALID_EMAIL,
+			client.$ERROR_CODES.INVALID_EMAIL.message,
 		).toEqualTypeOf<"Invalid email">();
 
 		// Should have admin error codes
 		expectTypeOf(
-			client.$ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REVOKE_USERS_SESSIONS,
+			client.$ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REVOKE_USERS_SESSIONS.message,
 		).toEqualTypeOf<"You are not allowed to revoke users sessions">();
 
 		// Should have multi-session error codes
 		expectTypeOf(
-			client.$ERROR_CODES.INVALID_SESSION_TOKEN,
+			client.$ERROR_CODES.INVALID_SESSION_TOKEN.message,
 		).toEqualTypeOf<"Invalid session token">();
 
 		// Should have generic-oauth error codes
 		expectTypeOf(
-			client.$ERROR_CODES.PROVIDER_NOT_FOUND,
+			client.$ERROR_CODES.PROVIDER_NOT_FOUND.message,
 		).toEqualTypeOf<"Provider not found">();
 
 		// Should have device-authorization error codes
 		expectTypeOf(
-			client.$ERROR_CODES.INVALID_DEVICE_CODE,
+			client.$ERROR_CODES.INVALID_DEVICE_CODE.message,
 		).toEqualTypeOf<"Invalid device code">();
 
 		// Should have base error codes
 		expectTypeOf(
-			client.$ERROR_CODES.USER_NOT_FOUND,
+			client.$ERROR_CODES.USER_NOT_FOUND.message,
 		).toEqualTypeOf<"User not found">();
 	});
 });

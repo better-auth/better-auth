@@ -16,7 +16,7 @@ export type {
 };
 
 /**
- * @deprecated use type `BetterAuthClientOptions` instead.
+ * @deprecated use type `ClientStore` instead.
  */
 export type Store = ClientStore;
 /**
@@ -24,7 +24,7 @@ export type Store = ClientStore;
  */
 export type AtomListener = ClientAtomListener;
 /**
- * @deprecated use type `BetterAuthClientPlugin` instead.
+ * @deprecated use type `BetterAuthClientOptions` instead.
  */
 export type ClientOptions = BetterAuthClientOptions;
 
@@ -79,7 +79,13 @@ export type InferErrorCodes<O extends BetterAuthClientOptions> =
 		? UnionToIntersection<
 				Plugin extends BetterAuthClientPlugin
 					? Plugin["$InferServerPlugin"] extends { $ERROR_CODES: infer E }
-						? E extends Record<string, string>
+						? E extends Record<
+								string,
+								{
+									code: string;
+									message: string;
+								}
+							>
 							? E
 							: {}
 						: {}

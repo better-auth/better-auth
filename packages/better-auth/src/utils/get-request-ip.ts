@@ -13,10 +13,6 @@ export function getIp(
 		return null;
 	}
 
-	if (isTest() || isDevelopment()) {
-		return LOCALHOST_IP;
-	}
-
 	const headers = "headers" in req ? req.headers : req;
 
 	const defaultHeaders = ["x-forwarded-for"];
@@ -33,6 +29,12 @@ export function getIp(
 			}
 		}
 	}
+
+	// Fallback to localhost IP in development/test environments when no IP found in headers
+	if (isTest() || isDevelopment()) {
+		return LOCALHOST_IP;
+	}
+
 	return null;
 }
 
