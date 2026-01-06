@@ -504,6 +504,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					} catch (e: any) {
 						// If the record doesn't exist, we don't want to throw an error
 						if (e?.meta?.cause === "Record to delete does not exist.") return;
+						if (e?.code === "P2025") return; // Prisma 7+
 						// otherwise if it's an unknown error, we want to just log it for debugging.
 						console.log(e);
 					}
