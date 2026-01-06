@@ -1462,6 +1462,9 @@ importers:
 
   packages/sso:
     dependencies:
+      '@better-auth/utils':
+        specifier: 'catalog:'
+        version: 0.3.0
       '@better-fetch/fetch':
         specifier: 'catalog:'
         version: 1.1.21
@@ -1478,9 +1481,6 @@ importers:
         specifier: ^4.1.12
         version: 4.3.4
     devDependencies:
-      '@better-auth/utils':
-        specifier: 'catalog:'
-        version: 0.3.0
       '@types/body-parser':
         specifier: ^1.19.6
         version: 1.19.6
@@ -20384,7 +20384,9 @@ snapshots:
       metro-runtime: 0.83.3
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
     optional: true
 
   '@react-native/normalize-colors@0.74.89': {}
