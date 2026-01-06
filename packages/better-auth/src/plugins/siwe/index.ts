@@ -138,6 +138,13 @@ export const siwe = (options: SIWEPluginOptions) =>
 					const walletAddress = toChecksumAddress(rawWalletAddress);
 					const isAnonymous = options.anonymous ?? true;
 
+					if (!isAnonymous && !email) {
+						throw APIError.fromStatus("BAD_REQUEST", {
+							message: "Email is required when anonymous is disabled.",
+							status: 400,
+						});
+					}
+
 					// Verify nonce exists and is not expired
 					const verification =
 						await ctx.context.internalAdapter.findVerificationValue(
@@ -242,7 +249,10 @@ export const siwe = (options: SIWEPluginOptions) =>
 						}
 
 						// Cross-chain: same address linked to different user
-						if (walletOnAnyChain && walletOnAnyChain.userId !== sessionUser.id) {
+						if (
+							walletOnAnyChain &&
+							walletOnAnyChain.userId !== sessionUser.id
+						) {
 							throw APIError.from(
 								"BAD_REQUEST",
 								SIWE_ERROR_CODES.WALLET_ALREADY_LINKED,
