@@ -4665,7 +4665,7 @@ describe("stripe", () => {
 					fetchOptions: { headers },
 				});
 
-				expect(res.error?.code).toBe("REFERENCE_ID_NOT_ALLOWED");
+				expect(res.error?.code).toBe("ORGANIZATION_REFERENCE_ID_REQUIRED");
 			});
 
 			it("should reject when authorizeReference returns false", async () => {
