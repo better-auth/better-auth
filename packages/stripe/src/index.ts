@@ -135,47 +135,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					}
 				};
 
-				/**
-				 * Delete Stripe customer and clean up DB subscriptions after organization deletion
-				 */
-				const afterDeleteStripeOrg = async (data: {
-					organization: Organization & WithStripeCustomerId;
-					user: User;
-				}) => {
-					const { organization } = data;
-					if (!organization.stripeCustomerId) return;
-
-					// Delete Stripe customer
-					try {
-						await client.customers.del(organization.stripeCustomerId);
-						ctx.logger.info(
-							`Deleted Stripe customer ${organization.stripeCustomerId}`,
-						);
-					} catch (e: any) {
-						ctx.logger.error(`Failed to delete Stripe customer: ${e.message}`);
-					}
-
-					// Clean up subscription records in DB - Always, regardless of Stripe response
-					try {
-						await ctx.adapter.deleteMany({
-							model: "subscription",
-							where: [
-								{
-									field: "referenceId",
-									value: organization.id,
-								},
-							],
-						});
-						ctx.logger.info(
-							`Cleaned up subscription records for organization ${organization.id}`,
-						);
-					} catch (e: any) {
-						ctx.logger.error(
-							`Failed to clean up subscription records: ${e.message}`,
-						);
-					}
-				};
-
 				orgPlugin.options.organizationHooks = {
 					...existingHooks,
 					afterUpdateOrganization: existingHooks.afterUpdateOrganization
@@ -190,12 +149,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								await beforeDeleteStripeOrg(data);
 							}
 						: beforeDeleteStripeOrg,
-					afterDeleteOrganization: existingHooks.afterDeleteOrganization
-						? async (data) => {
-								await existingHooks.afterDeleteOrganization!(data);
-								await afterDeleteStripeOrg(data);
-							}
-						: afterDeleteStripeOrg,
 				};
 			}
 
