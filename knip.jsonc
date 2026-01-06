@@ -9,9 +9,7 @@
 		"packages/*": {
 			"entry": ["src/index.ts"],
 			"project": ["src/**/*.ts!"],
-			"ignoreDependencies": [
-				"@better-auth/core"
-			]
+			"ignoreDependencies": ["@better-auth/core"]
 		},
 		"packages/better-auth": {
 			"project": [
