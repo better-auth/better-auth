@@ -57,10 +57,7 @@ const resolveRegistrationUser = async (
 	if (requireSession) {
 		const session = ctx.context?.session;
 		if (!session?.user?.id) {
-			throw APIError.from(
-				"UNAUTHORIZED",
-				PASSKEY_ERROR_CODES.SESSION_REQUIRED,
-			);
+			throw APIError.from("UNAUTHORIZED", PASSKEY_ERROR_CODES.SESSION_REQUIRED);
 		}
 		const sessionName = session.user.email || session.user.id;
 		return {

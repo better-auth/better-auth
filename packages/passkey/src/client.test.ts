@@ -71,7 +71,9 @@ describe("passkey client", () => {
 				}),
 			}),
 		);
-		expect(result.webauthn?.clientExtensionResults).toEqual({
+		expect(
+			"webauthn" in result && result.webauthn?.clientExtensionResults,
+		).toEqual({
 			credProps: true,
 		});
 	});
@@ -111,7 +113,8 @@ describe("passkey client", () => {
 		});
 
 		const result = await actions.signIn.passkey({
-			extensions: { hmacGetSecret: true },
+			// hmacGetSecret is a valid WebAuthn extension but not in standard type definitions
+			extensions: { hmacGetSecret: true } as Record<string, unknown>,
 			returnWebAuthnResponse: true,
 		});
 
@@ -125,7 +128,9 @@ describe("passkey client", () => {
 				}),
 			}),
 		);
-		expect(result.webauthn?.clientExtensionResults).toEqual({
+		expect(
+			"webauthn" in result && result.webauthn?.clientExtensionResults,
+		).toEqual({
 			credProps: true,
 		});
 	});
