@@ -359,7 +359,11 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		? Math.round(createdAt.getTime() / 1000)
 		: undefined;
 	const _scopes = scopes?.join(" ");
-	const _metadata = metadata ? JSON.parse(metadata) : undefined;
+	const _metadata = metadata
+		? typeof metadata === "string"
+			? JSON.parse(metadata)
+			: metadata
+		: undefined;
 
 	return {
 		// Important Fields
