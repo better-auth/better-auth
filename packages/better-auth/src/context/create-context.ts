@@ -130,6 +130,10 @@ export async function createAuthContext(
 		plugins: plugins.concat(internalPlugins),
 	};
 
+	const pluginIds = new Set(
+		options.plugins?.map((p) => p.id).filter(Boolean) ?? [],
+	);
+
 	checkEndpointConflicts(options, logger);
 	const cookies = getCookies(options);
 	const tables = getAuthTables(options);
@@ -320,6 +324,7 @@ export async function createAuthContext(
 			(options.plugins!.find((p): p is Plugin => p.id === id) as
 				| Plugin
 				| undefined) ?? null,
+		hasPlugin: (pluginId: string) => pluginIds.has(pluginId),
 	};
 
 	const initOrPromise = runPluginInit(ctx);
