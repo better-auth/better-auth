@@ -113,10 +113,9 @@ const upgradeSubscriptionBodySchema = z.object({
 		})
 		.optional(),
 	/**
-	 * Reference ID for the subscription.
-	 *
-	 * This is used to identify the subscription to upgrade.
-	 * For user subscriptions, defaults to the user's ID if not provided.
+	 * Reference ID for the subscription based on customerType:
+	 * - `user`: defaults to `user.id`
+	 * - `organization`: defaults to `session.activeOrganizationId`
 	 */
 	referenceId: z
 		.string()
@@ -148,12 +147,11 @@ const upgradeSubscriptionBodySchema = z.object({
 		})
 		.optional(),
 	/**
-	 * Any additional data you want to store in your database
-	 * subscriptions
+	 * Additional metadata to store with the subscription.
 	 */
 	metadata: z.record(z.string(), z.any()).optional(),
 	/**
-	 * If a subscription
+	 * Number of seats for subscriptions.
 	 */
 	seats: z
 		.number()
