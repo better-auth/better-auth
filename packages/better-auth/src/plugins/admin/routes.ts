@@ -346,6 +346,21 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
 
+			// Validate provided role(s) against allowed role list if present
+			if (ctx.body.role && opts.roles) {
+				const inputRoles = Array.isArray(ctx.body.role)
+					? ctx.body.role
+					: [ctx.body.role];
+				for (const role of inputRoles) {
+					if (!opts.roles[role as keyof typeof opts.roles]) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE,
+						);
+					}
+				}
+			}
+
 			const existUser =
 				await ctx.context.internalAdapter.findUserByEmail(email);
 			if (existUser) {
@@ -387,7 +402,7 @@ const adminUpdateUserBodySchema = z.object({
 	userId: z.coerce.string().meta({
 		description: "The user id",
 	}),
-	data: z.record(z.any(), z.any()).meta({
+	data: z.record(z.string(), z.any()).meta({
 		description: "The user data to update",
 	}),
 });
@@ -756,9 +771,9 @@ export const listUserSessions = (opts: AdminOptions) =>
 
 			const sessions: SessionWithImpersonatedBy[] =
 				await ctx.context.internalAdapter.listSessions(ctx.body.userId);
-			return {
+			return ctx.json({
 				sessions: sessions,
-			};
+			});
 		},
 	);
 
@@ -1510,6 +1525,10 @@ export const setUserPassword = (opts: AdminOptions) =>
 			}
 
 			const { newPassword, userId } = ctx.body;
+			const targetUser = await ctx.context.internalAdapter.findUserById(userId);
+			if (!targetUser) {
+				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
+			}
 			const minPasswordLength = ctx.context.password.config.minPasswordLength;
 			if (newPassword.length < minPasswordLength) {
 				ctx.context.logger.error("Password is too short");
