@@ -359,6 +359,24 @@ function mergeOIDCConfig(
 	};
 }
 
+function parseAndValidateConfig<T>(
+	configString: string | null | undefined,
+	configType: "SAML" | "OIDC",
+): T {
+	let config: T | null = null;
+	try {
+		config = safeJsonParse<T>(configString as string);
+	} catch {
+		config = null;
+	}
+	if (!config) {
+		throw new APIError("BAD_REQUEST", {
+			message: `Cannot update ${configType} config for a provider that doesn't have ${configType} configured`,
+		});
+	}
+	return config;
+}
+
 export const updateSSOProvider = <O extends SSOOptions>(options: O) => {
 	return createAuthEndpoint(
 		"/sso/providers/:providerId",
@@ -391,9 +409,16 @@ export const updateSSOProvider = <O extends SSOOptions>(options: O) => {
 			const { providerId } = ctx.params;
 			const body = ctx.body;
 
+			const { issuer, domain, samlConfig, oidcConfig } = body;
+			if (!issuer && !domain && !samlConfig && !oidcConfig) {
+				throw new APIError("BAD_REQUEST", {
+					message: "No fields provided for update",
+				});
+			}
+
 			const existingProvider = await checkProviderAccess(ctx, providerId);
 
-			const updateData: Record<string, any> = {};
+			const updateData: Partial<SSOProviderRecord> = {};
 
 			if (body.issuer !== undefined) {
 				updateData.issuer = body.issuer;
@@ -433,21 +458,10 @@ export const updateSSOProvider = <O extends SSOOptions>(options: O) => {
 					);
 				}
 
-				let currentSamlConfig: SAMLConfig | null = null;
-				try {
-					currentSamlConfig = safeJsonParse<SAMLConfig>(
-						existingProvider.samlConfig as string,
-					);
-				} catch {
-					currentSamlConfig = null;
-				}
-
-				if (!currentSamlConfig) {
-					throw new APIError("BAD_REQUEST", {
-						message:
-							"Cannot update SAML config for a provider that doesn't have SAML configured",
-					});
-				}
+				const currentSamlConfig = parseAndValidateConfig<SAMLConfig>(
+					existingProvider.samlConfig,
+					"SAML",
+				);
 
 				const updatedSamlConfig = mergeSAMLConfig(
 					currentSamlConfig,
@@ -461,21 +475,10 @@ export const updateSSOProvider = <O extends SSOOptions>(options: O) => {
 			}
 
 			if (body.oidcConfig) {
-				let currentOidcConfig: OIDCConfig | null = null;
-				try {
-					currentOidcConfig = safeJsonParse<OIDCConfig>(
-						existingProvider.oidcConfig as string,
-					);
-				} catch {
-					currentOidcConfig = null;
-				}
-
-				if (!currentOidcConfig) {
-					throw new APIError("BAD_REQUEST", {
-						message:
-							"Cannot update OIDC config for a provider that doesn't have OIDC configured",
-					});
-				}
+				const currentOidcConfig = parseAndValidateConfig<OIDCConfig>(
+					existingProvider.oidcConfig,
+					"OIDC",
+				);
 
 				const updatedOidcConfig = mergeOIDCConfig(
 					currentOidcConfig,
@@ -486,12 +489,6 @@ export const updateSSOProvider = <O extends SSOOptions>(options: O) => {
 				);
 
 				updateData.oidcConfig = JSON.stringify(updatedOidcConfig);
-			}
-
-			if (Object.keys(updateData).length === 0) {
-				throw new APIError("BAD_REQUEST", {
-					message: "No fields provided for update",
-				});
 			}
 
 			await ctx.context.adapter.update({
