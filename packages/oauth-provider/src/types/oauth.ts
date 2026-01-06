@@ -357,7 +357,7 @@ export interface OAuthClient {
 	enable_end_session?: boolean;
 	//---- All other metadata ----//
 	reference_id?: string;
-	[key: string]: any;
+	[key: string]: unknown;
 }
 
 /**
