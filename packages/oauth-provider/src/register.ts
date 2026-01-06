@@ -252,6 +252,8 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		skip_consent: skipConsent,
 		enable_end_session: enableEndSession,
 		reference_id: referenceId,
+		// Metadata field
+		metadata: _metadata,
 		// All other metadata
 		...rest
 	} = input;
@@ -261,7 +263,11 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 	const createdAt = _createdAt ? new Date(_createdAt * 1000) : undefined;
 	const scopes = _scope?.split(" ");
 	const metadata =
-		rest && Object.keys(rest).length ? JSON.stringify(rest) : undefined;
+		_metadata !== undefined
+			? _metadata
+			: rest && Object.keys(rest).length
+				? rest
+				: undefined;
 
 	return {
 		// Important Fields
@@ -354,11 +360,9 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		? Math.round(createdAt.getTime() / 1000)
 		: undefined;
 	const _scopes = scopes?.join(" ");
-	const _metadata = metadata ? JSON.parse(metadata) : undefined;
+	const _metadata = metadata;
 
 	return {
-		// All other metadata
-		..._metadata,
 		// Important Fields
 		client_id: clientId,
 		client_secret: clientSecret ?? undefined,
@@ -395,5 +399,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		skip_consent: skipConsent ?? undefined,
 		enable_end_session: enableEndSession ?? undefined,
 		reference_id: referenceId ?? undefined,
+		// Metadata
+		metadata: _metadata ?? undefined,
 	};
 }

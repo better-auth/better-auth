@@ -210,6 +210,20 @@ describe("oauth register", async () => {
 
 		expect(response.data?.disabled).toBeFalsy();
 	});
+
+	it("should register client with metadata", async () => {
+		const metadata = { foo: "bar", nested: { key: "value" } };
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				metadata,
+			},
+		});
+		expect(response?.client_id).toBeDefined();
+		// Metadata should be returned as a nested object under metadata key
+		expect(response?.metadata).toEqual(metadata);
+	});
 });
 
 describe("oauth register - unauthenticated", async () => {
