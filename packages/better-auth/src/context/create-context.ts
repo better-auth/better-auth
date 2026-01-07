@@ -1,4 +1,8 @@
-import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
+import type {
+	AuthContext,
+	BetterAuthOptions,
+	BetterAuthPlugin,
+} from "@better-auth/core";
 import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { createLogger, env, isProduction, isTest } from "@better-auth/core/env";
@@ -173,7 +177,7 @@ export async function createAuthContext(
 
 	const trustedOrigins = await getTrustedOrigins(options);
 
-	let ctx: AuthContext = {
+	const ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
 		socialProviders: providers,
 		options,
@@ -314,6 +318,10 @@ export async function createAuthContext(
 				logger.error("Failed to run background task:", e);
 			}
 		},
+		getPlugin: <Plugin extends BetterAuthPlugin>(id: Plugin["id"]) =>
+			(options.plugins!.find((p): p is Plugin => p.id === id) as
+				| Plugin
+				| undefined) ?? null,
 	};
 
 	const initOrPromise = runPluginInit(ctx);

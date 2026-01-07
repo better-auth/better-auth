@@ -48,7 +48,11 @@ import {
 	discoverOIDCConfig,
 	mapDiscoveryErrorToAPIError,
 } from "../oidc";
-import { validateConfigAlgorithms, validateSAMLAlgorithms } from "../saml";
+import {
+	validateConfigAlgorithms,
+	validateSAMLAlgorithms,
+	validateSingleAssertion,
+} from "../saml";
 import { generateRelayState, parseRelayState } from "../saml-state";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
 import { safeJsonParse, validateEmailDomain } from "../utils";
@@ -1939,6 +1943,8 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 					: undefined,
 			});
 
+			validateSingleAssertion(SAMLResponse);
+
 			let parsedResponse: FlowResult;
 			try {
 				parsedResponse = await sp.parseLoginResponse(idp, "post", {
@@ -2392,6 +2398,23 @@ export const acsEndpoint = (options?: SSOOptions) => {
 				: saml.IdentityProvider({
 						metadata: idpData.metadata,
 					});
+
+			try {
+				validateSingleAssertion(SAMLResponse);
+			} catch (error) {
+				if (error instanceof APIError) {
+					const redirectUrl =
+						RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+					const errorCode =
+						error.body?.code === "SAML_MULTIPLE_ASSERTIONS"
+							? "multiple_assertions"
+							: "no_assertion";
+					throw ctx.redirect(
+						`${redirectUrl}?error=${errorCode}&error_description=${encodeURIComponent(error.message)}`,
+					);
+				}
+				throw error;
+			}
 
 			// Parse and validate SAML response
 			let parsedResponse: FlowResult;
