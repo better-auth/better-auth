@@ -329,6 +329,58 @@ describe("base context creation", () => {
 			});
 		});
 
+		it("should disable cookieRefreshCache and warn when database is configured with refreshCache=true", async () => {
+			const log = vi.fn();
+			const res = await initBase({
+				logger: {
+					level: "warn",
+					log,
+				} as any,
+				database: new Database(":memory:"),
+				session: {
+					cookieCache: {
+						refreshCache: true,
+					},
+				},
+			});
+
+			expect(res.sessionConfig.cookieRefreshCache).toBe(false);
+			expect(log).toHaveBeenCalledWith(
+				"warn",
+				expect.stringContaining(
+					"`session.cookieCache.refreshCache` is enabled while `database` or `secondaryStorage` is configured",
+				),
+			);
+		});
+
+		it("should disable cookieRefreshCache and warn when secondaryStorage is configured with refreshCache=true", async () => {
+			const log = vi.fn();
+			const res = await initBase({
+				logger: {
+					level: "warn",
+					log,
+				} as any,
+				secondaryStorage: {
+					get: vi.fn(),
+					set: vi.fn(),
+					delete: vi.fn(),
+				},
+				session: {
+					cookieCache: {
+						refreshCache: true,
+					},
+				},
+			});
+
+			expect(res.sessionConfig.cookieRefreshCache).toBe(false);
+			expect(log).toHaveBeenCalledWith(
+				"warn",
+				expect.stringContaining(
+					"`session.cookieCache.refreshCache` is enabled while `database` or `secondaryStorage` is configured",
+				),
+			);
+		});
+
 		it("should use default maxAge (300) for 20% calculation", async () => {
 			const res = await initBase({
 				session: {
@@ -639,13 +691,15 @@ describe("base context creation", () => {
 			vi.unstubAllEnvs();
 		});
 
-		it("should throw error for invalid trusted origin", async () => {
-			await expect(
-				initBase({
-					baseURL: "http://localhost:3000",
-					trustedOrigins: ["", "http://valid.com"],
-				}),
-			).rejects.toThrow();
+		it("should filter out empty origin from trusted origin", async () => {
+			const ctx = await initBase({
+				baseURL: "http://localhost:3000",
+				trustedOrigins: ["", "http://valid.com"],
+			});
+			expect(ctx.trustedOrigins).toEqual([
+				"http://localhost:3000",
+				"http://valid.com",
+			]);
 		});
 
 		it("should handle empty baseURL gracefully", async () => {
@@ -1202,13 +1256,23 @@ describe("base context creation", () => {
 			vi.unstubAllEnvs();
 		});
 
-		it("should throw error when secret is too short", async () => {
+		it("should log a warning when secret is too short", async () => {
 			vi.stubEnv("BETTER_AUTH_SECRET", "");
 			vi.stubEnv("AUTH_SECRET", "");
 			const originalNodeEnv = process.env.NODE_ENV;
-
-			const expectedErrorMessage =
-				"Invalid BETTER_AUTH_SECRET: must be at least 32 characters long for adequate security. Generate one with `npx @better-auth/cli secret` or `openssl rand -base64 32`.";
+			const log = vi.fn();
+			await initBase({
+				logger: {
+					level: "warn",
+					log,
+				} as any,
+				database: new Database(":memory:"),
+				session: {
+					cookieCache: {
+						refreshCache: true,
+					},
+				},
+			});
 
 			vi.doMock("@better-auth/core/env", async () => {
 				const actual = await vi.importActual("@better-auth/core/env");
@@ -1235,12 +1299,15 @@ describe("base context creation", () => {
 				const getDatabaseType = () => "memory";
 				return createAuthContext(adapter, opts, getDatabaseType);
 			};
-
-			await expect(
-				initBaseNonTest({
-					secret: "short",
-				}),
-			).rejects.toThrow(expectedErrorMessage);
+			initBaseNonTest({
+				secret: "short",
+			}),
+				expect(log).toHaveBeenCalledWith(
+					"warn",
+					expect.stringContaining(
+						"`session.cookieCache.refreshCache` is enabled while `database` or `secondaryStorage` is configured",
+					),
+				);
 
 			vi.doUnmock("@better-auth/core/env");
 			vi.resetModules();
@@ -1558,6 +1625,55 @@ describe("base context creation", () => {
 			});
 			expect(ctx.options.session?.cookieCache?.enabled).toBe(false);
 			expect(ctx.oauthConfig.storeStateStrategy).toBe("database");
+		});
+	});
+
+	describe("hasPlugin", () => {
+		it("should return true when plugin is enabled", async () => {
+			const ctx = await initBase({
+				plugins: [
+					{
+						id: "test-plugin",
+					},
+				],
+			});
+			expect(ctx.hasPlugin("test-plugin")).toBe(true);
+		});
+
+		it("should return false when plugin is not enabled", async () => {
+			const ctx = await initBase({
+				plugins: [
+					{
+						id: "other-plugin",
+					},
+				],
+			});
+			expect(ctx.hasPlugin("test-plugin")).toBe(false);
+		});
+
+		it("should return false when no plugins are configured", async () => {
+			const ctx = await initBase({});
+			expect(ctx.hasPlugin("test-plugin")).toBe(false);
+		});
+
+		it("should work with multiple plugins", async () => {
+			const ctx = await initBase({
+				plugins: [
+					{
+						id: "plugin-1",
+					},
+					{
+						id: "plugin-2",
+					},
+					{
+						id: "plugin-3",
+					},
+				],
+			});
+			expect(ctx.hasPlugin("plugin-1")).toBe(true);
+			expect(ctx.hasPlugin("plugin-2")).toBe(true);
+			expect(ctx.hasPlugin("plugin-3")).toBe(true);
+			expect(ctx.hasPlugin("plugin-4")).toBe(false);
 		});
 	});
 });

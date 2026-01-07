@@ -1,15 +1,16 @@
 {
   "name": "@better-auth/core",
-  "version": "1.4.4-beta.1",
+  "version": "1.5.0-beta.2",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "https://github.com/better-auth/better-auth",
+    "url": "git+https://github.com/better-auth/better-auth.git",
     "directory": "packages/core"
   },
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     ".": {
       "dev-source": "./src/index.ts",
@@ -24,6 +25,12 @@
     "./async_hooks": {
       "dev-source": "./src/async_hooks/index.ts",
       "types": "./dist/async_hooks/index.d.mts",
+      "node": "./dist/async_hooks/index.mjs",
+      "deno": "./dist/async_hooks/index.mjs",
+      "bun": "./dist/async_hooks/index.mjs",
+      "edge": "./dist/async_hooks/pure.index.mjs",
+      "workerd": "./dist/async_hooks/index.mjs",
+      "browser": "./dist/async_hooks/pure.index.mjs",
       "default": "./dist/async_hooks/index.mjs"
     },
     "./context": {
@@ -108,11 +115,13 @@
     "build": "tsdown",
     "dev": "tsdown --watch",
     "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
     "typecheck": "tsc --project tsconfig.json",
-    "test": "vitest"
+    "test": "vitest",
+    "coverage": "vitest run --coverage"
   },
   "devDependencies": {
-    "@better-auth/utils": "0.3.0",
+    "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
     "better-call": "catalog:",
     "jose": "^6.1.0",
@@ -125,7 +134,7 @@
     "zod": "^4.1.12"
   },
   "peerDependencies": {
-    "@better-auth/utils": "0.3.0",
+    "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
     "better-call": "catalog:",
     "jose": "^6.1.0",

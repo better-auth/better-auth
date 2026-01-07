@@ -1,4 +1,5 @@
 import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
+import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { createLogger, env, isProduction, isTest } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
@@ -9,9 +10,9 @@ import { createTelemetry } from "@better-auth/telemetry";
 import defu from "defu";
 import type { Entries } from "type-fest";
 import { checkEndpointConflicts } from "../api";
+import { matchesOriginPattern } from "../auth/trusted-origins";
 import { createCookieGetter, getCookies } from "../cookies";
 import { hashPassword, verifyPassword } from "../crypto/password";
-import { getAuthTables } from "../db/get-tables";
 import { createInternalAdapter } from "../db/internal-adapter";
 import { generateId } from "../utils";
 import { DEFAULT_SECRET } from "../utils/constants";
@@ -63,8 +64,8 @@ function validateSecret(
 	}
 
 	if (secret.length < 32) {
-		throw new BetterAuthError(
-			`Invalid BETTER_AUTH_SECRET: must be at least 32 characters long for adequate security. Generate one with \`npx @better-auth/cli secret\` or \`openssl rand -base64 32\`.`,
+		logger.warn(
+			`[better-auth] Warning: your BETTER_AUTH_SECRET should be at least 32 characters long for adequate security. Generate one with \`npx @better-auth/cli secret\` or \`openssl rand -base64 32\`.`,
 		);
 	}
 
@@ -102,6 +103,12 @@ export async function createAuthContext(
 	const internalPlugins = getInternalPlugins(options);
 	const logger = createLogger(options.logger);
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
+
+	if (!baseURL) {
+		logger.warn(
+			`[better-auth] Base URL could not be determined. Please set a valid base URL using the baseURL config option or the BETTER_AUTH_BASE_URL environment variable. Without this, callbacks and redirects may not work correctly.`,
+		);
+	}
 
 	const secret =
 		options.secret ||
@@ -164,16 +171,35 @@ export async function createAuthContext(
 				: getDatabaseType(options.database),
 	});
 
-	let ctx: AuthContext = {
+	const pluginIds = new Set(options.plugins!.map((p) => p.id));
+
+	const getPluginFn = (id: string) =>
+		(options.plugins!.find((p) => p.id === id) as never | undefined) ?? null;
+
+	const hasPluginFn = (id: string) => pluginIds.has(id);
+
+	const ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
 		socialProviders: providers,
 		options,
 		oauthConfig: {
-			storeStateStrategy: options.account?.storeStateStrategy || "database",
+			storeStateStrategy:
+				options.account?.storeStateStrategy ||
+				(options.database ? "database" : "cookie"),
 			skipStateCookieCheck: !!options.account?.skipStateCookieCheck,
 		},
 		tables,
-		trustedOrigins: getTrustedOrigins(options),
+		trustedOrigins: await getTrustedOrigins(options),
+		isTrustedOrigin(
+			url: string,
+			settings?: {
+				allowRelativePaths: boolean;
+			},
+		) {
+			return this.trustedOrigins.some((origin) =>
+				matchesOriginPattern(url, origin, settings),
+			);
+		},
 		baseURL: baseURL || "",
 		sessionConfig: {
 			updateAge:
@@ -188,6 +214,17 @@ export async function createAuthContext(
 			cookieRefreshCache: (() => {
 				const refreshCache = options.session?.cookieCache?.refreshCache;
 				const maxAge = options.session?.cookieCache?.maxAge || 60 * 5;
+
+				// `refreshCache` is intended for fully stateless / DB-less setups.
+				// If a server-side store is configured, prefer fetching/refreshing from that source
+				// and disable stateless refresh behavior to avoid confusing/unsafe configurations.
+				const isStateful = !!options.database || !!options.secondaryStorage;
+				if (isStateful && refreshCache) {
+					logger.warn(
+						"[better-auth] `session.cookieCache.refreshCache` is enabled while `database` or `secondaryStorage` is configured. `refreshCache` is meant for stateless (DB-less) setups. Disabling `refreshCache` — remove it from your config to silence this warning.",
+					);
+					return false;
+				}
 
 				if (refreshCache === false || refreshCache === undefined) {
 					return false;
@@ -258,6 +295,32 @@ export async function createAuthContext(
 				: isTest()
 					? true
 					: false,
+		runInBackground:
+			options.advanced?.backgroundTasks?.handler ??
+			((p) => {
+				p.catch(() => {});
+			}),
+		async runInBackgroundOrAwait(
+			promise: Promise<unknown> | Promise<void> | void | unknown,
+		) {
+			try {
+				if (options.advanced?.backgroundTasks?.handler) {
+					if (promise instanceof Promise) {
+						options.advanced.backgroundTasks.handler(
+							promise.catch((e) => {
+								logger.error("Failed to run background task:", e);
+							}),
+						);
+					}
+				} else {
+					await promise;
+				}
+			} catch (e) {
+				logger.error("Failed to run background task:", e);
+			}
+		},
+		getPlugin: getPluginFn,
+		hasPlugin: hasPluginFn,
 	};
 
 	const initOrPromise = runPluginInit(ctx);

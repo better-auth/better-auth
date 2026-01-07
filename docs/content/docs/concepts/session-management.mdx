@@ -177,6 +177,21 @@ export const auth = betterAuth({
 });
 ```
 
+<Callout type="info">
+**Notes**
+
+When `cookieCache` is enabled, revoked sessions may remain active on other devices until the cookie cache expires (`maxAge`). This is because:
+
+- Cookie cache stores session data in the client's browser
+- The server cannot directly delete cookies from other devices
+- Sessions are only revalidated when the cache expires or `disableCookieCache: true` is used
+
+**If immediate session revocation is critical:**
+- Disable `cookieCache` entirely, or
+- Set a shorter `maxAge` (e.g. 60 seconds), or
+- Use `disableCookieCache: true` for sensitive operations
+</Callout>
+
 #### Cookie Cache Strategies
 
 Better Auth supports three different encoding strategies for cookie cache:

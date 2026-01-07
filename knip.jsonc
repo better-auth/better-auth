@@ -1,17 +1,15 @@
 {
-	"$schema": "https://unpkg.com/knip@5/schema-jsonc.json",
+	"$schema": "./node_modules/knip/schema-jsonc.json",
 	"ignoreExportsUsedInFile": {
 		"interface": true,
 		"type": true
-	},
-	"ignoreIssues": {
-		"**": ["exports", "types", "duplicates"]
 	},
 	"tags": ["-lintignore"],
 	"workspaces": {
 		"packages/*": {
 			"entry": ["src/index.ts"],
-			"project": ["src/**/*.ts!"]
+			"project": ["src/**/*.ts!"],
+			"ignoreDependencies": ["@better-auth/core"]
 		},
 		"packages/better-auth": {
 			"project": [
@@ -25,6 +23,8 @@
 				"drizzle-kit",
 				"drizzle-orm",
 				"mongodb",
+				"@prisma/client",
+				"prisma",
 
 				// implicit test-instance dependencies
 				"vitest",
@@ -84,6 +84,7 @@
 		"packages/sso": {
 			"ignoreDependencies": [
 				// type-only dependencies
+				"@better-auth/core",
 				"better-call"
 			]
 		}

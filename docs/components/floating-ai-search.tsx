@@ -79,6 +79,7 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 
 	const onStart = (e?: SyntheticEvent) => {
 		e?.preventDefault();
+		if (!input.trim() || isLoading) return;
 		void sendMessage({ text: input });
 		setInput("");
 	};
@@ -96,12 +97,12 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 		if (isLoading) document.getElementById("nd-ai-input")?.focus();
 	}, [isLoading]);
 
-	const { isMobile, ...formProps } = props;
+	const { isMobile: _isMobile, ...formProps } = props;
 
 	return (
 		<div
 			className={cn(
-				"flex relative flex-col rounded-lg border shadow-2xl bg-fd-background m-[1px] border-fd-border shadow-fd-background",
+				"flex relative flex-col rounded-lg border shadow-2xl bg-fd-background m-px border-fd-border shadow-fd-background",
 				isLoading ? "opacity-50" : "",
 			)}
 		>
@@ -121,6 +122,10 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 					}}
 					onKeyDown={(event) => {
 						if (!event.shiftKey && event.key === "Enter") {
+							if (!input.trim() || isLoading) {
+								event.preventDefault();
+								return;
+							}
 							onStart(event);
 						}
 					}}
@@ -149,7 +154,7 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 								className: "mt-2 rounded-full transition-all",
 							}),
 						)}
-						disabled={input.length === 0}
+						disabled={!input.trim() || isLoading}
 					>
 						<Send className="size-4" />
 					</button>
@@ -163,7 +168,7 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 					</p>
 					<div
 						className={cn(
-							"flex gap-2 overflow-x-auto  pb-2 -mx-3 px-3 [mask-image:linear-gradient(to_right,transparent_0%,black_1rem,black_calc(100%-1rem),transparent_100%)] [-webkit-mask-image:linear-gradient(to_right,transparent_0%,black_1rem,black_calc(100%-1rem),transparent_100%)]",
+							"flex gap-2 overflow-x-auto  pb-2 -mx-3 px-3 mask-[linear-gradient(to_right,transparent_0%,black_1rem,black_calc(100%-1rem),transparent_100%)] [-webkit-mask-image:linear-gradient(to_right,transparent_0%,black_1rem,black_calc(100%-1rem),transparent_100%)]",
 						)}
 					>
 						{suggestions.slice(0, 4).map((suggestion, i) => (
@@ -171,7 +176,7 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 								key={i}
 								onClick={() => handleSuggestionClick(suggestion)}
 								className={cn(
-									"bg-fd-muted/30 hover:bg-fd-muted/50 text-fd-muted-foreground hover:text-fd-foreground rounded-full border border-fd-border/50 hover:border-fd-border transition-all duration-200 text-left text-nowrap text-xs px-3 py-1.5 whitespace-nowrap flex-shrink-0",
+									"bg-fd-muted/30 hover:bg-fd-muted/50 text-fd-muted-foreground hover:text-fd-foreground rounded-full border border-fd-border/50 hover:border-fd-border transition-all duration-200 text-left text-nowrap text-xs px-3 py-1.5 whitespace-nowrap shrink-0",
 								)}
 							>
 								{suggestion}
@@ -305,7 +310,7 @@ function List(
 		return () => container.removeEventListener("scroll", handleScroll);
 	}, []);
 
-	const { messageCount, ...divProps } = props;
+	const { messageCount: _messageCount, ...divProps } = props;
 
 	return (
 		<div
@@ -505,9 +510,6 @@ export function AISearchTrigger() {
 		}),
 	});
 
-	const showSuggestions =
-		chat.messages.length === 0 && chat.status !== "streaming";
-
 	const onKeyPress = (e: KeyboardEvent) => {
 		if (e.key === "Escape" && open) {
 			setOpen(false);
@@ -568,7 +570,7 @@ export function AISearchTrigger() {
 							"fixed inset-0 flex flex-col items-center bg-fd-background/80 backdrop-blur-sm z-30",
 							isMobile
 								? "p-4 pb-40"
-								: "p-2 right-(--removed-body-scroll-bar-size,0) pb-[8.375rem]",
+								: "p-2 right-(--removed-body-scroll-bar-size,0) pb-33.5",
 							open ? "animate-fd-fade-in" : "animate-fd-fade-out",
 						)}
 						onClick={(e) => {

@@ -3,7 +3,6 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import { defineErrorCodes } from "@better-auth/core/utils";
 import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../api";
 import {
@@ -12,6 +11,15 @@ import {
 	parseSetCookieHeader,
 	setSessionCookie,
 } from "../../cookies";
+
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		"multi-session": {
+			creator: typeof multiSession;
+		};
+	}
+}
 
 export interface MultiSessionConfig {
 	/**
@@ -22,9 +30,22 @@ export interface MultiSessionConfig {
 	maximumSessions?: number | undefined;
 }
 
-const ERROR_CODES = defineErrorCodes({
-	INVALID_SESSION_TOKEN: "Invalid session token",
+import { MULTI_SESSION_ERROR_CODES as ERROR_CODES } from "./error-codes";
+
+export { MULTI_SESSION_ERROR_CODES as ERROR_CODES } from "./error-codes";
+
+const setActiveSessionBodySchema = z.object({
+	sessionToken: z.string().meta({
+		description: "The session token to set as active",
+	}),
 });
+
+const revokeDeviceSessionBodySchema = z.object({
+	sessionToken: z.string().meta({
+		description: "The session token to revoke",
+	}),
+});
+
 export const multiSession = (options?: MultiSessionConfig | undefined) => {
 	const opts = {
 		maximumSessions: 5,
@@ -110,11 +131,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 				"/multi-session/set-active",
 				{
 					method: "POST",
-					body: z.object({
-						sessionToken: z.string().meta({
-							description: "The session token to set as active",
-						}),
-					}),
+					body: setActiveSessionBodySchema,
 					requireHeaders: true,
 					use: [sessionMiddleware],
 					metadata: {
@@ -150,9 +167,10 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						ctx.context.secret,
 					);
 					if (!sessionCookie) {
-						throw new APIError("UNAUTHORIZED", {
-							message: ERROR_CODES.INVALID_SESSION_TOKEN,
-						});
+						throw APIError.from(
+							"UNAUTHORIZED",
+							ERROR_CODES.INVALID_SESSION_TOKEN,
+						);
 					}
 					const session =
 						await ctx.context.internalAdapter.findSession(sessionToken);
@@ -161,9 +179,10 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 							...ctx.context.authCookies.sessionToken.options,
 							maxAge: 0,
 						});
-						throw new APIError("UNAUTHORIZED", {
-							message: ERROR_CODES.INVALID_SESSION_TOKEN,
-						});
+						throw APIError.from(
+							"UNAUTHORIZED",
+							ERROR_CODES.INVALID_SESSION_TOKEN,
+						);
 					}
 					await setSessionCookie(ctx, session);
 					return ctx.json(session);
@@ -188,11 +207,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 				"/multi-session/revoke",
 				{
 					method: "POST",
-					body: z.object({
-						sessionToken: z.string().meta({
-							description: "The session token to revoke",
-						}),
-					}),
+					body: revokeDeviceSessionBodySchema,
 					requireHeaders: true,
 					use: [sessionMiddleware],
 					metadata: {
@@ -228,9 +243,10 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						ctx.context.secret,
 					);
 					if (!sessionCookie) {
-						throw new APIError("UNAUTHORIZED", {
-							message: ERROR_CODES.INVALID_SESSION_TOKEN,
-						});
+						throw APIError.from(
+							"UNAUTHORIZED",
+							ERROR_CODES.INVALID_SESSION_TOKEN,
+						);
 					}
 
 					await ctx.context.internalAdapter.deleteSession(sessionToken);
@@ -356,6 +372,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 				},
 			],
 		},
+		options,
 		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };

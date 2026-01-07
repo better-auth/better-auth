@@ -1,16 +1,24 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type {
+	AdapterFactoryCustomizeAdapterCreator,
+	AdapterFactoryOptions,
 	DBAdapter,
 	DBAdapterDebugLogOption,
 	Where,
 } from "@better-auth/core/db/adapter";
+import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import type { ClientSession, Db, MongoClient } from "mongodb";
 import { ObjectId } from "mongodb";
-import type {
-	AdapterFactoryCustomizeAdapterCreator,
-	AdapterFactoryOptions,
-} from "../adapter-factory";
-import { createAdapterFactory } from "../adapter-factory";
+
+class MongoAdapterError extends Error {
+	constructor(
+		public code: "INVALID_ID" | "UNSUPPORTED_OPERATOR",
+		message: string,
+	) {
+		super(message);
+		this.name = "MongoAdapterError";
+	}
+}
 
 export interface MongoDBAdapterConfig {
 	/**
@@ -101,25 +109,21 @@ export const mongodbAdapter = (
 								if (typeof v === "string") {
 									try {
 										return new ObjectId(v);
-									} catch (e) {
+									} catch {
 										return v;
 									}
 								}
 								if (v instanceof ObjectId) {
 									return v;
 								}
-								throw new Error(
-									"Invalid id value, received: " + JSON.stringify(v),
-								);
+								throw new MongoAdapterError("INVALID_ID", "Invalid id value");
 							});
 						}
-						throw new Error(
-							"Invalid id value, received: " + JSON.stringify(value),
-						);
+						throw new MongoAdapterError("INVALID_ID", "Invalid id value");
 					}
 					try {
 						return new ObjectId(value);
-					} catch (e) {
+					} catch {
 						return value;
 					}
 				}
@@ -245,7 +249,10 @@ export const mongodbAdapter = (
 							};
 							break;
 						default:
-							throw new Error(`Unsupported operator: ${operator}`);
+							throw new MongoAdapterError(
+								"UNSUPPORTED_OPERATOR",
+								`Unsupported operator: ${operator}`,
+							);
 					}
 					return { condition, connector };
 				});
@@ -562,6 +569,7 @@ export const mongodbAdapter = (
 			mapKeysTransformOutput: {
 				_id: "id",
 			},
+			supportsArrays: true,
 			supportsNumericIds: false,
 			transaction:
 				config?.client && (config?.transaction ?? true)
@@ -606,7 +614,7 @@ export const mongodbAdapter = (
 					if (customIdGen) {
 						return data;
 					}
-					if (action === "update") {
+					if (action !== "create") {
 						return data;
 					}
 					if (Array.isArray(data)) {
@@ -615,7 +623,7 @@ export const mongodbAdapter = (
 								try {
 									const oid = new ObjectId(v);
 									return oid;
-								} catch (error) {
+								} catch {
 									return v;
 								}
 							}
@@ -626,7 +634,7 @@ export const mongodbAdapter = (
 						try {
 							const oid = new ObjectId(data);
 							return oid;
-						} catch (error) {
+						} catch {
 							return data;
 						}
 					}

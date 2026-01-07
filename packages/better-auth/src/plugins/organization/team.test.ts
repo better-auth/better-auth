@@ -349,7 +349,7 @@ describe("team", async (it) => {
 });
 
 describe("multi team support", async (it) => {
-	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance(
+	const { auth, signInWithTestUser } = await getTestInstance(
 		{
 			plugins: [
 				organization({
@@ -655,7 +655,7 @@ describe("multi team support", async (it) => {
 		const newUser = await response.json();
 
 		// Add the user as a member to the organization
-		const member = await auth.api.addMember({
+		await auth.api.addMember({
 			headers: admin.headers,
 			body: {
 				organizationId: organizationId!,
@@ -751,7 +751,7 @@ describe("multi team support", async (it) => {
 		const newUser = await response.json();
 
 		// Add the user as a member to the organization
-		const member = await auth.api.addMember({
+		await auth.api.addMember({
 			headers: admin.headers,
 			body: {
 				organizationId: organizationId!,

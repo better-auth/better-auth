@@ -93,7 +93,7 @@ describe("Email Verification", async () => {
 
 		let sessionToken = "";
 		let verifyHeaders = new Headers();
-		const res = await client.verifyEmail({
+		await client.verifyEmail({
 			query: {
 				token,
 			},
@@ -273,7 +273,7 @@ describe("Email Verification", async () => {
 describe("Email Verification Secondary Storage", async () => {
 	let store = new Map<string, string>();
 	let token: string;
-	const { client, signInWithTestUser, db, auth, testUser, cookieSetter } =
+	const { client, signInWithTestUser, auth, testUser, cookieSetter } =
 		await getTestInstance({
 			secondaryStorage: {
 				set(key, value, ttl) {
@@ -500,5 +500,70 @@ describe("Email Verification Secondary Storage", async () => {
 
 		expect(secondSignInSession.data?.user.email).toBe(sampleUser.email);
 		expect(secondSignInSession.data?.user.emailVerified).toBe(true);
+	});
+
+	it("should call hooks when verifying email change (change-email-verification)", async () => {
+		const onEmailVerificationMock = vi.fn();
+		const afterEmailVerificationMock = vi.fn();
+		let capturedToken: string;
+
+		const { client, auth, signInWithTestUser, cookieSetter, testUser } =
+			await getTestInstance({
+				emailAndPassword: {
+					enabled: true,
+				},
+				emailVerification: {
+					async sendVerificationEmail({ token: _token }) {
+						capturedToken = _token;
+					},
+					onEmailVerification: onEmailVerificationMock,
+					afterEmailVerification: afterEmailVerificationMock,
+				},
+				user: {
+					changeEmail: {
+						enabled: true,
+						async sendChangeEmailVerification(data) {
+							capturedToken = data.token;
+						},
+					},
+				},
+			});
+
+		const { runWithUser } = await signInWithTestUser();
+
+		await runWithUser(async (headers) => {
+			// Request email change
+			await auth.api.changeEmail({
+				body: {
+					newEmail: "newemail@example.com",
+				},
+				headers,
+			});
+
+			// Verify new email (change-email-verification flow)
+			const verificationHeaders = new Headers();
+			await client.verifyEmail({
+				query: {
+					token: capturedToken,
+				},
+				fetchOptions: {
+					onSuccess: cookieSetter(verificationHeaders),
+					headers,
+				},
+			});
+
+			// Hooks should be called when email is verified
+			expect(onEmailVerificationMock).toHaveBeenCalledWith(
+				expect.objectContaining({ email: testUser.email }),
+				expect.any(Object),
+			);
+			expect(afterEmailVerificationMock).toHaveBeenCalledWith(
+				expect.objectContaining({
+					email: "newemail@example.com",
+					emailVerified: true,
+				}),
+				expect.any(Object),
+			);
+		});
 	});
 });
