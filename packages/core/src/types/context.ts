@@ -16,7 +16,27 @@ import type {
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
 } from "./init-options";
-import type { BetterAuthPlugin } from "./plugin";
+
+/**
+ * Mutators are defined in each plugin
+ *
+ * @example
+ * ```ts
+ * declare module "@better-auth/core" {
+ *  interface BetterAuthPluginRegistry<Auth, Context> {
+ *    'jwt': {
+ *      creator: typeof jwt
+ *    }
+ *  }
+ * }
+ * ```
+ */
+// biome-ignore lint/correctness/noUnusedVariables: Auth and Context is used in the declaration merging
+export interface BetterAuthPluginRegistry<Auth, Context> {}
+export type BetterAuthPluginRegistryIdentifier = keyof BetterAuthPluginRegistry<
+	unknown,
+	unknown
+>;
 
 export type GenericEndpointContext<
 	Options extends BetterAuthOptions = BetterAuthOptions,
@@ -161,9 +181,11 @@ type CheckPasswordFn<Options extends BetterAuthOptions = BetterAuthOptions> = (
 ) => Promise<boolean>;
 
 export type PluginContext = {
-	getPlugin: <Plugin extends BetterAuthPlugin>(
-		pluginId: Plugin["id"],
-	) => Plugin | null;
+	getPlugin: <ID extends BetterAuthPluginRegistryIdentifier>(
+		pluginId: ID,
+	) => ReturnType<
+		BetterAuthPluginRegistry<unknown, unknown>[ID]["creator"]
+	> | null;
 };
 
 export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
