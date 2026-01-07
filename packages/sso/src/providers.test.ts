@@ -538,10 +538,10 @@ describe("SSO provider read endpoints", () => {
 				}),
 			});
 
-		const response = await auth.api.getSSOProvider({
-			params: { providerId: "my-saml-provider" },
-			headers,
-		});
+			const response = await auth.api.getSSOProvider({
+				params: { providerId: "my-saml-provider" },
+				headers,
+			});
 
 			expect(response.samlConfig?.certificate).toBeDefined();
 			expect(
