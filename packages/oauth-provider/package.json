@@ -46,13 +46,14 @@
     }
   },
   "devDependencies": {
-    "@modelcontextprotocol/sdk": "^1.24.2",
     "@better-auth/core": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.24.2",
     "better-auth": "workspace:*",
     "listhen": "^1.9.0",
     "tsdown": "catalog:"
   },
   "dependencies": {
+    "ipaddr.js": "^2.3.0",
     "jose": "^6.1.0",
     "zod": "^4.1.12"
   },

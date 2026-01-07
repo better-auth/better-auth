@@ -15,6 +15,7 @@ export function authServerMetadata(
 	overrides?: {
 		scopes_supported?: AuthServerMetadata["scopes_supported"];
 		public_client_supported?: boolean;
+		cimd_supported?: boolean;
 		grant_types_supported?: GrantType[];
 		jwt_disabled?: boolean;
 	},
@@ -59,6 +60,7 @@ export function authServerMetadata(
 			"client_secret_post",
 		],
 		code_challenge_methods_supported: ["S256"],
+		client_id_metadata_document_supported: overrides?.cimd_supported,
 	};
 	return metadata;
 }
@@ -70,10 +72,12 @@ export function oidcServerMetadata(
 	const baseURL = ctx.context.baseURL;
 	const jwtPluginOptions = opts.disableJwtPlugin
 		? undefined
-		: getJwtPlugin(ctx.context).options;
+		: getJwtPlugin(ctx.context)?.options;
 	const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
 		scopes_supported: opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
-		public_client_supported: opts.allowUnauthenticatedClientRegistration,
+		public_client_supported:
+			opts.cimd?.enable ?? opts.allowUnauthenticatedClientRegistration,
+		cimd_supported: opts.cimd?.enable,
 		grant_types_supported: opts.grantTypes,
 		jwt_disabled: opts.disableJwtPlugin,
 	});

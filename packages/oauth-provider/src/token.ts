@@ -89,7 +89,7 @@ async function createJwtAccessToken(
 			})
 		: {};
 
-	const jwtPluginOptions = getJwtPlugin(ctx.context).options;
+	const jwtPluginOptions = getJwtPlugin(ctx.context)?.options;
 
 	// Sign token
 	return signJWT(ctx, {
@@ -148,7 +148,7 @@ async function createIdToken(
 
 	const jwtPluginOptions = opts.disableJwtPlugin
 		? undefined
-		: getJwtPlugin(ctx.context).options;
+		: getJwtPlugin(ctx.context)?.options;
 
 	const payload: JWTPayload = {
 		...customClaims,
@@ -795,7 +795,7 @@ async function handleClientCredentialsGrant(
 	// Check requested audience if sent as the resource parameter
 	const jwtPluginOptions = opts.disableJwtPlugin
 		? undefined
-		: getJwtPlugin(ctx.context).options;
+		: getJwtPlugin(ctx.context)?.options;
 	const audience = await checkResource(ctx, opts, requestedScopes);
 
 	const iat = Math.floor(Date.now() / 1000);
