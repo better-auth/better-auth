@@ -150,6 +150,29 @@ export const auth = betterAuth({
 });
 ```
 
+## Custom Schema namespace
+
+If you're using PostgreSQL and you want to generate the schema with a custom schema namespace,
+you can pass the `schemaName` option to the Drizzle adapter.
+
+```ts
+export const auth = betterAuth({
+  database: drizzleAdapter(db, {
+    provider: "pg",
+    schemaName: "auth", // [!code highlight]
+  }),
+});
+```
+
+This will generate the schema that looks something like this:
+
+```ts
+export const authSchema = pgSchema("auth");
+
+export const user = authSchema.table("user", {...});
+export const session = authSchema.table("session", {...});
+```
+
 ## Additional Information
 
 - If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.

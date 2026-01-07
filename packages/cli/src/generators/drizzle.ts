@@ -17,6 +17,24 @@ function convertToSnakeCase(str: string, camelCase?: boolean) {
 		.toLowerCase();
 }
 
+function toValidIdentifier(str: string): string {
+	// Convert schema name to a valid JavaScript identifier
+	// Replace hyphens and other non-alphanumeric characters (except underscore) with nothing
+	// Then convert to camelCase
+	let result = str
+		.replace(/[^a-zA-Z0-9_]/g, "")
+		.replace(/^[0-9]/, "_$&") // Can't start with a number
+		.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
+		.replace(/_/g, ""); // Remove remaining underscores
+
+	// Ensure first character is lowercase
+	if (result.length > 0 && result[0]!.match(/[A-Z]/)) {
+		result = result[0]!.toLowerCase() + result.slice(1);
+	}
+
+	return result || "schema"; // Fallback if result is empty
+}
+
 export const generateDrizzleSchema: SchemaGenerator = async ({
 	options,
 	file,
@@ -26,6 +44,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	const filePath = file || "./auth-schema.ts";
 	const databaseType: "sqlite" | "mysql" | "pg" | undefined =
 		adapter.options?.provider;
+
+	const schemaName = adapter.options?.schemaName;
 
 	if (!databaseType) {
 		throw new Error(
@@ -38,7 +58,15 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		databaseType,
 		tables,
 		options,
+		schemaName,
 	});
+
+	// Add schema declaration for PostgreSQL when schemaName is provided
+	let schemaVarName: string | undefined;
+	if (databaseType === "pg" && schemaName) {
+		schemaVarName = `${toValidIdentifier(schemaName)}Schema`;
+		code += `\nconst ${schemaVarName} = pgSchema("${schemaName}");\n\n`;
+	}
 
 	const getModelName = initGetModelName({
 		schema: tables,
@@ -212,7 +240,13 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			return code.join("\n");
 		};
 
-		const schema = `export const ${modelName} = ${databaseType}Table("${convertToSnakeCase(
+		// Determine table function to use based on schema support
+		const tableFunction =
+			databaseType === "pg" && schemaName && schemaVarName
+				? `${schemaVarName}.table`
+				: `${databaseType}Table`;
+
+		const schema = `export const ${modelName} = ${tableFunction}("${convertToSnakeCase(
 			modelName,
 			adapter.options?.camelCase,
 		)}", {
@@ -532,10 +566,12 @@ function generateImport({
 	databaseType,
 	tables,
 	options,
+	schemaName,
 }: {
 	databaseType: "sqlite" | "mysql" | "pg";
 	tables: BetterAuthDBSchema;
 	options: BetterAuthOptions;
+	schemaName?: string;
 }) {
 	const rootImports: string[] = ["relations"];
 	const coreImports: string[] = [];
@@ -556,6 +592,11 @@ function generateImport({
 		options.advanced?.database?.generateId === "serial";
 
 	const useUUIDs = options.advanced?.database?.generateId === "uuid";
+
+	// Import pgSchema for PostgreSQL when schemaName is provided
+	if (databaseType === "pg" && schemaName) {
+		coreImports.push("pgSchema");
+	}
 
 	coreImports.push(`${databaseType}Table`);
 	coreImports.push(

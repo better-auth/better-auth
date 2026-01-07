@@ -377,6 +377,160 @@ describe("generate", async () => {
 		);
 	});
 
+	it("should generate drizzle schema with schemaName for PostgreSQL", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: drizzleAdapter(
+				{},
+				{
+					provider: "pg",
+					schema: {},
+					schemaName: "auth",
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: drizzleAdapter(
+					{},
+					{
+						provider: "pg",
+						schema: {},
+						schemaName: "auth",
+					},
+				),
+				plugins: [twoFactor(), username()],
+			},
+		});
+		await expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/auth-schema-pg-with-schema-name.txt",
+		);
+		// Should declare the schema
+		expect(schema.code).toContain('const authSchema = pgSchema("auth")');
+		// Should use schema.table() instead of pgTable() for table definitions
+		expect(schema.code).toContain("authSchema.table");
+		// Should not use pgTable() for table definitions (may still be in imports)
+		expect(schema.code).not.toMatch(/export const \w+ = pgTable\(/);
+	});
+
+	it("should generate drizzle schema without schemaName for PostgreSQL", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: drizzleAdapter(
+				{},
+				{
+					provider: "pg",
+					schema: {},
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: drizzleAdapter(
+					{},
+					{
+						provider: "pg",
+						schema: {},
+					},
+				),
+				plugins: [twoFactor(), username()],
+			},
+		});
+		// Should not import pgSchema when schemaName is undefined
+		expect(schema.code).not.toContain(
+			'import { pgSchema } from "drizzle-orm/pg-core"',
+		);
+		// Should use pgTable() for table definitions
+		expect(schema.code).toMatch(/export const \w+ = pgTable\(/);
+		expect(schema.code).not.toContain("pgSchema(");
+	});
+
+	it("should ignore schemaName for SQLite", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: drizzleAdapter(
+				{},
+				{
+					provider: "sqlite",
+					schema: {},
+					schemaName: "auth", // Should be ignored
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: drizzleAdapter(
+					{},
+					{
+						provider: "sqlite",
+						schema: {},
+						schemaName: "auth",
+					},
+				),
+				plugins: [twoFactor(), username()],
+			},
+		});
+		// Should not import pgSchema (SQLite doesn't support schemas)
+		expect(schema.code).not.toContain("pgSchema");
+		// Should use sqliteTable() for table definitions
+		expect(schema.code).toMatch(/export const \w+ = sqliteTable\(/);
+		expect(schema.code).not.toContain("pgSchema(");
+	});
+
+	it("should ignore schemaName for MySQL", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: drizzleAdapter(
+				{},
+				{
+					provider: "mysql",
+					schema: {},
+					schemaName: "auth", // Should be ignored
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: drizzleAdapter(
+					{},
+					{
+						provider: "mysql",
+						schema: {},
+						schemaName: "auth",
+					},
+				),
+				plugins: [twoFactor(), username()],
+			},
+		});
+		// Should not import pgSchema (MySQL doesn't support schemas in the same way)
+		expect(schema.code).not.toContain("pgSchema");
+		// Should use mysqlTable() for table definitions
+		expect(schema.code).toMatch(/export const \w+ = mysqlTable\(/);
+		expect(schema.code).not.toContain("pgSchema(");
+	});
+
+	it("should generate drizzle schema with schemaName containing hyphens", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: drizzleAdapter(
+				{},
+				{
+					provider: "pg",
+					schema: {},
+					schemaName: "my-auth-schema",
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: drizzleAdapter(
+					{},
+					{
+						provider: "pg",
+						schema: {},
+						schemaName: "my-auth-schema",
+					},
+				),
+				plugins: [],
+			},
+		});
+		// Should convert hyphenated schema name to valid identifier
+		expect(schema.code).toContain(
+			'const myauthschemaSchema = pgSchema("my-auth-schema")',
+		);
+		expect(schema.code).toContain("myauthschemaSchema.table");
+	});
+
 	it("should generate kysely schema", async () => {
 		const schema = await generateKyselySchema({
 			file: "test.sql",
