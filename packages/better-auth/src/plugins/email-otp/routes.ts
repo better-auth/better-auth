@@ -515,7 +515,7 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				},
 			);
 			if (ctx.context.options.emailVerification?.onEmailVerification) {
-				ctx.context.options.emailVerification.onEmailVerification(
+				await ctx.context.options.emailVerification.onEmailVerification(
 					updatedUser,
 					ctx.request,
 				);

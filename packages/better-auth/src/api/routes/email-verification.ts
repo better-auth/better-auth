@@ -472,7 +472,7 @@ export const verifyEmail = createAuthEndpoint(
 			);
 		}
 		if (ctx.context.options.emailVerification?.onEmailVerification) {
-			ctx.context.options.emailVerification.onEmailVerification(
+			await ctx.context.options.emailVerification.onEmailVerification(
 				user.user,
 				ctx.request,
 			);
