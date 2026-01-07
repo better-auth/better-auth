@@ -29,6 +29,15 @@ import type {
 	UserWithRole,
 } from "./types";
 
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		admin: {
+			creator: typeof admin;
+		};
+	}
+}
+
 export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 	const opts = {
 		...(options || {}),

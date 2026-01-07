@@ -1453,6 +1453,9 @@ importers:
         specifier: ^4.1.5
         version: 4.3.4
     devDependencies:
+      '@better-auth/core':
+        specifier: workspace:*
+        version: link:../core
       '@better-auth/sso':
         specifier: workspace:*
         version: link:../sso
@@ -1481,6 +1484,9 @@ importers:
         specifier: ^4.1.12
         version: 4.3.4
     devDependencies:
+      '@better-auth/core':
+        specifier: workspace:*
+        version: link:../core
       '@types/body-parser':
         specifier: ^1.19.6
         version: 1.19.6

@@ -6,6 +6,15 @@ import { APIError } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { toBoolean } from "../../utils/boolean";
 
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		"one-tap": {
+			creator: typeof oneTap;
+		};
+	}
+}
+
 export interface OneTapOptions {
 	/**
 	 * Disable the signup flow

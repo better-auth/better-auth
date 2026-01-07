@@ -1,10 +1,6 @@
 import type { BetterAuthPlugin, User } from "better-auth";
 import { APIError } from "better-auth";
-import type {
-	Organization,
-	OrganizationOptions,
-	OrganizationPlugin,
-} from "better-auth/plugins/organization";
+import type { Organization } from "better-auth/plugins/organization";
 import { defu } from "defu";
 import type Stripe from "stripe";
 import { STRIPE_ERROR_CODES } from "./error-codes";
@@ -27,6 +23,15 @@ import type {
 	WithStripeCustomerId,
 } from "./types";
 import { escapeStripeSearchValue } from "./utils";
+
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		stripe: {
+			creator: typeof stripe;
+		};
+	}
+}
 
 export const stripe = <O extends StripeOptions>(options: O) => {
 	const client = options.stripeClient;
@@ -55,10 +60,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 		},
 		init(ctx) {
 			if (options.organization?.enabled) {
-				const orgPlugin =
-					ctx.getPlugin<OrganizationPlugin<OrganizationOptions>>(
-						"organization",
-					);
+				const orgPlugin = ctx.getPlugin("organization");
 				if (!orgPlugin) {
 					ctx.logger.error(`Organization plugin not found`);
 					return;

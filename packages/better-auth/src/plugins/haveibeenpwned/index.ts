@@ -6,6 +6,15 @@ import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "../../api";
 import { isAPIError } from "../../utils/is-api-error";
 
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		"have-i-been-pwned": {
+			creator: typeof haveIBeenPwned;
+		};
+	}
+}
+
 const ERROR_CODES = defineErrorCodes({
 	PASSWORD_COMPROMISED:
 		"The password you entered has been compromised. Please choose a different password.",
@@ -75,7 +84,7 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
 	];
 
 	return {
-		id: "haveIBeenPwned",
+		id: "have-i-been-pwned",
 		init(ctx) {
 			return {
 				context: {

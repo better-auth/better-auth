@@ -12,6 +12,15 @@ import {
 	setSessionCookie,
 } from "../../cookies";
 
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		"multi-session": {
+			creator: typeof multiSession;
+		};
+	}
+}
+
 export interface MultiSessionConfig {
 	/**
 	 * The maximum number of sessions a user can have
