@@ -12,10 +12,12 @@ import type { DBAdapter, Where } from "../db/adapter";
 import type { createLogger } from "../env";
 import type { OAuthProvider } from "../oauth2";
 import type { BetterAuthCookies } from "./cookie";
+import type { LiteralString } from "./helper";
 import type {
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
 } from "./init-options";
+import type { BetterAuthPlugin } from "./plugin";
 
 /**
  * Mutators are defined in each plugin
@@ -181,11 +183,13 @@ type CheckPasswordFn<Options extends BetterAuthOptions = BetterAuthOptions> = (
 ) => Promise<boolean>;
 
 export type PluginContext = {
-	getPlugin: <ID extends BetterAuthPluginRegistryIdentifier>(
+	getPlugin: <ID extends BetterAuthPluginRegistryIdentifier | LiteralString>(
 		pluginId: ID,
-	) => ReturnType<
-		BetterAuthPluginRegistry<unknown, unknown>[ID]["creator"]
-	> | null;
+	) =>
+		| (ID extends BetterAuthPluginRegistryIdentifier
+				? ReturnType<BetterAuthPluginRegistry<unknown, unknown>[ID]["creator"]>
+				: BetterAuthPlugin)
+		| null;
 	/**
 	 * Checks if a plugin is enabled by its ID.
 	 *
@@ -199,7 +203,7 @@ export type PluginContext = {
 	 * }
 	 * ```
 	 */
-	hasPlugin: <ID extends BetterAuthPluginRegistryIdentifier>(
+	hasPlugin: <ID extends BetterAuthPluginRegistryIdentifier | LiteralString>(
 		pluginId: ID,
 	) => boolean;
 };
