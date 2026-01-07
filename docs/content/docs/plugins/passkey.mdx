@@ -109,6 +109,15 @@ await auth.api.generatePasskeyRegistrationOptions({
 })
 ```
 
+When using passkey-first flows (`registration.requireSession: false`), pass the same `context` from the client when registering the passkey so the server can resolve the user during verification:
+
+```ts
+await authClient.passkey.addPasskey({
+  name: "Primary passkey",
+  context: "signed-registration-token",
+})
+```
+
 ## Usage
 
 ### Add/Register a passkey
@@ -134,6 +143,10 @@ type addPasskey = {
      * Return WebAuthn response and extension results
      */
     returnWebAuthnResponse?: boolean
+    /**
+     * Optional context for passkey-first registration flows. Forwarded to `registration.resolveUser`.
+     */
+    context?: string
 }
 ```
 </APIMethod>

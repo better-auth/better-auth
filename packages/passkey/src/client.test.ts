@@ -20,7 +20,7 @@ vi.mock("@simplewebauthn/browser", () => ({
 
 describe("passkey client", () => {
 	it("merges registration extensions and returns WebAuthn response", async () => {
-		const fetchMock = vi.fn(async (path: string) => {
+		const fetchMock = vi.fn(async (path: string, options?: any) => {
 			if (path === "/passkey/generate-register-options") {
 				return {
 					data: {
@@ -59,7 +59,17 @@ describe("passkey client", () => {
 		const result = await actions.passkey.addPasskey({
 			extensions: { hmacCreateSecret: true },
 			returnWebAuthnResponse: true,
+			context: "onboarding-context",
 		});
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			"/passkey/generate-register-options",
+			expect.objectContaining({
+				query: expect.objectContaining({
+					context: "onboarding-context",
+				}),
+			}),
+		);
 
 		expect(mocks.startRegistration).toHaveBeenCalledWith(
 			expect.objectContaining({
