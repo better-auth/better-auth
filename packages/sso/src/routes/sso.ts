@@ -1,4 +1,3 @@
-import { base64 } from "@better-auth/utils/base64";
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
 import type { User, Verification } from "better-auth";
 import {
@@ -37,6 +36,8 @@ import {
 	DEFAULT_ASSERTION_TTL_MS,
 	DEFAULT_AUTHN_REQUEST_TTL_MS,
 	DEFAULT_CLOCK_SKEW_MS,
+	DEFAULT_MAX_SAML_METADATA_SIZE,
+	DEFAULT_MAX_SAML_RESPONSE_SIZE,
 	USED_ASSERTION_KEY_PREFIX,
 } from "../constants";
 import { assignOrganizationFromProvider } from "../linking";
@@ -46,7 +47,11 @@ import {
 	discoverOIDCConfig,
 	mapDiscoveryErrorToAPIError,
 } from "../oidc";
-import { validateConfigAlgorithms, validateSAMLAlgorithms } from "../saml";
+import {
+	validateConfigAlgorithms,
+	validateSAMLAlgorithms,
+	validateSingleAssertion,
+} from "../saml";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
 import { safeJsonParse, validateEmailDomain } from "../utils";
 
@@ -666,6 +671,20 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 					message: "Invalid issuer. Must be a valid URL",
 				});
 			}
+
+			if (body.samlConfig?.idpMetadata?.metadata) {
+				const maxMetadataSize =
+					options?.saml?.maxMetadataSize ?? DEFAULT_MAX_SAML_METADATA_SIZE;
+				if (
+					new TextEncoder().encode(body.samlConfig.idpMetadata.metadata)
+						.length > maxMetadataSize
+				) {
+					throw new APIError("BAD_REQUEST", {
+						message: `IdP metadata exceeds maximum allowed size (${maxMetadataSize} bytes)`,
+					});
+				}
+			}
+
 			if (ctx.body.organizationId) {
 				const organization = await ctx.context.adapter.findOne({
 					model: "member",
@@ -720,7 +739,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 							tokenEndpointAuthentication:
 								body.oidcConfig.tokenEndpointAuthentication,
 						},
-						isTrustedOrigin: ctx.context.isTrustedOrigin,
+						isTrustedOrigin: (url: string) => ctx.context.isTrustedOrigin(url),
 					});
 				} catch (error) {
 					if (error instanceof DiscoveryError) {
@@ -1698,6 +1717,15 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 		async (ctx) => {
 			const { SAMLResponse, RelayState } = ctx.body;
 			const { providerId } = ctx.params;
+
+			const maxResponseSize =
+				options?.saml?.maxResponseSize ?? DEFAULT_MAX_SAML_RESPONSE_SIZE;
+			if (new TextEncoder().encode(SAMLResponse).length > maxResponseSize) {
+				throw new APIError("BAD_REQUEST", {
+					message: `SAML response exceeds maximum allowed size (${maxResponseSize} bytes)`,
+				});
+			}
+
 			let provider: SSOProvider<SSOOptions> | null = null;
 			if (options?.defaultSSO?.length) {
 				const matchingDefault = options.defaultSSO.find(
@@ -1811,6 +1839,8 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 					: undefined,
 			});
 
+			validateSingleAssertion(SAMLResponse);
+
 			let parsedResponse: FlowResult;
 			try {
 				parsedResponse = await sp.parseLoginResponse(idp, "post", {
@@ -1826,8 +1856,8 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			} catch (error) {
 				ctx.context.logger.error("SAML response validation failed", {
 					error,
-					decodedResponse: new TextDecoder().decode(
-						base64.decode(SAMLResponse),
+					decodedResponse: Buffer.from(SAMLResponse, "base64").toString(
+						"utf-8",
 					),
 				});
 				throw new APIError("BAD_REQUEST", {
@@ -2137,6 +2167,14 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			const { SAMLResponse, RelayState = "" } = ctx.body;
 			const { providerId } = ctx.params;
 
+			const maxResponseSize =
+				options?.saml?.maxResponseSize ?? DEFAULT_MAX_SAML_RESPONSE_SIZE;
+			if (new TextEncoder().encode(SAMLResponse).length > maxResponseSize) {
+				throw new APIError("BAD_REQUEST", {
+					message: `SAML response exceeds maximum allowed size (${maxResponseSize} bytes)`,
+				});
+			}
+
 			// If defaultSSO is configured, use it as the provider
 			let provider: SSOProvider<SSOOptions> | null = null;
 
@@ -2240,6 +2278,23 @@ export const acsEndpoint = (options?: SSOOptions) => {
 						metadata: idpData.metadata,
 					});
 
+			try {
+				validateSingleAssertion(SAMLResponse);
+			} catch (error) {
+				if (error instanceof APIError) {
+					const redirectUrl =
+						RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+					const errorCode =
+						error.body?.code === "SAML_MULTIPLE_ASSERTIONS"
+							? "multiple_assertions"
+							: "no_assertion";
+					throw ctx.redirect(
+						`${redirectUrl}?error=${errorCode}&error_description=${encodeURIComponent(error.message)}`,
+					);
+				}
+				throw error;
+			}
+
 			// Parse and validate SAML response
 			let parsedResponse: FlowResult;
 			try {
@@ -2256,8 +2311,8 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			} catch (error) {
 				ctx.context.logger.error("SAML response validation failed", {
 					error,
-					decodedResponse: new TextDecoder().decode(
-						base64.decode(SAMLResponse),
+					decodedResponse: Buffer.from(SAMLResponse, "base64").toString(
+						"utf-8",
 					),
 				});
 				throw new APIError("BAD_REQUEST", {
@@ -2353,8 +2408,8 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			}
 
 			// Assertion Replay Protection
-			const samlContentAcs = new TextDecoder().decode(
-				base64.decode(SAMLResponse),
+			const samlContentAcs = Buffer.from(SAMLResponse, "base64").toString(
+				"utf-8",
 			);
 			const assertionIdAcs = extractAssertionId(samlContentAcs);
 

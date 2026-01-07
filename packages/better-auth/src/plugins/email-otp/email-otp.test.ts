@@ -1136,4 +1136,55 @@ describe("override default email verification", async () => {
 			expect.any(Object),
 		);
 	});
+
+	it("should call afterEmailVerification hook when override is enabled", async () => {
+		const afterEmailVerification = vi.fn();
+		let otp = "";
+
+		const { client } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+				},
+				emailVerification: {
+					sendOnSignUp: true,
+					afterEmailVerification,
+				},
+				plugins: [
+					emailOTP({
+						async sendVerificationOTP(data, request) {
+							otp = data.otp;
+						},
+						overrideDefaultEmailVerification: true,
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+			},
+		);
+
+		await client.signUp.email({
+			email: "test-hook@email.com",
+			password: "password",
+			name: "Test User",
+		});
+
+		const res = await client.emailOtp.verifyEmail({
+			email: "test-hook@email.com",
+			otp,
+		});
+
+		expect(res.data?.status).toBe(true);
+		expect(afterEmailVerification).toHaveBeenCalledTimes(1);
+		expect(afterEmailVerification).toHaveBeenCalledWith(
+			expect.objectContaining({
+				email: "test-hook@email.com",
+				emailVerified: true,
+			}),
+			expect.any(Object),
+		);
+	});
 });

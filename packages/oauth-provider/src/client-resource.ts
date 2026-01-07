@@ -13,15 +13,22 @@ export const oauthProviderResourceClient = <T extends Auth | undefined>(
 ) => {
 	const oauthProviderPlugin = auth ? getOAuthProviderPlugin(auth) : undefined;
 	const oauthProviderOptions = oauthProviderPlugin?.options;
-	const jwtPlugin =
-		auth && !oauthProviderOptions?.disableJwtPlugin
-			? getJwtPlugin(auth)
-			: undefined;
-	const jwtPluginOptions = jwtPlugin?.options;
+	let jwtPlugin: ReturnType<typeof getJwtPlugin> | undefined;
+	const getJwtPluginOptions = async () => {
+		if (!jwtPlugin) {
+			jwtPlugin =
+				auth && !oauthProviderOptions?.disableJwtPlugin
+					? getJwtPlugin(await auth.$context)
+					: undefined;
+		}
+		return jwtPlugin?.options;
+	};
+	const getAuthorizationServer = async () => {
+		const jwtPluginOptions = await getJwtPluginOptions();
+		return jwtPluginOptions?.jwt?.issuer ?? authServerBaseUrl;
+	};
 	const authServerBaseUrl = auth?.options.baseURL;
 	const authServerBasePath = auth?.options.basePath;
-	const authorizationServer =
-		jwtPluginOptions?.jwt?.issuer ?? authServerBaseUrl;
 
 	return {
 		id: "oauth-provider-resource-client",
@@ -47,6 +54,7 @@ export const oauthProviderResourceClient = <T extends Auth | undefined>(
 						resourceMetadataMappings?: Record<string, string>;
 					},
 				): Promise<JWTPayload> => {
+					const jwtPluginOptions = await getJwtPluginOptions();
 					const audience = opts?.verifyOptions?.audience ?? authServerBaseUrl;
 					const issuer =
 						opts?.verifyOptions?.issuer ??
@@ -62,7 +70,7 @@ export const oauthProviderResourceClient = <T extends Auth | undefined>(
 						opts?.jwksUrl ??
 						jwtPluginOptions?.jwks?.remoteUrl ??
 						(authServerBaseUrl
-							? `${authServerBaseUrl + (authServerBasePath ?? "")}/jwks`
+							? `${authServerBaseUrl + (authServerBasePath ?? "")}${jwtPluginOptions?.jwks?.jwksPath ?? "/jwks"}`
 							: undefined);
 					const introspectUrl =
 						opts?.remoteVerify?.introspectUrl ??
@@ -158,6 +166,8 @@ export const oauthProviderResourceClient = <T extends Auth | undefined>(
 							}
 						}
 					}
+
+					const authorizationServer = await getAuthorizationServer();
 
 					return {
 						resource,
