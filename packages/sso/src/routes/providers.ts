@@ -37,6 +37,47 @@ async function isOrgAdmin(
 	return roles.some((r) => ADMIN_ROLES.includes(r.trim()));
 }
 
+async function batchCheckOrgAdmin(
+	ctx: {
+		context: {
+			adapter: {
+				findMany: <T>(query: {
+					model: string;
+					where: {
+						field: string;
+						value: string | string[];
+						operator?: string;
+					}[];
+				}) => Promise<T[]>;
+			};
+		};
+	},
+	userId: string,
+	organizationIds: string[],
+): Promise<Set<string>> {
+	if (organizationIds.length === 0) {
+		return new Set();
+	}
+
+	const members = await ctx.context.adapter.findMany<Member>({
+		model: "member",
+		where: [
+			{ field: "userId", value: userId },
+			{ field: "organizationId", value: organizationIds, operator: "in" },
+		],
+	});
+
+	const adminOrgIds = new Set<string>();
+	for (const member of members) {
+		const roles = member.role.split(",");
+		if (roles.some((r) => ADMIN_ROLES.includes(r.trim()))) {
+			adminOrgIds.add(member.organizationId);
+		}
+	}
+
+	return adminOrgIds;
+}
+
 function sanitizeProvider(
 	provider: {
 		providerId: string;
@@ -305,7 +346,56 @@ async function checkProviderAccess(
 	return provider;
 }
 
-export const updateSSOProvider = <O extends SSOOptions>(options?: O) => {
+function mergeSAMLConfig(
+	current: SAMLConfig,
+	updates: Partial<SAMLConfig>,
+	issuer: string,
+): SAMLConfig {
+	return {
+		...current,
+		...updates,
+		issuer,
+		entryPoint: updates.entryPoint ?? current.entryPoint,
+		cert: updates.cert ?? current.cert,
+		callbackUrl: updates.callbackUrl ?? current.callbackUrl,
+		spMetadata: updates.spMetadata ?? current.spMetadata,
+		idpMetadata: updates.idpMetadata ?? current.idpMetadata,
+		mapping: updates.mapping ?? current.mapping,
+		audience: updates.audience ?? current.audience,
+		wantAssertionsSigned:
+			updates.wantAssertionsSigned ?? current.wantAssertionsSigned,
+		identifierFormat: updates.identifierFormat ?? current.identifierFormat,
+		signatureAlgorithm: updates.signatureAlgorithm ?? current.signatureAlgorithm,
+		digestAlgorithm: updates.digestAlgorithm ?? current.digestAlgorithm,
+	};
+}
+
+function mergeOIDCConfig(
+	current: OIDCConfig,
+	updates: Partial<OIDCConfig>,
+	issuer: string,
+): OIDCConfig {
+	return {
+		...current,
+		...updates,
+		issuer,
+		pkce: updates.pkce ?? current.pkce ?? true,
+		clientId: updates.clientId ?? current.clientId,
+		clientSecret: updates.clientSecret ?? current.clientSecret,
+		discoveryEndpoint: updates.discoveryEndpoint ?? current.discoveryEndpoint,
+		mapping: updates.mapping ?? current.mapping,
+		scopes: updates.scopes ?? current.scopes,
+		authorizationEndpoint:
+			updates.authorizationEndpoint ?? current.authorizationEndpoint,
+		tokenEndpoint: updates.tokenEndpoint ?? current.tokenEndpoint,
+		userInfoEndpoint: updates.userInfoEndpoint ?? current.userInfoEndpoint,
+		jwksEndpoint: updates.jwksEndpoint ?? current.jwksEndpoint,
+		tokenEndpointAuthentication:
+			updates.tokenEndpointAuthentication ?? current.tokenEndpointAuthentication,
+	};
+}
+
+export const updateSSOProvider = <O extends SSOOptions>(options: O) => {
 	return createAuthEndpoint(
 		"/sso/providers/:providerId",
 		{
@@ -317,7 +407,8 @@ export const updateSSOProvider = <O extends SSOOptions>(options?: O) => {
 				openapi: {
 					operationId: "updateSSOProvider",
 					summary: "Update SSO provider",
-					description: "Updates an existing SSO provider configuration",
+					description:
+						"Partially update an SSO provider. Only provided fields are updated. If domain changes, domainVerified is reset to false.",
 					responses: {
 						"200": {
 							description: "SSO provider updated successfully",
@@ -338,7 +429,7 @@ export const updateSSOProvider = <O extends SSOOptions>(options?: O) => {
 
 			const provider = await checkProviderAccess(ctx, providerId);
 
-			if (body.issuer) {
+			if (body.issuer !== undefined) {
 				const issuerValidator = z.string().url();
 				if (issuerValidator.safeParse(body.issuer).error) {
 					throw new APIError("BAD_REQUEST", {
@@ -379,64 +470,6 @@ export const updateSSOProvider = <O extends SSOOptions>(options?: O) => {
 				});
 			}
 
-			let updatedOidcConfig: string | null = provider.oidcConfig as string;
-			let updatedSamlConfig: string | null = provider.samlConfig as string;
-
-			if (body.oidcConfig && existingOidcConfig) {
-				const mergedOidcConfig = {
-					...existingOidcConfig,
-					...body.oidcConfig,
-					mapping: body.oidcConfig.mapping ?? existingOidcConfig.mapping,
-				};
-				updatedOidcConfig = JSON.stringify(mergedOidcConfig);
-			}
-
-			if (body.samlConfig) {
-				if (existingSamlConfig) {
-					validateConfigAlgorithms(
-						{
-							signatureAlgorithm:
-								body.samlConfig.signatureAlgorithm ??
-								existingSamlConfig.signatureAlgorithm,
-							digestAlgorithm:
-								body.samlConfig.digestAlgorithm ??
-								existingSamlConfig.digestAlgorithm,
-						},
-						options?.saml?.algorithms,
-					);
-
-					const mergedSamlConfig = {
-						...existingSamlConfig,
-						...body.samlConfig,
-						idpMetadata: body.samlConfig.idpMetadata ?? existingSamlConfig.idpMetadata,
-						spMetadata: body.samlConfig.spMetadata ?? existingSamlConfig.spMetadata,
-						mapping: body.samlConfig.mapping ?? existingSamlConfig.mapping,
-					};
-					updatedSamlConfig = JSON.stringify(mergedSamlConfig);
-				} else {
-					validateConfigAlgorithms(
-						{
-							signatureAlgorithm: body.samlConfig.signatureAlgorithm,
-							digestAlgorithm: body.samlConfig.digestAlgorithm,
-						},
-						options?.saml?.algorithms,
-					);
-
-					updatedSamlConfig = JSON.stringify({
-						issuer: body.issuer ?? provider.issuer,
-						...body.samlConfig,
-					});
-				}
-			} else if (existingSamlConfig) {
-				validateConfigAlgorithms(
-					{
-						signatureAlgorithm: existingSamlConfig.signatureAlgorithm,
-						digestAlgorithm: existingSamlConfig.digestAlgorithm,
-					},
-					options?.saml?.algorithms,
-				);
-			}
-
 			const updateData: {
 				issuer?: string;
 				domain?: string;
@@ -456,15 +489,75 @@ export const updateSSOProvider = <O extends SSOOptions>(options?: O) => {
 				}
 			}
 
-			if (updatedOidcConfig !== null) {
-				updateData.oidcConfig = updatedOidcConfig;
+			if (body.oidcConfig) {
+				const currentOidcConfig = safeJsonParse<OIDCConfig>(
+					provider.oidcConfig as string,
+				);
+
+				if (!currentOidcConfig) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Cannot update OIDC config for a provider that doesn't have OIDC configured",
+					});
+				}
+
+				const updatedOidcConfig = mergeOIDCConfig(
+					currentOidcConfig,
+					body.oidcConfig,
+					updateData.issuer || currentOidcConfig.issuer || provider.issuer,
+				);
+				updateData.oidcConfig = JSON.stringify(updatedOidcConfig);
 			}
 
-			if (updatedSamlConfig !== null) {
-				updateData.samlConfig = updatedSamlConfig;
+			if (body.samlConfig) {
+				const currentSamlConfig = safeJsonParse<SAMLConfig>(
+					provider.samlConfig as string,
+				);
+
+				if (!currentSamlConfig) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Cannot update SAML config for a provider that doesn't have SAML configured",
+					});
+				}
+
+				if (
+					body.samlConfig.signatureAlgorithm !== undefined ||
+					body.samlConfig.digestAlgorithm !== undefined
+				) {
+					validateConfigAlgorithms(
+						{
+							signatureAlgorithm:
+								body.samlConfig.signatureAlgorithm ??
+								currentSamlConfig.signatureAlgorithm,
+							digestAlgorithm:
+								body.samlConfig.digestAlgorithm ??
+								currentSamlConfig.digestAlgorithm,
+						},
+						options?.saml?.algorithms,
+					);
+				}
+
+				const updatedSamlConfig = mergeSAMLConfig(
+					currentSamlConfig,
+					body.samlConfig,
+					updateData.issuer || currentSamlConfig.issuer || provider.issuer,
+				);
+				updateData.samlConfig = JSON.stringify(updatedSamlConfig);
 			}
 
-			const updatedProvider = await ctx.context.adapter.update<{
+
+			if (Object.keys(updateData).length === 0) {
+				throw new APIError("BAD_REQUEST", {
+					message: "No fields provided for update",
+				});
+			}
+
+			await ctx.context.adapter.update({
+				model: "ssoProvider",
+				where: [{ field: "providerId", value: providerId }],
+				update: updateData,
+			});
+
+			const fullProvider = await ctx.context.adapter.findOne<{
 				id: string;
 				providerId: string;
 				issuer: string;
@@ -477,16 +570,15 @@ export const updateSSOProvider = <O extends SSOOptions>(options?: O) => {
 			}>({
 				model: "ssoProvider",
 				where: [{ field: "providerId", value: providerId }],
-				update: updateData,
 			});
 
-			if (!updatedProvider) {
+			if (!fullProvider) {
 				throw new APIError("NOT_FOUND", {
-					message: "Provider not found",
+					message: "Provider not found after update",
 				});
 			}
 
-			return ctx.json(sanitizeProvider(updatedProvider, ctx.context.baseURL));
+			return ctx.json(sanitizeProvider(fullProvider, ctx.context.baseURL));
 		},
 	);
 };
