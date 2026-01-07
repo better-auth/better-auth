@@ -748,7 +748,7 @@ describe("internal adapter test", async () => {
 		testDb.close();
 	});
 
-	it("listSessions should skip corrupt/unparseable sessions without blanking the list", async () => {
+	it("listSessions should skip corrupt/unparsable sessions without blanking the list", async () => {
 		const testMap = new Map<string, string>();
 
 		const testDb = new Database(":memory:");
