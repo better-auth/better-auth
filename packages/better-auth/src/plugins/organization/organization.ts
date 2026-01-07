@@ -72,7 +72,7 @@ declare module "@better-auth/core" {
 	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
 	interface BetterAuthPluginRegistry<Auth, Context> {
 		organization: {
-			creator: OrganizationPluginCreator;
+			creator: typeof organization;
 		};
 	}
 }
@@ -294,12 +294,6 @@ export type OrganizationPlugin<O extends OrganizationOptions> = {
 	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
 	options: NoInfer<O>;
 };
-
-export interface OrganizationPluginCreator {
-	<O extends OrganizationOptions>(
-		options?: O | undefined,
-	): OrganizationPlugin<O>;
-}
 
 /**
  * Organization plugin for Better Auth. Organization allows you to create teams, members,
