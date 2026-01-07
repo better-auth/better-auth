@@ -178,6 +178,41 @@ describe("Email Verification", async () => {
 		);
 	});
 
+	it("should call beforeEmailVerification callback when email is verified", async () => {
+		const beforeEmailVerificationMock = vi.fn();
+		const { auth, client } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				async sendVerificationEmail({ user, url, token: _token }) {
+					token = _token;
+					mockSendEmail(user.email, url);
+				},
+				beforeEmailVerification: beforeEmailVerificationMock,
+			},
+		});
+
+		await auth.api.sendVerificationEmail({
+			body: {
+				email: testUser.email,
+			},
+		});
+
+		const res = await client.verifyEmail({
+			query: {
+				token,
+			},
+		});
+
+		expect(res.data?.status).toBe(true);
+		expect(beforeEmailVerificationMock).toHaveBeenCalledWith(
+			expect.objectContaining({ email: testUser.email }),
+			expect.any(Object),
+		);
+	});
+
 	it("should call afterEmailVerification callback when email is verified", async () => {
 		const afterEmailVerificationMock = vi.fn();
 		const { auth, client, testUser } = await getTestInstance({
