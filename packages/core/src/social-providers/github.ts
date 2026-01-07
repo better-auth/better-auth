@@ -2,9 +2,10 @@ import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
+	getOAuth2Tokens,
 	refreshAccessToken,
-	validateAuthorizationCode,
 } from "../oauth2";
+import { createAuthorizationCodeRequest } from "../oauth2/validate-authorization-code";
 
 export interface GithubProfile {
 	login: string;
@@ -86,13 +87,33 @@ export const github = (options: GithubOptions) => {
 			});
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
-			return validateAuthorizationCode({
+			const { body, headers: requestHeaders } = createAuthorizationCodeRequest({
 				code,
 				codeVerifier,
 				redirectURI,
 				options,
-				tokenEndpoint,
 			});
+
+			const { data, error } = await betterFetch<
+				| { access_token: string; token_type: string; scope: string }
+				| { error: string; error_description?: string; error_uri?: string }
+			>(tokenEndpoint, {
+				method: "POST",
+				body: body,
+				headers: requestHeaders,
+			});
+
+			if (error) {
+				throw error;
+			}
+
+			if ("error" in data) {
+				throw new Error(
+					data.error_description || data.error || "Failed to exchange code",
+				);
+			}
+
+			return getOAuth2Tokens(data);
 		},
 		refreshAccessToken: options.refreshAccessToken
 			? options.refreshAccessToken
