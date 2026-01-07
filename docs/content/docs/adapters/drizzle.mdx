@@ -164,7 +164,11 @@ export const auth = betterAuth({
 });
 ```
 
-This will generate the schema that looks something like this:
+Then when using the Better Auth CLI, it will generate the schema that looks something like this:
+
+```bash
+npx @better-auth/cli@latest generate
+```
 
 ```ts
 export const authSchema = pgSchema("auth");
