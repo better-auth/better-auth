@@ -52,7 +52,9 @@ describe("SSO provider read endpoints", () => {
 		const ssoPlugin = enableDomainVerification
 			? sso({ domainVerification: { enabled: true } })
 			: sso();
-		const plugins = includeOrgPlugin ? [ssoPlugin, organization()] : [ssoPlugin];
+		const plugins = includeOrgPlugin
+			? [ssoPlugin, organization()]
+			: [ssoPlugin];
 
 		const auth = betterAuth({
 			database: memory,
@@ -636,8 +638,10 @@ describe("SSO provider read endpoints", () => {
 		});
 
 		it("should update domain and reset domainVerified to false", async () => {
-			const { auth, getAuthHeaders, registerSAMLProvider } =
-				createTestAuth(false, true);
+			const { auth, getAuthHeaders, registerSAMLProvider } = createTestAuth(
+				false,
+				true,
+			);
 
 			const headers = await getAuthHeaders({
 				email: "owner@example.com",

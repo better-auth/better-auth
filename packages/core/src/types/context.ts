@@ -311,9 +311,9 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 		 * ```ts
 		 * if (ctx.context.hasPlugin("organization")) {
 		 *   // organization plugin is enabled
-	 * }
-	 * ```
-	 */
+		 * }
+		 * ```
+		 */
 		hasPlugin: <Plugin extends BetterAuthPlugin>(
 			pluginId: Plugin["id"],
 		) => boolean;

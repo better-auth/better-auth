@@ -1,9 +1,9 @@
+import type { AuthContext } from "better-auth";
 import {
 	APIError,
 	createAuthEndpoint,
 	sessionMiddleware,
 } from "better-auth/api";
-import type { AuthContext } from "better-auth";
 import z from "zod/v4";
 import { DEFAULT_MAX_SAML_METADATA_SIZE } from "../constants";
 import { validateConfigAlgorithms } from "../saml";
@@ -163,22 +163,29 @@ export const listSSOProviders = () => {
 
 			const orgPluginEnabled = ctx.context.hasPlugin("organization");
 
-			const accessibleProviders = await Promise.all(
-				allProviders.map(async (provider) => {
-					if (provider.organizationId) {
-						if (orgPluginEnabled) {
-							const hasAccess = await isOrgAdmin(
-								ctx,
-								userId,
-								provider.organizationId,
-							);
-							return hasAccess ? provider : null;
-						}
-						return provider.userId === userId ? provider : null;
+			let adminOrgIds: Set<string> = new Set();
+			if (orgPluginEnabled) {
+				const orgIds = [
+					...new Set(
+						allProviders
+							.filter((p) => p.organizationId)
+							.map((p) => p.organizationId!)
+							.filter((id): id is string => id !== null && id !== undefined),
+					),
+				];
+				adminOrgIds = await batchCheckOrgAdmin(ctx, userId, orgIds);
+			}
+
+			const accessibleProviders = allProviders.map((provider) => {
+				if (provider.organizationId) {
+					if (orgPluginEnabled) {
+						const hasAccess = adminOrgIds.has(provider.organizationId);
+						return hasAccess ? provider : null;
 					}
 					return provider.userId === userId ? provider : null;
-				}),
-			);
+				}
+				return provider.userId === userId ? provider : null;
+			});
 
 			const providers = accessibleProviders
 				.filter((p): p is NonNullable<typeof p> => p !== null)
@@ -353,7 +360,8 @@ function mergeSAMLConfig(
 		wantAssertionsSigned:
 			updates.wantAssertionsSigned ?? current.wantAssertionsSigned,
 		identifierFormat: updates.identifierFormat ?? current.identifierFormat,
-		signatureAlgorithm: updates.signatureAlgorithm ?? current.signatureAlgorithm,
+		signatureAlgorithm:
+			updates.signatureAlgorithm ?? current.signatureAlgorithm,
 		digestAlgorithm: updates.digestAlgorithm ?? current.digestAlgorithm,
 	};
 }
@@ -379,7 +387,8 @@ function mergeOIDCConfig(
 		userInfoEndpoint: updates.userInfoEndpoint ?? current.userInfoEndpoint,
 		jwksEndpoint: updates.jwksEndpoint ?? current.jwksEndpoint,
 		tokenEndpointAuthentication:
-			updates.tokenEndpointAuthentication ?? current.tokenEndpointAuthentication,
+			updates.tokenEndpointAuthentication ??
+			current.tokenEndpointAuthentication,
 	};
 }
 
@@ -484,7 +493,8 @@ export const updateSSOProvider = <O extends SSOOptions>(options: O) => {
 
 				if (!currentOidcConfig) {
 					throw new APIError("BAD_REQUEST", {
-						message: "Cannot update OIDC config for a provider that doesn't have OIDC configured",
+						message:
+							"Cannot update OIDC config for a provider that doesn't have OIDC configured",
 					});
 				}
 
@@ -503,7 +513,8 @@ export const updateSSOProvider = <O extends SSOOptions>(options: O) => {
 
 				if (!currentSamlConfig) {
 					throw new APIError("BAD_REQUEST", {
-						message: "Cannot update SAML config for a provider that doesn't have SAML configured",
+						message:
+							"Cannot update SAML config for a provider that doesn't have SAML configured",
 					});
 				}
 
@@ -529,11 +540,10 @@ export const updateSSOProvider = <O extends SSOOptions>(options: O) => {
 					body.samlConfig,
 					updateData.issuer || currentSamlConfig.issuer || provider.issuer,
 				);
-				updateData.samlConfig = JSON.stringify(updatedSamlConfig);
-			}
+			updateData.samlConfig = JSON.stringify(updatedSamlConfig);
+		}
 
-
-			if (Object.keys(updateData).length === 0) {
+		if (Object.keys(updateData).length === 0) {
 				throw new APIError("BAD_REQUEST", {
 					message: "No fields provided for update",
 				});
