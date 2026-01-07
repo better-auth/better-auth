@@ -171,7 +171,14 @@ export async function createAuthContext(
 				: getDatabaseType(options.database),
 	});
 
-	let ctx: AuthContext = {
+	const pluginIds = new Set(options.plugins!.map((p) => p.id));
+
+	const getPluginFn = (id: string) =>
+		(options.plugins!.find((p) => p.id === id) as never | undefined) ?? null;
+
+	const hasPluginFn = (id: string) => pluginIds.has(id);
+
+	const ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
 		socialProviders: providers,
 		options,
@@ -312,6 +319,8 @@ export async function createAuthContext(
 				logger.error("Failed to run background task:", e);
 			}
 		},
+		getPlugin: getPluginFn,
+		hasPlugin: hasPluginFn,
 	};
 
 	const initOrPromise = runPluginInit(ctx);
