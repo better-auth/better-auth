@@ -2,7 +2,7 @@ import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import * as z from "zod";
 import { createOAuthClientEndpoint, schemaToOAuth } from "../register";
 import type { OAuthOptions, Scope } from "../types";
-import { HttpsOnlyUrl, SafeUrlSchema } from "../types/zod";
+import { HttpsOnlyUrlSchema, SafeUrlSchema } from "../types/zod";
 import { createCimdClient } from "../utils/cimd";
 import {
 	deleteClientEndpoint,
@@ -19,7 +19,7 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 		{
 			method: "POST",
 			body: z.object({
-				client_id: HttpsOnlyUrl.optional(),
+				client_id: HttpsOnlyUrlSchema.optional(),
 				redirect_uris: z.array(SafeUrlSchema).min(1),
 				scope: z.string().optional(),
 				client_name: z.string().optional(),
@@ -236,7 +236,7 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 			method: "POST",
 			use: [sessionMiddleware],
 			body: z.object({
-				client_id: HttpsOnlyUrl.optional(),
+				client_id: HttpsOnlyUrlSchema.optional(),
 				redirect_uris: z.array(SafeUrlSchema).min(1),
 				scope: z.string().optional(),
 				client_name: z.string().optional(),
