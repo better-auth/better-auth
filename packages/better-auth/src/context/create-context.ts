@@ -1,8 +1,4 @@
-import type {
-	AuthContext,
-	BetterAuthOptions,
-	BetterAuthPluginRegistryIdentifier,
-} from "@better-auth/core";
+import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
 import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { createLogger, env, isProduction, isTest } from "@better-auth/core/env";
@@ -177,11 +173,10 @@ export async function createAuthContext(
 
 	const pluginIds = new Set(options.plugins!.map((p) => p.id));
 
-	const getPluginFn = <ID extends BetterAuthPluginRegistryIdentifier>(id: ID) =>
+	const getPluginFn = (id: string) =>
 		(options.plugins!.find((p) => p.id === id) as never | undefined) ?? null;
 
-	const hasPluginFn = <ID extends BetterAuthPluginRegistryIdentifier>(id: ID) =>
-		pluginIds.has(id);
+	const hasPluginFn = (id: string) => pluginIds.has(id);
 
 	const ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
