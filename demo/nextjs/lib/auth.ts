@@ -238,7 +238,9 @@ const authOptions = {
 			loginPage: "/sign-in",
 			consentPage: "/oauth/consent",
 			allowDynamicClientRegistration: true,
-			allowUnauthenticatedClientRegistration: true,
+			cimd: {
+				enable: true,
+			},
 			scopes: [
 				"openid",
 				"profile",
