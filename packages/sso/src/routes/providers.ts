@@ -325,8 +325,7 @@ function parseAndValidateConfig<T>(
 	}
 	if (!config) {
 		throw new APIError("BAD_REQUEST", {
-			message:
-				`Cannot update ${configType} config for a provider that doesn't have ${configType} configured`,
+			message: `Cannot update ${configType} config for a provider that doesn't have ${configType} configured`,
 		});
 	}
 	return config;

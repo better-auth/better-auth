@@ -123,7 +123,9 @@ export function sso<O extends SSOOptions>(
 	endpoints: SSOEndpoints<O>;
 };
 
-export function sso<O extends SSOOptions>(options?: O | undefined): BetterAuthPlugin {
+export function sso<O extends SSOOptions>(
+	options?: O | undefined,
+): BetterAuthPlugin {
 	const optionsWithStore = options as O;
 
 	let endpoints = {
