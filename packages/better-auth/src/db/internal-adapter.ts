@@ -164,16 +164,21 @@ export const createInternalAdapter = (
 				for (const session of validSessions) {
 					const sessionStringified = await secondaryStorage.get(session.token);
 					if (sessionStringified) {
-						const s = safeJSONParse<{
-							session: Session;
-							user: User;
-						}>(sessionStringified);
-						if (!s) return [];
-						const parsedSession = parseSessionOutput(ctx.options, {
-							...s.session,
-							expiresAt: new Date(s.session.expiresAt),
-						});
-						sessions.push(parsedSession);
+						try {
+							const s = safeJSONParse<{
+								session: Session;
+								user: User;
+							}>(sessionStringified);
+							if (!s) continue;
+							const parsedSession = parseSessionOutput(ctx.options, {
+								...s.session,
+								expiresAt: new Date(s.session.expiresAt),
+							});
+							sessions.push(parsedSession);
+						} catch {
+							// Skip invalid/corrupt session data
+							continue;
+						}
 					}
 				}
 				return sessions;
@@ -443,26 +448,31 @@ export const createInternalAdapter = (
 				for (const sessionToken of sessionTokens) {
 					const sessionStringified = await secondaryStorage.get(sessionToken);
 					if (sessionStringified) {
-						const s = safeJSONParse<{
-							session: Session;
-							user: User;
-						}>(sessionStringified);
-						if (!s) return [];
-						const session = {
-							session: {
-								...s.session,
-								expiresAt: new Date(s.session.expiresAt),
-							},
-							user: {
-								...s.user,
-								createdAt: new Date(s.user.createdAt),
-								updatedAt: new Date(s.user.updatedAt),
-							},
-						} as {
-							session: Session;
-							user: User;
-						};
-						sessions.push(session);
+						try {
+							const s = safeJSONParse<{
+								session: Session;
+								user: User;
+							}>(sessionStringified);
+							if (!s) continue;
+							const session = {
+								session: {
+									...s.session,
+									expiresAt: new Date(s.session.expiresAt),
+								},
+								user: {
+									...s.user,
+									createdAt: new Date(s.user.createdAt),
+									updatedAt: new Date(s.user.updatedAt),
+								},
+							} as {
+								session: Session;
+								user: User;
+							};
+							sessions.push(session);
+						} catch {
+							// Skip invalid/corrupt session data
+							continue;
+						}
 					}
 				}
 				return sessions;
