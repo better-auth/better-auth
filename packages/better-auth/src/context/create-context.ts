@@ -177,12 +177,11 @@ export async function createAuthContext(
 
 	const pluginIds = new Set(options.plugins!.map((p) => p.id));
 
-	const getPluginFn = <Plugin extends BetterAuthPlugin>(
-		id: Plugin["id"],
-	): Plugin | null =>
-		(options.plugins!.find((p): p is Plugin => p.id === id) as
-			| Plugin
-			| undefined) ?? null;
+	const getPluginFn = <ID extends BetterAuthPluginRegistryIdentifier>(id: ID) =>
+		(options.plugins!.find((p) => p.id === id) as never | undefined) ?? null;
+
+	const hasPluginFn = <ID extends BetterAuthPluginRegistryIdentifier>(id: ID) =>
+		pluginIds.has(id);
 
 	const ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
@@ -325,10 +324,8 @@ export async function createAuthContext(
 				logger.error("Failed to run background task:", e);
 			}
 		},
-    getPlugin: <ID extends BetterAuthPluginRegistryIdentifier>(id: ID) =>
-      (options.plugins!.find((p) => p.id === id) as never | undefined) ?? null,
-    hasPlugin: <ID extends BetterAuthPluginRegistryIdentifier>(pluginId: ID) =>
-      pluginIds.has(pluginId),
+		getPlugin: getPluginFn,
+		hasPlugin: hasPluginFn,
 	};
 
 	const initOrPromise = runPluginInit(ctx);

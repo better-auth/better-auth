@@ -186,6 +186,22 @@ export type PluginContext = {
 	) => ReturnType<
 		BetterAuthPluginRegistry<unknown, unknown>[ID]["creator"]
 	> | null;
+	/**
+	 * Checks if a plugin is enabled by its ID.
+	 *
+	 * @param pluginId - The ID of the plugin to check
+	 * @returns `true` if the plugin is enabled, `false` otherwise
+	 *
+	 * @example
+	 * ```ts
+	 * if (ctx.context.hasPlugin("organization")) {
+	 *   // organization plugin is enabled
+	 * }
+	 * ```
+	 */
+	hasPlugin: <ID extends BetterAuthPluginRegistryIdentifier>(
+		pluginId: ID,
+	) => boolean;
 };
 
 export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
@@ -323,20 +339,4 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 		runInBackgroundOrAwait: (
 			promise: Promise<unknown> | Promise<void> | void | unknown,
 		) => Promise<unknown>;
-		/**
-		 * Checks if a plugin is enabled by its ID.
-		 *
-		 * @param pluginId - The ID of the plugin to check
-		 * @returns `true` if the plugin is enabled, `false` otherwise
-		 *
-		 * @example
-		 * ```ts
-		 * if (ctx.context.hasPlugin("organization")) {
-		 *   // organization plugin is enabled
-		 * }
-		 * ```
-		 */
-		hasPlugin: <Plugin extends BetterAuthPlugin>(
-			pluginId: Plugin["id"],
-		) => boolean;
 	};
