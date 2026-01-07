@@ -358,8 +358,7 @@ describe("SSO provider read endpoints", () => {
 		});
 
 		it("should return provider with organizationId when org plugin is disabled if user owns it", async () => {
-			const { auth, getAuthHeaders, registerSAMLProvider, data } =
-				createTestAuth(false);
+			const { auth, getAuthHeaders, data } = createTestAuth(false);
 
 			const ownerHeaders = await getAuthHeaders({
 				email: "owner@example.com",
@@ -399,13 +398,8 @@ describe("SSO provider read endpoints", () => {
 		});
 
 		it("should require org admin access for user-owned provider with organizationId when org plugin enabled", async () => {
-			const {
-				auth,
-				getAuthHeaders,
-				createOrganization,
-				registerSAMLProvider,
-				data,
-			} = createTestAuth(true);
+			const { auth, getAuthHeaders, createOrganization, data } =
+				createTestAuth(true);
 
 			const ownerHeaders = await getAuthHeaders({
 				email: "owner@example.com",
@@ -643,12 +637,8 @@ describe("SSO provider read endpoints", () => {
 		});
 
 		it("should require org admin access for user-owned provider with organizationId when org plugin enabled", async () => {
-			const {
-				auth,
-				getAuthHeaders,
-				createOrganization,
-				data,
-			} = createTestAuth(true);
+			const { auth, getAuthHeaders, createOrganization, data } =
+				createTestAuth(true);
 
 			const ownerHeaders = await getAuthHeaders({
 				email: "owner@example.com",
