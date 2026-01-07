@@ -15,8 +15,8 @@ import type {
 	UpdateQueryBuilder,
 } from "kysely";
 import { sql } from "kysely";
-import type { KyselyDatabaseType } from "./types";
 import { capitalizeFirstLetter } from "../..";
+import type { KyselyDatabaseType } from "./types";
 
 interface KyselyAdapterConfig {
 	/**
