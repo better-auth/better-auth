@@ -1788,7 +1788,11 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 				ctx.context.options.onAPIError?.errorURL || `${appOrigin}/error`;
 			const currentCallbackPath = `${ctx.context.baseURL}/sso/saml2/callback/${providerId}`;
 
-			if (ctx.method === "GET") {
+			// Determine if this is a GET request by checking both method AND body presence
+			// When called via auth.api.*, ctx.method may not be reliable, so we also check for body
+			const isGetRequest = ctx.method === "GET" && !ctx.body?.SAMLResponse;
+
+			if (isGetRequest) {
 				const session = await getSessionFromCtx(ctx);
 
 				if (!session?.session) {
@@ -1806,7 +1810,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 				throw ctx.redirect(safeRedirectUrl);
 			}
 
-			if (!ctx.body) {
+			if (!ctx.body?.SAMLResponse) {
 				throw new APIError("BAD_REQUEST", {
 					message: "SAMLResponse is required for POST requests",
 				});
