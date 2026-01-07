@@ -20,6 +20,15 @@ import { ANONYMOUS_ERROR_CODES } from "./error-codes";
 import { schema } from "./schema";
 import type { AnonymousOptions, AnonymousSession } from "./types";
 
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		anonymous: {
+			creator: typeof anonymous;
+		};
+	}
+}
+
 async function getAnonUserEmail(
 	options: AnonymousOptions | undefined,
 ): Promise<string> {
