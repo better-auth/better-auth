@@ -356,6 +356,113 @@ describe("SSO provider read endpoints", () => {
 
 			expect(response.providers).toHaveLength(0);
 		});
+
+		it("should return provider with organizationId when org plugin is disabled if user owns it", async () => {
+			const { auth, getAuthHeaders, registerSAMLProvider, data } =
+				createTestAuth(false);
+
+			const ownerHeaders = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			const ownerUser = (data.user as { id: string; email: string }[]).find(
+				(u) => u.email === "owner@example.com",
+			);
+
+			// Create a provider with organizationId but org plugin is disabled
+			// User should still be able to access it if they own it
+			data.ssoProvider.push({
+				id: "provider-with-org-id",
+				providerId: "my-provider",
+				issuer: "https://idp.example.com",
+				domain: "example.com",
+				userId: ownerUser!.id,
+				organizationId: "some-org-id",
+				samlConfig: JSON.stringify({
+					entryPoint: "https://idp.example.com/sso",
+					cert: TEST_CERT,
+					callbackUrl: "http://localhost:3000/api/sso/callback",
+					audience: "my-audience",
+					wantAssertionsSigned: true,
+					spMetadata: {},
+				}),
+			});
+
+			const response = await auth.api.listSSOProviders({
+				headers: ownerHeaders,
+			});
+
+			expect(response.providers).toHaveLength(1);
+			expect(response.providers[0]!.providerId).toBe("my-provider");
+		});
+
+		it("should require org admin access for user-owned provider with organizationId when org plugin enabled", async () => {
+			const {
+				auth,
+				getAuthHeaders,
+				createOrganization,
+				registerSAMLProvider,
+				data,
+			} = createTestAuth(true);
+
+			const ownerHeaders = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			const org = await createOrganization("test-org", ownerHeaders);
+
+			// Create a provider where the user owns it (userId matches) but it's in an org
+			// When org plugin is enabled, org admin access should be required, not just ownership
+			const ownerUser = (data.user as { id: string; email: string }[]).find(
+				(u) => u.email === "owner@example.com",
+			);
+
+			data.ssoProvider.push({
+				id: "provider-owned-by-user-in-org",
+				providerId: "user-owned-org-provider",
+				issuer: "https://idp.example.com",
+				domain: "example.com",
+				userId: ownerUser!.id,
+				organizationId: org!.id,
+				samlConfig: JSON.stringify({
+					entryPoint: "https://idp.example.com/sso",
+					cert: TEST_CERT,
+					callbackUrl: "http://localhost:3000/api/sso/callback",
+					audience: "my-audience",
+					wantAssertionsSigned: true,
+					spMetadata: {},
+				}),
+			});
+
+			// Owner should be able to access it since they created the org (are admin)
+			const ownerResponse = await auth.api.listSSOProviders({
+				headers: ownerHeaders,
+			});
+
+			expect(ownerResponse.providers).toHaveLength(1);
+			expect(ownerResponse.providers[0]!.providerId).toBe(
+				"user-owned-org-provider",
+			);
+
+			// Create another user who is NOT an org admin
+			const nonAdminHeaders = await getAuthHeaders({
+				email: "nonadmin@example.com",
+				password: "password123",
+				name: "Non Admin",
+			});
+
+			const nonAdminResponse = await auth.api.listSSOProviders({
+				headers: nonAdminHeaders,
+			});
+
+			// Non-admin should not see it even though they might have the same userId logic elsewhere
+			// This tests that org admin check takes precedence when org plugin is enabled
+			expect(nonAdminResponse.providers).toHaveLength(0);
+		});
 	});
 
 	describe("GET /sso/providers/:providerId", () => {
@@ -495,6 +602,106 @@ describe("SSO provider read endpoints", () => {
 			const responseStr = JSON.stringify(response);
 			expect(responseStr).not.toContain("super-secret-value");
 			expect(responseStr).not.toContain("clientSecret");
+		});
+
+		it("should allow access to provider with organizationId when org plugin is disabled if user owns it", async () => {
+			const { auth, getAuthHeaders, data } = createTestAuth(false);
+
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			const user = (data.user as { id: string; email: string }[]).find(
+				(u) => u.email === "owner@example.com",
+			);
+
+			data.ssoProvider.push({
+				id: "provider-with-org-id",
+				providerId: "my-provider",
+				issuer: "https://idp.example.com",
+				domain: "example.com",
+				userId: user!.id,
+				organizationId: "some-org-id",
+				samlConfig: JSON.stringify({
+					entryPoint: "https://idp.example.com/sso",
+					cert: TEST_CERT,
+					callbackUrl: "http://localhost:3000/api/sso/callback",
+					audience: "my-audience",
+					wantAssertionsSigned: true,
+					spMetadata: {},
+				}),
+			});
+
+			const response = await auth.api.getSSOProvider({
+				params: { providerId: "my-provider" },
+				headers,
+			});
+
+			expect(response.providerId).toBe("my-provider");
+		});
+
+		it("should require org admin access for user-owned provider with organizationId when org plugin enabled", async () => {
+			const {
+				auth,
+				getAuthHeaders,
+				createOrganization,
+				data,
+			} = createTestAuth(true);
+
+			const ownerHeaders = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			const org = await createOrganization("test-org", ownerHeaders);
+
+			const ownerUser = (data.user as { id: string; email: string }[]).find(
+				(u) => u.email === "owner@example.com",
+			);
+
+			data.ssoProvider.push({
+				id: "provider-owned-by-user-in-org",
+				providerId: "user-owned-org-provider",
+				issuer: "https://idp.example.com",
+				domain: "example.com",
+				userId: ownerUser!.id,
+				organizationId: org!.id,
+				samlConfig: JSON.stringify({
+					entryPoint: "https://idp.example.com/sso",
+					cert: TEST_CERT,
+					callbackUrl: "http://localhost:3000/api/sso/callback",
+					audience: "my-audience",
+					wantAssertionsSigned: true,
+					spMetadata: {},
+				}),
+			});
+
+			// Owner should be able to access it since they created the org (are admin)
+			const ownerResponse = await auth.api.getSSOProvider({
+				params: { providerId: "user-owned-org-provider" },
+				headers: ownerHeaders,
+			});
+
+			expect(ownerResponse.providerId).toBe("user-owned-org-provider");
+
+			// Create another user who is NOT an org admin
+			const nonAdminHeaders = await getAuthHeaders({
+				email: "nonadmin@example.com",
+				password: "password123",
+				name: "Non Admin",
+			});
+
+			const nonAdminResponse = await auth.api.getSSOProvider({
+				params: { providerId: "user-owned-org-provider" },
+				headers: nonAdminHeaders,
+				asResponse: true,
+			});
+
+			// Non-admin should get 403 even though they might own providers elsewhere
+			expect(nonAdminResponse.status).toBe(403);
 		});
 	});
 
