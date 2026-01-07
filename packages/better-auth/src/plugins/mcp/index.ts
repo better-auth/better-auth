@@ -30,6 +30,15 @@ import { schema } from "../oidc-provider/schema";
 import { parsePrompt } from "../oidc-provider/utils/prompt";
 import { authorizeMCPOAuth } from "./authorize";
 
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		mcp: {
+			creator: typeof mcp;
+		};
+	}
+}
+
 interface MCPOptions {
 	loginPage: string;
 	resource?: string | undefined;
