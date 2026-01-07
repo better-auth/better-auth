@@ -72,9 +72,40 @@ declare module "@better-auth/core" {
 	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
 	interface BetterAuthPluginRegistry<Auth, Context> {
 		organization: {
-			creator: typeof organization;
+			creator: OrganizationCreator;
 		};
 	}
+}
+
+export type DefaultOrganizationPlugin<Options extends OrganizationOptions> = {
+	id: "organization";
+	endpoints: OrganizationEndpoints<Options>;
+	schema: OrganizationSchema<Options>;
+	$Infer: {
+		Organization: InferOrganization<Options>;
+		Invitation: InferInvitation<Options>;
+		Member: InferMember<Options>;
+		Team: Options["teams"] extends { enabled: true } ? Team : any;
+		TeamMember: Options["teams"] extends { enabled: true } ? TeamMember : any;
+		ActiveOrganization: Options["teams"] extends { enabled: true }
+			? {
+					members: InferMember<Options, false>[];
+					invitations: InferInvitation<Options, false>[];
+					teams: InferTeam<Options, false>[];
+				} & InferOrganization<Options, false>
+			: {
+					members: InferMember<Options, false>[];
+					invitations: InferInvitation<Options, false>[];
+				} & InferOrganization<Options, false>;
+	};
+	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
+	options: NoInfer<Options>;
+};
+
+export interface OrganizationCreator {
+	<Options extends OrganizationOptions>(
+		options?: Options | undefined,
+	): DefaultOrganizationPlugin<Options>;
 }
 
 export function parseRoles(roles: string | string[]): string {
@@ -405,30 +436,7 @@ export function organization<
 };
 export function organization<O extends OrganizationOptions>(
 	options?: O | undefined,
-): {
-	id: "organization";
-	endpoints: OrganizationEndpoints<O>;
-	schema: OrganizationSchema<O>;
-	$Infer: {
-		Organization: InferOrganization<O>;
-		Invitation: InferInvitation<O>;
-		Member: InferMember<O>;
-		Team: O["teams"] extends { enabled: true } ? Team : any;
-		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : any;
-		ActiveOrganization: O["teams"] extends { enabled: true }
-			? {
-					members: InferMember<O, false>[];
-					invitations: InferInvitation<O, false>[];
-					teams: InferTeam<O, false>[];
-				} & InferOrganization<O, false>
-			: {
-					members: InferMember<O, false>[];
-					invitations: InferInvitation<O, false>[];
-				} & InferOrganization<O, false>;
-	};
-	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
-	options: NoInfer<O>;
-};
+): DefaultOrganizationPlugin<O>;
 export function organization<O extends OrganizationOptions>(options?: O): any {
 	const opts = (options || {}) as O;
 	let endpoints = {
