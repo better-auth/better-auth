@@ -429,6 +429,14 @@ export type InferTeam<
 	Team & InferAdditionalFieldsFromPluginOptions<"team", O, isClientSide>
 >;
 
+export type InferTeamMember<
+	O extends OrganizationOptions,
+	isClientSide extends boolean = true,
+> = Prettify<
+	TeamMember &
+		InferAdditionalFieldsFromPluginOptions<"teamMember", O, isClientSide>
+>;
+
 export type InferInvitation<
 	O extends OrganizationOptions,
 	isClientSide extends boolean = true,

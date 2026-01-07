@@ -14,8 +14,8 @@ import type {
 	InferMember,
 	InferOrganization,
 	InferTeam,
+	InferTeamMember,
 	Member,
-	TeamMember,
 } from "../schema";
 import type { OrganizationOptions } from "../types";
 
@@ -207,7 +207,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 			let member:
 				| (Member & InferAdditionalFieldsFromPluginOptions<"member", O, false>)
 				| undefined;
-			let teamMember: TeamMember | null = null;
+			let teamMember: InferTeamMember<O, false> | null = null;
 			let data = {
 				userId: user.id,
 				organizationId: organization.id,
