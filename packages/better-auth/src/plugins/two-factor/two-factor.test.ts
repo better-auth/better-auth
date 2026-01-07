@@ -738,3 +738,299 @@ describe("view backup codes", async () => {
 		expect(response.status).toBe(404);
 	});
 });
+
+describe("two factor OTP methods (email/phone)", async () => {
+	let emailOTP = "";
+	let phoneOTP = "";
+	const sendEmailOTP = vi.fn();
+	const sendPhoneOTP = vi.fn();
+
+	const { auth, signInWithTestUser, testUser } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		plugins: [
+			twoFactor({
+				otpOptions: {
+					sendEmailOTP({ otp }) {
+						emailOTP = otp;
+						sendEmailOTP(otp);
+					},
+					sendPhoneOTP({ otp }) {
+						phoneOTP = otp;
+						sendPhoneOTP(otp);
+					},
+				},
+				skipVerificationOnEnable: true,
+			}),
+		],
+	});
+
+	let { headers } = await signInWithTestUser();
+
+	it("should enable two factor", async () => {
+		const res = await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+		headers = convertSetCookieToCookie(res.headers);
+		expect(res.status).toBe(200);
+	});
+
+	it("should send OTP via email by default", async () => {
+		sendEmailOTP.mockClear();
+		sendPhoneOTP.mockClear();
+
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+		headers = convertSetCookieToCookie(signInRes.headers);
+
+		await auth.api.sendTwoFactorOTP({
+			headers,
+			body: {},
+		});
+
+		expect(sendEmailOTP).toHaveBeenCalledTimes(1);
+		expect(sendPhoneOTP).not.toHaveBeenCalled();
+		expect(emailOTP.length).toBe(6);
+	});
+
+	it("should send OTP via email when method is explicitly email", async () => {
+		sendEmailOTP.mockClear();
+		sendPhoneOTP.mockClear();
+
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+		headers = convertSetCookieToCookie(signInRes.headers);
+
+		await auth.api.sendTwoFactorOTP({
+			headers,
+			body: {
+				method: "email",
+			},
+		});
+
+		expect(sendEmailOTP).toHaveBeenCalledTimes(1);
+		expect(sendPhoneOTP).not.toHaveBeenCalled();
+		expect(emailOTP.length).toBe(6);
+	});
+
+	it("should send OTP via phone when method is phone", async () => {
+		sendEmailOTP.mockClear();
+		sendPhoneOTP.mockClear();
+
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+		headers = convertSetCookieToCookie(signInRes.headers);
+
+		await auth.api.sendTwoFactorOTP({
+			headers,
+			body: {
+				method: "phone",
+			},
+		});
+
+		expect(sendPhoneOTP).toHaveBeenCalledTimes(1);
+		expect(sendEmailOTP).not.toHaveBeenCalled();
+		expect(phoneOTP.length).toBe(6);
+	});
+
+	it("should verify OTP regardless of which method was used to send", async () => {
+		sendPhoneOTP.mockClear();
+
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+		headers = convertSetCookieToCookie(signInRes.headers);
+
+		await auth.api.sendTwoFactorOTP({
+			headers,
+			body: {
+				method: "phone",
+			},
+		});
+
+		expect(sendPhoneOTP).toHaveBeenCalledTimes(1);
+
+		const verifyRes = await auth.api.verifyTwoFactorOTP({
+			headers,
+			body: {
+				code: phoneOTP,
+			},
+			asResponse: true,
+		});
+
+		expect(verifyRes.status).toBe(200);
+	});
+});
+
+describe("two factor OTP fallback to sendOTP", async () => {
+	let OTP = "";
+	const sendOTP = vi.fn();
+
+	const { auth, signInWithTestUser, testUser } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		plugins: [
+			twoFactor({
+				otpOptions: {
+					// Only configure the deprecated sendOTP, not the new methods
+					sendOTP({ otp }) {
+						OTP = otp;
+						sendOTP(otp);
+					},
+				},
+				skipVerificationOnEnable: true,
+			}),
+		],
+	});
+
+	let { headers } = await signInWithTestUser();
+
+	it("should enable two factor", async () => {
+		const res = await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+		headers = convertSetCookieToCookie(res.headers);
+		expect(res.status).toBe(200);
+	});
+
+	it("should fallback to sendOTP when sendEmailOTP is not configured", async () => {
+		sendOTP.mockClear();
+
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+		headers = convertSetCookieToCookie(signInRes.headers);
+
+		await auth.api.sendTwoFactorOTP({
+			headers,
+			body: {
+				method: "email",
+			},
+		});
+
+		expect(sendOTP).toHaveBeenCalledTimes(1);
+		expect(OTP.length).toBe(6);
+	});
+
+	it("should fallback to sendOTP when sendPhoneOTP is not configured", async () => {
+		sendOTP.mockClear();
+
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+		headers = convertSetCookieToCookie(signInRes.headers);
+
+		await auth.api.sendTwoFactorOTP({
+			headers,
+			body: {
+				method: "phone",
+			},
+		});
+
+		expect(sendOTP).toHaveBeenCalledTimes(1);
+		expect(OTP.length).toBe(6);
+	});
+});
+
+describe("two factor OTP error when method not configured", async () => {
+	const { auth, signInWithTestUser, testUser } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		plugins: [
+			twoFactor({
+				otpOptions: {
+					// Only configure sendEmailOTP, not sendPhoneOTP
+					sendEmailOTP({ otp }) {
+						// email only
+					},
+				},
+				skipVerificationOnEnable: true,
+			}),
+		],
+	});
+
+	let { headers } = await signInWithTestUser();
+
+	it("should enable two factor", async () => {
+		const res = await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+		headers = convertSetCookieToCookie(res.headers);
+		expect(res.status).toBe(200);
+	});
+
+	it("should throw error when phone method is requested but not configured", async () => {
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+		headers = convertSetCookieToCookie(signInRes.headers);
+
+		const res = await auth.api.sendTwoFactorOTP({
+			headers,
+			body: {
+				method: "phone",
+			},
+			asResponse: true,
+		});
+
+		expect(res.status).toBe(400);
+		const json = (await res.json()) as { message: string; code: string };
+		expect(json.message).toBe('otp isn\'t configured for method "phone"');
+		expect(json.code).toBe("OTP_NOT_CONFIGURED");
+	});
+
+	it("should work when email method is requested and configured", async () => {
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+		headers = convertSetCookieToCookie(signInRes.headers);
+
+		const res = await auth.api.sendTwoFactorOTP({
+			headers,
+			body: {
+				method: "email",
+			},
+			asResponse: true,
+		});
+
+		expect(res.status).toBe(200);
+	});
+});
