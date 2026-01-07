@@ -195,7 +195,9 @@ export async function createOAuthClientEndpoint(
 
 	// Generate clientId and clientSecret based on its type
 	const clientId =
-		opts.generateClientId?.() || generateRandomString(32, "a-z", "A-Z");
+		body.client_id ||
+		opts.generateClientId?.() ||
+		generateRandomString(32, "a-z", "A-Z");
 	const clientSecret = isPublic
 		? undefined
 		: opts.generateClientSecret?.() || generateRandomString(32, "a-z", "A-Z");

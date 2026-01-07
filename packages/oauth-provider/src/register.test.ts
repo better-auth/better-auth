@@ -127,7 +127,7 @@ describe("oauth register", async () => {
 
 	it("should register confidential client and check that certain fields are overwritten", async () => {
 		const applicationRequest: OAuthClient = {
-			client_id: "bad-actor",
+			client_id: "https://bad-actor.com",
 			client_secret: "bad-actor",
 			client_secret_expires_at: 0,
 			scope: "create:test delete:test",
