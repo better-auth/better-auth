@@ -3,6 +3,7 @@ import {
 	createAuthEndpoint,
 	sessionMiddleware,
 } from "better-auth/api";
+import type { AuthContext } from "@better-auth/core";
 import z from "zod/v4";
 import { DEFAULT_MAX_SAML_METADATA_SIZE } from "../constants";
 import { validateConfigAlgorithms } from "../saml";
@@ -38,20 +39,7 @@ async function isOrgAdmin(
 }
 
 async function batchCheckOrgAdmin(
-	ctx: {
-		context: {
-			adapter: {
-				findMany: <T>(query: {
-					model: string;
-					where: {
-						field: string;
-						value: string | string[];
-						operator?: string;
-					}[];
-				}) => Promise<T[]>;
-			};
-		};
-	},
+	ctx: { context: AuthContext },
 	userId: string,
 	organizationIds: string[],
 ): Promise<Set<string>> {
