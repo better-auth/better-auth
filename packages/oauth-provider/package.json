@@ -54,6 +54,7 @@
     "tsdown": "catalog:"
   },
   "dependencies": {
+    "ipaddr.js": "^2.3.0",
     "jose": "^6.1.0",
     "zod": "^4.3.6"
   },

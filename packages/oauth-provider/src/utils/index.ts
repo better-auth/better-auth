@@ -1,3 +1,4 @@
+import { lookup } from "node:dns/promises";
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import { base64, base64Url } from "@better-auth/utils/base64";
@@ -8,7 +9,9 @@ import {
 	symmetricEncrypt,
 } from "better-auth/crypto";
 import type { jwt } from "better-auth/plugins";
+import { toExpJWT } from "better-auth/plugins";
 import { APIError } from "better-call";
+import ipaddr from "ipaddr.js";
 import type { oauthProvider } from "../oauth";
 import type {
 	OAuthOptions,
@@ -17,6 +20,7 @@ import type {
 	Scope,
 	StoreTokenType,
 } from "../types";
+import { createCimdClient, refreshCimdClient } from "./cimd";
 
 class TTLCache<K, V extends { expiresAt?: Date }> {
 	private cache = new Map<K, V>();
@@ -74,10 +78,31 @@ export async function getClient(
 		return Object.assign({}, trustedClient);
 	}
 
-	const dbClient = await ctx.context.adapter.findOne<SchemaClient<Scope[]>>({
+	let dbClient = await ctx.context.adapter.findOne<SchemaClient<Scope[]>>({
 		model: options.schema?.oauthClient?.modelName ?? "oauthClient",
 		where: [{ field: "clientId", value: clientId }],
 	});
+
+	if (
+		options.cimd?.enable &&
+		URL.canParse(clientId) &&
+		URL.parse(clientId)?.protocol === "https:"
+	) {
+		const url = URL.parse(clientId)!;
+		const updated =
+			dbClient?.updatedAt ??
+			dbClient?.createdAt ??
+			new Date(Math.floor(Date.now() / 1000) * 1000);
+		const exp = toExpJWT(
+			options.cimd.refreshRate ?? "60m",
+			Math.floor(updated.getTime() / 1000),
+		);
+		if (!dbClient) {
+			dbClient = await createCimdClient(ctx, url, options);
+		} else if (exp < Date.now() / 1000) {
+			dbClient = await refreshCimdClient(ctx, url, options);
+		}
+	}
 
 	if (dbClient && options.cachedTrustedClients?.has(clientId)) {
 		cachedTrustedClients.set(clientId, Object.assign({}, dbClient));
@@ -424,4 +449,26 @@ export function deleteFromPrompt(query: URLSearchParams, prompt: Prompt) {
 			: query.delete("prompt");
 	}
 	return Object.fromEntries(query);
+}
+
+/**
+ * Resolves dns to an ip address
+ */
+export async function dnsToIp(hostname: string): Promise<string> {
+	const result = await lookup(hostname);
+	return result.address;
+}
+
+/**
+ * Checks if an IP address is public facing
+ * @param ip - IP address
+ */
+export function isPublicIp(ip: string): boolean {
+	if (!ipaddr.isValid(ip)) return false;
+	let addr = ipaddr.parse(ip);
+	if (addr.kind() === "ipv6" && (addr as ipaddr.IPv6).isIPv4MappedAddress()) {
+		addr = (addr as ipaddr.IPv6).toIPv4Address();
+	}
+	const range = addr.range();
+	return range === "unicast";
 }

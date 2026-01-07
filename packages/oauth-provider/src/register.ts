@@ -149,7 +149,9 @@ export async function createOAuthClientEndpoint(
 
 	// Generate clientId and clientSecret based on its type
 	const clientId =
-		opts.generateClientId?.() || generateRandomString(32, "a-z", "A-Z");
+		body.client_id ||
+		opts.generateClientId?.() ||
+		generateRandomString(32, "a-z", "A-Z");
 	const clientSecret = isPublic
 		? undefined
 		: opts.generateClientSecret?.() || generateRandomString(32, "a-z", "A-Z");
@@ -188,7 +190,11 @@ export async function createOAuthClientEndpoint(
 	});
 	const client = await ctx.context.adapter.create<SchemaClient<Scope[]>>({
 		model: "oauthClient",
-		data: schema,
+		data: {
+			...schema,
+			createdAt: new Date(iat * 1000),
+			updatedAt: new Date(iat * 1000),
+		},
 	});
 	// Format the response according to RFC7591
 	return ctx.json(
