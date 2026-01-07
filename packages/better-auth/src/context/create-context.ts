@@ -6,6 +6,7 @@ import { BetterAuthError } from "@better-auth/core/error";
 import type { OAuthProvider } from "@better-auth/core/oauth2";
 import type { SocialProviders } from "@better-auth/core/social-providers";
 import { socialProviders } from "@better-auth/core/social-providers";
+import { deprecate } from "@better-auth/core/utils";
 import { createTelemetry } from "@better-auth/telemetry";
 import defu from "defu";
 import type { Entries } from "type-fest";
@@ -329,6 +330,16 @@ export async function createAuthContext(
 		({ context } = await initOrPromise);
 	} else {
 		({ context } = initOrPromise);
+	}
+
+	if (
+		typeof context.options.emailVerification?.onEmailVerification === "function"
+	) {
+		context.options.emailVerification.onEmailVerification = deprecate(
+			context.options.emailVerification.onEmailVerification,
+			"Use `afterEmailVerification` instead. This will be removed in 1.5",
+			context.logger,
+		);
 	}
 
 	return context;
