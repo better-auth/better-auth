@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { APIError } from "better-call";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { setOAuthState } from "../api/middlewares/oauth";
 import {
@@ -20,15 +20,12 @@ export async function generateState(
 ) {
 	const callbackURL = c.body?.callbackURL || c.context.options.baseURL;
 	if (!callbackURL) {
-		throw new APIError("BAD_REQUEST", {
-			message: "callbackURL is required",
-		});
+		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.CALLBACK_URL_REQUIRED);
 	}
 
 	const codeVerifier = generateRandomString(128);
 	const state = generateRandomString(32);
-	const storeStateStrategy =
-		c.context.oauthConfig?.storeStateStrategy || "cookie";
+	const storeStateStrategy = c.context.oauthConfig.storeStateStrategy;
 
 	const stateData = {
 		...(additionalData ? additionalData : {}),
@@ -42,6 +39,7 @@ export async function generateState(
 		 */
 		expiresAt: Date.now() + 10 * 60 * 1000,
 		requestSignUp: c.body?.requestSignUp,
+		state,
 	};
 
 	await setOAuthState(stateData);
@@ -87,9 +85,10 @@ export async function generateState(
 		c.context.logger.error(
 			"Unable to create verification. Make sure the database adapter is properly working and there is a verification table in the database",
 		);
-		throw new APIError("INTERNAL_SERVER_ERROR", {
-			message: "Unable to create verification",
-		});
+		throw APIError.from(
+			"INTERNAL_SERVER_ERROR",
+			BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
+		);
 	}
 	return {
 		state: verification.identifier,
@@ -99,8 +98,7 @@ export async function generateState(
 
 export async function parseState(c: GenericEndpointContext) {
 	const state = c.query.state || c.body.state;
-	const storeStateStrategy =
-		c.context.oauthConfig.storeStateStrategy || "cookie";
+	const storeStateStrategy = c.context.oauthConfig.storeStateStrategy;
 
 	const stateDataSchema = z.looseObject({
 		callbackURL: z.string(),
@@ -115,10 +113,16 @@ export async function parseState(c: GenericEndpointContext) {
 			})
 			.optional(),
 		requestSignUp: z.boolean().optional(),
+		state: z.string().optional(),
 	});
 
 	let parsedData: z.infer<typeof stateDataSchema>;
-
+	/**
+	 * This is generally cause security issue and should only be used in
+	 * dev or staging environments. It's currently used by the oauth-proxy
+	 * plugin
+	 */
+	const skipStateCookieCheck = c.context.oauthConfig?.skipStateCookieCheck;
 	if (storeStateStrategy === "cookie") {
 		// Retrieve state data from encrypted cookie
 		const stateCookie = c.context.createAuthCookie("oauth_state");
@@ -149,6 +153,21 @@ export async function parseState(c: GenericEndpointContext) {
 			throw c.redirect(`${errorURL}?error=please_restart_the_process`);
 		}
 
+		const skipStateCookieCheck = c.context.oauthConfig?.skipStateCookieCheck;
+		if (
+			!skipStateCookieCheck &&
+			parsedData.state &&
+			parsedData.state !== state
+		) {
+			c.context.logger.error("State Mismatch. State parameter does not match", {
+				expected: parsedData.state,
+				received: state,
+			});
+			const errorURL =
+				c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
+			throw c.redirect(`${errorURL}?error=state_mismatch`);
+		}
+
 		// Clear the cookie after successful parsing
 		c.setCookie(stateCookie.name, "", {
 			maxAge: 0,
@@ -172,12 +191,7 @@ export async function parseState(c: GenericEndpointContext) {
 			stateCookie.name,
 			c.context.secret,
 		);
-		/**
-		 * This is generally cause security issue and should only be used in
-		 * dev or staging environments. It's currently used by the oauth-proxy
-		 * plugin
-		 */
-		const skipStateCookieCheck = c.context.oauthConfig?.skipStateCookieCheck;
+
 		if (
 			!skipStateCookieCheck &&
 			(!stateCookieValue || stateCookieValue !== state)

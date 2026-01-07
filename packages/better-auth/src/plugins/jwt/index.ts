@@ -15,11 +15,31 @@ import type { JwtOptions } from "./types";
 import { createJwk } from "./utils";
 import { verifyJWT as verifyJWTHelper } from "./verify";
 
+export { signJWT } from "./sign";
 export type * from "./types";
-export { createJwk, generateExportedKeyPair } from "./utils";
+export { createJwk, generateExportedKeyPair, toExpJWT } from "./utils";
 export { verifyJWT } from "./verify";
 
-export const jwt = (options?: JwtOptions | undefined) => {
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		jwt: {
+			creator: typeof jwt;
+		};
+	}
+}
+
+const signJWTBodySchema = z.object({
+	payload: z.record(z.string(), z.any()),
+	overrideOptions: z.record(z.string(), z.any()).optional(),
+});
+
+const verifyJWTBodySchema = z.object({
+	token: z.string(),
+	issuer: z.string().optional(),
+});
+
+export const jwt = <O extends JwtOptions>(options?: O) => {
 	// Remote url must be set when using signing function
 	if (options?.jwt?.sign && !options.jwks?.remoteUrl) {
 		throw new BetterAuthError(
@@ -36,12 +56,25 @@ export const jwt = (options?: JwtOptions | undefined) => {
 		);
 	}
 
+	const jwksPath = options?.jwks?.jwksPath ?? "/jwks";
+	if (
+		typeof jwksPath !== "string" ||
+		jwksPath.length === 0 ||
+		!jwksPath.startsWith("/") ||
+		jwksPath.includes("..")
+	) {
+		throw new BetterAuthError(
+			"jwks_config",
+			"jwksPath must be a non-empty string starting with '/' and not contain '..'",
+		);
+	}
+
 	return {
 		id: "jwt",
-		options,
+		options: options as NoInfer<O>,
 		endpoints: {
 			getJwks: createAuthEndpoint(
-				"/jwks",
+				jwksPath,
 				{
 					method: "GET",
 					metadata: {
@@ -218,11 +251,9 @@ export const jwt = (options?: JwtOptions | undefined) => {
 				},
 			),
 			signJWT: createAuthEndpoint(
-				"/sign-jwt",
 				{
 					method: "POST",
 					metadata: {
-						SERVER_ONLY: true,
 						$Infer: {
 							body: {} as {
 								payload: JWTPayload;
@@ -230,10 +261,7 @@ export const jwt = (options?: JwtOptions | undefined) => {
 							},
 						},
 					},
-					body: z.object({
-						payload: z.record(z.string(), z.any()),
-						overrideOptions: z.record(z.string(), z.any()).optional(),
-					}),
+					body: signJWTBodySchema,
 				},
 				async (c) => {
 					const jwt = await signJWT(c, {
@@ -247,11 +275,9 @@ export const jwt = (options?: JwtOptions | undefined) => {
 				},
 			),
 			verifyJWT: createAuthEndpoint(
-				"/verify-jwt",
 				{
 					method: "POST",
 					metadata: {
-						SERVER_ONLY: true,
 						$Infer: {
 							body: {} as {
 								token: string;
@@ -266,10 +292,7 @@ export const jwt = (options?: JwtOptions | undefined) => {
 							},
 						},
 					},
-					body: z.object({
-						token: z.string(),
-						issuer: z.string().optional(),
-					}),
+					body: verifyJWTBodySchema,
 				},
 				async (ctx) => {
 					const overrideOptions = ctx.body.issuer

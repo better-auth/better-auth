@@ -10,12 +10,15 @@ import {
 } from "@better-auth/core/context";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import type { InternalLogger } from "@better-auth/core/env";
+import { generateId, safeJSONParse } from "@better-auth/core/utils";
 import type { Account, Session, User, Verification } from "../types";
-import { generateId } from "../utils";
 import { getDate } from "../utils/date";
 import { getIp } from "../utils/get-request-ip";
-import { safeJSONParse } from "../utils/json";
-import { parseSessionOutput, parseUserOutput } from "./schema";
+import {
+	parseSessionInput,
+	parseSessionOutput,
+	parseUserOutput,
+} from "./schema";
 import { getWithHooks } from "./with-hooks";
 
 export const createInternalAdapter = (
@@ -220,10 +223,6 @@ export const createInternalAdapter = (
 			return total;
 		},
 		deleteUser: async (userId: string) => {
-			if (secondaryStorage) {
-				await secondaryStorage.delete(`active-sessions-${userId}`);
-			}
-
 			if (!secondaryStorage || options.session?.storeSessionInDatabase) {
 				await deleteManyWithHooks(
 					[
@@ -264,13 +263,18 @@ export const createInternalAdapter = (
 			override?: (Partial<Session> & Record<string, any>) | undefined,
 			overrideAll?: boolean | undefined,
 		) => {
-			const ctx = await getCurrentAuthContext();
-			const headers = ctx.headers || ctx.request?.headers;
+			const ctx = await getCurrentAuthContext().catch(() => null);
+			const headers = ctx?.headers || ctx?.request?.headers;
 			const { id: _, ...rest } = override || {};
+			//we're parsing default values for session additional fields
+			const defaultAdditionalFields = parseSessionInput(
+				ctx?.context.options ?? options,
+				{},
+			);
 			const data: Omit<Session, "id"> = {
 				ipAddress:
-					ctx.request || ctx.headers
-						? getIp(ctx.request || ctx.headers!, ctx.context.options) || ""
+					ctx?.request || ctx?.headers
+						? getIp(ctx?.request || ctx?.headers!, ctx?.context.options) || ""
 						: "",
 				userAgent: headers?.get("user-agent") || "",
 				...rest,
@@ -287,6 +291,7 @@ export const createInternalAdapter = (
 				// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 				createdAt: new Date(),
 				updatedAt: new Date(),
+				...defaultAdditionalFields,
 				...(overrideAll ? rest : {}),
 			};
 			const res = await createWithHooks(
@@ -502,21 +507,79 @@ export const createInternalAdapter = (
 					? {
 							async fn(data) {
 								const currentSession = await secondaryStorage.get(sessionToken);
-								let updatedSession: Session | null = null;
-								if (currentSession) {
-									const parsedSession = safeJSONParse<{
-										session: Session;
-										user: User;
-									}>(currentSession);
-									if (!parsedSession) return null;
-									updatedSession = {
-										...parsedSession.session,
-										...data,
-									};
-									return updatedSession;
-								} else {
+								if (!currentSession) {
 									return null;
 								}
+
+								const parsedSession = safeJSONParse<{
+									session: Session;
+									user: User;
+								}>(currentSession);
+								if (!parsedSession) return null;
+
+								const mergedSession = {
+									...parsedSession.session,
+									...data,
+									expiresAt: new Date(
+										data.expiresAt ?? parsedSession.session.expiresAt,
+									),
+									createdAt: new Date(parsedSession.session.createdAt),
+									updatedAt: new Date(
+										data.updatedAt ?? parsedSession.session.updatedAt,
+									),
+								};
+
+								const updatedSession = parseSessionOutput(
+									ctx.options,
+									mergedSession,
+								);
+
+								const now = Date.now();
+								const expiresMs = new Date(updatedSession.expiresAt).getTime();
+								const sessionTTL = Math.max(
+									Math.floor((expiresMs - now) / 1000),
+									0,
+								);
+
+								if (sessionTTL > 0) {
+									await secondaryStorage.set(
+										sessionToken,
+										JSON.stringify({
+											session: updatedSession,
+											user: parsedSession.user,
+										}),
+										sessionTTL,
+									);
+
+									const listKey = `active-sessions-${updatedSession.userId}`;
+									const listRaw = await secondaryStorage.get(listKey);
+									const list: { token: string; expiresAt: number }[] = listRaw
+										? safeJSONParse(listRaw) || []
+										: [];
+
+									const filtered = list
+										.filter(
+											(s) => s.token !== sessionToken && s.expiresAt > now,
+										)
+										.concat([{ token: sessionToken, expiresAt: expiresMs }]);
+
+									const sorted = filtered.sort(
+										(a, b) => a.expiresAt - b.expiresAt,
+									);
+									const furthestSessionExp = sorted.at(-1)?.expiresAt;
+
+									if (furthestSessionExp && furthestSessionExp > now) {
+										await secondaryStorage.set(
+											listKey,
+											JSON.stringify(sorted),
+											Math.floor((furthestSessionExp - now) / 1000),
+										);
+									} else {
+										await secondaryStorage.delete(listKey);
+									}
+								}
+
+								return updatedSession;
 							},
 							executeMainFn: options.session?.storeSessionInDatabase,
 						}
@@ -581,15 +644,12 @@ export const createInternalAdapter = (
 					return;
 				}
 			}
-			await (await getCurrentAdapter(adapter)).delete<Session>({
-				model: "session",
-				where: [
-					{
-						field: "token",
-						value: token,
-					},
-				],
-			});
+
+			await deleteWithHooks(
+				[{ field: "token", value: token }],
+				"session",
+				undefined,
+			);
 		},
 		deleteAccounts: async (userId: string) => {
 			await deleteManyWithHooks(
@@ -623,6 +683,9 @@ export const createInternalAdapter = (
 					for (const session of sessions) {
 						await secondaryStorage.delete(session.token);
 					}
+					await secondaryStorage.delete(
+						`active-sessions-${userIdOrSessionTokens}`,
+					);
 				} else {
 					for (const sessionToken of userIdOrSessionTokens) {
 						const session = await secondaryStorage.get(sessionToken);
@@ -755,6 +818,7 @@ export const createInternalAdapter = (
 			};
 		},
 		findUserById: async (userId: string) => {
+			if (!userId) return null;
 			const user = await (await getCurrentAdapter(adapter)).findOne<User>({
 				model: "user",
 				where: [
@@ -798,7 +862,6 @@ export const createInternalAdapter = (
 				undefined,
 			);
 			await refreshUserSessions(user);
-			await refreshUserSessions(user);
 			return user;
 		},
 		updateUserByEmail: async (
@@ -816,7 +879,6 @@ export const createInternalAdapter = (
 				"user",
 				undefined,
 			);
-			await refreshUserSessions(user);
 			await refreshUserSessions(user);
 			return user;
 		},
@@ -942,41 +1004,34 @@ export const createInternalAdapter = (
 				limit: 1,
 			});
 			if (!options.verification?.disableCleanup) {
-				await (await getCurrentAdapter(adapter)).deleteMany({
-					model: "verification",
-					where: [
+				await deleteManyWithHooks(
+					[
 						{
 							field: "expiresAt",
 							value: new Date(),
 							operator: "lt",
 						},
 					],
-				});
+					"verification",
+					undefined,
+				);
 			}
 			const lastVerification = verification[0];
 			return lastVerification as Verification | null;
 		},
 		deleteVerificationValue: async (id: string) => {
-			await (await getCurrentAdapter(adapter)).delete<Verification>({
-				model: "verification",
-				where: [
-					{
-						field: "id",
-						value: id,
-					},
-				],
-			});
+			await deleteWithHooks(
+				[{ field: "id", value: id }],
+				"verification",
+				undefined,
+			);
 		},
 		deleteVerificationByIdentifier: async (identifier: string) => {
-			await (await getCurrentAdapter(adapter)).delete<Verification>({
-				model: "verification",
-				where: [
-					{
-						field: "identifier",
-						value: identifier,
-					},
-				],
-			});
+			await deleteWithHooks(
+				[{ field: "identifier", value: identifier }],
+				"verification",
+				undefined,
+			);
 		},
 		updateVerificationValue: async (
 			id: string,

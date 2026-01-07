@@ -55,7 +55,7 @@ To use secondary storage, implement the `SecondaryStorage` interface:
 
 ```typescript
 interface SecondaryStorage {
-  get: (key: string) => Promise<unknown>; 
+  get: (key: string) => Promise<unknown>;
   set: (key: string, value: string, ttl?: number) => Promise<void>;
   delete: (key: string) => Promise<void>;
 }
@@ -406,7 +406,7 @@ export const auth = betterAuth({
   user: {
     additionalFields: {
       role: {
-        type: "string",
+        type: ["user", "admin"],
         required: false,
         defaultValue: "user",
         input: false, // don't allow user to set role
@@ -426,10 +426,12 @@ Now you can access the additional fields in your application logic.
 ```ts
 //on signup
 const res = await auth.api.signUpEmail({
-  email: "test@example.com",
-  password: "password",
-  name: "John Doe",
-  lang: "fr",
+	body: {
+		email: 'test@example.com',
+		password: 'password',
+		name: 'John Doe',
+		lang: 'fr',
+	},
 });
 
 //user object
@@ -677,7 +679,7 @@ export const auth = betterAuth({
           if (user.email.includes("admin")) {
             return false; // Abort deletion
           }
-          
+
           return true; // Allow deletion
         },
         after: async (user) => {
@@ -780,7 +782,7 @@ Both methods ensure your database schema stays up to date with your plugins' req
 
 Since Better-Auth version `1.4` we've introduced experimental database joins support.
 This allows Better-Auth to perform multiple database queries in a single request, reducing the number of database roundtrips.
-Over 50 endpoints support joins, and we're constantly adding more. 
+Over 50 endpoints support joins, and we're constantly adding more.
 
 Under the hood, our adapter system supports joins natively, meaning even if you don't enable experimental joins,
 it will still fallback to making multiple database queries and combining the results.
@@ -804,4 +806,4 @@ It's very important to read the documentation regarding experimental joins for y
 - [MySQL](/docs/adapters/mysql#joins-experimental)
 - [PostgreSQL](/docs/adapters/postgresql#joins-experimental)
 - [MSSQL](/docs/adapters/mssql#joins-experimental)
-- [MongoDB](/docs/adapters/mongodb#joins-experimental)
+- [MongoDB](/docs/adapters/mongo#joins-experimental)

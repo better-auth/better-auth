@@ -55,12 +55,12 @@ This will demonstrate the complete device authorization flow by:
         
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
-            ```bash
+            ```package-install
             npx @better-auth/cli migrate
             ```
             </Tab>
             <Tab value="generate">
-            ```bash
+            ```package-install
             npx @better-auth/cli generate
             ```
             </Tab>
@@ -415,6 +415,10 @@ The device flow defines specific error codes:
 ## Example: CLI Application
 
 Here's a complete example for a CLI application based on the actual demo:
+
+<Callout type="info">
+  To use the access token for API requests, ensure you have added the [Bearer plugin](/docs/plugins/bearer) to your auth instance.
+</Callout>
 
 ```ts title="cli-auth.ts"
 import { createAuthClient } from "better-auth/client";

@@ -1,8 +1,8 @@
 import type { BetterAuthOptions } from "@better-auth/core";
+import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { logger } from "@better-auth/core/env";
 import type { MemoryDB } from "../adapters/memory-adapter";
-import { getAuthTables } from "./get-tables";
 
 export async function getBaseAdapter(
 	options: BetterAuthOptions,
