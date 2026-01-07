@@ -89,7 +89,7 @@
       "optional": true
     },
     "expo-network": {
-      "optional": true
+      "optional": false
     },
     "expo-web-browser": {
       "optional": true
