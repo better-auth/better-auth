@@ -175,6 +175,9 @@ const UserCard = (props: {
 													{
 														onSuccess: () => {
 															removeActiveSession(session.id);
+															if (isCurrentSession) {
+																router.push("/");
+															}
 														},
 													},
 												);

@@ -1,11 +1,12 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { APIError } from "better-call";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { generateId } from "../../utils";
 import { getDate } from "../../utils/date";
+import { validatePassword } from "../../utils/password";
 import { originCheck } from "../middlewares";
+import { sensitiveSessionMiddleware } from "./session";
 
 function redirectError(
 	ctx: AuthContext,
@@ -89,8 +90,9 @@ export const requestPasswordReset = createAuthEndpoint(
 			ctx.context.logger.error(
 				"Reset password isn't enabled.Please pass an emailAndPassword.sendResetPassword function in your auth config!",
 			);
-			throw new APIError("BAD_REQUEST", {
+			throw APIError.from("BAD_REQUEST", {
 				message: "Reset password isn't enabled",
+				code: "RESET_PASSWORD_DISABLED",
 			});
 		}
 		const { email, redirectTo } = ctx.body;
@@ -271,9 +273,7 @@ export const resetPassword = createAuthEndpoint(
 	async (ctx) => {
 		const token = ctx.body.token || ctx.query?.token;
 		if (!token) {
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.INVALID_TOKEN,
-			});
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_TOKEN);
 		}
 
 		const { newPassword } = ctx.body;
@@ -281,14 +281,10 @@ export const resetPassword = createAuthEndpoint(
 		const minLength = ctx.context.password?.config.minPasswordLength;
 		const maxLength = ctx.context.password?.config.maxPasswordLength;
 		if (newPassword.length < minLength) {
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
-			});
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
 		}
 		if (newPassword.length > maxLength) {
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
-			});
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
 		}
 
 		const id = `reset-password:${token}`;
@@ -296,9 +292,7 @@ export const resetPassword = createAuthEndpoint(
 		const verification =
 			await ctx.context.internalAdapter.findVerificationValue(id);
 		if (!verification || verification.expiresAt < new Date()) {
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.INVALID_TOKEN,
-			});
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_TOKEN);
 		}
 		const userId = verification.value;
 		const hashedPassword = await ctx.context.password.hash(newPassword);
@@ -330,6 +324,63 @@ export const resetPassword = createAuthEndpoint(
 		if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
 			await ctx.context.internalAdapter.deleteSessions(userId);
 		}
+		return ctx.json({
+			status: true,
+		});
+	},
+);
+
+export const verifyPassword = createAuthEndpoint(
+	"/verify-password",
+	{
+		method: "POST",
+		body: z.object({
+			/**
+			 * The password to verify
+			 */
+			password: z.string().meta({
+				description: "The password to verify",
+			}),
+		}),
+		metadata: {
+			scope: "server",
+			openapi: {
+				operationId: "verifyPassword",
+				description: "Verify the current user's password",
+				responses: {
+					"200": {
+						description: "Success",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										status: {
+											type: "boolean",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		use: [sensitiveSessionMiddleware],
+	},
+	async (ctx) => {
+		const { password } = ctx.body;
+		const session = ctx.context.session;
+
+		const isValid = await validatePassword(ctx, {
+			password,
+			userId: session.user.id,
+		});
+
+		if (!isValid) {
+			throw new APIError("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
+		}
+
 		return ctx.json({
 			status: true,
 		});
