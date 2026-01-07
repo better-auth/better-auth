@@ -1,4 +1,4 @@
-import { describe, expectTypeOf } from "vitest";
+import { describe, expect, expectTypeOf } from "vitest";
 import { createAuthEndpoint, organization, twoFactor } from "../plugins";
 import { getTestInstance } from "../test-utils/test-instance";
 
@@ -27,6 +27,21 @@ describe("general types", async (it) => {
 				image?: string | null | undefined;
 			};
 		}>();
+	});
+
+	it("should match plugin type", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [twoFactor()],
+		});
+
+		const context = await auth.$context;
+		type TwoFactorPlugin = ReturnType<typeof twoFactor>;
+		const id = "two-factor";
+		const twoFactorPlugin = context.getPlugin(id)!;
+		expect(twoFactorPlugin).toBeDefined();
+		expect(twoFactorPlugin.id).toBe(id);
+		type TwoFactorPluginFromContext = typeof twoFactorPlugin;
+		expectTypeOf<TwoFactorPluginFromContext>().toMatchObjectType<TwoFactorPlugin>();
 	});
 
 	it("should infer the types of server scoped endpoints", async () => {
