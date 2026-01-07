@@ -543,10 +543,10 @@ describe("SSO provider read endpoints", () => {
 				headers,
 			});
 
-		expect(response.samlConfig?.certificate).toBeDefined();
-		expect(
-			(response.samlConfig?.certificate as { error?: string })?.error,
-		).toBe("Failed to parse certificate");
+			expect(response.samlConfig?.certificate).toBeDefined();
+			expect(
+				(response.samlConfig?.certificate as { error?: string })?.error,
+			).toBe("Failed to parse certificate");
 		});
 
 		it("should mask short clientId with just asterisks", async () => {
