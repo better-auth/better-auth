@@ -98,6 +98,40 @@ describe("cookies", async () => {
 			},
 		);
 	});
+
+	it("should use secure cookies in production when baseURL is not configured", async () => {
+		// Set NODE_ENV to production
+		vi.stubEnv("NODE_ENV", "production");
+
+		// Reset modules to reload with new NODE_ENV
+		vi.resetModules();
+
+		// Re-import modules after NODE_ENV change
+		const { getTestInstance: getTestInstanceReloaded } = await import(
+			"../test-utils/test-instance"
+		);
+
+		const { client, testUser } = await getTestInstanceReloaded({
+			baseURL: undefined,
+		});
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onResponse(context) {
+					const setCookie = context.response.headers.get("set-cookie");
+					expect(setCookie).toContain("Secure");
+				},
+			},
+		);
+
+		// Clean up
+		vi.unstubAllEnvs();
+		vi.resetModules();
+	});
 });
 
 describe("crossSubdomainCookies", () => {
