@@ -12,10 +12,12 @@ import type { DBAdapter, Where } from "../db/adapter";
 import type { createLogger } from "../env";
 import type { OAuthProvider } from "../oauth2";
 import type { BetterAuthCookies } from "./cookie";
+import type { LiteralString } from "./helper";
 import type {
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
 } from "./init-options";
+import type { BetterAuthPlugin } from "./plugin";
 
 /**
  * Mutators are defined in each plugin
@@ -181,11 +183,29 @@ type CheckPasswordFn<Options extends BetterAuthOptions = BetterAuthOptions> = (
 ) => Promise<boolean>;
 
 export type PluginContext = {
-	getPlugin: <ID extends BetterAuthPluginRegistryIdentifier>(
+	getPlugin: <ID extends BetterAuthPluginRegistryIdentifier | LiteralString>(
 		pluginId: ID,
-	) => ReturnType<
-		BetterAuthPluginRegistry<unknown, unknown>[ID]["creator"]
-	> | null;
+	) =>
+		| (ID extends BetterAuthPluginRegistryIdentifier
+				? ReturnType<BetterAuthPluginRegistry<unknown, unknown>[ID]["creator"]>
+				: BetterAuthPlugin)
+		| null;
+	/**
+	 * Checks if a plugin is enabled by its ID.
+	 *
+	 * @param pluginId - The ID of the plugin to check
+	 * @returns `true` if the plugin is enabled, `false` otherwise
+	 *
+	 * @example
+	 * ```ts
+	 * if (ctx.context.hasPlugin("organization")) {
+	 *   // organization plugin is enabled
+	 * }
+	 * ```
+	 */
+	hasPlugin: <ID extends BetterAuthPluginRegistryIdentifier | LiteralString>(
+		pluginId: ID,
+	) => boolean;
 };
 
 export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
