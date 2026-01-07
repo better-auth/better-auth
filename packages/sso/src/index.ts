@@ -113,7 +113,7 @@ export function sso<
 ): {
 	id: "sso";
 	endpoints: SSOEndpoints<O> & DomainVerificationEndpoints;
-	schema: any;
+	schema: NonNullable<BetterAuthPlugin["schema"]>;
 	options: O;
 };
 export function sso<O extends SSOOptions>(
@@ -123,7 +123,7 @@ export function sso<O extends SSOOptions>(
 	endpoints: SSOEndpoints<O>;
 };
 
-export function sso<O extends SSOOptions>(options?: O | undefined): any {
+export function sso<O extends SSOOptions>(options?: O | undefined): BetterAuthPlugin {
 	const optionsWithStore = options as O;
 
 	let endpoints = {
