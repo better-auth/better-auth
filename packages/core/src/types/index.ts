@@ -1,6 +1,8 @@
 export type { StandardSchemaV1 } from "@standard-schema/spec";
 export type {
 	AuthContext,
+	BetterAuthPluginRegistry,
+	BetterAuthPluginRegistryIdentifier,
 	GenericEndpointContext,
 	InternalAdapter,
 	PluginContext,

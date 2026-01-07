@@ -11,13 +11,22 @@ import { getJwtPlugin, getOAuthProviderPlugin } from "./utils";
 export const oauthProviderResourceClient = <T extends Auth | undefined>(
 	auth?: T,
 ) => {
-	const oauthProviderPlugin = auth ? getOAuthProviderPlugin(auth) : undefined;
-	const oauthProviderOptions = oauthProviderPlugin?.options;
+	let oauthProviderPlugin:
+		| ReturnType<typeof getOAuthProviderPlugin>
+		| undefined;
+	const getOauthProviderPlugin = async () => {
+		if (!oauthProviderPlugin) {
+			oauthProviderPlugin = auth
+				? getOAuthProviderPlugin(await auth.$context)
+				: undefined;
+		}
+		return oauthProviderPlugin;
+	};
 	let jwtPlugin: ReturnType<typeof getJwtPlugin> | undefined;
 	const getJwtPluginOptions = async () => {
 		if (!jwtPlugin) {
 			jwtPlugin =
-				auth && !oauthProviderOptions?.disableJwtPlugin
+				auth && !(await getOauthProviderPlugin())?.options?.disableJwtPlugin
 					? getJwtPlugin(await auth.$context)
 					: undefined;
 		}
@@ -128,6 +137,8 @@ export const oauthProviderResourceClient = <T extends Auth | undefined>(
 						| undefined,
 				): Promise<ResourceServerMetadata> => {
 					const resource = overrides?.resource ?? authServerBaseUrl;
+					const oauthProviderOptions = (await getOauthProviderPlugin())
+						?.options;
 					if (!resource) {
 						throw Error("missing required resource");
 					}
