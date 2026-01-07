@@ -27,7 +27,7 @@ export const SafeUrlSchema = z
 		{ message: "URL cannot use javascript:, data:, or vbscript: scheme" },
 	);
 
-export const HttpsOnlyUrl = z
+export const HttpsOnlyUrlSchema = z
 	.url()
 	.superRefine((val, ctx) => {
 		if (!URL.canParse(val)) {

@@ -1,7 +1,7 @@
 import type { JWSAlgorithms } from "better-auth/plugins";
 import * as z from "zod";
 import type { Prompt } from "../types";
-import { HttpsOnlyUrl, SafeUrlSchema } from "./zod";
+import { HttpsOnlyUrlSchema, SafeUrlSchema } from "./zod";
 
 /**
  * Supported grant types of the token endpoint
@@ -291,7 +291,7 @@ export const OAuthClientRegistrationSchema = z
  */
 export const OAuthClientMetadataSchema = OAuthClientRegistrationSchema.extend(
 	z.object({
-		client_id: HttpsOnlyUrl,
+		client_id: HttpsOnlyUrlSchema,
 	}).shape,
 );
 

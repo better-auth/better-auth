@@ -388,7 +388,7 @@ oauthProvider({
 To enable unauthenticated client registration which allows for dynamically registered public clients, additionally set `allowUnauthenticatedClientRegistration: true` in your auth config.
 
 <Callout type="warn">
-Support for `allowUnauthenticatedClientRegistration` **is deprecated** and is considered insecure. MCP has added added [Client ID Metadata Documents](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/991) which is [available](#cimd). Additionally, [`software_statement` and `jwks_uri`](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1032) may be added as an alternative.
+Support for `allowUnauthenticatedClientRegistration` **is deprecated** and is considered insecure. MCP has added [Client ID Metadata Documents](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/991) which is [available](#cimd). Additionally, [`software_statement` and `jwks_uri`](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1032) may be added as an alternative.
 </Callout>
 
 ```ts title="auth.ts"
@@ -1036,7 +1036,7 @@ oauthProvider({
 ```
 
 <Callout type="warn">
-Support for `allowUnauthenticatedClientRegistration` **is deprecated** and is considered insecure. MCP has added added [Client ID Metadata Documents](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/991) which is [available](#cimd). Additionally, [`software_statement` and `jwks_uri`](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1032) may be added as an alternative.
+Support for `allowUnauthenticatedClientRegistration` **is deprecated** and is considered insecure. MCP has added [Client ID Metadata Documents](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/991) which is [available](#cimd). Additionally, [`software_statement` and `jwks_uri`](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1032) may be added as an alternative.
 </Callout>
 
 #### Dynamic Client Registration Expiration
@@ -1076,7 +1076,7 @@ oauthProvider({
 
 [ClientId Metadata Documents](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/) provides a way for clients to identify themselves without prior registration by utilizing a metadata document as their `client_id`.
 
-Dynamic Client Registration can be utilized with CIMD providing a useful fallback for clients whom may not yet support CIMD.
+Dynamic Client Registration can be utilized with CIMD providing a useful fallback for clients who may not yet support CIMD.
 
 To enable CIMD, please add the following configuration:
 
@@ -1088,7 +1088,7 @@ oauthProvider({
 })
 ```
 
-To set the rate client metadata documents should be updated, set `refreshRate` (defaults: "60m"):
+To set the rate at which client metadata documents should be updated, set `refreshRate` (defaults: "60m"):
 
 ```ts title="auth.ts"
 oauthProvider({
