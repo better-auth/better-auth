@@ -1,6 +1,49 @@
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { afterEach, describe, expect, vi } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
+import { afterEach, describe, expect, expectTypeOf, vi } from "vitest";
+import { getTestInstance } from "../../test-utils";
+
+describe("sign-up with username field", async (it) => {
+	it("disable `requireUsername` should make username type happy", async () => {
+		const { auth } = await getTestInstance({
+			user: {
+				requireUsername: false,
+			},
+		});
+
+		type NoUndefined<T> = T extends undefined ? never : T;
+		type SignUpEmail = NoUndefined<Parameters<typeof auth.api.signUpEmail>[0]>;
+		type Body = SignUpEmail["body"];
+		expectTypeOf<Body>().toMatchObjectType<{
+			name?: string | undefined;
+		}>();
+	});
+
+	it("default options should make username type happy", async () => {
+		const { auth } = await getTestInstance();
+
+		type NoUndefined<T> = T extends undefined ? never : T;
+		type SignUpEmail = NoUndefined<Parameters<typeof auth.api.signUpEmail>[0]>;
+		type Body = SignUpEmail["body"];
+		expectTypeOf<Body>().toMatchObjectType<{
+			name: string;
+		}>();
+	});
+
+	it("enable `requireUsername` options should make username type happy", async () => {
+		const { auth } = await getTestInstance({
+			user: {
+				requireUsername: true,
+			},
+		});
+
+		type NoUndefined<T> = T extends undefined ? never : T;
+		type SignUpEmail = NoUndefined<Parameters<typeof auth.api.signUpEmail>[0]>;
+		type Body = SignUpEmail["body"];
+		expectTypeOf<Body>().toMatchObjectType<{
+			name: string;
+		}>();
+	});
+});
 
 describe("sign-up with custom fields", async (it) => {
 	const mockFn = vi.fn();

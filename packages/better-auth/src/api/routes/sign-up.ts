@@ -14,14 +14,53 @@ import { createEmailVerificationToken } from "./email-verification";
 
 const signUpEmailBodySchema = z
 	.object({
-		name: z.string().nonempty(),
+		name: z.string(),
 		email: z.email(),
 		password: z.string().nonempty(),
 		image: z.string().optional(),
 		callbackURL: z.string().optional(),
 		rememberMe: z.boolean().optional(),
 	})
+	.or(
+		z.object({
+			name: z.string().optional(),
+			email: z.email(),
+			password: z.string().nonempty(),
+			image: z.string().optional(),
+			callbackURL: z.string().optional(),
+			rememberMe: z.boolean().optional(),
+		}),
+	)
 	.and(z.record(z.string(), z.any()));
+
+type IsUsernameRequired<O extends BetterAuthOptions> = O extends {
+	user: {
+		requireUsername: true;
+	};
+}
+	? true
+	: O extends {
+				user: {
+					requireUsername?: undefined;
+				};
+			}
+		? true
+		: O extends {
+					user: {
+						requireUsername: false;
+					};
+				}
+			? false
+			: true;
+
+type UsernameField<O extends BetterAuthOptions> =
+	IsUsernameRequired<O> extends true
+		? {
+				name: string;
+			}
+		: {
+				name?: string;
+			};
 
 export const signUpEmail = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -38,13 +77,13 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				],
 				$Infer: {
 					body: {} as {
-						name: string;
 						email: string;
 						password: string;
 						image?: string | undefined;
 						callbackURL?: string | undefined;
 						rememberMe?: boolean | undefined;
-					} & AdditionalUserFieldsInput<O>,
+					} & UsernameField<O> &
+						AdditionalUserFieldsInput<O>,
 					returned: {} as {
 						token: string | null;
 						user: InferUser<O>;
