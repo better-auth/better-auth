@@ -387,11 +387,6 @@ export const createInternalAdapter = (
 		},
 		findSession: async (
 			token: string,
-			findSessionOptions?:
-				| {
-						onlyActiveSessions?: boolean | undefined;
-				  }
-				| undefined,
 		): Promise<{
 			session: Session & Record<string, any>;
 			user: User & Record<string, any>;
