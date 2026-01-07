@@ -3,7 +3,7 @@ import {
 	createAuthEndpoint,
 	sessionMiddleware,
 } from "better-auth/api";
-import type { AuthContext } from "@better-auth/core";
+import type { AuthContext } from "better-auth";
 import z from "zod/v4";
 import { DEFAULT_MAX_SAML_METADATA_SIZE } from "../constants";
 import { validateConfigAlgorithms } from "../saml";
@@ -58,7 +58,7 @@ async function batchCheckOrgAdmin(
 	const adminOrgIds = new Set<string>();
 	for (const member of members) {
 		const roles = member.role.split(",");
-		if (roles.some((r) => ADMIN_ROLES.includes(r.trim()))) {
+		if (roles.some((r: string) => ADMIN_ROLES.includes(r.trim()))) {
 			adminOrgIds.add(member.organizationId);
 		}
 	}
