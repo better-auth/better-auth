@@ -218,24 +218,25 @@ describe("open-api", async (it) => {
 
 		// Test sign-in endpoint: z.boolean().default(true).optional()
 		const signInPath = paths["/sign-in/email"];
-		if (signInPath?.post?.requestBody) {
-			const signInProps =
-				signInPath.post.requestBody.content["application/json"].schema
-					.properties;
-			validateDefaultField(signInProps, "rememberMe", "boolean", true);
-		}
+		expect(signInPath).toBeDefined();
+		expect(signInPath.post).toBeDefined();
+		expect(signInPath.post.requestBody).toBeDefined();
+
+		const signInProps =
+			signInPath.post.requestBody.content["application/json"].schema.properties;
+		validateDefaultField(signInProps, "rememberMe", "boolean", true);
 
 		// Test sign-up endpoint: z.boolean().optional() - no default
 		const signUpPath = paths["/sign-up/email"];
-		if (signUpPath?.post?.requestBody) {
-			const signUpProps =
-				signUpPath.post.requestBody.content["application/json"].schema
-					.properties;
-			// Should still be boolean, just without default
-			if (signUpProps.rememberMe) {
-				const baseTypes = getBaseType(signUpProps.rememberMe.type);
-				expect(baseTypes).toContain("boolean");
-			}
-		}
+		expect(signUpPath).toBeDefined();
+		expect(signUpPath.post).toBeDefined();
+		expect(signUpPath.post.requestBody).toBeDefined();
+
+		const signUpProps =
+			signUpPath.post.requestBody.content["application/json"].schema.properties;
+		// Should still be boolean, just without default
+		expect(signUpProps.rememberMe).toBeDefined();
+		const baseTypes = getBaseType(signUpProps.rememberMe.type);
+		expect(baseTypes).toContain("boolean");
 	});
 });
