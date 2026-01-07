@@ -130,6 +130,10 @@ export const getPasskeyActions = (
 					 */
 					authenticatorAttachment?: "platform" | "cross-platform";
 					/**
+					 * Optional context for passkey-first registration flows.
+					 */
+					context?: string | null;
+					/**
 					 * Optional WebAuthn extensions to include during registration.
 					 */
 					extensions?: AuthenticationExtensionsClientInputs;
@@ -158,6 +162,9 @@ export const getPasskeyActions = (
 					}),
 					...(opts?.name && {
 						name: opts.name,
+					}),
+					...(opts?.context && {
+						context: opts.context,
 					}),
 				},
 				throw: false,
