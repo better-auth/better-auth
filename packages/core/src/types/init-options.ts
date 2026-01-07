@@ -271,6 +271,31 @@ export type BetterAuthAdvancedOptions = {
 	 * used correctly. Please use this with caution.
 	 */
 	trustedProxyHeaders?: boolean | undefined;
+	/**
+	 * Configure background task handling for deferred operations.
+	 *
+	 * Background tasks allow non-critical operations (like cleanup, analytics,
+	 * or timing-attack mitigation) to run after the response is sent.
+	 *
+	 * Use `waitUntil` from `@vercel/functions` on Vercel,
+	 * or `ctx.waitUntil` on Cloudflare Workers.
+	 *
+	 * @example
+	 * // Vercel
+	 * import { waitUntil } from "@vercel/functions";
+	 * advanced: { backgroundTasks: { handler: waitUntil } }
+	 *
+	 * @example
+	 * // Cloudflare Workers (with AsyncLocalStorage)
+	 * advanced: {
+	 *   backgroundTasks: {
+	 *     handler: (p) => execCtxStorage.getStore()?.waitUntil(p)
+	 *   }
+	 * }
+	 */
+	backgroundTasks?: {
+		handler: (promise: Promise<void>) => void;
+	};
 };
 
 export type BetterAuthOptions = {
@@ -453,8 +478,18 @@ export type BetterAuthOptions = {
 				 * A function that is called when a user verifies their email
 				 * @param user the user that verified their email
 				 * @param request the request object
+				 * @deprecated Use `beforeEmailVerification` or `afterEmailVerification` instead. This will be removed in 1.5
 				 */
 				onEmailVerification?: (user: User, request?: Request) => Promise<void>;
+				/**
+				 * A function that is called before a user verifies their email
+				 * @param user the user that verified their email
+				 * @param request the request object
+				 */
+				beforeEmailVerification?: (
+					user: User,
+					request?: Request,
+				) => Promise<void>;
 				/**
 				 * A function that is called when a user's email is updated to verified
 				 * @param user the user that verified their email
@@ -969,9 +1004,34 @@ export type BetterAuthOptions = {
 		| undefined;
 	/**
 	 * List of trusted origins.
+	 *
+	 * @param request - The request object.
+	 * It'll be undefined if no request was
+	 * made. Like during a create context call
+	 * or `auth.api` call.
+	 *
+	 * Trusted origins will be dynamically
+	 * calculated based on the request.
+	 *
+	 * @example
+	 * ```ts
+	 * trustedOrigins: async (request) => {
+	 *   return [
+	 *    "https://better-auth.com",
+	 *    "https://*.better-auth.com",
+	 *    request.headers.get("x-custom-origin")
+	 *   ];
+	 * }
+	 * ```
+	 * @returns An array of trusted origins.
 	 */
 	trustedOrigins?:
-		| (string[] | ((request: Request) => Awaitable<string[]>))
+		| (
+				| string[]
+				| ((
+						request?: Request | undefined,
+				  ) => Awaitable<(string | undefined | null)[]>)
+		  )
 		| undefined;
 	/**
 	 * Rate limiting configuration

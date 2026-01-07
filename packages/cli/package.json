@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/cli",
-  "version": "1.4.7",
+  "version": "1.5.0-beta.2",
   "type": "module",
   "description": "The CLI for Better Auth",
   "module": "dist/index.mjs",
@@ -34,7 +34,20 @@
     "typescript",
     "better-auth"
   ],
-  "exports": "./dist/index.mjs",
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./api": {
+      "types": "./dist/api.d.mts",
+      "default": "./dist/api.mjs"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "api": [
+        "./dist/api.d.mts"
+      ]
+    }
+  },
   "bin": {
     "better-auth": "./dist/index.mjs"
   },
@@ -55,7 +68,7 @@
     "@babel/preset-typescript": "^7.27.1",
     "@better-auth/core": "workspace:*",
     "@better-auth/telemetry": "workspace:*",
-    "@better-auth/utils": "0.3.0",
+    "@better-auth/utils": "catalog:",
     "@clack/prompts": "^0.11.0",
     "@mrleebo/prisma-ast": "^0.13.0",
     "@prisma/client": "^5.22.0",

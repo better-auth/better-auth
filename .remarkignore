@@ -1,0 +1,9 @@
+packages/**/CHANGELOG.md
+**/dist/**
+**/.expo/**
+.expo/
+**/.expo
+demo/expo/.expo/README.md
+CODE_OF_CONDUCT.md
+CONTRIBUTING.md
+README.md

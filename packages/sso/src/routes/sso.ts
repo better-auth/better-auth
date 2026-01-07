@@ -22,7 +22,7 @@ import * as saml from "samlify";
 import type { BindingContext } from "samlify/types/src/entity";
 import type { IdentityProvider } from "samlify/types/src/entity-idp";
 import type { FlowResult } from "samlify/types/src/flow";
-import * as z from "zod/v4";
+import z from "zod/v4";
 
 interface AuthnRequestRecord {
 	id: string;
@@ -36,6 +36,8 @@ import {
 	DEFAULT_ASSERTION_TTL_MS,
 	DEFAULT_AUTHN_REQUEST_TTL_MS,
 	DEFAULT_CLOCK_SKEW_MS,
+	DEFAULT_MAX_SAML_METADATA_SIZE,
+	DEFAULT_MAX_SAML_RESPONSE_SIZE,
 	USED_ASSERTION_KEY_PREFIX,
 } from "../constants";
 import { assignOrganizationFromProvider } from "../linking";
@@ -45,7 +47,11 @@ import {
 	discoverOIDCConfig,
 	mapDiscoveryErrorToAPIError,
 } from "../oidc";
-import { validateSAMLAlgorithms } from "../saml";
+import {
+	validateConfigAlgorithms,
+	validateSAMLAlgorithms,
+	validateSingleAssertion,
+} from "../saml";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
 import { safeJsonParse, validateEmailDomain } from "../utils";
 
@@ -665,6 +671,20 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 					message: "Invalid issuer. Must be a valid URL",
 				});
 			}
+
+			if (body.samlConfig?.idpMetadata?.metadata) {
+				const maxMetadataSize =
+					options?.saml?.maxMetadataSize ?? DEFAULT_MAX_SAML_METADATA_SIZE;
+				if (
+					new TextEncoder().encode(body.samlConfig.idpMetadata.metadata)
+						.length > maxMetadataSize
+				) {
+					throw new APIError("BAD_REQUEST", {
+						message: `IdP metadata exceeds maximum allowed size (${maxMetadataSize} bytes)`,
+					});
+				}
+			}
+
 			if (ctx.body.organizationId) {
 				const organization = await ctx.context.adapter.findOne({
 					model: "member",
@@ -719,7 +739,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 							tokenEndpointAuthentication:
 								body.oidcConfig.tokenEndpointAuthentication,
 						},
-						isTrustedOrigin: ctx.context.isTrustedOrigin,
+						isTrustedOrigin: (url: string) => ctx.context.isTrustedOrigin(url),
 					});
 				} catch (error) {
 					if (error instanceof DiscoveryError) {
@@ -780,6 +800,16 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				});
 			};
 
+			if (body.samlConfig) {
+				validateConfigAlgorithms(
+					{
+						signatureAlgorithm: body.samlConfig.signatureAlgorithm,
+						digestAlgorithm: body.samlConfig.digestAlgorithm,
+					},
+					options?.saml?.algorithms,
+				);
+			}
+
 			const provider = await ctx.context.adapter.create<
 				Record<string, any>,
 				SSOProvider<O>
@@ -830,20 +860,26 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 							: `better-auth-token-${provider.providerId}`,
 						createdAt: new Date(),
 						updatedAt: new Date(),
-						value: domainVerificationToken,
+						value: domainVerificationToken as string,
 						expiresAt: new Date(Date.now() + 3600 * 24 * 7 * 1000), // 1 week
 					},
 				});
 			}
 
+			type SSOProviderResponse = {
+				redirectURI: string;
+				oidcConfig: OIDCConfig | null;
+				samlConfig: SAMLConfig | null;
+			} & Omit<SSOProvider<O>, "oidcConfig" | "samlConfig">;
+
 			type SSOProviderReturn = O["domainVerification"] extends { enabled: true }
-				? {
+				? SSOProviderResponse & {
 						domainVerified: boolean;
 						domainVerificationToken: string;
-					} & SSOProvider<O>
-				: SSOProvider<O>;
+					}
+				: SSOProviderResponse;
 
-			return ctx.json({
+			const result = {
 				...provider,
 				oidcConfig: safeJsonParse<OIDCConfig>(
 					provider.oidcConfig as unknown as string,
@@ -856,7 +892,9 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				...(options?.domainVerification?.enabled
 					? { domainVerificationToken }
 					: {}),
-			} as unknown as SSOProviderReturn);
+			};
+
+			return ctx.json(result as SSOProviderReturn);
 		},
 	);
 };
@@ -1679,6 +1717,15 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 		async (ctx) => {
 			const { SAMLResponse, RelayState } = ctx.body;
 			const { providerId } = ctx.params;
+
+			const maxResponseSize =
+				options?.saml?.maxResponseSize ?? DEFAULT_MAX_SAML_RESPONSE_SIZE;
+			if (new TextEncoder().encode(SAMLResponse).length > maxResponseSize) {
+				throw new APIError("BAD_REQUEST", {
+					message: `SAML response exceeds maximum allowed size (${maxResponseSize} bytes)`,
+				});
+			}
+
 			let provider: SSOProvider<SSOOptions> | null = null;
 			if (options?.defaultSSO?.length) {
 				const matchingDefault = options.defaultSSO.find(
@@ -1791,6 +1838,8 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 					? [parsedSamlConfig.identifierFormat]
 					: undefined,
 			});
+
+			validateSingleAssertion(SAMLResponse);
 
 			let parsedResponse: FlowResult;
 			try {
@@ -2118,6 +2167,14 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			const { SAMLResponse, RelayState = "" } = ctx.body;
 			const { providerId } = ctx.params;
 
+			const maxResponseSize =
+				options?.saml?.maxResponseSize ?? DEFAULT_MAX_SAML_RESPONSE_SIZE;
+			if (new TextEncoder().encode(SAMLResponse).length > maxResponseSize) {
+				throw new APIError("BAD_REQUEST", {
+					message: `SAML response exceeds maximum allowed size (${maxResponseSize} bytes)`,
+				});
+			}
+
 			// If defaultSSO is configured, use it as the provider
 			let provider: SSOProvider<SSOOptions> | null = null;
 
@@ -2220,6 +2277,23 @@ export const acsEndpoint = (options?: SSOOptions) => {
 				: saml.IdentityProvider({
 						metadata: idpData.metadata,
 					});
+
+			try {
+				validateSingleAssertion(SAMLResponse);
+			} catch (error) {
+				if (error instanceof APIError) {
+					const redirectUrl =
+						RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
+					const errorCode =
+						error.body?.code === "SAML_MULTIPLE_ASSERTIONS"
+							? "multiple_assertions"
+							: "no_assertion";
+					throw ctx.redirect(
+						`${redirectUrl}?error=${errorCode}&error_description=${encodeURIComponent(error.message)}`,
+					);
+				}
+				throw error;
+			}
 
 			// Parse and validate SAML response
 			let parsedResponse: FlowResult;
