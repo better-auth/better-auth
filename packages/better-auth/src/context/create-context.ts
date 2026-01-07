@@ -1,8 +1,4 @@
-import type {
-	AuthContext,
-	BetterAuthOptions,
-	BetterAuthPlugin,
-} from "@better-auth/core";
+import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
 import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { createLogger, env, isProduction, isTest } from "@better-auth/core/env";
@@ -10,6 +6,7 @@ import { BetterAuthError } from "@better-auth/core/error";
 import type { OAuthProvider } from "@better-auth/core/oauth2";
 import type { SocialProviders } from "@better-auth/core/social-providers";
 import { socialProviders } from "@better-auth/core/social-providers";
+import { deprecate } from "@better-auth/core/utils";
 import { createTelemetry } from "@better-auth/telemetry";
 import defu from "defu";
 import type { Entries } from "type-fest";
@@ -177,12 +174,10 @@ export async function createAuthContext(
 
 	const pluginIds = new Set(options.plugins!.map((p) => p.id));
 
-	const getPluginFn = <Plugin extends BetterAuthPlugin>(
-		id: Plugin["id"],
-	): Plugin | null =>
-		(options.plugins!.find((p): p is Plugin => p.id === id) as
-			| Plugin
-			| undefined) ?? null;
+	const getPluginFn = (id: string) =>
+		(options.plugins!.find((p) => p.id === id) as never | undefined) ?? null;
+
+	const hasPluginFn = (id: string) => pluginIds.has(id);
 
 	const ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
@@ -326,8 +321,7 @@ export async function createAuthContext(
 			}
 		},
 		getPlugin: getPluginFn,
-		hasPlugin: <Plugin extends BetterAuthPlugin>(pluginId: Plugin["id"]) =>
-			pluginIds.has(pluginId),
+		hasPlugin: hasPluginFn,
 	};
 
 	const initOrPromise = runPluginInit(ctx);
@@ -336,6 +330,16 @@ export async function createAuthContext(
 		({ context } = await initOrPromise);
 	} else {
 		({ context } = initOrPromise);
+	}
+
+	if (
+		typeof context.options.emailVerification?.onEmailVerification === "function"
+	) {
+		context.options.emailVerification.onEmailVerification = deprecate(
+			context.options.emailVerification.onEmailVerification,
+			"Use `afterEmailVerification` instead. This will be removed in 1.5",
+			context.logger,
+		);
 	}
 
 	return context;
