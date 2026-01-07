@@ -365,6 +365,12 @@ export const verifyEmail = createAuthEndpoint(
 				};
 			}
 			if (parsed.requestType === "change-email-verification") {
+				if (ctx.context.options.emailVerification?.onEmailVerification) {
+					await ctx.context.options.emailVerification.onEmailVerification(
+						user.user,
+						ctx.request,
+					);
+				}
 				const updatedUser = await ctx.context.internalAdapter.updateUserByEmail(
 					parsed.email,
 					{
@@ -372,6 +378,12 @@ export const verifyEmail = createAuthEndpoint(
 						emailVerified: true,
 					},
 				);
+				if (ctx.context.options.emailVerification?.afterEmailVerification) {
+					await ctx.context.options.emailVerification.afterEmailVerification(
+						updatedUser,
+						ctx.request,
+					);
+				}
 				await setSessionCookie(ctx, {
 					session: session.session,
 					user: {
