@@ -80,8 +80,9 @@ export interface Path {
 type AllowedType = "string" | "number" | "boolean" | "array" | "object";
 const allowedType = new Set(["string", "number", "boolean", "array", "object"]);
 function getTypeFromZodType(zodType: z.ZodType<any>) {
-	if ((zodType as any)?._def?.typeName === "ZodDefault") {
-		return getTypeFromZodType((zodType as any)._def.innerType);
+	// unwrap ZodDefault to get the inner type
+	if (zodType instanceof z.ZodDefault) {
+		return getTypeFromZodType(zodType.unwrap() as any);
 	}
 	const type = zodType.type;
 	return allowedType.has(type) ? (type as AllowedType) : "string";
@@ -195,7 +196,7 @@ function getRequestBody(options: EndpointOptions): any {
 function processZodType(zodType: z.ZodType<any>): any {
 	// optional unwrapping
 	if (zodType instanceof z.ZodOptional) {
-		const innerType = (zodType as any)._def.innerType;
+		const innerType = zodType.unwrap() as any;
 		const innerSchema = processZodType(innerType);
 		if (innerSchema.type) {
 			const type = Array.isArray(innerSchema.type)
@@ -208,6 +209,20 @@ function processZodType(zodType: z.ZodType<any>): any {
 		}
 		return {
 			anyOf: [innerSchema, { type: "null" }],
+		};
+	}
+	// default unwrapping
+	if (zodType instanceof z.ZodDefault) {
+		const innerType = zodType.unwrap() as any;
+		const innerSchema = processZodType(innerType);
+		const defaultValueDef = (zodType as any)._def.defaultValue;
+		const defaultValue =
+			typeof defaultValueDef === "function"
+				? defaultValueDef()
+				: defaultValueDef;
+		return {
+			...innerSchema,
+			default: defaultValue,
 		};
 	}
 	// object unwrapping
