@@ -28,6 +28,15 @@ import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
 
 export * from "./error-code";
 
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		"two-factor": {
+			creator: typeof twoFactor;
+		};
+	}
+}
+
 const enableTwoFactorBodySchema = z.object({
 	password: z.string().meta({
 		description: "User password",
