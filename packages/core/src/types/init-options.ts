@@ -151,17 +151,28 @@ export type BetterAuthAdvancedOptions = {
 	 */
 	useSecureCookies?: boolean | undefined;
 	/**
-	 * Disable trusted origins check
+	 * Disable all CSRF protection.
+	 *
+	 * When enabled, this disables:
+	 * - Origin header validation when cookies are present
+	 * - Fetch Metadata checks (Sec-Fetch-Site, Sec-Fetch-Mode, Sec-Fetch-Dest)
+	 * - Cross-site navigation blocking for first-login scenarios
 	 *
 	 * ⚠︎ This is a security risk and it may expose your application to
 	 * CSRF attacks
 	 */
 	disableCSRFCheck?: boolean | undefined;
 	/**
-	 * Disable origin check
+	 * Disable URL validation against trustedOrigins.
 	 *
-	 * ⚠︎ This may allow requests from any origin to be processed by
-	 * Better Auth. And could lead to security vulnerabilities.
+	 * When enabled, this disables validation of:
+	 * - callbackURL
+	 * - redirectTo
+	 * - errorCallbackURL
+	 * - newUserCallbackURL
+	 *
+	 * ⚠︎ This may allow open redirects and could lead to security
+	 * vulnerabilities.
 	 */
 	disableOriginCheck?: boolean | undefined;
 	/**

@@ -19,6 +19,11 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	}
 	await validateOrigin(ctx);
 
+	// disableOriginCheck disables URL validation (callbackURL, redirectTo, etc.)
+	if (ctx.context.skipOriginCheck) {
+		return;
+	}
+
 	const { body, query } = ctx;
 	const callbackURL = body?.callbackURL || query?.callbackURL;
 	const redirectURL = body?.redirectTo;
@@ -85,6 +90,10 @@ export const originCheck = (
 ) =>
 	createAuthMiddleware(async (ctx) => {
 		if (!ctx.request) {
+			return;
+		}
+		// disableOriginCheck disables URL validation (callbackURL, redirectTo, etc.)
+		if (ctx.context.skipOriginCheck) {
 			return;
 		}
 		const callbackURL = getValue(ctx);
@@ -156,9 +165,12 @@ async function validateOrigin(
 	const originHeader = headers.get("origin") || headers.get("referer") || "";
 	const useCookies = headers.has("cookie");
 
-	const shouldValidate =
-		forceValidate ||
-		(useCookies && !ctx.context.skipCSRFCheck && !ctx.context.skipOriginCheck);
+	// disableCSRFCheck controls CSRF protection (origin header validation when cookies present)
+	if (ctx.context.skipCSRFCheck) {
+		return;
+	}
+
+	const shouldValidate = forceValidate || useCookies;
 
 	if (!shouldValidate) {
 		return;
@@ -212,6 +224,11 @@ export const formCsrfMiddleware = createAuthMiddleware(async (ctx) => {
 async function validateFormCsrf(ctx: GenericEndpointContext): Promise<void> {
 	const req = ctx.request;
 	if (!req) {
+		return;
+	}
+
+	// disableCSRFCheck disables all CSRF protection including Fetch Metadata checks
+	if (ctx.context.skipCSRFCheck) {
 		return;
 	}
 
