@@ -653,21 +653,6 @@ export const createInternalAdapter = (
 				}
 			}
 
-			if (!options.session?.storeSessionInDatabase) {
-				return;
-			}
-
-			if (ctx.options.session?.preserveSessionInDatabase) {
-				// Update the session's expiresAt to mark it as expired instead of deleting
-				await updateWithHooks<Session>(
-					{ expiresAt: new Date() },
-					[{ field: "token", value: token }],
-					"session",
-					undefined,
-				);
-				return;
-			}
-
 			await deleteWithHooks(
 				[{ field: "token", value: token }],
 				"session",
