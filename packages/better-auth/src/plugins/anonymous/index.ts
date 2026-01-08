@@ -304,9 +304,19 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 								ctx,
 							});
 						}
-						if (!options?.disableDeleteAnonymousUser) {
-							await ctx.context.internalAdapter.deleteUser(session.user.id);
+						const newSessionUser = newSession.user as
+							| (UserWithAnonymous & Record<string, any>)
+							| undefined;
+						const isSameUser = newSessionUser?.id === session.user.id;
+						const newSessionIsAnonymous = Boolean(newSessionUser?.isAnonymous);
+						if (
+							options?.disableDeleteAnonymousUser ||
+							isSameUser ||
+							newSessionIsAnonymous
+						) {
+							return;
 						}
+						await ctx.context.internalAdapter.deleteUser(session.user.id);
 					}),
 				},
 			],
