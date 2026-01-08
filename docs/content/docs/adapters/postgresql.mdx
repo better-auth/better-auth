@@ -51,11 +51,11 @@ your database schema based on your Better Auth configuration and plugins.
   </tbody>
 </table>
 
-```bash title="Schema Generation"
+```package-install title="Schema Generation"
 npx @better-auth/cli@latest generate
 ```
 
-```bash title="Schema Migration"
+```package-install title="Schema Migration"
 npx @better-auth/cli@latest migrate
 ```
 
@@ -111,7 +111,7 @@ export const auth = betterAuth({
     port: 5432,
     user: "postgres",
     password: "password",
-    database: "mydb",
+    database: "my-db",
     options: "-c search_path=auth",
   }),
 });
@@ -176,4 +176,3 @@ This should return your custom schema (e.g., `auth`) as the first value.
 PostgreSQL is supported under the hood via the [Kysely](https://kysely.dev/) adapter, any database supported by Kysely would also be supported. (<Link href="/docs/adapters/other-relational-databases">Read more here</Link>)
 
 If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.
-

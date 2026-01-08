@@ -1,9 +1,18 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
+import type { BetterAuthPlugin, LiteralString } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "../../api";
-import type { LiteralString } from "../../types/helper";
+import { HIDE_METADATA } from "../../utils";
 import { generator } from "./generator";
 import { logo } from "./logo";
+
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		"open-api": {
+			creator: typeof openAPI;
+		};
+	}
+}
 
 export type { FieldSchema, OpenAPIModelSchema, Path } from "./generator";
 
@@ -109,9 +118,7 @@ export const openAPI = <O extends OpenAPIOptions>(options?: O | undefined) => {
 				path,
 				{
 					method: "GET",
-					metadata: {
-						isAction: false,
-					},
+					metadata: HIDE_METADATA,
 				},
 				async (ctx) => {
 					if (options?.disableDefaultReference) {
@@ -126,6 +133,7 @@ export const openAPI = <O extends OpenAPIOptions>(options?: O | undefined) => {
 				},
 			),
 		},
+		options: options as NoInfer<O>,
 	} satisfies BetterAuthPlugin;
 };
 

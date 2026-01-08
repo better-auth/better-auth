@@ -4,6 +4,7 @@
   "main": "src/index.ts",
   "name": "cloudflare",
   "upload_source_maps": true,
+  "compatibility_flags": ["nodejs_compat"],
   "d1_databases": [
     {
       "binding": "DB",

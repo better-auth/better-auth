@@ -39,15 +39,29 @@ export type InferValueType<T extends DBFieldType> = T extends "string"
 export type InferFieldsOutput<Field> =
 	Field extends Record<infer Key, DBFieldAttribute>
 		? {
-				[key in Key as Field[key]["required"] extends false
-					? Field[key]["defaultValue"] extends boolean | string | number | Date
-						? key
-						: never
-					: key]: InferFieldOutput<Field[key]>;
+				[key in Key as Field[key]["returned"] extends false
+					? never
+					: Field[key]["required"] extends false
+						? Field[key]["defaultValue"] extends
+								| boolean
+								| string
+								| number
+								| Date
+							? key
+							: never
+						: key]: InferFieldOutput<Field[key]>;
 			} & {
 				[key in Key as Field[key]["returned"] extends false
 					? never
-					: key]?: InferFieldOutput<Field[key]> | null;
+					: Field[key]["required"] extends false
+						? Field[key]["defaultValue"] extends
+								| boolean
+								| string
+								| number
+								| Date
+							? never
+							: key
+						: never]?: InferFieldOutput<Field[key]> | null;
 			}
 		: {};
 
@@ -170,7 +184,7 @@ export type PluginFieldAttribute = Omit<
 export type InferFieldsFromPlugins<
 	Options extends BetterAuthOptions,
 	Key extends string,
-	Format extends "output" | "input" = "output",
+	Format extends "output" | "input",
 > = Options["plugins"] extends []
 	? {}
 	: Options["plugins"] extends Array<infer T>
@@ -190,7 +204,7 @@ export type InferFieldsFromPlugins<
 export type InferFieldsFromOptions<
 	Options extends BetterAuthOptions,
 	Key extends "session" | "user",
-	Format extends "output" | "input" = "output",
+	Format extends "output" | "input",
 > = Options[Key] extends {
 	additionalFields: infer Field;
 }

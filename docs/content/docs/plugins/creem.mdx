@@ -121,10 +121,18 @@ export const authClient = createCreemAuthClient({
 
 If you're using database persistence (`persistSubscriptions: true`), generate and run the database schema:
 
-```bash
-npx @better-auth/cli generate
-npx @better-auth/cli migrate
-```
+<Tabs items={["migrate", "generate"]}>
+    <Tab value="migrate">
+    ```package-install
+    npx @better-auth/cli migrate
+    ```
+    </Tab>
+    <Tab value="generate">
+    ```package-install
+    npx @better-auth/cli generate
+    ```
+    </Tab>
+</Tabs>
 
 <Callout type="info">
   Depending on your database adapter, additional setup steps may be required. Refer to the [Better Auth adapter documentation](https://www.better-auth.com/docs/adapters/mysql) for details.
@@ -186,7 +194,9 @@ npx @better-auth/cli migrate
 
 When `persistSubscriptions: true`, the plugin creates the following schema:
 
-### Subscription Table
+### Creem Subscription Table
+
+Table Name: `creem_subscription`
 
 | Field                 | Type    | Description                      |
 | --------------------- | ------- | -------------------------------- |
@@ -837,4 +847,3 @@ For issues or questions:
 - Contact Creem support at [support@creem.io](mailto:support@creem.io)
 - Join our [Discord community](https://discord.gg/q3GKZs92Av) for real-time support and discussion.
 - Chat with us directly using the in-app live chat on the [Creem dashboard](https://creem.io/dashboard).
-

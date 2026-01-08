@@ -1,13 +1,20 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { APIError } from "@better-auth/core/error";
+import { safeJSONParse } from "@better-auth/core/utils";
 import * as z from "zod";
-import { APIError, sessionMiddleware } from "../../../api";
-import { safeJSONParse } from "../../../utils/json";
-import { ERROR_CODES } from "..";
+import { sessionMiddleware } from "../../../api";
+import { API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import { getApiKeyById } from "../adapter";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
+
+const getApiKeyQuerySchema = z.object({
+	id: z.string().meta({
+		description: "The id of the Api Key",
+	}),
+});
 
 export function getApiKey({
 	opts,
@@ -25,11 +32,7 @@ export function getApiKey({
 		"/api-key/get",
 		{
 			method: "GET",
-			query: z.object({
-				id: z.string().meta({
-					description: "The id of the Api Key",
-				}),
-			}),
+			query: getApiKeyQuerySchema,
 			use: [sessionMiddleware],
 			metadata: {
 				openapi: {
@@ -183,9 +186,7 @@ export function getApiKey({
 			}
 
 			if (!apiKey) {
-				throw new APIError("NOT_FOUND", {
-					message: ERROR_CODES.KEY_NOT_FOUND,
-				});
+				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
 			}
 
 			deleteAllExpiredApiKeys(ctx.context);
@@ -195,7 +196,7 @@ export function getApiKey({
 				apiKey.metadata as never as string,
 			);
 
-			const { key, ...returningApiKey } = apiKey;
+			const { key: _key, ...returningApiKey } = apiKey;
 
 			return ctx.json({
 				...returningApiKey,
