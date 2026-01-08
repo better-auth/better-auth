@@ -112,6 +112,16 @@ export const bearer = (options?: BearerOptions | undefined) => {
 							return;
 						}
 						const token = sessionCookie.value;
+						const location = ctx.context.responseHeaders?.get("location");
+						if (location) {
+							try {
+								const locationURL = new URL(location);
+								locationURL.searchParams.set("set-auth-token", token);
+								ctx.setHeader("location", locationURL.toString());
+							} catch (e) {
+								// ignore invalid URL
+							}
+						}
 						const exposedHeaders =
 							ctx.context.responseHeaders?.get(
 								"access-control-expose-headers",

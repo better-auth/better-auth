@@ -104,6 +104,12 @@ describe("oauth2", async () => {
 				cookieSetter(newHeaders)(context);
 			},
 		});
+		// remove set-auth-token from URL if present
+		if (callbackURL.includes("set-auth-token")) {
+			const url = new URL(callbackURL);
+			url.searchParams.delete("set-auth-token");
+			callbackURL = url.toString();
+		}
 
 		return { callbackURL, headers: newHeaders };
 	}

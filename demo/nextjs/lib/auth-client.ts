@@ -4,6 +4,7 @@ import { stripeClient } from "@better-auth/stripe/client";
 import {
 	adminClient,
 	customSessionClient,
+	bearerClient,
 	deviceAuthorizationClient,
 	lastLoginMethodClient,
 	multiSessionClient,
@@ -17,6 +18,7 @@ import type { auth } from "./auth";
 
 export const authClient = createAuthClient({
 	plugins: [
+		bearerClient(),
 		organizationClient(),
 		twoFactorClient({
 			onTwoFactorRedirect() {
