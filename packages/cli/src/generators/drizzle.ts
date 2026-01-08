@@ -23,9 +23,9 @@ function toValidIdentifier(str: string): string {
 	// Then convert to camelCase
 	let result = str
 		.replace(/[^a-zA-Z0-9_]/g, "")
-		.replace(/^[0-9]/, "_$&") // Can't start with a number
 		.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
-		.replace(/_/g, ""); // Remove remaining underscores
+		.replace(/_/g, "") // Remove remaining underscores
+		.replace(/^[0-9]/, "_$&"); // Can't start with a number - must be after underscore removal
 
 	// Ensure first character is lowercase
 	if (result.length > 0 && result[0]!.match(/[A-Z]/)) {
@@ -34,7 +34,6 @@ function toValidIdentifier(str: string): string {
 
 	return result || "schema"; // Fallback if result is empty
 }
-
 export const generateDrizzleSchema: SchemaGenerator = async ({
 	options,
 	file,
