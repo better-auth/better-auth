@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
 import type { AuthContext } from "@better-auth/core";
-import { decryptOAuthToken, setTokenUtil } from "./utils";
+import { describe, expect, it } from "vitest";
 import { symmetricEncrypt } from "../crypto";
+import { decryptOAuthToken, setTokenUtil } from "./utils";
 
 // Mock minimal AuthContext for testing
 function createMockContext(encryptOAuthTokens: boolean): AuthContext {
@@ -103,7 +103,8 @@ describe("migration scenario - issue #6018", () => {
 		const ctx = createMockContext(true);
 
 		// Google refresh tokens have this format
-		const googleRefreshToken = "1//0gxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+		const googleRefreshToken =
+			"1//0gxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
 
 		const result = await decryptOAuthToken(googleRefreshToken, ctx);
 		expect(result).toBe(googleRefreshToken);
