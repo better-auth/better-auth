@@ -3,7 +3,7 @@ import { createHash } from "@better-auth/utils/hash";
 import { symmetricEncrypt } from "../crypto";
 import type { StoreIdentifierOption } from "../types";
 
-export const defaultKeyHasher = async (identifier: string) => {
+const defaultKeyHasher = async (identifier: string) => {
 	const hash = await createHash("SHA-256").digest(
 		new TextEncoder().encode(identifier),
 	);
