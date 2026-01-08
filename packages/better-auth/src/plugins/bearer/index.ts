@@ -133,9 +133,6 @@ export const bearer = (options?: BearerOptions | undefined) => {
 								const locationURL = requestOrigin
 									? new URL(location, requestOrigin)
 									: new URL(location);
-									? new URL(ctx.request.url).origin
-									: `${protocol}://${host}`;
-								const locationURL = new URL(location, requestOrigin);
 
 								// Only append token if redirect is to same origin or trusted origin
 								const isSameOrigin = locationURL.origin === requestOrigin;
