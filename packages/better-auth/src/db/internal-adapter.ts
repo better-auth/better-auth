@@ -19,6 +19,10 @@ import {
 	parseSessionOutput,
 	parseUserOutput,
 } from "./schema";
+import {
+	getStorageOption,
+	processIdentifier,
+} from "./verification-token-storage";
 import { getWithHooks } from "./with-hooks";
 
 export const createInternalAdapter = (
@@ -974,12 +978,23 @@ export const createInternalAdapter = (
 			data: Omit<Verification, "createdAt" | "id" | "updatedAt"> &
 				Partial<Verification>,
 		) => {
+			const storageOption = getStorageOption(
+				data.identifier,
+				options.verification?.storeIdentifier,
+				options.verification?.overrides,
+			);
+			const storedIdentifier = await processIdentifier(
+				data.identifier,
+				storageOption,
+				options.secret!,
+			);
 			const verification = await createWithHooks(
 				{
 					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 					createdAt: new Date(),
 					updatedAt: new Date(),
 					...data,
+					identifier: storedIdentifier,
 				},
 				"verification",
 				undefined,
@@ -987,22 +1002,39 @@ export const createInternalAdapter = (
 			return verification as Verification;
 		},
 		findVerificationValue: async (identifier: string) => {
-			const verification = await (
-				await getCurrentAdapter(adapter)
-			).findMany<Verification>({
-				model: "verification",
-				where: [
-					{
-						field: "identifier",
-						value: identifier,
-					},
-				],
-				sortBy: {
-					field: "createdAt",
-					direction: "desc",
-				},
-				limit: 1,
-			});
+			const currentAdapter = await getCurrentAdapter(adapter);
+			const storageOption = getStorageOption(
+				identifier,
+				options.verification?.storeIdentifier,
+				options.verification?.overrides,
+			);
+
+			async function findByIdentifier(id: string) {
+				return currentAdapter.findMany<Verification>({
+					model: "verification",
+					where: [{ field: "identifier", value: id }],
+					sortBy: { field: "createdAt", direction: "desc" },
+					limit: 1,
+				});
+			}
+
+			let verification: Verification[] = [];
+
+			if (storageOption && storageOption !== "plain") {
+				const processedId = await processIdentifier(
+					identifier,
+					storageOption,
+					options.secret!,
+				);
+				verification = await findByIdentifier(processedId);
+
+				if (!verification.length) {
+					verification = await findByIdentifier(identifier);
+				}
+			} else {
+				verification = await findByIdentifier(identifier);
+			}
+
 			if (!options.verification?.disableCleanup) {
 				await deleteManyWithHooks(
 					[
@@ -1027,8 +1059,18 @@ export const createInternalAdapter = (
 			);
 		},
 		deleteVerificationByIdentifier: async (identifier: string) => {
+			const storageOption = getStorageOption(
+				identifier,
+				options.verification?.storeIdentifier,
+				options.verification?.overrides,
+			);
+			const storedIdentifier = await processIdentifier(
+				identifier,
+				storageOption,
+				options.secret!,
+			);
 			await deleteWithHooks(
-				[{ field: "identifier", value: identifier }],
+				[{ field: "identifier", value: storedIdentifier }],
 				"verification",
 				undefined,
 			);
