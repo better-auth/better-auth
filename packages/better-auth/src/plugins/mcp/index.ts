@@ -8,6 +8,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { isProduction, logger } from "@better-auth/core/env";
+import { safeJSONParse } from "@better-auth/core/utils";
 import { getWebcryptoSubtle } from "@better-auth/utils";
 import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
@@ -218,6 +219,12 @@ export const mcp = (options: MCPOptions) => {
 						if (!session) {
 							return;
 						}
+						const parsedCookie = safeJSONParse<Record<string, string>>(cookie);
+						if (!parsedCookie) {
+							return;
+						}
+						ctx.query = parsedCookie;
+
 						// Remove "login" from prompt since user just logged in
 						const promptSet = parsePrompt(String(ctx.query?.prompt));
 						if (promptSet.has("login")) {
