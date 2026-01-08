@@ -361,6 +361,7 @@ describe("Email Verification Secondary Storage", async () => {
 				},
 			});
 			expect(sessionAfterConfirmation.data?.user.email).toBe(testUser.email);
+			expect(sessionAfterConfirmation.data?.user.emailVerified).toBe(true);
 
 			// 2. Verify new email token (token variable was updated by sendVerificationEmail mock)
 			const verificationHeaders = new Headers();

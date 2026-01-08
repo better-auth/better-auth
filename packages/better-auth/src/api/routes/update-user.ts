@@ -3,7 +3,7 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
 import * as z from "zod";
-import { deleteSessionCookie, setSessionCookie } from "../../cookies";
+import { deleteSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { parseUserInput } from "../../db/schema";
 import type { AdditionalUserFieldsInput } from "../../types";
@@ -117,13 +117,6 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 					...additionalFields,
 				},
 			);
-			/**
-			 * Update the session cookie with the new user data
-			 */
-			await setSessionCookie(ctx, {
-				session: session.session,
-				user,
-			});
 			return ctx.json({
 				status: true,
 			});
@@ -289,11 +282,6 @@ export const changePassword = createAuthEndpoint(
 					message: BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
 				});
 			}
-			// set the new session cookie
-			await setSessionCookie(ctx, {
-				session: newSession,
-				user: session.user,
-			});
 			token = newSession.token;
 		}
 
@@ -769,22 +757,17 @@ export const changeEmail = createAuthEndpoint(
 			await ctx.context.internalAdapter.updateUserByEmail(
 				ctx.context.session.user.email,
 				{
-					email: newEmail,
+					pendingEmail: newEmail,
+					pendingEmailExpiresAt: new Date(Date.now() + 30 * 60 * 1000),
 				},
 			);
-			await setSessionCookie(ctx, {
-				session: ctx.context.session.session,
-				user: {
-					...ctx.context.session.user,
-					email: newEmail,
-				},
-			});
 			if (ctx.context.options.emailVerification?.sendVerificationEmail) {
 				const token = await createEmailVerificationToken(
 					ctx.context.secret,
 					newEmail,
 					undefined,
 					ctx.context.options.emailVerification?.expiresIn,
+					 { requestType: "change-email-verification" },
 				);
 				const url = `${
 					ctx.context.baseURL
@@ -793,10 +776,7 @@ export const changeEmail = createAuthEndpoint(
 				}`;
 				await ctx.context.options.emailVerification.sendVerificationEmail(
 					{
-						user: {
-							...ctx.context.session.user,
-							email: newEmail,
-						},
+						user: ctx.context.session.user,
 						url,
 						token,
 					},
@@ -870,10 +850,7 @@ export const changeEmail = createAuthEndpoint(
 		}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
 		await ctx.context.options.emailVerification.sendVerificationEmail(
 			{
-				user: {
-					...ctx.context.session.user,
-					email: newEmail,
-				},
+				user: ctx.context.session.user,
 				url,
 				token,
 			},
