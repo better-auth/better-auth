@@ -22,9 +22,14 @@ const ERROR_CODES = defineErrorCodes({
 
 async function checkPasswordCompromise(
 	password: string,
-	customMessage?: string | undefined,
+	customMessage?: string | (() => string | Promise<string>) | undefined,
 ) {
 	if (!password) return;
+
+	const failedMessage: string =
+		(await (typeof customMessage === "function"
+			? customMessage()
+			: customMessage)) || ERROR_CODES.PASSWORD_COMPROMISED.message;
 
 	const sha1Hash = (
 		await createHash("SHA-1", "hex").digest(password)
@@ -54,7 +59,7 @@ async function checkPasswordCompromise(
 
 		if (found) {
 			throw APIError.from("BAD_REQUEST", {
-				message: customMessage || ERROR_CODES.PASSWORD_COMPROMISED.message,
+				message: failedMessage,
 				code: ERROR_CODES.PASSWORD_COMPROMISED.code,
 			});
 		}
@@ -67,7 +72,10 @@ async function checkPasswordCompromise(
 }
 
 export interface HaveIBeenPwnedOptions {
-	customPasswordCompromisedMessage?: string | undefined;
+	customPasswordCompromisedMessage?:
+		| string
+		| (() => string | Promise<string>)
+		| undefined;
 	/**
 	 * Paths to check for password
 	 *
