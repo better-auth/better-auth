@@ -323,13 +323,14 @@ describe("internal adapter test", async () => {
 			const overrideAdapter = overrideCtx.internalAdapter;
 
 			// reset-password should be hashed
-			const hashedVerification =
-				await overrideAdapter.createVerificationValue({
-					identifier: "reset-password:token-abc",
-					value: "user-1",
-					expiresAt: new Date(Date.now() + 60000),
-				});
-			expect(hashedVerification.identifier).not.toBe("reset-password:token-abc");
+			const hashedVerification = await overrideAdapter.createVerificationValue({
+				identifier: "reset-password:token-abc",
+				value: "user-1",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+			expect(hashedVerification.identifier).not.toBe(
+				"reset-password:token-abc",
+			);
 
 			// other identifiers should be plain
 			const plainVerification = await overrideAdapter.createVerificationValue({
@@ -368,7 +369,9 @@ describe("internal adapter test", async () => {
 
 			// Should still find old plain token via fallback
 			const found =
-				await hashedCtx.internalAdapter.findVerificationValue("old-token:abc123");
+				await hashedCtx.internalAdapter.findVerificationValue(
+					"old-token:abc123",
+				);
 			expect(found).toBeDefined();
 			expect(found?.value).toBe("old-value");
 		});
