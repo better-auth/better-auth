@@ -182,4 +182,61 @@ describe("open-api", async (it) => {
 			checkNoNullable(requestBodySchema, "signInSocialRequestBody"),
 		).not.toThrow();
 	});
+
+	it("should correctly unwrap ZodDefault and infer inner type", async () => {
+		const schema = await auth.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, any>;
+
+		// Helper to extract base type from type array
+		const getBaseType = (type: any) => {
+			if (Array.isArray(type)) {
+				return type.filter((t) => t !== "null");
+			}
+			return [type];
+		};
+
+		// Helper to check if field has correct type and default value
+		const validateDefaultField = (
+			properties: any,
+			fieldName: string,
+			expectedType: string,
+			expectedDefault?: any,
+		) => {
+			expect(properties[fieldName]).toBeDefined();
+			const fieldSchema = properties[fieldName];
+
+			// Check type is correctly inferred - not fallback to "string"
+			const baseTypes = getBaseType(fieldSchema.type);
+			expect(baseTypes).toContain(expectedType);
+			expect(baseTypes).not.toContain("string");
+
+			// Check default value is included if expected
+			if (expectedDefault !== undefined) {
+				expect(fieldSchema.default).toBe(expectedDefault);
+			}
+		};
+
+		// Test sign-in endpoint: z.boolean().default(true).optional()
+		const signInPath = paths["/sign-in/email"];
+		expect(signInPath).toBeDefined();
+		expect(signInPath.post).toBeDefined();
+		expect(signInPath.post.requestBody).toBeDefined();
+
+		const signInProps =
+			signInPath.post.requestBody.content["application/json"].schema.properties;
+		validateDefaultField(signInProps, "rememberMe", "boolean", true);
+
+		// Test sign-up endpoint: z.boolean().optional() - no default
+		const signUpPath = paths["/sign-up/email"];
+		expect(signUpPath).toBeDefined();
+		expect(signUpPath.post).toBeDefined();
+		expect(signUpPath.post.requestBody).toBeDefined();
+
+		const signUpProps =
+			signUpPath.post.requestBody.content["application/json"].schema.properties;
+		// Should still be boolean, just without default
+		expect(signUpProps.rememberMe).toBeDefined();
+		const baseTypes = getBaseType(signUpProps.rememberMe.type);
+		expect(baseTypes).toContain("boolean");
+	});
 });
