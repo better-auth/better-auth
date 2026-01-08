@@ -1,11 +1,10 @@
+import type { LiteralString } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { APIError } from "better-call";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx, sessionMiddleware } from "../../../api";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db/to-zod";
-import type { LiteralString } from "../../../types/helper";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
@@ -18,45 +17,44 @@ import type {
 } from "../schema";
 import type { OrganizationOptions } from "../types";
 
+const baseMemberSchema = z.object({
+	userId: z.coerce.string().meta({
+		description:
+			'The user Id which represents the user to be added as a member. If `null` is provided, then it\'s expected to provide session headers. Eg: "user-id"',
+	}),
+	role: z.union([z.string(), z.array(z.string())]).meta({
+		description:
+			'The role(s) to assign to the new member. Eg: ["admin", "sale"]',
+	}),
+	organizationId: z
+		.string()
+		.meta({
+			description:
+				'An optional organization ID to pass. If not provided, will default to the user\'s active organization. Eg: "org-id"',
+		})
+		.optional(),
+	teamId: z
+		.string()
+		.meta({
+			description: 'An optional team ID to add the member to. Eg: "team-id"',
+		})
+		.optional(),
+});
+
 export const addMember = <O extends OrganizationOptions>(option: O) => {
 	const additionalFieldsSchema = toZodSchema({
 		fields: option?.schema?.member?.additionalFields || {},
 		isClientSide: true,
 	});
-	const baseSchema = z.object({
-		userId: z.coerce.string().meta({
-			description:
-				'The user Id which represents the user to be added as a member. If `null` is provided, then it\'s expected to provide session headers. Eg: "user-id"',
-		}),
-		role: z.union([z.string(), z.array(z.string())]).meta({
-			description:
-				'The role(s) to assign to the new member. Eg: ["admin", "sale"]',
-		}),
-		organizationId: z
-			.string()
-			.meta({
-				description:
-					'An optional organization ID to pass. If not provided, will default to the user\'s active organization. Eg: "org-id"',
-			})
-			.optional(),
-		teamId: z
-			.string()
-			.meta({
-				description: 'An optional team ID to add the member to. Eg: "team-id"',
-			})
-			.optional(),
-	});
 	return createAuthEndpoint(
-		"/organization/add-member",
 		{
 			method: "POST",
 			body: z.object({
-				...baseSchema.shape,
+				...baseMemberSchema.shape,
 				...additionalFieldsSchema.shape,
 			}),
 			use: [orgMiddleware],
 			metadata: {
-				SERVER_ONLY: true,
 				$Infer: {
 					body: {} as {
 						userId: string;
@@ -86,19 +84,17 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 			const orgId =
 				ctx.body.organizationId || session?.session.activeOrganizationId;
 			if (!orgId) {
-				return ctx.json(null, {
-					status: 400,
-					body: {
-						message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
-					},
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+				);
 			}
 
 			const teamId =
 				"teamId" in ctx.body ? (ctx.body.teamId as string) : undefined;
 			if (teamId && !ctx.context.orgOptions.teams?.enabled) {
 				ctx.context.logger.error("Teams are not enabled");
-				throw new APIError("BAD_REQUEST", {
+				throw APIError.fromStatus("BAD_REQUEST", {
 					message: "Teams are not enabled",
 				});
 			}
@@ -110,9 +106,7 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 			);
 
 			if (!user) {
-				throw new APIError("BAD_REQUEST", {
-					message: BASE_ERROR_CODES.USER_NOT_FOUND,
-				});
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
 
 			const alreadyMember = await adapter.findMemberByEmail({
@@ -121,10 +115,10 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 			});
 
 			if (alreadyMember) {
-				throw new APIError("BAD_REQUEST", {
-					message:
-						ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION,
+				);
 			}
 
 			if (teamId) {
@@ -133,9 +127,10 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 					organizationId: orgId,
 				});
 				if (!team || team.organizationId !== orgId) {
-					throw new APIError("BAD_REQUEST", {
-						message: ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
-					});
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+					);
 				}
 			}
 
@@ -143,10 +138,10 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 			const count = await adapter.countMembers({ organizationId: orgId });
 
 			if (count >= membershipLimit) {
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
-				});
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
+				);
 			}
 
 			const {
@@ -158,9 +153,10 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 
 			const organization = await adapter.findOrganizationById(orgId);
 			if (!organization) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				);
 			}
 
 			let memberData = {
@@ -214,26 +210,28 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 	);
 };
 
+const removeMemberBodySchema = z.object({
+	memberIdOrEmail: z.string().meta({
+		description: "The ID or email of the member to remove",
+	}),
+	/**
+	 * If not provided, the active organization will be used
+	 */
+	organizationId: z
+		.string()
+		.meta({
+			description:
+				'The ID of the organization to remove the member from. If not provided, the active organization will be used. Eg: "org-id"',
+		})
+		.optional(),
+});
+
 export const removeMember = <O extends OrganizationOptions>(options: O) =>
 	createAuthEndpoint(
 		"/organization/remove-member",
 		{
 			method: "POST",
-			body: z.object({
-				memberIdOrEmail: z.string().meta({
-					description: "The ID or email of the member to remove",
-				}),
-				/**
-				 * If not provided, the active organization will be used
-				 */
-				organizationId: z
-					.string()
-					.meta({
-						description:
-							'The ID of the organization to remove the member from. If not provided, the active organization will be used. Eg: "org-id"',
-					})
-					.optional(),
-			}),
+			body: removeMemberBodySchema,
 			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
@@ -280,12 +278,10 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 			const organizationId =
 				ctx.body.organizationId || session.session.activeOrganizationId;
 			if (!organizationId) {
-				return ctx.json(null, {
-					status: 400,
-					body: {
-						message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
-					},
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+				);
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const member = await adapter.findMemberByOrgId({
@@ -293,9 +289,10 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				organizationId: organizationId,
 			});
 			if (!member) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
+				);
 			}
 			let toBeRemovedMember: InferMember<O, false> | null = null;
 			if (ctx.body.memberIdOrEmail.includes("@")) {
@@ -312,19 +309,20 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				}
 			}
 			if (!toBeRemovedMember) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
+				);
 			}
 			const roles = toBeRemovedMember.role.split(",");
 			const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
 			const isOwner = roles.includes(creatorRole);
 			if (isOwner) {
 				if (member.role !== creatorRole) {
-					throw new APIError("BAD_REQUEST", {
-						message:
-							ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER,
-					});
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER,
+					);
 				}
 				const { members } = await adapter.listMembers({
 					organizationId: organizationId,
@@ -334,10 +332,10 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 					return roles.includes(creatorRole);
 				});
 				if (owners.length <= 1) {
-					throw new APIError("BAD_REQUEST", {
-						message:
-							ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER,
-					});
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER,
+					);
 				}
 			}
 			const canDeleteMember = await hasPermission(
@@ -353,30 +351,32 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 			);
 
 			if (!canDeleteMember) {
-				throw new APIError("UNAUTHORIZED", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_MEMBER,
-				});
+				throw APIError.from(
+					"UNAUTHORIZED",
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_MEMBER,
+				);
 			}
 
 			if (toBeRemovedMember?.organizationId !== organizationId) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
+				);
 			}
 
 			const organization = await adapter.findOrganizationById(organizationId);
 			if (!organization) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				);
 			}
 
 			const userBeingRemoved = await ctx.context.internalAdapter.findUserById(
 				toBeRemovedMember.userId,
 			);
 			if (!userBeingRemoved) {
-				throw new APIError("BAD_REQUEST", {
+				throw APIError.fromStatus("BAD_REQUEST", {
 					message: "User not found",
 				});
 			}
@@ -417,28 +417,29 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 		},
 	);
 
+const updateMemberRoleBodySchema = z.object({
+	role: z.union([z.string(), z.array(z.string())]).meta({
+		description:
+			'The new role to be applied. This can be a string or array of strings representing the roles. Eg: ["admin", "sale"]',
+	}),
+	memberId: z.string().meta({
+		description: 'The member id to apply the role update to. Eg: "member-id"',
+	}),
+	organizationId: z
+		.string()
+		.meta({
+			description:
+				'An optional organization ID which the member is a part of to apply the role update. If not provided, you must provide session headers to get the active organization. Eg: "organization-id"',
+		})
+		.optional(),
+});
+
 export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 	createAuthEndpoint(
 		"/organization/update-member-role",
 		{
 			method: "POST",
-			body: z.object({
-				role: z.union([z.string(), z.array(z.string())]).meta({
-					description:
-						'The new role to be applied. This can be a string or array of strings representing the roles. Eg: ["admin", "sale"]',
-				}),
-				memberId: z.string().meta({
-					description:
-						'The member id to apply the role update to. Eg: "member-id"',
-				}),
-				organizationId: z
-					.string()
-					.meta({
-						description:
-							'An optional organization ID which the member is a part of to apply the role update. If not provided, you must provide session headers to get the active organization. Eg: "organization-id"',
-					})
-					.optional(),
-			}),
+			body: updateMemberRoleBodySchema,
 			use: [orgMiddleware, orgSessionMiddleware],
 			requireHeaders: true,
 			metadata: {
@@ -499,16 +500,17 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 			const session = ctx.context.session;
 
 			if (!ctx.body.role) {
-				throw new APIError("BAD_REQUEST");
+				throw APIError.fromStatus("BAD_REQUEST");
 			}
 
 			const organizationId =
 				ctx.body.organizationId || session.session.activeOrganizationId;
 
 			if (!organizationId) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+				);
 			}
 
 			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
@@ -524,9 +526,10 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 			});
 
 			if (!member) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
+				);
 			}
 
 			const toBeUpdatedMember =
@@ -535,19 +538,20 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 					: member;
 
 			if (!toBeUpdatedMember) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
+				);
 			}
 
 			const memberBelongsToOrganization =
 				toBeUpdatedMember.organizationId === organizationId;
 
 			if (!memberBelongsToOrganization) {
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
-				});
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
+				);
 			}
 
 			const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
@@ -566,10 +570,10 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				(isUpdatingCreator && !updaterIsCreator) ||
 				(isSettingCreatorRole && !updaterIsCreator)
 			) {
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
-				});
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
+				);
 			}
 
 			if (updaterIsCreator && memberIsUpdatingThemselves) {
@@ -587,10 +591,10 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 					return roles.includes(creatorRole);
 				});
 				if (owners.length <= 1 && !isSettingCreatorRole) {
-					throw new APIError("BAD_REQUEST", {
-						message:
-							ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_WITHOUT_AN_OWNER,
-					});
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_WITHOUT_AN_OWNER,
+					);
 				}
 			}
 
@@ -608,24 +612,25 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 			);
 
 			if (!canUpdateMember) {
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
-				});
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
+				);
 			}
 
 			const organization = await adapter.findOrganizationById(organizationId);
 			if (!organization) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				);
 			}
 
 			const userBeingUpdated = await ctx.context.internalAdapter.findUserById(
 				toBeUpdatedMember.userId,
 			);
 			if (!userBeingUpdated) {
-				throw new APIError("BAD_REQUEST", {
+				throw APIError.fromStatus("BAD_REQUEST", {
 					message: "User not found",
 				});
 			}
@@ -650,9 +655,10 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 						response.data.role || newRole,
 					);
 					if (!updatedMember) {
-						throw new APIError("BAD_REQUEST", {
-							message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
-						});
+						throw APIError.from(
+							"BAD_REQUEST",
+							ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
+						);
 					}
 
 					// Run afterUpdateMemberRole hook
@@ -674,9 +680,10 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				newRole,
 			);
 			if (!updatedMember) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
+				);
 			}
 
 			// Run afterUpdateMemberRole hook
@@ -737,12 +744,10 @@ export const getActiveMember = <O extends OrganizationOptions>(options: O) =>
 			const session = ctx.context.session;
 			const organizationId = session.session.activeOrganizationId;
 			if (!organizationId) {
-				return ctx.json(null, {
-					status: 400,
-					body: {
-						message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
-					},
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+				);
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const member = await adapter.findMemberByOrgId({
@@ -750,28 +755,28 @@ export const getActiveMember = <O extends OrganizationOptions>(options: O) =>
 				organizationId: organizationId,
 			});
 			if (!member) {
-				return ctx.json(null, {
-					status: 400,
-					body: {
-						message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
-					},
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
+				);
 			}
 			return ctx.json(member);
 		},
 	);
+
+const leaveOrganizationBodySchema = z.object({
+	organizationId: z.string().meta({
+		description:
+			'The organization Id for the member to leave. Eg: "organization-id"',
+	}),
+});
 
 export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 	createAuthEndpoint(
 		"/organization/leave",
 		{
 			method: "POST",
-			body: z.object({
-				organizationId: z.string().meta({
-					description:
-						'The organization Id for the member to leave. Eg: "organization-id"',
-				}),
-			}),
+			body: leaveOrganizationBodySchema,
 			requireHeaders: true,
 			use: [sessionMiddleware, orgMiddleware],
 		},
@@ -784,9 +789,10 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 			});
 
 			if (!member) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
+				);
 			}
 			const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
 			const isOwnerLeaving = member.role.split(",").includes(creatorRole);
@@ -804,10 +810,10 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 					member.role.split(",").includes(creatorRole),
 				);
 				if (owners.length <= 1) {
-					throw new APIError("BAD_REQUEST", {
-						message:
-							ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER,
-					});
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER,
+					);
 				}
 			}
 			await adapter.deleteMember({
@@ -904,16 +910,18 @@ export const listMembers = <O extends OrganizationOptions>(options: O) =>
 					ctx.query?.organizationSlug,
 				);
 				if (!organization) {
-					throw new APIError("BAD_REQUEST", {
-						message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-					});
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+					);
 				}
 				organizationId = organization.id;
 			}
 			if (!organizationId) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+				);
 			}
 
 			const isMember = await adapter.findMemberByOrgId({
@@ -921,10 +929,10 @@ export const listMembers = <O extends OrganizationOptions>(options: O) =>
 				organizationId,
 			});
 			if (!isMember) {
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
-				});
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
+				);
 			}
 			const { members, total } = await adapter.listMembers({
 				organizationId,
@@ -947,6 +955,32 @@ export const listMembers = <O extends OrganizationOptions>(options: O) =>
 		},
 	);
 
+const getActiveMemberRoleQuerySchema = z
+	.object({
+		userId: z
+			.string()
+			.meta({
+				description:
+					"The user ID to get the role for. If not provided, will default to the current user's",
+			})
+			.optional(),
+		organizationId: z
+			.string()
+			.meta({
+				description:
+					'The organization ID to list members for. If not provided, will default to the user\'s active organization. Eg: "organization-id"',
+			})
+			.optional(),
+		organizationSlug: z
+			.string()
+			.meta({
+				description:
+					'The organization slug to list members for. If not provided, will default to the user\'s active organization. Eg: "organization-slug"',
+			})
+			.optional(),
+	})
+	.optional();
+
 export const getActiveMemberRole = <O extends OrganizationOptions>(
 	options: O,
 ) =>
@@ -954,31 +988,7 @@ export const getActiveMemberRole = <O extends OrganizationOptions>(
 		"/organization/get-active-member-role",
 		{
 			method: "GET",
-			query: z
-				.object({
-					userId: z
-						.string()
-						.meta({
-							description:
-								"The user ID to get the role for. If not provided, will default to the current user's",
-						})
-						.optional(),
-					organizationId: z
-						.string()
-						.meta({
-							description:
-								'The organization ID to list members for. If not provided, will default to the user\'s active organization. Eg: "organization-id"',
-						})
-						.optional(),
-					organizationSlug: z
-						.string()
-						.meta({
-							description:
-								'The organization slug to list members for. If not provided, will default to the user\'s active organization. Eg: "organization-slug"',
-						})
-						.optional(),
-				})
-				.optional(),
+			query: getActiveMemberRoleQuerySchema,
 			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 		},
@@ -992,26 +1002,28 @@ export const getActiveMemberRole = <O extends OrganizationOptions>(
 					ctx.query?.organizationSlug,
 				);
 				if (!organization) {
-					throw new APIError("BAD_REQUEST", {
-						message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-					});
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+					);
 				}
 				organizationId = organization.id;
 			}
 			if (!organizationId) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+				);
 			}
 			const isMember = await adapter.findMemberByOrgId({
 				userId: session.user.id,
 				organizationId,
 			});
 			if (!isMember) {
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
-				});
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
+				);
 			}
 			if (!ctx.query?.userId) {
 				return ctx.json({
@@ -1024,10 +1036,10 @@ export const getActiveMemberRole = <O extends OrganizationOptions>(
 				organizationId,
 			});
 			if (!member) {
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
-				});
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
+				);
 			}
 
 			return ctx.json({

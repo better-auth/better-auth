@@ -46,6 +46,18 @@ export const subscriptions = {
 				required: false,
 				defaultValue: false,
 			},
+			cancelAt: {
+				type: "date",
+				required: false,
+			},
+			canceledAt: {
+				type: "date",
+				required: false,
+			},
+			endedAt: {
+				type: "date",
+				required: false,
+			},
 			seats: {
 				type: "number",
 				required: false,
@@ -56,6 +68,17 @@ export const subscriptions = {
 
 export const user = {
 	user: {
+		fields: {
+			stripeCustomerId: {
+				type: "string",
+				required: false,
+			},
+		},
+	},
+} satisfies BetterAuthPluginDBSchema;
+
+export const organization = {
+	organization: {
 		fields: {
 			stripeCustomerId: {
 				type: "string",
@@ -79,12 +102,19 @@ export const getSchema = (options: StripeOptions) => {
 		};
 	}
 
+	if (options.organization?.enabled) {
+		baseSchema = {
+			...baseSchema,
+			...organization,
+		};
+	}
+
 	if (
 		options.schema &&
 		!options.subscription?.enabled &&
 		"subscription" in options.schema
 	) {
-		const { subscription, ...restSchema } = options.schema;
+		const { subscription: _subscription, ...restSchema } = options.schema;
 		return mergeSchema(baseSchema, restSchema);
 	}
 

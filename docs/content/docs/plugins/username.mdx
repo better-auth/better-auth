@@ -3,7 +3,7 @@ title: Username
 description: Username plugin
 ---
 
-The username plugin is a lightweight plugin that adds username support to the email and password authenticator. This allows users to sign in and sign up with their username instead of their email.
+The username plugin is a lightweight plugin that adds username support to the email and password authenticator. This allows users to sign in with their username instead of their email.
 
 ## Installation
 
@@ -32,12 +32,12 @@ The username plugin is a lightweight plugin that adds username support to the em
 
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
-            ```bash
+            ```package-install
             npx @better-auth/cli migrate
             ```
             </Tab>
             <Tab value="generate">
-            ```bash
+            ```package-install
             npx @better-auth/cli generate
             ```
             </Tab>
@@ -85,7 +85,7 @@ type signUpEmail = {
     /**
      * The username of the user.
     */
-    username: string = "test"
+    username?: string = "test"
     /**
      * An optional display username of the user.
     */

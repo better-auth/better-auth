@@ -4,6 +4,16 @@ import { defineErrorCodes } from "@better-auth/core/utils";
 import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "../../api";
+import { isAPIError } from "../../utils/is-api-error";
+
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		"have-i-been-pwned": {
+			creator: typeof haveIBeenPwned;
+		};
+	}
+}
 
 const ERROR_CODES = defineErrorCodes({
 	PASSWORD_COMPROMISED:
@@ -43,13 +53,13 @@ async function checkPasswordCompromise(
 		);
 
 		if (found) {
-			throw new APIError("BAD_REQUEST", {
-				message: customMessage || ERROR_CODES.PASSWORD_COMPROMISED,
-				code: "PASSWORD_COMPROMISED",
+			throw APIError.from("BAD_REQUEST", {
+				message: customMessage || ERROR_CODES.PASSWORD_COMPROMISED.message,
+				code: ERROR_CODES.PASSWORD_COMPROMISED.code,
 			});
 		}
 	} catch (error) {
-		if (error instanceof APIError) throw error;
+		if (isAPIError(error)) throw error;
 		throw new APIError("INTERNAL_SERVER_ERROR", {
 			message: "Failed to check password. Please try again later.",
 		});
@@ -74,7 +84,7 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
 	];
 
 	return {
-		id: "haveIBeenPwned",
+		id: "have-i-been-pwned",
 		init(ctx) {
 			return {
 				context: {
@@ -95,6 +105,7 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
 				},
 			};
 		},
+		options,
 		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };

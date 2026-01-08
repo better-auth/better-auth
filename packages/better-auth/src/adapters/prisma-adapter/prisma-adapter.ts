@@ -1,16 +1,14 @@
-import type { BetterAuthOptions } from "@better-auth/core";
+import type { Awaitable, BetterAuthOptions } from "@better-auth/core";
 import type {
+	AdapterFactoryCustomizeAdapterCreator,
+	AdapterFactoryOptions,
 	DBAdapter,
 	DBAdapterDebugLogOption,
 	JoinConfig,
 	Where,
 } from "@better-auth/core/db/adapter";
+import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
-import type {
-	AdapterFactoryCustomizeAdapterCreator,
-	AdapterFactoryOptions,
-} from "../adapter-factory";
-import { createAdapterFactory } from "../adapter-factory";
 
 export interface PrismaConfig {
 	/**
@@ -52,7 +50,7 @@ interface PrismaClient {}
 
 type PrismaClientInternal = {
 	$transaction: (
-		callback: (db: PrismaClient) => Promise<any> | any,
+		callback: (db: PrismaClient) => Awaitable<any>,
 	) => Promise<any>;
 } & {
 	[model: string]: {
@@ -194,10 +192,23 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						return operator;
 				}
 			}
-			const convertWhereClause = (
-				model: string,
-				where?: Where[] | undefined,
-			) => {
+			const convertWhereClause = ({
+				action,
+				model,
+				where,
+			}: {
+				model: string;
+				where?: Where[] | undefined;
+				action:
+					| "create"
+					| "update"
+					| "delete"
+					| "findOne"
+					| "findMany"
+					| "count"
+					| "updateMany"
+					| "deleteMany";
+			}) => {
 				if (!where || !where.length) return {};
 				const buildSingleCondition = (w: Where) => {
 					const fieldName = getFieldName({ model, field: w.field });
@@ -234,6 +245,84 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						},
 					};
 				};
+
+				// Special handling for update actions: extract AND conditions with eq operator to root level
+				// Prisma requires unique fields to be at root level, not nested in AND arrays
+				// Only simple equality conditions can be at root level; complex operators must stay in AND array
+				if (action === "update") {
+					const and = where.filter(
+						(w) => w.connector === "AND" || !w.connector,
+					);
+					const or = where.filter((w) => w.connector === "OR");
+
+					// Separate AND conditions into simple eq (can extract) and complex (must stay in AND)
+					const andSimple = and.filter(
+						(w) => w.operator === "eq" || !w.operator,
+					);
+					const andComplex = and.filter(
+						(w) => w.operator !== "eq" && w.operator !== undefined,
+					);
+
+					const andSimpleClause = andSimple.map((w) => buildSingleCondition(w));
+					const andComplexClause = andComplex.map((w) =>
+						buildSingleCondition(w),
+					);
+					const orClause = or.map((w) => buildSingleCondition(w));
+
+					// Extract simple equality AND conditions to root level
+					const result: Record<string, any> = {};
+					for (const clause of andSimpleClause) {
+						Object.assign(result, clause);
+					}
+					// Keep complex AND conditions in AND array
+					if (andComplexClause.length > 0) {
+						result.AND = andComplexClause;
+					}
+					if (orClause.length > 0) {
+						result.OR = orClause;
+					}
+					return result;
+				}
+
+				// Special handling for delete actions: extract id to root level
+				if (action === "delete") {
+					const idCondition = where.find((w) => w.field === "id");
+					if (idCondition) {
+						const idFieldName = getFieldName({ model, field: "id" });
+						const idClause = buildSingleCondition(idCondition);
+						const remainingWhere = where.filter((w) => w.field !== "id");
+
+						if (remainingWhere.length === 0) {
+							return idClause;
+						}
+
+						const and = remainingWhere.filter(
+							(w) => w.connector === "AND" || !w.connector,
+						);
+						const or = remainingWhere.filter((w) => w.connector === "OR");
+						const andClause = and.map((w) => buildSingleCondition(w));
+						const orClause = or.map((w) => buildSingleCondition(w));
+
+						// Extract id to root level, put other conditions in AND array
+						const result: Record<string, any> = {};
+						if (idFieldName in idClause) {
+							result[idFieldName] = (idClause as Record<string, any>)[
+								idFieldName
+							];
+						} else {
+							// Handle edge case where idClause might have special structure
+							Object.assign(result, idClause);
+						}
+						if (andClause.length > 0) {
+							result.AND = andClause;
+						}
+						if (orClause.length > 0) {
+							result.OR = orClause;
+						}
+						return result;
+					}
+				}
+
 				if (where.length === 1) {
 					const w = where[0]!;
 					if (!w) {
@@ -267,7 +356,11 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 				},
 				async findOne({ model, where, select, join }) {
 					// this is just "JoinOption" type because we disabled join transformation in adapter config
-					const whereClause = convertWhereClause(model, where);
+					const whereClause = convertWhereClause({
+						model,
+						where,
+						action: "findOne",
+					});
 					if (!db[model]) {
 						throw new BetterAuthError(
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
@@ -283,13 +376,10 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 
 					const selects = convertSelect(select, model, join);
 
-					let result = (
-						await db[model]!.findMany({
-							where: whereClause,
-							select: selects,
-							take: 1,
-						})
-					)[0];
+					let result = await db[model]!.findFirst({
+						where: whereClause,
+						select: selects,
+					});
 
 					// transform the resulting `include` items to use better-auth expected field names
 					if (join && result) {
@@ -305,7 +395,11 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 				},
 				async findMany({ model, where, limit, offset, sortBy, join }) {
 					// this is just "JoinOption" type because we disabled join transformation in adapter config
-					const whereClause = convertWhereClause(model, where);
+					const whereClause = convertWhereClause({
+						model,
+						where,
+						action: "findMany",
+					});
 					if (!db[model]) {
 						throw new BetterAuthError(
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
@@ -314,7 +408,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					// transform join keys to use Prisma expected field names
 					let map = new Map<string, string>();
 					if (join) {
-						for (const [joinModel, value] of Object.entries(join)) {
+						for (const [joinModel, _value] of Object.entries(join)) {
 							const key = getJoinKeyName(model, joinModel, schema);
 							map.set(key, getModelName(joinModel));
 						}
@@ -353,7 +447,11 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					return result;
 				},
 				async count({ model, where }) {
-					const whereClause = convertWhereClause(model, where);
+					const whereClause = convertWhereClause({
+						model,
+						where,
+						action: "count",
+					});
 					if (!db[model]) {
 						throw new BetterAuthError(
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
@@ -369,14 +467,28 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
 						);
 					}
-					const whereClause = convertWhereClause(model, where);
+					const whereClause = convertWhereClause({
+						model,
+						where,
+						action: "update",
+					});
+
 					return await db[model]!.update({
 						where: whereClause,
 						data: update,
 					});
 				},
 				async updateMany({ model, where, update }) {
-					const whereClause = convertWhereClause(model, where);
+					if (!db[model]) {
+						throw new BetterAuthError(
+							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
+						);
+					}
+					const whereClause = convertWhereClause({
+						model,
+						where,
+						action: "updateMany",
+					});
 					const result = await db[model]!.updateMany({
 						where: whereClause,
 						data: update,
@@ -384,7 +496,16 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					return result ? (result.count as number) : 0;
 				},
 				async delete({ model, where }) {
-					const whereClause = convertWhereClause(model, where);
+					if (!db[model]) {
+						throw new BetterAuthError(
+							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
+						);
+					}
+					const whereClause = convertWhereClause({
+						model,
+						where,
+						action: "delete",
+					});
 					try {
 						await db[model]!.delete({
 							where: whereClause,
@@ -392,12 +513,17 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					} catch (e: any) {
 						// If the record doesn't exist, we don't want to throw an error
 						if (e?.meta?.cause === "Record to delete does not exist.") return;
+						if (e?.code === "P2025") return; // Prisma 7+
 						// otherwise if it's an unknown error, we want to just log it for debugging.
 						console.log(e);
 					}
 				},
 				async deleteMany({ model, where }) {
-					const whereClause = convertWhereClause(model, where);
+					const whereClause = convertWhereClause({
+						model,
+						where,
+						action: "deleteMany",
+					});
 					const result = await db[model]!.deleteMany({
 						where: whereClause,
 					});
@@ -415,6 +541,10 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
 			supportsUUIDs: config.provider === "postgresql" ? true : false,
+			supportsArrays:
+				config.provider === "postgresql" || config.provider === "mongodb"
+					? true
+					: false,
 			transaction:
 				(config.transaction ?? false)
 					? (cb) =>
