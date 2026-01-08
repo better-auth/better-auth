@@ -119,7 +119,7 @@ export const callbackOAuth = createAuthEndpoint(
 			throw redirectOnError("oauth_provider_not_found");
 		}
 
-		let tokens: OAuth2Tokens;
+		let tokens: OAuth2Tokens | null;
 		try {
 			tokens = await provider.validateAuthorizationCode({
 				code: code,
@@ -129,6 +129,9 @@ export const callbackOAuth = createAuthEndpoint(
 			});
 		} catch (e) {
 			c.context.logger.error("", e);
+			throw redirectOnError("invalid_code");
+		}
+		if (!tokens) {
 			throw redirectOnError("invalid_code");
 		}
 		const userInfo = await provider

@@ -42,7 +42,7 @@ export interface OAuthProvider<
 		redirectURI: string;
 		codeVerifier?: string | undefined;
 		deviceId?: string | undefined;
-	}) => Promise<OAuth2Tokens>;
+	}) => Promise<OAuth2Tokens | null>;
 	getUserInfo: (
 		token: OAuth2Tokens & {
 			/**

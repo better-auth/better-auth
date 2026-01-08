@@ -1,4 +1,5 @@
 import { betterFetch } from "@better-fetch/fetch";
+import { logger } from "../env";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
@@ -104,13 +105,13 @@ export const github = (options: GithubOptions) => {
 			});
 
 			if (error) {
-				throw error;
+				logger.error("GitHub OAuth token exchange failed:", error);
+				return null;
 			}
 
 			if ("error" in data) {
-				throw new Error(
-					data.error_description || data.error || "Failed to exchange code",
-				);
+				logger.error("GitHub OAuth token exchange failed:", data);
+				return null;
 			}
 
 			return getOAuth2Tokens(data);
