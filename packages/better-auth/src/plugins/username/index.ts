@@ -200,7 +200,6 @@ export const username = (options?: UsernameOptions | undefined) => {
 				{
 					method: "POST",
 					body: signInUsernameBodySchema,
-					use: [originCheck((ctx) => ctx.body.callbackURL)],
 					metadata: {
 						openapi: {
 							summary: "Sign in with username",
