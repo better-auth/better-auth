@@ -491,6 +491,7 @@ export const auth = betterAuth({
 		},
 		useSecureCookies: true,
 		disableCSRFCheck: false,
+		disableOriginCheck: false,
 		crossSubDomainCookies: {
 			enabled: true,
 			additionalCookies: ["custom_cookie"],
@@ -532,6 +533,7 @@ export const auth = betterAuth({
 - `ipAddress`: IP address configuration for rate limiting and session tracking
 - `useSecureCookies`: Use secure cookies (default: `false`)
 - `disableCSRFCheck`: Disable trusted origins check (⚠️ security risk)
+- `disableOriginCheck`: Disable origin check (⚠️ security risk)
 - `crossSubDomainCookies`: Configure cookies to be shared across subdomains
 - `cookies`: Customize cookie names and attributes
 - `defaultCookieAttributes`: Default attributes for all cookies
