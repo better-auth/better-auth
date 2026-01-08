@@ -942,3 +942,278 @@ describe("custom response code", () => {
 		expect(response.response).toEqual({ success: true });
 	});
 });
+
+describe("hook position", () => {
+	const endpoints = {
+		trackOrder: createAuthEndpoint(
+			"/track-order",
+			{
+				method: "GET",
+			},
+			async (c) => {
+				return { order: ["endpoint"] };
+			},
+		),
+	};
+
+	describe("before hooks", () => {
+		it("should run user hook before plugin hooks by default (pre position)", async () => {
+			const order: string[] = [];
+
+			const authContext = init({
+				plugins: [
+					{
+						id: "test-plugin",
+						hooks: {
+							before: [
+								{
+									matcher: () => true,
+									handler: createAuthMiddleware(async () => {
+										order.push("plugin");
+									}),
+								},
+							],
+						},
+					},
+				],
+				hooks: {
+					before: createAuthMiddleware(async () => {
+						order.push("user");
+					}),
+				},
+			});
+
+			const api = toAuthEndpoints(endpoints, authContext);
+			await api.trackOrder();
+
+			expect(order).toEqual(["user", "plugin"]);
+		});
+
+		it("should run user hook before plugin hooks with explicit pre position", async () => {
+			const order: string[] = [];
+
+			const authContext = init({
+				plugins: [
+					{
+						id: "test-plugin",
+						hooks: {
+							before: [
+								{
+									matcher: () => true,
+									handler: createAuthMiddleware(async () => {
+										order.push("plugin");
+									}),
+								},
+							],
+						},
+					},
+				],
+				hooks: {
+					before: {
+						handler: createAuthMiddleware(async () => {
+							order.push("user-pre");
+						}),
+						position: "pre",
+					},
+				},
+			});
+
+			const api = toAuthEndpoints(endpoints, authContext);
+			await api.trackOrder();
+
+			expect(order).toEqual(["user-pre", "plugin"]);
+		});
+
+		it("should run user hook after plugin hooks with post position", async () => {
+			const order: string[] = [];
+
+			const authContext = init({
+				plugins: [
+					{
+						id: "test-plugin",
+						hooks: {
+							before: [
+								{
+									matcher: () => true,
+									handler: createAuthMiddleware(async () => {
+										order.push("plugin");
+									}),
+								},
+							],
+						},
+					},
+				],
+				hooks: {
+					before: {
+						handler: createAuthMiddleware(async () => {
+							order.push("user-post");
+						}),
+						position: "post",
+					},
+				},
+			});
+
+			const api = toAuthEndpoints(endpoints, authContext);
+			await api.trackOrder();
+
+			expect(order).toEqual(["plugin", "user-post"]);
+		});
+	});
+
+	describe("after hooks", () => {
+		it("should run user hook before plugin hooks by default (pre position)", async () => {
+			const order: string[] = [];
+
+			const authContext = init({
+				plugins: [
+					{
+						id: "test-plugin",
+						hooks: {
+							after: [
+								{
+									matcher: () => true,
+									handler: createAuthMiddleware(async () => {
+										order.push("plugin");
+									}),
+								},
+							],
+						},
+					},
+				],
+				hooks: {
+					after: createAuthMiddleware(async () => {
+						order.push("user");
+					}),
+				},
+			});
+
+			const api = toAuthEndpoints(endpoints, authContext);
+			await api.trackOrder();
+
+			expect(order).toEqual(["user", "plugin"]);
+		});
+
+		it("should run user hook after plugin hooks with post position", async () => {
+			const order: string[] = [];
+
+			const authContext = init({
+				plugins: [
+					{
+						id: "test-plugin",
+						hooks: {
+							after: [
+								{
+									matcher: () => true,
+									handler: createAuthMiddleware(async () => {
+										order.push("plugin");
+									}),
+								},
+							],
+						},
+					},
+				],
+				hooks: {
+					after: {
+						handler: createAuthMiddleware(async () => {
+							order.push("user-post");
+						}),
+						position: "post",
+					},
+				},
+			});
+
+			const api = toAuthEndpoints(endpoints, authContext);
+			await api.trackOrder();
+
+			expect(order).toEqual(["plugin", "user-post"]);
+		});
+
+		it("should allow user post hook to make final adjustments to response", async () => {
+			const authContext = init({
+				plugins: [
+					{
+						id: "test-plugin",
+						hooks: {
+							after: [
+								{
+									matcher: () => true,
+									handler: createAuthMiddleware(async () => {
+										return { modified: "by-plugin" };
+									}),
+								},
+							],
+						},
+					},
+				],
+				hooks: {
+					after: {
+						handler: createAuthMiddleware(async (ctx) => {
+							// User can see and override plugin modifications
+							return { modified: "by-user", plugin: ctx.context.returned };
+						}),
+						position: "post",
+					},
+				},
+			});
+
+			const api = toAuthEndpoints(endpoints, authContext);
+			const result = await api.trackOrder();
+
+			expect(result).toMatchObject({
+				modified: "by-user",
+				plugin: { modified: "by-plugin" },
+			});
+		});
+	});
+
+	describe("multiple plugins", () => {
+		it("should maintain correct order with multiple plugins and post position", async () => {
+			const order: string[] = [];
+
+			const authContext = init({
+				plugins: [
+					{
+						id: "plugin-1",
+						hooks: {
+							after: [
+								{
+									matcher: () => true,
+									handler: createAuthMiddleware(async () => {
+										order.push("plugin-1");
+									}),
+								},
+							],
+						},
+					},
+					{
+						id: "plugin-2",
+						hooks: {
+							after: [
+								{
+									matcher: () => true,
+									handler: createAuthMiddleware(async () => {
+										order.push("plugin-2");
+									}),
+								},
+							],
+						},
+					},
+				],
+				hooks: {
+					after: {
+						handler: createAuthMiddleware(async () => {
+							order.push("user-final");
+						}),
+						position: "post",
+					},
+				},
+			});
+
+			const api = toAuthEndpoints(endpoints, authContext);
+			await api.trackOrder();
+
+			// User hook with "post" runs after all plugin hooks
+			expect(order).toEqual(["plugin-1", "plugin-2", "user-final"]);
+		});
+	});
+});

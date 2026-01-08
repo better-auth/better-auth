@@ -240,6 +240,82 @@ This may be useful to use instead of using your db directly to get access to `da
 
 You can use `ctx.context.generateId` to generate Id for various reasons.
 
+## Hook Position
+
+By default, user-defined hooks run **before** plugin hooks. This is useful for pre-processing requests before plugins see them. However, sometimes you want your hooks to run **after** all plugin hooks, giving you the final say on the response.
+
+You can control when your hook runs relative to plugin hooks using the `position` option:
+
+- `"pre"` (default): Your hook runs **before** all plugin hooks
+- `"post"`: Your hook runs **after** all plugin hooks
+
+### Example: Final Response Adjustment
+
+This example shows how to use `position: "post"` to make final adjustments after all plugins have processed the request:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
+
+export const auth = betterAuth({
+    plugins: [
+        // ... your plugins
+    ],
+    hooks: {
+        // Run after all plugin hooks for final adjustments
+        after: {
+            handler: createAuthMiddleware(async (ctx) => {
+                // Access the response after plugins have modified it
+                const returned = ctx.context.returned;
+                
+                // Make final modifications
+                if (ctx.path === "/sign-up/email") {
+                    // Add custom data to response
+                    return {
+                        ...returned,
+                        customField: "added after plugins",
+                    };
+                }
+            }),
+            position: "post",
+        },
+    },
+});
+```
+
+### Example: Pre-processing Before Plugins
+
+Using the default `"pre"` position (or omitting position entirely), your hook runs before plugins:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { createAuthMiddleware, APIError } from "better-auth/api";
+
+export const auth = betterAuth({
+    hooks: {
+        // Runs before plugin hooks (default behavior)
+        before: createAuthMiddleware(async (ctx) => {
+            // Validate or modify request before plugins see it
+            if (ctx.path === "/sign-up/email") {
+                // Plugins will see this modified body
+                return {
+                    context: {
+                        body: {
+                            ...ctx.body,
+                            source: "pre-processed",
+                        },
+                    },
+                };
+            }
+        }),
+    },
+});
+```
+
+<Callout>
+The `position` option is available for both `before` and `after` hooks. Use `"post"` when you need to override or adjust what plugins have done.
+</Callout>
+
 ## Reusable Hooks
 
 If you need to reuse a hook across multiple endpoints, consider creating a plugin. Learn more in the [Plugins Documentation](/docs/concepts/plugins).
