@@ -221,8 +221,17 @@ export const username = (options?: UsernameOptions | undefined) => {
 													user: {
 														$ref: "#/components/schemas/User",
 													},
+													redirect: {
+														type: "boolean",
+														description:
+															"Whether to redirect to the callback URL",
+													},
+													url: {
+														type: "string",
+														description: "The URL to redirect to",
+													},
 												},
-												required: ["token", "user"],
+												required: ["token", "user", "redirect", "url"],
 											},
 										},
 									},
@@ -415,6 +424,8 @@ export const username = (options?: UsernameOptions | undefined) => {
 						throw ctx.redirect(ctx.body.callbackURL);
 					}
 					return ctx.json({
+						redirect: !!ctx.body.callbackURL,
+						url: ctx.body.callbackURL,
 						token: session.token,
 						user: {
 							id: user.id,
