@@ -929,7 +929,7 @@ describe("api-key", async () => {
 			},
 		});
 		expect(apiKey.valid).toBe(false);
-		expect(apiKey.error?.code).toBe("KEY_NOT_FOUND");
+		expect(apiKey.error?.code).toBe("INVALID_API_KEY");
 	});
 
 	let rateLimitedApiKey: ApiKey;
