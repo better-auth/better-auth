@@ -1,27 +1,31 @@
 {
   "name": "@better-auth/passkey",
-  "version": "1.4.0-beta.18",
+  "version": "1.5.0-beta.2",
   "type": "module",
   "description": "Passkey plugin for Better Auth",
   "main": "dist/index.mjs",
   "module": "dist/index.mjs",
+  "types": "dist/index.d.mts",
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
     "test": "vitest",
+    "coverage": "vitest run --coverage",
+    "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
     "build": "tsdown",
     "dev": "tsdown --watch",
     "typecheck": "tsc --project tsconfig.json"
   },
   "exports": {
     ".": {
-      "better-auth-dev-source": "./src/index.ts",
+      "dev-source": "./src/index.ts",
       "types": "./dist/index.d.mts",
       "default": "./dist/index.mjs"
     },
     "./client": {
-      "better-auth-dev-source": "./src/client.ts",
+      "dev-source": "./src/client.ts",
       "types": "./dist/client.d.mts",
       "default": "./dist/client.mjs"
     }
@@ -44,22 +48,22 @@
   "dependencies": {
     "@simplewebauthn/browser": "^13.1.2",
     "@simplewebauthn/server": "^13.1.2",
-    "zod": "^4.1.5"
+    "zod": "^4.1.12"
   },
   "peerDependencies": {
-    "nanostores": "^1.0.1",
-    "@better-auth/utils": "0.3.0",
-    "better-call": "catalog:",
-    "@better-fetch/fetch": "catalog:",
     "@better-auth/core": "workspace:*",
-    "better-auth": "workspace:*"
+    "@better-auth/utils": "catalog:",
+    "@better-fetch/fetch": "catalog:",
+    "better-auth": "workspace:*",
+    "better-call": "catalog:",
+    "nanostores": "^1.0.1"
   },
   "files": [
     "dist"
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/better-auth/better-auth",
+    "url": "git+https://github.com/better-auth/better-auth.git",
     "directory": "packages/passkey"
   },
   "homepage": "https://www.better-auth.com/docs/plugins/passkey",

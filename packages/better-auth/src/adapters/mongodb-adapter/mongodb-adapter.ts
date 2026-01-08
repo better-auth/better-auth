@@ -1,16 +1,24 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type {
+	AdapterFactoryCustomizeAdapterCreator,
+	AdapterFactoryOptions,
 	DBAdapter,
 	DBAdapterDebugLogOption,
 	Where,
 } from "@better-auth/core/db/adapter";
-import { createLogger } from "@better-auth/core/env";
-import { ClientSession, type Db, type MongoClient, ObjectId } from "mongodb";
-import {
-	type AdapterFactoryCustomizeAdapterCreator,
-	type AdapterFactoryOptions,
-	createAdapterFactory,
-} from "../adapter-factory";
+import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import type { ClientSession, Db, MongoClient } from "mongodb";
+import { ObjectId } from "mongodb";
+
+class MongoAdapterError extends Error {
+	constructor(
+		public code: "INVALID_ID" | "UNSUPPORTED_OPERATOR",
+		message: string,
+	) {
+		super(message);
+		this.name = "MongoAdapterError";
+	}
+}
 
 export interface MongoDBAdapterConfig {
 	/**
@@ -47,8 +55,7 @@ export const mongodbAdapter = (
 	let lazyOptions: BetterAuthOptions | null;
 
 	const getCustomIdGenerator = (options: BetterAuthOptions) => {
-		const generator =
-			options.advanced?.database?.generateId || options.advanced?.generateId;
+		const generator = options.advanced?.database?.generateId;
 		if (typeof generator === "function") {
 			return generator;
 		}
@@ -60,9 +67,14 @@ export const mongodbAdapter = (
 			db: Db,
 			session?: ClientSession | undefined,
 		): AdapterFactoryCustomizeAdapterCreator =>
-		({ options, getFieldName, schema, getDefaultModelName }) => {
+		({
+			getFieldAttributes,
+			getFieldName,
+			schema,
+			getDefaultModelName,
+			options,
+		}) => {
 			const customIdGen = getCustomIdGenerator(options);
-			const logger = createLogger(options.logger);
 
 			function serializeID({
 				field,
@@ -97,21 +109,21 @@ export const mongodbAdapter = (
 								if (typeof v === "string") {
 									try {
 										return new ObjectId(v);
-									} catch (e) {
+									} catch {
 										return v;
 									}
 								}
 								if (v instanceof ObjectId) {
 									return v;
 								}
-								throw new Error("Invalid id value");
+								throw new MongoAdapterError("INVALID_ID", "Invalid id value");
 							});
 						}
-						throw new Error("Invalid id value");
+						throw new MongoAdapterError("INVALID_ID", "Invalid id value");
 					}
 					try {
 						return new ObjectId(value);
-					} catch (e) {
+					} catch {
 						return value;
 					}
 				}
@@ -237,7 +249,10 @@ export const mongodbAdapter = (
 							};
 							break;
 						default:
-							throw new Error(`Unsupported operator: ${operator}`);
+							throw new MongoAdapterError(
+								"UNSUPPORTED_OPERATOR",
+								`Unsupported operator: ${operator}`,
+							);
 					}
 					return { condition, connector };
 				});
@@ -267,38 +282,234 @@ export const mongodbAdapter = (
 					const insertedData = { _id: res.insertedId.toString(), ...values };
 					return insertedData as any;
 				},
-				async findOne({ model, where, select }) {
-					const clause = convertWhereClause({ where, model });
-					const projection = select
-						? Object.fromEntries(
-								select.map((field) => [getFieldName({ field, model }), 1]),
-							)
-						: undefined;
+				async findOne({ model, where, select, join }) {
+					const matchStage = where
+						? { $match: convertWhereClause({ where, model }) }
+						: { $match: {} };
+					const pipeline: any[] = [matchStage];
+
+					if (join) {
+						for (const [joinedModel, joinConfig] of Object.entries(join)) {
+							const localField = getFieldName({
+								field: joinConfig.on.from,
+								model,
+							});
+							const foreignField = getFieldName({
+								field: joinConfig.on.to,
+								model: joinedModel,
+							});
+
+							const localFieldName = localField === "id" ? "_id" : localField;
+							const foreignFieldName =
+								foreignField === "id" ? "_id" : foreignField;
+
+							// Only unwind if the foreign field has a unique constraint (one-to-one relationship)
+							const joinedModelSchema =
+								schema[getDefaultModelName(joinedModel)];
+							const foreignFieldAttribute =
+								joinedModelSchema?.fields[joinConfig.on.to];
+							const isUnique = foreignFieldAttribute?.unique === true;
+
+							// For unique relationships, limit is ignored (as per JoinConfig type)
+							// For non-unique relationships, apply limit if specified
+							const shouldLimit = !isUnique && joinConfig.limit !== undefined;
+							let limit =
+								joinConfig.limit ??
+								options.advanced?.database?.defaultFindManyLimit ??
+								100;
+							if (shouldLimit && limit > 0) {
+								// Use pipeline syntax to support limit
+								// Construct the field reference string for the foreign field
+								const foreignFieldRef = `$${foreignFieldName}`;
+								pipeline.push({
+									$lookup: {
+										from: joinedModel,
+										let: { localFieldValue: `$${localFieldName}` },
+										pipeline: [
+											{
+												$match: {
+													$expr: {
+														$eq: [foreignFieldRef, "$$localFieldValue"],
+													},
+												},
+											},
+											{ $limit: limit },
+										],
+										as: joinedModel,
+									},
+								});
+							} else {
+								// Use simple syntax when no limit is needed
+								pipeline.push({
+									$lookup: {
+										from: joinedModel,
+										localField: localFieldName,
+										foreignField: foreignFieldName,
+										as: joinedModel,
+									},
+								});
+							}
+
+							if (isUnique) {
+								// For one-to-one relationships, unwind to flatten to a single object
+								pipeline.push({
+									$unwind: {
+										path: `$${joinedModel}`,
+										preserveNullAndEmptyArrays: true,
+									},
+								});
+							}
+							// For one-to-many, keep as array - no unwind
+						}
+					}
+
+					if (select) {
+						const projection: any = {};
+						select.forEach((field) => {
+							projection[getFieldName({ field, model })] = 1;
+						});
+
+						// Include joined collections in projection
+						if (join) {
+							for (const joinedModel of Object.keys(join)) {
+								projection[joinedModel] = 1;
+							}
+						}
+
+						pipeline.push({ $project: projection });
+					}
+
+					pipeline.push({ $limit: 1 });
+
 					const res = await db
 						.collection(model)
-						.findOne(clause, { session, projection });
-					if (!res) return null;
-					return res as any;
+						.aggregate(pipeline, { session })
+						.toArray();
+
+					if (!res || res.length === 0) return null;
+					return res[0] as any;
 				},
-				async findMany({ model, where, limit, offset, sortBy }) {
-					const clause = where ? convertWhereClause({ where, model }) : {};
-					const cursor = db.collection(model).find(clause, { session });
-					if (limit) cursor.limit(limit);
-					if (offset) cursor.skip(offset);
-					if (sortBy)
-						cursor.sort(
-							getFieldName({ field: sortBy.field, model }),
-							sortBy.direction === "desc" ? -1 : 1,
-						);
-					const res = await cursor.toArray();
+				async findMany({ model, where, limit, offset, sortBy, join }) {
+					const matchStage = where
+						? { $match: convertWhereClause({ where, model }) }
+						: { $match: {} };
+					const pipeline: any[] = [matchStage];
+
+					if (join) {
+						for (const [joinedModel, joinConfig] of Object.entries(join)) {
+							const localField = getFieldName({
+								field: joinConfig.on.from,
+								model,
+							});
+							const foreignField = getFieldName({
+								field: joinConfig.on.to,
+								model: joinedModel,
+							});
+
+							const localFieldName = localField === "id" ? "_id" : localField;
+							const foreignFieldName =
+								foreignField === "id" ? "_id" : foreignField;
+
+							// Only unwind if the foreign field has a unique constraint (one-to-one relationship)
+							const foreignFieldAttribute = getFieldAttributes({
+								model: joinedModel,
+								field: joinConfig.on.to,
+							});
+							const isUnique = foreignFieldAttribute?.unique === true;
+
+							// For unique relationships, limit is ignored (as per JoinConfig type)
+							// For non-unique relationships, apply limit if specified
+							const shouldLimit =
+								joinConfig.relation !== "one-to-one" &&
+								joinConfig.limit !== undefined;
+
+							let limit =
+								joinConfig.limit ??
+								options.advanced?.database?.defaultFindManyLimit ??
+								100;
+							if (shouldLimit && limit > 0) {
+								// Use pipeline syntax to support limit
+								// Construct the field reference string for the foreign field
+								const foreignFieldRef = `$${foreignFieldName}`;
+								pipeline.push({
+									$lookup: {
+										from: joinedModel,
+										let: { localFieldValue: `$${localFieldName}` },
+										pipeline: [
+											{
+												$match: {
+													$expr: {
+														$eq: [foreignFieldRef, "$$localFieldValue"],
+													},
+												},
+											},
+											{ $limit: limit },
+										],
+										as: joinedModel,
+									},
+								});
+							} else {
+								// Use simple syntax when no limit is needed
+								pipeline.push({
+									$lookup: {
+										from: joinedModel,
+										localField: localFieldName,
+										foreignField: foreignFieldName,
+										as: joinedModel,
+									},
+								});
+							}
+
+							if (isUnique) {
+								// For one-to-one relationships, unwind to flatten to a single object
+								pipeline.push({
+									$unwind: {
+										path: `$${joinedModel}`,
+										preserveNullAndEmptyArrays: true,
+									},
+								});
+							}
+							// For one-to-many, keep as array - no unwind
+						}
+					}
+
+					if (sortBy) {
+						pipeline.push({
+							$sort: {
+								[getFieldName({ field: sortBy.field, model })]:
+									sortBy.direction === "desc" ? -1 : 1,
+							},
+						});
+					}
+
+					if (offset) {
+						pipeline.push({ $skip: offset });
+					}
+
+					if (limit) {
+						pipeline.push({ $limit: limit });
+					}
+
+					const res = await db
+						.collection(model)
+						.aggregate(pipeline, { session })
+						.toArray();
+
 					return res as any;
 				},
 				async count({ model, where }) {
-					const clause = where ? convertWhereClause({ where, model }) : {};
+					const matchStage = where
+						? { $match: convertWhereClause({ where, model }) }
+						: { $match: {} };
+					const pipeline: any[] = [matchStage, { $count: "total" }];
+
 					const res = await db
 						.collection(model)
-						.countDocuments(clause, { session });
-					return res;
+						.aggregate(pipeline, { session })
+						.toArray();
+
+					if (!res || res.length === 0) return 0;
+					return res[0]?.total ?? 0;
 				},
 				async update({ model, where, update: values }) {
 					const clause = convertWhereClause({ where, model });
@@ -309,10 +520,12 @@ export const mongodbAdapter = (
 						{
 							session,
 							returnDocument: "after",
+							includeResultMetadata: true,
 						},
 					);
-					if (!res) return null;
-					return res as any;
+					const doc = (res as any)?.value ?? null;
+					if (!doc) return null;
+					return doc as any;
 				},
 				async updateMany({ model, where, update: values }) {
 					const clause = convertWhereClause({ where, model });
@@ -356,6 +569,7 @@ export const mongodbAdapter = (
 			mapKeysTransformOutput: {
 				_id: "id",
 			},
+			supportsArrays: true,
 			supportsNumericIds: false,
 			transaction:
 				config?.client && (config?.transaction ?? true)
@@ -400,17 +614,28 @@ export const mongodbAdapter = (
 					if (customIdGen) {
 						return data;
 					}
-					if (action === "update") {
+					if (action !== "create") {
 						return data;
 					}
 					if (Array.isArray(data)) {
-						return data.map((v) => new ObjectId());
+						return data.map((v) => {
+							if (typeof v === "string") {
+								try {
+									const oid = new ObjectId(v);
+									return oid;
+								} catch {
+									return v;
+								}
+							}
+							return v;
+						});
 					}
 					if (typeof data === "string") {
 						try {
-							return new ObjectId(data);
-						} catch (error) {
-							return new ObjectId();
+							const oid = new ObjectId(data);
+							return oid;
+						} catch {
+							return data;
 						}
 					}
 					if (
@@ -420,7 +645,8 @@ export const mongodbAdapter = (
 					) {
 						return null;
 					}
-					return new ObjectId();
+					const oid = new ObjectId();
+					return oid;
 				}
 				return data;
 			},

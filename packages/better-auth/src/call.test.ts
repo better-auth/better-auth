@@ -3,53 +3,14 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import type { GoogleProfile } from "@better-auth/core/social-providers";
-import { APIError } from "better-call";
-import { HttpResponse, http } from "msw";
-import { setupServer } from "msw/node";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { APIError } from "@better-auth/core/error";
+import { describe, expect, it } from "vitest";
 import * as z from "zod";
-import { getEndpoints, getOAuthState, router } from "./api";
+import { getEndpoints, router } from "./api";
 import { createAuthClient } from "./client";
-import { signJWT } from "./crypto";
-import { init } from "./init";
+import { init } from "./context/init";
 import { bearer } from "./plugins";
-import { DEFAULT_SECRET } from "./utils/constants";
-
-const mswServer = setupServer();
-
-beforeAll(async () => {
-	mswServer.listen({ onUnhandledRequest: "bypass" });
-	mswServer.use(
-		http.post("https://oauth2.googleapis.com/token", async () => {
-			const data: GoogleProfile = {
-				email: "user@email.com",
-				email_verified: true,
-				name: "Test User",
-				picture: "https://lh3.googleusercontent.com/a-/test",
-				exp: 1234567890,
-				sub: "1234567890",
-				iat: 1234567890,
-				aud: "test",
-				azp: "test",
-				nbf: 1234567890,
-				iss: "test",
-				locale: "en",
-				jti: "test",
-				given_name: "Test",
-				family_name: "User",
-			};
-			const testIdToken = await signJWT(data, DEFAULT_SECRET);
-			return HttpResponse.json({
-				access_token: "test-access-token",
-				refresh_token: "test-refresh-token",
-				id_token: testIdToken,
-			});
-		}),
-	);
-});
-
-afterAll(() => mswServer.close());
+import { isAPIError } from "./utils/is-api-error";
 
 describe("call", async () => {
 	const q = z.optional(
@@ -73,6 +34,38 @@ describe("call", async () => {
 				},
 				async (ctx) => {
 					return ctx.json({ success: ctx.query?.message || "true" });
+				},
+			),
+			testVirtual: createAuthEndpoint(
+				{
+					method: "GET",
+				},
+				async (ctx) => {
+					return "ok";
+				},
+			),
+			testServerScoped: createAuthEndpoint(
+				"/test-server-scoped",
+				{
+					method: "GET",
+					metadata: {
+						scope: "server",
+					},
+				},
+				async (ctx) => {
+					return "ok";
+				},
+			),
+			testHTTPScoped: createAuthEndpoint(
+				"/test-http-scoped",
+				{
+					method: "GET",
+					metadata: {
+						scope: "http",
+					},
+				},
+				async (ctx) => {
+					return "ok";
 				},
 			),
 			testCookies: createAuthEndpoint(
@@ -192,7 +185,7 @@ describe("call", async () => {
 								message: "from chained hook 1",
 							});
 						}
-						if (ctx.context.returned instanceof APIError) {
+						if (isAPIError(ctx.context.returned)) {
 							throw ctx.error("BAD_REQUEST", {
 								message: "from after hook",
 							});
@@ -207,7 +200,7 @@ describe("call", async () => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						if (ctx.context.returned instanceof APIError) {
+						if (isAPIError(ctx.context.returned)) {
 							const returned = ctx.context.returned;
 							const message = returned.message;
 							throw new APIError("BAD_REQUEST", {
@@ -219,7 +212,6 @@ describe("call", async () => {
 			],
 		},
 	} satisfies BetterAuthPlugin;
-	let latestOauthStore: Record<string, any> | undefined = {};
 	const options = {
 		baseURL: "http://localhost:3000",
 		plugins: [testPlugin, testPlugin2, bearer()],
@@ -253,10 +245,6 @@ describe("call", async () => {
 				if (ctx.query?.testAfterGlobal) {
 					return ctx.json({ after: "global" });
 				}
-				if (ctx.path === "/callback/:id" && ctx.params.id === "google") {
-					const store = await getOAuthState<{ invitedBy?: string }>();
-					latestOauthStore = store;
-				}
 			}),
 		},
 	} satisfies BetterAuthOptions;
@@ -280,55 +268,9 @@ describe("call", async () => {
 		});
 	});
 
-	it("should include additional data in oauth sign in", async () => {
-		const headers = new Headers();
-
-		const signInRes = await client.signIn.social(
-			{
-				provider: "google",
-				callbackURL: "/callback",
-				additionalData: {
-					invitedBy: "user-123",
-				},
-			},
-			{
-				onSuccess(context) {
-					const setCookie = context.response.headers.get("set-cookie");
-					if (setCookie) {
-						headers.set("cookie", setCookie);
-					}
-				},
-			},
-		);
-
-		expect(signInRes.data).toMatchObject({
-			url: expect.stringContaining("google.com"),
-			redirect: true,
-		});
-
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
-
-		await client.$fetch("/callback/google", {
-			query: {
-				state,
-				code: "test-authorization-code",
-			},
-			headers,
-			method: "GET",
-			onError(context) {
-				expect(context.response.status).toBe(302);
-				const location = context.response.headers.get("location");
-				expect(location).toBeDefined();
-				expect(location).toContain("/callback");
-			},
-		});
-		expect(latestOauthStore).toEqual({
-			callbackURL: "/callback",
-			codeVerifier: expect.any(String),
-			expiresAt: expect.any(Number),
-			invitedBy: "user-123",
-			errorURL: "http://localhost:3000/api/auth/error",
-		});
+	it("should call server scoped endpoint", async () => {
+		const response = await api.testServerScoped();
+		expect(response).toBe("ok");
 	});
 
 	it("should set cookies", async () => {
@@ -435,7 +377,7 @@ describe("call", async () => {
 				},
 			})
 			.catch((e) => {
-				expect(e).toBeInstanceOf(APIError);
+				expect(isAPIError(e)).toBeTruthy();
 
 				expect(e.status).toBe("FOUND");
 				expect(e.headers.get("Location")).toBe("/test");
@@ -450,7 +392,7 @@ describe("call", async () => {
 				},
 			})
 			.catch((e) => {
-				expect(e).toBeInstanceOf(APIError);
+				expect(isAPIError(e)).toBeTruthy();
 				expect(e.status).toBe("FOUND");
 				expect(e.headers.get("Location")).toBe("/test");
 				expect(e.headers.get("key")).toBe("value");
@@ -465,7 +407,7 @@ describe("call", async () => {
 				},
 			})
 			.catch((e) => {
-				expect(e).toBeInstanceOf(APIError);
+				expect(isAPIError(e)).toBeTruthy();
 				expect(e.status).toBe("BAD_REQUEST");
 				expect(e.message).toContain("from after hook");
 			});
@@ -479,7 +421,7 @@ describe("call", async () => {
 				},
 			})
 			.catch((e) => {
-				expect(e).toBeInstanceOf(APIError);
+				expect(isAPIError(e)).toBeTruthy();
 				expect(e.status).toBe("BAD_REQUEST");
 				expect(e.message).toContain("from chained hook 2");
 			});

@@ -3,7 +3,7 @@ import type {
 	BetterAuthPluginDBSchema,
 	DBFieldAttribute,
 } from "@better-auth/core/db";
-import { APIError } from "better-call";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { Account, Session, User } from "../types";
 
 // Cache for parsed schemas to avoid reparsing on every request
@@ -60,7 +60,10 @@ function getAllFields(options: BetterAuthOptions, table: string) {
 
 export function parseUserOutput(options: BetterAuthOptions, user: User) {
 	const schema = getAllFields(options, "user");
-	return parseOutputData(user, { fields: schema });
+	return {
+		...parseOutputData(user, { fields: schema }),
+		id: user.id,
+	};
 }
 
 export function parseAccountOutput(
@@ -102,16 +105,30 @@ export function parseInputData<T extends Record<string, any>>(
 					}
 				}
 				if (data[key]) {
-					throw new APIError("BAD_REQUEST", {
+					throw APIError.from("BAD_REQUEST", {
+						...BASE_ERROR_CODES.FIELD_NOT_ALLOWED,
 						message: `${key} is not allowed to be set`,
 					});
 				}
 				continue;
 			}
 			if (fields[key]!.validator?.input && data[key] !== undefined) {
-				parsedData[key] = fields[key]!.validator.input["~standard"].validate(
+				const result = fields[key]!.validator.input["~standard"].validate(
 					data[key],
 				);
+				if (result instanceof Promise) {
+					throw APIError.from(
+						"INTERNAL_SERVER_ERROR",
+						BASE_ERROR_CODES.ASYNC_VALIDATION_NOT_SUPPORTED,
+					);
+				}
+				if ("issues" in result && result.issues) {
+					throw APIError.from("BAD_REQUEST", {
+						...BASE_ERROR_CODES.VALIDATION_ERROR,
+						message: result.issues[0]?.message || "Validation Error",
+					});
+				}
+				parsedData[key] = result.value;
 				continue;
 			}
 			if (fields[key]!.transform?.input && data[key] !== undefined) {
@@ -123,12 +140,17 @@ export function parseInputData<T extends Record<string, any>>(
 		}
 
 		if (fields[key]!.defaultValue !== undefined && action === "create") {
+			if (typeof fields[key]!.defaultValue === "function") {
+				parsedData[key] = fields[key]!.defaultValue();
+				continue;
+			}
 			parsedData[key] = fields[key]!.defaultValue;
 			continue;
 		}
 
 		if (fields[key]!.required && action === "create") {
-			throw new APIError("BAD_REQUEST", {
+			throw APIError.from("BAD_REQUEST", {
+				...BASE_ERROR_CODES.MISSING_FIELD,
 				message: `${key} is required`,
 			});
 		}
@@ -173,12 +195,16 @@ export function mergeSchema<S extends BetterAuthPluginDBSchema>(
 	schema: S,
 	newSchema?:
 		| {
-				[K in keyof S]?: {
-					modelName?: string;
-					fields?: {
-						[P: string]: string;
-					};
-				};
+				[K in keyof S]?:
+					| {
+							modelName?: string | undefined;
+							fields?:
+								| {
+										[P: string]: string;
+								  }
+								| undefined;
+					  }
+					| undefined;
 		  }
 		| undefined,
 ) {

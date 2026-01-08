@@ -1,15 +1,16 @@
+import { execSync } from "node:child_process";
+import fs from "node:fs/promises";
+import path from "node:path";
 import Database from "better-sqlite3";
-import { execSync } from "child_process";
 import { drizzle } from "drizzle-orm/better-sqlite3";
-import fs from "fs/promises";
-import path from "path";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
+	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
-	performanceTestSuite,
 	transactionsTestSuite,
+	uuidTestSuite,
 } from "../../tests";
 import { drizzleAdapter } from "../drizzle-adapter";
 import {
@@ -24,7 +25,7 @@ let sqliteDB = new Database(dbFilePath);
 const { execute } = await testAdapter({
 	adapter: async (options) => {
 		const { schema } = await generateDrizzleSchema(sqliteDB, options, "sqlite");
-		return drizzleAdapter(drizzle(sqliteDB), {
+		return drizzleAdapter(drizzle(sqliteDB, { schema }), {
 			debugLogs: { isRunningAdapterTests: true },
 			schema,
 			provider: "sqlite",
@@ -66,7 +67,8 @@ const { execute } = await testAdapter({
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
-		performanceTestSuite({ dialect: "sqlite" }),
+		joinsTestSuite(),
+		uuidTestSuite(),
 	],
 	async onFinish() {
 		clearSchemaCache();

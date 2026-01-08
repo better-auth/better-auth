@@ -23,7 +23,6 @@ import { StarField } from "../_components/stat-field";
 
 const metaTitle = "Changelogs";
 const metaDescription = "Latest changes , fixes and updates.";
-const ogImage = "https://better-auth.com/release-og/changelog-og.png";
 
 export default async function Page({
 	params,
@@ -39,7 +38,6 @@ export default async function Page({
 		notFound();
 	}
 	const MDX = page.data?.body;
-	const toc = page.data?.toc;
 	const { title, description, date } = page.data;
 	return (
 		<div className="md:grid md:grid-cols-2 items-start">
@@ -128,9 +126,14 @@ export async function generateMetadata({
 	params: Promise<{ slug?: string[] }>;
 }) {
 	const { slug } = await params;
+	const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL;
+	const ogImage = `${baseUrl?.startsWith("http") ? baseUrl : `https://${baseUrl}`}/release-og/changelogs.png`;
+
 	if (!slug) {
 		return {
-			metadataBase: new URL("https://better-auth.com/changelogs"),
+			metadataBase: new URL(
+				`${baseUrl?.startsWith("http") ? baseUrl : `https://${baseUrl}`}/changelogs`,
+			),
 			title: metaTitle,
 			description: metaDescription,
 			openGraph: {
@@ -141,7 +144,7 @@ export async function generateMetadata({
 						url: ogImage,
 					},
 				],
-				url: "https://better-auth.com/changelogs",
+				url: `${baseUrl?.startsWith("http") ? baseUrl : `https://${baseUrl}`}/changelogs`,
 			},
 			twitter: {
 				card: "summary_large_image",
@@ -153,7 +156,6 @@ export async function generateMetadata({
 	}
 	const page = changelogs.getPage(slug);
 	if (page == null) notFound();
-	const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL;
 	const url = new URL(`${baseUrl}/release-og/${slug.join("")}.png`);
 	const { title, description } = page.data;
 

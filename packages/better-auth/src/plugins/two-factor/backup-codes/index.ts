@@ -1,10 +1,10 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { APIError } from "better-call";
+import { APIError } from "@better-auth/core/error";
+import { safeJSONParse } from "@better-auth/core/utils";
 import * as z from "zod";
 import { sessionMiddleware } from "../../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
 import { generateRandomString } from "../../../crypto/random";
-import { safeJSONParse } from "../../../utils/json";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import type {
 	TwoFactorProvider,
@@ -127,6 +127,45 @@ export async function getBackupCodes(
 	return safeJSONParse<string[]>(backupCodes);
 }
 
+const verifyBackupCodeBodySchema = z.object({
+	code: z.string().meta({
+		description: `A backup code to verify. Eg: "123456"`,
+	}),
+	/**
+	 * Disable setting the session cookie
+	 */
+	disableSession: z
+		.boolean()
+		.meta({
+			description: "If true, the session cookie will not be set.",
+		})
+		.optional(),
+	/**
+	 * if true, the device will be trusted
+	 * for 30 days. It'll be refreshed on
+	 * every sign in request within this time.
+	 */
+	trustDevice: z
+		.boolean()
+		.meta({
+			description:
+				"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
+		})
+		.optional(),
+});
+
+const viewBackupCodesBodySchema = z.object({
+	userId: z.coerce.string().meta({
+		description: `The user ID to view all backup codes. Eg: "user-id"`,
+	}),
+});
+
+const generateBackupCodesBodySchema = z.object({
+	password: z.string().meta({
+		description: "The users password.",
+	}),
+});
+
 export const backupCode2fa = (opts: BackupCodeOptions) => {
 	const twoFactorTable = "twoFactor";
 
@@ -153,32 +192,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 
 				{
 					method: "POST",
-					body: z.object({
-						code: z.string().meta({
-							description: `A backup code to verify. Eg: "123456"`,
-						}),
-						/**
-						 * Disable setting the session cookie
-						 */
-						disableSession: z
-							.boolean()
-							.meta({
-								description: "If true, the session cookie will not be set.",
-							})
-							.optional(),
-						/**
-						 * if true, the device will be trusted
-						 * for 30 days. It'll be refreshed on
-						 * every sign in request within this time.
-						 */
-						trustDevice: z
-							.boolean()
-							.meta({
-								description:
-									"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
-							})
-							.optional(),
-					}),
+					body: verifyBackupCodeBodySchema,
 					metadata: {
 						openapi: {
 							description: "Verify a backup code for two-factor authentication",
@@ -303,9 +317,10 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 						],
 					});
 					if (!twoFactor) {
-						throw new APIError("BAD_REQUEST", {
-							message: TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
-						});
+						throw APIError.from(
+							"BAD_REQUEST",
+							TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
+						);
 					}
 					const validate = await verifyBackupCode(
 						{
@@ -316,16 +331,17 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 						opts,
 					);
 					if (!validate.status) {
-						throw new APIError("UNAUTHORIZED", {
-							message: TWO_FACTOR_ERROR_CODES.INVALID_BACKUP_CODE,
-						});
+						throw APIError.from(
+							"UNAUTHORIZED",
+							TWO_FACTOR_ERROR_CODES.INVALID_BACKUP_CODE,
+						);
 					}
 					const updatedBackupCodes = await symmetricEncrypt({
 						key: ctx.context.secret,
 						data: JSON.stringify(validate.updated),
 					});
 
-					await ctx.context.adapter.updateMany({
+					const updated = await ctx.context.adapter.updateMany({
 						model: twoFactorTable,
 						update: {
 							backupCodes: updatedBackupCodes,
@@ -335,8 +351,17 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 								field: "userId",
 								value: user.id,
 							},
+							{
+								field: "backupCodes",
+								value: twoFactor.backupCodes,
+							},
 						],
 					});
+					if (!updated) {
+						throw APIError.fromStatus("CONFLICT", {
+							message: "Failed to verify backup code. Please try again.",
+						});
+					}
 
 					if (!ctx.body.disableSession) {
 						return valid(ctx);
@@ -374,11 +399,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 				"/two-factor/generate-backup-codes",
 				{
 					method: "POST",
-					body: z.object({
-						password: z.string().meta({
-							description: "The users password.",
-						}),
-					}),
+					body: generateBackupCodesBodySchema,
 					use: [sessionMiddleware],
 					metadata: {
 						openapi: {
@@ -417,9 +438,10 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 				async (ctx) => {
 					const user = ctx.context.session.user as UserWithTwoFactor;
 					if (!user.twoFactorEnabled) {
-						throw new APIError("BAD_REQUEST", {
-							message: TWO_FACTOR_ERROR_CODES.TWO_FACTOR_NOT_ENABLED,
-						});
+						throw APIError.from(
+							"BAD_REQUEST",
+							TWO_FACTOR_ERROR_CODES.TWO_FACTOR_NOT_ENABLED,
+						);
 					}
 					await ctx.context.password.checkPassword(user.id, ctx);
 					const backupCodes = await generateBackupCodes(
@@ -457,17 +479,9 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-view-backup-codes)
 			 */
 			viewBackupCodes: createAuthEndpoint(
-				"/two-factor/view-backup-codes",
 				{
 					method: "POST",
-					body: z.object({
-						userId: z.coerce.string().meta({
-							description: `The user ID to view all backup codes. Eg: "user-id"`,
-						}),
-					}),
-					metadata: {
-						SERVER_ONLY: true,
-					},
+					body: viewBackupCodesBodySchema,
 				},
 				async (ctx) => {
 					const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
@@ -480,9 +494,10 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 						],
 					});
 					if (!twoFactor) {
-						throw new APIError("BAD_REQUEST", {
-							message: TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
-						});
+						throw APIError.from(
+							"BAD_REQUEST",
+							TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
+						);
 					}
 					const decryptedBackupCodes = await getBackupCodes(
 						twoFactor.backupCodes,
@@ -491,9 +506,10 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 					);
 
 					if (!decryptedBackupCodes) {
-						throw new APIError("BAD_REQUEST", {
-							message: TWO_FACTOR_ERROR_CODES.INVALID_BACKUP_CODE,
-						});
+						throw APIError.from(
+							"BAD_REQUEST",
+							TWO_FACTOR_ERROR_CODES.INVALID_BACKUP_CODE,
+						);
 					}
 					return ctx.json({
 						status: true,

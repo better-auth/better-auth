@@ -1,4 +1,5 @@
-import { type BetterAuthPlugin, betterAuth } from "better-auth";
+import type { BetterAuthPlugin } from "@better-auth/core";
+import { betterAuth } from "better-auth";
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { migrateAction } from "../src/commands/migrate";
@@ -30,7 +31,7 @@ describe("migrate base auth instance", () => {
 		await migrateAction({
 			cwd: process.cwd(),
 			config: "test/auth.ts",
-			y: true,
+			yes: true,
 		});
 		const signUpRes = await auth.api.signUpEmail({
 			body: {
@@ -83,7 +84,7 @@ describe("migrate auth instance with plugins", () => {
 		await migrateAction({
 			cwd: process.cwd(),
 			config: "test/auth.ts",
-			y: true,
+			yes: true,
 		});
 		const res = db
 			.prepare("INSERT INTO plugin (id, test) VALUES (?, ?)")

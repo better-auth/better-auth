@@ -27,6 +27,9 @@ const html = (
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Error</title>
     <style>
+      * {
+        box-sizing: border-box;
+      }
       body {
         font-family: ${custom?.font?.defaultFamily || "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"};
         background: ${custom?.colors?.background || "var(--background)"};
@@ -43,7 +46,7 @@ const html = (
         --text-2xl--line-height: calc(2 / 1.5);
         --text-4xl: ${custom?.size?.text4xl || "2.25rem"};
         --text-4xl--line-height: calc(2.5 / 2.25);
-        --text-6xl: ${custom?.size?.text6xl || "3.75rem"};
+        --text-6xl: ${custom?.size?.text6xl || "3rem"};
         --text-6xl--line-height: 1;
         --font-weight-medium: 500;
         --font-weight-semibold: 600;
@@ -74,9 +77,36 @@ const html = (
       button:hover, .btn:hover {
         opacity: 0.8;
       }
+
+      @media (prefers-color-scheme: dark) {
+        :root,
+        :host {
+          --primary: ${custom?.colors?.primary || "white"};
+          --primary-foreground: ${custom?.colors?.primaryForeground || "black"};
+          --background: ${custom?.colors?.background || "oklch(0.15 0 0)"};
+          --foreground: ${custom?.colors?.foreground || "oklch(0.98 0 0)"};
+          --border: ${custom?.colors?.border || "oklch(0.27 0 0)"};
+          --destructive: ${custom?.colors?.destructive || "oklch(0.65 0.15 25.723)"};
+          --muted-foreground: ${custom?.colors?.mutedForeground || "oklch(0.65 0 0)"};
+          --corner-border: ${custom?.colors?.cornerBorder || "#a0a0a0"};
+        }
+      }
+      @media (max-width: 640px) {
+        :root, :host {
+          --text-6xl: 2.5rem;
+          --text-2xl: 1.25rem;
+          --text-sm: 0.8125rem;
+        }
+      }
+      @media (max-width: 480px) {
+        :root, :host {
+          --text-6xl: 2rem;
+          --text-2xl: 1.125rem;
+        }
+      }
     </style>
   </head>
-  <body style="width: 100vw; height: 100vh; overflow: hidden;">
+  <body style="width: 100vw; min-height: 100vh; overflow-x: hidden; overflow-y: auto;">
     <div
         style="
             display: flex;
@@ -85,8 +115,9 @@ const html = (
             justify-content: center;
             gap: 1.5rem;
             position: relative;
-            width: 100vw;
-            height: 100vh;
+            width: 100%;
+            min-height: 100vh;
+            padding: 1rem;
         "
         >
 ${
@@ -99,11 +130,24 @@ ${
           inset: 0;
           background-image: linear-gradient(to right, ${custom?.colors?.gridColor || "var(--border)"} 1px, transparent 1px),
             linear-gradient(to bottom, ${custom?.colors?.gridColor || "var(--border)"} 1px, transparent 1px);
-          opacity: 0.5;
-          background-size: 24px 24px;
+          background-size: 40px 40px;
+          opacity: 0.6;
           pointer-events: none;
           width: 100vw;
           height: 100vh;
+        "
+      ></div>
+      <div
+        style="
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: ${custom?.colors?.background || "var(--background)"};
+          mask-image: radial-gradient(ellipse at center, transparent 20%, black);
+          -webkit-mask-image: radial-gradient(ellipse at center, transparent 20%, black);
+          pointer-events: none;
         "
       ></div>
 `
@@ -115,9 +159,8 @@ ${
     z-index: 10;
     border: 2px solid var(--border);
     background: ${custom?.colors?.cardBackground || "var(--background)"};
-    padding: 3rem;
+    padding: 1.5rem;
     max-width: 42rem;
-    min-width: 297px;
     width: 100%;
   "
 >
@@ -131,8 +174,8 @@ ${
             position: absolute;
             top: -2px;
             left: -2px;
-            width: 3rem;
-            height: 3rem;
+            width: 2rem;
+            height: 2rem;
             border-top: 4px solid var(--corner-border);
             border-left: 4px solid var(--corner-border);
           "
@@ -142,8 +185,8 @@ ${
             position: absolute;
             top: -2px;
             right: -2px;
-            width: 3rem;
-            height: 3rem;
+            width: 2rem;
+            height: 2rem;
             border-top: 4px solid var(--corner-border);
             border-right: 4px solid var(--corner-border);
           "
@@ -154,8 +197,8 @@ ${
             position: absolute;
             bottom: -2px;
             left: -2px;
-            width: 3rem;
-            height: 3rem;
+            width: 2rem;
+            height: 2rem;
             border-bottom: 4px solid var(--corner-border);
             border-left: 4px solid var(--corner-border);
           "
@@ -165,27 +208,27 @@ ${
             position: absolute;
             bottom: -2px;
             right: -2px;
-            width: 3rem;
-            height: 3rem;
+            width: 2rem;
+            height: 2rem;
             border-bottom: 4px solid var(--corner-border);
             border-right: 4px solid var(--corner-border);
           "
         ></div>`
 		}
 
-        <div style="text-align: center; margin-bottom: 2rem;">
+        <div style="text-align: center; margin-bottom: 1.5rem;">
           <div style="margin-bottom: 1.5rem;">
             <div
               style="
                 display: inline-block;
                 border: 2px solid ${custom?.disableTitleBorder ? "transparent" : custom?.colors?.titleBorder || "var(--destructive)"};
-                padding: 0.5rem 1.5rem;
+                padding: 0.375rem 1rem;
               "
             >
               <h1
                 style="
                   font-size: var(--text-6xl);
-                  font-weight: var(--font-weight-bold);
+                  font-weight: var(--font-weight-semibold);
                   color: ${custom?.colors?.titleColor || "var(--foreground)"};
                   letter-spacing: -0.02em;
                   margin: 0;
@@ -196,10 +239,11 @@ ${
             </div>
             <div
               style="
-                height: 1px;
+                height: 2px;
                 background-color: var(--border);
-                width: 100%;
-                margin-top: 1rem;
+                width: calc(100% + 3rem);
+                margin-left: -1.5rem;
+                margin-top: 1.5rem;
               "
             ></div>
           </div>
@@ -209,7 +253,7 @@ ${
               font-size: var(--text-2xl);
               font-weight: var(--font-weight-semibold);
               color: var(--foreground);
-              margin: 0 0 1.5rem;
+              margin: 0 0 1rem;
             "
           >
             Something went wrong
@@ -222,8 +266,10 @@ ${
                 gap: 0.5rem;
                 border: 2px solid var(--border);
                 background-color: var(--muted);
-                padding: 0.5rem 1rem;
-                margin: 0 0 1.5rem;
+                padding: 0.375rem 0.75rem;
+                margin: 0 0 1rem;
+                flex-wrap: wrap;
+                justify-content: center;
             "
             >
             <span
@@ -240,6 +286,7 @@ ${
                 font-size: var(--text-sm);
                 font-family: var(--default-mono-font-family, monospace);
                 color: var(--foreground);
+                word-break: break-all;
                 "
             >
                 ${sanitize(code)}
@@ -251,8 +298,9 @@ ${
               color: var(--muted-foreground);
               max-width: 28rem;
               margin: 0 auto;
-              border-left: 2px solid var(--border);
-              padding-left: 1rem;
+              font-size: var(--text-sm);
+              line-height: 1.5;
+              text-wrap: pretty;
             "
           >
             ${
@@ -267,9 +315,10 @@ ${
         <div
           style="
             display: flex;
-            gap: 1rem;
-            margin-top: 2rem;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
             justify-content: center;
+            flex-wrap: wrap;
           "
         >
           <a
@@ -283,8 +332,9 @@ ${
                 border: 2px solid var(--border);
                 background: var(--primary);
                 color: var(--primary-foreground);
-                padding: 0.5rem 1.25rem;
+                padding: 0.5rem 1rem;
                 border-radius: 0;
+                white-space: nowrap;
               "
               class="btn"
             >
@@ -304,8 +354,9 @@ ${
                 border: 2px solid var(--border);
                 background: transparent;
                 color: var(--foreground);
-                padding: 0.5rem 1.25rem;
+                padding: 0.5rem 1rem;
                 border-radius: 0;
+                white-space: nowrap;
               "
               class="btn"
             >

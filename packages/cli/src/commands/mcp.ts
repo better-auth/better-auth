@@ -1,10 +1,10 @@
+import { execSync } from "node:child_process";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import { base64 } from "@better-auth/utils/base64";
 import chalk from "chalk";
-import { execSync } from "child_process";
 import { Command } from "commander";
-import * as fs from "fs";
-import * as os from "os";
-import * as path from "path";
 
 interface MCPOptions {
 	cursor?: boolean;
@@ -13,9 +13,9 @@ interface MCPOptions {
 	manual?: boolean;
 }
 
-export async function mcpAction(options: MCPOptions) {
+async function mcpAction(options: MCPOptions) {
 	const mcpUrl = "https://mcp.chonkie.ai/better-auth/better-auth-builder/mcp";
-	const mcpName = "Better Auth";
+	const mcpName = "better-auth";
 
 	if (options.cursor) {
 		await handleCursorAction(mcpUrl, mcpName);
@@ -62,7 +62,7 @@ async function handleCursorAction(mcpUrl: string, mcpName: string) {
 
 		execSync(command, { stdio: "inherit" });
 		console.log(chalk.green("\n✓ Cursor MCP installed successfully!"));
-	} catch (error) {
+	} catch {
 		console.log(
 			chalk.yellow(
 				"\n⚠ Could not automatically open Cursor. Please copy the deeplink URL above and open it manually.",
@@ -93,7 +93,7 @@ function handleClaudeCodeAction(mcpUrl: string) {
 	try {
 		execSync(command, { stdio: "inherit" });
 		console.log(chalk.green("\n✓ Claude Code MCP installed successfully!"));
-	} catch (error) {
+	} catch {
 		console.log(
 			chalk.yellow(
 				"\n⚠ Could not automatically add to Claude Code. Please run this command manually:",
@@ -121,7 +121,7 @@ function handleOpenCodeAction(mcpUrl: string) {
 	const openCodeConfig = {
 		$schema: "https://opencode.ai/config.json",
 		mcp: {
-			"Better Auth": {
+			"better-auth": {
 				type: "remote",
 				url: mcpUrl,
 				enabled: true,
@@ -155,7 +155,7 @@ function handleOpenCodeAction(mcpUrl: string) {
 			chalk.green(`\n✓ Open Code configuration written to ${configPath}`),
 		);
 		console.log(chalk.green("✓ Better Auth MCP added successfully!"));
-	} catch (error) {
+	} catch {
 		console.log(
 			chalk.yellow(
 				"\n⚠ Could not automatically write opencode.json. Please add this configuration manually:",
@@ -197,7 +197,7 @@ function handleManualAction(mcpUrl: string, mcpName: string) {
 		fs.writeFileSync(configPath, JSON.stringify(mergedConfig, null, 2));
 		console.log(chalk.green(`\n✓ MCP configuration written to ${configPath}`));
 		console.log(chalk.green("✓ Better Auth MCP added successfully!"));
-	} catch (error) {
+	} catch {
 		console.log(
 			chalk.yellow(
 				"\n⚠ Could not automatically write mcp.json. Please add this configuration manually:",

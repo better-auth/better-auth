@@ -3,28 +3,30 @@
  */
 
 import type { Database } from "bun:sqlite";
+import type {
+	DatabaseConnection,
+	DatabaseIntrospector,
+	DatabaseMetadata,
+	DatabaseMetadataOptions,
+	Dialect,
+	DialectAdapter,
+	DialectAdapterBase,
+	Driver,
+	Kysely,
+	QueryCompiler,
+	QueryResult,
+	SchemaMetadata,
+	TableMetadata,
+} from "kysely";
 import {
 	CompiledQuery,
-	type DatabaseConnection,
-	type DatabaseIntrospector,
-	type DatabaseMetadata,
-	type DatabaseMetadataOptions,
 	DEFAULT_MIGRATION_LOCK_TABLE,
 	DEFAULT_MIGRATION_TABLE,
 	DefaultQueryCompiler,
-	type Dialect,
-	type DialectAdapter,
-	DialectAdapterBase,
-	type Driver,
-	Kysely,
-	type QueryCompiler,
-	type QueryResult,
-	type SchemaMetadata,
 	sql,
-	type TableMetadata,
 } from "kysely";
 
-export class BunSqliteAdapter implements DialectAdapterBase {
+class BunSqliteAdapter implements DialectAdapterBase {
 	get supportsCreateIfNotExists(): boolean {
 		return true;
 	}
@@ -70,7 +72,7 @@ export interface BunSqliteDialectConfig {
 		| undefined;
 }
 
-export class BunSqliteDriver implements Driver {
+class BunSqliteDriver implements Driver {
 	readonly #config: BunSqliteDialectConfig;
 	readonly #connectionMutex = new ConnectionMutex();
 
@@ -164,7 +166,7 @@ class ConnectionMutex {
 	}
 }
 
-export class BunSqliteIntrospector implements DatabaseIntrospector {
+class BunSqliteIntrospector implements DatabaseIntrospector {
 	readonly #db: Kysely<unknown>;
 
 	constructor(db: Kysely<unknown>) {
@@ -255,7 +257,7 @@ export class BunSqliteIntrospector implements DatabaseIntrospector {
 	}
 }
 
-export class BunSqliteQueryCompiler extends DefaultQueryCompiler {
+class BunSqliteQueryCompiler extends DefaultQueryCompiler {
 	protected override getCurrentParameterPlaceholder() {
 		return "?";
 	}

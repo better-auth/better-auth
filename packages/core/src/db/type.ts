@@ -1,18 +1,12 @@
 import type { StandardSchemaV1 } from "@standard-schema/spec";
-import type { LiteralString } from "../types";
+import type { Awaitable, LiteralString } from "../types";
 
-export type DBPreservedModels =
-	| "user"
-	| "account"
-	| "session"
-	| "verification"
-	| "rate-limit"
-	| "organization"
-	| "member"
-	| "invitation"
-	| "jwks"
-	| "passkey"
-	| "two-factor";
+export type BaseModelNames = "user" | "account" | "session" | "verification";
+
+export type ModelNames<T extends string = LiteralString> =
+	| BaseModelNames
+	| T
+	| "rate-limit";
 
 export type DBFieldType =
 	| "string"
@@ -31,7 +25,8 @@ export type DBPrimitive =
 	| null
 	| undefined
 	| string[]
-	| number[];
+	| number[]
+	| (Record<string, unknown> | unknown[]);
 
 export type DBFieldAttributeConfig = {
 	/**
@@ -68,8 +63,8 @@ export type DBFieldAttributeConfig = {
 	 */
 	transform?:
 		| {
-				input?: (value: DBPrimitive) => DBPrimitive | Promise<DBPrimitive>;
-				output?: (value: DBPrimitive) => DBPrimitive | Promise<DBPrimitive>;
+				input?: (value: DBPrimitive) => Awaitable<DBPrimitive>;
+				output?: (value: DBPrimitive) => Awaitable<DBPrimitive>;
 		  }
 		| undefined;
 	/**
@@ -122,6 +117,11 @@ export type DBFieldAttributeConfig = {
 	 * It's useful to mark fields varchar instead of text.
 	 */
 	sortable?: boolean | undefined;
+	/**
+	 * If the field should be indexed.
+	 * @default false
+	 */
+	index?: boolean | undefined;
 };
 
 export type DBFieldAttribute<T extends DBFieldType = DBFieldType> = {
@@ -157,7 +157,7 @@ export interface SecondaryStorage {
 	 * @param key - Key to get
 	 * @returns - Value of the key
 	 */
-	get: (key: string) => Promise<unknown> | unknown;
+	get: (key: string) => Awaitable<unknown>;
 	set: (
 		/**
 		 * Key to store
@@ -171,10 +171,10 @@ export interface SecondaryStorage {
 		 * Time to live in seconds
 		 */
 		ttl?: number | undefined,
-	) => Promise<void | null | unknown> | void;
+	) => Awaitable<void | null | unknown>;
 	/**
 	 *
 	 * @param key - Key to delete
 	 */
-	delete: (key: string) => Promise<void | null | string> | void;
+	delete: (key: string) => Awaitable<void | null | string>;
 }

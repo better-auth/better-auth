@@ -1,63 +1,75 @@
 {
   "name": "@better-auth/core",
-  "version": "1.4.0-beta.18",
+  "version": "1.5.0-beta.2",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/better-auth/better-auth.git",
+    "directory": "packages/core"
+  },
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     ".": {
-      "better-auth-dev-source": "./src/index.ts",
+      "dev-source": "./src/index.ts",
       "types": "./dist/index.d.mts",
       "default": "./dist/index.mjs"
     },
     "./api": {
-      "better-auth-dev-source": "./src/api/index.ts",
+      "dev-source": "./src/api/index.ts",
       "types": "./dist/api/index.d.mts",
       "default": "./dist/api/index.mjs"
     },
     "./async_hooks": {
-      "better-auth-dev-source": "./src/async_hooks/index.ts",
+      "dev-source": "./src/async_hooks/index.ts",
       "types": "./dist/async_hooks/index.d.mts",
+      "node": "./dist/async_hooks/index.mjs",
+      "deno": "./dist/async_hooks/index.mjs",
+      "bun": "./dist/async_hooks/index.mjs",
+      "edge": "./dist/async_hooks/pure.index.mjs",
+      "workerd": "./dist/async_hooks/index.mjs",
+      "browser": "./dist/async_hooks/pure.index.mjs",
       "default": "./dist/async_hooks/index.mjs"
     },
     "./context": {
-      "better-auth-dev-source": "./src/context/index.ts",
+      "dev-source": "./src/context/index.ts",
       "types": "./dist/context/index.d.mts",
       "default": "./dist/context/index.mjs"
     },
     "./env": {
-      "better-auth-dev-source": "./src/env/index.ts",
+      "dev-source": "./src/env/index.ts",
       "types": "./dist/env/index.d.mts",
       "default": "./dist/env/index.mjs"
     },
     "./error": {
-      "better-auth-dev-source": "./src/error/index.ts",
+      "dev-source": "./src/error/index.ts",
       "types": "./dist/error/index.d.mts",
       "default": "./dist/error/index.mjs"
     },
     "./utils": {
-      "better-auth-dev-source": "./src/utils/index.ts",
+      "dev-source": "./src/utils/index.ts",
       "types": "./dist/utils/index.d.mts",
       "default": "./dist/utils/index.mjs"
     },
     "./social-providers": {
-      "better-auth-dev-source": "./src/social-providers/index.ts",
+      "dev-source": "./src/social-providers/index.ts",
       "types": "./dist/social-providers/index.d.mts",
       "default": "./dist/social-providers/index.mjs"
     },
     "./db": {
-      "better-auth-dev-source": "./src/db/index.ts",
+      "dev-source": "./src/db/index.ts",
       "types": "./dist/db/index.d.mts",
       "default": "./dist/db/index.mjs"
     },
     "./db/adapter": {
-      "better-auth-dev-source": "./src/db/adapter/index.ts",
+      "dev-source": "./src/db/adapter/index.ts",
       "types": "./dist/db/adapter/index.d.mts",
       "default": "./dist/db/adapter/index.mjs"
     },
     "./oauth2": {
-      "better-auth-dev-source": "./src/oauth2/index.ts",
+      "dev-source": "./src/oauth2/index.ts",
       "types": "./dist/oauth2/index.d.mts",
       "default": "./dist/oauth2/index.mjs"
     }
@@ -102,15 +114,16 @@
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
+    "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
     "typecheck": "tsc --project tsconfig.json",
-    "test": "vitest"
+    "test": "vitest",
+    "coverage": "vitest run --coverage"
   },
   "devDependencies": {
-    "@better-auth/utils": "0.3.0",
+    "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
-    "@types/better-sqlite3": "^7.6.13",
     "better-call": "catalog:",
-    "better-sqlite3": "^12.4.1",
     "jose": "^6.1.0",
     "kysely": "^0.28.5",
     "nanostores": "^1.0.1",
@@ -118,10 +131,10 @@
   },
   "dependencies": {
     "@standard-schema/spec": "^1.0.0",
-    "zod": "^4.1.5"
+    "zod": "^4.1.12"
   },
   "peerDependencies": {
-    "@better-auth/utils": "0.3.0",
+    "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
     "better-call": "catalog:",
     "jose": "^6.1.0",

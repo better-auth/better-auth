@@ -1,13 +1,96 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { APIError } from "@better-auth/core/error";
+import { safeJSONParse } from "@better-auth/core/utils";
 import * as z from "zod";
-import { APIError, getSessionFromCtx } from "../../../api";
+import { getSessionFromCtx } from "../../../api";
 import { getDate } from "../../../utils/date";
-import { safeJSONParse } from "../../../utils/json";
-import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
+import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
+import { getApiKeyById, setApiKey } from "../adapter";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
+
+const updateApiKeyBodySchema = z.object({
+	keyId: z.string().meta({
+		description: "The id of the Api Key",
+	}),
+	userId: z.coerce
+		.string()
+		.meta({
+			description:
+				'The id of the user which the api key belongs to. server-only. Eg: "some-user-id"',
+		})
+		.optional(),
+	name: z
+		.string()
+		.meta({
+			description: "The name of the key",
+		})
+		.optional(),
+	enabled: z
+		.boolean()
+		.meta({
+			description: "Whether the Api Key is enabled or not",
+		})
+		.optional(),
+	remaining: z
+		.number()
+		.meta({
+			description: "The number of remaining requests",
+		})
+		.min(1)
+		.optional(),
+	refillAmount: z
+		.number()
+		.meta({
+			description: "The refill amount",
+		})
+		.optional(),
+	refillInterval: z
+		.number()
+		.meta({
+			description: "The refill interval",
+		})
+		.optional(),
+	metadata: z.any().optional(),
+	expiresIn: z
+		.number()
+		.meta({
+			description: "Expiration time of the Api Key in seconds",
+		})
+		.min(1)
+		.optional()
+		.nullable(),
+	rateLimitEnabled: z
+		.boolean()
+		.meta({
+			description: "Whether the key has rate limiting enabled.",
+		})
+		.optional(),
+	rateLimitTimeWindow: z
+		.number()
+		.meta({
+			description:
+				"The duration in milliseconds where each request is counted. server-only. Eg: 1000",
+		})
+		.optional(),
+	rateLimitMax: z
+		.number()
+		.meta({
+			description:
+				"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 100",
+		})
+		.optional(),
+	permissions: z
+		.record(z.string(), z.array(z.string()))
+		.meta({
+			description: "Update the permissions on the API Key. server-only.",
+		})
+		.optional()
+		.nullable(),
+});
+
 export function updateApiKey({
 	opts,
 	schema,
@@ -24,85 +107,7 @@ export function updateApiKey({
 		"/api-key/update",
 		{
 			method: "POST",
-			body: z.object({
-				keyId: z.string().meta({
-					description: "The id of the Api Key",
-				}),
-				userId: z.coerce
-					.string()
-					.meta({
-						description:
-							'The id of the user which the api key belongs to. server-only. Eg: "some-user-id"',
-					})
-					.optional(),
-				name: z
-					.string()
-					.meta({
-						description: "The name of the key",
-					})
-					.optional(),
-				enabled: z
-					.boolean()
-					.meta({
-						description: "Whether the Api Key is enabled or not",
-					})
-					.optional(),
-				remaining: z
-					.number()
-					.meta({
-						description: "The number of remaining requests",
-					})
-					.min(1)
-					.optional(),
-				refillAmount: z
-					.number()
-					.meta({
-						description: "The refill amount",
-					})
-					.optional(),
-				refillInterval: z
-					.number()
-					.meta({
-						description: "The refill interval",
-					})
-					.optional(),
-				metadata: z.any().optional(),
-				expiresIn: z
-					.number()
-					.meta({
-						description: "Expiration time of the Api Key in seconds",
-					})
-					.min(1)
-					.optional()
-					.nullable(),
-				rateLimitEnabled: z
-					.boolean()
-					.meta({
-						description: "Whether the key has rate limiting enabled.",
-					})
-					.optional(),
-				rateLimitTimeWindow: z
-					.number()
-					.meta({
-						description:
-							"The duration in milliseconds where each request is counted. server-only. Eg: 1000",
-					})
-					.optional(),
-				rateLimitMax: z
-					.number()
-					.meta({
-						description:
-							"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 100",
-					})
-					.optional(),
-				permissions: z
-					.record(z.string(), z.array(z.string()))
-					.meta({
-						description: "Update the permissions on the API Key. server-only.",
-					})
-					.optional()
-					.nullable(),
-			}),
+			body: updateApiKeyBodySchema,
 			metadata: {
 				openapi: {
 					description: "Update an existing API key by ID",
@@ -264,15 +269,11 @@ export function updateApiKey({
 					: session?.user || { id: ctx.body.userId };
 
 			if (!user?.id) {
-				throw new APIError("UNAUTHORIZED", {
-					message: ERROR_CODES.UNAUTHORIZED_SESSION,
-				});
+				throw APIError.from("UNAUTHORIZED", ERROR_CODES.UNAUTHORIZED_SESSION);
 			}
 
 			if (session && ctx.body.userId && session?.user.id !== ctx.body.userId) {
-				throw new APIError("UNAUTHORIZED", {
-					message: ERROR_CODES.UNAUTHORIZED_SESSION,
-				});
+				throw APIError.from("UNAUTHORIZED", ERROR_CODES.UNAUTHORIZED_SESSION);
 			}
 
 			if (authRequired) {
@@ -287,43 +288,30 @@ export function updateApiKey({
 					remaining !== undefined ||
 					permissions !== undefined
 				) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.SERVER_ONLY_PROPERTY,
-					});
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.SERVER_ONLY_PROPERTY);
 				}
 			}
 
-			const apiKey = await ctx.context.adapter.findOne<ApiKey>({
-				model: API_KEY_TABLE_NAME,
-				where: [
-					{
-						field: "id",
-						value: keyId,
-					},
-					{
-						field: "userId",
-						value: user.id,
-					},
-				],
-			});
+			let apiKey: ApiKey | null = null;
+
+			apiKey = await getApiKeyById(ctx, keyId, opts);
+
+			// Verify ownership
+			if (apiKey && apiKey.userId !== user.id) {
+				apiKey = null;
+			}
 
 			if (!apiKey) {
-				throw new APIError("NOT_FOUND", {
-					message: ERROR_CODES.KEY_NOT_FOUND,
-				});
+				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
 			}
 
 			let newValues: Partial<ApiKey> = {};
 
 			if (name !== undefined) {
 				if (name.length < opts.minimumNameLength) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.INVALID_NAME_LENGTH,
-					});
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_NAME_LENGTH);
 				} else if (name.length > opts.maximumNameLength) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.INVALID_NAME_LENGTH,
-					});
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_NAME_LENGTH);
 				}
 				newValues.name = name;
 			}
@@ -333,9 +321,10 @@ export function updateApiKey({
 			}
 			if (expiresIn !== undefined) {
 				if (opts.keyExpiration.disableCustomExpiresTime === true) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.KEY_DISABLED_EXPIRATION,
-					});
+					throw APIError.from(
+						"BAD_REQUEST",
+						ERROR_CODES.KEY_DISABLED_EXPIRATION,
+					);
 				}
 				if (expiresIn !== null) {
 					// if expires is not null, check if it's under the valid range
@@ -343,22 +332,23 @@ export function updateApiKey({
 					const expiresIn_in_days = expiresIn / (60 * 60 * 24);
 
 					if (expiresIn_in_days < opts.keyExpiration.minExpiresIn) {
-						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
-						});
+						throw APIError.from(
+							"BAD_REQUEST",
+							ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
+						);
 					} else if (expiresIn_in_days > opts.keyExpiration.maxExpiresIn) {
-						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
-						});
+						throw APIError.from(
+							"BAD_REQUEST",
+							ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
+						);
 					}
 				}
 				newValues.expiresAt = expiresIn ? getDate(expiresIn, "sec") : null;
 			}
-			if (metadata !== undefined) {
+
+			if (metadata !== undefined && opts.enableMetadata === true) {
 				if (typeof metadata !== "object") {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.INVALID_METADATA_TYPE,
-					});
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_METADATA_TYPE);
 				}
 				//@ts-expect-error - we need this to be a string to save into DB.
 				newValues.metadata =
@@ -369,13 +359,15 @@ export function updateApiKey({
 			}
 			if (refillAmount !== undefined || refillInterval !== undefined) {
 				if (refillAmount !== undefined && refillInterval === undefined) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
-					});
+					throw APIError.from(
+						"BAD_REQUEST",
+						ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
+					);
 				} else if (refillInterval !== undefined && refillAmount === undefined) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
-					});
+					throw APIError.from(
+						"BAD_REQUEST",
+						ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
+					);
 				}
 				newValues.refillAmount = refillAmount;
 				newValues.refillInterval = refillInterval;
@@ -397,28 +389,49 @@ export function updateApiKey({
 			}
 
 			if (Object.keys(newValues).length === 0) {
-				throw new APIError("BAD_REQUEST", {
-					message: ERROR_CODES.NO_VALUES_TO_UPDATE,
-				});
+				throw APIError.from("BAD_REQUEST", ERROR_CODES.NO_VALUES_TO_UPDATE);
 			}
 
 			let newApiKey: ApiKey = apiKey;
 			try {
-				let result = await ctx.context.adapter.update<ApiKey>({
-					model: API_KEY_TABLE_NAME,
-					where: [
-						{
-							field: "id",
-							value: apiKey.id,
-						},
-					],
-					update: {
+				if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
+					const dbUpdated = await ctx.context.adapter.update<ApiKey>({
+						model: API_KEY_TABLE_NAME,
+						where: [
+							{
+								field: "id",
+								value: apiKey.id,
+							},
+						],
+						update: newValues,
+					});
+					if (dbUpdated) {
+						await setApiKey(ctx, dbUpdated, opts);
+						newApiKey = dbUpdated;
+					}
+				} else if (opts.storage === "database") {
+					const result = await ctx.context.adapter.update<ApiKey>({
+						model: API_KEY_TABLE_NAME,
+						where: [
+							{
+								field: "id",
+								value: apiKey.id,
+							},
+						],
+						update: newValues,
+					});
+					if (result) newApiKey = result;
+				} else {
+					const updated: ApiKey = {
+						...apiKey,
 						...newValues,
-					},
-				});
-				if (result) newApiKey = result;
+						updatedAt: new Date(),
+					};
+					await setApiKey(ctx, updated, opts);
+					newApiKey = updated;
+				}
 			} catch (error: any) {
-				throw new APIError("INTERNAL_SERVER_ERROR", {
+				throw APIError.fromStatus("INTERNAL_SERVER_ERROR", {
 					message: error?.message,
 				});
 			}
@@ -430,7 +443,7 @@ export function updateApiKey({
 				newApiKey.metadata as never as string,
 			);
 
-			const { key, ...returningApiKey } = newApiKey;
+			const { key: _key, ...returningApiKey } = newApiKey;
 
 			return ctx.json({
 				...returningApiKey,

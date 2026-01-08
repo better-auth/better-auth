@@ -117,7 +117,9 @@ export function getTelemetryAuthConfig(
 					options.advanced?.crossSubDomainCookies?.additionalCookies,
 			},
 			database: {
-				useNumberId: !!options.advanced?.database?.useNumberId,
+				useNumberId:
+					!!options.advanced?.database?.useNumberId ||
+					options.advanced?.database?.generateId === "serial",
 				generateId: options.advanced?.database?.generateId,
 				defaultFindManyLimit: options.advanced?.database?.defaultFindManyLimit,
 			},
