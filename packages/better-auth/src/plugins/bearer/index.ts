@@ -118,7 +118,7 @@ export const bearer = (options?: BearerOptions | undefined) => {
 								const locationURL = new URL(location);
 								locationURL.searchParams.set("set-auth-token", token);
 								ctx.setHeader("location", locationURL.toString());
-							} catch (e) {
+							} catch (_e) {
 								// ignore invalid URL
 							}
 						}

@@ -3,8 +3,8 @@ import { passkeyClient } from "@better-auth/passkey/client";
 import { stripeClient } from "@better-auth/stripe/client";
 import {
 	adminClient,
-	customSessionClient,
 	bearerClient,
+	customSessionClient,
 	deviceAuthorizationClient,
 	lastLoginMethodClient,
 	multiSessionClient,
