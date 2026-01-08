@@ -122,6 +122,31 @@ export const auth = betterAuth({
 });
 ```
 
+**trustedRedirectOrigins** (string[]): List of additional trusted origins allowed to receive tokens in redirect URLs. Default: `[]`.
+
+By default, same-origin redirects (like `/callback`) automatically receive the token in the URL as `?set-auth-token=...`. The client plugin reads this parameter and stores it automatically.
+
+Use this option to enable the same behavior for specific cross-origin redirects.
+
+<Callout type="warn">
+  **Security Warning**: Tokens in URLs may be logged in browser history and server logs. Only add origins you fully control and trust.
+</Callout>
+
+**Use case**: Multi-domain authentication flows (e.g., mobile deep links, cross-domain SSO).
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    plugins: [
+        bearer({
+            trustedRedirectOrigins: [
+                'https://app.example.com',
+                'https://admin.example.com'
+            ]
+        })
+    ]
+});
+```
+
 ### Client Options
 
 **localStorageKey** (string): The key used to store the token in localStorage. Default: `"bearer_token"`.

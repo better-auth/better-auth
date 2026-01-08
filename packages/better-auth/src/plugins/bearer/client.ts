@@ -15,7 +15,13 @@ export const bearerClient = (options?: BearerClientOptions) => {
 		const urlParams = new URLSearchParams(window.location.search);
 		const token = urlParams.get("set-auth-token");
 		if (token) {
-			localStorage.setItem(localStorageKey, token);
+			if (typeof window !== "undefined") {
+				try {
+					localStorage.setItem(localStorageKey, token);
+				} catch {
+					// ignore storage errors (e.g. disabled storage, quota exceeded)
+				}
+			}
 			urlParams.delete("set-auth-token");
 			const newUrl = `${window.location.pathname}${urlParams.toString() ? `?${urlParams.toString()}` : ""}${window.location.hash}`;
 			window.history.replaceState({}, "", newUrl);
@@ -31,8 +37,12 @@ export const bearerClient = (options?: BearerClientOptions) => {
 				hooks: {
 					onResponse(ctx) {
 						const authToken = ctx.response.headers.get("set-auth-token");
-						if (authToken) {
-							localStorage.setItem(localStorageKey, authToken);
+						if (authToken && typeof window !== "undefined") {
+							try {
+								localStorage.setItem(localStorageKey, authToken);
+							} catch {
+								// ignore storage errors (e.g. disabled storage, quota exceeded)
+							}
 						}
 					},
 				},
